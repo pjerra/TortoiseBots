@@ -92,6 +92,7 @@ bool PriestWandBlocksCastTrigger::IsActive()
     // below "almost full"; offheal heals the party below "medium health".
     bool const healerSpec = ai->ContainsStrategy(STRATEGY_TYPE_HEAL);
     Unit* healTarget = nullptr;
+    Unit* renewTarget = nullptr;
     if (AI_VALUE2(uint8, "health", "self target") < sPlayerbotAIConfig.lowHealth)
         healTarget = bot;
     else if (healerSpec || ai->HasStrategy("offheal", BotState::BOT_STATE_COMBAT))
@@ -100,15 +101,23 @@ bool PriestWandBlocksCastTrigger::IsActive()
         if (member && member->IsAlive())
         {
             uint8 const health = AI_VALUE2(uint8, "health", "party member to heal");
-            if (health < sPlayerbotAIConfig.mediumHealth ||
-                (healerSpec && health < sPlayerbotAIConfig.almostFullHealth && !ai->HasAura("renew", member)))
+            if (health < sPlayerbotAIConfig.mediumHealth)
                 healTarget = member;
+            // Between medium and almost full only the "party member almost
+            // full health -> renew on party" row fires, so probe Renew there:
+            // a castable Flash/Lesser Heal says nothing about it.
+            else if (healerSpec && health < sPlayerbotAIConfig.almostFullHealth && !ai->HasAura("renew", member))
+                renewTarget = member;
         }
     }
 
+    // Heals are probed without the form check: every heal row drops
+    // Shadowform first ("remove shadowform" prerequisite).
     WandSpellProbe bestHeal = WandSpellProbe::Blocked;
     if (healTarget)
-        bestHeal = BetterWandSpellProbe(ProbeSpell("flash heal", healTarget), ProbeSpell("lesser heal", healTarget));
+        bestHeal = BetterWandSpellProbe(ProbeSpell("flash heal", healTarget, false), ProbeSpell("lesser heal", healTarget, false));
+    else if (renewTarget)
+        bestHeal = ProbeSpell("renew", renewTarget, false);
 
     // Nukes: shadow always fights; holy/discipline only through offdps, and
     // there only while "healer should attack" (nobody to heal, mana
@@ -127,9 +136,9 @@ bool PriestWandBlocksCastTrigger::IsActive()
         if (nukeWanted)
         {
             // Mind Flay and Smite have no cooldown of their own, so a
-            // NOT_READY answer is the GCD. The GCD check comes before the
-            // form check in the core, so Smite is not probed in Shadowform
-            // (it would read "GCD only" although it can never be cast there).
+            // NOT_READY answer is the GCD. Smite can never be cast in
+            // Shadowform (ProbeSpell's form check would refuse it too), so
+            // it is not probed there.
             bestNuke = ProbeSpell("mind flay", target);
             if (!ai->HasAura("shadowform", bot))
                 bestNuke = BetterWandSpellProbe(bestNuke, ProbeSpell("smite", target));

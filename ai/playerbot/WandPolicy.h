@@ -22,7 +22,7 @@
 // cast. This rule keeps that intent under the Turtle GCD: stop the wand
 // while a wanted spell is blocked by nothing but the GCD (or is castable
 // outright), keep it while the spell is blocked by anything else (no mana,
-// not known, ...).
+// not known, silenced, school locked out, wrong form, no line of sight...).
 //
 // No core includes: the class triggers translate game state into these
 // plain inputs, so the rule stays testable in tools/test_wand_policy.cpp.
@@ -39,6 +39,36 @@ namespace ai
         GlobalCooldownOnly, // refused with SPELL_FAILED_NOT_READY: the GCD
         Blocked             // anything else: mana, unknown spell, not wanted...
     };
+
+    // What the trigger can read on the caster and target without CheckCast.
+    // The core answers SPELL_FAILED_NOT_READY for the GCD before it looks at
+    // any of these (Spell::CheckCast: GCD, then form, line of sight, and
+    // CheckCasterAuras for silence), and a player's school lockout is a
+    // per-spell cooldown that the bot-side probe also reports as NOT_READY.
+    // While the wand renews the GCD, NOT_READY alone cannot tell a free
+    // spell from a silenced, locked-out, wrong-form or out-of-sight one.
+    struct WandCastBlockers
+    {
+        bool silenced = false;      // silence (or pacify) flag for the spell's prevention type
+        bool lockedOut = false;     // the spell's school is locked out, or the spell has a cooldown of its own
+        bool wrongForm = false;     // the caster's shapeshift form forbids the spell
+        bool noLineOfSight = false; // the target is out of line of sight
+    };
+
+    // Turn a probe (castable now / refused with NOT_READY / refused for
+    // anything else) plus the blockers above into a WandSpellProbe. Any
+    // blocker makes it Blocked: stopping the wand for a spell that still
+    // cannot go out would only restart the wand one swing later. A probe
+    // that is "castable" is checked too, because the probe ignores range
+    // and so passes a line-of-sight failure.
+    inline WandSpellProbe ClassifyWandSpellProbe(bool castable, bool notReady, WandCastBlockers const& blockers)
+    {
+        if (!castable && !notReady)
+            return WandSpellProbe::Blocked;
+        if (blockers.silenced || blockers.lockedOut || blockers.wrongForm || blockers.noLineOfSight)
+            return WandSpellProbe::Blocked;
+        return castable ? WandSpellProbe::Castable : WandSpellProbe::GlobalCooldownOnly;
+    }
 
     struct WandState
     {

@@ -71,6 +71,31 @@ int main()
     CHECK(BetterWandSpellProbe(P::GlobalCooldownOnly, P::Castable) == P::Castable);
     CHECK(BetterWandSpellProbe(P::Blocked, P::Blocked) == P::Blocked);
 
+    // Probe classification. The core answers NOT_READY for the wand's GCD
+    // before it checks silence, school lockout, form or line of sight, so a
+    // NOT_READY only counts as "GCD only" when none of those blocks the spell.
+    using B = WandCastBlockers;
+    CHECK(ClassifyWandSpellProbe(false, true, B{}) == P::GlobalCooldownOnly);
+    CHECK(ClassifyWandSpellProbe(true, false, B{}) == P::Castable);
+    // Refused for something else (mana, not known): blocked, whatever else.
+    CHECK(ClassifyWandSpellProbe(false, false, B{}) == P::Blocked);
+    // Silenced mage: Frostbolt is impossible, keep the wand (review finding:
+    // before, this read "GCD only" and the wand stopped and restarted every swing).
+    CHECK(ClassifyWandSpellProbe(false, true, B{true, false, false, false}) == P::Blocked);
+    // Counterspelled: school locked out (prohibited school or per-spell cooldown).
+    CHECK(ClassifyWandSpellProbe(false, true, B{false, true, false, false}) == P::Blocked);
+    // Smite in Shadowform: the form forbids it.
+    CHECK(ClassifyWandSpellProbe(false, true, B{false, false, true, false}) == P::Blocked);
+    // Target out of line of sight; the probe ignores range, so even a
+    // "castable" answer is blocked then.
+    CHECK(ClassifyWandSpellProbe(false, true, B{false, false, false, true}) == P::Blocked);
+    CHECK(ClassifyWandSpellProbe(true, false, B{false, false, false, true}) == P::Blocked);
+    // End to end: a silenced mage at full mana keeps wanding.
+    CHECK(!ShouldStopWandToCast(WandState{true, ClassifyWandSpellProbe(false, true, B{true, false, false, false}), false, false}));
+    // A heal out of line of sight does not stop the wand either.
+    CHECK(!ShouldStopWandToCast(WandState{true, P::Blocked, false, false,
+        ClassifyWandSpellProbe(false, true, B{false, false, false, true})}));
+
     // Wait after the stop: until the next shot would have fired, plus the
     // react delay; never more than one swing.
     CHECK(WandStopWaitMs(1200, 1800, 100) == 1300);

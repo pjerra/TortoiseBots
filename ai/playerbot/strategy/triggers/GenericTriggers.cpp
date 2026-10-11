@@ -83,12 +83,50 @@ bool WandBlocksCastTrigger::IsWanding()
     return autoRepeat && autoRepeat->m_spellInfo && autoRepeat->m_spellInfo->Category == WAND_SHOOT_CATEGORY;
 }
 
-WandSpellProbe WandBlocksCastTrigger::ProbeSpell(std::string const& spell, Unit* target)
+WandSpellProbe WandBlocksCastTrigger::ProbeSpell(std::string const& spell, Unit* target, bool checkForm)
 {
     SpellCastResult result = SPELL_FAILED_DONT_REPORT;
-    if (ai->CanCastSpell(spell, target, 0, nullptr, true, false, false, &result))
-        return WandSpellProbe::Castable;
-    return result == SPELL_FAILED_NOT_READY ? WandSpellProbe::GlobalCooldownOnly : WandSpellProbe::Blocked;
+    bool const castable = ai->CanCastSpell(spell, target, 0, nullptr, true, false, false, &result);
+    bool const notReady = !castable && result == SPELL_FAILED_NOT_READY;
+    if (!castable && !notReady)
+        return WandSpellProbe::Blocked;
+    return ClassifyWandSpellProbe(castable, notReady, CastBlockers(spell, target, checkForm));
+}
+
+WandCastBlockers WandBlocksCastTrigger::CastBlockers(std::string const& spell, Unit* target, bool checkForm)
+{
+    WandCastBlockers blockers;
+    uint32 const spellId = AI_VALUE2(uint32, "spell id", spell);
+    SpellEntry const* spellInfo = spellId ? sServerFacade.LookupSpellInfo(spellId) : nullptr;
+    if (!spellInfo)
+        return blockers;
+
+    // Spell::CheckCasterAuras: silence and the school lockout of a
+    // Counterspell-like interrupt (Unit::IsSpellProhibited), pacify.
+    uint32 const unitFlags = bot->GetUInt32Value(UNIT_FIELD_FLAGS);
+    if (spellInfo->PreventionType == SPELL_PREVENTION_TYPE_SILENCE)
+    {
+        blockers.silenced = (unitFlags & UNIT_FLAG_SILENCED) != 0;
+        blockers.lockedOut = bot->IsSpellProhibited(spellInfo);
+    }
+    else if (spellInfo->PreventionType == SPELL_PREVENTION_TYPE_PACIFY)
+        blockers.silenced = (unitFlags & UNIT_FLAG_PACIFIED) != 0;
+
+    // Player::ProhibitSpellSchool puts every spell of the school on its own
+    // cooldown, and the bot-side check reports that as NOT_READY too. The
+    // GCD is kept apart (GlobalCooldownMgr), so this is never the wand.
+    if (bot->HasSpellCooldown(spellId))
+        blockers.lockedOut = true;
+
+    // Spell::CheckCast form check (e.g. Smite and heals in Shadowform).
+    if (checkForm)
+        blockers.wrongForm = spellInfo->GetErrorAtShapeshiftedCast(bot->GetShapeshiftForm()) != SPELL_CAST_OK;
+
+    // Spell::CheckCast line-of-sight check, for a target other than the caster.
+    if (target && target != bot && !(spellInfo->AttributesEx2 & SPELL_ATTR_EX2_IGNORE_LOS))
+        blockers.noLineOfSight = !sServerFacade.IsWithinLOSInMap(bot, target);
+
+    return blockers;
 }
 
 bool WandBlocksCastTrigger::NoManaRowActive()

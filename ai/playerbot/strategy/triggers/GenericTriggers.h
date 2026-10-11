@@ -709,7 +709,11 @@ namespace ai
     class WandBlocksCastTrigger : public Trigger
     {
     public:
-        WandBlocksCastTrigger(PlayerbotAI* ai, std::string name) : Trigger(ai, name) {}
+        // Check interval 2 s: each probe builds a Spell for CheckCast, so it
+        // must not run every tick while a wand is up. needCheck() treats an
+        // interval below 2 as "every tick" and counts whole seconds of
+        // time(), so 2 means the trigger runs again after 1 to 2 s.
+        WandBlocksCastTrigger(PlayerbotAI* ai, std::string name) : Trigger(ai, name, 2) {}
 
     protected:
         // The current auto-repeat spell is a wand shot (category 351).
@@ -717,7 +721,12 @@ namespace ai
         // One spell probe: castable now, refused by the GCD alone, or
         // refused for any other reason. Range is ignored: the wand shares
         // the casters' 30 yd and the core stops it by itself out of range.
-        WandSpellProbe ProbeSpell(std::string const& spell, Unit* target);
+        // "GCD alone" also needs the caster not silenced or locked out of
+        // the school, in the right form (when checkForm) and in line of
+        // sight of the target: the core checks the GCD first and hides
+        // those (WandCastBlockers in WandPolicy.h).
+        WandSpellProbe ProbeSpell(std::string const& spell, Unit* target, bool checkForm = true);
+        WandCastBlockers CastBlockers(std::string const& spell, Unit* target, bool checkForm);
         // Below 5% mana the "no mana" -> shoot row wands on purpose (same
         // line as NoManaTrigger); stopping it would only ping-pong.
         bool NoManaRowActive();
