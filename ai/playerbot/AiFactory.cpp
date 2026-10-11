@@ -1198,7 +1198,8 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
                             nonCombatEngine->addStrategy("maintenance");
                         }
 
-                        nonCombatEngine->ChangeStrategy(sPlayerbotAIConfig.randomBotNonCombatStrategies);
+                        // The config list runs last, so it must honour the guard too.
+                        nonCombatEngine->ChangeStrategy(InstanceSafeNonCombatStrategies(player, sPlayerbotAIConfig.randomBotNonCombatStrategies));
                     }
                     else
                     {
@@ -1251,6 +1252,42 @@ Engine* AiFactory::createNonCombatEngine(Player* player, PlayerbotAI* const faca
     facade->SetEngine(BotState::BOT_STATE_NON_COMBAT, nonCombatEngine);
     AddDefaultNonCombatStrategies(player, facade, nonCombatEngine);
 	return nonCombatEngine;
+}
+
+std::string AiFactory::InstanceSafeNonCombatStrategies(Player* player, std::string const& strategies)
+{
+    if (!player || !player->GetMap() || !(player->GetMap()->IsDungeon() || player->GetMap()->IsRaid()))
+        return strategies;
+
+    // Issue #218: inside an instance the party kit stays in charge. Drop the
+    // list's open-world adds, and its "+wander" so the movement mode the bot
+    // already has (follow for a player's bot) keeps its leash.
+    static char const* const openWorld[] = { "grind", "travel", "tfish", "rpg", "rpg craft", "wander" };
+
+    std::string kept;
+    for (std::string const& entry : split(strategies, ','))
+    {
+        bool drop = false;
+        if (!entry.empty() && entry[0] == '+')
+        {
+            for (char const* name : openWorld)
+            {
+                if (entry.compare(1, std::string::npos, name) == 0)
+                {
+                    drop = true;
+                    break;
+                }
+            }
+        }
+
+        if (drop)
+            continue;
+
+        if (!kept.empty())
+            kept += ",";
+        kept += entry;
+    }
+    return kept;
 }
 
 void AiFactory::AddDefaultDeadStrategies(Player* player, PlayerbotAI* const facade, Engine* deadEngine)

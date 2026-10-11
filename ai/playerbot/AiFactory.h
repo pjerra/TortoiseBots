@@ -25,6 +25,9 @@ public:
     static void AddDefaultDeadStrategies(Player* player, PlayerbotAI* const facade, Engine* deadEngine);
     static void AddDefaultCombatStrategies(Player* player, PlayerbotAI* const facade, Engine* engine);
     static void AddDefaultReactionStrategies(Player* player, PlayerbotAI* const facade, ReactionEngine* reactionEngine);
+    // RandomBotNonCombatStrategies without its open-world adds (grind, travel,
+    // tfish, rpg, rpg craft, wander) while the player is in a dungeon or raid.
+    static std::string InstanceSafeNonCombatStrategies(Player* player, std::string const& strategies);
 
 public:
     static int GetPlayerSpecTab(const Player* player);

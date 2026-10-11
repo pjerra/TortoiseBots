@@ -470,7 +470,8 @@ void RandomBotFacade::ChangeStrategy(Player* player)
         if (tankAssist && !ai->HasStrategy("tank assist", BotState::BOT_STATE_COMBAT) &&
             ai->HasStrategy("dps assist", BotState::BOT_STATE_COMBAT))
             ai->ChangeStrategy("+tank assist", BotState::BOT_STATE_COMBAT);
-        ai->ChangeStrategy(sPlayerbotAIConfig.randomBotNonCombatStrategies, BotState::BOT_STATE_NON_COMBAT);
+        // The timed re-apply keeps the instance guard as well (Issue #218).
+        ai->ChangeStrategy(AiFactory::InstanceSafeNonCombatStrategies(player, sPlayerbotAIConfig.randomBotNonCombatStrategies), BotState::BOT_STATE_NON_COMBAT);
     }
 }
 
