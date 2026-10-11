@@ -483,10 +483,24 @@ namespace ai
     // spells
 
 
-    class CastWarStompAction : public CastSpellAction
+    // War Stomp is a self-centred 8-yd AoE stun (20549, range self, radius
+    // index 14). Cast it only where the bot stands: no reach prerequisite
+    // (the engine runs a prerequisite before isPossible, so a reach on a
+    // cooling-down Stomp walked casters and hunters into melee every tick),
+    // the current target must already be inside the radius, and the spell
+    // must be off cooldown. Donor 79bd428 casts it as a melee-range spell.
+    class CastWarStompAction : public CastMeleeAoeSpellAction
     {
     public:
-        CastWarStompAction(PlayerbotAI* ai) : CastSpellAction(ai, "war stomp") {}
+        CastWarStompAction(PlayerbotAI* ai) : CastMeleeAoeSpellAction(ai, "war stomp", 8.0f)
+        {
+            range = radius;
+        }
+
+        bool isUseful() override
+        {
+            return GetSpellID() && sServerFacade.IsSpellReady(bot, GetSpellID()) && CastMeleeAoeSpellAction::isUseful();
+        }
     };
     class CastManaTapAction : public CastSpellAction
     {

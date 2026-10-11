@@ -7902,3 +7902,31 @@ review + build pending; in-game pending.
 | Feature | Source project | Source commit | Source files | Ported / reimplemented | Reason | Local validation |
 | --- | --- | --- | --- | --- | --- | --- |
 | Stuck-travel teleport to the destination for masterless pool bots (`AiPlayerbot.StuckTravelTeleport`, default 0) | `mod-playerbots` | `79bd428` | `src/Ai/World/Rpg/Action/NewRpgBaseAction.cpp` (`NewRpgBaseAction::MoveFarTo`, stuck check: no 5 yd progress over 5 attempts and `stuckTime` → `bot->TeleportTo(dest)`) | Reimplemented in `ai/playerbot/strategy/actions/MoveToTravelTargetAction.{h,cpp}` (`TryRescueStuckTravel`, landing search shared with the service rescue as `FindRescueLanding`) + `ai/playerbot/PlayerbotAIConfig.{h,cpp}` + `aiplayerbot.conf.dist.in`. Deviations: reuses this tree's stuck detection (the six-fail `IsMaxRetry` drop, which the no-displacement watchdog also feeds) instead of a new progress tracker; behind a toggle, off by default; masterless pool bots only (no real master, not owned, not hired), same map, nobody near either end, once per 10 min per bot; lands on the navmesh next to the destination (or the nearest route node within 200 yd) instead of the raw destination point; logs `StuckTravelTeleport` | Pool bots swimming at sea level (z -2) stood 3+ min re-picking targets that all failed: 15 runs, ~102 bot-min (live 2026-10-11); none of the walk recoveries work without walkable ground in reach | `bash tools/verify_all.sh`, `git diff --check`; code review + build pending; in-game pending |
+## War Stomp: cast in place, only when ready — 2026-10-11
+
+Feature: Tauren War Stomp no longer queues a reach step. `CastWarStompAction`
+is a `CastMeleeAoeSpellAction` (8-yd radius, no reach prerequisite, cast
+range = radius) that is useful only while War Stomp is off cooldown;
+`WarStompTrigger` also returns false while the spell is unknown or cooling
+down. The trigger's existing conditions (target within 8 yd plus low health,
+3+ attackers or a casting target) and the 71.0 relevance are unchanged.
+
+Source: mod-playerbots `79bd428`,
+`src/Ai/Base/Strategy/RacialsStrategy.cpp:51-55` (War Stomp only on
+`medium aoe`) and `src/Ai/Base/Actions/GenericSpellActions.h:286-290`
+(`CastWarStompAction : CastMeleeSpellAction`).
+
+Copied / ported / reimplemented: reimplemented. The donor's melee-range cast
+is expressed with this module's `CastMeleeAoeSpellAction` (the Frost Nova
+pattern), which casts where the bot stands instead of the donor's
+`reach melee`, so hunters and casters never walk in for it. The cooldown
+gate is local: the engine runs a prerequisite before `isPossible`, so the
+old `reach spell::war stomp` ran every tick of the 2.5-min cooldown (Turtle
+20549: range self, radius index 14 = 8 yd, recovery 150 s).
+
+Reason: live data (yulon-ubuntu, acd9e01, batch 3 item 2): `reach spell |
+war stomp` was 14.0 % and 12.7 % of Tauren combat samples in two windows,
+runs up to 30 s, about 4 actual Stomps in 6 min; hunters walked into melee.
+
+Validation: code review + build pending; in-game pending.
+`bash tools/verify_all.sh` and `git diff --check` run locally.

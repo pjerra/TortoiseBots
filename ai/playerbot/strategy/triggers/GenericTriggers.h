@@ -1401,6 +1401,13 @@ namespace ai
 
         virtual bool IsActive() override
         {
+            // Only while War Stomp is known and off cooldown: the cast action
+            // has no reach step, but a ready-gate here keeps the 71.0 row from
+            // firing for the whole 2.5-min cooldown (live: tauren spent 13-14 %
+            // of their fights walking into melee for a Stomp they could not cast).
+            uint32 spellId = AI_VALUE2(uint32, "spell id", "war stomp");
+            if (!spellId || !sServerFacade.IsSpellReady(bot, spellId))
+                return false;
             Unit* target = AI_VALUE(Unit*, "current target");
             return target && AI_VALUE2(bool, "combat", "self target") && AI_VALUE2(float, "distance", "current target") <= 8.0f &&
                 (AI_VALUE2(uint8, "health", "self target") < sPlayerbotAIConfig.mediumHealth ||
