@@ -324,7 +324,13 @@ bool MisplacedBotEligible(::Player* bot, int32& areaLevelOut, std::string* why =
         ::PlayerbotAI* townAi = PlayerbotAIStorage::Instance().GetAI(bot);
         if (townAi && townAi->GetRecentHostileTownDeaths() >= ::PlayerbotAI::kHostileTownLoopDeaths)
         {
-            areaLevelOut = 55;
+            // The bot's real area level when the cache knows it, else 0 (logged as
+            // n/a). RelocateHopelessBot skips its death minimum for a town loop, so
+            // the number only feeds the log line.
+            int32 loopAreaLevel = 0;
+            if (!MaNGOS::Singleton<ai::TravelMgr>::Instance().TryGetValidatedAreaLevel(bot->GetAreaId(), loopAreaLevel) || loopAreaLevel < 0)
+                loopAreaLevel = 0;
+            areaLevelOut = loopAreaLevel;
             return true;
         }
     }
@@ -403,8 +409,12 @@ bool TeleportMisplacedBot(::Player* bot, int32 areaLevel, const std::string& cau
             deathCountValue->Reset();
         ai->ClearHostileTownDeaths();
     }
-    sLog.outString("TortoiseBots: relocated %s %s level %u from area level %d",
-        cause.c_str(), bot->GetName(), bot->GetLevel(), areaLevel);
+    if (areaLevel > 0)
+        sLog.outString("TortoiseBots: relocated %s %s level %u from area level %d",
+            cause.c_str(), bot->GetName(), bot->GetLevel(), areaLevel);
+    else
+        sLog.outString("TortoiseBots: relocated %s %s level %u from area level n/a",
+            cause.c_str(), bot->GetName(), bot->GetLevel());
     return true;
 }
 } // namespace
