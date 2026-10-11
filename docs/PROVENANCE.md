@@ -7497,6 +7497,7 @@ Copied / ported / reimplemented: reimplemented in place. No new spells
 Local validation: `bash tools/verify_all.sh`; `git diff --check`.
 Build via build-commit.sh. No live test.
 | Ossirian crystal tactic (AQ20): crystal-run timing by buff/debuff-vs-travel-time, wait-in-range + 25yd use guards, single CMSG_GAMEOBJ_USE | `mod-playerbots` | `79bd4281` | `src/Ai/Raid/Aq20/Aq20Triggers.cpp` (Aq20MoveToCrystalTrigger), `src/Ai/Raid/Aq20/Aq20Actions.cpp` (Aq20UseCrystalAction), `src/Ai/Raid/Aq20/Aq20Utils.cpp` (buff/debuff/crystal helpers) | Reimplemented: trigger-driven `ossirian crystal run` + `use ossirian crystal` on the new `ruins of ahn'qiraj`/`ossirian` strategies; 1.12 single queued use-packet (no report-use opcode; cf. suppression-device precedent) | Donor's entire AQ20 module, all IDs verified in tw_world | `bash tools/verify_all.sh` + `tools/test_ossirian_crystal_policy.cpp`; build-commit + no live test |
+| Rogue Expose Armor skipped when Sunder Armor is on the target | `mod-playerbots` | `79bd4281` | `src/Ai/Class/Rogue/RogueTriggers.cpp` (`ExposeArmorTrigger::IsActive`) | Reimplemented | Expose and Sunder share spell group 1064 (powerful chain, no stacking), so combo points spent on Expose behind a warrior tank are wasted | code review + build pending; in-game pending |
 
 ## Priest parity healing ladder: PRI-11 holy greater/flash + PRI-5 disc shield + PRI-7 inner focus + PRI-12 disc non-combat — 2026-10-09
 Feature: (1) Holy combat ladder: medium tier tries `greater heal on party`
