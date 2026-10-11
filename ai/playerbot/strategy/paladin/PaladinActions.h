@@ -95,7 +95,7 @@ namespace ai
 	public:
 		CastPaladinAuraAction(PlayerbotAI* ai) : CastBuffSpellAction(ai, "paladin aura") {}
 		virtual bool isPossible() { return true; }
-		virtual bool isUseful() override { return true; }
+		virtual bool isUseful() override;
 		virtual bool Execute(Event& event);
 	};
 

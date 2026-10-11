@@ -36,6 +36,27 @@ bool CastConsecrationAction::isUseful()
     return inReach == 2 && mana >= 70;
 }
 
+// "no paladin aura" queues this fallback next to the spec aura, and a queued
+// basket outlives the tick (ExpireActionTime). Once the spec aura has landed,
+// a stale fallback would cast the first aura the bot does not have and swap
+// it out. Only act while the bot has none of its own auras up.
+bool CastPaladinAuraAction::isUseful()
+{
+    static const char* const kAuras[] =
+    {
+        "devotion aura", "retribution aura", "concentration aura", "sanctity aura",
+        "shadow resistance aura", "fire resistance aura", "frost resistance aura", "crusader aura"
+    };
+
+    for (const char* aura : kAuras)
+    {
+        if (AI_VALUE2(uint32, "spell id", aura) && ai->HasMyAura(aura, bot))
+            return false;
+    }
+
+    return true;
+}
+
 bool CastPaladinAuraAction::Execute(Event& event)
 {
     std::vector<std::string> altAuras;
