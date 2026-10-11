@@ -148,9 +148,8 @@ bool OpenLootAction::DoLoot(LootObject& lootObject)
     // them) and left skinners casting Skinning on an unlooted corpse every tick forever.
     if (creature && creature->HasFlag(UNIT_DYNAMIC_FLAGS, UNIT_DYNFLAG_LOOTABLE))
     {
-        // Dismount in the open step (mod-playerbots LootAction.cpp:93-98): the select
-        // triggers veto mounted bots, so without this a bot that mounted after picking
-        // a corpse waits for the mount-state round-trip before the chain can run.
+        // Dismount in the open step (mod-playerbots LootAction.cpp): "loot available"
+        // selects loot while mounted, so this is where a mounted bot gets off.
         if (bot->IsMounted())
             ai->Unmount();
 
@@ -208,10 +207,10 @@ bool OpenLootAction::DoLoot(LootObject& lootObject)
         }
     }
 
-    // Dismount for a game-object node like the corpse path above: the loot
-    // chain refuses mounted bots, so without this a bot that rode to its
-    // node burns its approach failures on casts that never start, the node
-    // is abandoned, and the travel action re-walks the same last yards.
+    // Dismount for a game-object node like the corpse path above: a bot that
+    // rode to its node would otherwise burn its approach failures on casts
+    // that never start, the node is abandoned, and the travel action
+    // re-walks the same last yards.
 
     if (bot->IsMounted())
         ai->Unmount();

@@ -136,7 +136,7 @@ bool CheckMountStateAction::Execute(Event& event)
         }
     }
 
-    // At a herb/ore node: the loot chain refuses mounted bots, and a gather trip
+    // At a herb/ore node: the gather cast needs the bot on foot, and a gather trip
     // can stop a few yards short of the node while its status still reads
     // TRAVEL, so the "working" rule below never dismounted it (live 2026-10-09:
     // bots mounted 3-14 yd from their node until the 5-min move-stuck reset).

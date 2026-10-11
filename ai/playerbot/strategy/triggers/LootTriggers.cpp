@@ -23,7 +23,16 @@ bool LootAvailableTrigger::IsActive()
     // the bot kneel for lootDelay next to an add that already had it as its victim - while a kill
     // still loots at once (the dead mob is gone from the set) and a corpse held up by a real fight
     // waits in the stack for LOOT_OBJECT_TTL_SECONDS instead of being lost.
-    if (AI_VALUE2(bool, "mounted", "self target") || !bot->GetAttackers().empty())
+    //
+    // A mounted bot selects loot too (mod-playerbots LootTriggers.cpp has no mount
+    // gate); "open loot" dismounts it at the corpse or node. The old "mounted" veto
+    // deadlocked travel: "move to travel target" stands down while the stack holds
+    // possible loot within lootDistance, so a bot that rode past a herb/ore node or a
+    // chest stood mounted next to it, and "add gathering loot" kept refreshing the
+    // node so it never aged out. Live pool 2026-10-11: 11 of 108 standstills, 3-12 min
+    // each, ended only by a buff cast that happened to dismount or a long-stuck rescue.
+    // Taxi flight keeps the veto: the bot cannot leave the flight path.
+    if (bot->IsTaxiFlying() || !bot->GetAttackers().empty())
         return false;
 
     if (!AI_VALUE(bool, "has available loot"))

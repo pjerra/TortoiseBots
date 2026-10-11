@@ -7815,3 +7815,35 @@ trips (WORK at an auctioneer, mailbox, rpg spot, trainer or quest NPC)
 re-picking the same NPC every ~30 s after the work-idle release.
 
 Validation: code review + build pending; in-game pending.
+## Mounted bots select loot (travel standstill) — 2026-10-11
+
+Feature: `loot available` no longer refuses a mounted bot, so a mounted
+traveller that stops next to a herb/ore node, chest or corpse in its loot
+stack selects it, rides to it and dismounts in `open loot`, instead of
+standing mounted while `move to travel target` waits for that loot.
+
+Donor: mod-playerbots (`79bd428`):
+`src/Ai/Base/Trigger/LootTriggers.cpp` (`LootAvailableTrigger::IsActive`
+has no mount gate) and `src/Ai/Base/Actions/LootAction.cpp`
+(`OpenLootAction::DoLoot` removes the mount at the loot).
+
+Source files (module, modified):
+`ai/playerbot/strategy/triggers/LootTriggers.cpp` (mount veto replaced by a
+taxi-flight veto), comment-only updates in
+`ai/playerbot/strategy/actions/LootAction.cpp` and
+`ai/playerbot/strategy/actions/CheckMountStateAction.cpp`,
+`docs/concepts/bot-mechanics-and-quirks.md`.
+
+Copied / ported / reimplemented: ported (behaviour only). The open-step
+dismount already existed here; only the select gate changed. Taxi flight
+keeps the veto (the old mount check covered it, and the bot cannot leave the
+flight path).
+
+Reason: live pool 2026-10-11 (`obs_samples.jsonl`, 150 snapshots), 11 of
+108 standstills of 3+ min were mounted bots with status `travel` and last
+actions `mount anim` / `suggest what to do` / `unstuck`; `MoveToTravelTargetAction::isUseful`
+refuses while the stack holds possible loot, the loot chain refused mounted
+bots, and `add gathering loot` refreshed the node so it never expired.
+
+Validation: code review + `bash tools/verify_all.sh` + `git diff --check`;
+build pending; in-game pending.
