@@ -7681,3 +7681,31 @@ Validation: code review + build pending; in-game pending.
 - Source: mod-playerbots 79bd428, `src/Ai/Raid/BWL/BWLActions.cpp` (`BwlOnyxiaScaleCloakAuraCheckAction`), `BWLStrategy.cpp`, `BWLHelpers.h`.
 - Mode: reimplemented (behaviour changed). The donor calls `AddAura` to grant the immunity for free; TortoiseBots only warns and grants nothing.
 - Validation: code review + build pending; in-game pending.
+## Hunter keeps range while the pet or a tank holds the mob — 2026-10-11
+
+Donor: mod-playerbots @ `79bd4281`,
+`src/Ai/Base/Trigger/RangeTriggers.cpp` (`EnemyTooCloseForSpellTrigger` and
+`EnemyTooCloseForAutoShotTrigger`: flee only while the mob is not on the bot,
+or is frozen/rooted, and is within melee range).
+
+Source file (module, modified):
+`ai/playerbot/strategy/triggers/RangeTriggers.h`
+(`EnemyTooCloseForSpellTrigger::IsActive`, hunter branch).
+
+Copied / ported / reimplemented: reimplemented in place, behaviour only.
+When the mob is NOT targeting the hunter, the trigger fires only inside the
+hunter's dead zone: the *Auto Shot* minimum range read through
+`PlayerbotAI::GetSpellRange` (the boundary `enemy too close for auto shot`
+already uses), with `CanReachWithMeleeAutoAttack` as fallback (the donor's
+melee-range test). The previous rule fired at 40 % of (spell range + reach),
+about 12-18 yd. When the mob IS on the hunter the old band, the slow-kite
+speed guard, the rooted shortcut and the follow/guard/wander 5 yd exemption
+are unchanged; other classes are unchanged.
+
+Reason: live sample (38 pool hunters 36+, 527 combat samples in 5 min) had
+`flee` at 38 %, top trigger `enemy too close for spell`, Auto Shot 19 and
+Steady/Arcane/Aimed/Multi almost never: hunters ran from mobs their pet was
+tanking instead of shooting.
+
+Local validation: code review + build pending; in-game pending.
+`bash tools/verify_all.sh`; `git diff --check`.

@@ -76,10 +76,24 @@ namespace ai
                     }
                 }
                 // Casters have no minimum range — only flee if the mob is actually targeting/attacking this bot.
-                // Hunters are excluded: their ranged weapons have a ~8 yd minimum range so they must
-                // maintain distance even when the mob is focused on someone else.
                 if (bot->GetClass() != CLASS_HUNTER && !isVictim && target->GetVictim() != bot)
                     return false;
+
+                // Hunters have a dead zone (Auto Shot minimum range, melee reach
+                // as fallback). While the pet, a tank or anyone else holds the
+                // mob, step out only from inside it; beyond it the hunter can
+                // shoot, so it stays and shoots. Donor mod-playerbots
+                // (RangeTriggers.cpp) gates the same flee on melee range.
+                if (bot->GetClass() == CLASS_HUNTER && !isVictim && target->GetVictim() != bot)
+                {
+                    float maxShotRange = 0.0f;
+                    float minShotRange = 0.0f;
+                    if (ai->GetSpellRange("auto shot", &maxShotRange, &minShotRange) && minShotRange > 0.0f &&
+                        bot->GetDistance(target, SizeFactor::CombatReach) < minShotRange)
+                        return true;
+
+                    return bot->CanReachWithMeleeAutoAttack(target);
+                }
 
                 //if (isBoss || isRaid)
                 //    return sServerFacade.IsDistanceLessThan(targetDistance, (ai->GetRange("spell") + combatReach) / 2);
