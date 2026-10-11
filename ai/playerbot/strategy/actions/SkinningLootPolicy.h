@@ -15,7 +15,12 @@
 // So the wire loot_type in SMSG_LOOT_RESPONSE is LOOT_PICKPOCKETING for both
 // a skin and a real pickpocket, while the server-side Loot keeps LOOT_SKINNING.
 // StoreLootAction must key off the server-side type (LootAccess::lootType()),
-// never the wire byte. The constants below mirror the core enums so this rule
+// never the wire byte.
+// - src/game/Spells/SpellEffects.cpp EffectOpenLock (Herb Gathering, Mining,
+//   any opening spell) ALSO calls SendLoot(guid, LOOT_SKINNING), so an herb or
+//   ore window carries server type 6 too. A game-object window therefore takes
+//   its skill from the object's lock, never from the loot type.
+// The constants below mirror the core enums so this rule
 // is unit-testable without core headers; LootAction.cpp static_asserts them
 // against LOOT_SKINNING / SKILL_SKINNING so drift fails the build.
 
@@ -27,14 +32,16 @@ namespace ai
     uint32_t const kNoGatherSkill = 0;      // SKILL_NONE
 
     // Gathering skill for one stored loot window. internalLootType is the
-    // server-side Loot::loot_type, NOT the wire byte. A game-object window is
-    // ordinary loot whose skill comes from the object's lock (nodeGatherSkill,
-    // SKILL_NONE when the lock asks for no skill).
+    // server-side Loot::loot_type, NOT the wire byte. A game-object window
+    // takes its skill from the object's lock (nodeGatherSkill, SKILL_NONE when
+    // the lock asks for no skill) whatever its type: an opened node arrives as
+    // LOOT_SKINNING, and checking the type first logged every herb and ore as
+    // a skin. Only a creature window with the skinning type is a skin.
     inline uint32_t DecideGatherSkillForLoot(uint32_t internalLootType, bool targetIsGameObject, uint32_t nodeGatherSkill)
     {
-        if (internalLootType == kSkinningLootType)
-            return kSkinningSkillId;
-        return targetIsGameObject ? nodeGatherSkill : kNoGatherSkill;
+        if (targetIsGameObject)
+            return nodeGatherSkill;
+        return internalLootType == kSkinningLootType ? kSkinningSkillId : kNoGatherSkill;
     }
 
     // True when the server-side loot type marks a skinning window. Used to

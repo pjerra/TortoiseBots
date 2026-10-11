@@ -46,13 +46,17 @@ int main()
     CHECK(!IsSkinningLoot(1));
     std::cout << "  [PASS] corpse loot stays non-gather\n";
 
-    // 4. Nodes keep the lock skill: an herb/ore window (ordinary loot on a
-    // game object) carries its lock skill, a skill-less lock carries none,
-    // and a skin type on a game object still reads as skinning.
+    // 4. Nodes keep the lock skill: a game-object window carries its lock
+    // skill and a skill-less lock carries none. The core opens herb and ore
+    // nodes with LOOT_SKINNING (EffectOpenLock), so the real node window is
+    // server type 6 and must still read as Herbalism (182) / Mining (186),
+    // never as a skin.
     CHECK(DecideGatherSkillForLoot(1, true, 186) == 186);
     CHECK(DecideGatherSkillForLoot(1, true, 0) == 0);
-    CHECK(DecideGatherSkillForLoot(6, true, 186) == 393);
-    std::cout << "  [PASS] node loot keeps the lock skill\n";
+    CHECK(DecideGatherSkillForLoot(6, true, 186) == 186);
+    CHECK(DecideGatherSkillForLoot(6, true, 182) == 182);
+    CHECK(DecideGatherSkillForLoot(6, true, 0) == kNoGatherSkill);
+    std::cout << "  [PASS] node loot keeps the lock skill, also under the skinning type\n";
 
     std::cout << "skinning-loot policy: OK\n";
     return 0;

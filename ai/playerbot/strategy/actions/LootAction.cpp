@@ -439,7 +439,8 @@ bool StoreLootAction::Execute(Event& event)
     // loot_type cannot identify a skin (#403): the core rewrites LOOT_SKINNING to LOOT_PICKPOCKETING
     // for the 1.12 client (Player::SendLoot), so every skin arrives as LOOT_PICKPOCKETING. The
     // server-side Loot still carries the real type (loot->loot_type), which is what marks a skin.
-    // A node window is ordinary loot on a game object, so its skill comes from the object's lock.
+    // A node window (herb, ore, opened chest) also arrives as LOOT_SKINNING (EffectOpenLock), so a
+    // game object's skill comes from its lock, never from the loot type.
     bot->SetLootGuid(guid);
 
     Loot* loot = sLootMgr.GetLoot(bot);
