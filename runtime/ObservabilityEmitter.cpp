@@ -974,8 +974,30 @@ void ObservabilityEmitter::Update(uint32 diff)
         }
 
         // Anomaly 2: combat target unreachable / out of line of sight.
-        Unit* combatTarget = bot->GetSelectedUnit();
-        if (state == STATE_COMBAT && combatTarget && sServerFacade.IsHostileTo(bot, combatTarget))
+        // Judged against the AI's "current target" while its combat engine
+        // runs, not the client selection: the selection outlives the fight
+        // (combat end does not clear it), so a bot the core still held in
+        // combat on its way to a travel target reported a mob it left minutes
+        // earlier, hundreds of yards away. The value is a guid lookup plus a
+        // range and visibility test (no DB, no world scan), and it is only
+        // read while the bot is in combat.
+        Unit* combatTarget = nullptr;
+        if (state == STATE_COMBAT && ai && ai->GetState() == BotState::BOT_STATE_COMBAT &&
+            ai->GetAiObjectContext())
+        {
+            if (ai::Value<Unit*>* current = ai->GetAiObjectContext()->GetValue<Unit*>("current target"))
+                combatTarget = current->Get();
+        }
+        // A new target starts its own clock: the reported duration belongs to
+        // the unit named in the event, not to the fight as a whole.
+        uint64 const combatTargetGuid = combatTarget ? combatTarget->GetObjectGuid().GetRawValue() : 0;
+        if (combatTargetGuid != track.unreachableTargetGuid)
+        {
+            track.unreachableTargetGuid = combatTargetGuid;
+            track.unreachableDurationMs = 0;
+            track.unreachableReported = false;
+        }
+        if (combatTarget && sServerFacade.IsHostileTo(bot, combatTarget))
         {
             float dist = bot->GetDistance(combatTarget);
             bool inLos = true;
@@ -1002,8 +1024,14 @@ void ObservabilityEmitter::Update(uint32 diff)
                     dss << "Combat target '" << combatTarget->GetName() << "' unreachable / out of LoS for "
                         << (track.unreachableDurationMs / 1000.0f) << "s (dist=" << std::fixed << std::setprecision(1) << dist
                         << ", inLos=" << (inLos ? "true" : "false") << ")";
+                    // The bot's real last action in its combat engine, read
+                    // only when the event is sent (the type already says
+                    // "unreachable"; a fixed label here hid what it did).
+                    std::string lastAction;
+                    if (Action const* last = ai->GetLastExecutedAction(ai->GetState()))
+                        lastAction = const_cast<Action*>(last)->getName();
                     EmitAnomaly("UNREACHABLE_TARGET", "WARN", bot, dss.str(), combatTarget->GetName(),
-                                FormatStrategies(ai), "combat reach");
+                                FormatStrategies(ai), lastAction);
                 }
             }
             else
