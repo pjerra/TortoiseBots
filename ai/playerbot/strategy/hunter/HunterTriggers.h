@@ -518,39 +518,25 @@ private:
     };
 
     // [Turtle] Steady Shot filler (ranks 3035..45974: timed cast, no
-    // cooldown, 1.5s GCD). Core: every timed cast pauses the repeating Auto
-    // Shot and sets m_AutoRepeatFirstCast, so on resume the ranged timer is
-    // raised to kAutoShotWindupMs if lower (Unit::_UpdateAutoRepeatSpell).
-    // Auto Shot is therefore not delayed only if, when the cast starts,
-    // timer > cast time + windup + a margin for bot tick and latency.
-    // Otherwise (also when the timer is 0) the bot keeps auto-shooting.
+    // cooldown, 1.5s GCD). A timed cast pauses the repeating Auto Shot, so it
+    // only fires right after an Auto Shot, while the time to the next one
+    // still covers the cast plus the core's resume windup
+    // (HunterSteadyShotFitsAutoShotWindow). Otherwise the bot keeps
+    // auto-shooting.
     class SteadyShotTrigger : public Trigger
     {
     public:
-        static constexpr uint32 kAutoShotWindupMs = 500;
-        static constexpr uint32 kWeaveMarginMs = 150;
-
         SteadyShotTrigger(PlayerbotAI* ai) : Trigger(ai, "steady shot", 1) {}
         virtual std::string GetTargetName() override { return "current target"; }
 
         virtual bool IsActive() override
         {
-            // Cheapest check first: no cast fits below windup + margin.
-            uint32 const timer = bot->GetAttackTimer(RANGED_ATTACK);
-            if (timer <= kAutoShotWindupMs + kWeaveMarginMs)
-                return false;
-
             uint32 const spellId = AI_VALUE2(uint32, "spell id", "steady shot");
-            if (!spellId || !HunterHasRangedAmmo(ai))
+            if (!HunterSteadyShotFitsAutoShotWindow(ai, spellId) || !HunterHasRangedAmmo(ai))
                 return false;
 
             Unit* target = GetTarget();
-            if (!target || !ai->CanCastSpell("steady shot", target, true, nullptr, true))
-                return false;
-
-            SpellEntry const* spellInfo = sServerFacade.LookupSpellInfo(spellId);
-            uint32 const castTime = GetSpellCastTime(spellInfo, bot);
-            return timer > castTime + kAutoShotWindupMs + kWeaveMarginMs;
+            return target && ai->CanCastSpell("steady shot", target, true, nullptr, true);
         }
     };
 

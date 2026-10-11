@@ -15,6 +15,11 @@ namespace ai
     // fallback has to stay available for that hunter.
     bool HunterHasLoadedRangedWeapon(PlayerbotAI* ai);
 
+    // [Turtle] Steady Shot weave gate: true when a Steady Shot started now
+    // ends early enough that the next Auto Shot is not delayed. Shared by the
+    // trigger and the action, because a queued basket can outlive the window.
+    bool HunterSteadyShotFitsAutoShotWindow(PlayerbotAI* ai, uint32 spellId);
+
     BEGIN_RANGED_DEBUFF_ACTION(CastHuntersMarkAction, "hunter's mark")
     END_SPELL_ACTION()
 
@@ -58,7 +63,12 @@ public:
     END_SPELL_ACTION()
 
     BEGIN_RANGED_SPELL_ACTION(CastSteadyShotAction, "steady shot")
-        virtual bool isUseful() override { return HunterHasRangedAmmo(ai) && CastSpellAction::isUseful(); }
+        virtual bool isUseful() override
+        {
+            return HunterHasRangedAmmo(ai) &&
+                HunterSteadyShotFitsAutoShotWindow(ai, AI_VALUE2(uint32, "spell id", "steady shot")) &&
+                CastSpellAction::isUseful();
+        }
     END_SPELL_ACTION()
 
     BEGIN_RANGED_DEBUFF_ACTION(CastConcussiveShotAction, "concussive shot")

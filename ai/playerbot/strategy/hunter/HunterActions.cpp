@@ -39,6 +39,44 @@ static bool HunterWantsViperSting(PlayerbotAI* ai, const std::string& targetName
     return ai->HasStrategy("sting viper", BotState::BOT_STATE_COMBAT) || AI_VALUE2(uint8, "mana", "self target") < 50;
 }
 
+// Core timing (Unit::_UpdateAutoRepeatSpell, SpellEntry::GetCastTime): the
+// ranged attack timer counts down the time to the next Auto Shot and keeps
+// running while a cast pauses the repeat; on resume the core raises it to
+// 500 ms if lower. The real cast is the base cast time scaled by ranged haste
+// plus a flat 500 ms that GetCastTime adds to every SPELL_ATTR_RANGED spell.
+// Without a Spell object GetCastTime adds the 500 but skips the haste, so the
+// haste is applied here. Unit::Update runs spell events before
+// _UpdateSpells, so the repeat resumes in the tick the cast ends; the margin
+// is one world tick (50 ms) of slack, not a latency guess.
+bool ai::HunterSteadyShotFitsAutoShotWindow(PlayerbotAI* playerbotAi, uint32 spellId)
+{
+    static constexpr uint32 kRangedCastExtraMs = 500;
+    static constexpr uint32 kAutoShotWindupMs = 500;
+    static constexpr uint32 kResumeMarginMs = 50;
+
+    if (!playerbotAi || !spellId)
+        return false;
+
+    Player* bot = playerbotAi->GetBot();
+    if (!bot)
+        return false;
+
+    // Cheapest check first: no ranged cast fits below this.
+    uint32 const timer = bot->GetAttackTimer(RANGED_ATTACK);
+    if (timer <= kRangedCastExtraMs + kAutoShotWindupMs + kResumeMarginMs)
+        return false;
+
+    SpellEntry const* spellInfo = sServerFacade.LookupSpellInfo(spellId);
+    if (!spellInfo)
+        return false;
+
+    uint32 castTime = GetSpellCastTime(spellInfo, bot);
+    if ((spellInfo->Attributes & SPELL_ATTR_RANGED) && castTime >= kRangedCastExtraMs)
+        castTime = uint32((castTime - kRangedCastExtraMs) * bot->m_modAttackSpeedPct[RANGED_ATTACK]) + kRangedCastExtraMs;
+
+    return timer > castTime + kAutoShotWindupMs + kResumeMarginMs;
+}
+
 bool CastSerpentStingAction::isUseful()
 {
     return HunterHasRangedAmmo(ai) && CastRangedDebuffSpellAction::isUseful() && AI_VALUE2(uint8, "health", GetTargetName()) > 50 &&
