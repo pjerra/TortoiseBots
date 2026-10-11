@@ -779,23 +779,24 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
         if (sPlayerbotAIConfig.jumpChase)
             combatEngine->addStrategy("chase jump");
 
-        // Party back-off (threat): non-tank DPS/healer bots grouped with a
-        // real player ride the shared tank's threat, so a full burn pulls the
-        // mob off the tank. Masterless pool bots keep the old behavior: the
-        // multiplier is group-gated anyway, and threat vetoes would stall
-        // their solo leveling burn. ThreatValue returns 0 with no tank, so
-        // solo/no-tank parties are unaffected even when the veto is present.
-        if (!player->InBattleGround() && facade->HasRealPlayerMaster() &&
-            !facade->IsTank(player) && !combatEngine->HasStrategy("threat"))
-            combatEngine->addStrategy("threat");
-
-
         combatEngine->ChangeStrategy(sPlayerbotAIConfig.randomBotCombatStrategies);
     }
     else
     {
         combatEngine->ChangeStrategy(sPlayerbotAIConfig.combatStrategies);
     }
+
+    // Party back-off (threat): non-tank DPS/healer bots grouped with a
+    // real player ride the shared tank's threat, so a full burn pulls the
+    // mob off the tank. Masterless pool bots keep the old behavior: the
+    // multiplier is group-gated anyway, and threat vetoes would stall
+    // their solo leveling burn. ThreatValue returns 0 with no tank, so
+    // solo/no-tank parties are unaffected even when the veto is present.
+    // Applied after the configured strategy strings: the shipped default
+    // random-bot string carries -threat and would strip it again.
+    if (!player->InBattleGround() && facade->HasRealPlayerMaster() &&
+        !facade->IsTank(player) && !combatEngine->HasStrategy("threat"))
+        combatEngine->addStrategy("threat");
 
     // Battleground switch
     if (player->InBattleGround())
