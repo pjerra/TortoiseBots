@@ -32,7 +32,14 @@ bool LootAvailableTrigger::IsActive()
     // node so it never aged out. Live pool 2026-10-11: 11 of 108 standstills, 3-12 min
     // each, ended only by a buff cast that happened to dismount or a long-stuck rescue.
     // Taxi flight keeps the veto: the bot cannot leave the flight path.
+    //
+    // Only for masterless bots: an owned/hired bot following a mounted player keeps the
+    // old mounted veto, or it would dismount at every node and chest near the road,
+    // get pulled away by "follow" and have to remount again and again.
     if (bot->IsTaxiFlying() || !bot->GetAttackers().empty())
+        return false;
+
+    if (ai->HasRealPlayerMaster() && AI_VALUE2(bool, "mounted", "self target"))
         return false;
 
     if (!AI_VALUE(bool, "has available loot"))

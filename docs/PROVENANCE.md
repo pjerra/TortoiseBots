@@ -7830,7 +7830,7 @@ has no mount gate) and `src/Ai/Base/Actions/LootAction.cpp`
 
 Source files (module, modified):
 `ai/playerbot/strategy/triggers/LootTriggers.cpp` (mount veto replaced by a
-taxi-flight veto), comment-only updates in
+taxi-flight veto; kept for bots with a real player master), comment-only updates in
 `ai/playerbot/strategy/actions/LootAction.cpp` and
 `ai/playerbot/strategy/actions/CheckMountStateAction.cpp`,
 `docs/concepts/bot-mechanics-and-quirks.md`.
