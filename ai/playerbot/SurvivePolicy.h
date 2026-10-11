@@ -91,6 +91,17 @@ namespace ai
         return !alreadyFightingBot && targetLevel > botLevel + 5;
     }
 
+    // Outnumbered hold ground for the hybrid self-healers (OutNumberedTrigger):
+    // a solo shaman, paladin or druid heals through an outnumbered fight like a
+    // solo priest instead of breaking off, but only while it still has the
+    // mana to heal (at or above LowMana, the same line PanicTrigger treats as
+    // "mana to fight on"). Out of mana, or in a group, it keeps the flee.
+    inline bool ShouldSelfHealerHoldGround(bool isHybridSelfHealer, bool inGroup,
+        bool hasMana, std::uint32_t manaPct, std::uint32_t lowManaPct)
+    {
+        return isHybridSelfHealer && !inGroup && hasMana && manaPct >= lowManaPct;
+    }
+
     // Death telemetry: the deaths.csv 'adds' loop used to count victim-
     // filtered "all targets" entries, but SetDeathState drains the attacker
     // set and clears victim pointers before OnDeath runs, so it was

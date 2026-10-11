@@ -65,6 +65,7 @@ Reactive swaps never fight an explicit order: any manual `totem <slot> <which>` 
 - **Mana sense:** Never skips a target at or below the low-health line for mana reasons; above the medium line it refuses oversized or average-efficiency heals, and below the medium-mana line it refuses mana-hungry heals (*Lesser Healing Wave*) in favor of *Healing Wave*. Tanks count the expected heal at two-thirds.
 - **Resurrection:** Resurrects fallen party members with *Ancestral Spirit* (no self-Reincarnation).
 - **Defensive & Utility:** Keeps *Earth Shield* on the party tank, recalls standing totems out of combat with *Totemic Recall* for mana (never the *Mana Tide* cooldown totem, never while anyone fights), and shifts to *Ghost Wolf* when carrying a PvP flag.
+- **Heals instead of fleeing when outnumbered:** A solo bot (no group) with mana at or above `AiPlayerbot.LowMana` (default 15%) is exempt from the `outnumbered` flee, like a solo priest, and heals itself through the fight with *Healing Wave*. Grouped or out of mana it still breaks off; the `panic` and `critical health no master` escapes are unchanged.
 
 ---
 

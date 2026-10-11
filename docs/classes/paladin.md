@@ -62,6 +62,7 @@ Paladins provide exceptional party utility, versatile auras, class blessings, an
 - **Auras:** Each spec keeps a fixed default aura (Holy → Concentration, Protection → Retribution, Retribution → Sanctity); otherwise (aura not trained yet, or another paladin's aura of that kind already on the bot) it casts the first aura in a fixed list that the bot does not have. The aura is only recast while the bot has none of its own auras up, so the fallback never swaps out a spec aura that has just landed. No damage-type or group-composition detection exists.
 - **Cleansing:** Uses *Cleanse* and *Purify* to remove poisons, diseases, and magic debuffs from party members (self first, then party).
 - **Crowd Control:** Stuns dangerous casters or runners using *Hammer of Justice*. *Repentance* fires automatically from interrupt, enemy-healer and snare triggers with no humanoid restriction; the Paladin CC-strategy spell is *Turn Undead*, and `.bot action cc` assigns marks rather than ordering a spell.
+- **Heals instead of fleeing when outnumbered:** A solo bot (no group) with mana at or above `AiPlayerbot.LowMana` (default 15%) is exempt from the `outnumbered` flee, like a solo priest, and heals itself through the fight with *Holy Light*. Grouped or out of mana it still breaks off; the `panic` and `critical health no master` escapes are unchanged.
 
 ---
 

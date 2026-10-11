@@ -21,6 +21,7 @@ using ai::ShouldGrantPoolFlee;
 using ai::ShouldIgnoreHardHostile;
 using ai::ShouldSeedDrink;
 using ai::ShouldDrinkAtManaPct;
+using ai::ShouldSelfHealerHoldGround;
 using ai::DeathAttackerEntry;
 int main()
 {
@@ -119,6 +120,15 @@ int main()
     CHECK(!ShouldIgnoreHardHostile(36, 30, true));
     CHECK(!ShouldIgnoreHardHostile(60, 30, true));
     CHECK(!ShouldIgnoreHardHostile(25, 30, false));
+
+    // Outnumbered hold ground: only a solo hybrid self-healer with mana at or
+    // above LowMana stays; grouped, out of mana or another class keeps flee.
+    CHECK(ShouldSelfHealerHoldGround(true, false, true, 100, 15));
+    CHECK(ShouldSelfHealerHoldGround(true, false, true, 15, 15));
+    CHECK(!ShouldSelfHealerHoldGround(true, false, true, 14, 15));
+    CHECK(!ShouldSelfHealerHoldGround(true, false, false, 0, 15));
+    CHECK(!ShouldSelfHealerHoldGround(true, true, true, 100, 15));
+    CHECK(!ShouldSelfHealerHoldGround(false, false, true, 100, 15));
 
     std::cout << "survive policy: OK\n";
     return 0;

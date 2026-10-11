@@ -254,6 +254,19 @@ bool OutNumberedTrigger::IsActive()
     if (bot->GetClass() == CLASS_PRIEST && (bot->GetLevel() < 10 || !bot->GetGroup()))
         return false;
 
+    // Shaman, paladin and druid self-heal from level 1 too (Healing Wave, Holy
+    // Light, Healing Touch / Regrowth rows in their combat strategies), so the solo
+    // priest reasoning above holds for them - as long as they have the mana to
+    // heal. Without this a solo shaman at full mana ran from two mobs at 70%
+    // health and died (58% of shaman deaths, Oct 2026 pool poll; solo priests
+    // 0%). Out of mana they keep the flee; panic and critical health stay.
+    uint8 const botClass = bot->GetClass();
+    if ((botClass == CLASS_SHAMAN || botClass == CLASS_PALADIN || botClass == CLASS_DRUID) &&
+        ShouldSelfHealerHoldGround(true, bot->GetGroup() != nullptr,
+            AI_VALUE2(bool, "has mana", "self target"),
+            AI_VALUE2(uint8, "mana", "self target"), sPlayerbotAIConfig.lowMana))
+        return false;
+
     // Don't trigger if the bot is a dungeon or raid
     if (!bot->IsInWorld() || bot->IsBeingTeleported() || bot->GetMap()->IsDungeon() || bot->GetMap()->IsRaid())
         return false;
