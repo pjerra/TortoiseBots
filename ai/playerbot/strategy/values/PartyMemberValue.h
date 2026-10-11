@@ -28,7 +28,7 @@ namespace ai
 
     protected:
         Unit* FindPartyMember(FindPlayerPredicate &predicate, bool ignoreOutOfGroup = false, bool ignoreTanks = false);
-        Unit* FindPartyMember(std::list<Player*>* party, FindPlayerPredicate &predicate, bool ignoreTanks);
+        Unit* FindPartyMember(std::list<Player*>* party, FindPlayerPredicate &predicate, bool ignoreTanks, Unit*& outOfSight);
         bool Check(Unit* player);
 	};
 }

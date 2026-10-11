@@ -8175,3 +8175,8 @@ Reason: batch-4 party/dungeon audit, gap 2 — bots walked into the next pack
 to loot.
 
 Validation: code review + build pending; in-game pending.
+## Party-member search prefers members in sight — 2026-10-12
+
+| Feature | Source project | Source commit | Source files | Ported / reimplemented | Reason | Local validation |
+| --- | --- | --- | --- | --- | --- | --- |
+| The party-member search (buffs, blessings, dispel, resurrect, soulstone) returns the first matching member in line of sight, and the first out-of-sight match only when nobody matching is in sight | `mod-playerbots` | `79bd4281` | `src/Ai/Base/Value/PartyMemberValue.cpp` (`PartyMemberValue::Check`: candidate must be `IsWithinLOS`), `src/Ai/Class/Paladin/Actions/PaladinActions.cpp:16-27` (`IsBlessingTargetCandidate`, same LOS filter) | Reimplemented in `ai/playerbot/strategy/values/PartyMemberValue.cpp` (`FindPartyMember`). Not a filter as in the donor: an out-of-sight match stays the fallback, because the resurrection value deliberately leaves reaching the corpse to the reach prerequisite, and a lone out-of-sight member must still be walked to. The LOS test runs only on members that already match, after the cheap checks | Follow-up to the hidden-GM blessing loop (fix 50): any member that cannot receive the cast (out of LOS where the bot cannot walk into sight, or under `stay`) was picked on every check and the members after it in the search order never got the buff | `bash tools/verify_all.sh`; `git diff --check`. Code review; build pending; in-game pending |
