@@ -217,6 +217,9 @@ namespace ai
 	{
 	public:
 	    CastCorruptionOnAttackerAction(PlayerbotAI* ai) : CastRangedDebuffSpellOnAttackerAction(ai, "corruption") {}
+
+    protected:
+        std::string GetTargetName() override { return "attacker without my aura"; }
 	};
 
     class CastCurseOfAgonyAction : public CastRangedDebuffSpellAction
@@ -718,6 +721,9 @@ namespace ai
     {
     public:
         CastImmolateOnAttackerAction(PlayerbotAI* ai) : CastRangedDebuffSpellOnAttackerAction(ai, "immolate") {}
+
+    protected:
+        std::string GetTargetName() override { return "attacker without my aura"; }
     };
 
     class CastConflagrateAction : public CastSpellAction
@@ -794,6 +800,9 @@ namespace ai
     {
     public:
         CastSiphonLifeOnAttackerAction(PlayerbotAI* ai) : CastRangedDebuffSpellOnAttackerAction(ai, "siphon life") {}
+
+    protected:
+        std::string GetTargetName() override { return "attacker without my aura"; }
     };
 
     class CastHowlOfTerrorAction : public CastMeleeAoeSpellAction

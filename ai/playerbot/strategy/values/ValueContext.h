@@ -145,6 +145,7 @@ namespace ai
             creators["party tank without aura"] = [](PlayerbotAI* ai) { return new PartyTankWithoutAuraValue(ai); };
             creators["party member without my aura"] = [](PlayerbotAI* ai) { return new PartyMemberWithoutMyAuraValue(ai); };
             creators["attacker without aura"] = [](PlayerbotAI* ai) { return new AttackerWithoutAuraTargetValue(ai); };
+            creators["attacker without my aura"] = [](PlayerbotAI* ai) { return new AttackerWithoutMyAuraTargetValue(ai); };
             creators["party member to heal"] = [](PlayerbotAI* ai) { return new PartyMemberToHeal(ai); };
             creators["healer low mana"] = [](PlayerbotAI* ai) { return new HealerLowMana(ai); };
             creators["party member to resurrect"] = [](PlayerbotAI* ai) { return new PartyMemberToResurrect(ai); };

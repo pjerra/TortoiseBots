@@ -71,11 +71,18 @@ namespace ai
         bool IsActive() override;
     };
 
-    DEBUFF_TRIGGER_A(CorruptionTrigger, "corruption");
+    // Periodic damage stacks per caster in the core (Unit.cpp dmgPeriodic rule),
+    // so Corruption, Siphon Life and Immolate ask "is MY DoT on the target".
+    class CorruptionTrigger : public DebuffTrigger
+    {
+    public:
+        CorruptionTrigger(PlayerbotAI* ai) : DebuffTrigger(ai, "corruption", 1, true) {}
+        bool IsActive() override;
+    };
     class SiphonLifeTrigger : public DebuffTrigger
     {
     public:
-        SiphonLifeTrigger(PlayerbotAI* ai) : DebuffTrigger(ai, "siphon life") {}
+        SiphonLifeTrigger(PlayerbotAI* ai) : DebuffTrigger(ai, "siphon life", 1, true) {}
         bool IsActive() override;
     };
 
@@ -87,7 +94,7 @@ namespace ai
     class CorruptionOnAttackerTrigger : public DebuffOnAttackerTrigger
     {
     public:
-        CorruptionOnAttackerTrigger(PlayerbotAI* ai) : DebuffOnAttackerTrigger(ai, "corruption") {}
+        CorruptionOnAttackerTrigger(PlayerbotAI* ai) : DebuffOnAttackerTrigger(ai, "corruption", true) {}
         bool IsActive() override;
     };
 
@@ -155,15 +162,19 @@ namespace ai
     class SiphonLifeOnAttackerTrigger : public DebuffOnAttackerTrigger
     {
     public:
-        SiphonLifeOnAttackerTrigger(PlayerbotAI* ai) : DebuffOnAttackerTrigger(ai, "siphon life") {}
+        SiphonLifeOnAttackerTrigger(PlayerbotAI* ai) : DebuffOnAttackerTrigger(ai, "siphon life", true) {}
     };
 
-    DEBUFF_TRIGGER(ImmolateTrigger, "immolate");
+    class ImmolateTrigger : public DebuffTrigger
+    {
+    public:
+        ImmolateTrigger(PlayerbotAI* ai) : DebuffTrigger(ai, "immolate", 1, true) {}
+    };
 
     class ImmolateOnAttackerTrigger : public DebuffOnAttackerTrigger
     {
     public:
-        ImmolateOnAttackerTrigger(PlayerbotAI* ai) : DebuffOnAttackerTrigger(ai, "immolate") {}
+        ImmolateOnAttackerTrigger(PlayerbotAI* ai) : DebuffOnAttackerTrigger(ai, "immolate", true) {}
     };
 
     class ShadowTranceTrigger : public HasAuraTrigger
