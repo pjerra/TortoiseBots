@@ -7674,3 +7674,10 @@ Files: `ai/playerbot/strategy/warlock/WarlockTriggers.{h,cpp}`, `WarlockActions.
 Feature: automatic Viper Sting gated on the hunter's own mana (< 50%) plus target mana >= 10%; Serpent Sting otherwise.
 Source: `mod-playerbots` @ 79bd428, `src/Ai/Class/Hunter/HunterActions.cpp` (`CastViperStingAction::isUseful`: own mana < 50, target mana >= 30). Reimplemented in `ai/playerbot/strategy/hunter/HunterActions.cpp`; the target threshold stays at the module's existing 10%. Turtle Viper Sting (spell 3034) is `SPELL_AURA_PERIODIC_MANA_LEECH`, so it still feeds the hunter in 1.12.
 Validation: code review + build pending; in-game pending.
+
+## BWL Onyxia Scale Cloak warning (audit gap 10)
+
+- Feature: on entering Blackwing Lair, a bot whose back slot is not the Onyxia Scale Cloak (item 15138, equip spell 22683) tells its master once.
+- Source: mod-playerbots 79bd428, `src/Ai/Raid/BWL/BWLActions.cpp` (`BwlOnyxiaScaleCloakAuraCheckAction`), `BWLStrategy.cpp`, `BWLHelpers.h`.
+- Mode: reimplemented (behaviour changed). The donor calls `AddAura` to grant the immunity for free; TortoiseBots only warns and grants nothing.
+- Validation: code review + build pending; in-game pending.
