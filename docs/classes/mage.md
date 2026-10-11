@@ -16,7 +16,7 @@ Mages provide premier ranged spell DPS, the game's most reliable crowd control (
 ## Supported Specs & Roles
 
 - **Frost (Ranged DPS):** Exceptional control and survivability. Leverages *Frostbolt*, *Frost Nova*, *Blizzard*, and *Ice Barrier*.
-- **Fire (Ranged DPS):** Massive burst damage with *Fireball*, *Pyroblast*, *Improved Scorch* (Fire Vulnerability) and *Combustion*.
+- **Fire (Ranged DPS):** Massive burst damage with *Fireball*, *Pyroblast*, *Scorch* (Fire Vulnerability) and *Combustion*.
 - **Arcane (Ranged DPS):** High single-target burst with *Arcane Missiles*, *Arcane Power*, and *Presence of Mind*.
 
 ---
@@ -35,7 +35,7 @@ Mages provide premier ranged spell DPS, the game's most reliable crowd control (
 ### 2. Fire Mage
 - Hurries a *Pyroblast* once *Hot Streak* reaches full stacks (highest-priority nuke).
 - Refreshes *Pyroblast* in combat and consumes *Presence of Mind* with it.
-- Weaves *Scorch* casts to maintain the *Improved Scorch* fire vulnerability.
+- Weaves *Scorch* casts to maintain the Fire Vulnerability debuff (talent ranks and debuff are matched by spell id; Turtle has no spell named "Improved Scorch").
 - Casts *Fireball* as main nuke and *Fire Blast* on the move or for finishing blows.
 - Skips damage spells whose school the target is immune to (fire elementals, Molten Core adds, *Ice Block*): *Fireball* and *Scorch* fall through to *Frostbolt*, then the wand, instead of casting for zero damage. Arcane has no Frostbolt fallback row yet.
 

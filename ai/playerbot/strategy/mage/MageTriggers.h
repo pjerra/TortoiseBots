@@ -233,7 +233,16 @@ namespace ai
         }
     };
 
-    DEBUFF_TRIGGER_A(NoImprovedScorchDebuffTrigger, "improved scorch");
+    // Turtle names the talent ranks (11095/12872/12873/12874/12875) and the target
+    // debuff (22959) "Fire Vulnerability"; no spell is called "Improved
+    // Scorch", so a name-based DebuffTrigger never matched. Id-based instead.
+    class NoImprovedScorchDebuffTrigger : public Trigger
+    {
+    public:
+        NoImprovedScorchDebuffTrigger(PlayerbotAI* ai) : Trigger(ai, "no improved scorch") {}
+        virtual bool IsActive() override;
+        virtual std::string GetTargetName() override { return "current target"; }
+    };
 
     class NoFireVulnerabilityTrigger : public Trigger
     {
@@ -247,7 +256,7 @@ namespace ai
             if (target && !target->IsPlayer())
             {
                 // Required Improved Scorch talent
-                if (bot->HasSpell(11095) || bot->HasSpell(12872) || bot->HasSpell(12873))
+                if (bot->HasSpell(11095) || bot->HasSpell(12872) || bot->HasSpell(12873) || bot->HasSpell(12874) || bot->HasSpell(12875))
                 {
                     // Check if have max stacks of fire vulnerability expiring in less than 7 seconds
                     Aura* aura = ai->GetAura(22959, target);
