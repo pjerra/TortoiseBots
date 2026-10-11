@@ -72,6 +72,7 @@ namespace ai
             fleeFailures = other.fleeFailures;
             spreadFailures = other.spreadFailures;
             lastSpreadStepMs = other.lastSpreadStepMs;
+            fleeNoSpotMs = other.fleeNoSpotMs;
             moveFailReason = other.moveFailReason;
             moveEvent = Event();
         }
@@ -88,6 +89,7 @@ namespace ai
             fleeFailures.Clear();
             spreadFailures.Clear();
             lastSpreadStepMs = 0;
+            fleeNoSpotMs = 0;
             lastMoveShort = WorldPosition();
             nextTeleport = 0;
             moveFailReason = 0;
@@ -122,6 +124,9 @@ namespace ai
         // RaidSpreadAction to one step per kSpreadStepCooldownMs so stacked
         // ranged bots settle instead of ping-ponging every tick. 0 = none yet.
         uint32 lastSpreadStepMs = 0;
+        // WorldTimer ms of the last pool-bot flee search that found no spot
+        // (PoolFleePolicy.h backoff). 0 = none.
+        uint32 fleeNoSpotMs = 0;
         TravelPath lastPath;
         WorldPosition lastMoveShort;
         time_t nextTeleport;

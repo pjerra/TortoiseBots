@@ -18,6 +18,7 @@
 #include "playerbot/GrindSpotPolicy.h"
 #include "playerbot/TravelRepickPolicy.h"
 #include "playerbot/AvoidAoePolicy.h"
+#include "playerbot/PoolFleePolicy.h"
 #include "Database/DBCStores.h"
 
 using namespace ai;
@@ -1897,9 +1898,10 @@ bool MovementAction::Flee(Unit *target)
 
     if (!ai->HasRealPlayerMaster() && !ai->IsRealPlayer(target))
     {
-        // Continuous chase computes its own heading: no point-dispatch
-        // outcome is attributable to it, so retain the existing behavior.
-        fleeMovement.fleeFailures.Clear();
+        // A flee toward a group member is already under way: keep it.
+        if (succeeded)
+            return true;
+
         bool fullDistance = false;
         if (target->IsPlayer())
             fullDistance = true;
@@ -1908,16 +1910,12 @@ bool MovementAction::Flee(Unit *target)
 
         float distance = fullDistance ? (ai->GetRange("flee") * 2) : ai->GetRange("flee");
 
-        MotionMaster* mm = bot->GetMotionMaster();
-
-        if (mm->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE)
-        {
-            if (sServerFacade.GetChaseTarget(bot) == target && !bot->IsStopped())
-                return true;
-        }
-
-        mm->MoveChase(target, distance, WorldPosition(bot).GetAngleTo(target));
-        return true;
+        // Not a MoveChase at flee range: the core chase generator holds
+        // position while a standing target is within 1.4x the offset, so that
+        // flee "succeeded" every tick without moving. A checked point step
+        // moves for real, and fails when there is nowhere to go so the
+        // engine falls back to fighting.
+        return FleeStepAway(target, distance);
     }
 
     // Generate a position to flee
@@ -1973,24 +1971,106 @@ bool MovementAction::Flee(Unit *target)
         float const fleeStartDistance = sServerFacade.getDistance2d(bot, target);
         if(MoveTo(target->GetMapId(), rx, ry, rz))
         {
-            LastMovement& lm = AI_VALUE(LastMovement&, "last movement");
-            // Count successive flee dispatches so FleeMultiplier can detect a flee loop and
-            // hand priority back to spellcasting. A dispatch within the return window of the
-            // previous one is "subsequent" (loop); otherwise it's a fresh flee episode.
-            if (lm.lastFleeAttempt && (now - lm.lastFleeAttempt) <= (time_t)(sPlayerbotAIConfig.returnDelay / 1000))
-                lm.fleeCount++;
-            else
-                lm.fleeCount = 1;
-            lm.lastFleeAttempt = now;
-            lm.lastFlee = time(0);
-            lm.fleeFailures.BeginAttempt(target->GetObjectGuid().GetRawValue(),
-                target->GetMapId(), fleeHeading, fleeStartDistance, nowMs, bot->movespline->GetId());
-            lm.lastSpreadStepMs = WorldTimer::getMSTime();
+            NoteFleeDispatch(target, fleeHeading, fleeStartDistance, nowMs);
             succeeded = true;
         }
     }
 
     return succeeded;
+}
+
+void MovementAction::NoteFleeDispatch(Unit* target, float heading, float startDistance, uint32 nowMs)
+{
+    LastMovement& lm = AI_VALUE(LastMovement&, "last movement");
+    time_t const now = time(0);
+    // Count successive flee dispatches so FleeMultiplier can detect a flee loop and
+    // hand priority back to spellcasting. A dispatch within the return window of the
+    // previous one is "subsequent" (loop); otherwise it's a fresh flee episode.
+    if (lm.lastFleeAttempt && (now - lm.lastFleeAttempt) <= (time_t)(sPlayerbotAIConfig.returnDelay / 1000))
+        lm.fleeCount++;
+    else
+        lm.fleeCount = 1;
+    lm.lastFleeAttempt = now;
+    lm.lastFlee = now;
+    lm.fleeFailures.BeginAttempt(target->GetObjectGuid().GetRawValue(),
+        target->GetMapId(), heading, startDistance, nowMs, bot->movespline->GetId());
+    lm.lastSpreadStepMs = WorldTimer::getMSTime();
+}
+
+bool MovementAction::FleeStepAway(Unit* target, float distance)
+{
+    LastMovement& lm = AI_VALUE(LastMovement&, "last movement");
+    uint32 const nowMs = WorldTimer::getMSTime();
+    // A search that just found nothing is not repeated every tick.
+    if (PoolFleeSearchBackedOff(lm.fleeNoSpotMs, nowMs))
+        return false;
+
+    WorldPosition const botPos(bot);
+    float const startDistance = sServerFacade.getDistance2d(bot, target);
+    float const away = target->GetAngle(bot);
+
+    // Unpulled hostile mobs one step could wake: one cached "possible
+    // targets" read, filtered once, not a scan per candidate.
+    struct Sleeper { Unit* unit; float radius; float toBot; };
+    std::vector<Sleeper> sleepers;
+    std::list<ObjectGuid> const& possibleTargets = AI_VALUE(std::list<ObjectGuid>, "possible targets");
+    for (ObjectGuid const& guid : possibleTargets)
+    {
+        Unit* unit = ai->GetUnit(guid);
+        if (!unit || unit == target || !sServerFacade.IsAlive(unit) || unit->IsInCombat())
+            continue;
+        Creature* creature = unit->ToCreature();
+        if (!creature || !unit->IsHostileTo(bot))
+            continue;
+        float const radius = creature->GetAttackDistance(bot);
+        float const toBot = sServerFacade.getDistance2d(unit, bot);
+        if (radius <= 0.0f || !PoolFleeMobInReach(toBot, radius, distance))
+            continue;
+        sleepers.push_back({ unit, radius, toBot });
+    }
+
+    float offsets[kPoolFleeHeadingCount];
+    int const count = PoolFleeHeadingOffsets(offsets);
+    for (int i = 0; i < count; ++i)
+    {
+        float const heading = away + offsets[i];
+        // Headings that just failed to gain distance are skipped; when every
+        // one has failed the bot fights instead of fleeing again.
+        if (!lm.fleeFailures.IsHeadingFree(heading, nowMs))
+            continue;
+
+        WorldPosition cand = botPos + WorldPosition(0, distance * cos(heading), distance * sin(heading), 1.0f);
+        cand.setZ(cand.GetHeight());
+        if (cand.isInWater())
+            continue;
+
+        bool wakesMob = false;
+        for (Sleeper const& sleeper : sleepers)
+        {
+            if (PoolFleeLandingWakesMob(sServerFacade.getDistance2d(sleeper.unit, cand.getX(), cand.getY()),
+                sleeper.toBot, sleeper.radius))
+            {
+                wakesMob = true;
+                break;
+            }
+        }
+        if (wakesMob)
+            continue;
+
+        if (!bot->IsWithinLOS(cand.getX(), cand.getY(), cand.getZ() + bot->GetCollisionHeight()))
+            continue;
+        if (!botPos.canPathTo(cand, bot))
+            continue;
+        if (!MoveTo(bot->GetMapId(), cand.getX(), cand.getY(), cand.getZ()))
+            continue;
+
+        NoteFleeDispatch(target, heading, startDistance, nowMs);
+        lm.fleeNoSpotMs = 0;
+        return true;
+    }
+
+    lm.fleeNoSpotMs = nowMs ? nowMs : 1;
+    return false;
 }
 
 void MovementAction::ClearIdleState()

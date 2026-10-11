@@ -76,6 +76,12 @@ namespace ai
         // no hazard. Shared by point moves that must not end inside geometry.
         bool IsValidPosition(const WorldPosition& position, const WorldPosition& visibleFromPosition);
         bool Flee(Unit *target);
+        // Pool-bot flee: one checked point step of `distance` away from
+        // target (fanned to the sides), false when no spot is usable.
+        bool FleeStepAway(Unit* target, float distance);
+        // Flee bookkeeping after a dispatched flee move (loop count for
+        // FleeMultiplier, lastFlee, failed-heading observation).
+        void NoteFleeDispatch(Unit* target, float heading, float startDistance, uint32 nowMs);
         void ClearIdleState();
         void UpdateMovementState();
 
