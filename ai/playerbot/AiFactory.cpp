@@ -889,6 +889,47 @@ Engine* AiFactory::createCombatEngine(Player* player, PlayerbotAI* const facade,
     return engine;
 }
 
+std::string AiFactory::RealMasterSafeNonCombatStrategies(PlayerbotAI* ai, std::string const& strategies)
+{
+    // A pool bot in a real player's party follows that player. "+wander" is a
+    // sibling of "follow" and replaces it, and the open-world adds re-arm what
+    // the player may have switched off, so the list skips them for such a bot.
+    if (!ai || !ai->HasRealPlayerMaster())
+        return strategies;
+
+    return StripOpenWorldNonCombatStrategies(strategies);
+}
+
+std::string AiFactory::StripOpenWorldNonCombatStrategies(std::string const& strategies)
+{
+    static char const* const openWorld[] = { "grind", "travel", "tfish", "rpg", "rpg craft", "wander" };
+
+    std::string kept;
+    for (std::string const& entry : split(strategies, ','))
+    {
+        bool drop = false;
+        if (!entry.empty() && entry[0] == '+')
+        {
+            for (char const* name : openWorld)
+            {
+                if (entry.compare(1, std::string::npos, name) == 0)
+                {
+                    drop = true;
+                    break;
+                }
+            }
+        }
+
+        if (drop)
+            continue;
+
+        if (!kept.empty())
+            kept += ",";
+        kept += entry;
+    }
+    return kept;
+}
+
 void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const facade, Engine* nonCombatEngine)
 {
     const int tab = GetPlayerSpecTab(player);
@@ -1198,8 +1239,10 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
                             nonCombatEngine->addStrategy("maintenance");
                         }
 
-                        // The config list runs last, so it must honour the guard too.
-                        nonCombatEngine->ChangeStrategy(InstanceSafeNonCombatStrategies(player, sPlayerbotAIConfig.randomBotNonCombatStrategies));
+                        // The config list runs last, so it must honour the instance guard and must
+                        // not let its "+wander" replace a player's bot's follow.
+                        nonCombatEngine->ChangeStrategy(InstanceSafeNonCombatStrategies(player,
+                            RealMasterSafeNonCombatStrategies(facade, sPlayerbotAIConfig.randomBotNonCombatStrategies)));
                     }
                     else
                     {

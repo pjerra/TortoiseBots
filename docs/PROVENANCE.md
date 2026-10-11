@@ -8180,3 +8180,17 @@ Validation: code review + build pending; in-game pending.
 | Feature | Source project | Source commit | Source files | Ported / reimplemented | Reason | Local validation |
 | --- | --- | --- | --- | --- | --- | --- |
 | The party-member search (buffs, blessings, dispel, resurrect, soulstone) returns the first matching member in line of sight, and the first out-of-sight match only when nobody matching is in sight | `mod-playerbots` | `79bd4281` | `src/Ai/Base/Value/PartyMemberValue.cpp` (`PartyMemberValue::Check`: candidate must be `IsWithinLOS`), `src/Ai/Class/Paladin/Actions/PaladinActions.cpp:16-27` (`IsBlessingTargetCandidate`, same LOS filter) | Reimplemented in `ai/playerbot/strategy/values/PartyMemberValue.cpp` (`FindPartyMember`). Not a filter as in the donor: an out-of-sight match stays the fallback, because the resurrection value deliberately leaves reaching the corpse to the reach prerequisite, and a lone out-of-sight member must still be walked to. The LOS test runs only on members that already match, after the cheap checks | Follow-up to the hidden-GM blessing loop (fix 50): any member that cannot receive the cast (out of LOS where the bot cannot walk into sight, or under `stay`) was picked on every check and the members after it in the search order never got the buff | `bash tools/verify_all.sh`; `git diff --check`. Code review; build pending; in-game pending |
+## A real player's pool bot keeps `follow` after the non-combat list — 2026-10-11
+Feature: `AiFactory::RealMasterSafeNonCombatStrategies` applies
+`RandomBotNonCombatStrategies` without its `+grind/+travel/+tfish/+rpg/
++rpg craft/+wander` entries while the bot's master is a real player, in the
+factory's grouped-bot branch and in `RandomBotFacade::ChangeStrategy` (timed
+re-apply). Source: mod-playerbots 79bd428, `src/Bot/Factory/AiFactory.cpp`
+(`AddDefaultNonCombatStrategies`: a grouped bot gets `follow` and no
+grind/rpg; `conf/playerbots.conf.dist` ships `RandomBotNonCombatStrategies`
+empty). Reimplemented as a list filter (same entry set as the Issue #218
+instance filter). Reason: `wander` is a sibling of `follow` in the movement
+strategy context, so the list's `+wander` replaced a player's bot's `follow`
+(in-game A/B at acd9e01: tank and healer showed `wander`, the tester
+whispered `follow` each time). Masterless pool bots keep the full list.
+Validation: code review + build pending; in-game pending.
