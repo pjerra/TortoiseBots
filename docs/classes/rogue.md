@@ -36,7 +36,7 @@ Rogues provide premier single-target melee physical DPS, invaluable pre-combat c
 - **Finishers:**
   - 4–5 Combo Points: Casts *Eviscerate* for burst damage (falling back to *Rupture* when the debuff is missing; Assassination/Subtlety also cast *Rupture* from 3+ combo points, on any target).
   - Almost-dead dump: a target at 25% health or less eats whatever combo points are banked (1+) as *Eviscerate*, ahead of the gated finishers, so points land as damage instead of dying with the mob.
-  - *Expose Armor* (Combat and generic DPS) is skipped while the target already carries *Sunder Armor* from any caster, since the two do not stack (spell group 1064, strongest wins); the rogue's own *Expose Armor* upkeep is unchanged.
+  - *Expose Armor* (Combat and generic DPS) is skipped while the target already carries *Sunder Armor* from any caster at any stack count, since the two do not stack (spell group 1064, strongest wins); the rogue's own *Expose Armor* upkeep is unchanged.
   - Interrupts are covered by *Kick* (*Cheap Shot* while stealthed); *Kidney Shot* is only a fallback when *Kick* cannot run.
 
 ### 3. Burst Cooldowns
