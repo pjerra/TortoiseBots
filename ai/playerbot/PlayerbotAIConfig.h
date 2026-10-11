@@ -693,6 +693,8 @@ public:
     std::list<std::string> debugFilter;
 
     std::unordered_map <std::string, std::pair<FILE*, bool>> logFiles;
+    // Logs that could not be opened or rotated; skipped for the rest of the run.
+    std::unordered_set<std::string> logOpenFailed;
 
     uint32 botCheatMask = 0;
     uint32 rndBotCheatMask = 0;

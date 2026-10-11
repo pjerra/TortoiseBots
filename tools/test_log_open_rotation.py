@@ -24,6 +24,7 @@ class LogOpenRotationTest(unittest.TestCase):
 #include <fstream>
 #include <iterator>
 #include <string>
+#include <unordered_set>
 #include <sys/stat.h>
 #include <system_error>
 #include <unordered_map>
@@ -63,6 +64,7 @@ public:
  uint32_t logRetentionDays=0;
  unordered_map<string,pair<FILE*,bool>> logFiles;
  unordered_map<string,time_t> logHour;
+ unordered_set<string> logOpenFailed;
  ai::LogFileRotation logRotation;
  bool hasLog(string const&) { return enabled; }
  bool openLog(string, char const*, bool haslog=false);
@@ -167,6 +169,9 @@ int main(int argc, char** argv) {
   cfg.enabled=true;
   assert(!cfg.openLog("missing/subdir.csv","w"));
   assert(!cfg.logFiles.at("missing/subdir.csv").first && !cfg.logFiles.at("missing/subdir.csv").second);
+  // A failed file stays off: later events neither retry fopen nor report again.
+  assert(!cfg.openLog("missing/subdir.csv","a"));
+  assert(!cfg.openLog("missing/subdir.csv","a"));
  }
  assert(sLog.errors==2);
 }

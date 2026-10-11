@@ -1319,6 +1319,11 @@ bool PlayerbotAIConfig::openLog(std::string fileName, char const* mode, bool has
     if (!haslog && !hasLog(fileName))
         return false;
 
+    // A file that failed to open or rotate stays off for this run: log() calls
+    // this on every event, and retrying cost an fopen plus an error line each time.
+    if (logOpenFailed.count(fileName))
+        return false;
+
     auto logFileIt = logFiles.find(fileName);
     if (logFileIt == logFiles.end())
     {
@@ -1344,7 +1349,10 @@ bool PlayerbotAIConfig::openLog(std::string fileName, char const* mode, bool has
         for (std::string const& piece : plain)
             CompressLogPiece(piece);
         if (!archiveLog(path, now))
+        {
+            logOpenFailed.insert(fileName);
             return false;
+        }
     }
     file = fopen(path.c_str(), mode);
 
@@ -1361,6 +1369,7 @@ bool PlayerbotAIConfig::openLog(std::string fileName, char const* mode, bool has
 
         logFileIt->second.first = nullptr;
         logFileIt->second.second = false;
+        logOpenFailed.insert(fileName);
 
         return false;
     }
