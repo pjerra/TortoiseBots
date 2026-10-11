@@ -17,6 +17,11 @@ namespace ai
         std::unordered_map<ObjectGuid, float> GetTargets(Player* requester, bool debug = false);
 
         std::string GetRpgActionReason(ObjectGuid target) { auto reason = rgpActionReason.find(target); if (reason != rgpActionReason.end())  return reason->second; return ""; }
+
+        // True while a travel target is picked, under way or cooling down: the
+        // rpg layer must not hijack that journey. An arrived trip (WORK) is
+        // not in flight - working the NPC the bot walked to is the rpg layer's job.
+        static bool TravelJourneyInFlight(PlayerbotAI* ai);
     private:
         float getMaxRelevance(GuidPosition guidP);
         bool HasSameTarget(ObjectGuid guid, uint32 max, std::list<ObjectGuid>& nearGuids);

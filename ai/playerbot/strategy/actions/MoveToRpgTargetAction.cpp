@@ -238,7 +238,7 @@ bool MoveToRpgTargetAction::isUseful()
         if (bot->IsMoving() && bot->GetMotionMaster() && bot->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
             return false;
 
-    if (AI_VALUE(bool, "travel target active"))
+    if (ChooseRpgTargetAction::TravelJourneyInFlight(ai))
         return false;
 
     if (AI_VALUE2(float, "distance", "rpg target") < INTERACTION_DISTANCE)

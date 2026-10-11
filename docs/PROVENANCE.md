@@ -7789,3 +7789,29 @@ pet was holding.
 
 Local validation: code review + build pending; in-game pending.
 `bash tools/verify_all.sh`; `git diff --check`.
+## Arrived travel trip releases the rpg layer (2026-10-11)
+
+Donor: mod-playerbots `79bd428`,
+`src/Ai/Base/Actions/ChooseRpgTargetAction.cpp:272-295`
+(`ChooseRpgTargetAction::isUseful`: no travel-status gate; the old
+"traveling" gate is commented out).
+
+Source files (module, modified):
+`ai/playerbot/strategy/actions/ChooseRpgTargetAction.{h,cpp}` (new static
+`TravelJourneyInFlight`, used by `isUseful`),
+`ai/playerbot/strategy/actions/MoveToRpgTargetAction.cpp` (same gate) +
+`docs/concepts/bot-mechanics-and-quirks.md`.
+
+Copied / ported / reimplemented: reimplemented. This narrows a gate that
+the module itself widened in 483df0d (#527, "travel target traveling" to
+"travel target active"). It does not remove the gate as the donor does: a
+picked, travelling or cooling-down target still holds the rpg layer back
+(#527's hijack/thrash fix), and only an arrived trip (WORK) is released.
+
+Reason: live 2026-10-11, yulon-ubuntu, 500 pool bots at 18d4d14, 25 min of
+dashboard samples: "choose rpg target" was the last executed action in 2
+of 74,972 bot samples, and 36 of 108 standstills of 3+ min were arrived
+trips (WORK at an auctioneer, mailbox, rpg spot, trainer or quest NPC)
+re-picking the same NPC every ~30 s after the work-idle release.
+
+Validation: code review + build pending; in-game pending.
