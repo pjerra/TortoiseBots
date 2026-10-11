@@ -20,6 +20,18 @@
 // the target would pin a healthy server at whatever the budget last shrank
 // to instead of reclaiming the ceiling.
 //
+// Only the pool's share of the tick is the controller's to cut. The world
+// tick also carries the core (maps, sessions), other module services and the
+// unbudgeted player-owned bots; when those alone keep the tick over the
+// shrink line, cutting the pool cannot bring it back and only makes bots
+// late. So the caller also feeds the time the previous pool turn loop took,
+// and the controller shrinks only when this tick is over the line and the
+// rest of it (tick minus pool turns, the larger of its smoothed and latest
+// reading) plus the pool at its floor would fit under the line. Otherwise it
+// holds the budgets: a core-bound stretch neither collapses them to the
+// floor nor grows them further. A pass spike the bots caused still shrinks,
+// because the rest of that tick stays small.
+//
 // Hardware-agnostic on purpose: no CPU detection, only feedback on measured
 // tick time. Oscillation is damped two ways: the tick reading is an
 // exponential moving average (one spike does not yank the budget), and the
@@ -42,11 +54,14 @@ public:
     // the operator's configured ceilings so tests can pin them down.
     AdaptiveBudget(uint32_t targetTickMs, uint32_t poolCeilingUs, uint32_t combatCeilingUs)
         : m_targetMs(targetTickMs), m_poolCeilingUs(poolCeilingUs), m_combatCeilingUs(combatCeilingUs),
-          m_poolUs(poolCeilingUs), m_combatUs(combatCeilingUs), m_tickEmaMs(targetTickMs) {}
+          m_poolUs(poolCeilingUs), m_combatUs(combatCeilingUs), m_tickEmaMs(targetTickMs),
+          m_restEmaMs(targetTickMs),
+          m_floorMs((std::min<uint64_t>(kFloorUs, poolCeilingUs) + std::min<uint64_t>(kFloorUs, combatCeilingUs)) / 1000.0) {}
 
-    // Feed the measured previous world tick (UpdateBots' diff, ms). Returns
-    // nothing; read the budgets back with PoolUs()/CombatUs().
-    void Update(uint32_t tickMs)
+    // Feed the measured previous world tick (UpdateBots' diff, ms) and how
+    // long the pool turn loop ran inside it (ms). Returns nothing; read the
+    // budgets back with PoolUs()/CombatUs().
+    void Update(uint32_t tickMs, uint32_t poolTurnsMs)
     {
         if (m_targetMs == 0)
         {
@@ -59,14 +74,32 @@ public:
         // EMA first: a single 14 s hitch (seen live at pool start) must not
         // collapse the budget for the next minutes.
         m_tickEmaMs += (static_cast<double>(tickMs) - m_tickEmaMs) / kEmaWindow;
+        double const restMs = tickMs > poolTurnsMs ? static_cast<double>(tickMs - poolTurnsMs) : 0.0;
+        m_restEmaMs += (restMs - m_restEmaMs) / kEmaWindow;
 
         uint32_t const shrinkAboveMs = m_targetMs + kDeadbandMs;
+        m_held = false;
         if (m_tickEmaMs > shrinkAboveMs)
         {
-            // Over target: multiplicative retreat, so a 250 ms tick cuts much
-            // harder than a 60 ms one over consecutive ticks.
-            m_poolUs = ClampScaled(m_poolUs, kShrinkFactor, m_poolCeilingUs);
-            m_combatUs = ClampScaled(m_combatUs, kShrinkFactor, m_combatCeilingUs);
+            // Over target. Shrink only when the pool is what keeps the tick
+            // over: this tick itself is over (not the smoothed tail of a load
+            // that has already passed) and the rest of the tick plus the pool
+            // at its floor fits under the line. The larger of the smoothed
+            // and latest rest reading is used so a core load that just
+            // started is seen at once instead of after the EMA catches up.
+            double const rest = std::max(m_restEmaMs, restMs);
+            if (tickMs > shrinkAboveMs && rest + m_floorMs <= shrinkAboveMs)
+            {
+                // Multiplicative retreat, so a 250 ms tick cuts much harder
+                // than a 60 ms one over consecutive ticks.
+                m_poolUs = ClampScaled(m_poolUs, kShrinkFactor, m_poolCeilingUs);
+                m_combatUs = ClampScaled(m_combatUs, kShrinkFactor, m_combatCeilingUs);
+            }
+            else
+            {
+                // Core-bound (or already back under): hold the budgets.
+                m_held = true;
+            }
         }
         else
         {
@@ -85,6 +118,10 @@ public:
 
     // Test seam: the smoothed reading the controller actually decides on.
     double SmoothedTickMs() const { return m_tickEmaMs; }
+    // Smoothed tick time outside the pool turns (core, services, player bots).
+    double SmoothedRestMs() const { return m_restEmaMs; }
+    // True when the last Update was over target but held instead of shrinking.
+    bool Held() const { return m_held; }
 
 private:
     // EMA window in ticks: ~8 ticks to absorb two-thirds of a step.
@@ -118,6 +155,10 @@ private:
     uint64_t m_poolUs;
     uint64_t m_combatUs;
     double m_tickEmaMs;
+    double m_restEmaMs;
+    // Pool + combat floor in ms: the least a cut can leave the pool turns.
+    double m_floorMs;
+    bool m_held = false;
 };
 
 } // namespace TortoiseBots

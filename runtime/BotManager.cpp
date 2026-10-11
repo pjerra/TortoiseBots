@@ -1824,7 +1824,9 @@ void BotManager::UpdateBots(uint32_t diff)
     auto const passStart = std::chrono::steady_clock::now();
 
     // Self-tuning tick budget: feed the measured previous world tick (diff)
-    // before the passes read their budgets. Re-sync when the operator's
+    // and the previous pool turn loop inside it before the passes read their
+    // budgets (the controller only cuts when the pool is what keeps the tick
+    // over target, see AdaptiveBudget.h). Re-sync when the operator's
     // target or ceilings change (restart-only keys). When the controller is
     // off (target 0) it holds the ceilings, which is the old static path.
     if (sPlayerbotAIConfig.targetWorldTickMs != m_adaptiveTargetMs ||
@@ -1837,7 +1839,7 @@ void BotManager::UpdateBots(uint32_t diff)
         m_adaptiveBudget = AdaptiveBudget(m_adaptiveTargetMs,
             static_cast<uint32_t>(m_adaptivePoolCeilingUs), static_cast<uint32_t>(m_adaptiveCombatCeilingUs));
     }
-    m_adaptiveBudget.Update(diff);
+    m_adaptiveBudget.Update(diff, m_lastPoolTurnsMs);
 
     // Guard: AI updates below can request (their own or another bot's) removal.
     // RemoveBot defers the session stop while this is set; the queue drains
@@ -2027,7 +2029,7 @@ void BotManager::UpdateBots(uint32_t diff)
         return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now().time_since_epoch()).count());
     };
-    uint64_t const turnsStartUs = budgetActive ? nowUs() : 0;
+    uint64_t const turnsStartUs = nowUs();
     uint32_t poolProcessed = 0;
     bool budgetHit = false;
     uint64_t const turnLoopStartUs = nowUs();
@@ -2055,7 +2057,10 @@ void BotManager::UpdateBots(uint32_t diff)
         updateOneBot(turn.guidLow);
         ++poolProcessed;
     }
-    m_perfTurnLoopUsSum += nowUs() - turnLoopStartUs;
+    uint64_t const turnLoopEndUs = nowUs();
+    m_perfTurnLoopUsSum += turnLoopEndUs - turnLoopStartUs;
+    // The cuttable share of this tick, fed to the controller next pass.
+    m_lastPoolTurnsMs = static_cast<uint32_t>((turnLoopEndUs - turnsStartUs) / 1000);
 
     m_inBotUpdate = false;
 

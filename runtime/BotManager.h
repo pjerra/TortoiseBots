@@ -241,6 +241,9 @@ private:
     uint32_t m_adaptiveTargetMs = 50;
     uint64_t m_adaptivePoolCeilingUs = 10000;
     uint64_t m_adaptiveCombatCeilingUs = 15000;
+    // How long the last pool turn loop ran (ms): the part of the world tick
+    // the controller can cut.
+    uint32_t m_lastPoolTurnsMs = 0;
     // BOTPERF window: UpdateBots pass cost accumulated over ~30 s of tick time.
     uint64_t m_perfPassUsSum = 0;
     uint64_t m_perfPassUsMax = 0;

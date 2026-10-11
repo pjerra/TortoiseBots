@@ -5,8 +5,9 @@
 // the floor, sustained at-or-under-target ticks grow additively back to the
 // ceiling, only readings above target + deadband shrink, a healthy in-target
 // reading reclaims (never holds a shrunken budget: the world thread pads
-// healthy ticks to ~50 ms), a single spike barely moves the EMA, and the
-// floor/ceiling clamps hold under long pressure.
+// healthy ticks to ~50 ms), a single spike barely moves the EMA, the
+// floor/ceiling clamps hold under long pressure, and a tick kept over target
+// by the core (not the pool turns) holds the budgets instead of cutting them.
 //
 // Build and run:
 //   g++ -std=c++17 -Wall -Wextra tools/test_adaptive_budget.cpp -o /tmp/test_adaptive_budget
@@ -29,11 +30,19 @@ static int checks = 0;
     } \
 } while (0)
 
-// Drive the controller for n ticks at a fixed measured tick time.
+// Drive the controller for n ticks at a fixed measured tick time, all of it
+// pool turns (the bots alone make the tick: cutting them always helps).
 static void Drive(AdaptiveBudget& budget, uint32_t tickMs, int n)
 {
     for (int i = 0; i < n; ++i)
-        budget.Update(tickMs);
+        budget.Update(tickMs, tickMs);
+}
+
+// Drive with a split tick: poolMs of pool turns, the rest core time.
+static void DriveSplit(AdaptiveBudget& budget, uint32_t tickMs, uint32_t poolMs, int n)
+{
+    for (int i = 0; i < n; ++i)
+        budget.Update(tickMs, poolMs);
 }
 
 static void TestOffHoldsCeilings()
@@ -101,10 +110,10 @@ static void TestDeadbandReclaimsSteady()
     // permanent on a healthy server. The EMA lags, so settle it into the
     // reclaim zone first, then pin the exact step.
     while (budget.SmoothedTickMs() > 60.0)
-        budget.Update(50);
+        budget.Update(50, 50);
     uint64_t const settled = budget.PoolUs();
     for (int i = 0; i < 10; ++i)
-        budget.Update(50);
+        budget.Update(50, 50);
     CHECK(budget.PoolUs() == settled + 10 * 1000);
     Drive(budget, 50, 200);
     CHECK(budget.PoolUs() == 100000);
@@ -123,7 +132,7 @@ static void TestSingleSpikeBarelyMovesEma()
     // of the gap — just outside the deadband, so the budget shrinks a few
     // steps instead of collapsing. Calm ticks then decay the EMA back into
     // the band and reclaim starts again.
-    budget.Update(300);
+    budget.Update(300, 300);
     CHECK(budget.SmoothedTickMs() < calm + (300.0 - calm) / 8.0 + 1.0);
     uint64_t const afterSpike = budget.PoolUs();
     CHECK(afterSpike < 10000);
@@ -147,14 +156,93 @@ static void TestHealthyTickReclaimsToCeiling()
     uint64_t const shrunk = budget.PoolUs();
     CHECK(shrunk < 22000);
     while (budget.SmoothedTickMs() > 60.0)
-        budget.Update(50);
+        budget.Update(50, 50);
     uint64_t const settled = budget.PoolUs();
     for (int i = 0; i < 30; ++i)
-        budget.Update(50);
+        budget.Update(50, 50);
     CHECK(budget.PoolUs() > settled);
     Drive(budget, 50, 100);
     CHECK(budget.PoolUs() == 22000);
     CHECK(budget.CombatUs() == 22000);
+}
+
+static void TestCoreBoundTickHolds()
+{
+    // Live shape (yulon, 500 bots, target 100): 30-s windows alternate between
+    // a ~102 ms tick and a ~136 ms tick while the bot pass stays ~26 ms, so
+    // the extra time is the core's. Cutting the pool cannot get under 110.
+    AdaptiveBudget budget(100, 10000, 15000);
+    DriveSplit(budget, 102, 26, 100);
+    CHECK(budget.PoolUs() == 10000);
+    CHECK(budget.CombatUs() == 15000);
+    // Bad window: the rest of the tick (~110 ms) plus the 4 ms floor is over
+    // the line from the very first tick, so the budgets hold all window long
+    // instead of sliding to the floor while the EMAs catch up.
+    for (int i = 0; i < 100; ++i)
+    {
+        budget.Update(136, 26);
+        CHECK(budget.PoolUs() == 10000);
+        CHECK(budget.CombatUs() == 15000);
+    }
+    CHECK(budget.SmoothedTickMs() > 110.0);
+    CHECK(budget.SmoothedRestMs() > 106.0);
+    CHECK(budget.Held());
+    // Back to the good window: the smoothed tick decays through the line
+    // without a cut (this tick is under the line), then reclaim resumes.
+    for (int i = 0; i < 100; ++i)
+    {
+        budget.Update(102, 26);
+        CHECK(budget.PoolUs() == 10000);
+    }
+    CHECK(!budget.Held());
+}
+
+static void TestCoreBoundHoldsAShrunkBudget()
+{
+    // Hold means hold: a budget already cut by the bots stays where it is
+    // while the core keeps the tick over target (no further cut, no growth
+    // that would only add to an over-target tick).
+    AdaptiveBudget budget(100, 10000, 15000);
+    DriveSplit(budget, 200, 150, 2);
+    uint64_t const shrunk = budget.PoolUs();
+    CHECK(shrunk < 10000);
+    CHECK(shrunk > 2000);
+    DriveSplit(budget, 140, 10, 100);
+    CHECK(budget.PoolUs() == shrunk);
+    CHECK(budget.Held());
+    // Core load gone: reclaim back to the ceiling.
+    DriveSplit(budget, 60, 20, 200);
+    CHECK(budget.PoolUs() == 10000);
+    CHECK(budget.CombatUs() == 15000);
+}
+
+static void TestPoolOverloadOnSlowCoreStillShrinks()
+{
+    // Core 80 ms is under the line on its own; 60 ms of pool turns push the
+    // tick to 140. Cutting the pool can reach the target, so it shrinks.
+    AdaptiveBudget budget(100, 10000, 15000);
+    DriveSplit(budget, 140, 60, 20);
+    CHECK(budget.PoolUs() == 2000);
+    CHECK(budget.CombatUs() == 2000);
+    CHECK(!budget.Held());
+}
+
+static void TestPoolSpikeOnBusyCoreStillShrinks()
+{
+    // A single slow pass (120 ms of pool turns) on a ~75 ms core: the bots
+    // caused it, so it still cuts, but only on the tick that was over.
+    AdaptiveBudget budget(100, 10000, 15000);
+    DriveSplit(budget, 102, 27, 100);
+    CHECK(budget.PoolUs() == 10000);
+    budget.Update(200, 120);
+    uint64_t const afterSpike = budget.PoolUs();
+    CHECK(afterSpike < 10000);
+    // The EMA tail of the spike does not keep cutting (those ticks are under
+    // the line), and reclaim returns the ceiling once the EMA is back.
+    DriveSplit(budget, 102, 27, 3);
+    CHECK(budget.PoolUs() >= afterSpike);
+    DriveSplit(budget, 102, 27, 100);
+    CHECK(budget.PoolUs() == 10000);
 }
 
 int main()
@@ -165,6 +253,10 @@ int main()
     TestDeadbandReclaimsSteady();
     TestSingleSpikeBarelyMovesEma();
     TestHealthyTickReclaimsToCeiling();
+    TestCoreBoundTickHolds();
+    TestCoreBoundHoldsAShrunkBudget();
+    TestPoolOverloadOnSlowCoreStillShrinks();
+    TestPoolSpikeOnBusyCoreStillShrinks();
     std::printf("adaptive budget: all %d checks passed\n", checks);
     return 0;
 }
