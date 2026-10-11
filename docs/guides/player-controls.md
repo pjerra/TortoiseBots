@@ -41,7 +41,7 @@ The modern control plane operates on **player intent**. Instead of micromanaging
 
 | Command | Target Required | What It Does |
 | :--- | :--- | :--- |
-| `.bot action attack` | Hostile Target | Controllable party DPS/tank bots engage your current target immediately (dedicated healers keep healing). A creature in evade mode — one the core has sent back to its spawn point, absorbing every point of damage aimed at it — is refused with "is evading": nothing can hurt it until it stops moving. |
+| `.bot action attack` | Hostile Target | Controllable party DPS/tank bots engage your current target immediately (dedicated healers keep healing). A creature in evade mode — one the core has sent back to its spawn point, absorbing every point of damage aimed at it — is refused with "is evading": nothing can hurt it until it stops moving. The order also lifts an earlier "unreachable" give-up on that mob and its kind (a bot that gave up on one Silvermane Wolf otherwise ignored every wolf that was not hitting it for five minutes); a mob that really cannot be reached is given up on again after 15 s. |
 | `.bot action interrupt` | Casting Hostile | Evaluates party bots and orders the first party bot with a ready interrupt (e.g. *Kick*, *Pummel*, *Earth Shock*, *Counterspell*); if it is out of range the bot first closes distance and then casts. |
 | `.bot action stop` | None | Clears combat queues and stops current attacks. |
 | `.bot action flee` | None | Break off: bots drop combat (and any pull hold) and follow you in passive mode without attacking. The next tactical order — `attack`, `pull`, `pullback`, `focus skull`, `follow`, `stay` — ends the passive hold; a pull brings the whole party back. |

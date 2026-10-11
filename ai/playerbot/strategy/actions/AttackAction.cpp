@@ -19,6 +19,22 @@ void CommitExplicitAttackTarget(PlayerbotAI* ai, ObjectGuid guid)
     context->GetValue<ObjectGuid>("attack target")->Set(guid);
     context->GetValue<ObjectGuid>("explicit attack target")->Set(guid);
 
+    // A player's order outranks an earlier reach give-up. That give-up puts the
+    // creature and its whole kind on the "unreachable" lists for five minutes,
+    // and AttackersValue::IgnoreTarget hides such a creature unless it hits this
+    // bot. The ordered mob was then missing from the bot's own attacker list: no
+    // "has attackers", no tank/dps assist, and the first time the order went
+    // invalid (the mage's Frost Nova) nothing picked it up again. A tank stood
+    // idle beside a fight for 55 s and engaged the next mob of that kind only
+    // when the five minutes ran out. If the mob really is out of reach, the
+    // reach action gives up on it again after 15 s.
+    context->GetValue<std::map<ObjectGuid, uint32>&>("unreachable targets")->Get().erase(guid);
+    if (Unit* unit = ai->GetUnit(guid))
+    {
+        if (unit->IsCreature())
+            context->GetValue<std::map<uint32, uint32>&>("unreachable entries")->Get().erase(unit->GetEntry());
+    }
+
     // Target and attacker values may have been evaluated earlier in this same
     // second while the bot was following.  Invalidate them now so the first
     // combat decision sees the command target instead of clearing it as stale.
