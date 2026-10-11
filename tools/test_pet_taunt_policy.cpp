@@ -73,6 +73,19 @@ static void TestCowerSpellSet()
     CHECK(!IsPetCowerSpell(3716));
 }
 
+// Sweep scope: pool pets sweep everything; a pet whose bot has a
+// real-player master sweeps only taunts, until the player orders one.
+static void TestSweepScope()
+{
+    CHECK(ShouldSweepPetSpell(false, false, false));
+    CHECK(ShouldSweepPetSpell(false, false, true));
+    CHECK(ShouldSweepPetSpell(false, true, true));
+    CHECK(ShouldSweepPetSpell(true, false, true));
+    CHECK(!ShouldSweepPetSpell(true, false, false));
+    CHECK(!ShouldSweepPetSpell(true, true, true));
+    CHECK(!ShouldSweepPetSpell(true, true, false));
+}
+
 int main()
 {
     TestSoloTaunts();
@@ -80,6 +93,7 @@ int main()
     TestTanklessGroupTaunts();
     TestTauntSpellSet();
     TestCowerSpellSet();
+    TestSweepScope();
     std::printf("test_pet_taunt_policy: %d checks passed\n", checks);
     return 0;
 }

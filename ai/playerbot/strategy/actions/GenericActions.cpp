@@ -315,6 +315,9 @@ bool SetPetAction::Execute(Event& event)
 
                     const bool autocastActive = IsAutocastActive();
                     pet->ToggleAutocast(spellId, !autocastActive);
+                    // PET-3: an ordered taunt beats the group-tank sweep.
+                    if (TortoiseBots::IsPetTauntSpell(spellId))
+                        ai->SetPetTauntAutocastOrdered();
 
                     std::ostringstream out;
                     out << (autocastActive ? "Disabling" : "Enabling") << " pet autocast for ";
@@ -550,9 +553,12 @@ bool SetPetAction::Execute(Event& event)
 
 bool TogglePetSpellAutoCastAction::isPossible()
 {
-    // Pool bots only: a player who owns or hired the bot sets its pet's
-    // autocast and stance themselves, and this must not override them.
-    return bot->GetPet() != nullptr && !ai->HasRealPlayerMaster();
+    // A player who owns, hired or groups with the bot sets its pet's
+    // autocast themselves (`pet autocast`), and this must not override
+    // them; the one exception is PET-3's taunt stand-down, kept until the
+    // player orders a taunt (runtime/PetTauntPolicy.h ShouldSweepPetSpell).
+    return bot->GetPet() != nullptr &&
+        (!ai->HasRealPlayerMaster() || !ai->IsPetTauntAutocastOrdered());
 }
 
 // PET-3: live input gathering for runtime/PetTauntPolicy.h. Solo bots skip
@@ -603,12 +609,17 @@ bool TogglePetSpellAutoCastAction::Execute(Event& /*event*/)
     // with a real tank. Computed once per sweep (the "has pet" trigger
     // throttles this), not per spell.
     bool const tauntAllowed = ai::IsPetTauntAllowed(ai, bot);
+    // With a real-player master (the player's party, or hired) only the
+    // taunts are swept, so Growl/Torment stop peeling off the party's tank.
+    bool const playerMaster = ai->HasRealPlayerMaster();
+    bool const tauntOrdered = ai->IsPetTauntAutocastOrdered();
 
     bool changed = false;
     std::vector<uint32> stale;
-    for (uint32 autocast : pet->m_autospells)
-        if (!pet->HasSpell(autocast))
-            stale.push_back(autocast);
+    if (!playerMaster)
+        for (uint32 autocast : pet->m_autospells)
+            if (!pet->HasSpell(autocast))
+                stale.push_back(autocast);
     for (uint32 spellId : stale)
     {
         auto it = std::find(pet->m_autospells.begin(), pet->m_autospells.end(), spellId);
@@ -626,6 +637,9 @@ bool TogglePetSpellAutoCastAction::Execute(Event& /*event*/)
 
         uint32 spellId = itr->first;
         if (IsPassiveSpell(spellId))
+            continue;
+        if (!TortoiseBots::ShouldSweepPetSpell(playerMaster, tauntOrdered,
+                TortoiseBots::IsPetTauntSpell(spellId)))
             continue;
 
         bool active = std::find(pet->m_autospells.begin(), pet->m_autospells.end(), spellId) != pet->m_autospells.end();

@@ -62,4 +62,16 @@ inline bool ShouldPetTaunt(PetTauntInputs const& inputs)
     return !inputs.tankInGroup;
 }
 
+// Which pet spells the autocast sweep may touch. Pool bots (no real-player
+// master): every spell. A bot with a real-player master (in a player's
+// party, or hired): only the taunts, so Growl/Torment still stand down
+// under the party's tank, and never once the player has ordered
+// `pet autocast` on a taunt; every other spell stays the player's.
+inline bool ShouldSweepPetSpell(bool playerMaster, bool tauntOrdered, bool isTauntSpell)
+{
+    if (!playerMaster)
+        return true;
+    return isTauntSpell && !tauntOrdered;
+}
+
 } // namespace TortoiseBots

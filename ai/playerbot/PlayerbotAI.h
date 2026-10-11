@@ -863,6 +863,10 @@ public:
         // when the bot joins the player's group.
         void SetForcedRole(uint8 role) { m_forcedRole = role; }
         uint8 GetForcedRole() const { return m_forcedRole; }
+        // PET-3: set when the player orders `pet autocast` on a pet taunt
+        // (Growl/Torment); the autocast sweep then leaves taunts to them.
+        void SetPetTauntAutocastOrdered() { m_petTauntAutocastOrdered = true; }
+        bool IsPetTauntAutocastOrdered() const { return m_petTauntAutocastOrdered; }
     void UpdateTalentSpec(PlayerTalentSpec spec = PlayerTalentSpec::TALENT_SPEC_INVALID);
 
     bool CanEnterArea(const AreaTrigger* area);
@@ -888,6 +892,7 @@ protected:
 	Player* bot;
 	Player* master;
 	uint8 m_forcedRole = 0;
+	bool m_petTauntAutocastOrdered = false;
 	time_t m_dungeonCatchUpAt = 0;
 	// GUID-shadow of `master` so we can verify the pointer is still
 	// alive each tick without dereferencing it. Set in SetMaster().
