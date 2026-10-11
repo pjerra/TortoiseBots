@@ -185,6 +185,10 @@ ai::WorldPosition const* PickLevelFittingPoint(::Player* bot)
                 continue;
             if (point->IsEnemyHomeZoneFor(info.GetTeam()))
                 continue;
+            // Never land a bot among hostile town guards: the hostile-town
+            // death-loop rescue below would otherwise move it into another one.
+            if (sPlayerbotAIConfig.avoidHostileTowns && point->IsGuardedHostileTownFor(bot, 120.0f, false))
+                continue;
             int32 areaLevel;
             if (!travelMgr.TryGetValidatedAreaLevel(area->Id, areaLevel))
                 continue;
@@ -311,6 +315,20 @@ bool MisplacedBotEligible(::Player* bot, int32& areaLevelOut, std::string* why =
         return true;
     }
 
+    // Bots those guards keep killing revive outside the town - the spirit
+    // healer often stands just beyond them (Horde at the Redridge graveyard
+    // beside Lakeshire) - and their travel target walks them straight back in.
+    // Two such deaths in half an hour count as hopeless too (PlayerbotAI::OnDeath).
+    if (sPlayerbotAIConfig.avoidHostileTowns)
+    {
+        ::PlayerbotAI* townAi = PlayerbotAIStorage::Instance().GetAI(bot);
+        if (townAi && townAi->GetRecentHostileTownDeaths() >= ::PlayerbotAI::kHostileTownLoopDeaths)
+        {
+            areaLevelOut = 55;
+            return true;
+        }
+    }
+
     auto& travelMgr = MaNGOS::Singleton<ai::TravelMgr>::Instance();
     int32 areaLevel = 0;
     if (!travelMgr.TryGetValidatedAreaLevel(bot->GetAreaId(), areaLevel) || areaLevel <= 0)
@@ -383,6 +401,7 @@ bool TeleportMisplacedBot(::Player* bot, int32 areaLevel, const std::string& cau
     {
         if (auto* deathCountValue = ai->GetAiObjectContext()->GetValue<uint32>("death count"))
             deathCountValue->Reset();
+        ai->ClearHostileTownDeaths();
     }
     sLog.outString("TortoiseBots: relocated %s %s level %u from area level %d",
         cause.c_str(), bot->GetName(), bot->GetLevel(), areaLevel);
@@ -643,13 +662,32 @@ bool BotManager::RelocateHopelessBot(::Player* bot)
     uint32 minDeaths = ((bot->GetLevel() < 10 && areaLevel >= 20) ||
         (!sPlayerbotAIConfig.allowIsolatedCustomStartingZones &&
          (PlayerbotAIConfig::IsIsolatedCustomZone(bot->GetAreaId()) || PlayerbotAIConfig::IsIsolatedCustomZone(bot->GetZoneId())))) ? 1 : 2;
-    if (deathCount < minDeaths)
+    // A hostile-town loop counts its own deaths: an XP tick between two guard
+    // deaths resets "death count" but not the loop.
+    bool const townLoop = sPlayerbotAIConfig.avoidHostileTowns &&
+        ai->GetRecentHostileTownDeaths() >= ::PlayerbotAI::kHostileTownLoopDeaths;
+    if (deathCount < minDeaths && !townLoop)
     {
         TB_LOG_DEBUG("TortoiseBots: hopeless check %s level %u zone %u area %u (level %d) deaths %u: below %u, not yet",
             bot->GetName(), bot->GetLevel(), bot->GetZoneId(), bot->GetAreaId(), areaLevel, deathCount, minDeaths);
         return false;
     }
-    return TeleportMisplacedBot(bot, areaLevel, "hopeless bot (" + std::to_string(deathCount) + " deaths)");
+    if (!TeleportMisplacedBot(bot, areaLevel, townLoop ? std::string("hostile-town death loop") :
+            "hopeless bot (" + std::to_string(deathCount) + " deaths)"))
+        return false;
+    // The travel target that led the bot through the guards would walk it back
+    // from wherever it lands: drop it so the next pick starts from the new spot.
+    if (townLoop)
+    {
+        auto* travelHolder = ai->GetAiObjectContext()->GetValue<ai::TravelTarget*>("travel target");
+        if (ai::TravelTarget* target = travelHolder ? travelHolder->Get() : nullptr)
+        {
+            MaNGOS::Singleton<ai::TravelMgr>::Instance().SetNullTravelTarget(target);
+            target->SetStatus(ai::TravelStatus::TRAVEL_STATUS_EXPIRED);
+            target->SetExpireIn(1000);
+        }
+    }
+    return true;
 }
 
 bool BotManager::RelocateStrandedBot(::Player* bot)

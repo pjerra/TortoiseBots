@@ -794,6 +794,21 @@ public:
     // A death-spot query needs only plain data (map + coordinates), so the
     // travel layer can ask without pulling in the policy header.
     bool IsDeathSpotAvoided(uint32 mapId, float x, float y, uint32 nowMs) const;
+    // Hostile-town death loop (see OnDeath): deaths within 120 yd of the guards
+    // of a town hostile to the bot, the last one less than half an hour ago.
+    // The post-rez rescue (BotManager::RelocateHopelessBot) moves the bot away
+    // at kHostileTownLoopDeaths; a relocation clears the count.
+    static constexpr uint32 kHostileTownLoopDeaths = 2;
+    static constexpr uint32 kHostileTownDeathWindowMs = 30 * 60 * 1000;
+    uint32 GetRecentHostileTownDeaths() const
+    {
+        if (!hostileTownDeathCount_ || WorldTimer::getMSTime() - hostileTownDeathMs_ > kHostileTownDeathWindowMs)
+            return 0;
+        return hostileTownDeathCount_;
+    }
+    void ClearHostileTownDeaths() { hostileTownDeathCount_ = 0; }
+    uint32 hostileTownDeathCount_ = 0;
+    uint32 hostileTownDeathMs_ = 0;
     // A player (usually another random bot) that killed this bot recently: name +
     // expiry. While set, the victim does not proactively engage that killer
     // (EnemyPlayersValue::IsValid refuses it) so a same-spot trade-kill loop

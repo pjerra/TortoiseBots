@@ -7725,3 +7725,32 @@ Local validation: code review + build pending; in-game pending.
 | Feature | Source project | Source commit | Source files | Ported / reimplemented | Reason | Local validation |
 | --- | --- | --- | --- | --- | ---: | --- |
 | `AiPlayerbot.PoolMeleeHoldGround`: pool warriors/rogues not granted the generic `flee` strategy (`panic` / `outnumbered` / `critical health no master`) | `mod-playerbots` (no generic flee strategy; `flee` only as ranged spacing in `src/Ai/Base/Strategy/RangedCombatStrategy.cpp:14-15` and caster/hunter class rows, melee fight on with defensive cooldowns, e.g. `src/Ai/Class/Warrior/Strategy/ArmsWarriorStrategy.cpp:228`, `src/Ai/Class/Rogue/Strategy/CombatRogueStrategy.cpp:158`) | `79bd4281` | `ai/playerbot/AiFactory.cpp` (pool `flee` grant), `ai/playerbot/SurvivePolicy.h` (`ShouldGrantPoolFlee`), `PlayerbotAIConfig.{h,cpp}`, `aiplayerbot.conf.dist.in`, `tools/test_survive_policy.cpp` | Reimplemented (behaviour only, no donor code); behind an opt-in key, off by default, because the flee nodes are deliberate module behaviour | Live pool (500 bots, 18d4d14): flee 15% of warrior and 13% of rogue combat samples (`outnumbered`/`panic`), 42% of sampled deaths had a flee in the prior 30 s; rage/energy users skip `PanicTrigger`'s mana gate and cannot outrun a mob | `bash tools/verify_all.sh`, `git diff --check`; code review + build pending; in-game pending |
+## Hostile-town death loop relocation (2026-10-11)
+
+Feature: a masterless random bot killed near the guards of a hostile town
+twice within 30 minutes is relocated by the post-rez rescue
+(`BotManager::RelocateHopelessBot`) on its next revive and its travel target
+is dropped; `PickLevelFittingPoint` no longer picks points within 120 yd of
+hostile town guards.
+
+Source: `mod-playerbots` at `79bd428`, `src/Bot/RandomPlayerbotMgr.cpp`
+(`RandomPlayerbotMgr::ProcessBot` dead branch -> `Revive` ->
+`RandomTeleportGrindForLevel`): a dead random bot is revived and teleported
+to level-appropriate grind ground, so it never walks back into what killed it.
+
+Ported / reimplemented: reimplemented (behaviour only, no donor code). The
+donor teleports every dead random bot; here the existing conditional rescue
+is extended with one more hopeless condition (two hostile-town deaths in 30
+minutes, counted in `PlayerbotAI::OnDeath`), behind the existing
+`AiPlayerbot.AvoidHostileTowns` and `AiPlayerbot.RelocateHopelessDeaths`
+toggles. Files: `ai/playerbot/PlayerbotAI.{h,cpp}`, `runtime/BotManager.cpp`.
+
+Reason: live pool on 2026-10-10 (yulon-ubuntu, 18d4d14): 52 of 836 deaths
+were to town guards, 25 of them to Lakeshire Guard. Horde bots revived at
+the Redridge spirit healer and walked their travel target through Lakeshire
+(one rogue died 12 times in 16 minutes). The route check covers named route
+nodes only, not the start leg or trips under 1,000 yd, and the existing
+in-town rescue only looked at the revive spot, which lies outside the town.
+
+Local validation: code review, `bash tools/verify_all.sh`, `git diff
+--check`; build pending; in-game pending.

@@ -1715,6 +1715,23 @@ void PlayerbotAI::OnDeath()
                     }
                 }
             }
+            // Hostile-town death loop: a bot killed by the guards of an enemy town
+            // revives at the nearest spirit healer, often just outside that town
+            // (Horde at the Redridge graveyard beside Lakeshire: 25 Lakeshire Guard
+            // kills in 16 minutes, one rogue 12 times), and the travel target it
+            // still holds walks it straight back through the guards - the route
+            // check only covers named route nodes, never the graveyard leg or a
+            // short hop. Count deaths within 120 yd of hostile guards (neutral-town
+            // bruisers excluded); the post-rez rescue moves the bot away at
+            // kHostileTownLoopDeaths (BotManager::RelocateHopelessBot).
+            if (sPlayerbotAIConfig.avoidHostileTowns && WorldPosition(bot).IsGuardedHostileTownFor(bot, 120.0f, false))
+            {
+                uint32 const nowTownMs = WorldTimer::getMSTime();
+                if (!GetRecentHostileTownDeaths())
+                    hostileTownDeathCount_ = 0;
+                ++hostileTownDeathCount_;
+                hostileTownDeathMs_ = nowTownMs;
+            }
             // Killed by a player (entry == 0, not the environment): avoid that
             // named killer for a while so two masterless random bots grinding the
             // same spot stop trading kills every ~60 s. Same shape as the
