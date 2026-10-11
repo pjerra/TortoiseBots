@@ -7754,3 +7754,37 @@ in-town rescue only looked at the revive spot, which lies outside the town.
 
 Local validation: code review, `bash tools/verify_all.sh`, `git diff
 --check`; build pending; in-game pending.
+
+## Hunter returns to the ranged kit while the pet or a tank holds the mob — 2026-10-11
+
+Donor: mod-playerbots @ `79bd4281`,
+`src/Ai/Class/Hunter/Strategy/GenericHunterStrategy.cpp` (no melee kit
+switch at all; `enemy too close for auto shot` → disengage 35 / flee 34
+outranks `enemy within melee` → mongoose bite 22 / wing clip 21) and
+`src/Ai/Base/Trigger/RangeTriggers.cpp` (`EnemyTooCloseForAutoShotTrigger`:
+step out only while the mob is not on the bot).
+
+Source files (module, modified):
+`ai/playerbot/HunterSwitchPolicy.h` (`ShouldSwitchToRanged`),
+`ai/playerbot/strategy/hunter/HunterTriggers.h` (new
+`HunterEnemyIsCloseTrigger`), `HunterAiObjectContext.cpp` (registers
+`hunter enemy is close`), `HunterStrategy.cpp` (the Raptor Strike /
+Wing Clip row uses it), `tools/test_hunter_switch_policy.cpp`.
+
+Copied / ported / reimplemented: reimplemented, behaviour only. The local
+melee kit switch stays (victim on the bot and inside 8 yd), but the ranged
+kit now comes back as soon as the mob is off the bot, at any distance; the
+old "and past 8 yd" half never fired because the melee kit's `reach melee`
+keeps the hunter inside 8 yd. In the ranged kit the 5 yd Raptor Strike /
+Wing Clip row fires only for a mob on the hunter, as the donor ranks the
+step-back above its melee row. The melee kit (mob on the hunter, or no
+ammo) is unchanged. Stacked on the previous entry (dead-zone flee).
+
+Reason: live sample (38 pool hunters 36+, 561 combat samples) had top
+triggers `enemy is close` 136 and `enemy too close for spell` 99, actions
+raptor strike 118, wing clip 44, reach melee 33, shots almost never; an
+in-game tester saw hunters switch to `-ranged,+close` and melee mobs their
+pet was holding.
+
+Local validation: code review + build pending; in-game pending.
+`bash tools/verify_all.sh`; `git diff --check`.

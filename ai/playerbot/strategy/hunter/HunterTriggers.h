@@ -239,9 +239,8 @@ private:
         {
             // No level gate: the donor's SwitchToRangedTrigger has none either, and
             // below level 10 this is what hands the ranged kit back after a melee
-            // trade - once the target is off the bot, immobilized, too slow to
-            // follow, or the bot has made distance (10+ yd, the hysteresis edge
-            // in HunterSwitchPolicy.h).
+            // trade - once the target is off the bot (pet or tank holds it, at
+            // any distance) or immobilized (HunterSwitchPolicy.h).
             bool hasAmmo = ai->HasCheat(BotCheatMask::item) || AI_VALUE2(uint32, "item count", "ammo");
             if (!hasAmmo)
                 return false;
@@ -287,6 +286,30 @@ private:
                 return false;
 
             return bot->GetDistance(target, SizeFactor::CombatReach) < minRange;
+        }
+    };
+
+    // Raptor Strike / Wing Clip row: the generic 5 yd "enemy is close", but in
+    // the ranged kit only for a mob that is on the hunter itself (the melee
+    // chain and the kite snare). A mob the pet or a tank holds is left to the
+    // dead-zone step-back, and the hunter goes back to shooting (mod-playerbots
+    // 79bd428 GenericHunterStrategy ranks its step-back above wing clip). The
+    // close kit (mob on the hunter, or no ammo) keeps the row as before.
+    class HunterEnemyIsCloseTrigger : public EnemyInRangeTrigger
+    {
+    public:
+        HunterEnemyIsCloseTrigger(PlayerbotAI* ai) : EnemyInRangeTrigger(ai, "hunter enemy is close", sPlayerbotAIConfig.tooCloseDistance) {}
+
+        bool IsActive() override
+        {
+            if (!EnemyInRangeTrigger::IsActive())
+                return false;
+
+            if (!ai->HasStrategy("ranged", BotState::BOT_STATE_COMBAT))
+                return true;
+
+            Unit* target = AI_VALUE(Unit*, "current target");
+            return target && target->GetVictim() == bot;
         }
     };
 

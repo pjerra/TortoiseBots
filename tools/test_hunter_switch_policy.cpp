@@ -19,8 +19,8 @@ int main()
 {
     std::cout << "Starting TortoiseBots hunter-switch tests...\n";
 
-    // Edges: the donor's own 8 yd both ways (melee <= 8, ranged > 8); the
-    // 10 yd constant is the return margin kept for future use.
+    // Edges: the donor's own 8 yd melee edge (melee <= 8; ranged returns on
+    // victim-off, not distance); the 10 yd constant is kept for future use.
     CHECK(kHunterMeleeGlueYd == 8.0f);
     CHECK(kHunterRangedReturnYd == 10.0f);
 
@@ -42,12 +42,15 @@ int main()
         std::cout << "  [PASS] melee trades only when the victim is glued on the bot\n";
     }
 
-    // Ranged side: the donor AND (off bot AND past the dead zone) or rooted.
+    // Ranged side: off the bot (pet/tank holds it) at any distance, or rooted.
     {
         // Off the bot past the edge: back to ranged.
         CHECK(ShouldSwitchToRanged(true, true, false, false, 8.1f, true));
-        // At the edge with the victim off: hold melee (donor uses > 8).
-        CHECK(!ShouldSwitchToRanged(true, true, false, false, 8.0f, true));
+        // Off the bot inside the dead zone: back to ranged too (the close
+        // kit's reach melee would otherwise keep the hunter meleeing a
+        // pet-held mob for the whole fight); the ranged kit steps out.
+        CHECK(ShouldSwitchToRanged(true, true, false, false, 8.0f, true));
+        CHECK(ShouldSwitchToRanged(true, true, false, false, 2.0f, true));
         // Victim still on the bot: hold even far out (melee finishes it).
         CHECK(!ShouldSwitchToRanged(true, false, false, false, 30.0f, true));
         // Rooted: ranged at any distance, even glued on the bot.
@@ -58,7 +61,7 @@ int main()
         // No close kit to trade back from, or no ammo: hold.
         CHECK(!ShouldSwitchToRanged(false, true, false, false, 30.0f, true));
         CHECK(!ShouldSwitchToRanged(true, true, false, false, 30.0f, false));
-        std::cout << "  [PASS] ranged returns off-bot past 8 yd, or rooted\n";
+        std::cout << "  [PASS] ranged returns once the mob is off the bot, or rooted\n";
     }
 
     std::cout << "All hunter-switch checks PASSED!\n";

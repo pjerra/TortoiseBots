@@ -10,8 +10,9 @@
 // SwitchToMeleeTrigger::IsActive is victim-on-bot AND distance<=8, and
 // SwitchToRangedTrigger::IsActive is victim-off-bot AND distance>8
 // (HunterTriggers.cpp:112-126 - both are ANDs, not ORs). Neither has a level
-// gate. The rules below are those exact donor ANDs plus the local no-ammo
-// and rooted branches, so a mob pacing the 8 yd line cannot flip the kit
+// gate. The melee rule below is that exact donor AND plus the local no-ammo
+// branch; the ranged rule drops the distance half (see ShouldSwitchToRanged)
+// and keeps the rooted branch, so a mob pacing the 8 yd line cannot flip the kit
 // every tick (fresh pool: inter-switch p50 13 s, 41% within 10 s, each flip
 // rebuilding the combat engine's trigger graph). The fresh-pool run is what
 // exposed the old extra branches as flap sources:
@@ -52,11 +53,17 @@ namespace ai
             distanceYd <= kHunterMeleeGlueYd;
     }
 
-    // Hands the ranged kit back once the bot has room (the donor's AND: off
-    // the bot AND past the dead zone) or the mob is rooted (shot from where
-    // the bot stands). The old slow-or-far OR is gone: at pool levels every
-    // walking mob reads as "too slow", which is what flipped 83% of
-    // melee->ranged pairs back at dist < 5 yd. Below level 10 this is what
+    // Hands the ranged kit back as soon as the mob is off the bot (pet, tank
+    // or anyone else holds it) or rooted (shot from where the bot stands), at
+    // any distance. The old "and past 8 yd" half trapped the hunter: the close
+    // kit's own "reach melee" keeps it inside 8 yd, so once the pet took the
+    // mob back the hunter meleed it for the rest of the fight. The ranged
+    // kit's dead-zone step-back then moves it out to shoot (mod-playerbots
+    // 79bd428 has no melee kit at all; its hunter only steps out). Victim on
+    // vs off the bot is the hysteresis: melee needs it on, ranged needs it
+    // off, so distance pacing cannot flip the kit. The old slow-or-far OR
+    // stays gone (it flipped 83% of melee->ranged pairs at dist < 5 yd
+    // while the mob was still on the bot). Below level 10 this is what
     // restores ranged after a melee trade.
     inline bool ShouldSwitchToRanged(bool hasCloseKit, bool targetOffBot, bool immobilized,
         bool tooSlowToFollow, float distanceYd, bool hasAmmo)
@@ -66,6 +73,7 @@ namespace ai
         if (immobilized)
             return true;
         (void)tooSlowToFollow;
-        return targetOffBot && distanceYd > kHunterMeleeGlueYd;
+        (void)distanceYd;
+        return targetOffBot;
     }
 }
