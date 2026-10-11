@@ -8147,3 +8147,31 @@ moving away.
 Validation: `bash tools/verify_all.sh` (incl. new
 `tools/test_pool_flee_policy.cpp`), `git diff --check`. Code review + build
 pending; in-game pending.
+## Loot walk only when no hostile is in sight, in dungeons and raids — 2026-10-11
+
+Feature: `LootAvailableTrigger` (`ai/playerbot/strategy/triggers/LootTriggers.cpp`)
+picks a corpse for any bot in a dungeon or raid only when no live hostile
+is within sight range or the nearest corpse is already within
+`INTERACTION_DISTANCE - 2`. Before, a party bot walked to any corpse within `LootDistance` of its master, including one
+lying next to an unpulled pack or on a patrol path.
+
+Source repository: `mod-playerbots` @ `79bd428` (local checkout
+`../playerbots-references/mod-playerbots`), file
+`src/Ai/Base/Trigger/LootTriggers.cpp:12-34` (`LootAvailableTrigger`: corpse
+in range, or `all targets` empty).
+
+Copied / ported / independently reimplemented: ported behaviour, not code.
+The gate removed on purpose in #340 (25db531) for dense grind zones is
+restored only inside instances, so the open world (pool grinding, and
+bots questing with a player in busy zones) keeps the ungated rule; there a
+sight-range gate would stop looting and could hold a round-robin corpse
+away from the player. "Hostile in sight"
+reads the sight-range `possible targets` list that `AttackersValue` already
+fills (no LoS, like the donor's `all targets`), and counts only hostile,
+selectable, attackable units: neutral mobs and invisible trigger NPCs do not
+hold looting back (the donor counts every unfriendly unit).
+
+Reason: batch-4 party/dungeon audit, gap 2 — bots walked into the next pack
+to loot.
+
+Validation: code review + build pending; in-game pending.

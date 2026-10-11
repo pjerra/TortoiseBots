@@ -2,7 +2,34 @@
 #include "playerbot/playerbot.h"
 #include "LootTriggers.h"
 #include "playerbot/LootObjectStack.h"
+#include "playerbot/PlayerbotAIConfig.h"
 using namespace ai;
+
+namespace
+{
+    // Any live hostile in sight range (walls ignored), the mod-playerbots "all targets" test.
+    // Reads the "possible targets" list that AttackersValue::AddTargetsOf fills for this bot
+    // with the same qualifier (sight range, unvalidated), so it is normally the cached list;
+    // at worst it refreshes once a second, and only while loot waits for a target.
+    // Neutral mobs (they do not aggro) and unselectable trigger NPCs do not count.
+    bool HasHostileInSight(PlayerbotAI* ai, Player* bot)
+    {
+        const std::string qualifier = Qualified::MultiQualify(
+            { std::to_string((int32)sPlayerbotAIConfig.sightDistance), std::to_string(true) }, ":");
+        const std::list<ObjectGuid> units =
+            ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid>>("possible targets", qualifier)->Get();
+        for (const ObjectGuid& guid : units)
+        {
+            Unit* unit = ai->GetUnit(guid);
+            if (!unit || !unit->IsAlive() || !bot->IsHostileTo(unit))
+                continue;
+            if (unit->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_NOT_ATTACKABLE_1))
+                continue;
+            return true;
+        }
+        return false;
+    }
+}
 
 bool LootAvailableTrigger::IsActive()
 {
@@ -43,6 +70,14 @@ bool LootAvailableTrigger::IsActive()
         return false;
 
     if (!AI_VALUE(bool, "has available loot"))
+        return false;
+
+    // In a dungeon or raid, pick a corpse only when no hostile is in sight, or when one lies
+    // within reach (mod-playerbots LootAvailableTrigger). Otherwise a bot walked to a corpse
+    // that fell beside an unpulled pack or a patrol path and pulled it. The open world keeps
+    // the ungated rule below: there a sight-range gate would stop looting in busy zones.
+    if (bot->GetMap()->IsDungeon() && HasHostileInSight(ai, bot) &&
+        AI_VALUE(LootObjectStack*, "available loot")->GetLoot(INTERACTION_DISTANCE - 2.0f).IsEmpty())
         return false;
 
     // Loot every corpse this bot (or its group) killed and may loot before
