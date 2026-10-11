@@ -18,6 +18,18 @@ namespace ai
     BEGIN_RANGED_DEBUFF_ACTION(CastHuntersMarkAction, "hunter's mark")
     END_SPELL_ACTION()
 
+    // One step straight out of the shot's dead zone while the pet, a tank or
+    // anyone else holds the mob (HunterDeadZoneStepOutTrigger). Point move to
+    // a checked spot (LOS, path), fanned up to 90 degrees off straight back
+    // like mod-playerbots 79bd428 MovementAction::MoveAway. While the step
+    // runs it holds without re-dispatching; it never chases or loops.
+    class HunterStepOutAction : public MovementAction
+    {
+    public:
+        HunterStepOutAction(PlayerbotAI* ai) : MovementAction(ai, "hunter step out") {}
+        bool Execute(Event& event) override;
+    };
+
     class CastAutoShotAction : public CastSpellAction
     {
     public:

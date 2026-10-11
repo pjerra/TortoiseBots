@@ -5,6 +5,7 @@
 #include "playerbot/strategy/values/LastMovementValue.h"
 #include "CombatActions.h"
 #include "HunterRangedTelemetry.h"
+#include "playerbot/strategy/hunter/HunterValues.h"
 
 using namespace ai;
 
@@ -22,6 +23,9 @@ bool SwitchToMeleeAction::Execute(Event &event)
         // HunterRangedTelemetry.h).
         LogHunterRangedEvent(ai, "SwitchToMelee", HunterSwitchWhy(ai, target, false));
         bot->Attack(target, true);
+        // Kit dwell starts now (HunterSwitchPolicy.h); hunters only.
+        if (HunterKitState* state = GetHunterKitState(ai))
+            NoteHunterKitSwitch(*state, WorldTimer::getMSTime());
         return ChangeCombatStrategyAction::Execute(event);
     }
     return false;
@@ -39,6 +43,8 @@ bool SwitchToRangedAction::Execute(Event &event)
     {
         LogHunterRangedEvent(ai, "SwitchToRanged", HunterSwitchWhy(ai, target, true));
         bot->AttackStop(true);
+        if (HunterKitState* state = GetHunterKitState(ai))
+            NoteHunterKitSwitch(*state, WorldTimer::getMSTime());
         return ChangeCombatStrategyAction::Execute(event);
     }
     return false;

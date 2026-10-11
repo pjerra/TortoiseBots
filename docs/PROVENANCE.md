@@ -7980,3 +7980,43 @@ owned bots in 66559d7. No other class registers a `dps` strategy, so the
 change only affects priests.
 
 Validation: code review + build pending; in-game pending.
+
+## Hunter dead-zone step-out and kit dwell (fix round) — 2026-10-11
+
+Donor: mod-playerbots @ `79bd4281`,
+`src/Ai/Base/Actions/MovementActions.cpp` (`MovementAction::MoveAway`: a
+fixed step away from the target, fanned in pi/8 steps up to pi/2 to either
+side; `FleeAction` uses it) and
+`src/Ai/Class/Hunter/Strategy/GenericHunterStrategy.cpp`
+(`enemy too close for auto shot` → disengage / flee, mob not on the bot).
+
+Source files (module): `ai/playerbot/HunterSwitchPolicy.h` (dwell, step-out
+episode, `ShouldSwitchToMelee`/`ShouldSwitchToRanged` inputs),
+`strategy/hunter/HunterValues.h` (new, `hunter kit state` value),
+`strategy/hunter/HunterTriggers.h` (`HunterDeadZoneStepOutTrigger`, switch
+triggers, `enemy too close for auto shot` now mob-on-hunter only),
+`strategy/hunter/HunterActions.{h,cpp}` (`HunterStepOutAction`),
+`HunterAiObjectContext.cpp`, `HunterStrategy.cpp`,
+`strategy/actions/CombatActions.cpp` (switch time stamp),
+`strategy/triggers/RangeTriggers.h` (hunter branch defers to the step-out),
+`tools/test_hunter_switch_policy.cpp`.
+
+Copied / ported / reimplemented: reimplemented, behaviour only. One point
+move per mob and episode, straight back then fanned like `MoveAway`, landing
+3 yd past the Auto Shot minimum range, checked for LOS and a path; held while
+it runs. Local additions: if the step fails (no spot, stops inside, 3 s) the
+hunter trades into its melee kit (the donor has none) and holds it while the
+mob stays in the dead zone, up to 10 s; every kit switch waits for 4 s on
+the current kit (REVIEW-batch2 finding 4), out of ammo and the failed step
+excepted.
+
+Reason: live sample with fixes 11 and 17 merged: hunters 36+ spent 57-63 %
+of combat samples on `flee` from `enemy too close for spell` (429 of 720
+samples in 5 min; 28-31 % before), deaths/bot-hour 3.2 → 5.5. For pool bots
+`MovementAction::Flee` is a `MoveChase` at flee range, which the core chase
+generator answers with "stay put" while the target stands still within 1.4x
+that range, so the flee returned success every tick without moving.
+
+Local validation: code review + build pending; in-game pending.
+`bash tools/verify_all.sh` (incl. the extended hunter-switch policy test);
+`git diff --check`.

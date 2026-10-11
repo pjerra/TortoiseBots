@@ -2,7 +2,9 @@
 #include "playerbot/playerbot.h"
 #include "playerbot/strategy/actions/GenericActions.h"
 #include "playerbot/strategy/actions/HunterRangedTelemetry.h"
+#include "playerbot/ServerFacade.h"
 #include "HunterActions.h"
+#include "HunterValues.h"
 
 using namespace ai;
 
@@ -145,4 +147,66 @@ bool CastAutoShotAction::Execute(Event& event)
     LogHunterRangedEvent(ai, "AutoShot", std::string("cast=") + (executed ? "1" : "0"));
 
     return executed;
+}
+
+bool HunterStepOutAction::Execute(Event& event)
+{
+    (void)event;
+    Unit* target = AI_VALUE(Unit*, "current target");
+    HunterKitState* state = GetHunterKitState(ai);
+    if (!target || !state)
+        return false;
+
+    uint64 const targetRaw = target->GetObjectGuid().GetRawValue();
+    uint32 const nowMs = WorldTimer::getMSTime();
+
+    // The one step is already under way for this mob: let it finish.
+    if (HunterStepOutEpisodeOpen(*state, targetRaw, nowMs))
+        return !bot->IsStopped() || sServerFacade.isMoving(bot);
+
+    float maxRange = 0.0f;
+    float minRange = 0.0f;
+    if (!ai->GetSpellRange("auto shot", &maxRange, &minRange) || minRange <= 0.0f)
+        return false;
+
+    // Stamp the episode before trying: a step that finds no spot counts as
+    // the one attempt, and the stuck verdict hands over to melee next tick.
+    BeginHunterStepOut(*state, targetRaw, nowMs);
+
+    float const edge = bot->GetDistance(target, SizeFactor::CombatReach);
+    float const center = sServerFacade.getDistance2d(bot, target);
+    // Reach terms between centre and edge distance, constant for the step.
+    float const reach = std::max(0.0f, center - edge);
+    float const step = HunterStepOutLength(edge, minRange);
+    float const away = target->GetAngle(bot);
+    WorldPosition const botPos(bot);
+
+    // Straight back first, then fanned out to either side (donor MoveAway).
+    static float const offsets[] = { 0.0f, M_PI_F / 8, -M_PI_F / 8, M_PI_F / 4, -M_PI_F / 4,
+        3 * M_PI_F / 8, -3 * M_PI_F / 8, M_PI_F / 2, -M_PI_F / 2 };
+    bool moved = false;
+    for (float const offset : offsets)
+    {
+        float const heading = away + offset;
+        WorldPosition cand = botPos + WorldPosition(0, step * cos(heading), step * sin(heading), 1.0f);
+        cand.setZ(cand.GetHeight());
+
+        // A fanned step must still land outside the dead zone.
+        float const landingCenter = sqrtf((cand.getX() - target->GetPositionX()) * (cand.getX() - target->GetPositionX()) +
+            (cand.getY() - target->GetPositionY()) * (cand.getY() - target->GetPositionY()));
+        if (landingCenter - reach < minRange + 1.0f)
+            continue;
+        if (!bot->IsWithinLOS(cand.getX(), cand.getY(), cand.getZ() + bot->GetCollisionHeight()))
+            continue;
+        if (!botPos.canPathTo(cand, bot))
+            continue;
+        if (!MoveTo(bot->GetMapId(), cand.getX(), cand.getY(), cand.getZ(), false, IsReaction(), false, true))
+            continue;
+
+        moved = true;
+        break;
+    }
+
+    LogHunterRangedEvent(ai, "StepOut", std::string("moved=") + (moved ? "1" : "0"));
+    return moved;
 }

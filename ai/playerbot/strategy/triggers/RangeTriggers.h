@@ -84,13 +84,17 @@ namespace ai
                 // mob, step out only from inside it; beyond it the hunter can
                 // shoot, so it stays and shoots. Donor mod-playerbots
                 // (RangeTriggers.cpp) gates the same flee on melee range.
+                // Inside the dead zone the hunter's own one-shot step-out row
+                // ("hunter dead zone step out", HunterStrategy.cpp) owns the
+                // move: this generic flee re-fired every tick there without
+                // moving. Only a hunter without Auto Shot range data keeps the
+                // melee-reach flee.
                 if (bot->GetClass() == CLASS_HUNTER && !isVictim && target->GetVictim() != bot)
                 {
                     float maxShotRange = 0.0f;
                     float minShotRange = 0.0f;
-                    if (ai->GetSpellRange("auto shot", &maxShotRange, &minShotRange) && minShotRange > 0.0f &&
-                        bot->GetDistance(target, SizeFactor::CombatReach) < minShotRange)
-                        return true;
+                    if (ai->GetSpellRange("auto shot", &maxShotRange, &minShotRange) && minShotRange > 0.0f)
+                        return false;
 
                     return bot->CanReachWithMeleeAutoAttack(target);
                 }
