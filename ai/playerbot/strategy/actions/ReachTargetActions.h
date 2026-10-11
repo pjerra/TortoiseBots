@@ -204,8 +204,19 @@ namespace ai
                     // not a stuck spot: the bot keeps after it instead of abandoning a nearly dead
                     // mob and blacklisting its kind.
                     bool const runner = target->HasUnitState(UNIT_STAT_FLEEING | UNIT_STAT_CONFUSED);
+                    // A creature in sight that is hitting one of us - the bot, its master, a group
+                    // member or one of their pets - is a live fight, not a stuck spot, the same as
+                    // one hitting the bot. In a party it often turns to the mage or healer, and the
+                    // clock above was last anchored when the bot first closed in, so the first
+                    // "reach melee" after the turn gave up on it at once: the rogue and the tank
+                    // dropped a 30000-HP wolf mid-fight, and the five-minute "unreachable entries"
+                    // mark then kept the tank off the next two wolves of that kind.
+                    Unit* const victim = target->GetVictim();
+                    Player* const victimPlayer = victim ? victim->GetCharmerOrOwnerPlayerOrPlayerItself() : nullptr;
+                    bool const hitsOurSide = victim == bot || (target->IsCreature() && victimPlayer &&
+                        (bot->IsInSameRaidWith(victimPlayer) || victimPlayer == GetMaster()));
                     bool const noHeadway = !runner && nowMs - noLosSinceMs >= kNoHeadwayMs &&
-                        (target->GetVictim() != bot || !inLos || cannotBeReached);
+                        (!hitsOurSide || !inLos || cannotBeReached);
                     bool const outOfReach = range > 0.0f
                         ? distanceToTarget > range * 1.4f
                         : !bot->CanReachWithMeleeAutoAttack(target);
