@@ -68,36 +68,42 @@ enum ProfessionSpells
 bool OpenLootAction::Execute(Event& event)
 {
     LootObject lootObject = AI_VALUE(LootObject, "loot target");
+    // DoLoot re-validates the object (Refresh), which empties lootObject.guid when it is
+    // no longer lootable; keep the guid the attempt was made on.
+    ObjectGuid const lootGuid = lootObject.guid;
     bool result = DoLoot(lootObject);
+    LootObjectStack* lootStack = AI_VALUE(LootObjectStack*, "available loot");
+
+    // Bounded give-up: count every open attempt per object on the stack's failure memory
+    // (the same one "move to loot" uses for unreachable corpses). A failed DoLoot
+    // ("not now": failed cast, contended game object, no opening spell) is an attempt,
+    // and so is a "successful" one: for a skin/herb/ore/lock open, success only means the
+    // cast started, and a CMSG_LOOT only means the request was sent. When that cast never
+    // completes or the server refuses the window, the object stays gatherable, the next
+    // "add gathering loot"/"add all loot" sweep re-queues it, and the bot cycled
+    // open -> add -> select -> open on the spot for minutes (live: 11 of 108 standstill runs
+    // of 3+ min, no loot and no skill-up). StoreLootAction forgets the count once a window
+    // pays out, so only opens that never yield anything add up; after three the object is
+    // abandoned for 120 s and the bot moves on. Player-ordered looting only issues the
+    // action once per order, so a counter that needs repeated attempts can never veto a
+    // fresh order.
+    if (!lootGuid.IsEmpty() && lootStack)
+        lootStack->NoteApproachFailure(lootGuid);
+
     if (result)
     {
-        AI_VALUE(LootObjectStack*, "available loot")->Remove(lootObject.guid);
+        if (lootStack)
+            lootStack->Remove(lootGuid);
         context->GetValue<LootObject>("loot target")->Set(LootObject());
         return true;
     }
 
-    // Bounded give-up: DoLoot says "not now" without dropping the corpse on several
-    // paths (failed open/skin/gather cast, a contended game object, no opening spell),
-    // so without a counter the same target re-fires every tick while the bot stands
-    // still. Count consecutive failures per corpse on the stack's failure memory (the
-    // same one "move to loot" uses for unreachable corpses); once it is abandoned the
-    // stack drops it and "loot" selects the next corpse. Player-ordered looting only
-    // issues the action once per order, so a counter that needs repeated failures can
-    // never veto a fresh order.
-    if (!lootObject.IsEmpty())
+    if (!lootGuid.IsEmpty() && lootStack && lootStack->IsAbandoned(lootGuid))
     {
-        LootObjectStack* lootStack = AI_VALUE(LootObjectStack*, "available loot");
-        if (lootStack)
-        {
-            lootStack->NoteApproachFailure(lootObject.guid);
-            if (lootStack->IsAbandoned(lootObject.guid))
-            {
-                sLog.outDebug("[BOT LOOT] %s: giving up on guid=%lu after repeated failed opens",
-                    bot->GetName(), lootObject.guid.GetRawValue());
-                lootStack->Remove(lootObject.guid);
-                context->GetValue<LootObject>("loot target")->Set(LootObject());
-            }
-        }
+        sLog.outDebug("[BOT LOOT] %s: giving up on guid=%lu after repeated failed opens",
+            bot->GetName(), lootGuid.GetRawValue());
+        lootStack->Remove(lootGuid);
+        context->GetValue<LootObject>("loot target")->Set(LootObject());
     }
     return false;
 }
@@ -557,6 +563,12 @@ bool StoreLootAction::Execute(Event& event)
 
         BroadcastHelper::BroadcastLootingItem(ai, bot, proto, itemQualifier);
     }
+
+    // The open paid out: forget the attempts OpenLootAction counted on this object. A window
+    // that yields nothing (refused, or no room for anything in it) keeps its count, so an
+    // object that is re-queued and re-opened without ever paying out is abandoned.
+    if (itemsTaken || gold)
+        AI_VALUE(LootObjectStack*, "available loot")->ForgetFailures(guid);
 
     AI_VALUE(LootObjectStack*, "available loot")->Remove(guid);
     RESET_AI_VALUE(LootObject, "loot target");

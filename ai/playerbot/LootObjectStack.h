@@ -76,6 +76,10 @@ namespace ai
         // failure memory ages out, so it cannot pin the loot chain forever.
         void NoteApproachFailure(ObjectGuid guid);
         bool IsAbandoned(ObjectGuid guid);
+        // A loot window from this object paid out (see StoreLootAction): the attempts
+        // counted so far were not a wedge, so a multi-use ore vein is not abandoned
+        // after its third mine.
+        void ForgetFailures(ObjectGuid guid);
 
     public:
         std::vector<LootObject> OrderByDistance(float maxDistance = 0);

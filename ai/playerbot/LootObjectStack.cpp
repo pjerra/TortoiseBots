@@ -516,6 +516,11 @@ bool LootObjectStack::IsAbandoned(ObjectGuid guid)
     return i->second.first >= MAX_APPROACH_FAILURES;
 }
 
+void LootObjectStack::ForgetFailures(ObjectGuid guid)
+{
+    approachFailures.erase(guid);
+}
+
 bool LootObjectStack::Add(ObjectGuid guid)
 {
     // A corpse we repeatedly failed to reach stays out of the stack until the

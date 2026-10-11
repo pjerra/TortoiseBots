@@ -7847,3 +7847,36 @@ bots, and `add gathering loot` refreshed the node so it never expired.
 
 Validation: code review + `bash tools/verify_all.sh` + `git diff --check`;
 build pending; in-game pending.
+## Loot open counts only when the window pays out (loot-loop standstill) — 2026-10-11
+Feature: `OpenLootAction::Execute` (`ai/playerbot/strategy/actions/LootAction.cpp`)
+now counts every open attempt on the loot stack's per-object failure memory,
+not only failed ones, and `StoreLootAction::Execute` forgets the count
+(`LootObjectStack::ForgetFailures`) when the loot window pays out (an item or
+gold taken). A skin/herb/ore/lock open "succeeds" as soon as the cast starts,
+and a corpse open as soon as `CMSG_LOOT` is sent; when the cast never
+completes or the window is refused, the object was dropped from the stack
+without a count, re-queued by the next `add gathering loot`/`add all loot`
+sweep, and re-opened on the spot forever. Now three opens without a payout
+abandon the object for 120 s (the existing give-up). Documented in
+`docs/concepts/bot-mechanics-and-quirks.md` (Loot Open-Failure Give-Up).
+
+Source repository: `mod-playerbots` @ `79bd428` (local checkout
+`../playerbots-references/mod-playerbots`, read-only) —
+`src/Ai/Base/Actions/LootAction.cpp` (`OpenLootAction::Execute`:
+`BeginLoot` on a started open, `DeferLoot` on a failed one) +
+`src/Mgr/Item/LootObjectStack.cpp` (`IsLootPending`: an open with no loot
+window within 15 s is cancelled and deferred with backoff; `LootOpened`).
+Reimplemented, not copied: the donor rule "an open is done only when its
+loot window arrives" is expressed on our existing per-object failure memory
+instead of a pending slot with exponential backoff.
+
+Reason: batch-2 live audit, yulon-ubuntu at 18d4d14, 150 dashboard samples
+over 24.8 min (`obs_samples.jsonl`): 11 of 108 standstill runs (18+
+samples within 2 yd, alive, out of combat) cycled `open loot`/`can loot` ->
+`add gathering loot`/`timer` -> `loot`/`loot available` with no loot items
+and no skinning/gathering events (e.g. Cesa 15 hunter beside Peacebloom
+in Elwynn, four runs of 22-28 samples; Dyrkrurg 12 hunter beside a Fel
+Cone in Teldrassil, 30 samples).
+
+Local validation: `bash tools/verify_all.sh`; `git diff --check`. Code
+review + build pending; in-game pending.
