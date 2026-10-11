@@ -69,4 +69,30 @@ namespace ai
     {
         return allowableClass == 0 || (allowableClass & classMask) != 0;
     }
+
+    // "Never NEED against a player": does one real player in the roll stand
+    // between this bot and the item? A vote the bot saw (its owner's own
+    // CMSG_LOOT_ROLL, forwarded to the owner's bots) is the answer: NEED
+    // competes, GREED or PASS steps aside. The core keeps everyone else's
+    // vote private, so an unseen player competes whenever the item is
+    // usable for them (Player::CanUseItem, the same test the core applies
+    // under need-before-greed).
+    inline bool RealPlayerCompetes(bool voteSeen, LootRollVote seenVote, bool canUse)
+    {
+        if (voteSeen)
+            return seenVote == LootRollVote::Need;
+
+        return canUse;
+    }
+
+    // An automatic NEED becomes GREED while a real player competes. An
+    // explicit FORCE_NEED order from the player still NEEDs (player control
+    // first); GREED and PASS are never raised.
+    inline LootRollVote PoliteRollVote(LootRollVote vote, bool realPlayerCompetes, bool forcedNeed)
+    {
+        if (vote == LootRollVote::Need && realPlayerCompetes && !forcedNeed)
+            return LootRollVote::Greed;
+
+        return vote;
+    }
 }

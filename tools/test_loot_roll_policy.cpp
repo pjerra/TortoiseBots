@@ -12,6 +12,8 @@
 
 using ai::LootMethodTakesRolls;
 using ai::LootRollVote;
+using ai::PoliteRollVote;
+using ai::RealPlayerCompetes;
 using ai::RecipeRollVote;
 using ai::TokenUsableByClass;
 using ai::UniqueCopyOwned;
@@ -61,6 +63,30 @@ int main()
         CHECK(!TokenUsableByClass(warrior << 2, warrior));
         CHECK(TokenUsableByClass(0, warrior));
         std::cout << "  [PASS] token class-mask gate\n";
+    }
+
+    // (5) Real player in the roll: a seen NEED competes, a seen GREED or
+    // PASS steps aside even for an item they could use; an unseen vote
+    // competes exactly when the player can use the item.
+    {
+        CHECK(RealPlayerCompetes(true, LootRollVote::Need, false));
+        CHECK(!RealPlayerCompetes(true, LootRollVote::Greed, true));
+        CHECK(!RealPlayerCompetes(true, LootRollVote::Pass, true));
+        CHECK(RealPlayerCompetes(false, LootRollVote::Pass, true));
+        CHECK(!RealPlayerCompetes(false, LootRollVote::Pass, false));
+        std::cout << "  [PASS] real-player competition\n";
+    }
+
+    // (6) Polite vote: NEED steps down to GREED against a competing player
+    // unless the player forced NEED; GREED/PASS untouched; no competitor,
+    // no change.
+    {
+        CHECK(PoliteRollVote(LootRollVote::Need, true, false) == LootRollVote::Greed);
+        CHECK(PoliteRollVote(LootRollVote::Need, true, true) == LootRollVote::Need);
+        CHECK(PoliteRollVote(LootRollVote::Need, false, false) == LootRollVote::Need);
+        CHECK(PoliteRollVote(LootRollVote::Greed, true, false) == LootRollVote::Greed);
+        CHECK(PoliteRollVote(LootRollVote::Pass, true, false) == LootRollVote::Pass);
+        std::cout << "  [PASS] never NEED against a player\n";
     }
 
     std::cout << "All loot-roll gate checks PASSED!\n";

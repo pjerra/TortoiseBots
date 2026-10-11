@@ -343,49 +343,61 @@ bool RollAction::RollOnItemInSlot(RollVote vote, ObjectGuid lootGuid, uint32 slo
     return true;
 }
 
-// Do any real players still have the roll dialog open, and did one of them
-// ask for need? Bots are ignored - they are expected to sort themselves out.
-bool RollAction::HumansStillDeciding(ObjectGuid lootGuid, uint32 slot, bool& humanNeeds)
+// Would rolling need on this item take it from a real player? Every real
+// player in the group who is in this roll counts (same map, inside the
+// core's loot distance of the corpse). seenVoter/seenVote carry the one
+// vote the bot knows: its owner's own CMSG_LOOT_ROLL that woke "delayed
+// roll". The core keeps the other votes private, so for anyone else the
+// test is whether they can use the item at all.
+bool RollAction::RealPlayerMayNeed(ObjectGuid lootGuid, ItemQualifier& itemQualifier, ObjectGuid seenVoter, uint8 seenVote)
 {
-    humanNeeds = false;
-
-    Group* group = bot->GetGroup();
-    if (!group)
+    const ItemPrototype* proto = itemQualifier.GetProto();
+    if (!proto || !bot->GetGroup() || !bot->GetMap())
         return false;
 
-    // Active roll votes are private in the core. Continue without trying to
-    // inspect human votes; CountRollVote still validates the bot's own vote.
+    Creature* lootTarget = bot->GetMap()->GetCreature(lootGuid);
+
+    for (Player* member : ai->GetPlayersInGroup())
+    {
+        if (member == bot || !member->IsInWorld() || member->GetMapId() != bot->GetMapId())
+            continue;
+
+        if (lootTarget && !member->IsWithinLootXPDist(lootTarget))
+            continue;
+
+        bool voteSeen = !seenVoter.IsEmpty() && member->GetObjectGuid() == seenVoter && seenVote < MAX_ROLL_FROM_CLIENT;
+        ai::LootRollVote vote = voteSeen ? ai::LootRollVote(seenVote) : ai::LootRollVote::Pass;
+        bool canUse = member->CanUseItem(proto) == EQUIP_ERR_OK;
+
+        if (ai::RealPlayerCompetes(voteSeen, vote, canUse))
+            return true;
+    }
+
     return false;
 }
 
-// Half the countdown is gone. Past that the bot votes regardless, so one
-// player who walked away cannot make the whole group wait out the timer.
-bool RollAction::RollAboutToExpire(ObjectGuid lootGuid)
+// Vote on one item the polite way: never roll need against a real player.
+bool RollAction::RollWithEtiquette(ObjectGuid lootGuid, uint32 slot, ObjectGuid seenVoter, uint8 seenVote)
 {
-    Creature* target = bot->GetMap() ? bot->GetMap()->GetCreature(lootGuid) : nullptr;
-    if (!target)
-        return true;
-
-    uint32 const left = target->GetGroupLootTimer();
-    return left == 0 || left < 30 * IN_MILLISECONDS;
-}
-
-// Vote on one item the polite way.
-bool RollAction::RollWithEtiquette(ObjectGuid lootGuid, uint32 slot)
-{
-    bool humanNeeds = false;
-    if (HumansStillDeciding(lootGuid, slot, humanNeeds) && !RollAboutToExpire(lootGuid))
-        return false;
-
     ItemQualifier itemQualifier = GetRollItem(lootGuid, slot);
     if (!itemQualifier.GetId())
         return false;
 
     RollVote vote = CalculateRollVote(itemQualifier);
 
-    // A player asked for it. Never roll need against them.
-    if (humanNeeds && vote == ROLL_NEED)
-        vote = ROLL_GREED;
+    if (vote == ROLL_NEED)
+    {
+        // A FORCE_NEED usage is the player's own order and still needs.
+        bool forcedNeed = AI_VALUE2(ItemUsage, "item usage", itemQualifier.GetQualifier()) == ItemUsage::ITEM_USAGE_FORCE_NEED;
+        bool competes = !forcedNeed && RealPlayerMayNeed(lootGuid, itemQualifier, seenVoter, seenVote);
+        if (ai::PoliteRollVote(ai::LootRollVote::Need, competes, forcedNeed) == ai::LootRollVote::Greed)
+        {
+            vote = ROLL_GREED;
+
+            if (AI_VALUE2(bool, "manual bool", "roll feedback"))
+                ai->TellPlayerNoFacing(ai->GetMaster(), "Rolling greed on " + ChatHelper::formatItem(itemQualifier) + " instead: a player in the group may need it.");
+        }
+    }
 
     return RollOnItemInSlot(vote, lootGuid, slot);
 }
@@ -403,7 +415,10 @@ bool LootRollAction::Execute(Event& event)
     p >> slot; //number of players invited to roll
     p >> rollType; //need,greed or pass on roll
 
-    return RollWithEtiquette(guid, slot);
+    // The packet is the owner's own vote: when they passed or greeded, the
+    // bot may need without competing with them.
+    Player* voter = GetMaster();
+    return RollWithEtiquette(guid, slot, voter ? voter->GetObjectGuid() : ObjectGuid(), rollType);
 }
 
 bool AutoLootRollAction::Execute(Event& event)

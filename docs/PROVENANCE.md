@@ -2992,6 +2992,41 @@ Local validation: `tools/test_loot_roll_policy.cpp` (loot method,
 recipe split, unique ownership, token mask; registered in
 `tools/verify_all.sh`); `bash tools/verify_all.sh`; `git diff --check`.
 No deploy (orchestrator compiles).
+
+## Never roll Need against a real player (batch 4 #1) — 2026-10-11
+Feature: an automatic NEED steps down to GREED when a real player in the
+roll could take the item: a vote the bot saw (its owner's own
+`CMSG_LOOT_ROLL`, which wakes `delayed roll`) decides for that player
+(NEED competes, GREED/PASS steps aside); anyone else competes when
+`Player::CanUseItem` is OK. "In the roll" mirrors the core's roll filter
+(same map, `IsWithinLootXPDist` of the corpse). Explicit orders win:
+`roll need [item]` bypasses the vote and a `keep need` (FORCE_NEED) usage
+still NEEDs. Replaces the `HumansStillDeciding` stub (always false, so the
+old "never need against them" branch never ran) and its unused
+`RollAboutToExpire` timer; bots do not wait for players.
+
+Source project: `mod-playerbots` 79bd428
+`src/Ai/Base/Actions/LootRollAction.cpp:85-92` (NEED downgraded by
+`LootNeedRollLevel`, default 1 = NEED becomes GREED,
+`conf/playerbots.conf.dist:314-321`).
+
+Source files: local `ai/playerbot/LootRollPolicy.h`
+(`RealPlayerCompetes`, `PoliteRollVote`),
+`ai/playerbot/strategy/actions/LootRollAction.cpp/.h`,
+`tools/test_loot_roll_policy.cpp`.
+
+Copied / ported / reimplemented: reimplemented, narrower than the donor.
+The donor demotes every NEED globally; here only a NEED that competes
+with a real player is demoted, so pool-only groups and items no player
+can use keep the old vote. The donor's GREED-to-PASS default
+(`LootGreedRollLevel = 0`) is not ported; no new config keys.
+
+Reason: batch 4 #1 — bots in the player's group NEEDed items the player
+could use, even after the player clicked Need.
+
+Validation: `tools/test_loot_roll_policy.cpp` (cases 5-6);
+`bash tools/verify_all.sh`; `git diff --check`; code review + build
+pending; in-game pending.
 ## 2026-10-03 — pet upkeep + gather tools + medium-mana potion (r-donor E01/E02/E10/E11)
 
 Donor: `mod-playerbots` @ b6696bdbd3740e575598d167d69f39f68cc0b907.
