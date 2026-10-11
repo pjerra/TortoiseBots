@@ -5105,7 +5105,23 @@ bool PlayerbotAI::CanCastSpell(uint32 spellid, Unit* target, uint8 effectMask, b
             }
         }
 
-        if (!damage)
+        if (damage)
+        {
+            // Damage spells skip the per-effect check below (mechanic/effect immunities do not stop damage),
+            // but a school or damage immunity (fire elementals, Ice Block) makes the cast do nothing: report it
+            // as not castable so the rotation falls through to the next row (e.g. Frostbolt).
+            if (target->IsImmuneToDamage(spellInfo->GetSpellSchoolMask(), spellInfo) ||
+                target->IsImmuneToSpell(spellInfo, bot == target))
+            {
+                if (checkResult)
+                {
+                    *checkResult = SPELL_FAILED_IMMUNE;
+                }
+
+                return false;
+            }
+        }
+        else
         {
             for (int32 i = EFFECT_INDEX_0; i <= EFFECT_INDEX_2; i++)
             {

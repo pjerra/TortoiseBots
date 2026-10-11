@@ -4003,8 +4003,9 @@ Mage blink id 1953 checked via `sServerFacade.IsSpellReady`; the 8 yd band
 mirrors the hunter dead-zone hysteresis already in-tree. Crusader Strike
 verified as an already-wired live trigger + action node
 (`CrusaderStrikeTrigger` CD_TRIGGER, `CastCrusaderStrikeAction` melee
-spell); only the priority moved. Skipped as not-small in this batch: mage
-fire-immune fallback, scorch exclusivity/HP gate, blizzard 10s gate (D5
+spell); only the priority moved. Skipped as not-small in this batch (the mage
+fire-immune fallback was later closed, see "Skip damage spells on immune
+targets" at the end of this file): scorch exclusivity/HP gate, blizzard 10s gate (D5
 M-items); prot disarm/block/panic/intervene/overpower/thunder items, arms
 death-wish/stance/execute (D6 S-items beyond the two rage/stack gates); ret
 exorcism split, double-bubble, blessing refresh (D7); priest mana recovery,
@@ -7660,3 +7661,9 @@ Feature: [Turtle] Steady Shot as the hunter ranged filler, cast only inside the 
 Behaviour reimplemented from mod-playerbots `79bd428`, `src/Ai/Class/Warlock/WarlockTriggers.h` (`CorruptionTrigger`, `ImmolateTrigger`: `DebuffTrigger(..., checkIsOwner=true)`). Reimplemented, not copied: Corruption, Immolate and Siphon Life triggers (and the spread-to-attackers variants via a new `attacker without my aura` value) ask for the bot's own aura, because the core stacks periodic damage per caster (`tortoise-wow` `src/game/Objects/Unit.cpp`, `dmgPeriodic` rule in `RemoveNoStackAurasDueToAuraHolder`). Deliberate deviation: Curse of Agony stays any-owner (the core keeps one curse rank per target, a same-rank curse from another warlock replaces it; the donor's WotLK rule differs).
 
 Files: `ai/playerbot/strategy/warlock/WarlockTriggers.{h,cpp}`, `WarlockActions.h`, `triggers/GenericTriggers.{h,cpp}`, `values/AttackerWithoutAuraTargetValue.{h,cpp}`, `values/ValueContext.h`. Validation: code review + build pending; in-game pending.
+
+## Skip damage spells on immune targets
+
+| Feature | Source project | Source commit | Source files | Ported / reimplemented | Reason | Local validation |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| Skip damage spells the target is fully immune to (school/spell immunity); Fireball/Scorch fall back to Frostbolt | mod-playerbots | 79bd428 | src/Bot/PlayerbotAI.cpp ~3469-3472 (`IsImmunedToSpell` before cast) | Reimplemented with the Turtle core's `Unit::IsImmuneToDamage` / `Unit::IsImmuneToSpell` in `PlayerbotAI::CanCastSpell`; fallback via the mage fireball/scorch action-node alternative | Fire mages cast Fireball at fire-immune mobs for zero damage and never switched spell | Not compiled, not tested in game; `tools/verify_all.sh` docs gates only |

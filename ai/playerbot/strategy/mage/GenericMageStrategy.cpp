@@ -44,7 +44,7 @@ private:
     {
         return new ActionNode("scorch",
                               /*P*/ {},
-                              /*A*/ { NextAction("shoot") },
+                              /*A*/ { NextAction("frostbolt") },
                               /*C*/ {});
     }
 
@@ -67,7 +67,7 @@ private:
     {
         return new ActionNode("fireball",
                               /*P*/ {},
-                              /*A*/ { NextAction("shoot") },
+                              /*A*/ { NextAction("frostbolt") },
                               /*C*/ {});
     }
 };
