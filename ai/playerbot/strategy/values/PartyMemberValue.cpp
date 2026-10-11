@@ -140,8 +140,20 @@ Unit* PartyMemberValue::FindPartyMember(FindPlayerPredicate &predicate, bool ign
 
 bool PartyMemberValue::Check(Unit* player)
 {
-    return player && player != bot && player->GetMapId() == bot->GetMapId() &&
-        bot->IsWithinDistInMap(player, sPlayerbotAIConfig.sightDistance, false);
+    if (!player || player == bot || player->GetMapId() != bot->GetMapId())
+        return false;
+
+    // A hidden GM (VISIBILITY_OFF; GM.Visible = 0 logs GMs in hidden and
+    // `.gm off` does not unhide them) can never be a spell target: the core
+    // drops such a player in Spell::CheckTarget after the cast has started,
+    // so the mana is spent and nothing lands. Left selectable, a party buff
+    // picked that member every tick forever and the members after it in the
+    // list never got the buff (paladin blessing loop, 2026-10-11).
+    // mod-playerbots skips GMs as blessing targets the same way.
+    if (player->IsPlayer() && player->GetVisibility() == VISIBILITY_OFF)
+        return false;
+
+    return bot->IsWithinDistInMap(player, sPlayerbotAIConfig.sightDistance, false);
 }
 
 bool PartyMemberValue::IsTargetOfSpellCast(Player* target, SpellEntryPredicate &predicate)
