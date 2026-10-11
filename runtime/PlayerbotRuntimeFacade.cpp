@@ -7,6 +7,7 @@
 #include "runtime/BotActivityLease.h"
 
 #include "../ai/playerbot/PlayerbotAI.h"
+#include "../ai/playerbot/AiFactory.h"
 #include "../ai/playerbot/PlayerbotAIConfig.h"
 #include "../ai/playerbot/PlayerbotFactory.h"
 #include "../ai/playerbot/BotState.h"
@@ -455,7 +456,15 @@ void RandomBotFacade::ChangeStrategy(Player* player)
 
     if (PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(player))
     {
+        // Same rule as AddDefaultCombatStrategies: the string's -threat must
+        // not strip the party back-off from a bot grouped with a real master.
+        // Only a back-off the bot already runs is kept, so a player's
+        // ".bot behavior <Name> threat off" survives the re-apply.
+        bool const keepThreat = ai->HasStrategy("threat", BotState::BOT_STATE_COMBAT) &&
+            AiFactory::KeepsPartyThreatBackoff(player, ai);
         ai->ChangeStrategy(sPlayerbotAIConfig.randomBotCombatStrategies, BotState::BOT_STATE_COMBAT);
+        if (keepThreat && !ai->HasStrategy("threat", BotState::BOT_STATE_COMBAT))
+            ai->ChangeStrategy("+threat", BotState::BOT_STATE_COMBAT);
         ai->ChangeStrategy(sPlayerbotAIConfig.randomBotNonCombatStrategies, BotState::BOT_STATE_NON_COMBAT);
     }
 }
