@@ -7,6 +7,7 @@
 // duration), but never later than its situation allows: in combat 400 ms,
 // dead or in a battleground 1 s, anything else 3 s. A change of situation
 // (pulled into combat, died, started a teleport) makes the bot due at once.
+// "In combat" is the core's combat flag or the AI's own combat state.
 //
 // Every tick the due bots are served most-overdue first, where "overdue" is
 // measured against what the bot's situation tolerates, until the tick budget
@@ -33,6 +34,33 @@ enum class TurnSituation : uint8_t
     Combat,
     Teleport,
 };
+
+// What the scan reads about a pool bot. Combat is the core's flag OR the AI's
+// own combat engine (mod-playerbots GetReactDelay counts both): a bot closing
+// on or pulling a target is fighting before the core says so, and the AI may
+// keep fighting a moment after the core drops the flag.
+struct TurnFacts
+{
+    bool teleporting = false;
+    bool alive = true;
+    bool coreCombat = false;
+    bool aiCombat = false;
+    bool battleground = false;
+};
+
+// Most urgent fact wins: teleport, then dead, then combat, then battleground.
+inline TurnSituation TurnSituationFrom(TurnFacts const& facts)
+{
+    if (facts.teleporting)
+        return TurnSituation::Teleport;
+    if (!facts.alive)
+        return TurnSituation::Dead;
+    if (facts.coreCombat || facts.aiCombat)
+        return TurnSituation::Combat;
+    if (facts.battleground)
+        return TurnSituation::Battleground;
+    return TurnSituation::Normal;
+}
 
 // The longest a bot in this situation may go without a turn.
 inline uint32_t TurnMaxWaitMs(TurnSituation situation)

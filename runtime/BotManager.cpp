@@ -80,19 +80,18 @@ bool AwaitsTravelStep(PlayerbotAI* ai)
 // The situation that caps how long a pool bot may wait for its next turn
 // (BotTurnScheduler.h). Takes the FindPlayerNotInWorld lookup, so a bot
 // mid-teleport is still seen; no player at all (logging in/out) waits as Normal.
-TurnSituation TurnSituationOf(::Player* player)
+// The AI's combat state counts as combat too (one member read; ai may be null).
+TurnSituation TurnSituationOf(::Player* player, PlayerbotAI* ai)
 {
     if (!player)
         return TurnSituation::Normal;
-    if (player->IsBeingTeleported())
-        return TurnSituation::Teleport;
-    if (!player->IsAlive())
-        return TurnSituation::Dead;
-    if (player->IsInCombat())
-        return TurnSituation::Combat;
-    if (player->InBattleGround())
-        return TurnSituation::Battleground;
-    return TurnSituation::Normal;
+    TurnFacts facts;
+    facts.teleporting = player->IsBeingTeleported();
+    facts.alive = player->IsAlive();
+    facts.coreCombat = player->IsInCombat();
+    facts.aiCombat = ai && ai->GetState() == BotState::BOT_STATE_COMBAT;
+    facts.battleground = player->InBattleGround();
+    return TurnSituationFrom(facts);
 }
 
 // One-shot headless RNDBOT scatter using persisted GenericRpg destinations.
@@ -1957,7 +1956,7 @@ void BotManager::UpdateBots(uint32_t diff)
                     ++entry.followUps;
                     aiDelayMs = 0;
                 }
-                entry.turnSituation = TurnSituationOf(sObjectAccessor.FindPlayerNotInWorld(entry.record.characterGuid));
+                entry.turnSituation = TurnSituationOf(sObjectAccessor.FindPlayerNotInWorld(entry.record.characterGuid), stepAi);
                 entry.turnDueMs = TurnNextDueMs(WorldTimer::getMSTime(), aiDelayMs, entry.turnSituation);
             }
 
@@ -2011,7 +2010,8 @@ void BotManager::UpdateBots(uint32_t diff)
         if (it == m_bots.end() || it->second.record.lifecycle != BotLifecycle::InWorld)
             continue;
         BotEntry& entry = it->second;
-        TurnSituation const situation = TurnSituationOf(sObjectAccessor.FindPlayerNotInWorld(entry.record.characterGuid));
+        TurnSituation const situation = TurnSituationOf(sObjectAccessor.FindPlayerNotInWorld(entry.record.characterGuid),
+            entry.aiAdapter ? entry.aiAdapter->GetAI() : nullptr);
         if (situation != entry.turnSituation || entry.turnDueMs == 0)
         {
             entry.turnSituation = situation;

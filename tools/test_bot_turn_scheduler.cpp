@@ -1,9 +1,10 @@
 // Standalone regression test for the random-pool turn scheduler
 // (runtime/BotTurnScheduler.h). Exercises the rules that must not regress:
 // a turn is due at the AI's own delay but never later than the situation
-// allows, the due check survives the world clock wrapping, due bots are
-// served most overdue relative to their tolerance, and in a simulated
-// overloaded pool no bot starves while fights stay ahead of idle walking.
+// allows, AI combat counts as combat, the due check survives the world
+// clock wrapping, due bots are served most overdue relative to their
+// tolerance, and in a simulated overloaded pool no bot starves while fights
+// stay ahead of idle walking.
 //
 // Build and run:
 //   g++ -std=c++17 -Wall -Wextra tools/test_bot_turn_scheduler.cpp -o /tmp/test_bot_turn_scheduler
@@ -45,6 +46,33 @@ static void TestNextDueCapsTheAiDelay()
     CHECK(TurnMaxWaitMs(TurnSituation::Combat) <= TurnMaxWaitMs(TurnSituation::Dead));
     CHECK(TurnMaxWaitMs(TurnSituation::Dead) <= TurnMaxWaitMs(TurnSituation::Normal));
     CHECK(TurnMaxWaitMs(TurnSituation::Battleground) <= TurnMaxWaitMs(TurnSituation::Normal));
+}
+
+static void TestAiCombatCountsAsCombat()
+{
+    TurnFacts facts;
+    CHECK(TurnSituationFrom(facts) == TurnSituation::Normal);
+    // The core's flag alone, the AI's combat engine alone (closing on or
+    // pulling a target, a moment after the core drops it), or both: combat.
+    facts.coreCombat = true;
+    CHECK(TurnSituationFrom(facts) == TurnSituation::Combat);
+    facts.coreCombat = false;
+    facts.aiCombat = true;
+    CHECK(TurnSituationFrom(facts) == TurnSituation::Combat);
+    facts.coreCombat = true;
+    CHECK(TurnSituationFrom(facts) == TurnSituation::Combat);
+    // AI combat inside a battleground is still the faster combat class.
+    facts.coreCombat = false;
+    facts.battleground = true;
+    CHECK(TurnSituationFrom(facts) == TurnSituation::Combat);
+    facts.aiCombat = false;
+    CHECK(TurnSituationFrom(facts) == TurnSituation::Battleground);
+    // Teleport and death outrank a stale AI combat state.
+    facts.aiCombat = true;
+    facts.alive = false;
+    CHECK(TurnSituationFrom(facts) == TurnSituation::Dead);
+    facts.teleporting = true;
+    CHECK(TurnSituationFrom(facts) == TurnSituation::Teleport);
 }
 
 static void TestDueSurvivesClockWrap()
@@ -202,6 +230,7 @@ static void TestOverloadedPoolStarvesNobody()
 int main()
 {
     TestNextDueCapsTheAiDelay();
+    TestAiCombatCountsAsCombat();
     TestDueSurvivesClockWrap();
     TestOrderIsRelativeToTolerance();
     TestUnderloadedPoolRunsOnTime();
