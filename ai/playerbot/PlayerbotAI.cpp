@@ -3599,8 +3599,16 @@ void PlayerbotAI::ResetStrategies(bool autoLoad)
     if (m_forcedRole)
     {
         char const* roleStrategy = m_forcedRole == 1 ? "tank" : (m_forcedRole == 2 ? "heal" : "dps");
-        engines[(uint8)BotState::BOT_STATE_COMBAT]->addStrategy(roleStrategy);
-        engines[(uint8)BotState::BOT_STATE_NON_COMBAT]->addStrategy(roleStrategy);
+        for (BotState state : { BotState::BOT_STATE_COMBAT, BotState::BOT_STATE_NON_COMBAT })
+        {
+            Engine* engine = engines[(uint8)state];
+            // Priests heal from two specs and "heal" aliases Holy, which
+            // would drop a Discipline priest's own spec as a sibling. A
+            // Discipline priest is already a healer, so it keeps its spec.
+            if (m_forcedRole == 2 && engine->HasStrategy("discipline"))
+                continue;
+            engine->addStrategy(roleStrategy);
+        }
         sLog.outBasic("LFT: %s strategies rebuilt as %s", bot->GetName(), roleStrategy);
     }
 

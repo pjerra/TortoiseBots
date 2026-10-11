@@ -19,6 +19,8 @@ Priests are the quintessential healers of Vanilla WoW, boasting an extensive hea
 - **Discipline (Healer / Support):** Damage absorption via *Power Word: Shield*, *Inner Focus*, mana conservation, and support damage.
 - **Shadow (Ranged DPS):** Shadowform damage dealer relying on *Shadow Word: Pain*, *Mind Flay*, *Mind Blast*, and *Vampiric Embrace*.
 
+A forced healer role (`.bot role <Name> healer` or a dungeon-finder heal slot) keeps a Discipline priest on `discipline`; Holy stays `holy`, and a Shadow priest switches to `holy` (the priest `heal` strategy alias). A forced `dps` role switches Holy and Discipline to `shadow`.
+
 ---
 
 ## The Priest Healing Ladder
