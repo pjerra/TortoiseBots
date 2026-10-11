@@ -7957,3 +7957,26 @@ pet policy (`runtime/WarlockPetPolicy.h`) and is left as is.
 
 Validation: code review + build pending; in-game pending.
 `bash tools/verify_all.sh` (incl. `test_pet_upkeep_policy`), `git diff --check`.
+## Pool priests keep their talent spec in combat (2026-10-11)
+
+Feature: `AiPlayerbot.RandomBotCombatStrategies` default (template and code
+fallback) drops `+dps`; it is now `+dps assist,-threat`.
+
+Source: `mod-playerbots` @ `79bd428`, `conf/playerbots.conf.dist:1381` and
+`src/PlayerbotAIConfig.cpp:459` (`RandomBotCombatStrategies = ""`: no
+role/spec override on top of the spec defaults). Behaviour aligned, no code
+copied.
+
+Reason: in the priest strategy context `dps` is an alias of the `shadow`
+spec placeholder (`PriestAiObjectContext.cpp`), and spec placeholders are
+siblings, so `+dps` removed `holy`/`discipline` from every Holy and
+Discipline pool priest's combat engine and ran the Shadow rotation. Those
+bots have no Mind Flay or Shadowform talents, so `shadow weaving missing ->
+mind flay` fell back to Smite (live yulon-ubuntu sample at acd9e01: every
+level 40+ priest with that Smite pattern was Holy or Discipline specced out
+of combat; Shadow-specced bots did cast Mind Flay and Shadowform). The same
+override had already been removed from `AiPlayerbot.CombatStrategies` for
+owned bots in 66559d7. No other class registers a `dps` strategy, so the
+change only affects priests.
+
+Validation: code review + build pending; in-game pending.

@@ -1635,7 +1635,11 @@ AiPlayerbot.EnableCustomRaidTactics = 1
 # Random bot default strategies (applied after defaults)
 # Note: non-tank bots grouped with a real-player master (outside BGs) get `threat` added back
 # after this list, so `-threat` here only affects masterless pool bots.
-AiPlayerbot.RandomBotCombatStrategies = +dps,+dps assist,-threat
+# No "+dps" here: for a priest "dps" is the Shadow spec strategy, and adding it
+# swaps a Holy or Discipline pool priest onto the Shadow rotation in combat
+# (no Mind Flay or Shadowform talents, so it fills with Smite). The spec
+# defaults already give pool healers off-spec damage through "offdps".
+AiPlayerbot.RandomBotCombatStrategies = +dps assist,-threat
 AiPlayerbot.RandomBotNonCombatStrategies = +grind,+loot,+custom::say,+tfish,+wander,+rpg craft
 #AiPlayerbot.RandomBotReactStrategies =
 #AiPlayerbot.RandomBotDeadStrategies =

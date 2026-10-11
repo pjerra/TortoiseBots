@@ -210,7 +210,7 @@ Fine-tune how aggressively bots heal, rest, or drink:
 | `AiPlayerbot.AlmostFullHealth` | `90` | Health ceiling above which bots stop casting heals to conserve mana. |
 | `AiPlayerbot.LowMana` | `15` | Mana floor where casters switch to low-cost wanding or conserve mana. |
 | `AiPlayerbot.MediumMana` | `40` | Threshold where bots consider conservative rotations. |
-| `AiPlayerbot.RandomBotCombatStrategies` | `+dps,+dps assist,-threat` | Combat strategies applied to pool bots after defaults. Note: grouped non-tank bots with a real-player master (outside battlegrounds) get `threat` added back after this list, so `-threat` here only affects masterless pool bots. Bots with a saved strategy snapshot replay it instead until re-saved. |
+| `AiPlayerbot.RandomBotCombatStrategies` | `+dps assist,-threat` | Strategy changes applied to every pool bot's combat set after the spec defaults. Leave `+dps` out: for a priest `dps` is the Shadow spec, so it moves Holy and Discipline pool priests onto the Shadow rotation without the Shadow talents (they fill with *Smite*). Note: grouped non-tank bots with a real-player master (outside battlegrounds) get `threat` added back after this list, so `-threat` here only affects masterless pool bots. Bots with a saved strategy snapshot replay it instead until re-saved. |
 | `AiPlayerbot.PoolMeleeHoldGround` | `0` | Opt-in. `1` = pool and free warriors and rogues get no generic `flee` combat strategy (`panic`, `outnumbered`, `critical health no master`), so they fight on with their own defensive kit instead of breaking off, like mod-playerbots melee. Other classes and bots with a real player master are unaffected. Takes effect after a server restart. |
 
 ---
