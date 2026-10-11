@@ -250,6 +250,12 @@ private:
     uint32_t m_perfTurns = 0;
     uint64_t m_perfLateMsSum = 0;
     uint32_t m_perfLateMsMax = 0;
+    // Same window: time spent inside the turn loop, and lateness by situation.
+    uint64_t m_perfTurnLoopUsSum = 0;
+    uint32_t m_perfCombatTurns = 0;
+    uint64_t m_perfCombatLateMsSum = 0;
+    uint32_t m_perfOtherTurns = 0;
+    uint64_t m_perfOtherLateMsSum = 0;
     // Action-count snapshot cadence: cumulative per-(class, action) CSV dump
     // every 5 minutes of tick time (AiPlayerbot.ActionCountsLog only).
     uint32_t m_actionCountsElapsedMs = 0;

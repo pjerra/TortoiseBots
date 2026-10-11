@@ -2030,6 +2030,7 @@ void BotManager::UpdateBots(uint32_t diff)
     uint64_t const turnsStartUs = budgetActive ? nowUs() : 0;
     uint32_t poolProcessed = 0;
     bool budgetHit = false;
+    uint64_t const turnLoopStartUs = nowUs();
     for (DueTurn const& turn : m_dueTurns)
     {
         if (budgetActive && nowUs() - turnsStartUs >= budgetUs)
@@ -2041,9 +2042,20 @@ void BotManager::UpdateBots(uint32_t diff)
         m_perfLateMsSum += lateMs;
         m_perfLateMsMax = std::max(m_perfLateMsMax, lateMs);
         ++m_perfTurns;
+        if (turn.situation == TurnSituation::Combat)
+        {
+            m_perfCombatLateMsSum += lateMs;
+            ++m_perfCombatTurns;
+        }
+        else
+        {
+            m_perfOtherLateMsSum += lateMs;
+            ++m_perfOtherTurns;
+        }
         updateOneBot(turn.guidLow);
         ++poolProcessed;
     }
+    m_perfTurnLoopUsSum += nowUs() - turnLoopStartUs;
 
     m_inBotUpdate = false;
 
@@ -2068,14 +2080,23 @@ void BotManager::UpdateBots(uint32_t diff)
     m_perfElapsedMs += diff;
     if (m_perfElapsedMs >= 30000)
     {
-        TB_LOG_BASIC("TortoiseBots: BOTPERF passUs=%llu playerBots=%u ownedBots=%u masterBots=%u poolBots=%u poolProcessed=%u due=%u budgetHit=%u maxUs=%llu ticks=%u poolBudgetUs=%llu combatBudgetUs=%llu turnLateAvgMs=%u turnLateMaxMs=%u",
+        // coreMs: average world tick minus the average bot pass, i.e. what the
+        // core and other services spend per tick that bots cannot give back.
+        uint64_t const tickUsAvg = (static_cast<uint64_t>(m_perfElapsedMs) * 1000) / m_perfPassCount;
+        uint64_t const passUsAvg = m_perfPassUsSum / m_perfPassCount;
+        uint64_t const coreMs = tickUsAvg > passUsAvg ? (tickUsAvg - passUsAvg) / 1000 : 0;
+        TB_LOG_BASIC("TortoiseBots: BOTPERF passUs=%llu playerBots=%u ownedBots=%u masterBots=%u poolBots=%u poolProcessed=%u due=%u budgetHit=%u maxUs=%llu ticks=%u poolBudgetUs=%llu combatBudgetUs=%llu turnLateAvgMs=%u turnLateMaxMs=%u turns=%u usPerTurn=%u coreMs=%u combatTurns=%u combatLateAvgMs=%u otherTurns=%u otherLateAvgMs=%u",
             static_cast<unsigned long long>(m_perfPassUsSum / m_perfPassCount),
             playerBots, ownedAccountBots, masterBots, poolBots, poolProcessed,
             static_cast<uint32_t>(m_dueTurns.size()), budgetHit ? 1u : 0u,
             static_cast<unsigned long long>(m_perfPassUsMax), m_perfPassCount,
             static_cast<unsigned long long>(m_adaptiveBudget.PoolUs()),
             static_cast<unsigned long long>(m_adaptiveBudget.CombatUs()),
-            m_perfTurns ? static_cast<uint32_t>(m_perfLateMsSum / m_perfTurns) : 0u, m_perfLateMsMax);
+            m_perfTurns ? static_cast<uint32_t>(m_perfLateMsSum / m_perfTurns) : 0u, m_perfLateMsMax,
+            m_perfTurns, m_perfTurns ? static_cast<uint32_t>(m_perfTurnLoopUsSum / m_perfTurns) : 0u,
+            static_cast<uint32_t>(coreMs),
+            m_perfCombatTurns, m_perfCombatTurns ? static_cast<uint32_t>(m_perfCombatLateMsSum / m_perfCombatTurns) : 0u,
+            m_perfOtherTurns, m_perfOtherTurns ? static_cast<uint32_t>(m_perfOtherLateMsSum / m_perfOtherTurns) : 0u);
         m_perfPassUsSum = 0;
         m_perfPassUsMax = 0;
         m_perfPassCount = 0;
@@ -2083,6 +2104,11 @@ void BotManager::UpdateBots(uint32_t diff)
         m_perfTurns = 0;
         m_perfLateMsSum = 0;
         m_perfLateMsMax = 0;
+        m_perfTurnLoopUsSum = 0;
+        m_perfCombatTurns = 0;
+        m_perfCombatLateMsSum = 0;
+        m_perfOtherTurns = 0;
+        m_perfOtherLateMsSum = 0;
     }
 
     // Cumulative action-count snapshot every 5 minutes of tick time. The dump
