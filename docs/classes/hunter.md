@@ -27,6 +27,7 @@ Hunters excel at sustained single-target ranged DPS, pet off-tanking, snares, an
 1. **Opener:** Casts *Hunter's Mark* on the primary target, orders pet to attack.
 2. **Shot Priority:**
    - *Aimed Shot* when the MM talent is known, otherwise *Arcane Shot* (never both), on cooldown.
+   - *Steady Shot* ([Turtle], taught by the hunter trainer at levels 36-60; highest known rank) as the filler below Aimed/Arcane (`ACTION_NORMAL - 1`, above plain Auto Shot). It is a timed cast with no cooldown. The core pauses the repeating Auto Shot during a timed cast and raises the ranged timer to a 500 ms windup on resume, so the `steady shot` trigger fires only when the ranged timer exceeds cast time + 500 ms + a 150 ms margin (`SteadyShotTrigger`, haste-aware cast time). Otherwise the bot keeps auto-shooting and Auto Shot is not delayed. No toggle: it completes the existing ranged kit, like Arcane Shot.
    - *Multi-Shot* when AoE is permitted and multiple enemies are engaged.
    - Keeps *Serpent Sting* ticking on high-health targets (skips on low-health mobs to conserve mana).
 3. **Threat Drop:** Climbing toward the top of the threat table without holding aggro fires *Feign Death* (medium threat); high threat feigns in raids too. The bot stands back up on its own via the feign-threat action node.

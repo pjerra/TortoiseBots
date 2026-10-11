@@ -105,6 +105,12 @@ void HunterStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
         "arcane shot",
         NextAction::array(0, new NextAction("arcane shot", ACTION_NORMAL + 1), NULL)));
 
+    // [Turtle] Steady Shot filler: below aimed/arcane/multi, above the
+    // idle auto shot. The trigger only fires inside the Auto Shot window.
+    triggers.push_back(new TriggerNode(
+        "steady shot",
+        NextAction::array(0, new NextAction("steady shot", ACTION_NORMAL - 1), NULL)));
+
     // Wing clip snare under raptor strike (donor melee chain): when a mob
     // closes in, slow it so the hunter keeps range; raptor stays first.
     triggers.push_back(new TriggerNode(

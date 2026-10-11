@@ -7646,3 +7646,11 @@ donor consumers are RS/Ulduar; the Geddon application is novel. Noted.
 
 ### Default "cast time" combat strategy (lifetime-aware cast veto)
 Feature: `CastTimeStrategy` (already ported) is now added to every non-battleground bot's combat strategies. Source: `mod-playerbots` `79bd428`, `src/Bot/Factory/AiFactory.cpp` (`addStrategiesNoInit(... "cast time" ...)` for non-battleground bots). Reimplemented in `AiFactory::AddDefaultCombatStrategies` (`ai/playerbot/AiFactory.cpp`), non-BG branch only; the BG branch keeps its existing `removeStrategy("cast time")`. The multiplier (`ai/playerbot/strategy/generic/CastTimeStrategy.cpp`) already follows the donor's lifetime formula from `src/Ai/Base/Strategy/CastTimeStrategy.cpp` (veto when cast time > 1000 * target HP / `estimated group dps`), reimplemented, so a low-percent boss with a long lifetime is not vetoed. Reason: nothing ever added the strategy, so the multiplier was dead code. Validation: code review + build pending; in-game pending.
+
+## Hunter Steady Shot filler — 2026-10-11
+
+Feature: [Turtle] Steady Shot as the hunter ranged filler, cast only inside the Auto Shot window.
+
+| Feature | Source repo | SHA | Files | Ported/reimplemented | Reason | Validation |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| Hunter Steady Shot filler in the ranged rotation, woven inside the Auto Shot window (timer > cast + 500 ms windup + 150 ms margin) | `mod-playerbots` | `79bd4281` | `src/Ai/Class/Hunter/HunterActions.h` (CastSteadyShotAction), `HunterAiObjectContext.cpp` (steady_shot), behaviour reference only (donor's spell is the WotLK one) | Reimplemented: `steady shot` trigger + action + `HunterStrategy` row at `ACTION_NORMAL - 1`; Turtle ids 3035-3038/3668/45970/45972/45974 (cast-time, no cooldown, 1.5s GCD), cast gated on the core's Auto Shot pause and 500 ms re-arm (`Unit::_UpdateAutoRepeatSpell`) | Turtle trainer teach spells (3039 etc.) give Steady Shot at 36-60 and the core scripts it; bots only auto-shot between Aimed/Arcane | code review + build pending; in-game pending |

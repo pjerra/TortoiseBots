@@ -228,6 +228,7 @@ namespace ai
                 creators["viper sting"] = [](PlayerbotAI* ai) { return new ViperStingTrigger(ai); };
                 creators["aimed shot"] = [](PlayerbotAI* ai) { return new AimedShotTrigger(ai); };
                 creators["arcane shot"] = [](PlayerbotAI* ai) { return new ArcaneShotTrigger(ai); };
+                creators["steady shot"] = [](PlayerbotAI* ai) { return new SteadyShotTrigger(ai); };
                 creators["bestial wrath"] = [](PlayerbotAI* ai) { return new BestialWrathBoostTrigger(ai); };
                 creators["kill command"] = [](PlayerbotAI* ai) { return new KillCommandTrigger(ai); };
                 creators["carve"] = [](PlayerbotAI* ai) { return new CarveTrigger(ai); };
@@ -245,6 +246,7 @@ namespace ai
                 creators["equip ammo"] = [](PlayerbotAI* ai) { return new HunterEquipAmmoAction(ai); };
                 creators["aimed shot"] = [](PlayerbotAI* ai) { return new CastAimedShotAction(ai); };
                 creators["arcane shot"] = [](PlayerbotAI* ai) { return new CastArcaneShotAction(ai); };
+                creators["steady shot"] = [](PlayerbotAI* ai) { return new CastSteadyShotAction(ai); };
                 creators["tranquilizing shot"] = [](PlayerbotAI* ai) { return new CastTranquilizingShotAction(ai); };
                 creators["concussive shot"] = [](PlayerbotAI* ai) { return new CastConcussiveShotAction(ai); };
                 creators["distracting shot"] = [](PlayerbotAI* ai) { return new CastDistractingShotAction(ai); };

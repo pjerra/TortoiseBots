@@ -45,6 +45,10 @@ public:
         virtual bool isUseful() override { return HunterHasRangedAmmo(ai) && CastSpellAction::isUseful(); }
     END_SPELL_ACTION()
 
+    BEGIN_RANGED_SPELL_ACTION(CastSteadyShotAction, "steady shot")
+        virtual bool isUseful() override { return HunterHasRangedAmmo(ai) && CastSpellAction::isUseful(); }
+    END_SPELL_ACTION()
+
     BEGIN_RANGED_DEBUFF_ACTION(CastConcussiveShotAction, "concussive shot")
         virtual bool isUseful() override { return HunterHasRangedAmmo(ai) && CastRangedDebuffSpellAction::isUseful(); }
     END_SPELL_ACTION()
