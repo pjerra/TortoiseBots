@@ -456,15 +456,20 @@ void RandomBotFacade::ChangeStrategy(Player* player)
 
     if (PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(player))
     {
-        // Same rule as AddDefaultCombatStrategies: the string's -threat must
-        // not strip the party back-off from a bot grouped with a real master.
-        // Only a back-off the bot already runs is kept, so a player's
-        // ".bot behavior <Name> threat off" survives the re-apply.
+        // Same rules as AiFactory::AddDefaultCombatStrategies: the string's -threat must
+        // not strip the party back-off from a bot grouped with a real master (only a
+        // back-off the bot already runs is kept, so a player's ".bot behavior <Name>
+        // threat off" survives the re-apply), and its "+dps assist" must not swap a
+        // tank's sibling "tank assist" out.
         bool const keepThreat = ai->HasStrategy("threat", BotState::BOT_STATE_COMBAT) &&
             AiFactory::KeepsPartyThreatBackoff(player, ai);
+        bool const tankAssist = ai->HasStrategy("tank assist", BotState::BOT_STATE_COMBAT);
         ai->ChangeStrategy(sPlayerbotAIConfig.randomBotCombatStrategies, BotState::BOT_STATE_COMBAT);
         if (keepThreat && !ai->HasStrategy("threat", BotState::BOT_STATE_COMBAT))
             ai->ChangeStrategy("+threat", BotState::BOT_STATE_COMBAT);
+        if (tankAssist && !ai->HasStrategy("tank assist", BotState::BOT_STATE_COMBAT) &&
+            ai->HasStrategy("dps assist", BotState::BOT_STATE_COMBAT))
+            ai->ChangeStrategy("+tank assist", BotState::BOT_STATE_COMBAT);
         ai->ChangeStrategy(sPlayerbotAIConfig.randomBotNonCombatStrategies, BotState::BOT_STATE_NON_COMBAT);
     }
 }

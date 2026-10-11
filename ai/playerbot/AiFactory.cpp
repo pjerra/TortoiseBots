@@ -797,7 +797,15 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
         if (sPlayerbotAIConfig.jumpChase)
             combatEngine->addStrategy("chase jump");
 
+        // "dps assist" and "tank assist" are siblings, so the list's
+        // "+dps assist" swapped "tank assist" out on every pool tank
+        // (Protection warrior/paladin, bear) and it picked targets like dps
+        // instead of collecting loose mobs. The spec/role defaults above
+        // decide the assist strategy; the list must not undo it.
+        bool const specTankAssist = combatEngine->HasStrategy("tank assist");
         combatEngine->ChangeStrategy(sPlayerbotAIConfig.randomBotCombatStrategies);
+        if (specTankAssist && !combatEngine->HasStrategy("tank assist") && combatEngine->HasStrategy("dps assist"))
+            combatEngine->addStrategy("tank assist");
     }
     else
     {

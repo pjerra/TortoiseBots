@@ -1639,6 +1639,8 @@ AiPlayerbot.EnableCustomRaidTactics = 1
 # swaps a Holy or Discipline pool priest onto the Shadow rotation in combat
 # (no Mind Flay or Shadowform talents, so it fills with Smite). The spec
 # defaults already give pool healers off-spec damage through "offdps".
+# A bot whose spec defaults chose "tank assist" (Protection warrior/paladin,
+# bear) keeps it: "+dps assist" here no longer swaps a tank's sibling out.
 AiPlayerbot.RandomBotCombatStrategies = +dps assist,-threat
 AiPlayerbot.RandomBotNonCombatStrategies = +grind,+loot,+custom::say,+tfish,+wander,+rpg craft
 #AiPlayerbot.RandomBotReactStrategies =

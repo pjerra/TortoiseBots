@@ -8020,3 +8020,36 @@ that range, so the flee returned success every tick without moving.
 Local validation: code review + build pending; in-game pending.
 `bash tools/verify_all.sh` (incl. the extended hunter-switch policy test);
 `git diff --check`.
+## Pool tanks keep "tank assist" under RandomBotCombatStrategies (2026-10-11)
+
+Feature: the shipped `AiPlayerbot.RandomBotCombatStrategies` row carries
+`+dps assist`, and `dps assist` / `tank assist` are siblings in
+`AssistStrategyContext`, so the row swapped `tank assist` out on every pool
+tank (live at acd9e01: Protection warriors 96 of 98 combat samples without
+it, Protection paladins 50/50, bears 15/15). A bot whose spec/role defaults
+chose `tank assist` now gets it back right after the list is applied, both
+in `AiFactory::AddDefaultCombatStrategies` and in the periodic
+`RandomBotFacade::ChangeStrategy` re-apply. The config value is unchanged.
+
+Source repository: `mod-playerbots/mod-playerbots`
+
+Source commit: `79bd4281` (local
+`playerbots-references/mod-playerbots` checkout).
+
+Source files:
+- `src/Bot/Factory/AiFactory.cpp:325,344,363` (tank specs get `tank assist`)
+- `conf/playerbots.conf.dist:1381` (`RandomBotCombatStrategies` ships empty, so nothing overrides it)
+
+Copied / ported / independently reimplemented: reimplemented (restore after
+the list instead of emptying the shipped row). Deliberate deviation: the
+donor switches ungrouped random tanks to `dps assist`
+(`AiFactory.cpp:419-425`); here the existing TortoiseBots intent stays, where
+a tank spec keeps `tank assist` solo too (the ungrouped bear block already
+adds it on purpose). Only a swap made by the list's own `+dps assist` is
+undone: a list that removes `tank assist` without adding `dps assist`, and a
+per-bot `co` change made before the periodic re-apply, are respected.
+
+Reason: pool tanks picked targets like dps instead of collecting loose mobs.
+
+Local validation: code review + build pending; in-game pending.
+`bash tools/verify_all.sh`; `git diff --check`.
