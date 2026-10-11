@@ -1316,13 +1316,25 @@ std::string PlayerbotAIConfig::GetTimestampStr()
 
 bool PlayerbotAIConfig::openLog(std::string fileName, char const* mode, bool haslog)
 {
+    std::lock_guard<std::mutex> guard(m_logMtx);
+    return openLogLocked(fileName, mode, haslog);
+}
+
+bool PlayerbotAIConfig::openLogLocked(std::string const& fileName, char const* mode, bool haslog)
+{
     if (!haslog && !hasLog(fileName))
         return false;
 
-    // A file that failed to open or rotate stays off for this run: log() calls
+    // A file that failed to open or rotate is skipped for a cool-down: log() calls
     // this on every event, and retrying cost an fopen plus an error line each time.
-    if (logOpenFailed.count(fileName))
-        return false;
+    // The clock is only read for a file that already failed.
+    auto const failed = logOpenFailed.find(fileName);
+    if (failed != logOpenFailed.end())
+    {
+        if (time(nullptr) < failed->second)
+            return false;
+        logOpenFailed.erase(failed);
+    }
 
     auto logFileIt = logFiles.find(fileName);
     if (logFileIt == logFiles.end())
@@ -1350,7 +1362,7 @@ bool PlayerbotAIConfig::openLog(std::string fileName, char const* mode, bool has
             CompressLogPiece(piece);
         if (!archiveLog(path, now))
         {
-            logOpenFailed.insert(fileName);
+            logOpenFailed[fileName] = time(nullptr) + LOG_OPEN_RETRY_SECONDS;
             return false;
         }
     }
@@ -1364,12 +1376,12 @@ bool PlayerbotAIConfig::openLog(std::string fileName, char const* mode, bool has
     // than "a log file could not be opened".
     if (!file)
     {
-        sLog.outError("Could not open bot log file %s%s (%s). Logging to it is off for this run.",
-            m_logsDir.c_str(), fileName.c_str(), strerror(errno));
+        sLog.outError("Could not open bot log file %s%s (%s). Logging to it is off for %d minutes.",
+            m_logsDir.c_str(), fileName.c_str(), strerror(errno), int(LOG_OPEN_RETRY_SECONDS / 60));
 
         logFileIt->second.first = nullptr;
         logFileIt->second.second = false;
-        logOpenFailed.insert(fileName);
+        logOpenFailed[fileName] = time(nullptr) + LOG_OPEN_RETRY_SECONDS;
 
         return false;
     }
@@ -1435,7 +1447,7 @@ void PlayerbotAIConfig::log(std::string fileName, const char* line)
     std::lock_guard<std::mutex> guard(m_logMtx);
 
     if (!isLogOpen(fileName))
-        if (!openLog(fileName, "a"))
+        if (!openLogLocked(fileName, "a", false))
             return;
 
     FILE* file = logFiles.find(fileName)->second.first;
@@ -1460,7 +1472,7 @@ void PlayerbotAIConfig::logf(std::string fileName, const char* format, ...)
     std::lock_guard<std::mutex> guard(m_logMtx);
 
     if (!isLogOpen(fileName))
-        if (!openLog(fileName, "a"))
+        if (!openLogLocked(fileName, "a", false))
             return;
 
     FILE* file = logFiles.find(fileName)->second.first;

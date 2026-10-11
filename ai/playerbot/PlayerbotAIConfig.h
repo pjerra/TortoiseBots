@@ -693,8 +693,10 @@ public:
     std::list<std::string> debugFilter;
 
     std::unordered_map <std::string, std::pair<FILE*, bool>> logFiles;
-    // Logs that could not be opened or rotated; skipped for the rest of the run.
-    std::unordered_set<std::string> logOpenFailed;
+    // Logs that could not be opened or rotated, with the time they may be tried
+    // again. Guarded by m_logMtx.
+    static constexpr time_t LOG_OPEN_RETRY_SECONDS = 300;
+    std::unordered_map<std::string, time_t> logOpenFailed;
 
     uint32 botCheatMask = 0;
     uint32 rndBotCheatMask = 0;
@@ -735,7 +737,9 @@ public:
     std::string GetTimestampStr();
 
     bool hasLog(std::string fileName) { return std::find(allowedLogFiles.begin(), allowedLogFiles.end(), fileName) != allowedLogFiles.end(); };
+    // Takes m_logMtx; log()/logf() use openLogLocked, which needs it already held.
     bool openLog(std::string fileName, char const* mode = "a", bool haslog = false);
+    bool openLogLocked(std::string const& fileName, char const* mode, bool haslog);
     bool isLogOpen(std::string fileName) { auto it = logFiles.find(fileName); return it != logFiles.end() && it->second.second;}
     std::string logsDirPath();
     bool archiveLog(std::string const& path, time_t now);
