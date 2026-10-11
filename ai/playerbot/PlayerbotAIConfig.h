@@ -300,6 +300,11 @@ public:
     // cooldown burnt (478 uses/100 min, 95% within 300 yd of the homebind, 2026-09-29).
     // Closer than this the unstuck chain repops instead. 0 disables the gate.
     float unstuckHearthMinDistance = 300.0f;
+    // Opt-in stuck-travel teleport (mod-playerbots MoveFarTo): a masterless pool
+    // bot whose trip hits the six-failed-move drop teleports to its destination
+    // instead (same map, unwatched, once per 10 min). Owned/hired bots and bots
+    // with a real master never teleport. Default off.
+    bool stuckTravelTeleport = false;
     // Quest-log upkeep for masterless random bots: drop finished quests that
     // can no longer be rewarded, refuse grey quests unless the reward is an
     // equip upgrade, and prefer turn-in travel once 2 quests are finished.

@@ -15,6 +15,7 @@
 #include "playerbot/FlightErrandPolicy.h"
 #include "playerbot/strategy/values/BudgetValues.h"
 #include "playerbot/strategy/values/FreeMoveValues.h"
+#include "runtime/HireLifecycle.h"
 #include <cstdlib>
 #include <iomanip>
 
@@ -269,6 +270,31 @@ bool MoveToTravelTargetAction::CheckServiceArrival(TravelTarget* target, std::st
     return false;
 }
 
+// Land on the navmesh, not on the npc's own spot: npcs on upper floors and
+// balconies the mmaps never meshed (Stormwind trainers) left the bot above
+// the mesh, where every path probe fails and the bot stood until rescued.
+// Narrowest height window first, and the landing must walk back to the npc:
+// with one 60 yd window the nearest poly under a Stormwind trainer was the
+// mesh beneath the city, and 94 of 174 rescues (live 2026-10-09) landed
+// there and failed every move again.
+static bool FindRescueLanding(Player* bot, WorldPosition const& location, WorldPosition& landing)
+{
+    if (!location.isMmapLoaded(bot->GetInstanceId()))
+        return false;
+    for (float const height : { 5.0f, 15.0f, 30.0f, 60.0f })
+    {
+        WorldPosition candidate = location;
+        if (!candidate.ClosestCorrectPoint(30.0f, height, bot->GetInstanceId()))
+            continue;
+        if (location.isPathTo(candidate.GetPathTo(location, bot), 10.0f, 10.0f))
+        {
+            landing = candidate;
+            return true;
+        }
+    }
+    return false;
+}
+
 // Rescue for a service trip at the drop threshold (IsMaxRetry): teleport to
 // the exact destination point instead of dropping + parking. Same
 // unwatched-either-end rule as the passive walk hop in MoveTo2, same map
@@ -301,30 +327,8 @@ bool MoveToTravelTargetAction::TryRescueServiceTrip(TravelTarget* target, std::s
     if (AI_VALUE2(time_t, "manual time", "service trip rescue") + SERVICE_TRIP_RESCUE_COOLDOWN_SEC > now)
         return false;
 
-    // Land on the navmesh, not on the npc's own spot: npcs on upper floors and
-    // balconies the mmaps never meshed (Stormwind trainers) left the bot above
-    // the mesh, where every path probe fails and the bot stood until rescued.
-    // Narrowest height window first, and the landing must walk back to the npc:
-    // with one 60 yd window the nearest poly under a Stormwind trainer was the
-    // mesh beneath the city, and 94 of 174 rescues (live 2026-10-09) landed
-    // there and failed every move again.
-    if (!location.isMmapLoaded(bot->GetInstanceId()))
-        return false;
     WorldPosition landing;
-    bool landed = false;
-    for (float const height : { 5.0f, 15.0f, 30.0f, 60.0f })
-    {
-        WorldPosition candidate = location;
-        if (!candidate.ClosestCorrectPoint(30.0f, height, bot->GetInstanceId()))
-            continue;
-        if (location.isPathTo(candidate.GetPathTo(location, bot), 10.0f, 10.0f))
-        {
-            landing = candidate;
-            landed = true;
-            break;
-        }
-    }
-    if (!landed)
+    if (!FindRescueLanding(bot, location, landing))
         return false;
     location = landing;
 
@@ -336,6 +340,77 @@ bool MoveToTravelTargetAction::TryRescueServiceTrip(TravelTarget* target, std::s
     target->SetRetry(true, 0);
     sPlayerbotAIConfig.logEvent(ai, "ServiceTripTeleport", purpose,
         std::to_string((int32)WorldPosition(bot).distance(location)));
+    return true;
+}
+
+// Opt-in stuck-travel teleport (AiPlayerbot.StuckTravelTeleport, default off),
+// after mod-playerbots NewRpgBaseAction::MoveFarTo: a trip that has made no
+// progress until the drop threshold (IsMaxRetry: six failed or no-progress
+// moves) teleports to its destination instead of dropping. It closes the
+// open-sea standstill: a pool bot swimming at sea level has no walkable mesh
+// in reach, so the step, the mesh hop and the trap rescues all refuse, and
+// every re-pick fails the same way until the long-stuck rescue (live
+// 2026-10-11: 15 runs of 3+ min at z -2, about 102 bot-min). Masterless pool
+// bots only (never a real master, an owned or a hired bot), same map, nobody
+// watching either end, once per STUCK_TRAVEL_RESCUE_COOLDOWN_SEC per bot.
+// Lands on the mesh next to the destination like the service rescue, or on
+// the nearest route node within STUCK_TRAVEL_NODE_RANGE_YD of it.
+static constexpr time_t STUCK_TRAVEL_RESCUE_COOLDOWN_SEC = 10 * MINUTE;
+static constexpr float STUCK_TRAVEL_NODE_RANGE_YD = 200.0f;
+
+bool MoveToTravelTargetAction::TryRescueStuckTravel(TravelTarget* target, std::string const& purpose)
+{
+    if (!sPlayerbotAIConfig.stuckTravelTeleport)
+        return false;
+    if (!target->IsMaxRetry(true) || target->IsForced())
+        return false;
+
+    WorldPosition const location = *target->getPosition();
+    if (location.GetMapId() != bot->GetMapId())
+        return false;
+    if (!bot->IsAlive() || bot->IsInCombat() || bot->InBattleGround() || bot->IsTaxiFlying() ||
+        bot->IsBeingTeleported() || bot->GetTransport())
+        return false;
+    if (ai->HasRealPlayerMaster() || ai->IsOwnedBot() || !sRandomBotFacade.IsRandomBot(bot) ||
+        TortoiseBots::HireLifecycle::Instance().IsHired(bot->GetObjectGuid()))
+        return false;
+
+    WorldPosition const botPos(bot);
+    if (ai->HasPlayerNearby(botPos, sPlayerbotAIConfig.reactDistance) || ai->HasPlayerNearby(location, sPlayerbotAIConfig.reactDistance))
+        return false;
+
+    AiObjectContext* context = ai->GetAiObjectContext();
+    time_t const now = time(0);
+    if (AI_VALUE2(time_t, "manual time", "stuck travel rescue") + STUCK_TRAVEL_RESCUE_COOLDOWN_SEC > now)
+        return false;
+
+    WorldPosition landing;
+    std::string landedOn = "mesh";
+    if (!FindRescueLanding(bot, location, landing))
+    {
+        bool found = false;
+        for (TravelNode* node : sTravelNodeMap.getNodes(location, STUCK_TRAVEL_NODE_RANGE_YD))
+        {
+            if (node->IsTransport())
+                continue;
+            landing = *node->getPosition();
+            found = true;
+            break;
+        }
+        if (!found || ai->HasPlayerNearby(landing, sPlayerbotAIConfig.reactDistance))
+            return false;
+        landedOn = "node";
+    }
+
+    if (!bot->TeleportTo(landing.GetMapId(), landing.getX(), landing.getY(), landing.getZ(), botPos.GetAngleTo(landing)))
+        return false;
+
+    SET_AI_VALUE2(time_t, "manual time", "stuck travel rescue", now);
+    target->SetRetry(true, 0);
+    noProgressArmed = false;
+    sPlayerbotAIConfig.logEvent(ai, "StuckTravelTeleport", purpose,
+        std::to_string((int32)botPos.distance(landing)) + ":" + landedOn + ":" +
+        std::to_string((int32)botPos.getZ()) + ">" + std::to_string((int32)location.getZ()));
     return true;
 }
 
@@ -1011,6 +1086,11 @@ bool MoveToTravelTargetAction::Execute(Event& event)
         // masterless pool bot, once per 30 min. A refused or failed rescue
         // falls through to the ordinary drop below.
         if (TryRescueServiceTrip(target, purpose))
+            return true;
+
+        // Opt-in: any other stuck trip of a masterless pool bot teleports to
+        // its destination instead of dropping (AiPlayerbot.StuckTravelTeleport).
+        if (TryRescueStuckTravel(target, purpose))
             return true;
 
         if (target->IsMaxRetry(true))

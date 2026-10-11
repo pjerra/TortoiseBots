@@ -50,6 +50,13 @@ namespace ai
         // Returns true when the rescue fired (the drop below is skipped).
         bool TryRescueServiceTrip(TravelTarget* target, std::string const& purpose);
 
+        // Opt-in (AiPlayerbot.StuckTravelTeleport, default off): a masterless
+        // pool bot's trip of any purpose at the failure threshold teleports to
+        // its destination (mesh landing, else the nearest route node near it)
+        // instead of dropping; unwatched, same map, once per 10 min. Logs
+        // StuckTravelTeleport. Returns true when the bot was teleported.
+        bool TryRescueStuckTravel(TravelTarget* target, std::string const& purpose);
+
         // Counts targets that fail NOPATH from one spot (TravelRepickPolicy.h)
         // and, at the threshold, runs the long-stuck rescue instead of
         // cycling targets from a spot nothing is reachable from. Returns true

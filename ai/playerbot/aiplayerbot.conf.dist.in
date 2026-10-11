@@ -243,6 +243,16 @@ AiPlayerbot.UnstuckHearthLevelFit = 1
 # graveyard instead. 0 disables the gate (always hearth). Default 300.
 AiPlayerbot.UnstuckHearthMinDistance = 300
 
+# Stuck-travel teleport for random bots without a player master (owned and hired
+# bots never teleport). 1 = a trip that fails or makes no progress for six moves
+# in a row (the point where the destination would be dropped) teleports the bot
+# to its destination instead: onto the navmesh next to it, or the nearest route
+# node within 200 yards. Same map only, only when no player is near either end,
+# at most once per 10 minutes per bot. It frees bots stranded swimming at sea,
+# where no walk can reach land. 0 = drop the destination and pick another (the
+# old behaviour). Default 0.
+AiPlayerbot.StuckTravelTeleport = 0
+
 # Quest-log upkeep for random bots without a player master: drop finished
 # quests that can no longer be rewarded (except transient money blockers),
 # drop grey incomplete deliver quests whose items are gone, refuse grey
