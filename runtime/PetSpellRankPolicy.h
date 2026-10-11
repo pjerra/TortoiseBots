@@ -550,8 +550,8 @@ inline void ForEachWarlockWantedSpell(uint32_t petEntry, uint32_t petLevel, Sink
 }
 
 // Teach-time autocast default. Mirrors the runtime sweep
-// (runtime/PetUpkeepPolicy.h: Prowl, Cower, Spell Lock, Devour Magic stay
-// manual) plus Sacrifice and Seduction, which the sweep would leave on but
+// (runtime/PetUpkeepPolicy.h: Prowl, Cower, Spell Lock, Devour Magic and
+// Sacrifice stay manual) plus Seduction, which the sweep would leave on but
 // must never fire without an order: Sacrifice kills the Voidwalker, Seduction
 // is a manual CC. Everything else (Growl, Torment, Firebolt, Bite, Claw,
 // family abilities) starts autocast-on so a fresh or relearned rank works

@@ -62,6 +62,19 @@ static void TestDonorOnlyRanksExcluded()
     CHECK(!IsDisabledPetAutocast(48011));
 }
 
+// Sacrifice kills the Voidwalker on 1.12 (INSTAKILL on itself) and the core
+// PetAI autocasts it in every fight: every rank must stay off, matching the
+// teach-time default in PetSpellRankPolicy.h.
+static void TestSacrificeRanksDisabled()
+{
+    CHECK(IsDisabledPetAutocast(7812));  // Sacrifice 1
+    CHECK(IsDisabledPetAutocast(19438)); // Sacrifice 2
+    CHECK(IsDisabledPetAutocast(19440)); // Sacrifice 3
+    CHECK(IsDisabledPetAutocast(19441)); // Sacrifice 4
+    CHECK(IsDisabledPetAutocast(19442)); // Sacrifice 5
+    CHECK(IsDisabledPetAutocast(19443)); // Sacrifice 6
+}
+
 // Working combat spells must stay autocast-on.
 static void TestWorkingSpellsEnabled()
 {
@@ -91,6 +104,8 @@ int main()
     std::printf("  [PASS] all Cower ranks disabled\n");
     TestDonorOnlyRanksExcluded();
     std::printf("  [PASS] donor-only ranks excluded\n");
+    TestSacrificeRanksDisabled();
+    std::printf("  [PASS] all Sacrifice ranks disabled\n");
     TestWorkingSpellsEnabled();
     std::printf("  [PASS] working spells stay enabled\n");
     TestToggleDecisionMatrix();

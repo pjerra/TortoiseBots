@@ -15,6 +15,14 @@
 // the donor list but are included here to agree with the factory, which
 // already toggles every Cower rank off by default
 // (`PlayerbotFactory.cpp` `cowerSpellIds`).
+//
+// Sacrifice 1-6 is a 1.12 addition the donor does not need: on this realm
+// the spell carries SPELL_EFFECT_INSTAKILL on the Voidwalker itself, and the
+// core PetAI autocasts it as soon as the pet has a victim. Left on, every
+// solo Voidwalker killed itself in its first fight after a sweep and the
+// warlock resummoned after almost every kill. The teach-time default
+// (PetSpellRankPolicy.h ShouldPetSpellAutocastDefault) already pins it off;
+// the sweep must agree or it switches it straight back on.
 
 namespace TortoiseBots
 {
@@ -24,6 +32,7 @@ inline constexpr uint32_t kDisabledPetAutocastSpells[] = {
     1742, 1753, 1754, 1755, 1756, 16697,        // Cower 1-6
     19244, 19647,                              // Spell Lock 1-2
     19505, 19731, 19734, 19736,                // Devour Magic 1-4
+    7812, 19438, 19440, 19441, 19442, 19443,   // Sacrifice 1-6 (kills the Voidwalker)
 };
 
 inline bool IsDisabledPetAutocast(uint32_t spellId)
