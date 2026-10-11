@@ -3,6 +3,7 @@
 #include "playerbot/GroupBuffPolicy.h"
 #include "playerbot/ForceRebuffPolicy.h"
 #include "playerbot/GroupMembers.h"
+#include "playerbot/WandPolicy.h"
 #include "GenericActions.h"
 #include "UseItemAction.h"
 
@@ -768,6 +769,20 @@ void CastShootAction::UpdateWeaponInfo()
     {
         rangedWeapon = nullptr;
     }
+}
+
+bool StopWandAction::isUseful()
+{
+    Spell* autoRepeat = bot->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL);
+    return autoRepeat && autoRepeat->m_spellInfo && autoRepeat->m_spellInfo->Category == WAND_SHOOT_CATEGORY;
+}
+
+bool StopWandAction::Execute(Event& event)
+{
+    uint32 const wait = WandStopWaitMs(bot->GetAttackTimer(RANGED_ATTACK), bot->GetAttackTime(RANGED_ATTACK), sPlayerbotAIConfig.reactDelay);
+    bot->InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
+    SetDuration(wait);
+    return true;
 }
 
 bool RemoveBuffAction::isUseful()

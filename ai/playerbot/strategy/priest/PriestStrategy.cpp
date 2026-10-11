@@ -115,6 +115,15 @@ void PriestStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode(
         "medium threat",
         NextAction::array(0, new NextAction("fade", ACTION_HIGH), NULL)));
+
+    // Each Turtle wand shot renews the GCD, so a running wand keeps every
+    // heal and nuke "not ready" for as long as it runs. Stop it while a heal
+    // (or a wanted nuke) is held back by that GCD alone. Every row above
+    // this one fails during the wand GCD, so the engine reaches it; below
+    // the HIGH tier like the mage row.
+    triggers.push_back(new TriggerNode(
+        "wand blocks cast",
+        NextAction::array(0, new NextAction("stop wand", ACTION_NORMAL + 5), NULL)));
 }
 
 void PriestStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)

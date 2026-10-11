@@ -1,0 +1,83 @@
+// Standalone regression test for "a caster with mana casts instead of
+// wanding" (mage, priest, warlock): stop a running wand while a wanted
+// nuke or heal is held back by the GCD each Turtle wand shot renews,
+// keep it when the spell is blocked for any other reason.
+//
+// Build and run:
+//   g++ -std=c++17 -Wall -Wextra tools/test_wand_policy.cpp -o /tmp/test_wand_policy
+//   /tmp/test_wand_policy
+
+#include "../ai/playerbot/WandPolicy.h"
+
+#include <cstdio>
+#include <cstdlib>
+
+using namespace ai;
+
+static int checks = 0;
+#define CHECK(cond) do { \
+    ++checks; \
+    if (!(cond)) { \
+        std::fprintf(stderr, "FAIL %s:%d: %s\n", __FILE__, __LINE__, #cond); \
+        std::exit(1); \
+    } \
+} while (0)
+
+int main()
+{
+    using P = WandSpellProbe;
+
+    // Wand Shoot (5019) category in Turtle spell data.
+    CHECK(WAND_SHOOT_CATEGORY == 351);
+
+    // Live case: wanding at full mana, the nuke refused only by the
+    // wand's GCD -> stop the wand.
+    CHECK(ShouldStopWandToCast(WandState{true, P::GlobalCooldownOnly, false, false}));
+    CHECK(ShouldStopWandToCast(WandState{true, P::Castable, false, false}));
+
+    // Out of mana (or no nuke known): the wand is the right tool.
+    CHECK(!ShouldStopWandToCast(WandState{true, P::Blocked, false, false}));
+
+    // Not wanding: nothing to stop.
+    CHECK(!ShouldStopWandToCast(WandState{false, P::Castable, false, false}));
+    CHECK(!ShouldStopWandToCast(WandState{false, P::GlobalCooldownOnly, false, false}));
+
+    // Raid "has aggro -> shoot" wands on purpose: leave it alone.
+    CHECK(!ShouldStopWandToCast(WandState{true, P::Castable, true, false}));
+    CHECK(!ShouldStopWandToCast(WandState{true, P::GlobalCooldownOnly, true, false}));
+
+    // Below the "no mana" line the existing "no mana -> shoot" row wands on
+    // purpose; stopping there would only ping-pong with it.
+    CHECK(!ShouldStopWandToCast(WandState{true, P::Castable, false, true}));
+    CHECK(!ShouldStopWandToCast(WandState{true, P::GlobalCooldownOnly, false, true}));
+
+    // Priest heals: a wanted heal held back only by the wand's GCD stops
+    // the wand, even with no nuke wanted (holy/discipline without offdps)
+    // and below the "no mana" line (heal rows outrank that wand row).
+    CHECK(ShouldStopWandToCast(WandState{true, P::Blocked, false, false, P::GlobalCooldownOnly}));
+    CHECK(ShouldStopWandToCast(WandState{true, P::Blocked, false, false, P::Castable}));
+    CHECK(ShouldStopWandToCast(WandState{true, P::Blocked, false, true, P::GlobalCooldownOnly}));
+    // No heal wanted or none affordable: back to the nuke rule.
+    CHECK(!ShouldStopWandToCast(WandState{true, P::Blocked, false, false, P::Blocked}));
+    CHECK(ShouldStopWandToCast(WandState{true, P::GlobalCooldownOnly, false, false, P::Blocked}));
+    // Not wanding: nothing to stop for a heal either.
+    CHECK(!ShouldStopWandToCast(WandState{false, P::Blocked, false, false, P::Castable}));
+
+    // Probe combination: the better outcome wins (Frostbolt not known at
+    // level 1-3, Fireball is; Mind Flay is a talent, Smite is not).
+    CHECK(BetterWandSpellProbe(P::Blocked, P::GlobalCooldownOnly) == P::GlobalCooldownOnly);
+    CHECK(BetterWandSpellProbe(P::GlobalCooldownOnly, P::Blocked) == P::GlobalCooldownOnly);
+    CHECK(BetterWandSpellProbe(P::Castable, P::Blocked) == P::Castable);
+    CHECK(BetterWandSpellProbe(P::GlobalCooldownOnly, P::Castable) == P::Castable);
+    CHECK(BetterWandSpellProbe(P::Blocked, P::Blocked) == P::Blocked);
+
+    // Wait after the stop: until the next shot would have fired, plus the
+    // react delay; never more than one swing.
+    CHECK(WandStopWaitMs(1200, 1800, 100) == 1300);
+    CHECK(WandStopWaitMs(0, 1800, 100) == 100);
+    CHECK(WandStopWaitMs(5000, 1800, 100) == 1900);
+    CHECK(WandStopWaitMs(700, 0, 100) == 800);
+
+    std::printf("wand policy: %d checks passed\n", checks);
+    return 0;
+}

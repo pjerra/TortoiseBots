@@ -1,6 +1,7 @@
 #pragma once
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/QuestLogPolicy.h"
+#include "playerbot/WandPolicy.h"
 #include "playerbot/ChatHelper.h"
 #include "playerbot/strategy/Trigger.h"
 #include "playerbot/PlayerbotAIConfig.h"
@@ -699,6 +700,30 @@ namespace ai
 
     private:
         bool checkMana;
+    };
+
+    // Shared probes for the class "wand blocks ..." triggers (mage, priest,
+    // warlock; rule in WandPolicy.h). Each Turtle wand shot renews the GCD,
+    // so a running wand keeps every caster spell "not ready"; the class
+    // trigger fires when a spell it wants is held back by that GCD alone.
+    class WandBlocksCastTrigger : public Trigger
+    {
+    public:
+        WandBlocksCastTrigger(PlayerbotAI* ai, std::string name) : Trigger(ai, name) {}
+
+    protected:
+        // The current auto-repeat spell is a wand shot (category 351).
+        bool IsWanding();
+        // One spell probe: castable now, refused by the GCD alone, or
+        // refused for any other reason. Range is ignored: the wand shares
+        // the casters' 30 yd and the core stops it by itself out of range.
+        WandSpellProbe ProbeSpell(std::string const& spell, Unit* target);
+        // Below 5% mana the "no mana" -> shoot row wands on purpose (same
+        // line as NoManaTrigger); stopping it would only ping-pong.
+        bool NoManaRowActive();
+        // The raid "has aggro" -> shoot row (mage, warlock) wands on purpose
+        // to stop building threat; leave that wand alone.
+        bool RaidAggroWand();
     };
 
     class AlmostFullManaTrigger : public Trigger

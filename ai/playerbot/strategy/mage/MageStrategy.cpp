@@ -97,6 +97,14 @@ void MageStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode(
         "no mana",
         NextAction::array(0, new NextAction("shoot", ACTION_NORMAL), NULL)));
+
+    // Each Turtle wand shot renews the GCD, so a running wand keeps every
+    // nuke "not ready" for as long as it runs. Stop it while the nuke is
+    // held back by that GCD alone (mana is there): above the nukes' rows
+    // (frostbolt/fireball NORMAL+1, scorch NORMAL+2), below the HIGH tier.
+    triggers.push_back(new TriggerNode(
+        "wand blocks nuke",
+        NextAction::array(0, new NextAction("stop wand", ACTION_NORMAL + 5), NULL)));
 }
 
 void MageStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)

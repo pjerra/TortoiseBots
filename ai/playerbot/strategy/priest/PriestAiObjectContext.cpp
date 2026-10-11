@@ -211,6 +211,7 @@ namespace ai
                 creators["mind blast"] = [](PlayerbotAI* ai) { return new MindBlastTrigger(ai); };
                 creators["smite"] = [](PlayerbotAI* ai) { return new SmiteTrigger(ai); };
                 creators["holy fire"] = [](PlayerbotAI* ai) { return new HolyFireTrigger(ai); };
+                creators["wand blocks cast"] = [](PlayerbotAI* ai) { return new PriestWandBlocksCastTrigger(ai); };
             }
         };
 
@@ -227,6 +228,7 @@ namespace ai
                 creators["devouring plague on attacker"] = [](PlayerbotAI* ai) { return new CastDevouringPlagueOnAttackerAction(ai); };
                 creators["devouring plague"] = [](PlayerbotAI* ai) { return new CastDevouringPlagueAction(ai); };
                 creators["mind flay"] = [](PlayerbotAI* ai) { return new CastMindFlayAction(ai); };
+                creators["stop wand"] = [](PlayerbotAI* ai) { return new StopWandAction(ai); };
                 creators["discipline fire"] = [](PlayerbotAI* ai) { return new CastHolyFireAction(ai); };
                 creators["smite"] = [](PlayerbotAI* ai) { return new CastSmiteAction(ai); };
                 creators["mind blast"] = [](PlayerbotAI* ai) { return new CastMindBlastAction(ai); };

@@ -193,6 +193,7 @@ namespace ai
             TriggerFactoryInternal()
             {
                 creators["shadow trance"] = [](PlayerbotAI* ai) { return new ShadowTranceTrigger(ai); };
+                creators["wand blocks nuke"] = [](PlayerbotAI* ai) { return new WarlockWandBlocksNukeTrigger(ai); };
                 creators["demon armor"] = [](PlayerbotAI* ai) { return new DemonArmorTrigger(ai); };
                 creators["unending breath"] = [](PlayerbotAI* ai) { return new UnendingBreathTrigger(ai); };
                 creators["unending breath on party"] = [](PlayerbotAI* ai) { return new UnendingBreathOnPartyTrigger(ai); };
@@ -316,6 +317,7 @@ namespace ai
                 creators["rain of fire"] = [](PlayerbotAI* ai) { return new CastRainOfFireAction(ai); };
                 creators["inferno"] = [](PlayerbotAI* ai) { return new CastInfernoAction(ai); };
                 creators["life tap"] = [](PlayerbotAI* ai) { return new CastLifeTapAction(ai); };
+                creators["stop wand"] = [](PlayerbotAI* ai) { return new StopWandAction(ai); };
                 creators["fear"] = [](PlayerbotAI* ai) { return new CastFearAction(ai); };
                 creators["fear on cc"] = [](PlayerbotAI* ai) { return new CastFearOnCcAction(ai); };
                 creators["conflagrate"] = [](PlayerbotAI* ai) { return new CastConflagrateAction(ai); };

@@ -179,6 +179,7 @@ namespace ai
                 creators["frost ward"] = [](PlayerbotAI* ai) { return new FrostWardTrigger(ai); };
                 creators["blink"] = [](PlayerbotAI* ai) { return new BlinkTrigger(ai); };
                 creators["blink back"] = [](PlayerbotAI* ai) { return new BlinkBackTrigger(ai); };
+                creators["wand blocks nuke"] = [](PlayerbotAI* ai) { return new WandBlocksNukeTrigger(ai); };
                 creators["mana shield"] = [](PlayerbotAI* ai) { return new ManaShieldTrigger(ai); };
                 creators["fire spells locked"] = [](PlayerbotAI* ai) { return new FireSpellsLocked(ai); };
                 creators["cold snap"] = [](PlayerbotAI* ai) { return new ColdSnapTrigger(ai); };
@@ -236,6 +237,7 @@ namespace ai
                 creators["fire ward"] = [](PlayerbotAI* ai) { return new CastFireWardAction(ai); };
                 creators["frost ward"] = [](PlayerbotAI* ai) { return new CastFrostWardAction(ai); };
                 creators["blink"] = [](PlayerbotAI* ai) { return new CastBlinkAction(ai); };
+                creators["stop wand"] = [](PlayerbotAI* ai) { return new StopWandAction(ai); };
                 creators["ice barrier"] = [](PlayerbotAI* ai) { return new CastIceBarrierAction(ai); };
                 creators["mana shield"] = [](PlayerbotAI* ai) { return new CastManaShieldAction(ai); };
                 creators["arcane explosion"] = [](PlayerbotAI* ai) { return new CastArcaneExplosionAction(ai); };

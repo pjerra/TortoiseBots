@@ -39,6 +39,12 @@ Group heals fire on headcount, not fixed pairs: at least 5 party members within 
 ### Healer Off-Spec Damage & Wand
 Holy and Discipline bots deal off-spec damage by default (the `offdps` strategy ships on; turn it off per bot with `.bot strategy -offdps`). A grouped healer only damages while **nobody in the party is below 90% health** and its mana is comfortable (85% reserve on easy pulls, 65% on normal ones, the medium-mana line on hard ones). Then it uses *Shadow Word: Pain*, *Holy Fire*, *Smite*, *Starshards* or *Mind Blast* at the lowest priority, so every heal outbids it, and *Holy Nova* when a pack stands in melee range. When the party is healthy but mana is not, it wands the target instead. A solo priest damages freely.
 
+### Wand Stops for Heals and Nukes (Shoot, Spell ID 5019)
+On Turtle every wand shot puts the global cooldown on the shooter for the wand's whole swing, and the next shot renews it, so a running wand keeps every heal and nuke "not ready". Before, a priest that started wanding (the healer wand row above, the shadow `no mana` → *Shoot* row, or *Smite* falling back to the wand after a GCD tick) kept wanding until it moved: heals for a dropping party member or for itself never went out, and a shadow priest wanded at full mana. Now the `wand blocks cast` trigger stops the wand (`stop wand`, below the HIGH tier) while a wanted spell is held back by that GCD alone, waits out the last shot's GCD and casts:
+- **Heals:** the priest itself below the low-health line (every spec); for Holy and Discipline a party member below the medium line, or below the almost-full line without *Renew*; for Shadow with `offheal` a party member below the medium line. The probe is *Flash Heal* / *Lesser Heal*, so the wand stops even below the 5% `no mana` line as long as a heal is affordable (heal rows outrank that wand row).
+- **Nukes:** Shadow always (*Mind Flay*, or *Smite* outside *Shadowform*); Holy and Discipline only with `offdps` and only while the off-spec damage condition above holds, so the healer's mana-saving wand keeps going.
+- The wand keeps going with too little mana for any wanted spell, or (nukes only) below the 5% `no mana` line.
+
 ### Power Word: Shield & Weakened Soul Refusal
 The bot checks for the *Weakened Soul* debuff (6788) before attempting *Power Word: Shield*. If the target already has Weakened Soul, the shield is skipped in favor of a direct heal, preventing wasted cast attempts.
 

@@ -467,4 +467,14 @@ namespace ai
         HealthFunnelTrigger(PlayerbotAI* ai) : Trigger(ai, "health funnel") {}
         bool IsActive() override;
     };
+
+    // A wand is running while Shadow Bolt is held back only by the GCD each
+    // wand shot renews on Turtle (WandPolicy.h): stop the wand so the
+    // warlock casts again instead of wanding once mana has come back.
+    class WarlockWandBlocksNukeTrigger : public WandBlocksCastTrigger
+    {
+    public:
+        WarlockWandBlocksNukeTrigger(PlayerbotAI* ai) : WandBlocksCastTrigger(ai, "wand blocks nuke") {}
+        bool IsActive() override;
+    };
 }

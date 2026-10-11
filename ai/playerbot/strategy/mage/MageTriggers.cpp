@@ -24,6 +24,34 @@ bool BlinkBackTrigger::IsActive()
     return sServerFacade.getDistance2d(bot, target) <= 8.0f;
 }
 
+bool WandBlocksNukeTrigger::IsActive()
+{
+    if (!IsWanding())
+        return false;
+
+    Unit* target = AI_VALUE(Unit*, "current target");
+    if (!target || !target->IsAlive())
+        return false;
+
+    // The raid strategy wands on purpose while the mage holds aggro
+    // ("has aggro" -> shoot, MageRaidStrategy); leave that wand alone.
+    bool const keepWandForThreat = RaidAggroWand();
+    if (keepWandForThreat)
+        return false;
+
+    // Below 5% mana the "no mana" -> shoot row (MageStrategy) wands on purpose.
+    bool const noManaRowActive = NoManaRowActive();
+    if (noManaRowActive)
+        return false;
+
+    WandState const state{
+        true,
+        BetterWandSpellProbe(ProbeSpell("frostbolt", target), ProbeSpell("fireball", target)),
+        keepWandForThreat,
+        noManaRowActive};
+    return ShouldStopWandToCast(state);
+}
+
 bool AnyMageArmorTrigger::IsActive()
 {
     Unit* target = GetTarget();

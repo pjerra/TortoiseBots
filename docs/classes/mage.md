@@ -53,6 +53,10 @@ Mages provide premier ranged spell DPS, the game's most reliable crowd control (
 - **Evocation Channeling (Spell ID 12051):**
   - Automatically activates *Evocation* when out of mana.
   - Automatically cancels the channel once mana reaches 95% to immediately re-enter combat rather than standing idle.
+- **Wand only without mana (Shoot, Spell ID 5019):**
+  - On Turtle every wand shot puts the global cooldown on the shooter for the wand's whole swing, and the next shot renews it, so a running wand keeps *Frostbolt*, *Fireball* and every other mage spell "not ready".
+  - Before, a mage whose nuke fell back to the wand once (a GCD tick, a cast refused while moving) kept wanding at full mana until it moved or the fight ended.
+  - Now the `wand blocks nuke` trigger stops the wand (`stop wand`) while *Frostbolt* or *Fireball* is held back by that GCD alone, waits out the last shot's GCD and casts again. With too little mana for either nuke, or below the 5% `no mana` line (where the `no mana` → *Shoot* row wands on purpose), the wand keeps going; in a raid group the wand also stays while the mage holds aggro (the raid `has aggro` → *Shoot* row).
 - **Icicles (Spell ID 52516):**
   - Custom Turtle Frost talent providing root and shatter synergy without breaking primary frost rotation loops.
 

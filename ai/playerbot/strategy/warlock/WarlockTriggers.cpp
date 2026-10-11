@@ -530,3 +530,33 @@ bool HealthFunnelTrigger::IsActive()
     gate.ownerInCombat = bot->IsInCombat();
     return TortoiseBots::CanCastHealthFunnel(gate);
 }
+
+bool WarlockWandBlocksNukeTrigger::IsActive()
+{
+    if (!IsWanding())
+        return false;
+
+    Unit* target = AI_VALUE(Unit*, "current target");
+    if (!target || !target->IsAlive())
+        return false;
+
+    // The raid strategy wands on purpose while the warlock holds aggro
+    // ("has aggro" -> shoot, WarlockRaidStrategy); leave that wand alone.
+    bool const keepWandForThreat = RaidAggroWand();
+    if (keepWandForThreat)
+        return false;
+
+    // Below 5% mana the "no mana" -> shoot row (WarlockStrategy) wands on purpose.
+    bool const noManaRowActive = NoManaRowActive();
+    if (noManaRowActive)
+        return false;
+
+    // Shadow Bolt is every spec's filler (default combat action), known
+    // from level 1, with no cooldown of its own: NOT_READY is the GCD.
+    WandState const state{
+        true,
+        ProbeSpell("shadow bolt", target),
+        keepWandForThreat,
+        noManaRowActive};
+    return ShouldStopWandToCast(state);
+}

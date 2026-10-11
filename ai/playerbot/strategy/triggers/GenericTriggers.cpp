@@ -77,6 +77,31 @@ bool HealerShouldAttackTrigger::IsActive()
     return !AI_VALUE2(bool, "has mana", "self target") || AI_VALUE2(uint8, "mana", "self target") >= manaThreshold;
 }
 
+bool WandBlocksCastTrigger::IsWanding()
+{
+    Spell* autoRepeat = bot->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL);
+    return autoRepeat && autoRepeat->m_spellInfo && autoRepeat->m_spellInfo->Category == WAND_SHOOT_CATEGORY;
+}
+
+WandSpellProbe WandBlocksCastTrigger::ProbeSpell(std::string const& spell, Unit* target)
+{
+    SpellCastResult result = SPELL_FAILED_DONT_REPORT;
+    if (ai->CanCastSpell(spell, target, 0, nullptr, true, false, false, &result))
+        return WandSpellProbe::Castable;
+    return result == SPELL_FAILED_NOT_READY ? WandSpellProbe::GlobalCooldownOnly : WandSpellProbe::Blocked;
+}
+
+bool WandBlocksCastTrigger::NoManaRowActive()
+{
+    return AI_VALUE2(bool, "has mana", "self target") && AI_VALUE2(uint8, "mana", "self target") < 5;
+}
+
+bool WandBlocksCastTrigger::RaidAggroWand()
+{
+    Group* group = bot->GetGroup();
+    return group && group->isRaidGroup() && AI_VALUE2(bool, "has aggro", "current target");
+}
+
 bool AlmostFullManaTrigger::IsActive()
 {
     return AI_VALUE2(bool, "has mana", "self target") && AI_VALUE2(uint8, "mana", "self target") > 85;

@@ -1,0 +1,85 @@
+#pragma once
+
+#include <cstdint>
+
+// Pure decision rule for "a caster with mana casts instead of wanding"
+// (mage, priest, warlock).
+//
+// Turtle core rule (tortoise-wow `Unit::_UpdateAutoRepeatSpell`): every wand
+// shot (spell category 351, SPELLCATEGORY_RANGED_WEAPON) puts the global
+// cooldown (category 133) on the shooter for the wand's whole swing time,
+// and the next shot renews it. Wand Shoot (5019) itself has no GCD category,
+// so it stays castable while every caster spell with a GCD (Frostbolt,
+// Fireball, Smite, Mind Flay, Shadow Bolt, Flash Heal, Lesser Heal...)
+// answers SPELL_FAILED_NOT_READY. A bot whose nuke fell through to its
+// "shoot" alternative once (a GCD tick, a cast refused while moving), or
+// whose "no mana" / "healer should wand" row started the wand, then never
+// saw its nuke or heal possible again: it wanded at full mana, or let the
+// party drop, until movement broke the wand or the fight ended.
+//
+// The donor (mod-playerbots class default lists: the nuke ranks above
+// shoot; heal rows far above both) wands only when nothing better can be
+// cast. This rule keeps that intent under the Turtle GCD: stop the wand
+// while a wanted spell is blocked by nothing but the GCD (or is castable
+// outright), keep it while the spell is blocked by anything else (no mana,
+// not known, ...).
+//
+// No core includes: the class triggers translate game state into these
+// plain inputs, so the rule stays testable in tools/test_wand_policy.cpp.
+
+namespace ai
+{
+    // Spell category of wand Shoot (5019) in Turtle 1.18.1 spell data.
+    constexpr std::uint32_t WAND_SHOOT_CATEGORY = 351;
+
+    // How a spell probe (PlayerbotAI::CanCastSpell with its result) came out.
+    enum class WandSpellProbe
+    {
+        Castable,           // the cast would go out now
+        GlobalCooldownOnly, // refused with SPELL_FAILED_NOT_READY: the GCD
+        Blocked             // anything else: mana, unknown spell, not wanted...
+    };
+
+    struct WandState
+    {
+        bool wandAutoRepeat;      // current auto-repeat spell is a wand shot
+        WandSpellProbe bestNuke;  // best probe over the class's nukes
+        bool keepWandForThreat;   // raid row "has aggro -> shoot" owns this
+        bool noManaRowActive;     // "no mana" (< 5%) -> shoot row owns this
+        // Best probe over the heals a heal row wants now (priest only;
+        // Blocked when nobody needs one). Heal rows sit far above the
+        // "no mana" wand row, so a wanted heal stops the wand even there.
+        WandSpellProbe bestHeal = WandSpellProbe::Blocked;
+    };
+
+    inline bool ShouldStopWandToCast(WandState const& state)
+    {
+        if (!state.wandAutoRepeat || state.keepWandForThreat)
+            return false;
+        if (state.bestHeal != WandSpellProbe::Blocked)
+            return true;
+        if (state.noManaRowActive)
+            return false;
+        return state.bestNuke != WandSpellProbe::Blocked;
+    }
+
+    // Combine two spell probes: the better outcome wins.
+    inline WandSpellProbe BetterWandSpellProbe(WandSpellProbe a, WandSpellProbe b)
+    {
+        if (a == WandSpellProbe::Castable || b == WandSpellProbe::Castable)
+            return WandSpellProbe::Castable;
+        if (a == WandSpellProbe::GlobalCooldownOnly || b == WandSpellProbe::GlobalCooldownOnly)
+            return WandSpellProbe::GlobalCooldownOnly;
+        return WandSpellProbe::Blocked;
+    }
+
+    // After stopping the wand, the GCD of its last shot runs out when the
+    // next shot would have fired. Sleep that long (plus the react delay) so
+    // the next combat tick finds the spell castable instead of falling back
+    // to "shoot" and restarting the wand. Never longer than one swing.
+    inline std::uint32_t WandStopWaitMs(std::uint32_t rangedTimerMs, std::uint32_t swingMs, std::uint32_t reactDelayMs)
+    {
+        std::uint32_t const wait = (swingMs && rangedTimerMs > swingMs) ? swingMs : rangedTimerMs;
+        return wait + reactDelayMs;
+    }
+}

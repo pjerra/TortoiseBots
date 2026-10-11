@@ -442,6 +442,19 @@ namespace ai
         bool needsAmmo;
     };
 
+    // Stops a running wand so the next tick can cast (see WandPolicy.h).
+    // The GCD of the last wand shot runs until the next shot would fire, so
+    // the bot waits that long instead of re-picking "shoot" on the way.
+    // Used by the mage, priest and warlock "wand blocks ..." rows.
+    class StopWandAction : public Action
+    {
+    public:
+        StopWandAction(PlayerbotAI* ai) : Action(ai, "stop wand") {}
+
+        bool isUseful() override;
+        bool Execute(Event& event) override;
+    };
+
     class RemoveBuffAction : public Action
     {
     public:

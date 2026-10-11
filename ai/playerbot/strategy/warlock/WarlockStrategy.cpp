@@ -63,6 +63,14 @@ void WarlockStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode(
         "no mana",
         NextAction::array(0, new NextAction("shoot", ACTION_NORMAL), NULL)));
+
+    // Each Turtle wand shot renews the GCD, so a running wand keeps Shadow
+    // Bolt (and Life Tap) "not ready" for as long as it runs. Stop it once
+    // Shadow Bolt is held back by that GCD alone (mana is back): above the
+    // corruption/life tap rows, below the HIGH tier, like the mage row.
+    triggers.push_back(new TriggerNode(
+        "wand blocks nuke",
+        NextAction::array(0, new NextAction("stop wand", ACTION_NORMAL + 5), NULL)));
 }
 
 void WarlockStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
