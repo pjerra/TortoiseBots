@@ -1104,8 +1104,10 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
 
         if (master && master->GetSession() && master->GetSession()->HasNetworkTransport())
         {
-            const char* wanderFollow = sPlayerbotAIConfig.useWanderAsDefaultFollowStrategy ? "wander" : "follow";
-            nonCombatEngine->addStrategies("racials", "nc", "food", wanderFollow, "default", "quest", "loot", "gather", "duel", "emote", "buff", "mount", "force rebuff", NULL);
+            // A real player's bot rebuilds with "follow" (GetDefaultMovementStrategy,
+            // mod-playerbots parity): a role change or regroup reset must not swap
+            // the follow it got on invite for UseWanderAsDefaultFollowStrategy's wander.
+            nonCombatEngine->addStrategies("racials", "nc", "food", "follow", "default", "quest", "loot", "gather", "duel", "emote", "buff", "mount", "force rebuff", NULL);
         }
         else
         {

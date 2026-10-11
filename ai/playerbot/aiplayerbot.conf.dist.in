@@ -1744,6 +1744,7 @@ AiPlayerbot.JumpChase = 1
 AiPlayerbot.UseKnockback = 1
 
 # Set 'wander' as a default following strategy instead of 'follow' (Bots have freedom to move around while near master)
+# Applies to bots without a real-player master; a bot whose master is a real player always rebuilds with 'follow'
 #AiPlayerbot.UseWanderAsDefaultFollowStrategy = 1
 
 # Default bot formation
