@@ -29,6 +29,7 @@
 #include "../../runtime/PlayerbotAIStorage.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/RandomBotFacade.h"
+#include "playerbot/SurvivePolicy.h"
 #include "Battlegrounds/BattleGroundMgr.h"
 
 // The class context of a bot; the augmenters of other modules are applied on top in
@@ -719,7 +720,12 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
         // druid/shaman/paladin kit below). Real-player masters are safe: the
         // trigger itself refuses to fire while one answers for the bot, and
         // dungeons/raids with a real master stay flee-free either way.
-        if (!player->GetGroup() || !facade->HasRealPlayerMaster())
+        // AiPlayerbot.PoolMeleeHoldGround (opt-in) leaves warriors and rogues
+        // without it: they fight on instead of breaking off (SurvivePolicy.h).
+        bool const rageOrEnergyClass = player->GetClass() == CLASS_WARRIOR ||
+            player->GetClass() == CLASS_ROGUE;
+        if ((!player->GetGroup() || !facade->HasRealPlayerMaster()) &&
+            ai::ShouldGrantPoolFlee(sPlayerbotAIConfig.poolMeleeHoldGround, rageOrEnergyClass))
             combatEngine->addStrategy("flee");
 
         if (!player->GetGroup())

@@ -1585,6 +1585,14 @@ AiPlayerbot.RpgDistance = 200
 # Bot can flee for enemy
 AiPlayerbot.FleeingEnabled = 1
 
+# Pool warriors and rogues hold their ground (opt-in). 1 = pool and free bots
+# of these two classes get no generic "flee" combat strategy, so they no longer
+# break off on panic (critical health, no mana gate for rage/energy),
+# outnumbered or critical health: they fight on with their own defensive kit,
+# like mod-playerbots melee. 0 = unchanged flee. Bots with a real player
+# master never get this flee anyway. Takes effect after a server restart.
+#AiPlayerbot.PoolMeleeHoldGround = 0
+
 # Universal raid survival (issue #201): bomb carriers run BombRunoutDistance
 # clear of the raid anchor; spread/flank steps use HazardEvasionDistance.
 #AiPlayerbot.BombRunoutDistance = 30.0

@@ -415,6 +415,9 @@ public:
     uint32 ownedBotSummonCooldown = 300;
     bool logInGroupOnly, logValuesPerTick;
     bool fleeingEnabled;
+    // Opt-in: pool warriors and rogues get no generic "flee" combat strategy
+    // (panic / outnumbered / critical health no master) and fight on.
+    bool poolMeleeHoldGround;
     // Universal raid survival knobs (issue #201): bomb carriers run
     // BombRunoutDistance clear, spread/split steps use HazardEvasionDistance.
     float bombRunoutDistance = 30.0f, hazardEvasionDistance = 12.0f;

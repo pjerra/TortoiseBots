@@ -17,6 +17,7 @@ using ai::IsDeathAttackerSnapshotFresh;
 using ai::RestStopHealthPct;
 using ai::ShouldAnswerAttacker;
 using ai::ShouldFleeAtCriticalHealth;
+using ai::ShouldGrantPoolFlee;
 using ai::ShouldIgnoreHardHostile;
 using ai::ShouldSeedDrink;
 using ai::ShouldDrinkAtManaPct;
@@ -48,6 +49,13 @@ int main()
     // The restored critical-health flee is pool-only: no real player master.
     CHECK(ShouldFleeAtCriticalHealth(false));
     CHECK(!ShouldFleeAtCriticalHealth(true));
+
+    // Pool melee hold ground: only the opt-in key plus a warrior/rogue drops
+    // the flee strategy; key off (the default) keeps it for every class.
+    CHECK(ShouldGrantPoolFlee(false, true));
+    CHECK(ShouldGrantPoolFlee(false, false));
+    CHECK(ShouldGrantPoolFlee(true, false));
+    CHECK(!ShouldGrantPoolFlee(true, true));
 
     // Attacker snapshot freshness: 30 s window, 0 means no sample yet.
     std::uint32_t const now = 1'000'000;

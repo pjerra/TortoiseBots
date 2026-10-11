@@ -403,6 +403,7 @@ bool PlayerbotAIConfig::Initialize()
     logInGroupOnly = config.GetBoolDefault("AiPlayerbot.LogInGroupOnly", true);
     logValuesPerTick = config.GetBoolDefault("AiPlayerbot.LogValuesPerTick", false);
     fleeingEnabled = config.GetBoolDefault("AiPlayerbot.FleeingEnabled", true);
+    poolMeleeHoldGround = config.GetBoolDefault("AiPlayerbot.PoolMeleeHoldGround", false);
     bombRunoutDistance = config.GetFloatDefault("AiPlayerbot.BombRunoutDistance", 30.0f);
     hazardEvasionDistance = config.GetFloatDefault("AiPlayerbot.HazardEvasionDistance", 12.0f);
     enableCustomRaidTactics = config.GetBoolDefault("AiPlayerbot.EnableCustomRaidTactics", true);

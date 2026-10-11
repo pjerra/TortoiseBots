@@ -64,6 +64,7 @@ Rogues provide premier single-target melee physical DPS, invaluable pre-combat c
 - **Poisons:** Poison choice is context-dependent: raid/generic uses Instant (main hand) + Deadly (off hand, Instant fallback while Deadly is untrained); PvE uses Instant on both hands; PvP uses Mind (main hand) + Crippling (off hand). Open-world rogues keep Instant on the main hand themselves; expiry or rank upgrades re-apply automatically. Wound-poison actions exist per hand, but the factory seeds no wound ladder yet — Instant/Deadly/Crippling/Mind only.
 - **Interrupts:** Casts *Kick* instantly to lock out enemy spell schools.
 - **Gouge & Blind:** Both are self-defence reactions — *Gouge* fires on the bot's own medium-health band against its current target; *Blind* is the top-priority critical-health self-peel, ahead of *Vanish*.
+- **No break-off (opt-in):** Pool rogues carry the generic `flee` strategy (`panic` and `critical health no master` at critical health, `outnumbered` under medium health with two or more attackers). `AiPlayerbot.PoolMeleeHoldGround = 1` drops it for rogues and warriors so they fight on with *Evasion* / *Blind* / *Vanish*, as mod-playerbots melee do. Off by default.
 
 ---
 
