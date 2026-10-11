@@ -37,6 +37,7 @@ Mages provide premier ranged spell DPS, the game's most reliable crowd control (
 - Refreshes *Pyroblast* in combat and consumes *Presence of Mind* with it.
 - Weaves *Scorch* casts to maintain the *Improved Scorch* fire vulnerability.
 - Casts *Fireball* as main nuke and *Fire Blast* on the move or for finishing blows.
+- Skips damage spells whose school the target is immune to (fire elementals, Molten Core adds, *Ice Block*): *Fireball* and *Scorch* fall through to *Frostbolt*, then the wand, instead of casting for zero damage. Arcane has no Frostbolt fallback row yet.
 
 ### 3. Arcane Mage
 - Opens with *Arcane Rupture* (damage that strengthens missiles for 8s; recast on its cooldown), then channels *Arcane Missiles* while the buff holds, with mana management.

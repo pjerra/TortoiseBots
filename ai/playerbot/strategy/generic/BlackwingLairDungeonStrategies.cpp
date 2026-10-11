@@ -199,6 +199,29 @@ void BlackwingLairDungeonStrategy::InitNonCombatTriggers(std::list<TriggerNode*>
         NextAction::array(0, new NextAction("disarm suppression device", ACTION_HIGH + 4), NULL)));
 }
 
+// Entering BWL: tell the master which bots lack the Onyxia Scale Cloak
+// (item 15138, equip spell 22683) - without it Shadow Flame from Firemaw,
+// Ebonroc, Flamegor and Nefarian kills them. Warning only; no aura is granted.
+// Runs once per strategy add (map entry), so nothing is polled per tick.
+void BlackwingLairDungeonStrategy::OnStrategyAdded(BotState state)
+{
+    if (state != BotState::BOT_STATE_NON_COMBAT)
+        return;
+
+    Player* bot = ai->GetBot();
+    Player* master = ai->GetMaster();
+    if (!bot || !master || master == bot)
+        return;
+
+    const uint32 ONYXIA_SCALE_CLOAK_ITEM = 15138;
+    Item* back = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_BACK);
+    if (back && back->GetEntry() == ONYXIA_SCALE_CLOAK_ITEM)
+        return;
+
+    ai->TellPlayerNoFacing(master,
+        "I am not wearing the Onyxia Scale Cloak. Shadow Flame from Firemaw, Ebonroc, Flamegor and Nefarian will kill me.");
+}
+
 class SuppressionRoomPassiveMultiplier : public Multiplier
 {
 public:

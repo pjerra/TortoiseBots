@@ -73,6 +73,21 @@ bool AlmostDeadFinisherTrigger::IsActive()
     return AI_VALUE2(uint8, "health", "current target") <= 25;
 }
 
+bool ExposeArmorTrigger::IsActive()
+{
+    if (!NoDebuffAndComboPointsAvailableTrigger::IsActive())
+        return false;
+
+    // Donor: mod-playerbots ExposeArmorTrigger skips when sunder armor is on the
+    // target. Our own Expose upkeep is unchanged (the base trigger above
+    // already goes quiet while our Expose is up).
+    Unit* target = AI_VALUE(Unit*, "current target");
+    if (target && ai->HasAura("sunder armor", target))
+        return false;
+
+    return true;
+}
+
 bool MainHandWeaponNoEnchantTrigger::IsActive()
 {
     Item* weapon = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);

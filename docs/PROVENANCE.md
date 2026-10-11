@@ -3732,7 +3732,7 @@ dagger-only, combat/other excluded; registered in `tools/verify_all.sh`);
 `bash tools/verify_all.sh`; `git diff --check`. No deploy (orchestrator
 compiles).
 | Hunter dead-zone switch hysteresis + revenge-before-travel self-defence | mod-playerbots `src/Ai/Class/Hunter/HunterTriggers.cpp:112-128` (SwitchToRanged victim!=bot/immobilized/slow/dist>8; SwitchToMelee victim==bot AND dist<=8, no level gate either side) + `src/Ai/Base/Actions/ChooseTargetActions.cpp:104-133` (AttackAnythingAction::isUseful with no facing gate) | `ai/playerbot/HunterSwitchPolicy.h` (ShouldSwitchToMelee/ShouldSwitchToRanged + 5/10 yd edges), `ai/playerbot/strategy/hunter/HunterTriggers.h` (triggers delegate, AND/OR shapes unchanged), `ai/playerbot/strategy/actions/ChooseTargetActions.cpp` (revenge victim==bot answers first with no isInFront gate, before the QuestTaker walk-through exemption and the wounded-pool gate; pre-emptive strike keeps the front arc) | Reimplemented: donor switch shapes kept, only the shared 8 yd distance edge becomes a 5/10 yd hysteresis band; revenge reorder is donor-parity (no facing gate) | Pool hunters flipped kits every few ticks at the shared 8 yd line (inter-switch p50 15 s, 37% within 10 s, each flip rebuilding the combat trigger graph); travelling bots on completed hand-in walks never faced their attacker so the isInFront revenge gate never fired (taker trips fought back 5% vs 60-93% elsewhere) | `tools/test_hunter_switch_policy.cpp`, `bash tools/verify_all.sh`, `git diff --check` |
-| Party threat back-off for real-master non-tank bots | `mod-playerbots` @ 5397110 `src/Ai/Base/Strategy/ThreatStrategy.cpp:11-60` (single >= 80 / AoE >= 50 veto, group-gated) | `ai/playerbot/AiFactory.cpp` (`AddDefaultCombatStrategies`: add `threat` for non-tank bots with a real player master, outside BGs) | Reimplemented wiring only: the multiplier already existed (`generic/ThreatStrategy.cpp`); previously never added to any engine. Pool bots unchanged; ThreatValue returns 0 with no tank so solo/no-tank parties unaffected | `bash tools/verify_all.sh`; `git diff --check`. Runtime pull-aggro check pending deploy |
+| Party threat back-off for real-master non-tank bots | `mod-playerbots` @ 79bd428 `src/Ai/Base/Strategy/ThreatStrategy.cpp:11-60` (single >= 80 / AoE >= 50 veto, group-gated) + `src/Bot/Factory/AiFactory.cpp:426,495` (threat removed only for ungrouped pool and BG bots) | `ai/playerbot/AiFactory.cpp` (`AddDefaultCombatStrategies`: add `threat` for non-tank bots with a real player master, outside BGs; applied after the `randomBotCombatStrategies`/`combatStrategies` ChangeStrategy call so the shipped `-threat` default and owned-alt strings no longer strip it) | Reimplemented wiring only: the multiplier already existed (`generic/ThreatStrategy.cpp`); previously never added to any engine. Pool bots unchanged; ThreatValue returns 0 with no tank so solo/no-tank parties unaffected | `bash tools/verify_all.sh`; `git diff --check`. Runtime pull-aggro check pending deploy |
 | Warrior base-combat interrupts (Arms/Fury pummel + shield bash) | `mod-playerbots` `src/Ai/Class/Warrior/WarriorTriggers.h` (pummel/shield-bash interrupt + enemy-healer triggers) | `ai/playerbot/strategy/warrior/WarriorStrategy.cpp` (`WarriorStrategy::InitCombatTriggers`: four rows at ACTION_INTERRUPT) | Ported trigger rows; creators/actions/stance nodes already existed (`WarriorTriggers.h`, `WarriorAiObjectContext.cpp`). Pummel stance-dances via its berserker-stance node; shield bash has no stance gate so one always fires | `python3 tools/verify_action_trigger_wiring.py` (0 live-missing); `bash tools/verify_all.sh`. Runtime interrupt check pending deploy |
 | Paladin tank taunt (Hand of Reckoning + Righteous Defense fallback) | `mod-playerbots` `src/Ai/Class/Paladin/Strategy/TankPaladinStrategy.cpp:116-121` + node factory (`hand_of_reckoning` -> `righteous defense` alternative) | `ai/playerbot/strategy/paladin/TankPaladinStrategy.cpp` (lose-aggro row + `TankPaladinStrategyActionNodeFactory`) | Ported row + node, mirroring live `ProtectionPaladinStrategy`. Turtle core: Hand of Reckoning is trainer spell 51303 (level 10); Righteous Defense ranks are 51328-51330 (`spell_paladin_righteous_defense`); DBC `Spell.dbc` names both plus Righteous Fury. Actions resolve via `PaladinAiObjectContext`. Note: file is an unregistered forward-port; live tanks run Protection (already correct) | `python3 tools/verify_action_trigger_wiring.py` (0 live-missing); `bash tools/verify_all.sh`. Runtime taunt check pending deploy |
 | Protection righteous fury upkeep in combat | `mod-playerbots` `src/Ai/Class/Paladin/Strategy/TankPaladinStrategy.cpp:147-154` (righteous-fury trigger row) | `ai/playerbot/strategy/paladin/ProtectionPaladinStrategy.cpp` (`ProtectionPaladinBuffStrategy::InitCombatTriggers`) | Ported: prior live row existed only in `InitNonCombatTriggers`, so mid-pull loss (death/bubble) stayed off all fight. Same trigger, buff-level priority so taunts and Holy Shield win the tick. Dropped donor pieces stay dropped: seal of corruption/vengeance, shield of righteousness, hammer of the righteous, avenger's shield, avenging wrath, divine sacrifice (WotLK-only); live already covers taunt, holy shield, 2+ consecration, sanctuary/kings, righteousness seal | `bash tools/verify_all.sh`; `git diff --check`. Runtime fury-uptime check pending deploy |
@@ -4003,8 +4003,9 @@ Mage blink id 1953 checked via `sServerFacade.IsSpellReady`; the 8 yd band
 mirrors the hunter dead-zone hysteresis already in-tree. Crusader Strike
 verified as an already-wired live trigger + action node
 (`CrusaderStrikeTrigger` CD_TRIGGER, `CastCrusaderStrikeAction` melee
-spell); only the priority moved. Skipped as not-small in this batch: mage
-fire-immune fallback, scorch exclusivity/HP gate, blizzard 10s gate (D5
+spell); only the priority moved. Skipped as not-small in this batch (the mage
+fire-immune fallback was later closed, see "Skip damage spells on immune
+targets" at the end of this file): scorch exclusivity/HP gate, blizzard 10s gate (D5
 M-items); prot disarm/block/panic/intervene/overpower/thunder items, arms
 death-wish/stance/execute (D6 S-items beyond the two rage/stack gates); ret
 exorcism split, double-bubble, blessing refresh (D7); priest mana recovery,
@@ -7496,6 +7497,7 @@ Copied / ported / reimplemented: reimplemented in place. No new spells
 Local validation: `bash tools/verify_all.sh`; `git diff --check`.
 Build via build-commit.sh. No live test.
 | Ossirian crystal tactic (AQ20): crystal-run timing by buff/debuff-vs-travel-time, wait-in-range + 25yd use guards, single CMSG_GAMEOBJ_USE | `mod-playerbots` | `79bd4281` | `src/Ai/Raid/Aq20/Aq20Triggers.cpp` (Aq20MoveToCrystalTrigger), `src/Ai/Raid/Aq20/Aq20Actions.cpp` (Aq20UseCrystalAction), `src/Ai/Raid/Aq20/Aq20Utils.cpp` (buff/debuff/crystal helpers) | Reimplemented: trigger-driven `ossirian crystal run` + `use ossirian crystal` on the new `ruins of ahn'qiraj`/`ossirian` strategies; 1.12 single queued use-packet (no report-use opcode; cf. suppression-device precedent) | Donor's entire AQ20 module, all IDs verified in tw_world | `bash tools/verify_all.sh` + `tools/test_ossirian_crystal_policy.cpp`; build-commit + no live test |
+| Rogue Expose Armor skipped when Sunder Armor is on the target | `mod-playerbots` | `79bd4281` | `src/Ai/Class/Rogue/RogueTriggers.cpp` (`ExposeArmorTrigger::IsActive`) | Reimplemented | Expose and Sunder share spell group 1064 (powerful chain, no stacking), so combo points spent on Expose behind a warrior tank are wasted | code review + build pending; in-game pending |
 
 ## Priest parity healing ladder: PRI-11 holy greater/flash + PRI-5 disc shield + PRI-7 inner focus + PRI-12 disc non-combat — 2026-10-09
 Feature: (1) Holy combat ladder: medium tier tries `greater heal on party`
@@ -7643,3 +7645,39 @@ victim==bot exemption is the fallback if it drags.
 
 Non-blocking "donor Geddon never used this primitive" — ACKNOWLEDGED:
 donor consumers are RS/Ulduar; the Geddon application is novel. Noted.
+
+### Default "cast time" combat strategy (lifetime-aware cast veto)
+Feature: `CastTimeStrategy` (already ported) is now added to every non-battleground bot's combat strategies. Source: `mod-playerbots` `79bd428`, `src/Bot/Factory/AiFactory.cpp` (`addStrategiesNoInit(... "cast time" ...)` for non-battleground bots). Reimplemented in `AiFactory::AddDefaultCombatStrategies` (`ai/playerbot/AiFactory.cpp`), non-BG branch only; the BG branch keeps its existing `removeStrategy("cast time")`. The multiplier (`ai/playerbot/strategy/generic/CastTimeStrategy.cpp`) already follows the donor's lifetime formula from `src/Ai/Base/Strategy/CastTimeStrategy.cpp` (veto when cast time > 1000 * target HP / `estimated group dps`), reimplemented, so a low-percent boss with a long lifetime is not vetoed. Reason: nothing ever added the strategy, so the multiplier was dead code. Validation: code review + build pending; in-game pending.
+
+## Hunter Steady Shot filler — 2026-10-11
+
+Feature: [Turtle] Steady Shot as the hunter ranged filler, cast only inside the Auto Shot window.
+
+| Feature | Source repo | SHA | Files | Ported/reimplemented | Reason | Validation |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| Hunter Steady Shot filler in the ranged rotation, woven inside the Auto Shot window (timer > cast + 500 ms windup + 150 ms margin) | `mod-playerbots` | `79bd4281` | `src/Ai/Class/Hunter/HunterActions.h` (CastSteadyShotAction), `HunterAiObjectContext.cpp` (steady_shot), behaviour reference only (donor's spell is the WotLK one) | Reimplemented: `steady shot` trigger + action + `HunterStrategy` row at `ACTION_NORMAL - 1`; Turtle ids 3035-3038/3668/45970/45972/45974 (cast-time, no cooldown, 1.5s GCD), cast gated on the core's Auto Shot pause and 500 ms re-arm (`Unit::_UpdateAutoRepeatSpell`) | Turtle trainer teach spells (3039 etc.) give Steady Shot at 36-60 and the core scripts it; bots only auto-shot between Aimed/Arcane | code review + build pending; in-game pending |
+
+## Warlock DoTs check for their own aura
+
+Behaviour reimplemented from mod-playerbots `79bd428`, `src/Ai/Class/Warlock/WarlockTriggers.h` (`CorruptionTrigger`, `ImmolateTrigger`: `DebuffTrigger(..., checkIsOwner=true)`). Reimplemented, not copied: Corruption, Immolate and Siphon Life triggers (and the spread-to-attackers variants via a new `attacker without my aura` value) ask for the bot's own aura, because the core stacks periodic damage per caster (`tortoise-wow` `src/game/Objects/Unit.cpp`, `dmgPeriodic` rule in `RemoveNoStackAurasDueToAuraHolder`). Deliberate deviation: Curse of Agony stays any-owner (the core keeps one curse rank per target, a same-rank curse from another warlock replaces it; the donor's WotLK rule differs).
+
+Files: `ai/playerbot/strategy/warlock/WarlockTriggers.{h,cpp}`, `WarlockActions.h`, `triggers/GenericTriggers.{h,cpp}`, `values/AttackerWithoutAuraTargetValue.{h,cpp}`, `values/ValueContext.h`. Validation: code review + build pending; in-game pending.
+
+## Skip damage spells on immune targets
+
+| Feature | Source project | Source commit | Source files | Ported / reimplemented | Reason | Local validation |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| Skip damage spells the target is fully immune to (school/spell immunity); Fireball/Scorch fall back to Frostbolt | mod-playerbots | 79bd428 | src/Bot/PlayerbotAI.cpp ~3469-3472 (`IsImmunedToSpell` before cast) | Reimplemented with the Turtle core's `Unit::IsImmuneToDamage` / `Unit::IsImmuneToSpell` in `PlayerbotAI::CanCastSpell`; fallback via the mage fireball/scorch action-node alternative | Fire mages cast Fireball at fire-immune mobs for zero damage and never switched spell | Not compiled, not tested in game; `tools/verify_all.sh` docs gates only |
+
+## Hunter Viper Sting only when low on mana
+
+Feature: automatic Viper Sting gated on the hunter's own mana (< 50%) plus target mana >= 10%; Serpent Sting otherwise.
+Source: `mod-playerbots` @ 79bd428, `src/Ai/Class/Hunter/HunterActions.cpp` (`CastViperStingAction::isUseful`: own mana < 50, target mana >= 30). Reimplemented in `ai/playerbot/strategy/hunter/HunterActions.cpp`; the target threshold stays at the module's existing 10%. Turtle Viper Sting (spell 3034) is `SPELL_AURA_PERIODIC_MANA_LEECH`, so it still feeds the hunter in 1.12.
+Validation: code review + build pending; in-game pending.
+
+## BWL Onyxia Scale Cloak warning (audit gap 10)
+
+- Feature: on entering Blackwing Lair, a bot whose back slot is not the Onyxia Scale Cloak (item 15138, equip spell 22683) tells its master once.
+- Source: mod-playerbots 79bd428, `src/Ai/Raid/BWL/BWLActions.cpp` (`BwlOnyxiaScaleCloakAuraCheckAction`), `BWLStrategy.cpp`, `BWLHelpers.h`.
+- Mode: reimplemented (behaviour changed). The donor calls `AddAura` to grant the immunity for free; TortoiseBots only warns and grants nothing.
+- Validation: code review + build pending; in-game pending.

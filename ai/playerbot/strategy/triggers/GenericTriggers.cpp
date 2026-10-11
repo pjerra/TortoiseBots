@@ -378,7 +378,7 @@ ai::Value<Unit*>* BuffOnTankTrigger::GetTargetValue()
 
 Value<Unit*>* DebuffOnAttackerTrigger::GetTargetValue()
 {
-	return context->GetValue<Unit*>("attacker without aura", spell);
+	return context->GetValue<Unit*>(checkIsOwner ? "attacker without my aura" : "attacker without aura", spell);
 }
 
 bool NoAttackersTrigger::IsActive()

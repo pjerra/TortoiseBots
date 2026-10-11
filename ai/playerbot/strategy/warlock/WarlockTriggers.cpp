@@ -72,7 +72,7 @@ bool CorruptionTrigger::IsActive()
     if (AI_VALUE2(uint8, "health", "current target") <= 20)
         return false;
     Unit* target = GetTarget();
-    return target && !ai->HasAura("corruption", target) && !HasMaxDebuffs();
+    return target && !ai->HasAura("corruption", target, false, true) && !HasMaxDebuffs();
 }
 
 bool SiphonLifeTrigger::IsActive()

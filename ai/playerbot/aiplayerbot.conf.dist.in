@@ -1611,6 +1611,8 @@ AiPlayerbot.EnableCustomRaidTactics = 1
 #AiPlayerbot.PullBackDpsJoinDelay = 5
 #AiPlayerbot.PullBackMaxReturnTime = 15
 # Random bot default strategies (applied after defaults)
+# Note: non-tank bots grouped with a real-player master (outside BGs) get `threat` added back
+# after this list, so `-threat` here only affects masterless pool bots.
 AiPlayerbot.RandomBotCombatStrategies = +dps,+dps assist,-threat
 AiPlayerbot.RandomBotNonCombatStrategies = +grind,+loot,+custom::say,+tfish,+wander,+rpg craft
 #AiPlayerbot.RandomBotReactStrategies =

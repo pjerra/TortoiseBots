@@ -76,6 +76,9 @@ namespace ai
     {
     public:
         ExposeArmorTrigger(PlayerbotAI* ai, uint8 comboPoints = 3) : NoDebuffAndComboPointsAvailableTrigger(ai, "expose armor", comboPoints) {}
+        // Sunder Armor (any caster) already on the target: Expose does not stack
+        // with it (spell group 1064, powerful chain), so do not spend combo points.
+        bool IsActive() override;
     };
 
     class KickInterruptEnemyHealerSpellTrigger : public InterruptEnemyHealerTrigger
