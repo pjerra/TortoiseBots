@@ -30,16 +30,8 @@ bool CheckMailAction::Execute(Event& event)
         if (!mail || mail->state == MAIL_STATE_DELETED)
             continue;
 
-        // Skip auction mail - auction payouts and won items must be collected via MailAction, never deleted!
-        if (mail->stationery == MAIL_STATIONERY_AUCTION || mail->messageType != MAIL_NORMAL)
-            continue;
-
-        Player* owner = sObjectMgr.GetPlayer(ObjectGuid(HIGHGUID_PLAYER, mail->sender));
+        Player* owner = GetProcessableOwner(mail);
         if (!owner)
-            continue;
-
-        uint32 account = sObjectMgr.GetPlayerAccountIdByGUID(owner->getObjectGuid());
-        if (sPlayerbotAIConfig.IsInRandomAccountList(account))
             continue;
 
         ProcessMail(mail, owner);
@@ -61,10 +53,38 @@ bool CheckMailAction::Execute(Event& event)
 bool CheckMailAction::isUseful()
 {
     MasterPlayer* master = bot->GetSession() ? bot->GetSession()->GetMasterPlayer() : nullptr;
-    if (!master || ai->GetMaster() || !master->GetMailSize() || bot->InBattleGround())
+    if (!master || ai->GetMaster() || !master->GetMailSize() || bot->InBattleGround() || bot->IsInCombat())
         return false;
 
-    return true;
+    // Only run when Execute() would act on at least one mail; auction, system, bot-sent and
+    // offline-sender mail is never removed and would otherwise re-trigger this action forever.
+    for (PlayerMails::iterator i = master->GetMailBegin(); i != master->GetMailEnd(); ++i)
+    {
+        if (GetProcessableOwner(*i))
+            return true;
+    }
+
+    return false;
+}
+
+Player* CheckMailAction::GetProcessableOwner(Mail* mail)
+{
+    if (!mail || mail->state == MAIL_STATE_DELETED)
+        return nullptr;
+
+    // Skip auction mail - auction payouts and won items must be collected via MailAction, never deleted!
+    if (mail->stationery == MAIL_STATIONERY_AUCTION || mail->messageType != MAIL_NORMAL)
+        return nullptr;
+
+    Player* owner = sObjectMgr.GetPlayer(ObjectGuid(HIGHGUID_PLAYER, mail->sender));
+    if (!owner)
+        return nullptr;
+
+    uint32 account = sObjectMgr.GetPlayerAccountIdByGUID(owner->getObjectGuid());
+    if (sPlayerbotAIConfig.IsInRandomAccountList(account))
+        return nullptr;
+
+    return owner;
 }
 
 
