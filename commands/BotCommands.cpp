@@ -6,6 +6,7 @@
 #include "../runtime/HireLifecycle.h"
 #include "../runtime/ClaimLifecycle.h"
 #include "../runtime/HireProvisionService.h"
+#include "../runtime/HireSpecPolicy.h"
 #include "BotCommandContext.h"
 #include "../behavior/PlayerConvenience.h"
 // pi-lens-ignore: clang:pp_file_not_found
@@ -905,6 +906,9 @@ static bool HandleHire(ChatHandler* handler, char const* args)
             tokens.push_back(token);
     }
     HireSelection sel;
+    // Tokens that are not class/race/gender/role words: resolved against the
+    // class after the loop, so "frost mage" works in either order.
+    std::vector<std::string> specWords;
     for (std::string raw : tokens)
     {
         std::string token = raw;
@@ -937,6 +941,8 @@ static bool HandleHire(ChatHandler* handler, char const* args)
                 continue;
             }
         }
+        if (ai::ChatHelper::parseRole(token) == ai::BOT_ROLE_NONE)
+            specWords.push_back(token);
         if (!sel.role)
         {
             ai::BotRoles parsed = ai::ChatHelper::parseRole(token);
@@ -995,6 +1001,25 @@ static bool HandleHire(ChatHandler* handler, char const* args)
     {
         handler->PSendSysMessage("Usage: .bot hire <class> [dps/tank/healer] [race] [male/female]");
         return true;
+    }
+    // A spec word picks the recruiter's spec option for every class, not only
+    // druids: without a specIndex provisioning draws any premade tree of the
+    // role, so "mage frost" could arrive Arcane. The spec word's role wins, as
+    // in the gossip menu. Druids keep the bear/cat handling above.
+    if (sel.classId != CLASS_DRUID)
+    {
+        uint32 specCount = 0;
+        HireSpecOption const* specs = HireSpecOptions(sel.classId, specCount);
+        for (std::string const& word : specWords)
+        {
+            int specIndex = HireSpecIndexForWord(sel.classId, word);
+            if (specs && specIndex >= 0 && static_cast<uint32>(specIndex) < specCount)
+            {
+                sel.specIndex = specIndex;
+                sel.role = specs[specIndex].role;
+                break;
+            }
+        }
     }
     // Defaults: requester's faction race pool, random gender, class role.
     if (!sel.race)

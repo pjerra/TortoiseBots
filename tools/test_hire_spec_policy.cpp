@@ -102,6 +102,64 @@ static void TestHonoured()
     CHECK(HireSpecHonoured("arms", nullptr) == false);
 }
 
+// `.bot hire` spec words pick the recruiter option for every class: the
+// in-game report was `.bot hire mage frost` arriving Arcane because only
+// druid words set a spec index.
+static void TestChatSpecWords()
+{
+    CHECK(HireSpecIndexForWord(kHireClassMage, "frost") == 0);
+    CHECK(HireSpecIndexForWord(kHireClassMage, "fire") == 1);
+    CHECK(HireSpecIndexForWord(kHireClassMage, "arcane") == 2);
+    CHECK(HireSpecIndexForWord(kHireClassMage, "frostmage") == 0);
+    CHECK(HireSpecIndexForWord(kHireClassWarrior, "arms") == 1);
+    CHECK(HireSpecIndexForWord(kHireClassWarrior, "fury") == 2);
+    CHECK(HireSpecIndexForWord(kHireClassWarrior, "prot") == 0);
+    CHECK(HireSpecIndexForWord(kHireClassPaladin, "ret") == 2);
+    CHECK(HireSpecIndexForWord(kHireClassPaladin, "holy") == 1);
+    CHECK(HireSpecIndexForWord(kHireClassPriest, "holy") == 0);
+    CHECK(HireSpecIndexForWord(kHireClassPriest, "disc") == 1);
+    CHECK(HireSpecIndexForWord(kHireClassPriest, "shadow") == 2);
+    CHECK(HireSpecIndexForWord(kHireClassShaman, "resto") == 0);
+    CHECK(HireSpecIndexForWord(kHireClassShaman, "elemental") == 1);
+    CHECK(HireSpecIndexForWord(kHireClassShaman, "enh") == 2);
+    CHECK(HireSpecIndexForWord(kHireClassWarlock, "destro") == 2);
+    CHECK(HireSpecIndexForWord(kHireClassWarlock, "demo") == 1);
+    CHECK(HireSpecIndexForWord(kHireClassWarlock, "afflic") == 0);
+    CHECK(HireSpecIndexForWord(kHireClassRogue, "sub") == 2);
+    CHECK(HireSpecIndexForWord(kHireClassRogue, "combat") == 1);
+    CHECK(HireSpecIndexForWord(kHireClassHunter, "beast") == 0);
+    CHECK(HireSpecIndexForWord(kHireClassHunter, "marks") == 1);
+    CHECK(HireSpecIndexForWord(kHireClassHunter, "surv") == 2);
+    // Words of another class, too-short words and unknown classes stay role-only.
+    CHECK(HireSpecIndexForWord(kHireClassMage, "arms") == -1);
+    CHECK(HireSpecIndexForWord(kHireClassWarrior, "frost") == -1);
+    CHECK(HireSpecIndexForWord(kHireClassMage, "fr") == -1);
+    CHECK(HireSpecIndexForWord(kHireClassMage, "") == -1);
+    CHECK(HireSpecIndexForWord(6, "frost") == -1);
+    // Four-letter stems never collide inside a class (the rule above relies on it).
+    for (uint8_t cls : kClasses)
+    {
+        uint32_t count = 0;
+        HireSpecOption const* options = HireSpecOptions(cls, count);
+        for (uint32_t i = 0; i < count; ++i)
+            for (uint32_t j = i + 1; j < count; ++j)
+                if (std::string(options[i].pathName) != options[j].pathName)
+                    CHECK(std::string(options[i].pathName).compare(0, 4, options[j].pathName, 0, 4) != 0);
+    }
+    // Every menu path name resolves to its own option, for every class.
+    for (uint8_t cls : kClasses)
+    {
+        uint32_t count = 0;
+        HireSpecOption const* options = HireSpecOptions(cls, count);
+        for (uint32_t i = 0; i < count; ++i)
+        {
+            int idx = HireSpecIndexForWord(cls, options[i].pathName);
+            CHECK(idx >= 0);
+            CHECK(std::string(options[idx].pathName) == options[i].pathName);
+        }
+    }
+}
+
 // Parse AiPlayerbot.PremadeSpecName.<class>.<n> = <name> from the shipped
 // template. Returns false when the file cannot be found (test still passes).
 static bool LoadPremadeSpecNames(std::map<int, std::set<std::string>>& out)
@@ -183,6 +241,7 @@ int main()
     TestUnknownClass();
     TestWarriorSpecsPinned();
     TestHonoured();
+    TestChatSpecWords();
     TestConfiguredNames();
     std::printf("hire spec policy: %d checks passed\n", checks);
     return 0;

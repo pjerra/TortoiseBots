@@ -125,6 +125,32 @@ inline char const* HireSpecPathName(uint8_t classId, int specIndex)
     return options[specIndex].pathName;
 }
 
+// `.bot hire` spec word -> gossip spec index, so "mage frost" picks the same
+// option (and premade tree) as the recruiter's "Frost (DPS)" row instead of a
+// role-only draw. word is lower case. It matches an option when it contains
+// the option's path name ("frost", "firemage"), abbreviates it with at least
+// three letters ("prot", "ret", "resto") or shares its first four letters
+// ("destro"). The four-letter stems are unique within every class. -1 when
+// the word names no spec of that class. Druid words (bear/cat/feral/balance/
+// resto) keep their own handling in HandleHire.
+inline int HireSpecIndexForWord(uint8_t classId, std::string const& word)
+{
+    if (word.size() < 3)
+        return -1;
+    uint32_t count = 0;
+    HireSpecOption const* options = HireSpecOptions(classId, count);
+    if (!options)
+        return -1;
+    for (uint32_t i = 0; i < count; ++i)
+    {
+        std::string const path = options[i].pathName;
+        if (path.compare(0, word.size(), word) == 0 || word.find(path) != std::string::npos ||
+            (word.size() >= 4 && word.compare(0, 4, path, 0, 4) == 0))
+            return static_cast<int>(i);
+    }
+    return -1;
+}
+
 // Post-provision check: does the build that was applied honour the request?
 // A role-only request (empty/null name) is honoured by any role-matching
 // build; a named request is honoured only by a build whose name contains it,
