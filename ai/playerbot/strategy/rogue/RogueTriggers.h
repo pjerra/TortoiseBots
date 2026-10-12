@@ -189,6 +189,21 @@ namespace ai
         }
     };
 
+    // Pre-pull Sap on the bot's assigned CC mark ("rti cc", Moon unless
+    // `.bot action cc <mark>` changed it). The "sap" trigger above lives in
+    // the combat engine and asks for the same out-of-combat state, and its
+    // "cc target" only holds mobs already fighting the group, so it can never
+    // fire before a pull. This one runs in the non-combat engine: rogue and
+    // marked mob both out of combat, mob a humanoid nobody holds yet.
+    // Player control: only for a bot whose master is a real player, so pool
+    // bots never Sap on their own.
+    class SapCcMarkTrigger : public Trigger
+    {
+    public:
+        SapCcMarkTrigger(PlayerbotAI* ai) : Trigger(ai, "sap cc mark") {}
+        bool IsActive() override;
+    };
+
     class SprintTrigger : public BuffTrigger
     {
     public:

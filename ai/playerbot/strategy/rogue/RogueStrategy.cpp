@@ -112,6 +112,17 @@ void RogueStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
         "off hand weapon no enchant",
         NextAction::array(0, new NextAction("apply deadly poison off hand", 19.0f),
                              new NextAction("apply instant poison off hand", 18.0f), NULL)));
+
+    // Sap before the pull (dungeon guide, `.bot action cc <mark>`): stealth,
+    // sneak to the assigned CC mark and Sap it while the party is still out
+    // of combat. Same order as mod-playerbots RogueCcStrategy (stealth, then
+    // sap), but in the non-combat engine, the only place where both the rogue
+    // and the mob are out of combat. Above follow (ACTION_NORMAL) and the
+    // stealth upkeep (ACTION_HIGH) so the approach is not pulled back.
+    triggers.push_back(new TriggerNode(
+        "sap cc mark",
+        NextAction::array(0, new NextAction("stealth", ACTION_HIGH + 2),
+                             new NextAction("sap", ACTION_HIGH + 1), NULL)));
 }
 
 void RogueStrategy::InitReactionTriggers(std::list<TriggerNode*>& triggers)

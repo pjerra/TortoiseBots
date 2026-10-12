@@ -185,12 +185,26 @@ namespace ai
         bool IsCrowdControlAction() const override { return true; }
         std::string GetCrowdControlSpellName() const override { return "sap"; }
 
+        // Before the pull the marked mob is not fighting anyone, so "cc
+        // target" (built from the group's attackers) cannot hold it: out of
+        // combat Sap the bot's assigned CC mark instead ("sap cc mark"
+        // trigger, `.bot action cc`). The reach prerequisite is named after
+        // GetTargetName, so it walks to the same mob.
         Value<Unit*>* GetTargetValue() override
         {
+            if (!sServerFacade.IsInCombat(bot))
+                return context->GetValue<Unit*>("rti cc target");
+
             return context->GetValue<Unit*>("cc target", getName());
         }
 
         virtual bool isUseful() override { return true; }
+
+    protected:
+        std::string GetTargetName() override
+        {
+            return sServerFacade.IsInCombat(bot) ? "current target" : "rti cc target";
+        }
     };
 
     class CastGarroteAction : public CastMeleeSpellAction

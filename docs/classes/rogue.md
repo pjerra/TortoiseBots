@@ -28,7 +28,7 @@ Rogues provide premier single-target melee physical DPS, invaluable pre-combat c
 - Moves into position behind target to execute appropriate openers:
   - *Cheap Shot* for lockdown stuns on dangerous casters.
   - *Ambush* (Daggers) or *Garrote* (Bleed) for initial damage.
-  - Out of combat *Sap* when assigned CC on humanoid targets.
+  - *Sap* before the pull: when the rogue's CC mark (Moon unless `.bot action cc <mark>` changed it) sits on a humanoid that is not in combat, a rogue whose master is a real player stealths, sneaks up and Saps it while the party is still out of combat. Pool bots without a real player never do this.
 
 ### 2. Combo Points & Finisher Priority
 - **Generator:** Uses *Sinister Strike* (Swords) or *Backstab* (Daggers), or *Hemorrhage* (Subtlety).

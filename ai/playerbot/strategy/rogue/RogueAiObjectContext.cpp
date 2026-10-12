@@ -199,6 +199,7 @@ namespace ai
                 creators["adrenaline rush"] = [](PlayerbotAI* ai) { return new RogueBoostBuffTrigger(ai, "adrenaline rush"); };
                 creators["unstealth"] = [](PlayerbotAI* ai) { return new RogueUnstealthTrigger(ai); };
                 creators["sap"] = [](PlayerbotAI* ai) { return new SapTrigger(ai); };
+                creators["sap cc mark"] = [](PlayerbotAI* ai) { return new SapCcMarkTrigger(ai); };
                 creators["in stealth"] = [](PlayerbotAI* ai) { return new InStealthTrigger(ai); };
                 creators["no stealth"] = [](PlayerbotAI* ai) { return new NoStealthTrigger(ai); };
                 creators["stealth"] = [](PlayerbotAI* ai) { return new StealthTrigger(ai); };

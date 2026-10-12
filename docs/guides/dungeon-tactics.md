@@ -71,7 +71,7 @@ Every bot starts with **Moon** as its CC mark, whatever its class. The table bel
 
 | Raid Icon | Primary Class & Ability | Valid Targets | Notes |
 | :---: | :--- | :--- | :--- |
-| **Moon** | **Mage** (*Polymorph*) / **Rogue** (*Sap*) | Beasts, Humanoids | Rogue must be in stealth prior to pull for Sap. |
+| **Moon** | **Mage** (*Polymorph*) / **Rogue** (*Sap*) | Beasts, Humanoids | Humanoids only for Sap. The rogue stealths, sneaks up and Saps its mark on its own while nobody is in combat; wait for the Sap before you pull. |
 | **Star** | **Priest** (*Shackle Undead*) / **Paladin** (*Turn Undead*) | Undead only | Crucial in Stratholme, Scholomance, and Shadowfang Keep. |
 | **Diamond** | **Warlock** (*Banish* / *Fear*) | Demons, Elementals (Banish); Fear only on its assigned mark | Banish completely immunizes target from damage. *Seduce* is not a bot CC executor. |
 | **Triangle** | **Hunter** (*Freezing Trap* / *Scare Beast*) / **Druid** (*Hibernate* / *Entangling Roots*) | Beasts, Dragonkin | Hunter drops trap; tank guides mob over the trap. |
@@ -83,6 +83,8 @@ Every bot starts with **Moon** as its CC mark, whatever its class. The table bel
   ```
 * Until you assign marks, every bot holds **Moon**: any bot whose CC fits the Moon mob may take it, and nobody CCs a Star, Diamond or Triangle. To assign a mark before the pull without selecting a mob, name the bot (`.bot action cc star <PriestName>`) or target the bot.
 * The mark is assigned to exactly one bot (exclusive ownership); reassigning it moves ownership. When no owned bot is targeted, the server selects the capable bot with the best-fitting CC for that target (Sap before the pull, then Shackle/Banish/Hibernate/Polymorph/traps, Fear last); the same target and state always pick the same bot.
+* Targeting an enemy when you type the command puts that mark on your current target (moving it off any mob that carried it). Select the bot instead, or clear your target, to keep the mark where you placed it.
+* **Rogue Sap before the pull:** out of combat a rogue (with you as its master) stealths and Saps the humanoid carrying its mark, so mark first, wait for the Sap, then pull. Nothing waits for the Sap automatically.
 * Dismiss with `.bot action cc clear` (targeted bot, or the whole owned party when untargeted).
 * **Dungeon rule:** inside non-raid dungeons bots CC only their assigned mark; in the open world they may CC a free pick. Bots never CC over an existing CC, and AoE triggers refuse packs holding a breakable CC.
 * **Automatic Discipline:** Once applied, party bots and pets are strictly blocked from attacking the crowd-controlled target until all other active threats are dead.
