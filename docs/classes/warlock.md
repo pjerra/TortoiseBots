@@ -48,6 +48,7 @@ Warlocks provide sustained Shadow and Fire DPS through curses and damage-over-ti
   - Custom Demonology pet burst (crowd-control break plus damage buff) costing the demon a share of base health over the duration, per game data. The bot requires a live pet above 60% health and a live enemy.
 - **Rain of Fire Channeling:**
   - Includes safe channel cancellation when fewer than 2 enemies remain in the AoE.
+  - *Rain of Fire* waits in a party while the tank has no threat on a mob in the fight or the bot holds half the tank's threat (`threat` behaviour).
 
 ---
 

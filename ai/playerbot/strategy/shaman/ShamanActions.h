@@ -437,6 +437,7 @@ namespace ai
     {
     public:
         CastChainLightningAction(PlayerbotAI* ai) : CastSpellAction(ai, "chain lightning") {}
+        virtual ActionThreatType getThreatType() override { return ActionThreatType::ACTION_THREAT_AOE; }
     };
 
     class CastLightningBoltAction : public CastSpellAction
