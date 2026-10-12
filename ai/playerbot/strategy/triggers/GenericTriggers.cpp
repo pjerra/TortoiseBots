@@ -1116,6 +1116,17 @@ bool WandBlocksCcTrigger::IsActive()
 
 bool WandBlocksCcTrigger::CcCastWaiting()
 {
+    uint32 const nowMs = WorldTimer::getMSTime();
+    if (waitingCheckMs && WorldTimer::getMSTimeDiff(waitingCheckMs, nowMs) < 1000)
+        return waitingCached;
+
+    waitingCheckMs = nowMs ? nowMs : 1;
+    waitingCached = ComputeCcCastWaiting();
+    return waitingCached;
+}
+
+bool WandBlocksCcTrigger::ComputeCcCastWaiting()
+{
     // The CC rows live in the "cc" strategy; without it nothing waits.
     if (!ai->HasStrategy("cc", BotState::BOT_STATE_COMBAT))
         return false;
@@ -1141,6 +1152,19 @@ bool WandBlocksCcTrigger::CcCastWaiting()
 
         Unit* target = AI_VALUE2(Unit*, "cc target", spell);
         if (!target || !target->IsAlive())
+            continue;
+
+        // The probe ignores range. Only a target already in cast range
+        // counts: one the bot cannot reach (a stay order, a root, no path)
+        // would otherwise keep the wand off while the CC never goes out.
+        uint32 const spellId = AI_VALUE2(uint32, "spell id", spell);
+        SpellEntry const* spellInfo = spellId ? sServerFacade.LookupSpellInfo(spellId) : nullptr;
+        SpellRangeEntry const* rangeEntry = spellInfo ? sSpellRangeStore.LookupEntry(spellInfo->rangeIndex) : nullptr;
+        if (!rangeEntry)
+            continue;
+        float maxRange = rangeEntry->maxRange;
+        bot->ApplySpellMod(spellId, SPELLMOD_RANGE, maxRange);
+        if (bot->GetCombatDistance(target) > maxRange)
             continue;
 
         WandState const state{true, ProbeSpell(spell, target), keepWandForThreat, noManaRowActive};

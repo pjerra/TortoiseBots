@@ -762,7 +762,8 @@ bool CastShootAction::isUseful()
 
     // A wand started now renews the GCD on every shot and starves a CC
     // that waits for its spell (WandBlocksCcTrigger): leave the wand off
-    // while the bot's CC is held back by the GCD alone. Only the wand
+    // while the bot's CC is in range and held back by the GCD alone (the
+    // answer is cached for ~1 s, CcCastWaiting). Only the wand
     // classes register "wand blocks cc"; for the others this is a miss.
     WandBlocksCcTrigger* wandBlocksCc = dynamic_cast<WandBlocksCcTrigger*>(context->GetTrigger("wand blocks cc"));
     return !wandBlocksCc || !wandBlocksCc->CcCastWaiting();

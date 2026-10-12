@@ -939,10 +939,16 @@ namespace ai
         bool IsActive() override;
         // The same test without the running wand. CastShootAction reads it
         // so a "shoot" fallback does not restart the wand while a CC waits.
+        // The answer is kept for about 1 s: "shoot" is weighed every tick
+        // and the cast probe builds a Spell (see WandBlocksCastTrigger).
         bool CcCastWaiting();
 
     private:
+        bool ComputeCcCastWaiting();
+
         std::vector<std::string> ccSpells;
+        uint32 waitingCheckMs = 0;
+        bool waitingCached = false;
     };
 
 	class NoMovementTrigger : public Trigger

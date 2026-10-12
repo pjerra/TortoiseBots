@@ -8798,9 +8798,12 @@ nuke's "shoot" alternative (mage `frostbolt` -> `shoot`) does not restart
 the wand. Rows: mage `polymorph` (`stop wand` at `ACTION_INTERRUPT + 1`),
 priest `shackle undead` (`ACTION_INTERRUPT + 1`), warlock `banish` and
 `fear` (`ACTION_INTERRUPT + 3`, above both). Seduction is the succubus's
-cast and is not covered. Range is not gated: an assigned mark is chosen
-out of range on purpose and reached by the CC action's own reach
-prerequisite, which only runs once the CC row fires.
+cast and is not covered. Only a CC target already within the spell's
+range (DBC max range plus range talents, combat distance) counts: the
+probe ignores range, and a target the bot cannot reach (stay order, root,
+no path) would otherwise keep the wand off forever while the CC row never
+fires. The answer is cached for about 1 s, because `CastShootAction` is
+weighed every tick and the probe builds a `Spell`.
 
 Source repository: none (native). The donor's core puts no GCD on wand
 shots, so mod-playerbots has nothing to port; behaviour intent is the
