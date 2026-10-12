@@ -157,14 +157,19 @@ namespace ai
     // Universal raid survival: dragon breath/tail geometry. Onyxia (10184),
     // Ebonroc (14601), Flamegor (11981), Firemaw (11983), Nefarian (11583).
     // Tanks hold the head away from the raid; everyone else clears the
-    // frontal cone and the rear tail cone and works the flanks.
+    // frontal cone and the rear tail cone and works the flanks, whether or
+    // not the dragon is their own target.
     class DragonBreathRiskTrigger : public Trigger
     {
     public:
         DragonBreathRiskTrigger(PlayerbotAI* ai, std::string name = "dragon breath risk", int checkInterval = 1)
         : Trigger(ai, name, checkInterval) {}
-        std::string GetTargetName() override { return "current target"; }
+        std::string GetTargetName() override { return "self target"; }
         bool IsActive() override;
+        // The dragon to clear: the bot's own target when it is a listed
+        // dragon (ownTarget = true), else the first live listed dragon in
+        // the cached group "attackers" (instance maps only), else null.
+        static Unit* FindDragon(PlayerbotAI* ai, Player* bot, bool& ownTarget);
     };
 
     // Universal raid survival: ranged AoE spread. When another friendly
