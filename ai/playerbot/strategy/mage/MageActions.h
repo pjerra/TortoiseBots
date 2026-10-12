@@ -53,6 +53,9 @@ namespace ai
     {
     public:
         CastFlamestrikeAction(PlayerbotAI* ai) : CastSpellAction(ai, "flamestrike") {}
+        // AoE threat mark (mod-playerbots 79bd428): the threat strategy holds
+        // area spells while the tank has not got the pack.
+        virtual ActionThreatType getThreatType() override { return ActionThreatType::ACTION_THREAT_AOE; }
     };
 
     class CastFrostNovaAction : public CastMeleeAoeSpellAction
@@ -333,12 +336,14 @@ namespace ai
     {
     public:
         CastArcaneExplosionAction(PlayerbotAI* ai) : CastMeleeAoeSpellAction(ai, "arcane explosion", 10.0f) {}
+        virtual ActionThreatType getThreatType() override { return ActionThreatType::ACTION_THREAT_AOE; }
     };
 
     class CastConeOfColdAction : public CastMeleeAoeSpellAction
     {
     public:
         CastConeOfColdAction(PlayerbotAI* ai) : CastMeleeAoeSpellAction(ai, "cone of cold", 10.0f) {}
+        virtual ActionThreatType getThreatType() override { return ActionThreatType::ACTION_THREAT_AOE; }
         // Donor CastConeOfColdAction::isUseful: a cone only hits what the
         // caster faces. Refuse cast while turned away so the GCD goes to a
         // nuke instead of an empty cone (range gate stays in the base).

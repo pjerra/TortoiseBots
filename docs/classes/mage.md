@@ -27,9 +27,10 @@ Mages provide premier ranged spell DPS, the game's most reliable crowd control (
 - Opens at max range with *Frostbolt*.
 - If enemies reach melee range, casts *Frost Nova* and *Blink* to reset distance.
   - Skips *Frost Nova* when the target is already frozen or immune to the freeze, so the GCD goes to damage.
-- Uses *Blizzard* and *Flamestrike* on grouped enemies — *Flamestrike* first, then *Blizzard* channeled on the burning ground while the pack holds (*Cone of Cold* on light AoE; *Arcane Explosion* point-blank for Arcane; *Blast Wave* for Fire).
-- Uses *Blizzard* and *Flamestrike* on grouped enemies (*Cone of Cold* on light AoE; *Arcane Explosion* point-blank for Arcane; *Blast Wave* for Fire), and stops the *Blizzard* channel early when the pack thins below two attackers.
-- Uses *Blizzard* and *Flamestrike* on grouped enemies, and *Cone of Cold* on close pairs (only while facing the target; *Blast Wave* for Fire).
+- Uses its own Frost AoE on grouped enemies: *Blizzard* (from 10 s into the fight) and *Cone of Cold* on light AoE. A Frost mage does not cast *Flamestrike* on its own; Fire and Arcane lead with *Flamestrike* and channel *Blizzard* on the burning ground while the pack holds (*Arcane Explosion* point-blank for Arcane; *Blast Wave* for Fire).
+- In a party with a tank, every area spell (*Blizzard*, *Flamestrike*, *Cone of Cold*, *Arcane Explosion*) waits while the tank has no threat on a mob in the fight or the mage holds half the tank's threat (`threat` behaviour), and no AoE is cast while an enemy that is not fighting the group yet stands beside the pack.
+- Stops the *Blizzard* channel early when the pack thins below two attackers.
+- Casts *Cone of Cold* on close pairs only while facing the target (*Blast Wave* for Fire).
 - Uses *Cold Snap* once any Frost cooldown (Frost Nova, Cone of Cold, Ice Barrier, Ice Block, Frost Ward) is spent.
 
 ### 2. Fire Mage
