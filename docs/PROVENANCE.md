@@ -8380,3 +8380,45 @@ dominated by `reset travel target`, 353 bot-minutes, 33 in capitals. One
 live snapshot later the same day: 27 of 504 bots in the loop, all level 13+.
 
 Validation: code review + build pending; in-game pending.
+
+## Dispel target reach and spread (raid batch 7, finding 1) — 2026-10-12
+
+Feature: `party member to dispel` (`PartyMemberToDispel`) keeps the role
+order (healers, tanks, master, others) but ranks candidates by reach and
+by claim: in cast range and unclaimed first, then in range but claimed by
+another bot, then a short walk (up to 1.5 x `SpellDistance`), with line of
+sight required. The picking bot claims the member for its dispel type in
+the existing `BuffClaimRegistry` (key `dispel:<type>`, 4 s TTL), so other
+dispellers of that type prefer someone else. Rules live in
+`ai/playerbot/DispelTargetPolicy.h`, tested by
+`tools/test_dispel_target_policy.cpp`.
+
+Source repository: `mod-playerbots/mod-playerbots`
+
+Source commit: `79bd4281` (local `playerbots-references/mod-playerbots`
+checkout).
+
+Source files:
+- `src/Ai/Base/Value/PartyMemberValue.cpp` (`PartyMemberValue::Check`: target within `SpellDistance * 2` and in line of sight)
+- `src/Ai/Base/Value/PartyMemberToDispel.cpp` (predicate: alive + `HasAuraToDispel`)
+
+Source files (module, modified): `ai/playerbot/DispelTargetPolicy.h`
+(new), `ai/playerbot/strategy/values/PartyMemberToDispel.cpp`,
+`tools/test_dispel_target_policy.cpp` + `tools/verify_all.sh` (new
+standalone test), `docs/concepts/bot-mechanics-and-quirks.md`,
+`docs/guides/dungeon-tactics.md`.
+
+Copied / ported / reimplemented: reach + line-of-sight rule ported from
+the donor, with the cap tightened from 2x to 1.5x spell distance (39 yd at
+the default 26) so a decurser does not cross a raid room; the 0d106be
+behaviour (walk to a member just outside cast range) is kept. The claim
+spread is native: the donor has no dispel coordination either. No
+debuff-severity table (not in the donor; left for a follow-up).
+
+Reason: every decurser/dispeller picked the same first member in role
+order, so a raid cleared about one curse per second on Lucifron, Gehennas
+or Chromaggus, and bots chased cursed members up to 60 yd without line of
+sight.
+
+Local validation: code review + build pending; in-game pending.
+`bash tools/verify_all.sh` (incl. new policy test); `git diff --check`.
