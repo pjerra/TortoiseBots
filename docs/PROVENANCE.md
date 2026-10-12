@@ -9237,7 +9237,9 @@ not in battlegrounds). (4) `RelaxTacticalMovement` (`commands/BotCommands.cpp`)
 adds the default mode back when breaking a stay leaves the bot with none;
 the per-bot `.bot attack <Name>` now goes through it too, like
 `.bot action attack` (build 13 on m910q: after `stay` and `.bot attack`
-the rogue kept `stay` and stood still after the fight).
+the rogue kept `stay` and stood still after the fight), and a whispered
+`attack` with a target ends the stay the same way
+(`PlayerbotAI::EndStayForOrder`, called from `AttackMyTargetAction`).
 
 Source: (1) and (2) follow mod-playerbots `79bd428`
 `src/Db/PlayerbotRepository.cpp:11-71` (`Load` clears an engine only on its
@@ -9261,8 +9263,8 @@ removes `stay` and added nothing). The rogue, never told to stay, kept
 `follow`.
 
 Validation: `tools/test_tactical_stay_release.py` (compiles the production
-`EndFlee`/`RelaxTacticalMovement` against a stand-in AI; checks `.bot attack`
-routes through it); `tools/test_movement_mode_policy.cpp` (mode list, the three
+`EndFlee`/`RelaxTacticalMovement`/`EndStayForOrder` against a stand-in AI;
+checks `.bot attack` and the whispered `attack` end the stay first); `tools/test_movement_mode_policy.cpp` (mode list, the three
 stored `nc` rows from m910q, half-written and complete snapshots, rebuild
 rule); `bash tools/verify_all.sh`; `git diff --check`; `c++ -fsyntax-only`
 of the three changed files against the core headers. Build pending; in-game

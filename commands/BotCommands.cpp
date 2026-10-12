@@ -596,25 +596,10 @@ static void RelaxTacticalMovement(PlayerbotAI* ai)
     if (!ai)
         return;
 
-    // Stay is now kept in all three engines by the central movement setter;
-    // remove its reaction copy as well or it can survive a tactical request
-    // and be mistaken for an active hold during the next transition.
-    ai->ChangeStrategy("-stay", BotState::BOT_STATE_REACTION);
-    ai->ChangeStrategy("-stay", BotState::BOT_STATE_NON_COMBAT);
-    // Before the check below: a "passive" that EndFlee drops is not a mode.
+    // EndFlee first: a "passive" it drops is not a movement mode, so the
+    // stay release below must not count it.
     EndFlee(ai);
-    // The broken stay was the bot's only movement mode: give it the default
-    // back (follow for a player's bot) or it stands wherever the fight ends
-    // until the player whispers "follow". Added directly rather than through
-    // SetMovementStrategy, which would drop the "pull hold" marker the pull
-    // release below still reads.
-    if (!ai->HasActiveMovementStrategy())
-    {
-        std::string const movement = "+" + ai->GetDefaultMovementStrategy();
-        ai->ChangeStrategy(movement, BotState::BOT_STATE_REACTION);
-        ai->ChangeStrategy(movement, BotState::BOT_STATE_NON_COMBAT);
-    }
-    ai->ChangeStrategy("-stay,-follow", BotState::BOT_STATE_COMBAT);
+    ai->EndStayForOrder();
 }
 
 static bool BindMovementMaster(Player* requester, Player* bot)

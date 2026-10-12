@@ -84,6 +84,10 @@ bool AttackMyTargetAction::Execute(Event& event)
         if (guid)
         {
             Unit* tgt = ai->GetUnit(guid);
+            // A whispered "attack" ends a stay like the .bot attack orders do
+            // (those already ended it; a second call changes nothing).
+            if (tgt)
+                ai->EndStayForOrder();
             SC_LOG("attack-cmd target bot=%s tgt=%s tgtMap=%d botMap=%u",
                    bot ? bot->GetName() : "(null)",
                    tgt ? tgt->GetName() : "(null-unit)",

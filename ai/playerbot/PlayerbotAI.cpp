@@ -7299,6 +7299,26 @@ void PlayerbotAI::ReleasePullHold()
     }
 }
 
+void PlayerbotAI::EndStayForOrder()
+{
+    // Stay is kept in all three engines by the central movement setter;
+    // remove its reaction copy as well or it can survive the order and be
+    // mistaken for an active hold during the next transition.
+    ChangeStrategy("-stay", BotState::BOT_STATE_REACTION);
+    ChangeStrategy("-stay", BotState::BOT_STATE_NON_COMBAT);
+    // The broken stay was the bot's only movement mode: give it the default
+    // back or it stands wherever the fight ends until the player whispers
+    // "follow". Added directly rather than through SetMovementStrategy, which
+    // would drop the "pull hold" marker the pull release still reads.
+    if (!HasActiveMovementStrategy())
+    {
+        std::string const movement = "+" + GetDefaultMovementStrategy();
+        ChangeStrategy(movement, BotState::BOT_STATE_REACTION);
+        ChangeStrategy(movement, BotState::BOT_STATE_NON_COMBAT);
+    }
+    ChangeStrategy("-stay,-follow", BotState::BOT_STATE_COMBAT);
+}
+
 std::string PlayerbotAI::HandleRemoteCommand(std::string command)
 {
     if (command == "state")

@@ -1,10 +1,12 @@
 """A tactical order that breaks a stay leaves the bot following again.
 
 Compiles the production EndFlee and RelaxTacticalMovement from
-commands/BotCommands.cpp against a stand-in PlayerbotAI (strategy sets per
-engine, the real movement-mode list from MovementModePolicy.h), and checks
-that every per-bot command that sends a bot at a target goes through it, as
-the party-wide `.bot action` forms do. Requires g++ (skipped when unavailable).
+commands/BotCommands.cpp and PlayerbotAI::EndStayForOrder from
+ai/playerbot/PlayerbotAI.cpp against a stand-in PlayerbotAI (strategy sets per
+engine, the real movement-mode list from MovementModePolicy.h). Also checks
+that the per-bot `.bot attack` and the whispered `attack` end the stay before
+they attack, as the party-wide `.bot action` forms do. Requires g++ (skipped
+when unavailable).
 """
 import pathlib
 import re
@@ -15,12 +17,14 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SOURCE = (ROOT / "commands/BotCommands.cpp").read_text()
+AI_SOURCE = (ROOT / "ai/playerbot/PlayerbotAI.cpp").read_text()
+ATTACK_SOURCE = (ROOT / "ai/playerbot/strategy/actions/AttackAction.cpp").read_text()
 
 
-def extract(signature, next_signature):
-    start = SOURCE.index(signature)
-    end = SOURCE.index(next_signature, start)
-    return SOURCE[start:end]
+def extract(signature, next_signature, source=SOURCE):
+    start = source.index(signature)
+    end = source.index(next_signature, start)
+    return source[start:end]
 
 
 FIXTURE = r"""
@@ -55,6 +59,7 @@ struct PlayerbotAI
         return false;
     }
     std::string GetDefaultMovementStrategy() { return "follow"; }
+    void EndStayForOrder();
 };
 
 %(code)s
@@ -88,6 +93,20 @@ int main()
     RelaxTacticalMovement(&guarded);
     assert(guarded.HasStrategy("guard", S::BOT_STATE_NON_COMBAT));
     assert(!guarded.HasStrategy("follow", S::BOT_STATE_NON_COMBAT));
+
+    // Whispered attack: AttackMyTargetAction calls EndStayForOrder directly.
+    PlayerbotAI whispered;
+    for (S s : { S::BOT_STATE_REACTION, S::BOT_STATE_NON_COMBAT, S::BOT_STATE_COMBAT })
+        whispered.engines[s] = { "stay" };
+    whispered.EndStayForOrder();
+    assert(whispered.HasStrategy("follow", S::BOT_STATE_NON_COMBAT));
+    assert(whispered.HasStrategy("follow", S::BOT_STATE_REACTION));
+    assert(!whispered.HasStrategy("stay", S::BOT_STATE_NON_COMBAT));
+    assert(!whispered.HasStrategy("stay", S::BOT_STATE_COMBAT));
+    // A second call (a .bot order already ended the stay) changes nothing.
+    whispered.EndStayForOrder();
+    assert(whispered.HasStrategy("follow", S::BOT_STATE_NON_COMBAT));
+    assert(!whispered.HasStrategy("follow", S::BOT_STATE_COMBAT));
     return 0;
 }
 """
@@ -96,7 +115,8 @@ int main()
 class TacticalStayReleaseTest(unittest.TestCase):
     @unittest.skipUnless(shutil.which("g++"), "g++ unavailable")
     def test_broken_stay_returns_to_follow(self):
-        code = extract("static void EndFlee(PlayerbotAI* ai)", "static bool BindMovementMaster(")
+        code = extract("void PlayerbotAI::EndStayForOrder()", "std::string PlayerbotAI::HandleRemoteCommand(", AI_SOURCE)
+        code += extract("static void EndFlee(PlayerbotAI* ai)", "static bool BindMovementMaster(")
         with tempfile.TemporaryDirectory() as tmp:
             src = pathlib.Path(tmp) / "fixture.cpp"
             src.write_text(FIXTURE % {"code": code})
@@ -111,6 +131,13 @@ class TacticalStayReleaseTest(unittest.TestCase):
         named = extract("static bool HandleNamedAction(", "// `.bot action flee`")
         relax = named.index("RelaxTacticalMovement(ai)")
         self.assertLess(relax, named.index("DoSpecificAction(action"))
+
+    def test_whispered_attack_breaks_stay(self):
+        # A whispered "attack" (AttackMyTargetAction) ends a stay before it
+        # attacks, like the .bot orders.
+        body = extract("bool AttackMyTargetAction::Execute(", "\n}\n", ATTACK_SOURCE)
+        end_stay = body.index("ai->EndStayForOrder()")
+        self.assertLess(end_stay, body.index("Attack(requester, tgt)"))
 
 
 if __name__ == "__main__":
