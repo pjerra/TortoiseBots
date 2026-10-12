@@ -7643,3 +7643,50 @@ victim==bot exemption is the fallback if it drags.
 
 Non-blocking "donor Geddon never used this primitive" — ACKNOWLEDGED:
 donor consumers are RS/Ulduar; the Geddon application is novel. Noted.
+
+## Nefarian class calls: priest Corrupted Healing, shaman totems, warlock infernals — 2026-10-12
+
+Feature: in the `nefarian` fight strategy a priest carrying Corrupted
+Healing casts no direct heal, and damage dealers kill the shaman call's
+corrupted totems, then the warlock call's Corrupted Infernals.
+
+Donor: none. mod-playerbots @ `79bd428`
+(`src/Ai/Raid/BWL/BWLStrategy.cpp:52-55`, `BWLTriggers.h:78-92`) handles
+only Nefarian positioning and the mage Wild Magic Ice Block; the other
+class calls are a native gap. Reimplemented from the core encounter
+(`tortoise-wow` `src/scripts/dungeons/blackwing_lair/boss_nefarian.cpp`:
+`HandleClassCall` spell ids 23397/23398/23401/23425/23427 and infernal
+14668; `npc_corrupted_totemAI` totems 14662-14666;
+`spell_nefarian_corrupted_totems`), `src/scripts/spells/spell_item.cpp`
+(`spell_item_corrupted_healing`: procs on any spell with
+`SPELL_EFFECT_HEAL`), `src/game/Spells/Spell.cpp` (23397 makes every
+shapeshift/stance cast fail) and 1.18.1 data (`tw_world_spell_template`,
+`tw_world_creature_template`).
+
+Source files (module): `ai/playerbot/BwlBundle1Policy.h` (ids, 30y range,
+add rank, role/switch/heal-block rules),
+`ai/playerbot/strategy/triggers/BlackwingLairDungeonTriggers.h`
+(`FindNefarianClassCallAdd` over the cached `attackers` list,
+`NefarianClassCallAddTrigger`),
+`ai/playerbot/strategy/actions/BlackwingLairDungeonActions.h`
+(`NefarianKillClassCallAddAction`),
+`ai/playerbot/strategy/generic/DungeonMultipliers.h/.cpp`
+(`NefarianClassCallMultiplier`: direct heals 0 under aura 23401, Holy
+Nova by name because it heals through a triggered spell; dps-assist 0
+while the current target is a class-call add),
+`ai/playerbot/strategy/generic/BlackwingLairDungeonStrategies.h/.cpp`
+(wiring), `TriggerContext.h` / `ActionContext.h` (registrations),
+`tools/test_bwl_bundle1_policy.cpp`, `docs/guides/dungeon-tactics.md`.
+
+Deliberately not handled: warrior call (forced Berserker Stance; the core
+fails every stance cast so the bot's stance actions are already
+impossible, and it returns to Berserker Stance 2458 when the aura ends,
+after which the normal stance triggers restore Defensive Stance), druid
+call (forced Cat Form; heals already fail the cast check, a cat-form
+DPS fallback would be new automation), hunter/rogue/paladin calls (no
+bot decision changes the outcome). Corrupted Fire Nova Totem 14662 is
+skipped: the core despawns it on its first update.
+
+Validation: code review + standalone policy test
+(`tools/test_bwl_bundle1_policy.cpp`) + `bash tools/verify_all.sh`;
+build pending; in-game pending.
