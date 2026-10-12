@@ -1,5 +1,6 @@
 #include "../ai/playerbot/DragonFlankPolicy.h"
 
+#include <cmath>
 #include <cstdlib>
 #include <iostream>
 
@@ -40,6 +41,33 @@ int main()
     CHECK(IsInDragonCone(1.0f, 1.0f + pi - 0.4f));
     CHECK(!IsInDragonCone(1.0f, 1.0f + pi - 0.6f));
     std::cout << "  [PASS] breath and tail cone geometry\n";
+
+    // Flank headings: own side first from the wrapped difference, all in
+    // [0, 2*pi), none inside a cone. Review case: facing 6.0, bot at 0.5 is
+    // just left of the nose, so the left flank (6.0 + pi/2) comes first.
+    {
+        float h[ai::kDragonFlankHeadingCount];
+        ai::DragonFlankHeadings(6.0f, 0.5f, h);
+        CHECK(std::fabs(h[0] - (6.0f + pi / 2.0f - 2.0f * pi)) < 0.001f);
+        CHECK(std::fabs(h[3] - (6.0f - pi / 2.0f)) < 0.001f);
+        ai::DragonFlankHeadings(0.2f, 6.0f, h);
+        CHECK(std::fabs(h[0] - (0.2f - pi / 2.0f + 2.0f * pi)) < 0.001f);
+        const float facings[] = { 0.0f, 0.2f, 1.0f, 3.0f, 6.0f, 6.2f };
+        const float bots[] = { 0.0f, 0.5f, 1.6f, 3.1f, 4.7f, 6.1f };
+        for (float f : facings)
+        {
+            for (float b : bots)
+            {
+                ai::DragonFlankHeadings(f, b, h);
+                for (int i = 0; i < ai::kDragonFlankHeadingCount; ++i)
+                {
+                    CHECK(h[i] >= 0.0f && h[i] < 2.0f * pi);
+                    CHECK(!IsInDragonCone(f, h[i]));
+                }
+            }
+        }
+    }
+    std::cout << "  [PASS] flank headings wrap and never point into a cone\n";
 
     // Own target is the dragon (unchanged rule): non-tanks flank; the
     // victim tank and a tank with no victim hold; a spare tank flanks.

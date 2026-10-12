@@ -49,6 +49,41 @@ namespace ai
         return diff < frontHalf || diff > (pi - rearHalf);
     }
 
+    // Angle in radians wrapped to [0, 2*pi).
+    inline float DragonFlankNormalize(float angle)
+    {
+        const float twoPi = 6.28318530718f;
+        while (angle >= twoPi)
+            angle -= twoPi;
+        while (angle < 0.0f)
+            angle += twoPi;
+        return angle;
+    }
+
+    // Headings (from the dragon, radians in [0, 2*pi)) the flank move tries
+    // in order: the flank on the bot's own side (side picked from the wrapped
+    // facing-to-bot difference, so a bot just left of the nose across the
+    // 0/2*pi seam does not run across the front to the far flank), the same
+    // flank 22.5 degrees toward the head and toward the tail (still clear of
+    // the 45-degree breath and 30-degree tail half-cones), then the far flank.
+    // Never the nose or the tail.
+    constexpr int kDragonFlankHeadingCount = 4;
+    inline void DragonFlankHeadings(float facing, float toBot, float* out)
+    {
+        const float pi = 3.14159265358979f;
+        float diff = toBot - facing;
+        while (diff > pi)
+            diff -= 2.0f * pi;
+        while (diff < -pi)
+            diff += 2.0f * pi;
+        const float sign = diff >= 0.0f ? 1.0f : -1.0f;
+        const float nearFlank = facing + sign * pi / 2.0f;
+        out[0] = DragonFlankNormalize(nearFlank);
+        out[1] = DragonFlankNormalize(nearFlank - sign * pi / 8.0f);
+        out[2] = DragonFlankNormalize(nearFlank + sign * pi / 8.0f);
+        out[3] = DragonFlankNormalize(facing - sign * pi / 2.0f);
+    }
+
     // Who flanks the dragon.
     // - Dragon is the bot's own target (unchanged rule): everyone flanks
     //   except the tank holding the head (or any tank while it has no victim).
