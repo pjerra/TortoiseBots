@@ -180,6 +180,7 @@ namespace ai
                 creators["blink"] = [](PlayerbotAI* ai) { return new BlinkTrigger(ai); };
                 creators["blink back"] = [](PlayerbotAI* ai) { return new BlinkBackTrigger(ai); };
                 creators["wand blocks nuke"] = [](PlayerbotAI* ai) { return new WandBlocksNukeTrigger(ai); };
+                creators["wand blocks cc"] = [](PlayerbotAI* ai) { return new WandBlocksCcTrigger(ai, {"polymorph"}); };
                 creators["mana shield"] = [](PlayerbotAI* ai) { return new ManaShieldTrigger(ai); };
                 creators["fire spells locked"] = [](PlayerbotAI* ai) { return new FireSpellsLocked(ai); };
                 creators["cold snap"] = [](PlayerbotAI* ai) { return new ColdSnapTrigger(ai); };

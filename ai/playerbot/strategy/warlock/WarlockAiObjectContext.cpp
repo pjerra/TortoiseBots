@@ -194,6 +194,8 @@ namespace ai
             {
                 creators["shadow trance"] = [](PlayerbotAI* ai) { return new ShadowTranceTrigger(ai); };
                 creators["wand blocks nuke"] = [](PlayerbotAI* ai) { return new WarlockWandBlocksNukeTrigger(ai); };
+                // Seduction is the succubus's cast, so the warlock's wand GCD never holds it.
+                creators["wand blocks cc"] = [](PlayerbotAI* ai) { return new WandBlocksCcTrigger(ai, {"banish", "fear"}); };
                 creators["demon armor"] = [](PlayerbotAI* ai) { return new DemonArmorTrigger(ai); };
                 creators["unending breath"] = [](PlayerbotAI* ai) { return new UnendingBreathTrigger(ai); };
                 creators["unending breath on party"] = [](PlayerbotAI* ai) { return new UnendingBreathOnPartyTrigger(ai); };

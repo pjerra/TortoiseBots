@@ -337,6 +337,12 @@ void PriestCcStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
         "shackle undead",
         NextAction::array(0, new NextAction("shackle undead", ACTION_INTERRUPT), NULL)));
 
+    // Each wand shot renews the GCD, so "shackle undead" (needs the spell
+    // ready) never fires while a wand runs: stop the wand while it waits.
+    triggers.push_back(new TriggerNode(
+        "wand blocks cc",
+        NextAction::array(0, new NextAction("stop wand", ACTION_INTERRUPT + 1), NULL)));
+
     triggers.push_back(new TriggerNode(
         "chastise",
         NextAction::array(0, new NextAction("chastise", ACTION_INTERRUPT), NULL)));

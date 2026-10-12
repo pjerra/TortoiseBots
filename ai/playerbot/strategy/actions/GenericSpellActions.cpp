@@ -7,6 +7,7 @@
 #include "GenericActions.h"
 #include "UseItemAction.h"
 #include "playerbot/strategy/values/TargetValue.h"
+#include "playerbot/strategy/triggers/GenericTriggers.h"
 #include "Database/DBCStores.h"
 
 #include <algorithm>
@@ -752,6 +753,19 @@ bool CastShootAction::isPossible()
     }
 
     return false;
+}
+
+bool CastShootAction::isUseful()
+{
+    if (!CastSpellAction::isUseful())
+        return false;
+
+    // A wand started now renews the GCD on every shot and starves a CC
+    // that waits for its spell (WandBlocksCcTrigger): leave the wand off
+    // while the bot's CC is held back by the GCD alone. Only the wand
+    // classes register "wand blocks cc"; for the others this is a miss.
+    WandBlocksCcTrigger* wandBlocksCc = dynamic_cast<WandBlocksCcTrigger*>(context->GetTrigger("wand blocks cc"));
+    return !wandBlocksCc || !wandBlocksCc->CcCastWaiting();
 }
 
 bool CastShootAction::Execute(Event& event)

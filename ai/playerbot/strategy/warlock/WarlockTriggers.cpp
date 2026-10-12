@@ -226,7 +226,7 @@ bool NoCurseOnAttackerTrigger::IsActive()
 // Fear runs the mob into other packs, so unlike the other CC triggers it never
 // auto-picks a target: it only fires on this bot's assigned raid mark
 // (mod-playerbots RtiCcTrigger semantics), and never replaces another CC.
-bool FearTrigger::IsActive()
+bool FearTrigger::CcTargetPending()
 {
     Unit* rtiCcTarget = AI_VALUE(Unit*, "rti cc target");
     if (!rtiCcTarget || AI_VALUE2(Unit*, "cc target", getName()) != rtiCcTarget)
@@ -236,7 +236,7 @@ bool FearTrigger::IsActive()
         PossibleAttackTargetsValue::HasUnBreakableCC(rtiCcTarget, bot))
         return false;
 
-    return HasCcTargetTrigger::IsActive();
+    return HasCcTargetTrigger::CcTargetPending();
 }
 
 bool FearPvpTrigger::IsActive()

@@ -429,6 +429,7 @@ namespace ai
         ActionThreatType getThreatType() override { return ActionThreatType::ACTION_THREAT_NONE; }
         bool Execute(Event& event) override;
         bool isPossible() override;
+        bool isUseful() override;
 
     protected:
         virtual std::string GetReachActionName() override { return "reach spell"; }

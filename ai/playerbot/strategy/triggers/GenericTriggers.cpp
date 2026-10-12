@@ -1082,28 +1082,70 @@ bool TankFaceNeededTrigger::IsActive()
 bool HasCcTargetTrigger::IsActive()
 {
     uint32 spellid = AI_VALUE2(uint32, "spell id", getName());
-    if (spellid && sServerFacade.IsSpellReady(bot, spellid))
+    return spellid && sServerFacade.IsSpellReady(bot, spellid) && CcTargetPending();
+}
+
+bool HasCcTargetTrigger::CcTargetPending()
+{
+    // mod-playerbots d9ee5198/#2648: inside a non-raid dungeon the generic
+    // CC never fires on a free pick — only on this bot's assigned raid
+    // mark ("rti cc target"). Open world keeps today's free CC; raids
+    // keep it too (marks are advisory there, packs are scripted).
+    // Opt-in bypass: the "auto cc" strategy (OFF by default, toggled via
+    // `.bot action auto cc [on|off]`) lets the bot CC its own smart pick
+    // (loose add on a healer/caster, unattacked, undotted) in dungeons.
+    // Explicit marks still win: CcTargetValue returns the assigned target
+    // first, so an assigned bot never falls through to its auto pick.
+    if (!ai->HasStrategy("auto cc", BotState::BOT_STATE_COMBAT) &&
+        bot->IsInWorld() && bot->GetMap() && bot->GetMap()->IsDungeon() && !bot->GetMap()->IsRaid())
     {
-        // mod-playerbots d9ee5198/#2648: inside a non-raid dungeon the generic
-        // CC never fires on a free pick — only on this bot's assigned raid
-        // mark ("rti cc target"). Open world keeps today's free CC; raids
-        // keep it too (marks are advisory there, packs are scripted).
-        // Opt-in bypass: the "auto cc" strategy (OFF by default, toggled via
-        // `.bot action auto cc [on|off]`) lets the bot CC its own smart pick
-        // (loose add on a healer/caster, unattacked, undotted) in dungeons.
-        // Explicit marks still win: CcTargetValue returns the assigned target
-        // first, so an assigned bot never falls through to its auto pick.
-        if (!ai->HasStrategy("auto cc", BotState::BOT_STATE_COMBAT) &&
-            bot->IsInWorld() && bot->GetMap() && bot->GetMap()->IsDungeon() && !bot->GetMap()->IsRaid())
-        {
-            Unit* rtiCcTarget = AI_VALUE(Unit*, "rti cc target");
-            if (!rtiCcTarget)
-                return false;
-            Unit* ccTarget = AI_VALUE2(Unit*, "cc target", getName());
-            if (!ccTarget || ccTarget != rtiCcTarget)
-                return false;
-        }
-        return AI_VALUE2(Unit*, "cc target", getName()) && !AI_VALUE2(Unit*, "current cc target", getName());
+        Unit* rtiCcTarget = AI_VALUE(Unit*, "rti cc target");
+        if (!rtiCcTarget)
+            return false;
+        Unit* ccTarget = AI_VALUE2(Unit*, "cc target", getName());
+        if (!ccTarget || ccTarget != rtiCcTarget)
+            return false;
+    }
+    return AI_VALUE2(Unit*, "cc target", getName()) && !AI_VALUE2(Unit*, "current cc target", getName());
+}
+
+bool WandBlocksCcTrigger::IsActive()
+{
+    return IsWanding() && CcCastWaiting();
+}
+
+bool WandBlocksCcTrigger::CcCastWaiting()
+{
+    // The CC rows live in the "cc" strategy; without it nothing waits.
+    if (!ai->HasStrategy("cc", BotState::BOT_STATE_COMBAT))
+        return false;
+
+    // Same wand-on-purpose rows as the nuke triggers: the raid "has aggro"
+    // wand and the "no mana" (< 5%) wand stay up.
+    bool const keepWandForThreat = RaidAggroWand();
+    if (keepWandForThreat)
+        return false;
+    bool const noManaRowActive = NoManaRowActive();
+    if (noManaRowActive)
+        return false;
+
+    for (std::string const& spell : ccSpells)
+    {
+        // The class's own CC trigger decides whether a target waits (mark
+        // gating, Fear's mark-only rule); only the "spell ready" part is
+        // left out. "cc target" is a cached value, and the cast probe below
+        // only runs when a target is pending.
+        HasCcTargetTrigger* ccTrigger = dynamic_cast<HasCcTargetTrigger*>(context->GetTrigger(spell));
+        if (!ccTrigger || !ccTrigger->CcTargetPending())
+            continue;
+
+        Unit* target = AI_VALUE2(Unit*, "cc target", spell);
+        if (!target || !target->IsAlive())
+            continue;
+
+        WandState const state{true, ProbeSpell(spell, target), keepWandForThreat, noManaRowActive};
+        if (ShouldStopWandToCast(state))
+            return true;
     }
 
     return false;

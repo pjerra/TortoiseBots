@@ -8778,3 +8778,48 @@ covering its hold/lapse matrix. Also touches
 
 Validation: `tools/test_four_horsemen_rotation_policy.cpp` + code review;
 build pending; in-game pending.
+
+## Wand stops for a waiting CC (mage, priest, warlock) — 2026-10-12
+
+Feature: a new generic trigger, `wand blocks cc` (`WandBlocksCcTrigger`,
+`strategy/triggers/GenericTriggers.{h,cpp}`), stops a running wand
+(`stop wand`) while one of the class's own CC spells has a pending target
+and is held back only by the GCD each Turtle wand shot renews. The CC rows
+(`HasCcTargetTrigger`) need the spell ready, so they never fired while a
+wand ran. The pending test is split out of `HasCcTargetTrigger::IsActive`
+into `CcTargetPending()` (dungeon mark gating, "cc target" and not yet
+"current cc target"); `FearTrigger` moves its mark-only gate into that
+override, so the wand trigger sees the same rules. The cast probe is the
+existing `WandBlocksCastTrigger::ProbeSpell` + `ShouldStopWandToCast`
+(`WandPolicy.h`), with the same exceptions (raid `has aggro` wand, the
+< 5% `no mana` wand, silence, school lockout, form, line of sight).
+`CastShootAction::isUseful` also returns false while that CC waits, so a
+nuke's "shoot" alternative (mage `frostbolt` -> `shoot`) does not restart
+the wand. Rows: mage `polymorph` (`stop wand` at `ACTION_INTERRUPT + 1`),
+priest `shackle undead` (`ACTION_INTERRUPT + 1`), warlock `banish` and
+`fear` (`ACTION_INTERRUPT + 3`, above both). Seduction is the succubus's
+cast and is not covered. Range is not gated: an assigned mark is chosen
+out of range on purpose and reached by the CC action's own reach
+prerequisite, which only runs once the CC row fires.
+
+Source repository: none (native). The donor's core puts no GCD on wand
+shots, so mod-playerbots has nothing to port; behaviour intent is the
+same as the earlier wand-stop rows (CC rows far above Shoot).
+
+Module files: `ai/playerbot/strategy/triggers/GenericTriggers.{h,cpp}`,
+`ai/playerbot/strategy/actions/GenericSpellActions.{h,cpp}`,
+`ai/playerbot/strategy/{mage,priest,warlock}/*AiObjectContext.cpp`,
+`ai/playerbot/strategy/mage/MageStrategy.cpp`,
+`ai/playerbot/strategy/priest/PriestStrategy.cpp`,
+`ai/playerbot/strategy/warlock/{WarlockStrategy.cpp,WarlockTriggers.h,WarlockTriggers.cpp}`.
+
+Copied / ported / reimplemented: reimplemented (native).
+
+Reason: audit "moon_sheep build 17", run B1. The mage stood in Polymorph
+reach for about 7 s with a wand running: each shot renewed the GCD, the
+`polymorph` trigger stayed false, `wand blocks nuke` (Frostbolt/Fireball
+only) stopped the wand once, and the `frostbolt` -> `shoot` fallback
+restarted it 0.28 s later. Polymorph started 1.56 s after the last shot.
+
+Validation: `c++ -fsyntax-only` of the changed files;
+`tools/verify_all.sh`. Not compiled into a server, not tested in game.

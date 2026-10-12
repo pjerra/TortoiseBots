@@ -920,6 +920,29 @@ namespace ai
     public:
         HasCcTargetTrigger(PlayerbotAI* ai, std::string name) : Trigger(ai, name) {}
         virtual bool IsActive() override;
+        // The row has a target to CC (dungeon mark gating included), leaving
+        // spell readiness aside. WandBlocksCcTrigger reads it too: a running
+        // wand keeps the spell "not ready", so IsActive alone never fires.
+        virtual bool CcTargetPending();
+    };
+
+    // A running wand renews the GCD on every shot (WandPolicy.h), so a CC
+    // row, which needs its spell ready, never fires while the wand runs.
+    // Fires while one of the class's own CC spells has a pending target and
+    // is held back by that GCD alone. Registered per class as "wand blocks
+    // cc" (mage, priest, warlock) and used by the cc strategies' stop-wand row.
+    class WandBlocksCcTrigger : public WandBlocksCastTrigger
+    {
+    public:
+        WandBlocksCcTrigger(PlayerbotAI* ai, std::vector<std::string> ccSpells)
+            : WandBlocksCastTrigger(ai, "wand blocks cc"), ccSpells(ccSpells) {}
+        bool IsActive() override;
+        // The same test without the running wand. CastShootAction reads it
+        // so a "shoot" fallback does not restart the wand while a CC waits.
+        bool CcCastWaiting();
+
+    private:
+        std::vector<std::string> ccSpells;
     };
 
 	class NoMovementTrigger : public Trigger

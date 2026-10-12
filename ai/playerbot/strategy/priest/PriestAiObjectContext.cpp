@@ -212,6 +212,7 @@ namespace ai
                 creators["smite"] = [](PlayerbotAI* ai) { return new SmiteTrigger(ai); };
                 creators["holy fire"] = [](PlayerbotAI* ai) { return new HolyFireTrigger(ai); };
                 creators["wand blocks cast"] = [](PlayerbotAI* ai) { return new PriestWandBlocksCastTrigger(ai); };
+                creators["wand blocks cc"] = [](PlayerbotAI* ai) { return new WandBlocksCcTrigger(ai, {"shackle undead"}); };
             }
         };
 

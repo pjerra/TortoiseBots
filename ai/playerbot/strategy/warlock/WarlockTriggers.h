@@ -234,7 +234,8 @@ namespace ai
     {
     public:
         FearTrigger(PlayerbotAI* ai) : HasCcTargetTrigger(ai, "fear") {}
-        virtual bool IsActive() override;
+        // Mark-only gating lives here so "wand blocks cc" sees it too.
+        virtual bool CcTargetPending() override;
     };
 
     class AmplifyCurseTrigger : public BuffTrigger
