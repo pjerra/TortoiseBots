@@ -238,6 +238,7 @@ namespace ai
                 creators["fire ward"] = [](PlayerbotAI* ai) { return new CastFireWardAction(ai); };
                 creators["frost ward"] = [](PlayerbotAI* ai) { return new CastFrostWardAction(ai); };
                 creators["blink"] = [](PlayerbotAI* ai) { return new CastBlinkAction(ai); };
+                creators["blink back"] = [](PlayerbotAI* ai) { return new CastBlinkBackAction(ai); };
                 creators["stop wand"] = [](PlayerbotAI* ai) { return new StopWandAction(ai); };
                 creators["ice barrier"] = [](PlayerbotAI* ai) { return new CastIceBarrierAction(ai); };
                 creators["mana shield"] = [](PlayerbotAI* ai) { return new CastManaShieldAction(ai); };

@@ -64,9 +64,11 @@ void MageStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 
     // Kite escape below the root/stun blink and the frost-nova pack root:
     // a live melee mob inside 8 yd eats a blink, then the nuke loop resumes.
+    // "blink back" turns away from the target first (plain Blink goes the
+    // way the mage faces, which is at its target).
     triggers.push_back(new TriggerNode(
         "blink back",
-        NextAction::array(0, new NextAction("blink", ACTION_HIGH + 5), NULL)));
+        NextAction::array(0, new NextAction("blink back", ACTION_HIGH + 5), NULL)));
 
     // MAG-9: burn the gem EARLY (medium mana, <40%) so it returns mana
     // while the fight still needs it; evocation stays the <15% rescue.
