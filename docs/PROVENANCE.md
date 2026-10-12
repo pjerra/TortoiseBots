@@ -8219,16 +8219,6 @@ pull. New non-combat trigger `sap cc mark` in `RogueStrategy` (stealth, then
 `sap`); `CastSapAction` targets the CC mark out of combat (its combat target,
 `cc target`, only holds mobs already fighting the group) and names the same
 target for its `reach melee` prerequisite.
-## Check mount state acts only when the mount state must change — 2026-10-12
-
-Feature: `CheckMountStateAction::isUseful` runs the mount decision in a
-plan-only mode (`Decide` with `planOnly`) and is useful only when it would
-mount, dismount or cast. A bot already mounted at its best speed on a trip,
-or on foot where the rules say dismount, no longer runs the action as a
-failure every tick (live 2026-10-12: 58 `check mount state` ACTION_LOOP
-anomalies from 47 pool bots in 50 min; the sampled ones were riding at
-~11-13 y/s on `travel target traveling`). `Mount()` now checks location,
-item and spell before it cancels a form or stops the bot.
 
 Source repository: `mod-playerbots/mod-playerbots`
 
@@ -8297,6 +8287,22 @@ no donor code.
 | Feature | Source project | Source commit | Source files | Ported / reimplemented | Reason | Local validation |
 | --- | --- | --- | --- | --- | ---: | --- |
 | Gather trips judged at their own spawn, empty spawns remembered (audit batch 5 finding 3) | `mod-playerbots` | `79bd428` | `src/Ai/Base/Actions/ChooseTravelTargetAction.cpp:42-175` (`getNewTarget`: no gather destination; bots gather what they pass) | Reimplemented: game-object entry sign fix in `GatherTravelDestination::IsActive` (local bug), own-point judgment (`TravelTarget::IsDestinationActive`) and the per-bot empty-spawn memory (`GatherSpotPolicy.h`, `PlayerbotAI::MarkEmptyGatherSpot`, `emptynode` pick gate) are local, the donor has no equivalent | Live 2026-10-12: gather 19.9 % of pool samples, 24 of 793 trips gathered, median trip 48 s, 47 bots ping-ponging node types | Code review + `bash tools/verify_all.sh` (incl. `tools/test_gather_spot_policy.cpp`); build pending; in-game pending |
+
+## Check mount state acts only when the mount state must change — 2026-10-12
+
+Feature: `CheckMountStateAction::isUseful` runs the mount decision in a
+plan-only mode (`Decide` with `planOnly`) and is useful only when it would
+mount, dismount or cast. A bot already mounted at its best speed on a trip,
+or on foot where the rules say dismount, no longer runs the action as a
+failure every tick (live 2026-10-12: 58 `check mount state` ACTION_LOOP
+anomalies from 47 pool bots in 50 min; the sampled ones were riding at
+~11-13 y/s on `travel target traveling`). `Mount()` now checks location,
+item and spell before it cancels a form or stops the bot.
+
+Source repository: `mod-playerbots/mod-playerbots`
+
+Source commit: `79bd4281` (local `playerbots-references/mod-playerbots` checkout).
+
 Source files: `src/Ai/Base/Actions/CheckMountStateAction.cpp`
 (`Execute`: a masterless bot calls `Mount()` only when not mounted, and
 dismounts only when mounted).
