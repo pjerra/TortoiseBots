@@ -7643,3 +7643,44 @@ victim==bot exemption is the fallback if it drags.
 
 Non-blocking "donor Geddon never used this primitive" — ACKNOWLEDGED:
 donor consumers are RS/Ulduar; the Geddon application is novel. Noted.
+
+## WSG flag roles toggle (`AiPlayerbot.WsgFlagRoles`, 2026-10-12)
+
+Feature: opt-in team-level Warsong Gulch roles. Off (`0`, default) keeps the
+existing objective pick, including the owner's 2026-07-27 rule that bots on
+a team with a real player patrol mid-field instead of fetching the enemy
+flag. On (`1`): each team's bots are split by GUID rank into ~40 %
+attackers, ~30 % defenders and the rest mid/escort, recomputed only when the
+match instance or the team size changes (cached in the per-bot `wsg flag
+role` value; the size is the core's O(1) `GetPlayersCountByTeam`).
+
+Donor: mod-playerbots `79bd4281`,
+`src/Ai/Base/Actions/BattleGroundTactics.cpp:2134-2287` (WSG branch of
+`selectObjective`: balanced strategy = 3 of 10 roles defend; defenders hunt
+the enemy carrier or roam the own base hide spots; attackers chase the enemy
+carrier at 70 %, else escort the own carrier, else push the enemy flag).
+
+Source files (module, modified): `ai/playerbot/strategy/actions/BattleGroundTactics.{h,cpp}`
+(`wsgFlagRole`, `selectWsgFlagRoleObjective`, toggle branch in
+`selectObjective`), `ai/playerbot/strategy/values/PvpValues.h` +
+`ValueContext.h` (`wsg flag role` cache value),
+`ai/playerbot/PlayerbotAIConfig.{h,cpp}` + `aiplayerbot.conf.dist.in`
+(`AiPlayerbot.WsgFlagRoles`, fallback `false` = commented template `0`).
+
+Copied / ported / reimplemented: ported (behaviour reimplemented in the
+module's own objective code). Deviations, all deliberate: (a) roles are a
+team-balanced GUID-rank split instead of the donor's per-bot `urand(0,9)`
+`bg role` threshold, so a 4v4 still gets a defender; real players are not
+counted; (b) a third mid/escort share holds mid-field (the patrol the
+toggle-off path already uses) instead of the donor's 5 % attacker free roam;
+(c) defenders hold the own flag room whenever no enemy carrier is up (donor:
+33 % room, else escort/mid), since the gap was "nobody guards the room";
+(d) no team-strategy (offensive/defensive), both-flags 20/80 split or
+graveyard camping - out of scope for this slice.
+
+Reason: audit batch 6 finding 5 - no bot ever guarded its own flag room,
+and with a human on the team no bot went for the enemy flag. The latter is
+the owner's request, so it stays the default and the role split is opt-in.
+
+Validation: code review + `bash tools/verify_all.sh` + `python3
+tools/verify_okf.py`; build pending; in-game pending.
