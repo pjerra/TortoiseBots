@@ -1140,6 +1140,20 @@ ai::TravelPickOutcome ChooseTravelTargetAction::SetBestTargetSliced(Player* requ
                         continue;
                     }
 
+                    // Errand death park (PlayerbotAI::OnDeath): a destination
+                    // the bot died pursuing twice in a row is off for half an
+                    // hour, so the pick lands on another one instead of the
+                    // same nearest errand along the same deadly route. Plain
+                    // per-bot data, four slots; only pool bots ever fill it.
+                    if (!ai->HasRealPlayerMaster() && ai->IsErrandParked((uint32)destination->GetPurpose(),
+                        destination->GetEntry(), WorldTimer::getMSTime()))
+                    {
+                        ai->TellDebug(requester, "Skipping " + destination->GetTitle() + " - died on the way there", "debug travel");
+                        ++rejects["errandpark"];
+                        if (slicing) scan.verdicts[{ destination, position }] = PICK_VERDICT_REJECT;
+                        continue;
+                    }
+
                     if (position->IsEnemyHomeZoneFor(bot->GetTeam()))
                     {
                         ai->TellDebug(requester, "Skipping " + destination->GetTitle() + " - enemy home zone", "debug travel");
@@ -1577,6 +1591,15 @@ bool RefreshTravelTargetAction::Execute(Event& event)
             refreshPoint->getY(), WorldTimer::getMSTime()))
         {
             ai->TellDebug(requester, "Old destination is death-spot avoided.", "debug travel");
+            return false;
+        }
+
+        // Errand death park: never re-point a destination parked after two
+        // deaths on the way to it (see SetBestTargetSliced).
+        if (!target->IsForced() && !ai->HasRealPlayerMaster() &&
+            ai->IsErrandParked(refreshPurposeId, oldDestination->GetEntry(), WorldTimer::getMSTime()))
+        {
+            ai->TellDebug(requester, "Old destination is parked after deaths on the way.", "debug travel");
             return false;
         }
     }

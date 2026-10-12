@@ -8269,3 +8269,8 @@ window.
 
 Validation: code review + `bash tools/verify_all.sh` + `git diff --check`;
 build pending; in-game pending.
+## Errand death park: give up a destination after two deaths on the way (2026-10-12)
+
+| Feature | Source project | Source commit | Source files | Ported / reimplemented | Reason | Local validation |
+| --- | --- | --- | --- | --- | ---: | --- |
+| A pool bot that dies twice within 15 min while pursuing the same non-grind travel destination (purpose + entry) drops the target and parks that destination for 30 min at pick and re-point time | `mod-playerbots` | `79bd428` | `src/Mgr/Travel/TravelMgr.h` (`TravelTarget::incRetry`/`isMaxRetry`), `src/Ai/Base/Actions/MoveToTravelTargetAction.cpp:115-118` (max move retries -> `TRAVEL_STATUS_COOLDOWN`), `src/Ai/Base/Actions/ChooseTravelTargetAction.cpp:451` (`SetCurrentTarget` refuses a max-retry destination) | Reimplemented: the donor's "give the target up after N failed attempts" with a death on the way counted as the failed attempt; the donor has no per-destination death memory of its own. Kept as plain per-bot data (`ai/playerbot/DeathClusterPolicy.h` `ErrandPark`, four slots) beside the #398 death-spot list; module files `PlayerbotAI.{h,cpp}` (`OnDeath`), `strategy/actions/ChooseTravelTargetAction.cpp` (`SetBestTargetSliced`, `RefreshTravelTargetAction`), test `tools/test_death_cluster_policy.cpp` | Batch 5 live audit (500 pool bots, 27.8 min): 80% of deaths were repeat deaths on one errand at the same spot (hand-in, gather, trainer), up to 19 per bot; the death-spot rules only look at the destination point, never the route | Code review + build pending; in-game pending. `bash tools/verify_all.sh` (incl. the extended death-cluster policy test) and `git diff --check` clean |

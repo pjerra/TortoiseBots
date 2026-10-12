@@ -158,4 +158,87 @@ namespace ai
     {
         return purposeId == grindId || (purposeId & questMask) != 0 || (purposeId & gatherMask) != 0;
     }
+
+    // Errand death park: the rules above key on the spot the bot died at, so
+    // a bot that dies on the ROUTE to a far hand-in, node or trainer keeps the
+    // errand - the destination point is nowhere near the death - and the next
+    // pick hands it the same nearest destination along the same path. Oct 2026
+    // pool (500 bots, 27.8 min): 80 % of all deaths were a bot dying 2+ times
+    // on one errand (Molor 19 deaths in 26 min on the way to one taker). A
+    // second death on the same destination (purpose + entry) inside the window
+    // parks that destination for the bot; the pick then lands elsewhere. This
+    // is the donor's "give the target up after N failed attempts" (TravelTarget
+    // retry cap -> cooldown) with a death counted as the failed attempt.
+    // Grind is left to the lethal-kind and death-cluster rules above.
+    std::uint32_t const kErrandDeathsToPark = 2;
+
+    std::uint32_t const kErrandDeathWindowMs = 15u * 60u * 1000u; // deaths this far apart belong to one errand
+
+    std::uint32_t const kErrandParkMs = 30u * 60u * 1000u; // how long the destination stays parked
+
+    std::uint32_t const kErrandParkSlots = 4; // parked destinations kept per bot; the oldest live one is replaced
+
+    struct ErrandPark
+    {
+        std::uint32_t purposeId = 0;
+        std::int32_t entry = 0;
+        std::uint32_t expiryMs = 0; // 0 = slot free
+    };
+
+    // Death count on the errand after one more death now: the same
+    // destination inside the window extends the streak, anything else starts
+    // a fresh one. Wrap-safe like NextDeathEscapeCount.
+    inline std::uint32_t NextErrandDeathCount(std::uint32_t prevCount, std::uint32_t prevPurposeId,
+        std::int32_t prevEntry, std::uint32_t purposeId, std::int32_t entry, std::uint32_t nowMs,
+        std::uint32_t lastDeathMs, std::uint32_t windowMs = kErrandDeathWindowMs)
+    {
+        if (prevCount > 0 && prevPurposeId == purposeId && prevEntry == entry && (nowMs - lastDeathMs) <= windowMs)
+            return prevCount + 1;
+        return 1;
+    }
+
+    // Whether destination (purposeId, entry) is parked for this bot now.
+    inline bool IsErrandParked(std::uint32_t purposeId, std::int32_t entry, std::uint32_t nowMs,
+        ErrandPark const* parks, std::uint32_t parkCount)
+    {
+        for (std::uint32_t i = 0; i < parkCount; ++i)
+        {
+            if (parks[i].purposeId == purposeId && parks[i].entry == entry && DeathSpotActive(nowMs, parks[i].expiryMs))
+                return true;
+        }
+        return false;
+    }
+
+    // Park one more destination: refresh its own slot when it is already
+    // parked, else take a free/expired slot, else replace the oldest live one.
+    inline void AddErrandPark(ErrandPark* parks, std::uint32_t parkCount, std::uint32_t purposeId, std::int32_t entry,
+        std::uint32_t nowMs, std::uint32_t durationMs = kErrandParkMs)
+    {
+        std::uint32_t slot = parkCount;
+        for (std::uint32_t i = 0; i < parkCount && slot == parkCount; ++i)
+        {
+            if (parks[i].purposeId == purposeId && parks[i].entry == entry && DeathSpotActive(nowMs, parks[i].expiryMs))
+                slot = i;
+        }
+        for (std::uint32_t i = 0; i < parkCount && slot == parkCount; ++i)
+        {
+            if (!DeathSpotActive(nowMs, parks[i].expiryMs))
+                slot = i;
+        }
+        if (slot == parkCount)
+        {
+            slot = 0;
+            for (std::uint32_t i = 1; i < parkCount; ++i)
+            {
+                if (static_cast<std::int32_t>(parks[i].expiryMs - nowMs) <
+                    static_cast<std::int32_t>(parks[slot].expiryMs - nowMs))
+                    slot = i;
+            }
+        }
+        parks[slot].purposeId = purposeId;
+        parks[slot].entry = entry;
+        parks[slot].expiryMs = nowMs + durationMs;
+        if (parks[slot].expiryMs == 0) // 0 marks a free slot; nudge the rare wrap onto it
+            parks[slot].expiryMs = 1;
+    }
 }

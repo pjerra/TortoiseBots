@@ -26,6 +26,14 @@ using ai::kDeathAvoidRadiusYd;
 using ai::kDeathAvoidSpots;
 using ai::kDeathAvoidWindowMs;
 using ai::NextDeathEscapeCount;
+using ai::AddErrandPark;
+using ai::ErrandPark;
+using ai::IsErrandParked;
+using ai::kErrandDeathWindowMs;
+using ai::kErrandDeathsToPark;
+using ai::kErrandParkMs;
+using ai::kErrandParkSlots;
+using ai::NextErrandDeathCount;
 
 namespace
 {
@@ -194,6 +202,58 @@ int main()
         CHECK(!IsDeathGatedPurpose(GATHER_FISH, GRIND, questMask, gatherMask));
         CHECK(!IsDeathGatedPurpose(VENDOR, GRIND, questMask, gatherMask));
         CHECK(IsDeathGatedPurpose(GRIND, GRIND, questMask, gatherMask));
+    }
+
+    // -------------------------------------------------------------
+    // Test 9: errand death streak - same destination inside the window
+    // -------------------------------------------------------------
+    {
+        CHECK(kErrandDeathsToPark == 2);
+        CHECK(kErrandDeathWindowMs == 15u * 60u * 1000u);
+        CHECK(kErrandParkMs == 30u * 60u * 1000u);
+        std::int32_t const TAKER = 1104; // a quest taker entry
+        std::uint32_t count = NextErrandDeathCount(0, 0, 0, QUEST_TAKER, TAKER, NOW, 0);
+        CHECK(count == 1);
+        // Molor shape: dead again 90 s later on the same hand-in -> park.
+        count = NextErrandDeathCount(count, QUEST_TAKER, TAKER, QUEST_TAKER, TAKER, NOW + 90000, NOW);
+        CHECK(count == kErrandDeathsToPark);
+        // Another destination, another purpose or a stale death starts over.
+        CHECK(NextErrandDeathCount(1, QUEST_TAKER, TAKER, QUEST_TAKER, TAKER + 1, NOW + 1000, NOW) == 1);
+        CHECK(NextErrandDeathCount(1, QUEST_TAKER, TAKER, VENDOR, TAKER, NOW + 1000, NOW) == 1);
+        CHECK(NextErrandDeathCount(1, QUEST_TAKER, TAKER, QUEST_TAKER, TAKER, NOW + kErrandDeathWindowMs + 1, NOW) == 1);
+        // Wrap-safe: the previous death just before the timer wrapped.
+        std::uint32_t const before = 0xFFFFFFFFu - 30000u;
+        CHECK(NextErrandDeathCount(1, GATHER_MINE, -1731, GATHER_MINE, -1731, 30000u, before) == 2);
+    }
+
+    // -------------------------------------------------------------
+    // Test 10: parked destinations - key, expiry, slot reuse
+    // -------------------------------------------------------------
+    {
+        CHECK(kErrandParkSlots == 4);
+        ErrandPark parks[kErrandParkSlots] = {};
+        CHECK(!IsErrandParked(QUEST_TAKER, 1104, NOW, parks, kErrandParkSlots));
+        AddErrandPark(parks, kErrandParkSlots, QUEST_TAKER, 1104, NOW);
+        CHECK(IsErrandParked(QUEST_TAKER, 1104, NOW + 1000, parks, kErrandParkSlots));
+        // Same entry under another purpose, or another entry, stays open.
+        CHECK(!IsErrandParked(QUEST_GIVER, 1104, NOW + 1000, parks, kErrandParkSlots));
+        CHECK(!IsErrandParked(QUEST_TAKER, 1105, NOW + 1000, parks, kErrandParkSlots));
+        CHECK(!IsErrandParked(QUEST_TAKER, 1104, NOW + kErrandParkMs, parks, kErrandParkSlots));
+        // Re-parking the same destination refreshes its slot, not a new one.
+        AddErrandPark(parks, kErrandParkSlots, QUEST_TAKER, 1104, NOW + 60000);
+        std::uint32_t used = 0;
+        for (auto const& park : parks)
+            used += park.expiryMs != 0 ? 1 : 0;
+        CHECK(used == 1);
+        CHECK(IsErrandParked(QUEST_TAKER, 1104, NOW + kErrandParkMs + 1000, parks, kErrandParkSlots));
+        // A fifth live park replaces the oldest one.
+        ErrandPark full[kErrandParkSlots] = {};
+        for (std::uint32_t i = 0; i < kErrandParkSlots; ++i)
+            AddErrandPark(full, kErrandParkSlots, VENDOR, 100 + (std::int32_t)i, NOW + i * 1000);
+        AddErrandPark(full, kErrandParkSlots, GATHER_HERB, -1617, NOW + 10000);
+        CHECK(!IsErrandParked(VENDOR, 100, NOW + 10000, full, kErrandParkSlots));
+        CHECK(IsErrandParked(VENDOR, 101, NOW + 10000, full, kErrandParkSlots));
+        CHECK(IsErrandParked(GATHER_HERB, -1617, NOW + 10000, full, kErrandParkSlots));
     }
 
     std::cout << "All death-cluster escalation tests passed.\n";

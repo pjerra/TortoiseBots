@@ -818,6 +818,19 @@ public:
     void ClearHostileTownDeaths() { hostileTownDeathCount_ = 0; }
     uint32 hostileTownDeathCount_ = 0;
     uint32 hostileTownDeathMs_ = 0;
+    // Errand death park (see OnDeath): the non-grind destination (purpose +
+    // entry) the bot last died pursuing, how often in a row, and the
+    // destinations parked after two such deaths. Pool bots without a real
+    // player master only; in memory, never saved.
+    uint32 errandDeathPurpose_ = 0;
+    int32 errandDeathEntry_ = 0;
+    uint32 errandDeathCount_ = 0;
+    uint32 errandDeathMs_ = 0;
+    ai::ErrandPark errandParks_[ai::kErrandParkSlots] = {};
+    bool IsErrandParked(uint32 purposeId, int32 entry, uint32 nowMs) const
+    {
+        return ai::IsErrandParked(purposeId, entry, nowMs, errandParks_, ai::kErrandParkSlots);
+    }
     // A player (usually another random bot) that killed this bot recently: name +
     // expiry. While set, the victim does not proactively engage that killer
     // (EnemyPlayersValue::IsValid refuses it) so a same-spot trade-kill loop

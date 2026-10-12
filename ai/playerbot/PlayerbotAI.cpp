@@ -1629,6 +1629,43 @@ void PlayerbotAI::OnDeath()
                 prevKillerEntry_ = lastKiller_.entry;
                 prevKillerMs_ = nowMs;
             }
+            // Errand death park: a second death inside fifteen minutes while
+            // pursuing the same non-grind destination (hand-in, quest giver or
+            // objective, node, trainer, vendor...) parks that destination for
+            // half an hour and drops the target, so the next pick goes
+            // elsewhere instead of walking the same deadly route again. Runs
+            // before the cluster escape below, which may drop the target.
+            // Pool bots without a real player master only; a forced target
+            // (an explicit order) is never counted or parked.
+            if (context && !HasRealPlayerMaster() && sRandomBotFacade.IsRandomBot(bot))
+            {
+                TravelTarget* errandTarget = AI_VALUE(TravelTarget*, "travel target");
+                TravelDestination* errandDest = errandTarget ? errandTarget->GetDestination() : nullptr;
+                uint32 const errandPurpose = errandDest ? (uint32)errandDest->GetPurpose() : 0;
+                int32 const errandEntry = errandDest ? errandDest->GetEntry() : 0;
+                if (errandDest && !errandTarget->IsForced() && errandEntry != 0 &&
+                    errandPurpose != (uint32)TravelDestinationPurpose::None &&
+                    errandPurpose != (uint32)TravelDestinationPurpose::Grind &&
+                    typeid(*errandDest) != typeid(NullTravelDestination))
+                {
+                    uint32 const nowErrandMs = WorldTimer::getMSTime();
+                    errandDeathCount_ = ai::NextErrandDeathCount(errandDeathCount_, errandDeathPurpose_,
+                        errandDeathEntry_, errandPurpose, errandEntry, nowErrandMs, errandDeathMs_);
+                    errandDeathPurpose_ = errandPurpose;
+                    errandDeathEntry_ = errandEntry;
+                    errandDeathMs_ = nowErrandMs;
+                    if (errandDeathCount_ >= ai::kErrandDeathsToPark)
+                    {
+                        errandDeathCount_ = 0; // the next death on it starts a fresh streak
+                        ai::AddErrandPark(errandParks_, ai::kErrandParkSlots, errandPurpose, errandEntry, nowErrandMs);
+                        sPlayerbotAIConfig.logEvent(this, "ErrandParked", errandDest->GetTitle(), WorldPosition(bot).GetAreaName());
+                        TellDebug(GetMaster(), "Giving up on " + errandDest->GetTitle() + " for a while - I died on the way twice", "debug travel");
+                        sTravelMgr.SetNullTravelTarget(errandTarget);
+                        errandTarget->SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
+                        errandTarget->SetExpireIn(1000);
+                    }
+                }
+            }
             // Death-cluster escape: kDeathClusterDeaths deaths inside one small area
             // within a window mean the bot is looping on a camp it cannot survive
             // there, whatever the killer kind is. The per-kind rule above only trips
