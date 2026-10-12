@@ -1,6 +1,7 @@
 #include "playerbot/playerbot.h"
 #include "playerbot/GroupMembers.h"
 #include "playerbot/GroupBuffPolicy.h"
+#include "playerbot/HealerManaPolicy.h"
 #include "playerbot/MainTankPolicy.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/ReadyRebuffPolicy.h"
@@ -71,11 +72,11 @@ bool HealerShouldAttackTrigger::IsActive()
     if (!checkMana)
         return true;
 
-    // Easy fights (low balance) keep a large reserve; hard ones allow more.
-    // 65 is the "high mana" line used by HighManaTrigger.
-    uint8 balance = AI_VALUE(uint8, "balance");
-    uint32 manaThreshold = balance <= 50 ? 85 : (balance <= 100 ? 65 : sPlayerbotAIConfig.mediumMana);
-    return !AI_VALUE2(bool, "has mana", "self target") || AI_VALUE2(uint8, "mana", "self target") >= manaThreshold;
+    // Balance-scaled reserve (HealerManaPolicy.h): hard fights (low balance)
+    // keep 85 %, even and easy ones 70 % - deliberately above the donor's
+    // 65 % / 40 % (owner decision 2026-10-12).
+    return HealerDpsManaAllows(AI_VALUE2(bool, "has mana", "self target"),
+        AI_VALUE2(uint8, "mana", "self target"), AI_VALUE(uint8, "balance"));
 }
 
 bool WandBlocksCastTrigger::IsWanding()

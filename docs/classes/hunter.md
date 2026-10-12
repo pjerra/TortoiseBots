@@ -29,6 +29,7 @@ Hunters excel at sustained single-target ranged DPS, pet off-tanking, snares, an
    - *Aimed Shot* when the MM talent is known, otherwise *Arcane Shot* (never both), on cooldown.
    - *Steady Shot* ([Turtle], taught by the hunter trainer at levels 36-60; highest known rank) as the filler below Aimed/Arcane (`ACTION_NORMAL - 1`, above plain Auto Shot). It is a timed cast with no cooldown. The core pauses the repeating Auto Shot during a timed cast and raises the ranged timer to a 500 ms windup on resume, so the `steady shot` trigger and action fire only when the ranged timer exceeds the real cast time + 500 ms + a 50 ms (one world tick) margin (`HunterSteadyShotFitsAutoShotWindow`). The real cast is the base 1 s scaled by ranged haste plus the flat 500 ms the core adds to every ranged-attribute cast, so in practice Steady Shot fits only right after an Auto Shot and only with an effective ranged speed above about 2 s. Otherwise the bot keeps auto-shooting and Auto Shot is not delayed. No toggle: it completes the existing ranged kit, like Arcane Shot.
    - *Multi-Shot* when AoE is permitted and multiple enemies are engaged.
+   - *Volley* on packs of 3+ attackers; it waits in a party while the tank has no threat on a mob in the fight or the bot holds half the tank's threat (`threat` behaviour).
    - Keeps *Serpent Sting* ticking on high-health targets (skips on low-health mobs to conserve mana).
    - *Serpent Sting* is the default sting. *Viper Sting* (drains the target's mana to the hunter over time) replaces it only when the hunter's own mana is below 50% and the target has mana (>= 10%); at healthy mana a caster mob still gets Serpent Sting. A manual `sting viper` order skips the own-mana gate, and a manual `sting serpent` order always allows Serpent Sting.
 3. **Threat Drop:** Climbing toward the top of the threat table without holding aggro fires *Feign Death* (medium threat); high threat feigns in raids too. The bot stands back up on its own via the feign-threat action node.
@@ -70,6 +71,7 @@ Hunters excel at sustained single-target ranged DPS, pet off-tanking, snares, an
   - When a target is crowd-controlled (e.g. *Polymorph* or *Freezing Trap*), the bot's pet is prevented from attacking the CC'd mob, preventing accidental breaks.
 - **Crowd Control:**
   - Deploys *Freezing Trap* when assigned CC via `.bot action cc <mark>`.
+  - When its mark is a beast it can *Scare Beast*, it never hits that mark with an area attack (*Multi-Shot*, *Volley*, ...) while other enemies are left, because it CCs that mob next. Once only CC marks are left, AoE on them is allowed.
   - Uses *Concussive Shot* to snare fleeing targets.
 
 ---

@@ -539,8 +539,12 @@ static bool HandleStay(ChatHandler* handler, char const* args)
     return true;
 }
 
+static void RelaxTacticalMovement(PlayerbotAI* ai);
+
+// relaxMovement: the order sends the bot at a target, so it ends a stay the
+// same way the party-wide `.bot action` form does (RelaxTacticalMovement).
 static bool HandleNamedAction(ChatHandler* handler, char const* args, char const* command,
-    char const* action, char const* confirmation)
+    char const* action, char const* confirmation, bool relaxMovement = false)
 {
     Player* requester = Requester(handler);
     Player* bot = nullptr;
@@ -558,6 +562,9 @@ static bool HandleNamedAction(ChatHandler* handler, char const* args, char const
         handler->PSendSysMessage("Bot %s has no AI yet.", name.c_str());
         return true;
     }
+
+    if (relaxMovement)
+        RelaxTacticalMovement(ai);
 
     ai::Event event(command, "", requester);
     if (!ai->DoSpecificAction(action, event, true))
@@ -589,13 +596,10 @@ static void RelaxTacticalMovement(PlayerbotAI* ai)
     if (!ai)
         return;
 
-    // Stay is now kept in all three engines by the central movement setter;
-    // remove its reaction copy as well or it can survive a tactical request
-    // and be mistaken for an active hold during the next transition.
-    ai->ChangeStrategy("-stay", BotState::BOT_STATE_REACTION);
-    ai->ChangeStrategy("-stay", BotState::BOT_STATE_NON_COMBAT);
-    ai->ChangeStrategy("-stay,-follow", BotState::BOT_STATE_COMBAT);
+    // EndFlee first: a "passive" it drops is not a movement mode, so the
+    // stay release below must not count it.
     EndFlee(ai);
+    ai->EndStayForOrder();
 }
 
 static bool BindMovementMaster(Player* requester, Player* bot)
@@ -630,7 +634,7 @@ static bool HandleReady(ChatHandler* handler, char const* args)
 
 static bool HandleAttack(ChatHandler* handler, char const* args)
 {
-    return HandleNamedAction(handler, args, "attack", "attack my target", "will attack your selected target");
+    return HandleNamedAction(handler, args, "attack", "attack my target", "will attack your selected target", true);
 }
 
 static bool IsPublicFormation(std::string const& formation)

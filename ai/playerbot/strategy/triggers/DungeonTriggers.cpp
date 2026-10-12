@@ -13,6 +13,7 @@
 #include "playerbot/strategy/actions/UseItemAction.h"
 #include "playerbot/CombatSpreadPolicy.h"
 #include "playerbot/DebuffSpreadPolicy.h"
+#include "playerbot/DragonFlankPolicy.h"
 #include "playerbot/BombRunoutPolicy.h"
 #include "Maps/GridNotifiers.h"
 #include "Maps/GridNotifiersImpl.h"
@@ -426,58 +427,57 @@ bool FourHorsemenMarkTrigger::IsActive()
     return false;
 }
 
-namespace
+Unit* DragonBreathRiskTrigger::FindDragon(PlayerbotAI* ai, Player* bot, bool& ownTarget)
 {
-bool IsRaidDragonEntry(uint32 entry)
-{
-    switch (entry)
+    ownTarget = false;
+    AiObjectContext* context = ai->GetAiObjectContext();
+    Unit* target = AI_VALUE(Unit*, "current target");
+    if (target && sServerFacade.IsAlive(target) && target->IsCreature() &&
+        IsRaidDragonEntry(target->GetEntry()))
     {
-        case 10184: // Onyxia
-        case 14601: // Ebonroc
-        case 11981: // Flamegor
-        case 11983: // Firemaw
-        case 11583: // Nefarian
-        case 13020: // Vaelastrasz the Corrupt
-        case 60748: // Solnius (Emerald Sanctum, Acid Breath 24839)
-            return true;
-        default:
-            return false;
+        ownTarget = true;
+        return target;
     }
+    // Healers (no target) and bots on whelps/adds: take the encounter's
+    // dragon from the cached group attackers (no world scan). Every listed
+    // dragon is an instance boss, so the open world skips the list.
+    Map* map = bot->GetMap();
+    if (!map || !map->IsDungeon())
+        return nullptr;
+    const std::list<ObjectGuid> attackers = AI_VALUE(std::list<ObjectGuid>, "attackers");
+    for (const ObjectGuid& guid : attackers)
+    {
+        Unit* unit = ai->GetUnit(guid);
+        if (unit && unit->IsCreature() && sServerFacade.IsAlive(unit) &&
+            IsRaidDragonEntry(unit->GetEntry()))
+            return unit;
+    }
+    return nullptr;
 }
-} // namespace
 
 bool DragonBreathRiskTrigger::IsActive()
 {
     if (!bot->IsInWorld() || bot->IsBeingTeleported() || !sServerFacade.IsAlive(bot))
         return false;
-    Unit* target = GetTarget();
-    if (!target || !sServerFacade.IsAlive(target) || !target->IsCreature())
-        return false;
-    if (!IsRaidDragonEntry(target->GetEntry()))
+    bool ownTarget = false;
+    Unit* dragon = FindDragon(ai, bot, ownTarget);
+    if (!dragon)
         return false;
     // The head-holding tank stays; everyone else flanks — including
     // off-tanks that are not the victim (Firemaw/Ebonroc/Flamegor spare
     // tanks, mod-playerbots parity). Tank positioning itself is an
-    // explicit .bot raid tankface command.
-    if (ai->IsTank(bot))
-    {
-        Unit* victim = target->GetVictim();
-        if (!victim || victim->getObjectGuid() == bot->getObjectGuid())
-            return false;
-    }
-    const float dist = bot->GetDistance(target);
+    // explicit .bot raid tankface command. Bots that do not target the
+    // dragon (healers, whelp/add killers) flank only while it is grounded
+    // and tanked; tanks on other targets hold their adds.
+    Unit* victim = dragon->GetVictim();
+    bool const airborne = dragon->HasAura(17131) || dragon->IsFlying();
+    if (!ShouldFlankDragon(ai->IsTank(bot), ownTarget, victim != nullptr,
+        victim == bot, airborne))
+        return false;
+    const float dist = bot->GetDistance(dragon);
     if (dist > sPlayerbotAIConfig.spellDistance + 10.0f)
         return false;
-    // Angle between the dragon's facing and the bot, in radians.
-    float facing = target->GetOrientation();
-    float toBot = target->GetAngle(bot);
-    float diff = fabs(toBot - facing);
-    while (diff > M_PI_F)
-        diff = fabs(diff - 2.0f * M_PI_F);
-    // Front 90-degree cone (breath/cleave) or rear 60-degree tail cone.
-    const float frontHalf = M_PI_F / 4.0f;
-    const float rearHalf = M_PI_F / 6.0f;
-    return diff < frontHalf || diff > (M_PI_F - rearHalf);
+    return IsInDragonCone(dragon->GetOrientation(), dragon->GetAngle(bot));
 }
 
 bool RaidSpreadNeededTrigger::IsActive()

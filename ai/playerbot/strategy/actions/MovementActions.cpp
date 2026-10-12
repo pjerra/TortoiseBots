@@ -19,6 +19,7 @@
 #include "playerbot/TravelRepickPolicy.h"
 #include "playerbot/AvoidAoePolicy.h"
 #include "playerbot/PoolFleePolicy.h"
+#include "playerbot/JumpPolicy.h"
 #include "Database/DBCStores.h"
 
 using namespace ai;
@@ -905,7 +906,7 @@ Unit* MovementAction::GetMover(Player* bot)
     return bot;
 }
 
-bool MovementAction::MoveTo2(const WorldPosition& endPos, bool idle, bool react, bool noPath, bool ignoreEnemyTargets)
+bool MovementAction::MoveTo2(const WorldPosition& endPos, bool idle, bool react, bool noPath, bool ignoreEnemyTargets, PackHoldResult* packHold)
 {
     LastMovement& lastMove = AI_VALUE(LastMovement&, "last movement");
 
@@ -1012,7 +1013,7 @@ bool MovementAction::MoveTo2(const WorldPosition& endPos, bool idle, bool react,
         lastMove.setPath(movePath);
     }
 
-    movePath.ClipPath(ai, mover, ignoreEnemyTargets);
+    movePath.ClipPath(ai, mover, ignoreEnemyTargets, packHold);
 
     if(ai->HasStrategy("debug move", BotState::BOT_STATE_NON_COMBAT))
     {
@@ -1467,6 +1468,11 @@ bool MovementAction::Follow(Unit* target, float distance, float angle)
     AI_VALUE(LastMovement&, "last movement").Set(target);
     ClearIdleState();
 
+
+    // A follower stranded on a dungeon navmesh island (a dais the core follow
+    // cannot leave) steps down off the edge; see StepDownOffLedge.
+    if (tDist > distance + 3.0f && StepDownOffLedge(target))
+        return true;
 
     // Find jump shortcut
     if (ai->HasStrategy("follow jump", BotState::BOT_STATE_NON_COMBAT) && ai->AllowActivity())
@@ -2122,6 +2128,164 @@ bool MovementAction::IsHazardNearPosition(const WorldPosition& position, HazardP
     }
 
     return false;
+}
+
+bool MovementAction::StepDownOffLedge(Unit* target)
+{
+    // Dungeon navmeshes have islands: raised daises and ledges the mesh does
+    // not link to the floor (Uldaman's Hall of the Keepers has 17, about 4 yd
+    // up). A bot summoned or teleported onto one gets only a partial path to
+    // its target that ends about a yard from it; the core's chase and follow
+    // stand still on such a path in sight of the target and the reach waited
+    // out the whole fight (Uldaman VM run 2026-10-12, the party on the dais
+    // above the Rockchewer). Owner decision 2026-10-12: in dungeons only, the
+    // bot steps down off the ledge like a player does. Nothing here runs
+    // outside instances, and the probe is paced by ledgeStepDown so no bot
+    // searches on every tick.
+    if (!target || !target->IsInWorld() || target->GetMapId() != bot->GetMapId())
+        return false;
+
+    Map* map = bot->GetMap();
+    if (!map || !map->IsDungeon() || bot->GetTransport() || bot->IsTaxiFlying() || bot->IsFlying() || bot->IsInWater())
+        return false;
+
+    if (!ai->CanMove() || !ai->IsSafe(target) || bot->IsNonMeleeSpellCasted(true, false, true))
+        return false;
+
+    // Not while something is hitting the bot: stepping away would drag the
+    // fight off the tank, and a creature in melee contact is reachable anyway.
+    bool beingHit = false;
+    for (Unit* attacker : bot->GetAttackers())
+    {
+        if (attacker && attacker->IsAlive() && attacker->CanReachWithMeleeAutoAttack(bot))
+        {
+            beingHit = true;
+            break;
+        }
+    }
+    if (beingHit)
+        return false;
+
+    uint32 const nowMs = WorldTimer::getMSTime();
+    if (!ledgeStepDown.Due(nowMs, bot->GetPositionX(), bot->GetPositionY(), target->GetObjectGuid().GetRawValue()))
+        return false;
+
+    LedgePoint from;
+    from.x = bot->GetPositionX();
+    from.y = bot->GetPositionY();
+    from.z = bot->GetPositionZ();
+    LedgePoint goal;
+    goal.x = target->GetPositionX();
+    goal.y = target->GetPositionY();
+    goal.z = target->GetPositionZ();
+
+    PathFinder path(bot);
+    path.calculate(goal.x, goal.y, goal.z, false);
+    bool const incomplete = (path.getPathType() & PATHFIND_INCOMPLETE) != 0;
+    float partialEndDistance = 0.0f;
+    Movement::PointsArray const& points = path.getPath();
+    if (!points.empty())
+    {
+        float const dx = points.back().x - from.x;
+        float const dy = points.back().y - from.y;
+        float const dz = points.back().z - from.z;
+        partialEndDistance = std::sqrt(dx * dx + dy * dy + dz * dz);
+    }
+
+    bool const stuck = UseLedgeStepDown(true, incomplete, partialEndDistance, beingHit);
+    if (!stuck)
+    {
+        ledgeStepDown.Probed(nowMs, LedgeProbeResult::NotStuck);
+        return false;
+    }
+
+    auto const groundAt = [map](float x, float y, float z, float& outZ)
+    {
+        if (!MaNGOS::IsValidMapCoord(x, y, z))
+            return false;
+        float const height = map->GetHeight(x, y, z + 0.5f, true, kLedgeStepMaxDrop + 2.0f);
+        if (height <= INVALID_HEIGHT)
+            return false;
+        outZ = height;
+        return true;
+    };
+    // No lava or slime under the landing point (GetHeight returns the bed
+    // under a liquid, which can sit inside the height band) and no AoE hazard.
+    auto const landingSafe = [this, map](LedgePoint const& point)
+    {
+        GridMapLiquidData liquid{};
+        // Half a yard above the bed: a ray from exactly on it can miss its own floor (t > 0, WorldModel.cpp:75; cf. GridMap.cpp:1212).
+        if (map->GetTerrain()->getLiquidStatus(point.x, point.y, point.z + 0.5f, MAP_ALL_LIQUIDS, &liquid) != LIQUID_MAP_NO_WATER &&
+            (liquid.type_flags & (MAP_LIQUID_TYPE_MAGMA | MAP_LIQUID_TYPE_SLIME)))
+            return false;
+        return !IsHazardNearPosition(WorldPosition(bot->GetMapId(), point.x, point.y, point.z));
+    };
+    // Each leg is checked low (half a yard up, so a railing or a low wall
+    // blocks it) and at eye height (so a wall or an overhang does).
+    float const eyeHeight = bot->GetCollisionHeight();
+    auto const clearLine = [map, eyeHeight](LedgePoint const& a, LedgePoint const& b)
+    {
+        return map->isInLineOfSight(a.x, a.y, a.z + 0.5f, b.x, b.y, b.z + 0.5f, true) &&
+            map->isInLineOfSight(a.x, a.y, a.z + eyeHeight, b.x, b.y, b.z + eyeHeight, true);
+    };
+    auto const pathFromLanding = [this, &goal](LedgePoint const& point)
+    {
+        PathFinder probe(bot);
+        probe.calculate(Vector3(point.x, point.y, point.z), Vector3(goal.x, goal.y, goal.z), false);
+        LedgePathProbe result;
+        result.normal = probe.getPathType() == PATHFIND_NORMAL;
+        Movement::PointsArray const& steps = probe.getPath();
+        if (!steps.empty())
+        {
+            result.hasStart = true;
+            result.start.x = steps.front().x;
+            result.start.y = steps.front().y;
+            result.start.z = steps.front().z;
+        }
+        return result;
+    };
+
+    LedgeStepDownChoice const choice = SelectLedgeStepDownPoint(from, goal, groundAt, landingSafe, clearLine, pathFromLanding);
+    ledgeStepDown.Probed(nowMs, choice.valid ? LedgeProbeResult::Stepped : LedgeProbeResult::NoFloor);
+    if (!choice.valid)
+    {
+        ai->TellDebug(GetMaster(), "Stuck on a ledge above " + std::string(target->GetName()) + " - no floor to step down to", "debug move");
+        return false;
+    }
+
+    bot->HandleEmoteState(0);
+    if (bot->GetStandState() != UNIT_STAND_STATE_STAND)
+        bot->SetStandState(UNIT_STAND_STATE_STAND);
+
+    // A raw two-leg spline, no navmesh (it has no link off the island, so a
+    // path-finding move would stop at the edge again): flat out over the edge
+    // at the bot's own height, then down to the floor. A straight line from
+    // foot to foot would cut through the platform itself. path[0] is the
+    // current position, as the core's spline expects.
+    std::vector<G3D::Vector3> legs;
+    legs.push_back(G3D::Vector3(from.x, from.y, from.z));
+    legs.push_back(G3D::Vector3(choice.edge.x, choice.edge.y, choice.edge.z));
+    legs.push_back(G3D::Vector3(choice.point.x, choice.point.y, choice.point.z));
+
+    MotionMaster& mm = *bot->GetMotionMaster();
+    mm.Clear(false, true);
+    mm.MoveIdle(); // A raw spline does not restore the default movement generator.
+    Movement::MoveSplineInit init(*bot, "StepDownOffLedge");
+    init.MovebyPath(legs);
+    init.SetWalk(false);
+    init.Launch();
+
+    float const ex = choice.edge.x - from.x;
+    float const ey = choice.edge.y - from.y;
+    float const lx = choice.point.x - choice.edge.x;
+    float const ly = choice.point.y - choice.edge.y;
+    float const lz = choice.point.z - choice.edge.z;
+    WaitForReach(std::sqrt(ex * ex + ey * ey) + std::sqrt(lx * lx + ly * ly + lz * lz));
+
+    ai->TellDebug(GetMaster(), "Stepping down off a ledge towards " + std::string(target->GetName()), "debug move");
+    sPlayerbotAIConfig.logEvent(ai, "LedgeStepDown", target->GetName(),
+        "drop=" + std::to_string((int)(from.z - choice.point.z)) + "|map=" + std::to_string(bot->GetMapId()));
+    return true;
 }
 
 bool MovementAction::GeneratePathAvoidingHazards(std::vector<WorldPosition>& movePath)
@@ -2945,6 +3109,11 @@ bool JumpAction::isUseful()
 
 bool JumpAction::Execute(ai::Event &event)
 {
+    // Issue #125: no automatic jumps inside dungeons/raids (strategies);
+    // an explicit player `jump` command (event has an owner) still works.
+    if (!ai::JumpAllowedOnMap(bot->GetMap() && bot->GetMap()->IsDungeon(), event.GetOwner() != nullptr))
+        return false;
+
     // don't jump while casting without real player command
     if (!event.GetOwner() && bot->IsNonMeleeSpellCasted(false, false, true))
         return false;

@@ -157,6 +157,7 @@ namespace ai
 	{
 	public:
 	    CastHurricaneAction(PlayerbotAI* ai) : CastSpellAction(ai, "hurricane") {}
+	    virtual ActionThreatType getThreatType() override { return ActionThreatType::ACTION_THREAT_AOE; }
 	};
 
 	class CastMoonfireAction : public CastRangedDebuffSpellAction

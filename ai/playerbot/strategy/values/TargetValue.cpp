@@ -1,6 +1,7 @@
 
 #include "playerbot/playerbot.h"
 #include "TargetValue.h"
+#include "CcMarkHoldPolicy.h"
 
 #include "playerbot/ServerFacade.h"
 #include "PossibleAttackTargetsValue.h"
@@ -61,10 +62,7 @@ namespace
         }
     };
 
-    // Grace for a CC mark at the start of its fight: the CC bot gets this
-    // long (whole seconds of creature combat) to land its first CC before
-    // the mark counts as a free enemy.
-    constexpr time_t CcGraceSeconds = 3;
+    // The hold window (CcMarkHoldSeconds) lives in CcMarkHoldPolicy.h.
     // A mob running in may be a few yards outside the CC spell's range.
     constexpr float CcGraceRangeSlack = 5.0f;
     // Cast-time CC a CC bot opens with on its mark (Sap and traps cannot
@@ -103,13 +101,26 @@ bool FindNonCcTargetStrategy::OnlyCcMarksLeft(Unit* except)
     return true;
 }
 
+bool CcGuard::OnlyMarksLeftCached()
+{
+    if (onlyMarksLeft < 0)
+        onlyMarksLeft = OnlyCcMarksLeft() ? 1 : 0;
+    return onlyMarksLeft == 1;
+}
+
 bool CcGuard::IsHeldCcMark(Unit* unit)
 {
     if (!unit || !IsCcTarget(unit))
         return false;
-    if (onlyMarksLeft < 0)
-        onlyMarksLeft = OnlyCcMarksLeft() ? 1 : 0;
-    return onlyMarksLeft == 0;
+    return !OnlyMarksLeftCached();
+}
+
+bool CcGuard::IsOwnReadyCcMark(Unit* unit)
+{
+    // Cheap test first: only this bot's own assigned mark qualifies.
+    if (!unit || ai->GetAiObjectContext()->GetValue<Unit*>("rti cc target")->Get() != unit)
+        return false;
+    return IsCcBotReadyFor(ai, ai->GetBot(), unit);
 }
 
 bool CcGuard::ProtectedEnemyNear(WorldObject* center, float radius, bool includeMarks)
@@ -127,6 +138,11 @@ bool CcGuard::ProtectedEnemyNear(WorldObject* center, float radius, bool include
             return true;
         if (includeMarks && IsHeldCcMark(unit))
             return true;
+        // This bot's own mark, which it will (re)CC: never splash it, held
+        // or free (build 11: the mage's own Flamestrike hit its Moon mob).
+        bool const ownMark = IsOwnReadyCcMark(unit);
+        if (ownMark && CcOwnerSparesMark(ownMark, OnlyMarksLeftCached()))
+            return true;
     }
     return false;
 }
@@ -139,15 +155,36 @@ bool FindNonCcTargetStrategy::IsCrowdControlled(PlayerbotAI* ai, Unit* unit)
         sServerFacade.IsFeared(unit) || ai->HasAura("banish", unit);
 }
 
+bool FindNonCcTargetStrategy::IsCcSpell(SpellEntry const* info)
+{
+    if (!info)
+        return false;
+    uint32 const ccMask = (1 << (MECHANIC_POLYMORPH - 1)) | (1 << (MECHANIC_BANISH - 1)) |
+        (1 << (MECHANIC_FEAR - 1)) | (1 << (MECHANIC_SLEEP - 1)) | (1 << (MECHANIC_KNOCKOUT - 1)) |
+        (1 << (MECHANIC_SHACKLE - 1));
+    return (info->GetAllSpellMechanicMask() & ccMask) != 0;
+}
+
 bool FindNonCcTargetStrategy::IsCastingCcAt(Unit* caster, Unit* target)
 {
     Spell* spell = caster ? caster->GetCurrentSpell(CURRENT_GENERIC_SPELL) : nullptr;
     if (!spell || !spell->m_spellInfo || spell->m_targets.getUnitTarget() != target)
         return false;
-    uint32 const ccMask = (1 << (MECHANIC_POLYMORPH - 1)) | (1 << (MECHANIC_BANISH - 1)) |
-        (1 << (MECHANIC_FEAR - 1)) | (1 << (MECHANIC_SLEEP - 1)) | (1 << (MECHANIC_KNOCKOUT - 1)) |
-        (1 << (MECHANIC_SHACKLE - 1));
-    return (spell->m_spellInfo->GetAllSpellMechanicMask() & ccMask) != 0;
+    return IsCcSpell(spell->m_spellInfo);
+}
+
+bool CcGuard::GroupCastsCcAt(Unit* unit)
+{
+    Group* group = unit ? ai->GetBot()->GetGroup() : nullptr;
+    if (!group)
+        return unit && IsCastingCcAt(ai->GetBot(), unit);
+    for (Group::MemberSlotList::const_iterator itr = group->GetMemberSlots().begin(); itr != group->GetMemberSlots().end(); ++itr)
+    {
+        Player* player = sObjectMgr.GetPlayer(itr->guid);
+        if (player && player->GetMapId() == unit->GetMapId() && IsCastingCcAt(player, unit))
+            return true;
+    }
+    return false;
 }
 
 bool FindNonCcTargetStrategy::IsCcTarget(Unit* attacker)
@@ -158,10 +195,13 @@ bool FindNonCcTargetStrategy::IsCcTarget(Unit* attacker)
 
 bool FindNonCcTargetStrategy::IsCcProtected(Unit* unit)
 {
-    if (IsCrowdControlled(ai, unit))
-        return true;
+    // CcMarkHeld is monotone: fill the cheap facts first and stop as soon
+    // as the mark is held.
+    CcMarkHoldState state;
+    state.crowdControlled = IsCrowdControlled(ai, unit);
     // A mark of an unpulled pack stays untouched until the pull.
-    if (!sServerFacade.IsInCombat(unit))
+    state.inCombat = sServerFacade.IsInCombat(unit);
+    if (CcMarkHeld(state))
         return true;
 
     Group* group = ai->GetBot()->GetGroup();
@@ -169,7 +209,9 @@ bool FindNonCcTargetStrategy::IsCcProtected(Unit* unit)
         return false;
 
     Creature* creature = unit->ToCreature();
-    bool const inGrace = creature && creature->GetCombatTime() <= CcGraceSeconds;
+    if (creature)
+        state.combatSeconds = static_cast<long>(creature->GetCombatTime());
+    bool const inWindow = state.combatSeconds >= 0 && state.combatSeconds <= CcMarkHoldSeconds;
 
     Group::MemberSlotList const& groupSlot = group->GetMemberSlots();
     for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
@@ -180,34 +222,44 @@ bool FindNonCcTargetStrategy::IsCcProtected(Unit* unit)
 
         // The sheep is on its way: do not hit (or drop the target of) the
         // mob under a group member's CC cast bar.
-        if (IsCastingCcAt(player, unit))
-            return true;
+        state.ccCastBarOnIt = IsCastingCcAt(player, unit);
 
-        if (!inGrace)
-            continue;
-
-        // Start of the fight: the mark's CC bot (rti cc target, "cc" on)
-        // gets a moment to land the first CC if it knows a CC spell that
-        // fits the mob, ready and in reach.
-        PlayerbotAI* memberAi = PlayerbotAIStorage::Instance().GetAI(player);
-        if (!memberAi || !memberAi->HasStrategy("cc", BotState::BOT_STATE_COMBAT))
-            continue;
-        if (PAI_VALUE(Unit*, "rti cc target") != unit)
-            continue;
-        if (!player->IsWithinDistInMap(unit, memberAi->GetRange("spell") + CcGraceRangeSlack))
-            continue;
-        for (char const* spellName : GraceCcSpells)
+        // Start of the fight: the mark's CC bot gets the hold window to
+        // land the first CC if it can CC the mob now.
+        if (inWindow)
         {
-            uint32 spellId = PAI_VALUE2(uint32, "spell id", spellName);
-            if (!spellId || !memberAi->HasSpell(spellId) || player->HasSpellCooldown(spellId))
-                continue;
-            SpellEntry const* info = sServerFacade.LookupSpellInfo(spellId);
-            if (!info || (info->TargetCreatureType && !(info->TargetCreatureType & unit->GetCreatureTypeMask())))
-                continue;
-            return true;
+            PlayerbotAI* memberAi = PlayerbotAIStorage::Instance().GetAI(player);
+            state.ccBotReady = memberAi && PAI_VALUE(Unit*, "rti cc target") == unit &&
+                IsCcBotReadyFor(memberAi, player, unit);
         }
+
+        if (CcMarkHeld(state))
+            return true;
     }
 
+    return false;
+}
+
+bool FindNonCcTargetStrategy::IsCcBotReadyFor(PlayerbotAI* memberAi, Player* player, Unit* unit)
+{
+    // The CC bot: "cc" on, knows a cast-time CC spell that fits the mob's
+    // creature type, off cooldown, and within its spell range (+ slack for
+    // a mob running in). The caller checks that the mark is its "rti cc
+    // target".
+    if (!memberAi || !player || !unit || !memberAi->HasStrategy("cc", BotState::BOT_STATE_COMBAT))
+        return false;
+    if (!player->IsWithinDistInMap(unit, memberAi->GetRange("spell") + CcGraceRangeSlack))
+        return false;
+    for (char const* spellName : GraceCcSpells)
+    {
+        uint32 spellId = PAI_VALUE2(uint32, "spell id", spellName);
+        if (!spellId || !memberAi->HasSpell(spellId) || player->HasSpellCooldown(spellId))
+            continue;
+        SpellEntry const* info = sServerFacade.LookupSpellInfo(spellId);
+        if (!info || (info->TargetCreatureType && !(info->TargetCreatureType & unit->GetCreatureTypeMask())))
+            continue;
+        return true;
+    }
     return false;
 }
 

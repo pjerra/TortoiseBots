@@ -361,6 +361,11 @@ public:
     // the bot's default movement. A no-op when no hold is placed, and never
     // touches a stay the player asked for (that drops the hold marker first).
     void ReleasePullHold();
+    // An order that sends the bot at a target ends a stay: drop "stay" from
+    // every engine and, when that leaves no movement mode, put the default
+    // (follow for a player's bot) back so it rejoins after the fight. Used by
+    // the .bot tactical orders and the whispered attack.
+    void EndStayForOrder();
 	std::string HandleRemoteCommand(std::string command);
     void HandleCommand(uint32 type, const std::string& text, Player& fromPlayer, const uint32 lang = LANG_UNIVERSAL);
     void QueueChatResponse(uint32 msgType, ObjectGuid guid1, ObjectGuid guid2, std::string message, std::string chanName, std::string name, bool noDelay = false);
@@ -559,9 +564,9 @@ private:
 
 private:
     void _fillGearScoreData(Player *player, Item* item, std::vector<uint32>* gearScore, uint32& twoHandScore);
-    bool IsTellAllowed(Player* player, PlayerbotSecurityLevel securityLevel = PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL);
 
 public:
+    bool IsTellAllowed(Player* player, PlayerbotSecurityLevel securityLevel = PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL);
 	Player* GetBot() { return bot; }
     Player* GetMaster() { return GetLiveMaster(); }
 

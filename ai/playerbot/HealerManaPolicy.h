@@ -67,4 +67,39 @@ namespace ai
             return false;
         return true;
     }
+
+    // Mana a grouped healer keeps back before it spends any on off-spec
+    // damage (`healer should attack`). `balance` is BalancePercentValue:
+    // party levels * 100 / weighted enemy levels, capped at 200, so a LOW
+    // balance is a HARD fight and a HIGH balance an EASY one.
+    // Donor mod-playerbots 79bd428 (src/Ai/Base/Trigger/GenericTriggers.cpp:361-368):
+    // 85 (balance <= 50), HighMana 65 (<= 100), MediumMana 40 (above).
+    // Deliberate deviation, owner decision 2026-10-12: the easy tier keeps
+    // 70 instead of 40. A full 5-man against one or two elites lands in that
+    // tier, and a vanilla healer (5-second rule, no Replenishment) that nukes
+    // down to 40 % runs dry on the first real damage (Uldaman / build-10:
+    // "shoot | no mana" ~23 s into a fight, tank at 44 %). The even tier is
+    // raised from 65 to 70 as well (controller ruling 2026-10-12) so the
+    // ladder stays monotonic: a harder fight never allows a lower reserve
+    // than an easier one. The hard tier stays on the donor's 85.
+    constexpr std::uint8_t HEALER_DPS_MANA_FLOOR_HARD_FIGHT = 85;
+    constexpr std::uint8_t HEALER_DPS_MANA_FLOOR_EVEN_FIGHT = 70;
+    constexpr std::uint8_t HEALER_DPS_MANA_FLOOR_EASY_FIGHT = 70;
+
+    inline std::uint8_t HealerDpsManaFloor(std::uint8_t balance)
+    {
+        if (balance <= 50)
+            return HEALER_DPS_MANA_FLOOR_HARD_FIGHT;
+        if (balance <= 100)
+            return HEALER_DPS_MANA_FLOOR_EVEN_FIGHT;
+        return HEALER_DPS_MANA_FLOOR_EASY_FIGHT;
+    }
+
+    // True when the healer's own mana allows off-spec damage. A bot without
+    // a mana bar is never held back here; the wand row (`healer should
+    // wand`) does not ask this at all.
+    inline bool HealerDpsManaAllows(bool hasMana, std::uint8_t mana, std::uint8_t balance)
+    {
+        return !hasMana || mana >= HealerDpsManaFloor(balance);
+    }
 }

@@ -18,6 +18,14 @@ namespace ai
         // "empty trading item list" error on gossip, so both sell and buy skip them here.
         static bool HasVendorStock(Creature* vendor);
 
+        // The bag items an autonomous vendor sale would actually sell: the sale's
+        // own item filter (FindVendorItemsVisitor), a real sell price, and the
+        // claimed-bot quality rule. The vendor trip need ("can sell", the batch
+        // and spell-funding rule) and the nearby-service sell verb read this same
+        // list, so a bot only walks to a vendor that will buy something.
+        // includeAH adds AH-usage stock, as the sale does now and then on full bags.
+        static std::list<Item*> VendorSaleStock(PlayerbotAI* ai, bool includeAH = false);
+
 #ifdef GenerateBotHelp
         virtual std::string GetHelpName() { return "sell"; } //Must equal iternal name
         virtual std::string GetHelpDescription()

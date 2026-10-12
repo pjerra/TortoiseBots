@@ -350,7 +350,20 @@ void ProtectionWarriorBuffStrategy::InitCombatTriggers(std::list<TriggerNode*>& 
 
 void ProtectionWarriorBuffStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
 {
-    WarriorBuffStrategy::InitNonCombatTriggers(triggers);
+    // Skip WarriorBuffStrategy's non-combat "battle stance" row: the tank
+    // swapped to Battle Stance after every fight and also mid-pack, because
+    // the non-combat engine runs for a moment whenever the tank's target dies
+    // (OnCombatEnded). The tank stays in Defensive Stance out of combat too;
+    // the donor TankWarriorStrategy has no Battle Stance row at all.
+    BuffStrategy::InitNonCombatTriggers(triggers);
+
+    triggers.push_back(new TriggerNode(
+        "defensive stance",
+        NextAction::array(0, new NextAction("defensive stance", ACTION_NORMAL), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "often",
+        NextAction::array(0, new NextAction("apply stone", ACTION_NORMAL), NULL)));
 }
 
 void ProtectionWarriorBuffPveStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)

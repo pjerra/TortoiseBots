@@ -216,6 +216,7 @@ namespace ai
 		ActionNode* getAction() {return action;}
         Event getEvent() { return event; }
         bool isSkipPrerequisites() { return skipPrerequisites; }
+        void clearSkipPrerequisites() { skipPrerequisites = false; }
         void AmendRelevance(float k) {relevance *= k; }
         void setRelevance(float relevance) { this->relevance = relevance; }
         void setEvent(Event event) { this->event = event; }

@@ -50,6 +50,7 @@ Warlocks provide sustained Shadow and Fire DPS through curses and damage-over-ti
   - Custom Demonology pet burst (crowd-control break plus damage buff) costing the demon a share of base health over the duration, per game data. The bot requires a live pet above 60% health and a live enemy.
 - **Rain of Fire Channeling:**
   - Includes safe channel cancellation when fewer than 2 enemies remain in the AoE.
+  - *Rain of Fire* waits in a party while the tank has no threat on a mob in the fight or the bot holds half the tank's threat (`threat` behaviour).
 
 ---
 
@@ -62,7 +63,7 @@ Warlocks provide sustained Shadow and Fire DPS through curses and damage-over-ti
   - *Felhunter:* Uses *Spell Lock* for ranged interrupts, and *Devour Magic* both ways: strips a magic buff off the current target (purge) and lifts magic off a party member (cleanse). Both fire only while a Felhunter is out.
   - *Felhunter:* Uses *Spell Lock* for ranged interrupts, and *Devour Magic* both ways: strips a magic buff off the current target (purge) and lifts magic off a party member (cleanse). Both fire only while a Felhunter is out; other demons idle those nodes safely.
 - **Out-of-combat upkeep:** The bot maintains *Demon Armor* (with *Demon Skin* as fallback) and casts *Unending Breath* on itself and the party.
-  - **Pet upkeep:** the demon's known spells are swept for autocast (non-passive, except *Spell Lock* / *Devour Magic* deliberate-cast abilities and *Sacrifice*, which kills the Voidwalker on this realm and would otherwise fire in every fight) and pet plus guardians are pinned to *Defensive* after each summon — same autonomous pair as hunter pets. Explicit `.bot pet aggressive|defensive|passive` orders still apply immediately. *Torment* follows the group like hunter *Growl*: autocast-on solo or tankless, off when grouped with a real tank; the ordered single-target peel still rescues the owner (only when the warlock itself is the victim, so it never steals from the tank).
+  - **Pet upkeep:** the demon's known spells are swept for autocast (non-passive, except *Spell Lock* / *Devour Magic* deliberate-cast abilities and *Sacrifice*, which kills the Voidwalker on this realm and would otherwise fire in every fight) and pet plus guardians are pinned to *Defensive* after each summon — same autonomous pair as hunter pets. Explicit `.bot pet aggressive|defensive|passive` orders still apply immediately. *Torment* follows the group like hunter *Growl*: autocast-on solo or tankless, off when grouped with a real tank (also in a player's party or when hired, until the player orders `.bot pet autocast Torment`); the ordered single-target peel still rescues the owner (only when the warlock itself is the victim, so it never steals from the tank).
   - *Felhunter:* Uses *Spell Lock* for ranged interrupts. *Devour Magic* has no registered action wiring, so the bot never casts it.
 - **Out-of-combat upkeep:** The bot maintains *Demon Armor* (with *Demon Skin* as fallback) and casts *Unending Breath* (5697) on itself and the party, but only while swimming — no buff churn on land.
   - **Pet upkeep:** the demon's known spells are swept for autocast (non-passive, except *Spell Lock* / *Devour Magic* deliberate-cast abilities and *Sacrifice*, which kills the Voidwalker on this realm and would otherwise fire in every fight) and pet plus guardians are pinned to *Defensive* after each summon — same autonomous pair as hunter pets. Explicit `.bot pet aggressive|defensive|passive` orders still apply immediately.
@@ -78,6 +79,7 @@ Warlocks provide sustained Shadow and Fire DPS through curses and damage-over-ti
   - Casts *Fear* only on its assigned raid CC mark, and never on a mob already under another CC (a feared mob pulls adds). There is no automatic Fear on unmarked mobs. Skips undead and mechanical marks (fear never lands on them).
   - *Howl of Terror* (AoE fear) is PvP-only; it is never cast in PvE groups, and never inside a dungeon or raid (a feared mob pulls neighbouring packs).
   - Casts *Banish* on Demons and Elementals (other marks are skipped: banish only lands on those two types).
+  - Never hits its own CC mark (the mark it can Fear or Banish) with an area spell (*Rain of Fire*, *Hellfire*, ...) while other enemies are left, because it CCs that mob next. Once only CC marks are left, AoE on them is allowed. It starts *Fear*/*Banish* only in line of sight and 5 yd inside the spell's range, and walks closer first.
   - *Seduce* (Succubus) is a CC executor for humanoid marks: with a Succubus out, the bot orders *Seduction* on its assigned CC mark (pet-cast, so range resolves against the demon — she must already be near the mark). Other types are skipped, and fear wins ties.
 
 ---

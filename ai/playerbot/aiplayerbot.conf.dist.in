@@ -215,6 +215,23 @@ AiPlayerbot.TurtleMountAtLevel = 18
 # the riding skill already level-gated). 1 = on; 0 = off, so a bot levelled
 # from 1 keeps only the turtle until it is re-seeded. Default 1.
 AiPlayerbot.LevelUpMounts = 1
+# Level-up gear top-up: a masterless random pool bot that reaches a new level
+# (5 or higher) gets its empty equipment slots, and grey/white items 6 or more
+# item levels below it, filled with level- and spec-appropriate gear from the
+# same selection the fresh-bot seed uses. Green or better is never replaced.
+# Once per level (after a restart, once at the current level); out of combat
+# only. Hired, guild-claimed and player-grouped bots are never touched.
+# 1 = on; 0 = off (gear only from drops, quests and vendors). Default 1.
+AiPlayerbot.PoolGearTopUpOnLevel = 1
+# Level-up money top-up: when a masterless random pool bot reaches a new level
+# holding less than its next class-trainer visit costs (every trainable class
+# rank plus the repair/ammo/AH/guild reserves the trainer trip keeps aside),
+# it is topped up to that amount, capped at 1 gold per bot level. Once per
+# level; a bot that already has the money gets nothing. Hired, guild-claimed
+# and player-grouped bots are never paid. Each top-up writes a PoolMoneyTopUp
+# row to bot_events.csv. 1 = on; 0 = off (money only from the one-time seed,
+# loot, quests and sales). Default 1.
+AiPlayerbot.PoolMoneyTopUp = 1
 # Safety factor on the mount break-even distance: bots mount for travel/RPG
 # trips only when the remaining distance exceeds
 # 7 y/s * mount cast time / (best mount speed % / 100) * this. 0 disables
@@ -426,7 +443,8 @@ AiPlayerbot.AhMarketTimeMax = 24
 # Currently has no effect (read but unused).
 AiPlayerbot.AhMarketValueVendor = 1
 
-# Demand-aware WSG/AB/AV queue participation for live Headless RNDBOTs. Default on.
+# Demand-aware WSG/AB/AV/SV/BR queue participation for live Headless RNDBOTs.
+# Default on. SV = Sunnyglade Valley, BR = Blood Ring arena (max-level bots only).
 # Uses the native BattleGroundJoinAction/WorldSession handler path and the
 # copy-only BattleGroundMgr queued-participant snapshot from core #416. No
 # human-waiting queue means no bot queueing; otherwise bots match the observed
@@ -438,8 +456,8 @@ AiPlayerbot.AhMarketValueVendor = 1
 # the autonomous seeder (budget 0 still turns both off). Candidates are
 # in-memory and checked for level, alive/idle/not queued/not in a BG, no deserter/taxi, and no
 # active human master. WSG/AB group joins require every member to be a
-# service-owned Headless bot; AV is always queued solo. Cadence is 5s..10m and
-# the per-interval budget is 0..10. No second queue/thread, DB scan, arena,
+# service-owned Headless bot; AV and BR are always queued solo. Cadence is
+# 5s..10m and the per-interval budget is 0..10. No second queue/thread, DB scan,
 # vehicle, or expansion BG behavior. Master-reclaim reconciliation only removes
 # queue entries owned by this service. Requires core #411 and #416.
 #AiPlayerbot.RandomBotBgEnabled = 1
@@ -455,6 +473,16 @@ AiPlayerbot.AhMarketValueVendor = 1
 #AiPlayerbot.RandomBotBgAutonomousMaxInstances = 1
 # Note: the seeder runs inside the backfill tick, so it also requires
 # AiPlayerbot.RandomBotBgEnabled = 1 (Autonomous=1 + BgEnabled=0 seeds nothing).
+# Warsong Gulch team roles (default 0 = off). 0 keeps the current tactics:
+# bots guard/escort their own carrier or chase the enemy one, go for the
+# enemy flag only when no real player is on their team, and otherwise
+# patrol mid-field (owner request, 2026-07-27); nobody guards the own flag
+# room. 1 splits each team's bots by rank, re-split only when the match or
+# the team roster changes: ~40% attackers go for the enemy flag (or chase the
+# enemy carrier / escort ours), ~30% defenders hold the own flag room and
+# chase an enemy carrier, the rest hold mid-field and escort - also when a
+# human is on the team (humans are not counted in the split).
+#AiPlayerbot.WsgFlagRoles = 0
 
 # Currently has NO effect: the key is read but nothing uses it (kept for
 # config compatibility). Bot activity is controlled by
@@ -562,6 +590,19 @@ AiPlayerbot.GenerateItemCaches = 1
 
 # Bots will mount up to catch up when far behind the master while following.
 # AiPlayerbot.BoostFollow = 0
+
+# Dungeon follow: hold before a pack (issue #127).
+# Inside a dungeon or raid, with nobody in combat, a bot whose leader is more
+# than 30 yd ahead walks the route to the leader itself and stops just outside
+# the aggro range of the first unpulled hostile creature on that route, instead
+# of walking past or through it. It whispers its master once per pack ("pack in
+# the way") and stands there; it does not eat or drink while it holds (it rests
+# through the normal out-of-combat flow once the hold ends). It walks on when
+# the pack is dead or gone or the route no longer passes it; when the leader
+# comes back within 25 yd the normal follow takes over. Off by default.
+# 0 - core follow, no pack check (Default)
+# 1 - hold before packs in dungeons and raids
+AiPlayerbot.DungeonFollowHoldBeforePacks = 0
 
 # Bots and npcs turn to eachother during an rpg interaction
 AiPlayerbot.TurnInRpg = 0
@@ -1678,6 +1719,16 @@ AiPlayerbot.CombatStrategies = ""
 
 # PvP Restricted Zones (bots don't pvp)
 #AiPlayerbot.PvpProhibitedZoneIds = 2255,656,2361,2362,2363,976,35,2268,3425,392,541,1446,3828,3712,3738,3565,3539,3623,4152,3988,4658,4284,4418,4436,4275,4323
+
+# World PvP engagement (opt-in). 0 = pool bots only hit back when a PvP-flagged
+# enemy player attacks them (current behaviour). 1 = a masterless pool bot that
+# is out of combat attacks a PvP-flagged enemy player within 40 yd (20 yd if the
+# target has more health) in line of sight and within 30 yd of height. Never
+# for a real player's companions, never in battlegrounds, cities, sanctuaries or
+# PvpProhibitedZoneIds, never a target 5+ levels above the bot, and the
+# recent-killer avoidance still applies. With 1 those bots also get the "pvp"
+# strategy out of combat ("-pvp" in RandomBotNonCombatStrategies removes it).
+#AiPlayerbot.WorldPvpEngage = 0
 
 # Spells every random bot will learn on randomize. Keep this list limited to
 # spells present in the Vanilla/Tortoise data set.

@@ -5,6 +5,7 @@
 #include "playerbot/ServerFacade.h"
 #include "playerbot/strategy/Action.h"
 #include "PossibleAttackTargetsValue.h"
+#include "CcMarkHoldPolicy.h"
 #include "playerbot/GroupMembers.h"
 
 using namespace ai;
@@ -25,6 +26,13 @@ public:
 
         AiObjectContext* context = ai->GetAiObjectContext();
 
+        // The assigned mark wins the whole tournament: the free-pick rules
+        // below assign `result` without looking at what it holds, so an
+        // open-world candidate checked after the mark replaced it and the
+        // CC bot sheeped another mob, or alternated, instead of its mark.
+        if (result && CcChooserKeepsResult(result == AI_VALUE(Unit*, "rti cc target")))
+            return;
+
         // Never CC over another CC (generalized from the Fear mark-only
         // branch): a mob already held by someone's breakable/unbreakable aura
         // stays held. Re-CC of our own aura of the same spell still flows
@@ -36,7 +44,11 @@ public:
 
         // A bot assigned to this raid mark may still need to close distance.
         // Keep the normal legality/resource checks, but let the mature reach
-        // prerequisite handle range for that one assigned target.
+        // prerequisite handle range for that one assigned target: it stays
+        // the "cc target" out of range or sight, and the cast itself waits
+        // until "reach cc" has it in sight and inside the range margin
+        // (CastCrowdControlSpellAction::isPossible), so a 1.5 s cast is not
+        // started on a mark that can leave range before it finishes.
 
         const bool assignedTarget = AI_VALUE(Unit*, "rti cc target") == creature;
 
@@ -67,8 +79,8 @@ public:
         // runs unmarked candidates. All conditions must hold:
         // - the bot may CC at all here (group combat),
         // - the candidate hits a party healer or caster, never the tank,
-        // - NOBODY in the group is attacking or targeting it (IsGroupFighting
-        //   above: members' victim + selection, pets' victim),
+        // - NOBODY in the group is attacking or targeting it, and it is not
+        //   hitting the tank, a melee member or a pet (IsGroupFighting above),
         // - it carries NO periodic damage aura from any source (else sheep is
         //   pointless — owner's words; shyalya check #8, but for every spell),
         // - it is not the only enemy in the fight (never sheep the last mob),
@@ -152,7 +164,14 @@ private:
     // bot's attack target, a player's target). This bot's own selection is
     // skipped: a cast with no prior selection leaves it on the cast target
     // (the sheep itself); its own victim still counts.
-    // Guid compares only, no lookups.
+    // The other direction counts too: a mob hitting the tank, a melee member
+    // or a pet stands in the melee pile, where it is held by threat and
+    // broken by Blade Flurry, cleave or a swing, even after the tank has
+    // switched to another mob (build 9: tank Taunt + Revenge on a Thief, then
+    // a Bandit; the Thief kept hitting the tank and was sheeped twice, broken
+    // by Blade Flurry each time). A mob on a healer or a caster is the loose
+    // add CC is for, so it stays a candidate (auto cc needs exactly that).
+    // Guid/pointer compares; role checks only for the mob's own victim.
     // mod-playerbots 79bd428 (CcTargetValue.cpp) skips only the bot's own
     // current target and lets a mob with no tank on it through.
     bool IsGroupFighting(Unit* creature)
@@ -163,6 +182,7 @@ private:
             return bot->GetVictim() == creature;
 
         const ObjectGuid guid = creature->getObjectGuid();
+        Unit* mobVictim = creature->GetVictim();
         for (Player* member : LiveGroupMembers(group))
         {
             if (!member || !sServerFacade.IsAlive(member) || member->GetMapId() != bot->GetMapId())
@@ -170,8 +190,11 @@ private:
             if (member->GetVictim() == creature ||
                 (member != bot && member->GetSelectionGuid() == guid))
                 return true;
+            if (mobVictim == member &&
+                (ai->IsTank(member) || (ai->IsMelee(member) && !PlayerbotAI::IsHeal(member))))
+                return true;
             if (Unit* pet = member->GetPet())
-                if (pet->GetVictim() == creature)
+                if (pet->GetVictim() == creature || mobVictim == pet)
                     return true;
         }
         return false;

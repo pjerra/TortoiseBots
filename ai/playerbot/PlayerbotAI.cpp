@@ -26,6 +26,7 @@
 #include "strategy/actions/SayAction.h"
 #include "strategy/actions/EmoteAction.h"
 #include "strategy/values/LastSpellCastValue.h"
+#include "strategy/values/TargetValue.h"
 #include "LootObjectStack.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "PlayerbotAI.h"
@@ -44,6 +45,7 @@
 #include "playerbot/strategy/actions/FishAction.h"
 #include "playerbot/DeathClusterPolicy.h"
 #include "playerbot/SurvivePolicy.h"
+#include "playerbot/MovementModePolicy.h"
 #include "../../runtime/AutoToolsKitPolicy.h"
 #include "../../behavior/PlayerConvenience.h"
 #include "Movement/spline/MoveSplineInitArgs.h"
@@ -3005,6 +3007,43 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
         sLog.outDetail("%s: KNOCKBACK x: %f, y: %f, z: %f, time: %f, dist: %f, maxHeight: %f inPlace: %u, landTime: %u", bot->GetName(), dest_calculated.getX(), dest_calculated.getY(), dest_calculated.getZ(), timeToLand, distToLand, maxHeight, jumpInPlace, jumpTime);
         return;
     }
+    case SMSG_CAST_RESULT:
+    {
+        // Failed crowd-control casts go to the bot action log (only open
+        // with AiPlayerbot.EnableActionLog = 1), so a sheep that never lands
+        // shows why. This core sends no SMSG_SPELL_FAILURE: a cast that
+        // fails at the end of its cast bar, or is cancelled (moving,
+        // interrupted), arrives here. 1.12 layout (Spell::SendCastResult):
+        // uint32 spellId, uint8 status (0 = ok, 2 = failed), uint8 result.
+        if (botdiag::BotActionLog::GetHandle(this) && packet.size() >= 6)
+        {
+            WorldPacket p(packet);
+            p.rpos(0);
+            uint32 spellId;
+            uint8 status;
+            p >> spellId >> status;
+            if (status != 0)
+            {
+                uint8 result;
+                p >> result;
+                SpellEntry const* info = sServerFacade.LookupSpellInfo(spellId);
+                if (info && FindNonCcTargetStrategy::IsCcSpell(info))
+                {
+                    // The cast's own target, from the start of this cast.
+                    LastSpellCast const& last = aiObjectContext->GetValue<LastSpellCast&>("last spell cast")->Get();
+                    Unit* ccTarget = last.id == spellId ? GetUnit(last.target) : nullptr;
+                    botdiag::BotActionLog::Write(this, "CC_CAST_FAILED",
+                        "spell=%u result=%u targetGuid=0x%llx dist=%.1f moving=%u",
+                        spellId, (unsigned)result,
+                        ccTarget ? (unsigned long long)ccTarget->getObjectGuid().GetRawValue() : 0ULL,
+                        ccTarget ? bot->GetDistance(ccTarget) : -1.0f,
+                        sServerFacade.isMoving(bot) ? 1u : 0u);
+                }
+            }
+        }
+        botOutgoingPacketHandlers.AddPacket(packet);
+        return;
+    }
 	default:
 		// log group invite arrivals so we
 		// can verify the auto-accept handler fires. If we see this line in
@@ -3661,6 +3700,12 @@ void PlayerbotAI::ResetStrategies(bool autoLoad)
         }
         sLog.outBasic("LFT: %s strategies rebuilt as %s", bot->GetName(), roleStrategy);
     }
+
+    // A player's companion leaves every rebuild with a movement mode: a stored
+    // snapshot saved without one would otherwise park it after each rebuild
+    // until the player whispers "follow" (ai::NeedsDefaultMovementMode).
+    if (ai::NeedsDefaultMovementMode(bot->InBattleGround(), HasActivePlayerMaster(), HasActiveMovementStrategy()))
+        SetMovementStrategy(GetDefaultMovementStrategy());
 
     for (uint8 i = 0; i < (uint8)BotState::BOT_STATE_ALL; i++)
     {
@@ -7192,11 +7237,7 @@ std::string PlayerbotAI::GetDefaultMovementStrategy()
 
 bool PlayerbotAI::HasActiveMovementStrategy()
 {
-    static char const* const movementStrategies[] = {
-        "follow", "stay", "wander", "guard", "free", "passive"
-    };
-
-    for (char const* strategy : movementStrategies)
+    for (char const* strategy : ai::kMovementModeStrategies)
     {
         if (HasStrategy(strategy, BotState::BOT_STATE_NON_COMBAT) ||
             HasStrategy(strategy, BotState::BOT_STATE_REACTION))
@@ -7294,6 +7335,26 @@ void PlayerbotAI::ReleasePullHold()
         posMap.erase("stay");
         EnsureDefaultMovementStrategy();
     }
+}
+
+void PlayerbotAI::EndStayForOrder()
+{
+    // Stay is kept in all three engines by the central movement setter;
+    // remove its reaction copy as well or it can survive the order and be
+    // mistaken for an active hold during the next transition.
+    ChangeStrategy("-stay", BotState::BOT_STATE_REACTION);
+    ChangeStrategy("-stay", BotState::BOT_STATE_NON_COMBAT);
+    // The broken stay was the bot's only movement mode: give it the default
+    // back or it stands wherever the fight ends until the player whispers
+    // "follow". Added directly rather than through SetMovementStrategy, which
+    // would drop the "pull hold" marker the pull release still reads.
+    if (!HasActiveMovementStrategy())
+    {
+        std::string const movement = "+" + GetDefaultMovementStrategy();
+        ChangeStrategy(movement, BotState::BOT_STATE_REACTION);
+        ChangeStrategy(movement, BotState::BOT_STATE_NON_COMBAT);
+    }
+    ChangeStrategy("-stay,-follow", BotState::BOT_STATE_COMBAT);
 }
 
 std::string PlayerbotAI::HandleRemoteCommand(std::string command)

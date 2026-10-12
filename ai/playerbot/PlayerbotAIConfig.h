@@ -282,6 +282,17 @@ public:
     // off, so a bot levelling from 1 only gets a 40/60 mount when re-seeded.
     // Default true.
     bool levelUpMounts = true;
+    // Level-up gear top-up: a masterless pool bot that dings (5+) gets its
+    // empty slots and clearly outdated grey/white items (6+ item levels below
+    // it) filled by the fresh-seed item selection, once per level. Never
+    // replaces green or better; never hired, claimed or player-led bots.
+    // Default true.
+    bool poolGearTopUpOnLevel = true;
+    // Level-up money top-up: a masterless pool bot that dings holding less
+    // than its next class-trainer visit costs (with the reserves the trip
+    // gate keeps aside, capped at 1 g per level) is topped up to that floor,
+    // once per level. Never hired, claimed or player-led bots. Default true.
+    bool poolMoneyTopUp = true;
     // Safety factor on the mount break-even distance: bots mount for travel
     // only when the remaining trip exceeds
     // 7 y/s * castTime / (mountSpeed/100) * this. 0 disables the threshold
@@ -459,6 +470,8 @@ public:
 	bool RandombotsWalkingRPG;
 	bool RandombotsWalkingRPGInDoors;
     bool boostFollow;
+    // Dungeon follow holds short of unpulled packs when the leader is far ahead (issue #127).
+    bool dungeonFollowHoldBeforePacks;
     bool turnInRpg;
     bool globalSoundEffects;
     bool shareTargets;
@@ -486,6 +499,7 @@ public:
     float playerbotsXPrate;
     bool disableBotOptimizations;
     bool disableActivityPriorities;
+    bool worldPvpEngage;
     bool forceActiveWhenNearPlayer;
     bool limitCombatActivity;
     bool guildOrderAlwaysActive;
@@ -667,6 +681,10 @@ public:
     // populated bracket, capped at one concurrent instance (average PC).
     bool randomBotBgAutonomous = true;
     uint32 randomBotBgAutonomousMaxInstances = 1;
+    // WSG team roles (off by default): defenders hold the own flag room,
+    // attackers go for the enemy flag, the rest hold mid/escort - also with
+    // a human on the team. Off keeps the 2026-07-27 mid-field patrol.
+    bool wsgFlagRoles = false;
 
     bool jumpInBg;
     bool jumpWithPlayer;
