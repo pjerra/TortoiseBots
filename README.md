@@ -81,11 +81,11 @@ Player-facing summary, no internals. Every claim below exists in the code on thi
 - Details: [Dungeon & Raid Tactics](docs/guides/dungeon-tactics.md).
 </details>
 
-<details><summary><b>⚔️ PvP battlegrounds</b> — WSG, AB, AV alongside real players</summary>
+<details><summary><b>⚔️ PvP battlegrounds</b> — WSG, AB, AV, Sunnyglade Valley and Blood Ring alongside real players</summary>
 
 - Queue at the battlemaster with Join as Group (WSG/AB; AV solo): your party bots queue with you and auto-accept the invite.
 - Random bots queue only while real players wait — to balance teams and start the match, never on their own.
-- Per-map tactics: WSG flag capture and chasing the enemy flag carrier, AB/AV objectives, battleground buffs and banners.
+- Per-map tactics: WSG flag capture and chasing the enemy flag carrier, AB/AV objectives, battleground buffs and banners; basic Sunnyglade Valley node capture and general push, and a seek-the-nearest-enemy fight in the Blood Ring arena.
 -
 - Details: [Living World](docs/guides/living-world.md#6-automated-dungeon--battleground-queues).
 </details>

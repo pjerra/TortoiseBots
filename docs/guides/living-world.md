@@ -157,7 +157,8 @@ Organic buyer (issue #405, no buyer teleport): the synthetic buyer bids only wit
 
 ### Battleground Auto-Queue
 * Config: **`AiPlayerbot.RandomBotBgEnabled = 1`** (on by default; set `0` to opt out)
-* Monitors PvP queues for **Warsong Gulch (WSG)**, **Arathi Basin (AB)**, and **Alterac Valley (AV)**.
+* Monitors PvP queues for **Warsong Gulch (WSG)**, **Arathi Basin (AB)**, **Alterac Valley (AV)**, Turtle's **Sunnyglade Valley (SV)** and the **Blood Ring** 3v3 arena (BR; max-level bots only, always solo, as the core's own arena join requires).
+* Inside Sunnyglade Valley bots split over the three nodes (two towers and the Herald's point): defenders hold the ones their side owns, attackers take the rest with the Arathi capture spell, and once the generals spawn they push the enemy general (defenders guard their own). Time Sparks are not turned in at the Herald. In the Blood Ring bots walk to the nearest living enemy and fight. Both maps have no waypoint paths, so bots walk over the navmesh.
 * When real players queue up, random bots queue to balance faction team sizes and launch the battleground, allowing you to play active PvP battlegrounds even on low-population private servers. Random bots only queue while a real human waits in the queue — unless you opt into autonomous bot-only matches below.
 
 ### Autonomous Bot-Only Matches (on by default; set `0` to opt out)
@@ -169,7 +170,7 @@ Organic buyer (issue #405, no buyer teleport): the synthetic buyer bids only wit
 
 ### Battlegrounds With Your Own Party Bots
 * Queue at the battlemaster with **Join as Group**: the core group-join check passes headless bot members like any player (same team, in world, level bracket, no deserter), so your party — you plus your own managed bots — enters the queue together. **WSG and AB** support group joins; **AV rejects group joins in the core**, so queue AV solo alongside your bots instead.
-* Your bots **auto-accept the BG invite** (`STATUS_WAIT_JOIN` → port) through the same `bg status` packet action random bots use, then drop `follow` and run the per-map BG strategies (`warsong`/`arathi`/`alterac` + `pvp`) for the duration of the match.
+* Your bots **auto-accept the BG invite** (`STATUS_WAIT_JOIN` → port) through the same `bg status` packet action random bots use, then drop `follow` and run the per-map BG strategies (`warsong`/`arathi`/`alterac` + `pvp`; Sunnyglade Valley and Blood Ring use the base `battleground` strategy) for the duration of the match.
 * The auto-queue service never touches your party bots: master-reclaim reconciliation and lease eviction only cancel queue entries the service itself queued, and human-demand accounting counts only non-headless real players — your bots (or random fill bots) never create fake demand.
 
 ---
