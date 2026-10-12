@@ -21,7 +21,8 @@ namespace ai
     // Kite escape (mod-playerbots GenericMageStrategy "enemy too close for
     // spell" -> blink back 35): blink is root/stun-only above, so a melee
     // mob walking up to the mage never triggers any escape. Fires when the
-    // target is inside cast range AND blink is off cooldown; frost nova
+    // current target is attacking the mage and is within 8 yd, AND blink is
+    // off cooldown (a target fighting someone else is no threat); frost nova
     // (EMERGENCY, cc strategy) still owns the rooted-pack case first.
     class BlinkBackTrigger : public Trigger
     {

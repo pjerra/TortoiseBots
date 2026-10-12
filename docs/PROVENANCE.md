@@ -8824,3 +8824,20 @@ the Moon mob), and the Blink GCD sat right before the first Polymorph.
 
 Validation: `c++ -fsyntax-only` of the changed files; `tools/verify_all.sh`.
 Not compiled into a server, not tested in game.
+
+Update (same branch): the "blink back" trigger now also requires that the
+current target is attacking the mage (`target->GetVictim() == bot`). Native
+refinement, not a port. Reason: audit "moon_sheep build 17", run B3. The
+mage walked toward its Icicles target, an Oracle the tank was fighting; it
+came within 8 yd, the trigger fired, and the mage blinked away to 27 yd
+from its Polymorph mark, outside cast reach, then walked back for about
+3 s. The donor's own test is different: `EnemyTooCloseForSpellTrigger`
+(`src/Ai/Base/Trigger/RangeTriggers.cpp:14-18`, 79bd428) fires within
+melee reach (`IsWithinCombatRange(bot, MIN_MELEE_REACH)`) when the target
+is *not* attacking the bot or is frozen/rooted, and relies on its own
+"enemy is close" -> Frost Nova row to freeze a chasing mob first. That
+rule is a reposition-out-of-the-pile step; this module's trigger is the
+kite escape from a mob on the mage (added because mages died to melee
+mobs with no escape), so it keeps the 8 yd band and gates on the victim
+instead. Validation: `c++ -fsyntax-only` of the changed file;
+`tools/verify_all.sh`. Not compiled into a server, not tested in game.

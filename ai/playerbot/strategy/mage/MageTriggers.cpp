@@ -20,6 +20,11 @@ bool BlinkBackTrigger::IsActive()
     Unit* target = AI_VALUE(Unit*, "current target");
     if (!target || !target->IsAlive())
         return false;
+    // Only a mob that is attacking the mage is a kiting threat. A target
+    // the tank holds can come within 8 yd while the mage walks up to cast;
+    // blinking away from it lands the mage out of cast (and CC) reach.
+    if (target->GetVictim() != bot)
+        return false;
     // Inside ~8 yd melee reach of the bot: blink away, then resume nuking.
     return sServerFacade.getDistance2d(bot, target) <= 8.0f;
 }
