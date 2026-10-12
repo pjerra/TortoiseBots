@@ -7643,3 +7643,31 @@ victim==bot exemption is the fallback if it drags.
 
 Non-blocking "donor Geddon never used this primitive" — ACKNOWLEDGED:
 donor consumers are RS/Ulduar; the Geddon application is novel. Noted.
+
+## Threat back-off never vetoes a heal (fix 104) — 2026-10-12
+
+Feature: `ThreatMultiplier` returns 1.0 for every `CastHealingSpellAction`
+(all heal, HoT and Power Word: Shield rows of every healer class), before
+the group, AoE-threat and `high threat` checks. Damage and debuff actions
+keep the back-off unchanged.
+Observed live (build 8 with the party threat back-off branch, Tanaris,
+2026-10-12): fight 7 (10:19:50-10:20:28) the holy priest at full mana cast
+nothing for 37 s while the rogue and mage took ~42 hits and died; fight 5
+(10:14:02-10:14:32) nothing while the rogue fell to 14%; fight 1
+(09:57:08-09:57:48) no heal on anyone. Each time the first heal followed the
+tank's first hit or taunt on the last untouched mob within 1-2 s. Cause
+(read in code): heals carry `ACTION_THREAT_AOE`, and `ThreatValue` reads 100
+for any in-combat attacker the tank has no threat on, so the AoE >= 50 veto
+zeroed every heal until the tank touched every attacker.
+
+Donor: `mod-playerbots` @ 79bd428 `src/Bot/Factory/AiFactory.cpp` (no
+default `threat` strategy for any bot; healers are never under the
+multiplier) and `src/Ai/Base/Strategy/ThreatStrategy.cpp` (`FocusMultiplier`
+exempts `CastHealingSpellAction` from its AoE veto). Reimplemented: the
+same heal exemption inside our `ThreatMultiplier`, which this module adds to
+non-tank party bots.
+
+Module files: `ai/playerbot/strategy/generic/ThreatStrategy.cpp`,
+`docs/concepts/strategy-engine.md`.
+Validation: code review + `bash tools/verify_all.sh` + `git diff --check`;
+build pending; in-game pending.

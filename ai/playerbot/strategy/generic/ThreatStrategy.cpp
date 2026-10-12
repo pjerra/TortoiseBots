@@ -17,6 +17,18 @@ float ThreatMultiplier::GetValue(Action* action)
     if (action == NULL || action->GetThreatType() == ActionThreatType::ACTION_THREAT_NONE)
         return 1.0f;
 
+    // Heals never back off. CastHealingSpellAction carries the AoE threat
+    // type, and the threat value reads 100 for any mob in combat that the
+    // tank has not touched yet, so while the tank was mounted, idle or on
+    // another mob the veto held every heal and shield and the healer
+    // watched the party die at full mana. The back-off is for damage that
+    // pulls a mob off the tank; a heal that keeps the mob's victim alive is
+    // never the worse choice. mod-playerbots does not give its healers this
+    // multiplier by default, and its FocusMultiplier exempts heals the same
+    // way.
+    if (dynamic_cast<CastHealingSpellAction*>(action))
+        return 1.0f;
+
     if (!AI_VALUE(bool, "group"))
         return 1.0f;
 
