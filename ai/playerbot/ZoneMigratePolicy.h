@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <ctime>
 
 // Zone migration for pool bots (leave-outgrown-zone grind errand).
 //
@@ -75,4 +76,40 @@ namespace ai
     // req 65). A pool bot below this keeps its starter Copper/Earthroot
     // (req 1) even when outleveled, or it would have nowhere to skill up.
     inline constexpr std::uint32_t OUTGROWN_GATHER_NEXT_TIER_SKILL = 65;
+
+    // Targetless leave. A pool bot with no travel target runs
+    // `reset travel target` every few seconds while every request row is
+    // parked, skip-rolled or yields to a need whose own trip never starts
+    // (a hand-in or capital service the bot cannot reach). Live m910q
+    // 2026-10-12: 72 runs of 3+ min on land, 353 bot-min in 28 min, 33 of
+    // them in capitals. The leave rule waited for those needs, so nothing
+    // moved the bot. Donor mod-playerbots `getNewTarget`
+    // (ChooseTravelTargetAction.cpp:163-175) always ends in a grind target
+    // before it idles. Here, two minutes of back-to-back resets turn the
+    // leave rule on: the bot grinds in a zone that fits its level.
+    //
+    // A stretch is one run of resets less than a minute apart. A longer gap
+    // means the bot did something else in between (a trip, a fight), so the
+    // stretch starts over. A real pick ends it (caller clears `since`).
+    constexpr std::time_t TARGETLESS_LEAVE_AFTER_SECONDS = 2 * 60;
+    constexpr std::time_t TARGETLESS_RESET_GAP_SECONDS = 60;
+    // The leave rule is also the stored condition of the Grind trip it
+    // starts, so it stays on long enough for that trip (same 10 min as the
+    // grind-empty-streak clause).
+    constexpr std::time_t TARGETLESS_LEAVE_LATCH_SECONDS = 10 * 60;
+
+    // Start of the targetless stretch after a reset at `now`. `since` and
+    // `lastReset` are 0 when unset.
+    inline std::time_t TargetlessSinceAfterReset(std::time_t since, std::time_t lastReset, std::time_t now)
+    {
+        if (since == 0 || lastReset == 0 || since > now || now - lastReset > TARGETLESS_RESET_GAP_SECONDS)
+            return now;
+        return since;
+    }
+
+    // Has the stretch lasted long enough to leave?
+    inline bool TargetlessLeaveDue(std::time_t since, std::time_t now)
+    {
+        return since != 0 && now >= since && now - since >= TARGETLESS_LEAVE_AFTER_SECONDS;
+    }
 }

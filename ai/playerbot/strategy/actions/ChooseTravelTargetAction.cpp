@@ -675,6 +675,10 @@ void ChooseTravelTargetAction::setNewTarget(Player* requester, TravelTarget* new
     TravelDestination* newPickDest = newTarget ? newTarget->GetDestination() : nullptr;
     bool const newPickIsNull = TravelTargetIsNull(newPickDest != nullptr,
         newPickDest != nullptr && typeid(*newPickDest) == typeid(NullTravelDestination));
+    // A real pick ends the targetless stretch that ResetTargetAction counts
+    // (ZoneMigratePolicy.h, targetless leave).
+    if (!newPickIsNull)
+        SET_AI_VALUE2(time_t, "manual time", "targetless since", time_t(0));
     std::string const travelPurposeName = GetTravelPurposeName(AI_VALUE2(std::string, "manual string", "future travel purpose"));
     bool const isResetToNull = TravelIsResetToNull(pickedFromNull, newPickIsNull, travelPurposeName);
     if (!isResetToNull)
@@ -1709,6 +1713,19 @@ bool ResetTargetAction::Execute(Event& event)
     oldTarget->SetExpireIn(poolBot ? 5000 : 60000);
     if (poolBot && !AI_VALUE(bool, "has nearby quest taker"))
         WanderOnEmptyPick(ai, bot);
+
+    // Count the targetless stretch: resets less than a minute apart extend
+    // it. Two minutes of it turn on the leave rule ("should leave outgrown
+    // zone"), which sends the bot to grind in a zone that fits its level
+    // instead of resetting here for minutes (ZoneMigratePolicy.h).
+    if (poolBot)
+    {
+        time_t const now = time(0);
+        SET_AI_VALUE2(time_t, "manual time", "targetless since",
+            ai::TargetlessSinceAfterReset(AI_VALUE2(time_t, "manual time", "targetless since"),
+                AI_VALUE2(time_t, "manual time", "targetless reset at"), now));
+        SET_AI_VALUE2(time_t, "manual time", "targetless reset at", now);
+    }
 
     ai->TellDebug(requester, "Cleared travel target fetches", "debug travel");
 

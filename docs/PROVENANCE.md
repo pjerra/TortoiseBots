@@ -8333,3 +8333,32 @@ build pending; in-game pending.
 | Feature | Source project | Source commit | Source files | Ported / reimplemented | Reason | Local validation |
 | --- | --- | --- | --- | --- | ---: | --- |
 | A masterless pool bot walking to a quest taker clears its travel move budget whenever it is 5 yd closer to the taker than its best distance so far on that trip, so the move-failure drop (and its 5-min quest-errand park) only fires after six failures with no new progress | `mod-playerbots` | `79bd428` | `src/Ai/World/Rpg/Action/NewRpgBaseAction.cpp:90-121` (`MoveFarTo`: `nearestMoveFarDis`, a 5 yd improvement resets `stuckAttempts`), `src/Ai/Base/Actions/MoveToTravelTargetAction.cpp:113-121` (a successful move resets the move retry count) | Reimplemented: the donor's progress-resets-the-stuck-count rule applied to this module's existing move budget (`TravelTarget::IsMaxRetry`); the donor's teleport fallback is not ported, a bot that stops closing the gap still drops the trip as before. Module files `ai/playerbot/TravelRepickPolicy.h` (`HandInTripProgressed`), `ai/playerbot/TravelMgr.{h,cpp}` (per-trip best distance, reset in `SetTarget`), `ai/playerbot/strategy/actions/MoveToTravelTargetAction.cpp`, test `tools/test_travel_repick_policy.cpp` | Batch 5 live audit finding 2 and a 12.5-min live re-sample (m910q, 500 pool bots): hand-in trips are 21 % of pool time but about one in five ends in a hand-in; most ended with the bot alive after a 5-19 s stand on a long walk, and most of those bots then held no quest errand for 5 min (the move-failure drop's park) | Code review + build pending; in-game pending. `bash tools/verify_all.sh` (incl. the extended travel repick policy test) and `git diff --check` clean |
+
+## Targetless pool bots fall back to a level-fitting grind (2026-10-12)
+
+Donor: mod-playerbots `79bd428`,
+`src/Ai/Base/Actions/ChooseTravelTargetAction.cpp:163-175`
+(`getNewTarget`: when nothing else was found it calls `SetGrindTarget`,
+and only then `SetNullTarget`, "idle a bit").
+
+Source files (module, modified): `ai/playerbot/ZoneMigratePolicy.h`
+(`TargetlessSinceAfterReset`, `TargetlessLeaveDue`, constants),
+`ai/playerbot/strategy/actions/ChooseTravelTargetAction.cpp`
+(`ResetTargetAction::Execute` counts the stretch, `setNewTarget` ends it),
+`ai/playerbot/strategy/values/TravelValues.cpp`
+(`ShouldLeaveOutgrownZoneValue` fires and latches), test in
+`tools/test_zone_migrate_policy.cpp`, docs in
+`docs/concepts/bot-mechanics-and-quirks.md` and
+`docs/guides/configuration-tuning.md`.
+
+Copied / ported / reimplemented: reimplemented. The donor tries grind on
+every pick. Here the existing leave-outgrown-zone Grind request (6.96) is
+the fallback. It fires after two minutes of back-to-back resets and stays
+on for 10 min, so the Grind trip it starts keeps its stored condition.
+
+Reason: live m910q 2026-10-12, 500 pool bots, 28 min of dashboard
+samples: 72 runs of 3+ min on land with no travel target, 70 of them
+dominated by `reset travel target`, 353 bot-minutes, 33 in capitals. One
+live snapshot later the same day: 27 of 504 bots in the loop, all level 13+.
+
+Validation: code review + build pending; in-game pending.

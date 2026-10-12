@@ -13,6 +13,8 @@
 using ai::OUTGROWN_GATHER_NEXT_TIER_SKILL;
 using ai::OutgrownZoneRefusesPoint;
 using ai::ZoneMigrationExcludeZone;
+using ai::TargetlessLeaveDue;
+using ai::TargetlessSinceAfterReset;
 int main()
 {
     std::cout << "Starting TortoiseBots zone migration policy tests...\n";
@@ -72,6 +74,31 @@ int main()
     // while the bot cannot gather next-zone Tin/Briarthorn (req 65).
     CHECK(OUTGROWN_GATHER_NEXT_TIER_SKILL == 65);
     std::cout << "  [PASS] gather next-tier skill threshold\n";
+
+    // Targetless leave: back-to-back resets (< 60 s apart) extend one
+    // stretch; a longer gap, an unset stamp or a clock step back start a
+    // new one at `now`.
+    CHECK(TargetlessSinceAfterReset(0, 0, 1000) == 1000);
+    CHECK(TargetlessSinceAfterReset(0, 990, 1000) == 1000);
+    CHECK(TargetlessSinceAfterReset(900, 0, 1000) == 1000);
+    CHECK(TargetlessSinceAfterReset(900, 990, 1000) == 900);
+    CHECK(TargetlessSinceAfterReset(900, 940, 1000) == 900);
+    CHECK(TargetlessSinceAfterReset(900, 939, 1000) == 1000);
+    CHECK(TargetlessSinceAfterReset(1100, 990, 1000) == 1000);
+    std::cout << "  [PASS] targetless stretch survives resets under a minute apart\n";
+
+    // The leave fires after two minutes of the stretch, never on an unset
+    // or future stamp; the latch covers a 10 min trip.
+    CHECK(!TargetlessLeaveDue(0, 1000));
+    CHECK(!TargetlessLeaveDue(1000, 1000));
+    CHECK(!TargetlessLeaveDue(1000, 1119));
+    CHECK(TargetlessLeaveDue(1000, 1120));
+    CHECK(TargetlessLeaveDue(1000, 1700));
+    CHECK(!TargetlessLeaveDue(1200, 1000));
+    CHECK(ai::TARGETLESS_LEAVE_AFTER_SECONDS == 120);
+    CHECK(ai::TARGETLESS_RESET_GAP_SECONDS == 60);
+    CHECK(ai::TARGETLESS_LEAVE_LATCH_SECONDS == 600);
+    std::cout << "  [PASS] targetless leave after two minutes\n";
 
     std::cout << "TortoiseBots zone migration policy tests passed.\n";
     return 0;

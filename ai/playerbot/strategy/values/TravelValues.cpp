@@ -3,6 +3,7 @@
 #include "TravelValues.h"
 #include "playerbot/TravelMgr.h"
 #include "playerbot/LocalPickPolicy.h"
+#include "playerbot/ZoneMigratePolicy.h"
 #include "MaintenanceValues.h"
 #include "QuestValues.h"
 #include "SharedValueContext.h"
@@ -650,6 +651,26 @@ bool ShouldLeaveOutgrownZoneValue::Calculate()
 
     if (bot->GetLevel() < 10)
         return false;
+
+    // Targetless leave (ZoneMigratePolicy.h): two minutes of back-to-back
+    // `reset travel target` mean no errand below is going to start, so the
+    // yields below (hand-in quest, capital service needs) no longer hold the
+    // bot. Checked first for that reason. The latch keeps the value true
+    // for the Grind trip it starts, whose stored condition is this value.
+    {
+        time_t const now = time(0);
+        if (AI_VALUE2(time_t, "manual time", "targetless leave until") > now)
+            return true;
+
+        time_t const targetlessSince = AI_VALUE2(time_t, "manual time", "targetless since");
+        if (ai::TargetlessLeaveDue(targetlessSince, now))
+        {
+            SET_AI_VALUE2(time_t, "manual time", "targetless leave until", now + ai::TARGETLESS_LEAVE_LATCH_SECONDS);
+            sPlayerbotAIConfig.logEvent(ai, "TargetlessLeave", WorldPosition(bot).GetAreaName(true, true),
+                std::to_string((long long)(now - targetlessSince)));
+            return true;
+        }
+    }
 
     // No IsActive early-out here: this value doubles as the travel condition
     // stored on the Grind target it requests, and bailing while a target is
