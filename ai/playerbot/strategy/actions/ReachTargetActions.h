@@ -448,6 +448,25 @@ namespace ai
     public:
         ReachMeleeAction(PlayerbotAI* ai) : ReachTargetAction(ai, "reach melee") {}
         bool RequiresAttackableTarget() const override { return true; }
+
+        // Nothing to walk for while the target is in melee reach. A melee
+        // strike (CastMeleeSpellAction, range ATTACK_DISTANCE) is castable
+        // exactly when the bot can reach the target with melee auto-attack, and
+        // "enemy out of melee" fires on the same test. The base check compares
+        // the strike's DBC range (combat range -> the bot's own combat reach,
+        // ~1.5 yd) with an edge distance, so from ~2 yd to the end of melee
+        // reach the "reach melee::<strike>" prerequisite ran instead of the
+        // strike, every tick while the target kept moving or turning: white
+        // hits landing, energy/rage pooled, last action "reach melee". Donor
+        // mod-playerbots: reach melee is useful only outside combat range.
+        bool isUseful() override
+        {
+            Unit* target = GetTarget();
+            if (target && bot->CanReachWithMeleeAutoAttack(target) && bot->IsWithinLOSInMap(target, true))
+                return false;
+
+            return ReachTargetAction::isUseful();
+        }
     };
 
     class ReachSpellAction : public ReachTargetAction

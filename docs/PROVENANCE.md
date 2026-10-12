@@ -8430,3 +8430,30 @@ Local validation: code review + build pending; in-game pending.
 | Feature | Donor | Module files | Copied / ported / reimplemented | Reason | Validation |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | Mounted companions follow further out | `mod-playerbots` @ 79bd428 `src/Ai/Base/Actions/MovementActions.cpp:1224-1225` (`MovementAction::Follow`: friendly target + bot mounted + no hostiles -> `distance += angle`) | `ai/playerbot/strategy/actions/MovementActions.cpp` (`kMountedFollowSpacing`, widen in `MovementAction::Follow`), `ai/playerbot/strategy/actions/CheckMountStateAction.cpp` (drop a standing follow generator on mount/unmount so the follow is re-issued with the new offset) | Reimplemented: fixed 3 yd instead of the donor's slot-angle-in-yards (0-6.3 yd); "no hostiles" mapped to out of combat and not in a dungeon/raid map. The re-issue is local: the core follow generator keeps its offset private and the module never replaces a running follow on the same target | In game (build 8) four hired companions on mechanical strider / winged mounts parked 2-4 yd from the master after every ride and covered the camera | code review + build pending; in-game pending |
+
+## Reach melee is not useful inside melee reach (fix 91) — 2026-10-12
+
+Feature: `ReachMeleeAction::isUseful` returns false while the bot can reach
+its target with melee auto-attack in line of sight
+(`CanReachWithMeleeAutoAttack`), the test melee strikes (`CastMeleeSpellAction`,
+range `ATTACK_DISTANCE`) use for `isPossible` and the `enemy out of melee`
+trigger uses. Before, the qualified prerequisite `reach melee::<strike>` took
+its range from the strike's DBC range (combat range = the bot's own combat
+reach, ~1.5 yd) and compared it with the bounding-radius edge distance, so
+between ~2 yd and the end of melee reach it ran instead of the strike.
+Observed live (build 8, Tanaris, 2026-10-12 09:57:11-09:57:23): rogue
+Bretorria showed `reach melee` (triggers `enemy out of melee` and `target
+with combo points`) while its white swings landed on a Wastewander Assassin
+every 1-2 s; one Eviscerate and no Sinister Strike in ~13 s at 52-70 energy.
+
+Donor: `mod-playerbots` @ 79bd428
+`src/Ai/Base/Actions/ReachTargetActions.cpp` (`ReachTargetAction::isUseful`:
+`!bot->IsWithinCombatRange(target, distance)`, reach melee distance =
+`MeleeDistance`) + `ReachTargetActions.h` (`ReachMeleeAction`).
+
+Module file: `ai/playerbot/strategy/actions/ReachTargetActions.h`
+(`ReachMeleeAction::isUseful` override). Reach spell / pull / heal reach,
+the give-up clocks and `ChaseTo` are unchanged.
+Reimplemented (donor rule expressed with the module's melee test).
+Validation: code review + `bash tools/verify_all.sh` + `git diff --check`;
+build pending; in-game pending.
