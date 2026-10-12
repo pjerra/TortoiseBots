@@ -440,6 +440,22 @@ Player* PlayerbotAI::GetGroupMaster()
     return master;
 }
 
+// A food or drink aura, by the core's own test (SpellEntry food/drink
+// specific): the aura's spell is removed by standing up. That covers the
+// cheat meal spells (24005/24355, aura types 20/21) and real food and drink
+// items (433/430 and their kin, aura types 84/85) alike.
+static bool HasSeatedAura(Player* bot)
+{
+    for (auto const& entry : bot->GetSpellAuraHolderMap())
+    {
+        SpellEntry const* spell = entry.second ? entry.second->GetSpellProto() : nullptr;
+        if (spell && (spell->AuraInterruptFlags & AURA_INTERRUPT_FLAG_NOT_SEATED))
+            return true;
+    }
+
+    return false;
+}
+
 void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
 {
     AiObjectContext* context = aiObjectContext;
@@ -622,10 +638,8 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
         // first: only a bot that is asleep, seated and has a food or drink
         // aura looks at its group. Standing drops the aura, so this fires
         // once; the fresh attackers make "combat start" fire on the next tick.
-        if (aiInternalUpdateDelay > 0 && !isWaiting &&
-            bot->GetStandState() == UNIT_STAND_STATE_SIT &&
-            (bot->HasAuraType(SPELL_AURA_OBS_MOD_HEALTH) || bot->HasAuraType(SPELL_AURA_OBS_MOD_MANA)) &&
-            IsGroupMemberNearInCombat())
+        if (aiInternalUpdateDelay > 0 && !isWaiting && bot->IsSittingDown() &&
+            HasSeatedAura(bot) && IsGroupMemberNearInCombat())
         {
             bot->SetStandState(UNIT_STAND_STATE_STAND);
             aiObjectContext->GetValue<std::list<ObjectGuid>>("attackers", 1)->Reset();
@@ -1300,6 +1314,10 @@ bool PlayerbotAI::IsGroupMemberNearInCombat()
         // A combat flag alone can be a stuck flag; a real fight has a victim
         // or something attacking the member.
         if (!sServerFacade.IsInCombat(member) || (!member->GetVictim() && member->GetAttackers().empty()))
+            continue;
+
+        // A duel is not the group's fight.
+        if (member->m_duel && member->GetVictim() && member->GetVictim()->GetObjectGuid() == member->m_duel->opponent)
             continue;
 
         if (sServerFacade.GetDistance2d(bot, member) <= sPlayerbotAIConfig.sightDistance)

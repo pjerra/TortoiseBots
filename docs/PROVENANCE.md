@@ -9459,12 +9459,13 @@ Not compiled into a server, not tested in game.
 Feature: `EatAction`/`DrinkAction::isUseful` refuse while the group is
 fighting — the cached `has attackers` value, or a live group member within
 `AiPlayerbot.SightDistance` that is in combat with a victim or an attacker
-(`PlayerbotAI::IsGroupMemberNearInCombat`, member flags only, outside
-battlegrounds). `EatAction::isUseful` also refuses a top-up meal at or above
+and is not just duelling (`PlayerbotAI::IsGroupMemberNearInCombat`, member
+flags only, outside battlegrounds). `EatAction::isUseful` also refuses a top-up meal at or above
 `MediumHealth` while the bot has the `cc` strategy and a live `rti cc target`.
-`PlayerbotAI::UpdateAI` wakes a bot that is asleep, seated and carries a food
-or drink aura (`SPELL_AURA_OBS_MOD_HEALTH`/`SPELL_AURA_OBS_MOD_MANA`) when the
-same member check is true: it stands up (which drops the aura), resets
+`PlayerbotAI::UpdateAI` wakes a bot that is asleep, seated and carries an aura
+whose spell has `AURA_INTERRUPT_FLAG_NOT_SEATED` (the core's own food/drink
+test: cheat spells 24005/24355 use aura types 20/21, real food and drink such
+as 433/430 use 84/85) when the same member check is true: it stands up (which drops the aura), resets
 `attackers`/`has attackers` and clears the AI delay, so `combat start` fires on
 the next tick. Files: `ai/playerbot/strategy/actions/UseItemAction.h`,
 `ai/playerbot/PlayerbotAI.{h,cpp}`.
