@@ -261,6 +261,25 @@ namespace ai
         }
     };
 
+    // True when the bot holds (or, with the item cheat, can conjure) a poison it is
+    // old enough to use. The cheat never covers a poison above the bot's level (same
+    // rule as ApplyPoisonAction), else the action fails and re-fires every tick.
+    template <typename Ids>
+    inline bool HasUsablePoisonItem(PlayerbotAI* ai, Player* bot, const Ids& itemIds)
+    {
+        const bool cheat = ai->HasCheat(BotCheatMask::item);
+        for (const uint32 itemId : itemIds)
+        {
+            const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemId);
+            if (proto && (bot->GetLevel() >= proto->RequiredLevel))
+            {
+                if (cheat || bot->HasItemCount(itemId, 1))
+                    return true;
+            }
+        }
+        return false;
+    }
+
     class ApplyPoisonTrigger : public Trigger
     {
     public:
@@ -272,19 +291,7 @@ namespace ai
 
         bool HasPoisonItem() const
         {
-            // The item cheat conjures the poison, but never one above the bot's level
-            // (same rule as ApplyPoisonAction), else the action fails and re-fires.
-            const bool cheat = ai->HasCheat(BotCheatMask::item);
-            for (const uint32 itemId : poisonItemIds)
-            {
-                const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemId);
-                if (proto && (bot->GetLevel() >= proto->RequiredLevel))
-                {
-                    if (cheat || bot->HasItemCount(itemId, 1))
-                        return true;
-                }
-            }
-            return false;
+            return HasUsablePoisonItem(ai, bot, poisonItemIds);
         }
 
         bool IsActive() override

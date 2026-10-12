@@ -105,16 +105,8 @@ bool MainHandWeaponNoEnchantTrigger::IsActive()
     if (!weapon || weapon->GetEnchantmentId(TEMP_ENCHANTMENT_SLOT))
         return false;
 
-    if (ai->HasCheat(BotCheatMask::item))
-        return true;
-
     static const uint32 mhPoisons[] = { 6947, 6949, 6950, 8926, 8927, 8928, 21927, 2892, 2893, 8984, 8985, 20844, 22053, 22054, 10918, 10920, 10921, 10922, 22055, 3775, 3776, 5237, 6951, 9186 };
-    for (uint32 id : mhPoisons)
-    {
-        if (bot->HasItemCount(id, 1))
-            return true;
-    }
-    return false;
+    return HasUsablePoisonItem(ai, bot, mhPoisons);
 }
 
 bool OffHandWeaponNoEnchantTrigger::IsActive()
@@ -123,16 +115,8 @@ bool OffHandWeaponNoEnchantTrigger::IsActive()
     if (!weapon || weapon->GetEnchantmentId(TEMP_ENCHANTMENT_SLOT))
         return false;
 
-    if (ai->HasCheat(BotCheatMask::item))
-        return true;
-
     static const uint32 ohPoisons[] = { 2892, 2893, 8984, 8985, 20844, 22053, 22054, 6947, 6949, 6950, 8926, 8927, 8928, 21927, 10918, 10920, 10921, 10922, 22055, 3775, 3776, 5237, 6951, 9186 };
-    for (uint32 id : ohPoisons)
-    {
-        if (bot->HasItemCount(id, 1))
-            return true;
-    }
-    return false;
+    return HasUsablePoisonItem(ai, bot, ohPoisons);
 }
 
 bool SapCcMarkTrigger::IsActive()
