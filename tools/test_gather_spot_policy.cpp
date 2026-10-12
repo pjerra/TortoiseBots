@@ -17,16 +17,27 @@ using ai::IsDeathPositionAvoided;
 using ai::kEmptyGatherSpotMs;
 using ai::kEmptyGatherSpotRadiusYd;
 using ai::kEmptyGatherSpots;
+using ai::ShouldMarkGatherSpotEmpty;
 
 int main()
 {
     std::cout << "Starting TortoiseBots gather spot tests...\n";
 
-    // Own point in sight: same map and inside the 60 yd sight range only.
-    CHECK(GatherPointInSight(true, 59.0f, 60.0f));
-    CHECK(GatherPointInSight(true, 60.0f, 60.0f));
-    CHECK(!GatherPointInSight(true, 61.0f, 60.0f));
+    // Own point in sight: same map, and the 60 yd scan around the bot must
+    // still cover the 10 yd spot radius around the point (<= 50 yd).
+    CHECK(GatherPointInSight(true, 49.0f, 60.0f));
+    CHECK(GatherPointInSight(true, 50.0f, 60.0f));
+    CHECK(!GatherPointInSight(true, 51.0f, 60.0f));
+    CHECK(!GatherPointInSight(true, 60.0f, 60.0f));
     CHECK(!GatherPointInSight(false, 5.0f, 60.0f));
+
+    // Only a point judged by sight, still gatherable, with no node on it is
+    // recorded empty: a live node, a pooled alternate or a skill/level expiry
+    // never marks the spot.
+    CHECK(ShouldMarkGatherSpotEmpty(true, true, false));
+    CHECK(!ShouldMarkGatherSpotEmpty(true, true, true));
+    CHECK(!ShouldMarkGatherSpotEmpty(true, false, false));
+    CHECK(!ShouldMarkGatherSpotEmpty(false, true, false));
 
     std::uint32_t const NOW = 1'000'000;
     std::uint32_t const MAP = 1;

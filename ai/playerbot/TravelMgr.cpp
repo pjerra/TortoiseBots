@@ -1095,10 +1095,15 @@ bool GatherTravelDestination::IsActive(Player* bot, const PlayerTravelInfo& info
             }
             else
             {
+                // Game-object destinations keep the entry negated (entry <= 0,
+                // see EntryTravelDestination); the guid carries the positive
+                // template id. Comparing the two as-is never matched, so a
+                // mining or herb trip near a spawned node always read inactive.
+                uint32 const goEntry = uint32(-GetEntry());
                 std::list<ObjectGuid> targets = AI_VALUE(std::list<ObjectGuid>, "nearest game objects no los");
 
                 for (auto& target : targets)
-                    if (target.GetEntry() == GetEntry())
+                    if (target.IsGameObject() && target.GetEntry() == goEntry)
                         return true;
             }
 
@@ -1213,6 +1218,34 @@ void TravelTarget::SetStatus(TravelStatus status) {
     }
 }
 
+// Whether a spawned mining or herb node (any entry: pooled ores share one
+// spot) stands within the empty-spot radius of a gather trip's own point.
+// Reads the sight-range node scan the destination verdict already filled;
+// the scan lists spawned game objects only.
+static bool GatherNodeAtPoint(PlayerbotAI* ai, WorldPosition const& point)
+{
+    AiObjectContext* context = ai->GetAiObjectContext();
+    EntryTravelPurposeMap const& purposes = GAI_VALUE_REF(EntryTravelPurposeMap, "entry travel purpose");
+    uint32 const gatherMask = (uint32)TravelDestinationPurpose::GatherMining | (uint32)TravelDestinationPurpose::GatherHerbalism;
+    float const radiusSq = ai::kEmptyGatherSpotRadiusYd * ai::kEmptyGatherSpotRadiusYd;
+
+    for (ObjectGuid const& guid : AI_VALUE(std::list<ObjectGuid>, "nearest game objects no los"))
+    {
+        if (!guid.IsGameObject())
+            continue;
+
+        auto const purpose = purposes.find(-1 * (int32)guid.GetEntry());
+        if (purpose == purposes.end() || !(purpose->second & gatherMask))
+            continue;
+
+        GameObject* go = ai->GetGameObject(guid);
+        if (go && WorldPosition(go).sqDistance2d(point) <= radiusSq)
+            return true;
+    }
+
+    return false;
+}
+
 bool TravelTarget::IsDestinationActive()
 {
     Player* player = bot;
@@ -1232,8 +1265,9 @@ bool TravelTarget::IsDestinationActive()
     // The destination verdict looks at whichever spawn of the entry is
     // nearest, so passing within sight of another, empty spawn of the same
     // node ended the trip half way (live 2026-10-12: median gather trip 48 s,
-    // 47 bots ping-ponging node types). Until the bot sees its own point only
-    // the static rules (skill, level) apply.
+    // 47 bots ping-ponging node types). Until the bot sees its own point (the
+    // node scan then covers the whole spot) only the static rules (skill,
+    // level) apply.
     TravelDestinationPurpose const purpose = tDestination->GetPurpose();
     if (wPosition && (purpose == TravelDestinationPurpose::GatherMining || purpose == TravelDestinationPurpose::GatherHerbalism))
     {
@@ -1409,11 +1443,16 @@ void TravelTarget::CheckStatus()
                 ai->TellDebug(ai->GetMaster(), "The target is expiring because its gather node is gone.", "debug travel");
                 // Remember the spawn point seen empty for about a respawn, so
                 // the next pick walks another spawn instead of back to this
-                // one. Only a point the bot could see (an expiry on skill or
-                // level alone says nothing about the node).
-                if (wPosition && wPosition->GetMapId() == bot->GetMapId() &&
-                    ai::GatherPointInSight(true, wPosition->distance(WorldPosition(bot)), sPlayerbotAIConfig.sightDistance))
-                    ai->MarkEmptyGatherSpot(wPosition->GetMapId(), wPosition->getX(), wPosition->getY(), WorldTimer::getMSTime());
+                // one. Only a point the bot could see, that it could still
+                // gather at (an expiry on skill or level alone says nothing
+                // about the node) and that really has no mining or herb node.
+                if (wPosition && wPosition->GetMapId() == bot->GetMapId())
+                {
+                    bool const inSight = ai::GatherPointInSight(true, wPosition->distance(WorldPosition(bot)), sPlayerbotAIConfig.sightDistance);
+                    if (ai::ShouldMarkGatherSpotEmpty(inSight, inSight && tDestination->IsPossible(PlayerTravelInfo(bot)),
+                            inSight && GatherNodeAtPoint(ai, *wPosition)))
+                        ai->MarkEmptyGatherSpot(wPosition->GetMapId(), wPosition->getX(), wPosition->getY(), WorldTimer::getMSTime());
+                }
                 forced = false;
                 SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
                 return;
