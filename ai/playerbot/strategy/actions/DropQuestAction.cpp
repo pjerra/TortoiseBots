@@ -2,6 +2,8 @@
 #include "playerbot/playerbot.h"
 #include "DropQuestAction.h"
 #include "playerbot/QuestLogPolicy.h"
+#include <algorithm>
+#include <vector>
 
 using namespace ai;
 
@@ -53,6 +55,21 @@ bool CleanQuestLogAction::IsGreyIncomplete(Quest const* quest)
     if (!quest || quest->GetQuestLevel() <= 0)
         return false;
     return bot->GetLevel() >= bot->GetQuestLevelForPlayer(quest) + 8;
+}
+
+bool CleanQuestLogAction::HasObjectiveProgress(Quest const* quest)
+{
+    auto const& statusMap = bot->getQuestStatusMap();
+    auto itr = statusMap.find(quest->GetQuestId());
+    if (itr == statusMap.end())
+        return false;
+    for (uint8 i = 0; i < QUEST_OBJECTIVES_COUNT; ++i)
+        if (itr->second.m_creatureOrGOcount[i] > 0)
+            return true;
+    for (uint8 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
+        if (itr->second.m_itemcount[i] > 0)
+            return true;
+    return false;
 }
 
 bool CleanQuestLogAction::HasRequiredDeliverItems(Quest const* quest)
@@ -156,34 +173,27 @@ bool CleanQuestLogAction::Execute(Event& event)
     // scan only applies the old per-quest rules.
     bool upkeep = IsUpkeepBot();
     bool dropped = false;
-    // The triage gate mirrors QuestLogNearlyFullTrigger (free slots > 2 =
-    // full enough to leave alone).
-    uint8 freeSlots = 0;
-    for (uint8 count = 0; count < MAX_QUEST_LOG_SIZE; ++count)
-        if (!GetQuestSlotIdCompat(bot, count))
-            ++freeSlots;
-    bool triage = upkeep && freeSlots < 2;
-    uint8 slot = 0;
-    while (slot < MAX_QUEST_LOG_SIZE)
+    // Pass 1: the per-quest rules (grey, banned, FAILED, unrewardable
+    // COMPLETE, itemless deliver) drop everything they match, as before.
+    // They never judge a quest the bot could still finish.
+    // Pass 2 (triage) only runs when fewer than two slots are free and only
+    // drops enough quests to get back to two free, worst first (see
+    // QuestTriageRank). Dropping every zone-mismatched quest at once threw
+    // away 7-16 in-level quests whenever a cross-zone errand filled the log.
+    for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
     {
         uint32 questId = GetQuestSlotIdCompat(bot, slot);
         QuestStatus status = questId ? bot->GetQuestStatus(questId) : QUEST_STATUS_NONE;
         if (!questId || (status != QUEST_STATUS_INCOMPLETE && status != QUEST_STATUS_COMPLETE && status != QUEST_STATUS_FAILED))
-        {
-            ++slot;
             continue;
-        }
 
         Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
         // Banned quests (CLUCK!, inactive templates) drop even when upkeep
         // is off or the bot is owned: they can never pay off, and IsDroppable
         // returns them before any upkeep-gated branch.
-
-        bool drop = IsDroppable(quest, status, upkeep, triage);
+        bool drop = IsDroppable(quest, status, upkeep, false);
         if (!drop && quest && ai::IsBannedQuest(questId, !quest->IsActive()))
             drop = !quest->GetRequiredClasses();
-
-        ++slot;
         if (!drop)
             continue;
 
@@ -191,6 +201,47 @@ bool CleanQuestLogAction::Execute(Event& event)
         ai->TellPlayer(requester, BOT_TEXT("quest_remove") + " " + chat->formatQuest(quest),
                        PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
         dropped = true;
+    }
+
+    // The triage gate mirrors QuestLogNearlyFullTrigger (free slots > 2 =
+    // full enough to leave alone).
+    uint8 freeSlots = 0;
+    for (uint8 count = 0; count < MAX_QUEST_LOG_SIZE; ++count)
+        if (!GetQuestSlotIdCompat(bot, count))
+            ++freeSlots;
+
+    if (upkeep && freeSlots < 2)
+    {
+        std::vector<std::pair<int, uint32>> candidates; // (rank, questId) in slot order
+        for (uint8 slot = 0; slot < MAX_QUEST_LOG_SIZE; ++slot)
+        {
+            uint32 questId = GetQuestSlotIdCompat(bot, slot);
+            QuestStatus status = questId ? bot->GetQuestStatus(questId) : QUEST_STATUS_NONE;
+            if (status != QUEST_STATUS_INCOMPLETE)
+                continue;
+            Quest const* quest = sObjectMgr.GetQuestTemplate(questId);
+            if (!IsDroppable(quest, status, upkeep, true))
+                continue;
+            int rank = ai::QuestTriageRank((int)quest->GetQuestLevel(), bot->GetLevel(),
+                quest->GetType(), quest->GetSuggestedPlayers(),
+                quest->GetZoneOrSort(), bot->GetZoneId(), HasObjectiveProgress(quest));
+            // A quest IsDroppable accepts for another reason (rank 0) goes last.
+            candidates.emplace_back(rank, questId);
+        }
+        std::stable_sort(candidates.begin(), candidates.end(),
+            [](std::pair<int, uint32> const& l, std::pair<int, uint32> const& r) { return l.first > r.first; });
+
+        for (auto const& candidate : candidates)
+        {
+            if (freeSlots >= 2)
+                break;
+            Quest const* quest = sObjectMgr.GetQuestTemplate(candidate.second);
+            ai->DropQuest(candidate.second);
+            ai->TellPlayer(requester, BOT_TEXT("quest_remove") + " " + chat->formatQuest(quest),
+                           PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+            ++freeSlots;
+            dropped = true;
+        }
     }
 
     if (!dropped)

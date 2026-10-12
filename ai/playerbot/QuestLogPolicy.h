@@ -50,6 +50,25 @@ namespace ai
         return false;
     }
 
+    // Which triage drop goes first when the log is full and only some slots
+    // must be freed (0 = not a triage drop). Unfinishable solo picks
+    // (over-level, elite/dungeon/raid, group-suggested) rank 3; a quest that
+    // only belongs to another zone ranks 2 with no objective progress and 1
+    // with progress, so in-level quests with work done go last. Ties keep
+    // log-slot order (stable sort at the call site).
+    inline int QuestTriageRank(int questLevel, std::uint32_t botLevel,
+        std::uint32_t questType, std::uint32_t suggestedPlayers,
+        std::int32_t zoneOrSort, std::uint32_t botZoneId, bool hasProgress)
+    {
+        if (QuestTriageShouldDrop(questLevel, botLevel, questType, suggestedPlayers,
+                false, 0, 0))
+            return 3;
+        if (QuestTriageShouldDrop(questLevel, botLevel, questType, suggestedPlayers,
+                false, zoneOrSort, botZoneId))
+            return hasProgress ? 1 : 2;
+        return 0;
+    }
+
     // Quest accept/drop churn (live pool: 16 695 accepts vs 7 194 drops).
     // The log showed two accept-side holes with the same shape as a drop
     // rule, so both are decided here on quest-template data and tested on

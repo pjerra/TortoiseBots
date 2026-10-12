@@ -2953,6 +2953,24 @@ Local validation: `tools/test_quest_log_triage_policy.cpp` (FAILED,
 `tools/verify_all.sh`); `bash tools/verify_all.sh`; `git diff --check`.
 No deploy (orchestrator compiles).
 
+## Quest-log triage drops only what is needed (batch5 finding 7) — 2026-10-12
+Feature: when the log is nearly full, triage now drops quests worst first and
+stops at two free slots (`QuestTriageRank` in `ai/playerbot/QuestLogPolicy.h`,
+`CleanQuestLogAction::Execute`): unfinishable picks, then zone-mismatched
+quests without objective progress, then zone-mismatched with progress.
+Per-quest rules (grey, FAILED, banned, unrewardable) are unchanged.
+
+Source project: `mod-playerbots` @ 79bd428
+`src/Ai/World/Rpg/Action/NewRpgBaseAction.cpp` (`OrganizeQuestLog`: low-slot
+passes, bounded drop count).
+Source files: local `QuestLogPolicy.h`, `DropQuestAction.{h,cpp}`,
+`tools/test_quest_log_triage_policy.cpp`.
+Copied / ported / reimplemented: reimplemented (ordering and stop point are
+module logic; donor stops after 8 drops).
+Reason: live pool purged 16/13/7 in-level quests at once after cross-zone trips.
+Local validation: code review + build pending; in-game pending;
+`tools/test_quest_log_triage_policy.cpp`, `bash tools/verify_all.sh`.
+
 ## Loot-roll vote gates for pool bots (E08) — 2026-10-03
 Feature: plain auto votes pass through three donor gates before the
 `IsLootAllowed` verdict — FFA/master-loot rolls PASS, recipes NEED when
