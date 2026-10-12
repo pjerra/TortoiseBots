@@ -46,5 +46,17 @@ namespace ai
         float MountBreakEvenDistance() const;
         bool Mount(Player* requester, bool limitSpeedToGroup = false);
         bool UnMount() const;
+        // The mount/unmount decision shared by Execute and isUseful. With
+        // planOnly set it changes nothing and only answers "would this mount,
+        // dismount or cast?", so a bot already in the right mount state is
+        // useless for this tick instead of a failed action.
+        bool Decide(Player* requester);
+        bool DebugMount() const;
+        bool planOnly = false;
+        // The "mount in a safe place" coin flip, rolled once by the plan and
+        // reused by the Execute that follows it, so the 50 % chance is not
+        // rolled twice (25 %). -1 = not rolled for this decision.
+        int safeMountRoll = -1;
+        bool SafeMountRoll();
     };
 }
