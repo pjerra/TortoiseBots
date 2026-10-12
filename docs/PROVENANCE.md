@@ -8981,3 +8981,9 @@ check, because the core refuses a click on a node the clicker's team holds
 or is assaulting (`BattleGroundAB.cpp:364-365`).
 
 Validation: code review + build pending; in-game pending.
+
+## Keep usable consumables at any item level — 2026-10-12
+
+| Feature | Source project | Source commit | Source files | Ported / reimplemented | Reason | Local validation |
+| --- | --- | --- | --- | --- | ---: | --- |
+| Food, drink, potions and bandages the bot can use are KEEP at any item level (no `ItemLevel >= bot level` gate, bandages for every class with First Aid); a lower tier is surplus once a full stack of a better tier is held. Class poisons, stones and oils are KEEP until a higher tier of the same ladder is held (fixed +6/+10 level windows removed). Buying stays level-tiered. | `mod-playerbots` | `79bd428` | `src/Ai/Base/Value/ItemUsageValue.cpp:76-93` (consumable keep, no item-level gate), `:894-929` (`GetConsumableType`: bandages for every class), `:803-827` (`BetterStacks`) | Reimplemented: donor "keep while better tiers are under N stacks" rule, with a 1-stack threshold (TortoiseBots' existing restock target) and no own-item-id cap, because sell and destroy act on every stack of an item id at once; tier ladders for poisons/stones/oils in `runtime/ClassConsumablePolicy.h` | Live m910q (batch 8, finding 5): 67 Major Healing Potions sold by level 56-60 bots, 1,306 seeded Linen Bandages, 85 Crippling Poison, 174 Minor Wizard Oil, 71 Dense Sharpening/Weightstone sold in 16 h and re-seeded | `tools/test_class_consumable_policy.cpp`, `bash tools/verify_all.sh`; code review + build pending; in-game pending |
