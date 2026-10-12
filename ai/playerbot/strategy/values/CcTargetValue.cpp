@@ -9,10 +9,10 @@
 
 using namespace ai;
 
-class FindTargetForCcStrategy : public FindTargetStrategy
+class FindTargetForCcStrategy : public FindNonCcTargetStrategy
 {
 public:
-    FindTargetForCcStrategy(PlayerbotAI* ai, std::string spell) : FindTargetStrategy(ai)
+    FindTargetForCcStrategy(PlayerbotAI* ai, std::string spell) : FindNonCcTargetStrategy(ai)
     {
         this->spell = spell;
         maxDistance = 0;
@@ -44,10 +44,11 @@ public:
 
         if (assignedTarget)
         {
-            // Never CC the last enemy of the fight: the party kills the
-            // marked mob last (DPS/tank kill-last fallback), so re-CCing it
-            // would only stall the fight or ping-pong sheep and damage.
-            if (IsOnlyEnemyLeft(creature))
+            // Never CC once only CC marks are left: the party then kills
+            // the marks last (DPS/tank kill-last fallback, same test), so
+            // re-CCing would only stall the fight or ping-pong sheep and
+            // damage. A stunned/rooted/feared unmarked mob still counts.
+            if (OnlyCcMarksLeft(creature))
                 return;
             result = creature;
             return;
@@ -137,22 +138,6 @@ public:
     }
 
 private:
-    // True when no other live enemy is left among the bot's attack targets.
-    bool IsOnlyEnemyLeft(Unit* creature)
-    {
-        AiObjectContext* context = ai->GetAiObjectContext();
-        std::list<ObjectGuid> attackers = AI_VALUE(std::list<ObjectGuid>, "possible attack targets");
-        for (ObjectGuid const& guid : attackers)
-        {
-            if (guid == creature->getObjectGuid())
-                continue;
-            Unit* other = ai->GetUnit(guid);
-            if (other && sServerFacade.IsAlive(other))
-                return false;
-        }
-        return true;
-    }
-
     // Smart auto-CC candidacy, see the call site for the rules.
     bool IsAutoCcTarget(Unit* creature)
     {

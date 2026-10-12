@@ -39,6 +39,12 @@ namespace ai
     public:
         FindNonCcTargetStrategy(PlayerbotAI* ai) : FindTargetStrategy(ai) {}
 
+        // True when every live enemy fighting the group is a CC mark (Moon
+        // or a bot's assigned "rti cc" mark), not counting `except`. Judged
+        // from the raw "attackers" list, so a stunned, rooted, feared or
+        // sheeped unmarked mob still counts as an enemy left to fight.
+        bool OnlyCcMarksLeft(Unit* except = nullptr);
+
     protected:
         virtual bool IsCcTarget(Unit* attacker);
 
@@ -62,8 +68,9 @@ namespace ai
         // up and creates threat.
         Unit* GetExplicitAttackTarget();
         // Kill-last fallback for the tank/DPS pickers: once only CC-marked
-        // mobs (Moon or a bot's assigned "rti cc" mark) are left, sheeped or
-        // free, the first live one is the target instead of none.
+        // mobs (Moon or a bot's assigned "rti cc" mark) are left fighting the
+        // group, sheeped or free, the first live one in combat is the target
+        // instead of none. Any other enemy, crowd-controlled or not, blocks it.
         Unit* FindLastCcTarget();
     };
 

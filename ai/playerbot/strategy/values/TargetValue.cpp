@@ -52,6 +52,10 @@ namespace
         {
             if (result || !attacker || attacker->IsPlayer() || !sServerFacade.IsAlive(attacker))
                 return;
+            // Only a mark that is already fighting: never open on a marked
+            // mob of an unpulled pack.
+            if (!sServerFacade.IsInCombat(attacker))
+                return;
             if (IsCcTarget(attacker))
                 result = attacker;
         }
@@ -61,7 +65,31 @@ namespace
 Unit* TargetValue::FindLastCcTarget()
 {
     FindLastCcTargetStrategy strategy(ai);
+    // "possible attack targets" drops stunned/rooted/feared mobs while a
+    // free one is left, so the tournaments returning nothing does not mean
+    // only marks are left; check the raw attackers first.
+    if (!strategy.OnlyCcMarksLeft())
+        return nullptr;
     return FindTarget(&strategy);
+}
+
+bool FindNonCcTargetStrategy::OnlyCcMarksLeft(Unit* except)
+{
+    Player* bot = ai->GetBot();
+    std::list<ObjectGuid> attackers = ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid>>("attackers")->Get();
+    for (ObjectGuid const& guid : attackers)
+    {
+        Unit* unit = ai->GetUnit(guid);
+        if (!unit || unit == except || !sServerFacade.IsAlive(unit))
+            continue;
+        // Same filter "possible attack targets" applies before its CC strip
+        // (ignoreCC = true): crowd-controlled mobs stay in.
+        if (!PossibleAttackTargetsValue::IsValid(unit, bot, sPlayerbotAIConfig.sightDistance, true, false))
+            continue;
+        if (!IsCcTarget(unit))
+            return false;
+    }
+    return true;
 }
 
 bool FindNonCcTargetStrategy::IsCcTarget(Unit* attacker)
