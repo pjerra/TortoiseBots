@@ -1644,6 +1644,7 @@ AiPlayerbot.EnableCustomRaidTactics = 1
 AiPlayerbot.RandomBotCombatStrategies = +dps assist,-threat
 # Inside a dungeon or raid the non-combat list skips +grind, +travel, +tfish, +rpg,
 # +rpg craft and +wander, so a pool bot in a party keeps its follow leash there.
+# Zoning in drops those strategies too; leaving gives them back with this list.
 AiPlayerbot.RandomBotNonCombatStrategies = +grind,+loot,+custom::say,+tfish,+wander,+rpg craft
 #AiPlayerbot.RandomBotReactStrategies =
 #AiPlayerbot.RandomBotDeadStrategies =

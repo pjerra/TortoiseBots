@@ -1221,6 +1221,7 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
                         // world: grind/travel/tfish/rpg wander inside the
                         // instance otherwise (Issue #218).
                         bool const inInstance = player->GetMap() && (player->GetMap()->IsDungeon() || player->GetMap()->IsRaid());
+                        facade->instanceGuardHeld = inInstance;
                         nonCombatEngine->addStrategy("collision");
                         if (!inInstance)
                             nonCombatEngine->addStrategy("grind");
@@ -1331,6 +1332,47 @@ std::string AiFactory::InstanceSafeNonCombatStrategies(Player* player, std::stri
         kept += entry;
     }
     return kept;
+}
+
+void AiFactory::ApplyInstanceGuardOnMapChange(Player* player, PlayerbotAI* ai)
+{
+    if (!player || !ai || !player->GetMap() || player->InBattleGround())
+        return;
+
+    // The bots the guarded branch of AddDefaultNonCombatStrategies builds: a
+    // pool bot in a group it does not lead, with a master. Without this the
+    // kit from the open world rode along through the instance portal until
+    // something rebuilt the strategies (Issue #218).
+    if (!sRandomBotFacade.IsFreeBot(player) || !player->GetGroup() || ai->IsGroupLeader() || !ai->GetMaster())
+        return;
+
+    bool const inInstance = player->GetMap()->IsDungeon() || player->GetMap()->IsRaid();
+    if (inInstance)
+    {
+        // "-rpg" also drops its children (rpg quest/vendor/explore/maintenance).
+        // "wander" goes only next to "follow", so a bot whose movement mode is
+        // wander keeps a movement strategy, as on a rebuild inside.
+        std::string strip = "-grind,-travel,-tfish,-rpg,-rpg craft";
+        if (ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT))
+            strip += ",-wander";
+        ai->ChangeStrategy(strip, BotState::BOT_STATE_NON_COMBAT);
+        ai->instanceGuardHeld = true;
+        return;
+    }
+
+    // Back in the open world: give back what the guarded branch adds there,
+    // but only to a bot the guard held, so a boat or zeppelin ride does not
+    // undo a player's own "-grind".
+    if (!ai->instanceGuardHeld)
+        return;
+    ai->instanceGuardHeld = false;
+
+    std::string restore = "+grind";
+    if (sPlayerbotAIConfig.autoDoQuests)
+        restore += ",+travel,+tfish,+rpg";
+    if (!sPlayerbotAIConfig.randomBotNonCombatStrategies.empty())
+        restore += "," + sPlayerbotAIConfig.randomBotNonCombatStrategies;
+    ai->ChangeStrategy(restore, BotState::BOT_STATE_NON_COMBAT);
 }
 
 void AiFactory::AddDefaultDeadStrategies(Player* player, PlayerbotAI* const facade, Engine* deadEngine)

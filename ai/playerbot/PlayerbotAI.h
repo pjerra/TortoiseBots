@@ -609,6 +609,12 @@ public:
     // target's creature_id triggers a strategy reset for the new target.
     uint32 scboteLastEncounterCreatureId = 0;
 
+    // Issue #218: true while the instance guard holds this pool bot's
+    // open-world non-combat kit back (built or entered on a dungeon/raid map).
+    // AiFactory::ApplyInstanceGuardOnMapChange gives the kit back when the bot
+    // leaves for the open world, and only then.
+    bool instanceGuardHeld = false;
+
     // BotActionLog: track last combat state so we only log STATE snapshots
     // on actual combat-state transitions (combat-enter / combat-exit).
     // Without this we'd spam the log with "still in combat" lines every

@@ -108,8 +108,19 @@ void BotPlayerAdapter::OnLogin(Player* player)
 
 void BotPlayerAdapter::OnMapChanged(Player* player)
 {
-    if (!player || !player->GetSession() || !player->GetSession()->HasNetworkTransport() ||
-        !player->IsInWorld() || !player->GetMap() || player->GetMap()->IsDungeon())
+    if (!player || !player->GetSession())
+        return;
+
+    // A bot's own far teleport (PlayerbotAI::HandleTeleportAck acks it) lands
+    // here once per map change: re-apply the instance guard for the new map.
+    if (!player->GetSession()->HasNetworkTransport())
+    {
+        if (PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(player))
+            AiFactory::ApplyInstanceGuardOnMapChange(player, ai);
+        return;
+    }
+
+    if (!player->IsInWorld() || !player->GetMap() || player->GetMap()->IsDungeon())
     {
         return;
     }
