@@ -10,11 +10,13 @@ namespace ai
     // included: the WSG roof/floor jumps there are scripted routes, and the
     // open world and BGs have no cut-off-island problem.
     //
-    // Pure decision rule, no core includes. Used by JumpAction::isUseful
-    // (which every jump strategy and the explicit `jump` command go through)
-    // and by the follow path's "maybe jump is faster" shortcut check.
-    inline bool JumpAllowedOnMap(bool isDungeonOrRaid)
+    // Only automatic jumps are blocked: an explicit player `jump` command
+    // (explicitOrder) still works ("explicit orders beat automation").
+    //
+    // Pure decision rule, no core includes. Used by JumpAction::Execute and
+    // by the follow path's "maybe jump is faster" shortcut check.
+    inline bool JumpAllowedOnMap(bool isDungeonOrRaid, bool explicitOrder)
     {
-        return !isDungeonOrRaid;
+        return explicitOrder || !isDungeonOrRaid;
     }
 }

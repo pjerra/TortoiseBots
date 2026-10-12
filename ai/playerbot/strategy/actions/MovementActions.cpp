@@ -2851,16 +2851,16 @@ bool MoveToAction::Execute(Event& event)
 
 bool JumpAction::isUseful()
 {
-    // Issue #125: no jumping inside dungeons/raids (covers every jump
-    // strategy and the explicit `jump` command).
-    if (!bot->IsInWorld() || !ai::JumpAllowedOnMap(bot->GetMap() && bot->GetMap()->IsDungeon()))
-        return false;
-
-    return ai->HasPlayerNearby() && !ai->IsJumping();
+    return bot->IsInWorld() && ai->HasPlayerNearby() && !ai->IsJumping();
 }
 
 bool JumpAction::Execute(ai::Event &event)
 {
+    // Issue #125: no automatic jumps inside dungeons/raids (strategies);
+    // an explicit player `jump` command (event has an owner) still works.
+    if (!ai::JumpAllowedOnMap(bot->GetMap() && bot->GetMap()->IsDungeon(), event.GetOwner() != nullptr))
+        return false;
+
     // don't jump while casting without real player command
     if (!event.GetOwner() && bot->IsNonMeleeSpellCasted(false, false, true))
         return false;

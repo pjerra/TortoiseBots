@@ -90,7 +90,7 @@ bool FollowAction::isUseful()
 
     // maybe jump is faster?
     if (ai->HasStrategy("follow jump", BotState::BOT_STATE_NON_COMBAT) && ai->AllowActivity() &&
-        ai::JumpAllowedOnMap(bot->GetMap() && bot->GetMap()->IsDungeon()))
+        ai::JumpAllowedOnMap(bot->GetMap() && bot->GetMap()->IsDungeon(), false))
     {
         return true;
     }

@@ -15,11 +15,16 @@ int main()
     std::cout << "Starting TortoiseBots jump policy tests...\n";
 
     // Dungeons and raids (Map::IsDungeon()): no jumping.
-    CHECK(!ai::JumpAllowedOnMap(true));
-    std::cout << "  [PASS] no jumps in dungeons/raids\n";
+    CHECK(!ai::JumpAllowedOnMap(true, false));
+    std::cout << "  [PASS] no automatic jumps in dungeons/raids\n";
+
+    // An explicit player order still works there.
+    CHECK(ai::JumpAllowedOnMap(true, true));
+    std::cout << "  [PASS] explicit jump order allowed in dungeons\n";
 
     // Open world and battlegrounds: unchanged.
-    CHECK(ai::JumpAllowedOnMap(false));
+    CHECK(ai::JumpAllowedOnMap(false, false));
+    CHECK(ai::JumpAllowedOnMap(false, true));
     std::cout << "  [PASS] jumps allowed elsewhere\n";
 
     std::cout << "All TortoiseBots jump policy tests passed.\n";
