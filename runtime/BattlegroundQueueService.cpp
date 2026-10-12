@@ -1,5 +1,6 @@
 #include "BattlegroundQueueService.h"
 #include "AutonomousBgPolicy.h"
+#include "HumanBgDemandPolicy.h"
 #include "BotActivityLease.h"
 
 // pi-lens-ignore: clang:pp_file_not_found
@@ -54,8 +55,20 @@ struct HumanBgDemand
     BattleGroundQueueTypeId queueType;
     BattleGroundTypeId bgType;
     BattleGroundBracketId bracket;
-    Team underrepresentedTeam = TEAM_NONE;
+    // Bots still wanted per side ([0] Alliance, [1] Horde) and bots queued
+    // per side in the current check.
+    uint32 need[2] = {0, 0};
+    uint32 queuedThisCheck[2] = {0, 0};
 };
+
+int BgSideIndex(Team team)
+{
+    if (team == ALLIANCE)
+        return 0;
+    if (team == HORDE)
+        return 1;
+    return -1;
+}
 
 bool IsHumanWaitingParticipant(BattleGroundQueue::QueuedParticipantInfo const& info)
 {
@@ -80,35 +93,44 @@ std::vector<HumanBgDemand> GetHumanBgDemands()
         if (bgType != BATTLEGROUND_WS && bgType != BATTLEGROUND_AB && bgType != BATTLEGROUND_AV)
             continue;
 
-        if (!sBattleGroundMgr.GetBattleGroundTemplate(bgType))
+        BattleGround* bgTemplate = sBattleGroundMgr.GetBattleGroundTemplate(bgType);
+        if (!bgTemplate)
             continue;
+        uint32 sideTarget = HumanBgSideTarget(bgTemplate->GetMinPlayersPerTeam(),
+            bgTemplate->GetMaxPlayersPerTeam());
 
         for (uint32 bracketIndex = 0; bracketIndex < MAX_BATTLEGROUND_BRACKETS; ++bracketIndex)
         {
             BattleGroundBracketId bracket = BattleGroundBracketId(bracketIndex);
             std::vector<BattleGroundQueue::QueuedParticipantInfo> participants =
                 sBattleGroundMgr.GetQueuedParticipants(queueType, bracket);
-            uint32 alliance = 0;
-            uint32 horde = 0;
+            // Humans waiting decide whether the bucket has demand at all;
+            // everyone waiting (humans and bots, not yet invited) counts
+            // toward each side's fill target. Both sides are filled: the
+            // core needs MinPlayersPerTeam on each side, so a solo human's
+            // own side needs bots as much as the other one.
+            uint32 humans = 0;
+            uint32 waiting[2] = {0, 0};
             for (auto const& participant : participants)
             {
-                if (participant.bgTypeId != bgType || participant.bracketId != bracket ||
-                    !IsHumanWaitingParticipant(participant))
+                if (participant.bgTypeId != bgType || participant.bracketId != bracket)
                     continue;
-                if (participant.team == ALLIANCE)
-                    ++alliance;
-                else if (participant.team == HORDE)
-                    ++horde;
+                if (participant.isInvited || !participant.online)
+                    continue;
+                int side = BgSideIndex(participant.team);
+                if (side < 0)
+                    continue;
+                ++waiting[side];
+                if (IsHumanWaitingParticipant(participant))
+                    ++humans;
             }
 
-            if (!alliance && !horde)
+            if (!humans)
                 continue;
 
             HumanBgDemand demand{queueType, bgType, bracket};
-            if (alliance < horde)
-                demand.underrepresentedTeam = ALLIANCE;
-            else if (horde < alliance)
-                demand.underrepresentedTeam = HORDE;
+            demand.need[0] = HumanBgSideNeed(sideTarget, waiting[0]);
+            demand.need[1] = HumanBgSideNeed(sideTarget, waiting[1]);
             demands.push_back(demand);
         }
     }
@@ -128,6 +150,7 @@ void BattlegroundQueueService::Initialize()
         return;
     m_initialized = true;
     m_elapsedMs = 0;
+    m_demandElapsedMs = 0;
 
     if (!sPlayerbotAIConfig.enabled || !sPlayerbotAIConfig.randomBotBgEnabled)
     {
@@ -136,8 +159,9 @@ void BattlegroundQueueService::Initialize()
         return;
     }
 
-    TB_LOG_BASIC("TortoiseBots: demand-aware BG auto-queue enabled interval %u max %u (WSG/AB/AV, guid 1337 bypass, core BattleGroundMgr ownership)",
-        sPlayerbotAIConfig.randomBotBgQueueInterval, sPlayerbotAIConfig.randomBotBgMaxQueuePerInterval);
+    TB_LOG_BASIC("TortoiseBots: demand-aware BG auto-queue enabled interval %u max %u, human demand every %u ms up to %u (WSG/AB/AV, guid 1337 bypass, core BattleGroundMgr ownership)",
+        sPlayerbotAIConfig.randomBotBgQueueInterval, sPlayerbotAIConfig.randomBotBgMaxQueuePerInterval,
+        kHumanBgDemandIntervalMs, kHumanBgDemandMaxPerCheck);
 }
 
 bool BattlegroundQueueService::IsEligible(::Player* bot) const
@@ -550,26 +574,41 @@ void BattlegroundQueueService::Update(uint32_t diff)
     if (interval > 600000)
         interval = 600000;
 
+    // Two cadences: the configured interval paces the autonomous bot-only
+    // seeder (unchanged); a fixed 5 s check serves a waiting human so a
+    // match forms in seconds, not after 1 bot per 30 s.
     m_elapsedMs += diff;
-    if (m_elapsedMs < interval)
+    m_demandElapsedMs += diff;
+    bool seedDue = m_elapsedMs >= interval;
+    bool demandDue = m_demandElapsedMs >= kHumanBgDemandIntervalMs;
+    if (!seedDue && !demandDue)
         return;
-    m_elapsedMs = 0;
+    if (seedDue)
+        m_elapsedMs = 0;
+    if (demandDue)
+        m_demandElapsedMs = 0;
 
-    uint32 maxPerInterval = sPlayerbotAIConfig.randomBotBgMaxQueuePerInterval;
-    if (!maxPerInterval)
+    // Budget 0 still switches both paths off.
+    if (!sPlayerbotAIConfig.randomBotBgMaxQueuePerInterval)
         return;
-    if (maxPerInterval > 10)
-        maxPerInterval = 10;
     // Observe actual human demand through the core's copy-only snapshot.
     std::vector<HumanBgDemand> demands = GetHumanBgDemands();
     if (demands.empty())
     {
         // No human demand: autonomous bot-only WSG seeding (default on,
         // opt out with AiPlayerbot.RandomBotBgAutonomous = 0) runs on the
-        // same cadence/budget instead of idling.
-        UpdateAutonomousSeeding();
+        // configured cadence/budget instead of idling.
+        if (seedDue)
+            UpdateAutonomousSeeding();
         return;
     }
+
+    bool anyNeed = false;
+    for (HumanBgDemand const& demand : demands)
+        if (demand.need[0] || demand.need[1])
+            anyNeed = true;
+    if (!anyNeed)
+        return;
 
     // In-memory live Headless/random candidate selection: no DB or world scan.
     std::vector<Player*> candidates;
@@ -587,33 +626,39 @@ void BattlegroundQueueService::Update(uint32_t diff)
         std::swap(candidates[i], candidates[j]);
     }
 
+    // Fill both sides of every human-demand bucket toward the template team
+    // size, a few bots per side per check so the sides grow together.
     uint32 queued = 0;
     for (Player* bot : candidates)
     {
-        if (queued >= maxPerInterval)
+        if (queued >= kHumanBgDemandMaxPerCheck)
             break;
         if (!IsEligible(bot))
             continue;
+        int side = BgSideIndex(bot->GetTeam());
+        if (side < 0)
+            continue;
 
-        for (HumanBgDemand const& demand : demands)
+        for (HumanBgDemand& demand : demands)
         {
             if (bot->GetBattleGroundBracketIdFromLevel(demand.bgType) != demand.bracket)
                 continue;
-            if (demand.underrepresentedTeam != TEAM_NONE &&
-                bot->GetTeam() != demand.underrepresentedTeam)
+            if (!HumanBgSideWantsBot(demand.need[side], demand.queuedThisCheck[side]))
                 continue;
             if (TryQueue(bot, uint32(demand.queueType)))
             {
                 ++queued;
+                --demand.need[side];
+                ++demand.queuedThisCheck[side];
                 break;
             }
         }
     }
 
     if (queued)
-        TB_LOG_DEBUG("TortoiseBots: BG auto-queue tick queued %u/%u for human demand (eligible %u, demand buckets %u, interval %u ms)",
-            queued, maxPerInterval, static_cast<uint32>(candidates.size()),
-            static_cast<uint32>(demands.size()), interval);
+        TB_LOG_DEBUG("TortoiseBots: BG auto-queue check queued %u/%u for human demand (eligible %u, demand buckets %u, every %u ms)",
+            queued, kHumanBgDemandMaxPerCheck, static_cast<uint32>(candidates.size()),
+            static_cast<uint32>(demands.size()), kHumanBgDemandIntervalMs);
 }
 
 uint32_t BattlegroundQueueService::CountRunningBotOnlyWsg(uint32_t bracketIndex) const
@@ -936,6 +981,7 @@ void BattlegroundQueueService::Shutdown()
     m_ownedQueuedGuids.clear();
     m_initialized = false;
     m_elapsedMs = 0;
+    m_demandElapsedMs = 0;
 }
 
 void BattlegroundQueueService::OnLeaseEvicted(uint32_t guidLow)

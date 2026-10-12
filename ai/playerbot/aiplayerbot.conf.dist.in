@@ -430,7 +430,12 @@ AiPlayerbot.AhMarketValueVendor = 1
 # Uses the native BattleGroundJoinAction/WorldSession handler path and the
 # copy-only BattleGroundMgr queued-participant snapshot from core #416. No
 # human-waiting queue means no bot queueing; otherwise bots match the observed
-# queue type/bracket and underrepresented team. Candidates are in-memory and
+# queue type/bracket and fill BOTH sides toward the BG's team size (WSG 10, AB
+# 15, AV 40), counting humans and bots already waiting, so a solo human's own
+# side reaches the core minimum too. Human demand is checked every 5 s with up
+# to 10 bots per check (5 per side), so a match forms within seconds; the
+# interval/budget below pace only the autonomous seeder (budget 0 still turns
+# both off). Candidates are in-memory and
 # checked for level, alive/idle/not queued/not in a BG, no deserter/taxi, and no
 # active human master. WSG/AB group joins require every member to be a
 # service-owned Headless bot; AV is always queued solo. Cadence is 5s..10m and

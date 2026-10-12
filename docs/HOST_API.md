@@ -792,7 +792,9 @@ mapId+0, fail-closed `GetBattleGroundTemplate`/`GetMapId` validation) for
 master-reclaim leave. Demand is read from the copy-only generic
 `BattleGroundMgr::GetQueuedParticipants` snapshot (merged #438): no human
 waiting participant means no bot is queued, and a non-empty bucket selects its
-queue type/bracket and underrepresented team. A waiting participant counts only
+queue type/bracket and fills both sides toward the template team size, counting
+everyone already waiting (checked every 5 s while a human waits,
+`runtime/HumanBgDemandPolicy.h`). A waiting participant counts only
 when its session is non-headless and it is not a random bot, so neither random
 fill bots nor a human's own headless party bots create demand. The core remains
 the owner of queue state, invites, and port events; the module never mutates
