@@ -676,9 +676,20 @@ void ChooseTravelTargetAction::setNewTarget(Player* requester, TravelTarget* new
     bool const newPickIsNull = TravelTargetIsNull(newPickDest != nullptr,
         newPickDest != nullptr && typeid(*newPickDest) == typeid(NullTravelDestination));
     // A real pick ends the targetless stretch that ResetTargetAction counts
-    // (ZoneMigratePolicy.h, targetless leave).
+    // and the pending targetless leave (ZoneMigratePolicy.h). The leave
+    // rule's own Grind pick starts the one trip that keeps the rule on; any
+    // other pick, or a reset to null, ends that trip.
     if (!newPickIsNull)
+    {
         SET_AI_VALUE2(time_t, "manual time", "targetless since", time_t(0));
+        bool const leavePending = AI_VALUE2(time_t, "manual time", "targetless leave until") > time(0);
+        bool const leaveCondition = AI_VALUE2(std::string, "manual string", "future travel condition") == "should leave outgrown zone";
+        SET_AI_VALUE2(bool, "manual bool", "targetless leave trip", ai::TargetlessLeaveTripStarts(false,
+            newPickDest->GetPurpose() == TravelDestinationPurpose::Grind, leaveCondition, leavePending));
+        SET_AI_VALUE2(time_t, "manual time", "targetless leave until", time_t(0));
+    }
+    else
+        SET_AI_VALUE2(bool, "manual bool", "targetless leave trip", false);
     std::string const travelPurposeName = GetTravelPurposeName(AI_VALUE2(std::string, "manual string", "future travel purpose"));
     bool const isResetToNull = TravelIsResetToNull(pickedFromNull, newPickIsNull, travelPurposeName);
     if (!isResetToNull)

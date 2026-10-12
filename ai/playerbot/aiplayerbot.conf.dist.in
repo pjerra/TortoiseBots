@@ -270,8 +270,8 @@ AiPlayerbot.BotQuestLogUpkeep = 1
 # below its level (capitals excepted); 0 = the old behaviour, which let bots
 # sit in outgrown zones and bind there. Unknown area levels fail closed.
 # A level 10+ pool bot whose travel target has been reset back to back for
-# 2 min also requests that Grind target, for 10 min, whatever needs are
-# pending.
+# 2 min also requests that Grind target, for that one trip, whatever needs
+# are pending.
 # Default 1.
 AiPlayerbot.LeaveOutgrownZones = 1
 

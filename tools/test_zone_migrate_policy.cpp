@@ -14,6 +14,7 @@ using ai::OUTGROWN_GATHER_NEXT_TIER_SKILL;
 using ai::OutgrownZoneRefusesPoint;
 using ai::ZoneMigrationExcludeZone;
 using ai::TargetlessLeaveDue;
+using ai::TargetlessLeaveTripStarts;
 using ai::TargetlessSinceAfterReset;
 int main()
 {
@@ -99,6 +100,15 @@ int main()
     CHECK(ai::TARGETLESS_RESET_GAP_SECONDS == 60);
     CHECK(ai::TARGETLESS_LEAVE_LATCH_SECONDS == 600);
     std::cout << "  [PASS] targetless leave after two minutes\n";
+
+    // Only the leave rule's own Grind pick, made while the leave is pending,
+    // starts a trip that keeps the rule on.
+    CHECK(TargetlessLeaveTripStarts(false, true, true, true));
+    CHECK(!TargetlessLeaveTripStarts(true, true, true, true));
+    CHECK(!TargetlessLeaveTripStarts(false, false, true, true));
+    CHECK(!TargetlessLeaveTripStarts(false, true, false, true));
+    CHECK(!TargetlessLeaveTripStarts(false, true, true, false));
+    std::cout << "  [PASS] targetless leave trip starts only on its own Grind pick\n";
 
     std::cout << "TortoiseBots zone migration policy tests passed.\n";
     return 0;

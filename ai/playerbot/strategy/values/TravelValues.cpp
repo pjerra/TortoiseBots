@@ -1,5 +1,6 @@
 #include "playerbot/playerbot.h"
 #include <algorithm>
+#include <typeinfo>
 #include "TravelValues.h"
 #include "playerbot/TravelMgr.h"
 #include "playerbot/LocalPickPolicy.h"
@@ -655,9 +656,25 @@ bool ShouldLeaveOutgrownZoneValue::Calculate()
     // Targetless leave (ZoneMigratePolicy.h): two minutes of back-to-back
     // `reset travel target` mean no errand below is going to start, so the
     // yields below (hand-in quest, capital service needs) no longer hold the
-    // bot. Checked first for that reason. The latch keeps the value true
-    // for the Grind trip it starts, whose stored condition is this value.
+    // bot. Checked first for that reason. Once due, the value stays true
+    // until the next real pick (bounded wait), then for the Grind trip that
+    // pick starts, because this value is that trip's stored condition. The
+    // trip hold ends with the trip itself, not on a clock: a bot that
+    // finished its trip in a zone that fits is not sent on again.
     {
+        if (AI_VALUE2(bool, "manual bool", "targetless leave trip"))
+        {
+            TravelTarget* const trip = AI_VALUE(TravelTarget*, "travel target");
+            TravelDestination* const tripDest = trip ? trip->GetDestination() : nullptr;
+            TravelStatus const tripStatus = trip ? trip->GetStatus() : TravelStatus::TRAVEL_STATUS_NONE;
+            if (tripDest && typeid(*tripDest) != typeid(NullTravelDestination) &&
+                (tripStatus == TravelStatus::TRAVEL_STATUS_READY ||
+                 tripStatus == TravelStatus::TRAVEL_STATUS_TRAVEL ||
+                 tripStatus == TravelStatus::TRAVEL_STATUS_WORK))
+                return true;
+            SET_AI_VALUE2(bool, "manual bool", "targetless leave trip", false);
+        }
+
         time_t const now = time(0);
         if (AI_VALUE2(time_t, "manual time", "targetless leave until") > now)
             return true;

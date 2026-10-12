@@ -8399,11 +8399,13 @@ Donor: mod-playerbots `79bd428`,
 and only then `SetNullTarget`, "idle a bit").
 
 Source files (module, modified): `ai/playerbot/ZoneMigratePolicy.h`
-(`TargetlessSinceAfterReset`, `TargetlessLeaveDue`, constants),
+(`TargetlessSinceAfterReset`, `TargetlessLeaveDue`,
+`TargetlessLeaveTripStarts`, constants),
 `ai/playerbot/strategy/actions/ChooseTravelTargetAction.cpp`
-(`ResetTargetAction::Execute` counts the stretch, `setNewTarget` ends it),
+(`ResetTargetAction::Execute` counts the stretch, `setNewTarget` ends it
+and marks the leave trip),
 `ai/playerbot/strategy/values/TravelValues.cpp`
-(`ShouldLeaveOutgrownZoneValue` fires and latches), test in
+(`ShouldLeaveOutgrownZoneValue` fires and holds for the trip), test in
 `tools/test_zone_migrate_policy.cpp`, docs in
 `docs/concepts/bot-mechanics-and-quirks.md` and
 `docs/guides/configuration-tuning.md`.
@@ -8411,7 +8413,9 @@ Source files (module, modified): `ai/playerbot/ZoneMigratePolicy.h`
 Copied / ported / reimplemented: reimplemented. The donor tries grind on
 every pick. Here the existing leave-outgrown-zone Grind request (6.96) is
 the fallback. It fires after two minutes of back-to-back resets and stays
-on for 10 min, so the Grind trip it starts keeps its stored condition.
+on until the next real pick (at most 10 min), then for exactly the Grind
+trip that pick starts, so that trip keeps its stored condition however long
+it is, and a bot that finished it in a fitting zone is not sent on again.
 
 Reason: live m910q 2026-10-12, 500 pool bots, 28 min of dashboard
 samples: 72 runs of 3+ min on land with no travel target, 70 of them

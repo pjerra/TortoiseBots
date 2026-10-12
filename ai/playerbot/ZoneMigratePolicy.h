@@ -93,9 +93,10 @@ namespace ai
     // stretch starts over. A real pick ends it (caller clears `since`).
     constexpr std::time_t TARGETLESS_LEAVE_AFTER_SECONDS = 2 * 60;
     constexpr std::time_t TARGETLESS_RESET_GAP_SECONDS = 60;
-    // The leave rule is also the stored condition of the Grind trip it
-    // starts, so it stays on long enough for that trip (same 10 min as the
-    // grind-empty-streak clause).
+    // Once due, the leave rule stays on until the bot's next real pick (the
+    // resets in between would otherwise drop it). This only bounds that
+    // wait, for a bot whose Grind search keeps coming back empty (same
+    // 10 min as the grind-empty-streak clause). It never runs during a trip.
     constexpr std::time_t TARGETLESS_LEAVE_LATCH_SECONDS = 10 * 60;
 
     // Start of the targetless stretch after a reset at `now`. `since` and
@@ -111,5 +112,17 @@ namespace ai
     inline bool TargetlessLeaveDue(std::time_t since, std::time_t now)
     {
         return since != 0 && now >= since && now - since >= TARGETLESS_LEAVE_AFTER_SECONDS;
+    }
+
+    // Does a pick start a targetless-leave trip? Only the Grind the leave
+    // rule asked for while the leave was pending. The leave rule is that
+    // trip's stored condition, so it stays on for exactly that trip: while
+    // the bot walks to the spot and works it, however long the walk takes.
+    // When the trip ends (expired, cooled down, reset, another pick) the
+    // rule falls back to its ordinary tests, so a zone that fits the bot is
+    // never left because of an old targetless stretch.
+    inline bool TargetlessLeaveTripStarts(bool pickIsNull, bool pickIsGrind, bool leaveCondition, bool leavePending)
+    {
+        return !pickIsNull && pickIsGrind && leaveCondition && leavePending;
     }
 }
