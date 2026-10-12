@@ -48,9 +48,17 @@ enum BattleBotWsgWaitSpot
     BB_WSG_WAIT_SPOT_RIGHT
 };
 
-std::vector<uint32> const vFlagsAB = { BG_AB_BANNER_ALLIANCE , BG_AB_BANNER_CONTESTED_A , BG_AB_BANNER_HORDE , BG_AB_BANNER_CONTESTED_H ,
-                                       BG_AB_BANNER_STABLE, BG_AB_BANNER_BLACKSMITH, BG_AB_BANNER_FARM, BG_AB_BANNER_LUMBER_MILL,
-                                       BG_AB_BANNER_MINE };
+// Arathi Basin banner game objects (world DB gameobject_template; the core
+// spawns one per node and state through battleground_events map 529). The
+// shim's BG_AB_BANNER_* are 0-4 placeholders, not entries, so a list built
+// from them never matched a banner.
+static constexpr uint32 AB_GO_BANNER_ALLIANCE    = 180058; // held by Alliance
+static constexpr uint32 AB_GO_BANNER_CONTESTED_A = 180059; // assaulted by Alliance
+static constexpr uint32 AB_GO_BANNER_HORDE       = 180060; // held by Horde
+static constexpr uint32 AB_GO_BANNER_CONTESTED_H = 180061; // assaulted by Horde
+// Neutral banners, one entry per node: stables, blacksmith, farm, lumber mill, mine.
+std::vector<uint32> const vFlagsAB = { AB_GO_BANNER_ALLIANCE, AB_GO_BANNER_CONTESTED_A, AB_GO_BANNER_HORDE, AB_GO_BANNER_CONTESTED_H,
+                                       180087, 180088, 180089, 180090, 180091 };
 
 std::vector<uint32> const vFlagsWS = { GO_WS_SILVERWING_FLAG, GO_WS_WARSONG_FLAG, GO_WS_SILVERWING_FLAG_DROP, GO_WS_WARSONG_FLAG_DROP };
 static std::map<uint32, GameObject*> botSelectedObjectives;
@@ -3022,6 +3030,16 @@ bool BGTactics::atFlag(std::vector<BattleBotPath*> const& vPaths, std::vector<ui
         {
         case BATTLEGROUND_AB:
         {
+            // Our own banner (held, or already assaulted by us) cannot be
+            // clicked: BattleGroundAB::EventPlayerClickedOnFlag refuses it,
+            // so casting at it would only stand the bot still for the cast.
+            uint32 const entry = go->GetEntry();
+            bool const ownBanner = bot->GetTeam() == ALLIANCE
+                ? (entry == AB_GO_BANNER_ALLIANCE || entry == AB_GO_BANNER_CONTESTED_A)
+                : (entry == AB_GO_BANNER_HORDE || entry == AB_GO_BANNER_CONTESTED_H);
+            if (ownBanner)
+                continue;
+
             if (bot->IsMounted())
                 bot->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
 
