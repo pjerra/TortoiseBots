@@ -4,6 +4,7 @@
 #include "LeastHpTargetValue.h"
 #include "PossibleAttackTargetsValue.h"
 #include "playerbot/DpsTargetPolicy.h"
+#include "playerbot/FourHorsemenRotationPolicy.h"
 #include "playerbot/GroupMembers.h"
 
 using namespace ai;
@@ -34,6 +35,42 @@ namespace
                 return true;
         }
         return false;
+    }
+
+    // Four Horsemen mark rotation (FourHorsemenRotateAction): while the
+    // bot's stored corner choice holds, its dps target is the horseman at
+    // that corner. Without this "dps assist" resets the target to the tank's
+    // horseman and the bot walks back into the mark it just left. A stay
+    // order parks the bot, so the override stands down with it.
+    Unit* FourHorsemenRotationTarget(PlayerbotAI* ai, Player* bot)
+    {
+        if (bot->GetMapId() != 533)
+            return nullptr;
+        AiObjectContext* context = ai->GetAiObjectContext();
+        const int fromIdx = context->GetValue<int32>("manual int", kFourHorsemenFromKey)->Get() - 1;
+        const int toIdx = context->GetValue<int32>("manual int", kFourHorsemenToKey)->Get() - 1;
+        const int count = static_cast<int>(kFourHorsemenCount);
+        if (fromIdx < 0 || fromIdx >= count || toIdx < 0 || toIdx >= count)
+            return nullptr;
+        if (ai->HasStrategy("stay", BotState::BOT_STATE_COMBAT))
+            return nullptr;
+        HorsemanSpot spots[kFourHorsemenCount];
+        if (Aura* aura = ai->GetAura(kFourHorsemenMarks[fromIdx], bot))
+            spots[fromIdx].stacks = aura->GetStackAmount();
+        if (Aura* aura = ai->GetAura(kFourHorsemenMarks[toIdx], bot))
+            spots[toIdx].stacks = aura->GetStackAmount();
+        Unit* chosen = nullptr;
+        for (ObjectGuid const& guid : context->GetValue<std::list<ObjectGuid>>("attackers")->Get())
+        {
+            Unit* unit = ai->GetUnit(guid);
+            if (unit && unit->IsAlive() && unit->GetEntry() == kFourHorsemenEntries[toIdx])
+            {
+                chosen = unit;
+                spots[toIdx].alive = true;
+                break;
+            }
+        }
+        return FourHorsemenChoiceHolds(spots, fromIdx, toIdx) ? chosen : nullptr;
     }
 
     // mod-playerbots DPS target tournament (LD-1/LD-4): lifetime buckets per
@@ -296,6 +333,11 @@ Unit* DpsTargetValue::Calculate()
     // Explicit orders and raid marks remain ahead of tank assistance.
     if (Unit* explicitTarget = GetExplicitAttackTarget())
         return explicitTarget;
+
+    // A Four Horsemen mark carrier fights the horseman at its new corner
+    // (a raid mark on another corner would walk it back into the mark).
+    if (Unit* horseman = FourHorsemenRotationTarget(ai, bot))
+        return horseman;
 
     Unit* rti = RtiTargetValue::Calculate();
     if (rti) return rti;

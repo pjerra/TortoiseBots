@@ -87,6 +87,33 @@ int main()
     CHECK(FourHorsemenNextIndex(s, 0, 3) == 2);
     std::cout << "  [PASS] stays at the new corner until its mark stacks up\n";
 
+    // Stored choice: Thane (0) at 3, Blaumeux (1) and Zeliek (3) at 2, so
+    // the bot walks diagonally to Mograine (2). Mid-walk Blaumeux is
+    // nearest; the stored choice still wins over the nearest corner.
+    Square(s);
+    s[0].stacks = 3;
+    s[1].stacks = 2;
+    s[3].stacks = 2;
+    CHECK(FourHorsemenNextIndex(s, 0, 1) == 1);
+    CHECK(FourHorsemenNextIndex(s, 0, 0) == 2);
+    CHECK(FourHorsemenChoiceHolds(s, 0, 2));
+    CHECK(FourHorsemenNextIndex(s, 0, FourHorsemenChoiceHolds(s, 0, 2) ? 2 : 1) == 2);
+    // It lapses when the old mark drops under 3 ...
+    s[0].stacks = 2;
+    CHECK(!FourHorsemenChoiceHolds(s, 0, 2));
+    // ... when the chosen corner stacks up or dies ...
+    s[0].stacks = 3;
+    s[2].stacks = 3;
+    CHECK(!FourHorsemenChoiceHolds(s, 0, 2));
+    s[2].stacks = 0;
+    s[2].alive = false;
+    CHECK(!FourHorsemenChoiceHolds(s, 0, 2));
+    // ... and nothing stored (0 - 1 = -1) or out of range never holds.
+    CHECK(!FourHorsemenChoiceHolds(s, -1, -1));
+    CHECK(!FourHorsemenChoiceHolds(s, 0, 4));
+    CHECK(!FourHorsemenChoiceHolds(s, 1, 1));
+    std::cout << "  [PASS] stored corner holds mid-walk, lapses on reset\n";
+
     // Stand-off spot: toward the centre, capped at the centre.
     Square(s);
     float x, y;

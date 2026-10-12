@@ -94,6 +94,14 @@ namespace ai
         FourHorsemenRotateAction(PlayerbotAI* ai, std::string name = "four horsemen rotate") : MovementAction(ai, name) {}
         bool Execute(Event& event) override;
         bool isPossible() override { return MovementAction::isPossible() && ai->CanMove(); }
+        // A stay order (.bot action stay, a pull hold) vetoes the move in
+        // any engine state: the player parked this bot on purpose.
+        bool isUseful() override
+        {
+            return MovementAction::isUseful() &&
+                !ai->HasStrategy("stay", BotState::BOT_STATE_COMBAT) &&
+                !ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT);
+        }
     };
 
     // Universal raid survival: dragon flank. Sidesteps out of the frontal

@@ -95,9 +95,10 @@ namespace ai
     // The corner to rotate to: a living horseman other than the stacking
     // one, fewest own stacks first, then the nearest clockwise from the
     // stacking corner (index order when the stacking horseman is gone).
-    // `currentIdx` is the horseman the bot stands at now (-1 if unknown):
-    // a bot that already rotated to a corner still under the threshold
-    // stays there instead of hopping on at every new mark tick.
+    // `currentIdx` is the bot's stored choice while it holds, else the
+    // horseman it stands at now (-1 if unknown): a bot that already rotated
+    // to a corner still under the threshold stays there instead of hopping
+    // on at every new mark tick.
     // -1 when no living alternative exists (stay and fight).
     inline int FourHorsemenNextIndex(const HorsemanSpot* spots, int stackingIdx, int currentIdx)
     {
@@ -139,6 +140,27 @@ namespace ai
             }
         }
         return best;
+    }
+
+    // The bot's rotation choice is stored per bot ("manual int" values,
+    // index + 1, 0 = none): the mark it rotated away from and the corner it
+    // chose. FourHorsemenRotateAction writes it, DpsTargetValue reads it.
+    constexpr const char* kFourHorsemenFromKey = "four horsemen rotate from";
+    constexpr const char* kFourHorsemenToKey = "four horsemen rotate to";
+
+    // A stored choice still holds while the bot carries 3+ stacks of the
+    // mark it left and the chosen horseman lives with its mark still under
+    // the threshold. While it holds the bot keeps walking to that corner
+    // (the nearest horseman mid-walk does not take over) and its dps target
+    // is the chosen horseman. It lapses on its own once the old mark drops
+    // under 3 or the chosen corner stacks up or dies.
+    inline bool FourHorsemenChoiceHolds(const HorsemanSpot* spots, int fromIdx, int toIdx)
+    {
+        const int count = static_cast<int>(kFourHorsemenCount);
+        if (fromIdx < 0 || fromIdx >= count || toIdx < 0 || toIdx >= count || fromIdx == toIdx)
+            return false;
+        return spots[fromIdx].stacks >= kFourHorsemenRotateStacks &&
+            spots[toIdx].alive && spots[toIdx].stacks < kFourHorsemenRotateStacks;
     }
 
     // At the chosen corner already: the nearest living horseman is the

@@ -8780,6 +8780,14 @@ stack-driven (3+ stacks of one mark, the legacy trigger threshold): next
 living horseman clockwise around the horsemen's centre, fewest own stacks
 first; a bot stays at its new corner until that mark reaches 3 too. Tanks and
 DPS switch target to that horseman; healers stand 20yd off it toward the room.
+Fix round (cold review batch 7): the chosen corner is stored per bot
+("manual int" `four horsemen rotate from/to`) and kept until the mark it left
+drops under 3 or the chosen mark reaches 3, so the nearest horseman mid-walk
+no longer captures the bot; `DpsTargetValue` returns that horseman while the
+choice holds (after explicit attack orders, before raid marks), so "dps
+assist" stops pulling DPS back to the tank's horseman; a `stay` order vetoes
+the move and the target override. Also touches
+`ai/playerbot/strategy/values/DpsTargetValue.cpp`.
 No kill order port (needs the tank-role work from the raid audit).
 
 Reason: batch-7 raid audit finding 5 — the old wiring called the hazard

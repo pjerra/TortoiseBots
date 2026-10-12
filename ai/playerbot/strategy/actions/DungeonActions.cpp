@@ -400,9 +400,22 @@ bool FourHorsemenRotateAction::Execute(Event& event)
             currentIdx = static_cast<int>(i);
         }
     }
-    const int nextIdx = FourHorsemenNextIndex(spots, stackingIdx, currentIdx);
+    // Keep the corner chosen earlier while that choice holds, so a bot
+    // walking diagonally is not captured by whichever horseman is nearest
+    // mid-walk; otherwise the corner it stands at now.
+    const int storedFrom = AI_VALUE2(int32, "manual int", kFourHorsemenFromKey) - 1;
+    const int storedTo = AI_VALUE2(int32, "manual int", kFourHorsemenToKey) - 1;
+    const bool keepChoice = FourHorsemenChoiceHolds(spots, storedFrom, storedTo);
+    const int nextIdx = FourHorsemenNextIndex(spots, stackingIdx, keepChoice ? storedTo : currentIdx);
     if (nextIdx < 0)
         return false;
+    // Remember the choice; DpsTargetValue reads it so "dps assist" keeps
+    // the bot on this horseman instead of the tank's (no ping-pong).
+    if (!keepChoice || nextIdx != storedTo)
+    {
+        SET_AI_VALUE2(int32, "manual int", kFourHorsemenFromKey, stackingIdx + 1);
+        SET_AI_VALUE2(int32, "manual int", kFourHorsemenToKey, nextIdx + 1);
+    }
     Unit* next = horsemen[nextIdx];
     const bool healer = ai->IsHeal(bot);
     // Tanks pick the horseman up, DPS hit the one they now stand at (melee
