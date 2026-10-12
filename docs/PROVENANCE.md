@@ -8504,9 +8504,11 @@ build pending; in-game pending.
 Feature: (1) `PartyMemberToHeal` ranks candidates by effective health
 percent (incoming melee damage taken off first under `preheal`) instead of
 missing hit points; the LOS tie-break window becomes 30 health-percent
-points (100 - mediumHealth) above the top pick. (2) `enemy too close for
-spell` does not fire for a grouped healer while `party member to heal` is
-below mediumHealth, unless the healer's own health is below lowHealth.
+points (100 - mediumHealth) above the top pick. (2) The party keep-away case
+of `enemy too close for spell` (a mob in melee reach that is not attacking
+this bot, a live tank in the group) does not fire for a healer outside raids
+while `party member to heal` is below mediumHealth, unless the healer's own
+health is below lowHealth. The healer-is-victim cases and raids are unchanged.
 Observed live (build 8, Tanaris, 2026-10-12 09:57): the frost mage fell from
 81% to 31% and died (09:57:14-09:57:21) while the holy priest cast nothing on
 him after one Dispel; the tank (76-80%, 3444 max HP, Renew already up) was

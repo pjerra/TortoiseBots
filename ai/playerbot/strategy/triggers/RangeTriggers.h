@@ -59,16 +59,6 @@ namespace ai
                 if (bot->GetMap()->IsRaid())
                     isRaid = true;
 
-                // A party healer holds its ground while a groupmate needs a
-                // real heal (below medium health): Flee() runs up to twice the
-                // flee range in the open world, out of heal range of the member
-                // it should be saving, and the heal rows only win the ticks
-                // where a cast is possible. Its own low health still lets it go.
-                if (bot->GetGroup() && ai->IsHeal(bot) &&
-                    AI_VALUE2(uint8, "health", "self target") >= sPlayerbotAIConfig.lowHealth &&
-                    AI_VALUE2(uint8, "health", "party member to heal") < sPlayerbotAIConfig.mediumHealth)
-                    return false;
-
                 // Party keep-away: a tank-held mob standing on a caster never
                 // fires the victim gate below, so the caster stands in melee.
                 // When the mob is in melee reach of THIS bot and a live tank
@@ -78,6 +68,18 @@ namespace ai
                 if (bot->GetClass() != CLASS_HUNTER && !isVictim && bot->GetGroup() &&
                     bot->CanReachWithMeleeAutoAttack(target))
                 {
+                    // A party healer holds its ground here while a groupmate
+                    // needs a real heal (below medium health): Flee() runs up
+                    // to twice the flee range in the open world, out of heal
+                    // range of the member it should be saving. Only this case:
+                    // the mob is not on the healer (victim cases below still
+                    // back off), raids keep the keep-away, and the healer's
+                    // own low health still lets it go.
+                    if (!isRaid && ai->IsHeal(bot) &&
+                        AI_VALUE2(uint8, "health", "self target") >= sPlayerbotAIConfig.lowHealth &&
+                        AI_VALUE2(uint8, "health", "party member to heal") < sPlayerbotAIConfig.mediumHealth)
+                        return false;
+
                     for (Player* member : LiveGroupMembers(bot->GetGroup()))
                     {
                         if (member && member != bot && sServerFacade.IsAlive(member) &&
