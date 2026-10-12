@@ -8,7 +8,6 @@
 #include "playerbot/CombatSpreadPolicy.h"
 #include "playerbot/VaelPolicy.h"
 #include "playerbot/DebuffSpreadPolicy.h"
-#include "playerbot/strategy/triggers/DungeonTriggers.h"
 #include "playerbot/FourHorsemenRotationPolicy.h"
 #include "playerbot/BombRunoutPolicy.h"
 #include "Movement/spline/MoveSpline.h"
