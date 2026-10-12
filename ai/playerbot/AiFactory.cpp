@@ -1372,7 +1372,8 @@ void AiFactory::ApplyInstanceGuardOnMapChange(Player* player, PlayerbotAI* ai)
         restore += ",+travel,+tfish,+rpg";
     if (!sPlayerbotAIConfig.randomBotNonCombatStrategies.empty())
         restore += "," + sPlayerbotAIConfig.randomBotNonCombatStrategies;
-    ai->ChangeStrategy(restore, BotState::BOT_STATE_NON_COMBAT);
+    // A pool bot following a real player keeps follow, not the open-world kit.
+    ai->ChangeStrategy(RealMasterSafeNonCombatStrategies(ai, restore), BotState::BOT_STATE_NON_COMBAT);
 }
 
 void AiFactory::AddDefaultDeadStrategies(Player* player, PlayerbotAI* const facade, Engine* deadEngine)
