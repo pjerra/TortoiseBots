@@ -8917,3 +8917,30 @@ the owner's request, so it stays the default and the role split is opt-in.
 
 Validation: code review + `bash tools/verify_all.sh` + `python3
 tools/verify_okf.py`; build pending; in-game pending.
+
+## Arathi Basin banner entries for bot capture (2026-10-12)
+
+Feature: bots in Arathi Basin find and click the node banners. `vFlagsAB`
+in `BattleGroundTactics.cpp` was built from the cmangos shim's
+`BG_AB_BANNER_*` placeholders (0-4), so `atFlag` never matched a banner and
+no bot ever cast the capture spell.
+
+Donor: `mod-playerbots` @ `79bd4281`,
+`src/Ai/Base/Actions/BattleGroundTactics.cpp:122-131` (`vFlagsAB`: the four
+faction banners plus the five neutral node banners) and `:3521-3800`
+(`atFlag`: `CanUseBattlegroundObject` faction check keeps a bot off its own
+banners).
+
+Module files: `ai/playerbot/strategy/actions/BattleGroundTactics.cpp`
+(real entries; own-banner skip in the `atFlag` AB case).
+
+Ported / reimplemented: reimplemented. Entries come from the 1.12 world DB,
+not the donor headers: `gameobject_template` 180058 Alliance Banner, 180059
+Contested Banner (Alliance assault), 180060 Horde Banner, 180061 Contested
+Banner (Horde assault), 180087-180091 neutral node banners; the
+`gameobject` guids 90014-90053 on map 529 tie them to `battleground_events`
+(node 0-4, status 0-4). The donor's faction check is replaced by an entry
+check, because the core refuses a click on a node the clicker's team holds
+or is assaulting (`BattleGroundAB.cpp:364-365`).
+
+Validation: code review + build pending; in-game pending.
