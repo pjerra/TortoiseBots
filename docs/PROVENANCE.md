@@ -7651,8 +7651,8 @@ existing objective pick, including the owner's 2026-07-27 rule that bots on
 a team with a real player patrol mid-field instead of fetching the enemy
 flag. On (`1`): each team's bots are split by GUID rank into ~40 %
 attackers, ~30 % defenders and the rest mid/escort, recomputed only when the
-match instance or the team size changes (cached in the per-bot `wsg flag
-role` value; the size is the core's O(1) `GetPlayersCountByTeam`).
+match instance or the team's member set changes (cached in the per-bot `wsg
+flag role` value, keyed on a hash of the instance id and member GUIDs).
 
 Donor: mod-playerbots `79bd4281`,
 `src/Ai/Base/Actions/BattleGroundTactics.cpp:2134-2287` (WSG branch of
