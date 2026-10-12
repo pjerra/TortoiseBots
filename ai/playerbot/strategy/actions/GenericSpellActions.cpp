@@ -435,8 +435,10 @@ bool CastBuffSpellAction::isUseful()
 
     // Issue #378: the mana floor and the retry window are upkeep rules. Combat
     // casts of the same spells (seals, totems, Mana Shield, Earth Shield, an
-    // Inner Fire re-apply) must never be held back by them.
-    if (!bot->IsInCombat())
+    // Inner Fire re-apply) must never be held back by them. "Combat" means the
+    // combat engine with the combat flag set: the non-combat engine runs the
+    // upkeep rows while the flag can still be on, and must keep the floor.
+    if (ai::UpkeepBuffRulesApply(bot->IsInCombat(), ai->IsStateActive(BotState::BOT_STATE_COMBAT)))
     {
         if (target && lastAttemptTime && target->getObjectGuid() == lastAttemptTarget &&
             time(0) - lastAttemptTime < (time_t)GetBuffRetryCooldown())
@@ -492,7 +494,12 @@ bool CastBuffSpellAction::HasManaForBuff()
         return true;
 
     uint8 const minMana = ai::BuffManaFloor(spellInfo->procCharges != 0, ai->HasRealPlayerMaster());
-    return ai->GetManaPercent() >= minMana;
+    // A real player's party bot keeps the floor after the cast (it must drink
+    // before the next pull); pool bots keep the plain floor check, so low-level
+    // casters are not held back on their own armor and self buffs.
+    if (!ai->HasRealPlayerMaster())
+        return ai->GetManaPercent() >= minMana;
+    return ai::ManaStaysAboveFloor(bot->GetPower(POWER_MANA), bot->GetMaxPower(POWER_MANA), manaCost, minMana);
 }
 
 uint32 CastBuffSpellAction::GetBuffRetryCooldown() const

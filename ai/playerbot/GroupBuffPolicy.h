@@ -115,4 +115,28 @@ namespace ai
             return isChargeBuff ? kHiredChargeBuffMinManaPercent : kHiredBuffMinManaPercent;
         return isChargeBuff ? kChargeBuffMinManaPercent : kBuffMinManaPercent;
     }
+
+    // The upkeep rules (mana floor, retry window) are skipped only for a
+    // real fight: the unit combat flag AND the combat engine. The non-combat
+    // engine also runs while the flag is still set (the last mob is on the
+    // tank but no longer counts as the bot's attacker, or the flag lags the
+    // kill), and a holy priest used that window to spend its last mana on
+    // party buffs instead of drinking (Uldaman run: 930 -> 138 of 3051).
+    inline bool UpkeepBuffRulesApply(bool unitInCombat, bool combatEngine)
+    {
+        return !(unitInCombat && combatEngine);
+    }
+
+    // The floor holds for the mana LEFT after the cast, so a buff never takes
+    // the bot below it (checked before the cast only, a 20% floor still let a
+    // 240-340 mana party buff end the priest near 10%).
+    inline bool ManaStaysAboveFloor(std::uint32_t mana, std::uint32_t maxMana,
+        std::uint32_t cost, std::uint8_t floorPercent)
+    {
+        if (!maxMana)
+            return true;
+        if (cost > mana)
+            return false;
+        return std::uint64_t(mana - cost) * 100 >= std::uint64_t(floorPercent) * maxMana;
+    }
 }

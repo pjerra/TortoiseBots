@@ -81,6 +81,30 @@ static void TestManaFloor()
     CHECK(kHiredChargeBuffMinManaPercent == 40);
 }
 
+// Upkeep rules hold unless the bot is really fighting (flag AND combat
+// engine): the non-combat engine with the flag still on keeps the floor.
+static void TestUpkeepRulesApply()
+{
+    CHECK(UpkeepBuffRulesApply(false, false));
+    CHECK(UpkeepBuffRulesApply(true, false));
+    CHECK(UpkeepBuffRulesApply(false, true));
+    CHECK(!UpkeepBuffRulesApply(true, true));
+}
+
+// The floor holds for the mana left after the cast. Uldaman priest, 3051 max,
+// 20% hired floor: Fortitude (240) at 698 would leave 458 (15%) - refused;
+// at 930 it leaves 690 (22.6%) - allowed. Zero max (no mana bar) never vetoes.
+static void TestManaStaysAboveFloor()
+{
+    CHECK(!ManaStaysAboveFloor(698, 3051, 240, 20));
+    CHECK(ManaStaysAboveFloor(930, 3051, 240, 20));
+    CHECK(ManaStaysAboveFloor(1000, 1000, 0, 100));
+    CHECK(!ManaStaysAboveFloor(100, 1000, 200, 0));
+    CHECK(ManaStaysAboveFloor(600, 1000, 200, 40));
+    CHECK(!ManaStaysAboveFloor(599, 1000, 200, 40));
+    CHECK(ManaStaysAboveFloor(0, 0, 50, 40));
+}
+
 // Variant map: the five 1.12 group buffs, blessings excluded.
 static void TestVariantMap()
 {
@@ -130,6 +154,8 @@ int main()
     TestRefreshWindow();
     TestPortedConstants();
     TestManaFloor();
+    TestUpkeepRulesApply();
+    TestManaStaysAboveFloor();
     TestVariantMap();
     TestUpgradePairScope();
     TestUpgradeQuorum();
