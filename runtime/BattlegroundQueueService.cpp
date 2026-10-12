@@ -684,11 +684,11 @@ void BattlegroundQueueService::Update(uint32_t diff)
         {
             if (bot->GetBattleGroundBracketIdFromLevel(demand.bgType) != demand.bracket)
                 continue;
-            // A WSG/AB bot group leader queues its whole group; count every
-            // member so a group never pushes the side past its target (AV is
-            // always queued solo).
+            // A WSG/AB/SV bot group leader queues its whole group; count every
+            // member so a group never pushes the side past its target (AV and
+            // the Blood Ring are always queued solo).
             uint32 entrySize = 1;
-            if (demand.bgType != BATTLEGROUND_AV)
+            if (demand.bgType != BATTLEGROUND_AV && demand.bgType != BATTLEGROUND_BR)
                 if (Group* group = bot->GetGroup())
                     entrySize = group->GetMembersCount();
             if (!HumanBgSideWantsBot(demand.need[side], demand.queuedThisCheck[side], entrySize))
