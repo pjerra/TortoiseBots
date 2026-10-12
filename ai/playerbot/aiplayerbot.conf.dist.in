@@ -215,6 +215,15 @@ AiPlayerbot.TurtleMountAtLevel = 18
 # the riding skill already level-gated). 1 = on; 0 = off, so a bot levelled
 # from 1 keeps only the turtle until it is re-seeded. Default 1.
 AiPlayerbot.LevelUpMounts = 1
+# Level-up money top-up: when a masterless random pool bot reaches a new level
+# holding less than its next class-trainer visit costs (every trainable class
+# rank plus the repair/ammo/AH/guild reserves the trainer trip keeps aside),
+# it is topped up to that amount, capped at 1 gold per bot level. Once per
+# level; a bot that already has the money gets nothing. Hired, guild-claimed
+# and player-grouped bots are never paid. Each top-up writes a PoolMoneyTopUp
+# row to bot_events.csv. 1 = on; 0 = off (money only from the one-time seed,
+# loot, quests and sales). Default 1.
+AiPlayerbot.PoolMoneyTopUp = 1
 # Safety factor on the mount break-even distance: bots mount for travel/RPG
 # trips only when the remaining distance exceeds
 # 7 y/s * mount cast time / (best mount speed % / 100) * this. 0 disables

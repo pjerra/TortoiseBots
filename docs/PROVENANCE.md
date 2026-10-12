@@ -7643,3 +7643,39 @@ victim==bot exemption is the fallback if it drags.
 
 Non-blocking "donor Geddon never used this primitive" — ACKNOWLEDGED:
 donor consumers are RS/Ulduar; the Geddon application is novel. Noted.
+
+## Level-up money top-up for masterless pool bots (`AiPlayerbot.PoolMoneyTopUp`) — 2026-10-12
+
+Feature: on every level-up, a masterless random pool bot (not hired, not
+guild-claimed, no live player master, no gold cheat) whose purse is below
+the cost of its next class-trainer visit — the module's own
+`"total money needed for" spells` budget (repair, ammo, AH deposit, guild
+reserves, then every trainable class rank) — is topped up to that floor,
+capped at 1 g per bot level, once per level (level kept as an in-memory
+facade value). Action `pool money top up` on the `levelup` packet node; pure
+rule in `runtime/PoolMoneyTopUpPolicy.h`; logs `PoolMoneyTopUp`. Owner
+decision 2026-10-12: default on, masterless pool bots only.
+
+Source repository: `mod-playerbots/mod-playerbots`
+
+Source commit: `79bd4281` (local
+`playerbots-references/mod-playerbots` checkout).
+
+Source files:
+- `src/Bot/RandomPlayerbotMgr.cpp` (`RandomPlayerbotMgr::Refresh`: random bots get `money + 500 x sqrt(urand(1, level x 5))` copper on every refresh)
+
+Copied / ported / reimplemented: reimplemented, no donor code copied. The
+donor pays an unconditional random stipend on every refresh (revive /
+teleport); this module pays only a broke bot, only up to what its next
+trainer visit needs, once per level, because every class rank here is
+bought (`AutoLearnTrainerSpells = 0`) and the earned economy should stay
+earned for bots that can pay.
+
+Reason: batch 8 economy audit (2026-10-12) — 121 of 504 pool bots under 1 g,
+`TrainerNoMoney` 1,020 times on 164 bots in 16.3 h (median shortfall 17 s),
+no top-up after the one-time seed (`PlayerbotFactory::SeedFreshMoney`).
+
+Local validation: `tools/test_pool_money_topup_policy.cpp` (wired into
+`verify_all.sh`); `bash tools/verify_all.sh`; `git diff --check`;
+`-fsyntax-only` of the touched sources against a core tree. Not built or
+linked, no in-game check yet.
