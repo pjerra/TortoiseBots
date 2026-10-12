@@ -9096,3 +9096,15 @@ prerequisite, which is NOT ported: the engine pushes prerequisites before
 fire on every in-combat enemy-out-of-melee tick and dance back. Arms/Fury
 are unchanged. Validation: code review + `bash tools/verify_all.sh` +
 `git diff --check`; build pending; in-game pending.
+
+## Healer off-spec damage: 70 % mana reserve on even and easy fights — 2026-10-12
+
+Feature: `HealerShouldAttackTrigger` (`healer should attack`) now reads its balance-scaled mana reserve from `HealerDpsManaFloor` / `HealerDpsManaAllows` (`ai/playerbot/HealerManaPolicy.h`). Hard fights (balance <= 50) keep 85 %, as in the donor. Even fights (<= 100) and easy fights (> 100) keep 70 % instead of the donor's `HighMana` 65 % and `MediumMana` 40 %. Priest, resto druid and resto shaman `offdps` rows share the trigger. The wand row (`healer should wand`) and solo healers are unchanged.
+
+Source repository: `mod-playerbots/mod-playerbots`, commit `79bd428`, file `src/Ai/Base/Trigger/GenericTriggers.cpp:346-371` (`HealerShouldAttackTrigger::IsActive`).
+
+Kind: deliberate deviation, owner decision 2026-10-12 (easy tier 40 -> 70); even tier raised from 65 to 70 % to keep the ladder monotonic, controller ruling 2026-10-12. The 85 % hard tier stays ported as-is.
+
+Reason: a full 5-man fighting one or two elites lands in the easy tier. There a holy priest nuked from 100 % down to 40 % while the party was full, then ran dry when the damage started (Uldaman wipes; build-10 check: "shoot | no mana" ~23 s into a fight with the tank at 44 %). Vanilla healers have no Replenishment and live under the 5-second rule, so the donor's WotLK-tuned 40 % leaves too little.
+
+Validation: `tools/test_healer_mana_policy.cpp` (floor per tier, monotonic ladder, the Uldaman balance case); `bash tools/verify_all.sh`, `git diff --check`; build pending; in-game pending.

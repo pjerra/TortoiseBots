@@ -1,6 +1,7 @@
 // Standalone regression test for the healer mana-conservation port (night2
 // gaps 1+2): never veto a target in danger, veto oversized/inefficient heals
-// on comfortable targets, veto mana-hungry heals while the healer is low.
+// on comfortable targets, veto mana-hungry heals while the healer is low,
+// and keep the balance-scaled mana reserve before healer off-spec damage.
 //
 // Build and run:
 //   g++ -std=c++17 -Wall -Wextra tools/test_healer_mana_policy.cpp -o /tmp/test_healer_mana
@@ -66,6 +67,34 @@ int main()
 
     // Full-health target: loss 0, any estimate overshoots.
     CHECK(!ShouldStartHeal(HealerManaState{100, 90, 15, HealManaEfficiency::VERY_HIGH, false, 50, 70, 40}));
+
+    // Healer off-spec damage reserve (`healer should attack`), by balance.
+    // Hard fight (balance <= 50) keeps the donor's 85; even (<= 100) and
+    // easy (> 100) fights keep 70, not the donor's 65 / 40.
+    CHECK(HealerDpsManaFloor(0) == 85);
+    CHECK(HealerDpsManaFloor(50) == 85);
+    CHECK(HealerDpsManaFloor(51) == 70);
+    CHECK(HealerDpsManaFloor(100) == 70);
+    CHECK(HealerDpsManaFloor(101) == 70);
+    CHECK(HealerDpsManaFloor(200) == 70);
+    // Monotonic: a harder fight (lower balance) never allows a lower reserve.
+    for (int b = 1; b <= 200; ++b)
+        CHECK(HealerDpsManaFloor(std::uint8_t(b - 1)) >= HealerDpsManaFloor(std::uint8_t(b)));
+    // Uldaman case: full 5-man (5 x 45) vs two elites (2 x 37 x 3) gives
+    // balance 101; the priest stops nuking at 70 %, no longer at 40 %.
+    CHECK(HealerDpsManaAllows(true, 70, 101));
+    CHECK(!HealerDpsManaAllows(true, 69, 101));
+    CHECK(!HealerDpsManaAllows(true, 40, 200));
+    CHECK(HealerDpsManaAllows(true, 100, 200));
+    // Even fight: 65 % no longer enough.
+    CHECK(HealerDpsManaAllows(true, 70, 100));
+    CHECK(!HealerDpsManaAllows(true, 65, 100));
+    // Hard fight unchanged.
+    CHECK(HealerDpsManaAllows(true, 85, 50));
+    CHECK(!HealerDpsManaAllows(true, 84, 50));
+    // No mana bar: never held back by the reserve.
+    CHECK(HealerDpsManaAllows(false, 0, 101));
+    CHECK(HealerDpsManaAllows(false, 0, 10));
 
     std::printf("healer mana policy: OK (%d checks)\n", checks);
     return 0;
