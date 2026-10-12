@@ -39,6 +39,14 @@ public:
         // prerequisite handle range for that one assigned target.
 
         const bool assignedTarget = AI_VALUE(Unit*, "rti cc target") == creature;
+
+        // Never a free pick on a mob the group is fighting: a sheep there is
+        // broken by the next hit (Blade Flurry, a swing, a pet). Only an
+        // explicit mark may CC a mob someone is on. Holds for the legacy
+        // chooser and for "auto cc" alike.
+        if (!assignedTarget && IsGroupFighting(creature))
+            return;
+
         if (!ai->CanCastSpell(spell, creature, true, nullptr, assignedTarget, true))
             return;
 
@@ -59,7 +67,8 @@ public:
         // runs unmarked candidates. All conditions must hold:
         // - the bot may CC at all here (group combat),
         // - the candidate hits a party healer or caster, never the tank,
-        // - NOBODY in the group is attacking it (victim + pets),
+        // - NOBODY in the group is attacking or targeting it (IsGroupFighting
+        //   above: members' victim + selection, pets' victim),
         // - it carries NO periodic damage aura from any source (else sheep is
         //   pointless — owner's words; shyalya check #8, but for every spell),
         // - it is not the only enemy in the fight (never sheep the last mob),
@@ -138,6 +147,36 @@ public:
     }
 
 private:
+    // True when a group member (this bot included) or a member's pet is
+    // fighting the mob: its victim, or another member's selected target (a
+    // bot's attack target, a player's target). This bot's own selection is
+    // skipped: a cast with no prior selection leaves it on the cast target
+    // (the sheep itself); its own victim still counts.
+    // Guid compares only, no lookups.
+    // mod-playerbots 79bd428 (CcTargetValue.cpp) skips only the bot's own
+    // current target and lets a mob with no tank on it through.
+    bool IsGroupFighting(Unit* creature)
+    {
+        Player* bot = ai->GetBot();
+        Group* group = bot->GetGroup();
+        if (!group)
+            return bot->GetVictim() == creature;
+
+        const ObjectGuid guid = creature->getObjectGuid();
+        for (Player* member : LiveGroupMembers(group))
+        {
+            if (!member || !sServerFacade.IsAlive(member) || member->GetMapId() != bot->GetMapId())
+                continue;
+            if (member->GetVictim() == creature ||
+                (member != bot && member->GetSelectionGuid() == guid))
+                return true;
+            if (Unit* pet = member->GetPet())
+                if (pet->GetVictim() == creature)
+                    return true;
+        }
+        return false;
+    }
+
     // Smart auto-CC candidacy, see the call site for the rules.
     bool IsAutoCcTarget(Unit* creature)
     {
@@ -176,18 +215,8 @@ private:
         if (!PlayerbotAI::IsHeal(victimPlayer) && !ai->IsRanged(victimPlayer))
             return false;
 
-        // Nobody in the group may be attacking it (members + their pets);
-        // this also covers the tank's target.
-        for (Player* member : LiveGroupMembers(group))
-        {
-            if (!member || member->GetMapId() != bot->GetMapId())
-                continue;
-            if (member->GetVictim() == creature)
-                return false;
-            if (Unit* pet = member->GetPet())
-                if (pet->GetVictim() == creature)
-                    return false;
-        }
+        // "Nobody in the group attacks it" (tank's target included) is the
+        // IsGroupFighting guard in CheckAttacker, already passed here.
 
         // No periodic damage aura from any source — sheep would be pointless.
         // Shyalya precedent (CcTargetValue check #8) exempted fear/banish;
