@@ -440,6 +440,15 @@ namespace ai
         virtual ActionThreatType getThreatType() override { return ActionThreatType::ACTION_THREAT_AOE; }
     };
 
+    // Same spell used as the elemental single-target nuke: it keeps the
+    // CastSpellAction single-target threat type, so the AoE threat hold on
+    // CastChainLightningAction does not stop it.
+    class CastChainLightningSingleAction : public CastSpellAction
+    {
+    public:
+        CastChainLightningSingleAction(PlayerbotAI* ai) : CastSpellAction(ai, "chain lightning") {}
+    };
+
     class CastLightningBoltAction : public CastSpellAction
     {
     public:
