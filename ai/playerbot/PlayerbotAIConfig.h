@@ -478,6 +478,7 @@ public:
     float playerbotsXPrate;
     bool disableBotOptimizations;
     bool disableActivityPriorities;
+    bool worldPvpEngage;
     bool forceActiveWhenNearPlayer;
     bool limitCombatActivity;
     bool guildOrderAlwaysActive;

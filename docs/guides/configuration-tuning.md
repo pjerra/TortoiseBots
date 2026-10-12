@@ -209,6 +209,7 @@ Fine-tune how aggressively bots heal, rest, or drink:
 | `AiPlayerbot.AlmostFullHealth` | `90` | Health ceiling above which bots stop casting heals to conserve mana. |
 | `AiPlayerbot.LowMana` | `15` | Mana floor where casters switch to low-cost wanding or conserve mana. |
 | `AiPlayerbot.MediumMana` | `40` | Threshold where bots consider conservative rotations. |
+| `AiPlayerbot.WorldPvpEngage` | `0` | `1` lets masterless pool bots start a fight with a PvP-flagged enemy player in the open world (40 yd, 20 yd if the target has more health; line of sight; within 30 yd of height). Out of combat only; never for a real player's companions, in battlegrounds, cities, sanctuaries or `PvpProhibitedZoneIds`, or against a target 5+ levels above the bot. `0` = bots only hit back. |
 
 ---
 
