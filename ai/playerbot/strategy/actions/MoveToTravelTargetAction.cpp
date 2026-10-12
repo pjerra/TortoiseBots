@@ -343,7 +343,7 @@ bool MoveToTravelTargetAction::TryRescueServiceTrip(TravelTarget* target, std::s
     return true;
 }
 
-// Opt-in stuck-travel teleport (AiPlayerbot.StuckTravelTeleport, default off),
+// Stuck-travel teleport (AiPlayerbot.StuckTravelTeleport, default on),
 // after mod-playerbots NewRpgBaseAction::MoveFarTo: a trip that has made no
 // progress until the drop threshold (IsMaxRetry: six failed or no-progress
 // moves) teleports to its destination instead of dropping. It closes the
@@ -1097,7 +1097,7 @@ bool MoveToTravelTargetAction::Execute(Event& event)
         if (TryRescueServiceTrip(target, purpose))
             return true;
 
-        // Opt-in: any other stuck trip of a masterless pool bot teleports to
+        // Any other stuck trip of a masterless pool bot teleports to
         // its destination instead of dropping (AiPlayerbot.StuckTravelTeleport).
         if (TryRescueStuckTravel(target, purpose))
             return true;

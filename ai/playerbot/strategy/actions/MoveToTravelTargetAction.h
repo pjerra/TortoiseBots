@@ -50,7 +50,7 @@ namespace ai
         // Returns true when the rescue fired (the drop below is skipped).
         bool TryRescueServiceTrip(TravelTarget* target, std::string const& purpose);
 
-        // Opt-in (AiPlayerbot.StuckTravelTeleport, default off): a masterless
+        // On by default (AiPlayerbot.StuckTravelTeleport; 0 disables): a masterless
         // pool bot's trip of any purpose at the failure threshold teleports to
         // its destination (mesh landing, else the nearest route node near it)
         // instead of dropping; unwatched, same map, once per 10 min. Logs
