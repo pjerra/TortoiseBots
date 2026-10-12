@@ -6,6 +6,7 @@
 #include "playerbot/DpsTargetPolicy.h"
 #include "playerbot/FourHorsemenRotationPolicy.h"
 #include "playerbot/GroupMembers.h"
+#include "playerbot/strategy/triggers/EmeraldSanctumDungeonTriggers.h"
 
 using namespace ai;
 
@@ -71,6 +72,23 @@ namespace
             }
         }
         return FourHorsemenChoiceHolds(spots, fromIdx, toIdx) ? chosen : nullptr;
+    }
+
+    // Solnius Call of Nightmare (Emerald Sanctum, 807): while a major add
+    // lives, a DPS bot's dps target is that add (the one it already hits,
+    // else the nearest), so "dps assist" agrees with "solnius attack add"
+    // instead of resetting the bot to Solnius every tick. Cached attackers
+    // only, and only while the "solnius" fight strategy is on.
+    Unit* SolniusAddTarget(PlayerbotAI* ai, Player* bot)
+    {
+        if (bot->GetMapId() != 807 || !ai->HasStrategy("solnius", BotState::BOT_STATE_COMBAT))
+            return nullptr;
+        if (PlayerbotAI::IsTank(bot) || PlayerbotAI::IsHeal(bot))
+            return nullptr;
+        Unit* current = ai->GetAiObjectContext()->GetValue<Unit*>("current target")->Get();
+        if (IsSolniusAdd(current) && current->IsAlive() && !current->IsFriendlyTo(bot))
+            return current;
+        return FindSolniusAdd(ai);
     }
 
     // mod-playerbots DPS target tournament (LD-1/LD-4): lifetime buckets per
@@ -338,6 +356,10 @@ Unit* DpsTargetValue::Calculate()
     // (a raid mark on another corner would walk it back into the mark).
     if (Unit* horseman = FourHorsemenRotationTarget(ai, bot))
         return horseman;
+
+    // Solnius adds beat the tank's target and raid marks (both are Solnius).
+    if (Unit* add = SolniusAddTarget(ai, bot))
+        return add;
 
     Unit* rti = RtiTargetValue::Calculate();
     if (rti) return rti;
