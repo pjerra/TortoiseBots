@@ -7,6 +7,7 @@
 #include "playerbot/CombatSpreadPolicy.h"
 #include "playerbot/VaelPolicy.h"
 #include "playerbot/DebuffSpreadPolicy.h"
+#include "playerbot/strategy/triggers/DungeonTriggers.h"
 #include "Movement/spline/MoveSpline.h"
 #include "Maps/GridNotifiers.h"
 #include "Maps/GridNotifiersImpl.h"
@@ -333,7 +334,11 @@ bool RaidBombRunoutAction::Execute(Event& event)
 bool DragonFlankAction::Execute(Event& event)
 {
     (void)event;
-    Unit* target = AI_VALUE(Unit*, "current target");
+    // Same dragon the "dragon breath risk" trigger checked: the bot's own
+    // target, or the encounter dragon from the group's attackers for
+    // healers and bots on whelps/adds.
+    bool ownTarget = false;
+    Unit* target = DragonBreathRiskTrigger::FindDragon(ai, bot, ownTarget);
     if (!target || !sServerFacade.IsAlive(target))
         return false;
     const WorldPosition bossPos(target);

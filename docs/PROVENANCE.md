@@ -7643,3 +7643,27 @@ victim==bot exemption is the fallback if it drags.
 
 Non-blocking "donor Geddon never used this primitive" — ACKNOWLEDGED:
 donor consumers are RS/Ulduar; the Geddon application is novel. Noted.
+
+## Dragon breath/tail flank for every role — 2026-10-12
+Feature: the universal `dragon breath risk` trigger and `dragon flank` action
+resolve the dragon from the bot's own target or, failing that, from the
+cached group `attackers` list (instance maps only), so healers and bots on
+whelps/adds clear Onyxia/Firemaw/Ebonroc/Flamegor/Nefarian/Vaelastrasz/Solnius
+breath and tail cones too.
+
+Source: `mod-playerbots` @ `79bd428`,
+`src/Ai/Raid/Ony/OnyTriggers.cpp` (`OnyxiaNearTailTrigger`: boss found
+whatever the bot targets, tanks skipped, quiet while airborne or with no
+victim), `src/Ai/Raid/BWL/BWLStrategy.cpp` ("not victim" drake triggers).
+
+Copied / ported / reimplemented: reimplemented. Rules in
+`ai/playerbot/DragonFlankPolicy.h` (entry list, cone math, who flanks);
+the own-target path keeps the existing tank rule, the decoupled path skips
+tanks and requires a grounded, tanked dragon (donor rule). Hover aura 17131
+from the core Onyxia script.
+
+Reason: raid audit batch 7 finding 6 (code-only) — the trigger read only
+`current target`, so healers and add killers stood in breath/tail cones.
+
+Validation: `tools/test_dragon_flank_policy.cpp`, `bash tools/verify_all.sh`;
+code review + build pending; in-game pending.
