@@ -119,6 +119,15 @@ bool SapCcMarkTrigger::IsActive()
     if (ai->HasStrategy("no sap", BotState::BOT_STATE_NON_COMBAT))
         return false;
 
+    // Leash: while this fires, the walk to the mark outranks following the
+    // master. Once the master is more than kSapMasterLeash yd from the rogue
+    // (walked or rode off), the Sap is dropped and following wins again.
+    const float kSapMasterLeash = 50.0f;
+    Player* master = ai->GetMaster();
+    if (!master || master->GetMapId() != bot->GetMapId() ||
+        sServerFacade.IsDistanceGreaterThan(sServerFacade.GetDistance2d(bot, master), kSapMasterLeash))
+        return false;
+
     const uint32 spellId = AI_VALUE2(uint32, "spell id", "sap");
     if (!spellId || !sServerFacade.IsSpellReady(bot, spellId))
         return false;
