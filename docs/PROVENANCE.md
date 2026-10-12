@@ -9080,3 +9080,19 @@ Local validation: `tools/test_pool_money_topup_policy.cpp` (wired into
 `verify_all.sh`); `bash tools/verify_all.sh`; `git diff --check`;
 `-fsyntax-only` of the touched sources against a core tree. Not built or
 linked, no in-game check yet.
+Round 2 (in-game retest, build 9, Tanaris 2026-10-12 11:14-11:43): the tank
+still went "Defensive Stance fades / gains Battle Stance" after every fight
+and once mid-pack (11:14:56, one second after its target died); dashboard
+`battle stance` / trigger `battle stance` out of combat. Cause: the
+inherited `WarriorBuffStrategy` non-combat `battle stance` row, which also
+runs when the target dies mid-pack (`OnCombatEnded` switches to the
+non-combat engine). `ProtectionWarriorBuffStrategy::InitNonCombatTriggers`
+now calls `BuffStrategy::InitNonCombatTriggers`, adds a non-combat
+`defensive stance` row and keeps `apply stone`. Donor
+`TankWarriorStrategy` / `GenericWarriorNonCombatStrategy` have no Battle
+Stance row; the donor's Charge node swaps to Battle Stance as a
+prerequisite, which is NOT ported: the engine pushes prerequisites before
+`isPossible`, and vanilla Charge is out-of-combat only, so the swap would
+fire on every in-combat enemy-out-of-melee tick and dance back. Arms/Fury
+are unchanged. Validation: code review + `bash tools/verify_all.sh` +
+`git diff --check`; build pending; in-game pending.

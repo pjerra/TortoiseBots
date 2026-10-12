@@ -24,7 +24,7 @@ Warriors serve as primary dungeon tanks or powerful melee DPS. The bot manages r
 ## Combat Rotations & Priorities
 
 ### 1. Protection (Tank)
-1. **Pull & Engagement:** Charges on enemy-out-of-melee, then swaps to Defensive Stance (no Battle Stance prep in code). No *Intercept* gap-closer: it needs Berserker Stance, and the tank stays in Defensive Stance (donor `TankWarriorStrategy` has none either).
+1. **Pull & Engagement:** Stays in Defensive Stance in and out of combat: the Protection buff strategy replaces the base out-of-combat *Battle Stance* row with a *Defensive Stance* row (the non-combat engine also runs for a moment whenever the tank's target dies mid-pack). The enemy-out-of-melee *Charge* row stays, but Charge needs Battle Stance and no combat (vanilla), so from Defensive Stance the tank walks in (`reach melee`) and uses *Taunt*; no stance swap is made for Charge. No *Intercept* gap-closer: it needs Berserker Stance (donor `TankWarriorStrategy` has none either).
 2. **Threat Generation:**
    - Keeps *Shield Block* active on cooldown to enable *Revenge*.
    - Stacks *Sunder Armor* to a full 5-stack, then stops (re-applies only to refresh an expiring stack; sunder yields to Shield Slam only once 40+ rage makes slam live).
