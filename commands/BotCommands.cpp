@@ -594,6 +594,17 @@ static void RelaxTacticalMovement(PlayerbotAI* ai)
     // and be mistaken for an active hold during the next transition.
     ai->ChangeStrategy("-stay", BotState::BOT_STATE_REACTION);
     ai->ChangeStrategy("-stay", BotState::BOT_STATE_NON_COMBAT);
+    // The broken stay was the bot's only movement mode: give it the default
+    // back (follow for a player's bot) or it stands wherever the fight ends
+    // until the player whispers "follow". Added directly rather than through
+    // SetMovementStrategy, which would drop the "pull hold" marker the pull
+    // release below still reads.
+    if (!ai->HasActiveMovementStrategy())
+    {
+        std::string const movement = "+" + ai->GetDefaultMovementStrategy();
+        ai->ChangeStrategy(movement, BotState::BOT_STATE_REACTION);
+        ai->ChangeStrategy(movement, BotState::BOT_STATE_NON_COMBAT);
+    }
     ai->ChangeStrategy("-stay,-follow", BotState::BOT_STATE_COMBAT);
     EndFlee(ai);
 }

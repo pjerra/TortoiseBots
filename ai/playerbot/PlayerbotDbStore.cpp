@@ -3,6 +3,7 @@
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/PlayerbotFactory.h"
 #include "PlayerbotDbStore.h"
+#include "MovementModePolicy.h"
 #include <cstdlib>
 #include <iostream>
 #include <utility>
@@ -30,24 +31,29 @@ void PlayerbotDbStore::Load(PlayerbotAI *ai, std::string preset)
         };
 
         std::vector<StoredRow> rows;
-        bool hasStrategySnapshot = false;
+        StoredStrategyRows stored;
         do
         {
             Field* fields = results->Fetch();
             StoredRow row{ fields[0].GetString(), fields[1].GetString() };
-            hasStrategySnapshot = hasStrategySnapshot ||
-                row.key == "co" || row.key == "nc" || row.key == "dead" || row.key == "react";
+            stored.Note(row.key.c_str());
             rows.push_back(std::move(row));
         } while (results->NextRow());
 
-        // A value-only preset is possible after a talent topology change. Do
-        // not clear the freshly rebuilt defaults in that case. Complete
-        // snapshots retain the historical clear-and-replay behavior.
-        if (hasStrategySnapshot)
+        // Clear and replay only the engines whose own row was read
+        // (StoredStrategyRows). A value-only preset (after a talent topology
+        // change) clears nothing, and a snapshot missing its "nc" row can no
+        // longer wipe the non-combat engine down to the baseline below with
+        // no row to replay: that engine keeps its fresh defaults, follow
+        // included.
+        if (stored.combat)
         {
             ai->ClearStrategies(BotState::BOT_STATE_COMBAT);
-            ai->ClearStrategies(BotState::BOT_STATE_NON_COMBAT);
             ai->ChangeStrategy("+chat", BotState::BOT_STATE_COMBAT);
+        }
+        if (stored.nonCombat)
+        {
+            ai->ClearStrategies(BotState::BOT_STATE_NON_COMBAT);
             // Baseline first: +loot/+delayed roll survive stale snapshots missing
             // them (#222), +quest survives snapshots predating it (#277). Replay
             // below then re-applies the stored snapshot verbatim, so a stored
@@ -59,10 +65,10 @@ void PlayerbotDbStore::Load(PlayerbotAI *ai, std::string preset)
         for (StoredRow const& row : rows)
         {
             if (row.key == "value") values.push_back(row.value);
-            else if (hasStrategySnapshot && row.key == "co") ai->ChangeStrategy(row.value, BotState::BOT_STATE_COMBAT);
-            else if (hasStrategySnapshot && row.key == "nc") ai->ChangeStrategy(row.value, BotState::BOT_STATE_NON_COMBAT);
-            else if (hasStrategySnapshot && row.key == "dead") ai->ChangeStrategy(row.value, BotState::BOT_STATE_DEAD);
-            else if (hasStrategySnapshot && row.key == "react") ai->ChangeStrategy(row.value, BotState::BOT_STATE_REACTION);
+            else if (row.key == "co") ai->ChangeStrategy(row.value, BotState::BOT_STATE_COMBAT);
+            else if (row.key == "nc") ai->ChangeStrategy(row.value, BotState::BOT_STATE_NON_COMBAT);
+            else if (row.key == "dead") ai->ChangeStrategy(row.value, BotState::BOT_STATE_DEAD);
+            else if (row.key == "react") ai->ChangeStrategy(row.value, BotState::BOT_STATE_REACTION);
         }
 
         ai->GetAiObjectContext()->Load(values);
@@ -72,6 +78,13 @@ void PlayerbotDbStore::Load(PlayerbotAI *ai, std::string preset)
 void PlayerbotDbStore::Save(PlayerbotAI *ai, std::string preset)
 {
     uint64 guid = ai->GetBot()->getObjectGuid().GetRawValue();
+
+    // One transaction for the delete and every insert. Loose async statements
+    // are shared out over all character-database workers (4 by default), so
+    // the delete could run after some of the inserts and drop them, and a
+    // rebuild could read a half-written snapshot. A caller that already holds
+    // a transaction (ChangeStrategyAction) keeps ours inside its own.
+    bool const ownTransaction = !CharacterDatabase.InTransaction() && CharacterDatabase.BeginTransaction();
 
     Reset(ai, preset);
 
@@ -85,6 +98,9 @@ void PlayerbotDbStore::Save(PlayerbotAI *ai, std::string preset)
     SaveValue(guid, preset, "nc", FormatStrategies("nc", ai->GetStrategies(BotState::BOT_STATE_NON_COMBAT)));
     SaveValue(guid, preset, "dead", FormatStrategies("dead", ai->GetStrategies(BotState::BOT_STATE_DEAD)));
     SaveValue(guid, preset, "react", FormatStrategies("react", ai->GetStrategies(BotState::BOT_STATE_REACTION)));
+
+    if (ownTransaction)
+        CharacterDatabase.CommitTransaction();
 }
 
 std::string PlayerbotDbStore::FormatStrategies(std::string type, std::list<std::string_view> strategies)
