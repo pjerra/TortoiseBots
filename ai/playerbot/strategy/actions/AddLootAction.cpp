@@ -26,6 +26,24 @@ bool AddLootAction::Execute(Event& event)
     return AI_VALUE(LootObjectStack*, "available loot")->Add(guid);
 }
 
+void AddAllLootAction::TellBlocked(Player* requester, ObjectGuid objectGuid, const std::string& text)
+{
+    const time_t kBlockedTellCooldown = 60;
+
+    if (bot->GetMap()->IsDungeon() || bot->IsInCombat())
+        return;
+
+    const time_t now = time(nullptr);
+    std::map<ObjectGuid, time_t>::iterator it = blockedTold.find(objectGuid);
+    if (it != blockedTold.end() && now - it->second < kBlockedTellCooldown)
+        return;
+
+    if (blockedTold.size() > 64)
+        blockedTold.clear();
+    blockedTold[objectGuid] = now;
+    ai->TellError(requester, text);
+}
+
 bool AddAllLootAction::Execute(Event& event)
 {
     Player* requester = event.GetOwner() ? event.GetOwner() : GetMaster();
@@ -172,7 +190,7 @@ bool AddAllLootAction::AddLoot(Player* requester, ObjectGuid guid)
         {
             std::ostringstream out;
             out << hostiles.front()->GetName() << " is blocking " << wo->GetName() << ", need to kill it or I will not loot";
-            ai->TellError(requester, out.str());
+            TellBlocked(requester, guid, out.str());
             sLog.outDebug("[BOT LOOT] %s: AddLoot reject guid=%lu (hostile '%s' within %.0fy of corpse, count=%zu)",
                 bot->GetName(), guid.GetRawValue(), hostiles.front()->GetName(), MOB_AGGRO_DISTANCE, hostiles.size());
             return false;
@@ -286,7 +304,7 @@ bool AddGatheringLootAction::AddLoot(Player* requester, ObjectGuid guid)
         {
             std::ostringstream out;
             out << hostiles.front()->GetName() << " is blocking " << wo->GetName() << ", need to kill it or I will not gather";
-            ai->TellError(requester, out.str());
+            TellBlocked(requester, guid, out.str());
             return false;
         }
     }
@@ -296,7 +314,7 @@ bool AddGatheringLootAction::AddLoot(Player* requester, ObjectGuid guid)
         {
             std::ostringstream out;
             out << strongHostiles.front()->GetName() << " is blocking " << wo->GetName() << ", need to kill it or I will not gather";
-            ai->TellError(requester, out.str());
+            TellBlocked(requester, guid, out.str());
             return false;
         }
     }
