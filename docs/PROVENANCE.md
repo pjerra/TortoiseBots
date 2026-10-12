@@ -8422,3 +8422,9 @@ sight.
 
 Local validation: code review + build pending; in-game pending.
 `bash tools/verify_all.sh` (incl. new policy test); `git diff --check`.
+
+## Mounted follow spacing (2026-10-12)
+
+| Feature | Donor | Module files | Copied / ported / reimplemented | Reason | Validation |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| Mounted companions follow further out | `mod-playerbots` @ 79bd428 `src/Ai/Base/Actions/MovementActions.cpp:1224-1225` (`MovementAction::Follow`: friendly target + bot mounted + no hostiles -> `distance += angle`) | `ai/playerbot/strategy/actions/MovementActions.cpp` (`kMountedFollowSpacing`, widen in `MovementAction::Follow`), `ai/playerbot/strategy/actions/CheckMountStateAction.cpp` (drop a standing follow generator on mount/unmount so the follow is re-issued with the new offset) | Reimplemented: fixed 3 yd instead of the donor's slot-angle-in-yards (0-6.3 yd); "no hostiles" mapped to out of combat and not in a dungeon/raid map. The re-issue is local: the core follow generator keeps its offset private and the module never replaces a running follow on the same target | In game (build 8) four hired companions on mechanical strider / winged mounts parked 2-4 yd from the master after every ride and covered the camera | code review + build pending; in-game pending |

@@ -29,6 +29,13 @@ using namespace ai;
 // subterranean terrain fallback is not.
 static constexpr float kMaxWaypointDrop = 4.0f;
 
+// Mounted follow spacing: the on-foot follow slot (FollowDistance 1.5 yd) is
+// smaller than a mount model, so mounted companions parked on top of the
+// master and each other after every ride. Out of combat and outside
+// instances a mounted bot follows this much further out (mod-playerbots
+// MovementAction::Follow also widens the follow distance for mounted bots).
+static constexpr float kMountedFollowSpacing = 3.0f;
+
 // Elevator boarding (issue #216): maximum 3D distance at which a bot may step
 // directly onto the master's transport. Large enough to cover the gap between
 // the shaft edge and a docked platform, small enough that the bot waits for it
@@ -1330,6 +1337,9 @@ bool MovementAction::Follow(Unit* target, float distance, float angle)
     MotionMaster &mm = *bot->GetMotionMaster();
 
     distance = distance <= target->GetObjectBoundingRadius() ? 0 : distance - target->GetObjectBoundingRadius();
+
+    if (bot->IsMounted() && !bot->IsInCombat() && bot->GetMap() && !bot->GetMap()->IsDungeon())
+        distance += kMountedFollowSpacing;
 
     UpdateMovementState();
 
