@@ -116,7 +116,8 @@ If your group wipes, follow this checklist to recover quickly:
 
 ### Followers That Stand Still
 * Out of combat a bot follows you with the server's follow movement. Inside a dungeon that movement can give up silently: when the navmesh path to you is only partial (the bot stands on a cut-off step or platform), it stops and the bot stays put, shown as "moving" with no motion. Bots used to trust it and never looked again while you stayed within 60 yd.
-* Inside dungeons and raids, a bot that is more than 3 yd beyond its follow distance and has not moved a yard for 2 s (not while it eats, drinks, casts or is rooted) now takes over: it first tries *Stepping Down Off a Dais*, then walks the navmesh path to you itself, at most once every 2 s, waiting up to 8 s between tries while no walk can start. Once it is back within range the normal follow resumes. Out of combat only; no setting; never outside instances.
+* Inside dungeons and raids, a bot that is more than 3 yd beyond its follow distance and has not moved a yard for 2 s (not while it eats, drinks, casts or is rooted) now takes over: it first tries *Stepping Down Off a Dais*, then walks the navmesh path to you itself, at most once every 2 s, waiting up to 8 s between tries while no walk can start. It leaves the bot alone while it eats, drinks, casts or is rooted, and after five walks in a row that cannot start it gives up for 60 s. Once it is back within range the normal follow resumes. Out of combat only; no setting; never outside instances.
+* The rescue walk takes the same navmesh route as a bot that is far behind, so with `AiPlayerbot.DungeonFollowHoldBeforePacks` off (the default) it can pass right next to an unpulled pack, just as far follow already does (see *Running Ahead Past Packs*).
 * If neither works (a bot below a platform you stand on, or a gap the navmesh does not cross), use `.bot summon <Name>` out of combat.
 
 ### Running Ahead Past Packs
