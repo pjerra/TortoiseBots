@@ -18,6 +18,7 @@
 #include "playerbot/GroupMembers.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/GolemaggPolicy.h"
+#include "playerbot/strategy/values/PartyMemberToHeal.h"
 #include "playerbot/GeddonInfernoPolicy.h"
 
 using namespace ai;
@@ -125,29 +126,17 @@ float RazorgoreOffTankMultiplier::GetValue(Action* action)
             break;
         }
     }
-    // Off-tank = first living tank of the group by member-slot order (no
-    // main/assist-tank distinction exists yet; Golemagg will add it).
-    // While eggs live the off-tank holds the boss: veto tank-assist
-    // retargets so adds don't pull it off.
-    bool botIsOffTank = false;
-    if (Group* group = bot->GetGroup())
+    // Off-tank = the first assist tank in the shared tank order (raid Main
+    // Tank flag, else tank Main Assist, else living same-map tanks by slot:
+    // GetRaidTankRoles), the lone tank when there is only one; the main
+    // tank keeps the adds. While eggs live the off-tank holds the boss:
+    // veto tank-assist retargets so adds don't pull it off.
+    bool botIsOffTank = true;
+    if (bot->GetGroup())
     {
-        for (Player* member : LiveGroupMembers(group))
-        {
-            if (!member || !sServerFacade.IsAlive(member))
-                continue;
-            // Same-map only: an out-of-instance tank must not win slot 0.
-            if (member->GetMapId() != bot->GetMapId())
-                continue;
-            if (!ai->IsTank(member))
-                continue;
-            botIsOffTank = (member == bot);
-            break;
-        }
-    }
-    else
-    {
-        botIsOffTank = true;
+        const RaidTankRoles tankRoles = GetRaidTankRoles(ai);
+        botIsOffTank = tankRoles.botIndex >= 0 &&
+            static_cast<std::size_t>(tankRoles.botIndex) == RazorgoreHolderTankIndex(tankRoles.tanks.size());
     }
     if (ShouldHoldRazorgore(eggsAlive, botIsOffTank))
         return 0.0f;
@@ -175,20 +164,13 @@ float GolemaggFightMultiplier::GetValue(Action* action)
     if (!boss)
         return 1.0f;
     bool burnPhase = boss->GetHealthPercent() <= kGolemaggBurnPct;
-    // Living tanks in the group (slot order; ld-8 value pending).
-    unsigned livingTanks = 0;
-    if (Group* group = bot->GetGroup())
-    {
-        for (Player* member : LiveGroupMembers(group))
-        {
-            if (member && sServerFacade.IsAlive(member) && ai->IsTank(member))
-                ++livingTanks;
-        }
-    }
-    else if (ai->IsTank(bot))
-    {
-        livingTanks = 1;
-    }
+    // Tank jobs in the group: same order as GolemaggTankHoldAction (raid
+    // Main Tank flag, else tank Main Assist, else slot order), living
+    // same-map members only. Only tanks read them, so only tanks pay.
+    RaidTankRoles tankRoles;
+    if (ai->IsTank(bot))
+        tankRoles = GetRaidTankRoles(ai);
+    const unsigned livingTanks = static_cast<unsigned>(tankRoles.tanks.size());
     // Single tank picks up everything: role-hold actions would only fight
     // the normal target selection. Type check: MoveToAction hardcodes its
     // name to "name" (MovementActions.h), so a getName() match never fires.
@@ -197,22 +179,11 @@ float GolemaggFightMultiplier::GetValue(Action* action)
         if (dynamic_cast<GolemaggTankHoldAction*>(action))
             return 0.0f;
     }
-    // Assist tanks (non-first tanks) never follow tank-assist retargets:
-    // they stay glued to their rager.
+    // Assist tanks (every tank but the main tank) never follow tank-assist
+    // retargets: they stay glued to their rager.
     if (ai->IsTank(bot) && livingTanks > 1)
     {
-        bool botIsFirstTank = false;
-        if (Group* group = bot->GetGroup())
-        {
-            for (Player* member : LiveGroupMembers(group))
-            {
-                if (!member || !sServerFacade.IsAlive(member) || !ai->IsTank(member))
-                    continue;
-                botIsFirstTank = (member == bot);
-                break;
-            }
-        }
-        if (!botIsFirstTank && dynamic_cast<TankAssistAction*>(action))
+        if (!tankRoles.BotIsMainTank() && dynamic_cast<TankAssistAction*>(action))
             return 0.0f;
     }
     // DPS AoE stays off for the whole fight (rager Trust + splash).

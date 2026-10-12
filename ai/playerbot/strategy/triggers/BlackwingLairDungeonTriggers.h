@@ -2,6 +2,7 @@
 #include "DungeonTriggers.h"
 #include "playerbot/RazorgorePolicy.h"
 #include "playerbot/GroupMembers.h"
+#include "playerbot/strategy/values/PartyMemberToHeal.h"
 #include "GenericTriggers.h"
 
 namespace ai
@@ -89,31 +90,17 @@ namespace ai
             // (Anubrekhan precedent).
             if (!AI_VALUE(ObjectGuid, "explicit attack target").IsEmpty())
                 return false;
-            // Only the elected off-tank holds the boss: first living
-            // same-map tank by member-slot order (mirrors
-            // RazorgoreOffTankMultiplier; solo → true). Other tanks keep
-            // normal add pickup via tank-assist.
-            bool botIsOffTank = false;
-            if (Group* group = bot->GetGroup())
+            // Only the elected off-tank holds the boss: the first assist
+            // tank in the shared tank order, the lone tank when there is
+            // only one (mirrors RazorgoreOffTankMultiplier; solo → true).
+            // Other tanks keep normal add pickup via tank-assist.
+            if (bot->GetGroup())
             {
-                for (Player* member : LiveGroupMembers(group))
-                {
-                    if (!member || !sServerFacade.IsAlive(member))
-                        continue;
-                    if (member->GetMapId() != bot->GetMapId())
-                        continue;
-                    if (!ai->IsTank(member))
-                        continue;
-                    botIsOffTank = (member == bot);
-                    break;
-                }
+                const RaidTankRoles tankRoles = GetRaidTankRoles(ai);
+                if (tankRoles.botIndex < 0 ||
+                    static_cast<std::size_t>(tankRoles.botIndex) != RazorgoreHolderTankIndex(tankRoles.tanks.size()))
+                    return false;
             }
-            else
-            {
-                botIsOffTank = true;
-            }
-            if (!botIsOffTank)
-                return false;
             const std::list<ObjectGuid>& attackers = AI_VALUE(std::list<ObjectGuid>, "attackers");
             for (const ObjectGuid& attackerGuid : attackers)
             {

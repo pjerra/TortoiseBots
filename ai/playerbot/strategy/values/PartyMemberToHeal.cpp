@@ -4,6 +4,7 @@
 #include "PartyMemberToHeal.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/ServerFacade.h"
+#include "playerbot/RaidTankRolePolicy.h"
 #include "ObjectAccessor.h"
 
 using namespace ai;
@@ -390,28 +391,53 @@ Unit* PartyMemberToRemoveRoots::Calculate()
     return target;
 }
 
-Unit* PartyMemberMainTankValue::Calculate()
+RaidTankRoles ai::GetRaidTankRoles(PlayerbotAI* ai)
 {
+    RaidTankRoles roles;
+    Player* bot = ai->GetBot();
     Group* group = bot->GetGroup();
     if (!group)
-        return PlayerbotAI::IsTank(bot) ? bot : NULL;
-
-    // Explicit raid main-tank flag first (donor GetMainTankGuid; core owns
-    // the flag via Group::GetMainTankGuid, raid-only by design).
-    ObjectGuid mainTankGuid = group->GetMainTankGuid();
-    if (!mainTankGuid.IsEmpty())
     {
-        if (Player* mainTank = ObjectAccessor::FindPlayer(mainTankGuid))
-            if (mainTank->IsAlive() && ai->IsSafe(mainTank))
-                return mainTank;
+        if (PlayerbotAI::IsTank(bot))
+        {
+            roles.tanks.push_back(bot);
+            roles.botIndex = 0;
+        }
+        return roles;
     }
 
-    // Else the first live tank in slot order (donor fallback).
+    // Explicit raid flags first (donor GetMainTankGuid; the core owns the
+    // Main Tank / Main Assist flags on Group, raid-only by design), then
+    // promoted assistants among the assist tanks, then live tanks by slot.
+    ObjectGuid const mainTankGuid = group->GetMainTankGuid();
+    ObjectGuid const mainAssistGuid = group->GetMainAssistantGuid();
+
+    std::vector<Player*> members;
+    std::vector<RaidTankCandidate> slots;
     for (Player* member : LiveGroupMembers(group))
     {
-        if (member && member->IsAlive() && ai->IsSafe(member) && PlayerbotAI::IsTank(member))
-            return member;
+        if (!member)
+            continue;
+        bool const usable = member->IsAlive() && ai->IsSafe(member);
+        bool const isTank = usable && PlayerbotAI::IsTank(member);
+        members.push_back(member);
+        slots.push_back({usable,
+                         isTank,
+                         member->GetObjectGuid() == mainTankGuid,
+                         member->GetObjectGuid() == mainAssistGuid,
+                         isTank && group->IsAssistant(member->GetObjectGuid())});
     }
 
-    return NULL;
+    for (std::size_t index : OrderRaidTankRoles(slots))
+    {
+        if (members[index] == bot)
+            roles.botIndex = static_cast<int>(roles.tanks.size());
+        roles.tanks.push_back(members[index]);
+    }
+    return roles;
+}
+
+Unit* PartyMemberMainTankValue::Calculate()
+{
+    return GetRaidTankRoles(ai).MainTank();
 }

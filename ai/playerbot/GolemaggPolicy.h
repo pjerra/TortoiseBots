@@ -11,11 +11,10 @@
 // MCMultipliers.cpp:105-144 (single-tank, assist-tank, AoE-off, melee
 // fallback, back-off lock, burn phase) + MCStrategy.cpp:108-128 (DPS
 // exclusion of Core Ragers while Golemagg lives).
-// NOTE: branched from origin/feat/playerbots-parity WITHOUT the
-// parity/ld-8-main-tank value (not merged at implementation time). Tank
-// roles below use the same fallback the Razorgore PR used: main = first
-// living tank by member-slot order, assists = next two. When ld-8 merges,
-// the role reads should move to the shared value — flagged in provenance.
+// Tank roles come from the shared order (GetRaidTankRoles in
+// strategy/values/PartyMemberToHeal.h, rules in RaidTankRolePolicy.h): the
+// raid Main Tank flag, else a tank Main Assist, else the first living
+// same-map tank by slot holds the boss; every other tank holds a rager.
 // No core includes: callers translate game state into plain inputs so the
 // rules stay testable in tools/test_golemagg_policy.cpp.
 

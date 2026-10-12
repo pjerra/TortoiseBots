@@ -20,6 +20,7 @@ using ai::kRazorgoreRangedDistance;
 using ai::ShouldBackOffRazorgore;
 using ai::ShouldEscapeRazorgoreCone;
 using ai::ShouldHoldRazorgore;
+using ai::RazorgoreHolderTankIndex;
 
 int main()
 {
@@ -62,6 +63,13 @@ int main()
     CHECK(!ShouldHoldRazorgore(false, true));
     CHECK(!ShouldHoldRazorgore(true, false));
     std::cout << "  [PASS] off-tank hold rule\n";
+
+    // Holder: first assist tank with 2+ tanks, the lone tank otherwise.
+    CHECK(RazorgoreHolderTankIndex(0) == 0);
+    CHECK(RazorgoreHolderTankIndex(1) == 0);
+    CHECK(RazorgoreHolderTankIndex(2) == 1);
+    CHECK(RazorgoreHolderTankIndex(4) == 1);
+    std::cout << "  [PASS] holder is assist tank 0, lone tank holds alone\n";
 
     std::cout << "All razorgore policy tests passed.\n";
     return 0;

@@ -1,4 +1,5 @@
 #pragma once
+#include <vector>
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/strategy/AiObjectContext.h"
 #include "playerbot/strategy/Value.h"
@@ -21,9 +22,26 @@ namespace ai
         std::vector<Player*> GetPartyMembers();
 	};
 
+    // The group's tank jobs in one order (RaidTankRolePolicy.h): raid Main
+    // Tank flag, then a tank Main Assist, then promoted raid assistants
+    // (assist jobs only), then live tanks in slot order.
+    // Only alive members on the bot's map and instance count. Without a
+    // group the bot is its own main tank when it is a tank.
+    struct RaidTankRoles
+    {
+        std::vector<Player*> tanks; // [0] main tank, [1..] assist tanks
+        int botIndex = -1;          // the bot's place in `tanks`, -1 if none
+
+        Player* MainTank() const { return tanks.empty() ? nullptr : tanks.front(); }
+        bool BotIsMainTank() const { return botIndex == 0; }
+    };
+
+    RaidTankRoles GetRaidTankRoles(PlayerbotAI* ai);
+
     // mod-playerbots PartyMemberMainTankValue (LD-8): the raid/party main
     // tank — explicit raid flag first, else the first live tank. No
     // Misdirection/Tricks consumers exist in 1.18.1; raid tactics read it.
+    // Same order as the boss scripts via GetRaidTankRoles.
     class PartyMemberMainTankValue : public PartyMemberValue
     {
     public:

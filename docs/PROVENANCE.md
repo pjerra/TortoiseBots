@@ -8641,3 +8641,39 @@ reported role `dps`; priests ran `shadow` and a Restoration shaman ran
 Heal-type actions were 3.5-6 % of samples against `attack enemy player`.
 
 Validation: code review + build pending; in-game pending.
+
+## Shared raid tank roles: Main Tank flag, assistants, slot order — 2026-10-12
+
+Feature: one tank-job order (`GetRaidTankRoles` in
+`ai/playerbot/strategy/values/PartyMemberToHeal.{h,cpp}`, pure rules in
+`ai/playerbot/RaidTankRolePolicy.h`) replaces four separate "first live
+tank by slot" loops: `GolemaggTankHoldAction`
+(`strategy/actions/MoltenCoreDungeonActions.cpp`), `GolemaggFightMultiplier`
+and `RazorgoreOffTankMultiplier` (`strategy/generic/DungeonMultipliers.cpp`),
+`RazorgoreEngageTrigger` (`strategy/triggers/BlackwingLairDungeonTriggers.h`),
+and backs the `main tank` value. Main tank = group Main Tank flag, else a
+tank Main Assist, else the first live same-map tank by slot; assist tanks =
+Main Assist tank, then promoted raid assistants, then the rest by slot.
+Razorgore's boss holder becomes the first assist tank (the lone tank when
+only one is alive; `RazorgoreHolderTankIndex` in `RazorgorePolicy.h`).
+Golemagg's tank count now has the same-map filter Razorgore had.
+
+Copied / ported / reimplemented: reimplemented from donor behaviour,
+`mod-playerbots` @ 79bd428 `src/Bot/PlayerbotAI.cpp:2497-2516`
+(`GetMainTankGuid`), `:2607-2672` (`IsAssistTank`, `IsAssistTankOfIndex`:
+assistants first), `src/Ai/Raid/BWL/BWLHelpers.cpp:34-37`
+(`IsRazorgoreOffTank` = living assist tank 0), `src/Ai/Raid/MC/MCTriggers.cpp:75-83`
+(Golemagg main/assist triggers). Divergences: the Main Assist flag (vanilla
+group field, no donor use) is honoured when that member is a tank; a lone
+tank still holds Razorgore (the donor leaves him loose); the core sets the
+Main Tank / Main Assist fields from no 1.12 packet, so in game they come only
+from the `groups` table — promoted assistants are the live lever.
+
+Reason: batch-7 raid audit finding 4 — the boss scripts ignored the raid
+Main Tank flag the `main tank` value reads, and could hand the Golemagg boss
+camp or the Razorgore hold to a human tank who happened to sit in slot 1.
+
+Validation: `tools/test_raid_tank_role_policy.cpp` + the extended
+`tools/test_razorgore_policy.cpp` (both in `tools/verify_all.sh`); `bash
+tools/verify_all.sh`; `git diff --check`. Code review + build pending;
+in-game pending.

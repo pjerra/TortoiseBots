@@ -3,6 +3,7 @@
 #include "playerbot/GroupMembers.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/strategy/AiObjectContext.h"
+#include "playerbot/strategy/values/PartyMemberToHeal.h"
 #include "MoltenCoreDungeonActions.h"
 
 using namespace ai;
@@ -36,26 +37,11 @@ bool GolemaggTankHoldAction::Execute(Event& event)
     }
     if (!boss)
         return false;
-    // Main tank (first living tank by slot order — ld-8 value pending, see
-    // policy header) holds Golemagg at his camp; assists hold a rager at
-    // its camp. Non-tanks never see this action (strategy-gated).
-    bool botIsMain = false;
-    if (Group* group = bot->GetGroup())
-    {
-        for (Player* member : LiveGroupMembers(group))
-        {
-            if (!member || !sServerFacade.IsAlive(member))
-                continue;
-            if (!ai->IsTank(member))
-                continue;
-            botIsMain = (member == bot);
-            break;
-        }
-    }
-    else
-    {
-        botIsMain = true;
-    }
+    // Main tank (raid Main Tank flag, else tank Main Assist, else first
+    // living same-map tank by slot: GetRaidTankRoles) holds Golemagg at his
+    // camp; assists hold a rager at its camp. Non-tanks never see this
+    // action (strategy-gated); solo the bot is the main tank.
+    bool botIsMain = !bot->GetGroup() || GetRaidTankRoles(ai).BotIsMainTank();
     float tx, ty, tz;
     if (botIsMain)
     {

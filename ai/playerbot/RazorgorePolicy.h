@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -51,10 +52,20 @@ namespace ai
         return botIsRanged && !botIsVictim && !insideCone && insideRange;
     }
 
-    // Off-tank moon + hold: first tank by group index holds the boss while
-    // eggs live (bots never touch the orb — that stays a player job).
+    // Off-tank moon + hold: the off-tank holds the boss while eggs live
+    // (bots never touch the orb — that stays a player job).
     inline bool ShouldHoldRazorgore(bool eggsAlive, bool botIsOffTank)
     {
         return eggsAlive && botIsOffTank;
+    }
+
+    // Which tank job holds the boss, as an index into the shared tank order
+    // (GetRaidTankRoles: [0] main tank, [1..] assist tanks). Donor
+    // IsRazorgoreOffTank = living assist tank 0, so the main tank stays free
+    // for the adds; a lone tank keeps holding the boss as before (the donor
+    // would leave him loose).
+    inline std::size_t RazorgoreHolderTankIndex(std::size_t livingTankCount)
+    {
+        return livingTankCount > 1 ? 1 : 0;
     }
 }
