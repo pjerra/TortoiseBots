@@ -521,6 +521,42 @@ void LootObjectStack::ForgetFailures(ObjectGuid guid)
     approachFailures.erase(guid);
 }
 
+void LootObjectStack::Abandon(ObjectGuid guid)
+{
+    std::pair<uint32, time_t>& entry = approachFailures[guid];
+    entry.first = MAX_APPROACH_FAILURES;
+    entry.second = time(0);
+    Remove(guid);
+}
+
+void LootObjectStack::NotePlayerOrder(ObjectGuid guid)
+{
+    time_t now = time(0);
+
+    // Drop aged-out marks (a handful of entries at most, only on a player order).
+    for (std::map<ObjectGuid, time_t>::iterator i = playerOrders.begin(); i != playerOrders.end();)
+    {
+        if (now - i->second > APPROACH_FAILURE_TTL)
+            i = playerOrders.erase(i);
+        else
+            ++i;
+    }
+
+    approachFailures.erase(guid);
+    playerOrders[guid] = now;
+}
+
+bool LootObjectStack::TakePlayerOrder(ObjectGuid guid)
+{
+    std::map<ObjectGuid, time_t>::iterator i = playerOrders.find(guid);
+    if (i == playerOrders.end())
+        return false;
+
+    bool const fresh = time(0) - i->second <= APPROACH_FAILURE_TTL;
+    playerOrders.erase(i);
+    return fresh;
+}
+
 bool LootObjectStack::Add(ObjectGuid guid)
 {
     // A corpse we repeatedly failed to reach stays out of the stack until the
@@ -558,6 +594,7 @@ void LootObjectStack::Clear()
 {
     availableLoot.clear();
     approachFailures.clear();
+    playerOrders.clear();
 }
 
 bool LootObjectStack::CanLoot(float maxDistance)

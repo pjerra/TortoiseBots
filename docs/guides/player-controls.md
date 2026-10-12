@@ -180,6 +180,7 @@ In addition to high-level `.bot action` party commands, you can delegate command
 | | `ue <slot>` | Unequips gear from the specified equipment slot into bags. |
 | | `u <item>` | Uses an item from inventory (potions, quest items, bandages). |
 | | `destroy <item>` | Destroys an item from inventory to free up bag space. (`drop <quest>` abandons a quest.) |
+| | `loot [<object link>]` | Loots the nearby corpses, chests and nodes now (or only the linked object). An object the bot gave up on (an empty or refused loot window, three opens without loot) is tried again on your order, and an empty or refused window from your order does not make the bot give up on it. |
 | **Vendors & Repairs** | `s [gray\|all\|<item>]` | Sells gray junk items or specific items when targeted vendor is open. |
 | | `b <item>` | Purchases the specified item from the open merchant window. |
 | | `bb <item>` | Buys back an accidentally sold item from the vendor. |

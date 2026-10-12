@@ -12,6 +12,7 @@
 #include "Maps/CellImpl.h"
 
 #include "playerbot/strategy/actions/DestroyItemAction.h"
+#include "playerbot/strategy/actions/LootWindowPolicy.h"
 
 using namespace ai;
 using namespace MaNGOS;
@@ -49,6 +50,7 @@ bool AddAllLootAction::Execute(Event& event)
 {
     Player* requester = event.GetOwner() ? event.GetOwner() : GetMaster();
     bool added = false;
+    playerOrder = IsPlayerLootOrder(event.getSource(), event.GetOwner() != nullptr);
 
     std::string text = event.GetParam();
 
@@ -231,7 +233,14 @@ bool AddAllLootAction::AddLoot(Player* requester, ObjectGuid guid)
         }
     }
 
-    bool added = AI_VALUE(LootObjectStack*, "available loot")->Add(guid);
+    LootObjectStack* lootStack = AI_VALUE(LootObjectStack*, "available loot");
+    // A player's explicit order is never vetoed by an earlier give-up on this object
+    // (an empty/refused window or three failed opens), and its window does not record
+    // a new one (StoreLootAction).
+    if (playerOrder)
+        lootStack->NotePlayerOrder(guid);
+
+    bool added = lootStack->Add(guid);
     sLog.outDebug("[BOT LOOT] %s: AddLoot queued guid=%lu (botDist=%.1f masterDist=%.1f cap=%.1f added=%d)",
         bot->GetName(), guid.GetRawValue(), botDist, masterDist, lootDistanceToUse, added ? 1 : 0);
     return added;

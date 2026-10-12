@@ -80,6 +80,16 @@ namespace ai
         // counted so far were not a wedge, so a multi-use ore vein is not abandoned
         // after its third mine.
         void ForgetFailures(ObjectGuid guid);
+        // A loot window that gave this bot nothing (the server refused it, or every item
+        // was blocked by a roll, view-only or not wanted) is abandoned at once: the corpse
+        // stays lootable for the core, so "add all loot" would re-queue it and "open loot"
+        // would re-open it every few seconds on the same spot. Same TTL as above.
+        void Abandon(ObjectGuid guid);
+        // A player's explicit "loot" order on this object: it clears the failure memory so
+        // an earlier abandon cannot silently veto the order, and marks the object so the
+        // window it opens does not record a new abandon (TakePlayerOrder consumes the mark).
+        void NotePlayerOrder(ObjectGuid guid);
+        bool TakePlayerOrder(ObjectGuid guid);
 
     public:
         std::vector<LootObject> OrderByDistance(float maxDistance = 0);
@@ -91,6 +101,7 @@ namespace ai
         Player* bot;
         LootTargetList availableLoot;
         std::map<ObjectGuid, std::pair<uint32, time_t> > approachFailures;
+        std::map<ObjectGuid, time_t> playerOrders;
     };
 
 };

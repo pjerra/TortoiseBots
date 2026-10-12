@@ -45,6 +45,8 @@ namespace ai
         std::map<ObjectGuid, time_t> blockedTold;
 
     protected:
+        // Set per Execute: this run is a player's explicit "loot" order (LootWindowPolicy).
+        bool playerOrder = false;
 
 #ifdef GenerateBotHelp
         virtual std::string GetHelpName() { return "add all loot"; }

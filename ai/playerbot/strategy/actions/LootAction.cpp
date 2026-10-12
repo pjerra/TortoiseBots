@@ -1,6 +1,7 @@
 
 #include "playerbot/playerbot.h"
 #include "SkinningLootPolicy.h"
+#include "LootWindowPolicy.h"
 #include "LootAction.h"
 
 #include "playerbot/LootObjectStack.h"
@@ -424,8 +425,16 @@ bool StoreLootAction::Execute(Event& event)
         sLog.outDebug("[BOT LOOT] %s: loot REJECTED guid=%lu error=%u (%s)",
             bot->GetName(), guid.GetRawValue(), lootError, errName);
 
-        // Drop the corpse so the bot stops retrying a loot the server won't grant.
-        AI_VALUE(LootObjectStack*, "available loot")->Remove(guid);
+        // Drop the corpse so the bot stops retrying a loot the server won't grant. Abandon it
+        // rather than just unqueue it: the core still shows it lootable, so "add all loot"
+        // re-queued it on the next sweep and the refused open repeated on the same spot. A
+        // player's explicit loot order is only unqueued, so the order is never silently
+        // vetoed by a transient refusal (TOO_FAR, a scripted mob not yet lootable).
+        LootObjectStack* lootStack = AI_VALUE(LootObjectStack*, "available loot");
+        if (DecideAfterLootWindow(true, false, lootStack->TakePlayerOrder(guid)) == LootWindowVerdict::Abandon)
+            lootStack->Abandon(guid);
+        else
+            lootStack->Remove(guid);
         RESET_AI_VALUE(LootObject, "loot target");
         return false;
     }
@@ -565,13 +574,29 @@ bool StoreLootAction::Execute(Event& event)
         BroadcastHelper::BroadcastLootingItem(ai, bot, proto, itemQualifier);
     }
 
-    // The open paid out: forget the attempts OpenLootAction counted on this object. A window
-    // that yields nothing (refused, or no room for anything in it) keeps its count, so an
-    // object that is re-queued and re-opened without ever paying out is abandoned.
-    if (itemsTaken || gold)
-        AI_VALUE(LootObjectStack*, "available loot")->ForgetFailures(guid);
+    // The open paid out: forget the attempts OpenLootAction counted on this object, so a
+    // multi-use ore vein or a loot-then-skin corpse is never cut short. A window that gave
+    // this bot nothing (every item under a roll, view-only, unwanted, or no bag room) leaves
+    // the corpse lootable for the core: abandon it so the next "add all loot" sweep does not
+    // re-queue it and re-open the same empty window. A player's explicit order is only
+    // unqueued and keeps its open count (LootWindowPolicy).
+    LootObjectStack* lootStack = AI_VALUE(LootObjectStack*, "available loot");
+    bool const playerOrdered = lootStack->TakePlayerOrder(guid);
+    switch (DecideAfterLootWindow(false, itemsTaken || gold, playerOrdered))
+    {
+    case LootWindowVerdict::ForgetFailures:
+        lootStack->ForgetFailures(guid);
+        break;
+    case LootWindowVerdict::Abandon:
+        sLog.outDebug("[BOT LOOT] %s: abandoning guid=%lu (window gave nothing)",
+            bot->GetName(), guid.GetRawValue());
+        lootStack->Abandon(guid);
+        break;
+    case LootWindowVerdict::KeepCount:
+        break;
+    }
 
-    AI_VALUE(LootObjectStack*, "available loot")->Remove(guid);
+    lootStack->Remove(guid);
     RESET_AI_VALUE(LootObject, "loot target");
     RESET_AI_VALUE2(bool, "should loot object", std::to_string(guid.GetRawValue()));
 

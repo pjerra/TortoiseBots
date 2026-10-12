@@ -8272,3 +8272,40 @@ existing TortoiseBots decision tree instead of replacing it, so travel
 break-even, group speed limits and follow-master mounting are unchanged.
 
 Local validation: code review + build pending; in-game pending.
+
+## Loot: abandon empty or refused loot windows (open-loot repeat) — 2026-10-12
+Feature: `StoreLootAction::Execute` (`ai/playerbot/strategy/actions/LootAction.cpp`)
+abandons the looted object on the loot stack's failure memory
+(`LootObjectStack::Abandon`, `ai/playerbot/LootObjectStack.{h,cpp}`) when the
+server refuses the window or the window gives the bot nothing (no item taken,
+no money). A window that does yield loot still clears the memory
+(`ForgetFailures`, from the loot-loop standstill entry above, which also
+counts every open; this entry adds no counting of its own). A player's
+whispered `loot` order (`AddAllLootAction`, chat trigger source
+`add all loot`) clears any earlier give-up on the object before queueing it
+(`LootObjectStack::NotePlayerOrder`), and the window it opens only unqueues
+the object instead of abandoning it (`TakePlayerOrder`). The verdict is the
+pure `ai/playerbot/strategy/actions/LootWindowPolicy.h`, tested by
+`tools/test_loot_window_policy.cpp`.
+
+Source repository: `mod-playerbots` @ `79bd428` (local checkout
+`../playerbots-references/mod-playerbots`, read-only):
+`src/Ai/Base/Actions/LootAction.cpp` (`OpenLootAction::Execute` BeginLoot/DeferLoot,
+`StoreLootAction::Execute` RetryLoot on a LOOT_NONE answer) and
+`src/Mgr/Item/LootObjectStack.cpp` (`BeginLoot`/`LootOpened`/`CancelLoot`/`DeferLoot`,
+15 s pending window, exponential retry delay). Reimplemented, not copied: the
+donor behaviour (a loot that did not complete is held back for a while instead
+of being retried at once) is mapped onto the module's existing 3-strike /
+120 s failure memory instead of porting the donor's pending-loot state. The
+player-order exemption is module-specific (AGENTS.md "player control first").
+
+Reason: Uldaman dungeon run (2026-10-12, P5). The prot tank showed
+`open loot` / `can loot` in 10 dashboard samples on the same spot between
+02:51:28 and 02:52:10 after taking its only item. The corpse stayed lootable
+for the core, so the `often` `add all loot` sweep re-queued it after each empty
+window. Cold review (batch 6): rebased on the loot-loop standstill fix so the
+open is counted once, and the player-order exemption added so a refused
+window cannot silently veto a `loot` order for 120 s.
+
+Validation: code review + `bash tools/verify_all.sh` + `git diff --check`;
+build pending; in-game pending.
