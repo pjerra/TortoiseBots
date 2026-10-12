@@ -282,6 +282,12 @@ public:
     // off, so a bot levelling from 1 only gets a 40/60 mount when re-seeded.
     // Default true.
     bool levelUpMounts = true;
+    // Level-up gear top-up: a masterless pool bot that dings (5+) gets its
+    // empty slots and clearly outdated grey/white items (6+ item levels below
+    // it) filled by the fresh-seed item selection, once per level. Never
+    // replaces green or better; never hired, claimed or player-led bots.
+    // Default true.
+    bool poolGearTopUpOnLevel = true;
     // Safety factor on the mount break-even distance: bots mount for travel
     // only when the remaining trip exceeds
     // 7 y/s * castTime / (mountSpeed/100) * this. 0 disables the threshold

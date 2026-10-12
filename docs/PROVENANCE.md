@@ -7643,3 +7643,43 @@ victim==bot exemption is the fallback if it drags.
 
 Non-blocking "donor Geddon never used this primitive" — ACKNOWLEDGED:
 donor consumers are RS/Ulduar; the Geddon application is novel. Noted.
+
+## Level-up gear top-up for masterless pool bots (`AiPlayerbot.PoolGearTopUpOnLevel`) — 2026-10-12
+
+Feature: on every level-up (5+), a masterless random pool bot runs the
+module's own fresh-seed item selection (`PlayerbotFactory::InitEquipment`
+incremental, seed band, provenance gates) restricted by a new slot mask to
+empty slots and grey/white items 6+ item levels below the bot
+(`PlayerbotFactory::TopUpPoolGear`, pure rule in
+`runtime/PoolGearTopUpPolicy.h`). Action `pool gear top up` on the
+`levelup` packet node and the maintenance `equipment audit` node (out of
+combat only, once per level, level kept as an in-memory facade value).
+Owner decision 2026-10-12: default on, masterless pool bots only.
+
+Source repository: `mod-playerbots/mod-playerbots`
+
+Source commit: `79bd4281` (local
+`playerbots-references/mod-playerbots` checkout).
+
+Source files:
+- `src/Ai/Base/Actions/AutoMaintenanceOnLevelupAction.cpp` (`AutoUpgradeEquip`: random bots run `PlayerbotFactory::InitEquipment(true)` on every level-up behind `Playerbots.AutoUpgradeEquip`, default on)
+- `src/PlayerbotAIConfig.cpp` (`AutoUpgradeEquip` default `true`)
+
+Copied / ported / reimplemented: behaviour reimplemented on the module's
+existing seed path; no donor code copied. Deliberate deviations: (a) only
+empty and clearly outdated grey/white slots are searched, so earned green+
+gear is never replaced (the donor's incremental pass may swap any slot for a
+better roll); (b) hired companions, guild-claimed bots and bots with a live
+player master are excluded (donor: `IsRandomBot` only); (c) never in combat
+(module rule #336), a combat ding is handled by the next equipment audit;
+(d) consumables/ammo are not part of this pass (the module's level-up spell
+hook already swaps food, consumables and bandages).
+
+Reason: batch 8 gear audit (2026-10-12) — levels 11-20 wore 63 % white/grey
+and 58 of 115 bots had fewer than 13 slots filled, because seeding only
+reaches fresh bots of level 5+ and the ding only re-equips from bags.
+
+Local validation: `tools/test_pool_gear_topup_policy.cpp` (wired into
+`verify_all.sh`); `bash tools/verify_all.sh`; `git diff --check`;
+`-fsyntax-only` of the touched sources against a core tree. Not built or
+linked, no in-game check yet.
