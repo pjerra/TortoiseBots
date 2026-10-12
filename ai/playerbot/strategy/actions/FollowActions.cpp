@@ -7,6 +7,7 @@
 #include "playerbot/strategy/values/FreeMoveValues.h"
 #include "playerbot/TravelMgr.h"
 #include "playerbot/LootObjectStack.h"
+#include "playerbot/JumpPolicy.h"
 
 using namespace ai;
 
@@ -88,7 +89,8 @@ bool FollowAction::isUseful()
     }
 
     // maybe jump is faster?
-    if (ai->HasStrategy("follow jump", BotState::BOT_STATE_NON_COMBAT) && ai->AllowActivity())
+    if (ai->HasStrategy("follow jump", BotState::BOT_STATE_NON_COMBAT) && ai->AllowActivity() &&
+        ai::JumpAllowedOnMap(bot->GetMap() && bot->GetMap()->IsDungeon(), false))
     {
         return true;
     }

@@ -104,7 +104,8 @@ If your group wipes, follow this checklist to recover quickly:
 4. If a bot gets stuck outside the dungeon entrance, simply zone in yourself and type `.bot summon <Name>` to gather them safely at the instance threshold.
 
 ### Elevators, Boats & Ledges
-* In complex vertical dungeons (Gnomeregan, Sunken Temple, Blackrock Spire), bots can occasionally desync when jumping down ledges or riding elevators.
+* In complex vertical dungeons (Gnomeregan, Sunken Temple, Blackrock Spire), bots can occasionally desync when riding elevators or dropping off ledges.
+* Bots never jump inside dungeons or raids: the `chase jump`, `follow jump` and `rpg jump` strategies do nothing there (an explicit `jump` command from you still works) (a jump could land a bot on a raised platform with no way back down, e.g. Uldaman Hall of the Keepers). Open world is unchanged; battleground scripted routes are unaffected.
 * Always wait for bots at the bottom of elevators or after ledge drops, then click **Summon** in `/tbm` to regroup before engaging the next pack.
 
 ---

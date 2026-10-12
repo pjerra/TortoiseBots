@@ -19,6 +19,7 @@
 #include "playerbot/TravelRepickPolicy.h"
 #include "playerbot/AvoidAoePolicy.h"
 #include "playerbot/PoolFleePolicy.h"
+#include "playerbot/JumpPolicy.h"
 #include "Database/DBCStores.h"
 
 using namespace ai;
@@ -2945,6 +2946,11 @@ bool JumpAction::isUseful()
 
 bool JumpAction::Execute(ai::Event &event)
 {
+    // Issue #125: no automatic jumps inside dungeons/raids (strategies);
+    // an explicit player `jump` command (event has an owner) still works.
+    if (!ai::JumpAllowedOnMap(bot->GetMap() && bot->GetMap()->IsDungeon(), event.GetOwner() != nullptr))
+        return false;
+
     // don't jump while casting without real player command
     if (!event.GetOwner() && bot->IsNonMeleeSpellCasted(false, false, true))
         return false;
