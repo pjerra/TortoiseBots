@@ -384,14 +384,15 @@ bool RaidSpreadAction::Execute(Event& event)
     {
         // The reaction engine fires this for any stacked ranged bot, but the
         // Onyxia fight strategy also queues it directly: re-check the spread
-        // gate here so explicit hold orders and owned bots (live master OR owner
-        // record, for offline masters) hold position instead of stepping out.
-        if (!ShouldCombatSpread(sServerFacade.IsInCombat(bot), ai->HasRealPlayerMaster(),
+        // gate here so explicit hold orders hold position, and owned bots (live
+        // master OR owner record, for offline masters) do too outside raid
+        // maps. Inside a raid companions spread like pool bots.
+        if (!ShouldRaidSurvivalSpread(sServerFacade.IsInCombat(bot), ai->HasRealPlayerMaster(),
+            ai->IsOwnedBot(), bot->GetMap() && bot->GetMap()->IsRaid(),
             ai->HasStrategy("stay", BotState::BOT_STATE_COMBAT),
             ai->HasStrategy("follow", BotState::BOT_STATE_COMBAT),
             ai->HasStrategy("wait for attack", BotState::BOT_STATE_COMBAT),
-            ai->HasStrategy("grind", BotState::BOT_STATE_COMBAT)) ||
-            IsSpreadExemptOwned(ai->HasRealPlayerMaster(), ai->IsOwnedBot()))
+            ai->HasStrategy("grind", BotState::BOT_STATE_COMBAT)))
             return false;
         // Melee/tanks stack by design; spread is a ranged survival behavior.
         if (!ai->IsRanged(bot))

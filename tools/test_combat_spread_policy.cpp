@@ -17,6 +17,7 @@ using ai::IsSpreadExemptOwned;
 using ai::IsSpreadOnCooldown;
 using ai::kSpreadStepCooldownMs;
 using ai::ShouldCombatSpread;
+using ai::ShouldRaidSurvivalSpread;
 
 int main()
 {
@@ -138,6 +139,22 @@ int main()
     CHECK(IsSpreadExemptOwned(true, true));
     CHECK(!IsSpreadExemptOwned(false, false));
     std::cout << "  [PASS] offline-master owned bots stay exempt\n";
+
+    // Raid survival spread: outside raid maps owned bots (live master or
+    // owner record) hold; on a raid map they spread like pool bots. Combat
+    // and explicit hold orders still gate everywhere.
+    CHECK(ShouldRaidSurvivalSpread(true, false, false, false, false, false, false, false));
+    CHECK(!ShouldRaidSurvivalSpread(true, true, false, false, false, false, false, false));
+    CHECK(!ShouldRaidSurvivalSpread(true, false, true, false, false, false, false, false));
+    CHECK(ShouldRaidSurvivalSpread(true, true, false, true, false, false, false, false));
+    CHECK(ShouldRaidSurvivalSpread(true, false, true, true, false, false, false, false));
+    CHECK(ShouldRaidSurvivalSpread(true, true, true, true, false, false, false, false));
+    CHECK(!ShouldRaidSurvivalSpread(false, true, true, true, false, false, false, false));
+    CHECK(!ShouldRaidSurvivalSpread(true, true, true, true, true, false, false, false));
+    CHECK(!ShouldRaidSurvivalSpread(true, true, true, true, false, true, false, false));
+    CHECK(!ShouldRaidSurvivalSpread(true, true, true, true, false, false, true, false));
+    CHECK(!ShouldRaidSurvivalSpread(true, true, true, true, false, false, false, true));
+    std::cout << "  [PASS] owned bots spread on raid maps, hold elsewhere\n";
 
     // Re-step throttle: no dispatch yet never throttles; a step inside the
     // window holds; a step past it goes. Wrap-safe at the 32-bit clock edge.

@@ -189,6 +189,22 @@ namespace ai
         return hasRealPlayerMaster || isOwnedBot;
     }
 
+    // Default ("raid spread") gate for the universal trigger and for
+    // encounter scripts that queue the step-out directly (Onyxia phase 2).
+    // The owned/hired exemption (#479) keeps a player's companions on their
+    // player in the open world and in 5-man dungeons. On a raid map spread is
+    // raid survival (Fireball splash, chain damage), so it applies to
+    // companions too. Combat-only and explicit hold orders still win there.
+    inline bool ShouldRaidSurvivalSpread(bool inCombat, bool hasRealPlayerMaster,
+        bool isOwnedBot, bool onRaidMap,
+        bool stayOrdered, bool followOrdered, bool waitOrdered, bool grindOrdered)
+    {
+        if (!onRaidMap && IsSpreadExemptOwned(hasRealPlayerMaster, isOwnedBot))
+            return false;
+        return ShouldCombatSpread(inCombat, false,
+            stayOrdered, followOrdered, waitOrdered, grindOrdered);
+    }
+
     // Spread re-step throttle: a step-out within the cooldown of the last
     // recorded flee/spread dispatch holds position instead of stepping again.
     // Wrap-safe via unsigned subtraction; 0 (no dispatch yet) never throttles.

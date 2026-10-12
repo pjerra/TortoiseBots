@@ -475,13 +475,14 @@ bool RaidSpreadNeededTrigger::IsActive()
     // anchors, wait-for-attack, grind) holds it; spread never overrides.
     // Owned/hired bots are exempt via live master OR owner record, so an
     // offline master (or a master on another character) still protects them;
-    // spread stays a pool-bot behavior.
-    if (!ShouldCombatSpread(sServerFacade.IsInCombat(bot), ai->HasRealPlayerMaster(),
+    // outside raid maps spread stays a pool-bot behavior. On a raid map it is
+    // raid survival and applies to companions too.
+    if (!ShouldRaidSurvivalSpread(sServerFacade.IsInCombat(bot), ai->HasRealPlayerMaster(),
+        ai->IsOwnedBot(), bot->GetMap() && bot->GetMap()->IsRaid(),
         ai->HasStrategy("stay", BotState::BOT_STATE_COMBAT),
         ai->HasStrategy("follow", BotState::BOT_STATE_COMBAT),
         ai->HasStrategy("wait for attack", BotState::BOT_STATE_COMBAT),
-        ai->HasStrategy("grind", BotState::BOT_STATE_COMBAT)) ||
-        IsSpreadExemptOwned(ai->HasRealPlayerMaster(), ai->IsOwnedBot()))
+        ai->HasStrategy("grind", BotState::BOT_STATE_COMBAT)))
         return false;
     // Melee/tanks stack by design; spread is a ranged survival behavior.
     if (!ai->IsRanged(bot))
