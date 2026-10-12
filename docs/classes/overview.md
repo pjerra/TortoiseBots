@@ -55,6 +55,7 @@ flowchart TD
 The bot's combat strategy is determined dynamically by analyzing its spent talent points (`AiFactory::GetPlayerSpecTab`):
 - **Dominant Talent Tree:** The bot tallies spent talent points across the three class tabs. Whichever tree has the highest allocation determines the active combat strategy (e.g. Arms vs Fury vs Protection for Warriors).
 - **Hybrid Support:** Hybrid classes adapt based on context. For example, a Feral Druid switches to Bear form when tanking or Cat form when DPSing.
+- **Battlegrounds:** Healing specs keep their heal strategy in a battleground (priest Holy/Discipline, shaman and druid Restoration, paladin Holy); the BG switch in `AiFactory::AddDefaultCombatStrategies` only layers objectives and `pvp` on top.
 - **Dynamic Role Assignment:** In party groups, the player can designate bot roles (Tank, Healer, DPS) which adjusts multiplier weights for aggro generation, healing urgency, and positioning.
 
 Players can set `.bot role self <tank|healer|dps|clear>` to override runtime role inference. Without an override, role detection uses party context and current stance/form or tank equipment signals; if another tank already occupies the role, temporary stance/form changes do not promote a second tank.

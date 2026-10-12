@@ -848,14 +848,35 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
         combatEngine->removeStrategy("conserve mana");
         combatEngine->removeStrategy("cast time");
 
-        if (player->GetClass() == CLASS_SHAMAN && tab == 2)
+        // A healing spec stays a healer in a battleground, as in mod-playerbots:
+        // its BG switch adds objectives and pvp on top but keeps the talent
+        // spec. Re-adding the spec strategy drops its sibling, so a "+dps"
+        // (the priest Shadow placeholder) in the combat strategy list or the
+        // ungrouped pool kit (elemental/balance/retribution) cannot turn the
+        // team's healers into damage dealers. Stored strategies and a forced
+        // role are applied after this, so a player's explicit order still wins.
+        if (player->GetClass() == CLASS_PRIEST && tab == 0)
         {
-            combatEngine->addStrategies("elemental", "aoe", "cc", NULL);
+            combatEngine->addStrategy("discipline");
         }
 
-        if (player->GetClass() == CLASS_DRUID && tab == 2)
+        if (player->GetClass() == CLASS_PRIEST && tab == 1)
         {
-            combatEngine->addStrategies("balance", NULL);
+            combatEngine->addStrategy("holy");
+        }
+
+        // Below level 10 a druid runs the "leveling" kit instead of a spec.
+        if ((player->GetClass() == CLASS_SHAMAN ||
+             (player->GetClass() == CLASS_DRUID && player->GetLevel() >= 10)) && tab == 2)
+        {
+            combatEngine->addStrategies("restoration", "ranged", NULL);
+            combatEngine->removeStrategy("close");
+        }
+
+        if (player->GetClass() == CLASS_PALADIN && tab == 0)
+        {
+            combatEngine->addStrategies("holy", "ranged", NULL);
+            combatEngine->removeStrategy("close");
         }
 
         if (player->GetClass() == CLASS_DRUID && tab == 1)

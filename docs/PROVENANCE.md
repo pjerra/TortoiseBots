@@ -8620,3 +8620,24 @@ carrier" (about 11 % of in-match bot samples).
 
 Validation: code review + build pending; in-game pending.
 `bash tools/verify_all.sh` and `git diff --check`.
+
+## Battleground healers keep their heal spec (2026-10-12)
+
+Feature: the battleground switch in `AiFactory::AddDefaultCombatStrategies`
+no longer moves Restoration shamans to `elemental` or Restoration druids to
+`balance`; it re-adds the healing spec strategy (priest `discipline`/`holy`,
+shaman/druid `restoration` + `ranged`, paladin `holy` + `ranged`) after the
+combat strategy list, so a `+dps` (the priest Shadow placeholder) or the
+ungrouped pool kit cannot leave a healer on a damage spec in a battleground.
+
+Source: `mod-playerbots` @ `79bd428`, `src/Bot/Factory/AiFactory.cpp:459-497`
+(BG switch adds `warsong`/`arathi`/`alterac`, `boost`, `potions`,
+`dps assist` etc. but keeps the talent spec). Behaviour reimplemented in the
+module's own factory, no code copied.
+
+Reason: live m910q Warsong sample (batch 6 audit, finding 4): all 20 bots
+reported role `dps`; priests ran `shadow` and a Restoration shaman ran
+`elemental` in combat while carrying `holy`/`restoration` out of combat.
+Heal-type actions were 3.5-6 % of samples against `attack enemy player`.
+
+Validation: code review + build pending; in-game pending.
