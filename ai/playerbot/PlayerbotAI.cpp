@@ -45,6 +45,7 @@
 #include "playerbot/strategy/actions/FishAction.h"
 #include "playerbot/DeathClusterPolicy.h"
 #include "playerbot/SurvivePolicy.h"
+#include "playerbot/MovementModePolicy.h"
 #include "../../runtime/AutoToolsKitPolicy.h"
 #include "../../behavior/PlayerConvenience.h"
 #include "Movement/spline/MoveSplineInitArgs.h"
@@ -3700,6 +3701,12 @@ void PlayerbotAI::ResetStrategies(bool autoLoad)
         sLog.outBasic("LFT: %s strategies rebuilt as %s", bot->GetName(), roleStrategy);
     }
 
+    // A player's companion leaves every rebuild with a movement mode: a stored
+    // snapshot saved without one would otherwise park it after each rebuild
+    // until the player whispers "follow" (ai::NeedsDefaultMovementMode).
+    if (ai::NeedsDefaultMovementMode(bot->InBattleGround(), HasActivePlayerMaster(), HasActiveMovementStrategy()))
+        SetMovementStrategy(GetDefaultMovementStrategy());
+
     for (uint8 i = 0; i < (uint8)BotState::BOT_STATE_ALL; i++)
     {
         engines[i]->initMode = false;
@@ -7230,11 +7237,7 @@ std::string PlayerbotAI::GetDefaultMovementStrategy()
 
 bool PlayerbotAI::HasActiveMovementStrategy()
 {
-    static char const* const movementStrategies[] = {
-        "follow", "stay", "wander", "guard", "free", "passive"
-    };
-
-    for (char const* strategy : movementStrategies)
+    for (char const* strategy : ai::kMovementModeStrategies)
     {
         if (HasStrategy(strategy, BotState::BOT_STATE_NON_COMBAT) ||
             HasStrategy(strategy, BotState::BOT_STATE_REACTION))

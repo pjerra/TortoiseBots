@@ -9241,3 +9241,43 @@ Review fixes (2026-10-12, REVIEW-129): (1) the rescue yields while the bot is he
 | A CC mark is protected only while held: crowd-controlled (breakable CC, fear, banish), under a group member's CC cast bar, or in its first ~3 s of combat (superseded: 10 s, see the next row) with its CC bot ready (fitting spell known, off cooldown, within spell range + 5 yd); a free mark is a normal enemy for every picker, Taunt, DoT spread and area gate | `mod-playerbots` @ 79bd428 `src/Ai/Base/Value/AttackersValue.cpp` (`hasRealThreat` drops only units that are actually polymorphed, a free mark stays an attacker) | `ai/playerbot/strategy/values/{TargetValue,InvalidTargetValue,DpsTargetValue,SnareTargetValue}.{h,cpp}` | Ported (protect the CC'd unit, not the mark) + native (cast-bar and start-of-fight grace) | Owner report: a free Moon mob (sheep missed or broke, or no CC bot) killed the party while nobody attacked it | code review + build pending; in-game pending |
 | Moon mark of a pack: hold window 10 s (was 3 s) of creature combat while its CC bot is ready; the CC bot's own area spells spare its mark (held or free) while other enemies are left; the CC chooser keeps the bot's assigned mark once found (an open-world free pick checked later no longer replaces it). Policy in `CcMarkHoldPolicy.h` | `mod-playerbots` @ 79bd428 `src/Ai/Base/Value/TargetValue.cpp` (`FindNonCcTargetStrategy::IsCcTarget`: the Moon / `rti cc` mark is skipped by the tank and DPS pickers for the whole fight), `src/Ai/Base/Value/DpsTargetValue.cpp` (Moon skip in every tournament), `src/Ai/Base/Trigger/GenericTriggers.cpp` (`HasCcTargetTrigger::IsCcTargetFree`: in dungeons only the `rti cc target` is CC'd) | `ai/playerbot/strategy/values/{CcMarkHoldPolicy.h,TargetValue.h,TargetValue.cpp,CcTargetValue.cpp}`, `ai/playerbot/strategy/actions/GenericSpellActions.cpp` (comments), `tools/test_cc_mark_hold_policy.cpp` | Reimplemented: the donor's whole-fight Moon skip, bounded to the CC bot's first tries (the owner's free-mark rule stays: a mark nobody can CC, or still free after 10 s, is a normal enemy); own-mark area sparing and the chooser fix are native (the donor has no area gate, and its chooser has the same overwrite but its dungeon trigger hides it) | Build 11 pack pull: the pack entered combat at the pull (creature group assist), the 3 s window ran out before the mage's first Polymorph (6 s), tank, rogue and priest SW:P were on the Moon mob from 4 s, the first sheep landed at 28 s and broke at once, and the mage's own Flamestrike hit the mob twice | `tools/test_cc_mark_hold_policy.cpp`; `c++ -fsyntax-only` of the changed files; code review + build pending; in-game pending |
 | Moon mark round 2: (a) the tank's *Taunt on snare target* passes the hold when the held mark is not CC'd, has no CC cast bar on it and hits a healer (owner decision 2026-10-12; no damage, the tank keeps its target); (b) a CC cast starts only in line of sight and 5 yd inside the spell's range, and the new `reach cc` closes to that distance (the chooser still keeps the out-of-range mark as `cc target`); (c) with `AiPlayerbot.EnableActionLog = 1`, a failed CC-mechanic cast (`SMSG_CAST_RESULT`, 1.12 layout) writes a `CC_CAST_FAILED` row to the bot action log: spell id, result code, distance to the cast's target, moving | Native: range shortening for a moving target as in TB's own `ReachPullAction`; the action-log row uses TB's `BotActionLog` | `ai/playerbot/strategy/values/{CcMarkHoldPolicy.h,SnareTargetValue.cpp,TargetValue.h,TargetValue.cpp,CcTargetValue.cpp,InvalidTargetValue.cpp}`, `ai/playerbot/strategy/actions/{GenericSpellActions.h,ReachTargetActions.h,ActionContext.h}`, `ai/playerbot/PlayerbotAI.cpp`, `tools/test_cc_mark_hold_policy.cpp` | Native (owner decision for the taunt; range margin from TB's own pull reach; diagnostics row native) | Build 11: four Polymorph starts never finished (the assigned mark skipped the range check and was moving between the rogue and the tank), failed 1.5 s casts left no trace (the cast-failed tell action is not wired to its trigger and parses the TBC packet layout), and a held mark on the healer had no answer for up to 10 s | `tools/test_cc_mark_hold_policy.cpp` (34 checks); `c++ -fsyntax-only` of the changed files; code review + build pending; in-game pending |
+
+## Companions keep `follow` (strategy snapshot and broken stay) — 2026-10-12
+
+Feature: (1) `PlayerbotDbStore::Save` writes its delete and every insert in
+one character-database transaction with the bot's guid as serial id, so one
+bot's saves run in order on one worker (it joins a caller's open
+transaction, as `ChangeStrategyAction` holds one). (2) `PlayerbotDbStore::Load` clears and
+replays only the engines whose own row it read (`ai::StoredStrategyRows`,
+`ai/playerbot/MovementModePolicy.h`). (3) `PlayerbotAI::ResetStrategies`
+gives a real player's bot its default movement mode (`follow`) when, after
+the snapshot and the forced role, it has none (`ai::NeedsDefaultMovementMode`;
+not in battlegrounds). (4) `RelaxTacticalMovement` (`commands/BotCommands.cpp`)
+adds the default mode back when breaking a stay leaves the bot with none.
+
+Source: (1) and (2) follow mod-playerbots `79bd428`
+`src/Db/PlayerbotRepository.cpp:11-71` (`Load` clears an engine only on its
+own `co`/`nc` row; `Save` appends everything to one transaction).
+Reimplemented on the cmangos `Database` API (`InTransaction`,
+`BeginTransaction`, `CommitTransaction`); the donor commits directly, ours
+stays asynchronous. (3) and (4) are module rules with no donor counterpart.
+
+Reason: on m910q build 11 three hired companions (Latal, Maethiza,
+Niabrenans) had no movement strategy at all and stood still until whispered
+`follow`; the dungeon catch-up (#644) only brings in bots with `follow`, so
+only the rogue came along on `.tele ulda`. Their stored rows (read-only
+check) show it: Latal's `nc` was exactly the `Load` baseline plus the
+protection kit, the result of reading a snapshot without its `nc` row; the
+loose async rows of one Save are spread over the 4 character-database
+workers (`CharacterDatabase.WorkerThreads = 4`), so its delete can run after
+its own inserts, and the tank hire saves and then rebuilds in the same call.
+Maethiza and Niabrenans had their full kit minus any mode: a whispered
+`stay` followed by a tactical order that breaks it (`RelaxTacticalMovement`
+removes `stay` and added nothing). The rogue, never told to stay, kept
+`follow`.
+
+Validation: `tools/test_movement_mode_policy.cpp` (mode list, the three
+stored `nc` rows from m910q, half-written and complete snapshots, rebuild
+rule); `bash tools/verify_all.sh`; `git diff --check`; `c++ -fsyntax-only`
+of the three changed files against the core headers. Build pending; in-game
+pending.
