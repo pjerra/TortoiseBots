@@ -108,3 +108,15 @@ bool OffHandWeaponNoEnchantTrigger::IsActive()
     }
     return false;
 }
+
+bool BladeFlurryNearCcTrigger::IsActive()
+{
+    // Aura first: only a rogue with Blade Flurry up pays for the scan.
+    bool const up = ai->HasAura("blade flurry", bot);
+    if (!up)
+        return false;
+    CcGuard ccGuard(ai);
+    bool const protectedNear = ccGuard.ProtectedEnemyNear(bot, CcBladeFlurryGuardRadius, true);
+    return CcCancelBladeFlurry(up, protectedNear,
+        !protectedNear && ccGuard.ReadyCcMarkNear(bot, CcBladeFlurryGuardRadius));
+}
