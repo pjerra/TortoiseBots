@@ -18,6 +18,7 @@ using TortoiseBots::HumanBgSideNeed;
 using TortoiseBots::HumanBgSideTarget;
 using TortoiseBots::HumanBgSideWantsBot;
 using TortoiseBots::kHumanBgDemandIntervalMs;
+using TortoiseBots::kHumanBgDemandMargin;
 using TortoiseBots::kHumanBgDemandMaxPerCheck;
 using TortoiseBots::kHumanBgDemandPerSidePerCheck;
 
@@ -25,19 +26,34 @@ int main()
 {
     std::cout << "Starting TortoiseBots human BG demand policy tests...\n";
 
-    // Target is the template team size, never below the core minimum.
-    CHECK(HumanBgSideTarget(4, 10) == 10);   // WSG
-    CHECK(HumanBgSideTarget(5, 15) == 15);   // AB
-    CHECK(HumanBgSideTarget(15, 40) == 40);  // AV
-    CHECK(HumanBgSideTarget(4, 0) == 4);     // broken template max
+    // Target is the core match minimum plus the margin, not the team size.
+    CHECK(HumanBgSideTarget(4, 10) == 4 + kHumanBgDemandMargin);    // WSG
+    CHECK(HumanBgSideTarget(5, 15) == 5 + kHumanBgDemandMargin);    // AB
+    CHECK(HumanBgSideTarget(15, 40) == 15 + kHumanBgDemandMargin);  // AV
+    CHECK(HumanBgSideTarget(4, 0) == 4 + kHumanBgDemandMargin);     // broken template max
+    CHECK(HumanBgSideTarget(4, 4) == 4);                            // never above a full side
+    CHECK(HumanBgSideTarget(1, 10) == 1);                           // margin stays below min
+    CHECK(HumanBgSideTarget(0, 10) == 0);
+    // Alterac.MinPlayersInQueue raises the base so AV can still form.
+    CHECK(HumanBgSideTarget(15, 40, 20) == 20 + kHumanBgDemandMargin);
+    CHECK(HumanBgSideTarget(15, 40, 5) == 15 + kHumanBgDemandMargin);
+
+    // No second match from leftovers: the core takes at least the minimum
+    // per side into the human's match, so what stays queued per side is at
+    // most target - min, which must stay below the minimum.
+    for (std::uint32_t min = 1; min <= 40; ++min)
+        CHECK(HumanBgSideTarget(min, 40) - min < min);
+    // The AV overshoot the old team-size target allowed (40 - 15 = 25 left
+    // a side, enough for a second 15v15) is gone.
+    CHECK(HumanBgSideTarget(15, 40) - 15 < 15);
 
     // Solo Alliance human in WSG: BOTH sides want bots (the old rule filled
-    // only Horde). Own side needs 9 more, the other side 10.
+    // only Horde). Own side needs 4 more, the other side 5.
     std::uint32_t target = HumanBgSideTarget(4, 10);
-    CHECK(HumanBgSideNeed(target, 1) == 9);
-    CHECK(HumanBgSideNeed(target, 0) == 10);
+    CHECK(HumanBgSideNeed(target, 1) == 4);
+    CHECK(HumanBgSideNeed(target, 0) == 5);
     // Waiting bots count toward the side; a full side needs nothing.
-    CHECK(HumanBgSideNeed(target, 10) == 0);
+    CHECK(HumanBgSideNeed(target, 5) == 0);
     CHECK(HumanBgSideNeed(target, 12) == 0);
 
     // Per-check share per side keeps both sides growing together.
@@ -45,11 +61,15 @@ int main()
     CHECK(HumanBgSideWantsBot(9, kHumanBgDemandPerSidePerCheck - 1));
     CHECK(!HumanBgSideWantsBot(9, kHumanBgDemandPerSidePerCheck));
     CHECK(!HumanBgSideWantsBot(0, 0));
+    // A bot group leader queues its whole group: only when it fits.
+    CHECK(HumanBgSideWantsBot(5, 0, 5));
+    CHECK(!HumanBgSideWantsBot(4, 0, 5));
+    CHECK(HumanBgSideWantsBot(1, 0, 0));  // size 0 treated as solo
 
     // Pace: one check lifts a solo WSG queue past the core minimum on both
-    // sides (1 human + 5 own bots >= 4, 5 enemy bots >= 4).
-    CHECK(1 + kHumanBgDemandPerSidePerCheck >= 4);
-    CHECK(kHumanBgDemandPerSidePerCheck >= 4);
+    // sides (1 human + 4 own bots >= 4, 5 enemy bots >= 4).
+    CHECK(HumanBgSideNeed(target, 1) <= kHumanBgDemandPerSidePerCheck);
+    CHECK(HumanBgSideNeed(target, 0) <= kHumanBgDemandPerSidePerCheck);
     CHECK(kHumanBgDemandMaxPerCheck >= 2 * kHumanBgDemandPerSidePerCheck);
     // AV minimum (15 a side) within a few checks, well under two minutes.
     std::uint32_t checksForAv = (15 + kHumanBgDemandPerSidePerCheck - 1) / kHumanBgDemandPerSidePerCheck;

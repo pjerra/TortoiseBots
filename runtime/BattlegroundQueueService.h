@@ -12,8 +12,9 @@ namespace TortoiseBots
 // Default-on demand-aware WSG/AB/AV queue participation for live Headless
 // random bots. The service uses the core's copy-only queued-participant demand
 // snapshot to match human-waiting queue type/bracket and fills BOTH sides of
-// that bucket toward the template team size (counting humans and bots already
-// waiting), on a fixed 5 s check while a human waits (HumanBgDemandPolicy.h).
+// that bucket up to the core's match minimum plus a small margin (counting
+// humans and bots already waiting), on a fixed 5 s check while a human waits
+// (HumanBgDemandPolicy.h).
 // It joins through WorldSession::HandleBattlemasterJoinOpcode (guid 1337 bypass)
 // and leaves through HandleBattleFieldPortOpcode action=0; core owns queue,
 // invites, and port events. InBattleGround, LFT, group, master, and owned-pair

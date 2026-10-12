@@ -96,19 +96,26 @@ std::vector<HumanBgDemand> GetHumanBgDemands()
         BattleGround* bgTemplate = sBattleGroundMgr.GetBattleGroundTemplate(bgType);
         if (!bgTemplate)
             continue;
+        // Fill to the match minimum plus a small margin, not the team size:
+        // the core starts the match at the minimum, and bots queued past it
+        // would wait on and could start a second match with no human in it.
+        // AV honours the core's Alterac.MinPlayersInQueue gate (default 0).
+        uint32 queueFloor = bgType == BATTLEGROUND_AV
+            ? sWorld.getConfig(CONFIG_UINT32_AV_MIN_PLAYERS_IN_QUEUE) : 0;
         uint32 sideTarget = HumanBgSideTarget(bgTemplate->GetMinPlayersPerTeam(),
-            bgTemplate->GetMaxPlayersPerTeam());
+            bgTemplate->GetMaxPlayersPerTeam(), queueFloor);
 
         for (uint32 bracketIndex = 0; bracketIndex < MAX_BATTLEGROUND_BRACKETS; ++bracketIndex)
         {
             BattleGroundBracketId bracket = BattleGroundBracketId(bracketIndex);
             std::vector<BattleGroundQueue::QueuedParticipantInfo> participants =
                 sBattleGroundMgr.GetQueuedParticipants(queueType, bracket);
-            // Humans waiting decide whether the bucket has demand at all;
-            // everyone waiting (humans and bots, not yet invited) counts
-            // toward each side's fill target. Both sides are filled: the
-            // core needs MinPlayersPerTeam on each side, so a solo human's
-            // own side needs bots as much as the other one.
+            // Humans waiting decide whether the bucket has demand at all, so
+            // demand ends once the human is invited; everyone waiting
+            // (humans and bots, not yet invited) counts toward each side's
+            // fill target. Both sides are filled: the core needs
+            // MinPlayersPerTeam on each side, so a solo human's own side
+            // needs bots as much as the other one.
             uint32 humans = 0;
             uint32 waiting[2] = {0, 0};
             for (auto const& participant : participants)
@@ -626,8 +633,9 @@ void BattlegroundQueueService::Update(uint32_t diff)
         std::swap(candidates[i], candidates[j]);
     }
 
-    // Fill both sides of every human-demand bucket toward the template team
-    // size, a few bots per side per check so the sides grow together.
+    // Fill both sides of every human-demand bucket up to the match minimum
+    // plus a small margin, a few bots per side per check so the sides grow
+    // together.
     uint32 queued = 0;
     for (Player* bot : candidates)
     {
@@ -643,12 +651,19 @@ void BattlegroundQueueService::Update(uint32_t diff)
         {
             if (bot->GetBattleGroundBracketIdFromLevel(demand.bgType) != demand.bracket)
                 continue;
-            if (!HumanBgSideWantsBot(demand.need[side], demand.queuedThisCheck[side]))
+            // A WSG/AB bot group leader queues its whole group; count every
+            // member so a group never pushes the side past its target (AV is
+            // always queued solo).
+            uint32 entrySize = 1;
+            if (demand.bgType != BATTLEGROUND_AV)
+                if (Group* group = bot->GetGroup())
+                    entrySize = group->GetMembersCount();
+            if (!HumanBgSideWantsBot(demand.need[side], demand.queuedThisCheck[side], entrySize))
                 continue;
             if (TryQueue(bot, uint32(demand.queueType)))
             {
                 ++queued;
-                --demand.need[side];
+                demand.need[side] -= std::min(entrySize, demand.need[side]);
                 ++demand.queuedThisCheck[side];
                 break;
             }
