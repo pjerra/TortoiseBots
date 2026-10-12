@@ -9453,3 +9453,45 @@ the Moon mob), and the Blink GCD sat right before the first Polymorph.
 
 Validation: `c++ -fsyntax-only` of the changed files; `tools/verify_all.sh`.
 Not compiled into a server, not tested in game.
+
+## No meal while the group fights; wake a resting bot at the pull — 2026-10-12
+
+Feature: `EatAction`/`DrinkAction::isUseful` refuse while the group is
+fighting — the cached `has attackers` value, or a live group member within
+`AiPlayerbot.SightDistance` that is in combat with a victim or an attacker
+(`PlayerbotAI::IsGroupMemberNearInCombat`, member flags only, outside
+battlegrounds). `EatAction::isUseful` also refuses a top-up meal at or above
+`MediumHealth` while the bot has the `cc` strategy and a live `rti cc target`.
+`PlayerbotAI::UpdateAI` wakes a bot that is asleep, seated and carries a food
+or drink aura (`SPELL_AURA_OBS_MOD_HEALTH`/`SPELL_AURA_OBS_MOD_MANA`) when the
+same member check is true: it stands up (which drops the aura), resets
+`attackers`/`has attackers` and clears the AI delay, so `combat start` fires on
+the next tick. Files: `ai/playerbot/strategy/actions/UseItemAction.h`,
+`ai/playerbot/PlayerbotAI.{h,cpp}`.
+
+Source repository: `mod-playerbots` @ `79bd428` (local checkout
+`../playerbots-references/mod-playerbots`), reviewed, not ported.
+
+Source files (donor, reference only): `src/Bot/PlayerbotAI.cpp:284-298` (the
+wake tests only the bot's own combat flag, the same gap this fixes),
+`src/Ai/Base/Actions/NonCombatActions.cpp:95-151` (`EatAction` sleeps
+`18000 ms x missing%`, `isUseful` requires HP below `LowHealth`),
+`src/Ai/Base/Strategy/UseFoodStrategy.cpp:14-17` (food cheat eats on
+`medium health` only).
+
+Copied / ported / reimplemented: reimplemented locally; the donor has no
+group-combat gate or wake to port. The donor avoids the symptom by eating less
+often and for shorter (medium-health band, 18 s scale against our 27 s). That
+part is deliberately not adopted here: the almost-full rest band for free-food
+bots is a recorded choice (see "Death fix B" above), and moving the band or
+the meal length changes pacing for every levelling bot, which is a balance
+call for the owner, not part of this fix.
+
+Reason: moon-followups B16 item B. A mage 40-46 yd behind the tank sat down to
+eat at 78% (after Power Word: Fortitude raised its max HP) just before or just
+after the pull, slept the 6 s meal, and missed its Polymorph order; nothing
+woke it until its own combat flag rose.
+
+Validation: syntax-only compile of `PlayerbotAI.cpp` and
+`UseItemAction.cpp`; `bash tools/verify_all.sh`; `git diff --check`. Build
+pending; in-game pending.

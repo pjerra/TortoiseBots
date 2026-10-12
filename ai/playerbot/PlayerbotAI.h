@@ -693,6 +693,10 @@ public:
     BotCheatMask GetCheat() { return cheatMask; }
     void SetCheat(BotCheatMask mask) { cheatMask = mask; }
 
+    // A live group member near this bot is fighting something. Member flags
+    // only, no grid scan, so it is cheap enough for the per-tick resting wake.
+    bool IsGroupMemberNearInCombat();
+
     // Cache master's GUID alongside the raw pointer so we can revalidate
     // the pointer each tick against ObjectAccessor — if the master Player
     // was destroyed (logout / disconnect) since SetMaster() was called,

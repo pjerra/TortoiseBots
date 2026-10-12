@@ -612,6 +612,19 @@ namespace ai
         virtual uint32 GetItemId() override { return 5634; }
     };
 
+    // Eating and drinking rest the bot between fights (#133). Sitting down
+    // while the group is already fighting puts the AI to sleep for the whole
+    // meal, so the bot missed the pull and any CC order. "has attackers" is
+    // the cached value the combat-start trigger reads anyway; the member
+    // check catches the first seconds of a pull before that cache refreshes,
+    // and it is the same test that wakes an eating bot (PlayerbotAI::UpdateAI),
+    // so a woken bot does not sit straight back down.
+    inline bool GroupIsFighting(PlayerbotAI* ai)
+    {
+        return ai->GetAiObjectContext()->GetValue<bool>("has attackers")->Get() ||
+            ai->IsGroupMemberNearInCombat();
+    }
+
     class DrinkAction : public UseAction
     {
     public:
@@ -683,7 +696,7 @@ namespace ai
 
         bool isUseful() override
         {
-            return UseAction::isUseful() && AI_VALUE(bool, "should drink");
+            return UseAction::isUseful() && AI_VALUE(bool, "should drink") && !GroupIsFighting(ai);
         }
 
         bool isPossible() override
@@ -759,7 +772,20 @@ namespace ai
 
         bool isUseful() override
         {
-            return UseAction::isUseful() && AI_VALUE(bool, "should eat");
+            if (!UseAction::isUseful() || !AI_VALUE(bool, "should eat") || GroupIsFighting(ai))
+                return false;
+
+            // A CC bot whose mark is alive and in sight does not sit down to
+            // top up from MediumHealth: only free-food bots eat that high,
+            // and the meal would run into the pull. "rti cc" is Moon on every
+            // bot until a .bot action cc order gives the mark to one bot, so
+            // a real need (below MediumHealth) still eats and drinking is
+            // not touched.
+            if (AI_VALUE2(uint8, "health", "self target") >= sPlayerbotAIConfig.mediumHealth &&
+                ai->HasStrategy("cc", BotState::BOT_STATE_COMBAT) && AI_VALUE(Unit*, "rti cc target"))
+                return false;
+
+            return true;
         }
 
         bool isPossible() override

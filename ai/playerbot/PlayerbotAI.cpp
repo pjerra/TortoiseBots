@@ -614,6 +614,24 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
             ResetAIInternalUpdateDelay();
 
         inCombat = false;
+
+        // Wake up a resting bot when its group starts fighting (#133). A meal
+        // puts the AI to sleep for up to 27 s and the bot's own combat flag
+        // only rises once it hits something, so a caster sitting behind the
+        // tank kept eating through the pull and its CC order. Cheap checks
+        // first: only a bot that is asleep, seated and has a food or drink
+        // aura looks at its group. Standing drops the aura, so this fires
+        // once; the fresh attackers make "combat start" fire on the next tick.
+        if (aiInternalUpdateDelay > 0 && !isWaiting &&
+            bot->GetStandState() == UNIT_STAND_STATE_SIT &&
+            (bot->HasAuraType(SPELL_AURA_OBS_MOD_HEALTH) || bot->HasAuraType(SPELL_AURA_OBS_MOD_MANA)) &&
+            IsGroupMemberNearInCombat())
+        {
+            bot->SetStandState(UNIT_STAND_STATE_STAND);
+            aiObjectContext->GetValue<std::list<ObjectGuid>>("attackers", 1)->Reset();
+            aiObjectContext->GetValue<bool>("has attackers")->Reset();
+            ResetAIInternalUpdateDelay();
+        }
     }
 
     // force stop if moving but should not
@@ -1264,6 +1282,31 @@ bool PlayerbotAI::IsStateActive(BotState state) const
 time_t PlayerbotAI::GetCombatStartTime() const
 {
     return aiObjectContext->GetValue<time_t>("combat start time")->Get();
+}
+
+bool PlayerbotAI::IsGroupMemberNearInCombat()
+{
+    // Battlegrounds keep their own rhythm: the attackers value does not pool
+    // a battleground raid either.
+    Group* group = bot->GetGroup();
+    if (!group || bot->InBattleGround())
+        return false;
+
+    for (Player* member : LiveGroupMembers(group))
+    {
+        if (member == bot || !IsSafe(member) || !member->IsInWorld() || !sServerFacade.IsAlive(member))
+            continue;
+
+        // A combat flag alone can be a stuck flag; a real fight has a victim
+        // or something attacking the member.
+        if (!sServerFacade.IsInCombat(member) || (!member->GetVictim() && member->GetAttackers().empty()))
+            continue;
+
+        if (sServerFacade.GetDistance2d(bot, member) <= sPlayerbotAIConfig.sightDistance)
+            return true;
+    }
+
+    return false;
 }
 
 void PlayerbotAI::OnCombatStarted()
