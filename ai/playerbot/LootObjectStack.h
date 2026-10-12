@@ -77,6 +77,15 @@ namespace ai
         void NoteApproachFailure(ObjectGuid guid);
         bool IsAbandoned(ObjectGuid guid);
 
+        // A loot window that gave this bot nothing (the server refused it, or every item
+        // was blocked by a roll, view-only or not wanted) is abandoned at once: the corpse
+        // stays lootable for the core, so "add all loot" would re-queue it and "open loot"
+        // would re-open it every few seconds on the same spot. Same TTL as above.
+        void Abandon(ObjectGuid guid);
+        // A window that did yield loot clears the object's failure memory, so a node that
+        // can be worked several times (ore veins) never runs into the open-attempt count.
+        void ForgetFailures(ObjectGuid guid);
+
     public:
         std::vector<LootObject> OrderByDistance(float maxDistance = 0);
 

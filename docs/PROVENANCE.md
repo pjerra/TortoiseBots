@@ -7643,3 +7643,32 @@ victim==bot exemption is the fallback if it drags.
 
 Non-blocking "donor Geddon never used this primitive" — ACKNOWLEDGED:
 donor consumers are RS/Ulduar; the Geddon application is novel. Noted.
+
+## Loot: abandon empty or refused loot windows (open-loot repeat) — 2026-10-12
+Feature: `StoreLootAction::Execute` (`ai/playerbot/strategy/actions/LootAction.cpp`)
+abandons the looted object on the loot stack's failure memory
+(`LootObjectStack::Abandon`, `ai/playerbot/LootObjectStack.{h,cpp}`) when the
+server refuses the window or the window gives the bot nothing (no item taken,
+no money). A window that does yield loot clears the memory
+(`LootObjectStack::ForgetFailures`). `OpenLootAction::Execute` also counts a
+successful open on that memory, so an open that never gets a window can repeat
+at most 3 times in 120 s.
+
+Source repository: `mod-playerbots` @ `79bd428` (local checkout
+`../playerbots-references/mod-playerbots`, read-only):
+`src/Ai/Base/Actions/LootAction.cpp` (`OpenLootAction::Execute` BeginLoot/DeferLoot,
+`StoreLootAction::Execute` RetryLoot on a LOOT_NONE answer) and
+`src/Mgr/Item/LootObjectStack.cpp` (`BeginLoot`/`LootOpened`/`CancelLoot`/`DeferLoot`,
+15 s pending window, exponential retry delay). Reimplemented, not copied: the
+donor behaviour (a loot that did not complete is held back for a while instead
+of being retried at once) is mapped onto the module's existing 3-strike /
+120 s failure memory instead of porting the donor's pending-loot state.
+
+Reason: Uldaman dungeon run (2026-10-12, P5). The prot tank showed
+`open loot` / `can loot` in 10 dashboard samples on the same spot between
+02:51:28 and 02:52:10 after taking its only item. The corpse stayed lootable
+for the core, so the `often` `add all loot` sweep re-queued it after each empty
+window.
+
+Validation: code review + `bash tools/verify_all.sh` + `git diff --check`;
+build pending; in-game pending.

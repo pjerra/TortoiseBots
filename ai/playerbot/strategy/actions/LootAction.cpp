@@ -71,6 +71,13 @@ bool OpenLootAction::Execute(Event& event)
     bool result = DoLoot(lootObject);
     if (result)
     {
+        // Every open counts on the failure memory too; a window that yields loot clears it
+        // again (StoreLootAction). An open the server answers silently, or one that keeps
+        // yielding nothing, can therefore only repeat MAX_APPROACH_FAILURES times before
+        // the object is abandoned - the corpse stays lootable for the core, so "add all
+        // loot" re-queued it and the tank re-opened it 10 times on one spot (Uldaman).
+        if (!lootObject.IsEmpty())
+            AI_VALUE(LootObjectStack*, "available loot")->NoteApproachFailure(lootObject.guid);
         AI_VALUE(LootObjectStack*, "available loot")->Remove(lootObject.guid);
         context->GetValue<LootObject>("loot target")->Set(LootObject());
         return true;
@@ -419,8 +426,10 @@ bool StoreLootAction::Execute(Event& event)
         sLog.outDebug("[BOT LOOT] %s: loot REJECTED guid=%lu error=%u (%s)",
             bot->GetName(), guid.GetRawValue(), lootError, errName);
 
-        // Drop the corpse so the bot stops retrying a loot the server won't grant.
-        AI_VALUE(LootObjectStack*, "available loot")->Remove(guid);
+        // Drop the corpse so the bot stops retrying a loot the server won't grant. Abandon it
+        // rather than just unqueue it: the core still shows it lootable, so "add all loot"
+        // re-queued it on the next sweep and the refused open repeated on the same spot.
+        AI_VALUE(LootObjectStack*, "available loot")->Abandon(guid);
         RESET_AI_VALUE(LootObject, "loot target");
         return false;
     }
@@ -559,6 +568,13 @@ bool StoreLootAction::Execute(Event& event)
         BroadcastHelper::BroadcastLootingItem(ai, bot, proto, itemQualifier);
     }
 
+    // A window that gave this bot nothing (every item blocked by a roll, view-only, not
+    // wanted, or no bag room) leaves the corpse lootable for the core: abandon it so the
+    // next "add all loot" sweep does not re-queue it and re-open the same empty window.
+    if (itemsTaken == 0 && gold == 0)
+        AI_VALUE(LootObjectStack*, "available loot")->Abandon(guid);
+    else
+        AI_VALUE(LootObjectStack*, "available loot")->ForgetFailures(guid);
     AI_VALUE(LootObjectStack*, "available loot")->Remove(guid);
     RESET_AI_VALUE(LootObject, "loot target");
     RESET_AI_VALUE2(bool, "should loot object", std::to_string(guid.GetRawValue()));
