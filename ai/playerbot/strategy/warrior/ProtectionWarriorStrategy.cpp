@@ -41,7 +41,21 @@ NextAction** ProtectionWarriorStrategy::GetDefaultCombatActions()
 
 void ProtectionWarriorStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 {
-    WarriorStrategy::InitCombatTriggers(triggers);
+    // Skip WarriorStrategy's base interrupt rows: their Pummel resolves
+    // through the berserker-stance prerequisite, so a tank facing a caster
+    // left Defensive Stance, could not Pummel (no rage after the swap), and
+    // the "defensive stance" buff row swapped it straight back - every tick
+    // for as long as the mob kept casting. The tank interrupts with Shield
+    // Bash only (donor TankWarriorStrategy), which Defensive Stance allows.
+    ClassStrategy::InitCombatTriggers(triggers);
+
+    triggers.push_back(new TriggerNode(
+        "shield bash",
+        NextAction::array(0, new NextAction("shield bash", ACTION_INTERRUPT), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "shield bash on enemy healer",
+        NextAction::array(0, new NextAction("shield bash on enemy healer", ACTION_INTERRUPT), NULL)));
 
     // Staggered defensives (donor TankWarriorStrategy): Shield Wall fires
     // early at low health (20-50%), Last Stand only at critical (<20%).
@@ -67,13 +81,9 @@ void ProtectionWarriorStrategy::InitCombatTriggers(std::list<TriggerNode*>& trig
         "enemy out of melee",
         NextAction::array(0, new NextAction("charge", ACTION_MOVE + 7), NULL)));
 
-    triggers.push_back(new TriggerNode(
-        "intercept and rage",
-        NextAction::array(0, new NextAction("berserker stance", ACTION_MOVE + 6), NULL)));
-
-    triggers.push_back(new TriggerNode(
-        "intercept and rage",
-        NextAction::array(0, new NextAction("intercept", ACTION_MOVE + 5), NULL)));
+    // No Intercept rows: Intercept needs Berserker Stance, and the donor tank
+    // never leaves Defensive Stance to close a gap (charge / reach melee and
+    // taunt cover it).
 
     // Intervene a focused party member (donor TankWarriorStrategy fires at
     // EMERGENCY): Intervene 45595 is a real learnable 1.18.1 spell

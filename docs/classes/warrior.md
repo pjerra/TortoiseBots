@@ -24,7 +24,7 @@ Warriors serve as primary dungeon tanks or powerful melee DPS. The bot manages r
 ## Combat Rotations & Priorities
 
 ### 1. Protection (Tank)
-1. **Pull & Engagement:** Charges on enemy-out-of-melee, then swaps to Defensive Stance (no Battle Stance prep in code).
+1. **Pull & Engagement:** Charges on enemy-out-of-melee, then swaps to Defensive Stance (no Battle Stance prep in code). No *Intercept* gap-closer: it needs Berserker Stance, and the tank stays in Defensive Stance (donor `TankWarriorStrategy` has none either).
 2. **Threat Generation:**
    - Keeps *Shield Block* active on cooldown to enable *Revenge*.
    - Stacks *Sunder Armor* to a full 5-stack, then stops (re-applies only to refresh an expiring stack; sunder yields to Shield Slam only once 40+ rage makes slam live).
@@ -63,7 +63,7 @@ Warriors serve as primary dungeon tanks or powerful melee DPS. The bot manages r
 
 ## Utility & Interrupts
 
-- **Interrupts:** Protection: *Shield Bash* (+enemy-healer row) · Fury: *Pummel* (auto-Berserker) · Arms/Fury base: *Pummel* first, *Shield Bash* as the no-stance-dance fallback (both at ACTION_INTERRUPT, plus enemy-healer rows). Pummel stance-dances via its berserker-stance node; shield bash has no stance gate, so one of the two always fires without per-cast dancing.
+- **Interrupts:** Protection: *Shield Bash* only (+enemy-healer row; the base *Pummel* rows are not inherited, so a tank never leaves Defensive Stance to interrupt) · Fury: *Pummel* (auto-Berserker) · Arms/Fury base: *Pummel* first, *Shield Bash* as the no-stance-dance fallback (both at ACTION_INTERRUPT, plus enemy-healer rows). Pummel stance-dances via its berserker-stance node; shield bash has no stance gate, so one of the two always fires without per-cast dancing.
 - **Shouts:** Automatically maintains *Battle Shout* on party members (all specs) — skipped while an equal-or-stronger *Blessing of Might* is up, since shouting over it wastes rage for zero gain; only Protection wires *Demoralizing Shout*. *Intimidating Shout* (AoE fear) never fires inside a dungeon or raid, or for a bot grouped with a real player (a feared mob pulls neighbouring packs); outdoors with no master to disrupt, a critical-health bot may still shout to make space.
 - **No break-off (opt-in):** Pool warriors carry the generic `flee` strategy (`panic` and `critical health no master` at critical health, `outnumbered` under medium health with two or more attackers). `AiPlayerbot.PoolMeleeHoldGround = 1` drops it for warriors and rogues so they fight on with their own kit (*Last Stand* / *Shield Wall* where the spec wires them, *Intimidating Shout*), as mod-playerbots melee do. Off by default.
 

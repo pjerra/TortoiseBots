@@ -8486,3 +8486,27 @@ probe not ported (the module keeps its 2x heal-range candidate filter and LOS
 tie-break).
 Validation: code review + `bash tools/verify_all.sh` + `git diff --check`;
 build pending; in-game pending.
+
+## Protection warrior stays in Defensive Stance: no Pummel / Intercept stance dance (fix 93) — 2026-10-12
+
+Feature: the Protection tank no longer inherits the base warrior Pummel rows
+(Pummel's node has a Berserker Stance prerequisite) and no longer has the
+`intercept and rage` -> `berserker stance` / `intercept` rows. Observed live
+(build 8, Tanaris, 2026-10-12 09:57): the tank swapped Defensive <-> Berserker
+Stance 13 times in 45 s on trigger `pummel` without one Pummel cast (0 rage
+after each swap), while a party member died.
+
+Donor: `mod-playerbots` @ 79bd428
+`src/Ai/Class/Warrior/Strategy/TankWarriorStrategy.cpp` (interrupts are only
+`shield bash` / `shield bash on enemy healer` at ACTION_INTERRUPT; no Pummel,
+no Intercept; `defensive stance` kept at HIGH+9).
+
+Module file: `ai/playerbot/strategy/warrior/ProtectionWarriorStrategy.cpp`
+(`InitCombatTriggers` calls `ClassStrategy::InitCombatTriggers` and adds the
+two Shield Bash rows itself; intercept rows removed). Arms/Fury keep the
+base Pummel-first rows. Berserker Rage against fear (donor keeps it too) and
+the Overpower dance (swaps straight back) are unchanged.
+
+Ported behaviour (row set), reimplemented in the module's strategy layout.
+Validation: code review + `bash tools/verify_all.sh` + `git diff --check`;
+build pending; in-game pending.
