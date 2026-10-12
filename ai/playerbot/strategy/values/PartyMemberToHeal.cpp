@@ -32,35 +32,20 @@ bool compareByHealth(const Unit *u1, const Unit *u2)
     return u1->GetHealthPercent() < u2->GetHealthPercent();
 }
 
-bool compareByMissingHealth(const Unit* u1, const Unit* u2, bool incomingDamage = false)
+// Effective health percent (incoming melee damage taken off first when
+// pre-healing). Ranking by percent, as the donor does, keeps a cloth member at
+// 60 % ahead of a tank at 76 %: by missing hit points the tank's larger pool
+// always won and the member who was actually dying got nothing.
+static float effectiveHealthPercent(const Unit* u, bool incomingDamage)
 {
-    uint32 hp1 = u1->GetHealth();
+    uint32 hp = u->GetHealth();
     if (incomingDamage)
     {
-        uint32 damage1 = getIncomingdamage(u1);
-        hp1 = damage1 >= hp1 ? 0 : hp1 - damage1;
+        uint32 damage = getIncomingdamage(u);
+        hp = damage >= hp ? 0 : hp - damage;
     }
-    uint32 hpmax1 = u1->GetMaxHealth();
-    uint32 hp2 = u2->GetHealth();
-    if (incomingDamage)
-    {
-        uint32 damage2 = getIncomingdamage(u2);
-        hp2 = damage2 >= hp2 ? 0 : hp2 - damage2;
-    }
-    uint32 hpmax2 = u2->GetMaxHealth();
-    return (hpmax1 - hp1) > (hpmax2 - hp2);
-}
-
-// Urgency for the LOS tie-break below: missing health falls back to health
-// percent when max health is unreachable (should not happen for live units,
-// but the sort must stay a strict ordering either way).
-static uint32 missingHealthForLosTieBreak(const Unit* u)
-{
-    uint32 cur = u->GetHealth();
-    uint32 max = u->GetMaxHealth();
-    if (!max || cur >= max)
-        return 0;
-    return max - cur;
+    uint32 hpmax = u->GetMaxHealth();
+    return hpmax ? hp * 100.0f / hpmax : 100.0f;
 }
 
 Unit* PartyMemberToHeal::Calculate()
@@ -155,7 +140,7 @@ Unit* PartyMemberToHeal::Calculate()
     }
 
     bool preHealing = ai->HasStrategy("preheal", BotState::BOT_STATE_COMBAT);
-    sort(needHeals.begin(), needHeals.end(), [preHealing](const Unit* u1, const Unit* u2) { return compareByMissingHealth(u1, u2, preHealing); });
+    sort(needHeals.begin(), needHeals.end(), [preHealing](const Unit* u1, const Unit* u2) { return effectiveHealthPercent(u1, preHealing) < effectiveHealthPercent(u2, preHealing); });
 
     // Prefer an in-LOS member over an out-of-LOS one at similar urgency: an
     // out-of-LOS pick still casts (its reach action walks the healer into
@@ -171,16 +156,14 @@ Unit* PartyMemberToHeal::Calculate()
         !sServerFacade.IsWithinLOSInMap(bot, mostUrgent))
     {
         // Window: a candidate less urgent by more than this still loses.
-        // mediumHealth 70 -> 30% of the top target's max health.
-        uint32 topMissing = missingHealthForLosTieBreak(mostUrgent);
-        uint32 smallGap = mostUrgent->GetMaxHealth()
-            ? mostUrgent->GetMaxHealth() * (100 - sPlayerbotAIConfig.mediumHealth) / 100
-            : 0;
+        // mediumHealth 70 -> 30 health-percent points above the top target.
+        float const topPercent = mostUrgent->GetHealthPercent();
+        float const smallGap = float(100 - sPlayerbotAIConfig.mediumHealth);
         for (Unit* candidate : needHeals)
         {
             if (candidate == mostUrgent)
                 continue;
-            if (topMissing > missingHealthForLosTieBreak(candidate) + smallGap)
+            if (candidate->GetHealthPercent() > topPercent + smallGap)
                 break;
             if (sServerFacade.IsWithinLOSInMap(bot, candidate))
             {
