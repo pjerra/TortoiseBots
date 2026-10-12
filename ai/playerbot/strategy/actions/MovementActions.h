@@ -8,6 +8,7 @@
 #include "Movement/WaypointMovementGenerator.h"
 #include "playerbot/strategy/values/HazardsValue.h"
 #include "playerbot/strategy/values/LastMovementValue.h"
+#include "playerbot/LedgeStepDownPolicy.h"
 
 namespace ai
 {
@@ -77,6 +78,13 @@ namespace ai
         bool IsValidPosition(const WorldPosition& position, const WorldPosition& visibleFromPosition);
         bool IsHazardNearPosition(const WorldPosition& position, HazardPosition* outHazard = nullptr);
         bool Flee(Unit *target);
+        // Inside a dungeon, a bot stranded on a navmesh island (a raised dais
+        // or ledge the mesh does not link to the floor) steps off the edge
+        // towards `target` the way a player would: a straight move, without
+        // the navmesh, to floor 2-8 yd lower that it can see and that has a
+        // complete path to the target. Paced per bot (LedgeStepDownClock);
+        // true only when that move was launched. See LedgeStepDownPolicy.h.
+        bool StepDownOffLedge(Unit* target);
         void ClearIdleState();
         void UpdateMovementState();
 
@@ -92,6 +100,8 @@ namespace ai
 
     private:
         bool GeneratePathAvoidingHazards(std::vector<WorldPosition>& movePath);
+
+        LedgeStepDownClock ledgeStepDown;
     };
 
     class FleeAction : public MovementAction
