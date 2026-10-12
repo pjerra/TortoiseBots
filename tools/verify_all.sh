@@ -41,6 +41,7 @@ python3 -m unittest tools/test_mana_percentage.py
 python3 -m unittest tools/test_hazard_chase_motion.py
 python3 -m unittest tools/test_travel_route_distance.py
 python3 -m unittest tools/test_outfit_item_parser.py
+python3 -m unittest tools/test_queue_prerequisite_merge.py
 echo "✓ Engine unit tests passed."
 
 echo ""
