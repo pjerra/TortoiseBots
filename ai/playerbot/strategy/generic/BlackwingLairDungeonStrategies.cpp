@@ -22,6 +22,13 @@ void BlackwingLairDungeonStrategy::InitCombatTriggers(std::list<TriggerNode*>& t
         "boss wants shadow aura",
         NextAction::array(0, new NextAction("swap shadow resistance aura", ACTION_HIGH + 1), NULL)));
 
+    // Boss protection potion (fire/shadow/nature per boss entry, see
+    // ProtectionPotionPolicy.h): only once a listed boss is an attacker, and
+    // below movement, dispels and every heal tier so survival comes first.
+    triggers.push_back(new TriggerNode(
+        "boss protection potion ready",
+        NextAction::array(0, new NextAction("boss protection potion", ACTION_HIGH), NULL)));
+
     triggers.push_back(new TriggerNode(
         "start chromaggus fight",
         NextAction::array(0, new NextAction("enable chromaggus fight strategy", 100.0f), NULL)));
@@ -62,10 +69,6 @@ void ChromaggusFightStrategy::InitDeadTriggers(std::list<TriggerNode*>& triggers
 
 void RazorgoreFightStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 {
-    triggers.push_back(new TriggerNode(
-        "fire protection potion ready",
-        NextAction::array(0, new NextAction("fire protection potion", 100.0f), NULL)));
-
     // Off-tank engage (donor MarkBoss attack arm): tanks attack Razorgore
     // while eggs live so the boss is held from the pull. Non-tanks never
     // see this node; the victim guard + egg check live in the action.
@@ -162,13 +165,6 @@ void NefarianFightStrategy::InitDeadTriggers(std::list<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode(
         "end nefarian fight",
         NextAction::array(0, new NextAction("disable nefarian fight strategy", 100.0f), NULL)));
-}
-
-void VaelFightStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
-{
-    triggers.push_back(new TriggerNode(
-        "fire protection potion ready",
-        NextAction::array(0, new NextAction("fire protection potion", 100.0f), NULL)));
 }
 
 void VaelFightStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)

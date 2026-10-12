@@ -317,4 +317,15 @@ namespace ai
     private:
         uint32 buffID;
     };
+
+    // In combat with a listed raid boss (ProtectionPotionPolicy.h), the
+    // matching protection potion is in the bags (or the item cheat is on),
+    // off cooldown, and its buff is not up.
+    class BossProtectionPotionReadyTrigger : public ItemReadyTrigger
+    {
+    public:
+        BossProtectionPotionReadyTrigger(PlayerbotAI* ai) : ItemReadyTrigger(ai, "boss protection potion ready", 0) {}
+
+        bool IsActive() override;
+    };
 }

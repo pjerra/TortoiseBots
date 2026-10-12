@@ -572,6 +572,20 @@ namespace ai
         virtual uint32 GetItemId() override { return 13457; }
     };
 
+    // Greater Protection Potion for the listed raid boss among the bot's
+    // attackers (ProtectionPotionPolicy.h); 0 when none is in the fight.
+    uint32 FindBossProtectionPotion(PlayerbotAI* ai, uint32* buffSpellId = nullptr);
+
+    class UseBossProtectionPotionAction : public UseItemIdAction
+    {
+    public:
+        UseBossProtectionPotionAction(PlayerbotAI* ai) : UseItemIdAction(ai, "boss protection potion") {}
+
+        virtual bool isUseful() override;
+
+        virtual uint32 GetItemId() override { return FindBossProtectionPotion(ai); }
+    };
+
     class UseFreeActionPotionAction : public UseItemIdAction
     {
     public:

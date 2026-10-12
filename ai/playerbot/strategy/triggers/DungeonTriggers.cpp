@@ -10,6 +10,7 @@
 #include "playerbot/strategy/AiObjectContext.h"
 #include "playerbot/strategy/values/HazardsValue.h"
 #include "playerbot/strategy/actions/MovementActions.h"
+#include "playerbot/strategy/actions/UseItemAction.h"
 #include "playerbot/CombatSpreadPolicy.h"
 #include "playerbot/DebuffSpreadPolicy.h"
 #include "playerbot/DragonFlankPolicy.h"
@@ -354,6 +355,21 @@ bool ItemBuffReadyTrigger::IsActive()
     }
 
     return false;
+}
+
+bool BossProtectionPotionReadyTrigger::IsActive()
+{
+    if (!bot->IsInWorld() || bot->IsBeingTeleported() || !sServerFacade.IsAlive(bot))
+        return false;
+    if (bot->GetLevel() < 48)
+        return false;
+
+    uint32 buffSpellId = 0;
+    itemID = FindBossProtectionPotion(ai, &buffSpellId);
+    if (!itemID || bot->HasAura(buffSpellId))
+        return false;
+
+    return ItemReadyTrigger::IsActive();
 }
 
 bool RaidBombDebuffTrigger::IsActive()

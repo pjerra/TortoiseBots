@@ -11,6 +11,7 @@
 #include "TellLosAction.h"
 #include "playerbot/strategy/values/ItemUsageValue.h"
 #include "playerbot/strategy/values/ItemCountValue.h"
+#include "playerbot/ProtectionPotionPolicy.h"
 #include "playerbot/TravelMgr.h"
 
 using namespace ai;
@@ -1135,6 +1136,44 @@ bool UseItemIdAction::isUseful()
     }
 
     return false;
+}
+
+uint32 ai::FindBossProtectionPotion(PlayerbotAI* ai, uint32* buffSpellId)
+{
+    // The bot's own cached attacker list: a listed boss only shows up once
+    // its pull has started, so trash pulls never spend the potion.
+    AiObjectContext* context = ai->GetAiObjectContext();
+    const std::list<ObjectGuid> attackers = AI_VALUE(std::list<ObjectGuid>, "attackers");
+    for (const ObjectGuid& attackerGuid : attackers)
+    {
+        Unit* attacker = ai->GetUnit(attackerGuid);
+        if (!attacker || !sServerFacade.IsAlive(attacker))
+            continue;
+
+        const ProtectionPotion potion = BossProtectionPotion(attacker->GetEntry());
+        if (potion.itemId)
+        {
+            if (buffSpellId)
+                *buffSpellId = potion.buffSpellId;
+            return potion.itemId;
+        }
+    }
+
+    return 0;
+}
+
+bool UseBossProtectionPotionAction::isUseful()
+{
+    // All three Greater Protection Potions need level 48 (same gate as the
+    // fire potion action above).
+    if (bot->GetLevel() < 48)
+        return false;
+
+    uint32 buffSpellId = 0;
+    if (!FindBossProtectionPotion(ai, &buffSpellId))
+        return false;
+
+    return UseItemIdAction::isUseful() && !bot->HasAura(buffSpellId);
 }
 
 bool UseSpellItemAction::isUseful()

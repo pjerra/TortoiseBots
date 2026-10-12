@@ -33,6 +33,13 @@ void MoltenCoreDungeonStrategy::InitCombatTriggers(std::list<TriggerNode*>& trig
         "boss wants shadow aura",
         NextAction::array(0, new NextAction("swap shadow resistance aura", ACTION_HIGH + 1), NULL)));
 
+    // Boss protection potion (fire/shadow/nature per boss entry, see
+    // ProtectionPotionPolicy.h): only once a listed boss is an attacker, and
+    // below movement, dispels and every heal tier so survival comes first.
+    triggers.push_back(new TriggerNode(
+        "boss protection potion ready",
+        NextAction::array(0, new NextAction("boss protection potion", ACTION_HIGH), NULL)));
+
     triggers.push_back(new TriggerNode(
         "start geddon fight",
         NextAction::array(0, new NextAction("enable geddon fight strategy", 100.0f), NULL)));
@@ -84,10 +91,6 @@ void ShazzrahFightStrategy::InitDeadTriggers(std::list<TriggerNode*>& triggers)
 
 void GolemaggFightStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 {
-    triggers.push_back(new TriggerNode(
-        "fire protection potion ready",
-        NextAction::array(0, new NextAction("fire protection potion", 100.0f), NULL)));
-
     // Tanks hold their camps while Trust is up; healers work the midpoint.
     if (ai->IsTank(ai->GetBot()))
     {
@@ -138,10 +141,6 @@ void MoltenCoreDungeonStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& t
         NextAction::array(0,
             new NextAction("douse mc rune eternal", 2.0f),
             new NextAction("douse mc rune aqual", 1.0f), NULL)));
-
-    triggers.push_back(new TriggerNode(
-        "fire protection potion ready",
-        NextAction::array(0, new NextAction("fire protection potion", 100.0f), NULL)));
 }
 
 void MoltenCoreDungeonStrategy::InitCombatMultipliers(std::list<Multiplier*>& multipliers)
@@ -166,10 +165,6 @@ void MagmadarFightStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers
             "magmadar too close",
             NextAction::array(0, new NextAction("move away from magmadar", 100.0f), NULL)));
     }
-
-    triggers.push_back(new TriggerNode(
-        "fire protection potion ready",
-        NextAction::array(0, new NextAction("fire protection potion", 100.0f), NULL)));
 }
 
 void MagmadarFightStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
@@ -204,10 +199,6 @@ void MagmadarFightStrategy::InitCombatMultipliers(std::list<Multiplier*>& multip
 
 void GeddonFightStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 {
-    triggers.push_back(new TriggerNode(
-        "fire protection potion ready",
-        NextAction::array(0, new NextAction("fire protection potion", 100.0f), NULL)));
-
     // Survival tier (below the carrier's own runout at +6): healers must
     // step out instead of casting through the blast.
     triggers.push_back(new TriggerNode(

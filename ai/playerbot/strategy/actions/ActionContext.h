@@ -265,6 +265,7 @@ namespace ai
             creators["use bandage"] = [](PlayerbotAI* ai) { return new UseBandageAction(ai); };
             creators["rocket boots"] = [](PlayerbotAI* ai) { return new UseRocketBootsAction(ai); };
             creators["fire protection potion"] = [](PlayerbotAI* ai) { return new UseFireProtectionPotionAction(ai); };
+            creators["boss protection potion"] = [](PlayerbotAI* ai) { return new UseBossProtectionPotionAction(ai); };
             creators["free action potion"] = [](PlayerbotAI* ai) { return new UseFreeActionPotionAction(ai); };
             creators["use consumable"] = [](PlayerbotAI* ai) { return new UseConsumableAction(ai); };
             creators["anti-venom"] = [](PlayerbotAI* ai) { return new UseAntiVenomAction(ai); };

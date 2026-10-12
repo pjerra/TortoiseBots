@@ -15,6 +15,13 @@ void OnyxiasLairDungeonStrategy::InitCombatTriggers(std::list<TriggerNode*>& tri
     triggers.push_back(new TriggerNode(
         "boss wants fire aura",
         NextAction::array(0, new NextAction("swap fire resistance aura", ACTION_HIGH + 1), NULL)));
+
+    // Boss protection potion (fire/shadow/nature per boss entry, see
+    // ProtectionPotionPolicy.h): only once a listed boss is an attacker, and
+    // below movement, dispels and every heal tier so survival comes first.
+    triggers.push_back(new TriggerNode(
+        "boss protection potion ready",
+        NextAction::array(0, new NextAction("boss protection potion", ACTION_HIGH), NULL)));
 }
 
 void OnyxiaFightStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
