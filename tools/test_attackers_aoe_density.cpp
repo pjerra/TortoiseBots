@@ -123,17 +123,13 @@ std::list<ObjectGuid> SimulateFindMaxDensity(
 // C++ implementation of the fixed shareTargets deduplication logic preserving first-seen sequence
 std::list<ObjectGuid> SimulateShareTargets(
     std::list<ObjectGuid> initialList,
-    const std::vector<Unit*>& otherBotSpecificTargets,
+    const std::vector<Unit*>& /*otherBotSpecificTargets*/,
     const std::vector<Unit*>& thisBotSpecificTargets,
     const std::map<ObjectGuid, Unit*>& unitMap,
     bool getOne = false)
 {
-    // Remove other bot specific targets
-    for (Unit* target : otherBotSpecificTargets)
-    {
-        if (target)
-            initialList.remove(target->getObjectGuid());
-    }
+    // The other bot's own targets stay in the copied list; validation below
+    // drops the ones that do not threaten the party (party-split fix).
 
     // Append bot specific targets of this bot in natural priority order
     for (Unit* target : thisBotSpecificTargets)

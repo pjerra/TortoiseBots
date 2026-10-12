@@ -8534,3 +8534,34 @@ Reason: raid audit batch 7 finding 6 (code-only) — the trigger read only
 
 Validation: `tools/test_dragon_flank_policy.cpp`, `bash tools/verify_all.sh`;
 code review + build pending; in-game pending.
+
+## Combat: shared attacker lists keep the other bot's target — 2026-10-12
+
+Feature: with `AiPlayerbot.ShareTargets` on (the default), a bot that copies
+the `attackers` list of a bot within 10 yd no longer strips that bot's own
+`current target` / `old target` / `attack target` / `pull target` from the
+copy. The copied list is still validated against us, the group and the master
+(`AttackersValue::IsValidForGroup`, #549), so a copied target counts exactly
+when a fresh scan would count it.
+
+Source repository: `playerbots-references/mod-playerbots` @ 79bd428,
+`src/Ai/Base/Value/AttackersValue.cpp` (`Calculate`, `AddAttackersOf(Group*)`,
+`AddAttackersOf(Player*)`): a creature that threatens any alive group member
+within `SightDistance` is an attacker for every bot, so the whole party stays
+in combat until it is dead. The donor has no shared-list copy; the module's
+copy is a performance shortcut that must give the same answer.
+
+Copied / ported / independently reimplemented: reimplemented (one loop removed
+from `ai/playerbot/strategy/values/AttackersValue.cpp`, no donor code).
+
+Reason: in game (build 8, Wastewander Shadow Mage + Voidwalker on a mounted
+ride) the tank and healer stood next to the mage when the Voidwalker died
+(traced from the dashboard samples and the code, not from a server log).
+They copied the mage's list, which dropped the Shadow Mage because it was the
+mage's current target, found no attackers, left combat and followed the
+master, while the rogue (scanning on her own, 44 yd away) fought alone without
+heals until the whole party broke off and left the mob alive.
+
+Validation: code review + build pending; in-game pending. The shared-list
+models in `tools/test_attackers_aoe_density.{py,cpp}` follow the change and
+gain a case for it; `bash tools/verify_all.sh` and `git diff --check` clean.

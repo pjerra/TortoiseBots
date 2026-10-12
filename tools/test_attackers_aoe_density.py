@@ -70,10 +70,9 @@ def calculate_attackers_share_targets(
     """
     result = list(copied_attackers)
 
-    # Remove bot specific targets of the other bot.
-    for target in other_bot_specific:
-        if target:
-            result = [g for g in result if g != target.get_guid()]
+    # The other bot's own targets (other_bot_specific) stay in the copied list:
+    # the validation below drops the ones that do not threaten the party, the
+    # same rule a fresh scan applies (party-split fix).
 
     # Append bot specific targets of this bot in natural priority order.
     for target in this_bot_specific:
@@ -256,6 +255,29 @@ class TestAttackersAoeDensity(unittest.TestCase):
             is_aoe_trigger_active(self.bot, attackers, self.units, amount=3),
             "Real clustered 3 mobs must be AoE eligible",
         )
+
+    def test_other_bots_current_target_is_kept(self):
+        """
+        Party-split fix: a tank standing next to the mage copies the mage's list.
+        The mob the mage is shooting must stay an attacker for the tank even when
+        the tank's own target (a dead Voidwalker) is invalid.
+        """
+        dead_pet = MockUnit(ObjectGuid(0xF130, 301), "Voidwalker", 10.0, 0.0, is_valid=False)
+        units = dict(self.units)
+        units[dead_pet.guid] = dead_pet
+        copied_attackers = [self.mob1.guid]
+        other_bot_targets = [self.mob1, None, None, None]
+        this_bot_targets = [dead_pet, None, None, None]
+
+        attackers = calculate_attackers_share_targets(
+            copied_attackers, other_bot_targets, this_bot_targets, units
+        )
+        self.assertEqual(attackers, [self.mob1.guid], "The mage's target must stay in the tank's attackers")
+
+        one = calculate_attackers_share_targets(
+            copied_attackers, other_bot_targets, this_bot_targets, units, get_one=True
+        )
+        self.assertEqual(one, [self.mob1.guid], "attackers::1 (has attackers) must not come back empty")
 
     def test_three_spread_mobs_remain_ineligible(self):
         """

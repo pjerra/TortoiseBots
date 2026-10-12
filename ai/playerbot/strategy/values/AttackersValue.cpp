@@ -106,13 +106,12 @@ std::list<ObjectGuid> AttackersValue::Calculate()
             std::vector<std::string> specificTargetNames = { "current target","old target","attack target","pull target" };
             Unit* target;
 
-            // Remove bot specific targets of the other bot.
-            for (auto& targetName : specificTargetNames)
-            {
-                target = (targetName == "attack target") ? ai->GetUnit(PAI_VALUE(ObjectGuid, targetName)) : PAI_VALUE(Unit*, targetName);
-                if (target)
-                    result.remove(target->getObjectGuid());
-            }
+            // The other bot's own targets stay in the copied list. Its current
+            // target is usually the mob the party is fighting; dropping it left
+            // a tank or healer standing next to the mage with no attackers, so
+            // they left combat and followed the master while the rogue fought
+            // on. The validation below already drops any of them that does not
+            // threaten us or a groupmate, which is what a fresh scan keeps.
 
             // Append bot specific targets of this bot in natural priority order.
             for (auto& targetName : specificTargetNames)
