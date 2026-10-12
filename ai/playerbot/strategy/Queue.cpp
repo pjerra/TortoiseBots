@@ -21,6 +21,13 @@ void Queue::Push(ActionBasket *action)
                     basket->setRelevance(action->getRelevance());
                     basket->setEvent(action->getEvent());
                 }
+                // A fresh request (trigger, default, alternative, continuer)
+                // re-arms the prerequisites. The skip mark only belongs to the
+                // PushAgain after a prerequisite: kept across ticks, every other
+                // tick ran the action without its walk-up (out of reach, so
+                // impossible) and a lower action such as follow ran instead.
+                if (!action->isSkipPrerequisites())
+                    basket->clearSkipPrerequisites();
 				ActionNode *actionNode = action->getAction();
 				if (actionNode)
 				    delete actionNode;

@@ -181,12 +181,14 @@ class RogueSapApproachTest(unittest.TestCase):
         self.assertIn('MultiplyAndPush(actionNode->getPrerequisites(), relevance + 0.02', ENGINE_CPP.read_text())
         self.assertIn('PushAgain(actionNode, relevance + 0.01, event);', ENGINE_CPP.read_text())
 
-    def test_queue_merge_keeps_the_skip_flag(self):
-        # The model's merge rule. If Queue::Push ever refreshes the flag, the
-        # build 9 flip-flop is gone at the source and this test should be revisited.
+    def test_queue_merge_refreshes_the_skip_flag(self):
+        # Queue::Push now clears the skip-prerequisites mark when a fresh request
+        # merges (tools/test_queue_prerequisite_merge.py pins the rule), so the
+        # build 9 flip-flop is gone at the source; the walk-every-tick wiring
+        # below stays as the Sap node's own guarantee.
         body = function_body(QUEUE_CPP.read_text(), "void Queue::Push(")
         self.assertIn("basket->setRelevance(action->getRelevance());", body)
-        self.assertNotIn("kip", body)
+        self.assertIn("kip", body)
 
     def test_sap_node_queues_the_walk_between_sap_and_follow(self):
         names = [name for name, _ in self.sap_node]
