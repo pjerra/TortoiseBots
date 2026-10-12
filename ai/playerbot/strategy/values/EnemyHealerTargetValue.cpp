@@ -24,12 +24,13 @@ Unit* EnemyHealerTargetValue::Calculate()
         if (!ai->IsInterruptableSpellCasting(unit, spell, true))
             continue;
 
+        // A real heal only: "positive" also covers self buffs such as Lightning Shield.
         Spell* spell = unit->GetCurrentSpell(CURRENT_GENERIC_SPELL);
-        if (spell && IsPositiveSpell(spell->m_spellInfo))
+        if (spell && PlayerbotAI::IsHealSpell(spell->m_spellInfo))
             return unit;
 
         spell = unit->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
-        if (spell && IsPositiveSpell(spell->m_spellInfo))
+        if (spell && PlayerbotAI::IsHealSpell(spell->m_spellInfo))
             return unit;
     }
 

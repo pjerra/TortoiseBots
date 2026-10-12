@@ -8778,3 +8778,23 @@ covering its hold/lapse matrix. Also touches
 
 Validation: `tools/test_four_horsemen_rotation_policy.cpp` + code review;
 build pending; in-game pending.
+## Enemy healer detection needs a real heal (fix 141) — 2026-10-12
+
+Feature: `EnemyHealerTargetValue` (target of every `<spell> on enemy healer`
+trigger) now requires the enemy's current cast to carry a heal effect
+(`PlayerbotAI::IsHealSpell`: heal, heal-max-health or periodic-heal aura)
+instead of "positive spell". Observed live (build 17 gate run 1): a tank
+Shield Bashed a Moon-marked Stonevault Oracle casting Lightning Shield (945),
+a self buff.
+
+Donor: `mod-playerbots` @ 79bd428
+`src/Ai/Base/Value/EnemyHealerTargetValue.cpp` uses the same
+`IsPositive()` test, so the donor has the same flaw; this is a module-side
+tightening, not a port.
+
+Module file: `ai/playerbot/strategy/values/EnemyHealerTargetValue.cpp`
+(reuses the existing `PlayerbotAI::IsHealSpell` helper, no new cache needed:
+three effect slots per candidate that is already casting an interruptible spell).
+
+Reimplemented (module-only). Validation: code review + `bash tools/verify_all.sh`
++ `git diff --check`; build pending; in-game pending.
