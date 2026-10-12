@@ -8575,6 +8575,12 @@ from the core Onyxia script.
 
 Reason: raid audit batch 7 finding 6 (code-only) — the trigger read only
 `current target`, so healers and add killers stood in breath/tail cones.
+Fix round (cold review batch 7): `DragonFlankAction` picked the flank side
+from the unwrapped `toBot - facing` (a bot just left of the nose across the
+0/2*pi seam ran across the front to the far flank) and its fallbacks turned
+in 90-degree steps onto the tail and the nose. `DragonFlankHeadings` now
+wraps the difference, normalises every heading to [0, 2*pi), and tries the
+near flank, the near flank +/-22.5 degrees, then the far flank.
 
 Validation: `tools/test_dragon_flank_policy.cpp`, `bash tools/verify_all.sh`;
 code review + build pending; in-game pending.

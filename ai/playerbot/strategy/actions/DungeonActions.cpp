@@ -10,6 +10,7 @@
 #include "playerbot/DebuffSpreadPolicy.h"
 #include "playerbot/FourHorsemenRotationPolicy.h"
 #include "playerbot/BombRunoutPolicy.h"
+#include "playerbot/DragonFlankPolicy.h"
 #include "Movement/spline/MoveSpline.h"
 #include "Maps/GridNotifiers.h"
 #include "Maps/GridNotifiersImpl.h"
@@ -445,12 +446,12 @@ bool DragonFlankAction::Execute(Event& event)
         return false;
     const WorldPosition bossPos(target);
     const WorldPosition botPos(bot);
-    float facing = target->GetOrientation();
-    // Flank = 90 degrees off the facing axis; pick the nearer side.
-    float toBot = bossPos.GetAngleTo(botPos);
-    float side = (toBot - facing) > 0 ? (facing + M_PI_F / 2.0f) : (facing - M_PI_F / 2.0f);
+    // Flank = 90 degrees off the facing axis, the bot's own side first;
+    // fallbacks stay on the flanks (DragonFlankPolicy.h), never nose or tail.
+    float headings[kDragonFlankHeadingCount];
+    DragonFlankHeadings(target->GetOrientation(), bossPos.GetAngleTo(botPos), headings);
     const float dist = std::max(botPos.distance(bossPos), 8.0f);
-    for (int i = 0; i < 4; ++i)
+    for (float side : headings)
     {
         WorldPosition point = bossPos + WorldPosition(0, dist * cos(side), dist * sin(side), 1.0f);
         point.setZ(point.GetHeight());
@@ -458,7 +459,6 @@ bool DragonFlankAction::Execute(Event& event)
             bossPos.canPathTo(point, bot) &&
             MoveTo(bot->GetMapId(), point.getX(), point.getY(), point.getZ(), false, IsReaction(), false, true))
             return true;
-        side += M_PI_F / 2.0f;
     }
     return false;
 }
