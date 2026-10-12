@@ -3428,6 +3428,43 @@ score-vs-level ordering, unweighted fallback, tie stability; registered in
 `tools/verify_all.sh`); `bash tools/verify_all.sh`; `git diff --check`. No
 deploy (orchestrator compiles).
 
+## No vendor buys to resell, ammo capped by what is carried (fix/no-buy-to-resell-loops) — 2026-10-12
+Feature: the vendor "buy useful" loop no longer buys anything whose only
+use is an AH listing (`ITEM_USAGE_AH` falls to the unbought default), buys
+non-stackable stock (recipes, gear) at most once per item per visit and
+stackable stock at most 10 times (the usage re-check still stops at the
+needed count), buys ammo (arrows, bullets, thrown) only when the bot does
+not already carry that ammo unless the usage is the AMMO restock (which
+already counts carried stacks against the 8/2 need), and gives item-cheat
+bots a per-bot 5-minute ammo-buy cooldown (`"manual time"` key
+`cheat ammo buy ready`) instead of the old per-visit cap.
+
+Source project: `mod-playerbots` `src/Ai/Base/Actions/BuyAction.cpp:94-101`
+(`maxPurchases` 1, 10 for consumables/projectiles) and `:139-165` (no
+`ITEM_USAGE_AH` case, so `needMoneyFor` stays `none` and the loop breaks) @
+`79bd428`. Ammo for item-cheat bots: donor seeds it on level-up
+(`AutoMaintenanceOnLevelupAction.cpp:91`, `InitAmmo`) and has no vendor
+loop for it; ours keeps the vendor equip-upgrade buy, capped.
+
+Ported / reimplemented: `ai/playerbot/strategy/actions/BuyAction.cpp`
+(AH-flip buy removed, per-item purchase cap, ammo cap + cooldown),
+`ai/playerbot/strategy/values/VendorBuyPolicy.h` (`VendorBuyMaxPurchases`,
+the donor class rule expressed by stack size so profession reagents keep
+the 10), `ai/playerbot/strategy/values/AmmoCheatPolicy.h`
+(`VendorAmmoBuyAllowed`, `CHEAT_AMMO_BUY_COOLDOWN_SECONDS`),
+`tools/test_vendor_buy_policy.cpp`, `tools/test_ammo_cheat_policy.cpp`.
+Reimplemented (behaviour harvested, no donor code copied).
+
+Reason: live pool m910q 2026-10-12 (batch 8 findings 3 and 7): one visit
+bought 20x Plans: Pure Shining Moonstone, a rogue bought 170 Strong Flux in
+13 min to list on the AH, and a hunter re-bought one Razor Arrow stack 17
+times in 2 min because the 10-buy loop covered AH buys and the cheat ammo
+cap reset every visit.
+
+Validation: code review + build pending; in-game pending.
+`tools/test_vendor_buy_policy.cpp` and `tools/test_ammo_cheat_policy.cpp`
+extended; `bash tools/verify_all.sh`; `git diff --check`.
+
 ## Weighted RPG status mixer (issue #422) — 2026-10-03
 Feature: a pool bot's next leisure journey (quest / grind / camp / explore)
 is drawn from a weighted table (quest 60, grind 15, camp 10, explore 5 -

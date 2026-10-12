@@ -182,6 +182,7 @@ In addition to high-level `.bot action` party commands, you can delegate command
 | | `destroy <item>` | Destroys an item from inventory to free up bag space. (`drop <quest>` abandons a quest.) |
 | **Vendors & Repairs** | `s [gray\|all\|<item>]` | Sells gray junk items or specific items when targeted vendor is open. |
 | | `b <item>` | Purchases the specified item from the open merchant window. |
+| | `b vendor` | Buys what the bot needs from a nearby vendor (gear upgrades, consumables, ammo, profession reagents) up to the needed count, the same loop a vendor errand runs. Never buys stock only to resell it on the AH; recipes and gear are bought once per visit, ammo only when the bot does not already carry that ammo, and a pool bot with the item cheat buys at most one ammo stack every 5 minutes. |
 | | `bb <item>` | Buys back an accidentally sold item from the vendor. |
 | | `repair` | Repairs damaged equipment at a blacksmith / armorer NPC. |
 | | `t` | Initiates or accepts a direct trade window with the player. |
