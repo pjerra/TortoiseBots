@@ -12,6 +12,17 @@ namespace ai
 		virtual bool Execute(Event& event) override;
         virtual bool isUseful() override;
         virtual bool CanDeadFollow(Unit* target);
+
+    private:
+        // Dungeon "hold before a pack" follow (AiPlayerbot.DungeonFollowHoldBeforePacks).
+        bool UseHoldBeforePacks(Unit* followTarget);
+        bool FollowHoldingBeforePacks(Unit* followTarget, bool& moved);
+
+        bool holdGateOpen = false;      // gate state, for the 30/25 yd hysteresis
+        bool holdFollowActive = false;  // Execute ran the walk (reset the wait on leaving)
+        bool holdStanding = false;      // standing at a hold point, nothing left to walk
+        ObjectGuid holdToldPack;
+        time_t holdToldAt = 0;
 	};
 
 	class StopFollowAction : public MovementAction {

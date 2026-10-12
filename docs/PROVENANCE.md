@@ -9124,3 +9124,88 @@ Reason: inside a dungeon a healer or caster that saw its target but stood out of
 Validation: `tools/test_ranged_approach_policy.cpp` (gate, straight corridor, corner, line-of-sight stop, out-of-sight edge point, 3D range, partial paths, degenerate inputs, partial paths whose end is out of sight in and out of range); `bash tools/verify_all.sh`, `git diff --check`; `c++ -fsyntax-only` of `ReachTargetActions.cpp` and `MovementActions.cpp` against the core headers; full build pending; in-game pending (Uldaman: healer 45 yd from the tank in line of sight walks into heal range).
 
 Review fixes (2026-10-12, REVIEW-124): (1) a partial path could park the bot on a point out of sight of its target (the end was never checked), now every chosen point sees the target, see above; (2) the dungeon and distance gate runs before the sight ray, so open-world reaches pay nothing extra; (3) the sight check uses the target's own collision height at the target end, as the core's `IsWithinLOSInMap` does; (4) the unused `RangedApproachChoice::inRange` field was dropped.
+
+## Dungeon follow holds before unpulled packs (issue #127) — 2026-10-12
+
+Feature: optional `AiPlayerbot.DungeonFollowHoldBeforePacks` (default `0`).
+In a dungeon or raid, out of combat on both sides, a bot whose leader is
+more than 30 yd ahead follows with the module's `MoveTo2` instead of the
+core `MoveFollow`, so the route goes through `TravelPath::ClipPath`. With
+the new `PackHoldResult` out-parameter, `ClipPath` also ends the route
+3 yd outside the aggro radius (`Creature::GetAttackDistance(bot)`, core
+`CREATURE_Z_ATTACK_RANGE` vertical gate unless the creature flies) of the
+first unpulled hostile creature on it (alive, not in combat, no victim,
+`CanInitiateAttack`), read from the cached `possible targets` list. The
+bot holds there, whispers its master once per pack (30 s floor), and walks
+on when the pack is gone, the route clears or the leader comes back within
+30 yd. The existing melee-reach clip is unchanged and still runs first.
+
+Source repository: none — this goes **beyond mod-playerbots**. Checked
+`mod-playerbots` @ `79bd4281` (`src/Ai/Base/Actions/MovementActions.cpp`
+`Follow`/`MoveTo`, `src/Ai/Base/Actions/FollowActions.cpp`): the donor
+follows with the plain core `MoveFollow`, its `MoveTo` does not avoid
+packs, and it has no `ClipPath`; no donor code or behaviour was copied.
+
+Copied / ported / reimplemented: independently implemented in the module.
+Pure gate and geometry in `ai/playerbot/DungeonFollowHoldPolicy.h`
+(segment-sphere entry, earliest pack along the route, inward-only hold
+when already inside the margin), tested by
+`tools/test_dungeon_follow_hold_policy.cpp` (wired into
+`tools/verify_all.sh`).
+
+Source files (module, modified): `ai/playerbot/DungeonFollowHoldPolicy.h`
+(new), `ai/playerbot/TravelNode.{h,cpp}` (`PackHoldResult`,
+`ClipPath` out-parameter, `ClipBeforePack`),
+`ai/playerbot/strategy/actions/MovementActions.{h,cpp}` (`MoveTo2`
+passes it through), `ai/playerbot/strategy/actions/FollowActions.{h,cpp}`
+(gate, hold, whisper, `isUseful` takes over from a running core follow),
+`ai/playerbot/PlayerbotAIConfig.{h,cpp}` + `aiplayerbot.conf.dist.in`
+(key), docs (`configuration-tuning.md`, `dungeon-tactics.md`,
+`player-controls.md`). No core change, no new host hook.
+
+Reason: evidence in the Uldaman investigation (2026-10-12): the only
+navmesh route north from the entrance passes ~3 yd from the west-room
+pack; bots following a leader who ran or teleported ahead walked into it
+and wiped the party (VM run, WIPE 1; m910q build 4 P2).
+
+Cost: nothing when the key is `0` (one bool check in `isUseful`/`Execute`).
+When on and the gate holds, one `MoveTo2` re-check per second (the route is
+reused from `last movement` while the leader stays put) and one read of
+the cached `possible targets` value (recalculated at most once a second by
+its own cache); no extra grid search or path per creature.
+
+Local validation: `bash tools/verify_all.sh` (incl. the new policy test);
+`git diff --check`. Not compiled against the core and not tested in game
+yet.
+
+### Review fixes (2026-10-12, REVIEW-127 CHANGES REQUIRED)
+
+- I1 (fixed): the vertical gate is now tested where the route leg actually
+  enters the aggro zone (segment inside the sphere AND inside the height
+  band), so a ramp or stair leg that climbs through the pack's level holds.
+  The band is `CREATURE_Z_ATTACK_RANGE` + the creature's + the bot's bounding
+  radius, matching the core's `GetDistanceZ`. Ramp cases added to the test.
+- M1 (fixed): a core FOLLOW left running when `MoveTo2` launched nothing is
+  stopped, so it cannot carry the bot past the margin.
+- M2 (fixed): gate hysteresis, on beyond 30 yd and off within 25 yd.
+- M3 (kept, comment fixed): creatures already fighting someone else are not
+  held for; with the bot and leader out of combat that fight belongs to a
+  pet, escort or other member, and joining it is acceptable.
+- M4 (fixed): gate closed while the leader is on a transport.
+- M5 (fixed): docs and template say the bot whispers its master.
+- M6 (dropped in fix round 2, coordinator ruling on re-review N1): the
+  step-aside that let rest triggers run between re-checks was unreachable
+  with the default `JumpFollow = 1` and had cut the standing re-check to
+  `ReactDelay`. Removed; the standing hold re-checks once a second again and
+  the bot rests only through the normal out-of-combat flow once the hold ends.
+  N3: the toggle-off path now also resets the hold state.
+- Performance: a bot standing at its hold point reads the cached creature
+  list lazily; it refreshes only while walking.
+- M7 and ScriptedAI (no height gate in core `ScriptedAI::MoveInLineOfSight`):
+  listed as known limits in the PR.
+
+Local validation: `bash tools/verify_all.sh` (incl. the extended policy
+test); `git diff --check`; `g++ -fsyntax-only` of the touched module files
+against `~/tortoise-wow` headers with the module PCH (only pre-existing
+host-API mismatches reported, none in changed lines). Not built with the
+dev loop and not tested in game.
