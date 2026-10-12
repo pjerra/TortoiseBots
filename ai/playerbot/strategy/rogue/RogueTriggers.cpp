@@ -140,6 +140,10 @@ bool SapCcMarkTrigger::IsActive()
     if (sServerFacade.IsInCombat(bot) || !ai->HasRealPlayerMaster())
         return false;
 
+    // Player switch: `.bot action sap off` adds "no sap" (on by default).
+    if (ai->HasStrategy("no sap", BotState::BOT_STATE_NON_COMBAT))
+        return false;
+
     const uint32 spellId = AI_VALUE2(uint32, "spell id", "sap");
     if (!spellId || !sServerFacade.IsSpellReady(bot, spellId))
         return false;

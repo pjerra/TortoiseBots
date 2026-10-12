@@ -572,6 +572,7 @@ public:
             (actionName == "select new target") ||
             (actionName == "follow") ||
             (actionName == "reach melee") ||
+            (actionName == "reach sap") ||
             (actionName == "set behind") ||
             (actionName == "set combat state") ||
             (actionName == "set non combat state") ||

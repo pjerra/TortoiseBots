@@ -178,6 +178,56 @@ namespace ai
         std::string GetReachActionName() override { return "reach melee"; }
     };
 
+    // Pre-pull approach for Sap (out of combat; CastSapAction picks it).
+    // "reach melee" chases with the core chase generator, and on arrival that
+    // generator starts melee auto-attack (ChaseMovementGenerator<Player>::
+    // _reachTarget -> Attack(target, true)): the first swing broke Stealth and
+    // pulled the pack before Sap was cast (retest build 8: white hit + Instant
+    // Poison, then "Stealth fades"). The chase also aimed at Sap's own range,
+    // the bot's combat reach (1.5 yd edge to edge, chased to 0.6 yd), inside
+    // the 1.5 yd at which any mob sees a stealthed unit (CanDetectStealthOf).
+    // So walk to a point instead: on the rogue's side of the mob, 2.5 yd from
+    // its edge, inside Sap's melee reach.
+    class ReachSapAction : public ReachTargetAction
+    {
+    public:
+        ReachSapAction(PlayerbotAI* ai) : ReachTargetAction(ai, "reach sap") {}
+
+        bool RequiresAttackableTarget() const override { return true; }
+
+        void Qualify(const std::string& qualifier) override
+        {
+            ReachTargetAction::Qualify(qualifier);
+            // Done when Sap reaches (isUseful), not at a range; 0 also makes
+            // the give-up check measure melee reach.
+            range = 0.0f;
+        }
+
+        bool isUseful() override
+        {
+            Unit* target = GetTarget();
+            if (target && bot->CanReachWithMeleeAutoAttack(target) && bot->IsWithinLOSInMap(target, true))
+                return false;
+
+            return ReachTargetAction::isUseful();
+        }
+
+        bool MoveIntoRange(Unit* target, float /*distance*/) override
+        {
+            const float edgeGap = 2.5f;
+            float standDist = bot->GetObjectBoundingRadius() + target->GetObjectBoundingRadius() + edgeGap;
+            standDist = std::min(standDist, bot->GetCombatReach(target, false, 0.0f) - 1.0f);
+
+            const float angle = target->GetAngle(bot);
+            WorldPosition stand(target->GetMapId(),
+                target->GetPositionX() + standDist * std::cos(angle),
+                target->GetPositionY() + standDist * std::sin(angle),
+                target->GetPositionZ());
+            stand.setZ(stand.GetHeight());
+            return MoveTo(stand.GetMapId(), stand.getX(), stand.getY(), stand.getZ());
+        }
+    };
+
     class CastSapAction : public CastMeleeSpellAction
     {
     public:
@@ -204,6 +254,13 @@ namespace ai
         std::string GetTargetName() override
         {
             return sServerFacade.IsInCombat(bot) ? "current target" : "rti cc target";
+        }
+
+        // Before the pull: a point move that stops in Sap reach (ReachSapAction),
+        // never the auto-attacking melee chase.
+        std::string GetReachActionName() override
+        {
+            return sServerFacade.IsInCombat(bot) ? "reach melee" : "reach sap";
         }
     };
 

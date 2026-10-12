@@ -2604,7 +2604,7 @@ static bool ParseAction(std::string input, std::string& intent, std::string& opt
         first != "repair" && first != "sell" && first != "rest" &&
         first != "drink" && first != "eat" && first != "release" &&
         first != "corpse run" && first != "corpserun" && first != "learn" &&
-        first != "trade" && first != "raid" && first != "flee")
+        first != "trade" && first != "raid" && first != "flee" && first != "sap")
         return false;
 
     if (first == "raid")
@@ -2641,6 +2641,32 @@ static bool ParseAction(std::string input, std::string& intent, std::string& opt
             return true;
         }
         return false;
+    }
+    else if (first == "sap")
+    {
+        // "sap [on|off] [<BotName>]": pre-pull Sap switch. Bare form toggles,
+        // like aoe/loot; an explicit name scopes it to that owned bot, like
+        // "cc <mark> [bot]". The mode token is lowercased, the name keeps its
+        // case for resolution. option = "<on|off|toggle>[ <BotName>]".
+        size_t modeSeparator = remainder.find_first_of(" \t");
+        std::string mode = remainder.substr(0, modeSeparator);
+        for (char& character : mode)
+            character = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+        std::string botToken = modeSeparator == std::string::npos
+            ? std::string() : Trim(remainder.substr(modeSeparator + 1));
+        if (mode != "on" && mode != "off")
+        {
+            // "sap <BotName>": toggle for that bot.
+            if (!botToken.empty())
+                return false;
+            botToken = remainder.substr(0, modeSeparator);
+            mode = "toggle";
+        }
+        if (botToken.find_first_of(" \t") != std::string::npos)
+            return false;
+        intent = first;
+        option = botToken.empty() ? mode : mode + " " + botToken;
+        return true;
     }
     else if (first == "pull" || first == "pullback")
     {
@@ -2719,7 +2745,7 @@ static bool HandleAction(ChatHandler* handler, char const* args)
     std::string option;
     if (!requester || !ParseAction(Trim(args ? args : ""), intent, option))
     {
-        SendActionError(handler, intent, "invalid", "Usage: .bot action attack/interrupt/stop/pull [seconds]/pullback [seconds]/come/stay/hold/follow/flee/focus skull/cc <mark> [bot]/cc clear [bot]/auto cc [on/off]/aoe [on/off]/loot [on/off]/repair/sell/rest/drink/eat/release/corpse run/learn/trade/ready/raid [status/tankface/douse/custom status/custom on/custom off]");
+        SendActionError(handler, intent, "invalid", "Usage: .bot action attack/interrupt/stop/pull [seconds]/pullback [seconds]/come/stay/hold/follow/flee/focus skull/cc <mark> [bot]/cc clear [bot]/auto cc [on/off]/sap [on/off] [bot]/aoe [on/off]/loot [on/off]/repair/sell/rest/drink/eat/release/corpse run/learn/trade/ready/raid [status/tankface/douse/custom status/custom on/custom off]");
         return true;
     }
     if (!requester->IsInWorld() || !requester->IsAlive() || requester->IsBeingTeleported())
@@ -2739,6 +2765,7 @@ static bool HandleAction(ChatHandler* handler, char const* args)
         return ExecuteInterruptAction(handler, context, requester);
 
     std::vector<Player*> scope;
+    Player* sapNamedBot = nullptr;
     if (intent == "focus skull")
     {
         if (context.group && context.enemyTarget)
@@ -2967,6 +2994,20 @@ static bool HandleAction(ChatHandler* handler, char const* args)
     }
     else if (intent == "raid status" || intent == "raid tankface" || intent == "raid douse" || intent == "raid custom status" || intent == "raid custom on" || intent == "raid custom off")
         return HandleRaidAction(handler, context, requester, intent);
+    else if (intent == "sap" && option.find(' ') != std::string::npos)
+    {
+        // "sap <mode> <BotName>": only that owned bot; option keeps the mode.
+        std::string sapBotToken = option.substr(option.find(' ') + 1);
+        option = option.substr(0, option.find(' '));
+        BotRecord* namedRecord = nullptr;
+        std::string namedName;
+        if (!ResolveOwnedBot(handler, sapBotToken.c_str(), sapNamedBot, namedRecord, namedName))
+        {
+            SendActionError(handler, intent, "no-bot", "Unknown or uncontrollable bot name for sap.");
+            return true;
+        }
+        scope.push_back(sapNamedBot);
+    }
     else
         scope = ResolveDynamicScope(context);
     if (tactical)
@@ -3212,6 +3253,20 @@ static bool HandleAction(ChatHandler* handler, char const* args)
             ExecuteQuietNextAction(ai, true);
             accepted = ai->HasStrategy("auto cc", BotState::BOT_STATE_COMBAT) == enable;
         }
+        else if (intent == "sap")
+        {
+            // Pre-pull Sap on the CC mark, ON by default: "off" adds the
+            // opt-out strategy "no sap", "on" removes it. Persisted like the
+            // loot toggle. Other classes have no such strategy: skip them.
+            if (bot->GetClass() != CLASS_ROGUE)
+                continue;
+            bool enable = option == "on" ||
+                (option == "toggle" && ai->HasStrategy("no sap", BotState::BOT_STATE_NON_COMBAT));
+            ai->ChangeStrategy((enable ? "-" : "+") + std::string("no sap"),
+                BotState::BOT_STATE_NON_COMBAT);
+            sPlayerbotDbStore.Save(ai);
+            accepted = ai->HasStrategy("no sap", BotState::BOT_STATE_NON_COMBAT) != enable;
+        }
         else if (intent == "focus skull")
         {
             RelaxTacticalMovement(ai);
@@ -3293,7 +3348,22 @@ static bool HandleAction(ChatHandler* handler, char const* args)
                 else if (aoeState != current)
                     aoeState = "mixed";
             }
+            if (intent == "sap")
+            {
+                std::string current = ai->HasStrategy("no sap", BotState::BOT_STATE_NON_COMBAT)
+                    ? "off" : "on";
+                if (aoeState.empty())
+                    aoeState = current;
+                else if (aoeState != current)
+                    aoeState = "mixed";
+            }
         }
+    }
+
+    if (!succeeded && intent == "sap")
+    {
+        SendActionError(handler, intent, "no-rogue", "No rogue bot in scope: name, select or group a rogue bot.");
+        return true;
     }
 
     if (!succeeded)
@@ -3302,10 +3372,11 @@ static bool HandleAction(ChatHandler* handler, char const* args)
         return true;
     }
 
-    std::string scopeName = context.selectedBot && scope.size() == 1
+    std::string scopeName = sapNamedBot ? "bot:" + std::string(sapNamedBot->GetName())
+        : context.selectedBot && scope.size() == 1
         ? "bot:" + std::string(context.selectedBot->GetName()) : "party";
     SendActionAck(handler, intent, scopeName, succeeded,
-        intent == "aoe" || intent == "loot" || intent == "auto cc" ? aoeState : "");
+        intent == "aoe" || intent == "loot" || intent == "auto cc" || intent == "sap" ? aoeState : "");
     return true;
 }
 

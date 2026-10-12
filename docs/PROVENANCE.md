@@ -8244,6 +8244,24 @@ Moon-marked Defias and never Sapped.
 
 Local validation: code review + `bash tools/verify_all.sh` + `git diff --check`;
 build pending; in-game pending.
+
+Fix round 2 (in-game retest, build 8, 2026-10-12): the stealthed rogue reached
+the Moon mob and opened with a white swing instead of Sap. Cause: the Sap
+prerequisite `reach melee` used the core chase, whose arrival starts melee
+auto-attack (core `ChaseMovementGenerator<Player>::_reachTarget`), and it chased
+to 0.6 yd, inside the 1.5 yd collision detection of `Unit::CanDetectStealthOf`.
+Out of combat `CastSapAction` now uses `reach sap` (`ReachSapAction`,
+`RogueActions.h`): a point move to 2.5 yd from the mob's edge (capped inside
+melee reach), done once Sap reaches; allowed while stealthed. In combat Sap
+keeps `reach melee`. Module-only reimplementation, no donor code.
+
+Fix round 3 (owner decision, 2026-10-12): an on/off switch, default ON.
+Opt-out non-combat strategy `no sap` (`RogueNoSapStrategy`, `RogueStrategy.h`,
+no triggers of its own); `SapCcMarkTrigger` stays quiet while it is present.
+`.bot action sap [on|off] [bot]` (`commands/BotCommands.cpp`) adds it on `off`,
+removes it on `on`, and saves the bot like the loot / auto cc toggles. Absent
+means on, so rogues saved before the switch need no data change. Module-only,
+no donor code.
 ## Polymorph cast held through its cast bar; CC marks killed last (2026-10-12)
 
 | Feature | Source | Files | Mode | Reason | Validation |

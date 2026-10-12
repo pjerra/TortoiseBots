@@ -10,6 +10,18 @@ namespace ai
         std::string getName() override { return "poisons"; }
     };
 
+    // Opt-out marker for the pre-pull Sap on the bot's CC mark (`.bot action
+    // sap off` adds it, `sap on` removes it). No triggers of its own: the
+    // "sap cc mark" trigger stays quiet while it is present. Absent means on,
+    // so rogues saved before the switch existed keep Sapping, and "off" is
+    // persisted through the bot's normal saved strategy list.
+    class RogueNoSapStrategy : public Strategy
+    {
+    public:
+        RogueNoSapStrategy(PlayerbotAI* ai) : Strategy(ai) {}
+        std::string getName() override { return "no sap"; }
+    };
+
     class RogueStrategy : public ClassStrategy
     {
     public:
