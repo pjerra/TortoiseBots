@@ -11,6 +11,15 @@ class PlayerbotDbStore
 public:
     PlayerbotDbStore() {}
     virtual ~PlayerbotDbStore() {}
+    // Serial id for every transaction on ai_playerbot_db_store. A snapshot
+    // save is DELETE-by-guid then INSERTs; under REPEATABLE READ the DELETE
+    // gap-locks the non-unique guid index up to the next guid, so two bots
+    // with neighbouring guids saving on different DB workers deadlock
+    // (MySQL error 1213) and one save is rolled back and lost. One constant
+    // id sends them all to one worker, which runs them one at a time in
+    // queue order, so they never overlap and one bot's saves stay in order.
+    static constexpr uint32 DB_SERIAL_ID = 1;
+
     static PlayerbotDbStore& instance()
     {
         static PlayerbotDbStore instance;

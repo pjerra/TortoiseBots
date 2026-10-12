@@ -82,12 +82,14 @@ void PlayerbotDbStore::Save(PlayerbotAI *ai, std::string preset)
     // One transaction for the delete and every insert. Loose async statements
     // are shared out over all character-database workers (4 by default), so
     // the delete could run after some of the inserts and drop them, and a
-    // rebuild could read a half-written snapshot. The bot's guid is the serial
-    // id, so all of one bot's saves run on one worker in order (the core does
-    // the same for player saves). A caller that already holds a transaction
-    // (ChangeStrategyAction) keeps ours inside its own.
+    // rebuild could read a half-written snapshot. Every save uses the same
+    // serial id (DB_SERIAL_ID), so all of them run on one worker in order:
+    // one bot's saves never reorder, and two bots' saves never overlap and
+    // deadlock on the guid index gap lock. A caller that already holds a
+    // transaction (ChangeStrategyAction, opened with the same id) keeps ours
+    // inside its own.
     bool const ownTransaction = !CharacterDatabase.InTransaction() &&
-        CharacterDatabase.BeginTransaction(ai->GetBot()->GetGUIDLow());
+        CharacterDatabase.BeginTransaction(DB_SERIAL_ID);
 
     Reset(ai, preset);
 

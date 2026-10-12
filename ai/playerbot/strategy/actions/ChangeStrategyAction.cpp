@@ -18,7 +18,7 @@ bool ChangeCombatStrategyAction::Execute(Event& event)
        if (event.GetSource() == "co")
        {
           std::vector<std::string> splitted = split(text, ',');
-          CharacterDatabase.BeginTransaction();
+          CharacterDatabase.BeginTransaction(PlayerbotDbStore::DB_SERIAL_ID);
           for (std::vector<std::string>::iterator i = splitted.begin(); i != splitted.end(); i++)
           {
              const char* name = i->c_str();
@@ -56,7 +56,7 @@ bool ChangeNonCombatStrategyAction::Execute(Event& event)
        if (event.GetSource() == "nc")
        {
           std::vector<std::string> splitted = split(text, ',');
-          CharacterDatabase.BeginTransaction();
+          CharacterDatabase.BeginTransaction(PlayerbotDbStore::DB_SERIAL_ID);
           for (std::vector<std::string>::iterator i = splitted.begin(); i != splitted.end(); i++)
           {
              const char* name = i->c_str();
@@ -126,7 +126,7 @@ bool ChangeAllStrategyAction::Execute(Event& event)
        if (event.GetSource() == "nc" || event.GetSource() == "co")
        {
           std::vector<std::string> splitted = split(text, ',');
-          CharacterDatabase.BeginTransaction();
+          CharacterDatabase.BeginTransaction(PlayerbotDbStore::DB_SERIAL_ID);
           for (std::vector<std::string>::iterator i = splitted.begin(); i != splitted.end(); i++)
           {
              const char* name = i->c_str();

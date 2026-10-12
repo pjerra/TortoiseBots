@@ -9348,9 +9348,10 @@ Review fixes (2026-10-12, REVIEW-129): (1) the rescue yields while the bot is he
 ## Companions keep `follow` (strategy snapshot and broken stay) — 2026-10-12
 
 Feature: (1) `PlayerbotDbStore::Save` writes its delete and every insert in
-one character-database transaction with the bot's guid as serial id, so one
-bot's saves run in order on one worker (it joins a caller's open
-transaction, as `ChangeStrategyAction` holds one). (2) `PlayerbotDbStore::Load` clears and
+one character-database transaction with one fixed serial id
+(`PlayerbotDbStore::DB_SERIAL_ID`), so every `ai_playerbot_db_store`
+transaction runs on one worker in queue order (it joins a caller's open
+transaction, as `ChangeStrategyAction` holds one, opened with the same id). (2) `PlayerbotDbStore::Load` clears and
 replays only the engines whose own row it read (`ai::StoredStrategyRows`,
 `ai/playerbot/MovementModePolicy.h`). (3) `PlayerbotAI::ResetStrategies`
 gives a real player's bot its default movement mode (`follow`) when, after
@@ -9391,6 +9392,21 @@ stored `nc` rows from m910q, half-written and complete snapshots, rebuild
 rule); `bash tools/verify_all.sh`; `git diff --check`; `c++ -fsyntax-only`
 of the three changed files against the core headers. Build pending; in-game
 pending.
+
+Deadlock follow-up: the first version used the bot's guid as serial id.
+Different bots' saves then ran on different workers at once, and under
+REPEATABLE READ the `DELETE ... WHERE guid` gap-locks the non-unique `guid`
+index up to the next guid, so two bots with neighbouring guids blocked each
+other's `INSERT` (MySQL error 1213 on m910q build 16, `errors.log`, guids
+521-523/530-531/536-538 during party-wide summons and `.bot action`). InnoDB
+rolled back one bot's whole save and nothing retried it. A constant serial id
+sends all of these transactions to one worker (`serialId % workers` in the
+core's `Database::AddToSerialDelayQueue`; that worker drains its serial queue
+one operation at a time on its own connection), so they never overlap and one
+bot's saves still run in order. Validation: `tbsyntax` of the changed `.cpp`
+files, `bash tools/verify_all.sh`, `git diff --check`. Build pending; in-game
+pending.
+
 | Moon mark round 3 (pack melee): (a) every enemy-area spell, instant and chained as well as lingering (*Cleave*, *Thunder Clap*, *Arcane Explosion*, *Multi-Shot*), skips a held mark in its blast, not only a crowd-controlled mob; (b) the enemy-healer pick behind *Kick* / *Shield Bash* / *Pummel* / *Counterspell* / *Hammer of Justice* "on enemy healer" skips a held mark; (c) *Blade Flurry* (Turtle 13877: infinite-duration toggle, 4 s cooldown, so it stays on from the last pull) is cancelled ("blade flurry near cc" -> "remove blade flurry", rogue base strategy) while a sheeped mob, a held mark, or a CC mark whose CC bot is ready (any combat time, other enemies left) is within 8 yd, and not started within 11 yd (hysteresis); the rogue's own victim is skipped for the CC and held-mark tests (the core proc never hits it, so its own Gouge does not cancel), a ready mark counts even as its victim. Policy in `CcMarkHoldPolicy.h` | Native: the donor has no area gate, its `src/Ai/Base/Value/EnemyHealerTargetValue.cpp` @ 79bd428 picks any healing attacker (no Moon skip), and its Blade Flurry (`src/Ai/Class/Rogue/Action/RogueActions.h`) has no cancel; core fact: `spell_rogue_blade_flurry` (tortoise-wow `src/scripts/spells/spell_rogue.cpp`) copies each swing onto a random enemy within 5 yd, sheeped or not | `ai/playerbot/strategy/values/{CcMarkHoldPolicy.h,TargetValue.h,TargetValue.cpp,EnemyHealerTargetValue.cpp}`, `ai/playerbot/strategy/actions/GenericSpellActions.cpp`, `ai/playerbot/strategy/rogue/{RogueTriggers.h,RogueTriggers.cpp,RogueActions.h,RogueAiObjectContext.cpp,RogueStrategy.cpp}`, `tools/test_cc_mark_hold_policy.cpp` | Native | Build 13 headless gate (#131, Stonevault Oracle pack in Uldaman, Moon on one Oracle by `.bot action cc moon <mage>`, tank pulled the other): two party hits on the Moon mob before the first sheep at 9.8 s (inside the 10 s hold), and Blade Flurry broke the sheep after it landed; build 14 gate: three Blade Flurry (22482) hits on the Moon mob at 14-17 s before the first sheep (16.9 s), with Blade Flurry still on from the previous pull; the hold only covered the target tournaments, while instant areas, enemy-healer interrupts and an already running Blade Flurry bypassed it | `tools/test_cc_mark_hold_policy.cpp` (56 checks); `c++ -fsyntax-only` of the changed files; code review + build pending; in-game pending |
 ## Mage "blink back" turns away from the target first — 2026-10-12
 
