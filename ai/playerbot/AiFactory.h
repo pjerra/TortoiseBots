@@ -27,10 +27,11 @@ public:
     static void AddDefaultReactionStrategies(Player* player, PlayerbotAI* const facade, ReactionEngine* reactionEngine);
     // RandomBotNonCombatStrategies without its open-world adds (grind, travel,
     // tfish, rpg, rpg craft, wander) while the player is in a dungeon or raid.
-    static std::string InstanceSafeNonCombatStrategies(Player* player, std::string const& strategies);
+    // When withheld is given, the bits of the entries it dropped are OR-ed in.
+    static std::string InstanceSafeNonCombatStrategies(Player* player, std::string const& strategies, uint8* withheld = nullptr);
     // Map-change half of the same guard, run once per map change: a grouped
     // pool bot that enters a dungeon or raid drops that open-world kit, and
-    // gets it back when it leaves for the open world.
+    // gets back only what the guard held when it leaves for the open world.
     static void ApplyInstanceGuardOnMapChange(Player* player, PlayerbotAI* ai);
 
 public:
