@@ -8339,6 +8339,23 @@ no triggers of its own); `SapCcMarkTrigger` stays quiet while it is present.
 removes it on `on`, and saves the bot like the loot / auto cc toggles. Absent
 means on, so rogues saved before the switch need no data change. Module-only,
 no donor code.
+
+Fix round 4 (in-game retest, build 9, 2026-10-12): the rogue stealthed and
+started to walk, but the dashboard showed `reach sap` and `follow` alternating
+and no Sap was cast; once `unstealth` dropped Stealth next to the mob. Cause:
+after Sap's prerequisite has run, `Engine::DoNextAction` re-queues Sap with
+skip-prerequisites set, and `Queue::Push` merges the next tick's trigger push
+into that basket without clearing the flag, so every other tick Sap came up
+without its walk, was impossible, and `follow` / `unstealth` (ACTION_NORMAL)
+ran instead. The "sap cc mark" node now also queues the walk itself
+(`reach sap::{sap::rti cc target}`, ACTION_HIGH + 0.5, the same name as the
+prerequisite), so it runs on those ticks too. Leash: `SapCcMarkTrigger` only
+fires while the master is within 50 yd of the rogue, so the walk never
+outranks follow beyond that. Engine unchanged. Test:
+`tools/test_rogue_sap_approach.py` replays the queue rules with the real
+relevances (and reproduces the build 9 flip-flop without the node). Module-only,
+no donor code.
+
 ## Polymorph cast held through its cast bar; CC marks killed last (2026-10-12)
 
 | Feature | Source | Files | Mode | Reason | Validation |

@@ -196,7 +196,8 @@ namespace ai
     // fire before a pull. This one runs in the non-combat engine: rogue and
     // marked mob both out of combat, mob a humanoid nobody holds yet.
     // Player control: only for a bot whose master is a real player, so pool
-    // bots never Sap on their own.
+    // bots never Sap on their own, and only while that master is within
+    // 50 yd of the rogue (the walk outranks follow while this fires).
     class SapCcMarkTrigger : public Trigger
     {
     public:

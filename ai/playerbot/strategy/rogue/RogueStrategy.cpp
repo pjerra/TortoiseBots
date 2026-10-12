@@ -119,10 +119,24 @@ void RogueStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)
     // sap), but in the non-combat engine, the only place where both the rogue
     // and the mob are out of combat. Above follow (ACTION_NORMAL) and the
     // stealth upkeep (ACTION_HIGH) so the approach is not pulled back.
+    //
+    // The walk is queued here as well, not only as Sap's prerequisite.
+    // Once the prerequisite has run, the engine re-queues "sap" with
+    // "skip prerequisites" set, and Queue::Push merges the next tick's
+    // trigger push into that basket without clearing the flag. So every
+    // other tick Sap came up without its walk, was impossible (out of
+    // reach) and "follow" (ACTION_NORMAL) ran instead and pulled the rogue
+    // back towards the player; "unstealth" (ACTION_NORMAL) could win the
+    // same gap and drop Stealth next to the mob (retest build 9: reach sap
+    // and follow alternating, then "Stealth fades", no Sap). Queued at its
+    // own relevance, the walk runs on those ticks too. The name must equal
+    // the prerequisite CastSapAction builds out of combat
+    // ("<reach>::{<spell>::<target>}"), so both land in one queue basket.
     triggers.push_back(new TriggerNode(
         "sap cc mark",
         NextAction::array(0, new NextAction("stealth", ACTION_HIGH + 2),
-                             new NextAction("sap", ACTION_HIGH + 1), NULL)));
+                             new NextAction("sap", ACTION_HIGH + 1),
+                             new NextAction("reach sap::{sap::rti cc target}", ACTION_HIGH + 0.5f), NULL)));
 }
 
 void RogueStrategy::InitReactionTriggers(std::list<TriggerNode*>& triggers)
