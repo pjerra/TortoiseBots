@@ -525,6 +525,13 @@ void PaladinAuraStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& trigger
     triggers.push_back(new TriggerNode(
         "no paladin aura",
         NextAction::array(0, new NextAction("paladin aura", ACTION_NORMAL), NULL)));
+
+    // After a raid boss resist swap: back to the spec aura once out of
+    // combat. Lives here, not in the raid strategy, so it still runs when
+    // the bot ends the fight outside the instance (released after a wipe).
+    triggers.push_back(new TriggerNode(
+        "resist aura swap over",
+        NextAction::array(0, new NextAction("restore spec aura", ACTION_NORMAL + 2), NULL)));
 }
 
 void PaladinAuraPvpStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)

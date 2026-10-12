@@ -5283,6 +5283,35 @@ Reason: raid1 gap MC-AURA/BWL: aura actions existed but were manual-only
 Local validation: `bash tools/verify_all.sh` (all suites incl. the new
 policy test pass); `git diff --check`. Build via build-commit.sh pending;
 live in-game check pending.
+## Paladin resist aura: election, Onyxia/BWL bosses, fight-end restore — 2026-10-12
+
+Follow-up to the auto-swap above (audit batch7-raids finding 9).
+Reimplemented, not ported: the donor (mod-playerbots @ `79bd4281`,
+`src/Ai/Base/Trigger/BossAuraTriggers.cpp:46-60`) elects the first alive
+paladin in the group and never switches back; both are deviations here.
+
+- Election (`ResistAuraPolicy.h` `IsElectedResistAuraPaladin`, called
+  from `DungeonTriggers.cpp`): first paladin **bot** in group order that
+  is alive, on the bot's map, in combat, knows the aura and has no manual
+  aura order. Humans and other-map paladins no longer block every bot.
+- Bosses (entries from `tw_world_creature_template`, schools from
+  `tw_world_spell_template` column `school`): Onyxia 10184 fire (Flame
+  Breath 18435, Deep Breath 23461, Fireball 18392 = school 2);
+  Chromaggus 14020 fire (breaths `boss_chromaggus.cpp:43-47`: Incinerate
+  23308 and Ignite Flesh 23315 are fire, 7 of 10 breath pairs include
+  one, none is shadow); Ebonroc 14601 and Nefarian 11583 shadow (Shadow
+  Flame 22539 and Veil of Shadow 22687 = school 5). Onyxia's dungeon
+  strategy now carries `boss wants fire aura`.
+- Restore: the swap sets `manual bool` "resist aura swapped"; the new
+  `resist aura swap over` trigger (paladin aura strategy, non-combat)
+  queues `restore spec aura`, which re-adds the `aura` placeholder in the
+  combat engine (dropping `rfire`/`rshadow`) and removes the resist aura,
+  so the spec aura returns through the existing `no paladin aura` path.
+  A manual aura order is left alone.
+
+Validation: `bash tools/verify_all.sh` (resist-aura policy test extended:
+election, new entries, restore); `git diff --check`. Not compiled here;
+build and in-game check pending.
 ## Warrior WAR-8: tank Intervene on focused party member (2026-10-09)
 
 Feature: `ProtectionWarriorStrategy` gains `protect party member` →

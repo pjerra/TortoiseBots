@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 
 // Pure decision rules for paladin resist-aura auto-swap per boss
 // (mod-playerbots parity, raid1 batch item 8).
@@ -31,6 +32,11 @@ namespace ai
             case 12017: // Broodlord Lashlayer
             case 11983: // Firemaw
             case 11981: // Flamegor
+            // Chromaggus rolls two of five breaths per reset; two of the
+            // five (Incinerate 23308, Ignite Flesh 23315) are school 2 fire,
+            // so 7 of the 10 possible pairs include fire; none is shadow.
+            case 14020: // Chromaggus
+            case 10184: // Onyxia (Flame Breath 18435/23461, Fireball 18392: school 2)
                 return true;
             default:
                 return false;
@@ -45,10 +51,48 @@ namespace ai
             case 12118: // Lucifron
             case 12259: // Gehennas
             case 12018: // Majordomo Executus
+            // Shadow Flame 22539 and Veil of Shadow 22687 are school 5
+            // (shadow) in the 1.18.1 spell_template.
+            case 14601: // Ebonroc
+            case 11583: // Nefarian
                 return true;
             default:
                 return false;
         }
+    }
+
+    // One paladin per raid covers the aura. A raid member counts only if it
+    // is a paladin bot (a human's aura is the human's call), alive, on the
+    // bot's map and in combat (in the encounter), knows the aura and has no
+    // manual aura order (it would refuse to swap). The first such member in
+    // group order swaps; the rest keep their spec aura.
+    struct ResistAuraCandidate
+    {
+        bool self = false;
+        bool isBot = false;
+        bool alive = false;
+        bool sameMap = false;
+        bool inCombat = false;
+        bool knowsAura = false;
+        bool manualAura = false;
+    };
+
+    inline bool IsElectedResistAuraPaladin(const std::vector<ResistAuraCandidate>& paladins)
+    {
+        for (const ResistAuraCandidate& p : paladins)
+        {
+            if (!p.isBot || !p.alive || !p.sameMap || !p.inCombat || !p.knowsAura || p.manualAura)
+                continue;
+            return p.self;
+        }
+        return false;
+    }
+
+    // The fight is over for a bot that swapped once it is alive and out of
+    // combat: drop the resist upkeep and let the spec aura come back.
+    inline bool ShouldRestoreSpecAura(bool swapped, bool alive, bool inCombat)
+    {
+        return swapped && alive && !inCombat;
     }
 
     // Swap only when the wanted aura is not already up; the trigger that

@@ -342,6 +342,7 @@ namespace ai
             creators["raid spread needed"] = [](PlayerbotAI* ai) { return new RaidSpreadNeededTrigger(ai); };
             creators["boss wants fire aura"] = [](PlayerbotAI* ai) { return new BossWantsFireAuraTrigger(ai); };
             creators["boss wants shadow aura"] = [](PlayerbotAI* ai) { return new BossWantsShadowAuraTrigger(ai); };
+            creators["resist aura swap over"] = [](PlayerbotAI* ai) { return new ResistAuraSwapOverTrigger(ai); };
             creators["spread needed"] = [](PlayerbotAI* ai) { return new SpreadNeededTrigger(ai); };
 
             creators["start onyxia fight"] = [](PlayerbotAI* ai) { return new OnyxiaStartFightTrigger(ai); };

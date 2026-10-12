@@ -1,5 +1,6 @@
 #include "playerbot/GroupMembers.h"
 #include "DungeonActions.h"
+#include "playerbot/strategy/triggers/DungeonTriggers.h"
 #include "playerbot/strategy/values/PositionValue.h"
 #include "playerbot/strategy/AiObjectContext.h"
 #include "playerbot/PlayerbotAI.h"
@@ -535,15 +536,39 @@ bool MoveAwayFromCreature::IsHazardNearby(const WorldPosition& point, const std:
 bool SwapFireResistanceAuraAction::Execute(Event& event)
 {
     // Combat engine only (donor parity): the rfire strategy's upkeep
-    // trigger then maintains the aura for the rest of the fight.
+    // trigger then maintains the aura for the rest of the fight. The flag
+    // marks the swap as ours, so "restore spec aura" undoes it after the
+    // fight and a player's own "+rfire" is left alone.
     ai->ChangeStrategy("+rfire", BotState::BOT_STATE_COMBAT);
+    SET_AI_VALUE2(bool, "manual bool", "resist aura swapped", true);
     return ai->DoSpecificAction(WantedResistAuraAction(true, false), event, true);
 }
 
 bool SwapShadowResistanceAuraAction::Execute(Event& event)
 {
     ai->ChangeStrategy("+rshadow", BotState::BOT_STATE_COMBAT);
+    SET_AI_VALUE2(bool, "manual bool", "resist aura swapped", true);
     return ai->DoSpecificAction(WantedResistAuraAction(false, true), event, true);
+}
+
+bool RestoreSpecAuraAction::Execute(Event& event)
+{
+    (void)event;
+    SET_AI_VALUE2(bool, "manual bool", "resist aura swapped", false);
+    // A manual aura order taken since the swap wins: re-adding the "aura"
+    // placeholder would drop it (same sibling group), so only forget.
+    if (HasManualPaladinAuraOverride(ai))
+        return true;
+    // "aura" is a sibling of rfire/rshadow: adding it back drops the
+    // resist upkeep, and the spec's raid/pve aura strategy follows it.
+    ai->ChangeStrategy("-rfire,-rshadow,+aura", BotState::BOT_STATE_COMBAT);
+    // "no paladin aura" stays quiet while any own aura is up, so drop
+    // the resist aura; the spec aura ("no paladin aura") recasts next tick.
+    if (ai->HasMyAura("fire resistance aura", bot))
+        ai->RemoveAura("fire resistance aura");
+    if (ai->HasMyAura("shadow resistance aura", bot))
+        ai->RemoveAura("shadow resistance aura");
+    return true;
 }
 
 bool VaelBurningAdrenalineFleeAction::Execute(Event& event)

@@ -9,6 +9,12 @@ void OnyxiasLairDungeonStrategy::InitCombatTriggers(std::list<TriggerNode*>& tri
     triggers.push_back(new TriggerNode(
         "start onyxia fight",
         NextAction::array(0, new NextAction("enable onyxia fight strategy", 100.0f), NULL)));
+
+    // Paladin resist auto-swap, as in Molten Core and Blackwing Lair:
+    // Onyxia is on the fire list (Flame Breath, Fireball, Deep Breath).
+    triggers.push_back(new TriggerNode(
+        "boss wants fire aura",
+        NextAction::array(0, new NextAction("swap fire resistance aura", ACTION_HIGH + 1), NULL)));
 }
 
 void OnyxiaFightStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)

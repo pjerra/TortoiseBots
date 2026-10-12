@@ -115,6 +115,17 @@ namespace ai
         bool Execute(Event& event) override;
     };
 
+    // Fight over: undo the swap above. Puts the "aura" placeholder back in
+    // the combat engine (dropping rfire/rshadow) and removes the resist
+    // aura so the spec aura returns through the normal "no paladin aura"
+    // path. A manual aura order is left as is.
+    class RestoreSpecAuraAction : public Action
+    {
+    public:
+        RestoreSpecAuraAction(PlayerbotAI* ai) : Action(ai, "restore spec aura") {}
+        bool Execute(Event& event) override;
+    };
+
     // Vaelastrasz Burning Adrenaline refinement (mod-playerbots parity):
     // flees by weighted repulsion from non-BA bots (BA carriers cluster),
     // the boss's victim holds while Vael lives, tail-sweep recovery past
