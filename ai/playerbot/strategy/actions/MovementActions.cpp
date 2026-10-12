@@ -18,6 +18,7 @@
 #include "playerbot/GrindSpotPolicy.h"
 #include "playerbot/TravelRepickPolicy.h"
 #include "playerbot/AvoidAoePolicy.h"
+#include "playerbot/JumpPolicy.h"
 #include "Database/DBCStores.h"
 
 using namespace ai;
@@ -2850,7 +2851,12 @@ bool MoveToAction::Execute(Event& event)
 
 bool JumpAction::isUseful()
 {
-    return bot->IsInWorld() && ai->HasPlayerNearby() && !ai->IsJumping();
+    // Issue #125: no jumping inside dungeons/raids (covers every jump
+    // strategy and the explicit `jump` command).
+    if (!bot->IsInWorld() || !ai::JumpAllowedOnMap(bot->GetMap() && bot->GetMap()->IsDungeon()))
+        return false;
+
+    return ai->HasPlayerNearby() && !ai->IsJumping();
 }
 
 bool JumpAction::Execute(ai::Event &event)

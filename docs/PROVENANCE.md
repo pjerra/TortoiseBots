@@ -7643,3 +7643,5 @@ victim==bot exemption is the fallback if it drags.
 
 Non-blocking "donor Geddon never used this primitive" — ACKNOWLEDGED:
 donor consumers are RS/Ulduar; the Geddon application is novel. Noted.
+
+| No jumping in dungeons/raids (#125) | `mod-playerbots` | `79bd4281` | none: mod-playerbots has no jump strategies or action at all | Reimplemented (restriction only) | Jump strategies (`chase jump`, `follow jump`, `rpg jump`, `jump` command) can strand bots on raised instance platforms with no navmesh link down (Uldaman Hall of the Keepers). Gated in `JumpAction::isUseful` via `ai/playerbot/JumpPolicy.h` on `Map::IsDungeon()` (instances and raids; battlegrounds and open world unchanged). | `tools/test_jump_policy.cpp` in `verify_all.sh`; code review + build pending; in-game pending |
