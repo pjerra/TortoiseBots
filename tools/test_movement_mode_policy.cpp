@@ -62,7 +62,8 @@ int main()
         CHECK(!rows.dead);
         CHECK(!rows.reaction);
     }
-    // A complete snapshot replaces all four engines.
+    // A complete snapshot notes all four rows. Load clears and replays co and
+    // nc; dead and react are replayed on top of the fresh defaults.
     {
         StoredStrategyRows rows;
         for (char const* key : { "value", "co", "nc", "dead", "react" })

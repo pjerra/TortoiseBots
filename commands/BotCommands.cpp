@@ -594,6 +594,8 @@ static void RelaxTacticalMovement(PlayerbotAI* ai)
     // and be mistaken for an active hold during the next transition.
     ai->ChangeStrategy("-stay", BotState::BOT_STATE_REACTION);
     ai->ChangeStrategy("-stay", BotState::BOT_STATE_NON_COMBAT);
+    // Before the check below: a "passive" that EndFlee drops is not a mode.
+    EndFlee(ai);
     // The broken stay was the bot's only movement mode: give it the default
     // back (follow for a player's bot) or it stands wherever the fight ends
     // until the player whispers "follow". Added directly rather than through
@@ -606,7 +608,6 @@ static void RelaxTacticalMovement(PlayerbotAI* ai)
         ai->ChangeStrategy(movement, BotState::BOT_STATE_NON_COMBAT);
     }
     ai->ChangeStrategy("-stay,-follow", BotState::BOT_STATE_COMBAT);
-    EndFlee(ai);
 }
 
 static bool BindMovementMaster(Player* requester, Player* bot)

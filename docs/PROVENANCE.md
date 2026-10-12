@@ -9222,11 +9222,13 @@ Reason: Uldaman's Hall of the Keepers has 17 raised daises the navmesh cuts off 
 Validation: `tools/test_ledge_step_down_policy.cpp` (gate, height band, horizontal radius, candidate order, Uldaman dais with its edge point, needs-path rule, NORMAL path off the mesh, unsafe landing per point, both legs' clear line, edge point through walls and holes, no ground / fall / climbable step / wide dais, narrow ledge, pacing with the failed-look and step caps and clock wrap); `bash tools/verify_all.sh`, `git diff --check`; `c++ -fsyntax-only` of `MovementActions.cpp` and `ReachTargetActions.cpp` against the core headers; full build pending; in-game pending (Uldaman: `.go xyz -190 66 -46 70`, summon the party onto the dais, pull the Rockchewer; bots should run off the edge and drop to the floor within a few seconds).
 
 Review fixes (2026-10-12, REVIEW-126): (1) the landing must be on the navmesh (path start within 1 / 1.5 yd) and free of magma/slime, checked per candidate; (2) the move is a two-leg spline over the lip instead of a straight foot-to-foot line through the platform, with a low (+0.5 yd) line check per leg for railings; (3) a hazard rejects only its candidate; (4) only probes without floor count towards the give-up, launched steps have their own cap of three; (5) docs say "per action" for the pacing.
+
 ## Companions keep `follow` (strategy snapshot and broken stay) — 2026-10-12
 
 Feature: (1) `PlayerbotDbStore::Save` writes its delete and every insert in
-one character-database transaction (it joins a caller's open transaction,
-as `ChangeStrategyAction` holds one). (2) `PlayerbotDbStore::Load` clears and
+one character-database transaction with the bot's guid as serial id, so one
+bot's saves run in order on one worker (it joins a caller's open
+transaction, as `ChangeStrategyAction` holds one). (2) `PlayerbotDbStore::Load` clears and
 replays only the engines whose own row it read (`ai::StoredStrategyRows`,
 `ai/playerbot/MovementModePolicy.h`). (3) `PlayerbotAI::ResetStrategies`
 gives a real player's bot its default movement mode (`follow`) when, after
