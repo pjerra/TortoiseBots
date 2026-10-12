@@ -2,6 +2,7 @@
 #include "playerbot/playerbot.h"
 
 #include "ReactionEngine.h"
+#include "playerbot/BombRunoutPolicy.h"
 #include <iomanip>
 
 using namespace ai;
@@ -371,8 +372,7 @@ bool ReactionEngine::HasReactionWork() const
 // and buffs fall through and let FindReaction skip the fan-out.
 bool ReactionEngine::HasReactionAuraWork(Player* bot) const
 {
-    static const uint32 bombSpells[] = { 20475, 23620, 18173, 23478, 28169 };
-    for (uint32 spellId : bombSpells)
+    for (uint32 spellId : kRaidBombSpellIds)
     {
         if (bot->HasAura(spellId))
             return true;

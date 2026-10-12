@@ -13,6 +13,7 @@
 #include "playerbot/CombatSpreadPolicy.h"
 #include "playerbot/DebuffSpreadPolicy.h"
 #include "playerbot/DragonFlankPolicy.h"
+#include "playerbot/BombRunoutPolicy.h"
 #include "Maps/GridNotifiers.h"
 #include "Maps/GridNotifiersImpl.h"
 #include "Maps/CellImpl.h"
@@ -362,8 +363,7 @@ bool RaidBombDebuffTrigger::IsActive()
     // Spell-ID based: Geddon Living Bomb, Vael Burning Adrenaline
     // (Turtle 23620 + classic 18173), Grobbulus Mutating Injection,
     // Kel'Thuzad Detonate Mana (27819, vanilla-only).
-    static const uint32 bombSpells[] = { 20475, 23620, 18173, 23478, 28169, 27819 };
-    for (uint32 spellId : bombSpells)
+    for (uint32 spellId : kRaidBombSpellIds)
     {
         if (ai->HasAura(spellId, bot))
             return true;

@@ -8788,3 +8788,35 @@ death while the docs said carriers rotate.
 
 Validation: `tools/test_four_horsemen_rotation_policy.cpp` + code review;
 build pending; in-game pending.
+
+## Bomb runout from the raid's centre (2026-10-12)
+
+Donor: mod-playerbots (`79bd4281`):
+`src/Ai/Base/Actions/MovementActions.cpp` (`MovementAction::MoveFromGroup`:
+flee the centroid of living same-map members by `distance - closestDist`,
+only while the closest member is inside `distance`), used by
+`src/Ai/Raid/MC/MCActions.cpp` (`McMoveFromGroupAction`, Living Bomb).
+
+Source files (module): `ai/playerbot/BombRunoutPolicy.h` (new pure rules,
+reusing `DebuffSpreadPolicy.h` clearance), `ai/playerbot/strategy/actions/
+DungeonActions.{h,cpp}` (`RaidBombRunoutAction` rewritten),
+`ai/playerbot/aiplayerbot.conf.dist.in` (comment only),
+`tools/test_bomb_runout_policy.cpp`.
+
+Copied / ported / reimplemented: ported behaviour. Deviations, deliberate:
+the step starts at the donor's `radius - nearest` but grows 2yd at a time
+until the end point clears every member by radius + 2yd, so one move gets
+the carrier clear (the donor re-steps each tick); five headings around
+"away" are tried through the existing LoS / path / unpulled-hostile check;
+the reaction holds until arrival (`WaitForReach`). Radius stays the
+existing `AiPlayerbot.BombRunoutDistance` (30yd; the donor uses 20yd for
+Living Bomb). A carrier with no living same-map group member no longer
+runs (nobody to protect). The Vael flee still outranks this action.
+
+Reason: batch-7 raid audit finding 7 — the runout anchored on the master
+or the nearest member and re-targeted 30-40yd past the bot every tick for
+the whole debuff, which could run a carrier through the other side of the
+raid or into unpulled trash.
+
+Validation: `tools/test_bomb_runout_policy.cpp` + code review; build
+pending; in-game pending.

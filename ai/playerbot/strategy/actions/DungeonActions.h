@@ -73,9 +73,9 @@ namespace ai
         float range;
     };
 
-    // Universal raid survival: bomb/plague runout. Flees AWAY from the raid
-    // anchor (not toward a member like FleeAction) so the 30yd detonation
-    // cannot bracket the clump. Reuses the flee-distance config knob.
+    // Universal raid survival: bomb/plague runout. Runs once directly away
+    // from the centre of the living same-map group until no member is
+    // within BombRunoutDistance, then stays put (BombRunoutPolicy.h).
     class RaidBombRunoutAction : public MovementAction
     {
     public:

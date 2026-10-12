@@ -10,6 +10,7 @@
 #include "playerbot/DebuffSpreadPolicy.h"
 #include "playerbot/strategy/triggers/DungeonTriggers.h"
 #include "playerbot/FourHorsemenRotationPolicy.h"
+#include "playerbot/BombRunoutPolicy.h"
 #include "Movement/spline/MoveSpline.h"
 #include "Maps/GridNotifiers.h"
 #include "Maps/GridNotifiersImpl.h"
@@ -305,32 +306,54 @@ bool FindStep(PlayerbotAI* ai, Player* bot, const WorldPosition& from, float ang
 bool RaidBombRunoutAction::Execute(Event& event)
 {
     (void)event;
-    // 30yd clear of the raid anchor: Geddon/Vael/Grobbulus detonations
-    // bracket the whole clump otherwise. Keep running while the aura lives;
-    // the trigger re-fires each tick until it expires or detonates.
+    // Run from the raid's centre, not from one person: anchoring on the
+    // master or the nearest member could send a carrier through the other
+    // side of the raid. Move once to a point that clears every living
+    // same-map member by the runout radius, then stay there; the trigger
+    // keeps firing while the aura lasts, but a clear carrier does nothing.
+    Group* group = bot->GetGroup();
+    if (!group)
+        return false;
+    std::vector<DebuffAnchor> members;
+    for (Player* member : LiveGroupMembers(group))
+    {
+        if (!member || member == bot || !sServerFacade.IsAlive(member))
+            continue;
+        if (member->GetMapId() != bot->GetMapId())
+            continue;
+        DebuffAnchor anchor;
+        anchor.x = member->GetPositionX();
+        anchor.y = member->GetPositionY();
+        members.push_back(anchor);
+    }
     const float runout = sPlayerbotAIConfig.bombRunoutDistance;
+    const float botX = bot->GetPositionX();
+    const float botY = bot->GetPositionY();
+    float centreX = 0.0f, centreY = 0.0f, nearestDist = 0.0f;
+    std::size_t nearestIdx = 0;
+    if (!BombRunoutCentre(botX, botY, members.data(), members.size(), centreX, centreY, nearestDist, nearestIdx))
+        return false;
+    if (IsBombRunoutClear(nearestDist, runout))
+        return false;
+    const float away = BombRunoutAwayAngle(botX, botY, centreX, centreY,
+        members[nearestIdx].x, members[nearestIdx].y);
     const WorldPosition botPos(bot);
     WorldPosition out(botPos);
-    if (Unit* anchor = RaidAnchor(ai, bot))
+    const float angles[] = { 0.0f, 0.5f, -0.5f, 1.0f, -1.0f };
+    for (float d : angles)
     {
-        const WorldPosition anchorPos(anchor);
-        float away = anchorPos.GetAngleTo(botPos);
-        const float angles[] = { 0.0f, 0.5f, -0.5f };
-        for (float extra = 0.0f; extra <= 10.0f; extra += 5.0f)
+        const float step = BombRunoutStep(botX, botY, away + d, nearestDist, runout, members.data(), members.size());
+        if (FindStep(ai, bot, botPos, away + d, step, out) &&
+            MoveTo(bot->GetMapId(), out.getX(), out.getY(), out.getZ(), false, IsReaction(), false, true))
         {
-            for (float d : angles)
-            {
-                if (FindStep(ai, bot, botPos, away + d, runout + extra, out) &&
-                    MoveTo(bot->GetMapId(), out.getX(), out.getY(), out.getZ(), false, IsReaction(), false, true))
-                    return true;
-            }
+            // Hold the reaction until the carrier arrives, so it is not
+            // re-planned every tick on the way out.
+            if (IsReaction())
+                WaitForReach(step);
+            return true;
         }
-        return false;
     }
-    // Solo carrier: radial flee still clears melee range.
-    float angle = frand(0, M_PI_F * 2.0f);
-    return FindStep(ai, bot, botPos, angle, runout, out) &&
-           MoveTo(bot->GetMapId(), out.getX(), out.getY(), out.getZ(), false, IsReaction(), false, true);
+    return false;
 }
 
 bool FourHorsemenRotateAction::Execute(Event& event)
