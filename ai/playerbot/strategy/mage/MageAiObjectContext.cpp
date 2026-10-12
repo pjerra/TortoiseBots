@@ -187,6 +187,7 @@ namespace ai
                 creators["icicles channel check"] = [](PlayerbotAI* ai) { return new IciclesChannelCheckTrigger(ai); };
                 creators["evocation channel check"] = [](PlayerbotAI* ai) { return new EvocationChannelCheckTrigger(ai); };
                 creators["flamestrike window"] = [](PlayerbotAI* ai) { return new FlamestrikeWindowTrigger(ai); };
+                creators["ranged medium aoe after opener"] = [](PlayerbotAI* ai) { return new RangedMediumAoeAfterOpenerTrigger(ai); };
                 creators["blizzard channel check"] = [](PlayerbotAI* ai) { return new BlizzardChannelCheckTrigger(ai); };
                 creators["no improved scorch"] = [](PlayerbotAI* ai) { return new NoImprovedScorchDebuffTrigger(ai); };
                 creators["no fire vulnerability"] = [](PlayerbotAI* ai) { return new NoFireVulnerabilityTrigger(ai); };
