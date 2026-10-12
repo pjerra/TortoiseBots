@@ -272,14 +272,15 @@ namespace ai
 
         bool HasPoisonItem() const
         {
-            if (ai->HasCheat(BotCheatMask::item))
-                return true;
+            // The item cheat conjures the poison, but never one above the bot's level
+            // (same rule as ApplyPoisonAction), else the action fails and re-fires.
+            const bool cheat = ai->HasCheat(BotCheatMask::item);
             for (const uint32 itemId : poisonItemIds)
             {
                 const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemId);
                 if (proto && (bot->GetLevel() >= proto->RequiredLevel))
                 {
-                    if (bot->HasItemCount(itemId, 1))
+                    if (cheat || bot->HasItemCount(itemId, 1))
                         return true;
                 }
             }
