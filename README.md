@@ -74,7 +74,7 @@ Player-facing summary, no internals. Every claim below exists in the code on thi
 - **Molten Core:** Magmadar, Baron Geddon (Inferno runout); rune dousing on order.
 - **Blackwing Lair:** rogues disarm suppression devices; Broodlord ranged stand-off; Vaelastrasz Burning Adrenaline flee; Nefarian Wild Magic Ice Block.
 - **Onyxia:** air-phase ranged fire with spread while she flies.
-- **Naxxramas:** Four Horsemen void zones; Sapphiron air-phase hide and blizzard step-out.
+- **Naxxramas:** Four Horsemen void zones and mark rotation; Sapphiron air-phase hide and blizzard step-out.
 - **Emerald Sanctum:** Solnius Emerald Rot runout and add focus. **Lower Karazhan:** Araxxna spiderling cleave, Moroes re-target. Karazhan Crypt puzzles stay manual.
 - 5-player dungeons: corner pulls, CC marks, wipe recovery (release + corpse run), summon to regroup.
 -

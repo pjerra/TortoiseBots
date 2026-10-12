@@ -8753,3 +8753,38 @@ skipped: the core despawns it on its first update.
 Validation: code review + standalone policy test
 (`tools/test_bwl_bundle1_policy.cpp`) + `bash tools/verify_all.sh`;
 build pending; in-game pending.
+
+## Four Horsemen mark rotation (Naxxramas, 2026-10-12)
+
+Donor: mod-playerbots (`79bd4281`):
+`src/Ai/Raid/Naxx/Action/NaxxActions_FourHorsemen.cpp`
+(`FourHorsemenAttractAlternativelyAction`, `FourHorsemenAttackInOrderAction`),
+`src/Ai/Raid/Naxx/NaxxBossHelper.h` (`FourHorsemenBossHelper`: 3.x clock over
+two fixed WotLK spots for Lady and Sir).
+
+Source files (module): `ai/playerbot/FourHorsemenRotationPolicy.h` (new pure
+rules), `ai/playerbot/strategy/actions/DungeonActions.{h,cpp}`
+(`FourHorsemenRotateAction`), `ai/playerbot/strategy/actions/ActionContext.h`
+(creator), `ai/playerbot/strategy/generic/ReactionStrategy.cpp` (the
+`four horsemen mark` trigger now queues `four horsemen rotate` instead of the
+no-op `move away from hazard`), `tools/test_four_horsemen_rotation_policy.cpp`.
+
+Copied / ported / reimplemented: reimplemented behaviour (bots trade horsemen
+so no one keeps stacking a mark). Deviations, all deliberate: the donor's
+fixed positions and timer are 3.x-only (stationary caster horsemen); in the
+Tortoise core the four spawn in a line (`tw_world_creature` guids
+88752-88755, 2513-2524 / -2955..-2944, z 245.64) with no waypoints
+(`boss_four_horsemen.cpp`), so each horseman's corner is wherever the raid
+tanks it and is read live from the `attackers` list. The rotation is
+stack-driven (3+ stacks of one mark, the legacy trigger threshold): next
+living horseman clockwise around the horsemen's centre, fewest own stacks
+first; a bot stays at its new corner until that mark reaches 3 too. Tanks and
+DPS switch target to that horseman; healers stand 20yd off it toward the room.
+No kill order port (needs the tank-role work from the raid audit).
+
+Reason: batch-7 raid audit finding 5 — the old wiring called the hazard
+step-out, which only moves inside registered hazards, so marks stacked until
+death while the docs said carriers rotate.
+
+Validation: `tools/test_four_horsemen_rotation_policy.cpp` + code review;
+build pending; in-game pending.

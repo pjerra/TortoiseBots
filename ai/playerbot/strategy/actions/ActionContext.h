@@ -395,6 +395,7 @@ namespace ai
 
             creators["move away from hazard"] = [](PlayerbotAI* ai) { return new MoveAwayFromHazard(ai); };
             creators["raid bomb runout"] = [](PlayerbotAI* ai) { return new RaidBombRunoutAction(ai); };
+            creators["four horsemen rotate"] = [](PlayerbotAI* ai) { return new FourHorsemenRotateAction(ai); };
             creators["vael adrenaline flee"] = [](PlayerbotAI* ai) { return new VaelBurningAdrenalineFleeAction(ai); };
             creators["dragon flank"] = [](PlayerbotAI* ai) { return new DragonFlankAction(ai); };
             creators["raid spread"] = [](PlayerbotAI* ai) { return new RaidSpreadAction(ai); };

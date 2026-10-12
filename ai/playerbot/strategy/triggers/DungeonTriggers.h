@@ -156,9 +156,8 @@ namespace ai
         float range;
     };
 
-    // Legacy 4H mark threshold alert. ReactionStrategy routes this to the
-    // generic hazard escape; it does not rotate targets, assign tanks, or
-    // ensure that moving away is safe. Marks: 28832-28835.
+    // 4H mark threshold (3+ stacks of one of 28832-28835). ReactionStrategy
+    // routes it to "four horsemen rotate" (next corner clockwise).
     class FourHorsemenMarkTrigger : public Trigger
     {
     public:
