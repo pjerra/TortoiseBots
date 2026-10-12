@@ -7643,3 +7643,15 @@ victim==bot exemption is the fallback if it drags.
 
 Non-blocking "donor Geddon never used this primitive" — ACKNOWLEDGED:
 donor consumers are RS/Ulduar; the Geddon application is novel. Noted.
+
+## Healer off-spec damage: 70 % mana reserve on easy fights — 2026-10-12
+
+Feature: `HealerShouldAttackTrigger` (`healer should attack`) now reads its balance-scaled mana reserve from `HealerDpsManaFloor` / `HealerDpsManaAllows` (`ai/playerbot/HealerManaPolicy.h`). Hard fights (balance <= 50) keep 85 % and even fights (<= 100) keep 65 %, as in the donor. Easy fights (balance > 100) keep 70 % instead of the donor's `MediumMana` 40 %. Priest, resto druid and resto shaman `offdps` rows share the trigger. The wand row (`healer should wand`) and solo healers are unchanged.
+
+Source repository: `mod-playerbots/mod-playerbots`, commit `79bd428`, file `src/Ai/Base/Trigger/GenericTriggers.cpp:346-371` (`HealerShouldAttackTrigger::IsActive`).
+
+Kind: deliberate deviation, owner decision 2026-10-12 (the 85 / 65 tiers stay ported as-is).
+
+Reason: a full 5-man fighting one or two elites lands in the easy tier. There a holy priest nuked from 100 % down to 40 % while the party was full, then ran dry when the damage started (Uldaman wipes; build-10 check: "shoot | no mana" ~23 s into a fight with the tank at 44 %). Vanilla healers have no Replenishment and live under the 5-second rule, so the donor's WotLK-tuned 40 % leaves too little.
+
+Validation: `tools/test_healer_mana_policy.cpp` (floor per tier, the Uldaman balance case); `bash tools/verify_all.sh`, `git diff --check`; build pending; in-game pending.
