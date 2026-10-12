@@ -573,23 +573,6 @@ bool NoThreatTrigger::IsActive()
     return true;
 }
 
-// Deliberate damage-breakable CC that an AoE would waste. The frozen state is
-// left out on purpose: Frost Nova sets it too, and nova + AoE is normal play.
-static bool HoldsBreakableCc(PlayerbotAI* ai, Unit* unit, Player* bot)
-{
-    if (!unit || PossibleAttackTargetsValue::HasIgnoreCCRti(unit, bot))
-        return false;
-
-    static char const* const breakableCc[] = { "sap", "gouge", "shackle undead", "hibernate",
-        "freezing trap effect", "seduction", "repentance", "wyvern sting" };
-    if (unit->IsPolymorphed())
-        return true;
-    for (char const* spell : breakableCc)
-        if (ai->HasAura(spell, unit))
-            return true;
-    return false;
-}
-
 bool AoeTrigger::IsActive()
 {
     std::list<ObjectGuid> aoeEnemies = AoeCountValue::FindMaxDensity(bot, range);
@@ -602,14 +585,14 @@ bool AoeTrigger::IsActive()
     // Splash counts too: a CCed mob beside the cluster still eats the blast.
     for (std::list<ObjectGuid>::iterator i = aoeEnemies.begin(); i != aoeEnemies.end(); ++i)
     {
-        if (HoldsBreakableCc(ai, ai->GetUnit(*i), bot))
+        if (PossibleAttackTargetsValue::HoldsBreakableCc(ai, ai->GetUnit(*i), bot))
             return false;
     }
     std::list<ObjectGuid> attackers = AI_VALUE(std::list<ObjectGuid>, "attackers");
     for (std::list<ObjectGuid>::iterator i = attackers.begin(); i != attackers.end(); ++i)
     {
         Unit* unit = ai->GetUnit(*i);
-        if (!HoldsBreakableCc(ai, unit, bot))
+        if (!PossibleAttackTargetsValue::HoldsBreakableCc(ai, unit, bot))
             continue;
         for (std::list<ObjectGuid>::iterator j = aoeEnemies.begin(); j != aoeEnemies.end(); ++j)
         {

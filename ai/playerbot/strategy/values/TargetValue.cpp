@@ -56,10 +56,21 @@ namespace
             // mob of an unpulled pack.
             if (!sServerFacade.IsInCombat(attacker))
                 return;
-            if (IsCcTarget(attacker))
+            if (IsCcMark(attacker))
                 result = attacker;
         }
     };
+
+    // Grace for a CC mark at the start of its fight: the CC bot gets this
+    // long (whole seconds of creature combat) to land its first CC before
+    // the mark counts as a free enemy.
+    constexpr time_t CcGraceSeconds = 3;
+    // A mob running in may be a few yards outside the CC spell's range.
+    constexpr float CcGraceRangeSlack = 5.0f;
+    // Cast-time CC a CC bot opens with on its mark (Sap and traps cannot
+    // hit a mob that is already fighting).
+    char const* const GraceCcSpells[] = { "polymorph", "shackle undead", "hibernate", "banish",
+        "fear", "scare beast" };
 }
 
 Unit* TargetValue::FindLastCcTarget()
@@ -86,13 +97,121 @@ bool FindNonCcTargetStrategy::OnlyCcMarksLeft(Unit* except)
         // (ignoreCC = true): crowd-controlled mobs stay in.
         if (!PossibleAttackTargetsValue::IsValid(unit, bot, sPlayerbotAIConfig.sightDistance, true, false))
             continue;
-        if (!IsCcTarget(unit))
+        if (!IsCcMark(unit))
             return false;
     }
     return true;
 }
 
+bool CcGuard::IsHeldCcMark(Unit* unit)
+{
+    if (!unit || !IsCcTarget(unit))
+        return false;
+    if (onlyMarksLeft < 0)
+        onlyMarksLeft = OnlyCcMarksLeft() ? 1 : 0;
+    return onlyMarksLeft == 0;
+}
+
+bool CcGuard::ProtectedEnemyNear(WorldObject* center, float radius, bool includeMarks)
+{
+    if (!center)
+        return false;
+    Player* bot = ai->GetBot();
+    std::list<ObjectGuid> attackers = ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid>>("attackers")->Get();
+    for (ObjectGuid const& guid : attackers)
+    {
+        Unit* unit = ai->GetUnit(guid);
+        if (!unit || !sServerFacade.IsAlive(unit) || !center->IsWithinDistInMap(unit, radius, false))
+            continue;
+        if (PossibleAttackTargetsValue::HoldsBreakableCc(ai, unit, bot))
+            return true;
+        if (includeMarks && IsHeldCcMark(unit))
+            return true;
+    }
+    return false;
+}
+
+bool FindNonCcTargetStrategy::IsCrowdControlled(PlayerbotAI* ai, Unit* unit)
+{
+    if (!unit)
+        return false;
+    return PossibleAttackTargetsValue::HoldsBreakableCc(ai, unit, ai->GetBot()) ||
+        sServerFacade.IsFeared(unit) || ai->HasAura("banish", unit);
+}
+
+bool FindNonCcTargetStrategy::IsCastingCcAt(Unit* caster, Unit* target)
+{
+    Spell* spell = caster ? caster->GetCurrentSpell(CURRENT_GENERIC_SPELL) : nullptr;
+    if (!spell || !spell->m_spellInfo || spell->m_targets.getUnitTarget() != target)
+        return false;
+    uint32 const ccMask = (1 << (MECHANIC_POLYMORPH - 1)) | (1 << (MECHANIC_BANISH - 1)) |
+        (1 << (MECHANIC_FEAR - 1)) | (1 << (MECHANIC_SLEEP - 1)) | (1 << (MECHANIC_KNOCKOUT - 1)) |
+        (1 << (MECHANIC_SHACKLE - 1));
+    return (spell->m_spellInfo->GetAllSpellMechanicMask() & ccMask) != 0;
+}
+
 bool FindNonCcTargetStrategy::IsCcTarget(Unit* attacker)
+{
+    // Mark first: the protection test only runs for the one or two marks.
+    return IsCcMark(attacker) && IsCcProtected(attacker);
+}
+
+bool FindNonCcTargetStrategy::IsCcProtected(Unit* unit)
+{
+    if (IsCrowdControlled(ai, unit))
+        return true;
+    // A mark of an unpulled pack stays untouched until the pull.
+    if (!sServerFacade.IsInCombat(unit))
+        return true;
+
+    Group* group = ai->GetBot()->GetGroup();
+    if (!group)
+        return false;
+
+    Creature* creature = unit->ToCreature();
+    bool const inGrace = creature && creature->GetCombatTime() <= CcGraceSeconds;
+
+    Group::MemberSlotList const& groupSlot = group->GetMemberSlots();
+    for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
+    {
+        Player* player = sObjectMgr.GetPlayer(itr->guid);
+        if (!player || !sServerFacade.IsAlive(player) || !ai->IsSafe(player) || player->GetMapId() != unit->GetMapId())
+            continue;
+
+        // The sheep is on its way: do not hit (or drop the target of) the
+        // mob under a group member's CC cast bar.
+        if (IsCastingCcAt(player, unit))
+            return true;
+
+        if (!inGrace)
+            continue;
+
+        // Start of the fight: the mark's CC bot (rti cc target, "cc" on)
+        // gets a moment to land the first CC if it knows a CC spell that
+        // fits the mob, ready and in reach.
+        PlayerbotAI* memberAi = PlayerbotAIStorage::Instance().GetAI(player);
+        if (!memberAi || !memberAi->HasStrategy("cc", BotState::BOT_STATE_COMBAT))
+            continue;
+        if (PAI_VALUE(Unit*, "rti cc target") != unit)
+            continue;
+        if (!player->IsWithinDistInMap(unit, memberAi->GetRange("spell") + CcGraceRangeSlack))
+            continue;
+        for (char const* spellName : GraceCcSpells)
+        {
+            uint32 spellId = PAI_VALUE2(uint32, "spell id", spellName);
+            if (!spellId || !memberAi->HasSpell(spellId) || player->HasSpellCooldown(spellId))
+                continue;
+            SpellEntry const* info = sServerFacade.LookupSpellInfo(spellId);
+            if (!info || (info->TargetCreatureType && !(info->TargetCreatureType & unit->GetCreatureTypeMask())))
+                continue;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool FindNonCcTargetStrategy::IsCcMark(Unit* attacker)
 {
     Group* group = ai->GetBot()->GetGroup();
     if (group)

@@ -109,6 +109,21 @@ bool PossibleAttackTargetsValue::HasIgnoreCCRti(Unit* target, Player* player)
     return group && (group->GetTargetIcon(7) == target->getObjectGuid());
 }
 
+bool PossibleAttackTargetsValue::HoldsBreakableCc(PlayerbotAI* ai, Unit* unit, Player* bot)
+{
+    if (!unit || HasIgnoreCCRti(unit, bot))
+        return false;
+
+    static char const* const breakableCc[] = { "sap", "gouge", "shackle undead", "hibernate",
+        "freezing trap effect", "seduction", "repentance", "wyvern sting" };
+    if (unit->IsPolymorphed())
+        return true;
+    for (char const* spell : breakableCc)
+        if (ai->HasAura(spell, unit))
+            return true;
+    return false;
+}
+
 bool PossibleAttackTargetsValue::HasBreakableCC(Unit* target, Player* player)
 {
     if (target->IsPolymorphed())

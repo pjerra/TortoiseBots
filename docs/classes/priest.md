@@ -59,7 +59,7 @@ Climbing toward the top of the threat table without holding aggro fires *Fade* a
 
 1. Activates and maintains *Shadowform*.
 2. Casts *Vampiric Embrace* to siphon damage into party healing.
-3. Applies and maintains *Shadow Word: Pain* (spread across attackers when AoE is on, plus *Devouring Plague* on attackers for undead priests).
+3. Applies and maintains *Shadow Word: Pain* (spread across attackers when AoE is on, skipping a held CC mark while other enemies fight, plus *Devouring Plague* on attackers for undead priests).
 4. Casts *Mind Blast* on cooldown.
 5. Channels *Mind Flay* as the primary filler, falling back to *Smite* then the wand when mana runs dry. A priest with the *Shadow Weaving* talent also raises *Mind Flay* above the normal rotation while the target carries no *Shadow Weaving* vulnerability (from any priest, at any stack count), to build the stacks; without the talent that boost never fires.
 6. Casts *Silence* to interrupt dangerous enemy casters, preferring enemy healers.

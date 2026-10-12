@@ -1,6 +1,7 @@
 
 #include "playerbot/playerbot.h"
 #include "SnareTargetValue.h"
+#include "TargetValue.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/ServerFacade.h"
 #include "Movement/TargetedMovementGenerator.h"
@@ -21,10 +22,17 @@ Unit* SnareTargetValue::Calculate()
 
     std::list<ObjectGuid> attackers = ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid>>("possible attack targets")->Get();
     Unit* target = ai->GetAiObjectContext()->GetValue<Unit*>("current target")->Get();
+    CcGuard ccGuard(ai);
     for (std::list<ObjectGuid>::iterator i = attackers.begin(); i != attackers.end(); ++i)
     {
         Unit* unit = ai->GetUnit(*i);
         if (!unit)
+            continue;
+
+        // A held CC mark (sheeped, under the CC cast bar or in its CC grace
+        // window) is the CC bot's job: a taunt or a damaging snare on it
+        // breaks the sheep. A free mark on the healer may be taunted.
+        if (ccGuard.IsHeldCcMark(unit))
             continue;
 
         if (sServerFacade.getDistance2d(bot, unit) > ai->GetRange("spell"))

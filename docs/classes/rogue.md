@@ -40,7 +40,7 @@ Rogues provide premier single-target melee physical DPS, invaluable pre-combat c
   - Interrupts are covered by *Kick* (*Cheap Shot* while stealthed); *Kidney Shot* is only a fallback when *Kick* cannot run.
 
 ### 3. Burst Cooldowns
-- Combat casts *Adrenaline Rush* and *Blade Flurry* during tough encounters or multi-mob pulls; Assassination fires *Cold Blood* and Subtlety fires *Preparation*.
+- Combat casts *Adrenaline Rush* and *Blade Flurry* during tough encounters or multi-mob pulls (never *Blade Flurry* or *Oil of Immolation* within 8 yd of a crowd-controlled mob or a CC mark still waiting for its sheep, since the cleave would break it); Assassination fires *Cold Blood* and Subtlety fires *Preparation*.
 - Activates *Evasion* on the low-health trigger (own HP in the low band), regardless of aggro source; when evasion is spent (5-minute cooldown, e.g. death loops), *Vanish* breaks combat instead of a solo-useless *Feint*, which stays last for grouped rogues with a tank to save.
 - Activates *Vanish* if health falls below 20% to wipe threat (after *Blind*).
 

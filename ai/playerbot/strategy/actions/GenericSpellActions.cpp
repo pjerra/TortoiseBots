@@ -6,7 +6,10 @@
 #include "playerbot/WandPolicy.h"
 #include "GenericActions.h"
 #include "UseItemAction.h"
+#include "playerbot/strategy/values/TargetValue.h"
+#include "Database/DBCStores.h"
 
+#include <algorithm>
 #include <map>
 #include <mutex>
 #include <utility>
@@ -15,6 +18,74 @@ using namespace ai;
 
 namespace
 {
+// True when `info` hits enemies in an area that would reach crowd control:
+// a mob in damage-breakable CC within the blast, or - for a lingering area
+// (ground effect, channel, area DoT) that outlasts the next sheep - a held
+// CC mark. The shape comes from the spell data (both implicit targets: Frost
+// Nova and Thunder Clap name the enemy area in target B): caster-centred
+// areas and cones use the caster (a cone is checked as a full circle),
+// ground/dest areas and chains the spell target. Single-target spells never
+// enter the loop over attackers, so the cost stays on area casts.
+bool BreaksCcInArea(PlayerbotAI* ai, Player* bot, SpellEntry const* info, Unit* spellTarget)
+{
+    if (!info || !spellTarget)
+        return false;
+
+    bool area = false;
+    bool atTarget = false;
+    float radius = 0.0f;
+    for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+    {
+        uint32 const targetA = info->EffectImplicitTargetA[i];
+        uint32 const targetB = info->EffectImplicitTargetB[i];
+        uint32 const enemyArea =
+            (targetA == TARGET_ENUM_UNITS_ENEMY_AOE_AT_SRC_LOC || targetA == TARGET_ENUM_UNITS_ENEMY_AOE_AT_DEST_LOC ||
+             targetA == TARGET_ENUM_UNITS_ENEMY_IN_CONE_24 || targetA == TARGET_ENUM_UNITS_ENEMY_AOE_AT_DYNOBJ_LOC ||
+             targetA == TARGET_ENUM_UNITS_ENEMY_WITHIN_CASTER_RANGE) ? targetA :
+            (targetB == TARGET_ENUM_UNITS_ENEMY_AOE_AT_SRC_LOC || targetB == TARGET_ENUM_UNITS_ENEMY_AOE_AT_DEST_LOC ||
+             targetB == TARGET_ENUM_UNITS_ENEMY_IN_CONE_24 || targetB == TARGET_ENUM_UNITS_ENEMY_AOE_AT_DYNOBJ_LOC ||
+             targetB == TARGET_ENUM_UNITS_ENEMY_WITHIN_CASTER_RANGE) ? targetB : 0;
+
+        float effectRadius = 0.0f;
+        if (SpellRadiusEntry const* radiusEntry = sSpellRadiusStore.LookupEntry(info->EffectRadiusIndex[i]))
+            effectRadius = radiusEntry->Radius;
+
+        if (enemyArea)
+        {
+            area = true;
+            // Dest/ground areas land on the spell target unless the dest is
+            // the caster itself (Consecration: A = caster dest, B = area).
+            if ((enemyArea == TARGET_ENUM_UNITS_ENEMY_AOE_AT_DEST_LOC || enemyArea == TARGET_ENUM_UNITS_ENEMY_AOE_AT_DYNOBJ_LOC) &&
+                targetA != TARGET_LOCATION_CASTER_SRC && targetA != TARGET_LOCATION_CASTER_DEST)
+                atTarget = true;
+            if (effectRadius <= 0.0f)
+                if (SpellRangeEntry const* rangeEntry = sSpellRangeStore.LookupEntry(info->rangeIndex))
+                    effectRadius = rangeEntry->maxRange;
+        }
+        else if (targetA == TARGET_UNIT_ENEMY && info->EffectChainTarget[i] > 1)
+        {
+            // Chains (Cleave, Chain Lightning, Multi-Shot) jump from the target.
+            area = true;
+            atTarget = true;
+            effectRadius = std::max(effectRadius, info->DmgClass == SPELL_DAMAGE_CLASS_MELEE ?
+                float(ATTACK_DISTANCE) : float(CHAIN_SPELL_JUMP_RADIUS));
+        }
+        else
+            continue;
+
+        radius = std::max(radius, effectRadius);
+    }
+
+    if (!area)
+        return false;
+
+    bool lingering = info->IsChanneledSpell() || info->HasEffect(SPELL_EFFECT_PERSISTENT_AREA_AURA) ||
+        info->HasAura(SPELL_AURA_PERIODIC_DAMAGE);
+
+    CcGuard ccGuard(ai);
+    return ccGuard.ProtectedEnemyNear(atTarget ? static_cast<WorldObject*>(spellTarget) : bot, radius, lingering);
+}
+
 bool CanInterruptCurrentSpell(Spell const* spell)
 {
     // The core has no CanBeInterrupted() helper, but its spell state is the
@@ -289,6 +360,12 @@ bool CastSpellAction::isUseful()
         return false;
 
     if (!spellTarget->IsInWorld() || spellTarget->GetMapId() != bot->GetMapId())
+        return false;
+
+    // Never splash crowd control: an enemy-area spell whose blast would reach
+    // a sheeped/sapped mob (or, for a lingering area, a CC mark about to be
+    // sheeped) is not cast.
+    if (BreaksCcInArea(ai, bot, sServerFacade.LookupSpellInfo(spellId), spellTarget))
         return false;
 
     return true;

@@ -3,6 +3,7 @@
 #include "GenericActions.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/RandomItemMgr.h"
+#include "playerbot/strategy/values/TargetValue.h"
 
 namespace ai
 {
@@ -354,7 +355,13 @@ namespace ai
         UseOilOfImmolationAction(PlayerbotAI* ai) : UseItemIdAction(ai, "oil of immolation") {}
         virtual bool isUseful() override
         {
-            return UseItemIdAction::isUseful() && bot->GetLevel() >= 31 && !ai->HasAura(11350, bot);
+            if (!UseItemIdAction::isUseful() || bot->GetLevel() < 31 || ai->HasAura(11350, bot))
+                return false;
+            // The oil burns every mob near the user for its whole duration:
+            // never start it beside a sheeped mob or a CC mark about to be
+            // sheeped (same rule as Blade Flurry).
+            CcGuard ccGuard(ai);
+            return !ccGuard.ProtectedEnemyNear(bot, 8.0f, true);
         }
 
         virtual uint32 GetItemId() override { return 8956; }
