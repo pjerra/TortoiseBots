@@ -288,6 +288,11 @@ public:
     // replaces green or better; never hired, claimed or player-led bots.
     // Default true.
     bool poolGearTopUpOnLevel = true;
+    // Level-up money top-up: a masterless pool bot that dings holding less
+    // than its next class-trainer visit costs (with the reserves the trip
+    // gate keeps aside, capped at 1 g per level) is topped up to that floor,
+    // once per level. Never hired, claimed or player-led bots. Default true.
+    bool poolMoneyTopUp = true;
     // Safety factor on the mount break-even distance: bots mount for travel
     // only when the remaining trip exceeds
     // 7 y/s * castTime / (mountSpeed/100) * this. 0 disables the threshold

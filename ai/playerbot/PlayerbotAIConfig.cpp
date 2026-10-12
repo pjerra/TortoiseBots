@@ -437,6 +437,7 @@ bool PlayerbotAIConfig::Initialize()
     turtleMountAtLevel = static_cast<uint32>(config.GetIntDefault("AiPlayerbot.TurtleMountAtLevel", 18));
     levelUpMounts = config.GetBoolDefault("AiPlayerbot.LevelUpMounts", true);
     poolGearTopUpOnLevel = config.GetBoolDefault("AiPlayerbot.PoolGearTopUpOnLevel", true);
+    poolMoneyTopUp = config.GetBoolDefault("AiPlayerbot.PoolMoneyTopUp", true);
     mountBreakEvenFactor = config.GetFloatDefault("AiPlayerbot.MountBreakEvenFactor", 1.5f);
     avoidHostileTowns = config.GetBoolDefault("AiPlayerbot.AvoidHostileTowns", true);
     unstuckHearthLevelFit = config.GetBoolDefault("AiPlayerbot.UnstuckHearthLevelFit", true);
