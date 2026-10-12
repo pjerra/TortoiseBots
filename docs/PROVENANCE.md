@@ -8241,3 +8241,31 @@ build pending; in-game pending.
 | Engine does not re-decide while a Polymorph cast bar runs | `mod-playerbots` @ 79bd428 `src/Bot/PlayerbotAI.cpp` (UpdateAI yields while the generic spell is `SPELL_STATE_PREPARING`); `src/Ai/Class/Mage/MageActions.h` (`CastPolymorphAction` is a plain CC cast action) | `ai/playerbot/strategy/mage/MageActions.h`, `commands/BotCommands.cpp` | Reimplemented narrowly: `CastPolymorphAction::Execute` now sets the cast time as its action duration like `CastSpellAction::Execute`; the `cc <mark>` order skips its forced extra decision while the CC cast runs. The global engine guard was not ported (it would also stop heal-interrupt decisions mid-cast). | Uldaman run: ~70 Polymorph starts in 17 s, no landed sheep on an engaged Moon mob | code review + build pending; in-game pending |
 | Stop CCing once only CC marks are left; tank/DPS kill CC marks last (judged from the raw `attackers` list, so CC'd unmarked mobs still count; only in-combat marks are picked) | Native (donor `DpsTargetValue`/`TankTargetValue` skip the Moon mark with no fallback, same stall) | `ai/playerbot/strategy/values/{CcTargetValue,TargetValue,DpsTargetValue,TankTargetValue}.{h,cpp}` | Native | Fight stalled ~25 s on a free Moon mob and on a sheeped last mob | code review + build pending; in-game pending |
 | Instance guard on map change (Issue #218, fix 72): a grouped pool bot drops its open-world non-combat kit (`grind`/`travel`/`tfish`/`rpg`/`rpg craft`, `wander` next to `follow`) on zoning into a dungeon or raid and gets back only what was dropped on leaving | `mod-playerbots` | `79bd4281` | `src/Bot/PlayerbotAI.cpp:847-877` (`HandleTeleportAck` far branch calls `ApplyInstanceStrategies(bot->GetMapId(), true)` right after the worldport ack), `:1712` (`ApplyInstanceStrategies`: targeted per-map strategy swap, no full reset), `conf/playerbots.conf.dist:1382` (empty `RandomBotNonCombatStrategies`) | Reimplemented, no code copied: the donor's arrival timing via the existing `BotPlayerAdapter::OnMapChanged` hook (`AiFactory::ApplyInstanceGuardOnMapChange`), as a targeted strip/restore instead of a reset. The donor ships an empty pool-bot non-combat list, so it has nothing to strip; TB ships a non-empty one, so it strips, records the removed set per bot (`PlayerbotAI::instanceGuardWithheld` bitmask, also set by a build inside the instance) and restores only that set, never `+wander` next to `follow` | Hired companions kept grind/rpg/travel/tfish from the open world through the instance portal until a `.bot role` rebuild (Uldaman, live run); player-removed strategies must survive the round trip (player control first) | `bash tools/verify_all.sh`; `git diff --check`. Code review + build pending; in-game pending |
+## Loot: abandon empty or refused loot windows (open-loot repeat) — 2026-10-12
+Feature: `StoreLootAction::Execute` (`ai/playerbot/strategy/actions/LootAction.cpp`)
+abandons the looted object on the loot stack's failure memory
+(`LootObjectStack::Abandon`, `ai/playerbot/LootObjectStack.{h,cpp}`) when the
+server refuses the window or the window gives the bot nothing (no item taken,
+no money). A window that does yield loot clears the memory
+(`LootObjectStack::ForgetFailures`). `OpenLootAction::Execute` also counts a
+successful open on that memory, so an open that never gets a window can repeat
+at most 3 times in 120 s.
+
+Source repository: `mod-playerbots` @ `79bd428` (local checkout
+`../playerbots-references/mod-playerbots`, read-only):
+`src/Ai/Base/Actions/LootAction.cpp` (`OpenLootAction::Execute` BeginLoot/DeferLoot,
+`StoreLootAction::Execute` RetryLoot on a LOOT_NONE answer) and
+`src/Mgr/Item/LootObjectStack.cpp` (`BeginLoot`/`LootOpened`/`CancelLoot`/`DeferLoot`,
+15 s pending window, exponential retry delay). Reimplemented, not copied: the
+donor behaviour (a loot that did not complete is held back for a while instead
+of being retried at once) is mapped onto the module's existing 3-strike /
+120 s failure memory instead of porting the donor's pending-loot state.
+
+Reason: Uldaman dungeon run (2026-10-12, P5). The prot tank showed
+`open loot` / `can loot` in 10 dashboard samples on the same spot between
+02:51:28 and 02:52:10 after taking its only item. The corpse stayed lootable
+for the core, so the `often` `add all loot` sweep re-queued it after each empty
+window.
+
+Validation: code review + `bash tools/verify_all.sh` + `git diff --check`;
+build pending; in-game pending.

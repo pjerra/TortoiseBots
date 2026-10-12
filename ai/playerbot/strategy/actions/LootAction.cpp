@@ -424,8 +424,10 @@ bool StoreLootAction::Execute(Event& event)
         sLog.outDebug("[BOT LOOT] %s: loot REJECTED guid=%lu error=%u (%s)",
             bot->GetName(), guid.GetRawValue(), lootError, errName);
 
-        // Drop the corpse so the bot stops retrying a loot the server won't grant.
-        AI_VALUE(LootObjectStack*, "available loot")->Remove(guid);
+        // Drop the corpse so the bot stops retrying a loot the server won't grant. Abandon it
+        // rather than just unqueue it: the core still shows it lootable, so "add all loot"
+        // re-queued it on the next sweep and the refused open repeated on the same spot.
+        AI_VALUE(LootObjectStack*, "available loot")->Abandon(guid);
         RESET_AI_VALUE(LootObject, "loot target");
         return false;
     }
@@ -565,12 +567,13 @@ bool StoreLootAction::Execute(Event& event)
         BroadcastHelper::BroadcastLootingItem(ai, bot, proto, itemQualifier);
     }
 
-    // The open paid out: forget the attempts OpenLootAction counted on this object. A window
-    // that yields nothing (refused, or no room for anything in it) keeps its count, so an
-    // object that is re-queued and re-opened without ever paying out is abandoned.
-    if (itemsTaken || gold)
+    // A window that gave this bot nothing (every item blocked by a roll, view-only, not
+    // wanted, or no bag room) leaves the corpse lootable for the core: abandon it so the
+    // next "add all loot" sweep does not re-queue it and re-open the same empty window.
+    if (itemsTaken == 0 && gold == 0)
+        AI_VALUE(LootObjectStack*, "available loot")->Abandon(guid);
+    else
         AI_VALUE(LootObjectStack*, "available loot")->ForgetFailures(guid);
-
     AI_VALUE(LootObjectStack*, "available loot")->Remove(guid);
     RESET_AI_VALUE(LootObject, "loot target");
     RESET_AI_VALUE2(bool, "should loot object", std::to_string(guid.GetRawValue()));

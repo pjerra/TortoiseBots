@@ -501,6 +501,19 @@ void LootObjectStack::NoteApproachFailure(ObjectGuid guid)
     entry.second = now;
 }
 
+void LootObjectStack::Abandon(ObjectGuid guid)
+{
+    std::pair<uint32, time_t>& entry = approachFailures[guid];
+    entry.first = MAX_APPROACH_FAILURES;
+    entry.second = time(0);
+    Remove(guid);
+}
+
+void LootObjectStack::ForgetFailures(ObjectGuid guid)
+{
+    approachFailures.erase(guid);
+}
+
 bool LootObjectStack::IsAbandoned(ObjectGuid guid)
 {
     std::map<ObjectGuid, std::pair<uint32, time_t> >::iterator i = approachFailures.find(guid);
@@ -514,11 +527,6 @@ bool LootObjectStack::IsAbandoned(ObjectGuid guid)
     }
 
     return i->second.first >= MAX_APPROACH_FAILURES;
-}
-
-void LootObjectStack::ForgetFailures(ObjectGuid guid)
-{
-    approachFailures.erase(guid);
 }
 
 bool LootObjectStack::Add(ObjectGuid guid)
