@@ -78,10 +78,12 @@ namespace ai
     // 70 instead of 40. A full 5-man against one or two elites lands in that
     // tier, and a vanilla healer (5-second rule, no Replenishment) that nukes
     // down to 40 % runs dry on the first real damage (Uldaman / build-10:
-    // "shoot | no mana" ~23 s into a fight, tank at 44 %). The 85 and 65
-    // tiers stay on the donor values.
+    // "shoot | no mana" ~23 s into a fight, tank at 44 %). The even tier is
+    // raised from 65 to 70 as well (controller ruling 2026-10-12) so the
+    // ladder stays monotonic: a harder fight never allows a lower reserve
+    // than an easier one. The hard tier stays on the donor's 85.
     constexpr std::uint8_t HEALER_DPS_MANA_FLOOR_HARD_FIGHT = 85;
-    constexpr std::uint8_t HEALER_DPS_MANA_FLOOR_EVEN_FIGHT = 65;
+    constexpr std::uint8_t HEALER_DPS_MANA_FLOOR_EVEN_FIGHT = 70;
     constexpr std::uint8_t HEALER_DPS_MANA_FLOOR_EASY_FIGHT = 70;
 
     inline std::uint8_t HealerDpsManaFloor(std::uint8_t balance)

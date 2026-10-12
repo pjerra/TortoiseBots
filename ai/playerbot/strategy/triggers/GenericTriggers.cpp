@@ -72,8 +72,8 @@ bool HealerShouldAttackTrigger::IsActive()
         return true;
 
     // Balance-scaled reserve (HealerManaPolicy.h): hard fights (low balance)
-    // keep 85 %, even ones 65 %, easy ones 70 % - the easy tier deliberately
-    // above the donor's 40 % (owner decision 2026-10-12).
+    // keep 85 %, even and easy ones 70 % - deliberately above the donor's
+    // 65 % / 40 % (owner decision 2026-10-12).
     return HealerDpsManaAllows(AI_VALUE2(bool, "has mana", "self target"),
         AI_VALUE2(uint8, "mana", "self target"), AI_VALUE(uint8, "balance"));
 }
