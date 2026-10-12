@@ -622,6 +622,7 @@ public:
             (actionName == "shred") ||
             (actionName == "food") ||
             (actionName == "drink") ||
+            (actionName == "bg leave") || // leaving a finished battleground, as for rogues
             (actionName == "dps assist") ||
             (actionName == "select new target") ||
             (actionName == "follow") ||

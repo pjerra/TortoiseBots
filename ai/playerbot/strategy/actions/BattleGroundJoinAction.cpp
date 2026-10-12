@@ -57,9 +57,20 @@ bool BGLeaveAction::Execute(Event& event)
 
     if (bot->InBattleGround())
     {
-        WorldPacket packet(CMSG_LEAVE_BATTLEFIELD);
-        packet << uint8(0) << uint8(0) << uint16(0);
+        // The 1.12 CMSG_LEAVE_BATTLEFIELD body is one uint32, the map id, and the core
+        // drops the request unless it is the player's own map
+        // (WorldSession::HandleLeaveBattlefieldOpcode). The old body was four zero bytes,
+        // i.e. map 0, so no leave ever went through: after a match every bot stayed
+        // until the core's end timer ported it out, some still fighting.
+        WorldPacket packet(CMSG_LEAVE_BATTLEFIELD, 4);
+        packet << uint32(bot->GetMapId());
         bot->GetSession()->HandleLeaveBattlefieldOpcode(packet);
+
+        // The core refuses a leave in combat while the match is still running. Keep the
+        // battleground strategies then: resetting them while still inside only made the
+        // next tick put them back ("update pvp strats" churn).
+        if (bot->InBattleGround())
+            return false;
     }
     else
     {

@@ -4,6 +4,18 @@
 
 using namespace ai;
 
+// Leave as soon as the match is over. Above "attack enemy player" and "invalid
+// target" (ACTION_EMERGENCY): once the result is in, nothing is worth staying for,
+// and the core accepts a leave in combat at that point (STATUS_WAIT_LEAVE). The
+// combat engine needs the node as well, or a bot still fighting at the end stayed
+// until the core's own end timer ported it out, about two minutes later.
+static void AddBgLeaveTrigger(std::list<TriggerNode*>& triggers)
+{
+    triggers.push_back(new TriggerNode(
+        "bg ended",
+        NextAction::array(0, new NextAction("bg leave", ACTION_EMERGENCY + 5), NULL)));
+}
+
 void BattlegroundStrategy::InitNonCombatTriggers(std::list<TriggerNode*> &triggers)
 {
     triggers.push_back(new TriggerNode(
@@ -28,9 +40,7 @@ void BattlegroundStrategy::InitNonCombatTriggers(std::list<TriggerNode*> &trigge
         "bg active",
         NextAction::array(0, new NextAction("bg check flag", ACTION_HIGH), NULL)));
 
-    triggers.push_back(new TriggerNode(
-        "bg ended",
-        NextAction::array(0, new NextAction("bg leave", ACTION_HIGH), NULL)));
+    AddBgLeaveTrigger(triggers);
 
     /*triggers.push_back(new TriggerNode(
         "enemy flagcarrier near",
@@ -102,6 +112,7 @@ void WarsongStrategy::InitNonCombatTriggers(std::list<TriggerNode*> &triggers)
 void WarsongStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 {
     InitNonCombatTriggers(triggers);
+    AddBgLeaveTrigger(triggers);
 }
 
 void AlteracStrategy::InitNonCombatTriggers(std::list<TriggerNode*> &triggers)
@@ -119,6 +130,8 @@ void AlteracStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode(
         "very often",
         NextAction::array(0, new NextAction("bg banner", ACTION_NORMAL), NULL)));
+
+    AddBgLeaveTrigger(triggers);
 }
 
 void ArathiStrategy::InitNonCombatTriggers(std::list<TriggerNode*> &triggers)
@@ -147,4 +160,5 @@ void ArathiStrategy::InitNonCombatTriggers(std::list<TriggerNode*> &triggers)
 void ArathiStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 {
     InitNonCombatTriggers(triggers);
+    AddBgLeaveTrigger(triggers);
 }
