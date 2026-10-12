@@ -62,6 +62,7 @@ namespace ai
     {
     public:
         AddGatheringLootAction(PlayerbotAI* ai) : AddAllLootAction(ai, "add gathering loot") {}
+        virtual bool isUseful() override;
 
     private:
         bool AddLoot(Player* requester, ObjectGuid guid) override;

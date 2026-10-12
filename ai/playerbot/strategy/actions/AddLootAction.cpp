@@ -5,6 +5,7 @@
 #include "playerbot/LootObjectStack.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/ServerFacade.h"
+#include "playerbot/TravelInstancePolicy.h"
 
 #include "Maps/GridNotifiers.h"
 #include "Maps/GridNotifiersImpl.h"
@@ -234,6 +235,19 @@ bool AddAllLootAction::AddLoot(Player* requester, ObjectGuid guid)
     sLog.outDebug("[BOT LOOT] %s: AddLoot queued guid=%lu (botDist=%.1f masterDist=%.1f cap=%.1f added=%d)",
         bot->GetName(), guid.GetRawValue(), botDist, masterDist, lootDistanceToUse, added ? 1 : 0);
     return added;
+}
+
+bool AddGatheringLootAction::isUseful()
+{
+    // The automatic node sweep stands down for a companion inside a dungeon or raid
+    // (TravelInstancePolicy.h, same rule as travel #388). Map check first: the master
+    // lookup is the dearer half and the open world is the common case.
+    Map* map = bot->GetMap();
+    bool const inInstance = map && (map->IsDungeon() || map->IsRaid());
+    if (inInstance && GatherSweepBlockedByInstance(ai->HasRealPlayerMaster(), inInstance))
+        return false;
+
+    return AddAllLootAction::isUseful();
 }
 
 bool AddGatheringLootAction::AddLoot(Player* requester, ObjectGuid guid)

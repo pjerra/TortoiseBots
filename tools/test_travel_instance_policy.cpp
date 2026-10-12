@@ -27,6 +27,13 @@ int main()
     CHECK(!TravelSelectionBlockedByInstance(false, true));
     CHECK(!TravelSelectionBlockedByInstance(false, false));
 
+    // The gather sweep follows the same rule: a companion stops sweeping for
+    // nodes inside an instance, everyone else is unchanged.
+    CHECK(ai::GatherSweepBlockedByInstance(true, true));
+    CHECK(!ai::GatherSweepBlockedByInstance(true, false));
+    CHECK(!ai::GatherSweepBlockedByInstance(false, true));
+    CHECK(!ai::GatherSweepBlockedByInstance(false, false));
+
     std::cout << "travel instance policy: OK\n";
     return 0;
 }

@@ -20,4 +20,15 @@ namespace ai
     {
         return hasRealPlayerMaster && inInstanceMap;
     }
+
+    // Same rule for the "gather" strategy's automatic node sweep ("add gathering
+    // loot"): a companion inside a dungeon or raid follows its player, and every
+    // node there sits next to a pack until it is cleared, so the sweep only
+    // scanned, refused ("X is blocking Iron Deposit") and scanned again (Uldaman
+    // run). A player's own loot order ("loot", optionally with a node link) is a
+    // different action and keeps working; masterless bots are unchanged.
+    inline bool GatherSweepBlockedByInstance(bool hasRealPlayerMaster, bool inInstanceMap)
+    {
+        return TravelSelectionBlockedByInstance(hasRealPlayerMaster, inInstanceMap);
+    }
 }
