@@ -12,6 +12,7 @@
 #include "strategy/IterateItemsMask.h"
 #include "BotDiagnostics.h"
 #include "playerbot/DeathClusterPolicy.h"
+#include "playerbot/GatherSpotPolicy.h"
 #include "playerbot/SurvivePolicy.h"
 #include "../../runtime/BotManager.h"
 
@@ -830,6 +831,20 @@ public:
     bool IsErrandParked(uint32 purposeId, int32 entry, uint32 nowMs) const
     {
         return ai::IsErrandParked(purposeId, entry, nowMs, errandParks_, ai::kErrandParkSlots);
+    }
+    // Gather spawn points this bot reached and saw empty (GatherSpotPolicy.h),
+    // kept for about a respawn so the next mining/herbalism pick walks to
+    // another spawn instead of back to this one. Pool bots only fill it (the
+    // TravelTarget gather expiry); plain data, no world lookup.
+    ai::DeathAvoidSpot emptyGatherSpots_[ai::kEmptyGatherSpots] = {};
+    void MarkEmptyGatherSpot(uint32 mapId, float x, float y, uint32 nowMs)
+    {
+        ai::AddDeathAvoidSpot(emptyGatherSpots_, ai::kEmptyGatherSpots, mapId, x, y, nowMs,
+            ai::kEmptyGatherSpotMs, ai::kEmptyGatherSpotRadiusYd);
+    }
+    bool IsEmptyGatherSpot(uint32 mapId, float x, float y, uint32 nowMs) const
+    {
+        return ai::IsDeathPositionAvoided(mapId, x, y, nowMs, emptyGatherSpots_, ai::kEmptyGatherSpots);
     }
     // A player (usually another random bot) that killed this bot recently: name +
     // expiry. While set, the victim does not proactively engage that killer

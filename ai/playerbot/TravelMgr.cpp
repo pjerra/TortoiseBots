@@ -1228,6 +1228,21 @@ bool TravelTarget::IsDestinationActive()
     if (!PlayerbotAIStorage::Instance().GetAI(player)) //No ai so clear target.
         return false;
 
+    // A gather trip is judged at its own spawn point (GatherSpotPolicy.h).
+    // The destination verdict looks at whichever spawn of the entry is
+    // nearest, so passing within sight of another, empty spawn of the same
+    // node ended the trip half way (live 2026-10-12: median gather trip 48 s,
+    // 47 bots ping-ponging node types). Until the bot sees its own point only
+    // the static rules (skill, level) apply.
+    TravelDestinationPurpose const purpose = tDestination->GetPurpose();
+    if (wPosition && (purpose == TravelDestinationPurpose::GatherMining || purpose == TravelDestinationPurpose::GatherHerbalism))
+    {
+        bool const sameMap = wPosition->GetMapId() == player->GetMapId();
+        WorldPosition const playerPos(player);
+        if (!ai::GatherPointInSight(sameMap, sameMap ? wPosition->distance(playerPos) : 0.0f, sPlayerbotAIConfig.sightDistance))
+            return tDestination->IsPossible(PlayerTravelInfo(player));
+    }
+
     return tDestination->IsActive(player, PlayerTravelInfo(player));
 }
 
@@ -1392,6 +1407,13 @@ void TravelTarget::CheckStatus()
                  tDestination->GetPurpose() == TravelDestinationPurpose::GatherHerbalism))
             {
                 ai->TellDebug(ai->GetMaster(), "The target is expiring because its gather node is gone.", "debug travel");
+                // Remember the spawn point seen empty for about a respawn, so
+                // the next pick walks another spawn instead of back to this
+                // one. Only a point the bot could see (an expiry on skill or
+                // level alone says nothing about the node).
+                if (wPosition && wPosition->GetMapId() == bot->GetMapId() &&
+                    ai::GatherPointInSight(true, wPosition->distance(WorldPosition(bot)), sPlayerbotAIConfig.sightDistance))
+                    ai->MarkEmptyGatherSpot(wPosition->GetMapId(), wPosition->getX(), wPosition->getY(), WorldTimer::getMSTime());
                 forced = false;
                 SetStatus(TravelStatus::TRAVEL_STATUS_EXPIRED);
                 return;

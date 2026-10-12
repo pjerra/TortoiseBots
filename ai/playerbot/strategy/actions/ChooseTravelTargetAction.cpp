@@ -1252,6 +1252,20 @@ ai::TravelPickOutcome ChooseTravelTargetAction::SetBestTargetSliced(Player* requ
                         continue;
                     }
 
+                    // Empty gather spawn (GatherSpotPolicy.h): a mining or
+                    // herbalism point this bot reached and saw empty stays
+                    // refused for about a respawn, so the next spawn of the
+                    // node wins instead of the walk back to the same one.
+                    if ((destination->GetPurpose() == TravelDestinationPurpose::GatherMining ||
+                         destination->GetPurpose() == TravelDestinationPurpose::GatherHerbalism) &&
+                        ai->IsEmptyGatherSpot(position->GetMapId(), position->getX(), position->getY(), WorldTimer::getMSTime()))
+                    {
+                        ai->TellDebug(requester, "Skipping " + destination->GetTitle() + " - spawn seen empty", "debug travel");
+                        ++rejects["emptynode"];
+                        if (slicing) scan.verdicts[{ destination, position }] = PICK_VERDICT_REJECT;
+                        continue;
+                    }
+
                     std::string blocker;
                     // The 1000 yd bypass inside RouteIsSurvivable skips exactly
                     // the trips a beginner makes - starter-zone takers and
