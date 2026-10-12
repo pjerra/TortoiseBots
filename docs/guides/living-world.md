@@ -173,6 +173,7 @@ Organic buyer (issue #405, no buyer teleport): the synthetic buyer bids only wit
 * Your bots **auto-accept the BG invite** (`STATUS_WAIT_JOIN` → port) through the same `bg status` packet action random bots use, then drop `follow` and run the per-map BG strategies (`warsong`/`arathi`/`alterac` + `pvp`) for the duration of the match.
 * **Healers stay healers in a battleground** (pool and party bots alike): a Holy/Discipline priest, Restoration shaman or druid and Holy paladin keep their talent spec in combat, with the BG objective and `pvp` strategies on top, so each team brings its healers. A `+dps` in `AiPlayerbot.RandomBotCombatStrategies` or `AiPlayerbot.CombatStrategies` cannot swap a healer onto a damage spec there; a stored `.bot strategy` change or a forced role (`.bot role`) still wins.
 * The auto-queue service never touches your party bots: master-reclaim reconciliation and lease eviction only cancel queue entries the service itself queued, and human-demand accounting counts only non-headless real players — your bots (or random fill bots) never create fake demand.
+* **Warsong Gulch team roles** (`AiPlayerbot.WsgFlagRoles`, off by default): with the default `0`, bots on a team with a real player patrol mid-field and leave the enemy flag to the human, and no bot guards the own flag room. Set `1` to split each team's bots into attackers (go for the enemy flag), defenders (hold the own flag room) and mid/escort, also when you are on the team. See [Configuration Tuning](configuration-tuning.md).
 
 ---
 
