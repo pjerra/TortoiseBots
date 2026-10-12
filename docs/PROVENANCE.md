@@ -8234,3 +8234,9 @@ Moon-marked Defias and never Sapped.
 
 Local validation: code review + `bash tools/verify_all.sh` + `git diff --check`;
 build pending; in-game pending.
+## Polymorph cast held through its cast bar; CC marks killed last (2026-10-12)
+
+| Feature | Source | Files | Mode | Reason | Validation |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| Engine does not re-decide while a Polymorph cast bar runs | `mod-playerbots` @ 79bd428 `src/Bot/PlayerbotAI.cpp` (UpdateAI yields while the generic spell is `SPELL_STATE_PREPARING`); `src/Ai/Class/Mage/MageActions.h` (`CastPolymorphAction` is a plain CC cast action) | `ai/playerbot/strategy/mage/MageActions.h`, `commands/BotCommands.cpp` | Reimplemented narrowly: `CastPolymorphAction::Execute` now sets the cast time as its action duration like `CastSpellAction::Execute`; the `cc <mark>` order skips its forced extra decision while the CC cast runs. The global engine guard was not ported (it would also stop heal-interrupt decisions mid-cast). | Uldaman run: ~70 Polymorph starts in 17 s, no landed sheep on an engaged Moon mob | code review + build pending; in-game pending |
+| Never CC the last enemy; tank/DPS kill CC marks last | Native (donor `DpsTargetValue`/`TankTargetValue` skip the Moon mark with no fallback, same stall) | `ai/playerbot/strategy/values/{CcTargetValue,TargetValue,DpsTargetValue,TankTargetValue}.{h,cpp}` | Native | Fight stalled ~25 s on a free Moon mob and on a sheeped last mob | code review + build pending; in-game pending |

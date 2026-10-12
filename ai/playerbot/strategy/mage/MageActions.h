@@ -256,7 +256,21 @@ namespace ai
             if (bot->HasSpell(28272))
                 polySpells.push_back("polymorph: pig");
 
-            return ai->CastSpell(polySpells[urand(0, polySpells.size() - 1)], GetTarget());
+            Unit* target = GetTarget();
+            if (!target)
+                return false;
+
+            // Same contract as CastSpellAction::Execute: the action duration
+            // is the cast time, so the engine sleeps through the cast bar.
+            // The old wait-for-spell cast left the default 100 ms duration,
+            // the engine woke mid-cast, another action cancelled the sheep and
+            // the trigger restarted it (4-5 Polymorph starts a second).
+            uint32 spellDuration = sPlayerbotAIConfig.globalCoolDown;
+            bool executed = ai->CastSpell(polySpells[urand(0, polySpells.size() - 1)], target, nullptr, false, &spellDuration);
+            if (executed)
+                SetDuration(spellDuration);
+
+            return executed;
         }
     };
 

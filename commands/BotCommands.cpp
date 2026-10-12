@@ -2954,7 +2954,10 @@ static bool HandleAction(ChatHandler* handler, char const* args)
                 // non-combat engine and drop it.
                 ai->DoNextAction(false, true);
             }
-            else
+            // While the CC cast bar runs, a forced decision can only cancel
+            // it (the order's one Polymorph start never landed); the cast's
+            // action duration already schedules the next decision.
+            else if (!executor->IsNonMeleeSpellCasted(false, true, true))
                 ExecuteQuietNextAction(ai, true);
         }
 

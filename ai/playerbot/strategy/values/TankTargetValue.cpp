@@ -141,5 +141,8 @@ Unit* TankTargetValue::Calculate()
     }
 
     FindTankTargetSmartStrategy strategy(ai);
-    return FindTarget(&strategy);
+    if (Unit* target = FindTarget(&strategy))
+        return target;
+    // Only CC-marked mobs left: pick the last one up instead of idling.
+    return FindLastCcTarget();
 }

@@ -41,6 +41,29 @@ Unit* TargetValue::GetExplicitAttackTarget()
     return target;
 }
 
+namespace
+{
+    class FindLastCcTargetStrategy : public FindNonCcTargetStrategy
+    {
+    public:
+        FindLastCcTargetStrategy(PlayerbotAI* ai) : FindNonCcTargetStrategy(ai) {}
+
+        void CheckAttacker(Unit* attacker, ThreatManager* /*threatManager*/) override
+        {
+            if (result || !attacker || attacker->IsPlayer() || !sServerFacade.IsAlive(attacker))
+                return;
+            if (IsCcTarget(attacker))
+                result = attacker;
+        }
+    };
+}
+
+Unit* TargetValue::FindLastCcTarget()
+{
+    FindLastCcTargetStrategy strategy(ai);
+    return FindTarget(&strategy);
+}
+
 bool FindNonCcTargetStrategy::IsCcTarget(Unit* attacker)
 {
     Group* group = ai->GetBot()->GetGroup();

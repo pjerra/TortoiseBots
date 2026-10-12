@@ -61,6 +61,10 @@ namespace ai
         // to preserve that commitment while the normal combat engine catches
         // up and creates threat.
         Unit* GetExplicitAttackTarget();
+        // Kill-last fallback for the tank/DPS pickers: once only CC-marked
+        // mobs (Moon or a bot's assigned "rti cc" mark) are left, sheeped or
+        // free, the first live one is the target instead of none.
+        Unit* FindLastCcTarget();
     };
 
     class RpgTargetValue : public ManualSetValue<GuidPosition>

@@ -87,7 +87,7 @@ Every bot starts with **Moon** as its CC mark, whatever its class. The table bel
 * **Rogue Sap before the pull:** out of combat a rogue (with you as its master) stealths and Saps the humanoid carrying its mark, so mark first, wait for the Sap, then pull. Nothing waits for the Sap automatically.
 * Dismiss with `.bot action cc clear` (targeted bot, or the whole owned party when untargeted).
 * **Dungeon rule:** inside non-raid dungeons bots CC only their assigned mark; in the open world they may CC a free pick. Bots never CC over an existing CC, and AoE triggers refuse packs holding a breakable CC.
-* **Automatic Discipline:** Once applied, party bots and pets are strictly blocked from attacking the crowd-controlled target until all other active threats are dead.
+* **Automatic Discipline:** Once applied, party bots and pets are strictly blocked from attacking the crowd-controlled target until all other active threats are dead. Then the marked mob is killed last: when only CC-marked mobs are left (sheeped, or free because the CC never landed), the tank and DPS pick it up, and the CC bot does not re-CC the last enemy.
 
 ---
 

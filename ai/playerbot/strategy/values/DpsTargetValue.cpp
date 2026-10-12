@@ -321,19 +321,27 @@ Unit* DpsTargetValue::Calculate()
     // (DpsTargetValue.cpp:281-295); small groups always run the general pick.
     unsigned nearCount = NearGroupCount(ai, bot);
     float groupDps = AI_VALUE(float, "estimated group dps");
+    // Every tournament skips the CC marks; when they are all that is left,
+    // the marked mob is killed last instead of never (FindLastCcTarget).
     if (nearCount > 3 && IsCasterBot(ai, bot))
     {
         CasterDpsStrategy strategy(ai, groupDps);
-        return TargetValue::FindTarget(&strategy);
+        if (Unit* target = TargetValue::FindTarget(&strategy))
+            return target;
+        return FindLastCcTarget();
     }
     if (nearCount > 3 && IsComboBot(ai, bot))
     {
         ComboDpsStrategy strategy(ai, groupDps);
-        return TargetValue::FindTarget(&strategy);
+        if (Unit* target = TargetValue::FindTarget(&strategy))
+            return target;
+        return FindLastCcTarget();
     }
 
     GeneralDpsStrategy strategy(ai, groupDps);
-    return TargetValue::FindTarget(&strategy);
+    if (Unit* target = TargetValue::FindTarget(&strategy))
+        return target;
+    return FindLastCcTarget();
 }
 
 class FindMaxHpTargetStrategy : public FindTargetStrategy
