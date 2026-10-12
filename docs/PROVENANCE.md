@@ -8778,3 +8778,32 @@ covering its hold/lapse matrix. Also touches
 
 Validation: `tools/test_four_horsemen_rotation_policy.cpp` + code review;
 build pending; in-game pending.
+
+## Feral druid prowl lock out of combat (2026-10-12)
+
+Donor: mod-playerbots (`79bd428`): `src/Ai/Class/Druid/Strategy/CatDruidStrategy.cpp`
+(`prowl` trigger → `prowl` action, combat triggers only),
+`src/Ai/Class/Druid/Action/DruidCatActions.h` (`CastProwlAction` is a plain
+buff; `ravage`/`pounce` gate on the prowl aura), `src/Ai/Class/Druid/DruidTriggers.cpp`
+(`ProwlTrigger`). The donor has no action whitelist while prowling, in or out
+of combat.
+
+Source files (module): `ai/playerbot/strategy/druid/DpsFeralDruidStrategy.cpp`
+(`DpsFeralDruidStealthedStrategy::InitNonCombatMultipliers` now installs no
+multiplier), `ai/playerbot/strategy/druid/DruidActions.h` (`DruidStealthAction`
+and `CheckStealthAction` add `stealthed` to the combat engine only; removal
+still clears both engines).
+
+Copied / ported / reimplemented: reimplemented behaviour (out of combat a
+prowling druid acts as if not prowling). Kept: the in-combat `stealthed`
+whitelist (openers, BG play), unlike the donor.
+
+Reason: fix 138 / audit batch 9 item 1. The druid non-combat engine has no
+`stealth` strategy, so no `check stealth`/`unstealth` trigger runs there, yet
+prowl added the `stealthed` whitelist to it. A druid that left combat prowling
+could only eat/drink/assist; once healed it stood still (last action `food`,
+trigger `almost full health`) until `RandomBotStallRelogMinutes` (45 min).
+m910q: Nalcraecrur frozen 100/100 samples with `stealthed` in its non-combat
+list; Zararkorn and Tharorcush STUCK on `food` ~2700 s.
+
+Validation: code review + build pending; in-game pending.

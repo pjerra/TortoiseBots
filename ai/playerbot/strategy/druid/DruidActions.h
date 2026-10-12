@@ -496,8 +496,9 @@ namespace ai
         {
             if (ai->CastSpell("prowl", bot))
             {
+                // Combat engine only: out of combat a prowling druid keeps its
+                // normal non-combat actions (see DpsFeralDruidStealthedStrategy).
                 ai->ChangeStrategy("+stealthed", BotState::BOT_STATE_COMBAT);
-                ai->ChangeStrategy("+stealthed", BotState::BOT_STATE_NON_COMBAT);
                 bot->InterruptSpell(CURRENT_MELEE_SPELL);
             }
 
@@ -537,7 +538,6 @@ namespace ai
             if (isStealthed && !hasStealthStrategy)
             {
                 ai->ChangeStrategy("+stealthed", BotState::BOT_STATE_COMBAT);
-                ai->ChangeStrategy("+stealthed", BotState::BOT_STATE_NON_COMBAT);
                 return true;
             }
             else if (!isStealthed && hasStealthStrategy)

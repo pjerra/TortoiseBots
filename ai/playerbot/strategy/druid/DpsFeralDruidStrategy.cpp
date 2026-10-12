@@ -658,7 +658,11 @@ void DpsFeralDruidStealthedStrategy::InitCombatMultipliers(std::list<Multiplier*
 
 void DpsFeralDruidStealthedStrategy::InitNonCombatMultipliers(std::list<Multiplier*>& multipliers)
 {
-    DpsFeralDruidStealthedStrategy::InitCombatMultipliers(multipliers);
+    // No whitelist out of combat. The druid non-combat engine has no "stealth"
+    // strategy, so nothing there ever runs "check stealth" or "unstealth": a druid
+    // that left combat while prowling kept this whitelist, which blocks travel,
+    // grind and rpg, and stood still until the stall relog (~45 min). Prowl only
+    // gates combat openers, as in mod-playerbots, where prowl is a plain buff.
 }
 
 void DpsFeralDruidPowershiftStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
