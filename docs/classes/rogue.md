@@ -29,6 +29,7 @@ Rogues provide premier single-target melee physical DPS, invaluable pre-combat c
   - *Cheap Shot* for lockdown stuns on dangerous casters.
   - *Ambush* (Daggers) or *Garrote* (Bleed) for initial damage.
   - *Sap* before the pull: when the rogue's CC mark (Moon unless `.bot action cc <mark>` changed it) sits on a humanoid that is not in combat, a rogue whose master is a real player stealths, walks to a spot about 2.5 yd from the mob's edge on its own side (a point move, not a melee chase, so no auto-attack and no bump into the mob's stealth detection) and Saps it while the party is still out of combat. Pool bots without a real player never do this. On by default; `.bot action sap off [bot]` turns it off (`sap on` back on, bare `sap` toggles). `off` adds the non-combat opt-out strategy `no sap` (listed by `nc ?`) and `on` removes it; it is saved with the bot like the loot toggle.
+- In battlegrounds a stealthed rogue still takes enemy-player orders: it sneaks up to the player in stealth and opens from there, and it keeps playing the objectives (flag, carrier, move to objective) while stealthed.
 
 ### 2. Combo Points & Finisher Priority
 - **Generator:** Uses *Sinister Strike* (Swords) or *Backstab* (Daggers), or *Hemorrhage* (Subtlety).

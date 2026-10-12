@@ -17,7 +17,8 @@ namespace ai
         static bool IsValid(Unit* target, Player* player);
 
     private:
-        void ApplyFilter(std::list<ObjectGuid>& targets, bool getOne);
+        void ApplyFilter(std::list<ObjectGuid>& targets, bool getOne, bool proximityScan = false);
+        bool CanEngageFromHere(Unit* target) const;
     };
 
     class HasEnemyPlayersValue : public BoolCalculatedValue, public Qualified

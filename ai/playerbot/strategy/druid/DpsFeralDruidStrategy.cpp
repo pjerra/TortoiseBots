@@ -632,6 +632,15 @@ public:
             (actionName == "set dead state") ||
             (actionName == "update pvp strats") ||
             (actionName == "update pve strats") ||
+            // Battleground play, as the rogue list allows it: without these a prowling
+            // druid could neither take an objective nor chase a carrier or a player.
+            (actionName == "bg status") ||
+            (actionName == "bg move to start") ||
+            (actionName == "bg move to objective") ||
+            (actionName == "bg check objective") ||
+            (actionName == "bg check flag") ||
+            (actionName == "attack enemy flag carrier") ||
+            (actionName == "attack enemy player") ||
             (actionName == "update raid strats"))
         {
             return 1.0f;

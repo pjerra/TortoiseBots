@@ -366,9 +366,61 @@ bool ai::AttackAnythingAction::GiveUpOnGrindTarget(Unit* target)
     return true;
 }
 
+// An enemy player picked by "attack enemy player" or "attack enemy flag carrier" is
+// usually not fighting the bot yet. Attack() only selects it and arms the swing; the
+// combat engine's "invalid target" check then refused it on the next tick, because a
+// player counts as a valid target only once it is fighting the bot
+// (AttackersValue::InCombat) or is the bot's "attack target". The target was dropped,
+// combat ended, the non-combat engine gave the same order again - and the bot stood
+// still in mid-field with the order "succeeding" every tick. Arm "attack target" as
+// the grind order does, and carry the walk with the order; the reach action gives up
+// after 15 s without headway and blacklists the player ("unreachable targets", which
+// EnemyPlayersValue honours), so the bot goes back to its objective.
+static bool CommitEnemyPlayerOrder(PlayerbotAI* botAi, Unit* target, Event& event)
+{
+    botAi->GetAiObjectContext()->GetValue<ObjectGuid>("attack target")->Set(target->getObjectGuid());
+
+    const bool rangedKit = botAi->HasStrategy("ranged", BotState::BOT_STATE_COMBAT) &&
+        !botAi->HasStrategy("close", BotState::BOT_STATE_COMBAT);
+    return botAi->DoSpecificAction(rangedKit ? "reach spell" : "reach melee", event, true);
+}
+
 bool AttackEnemyPlayerAction::isUseful()
 {
+    // A flag carrier runs the flag home instead of starting fights (mod-playerbots
+    // 79bd428 refuses this order to a carrier too).
+    if (bot->HasAura(23333) || bot->HasAura(23335))
+        return false;
+
     return !sPlayerbotAIConfig.IsInPvpProhibitedZone(sServerFacade.GetAreaId(bot));
+}
+
+bool AttackEnemyPlayerAction::Execute(Event& event)
+{
+    if (!AttackAction::Execute(event))
+        return false;
+
+    Unit* target = GetTarget();
+    if (!target)
+        return true;
+
+    // The nested reach booked its own walk wait; carry it as this action's duration
+    // (see AttackAnythingAction::Execute), or release the default when nothing moved.
+    SetDuration(CommitEnemyPlayerOrder(ai, target, event) ? ai->GetAIInternalUpdateDelay() : sPlayerbotAIConfig.reactDelay);
+    return true;
+}
+
+bool AttackEnemyFlagCarrierAction::Execute(Event& event)
+{
+    if (!AttackAction::Execute(event))
+        return false;
+
+    Unit* target = GetTarget();
+    if (!target)
+        return true;
+
+    SetDuration(CommitEnemyPlayerOrder(ai, target, event) ? ai->GetAIInternalUpdateDelay() : sPlayerbotAIConfig.reactDelay);
+    return true;
 }
 
 bool AttackEnemyFlagCarrierAction::isUseful()

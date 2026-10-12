@@ -8571,3 +8571,50 @@ heals until the whole party broke off and left the mob alive.
 Validation: code review + build pending; in-game pending. The shared-list
 models in `tools/test_attackers_aoe_density.{py,cpp}` follow the change and
 gain a case for it; `bash tools/verify_all.sh` and `git diff --check` clean.
+
+## Battleground enemy-player pick and order (attack enemy player stall) — 2026-10-12
+
+Feature: "attack enemy player" drops from `ACTION_EMERGENCY` (90) to 55 in
+both engines; the battleground proximity fallback in `EnemyPlayersValue`
+only takes a player in line of sight, less than 30 yd above or below and
+within 40 yd (20 yd when the enemy has more health than the bot); a flag
+carrier does not take the order. TortoiseBots-side: the order (and "attack
+enemy flag carrier") arms `attack target` and runs the reach action, and
+`EnemyPlayersValue` honours the reach give-up list ("unreachable targets"),
+so an enemy player the bot cannot reach is dropped after 15 s instead of
+holding the bot in mid-field. The stealth whitelists let a stealthed rogue
+or prowling druid take the order (and the druid the BG objective actions,
+as the rogue list already did).
+
+Source repository: `mod-playerbots/mod-playerbots`
+
+Source commit: `79bd4281` (local `playerbots-references/mod-playerbots` checkout).
+
+Source files:
+- `src/Ai/Base/Strategy/AttackEnemyPlayersStrategy.cpp` (relevance 55)
+- `src/Ai/Base/Value/EnemyPlayerValue.cpp` (`EnemyPlayerValue::Calculate`: LoS, |dz| < 30, 40/20 yd by relative health)
+- `src/Ai/Base/Actions/ChooseTargetActions.cpp` (`AttackEnemyPlayerAction::isUseful`: refused to a flag carrier)
+
+Source files (module, modified): `ai/playerbot/strategy/generic/AttackEnemyPlayersStrategy.cpp`,
+`ai/playerbot/strategy/values/EnemyPlayerValue.{h,cpp}`,
+`ai/playerbot/strategy/actions/ChooseTargetActions.{h,cpp}`,
+`ai/playerbot/strategy/druid/DpsFeralDruidStrategy.cpp` and
+`ai/playerbot/strategy/rogue/RogueStrategy.cpp` (stealth whitelists),
+`docs/concepts/bot-mechanics-and-quirks.md`, `docs/classes/{rogue,druid}.md`.
+
+Copied / ported / reimplemented: reimplemented in TortoiseBots' value and
+action shapes. Not taken from the donor: its PvP combat-reference first
+pass (this core's equivalent is the existing attacker list), vehicle
+ranges, and its "attack the enemy carrier only while carrying a flag" rule.
+The `attack target` arming and the give-up honour have no donor counterpart:
+they fix a TortoiseBots-only interaction (a player not yet fighting the bot
+failed `AttackersValue::InCombat`, so "invalid target" dropped the order on
+the next tick).
+
+Reason: battleground sampling on 2026-10-12 (batch 6, finding 1) showed
+rogues and a stealthed feral druid standing still at full health for 5-7
+minutes in Warsong Gulch on "attack enemy player" / "attack enemy flag
+carrier" (about 11 % of in-match bot samples).
+
+Validation: code review + build pending; in-game pending.
+`bash tools/verify_all.sh` and `git diff --check`.

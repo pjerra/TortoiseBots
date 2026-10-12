@@ -92,6 +92,7 @@ namespace ai
         AttackEnemyPlayerAction(PlayerbotAI* ai) : AttackAction(ai, "attack enemy player") {}
         std::string GetTargetName() override { return "enemy player target"; }
         bool isUseful() override;
+        bool Execute(Event& event) override;
     };
 
     class AttackEnemyFlagCarrierAction : public AttackAction
@@ -100,6 +101,7 @@ namespace ai
         AttackEnemyFlagCarrierAction(PlayerbotAI* ai) : AttackAction(ai, "attack enemy flag carrier") {}
         std::string GetTargetName() override { return "enemy flag carrier"; }
         bool isUseful() override;
+        bool Execute(Event& event) override;
     };
 
     class SelectNewTargetAction : public Action

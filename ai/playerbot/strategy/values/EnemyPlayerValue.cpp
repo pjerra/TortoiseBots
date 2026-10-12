@@ -51,7 +51,7 @@ std::list<ObjectGuid> EnemyPlayersValue::Calculate()
             if (result.empty() && bot->InBattleGround())
             {
                 result = AI_VALUE(std::list<ObjectGuid>, "possible targets");
-                ApplyFilter(result, getOne);
+                ApplyFilter(result, getOne, true);
             }
         }
     }
@@ -101,6 +101,18 @@ bool EnemyPlayersValue::IsValid(Unit* target, Player* player)
                     if (!player->IsInCombat() && player->GetAttackers().empty())
                         return false;
                 }
+
+                // A player the bot gave up on (ReachTargetAction: no headway for 15 s) is
+                // not picked again until the give-up expires, unless it comes after the
+                // bot in plain sight - the same rule AttackersValue::IgnoreTarget applies
+                // to the attacker list. Without it the order re-armed the same unreachable
+                // player on the next tick and the give-up never took effect.
+                std::map<ObjectGuid, uint32>& unreachable =
+                    playerAi->GetAiObjectContext()->GetValue<std::map<ObjectGuid, uint32>&>("unreachable targets")->Get();
+                auto givenUp = unreachable.find(target->getObjectGuid());
+                if (givenUp != unreachable.end() && WorldTimer::getMSTime() < givenUp->second &&
+                    (target->GetVictim() != player || !player->IsWithinLOSInMap(target, true)))
+                    return false;
             }
 
             return true;
@@ -110,13 +122,33 @@ bool EnemyPlayersValue::IsValid(Unit* target, Player* player)
     return false;
 }
 
-void EnemyPlayersValue::ApplyFilter(std::list<ObjectGuid>& targets, bool getOne)
+bool EnemyPlayersValue::CanEngageFromHere(Unit* target) const
+{
+    // mod-playerbots EnemyPlayerValue (79bd428): an enemy player found by proximity
+    // alone is only taken when the bot can see it and could plausibly reach it - in
+    // line of sight, less than 30 yd above or below, and inside the aggro range
+    // (the full range for a target with less health than the bot, 20 yd otherwise).
+    // The scan behind it ("possible targets") has none of these, so a player behind
+    // a wall, down in the flag-room tunnel or across the field qualified, and the
+    // bot stood still holding an order it could never carry out.
+    float const aggroDistance = bot->GetHealth() > target->GetHealth() ?
+        EnemyPlayerValue::GetMaxAttackDistance(bot) : 20.0f;
+    if (!bot->IsWithinDist(target, aggroDistance))
+        return false;
+
+    if (fabs(bot->GetPositionZ() - target->GetPositionZ()) >= 30.0f)
+        return false;
+
+    return bot->IsWithinLOSInMap(target, true);
+}
+
+void EnemyPlayersValue::ApplyFilter(std::list<ObjectGuid>& targets, bool getOne, bool proximityScan)
 {
     std::list<ObjectGuid> filteredTargets;
     for (const ObjectGuid& targetGuid : targets)
     {
         Unit* target = ai->GetUnit(targetGuid);
-        if (IsValid(target, bot))
+        if (IsValid(target, bot) && (!proximityScan || CanEngageFromHere(target)))
         {
             filteredTargets.push_back(target->getObjectGuid());
 
