@@ -81,12 +81,6 @@ namespace ai
         // after its third mine.
         void ForgetFailures(ObjectGuid guid);
 
-        // A loot window that gave this bot nothing (the server refused it, or every item
-        // was blocked by a roll, view-only or not wanted) is abandoned at once: the corpse
-        // stays lootable for the core, so "add all loot" would re-queue it and "open loot"
-        // would re-open it every few seconds on the same spot. Same TTL as above.
-        void Abandon(ObjectGuid guid);
-
     public:
         std::vector<LootObject> OrderByDistance(float maxDistance = 0);
 
