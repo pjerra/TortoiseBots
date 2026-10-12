@@ -1174,6 +1174,8 @@ void TravelTarget::SetTarget(TravelDestination* tDestination1, WorldPosition* wP
     // from the freshly chosen target. UnstuckAction saves/restores both
     // counters around the re-SetTarget it does after its reset.
     moveRetryCount = 0;
+    // The hand-in progress mark belongs to the walk toward this point.
+    handInBestDistance = -1.0f;
 
     SetStatus(TravelStatus::TRAVEL_STATUS_TRAVEL);
 }

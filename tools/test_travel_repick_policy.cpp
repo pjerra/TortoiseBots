@@ -26,6 +26,8 @@ using ai::GIVER_REPICK_PARK_AFTER;
 using ai::TRAVEL_STARVED_PARKED_PURPOSES;
 using ai::TravelSearchesStarved;
 using ai::TravelStarvedParkKeys;
+using ai::HandInTripProgressed;
+using ai::HAND_IN_PROGRESS_STEP_YD;
 
 int main()
 {
@@ -197,6 +199,27 @@ int main()
         CHECK(!trainerCounted);
     }
     std::cout << "  [PASS] starved gate needs 3 parked purposes, named errands out\n";
+
+    // Hand-in progress: the first reading only records; a new best at least
+    // 5 yd closer counts (and becomes the best); standing, drifting back or
+    // creeping under the step does not; the best never grows back.
+    {
+        float best = -1.0f;
+        CHECK(!HandInTripProgressed(best, 3000.0f));
+        CHECK(best == 3000.0f);
+        CHECK(!HandInTripProgressed(best, 2996.0f));
+        CHECK(best == 3000.0f);
+        CHECK(HandInTripProgressed(best, 2990.0f));
+        CHECK(best == 2990.0f);
+        CHECK(!HandInTripProgressed(best, 2990.0f));
+        CHECK(!HandInTripProgressed(best, 3100.0f));
+        CHECK(best == 2990.0f);
+        CHECK(!HandInTripProgressed(best, 2990.0f - HAND_IN_PROGRESS_STEP_YD));
+        CHECK(HandInTripProgressed(best, 2984.0f));
+        CHECK(best == 2984.0f);
+        CHECK(HAND_IN_PROGRESS_STEP_YD == 5.0f);
+    }
+    std::cout << "  [PASS] hand-in progress resets on a 5 yd new best only\n";
 
     std::cout << "travel repick policy: OK\n";
     return 0;

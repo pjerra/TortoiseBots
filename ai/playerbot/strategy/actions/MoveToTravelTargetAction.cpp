@@ -987,6 +987,15 @@ bool MoveToTravelTargetAction::Execute(Event& event)
     // exactly as for a refused move; nothing is re-armed.
     bool const noProgress = canMove && TravelMoveMadeNoProgress();
 
+    // A pool bot's hand-in trip keeps its move budget while it is getting
+    // closer: 5 yd nearer the taker than ever before on this trip clears the
+    // failures so far (HandInTripProgressed, donor MoveFarTo). Only a walk
+    // that stops closing the gap reaches the drop and the 5-min quest park.
+    if (sRandomBotFacade.IsRandomBot(bot) && !ai->HasRealPlayerMaster() &&
+        HandInTakerDestination(target, purpose) &&
+        HandInTripProgressed(target->HandInBestDistance(), botLocation.distance(location)))
+        target->SetRetry(true, 0);
+
     if (!canMove || noProgress)
     {
         target->IncRetry(true);

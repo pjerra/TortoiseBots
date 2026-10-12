@@ -277,4 +277,36 @@ namespace ai
     {
         return newIsNull || (pickedFromNull && purposeName == "None");
     }
+
+    // Hand-in trips give up on lack of progress, not on a lifetime count of
+    // failed moves. The move budget (TravelTarget::IsMaxRetry: failures add
+    // 2, successes take 1 back) spans the whole walk, and on a 2,000-7,000 yd
+    // walk to a quest taker every short stand (eat, loot, mount, a city
+    // corner) adds to it, so a bot that had walked most of the way dropped
+    // the trip after a 5-20 s stand and parked the quest errand for 5 min
+    // (live m910q 2026-10-12, 12.5 min: 145 hand-in trips ended with the bot
+    // alive and unpaid, 88 of them after a 5-19 s stand; 51 of the 83 with
+    // 5 min of follow-up then held no quest errand for 5 min). mod-playerbots 79bd428 (NewRpgBaseAction::
+    // MoveFarTo, nearestMoveFarDis) resets its stuck count whenever the bot
+    // is 5 yd closer than its best so far. Same rule here: true when
+    // `distance` beats the trip's best by at least the step, and the caller
+    // then clears the move budget, so the drop still fires after six
+    // failures with no new progress. bestDistance < 0 means "not measured
+    // yet": the first call only records. The best only ever shrinks, so the
+    // resets are bounded by the trip's length.
+    constexpr float HAND_IN_PROGRESS_STEP_YD = 5.0f;
+    inline bool HandInTripProgressed(float& bestDistance, float distance)
+    {
+        if (bestDistance < 0.0f)
+        {
+            bestDistance = distance;
+            return false;
+        }
+
+        if (distance + HAND_IN_PROGRESS_STEP_YD >= bestDistance)
+            return false;
+
+        bestDistance = distance;
+        return true;
+    }
 }
