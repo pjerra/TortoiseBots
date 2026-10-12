@@ -1858,16 +1858,19 @@ static char const* AddonCommandChannel(Player* requester)
 // Per-bot behaviour toggles the TBM bot panel exposes. Each key maps to one
 // mature strategy on one engine; nothing outside this list is reachable from
 // `.bot behavior`, so the addon cannot be used as a generic strategy editor.
+// An inverted key is ON while its strategy is ABSENT: `aoe` is on by default
+// and `aoe off` adds the "no aoe" veto on every area spell.
 struct BehaviorToggle
 {
     char const* key;
     char const* strategy;
     BotState state;
+    bool inverted = false;
 };
 
 static BehaviorToggle const BehaviorToggles[] = {
     { "loot",     "loot",          BotState::BOT_STATE_NON_COMBAT },
-    { "aoe",      "dps aoe",       BotState::BOT_STATE_COMBAT },
+    { "aoe",      "no aoe",        BotState::BOT_STATE_COMBAT, true },
     { "autocc",   "auto cc",       BotState::BOT_STATE_COMBAT },
     { "savemana", "conserve mana", BotState::BOT_STATE_COMBAT },
     { "boost",    "boost",         BotState::BOT_STATE_COMBAT },
@@ -1885,6 +1888,16 @@ static BehaviorToggle const* FindBehaviorToggle(std::string const& key)
     return nullptr;
 }
 
+static bool IsBehaviorOn(PlayerbotAI* ai, BehaviorToggle const& toggle)
+{
+    return ai->HasStrategy(toggle.strategy, toggle.state) != toggle.inverted;
+}
+
+static void SetBehavior(PlayerbotAI* ai, BehaviorToggle const& toggle, bool enable)
+{
+    ai->ChangeStrategy((enable != toggle.inverted ? "+" : "-") + std::string(toggle.strategy), toggle.state);
+}
+
 // "TBM:BOTSTATE|<name>|move=follow,loot=on,..." - one line per live bot.
 // Flee parks a bot in passive follow, reported as its own movement mode so
 // the addon can show that the bot is holding off until the next order.
@@ -1898,7 +1911,7 @@ static void SendBotStateLine(ChatHandler* handler, Player* bot)
         movement = "flee";
     std::string fields = "move=" + movement;
     for (BehaviorToggle const& toggle : BehaviorToggles)
-        fields += std::string(",") + toggle.key + "=" + (ai->HasStrategy(toggle.strategy, toggle.state) ? "on" : "off");
+        fields += std::string(",") + toggle.key + "=" + (IsBehaviorOn(ai, toggle) ? "on" : "off");
     handler->PSendSysMessage("TBM:BOTSTATE|%s|%s", ProtocolSafe(bot->GetName()).c_str(), fields.c_str());
 }
 
@@ -2502,9 +2515,9 @@ static bool HandleBehavior(ChatHandler* handler, char const* args)
             PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot);
             if (!ai)
                 continue;
-            ai->ChangeStrategy((enable ? "+" : "-") + std::string(toggle->strategy), toggle->state);
+            SetBehavior(ai, *toggle, enable);
             sPlayerbotDbStore.Save(ai);
-            if (ai->HasStrategy(toggle->strategy, toggle->state) == enable)
+            if (IsBehaviorOn(ai, *toggle) == enable)
                 ++succeeded;
             SendBotStateLine(handler, bot);
         }
@@ -2523,9 +2536,9 @@ static bool HandleBehavior(ChatHandler* handler, char const* args)
         return true;
     }
 
-    ai->ChangeStrategy((enable ? "+" : "-") + std::string(toggle->strategy), toggle->state);
+    SetBehavior(ai, *toggle, enable);
     sPlayerbotDbStore.Save(ai);
-    bool const now = ai->HasStrategy(toggle->strategy, toggle->state);
+    bool const now = IsBehaviorOn(ai, *toggle);
     if (now != enable)
         SendActionError(handler, intent, "failed", "This bot does not support that behaviour.");
     else
@@ -2666,6 +2679,18 @@ static bool ParseAction(std::string input, std::string& intent, std::string& opt
             return false;
         intent = first;
         option = botToken.empty() ? mode : mode + " " + botToken;
+        return true;
+    }
+    else if (first == "aoe" || first == "loot")
+    {
+        // "aoe [on|off]" / "loot [on|off]": bare form toggles, as documented.
+        std::string rest = remainder;
+        for (char& character : rest)
+            character = static_cast<char>(std::tolower(static_cast<unsigned char>(character)));
+        if (!rest.empty() && rest != "on" && rest != "off")
+            return false;
+        intent = first;
+        option = rest;
         return true;
     }
     else if (first == "pull" || first == "pullback")
@@ -3229,14 +3254,18 @@ static bool HandleAction(ChatHandler* handler, char const* args)
         }
         else if (intent == "aoe")
         {
+            // Same switch as `.bot behavior <bot> aoe`: off adds the
+            // "no aoe" veto on every area spell, on removes it. Persisted
+            // like the behaviour toggles.
+            BehaviorToggle const& aoeToggle = *FindBehaviorToggle("aoe");
             bool enable = option == "on" ||
-                (option.empty() && !ai->HasStrategy("dps aoe", BotState::BOT_STATE_COMBAT));
+                (option.empty() && !IsBehaviorOn(ai, aoeToggle));
             if (option == "off")
                 enable = false;
-            ai->ChangeStrategy((enable ? "+" : "-") + std::string("dps aoe"),
-                BotState::BOT_STATE_COMBAT);
+            SetBehavior(ai, aoeToggle, enable);
+            sPlayerbotDbStore.Save(ai);
             ExecuteQuietNextAction(ai, true);
-            accepted = ai->HasStrategy("dps aoe", BotState::BOT_STATE_COMBAT) == enable;
+            accepted = IsBehaviorOn(ai, aoeToggle) == enable;
         }
         else if (intent == "auto cc")
         {
@@ -3323,7 +3352,7 @@ static bool HandleAction(ChatHandler* handler, char const* args)
             ++succeeded;
             if (intent == "aoe")
             {
-                std::string current = ai->HasStrategy("dps aoe", BotState::BOT_STATE_COMBAT)
+                std::string current = IsBehaviorOn(ai, *FindBehaviorToggle("aoe"))
                     ? "on" : "off";
                 if (aoeState.empty())
                     aoeState = current;

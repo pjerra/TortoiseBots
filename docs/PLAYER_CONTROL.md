@@ -68,7 +68,7 @@ layer.
 | Pullback | pullback | `PullStrategy` + `PullBackStrategy` / `pull my target` | Selects a tank executor and enables the existing return-to-pull-position behavior. |
 | RTI | focus skull | `rti` value + `attack rti target` | Uses the existing Skull default and group raid-target icon. |
 | Crowd control | cc `<raid-mark>` | Existing `rti cc` value and class CC strategies/triggers | Eight raid marks are accepted. Target an owned bot to assign it; target an enemy or existing mark for automatic executor selection. |
-| Policy | aoe on/off | Existing `dps aoe` strategy | Scope-resolved strategy toggle; CC/RTI avoidance remains mature-AI-owned. |
+| Policy | aoe on/off | `no aoe` strategy (veto on every area-spell action, `AoeOffPolicy.h`) | Scope-resolved strategy toggle, persisted; AoE is on by default. CC/RTI avoidance remains mature-AI-owned. |
 | Lifecycle | login, logout, invite, kick, summon | Headless lifecycle and native group/convenience handlers | Roster-only; multi-select is filtered to eligible server-owned rows. |
 | Visibility | roster snapshot, status | Module roster storage and diagnostics | `.bot roster` is authoritative for offline and online owned rows. |
 | Roles | `.bot role self <tank|healer|dps|clear>` | `AiFactory::GetPlayerRoles` and the shared player-role predicates | Stores a runtime-only human role override without registering a `PlayerbotAI`; `clear` restores group-aware automatic inference. |
