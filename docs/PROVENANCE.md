@@ -8848,3 +8848,10 @@ Module files: `ai/playerbot/strategy/generic/ThreatStrategy.cpp`,
 `docs/concepts/strategy-engine.md`.
 Validation: code review + `bash tools/verify_all.sh` + `git diff --check`;
 build pending; in-game pending.
+
+## Area spells wait for the tank; frost Flamestrike opener gate (2026-10-12)
+
+| Feature | Source project | Source commit | Source files | Ported / reimplemented | Reason | Local validation |
+| --- | --- | --- | --- | --- | ---: | --- |
+| AoE threat mark on area damage spells (Flamestrike, Cone of Cold, Arcane Explosion, Volley, Hurricane, Rain of Fire, Chain Lightning; Blizzard already had it), so the existing `threat` multiplier holds them while the tank has no threat on a mob or the bot holds half the tank's threat | `mod-playerbots` | `79bd428` | `src/Ai/Class/Mage/MageActions.h` (`CastConeOfColdAction`, `CastFlamestrikeAction`), `src/Ai/Class/Hunter/HunterActions.h` (`CastVolleyAction`), `src/Ai/Class/Druid/Action/DruidActions.h` (`CastHurricaneAction`), `src/Ai/Class/Warlock/WarlockActions.h` (`CastRainOfFireAction`), `src/Ai/Class/Shaman/ShamanActions.h` (`CastChainLightningAction`), `src/Ai/Base/Strategy/ThreatStrategy.cpp` | Ported (one `getThreatType()` override per action). Local addition: Arcane Explosion (no donor action). Frost Nova and Blast Wave stay unmarked (escape tools). | A hired frost mage cast Flamestrike 8 s after the attack order, before the tank held the pack, and died (play-b8 fight 1). Without the mark the donor's AoE threat gate never saw Flamestrike. | code review + `tools/verify_all.sh`; build pending; in-game pending |
+| 10 s opener gate on frost's Flamestrike row (`ranged medium aoe after opener`) | Local; the donor frost tab keeps flamestrike 23 > blizzard 22 without a gate | — | `ai/playerbot/strategy/mage/{MageTriggers.h,MageAiObjectContext.cpp,FrostMageStrategy.cpp}` | Reimplemented locally, same condition as the local `CastBlizzardAction::isUseful` combat-time gate | Same incident: frost's Flamestrike was its only AoE without the opener gate | code review; build pending; in-game pending |

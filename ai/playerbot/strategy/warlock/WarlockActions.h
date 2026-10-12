@@ -702,6 +702,7 @@ namespace ai
     {
     public:
         CastRainOfFireAction(PlayerbotAI* ai) : CastSpellAction(ai, "rain of fire") {}
+        virtual ActionThreatType getThreatType() override { return ActionThreatType::ACTION_THREAT_AOE; }
     };
     class CastInfernoAction : public CastSpellAction
     {

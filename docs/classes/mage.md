@@ -27,7 +27,8 @@ Mages provide premier ranged spell DPS, the game's most reliable crowd control (
 - Opens at max range with *Frostbolt*.
 - If enemies reach melee range, casts *Frost Nova* and *Blink* to reset distance.
   - Skips *Frost Nova* when the target is already frozen or immune to the freeze, so the GCD goes to damage.
-- Uses *Blizzard* and *Flamestrike* on grouped enemies — *Flamestrike* first, then *Blizzard* channeled on the burning ground while the pack holds (*Cone of Cold* on light AoE; *Arcane Explosion* point-blank for Arcane; *Blast Wave* for Fire).
+- Uses *Blizzard* and *Flamestrike* on grouped enemies — *Flamestrike* first, then *Blizzard* channeled on the burning ground while the pack holds (*Cone of Cold* on light AoE; *Arcane Explosion* point-blank for Arcane; *Blast Wave* for Fire). A Frost mage casts neither in the first 10 s of a fight, so it does not open a fresh pack before the tank holds it.
+- *Flamestrike*, *Cone of Cold* and *Arcane Explosion*, like *Blizzard*, wait in a party while the tank has no threat on a mob in the fight or the mage holds half the tank's threat (`threat` behaviour).
 - Uses *Blizzard* and *Flamestrike* on grouped enemies (*Cone of Cold* on light AoE; *Arcane Explosion* point-blank for Arcane; *Blast Wave* for Fire), and stops the *Blizzard* channel early when the pack thins below two attackers.
 - Uses *Blizzard* and *Flamestrike* on grouped enemies, and *Cone of Cold* on close pairs (only while facing the target; *Blast Wave* for Fire).
 - Uses *Cold Snap* once any Frost cooldown (Frost Nova, Cone of Cold, Ice Barrier, Ice Block, Frost Ward) is spent.
