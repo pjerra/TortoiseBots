@@ -26,12 +26,18 @@ void BattlegroundStrategy::InitNonCombatTriggers(std::list<TriggerNode*> &trigge
         "player has flag",
         NextAction::array(0, new NextAction("jump::position bg objective", 3.0f), NULL)));
 
-    // No mount node here (like mod-playerbots): at 2.0 it outranked the move
-    // and held bots still while a mount cast failed. Mounting still comes from
-    // NonCombatStrategy's "very often" node, so the objective move wins ties.
     triggers.push_back(new TriggerNode(
         "bg active",
         NextAction::array(0, new NextAction("bg move to objective", 1.0f), NULL)));
+
+    // Mount slot: just above the objective move, only while the objective is
+    // over 40 yd away and the bot is on foot, and at most once per 5 s. The
+    // old "bg active" node at 2.0 fired every tick and held a bot still while
+    // its mount cast kept failing; the generic "very often" node at 1.0 ties
+    // the move, and a tie goes to whichever basket is queued first.
+    triggers.push_back(new TriggerNode(
+        "bg objective far",
+        NextAction::array(0, new NextAction("check mount state", 1.5f), NULL)));
 
     // Random "often" like mod-playerbots: on "very often" the re-pick won
     // nearly every visit and "bg move to objective" never got a turn.

@@ -93,6 +93,21 @@ namespace ai
         virtual bool IsActive() override;
     };
 
+    // Battleground mount slot: in progress, not mounted (nor in a travel
+    // form), out of combat, not carrying a flag, and the current
+    // "bg objective" is over 40 yd away.
+    // Checked every 5 s (like mod-playerbots' timer-paced mount check), so a
+    // mount cast that keeps failing costs at most one try per 5 s and the
+    // objective move runs in between.
+    class BgObjectiveFarTrigger : public Trigger
+    {
+    public:
+        BgObjectiveFarTrigger(PlayerbotAI* ai) : Trigger(ai, "bg objective far", 5) {}
+
+    public:
+        virtual bool IsActive() override;
+    };
+
     class BgInviteActiveTrigger : public Trigger
     {
     public:

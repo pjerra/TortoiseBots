@@ -204,6 +204,7 @@ namespace ai
 
             creators["bg waiting"] = [](PlayerbotAI* ai) { return new BgWaitingTrigger(ai); };
             creators["bg active"] = [](PlayerbotAI* ai) { return new BgActiveTrigger(ai); };
+            creators["bg objective far"] = [](PlayerbotAI* ai) { return new BgObjectiveFarTrigger(ai); };
             creators["bg ended"] = [](PlayerbotAI* ai) { return new BgEndedTrigger(ai); };
             creators["timer bg"] = [](PlayerbotAI* ai) { return new TimerBgTrigger(ai); };
             creators["bg invite active"] = [](PlayerbotAI* ai) { return new BgInviteActiveTrigger(ai); };

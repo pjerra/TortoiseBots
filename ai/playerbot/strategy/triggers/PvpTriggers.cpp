@@ -76,6 +76,30 @@ bool BgActiveTrigger::IsActive()
     return false;
 }
 
+bool BgObjectiveFarTrigger::IsActive()
+{
+    if (!bot->InBattleGround() || bot->IsMounted() || bot->IsInCombat())
+        return false;
+
+    // Travel form / Ghost Wolf count as mounted too (speed > 0).
+    if (AI_VALUE2(uint32, "current mount speed", "self target"))
+        return false;
+
+    BattleGround* bg = bot->GetBattleGround();
+    if (!bg || bg->GetStatus() != STATUS_IN_PROGRESS)
+        return false;
+
+    // WSG flag carriers do not mount (CheckMountStateAction::isUseful).
+    if (bot->HasAura(BG_WS_SPELL_WARSONG_FLAG) || bot->HasAura(BG_WS_SPELL_SILVERWING_FLAG))
+        return false;
+
+    PositionEntry pos = context->GetValue<PositionMap&>("position")->Get()["bg objective"];
+    if (!pos.isSet() || pos.mapId != bot->GetMapId())
+        return false;
+
+    return bot->GetDistance(pos.x, pos.y, pos.z, SizeFactor::None) > 40.0f;
+}
+
 bool BgInviteActiveTrigger::IsActive()
 {
     if (bot->InBattleGround() || !bot->InBattleGroundQueue())
