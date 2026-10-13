@@ -897,7 +897,7 @@ bool PlayerbotAIConfig::Initialize()
     hunterViperOnLowMana = config.GetBoolDefault("AiPlayerbot.HunterViperOnLowMana", true);
     paladinJudgementUpkeep = config.GetBoolDefault("AiPlayerbot.PaladinJudgementUpkeep", true);
     onyxiaWhelpsAndEggs = config.GetBoolDefault("AiPlayerbot.OnyxiaWhelpsAndEggs", true);
-    avoidCreatureAuras = config.GetBoolDefault("AiPlayerbot.AvoidCreatureAuras", true);
+    avoidCreatureAuras = config.GetBoolDefault("AiPlayerbot.AvoidCreatureAuras", false);
     allowRepairedTaxiPaths = config.GetBoolDefault("AiPlayerbot.AllowRepairedTaxiPaths", false);
     turnInRpg = config.GetBoolDefault("AiPlayerbot.TurnInRpg", false);
     shareTargets = config.GetBoolDefault("AiPlayerbot.ShareTargets", true);
