@@ -7840,6 +7840,9 @@ Files: `ai/playerbot/strategy/warlock/WarlockTriggers.{h,cpp}`, `WarlockActions.
 - Source: mod-playerbots 79bd428, `src/Ai/Raid/BWL/BWLActions.cpp` (`BwlOnyxiaScaleCloakAuraCheckAction`), `BWLStrategy.cpp`, `BWLHelpers.h`.
 - Mode: reimplemented (behaviour changed). The donor calls `AddAura` to grant the immunity for free; TortoiseBots only warns and grants nothing.
 - Validation: code review + build pending; in-game pending.
+
+---
+
 ## Mage: cast instead of wanding at full mana — 2026-10-11
 
 | Feature | Source project | Source commit | Source files | Ported / reimplemented | Reason | Local validation |
@@ -9781,6 +9784,9 @@ on the test VM (see the PR); build pending; in-game pending.
 - Source: `pjerra/turtle-agent` (the owner's own MIT project) at b017673: plan format v1 (`internal/dungeon/plan.go`), the plan stepper (`internal/dungeon/stepper.go`) and the remote driver's safety rules (`internal/dungeon/remote*.go`, README "Remote mode": gather before pulls, no unseen pack counted cleared, no live boss counted dead, every wait bounded, stop on a wipe). Reimplemented in C++ as a server-side step machine; no code copied. mod-playerbots has no dungeon leader to port (design: TortoiseBots-audit DESIGN-DUNGEON-MODES §2).
 - Reason: owner decision 2026-10-14 (opt-in self-clear, off by default; the agent's plans are the single data source).
 - Validation: `tools/test_dungeon_plan_policy.cpp`, `tools/test_dungeon_run_policy.cpp`, `tools/test_dungeon_plan_sql.py`; module syntax check of the glue; no live run yet.
+
+---
+
 ## Commanded ranged pull: weapon pulls for tanks — 2026-10-15
 
 - Feature: `.bot action pull|pullback [seconds] [ranged]` and `.bot cmd pull|pullback <guid> [seconds] [ranged]`: the tank opens from range with its equipped ranged weapon when the mob is unreachable by navmesh path, farther than `AiPlayerbot.RangedPullMeleeApproach`, or the order says `ranged`; `AiPlayerbot.RangedPull` gates the automatic rules.
@@ -9788,3 +9794,36 @@ on the test VM (see the PR); build pending; in-game pending.
 - Reason: a plain pull command is a melee engagement; on a ledge the tank cannot reach, or a camp near the next pack, walking in fails or aggroes the neighbours.
 - Validation: `tools/test_pull_opening_policy.cpp` (reachable / unreachable, range, sight, explicit order, config off, pullback, order parsing), `bash tools/verify_all.sh`, `-fsyntax-only` of the touched module files on the test VM; live check pending.
 
+
+
+## Warlock: Soulstone the healer — 2026-10-15
+
+Feature: out of combat in a group the warlock keeps one Soulstone and uses it
+on the group's healer (else the tank, else the master/leader); solo it stones
+itself. Re-applied when the 30 minute buff is gone or was used; created only
+with a Soul Shard in the bags.
+
+- Source repo + SHA: `mod-playerbots` @ `79bd428115c8f33b74b13de23b133d49c3f75c60`
+  (`src/Ai/Class/Warlock/WarlockActions.cpp` `UseSoulstoneHealerAction`,
+  `WarlockTriggers.{h,cpp}` `SoulstoneTrigger`/`OutOfSoulstoneTrigger`,
+  `Strategy/GenericWarlockNonCombatStrategy.cpp` `ss healer`).
+- Reimplemented, not copied. The donor's healer pick is opt-in (`nc +ss healer`),
+  scans the group inside the action under a 2.5 s reservation map and checks
+  30 yd + LOS; TortoiseBots already had the older cmangos value
+  (`values/PartyMemberToSoulstone`) wired into the default warlock buff
+  strategy, so the donor idea (healer first, aura check, LOS, skip a target
+  another warlock is casting on) was folded into that value as the pure
+  decision `runtime/WarlockSoulstonePolicy.h`.
+- Differences from the donor, on purpose: on by default (owner order
+  2026-10-15, no config key because the donor has none); the master/leader
+  is the last fallback; a tier present in the group but not ready is waited
+  for (the item shares a 30 minute cooldown); the stone used is the best rank
+  held (a stone made before a rank-up used to stay unused forever); the
+  create trigger stays quiet without a Soul Shard and the create row ranks
+  one above the other stones so a single shard goes to the Soulstone.
+- Shard source (unchanged): Drain Soul organic harvest; hires and `.bot
+  maintenance` seed 1-5 shards via `PlayerbotFactory::InitReagents`.
+- Validation: `tools/test_warlock_soulstone_policy.cpp` (38 checks: healer >
+  leader, aura skip and re-apply, combat skip, wait for an unready healer,
+  no shard no create, rank pick), `bash tools/verify_all.sh`, `-fsyntax-only`
+  of the touched translation units on the VM. Not run: live group (no deploy).
