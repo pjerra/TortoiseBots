@@ -79,6 +79,14 @@ static void TestMove()
     Tick(r, f);
     CHECK(r.state == State::Done);
     CHECK(StatusLine(r) == "TBM:RUN|t|done|2/2|0|move_direct|begin|plan done");
+    // The same facts as fields (the dashboard's run card): the line is built from them.
+    StatusFields const sf = StatusParts(r);
+    CHECK(sf.plan == "t" && sf.state == "done" && sf.step == 2 && sf.steps == 2 && sf.leg == "0" && sf.kind == "move_direct" &&
+        sf.phase == "begin" && sf.note == "plan done");
+    Run none;
+    StatusFields const nf = StatusParts(none);
+    CHECK(nf.plan.empty() && nf.step == 0 && nf.steps == 0 && nf.leg.empty() && nf.kind.empty());
+    CHECK(StatusLine(none).compare(0, 21, "TBM:RUN|-|running|0/0") == 0);
 }
 
 static void TestWalkStuckIsBounded()

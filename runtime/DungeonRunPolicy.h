@@ -817,25 +817,46 @@ inline std::string Tick(Run& r, const Facts& f, std::uint32_t dt = kTickMs, cons
     return order;
 }
 
+// What the status line says, as fields: the plan, state, step shown (1-based, 0 before the first, the last for a done run) of the plan's
+// steps, the current leg's name, the step kind, the phase and the note ('|' and line breaks in the note become spaces). Empty plan,
+// leg and kind read "-" in the line; here they are empty.
+struct StatusFields
+{
+    std::string plan, state, leg, kind, phase, note;
+    std::size_t step = 0;
+    std::size_t steps = 0;
+};
+
+inline StatusFields StatusParts(const Run& r)
+{
+    StatusFields f;
+    f.steps = r.plan ? r.plan->steps.size() : 0;
+    f.step = f.steps == 0 ? 0 : (r.step < f.steps ? r.step + 1 : f.steps);
+    const PlanStep* s = r.plan && f.step ? &r.plan->steps[f.step - 1] : nullptr;
+    f.note = r.note;
+    for (char& c : f.note)
+        if (c == '|' || c == '\n' || c == '\r')
+            c = ' ';
+    f.leg = s ? r.plan->LegName(s->leg) : std::string();
+    if (f.leg.empty() && s)
+        f.leg = std::to_string(s->leg);
+    f.plan = r.plan ? r.plan->name : std::string();
+    f.state = StateName(r.state);
+    f.kind = s ? ai::PlanStepKindName(s->kind) : "";
+    f.phase = PhaseName(r.phase);
+    return f;
+}
+
 // The status line for the commander:
 //   TBM:RUN|<plan>|<state>|<step>/<steps>|<leg>|<kind>|<phase>|<note>
 // <step> counts from 1 (0 before the first, steps+1 is never sent: a done run
 // shows the last). '|' and line breaks in the note become spaces.
 inline std::string StatusLine(const Run& r)
 {
-    std::size_t const total = r.plan ? r.plan->steps.size() : 0;
-    std::size_t const shown = total == 0 ? 0 : (r.step < total ? r.step + 1 : total);
-    const PlanStep* s = r.plan && shown ? &r.plan->steps[shown - 1] : nullptr;
-    std::string note = r.note;
-    for (char& c : note)
-        if (c == '|' || c == '\n' || c == '\r')
-            c = ' ';
-    std::string leg = s ? r.plan->LegName(s->leg) : std::string();
-    if (leg.empty() && s)
-        leg = std::to_string(s->leg);
-    return "TBM:RUN|" + (r.plan ? r.plan->name : std::string("-")) + "|" + StateName(r.state) + "|" +
-        std::to_string(shown) + "/" + std::to_string(total) + "|" + (leg.empty() ? "-" : leg) + "|" +
-        (s ? ai::PlanStepKindName(s->kind) : "-") + "|" + PhaseName(r.phase) + "|" + (note.empty() ? "-" : note);
+    StatusFields const f = StatusParts(r);
+    auto dash = [](std::string const& v) { return v.empty() ? std::string("-") : v; };
+    return "TBM:RUN|" + dash(f.plan) + "|" + f.state + "|" + std::to_string(f.step) + "/" + std::to_string(f.steps) + "|" + dash(f.leg) +
+        "|" + dash(f.kind) + "|" + f.phase + "|" + dash(f.note);
 }
 
 // Which steps the run leader does today; the rest pause the run.
