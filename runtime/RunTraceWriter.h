@@ -1,7 +1,8 @@
 #pragma once
 
 // Run trace, file writer: a bounded queue and one writer thread that appends
-// JSONL lines to the trace file, so the world thread never waits on the disk.
+// JSONL lines to the trace file, so the world thread does not wait on the disk
+// while a run is going (Open and Close, at start and stop, do wait for it).
 // Standard library only; tools/test_run_trace_writer.cpp builds it standalone.
 //
 // Bounds: the queue holds at most maxQueueRecords lines and maxQueueBytes bytes;

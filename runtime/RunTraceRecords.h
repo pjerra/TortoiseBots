@@ -519,6 +519,35 @@ private:
 };
 
 // ---------------------------------------------------------------------------
+// Who a run may record
+//
+// Permission is judged when a run starts and again at every frame, because the
+// scope is re-read from the group each time: a player who joins the party (or a
+// raid) later must not bring their bots into somebody else's trace. A bot is in
+// scope while the requester is online and `controllable` for it: the glue sets
+// that from "a GameMaster, or controls the bot" (CanControlBot) at every frame.
+// At most kMaxScopeBots are kept, counted after the filter.
+// ---------------------------------------------------------------------------
+
+struct ScopeCandidate
+{
+    uint64_t guid = 0;
+    bool controllable = false;  // the requester controls this bot right now (CanControlBot)
+};
+
+inline std::vector<size_t> SelectScope(bool requesterOnline, std::vector<ScopeCandidate> const& candidates,
+    size_t cap = kMaxScopeBots)
+{
+    std::vector<size_t> allowed;
+    if (!requesterOnline)
+        return allowed;
+    for (size_t i = 0; i < candidates.size() && allowed.size() < cap; ++i)
+        if (candidates[i].controllable)
+            allowed.push_back(i);
+    return allowed;
+}
+
+// ---------------------------------------------------------------------------
 // Merging repeated outcomes
 //
 // A bot that spends a second failing the same action makes the same record

@@ -108,31 +108,53 @@ void RunTraceWriter::Run()
             queuedBytes_ = 0;
             stop = stopping_;
         }
+        // Only this thread writes the file and changes bytes / records / failed /
+        // truncated, so it decides and writes without the lock (Push, on the
+        // world thread, takes the same mutex and must never wait for the disk);
+        // the lock is taken only to publish the counters.
+        uint64_t bytes = 0;
+        uint64_t records = 0;
+        uint64_t dropped = 0;
+        bool failed = false;
+        bool truncated = false;
+        {
+            std::lock_guard<std::mutex> lock(mu_);
+            bytes = stats_.bytes;
+            failed = stats_.failed;
+            truncated = stats_.truncated;
+        }
         for (auto& item : batch)
         {
             std::string const& line = item.first;
             uint64_t const need = line.size() + 1;
-            std::lock_guard<std::mutex> lock(mu_);
             uint64_t const limit = item.second ? maxBytes_ : (maxBytes_ > kWriterTailReserve ? maxBytes_ - kWriterTailReserve : 0);
-            if (stats_.failed || stats_.bytes + need > limit)
+            if (failed || bytes + need > limit)
             {
-                if (!stats_.failed && !item.second)
-                    stats_.truncated = true;
-                ++stats_.dropped;
+                if (!failed && !item.second)
+                    truncated = true;
+                ++dropped;
                 continue;
             }
             out_.write(line.data(), static_cast<std::streamsize>(line.size()));
             out_.put('\n');
             if (!out_)
             {
-                stats_.failed = true;
-                ++stats_.dropped;
+                failed = true;
+                ++dropped;
                 continue;
             }
-            stats_.bytes += need;
-            ++stats_.records;
+            bytes += need;
+            ++records;
         }
         batch.clear();
+        {
+            std::lock_guard<std::mutex> lock(mu_);
+            stats_.bytes = bytes;
+            stats_.records += records;
+            stats_.dropped += dropped;
+            stats_.failed = failed;
+            stats_.truncated = truncated;
+        }
         auto const now = std::chrono::steady_clock::now();
         if (stop || now - lastFlush > std::chrono::seconds(1))
         {

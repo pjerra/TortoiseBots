@@ -368,6 +368,36 @@ static void TestLoopDetector()
     }
 }
 
+static void TestScopePolicy()
+{
+    std::vector<ScopeCandidate> group = {{1, true}, {2, false}, {3, true}, {4, false}};
+
+    // The owner keeps only the bots they control, in order.
+    auto own = SelectScope(true, group);
+    CHECK(own.size() == 2 && own[0] == 0 && own[1] == 2);
+
+    // A stranger's bots that joined the group later are not recorded.
+    std::vector<ScopeCandidate> strangers = {{1, false}, {2, false}};
+    CHECK(SelectScope(true, strangers).empty());
+
+    // A GameMaster controls every bot (the glue marks them all controllable).
+    std::vector<ScopeCandidate> gm = {{1, true}, {2, true}, {3, true}};
+    CHECK(SelectScope(true, gm).size() == 3);
+
+    // An offline requester records nothing.
+    CHECK(SelectScope(false, group).empty());
+    CHECK(SelectScope(false, gm).empty());
+
+    // The cap applies after the filter: uncontrolled bots do not use up places.
+    std::vector<ScopeCandidate> big;
+    for (uint64_t i = 0; i < 10; ++i)
+        big.push_back({i, i % 2 == 1});
+    auto capped = SelectScope(true, big, 3);
+    CHECK(capped.size() == 3 && capped[0] == 1 && capped[1] == 3 && capped[2] == 5);
+
+    CHECK(SelectScope(true, {}).empty());
+}
+
 int main()
 {
     TestHelpers();
@@ -377,6 +407,7 @@ int main()
     TestOutcomes();
     TestCoalescer();
     TestLoopDetector();
+    TestScopePolicy();
     std::printf("test_run_trace_records: %d checks passed\n", checks);
     return 0;
 }

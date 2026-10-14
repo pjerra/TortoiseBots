@@ -232,6 +232,11 @@ bool RunTraceService::Start(StartParams const& params, std::string& message)
         message = "The run trace is off (AiPlayerbot.RunTrace.Enabled = 0).";
         return false;
     }
+    if (!params.mayRecord)
+    {
+        message = "Cannot start the trace: no permission check supplied.";
+        return false;
+    }
     if (!RunTrace::ValidRunId(params.runId))
     {
         message = "Invalid run id: use 1-64 letters, digits, '.', '_' or '-'.";
@@ -280,6 +285,7 @@ bool RunTraceService::Start(StartParams const& params, std::string& message)
     wholeParty_ = params.wholeParty;
     anchorGuid_ = params.anchorGuid;
     requesterGuid_ = params.requesterGuid;
+    mayRecord_ = params.mayRecord;
     intervalMs_ = header_.intervalMs;
     elapsedMs_ = 0;
     frameAccumMs_ = 0;
@@ -476,27 +482,34 @@ void RunTraceService::ResolveBots(std::vector<Player*>& bots)
     Player* anchor = ObjectAccessor::FindPlayer(ObjectGuid(anchorGuid_));
     if (!anchor)
         return;
-    if (!wholeParty_)
+
+    // Every controllable bot of the group (or the one bot), then the permission
+    // filter: the group changes while a run lasts, the requester's rights over
+    // its members must hold at every frame, not only at the start.
+    static std::vector<Player*> found;
+    found.clear();
+    Group* group = wholeParty_ ? anchor->GetGroup() : nullptr;
+    if (group)
     {
-        if (BotManager::Instance().IsControllableBot(anchor))
-            bots.push_back(anchor);
-        return;
+        for (Group::MemberSlot const& slot : group->GetMemberSlots())
+        {
+            Player* member = ObjectAccessor::FindPlayer(slot.guid);
+            if (member && member->IsInWorld() && BotManager::Instance().IsControllableBot(member))
+                found.push_back(member);
+        }
     }
-    Group* group = anchor->GetGroup();
-    if (!group)
-    {
-        if (BotManager::Instance().IsControllableBot(anchor))
-            bots.push_back(anchor);
-        return;
-    }
-    for (Group::MemberSlot const& slot : group->GetMemberSlots())
-    {
-        if (bots.size() >= RunTrace::kMaxScopeBots)
-            break;
-        Player* member = ObjectAccessor::FindPlayer(slot.guid);
-        if (member && member->IsInWorld() && BotManager::Instance().IsControllableBot(member))
-            bots.push_back(member);
-    }
+    else if (BotManager::Instance().IsControllableBot(anchor))
+        found.push_back(anchor);
+
+    std::vector<RunTrace::ScopeCandidate> candidates;
+    candidates.reserve(found.size());
+    bool const online = ObjectAccessor::FindPlayer(ObjectGuid(requesterGuid_)) != nullptr;
+    for (Player* member : found)
+        candidates.push_back({ member->GetObjectGuid().GetRawValue(),
+            online && mayRecord_ && mayRecord_(requesterGuid_, member) });
+    // mayRecord_ already includes the GameMaster exemption.
+    for (size_t index : RunTrace::SelectScope(online, candidates))
+        bots.push_back(found[index]);
 }
 
 void RunTraceService::Sample()
