@@ -4383,6 +4383,12 @@ struct DungeonRunSlot
     uint64 carrierRaw = 0;    // the bot of the run's last loot/open/use order
     int taskReply = 0;        // its task's answer since then: 0 none, 1 ACK, 2 ERR
     std::string taskText;
+    // The plan steps of the current section for the dashboard, rebuilt only when the step, the plan or the skipped set changes
+    // (the dashboard datagram goes out every 2 s, the step moves a few times a minute).
+    std::vector<CommanderTelemetry::RunStepInfo> stepList;
+    ai::DungeonPlan const* stepListPlan = nullptr;
+    std::size_t stepListAt = static_cast<std::size_t>(-1);
+    std::size_t stepListSkipped = static_cast<std::size_t>(-1);
 };
 
 std::unordered_map<uint64, DungeonRunSlot>& DungeonRuns()
@@ -9104,6 +9110,64 @@ static void FillCommanderMapData(RemoteCommander::Binding const& binding, Player
     FillCommanderObjects(lead, ref);
 }
 
+// The name of the creature or object a plan step is about, for the dashboard's label; empty when unknown. Only called when the list is rebuilt.
+static std::string PlanStepName(ai::PlanStep const& step)
+{
+    if (!step.entry)
+        return std::string();
+    switch (step.kind)
+    {
+        case ai::PlanStepKind::Boss:
+            if (CreatureInfo const* info = sObjectMgr.GetCreatureTemplate(step.entry))
+                return info->name;
+            break;
+        case ai::PlanStepKind::Open:
+        case ai::PlanStepKind::WaitObject:
+        case ai::PlanStepKind::Loot:
+            if (GameObjectInfo const* info = sObjectMgr.GetGameObjectInfo(step.entry))
+                return info->name;
+            if (step.kind == ai::PlanStepKind::Loot)
+                if (CreatureInfo const* creature = sObjectMgr.GetCreatureTemplate(step.entry))
+                    return creature->name;
+            break;
+        default:
+            break;
+    }
+    return std::string();
+}
+
+// The run's current section as the dashboard's step list (at most kMaxRunSteps, windowed around the current step).
+static void FillRunStepList(DungeonRunSlot& slot, CommanderTelemetry::RunInfo& info)
+{
+    TortoiseBots::DungeonRun::Run const& run = slot.run;
+    if (!run.plan)
+        return;
+    if (slot.stepListPlan != run.plan || slot.stepListAt != run.step || slot.stepListSkipped != run.skippedSteps.size())
+    {
+        slot.stepListPlan = run.plan;
+        slot.stepListAt = run.step;
+        slot.stepListSkipped = run.skippedSteps.size();
+        slot.stepList.clear();
+        auto const leg = TortoiseBots::DungeonRun::LegRange(run);
+        auto const window = CommanderTelemetry::RunStepWindow(leg.first, leg.second, run.step);
+        for (std::size_t i = window.first; i < window.second; ++i)
+        {
+            ai::PlanStep const& step = run.plan->steps[i];
+            CommanderTelemetry::RunStepInfo item;
+            item.index = static_cast<uint32_t>(i + 1);
+            item.kind = ai::PlanStepKindName(step.kind);
+            item.x = step.x;
+            item.y = step.y;
+            item.radius = step.radius;
+            item.entry = step.entry;
+            item.name = PlanStepName(step);
+            item.skipped = run.skippedSteps.count(i) != 0;
+            slot.stepList.push_back(std::move(item));
+        }
+    }
+    info.stepList = slot.stepList;
+}
+
 void CollectCommanderTelemetry(std::vector<CommanderTelemetry::BindingRef>& out)
 {
     out.clear();
@@ -9151,6 +9215,7 @@ void CollectCommanderTelemetry(std::vector<CommanderTelemetry::BindingRef>& out)
             info.phase = f.phase;
             info.note = f.note;
             info.changedAt = run->second.changedAt;
+            FillRunStepList(run->second, info);
         }
         out.push_back(std::move(ref));
     }

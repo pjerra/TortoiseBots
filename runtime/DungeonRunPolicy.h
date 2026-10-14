@@ -38,6 +38,8 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
+#include <vector>
 #include <vector>
 
 namespace TortoiseBots {
@@ -185,11 +187,30 @@ struct Run
     std::uint32_t pulls = 0;
     std::unordered_map<std::uint64_t, std::uint32_t> pullTries;
     std::unordered_set<std::uint64_t> passed;
+    // Steps `.bot run skip` left out (0-based plan indexes), so the dashboard can draw them struck out.
+    std::unordered_set<std::size_t> skippedSteps;
 };
 
 inline const PlanStep* Current(const Run& r)
 {
     return r.plan && r.step < r.plan->steps.size() ? &r.plan->steps[r.step] : nullptr;
+}
+
+// The current section of the plan as a range [first, end) of 0-based step indexes. A plan's steps are sorted by (leg, seq), so a section
+// is one run of equal legs; a finished run (step past the end) shows its last section; {0, 0} without a plan or steps.
+inline std::pair<std::size_t, std::size_t> LegRange(const Run& r)
+{
+    if (!r.plan || r.plan->steps.empty())
+        return {0, 0};
+    const std::vector<PlanStep>& steps = r.plan->steps;
+    const std::size_t cur = r.step < steps.size() ? r.step : steps.size() - 1;
+    const std::uint8_t leg = steps[cur].leg;
+    std::size_t first = cur, end = cur + 1;
+    while (first > 0 && steps[first - 1].leg == leg)
+        --first;
+    while (end < steps.size() && steps[end].leg == leg)
+        ++end;
+    return {first, end};
 }
 
 inline std::string Num(float v)
@@ -288,6 +309,7 @@ inline bool Skip(Run& r)
     if (r.state != State::Paused || !Current(r))
         return false;
     std::size_t const skipped = r.step + 1;
+    r.skippedSteps.insert(r.step);
     NextStep(r, "skipped step " + std::to_string(skipped));
     if (r.state != State::Done)
         r.state = State::Paused;

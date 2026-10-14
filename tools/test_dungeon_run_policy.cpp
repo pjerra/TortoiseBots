@@ -578,9 +578,51 @@ static void TestEmptyPlan()
     CHECK(Tick(r, f).empty());
 }
 
+static void TestLegRangeAndSkipped()
+{
+    DungeonPlan plan;
+    plan.name = "t";
+    for (std::uint8_t leg = 1; leg <= 3; ++leg)
+        for (int i = 0; i < 4; ++i)
+        {
+            PlanStep s = Step(PlanStepKind::Move, static_cast<float>(i), 0, 0);
+            s.leg = leg;
+            s.seq = static_cast<std::uint16_t>(i);
+            plan.steps.push_back(s);
+        }
+    Run run = Start(&plan);
+    auto range = LegRange(run);
+    CHECK(range.first == 0 && range.second == 4);        // the first section
+    run.step = 5;
+    range = LegRange(run);
+    CHECK(range.first == 4 && range.second == 8);        // the second
+    run.step = 11;
+    range = LegRange(run);
+    CHECK(range.first == 8 && range.second == 12);       // the last step of the last section
+    run.step = 99;
+    range = LegRange(run);
+    CHECK(range.first == 8 && range.second == 12);       // a finished run shows its last section
+    CHECK(LegRange(Run()).second == 0);                   // no plan
+    DungeonPlan empty;
+    Run none = Start(&empty);
+    CHECK(LegRange(none).first == 0 && LegRange(none).second == 0);
+
+    // `.bot run skip` remembers the step it left out; a plain step does not
+    Run r = Start(&plan);
+    Pause(r, "stuck");
+    CHECK(Skip(r));
+    CHECK(r.skippedSteps.size() == 1 && r.skippedSteps.count(0) == 1);
+    CHECK(r.step == 1);
+    CHECK(Skip(r));
+    CHECK(r.skippedSteps.count(1) == 1 && r.skippedSteps.size() == 2);
+    NextStep(r, "done");
+    CHECK(r.skippedSteps.size() == 2);
+}
+
 int main()
 {
     TestMove();
+    TestLegRangeAndSkipped();
     TestWalkStuckIsBounded();
     TestStalledNearPointCountsAsArrived();
     TestPullLoopOnOneTargetPauses();
