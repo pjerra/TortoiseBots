@@ -46,6 +46,8 @@ using BattlegroundQueueService = Service<8>;
 using ObservabilityEmitter = Service<9>;
 using BotChatAdapter = Service<10>;
 using BotPacketAdapter = Service<11>;
+// The opt-in run trace: one atomic load per tick while no run is active.
+using RunTraceService = Service<13>;
 // Issue #884: the remote commander's binding sweep.
 namespace BotCommands { inline void UpdateRemoteCommanders(uint32 diff) { assert(diff == 50); calls.push_back(12); } }
 struct BotHostAdapter { uint32 m_ticks = 0; void OnUpdate(uint32 diff); };
@@ -67,13 +69,13 @@ int main() {
     // Enabled: lease expiry, then the commands (#846: they run the deferred
     // bot items queued ahead of each), then the rest of the deferred items
     // up to the bound the command drain returned, then the services (the
-    // remote commander sweep, 12, right after the bot update).
+    // remote commander sweep, 12, right after the bot update; the run trace, 13, last).
     adapter.OnUpdate(50);
-    assert((calls == std::vector<unsigned>{1,10,11,2,12,3,4,5,6,7,8,9}));
+    assert((calls == std::vector<unsigned>{1,10,11,2,12,3,4,5,6,7,8,9,13}));
     assert(adapter.m_ticks == 1);
     sPlayerbotAIConfig.enabled = false;
     adapter.OnUpdate(50);
-    assert((calls == std::vector<unsigned>{1,10,11,2,12,3,4,5,6,7,8,9,10}));
+    assert((calls == std::vector<unsigned>{1,10,11,2,12,3,4,5,6,7,8,9,13,10}));
     assert(adapter.m_ticks == 1);
 }
 '''

@@ -216,6 +216,7 @@ Commands for checking bot state, lifecycle, and fleet metrics:
 | `.bot list` | None | Lists all online bots currently owned by your account (Name, lifecycle, random flag, AI status). |
 | `.bot status` | `<Name>` | Displays detailed status of an owned bot: lifecycle (`starting`, `in world`, `removing`), AI attachment, active movement strategy (`follow`, `stay`, `guard`, `free`, `custom`), and owner. |
 | `.bot stats` | None | Summarizes owned bot fleet: total online, random bots, and bots with active AI attached. |
+| `.bot trace` | `start <run_id> [party\|bot <Name>]` / `stop` / `status` | Opt-in run recorder, see section 4b. |
 | `.bot lease` | `[status]` | Reports autonomous activity lease counts (Idle, Grinding, Trading, LftQueued, BgQueued, PlayerMaster) and lists active lease timers. |
 | `.bot version` *(aliases `v`, `about`, `credits`)* | None | Prints the server build version (`TortoiseBots <UTC date>-v<N>`), then `TBM:VERSION|<version>` for the addon, then the author credit and source link (`by Sagiroth - https://github.com/Sagiroth/TortoiseBots`); any player may use it. The same credit line is sent to every player on login and written to the startup log. |
 | `.bot help` *(alias `h`)* | None | Prints the server version (`TBM:VERSION|<version>`). |
@@ -236,6 +237,20 @@ Structured commands behind the TBM bot panel. They work on any online bot you co
 | `.bot behavior <Name> <key> <on\|off>` *(alias `behaviour`)* | Per-bot behaviour toggle, persisted like the loot toggle. Keys: `loot` (loot corpses), `aoe` (all area spells, on by default; `off` adds the `no aoe` strategy, same switch as `.bot action aoe`), `autocc` (`auto cc`), `savemana` (`conserve mana`), `boost` (offensive cooldowns), `threat` (ease off near tank threat), `potions` (reaction engine), `spread` (opt-in combat spacing, off by default), `mimic` (`mimic consumables`, off by default: the bot drinks the class/spec/level-appropriate equivalent when you use an elixir, flask, scroll, weapon imbue, protection potion, stat food, alcohol, raid buff or utility potion out of combat — capped by your item's level band so a cheap lowbie drink never grants BiS). Use `.bot behavior party\|raid mimic on\|off` for the whole group. Small groups (up to 4 bots) whisper what they use; larger raids stay silent and you get one `[Raid Mimic]` summary line. Answers an ACK and the bot's `TBM:BOTSTATE` line. |
 
 Replies use the action protocol: `TBM:ACTION_ACK|item <op>|bot:<Name>|1|<itemId>[ pending]`, `TBM:ACTION_ACK|behavior <key>|bot:<Name>|1|<on|off>` (`.bot behavior party|raid ...` answers `TBM:ACTION_ACK|behavior <key>|party|<N>|<on|off>`), or `TBM:ACTION_ERR|<intent>|<code>|<message>`. The ACK scope is always `party` or `bot:<Name>`, the detail never contains `|`, and the ERR intent is never empty (an unparseable `.bot action` names the first word typed, cut to 32 bytes on a UTF-8 character boundary with `|`, CR and LF turned into spaces, or `unknown` when nothing is left).
+
+---
+
+## 4b. Run Trace (`.bot trace`)
+
+Opt-in recorder for tests and tuning: it writes what a party's bots did during one run to a JSONL file, and `tools/trace_score.py` scores it offline. Off by default: needs `AiPlayerbot.RunTrace.Enabled = 1`, otherwise `.bot trace start` answers `TBM:ACTION_ERR|trace start|disabled|…`. Schema, files and oracles: [run trace](run-trace.md).
+
+| Command | What It Does |
+| :--- | :--- |
+| `.bot trace start <run_id> [party\|bot <Name>]` | Starts a run. `party` (default) records the bots of your party (a bound remote commander, section 1a, records the group it commands); `bot <Name>` records one bot you control. The run id (1-64 letters, digits, `.`, `_`, `-`) is stamped on every record, and names the files; an id that already has a trace is refused (`refused`). A GameMaster may trace any party; everyone else only a party whose bots they control (`forbidden`). One run at a time. ACK: `TBM:ACTION_ACK|trace start|party\|bot:<Name>|<bots>|<run_id>`. |
+| `.bot trace stop` | Ends the run and writes the summary. Only a GameMaster or the player who started it (`forbidden`); `not-running` without one. ACK: `TBM:ACTION_ACK|trace stop|stopped|1|<run_id>`. |
+| `.bot trace status` | Prints the running run's id, scope, elapsed time, record counts, bytes written and lines dropped. ACK: `TBM:ACTION_ACK|trace status|running\|idle|<0\|1>|<run_id>`. |
+
+A run ends on its own when the size cap is reached, when the party has had no bots for 10 s, when the feature is switched off or at server shutdown; the summary says why (`end_reason`).
 
 ---
 
