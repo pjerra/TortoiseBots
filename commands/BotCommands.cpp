@@ -4387,6 +4387,7 @@ struct DungeonRunSlot
 {
     TortoiseBots::DungeonRun::Run run;
     std::string lastLine;     // the last TBM:RUN line sent (a line goes out on change)
+    int64_t changedAt = 0;    // unix seconds that line last changed (the dashboard shows it)
     uint64 carrierRaw = 0;    // the bot of the run's last loot/open/use order
     int taskReply = 0;        // its task's answer since then: 0 none, 1 ACK, 2 ERR
     std::string taskText;
@@ -8459,6 +8460,8 @@ void SendRunLine(Player* commander, DungeonRunSlot& slot, bool force)
     std::string const line = TortoiseBots::DungeonRun::StatusLine(slot.run);
     if (!force && line == slot.lastLine)
         return;
+    if (line != slot.lastLine)
+        slot.changedAt = static_cast<int64_t>(time(nullptr));
     slot.lastLine = line;
     if (commander && commander->IsInWorld() && commander->GetSession())
         ChatHandler(commander).PSendSysMessage("%s", line.c_str());
@@ -9182,6 +9185,23 @@ void CollectCommanderTelemetry(std::vector<CommanderTelemetry::BindingRef>& out)
             FillCommandedBots(group, lead, ref.bots);
         ref.orders = CommanderOrderLog().Recent(commanderRaw);
         FillCommanderMapData(*binding, commander, lead, ref);
+        // The run leader's run of this binding, for the dashboard's "observe" card: the status line's own fields.
+        auto const run = DungeonRuns().find(commanderRaw);
+        if (run != DungeonRuns().end())
+        {
+            TortoiseBots::DungeonRun::StatusFields const f = TortoiseBots::DungeonRun::StatusParts(run->second.run);
+            CommanderTelemetry::RunInfo& info = ref.run;
+            info.present = true;
+            info.plan = f.plan;
+            info.state = f.state;
+            info.step = static_cast<uint32_t>(f.step);
+            info.steps = static_cast<uint32_t>(f.steps);
+            info.leg = f.leg;
+            info.kind = f.kind;
+            info.phase = f.phase;
+            info.note = f.note;
+            info.changedAt = run->second.changedAt;
+        }
         out.push_back(std::move(ref));
     }
     CommanderOrderLog().Retain(bound);
