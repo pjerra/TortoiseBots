@@ -11,6 +11,7 @@
 #include "../runtime/AhMarketService.h"
 #include "../runtime/BattlegroundQueueService.h"
 #include "../runtime/ObservabilityEmitter.h"
+#include "../runtime/RunTrace.h"
 #include "BotChatAdapter.h"
 #include "BotPacketAdapter.h"
 #include "HireRecruiterScript.h"
@@ -183,10 +184,13 @@ void BotHostAdapter::OnUpdate(uint32 diff)
     AhMarketService::Instance().Update(diff);
     BattlegroundQueueService::Instance().Update(diff);
     ObservabilityEmitter::Instance().Update(diff);
+    // Opt-in run trace (one atomic load per tick while no run is active).
+    RunTraceService::Instance().Update(diff);
 }
 
 void BotHostAdapter::OnShutdown()
 {
+    RunTraceService::Instance().Shutdown();
     ObservabilityEmitter::Instance().Shutdown();
     BattlegroundQueueService::Instance().Shutdown();
     BotCommandQueue::Instance().Clear();

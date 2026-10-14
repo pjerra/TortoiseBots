@@ -291,6 +291,7 @@ Commands for checking bot state, lifecycle, and fleet metrics:
 | `.bot list` | None | Lists all online bots currently owned by your account (Name, lifecycle, random flag, AI status). |
 | `.bot status` | `<Name>` | Displays detailed status of an owned bot: lifecycle (`starting`, `in world`, `removing`), AI attachment, active movement strategy (`follow`, `stay`, `guard`, `free`, `custom`), and owner. |
 | `.bot stats` | None | Summarizes owned bot fleet: total online, random bots, and bots with active AI attached. |
+| `.bot trace` | `start <run_id> [party\|bot <Name>]` / `stop` / `status` | Opt-in run recorder, see section 4b. |
 | `.bot lease` | `[status]` | Reports autonomous activity lease counts (Idle, Grinding, Trading, LftQueued, BgQueued, PlayerMaster) and lists active lease timers. |
 | `.bot version` *(aliases `v`, `about`, `credits`)* | None | Prints the server build version (`TortoiseBots <UTC date>-v<N>`), then `TBM:VERSION|<version>` for the addon, then the author credit and source link (`by Sagiroth - https://github.com/Sagiroth/TortoiseBots`); any player may use it. The same credit line is sent to every player on login and written to the startup log. |
 | `.bot help` *(alias `h`)* | None | Prints the server version (`TBM:VERSION|<version>`). |
@@ -315,6 +316,20 @@ Structured commands behind the TBM bot panel. They work on any online bot you co
 | `.bot totem <bot> status` | Report choice/mode: one `TBM:TOTEM\|<bot>\|earth=<…>,fire=<…>,water=<…>,air=<…>,mode=<…>` line per bot (`auto` shows as `auto`, `none`/unset as `none`), then `TBM:ACTION_ACK\|totem status\|<scope>\|<n>\|-`. |
 
 Replies use the action protocol: `TBM:ACTION_ACK|item <op>|bot:<Name>|1|<itemId>[ pending]`, `TBM:ACTION_ACK|behavior <key>|bot:<Name>|1|<on|off>` (`.bot behavior party|raid ...` answers `TBM:ACTION_ACK|behavior <key>|party|<N>|<on|off>`), or `TBM:ACTION_ERR|<intent>|<code>|<message>`. The ACK scope is always `party` or `bot:<Name>`, the detail never contains `|`, and the ERR intent is never empty (an unparseable `.bot action` names the first word typed, cut to 32 bytes on a UTF-8 character boundary with `|`, CR and LF turned into spaces, or `unknown` when nothing is left).
+
+---
+
+## 4b. Run Trace (`.bot trace`)
+
+Opt-in recorder for tests and tuning: it writes what a party's bots did during one run to a JSONL file, and `tools/trace_score.py` scores it offline. Off by default: needs `AiPlayerbot.RunTrace.Enabled = 1`, otherwise `.bot trace start` answers `TBM:ACTION_ERR|trace start|disabled|…`. Schema, files and oracles: [run trace](run-trace.md).
+
+| Command | What It Does |
+| :--- | :--- |
+| `.bot trace start <run_id> [party\|bot <Name>]` | Starts a run. `party` (default) records the bots of your party (a bound remote commander, section 1a, records the group it commands); `bot <Name>` records one bot you control. The run id (1-64 letters, digits, `.`, `_`, `-`) is stamped on every record, and names the files; an id that already has a trace is refused (`refused`). A GameMaster may trace any party; everyone else only a party whose bots they control (`forbidden`). One run at a time. ACK: `TBM:ACTION_ACK|trace start|party\|bot:<Name>|<bots>|<run_id>`. |
+| `.bot trace stop` | Ends the run and writes the summary. Only a GameMaster or the player who started it (`forbidden`); `not-running` without one. ACK: `TBM:ACTION_ACK|trace stop|stopped|1|<run_id>`. |
+| `.bot trace status` | Prints the running run's id, scope, elapsed time, record counts, bytes written and lines dropped. ACK: `TBM:ACTION_ACK|trace status|running\|idle|<0\|1>|<run_id>`. |
+
+A run ends on its own when the size cap is reached, when the party has had no bots for 10 s, when the feature is switched off or at server shutdown; the summary says why (`end_reason`).
 
 ---
 

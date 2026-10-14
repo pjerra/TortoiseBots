@@ -67,6 +67,7 @@ Detailed combat rotations, Turtle WoW 1.18.1 custom abilities, pet handling, and
 - [**Player Controls**](guides/player-controls.md) — Roster vs. Actions, `.bot action` command intents, and the `TBM:` addon protocol.
 - [**Configuration & Tuning**](guides/configuration-tuning.md) — Plain-English explanation of `aiplayerbot.conf` and `tortoise_bots.conf` settings.
 - [**Observability & Dashboard**](guides/observability-dashboard.md) — Go telemetry daemon, Prometheus metrics, and live browser dashboard.
+- [**Run Trace**](guides/run-trace.md) — Opt-in recorder of a party's run (`.bot trace`), the `bt-trace` v1 schema, and the offline scorer.
 
 ---
 
