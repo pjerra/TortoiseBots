@@ -52,6 +52,9 @@ public:
         std::string scopeName;      // shown in the header and the status
         std::string requester;      // name, for the header
         uint64_t requesterGuid = 0; // who may stop it (besides a GM)
+        // True while the requester may record this bot (a GM, or controls it).
+        // Called for every bot of the group at start and at every frame.
+        bool (*mayRecord)(uint64_t requesterGuid, Player* bot) = nullptr;
     };
 
     // World thread. False with `message` filled when the run cannot start.
@@ -115,6 +118,7 @@ private:
     bool wholeParty_ = true;
     uint64_t anchorGuid_ = 0;
     uint64_t requesterGuid_ = 0;
+    bool (*mayRecord_)(uint64_t requesterGuid, Player* bot) = nullptr;
     uint32_t elapsedMs_ = 0;
     uint32_t frameAccumMs_ = 0;
     uint32_t checkAccumMs_ = 0;

@@ -329,7 +329,7 @@ Opt-in recorder for tests and tuning: it writes what a party's bots did during o
 | `.bot trace stop` | Ends the run and writes the summary. Only a GameMaster or the player who started it (`forbidden`); `not-running` without one. ACK: `TBM:ACTION_ACK|trace stop|stopped|1|<run_id>`. |
 | `.bot trace status` | Prints the running run's id, scope, elapsed time, record counts, bytes written and lines dropped. ACK: `TBM:ACTION_ACK|trace status|running\|idle|<0\|1>|<run_id>`. |
 
-A run ends on its own when the size cap is reached, when the party has had no bots for 10 s, when the feature is switched off or at server shutdown; the summary says why (`end_reason`).
+The permission is re-checked every frame, so bots of someone else who join your party are not recorded. A run ends on its own when the size cap is reached, when the party has had no bots you may record for 10 s (also when you log out), when the feature is switched off or at server shutdown; the summary says why (`end_reason`).
 
 ---
 

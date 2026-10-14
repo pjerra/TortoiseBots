@@ -27,6 +27,8 @@ It is **off by default** (`AiPlayerbot.RunTrace.Enabled = 0`) and costs nothing 
 
 See [player controls, section 4b](player-controls.md) for who may run them. `party` (the default) follows the bots of your party; for a [remote commander](player-controls.md) with a standing binding it follows the commanded group. `bot <Name>` follows one bot. One run at a time. A run also ends by itself when the size cap is reached (`size_cap`), when the group has no bots for 10 s (`scope_lost`), when the config switch is turned off (`disabled`) or at server shutdown (`shutdown`).
 
+The scope is re-read every frame and permission is re-checked each time: a bot is recorded only while the player who started the run is online and is a GameMaster or controls that bot, so a stranger's bots that join the party later are left out. If the starter logs out, the run ends by itself (`scope_lost`).
+
 A run id is 1-64 characters of letters, digits, `.`, `_` and `-` (it becomes the file name), and a run id that already has a trace file is refused.
 
 ## Files
@@ -106,7 +108,7 @@ Ten oracles. The facing, self-interrupt, stuck and in-fire checks look for probl
 ## Cost and limits
 
 - **Off, or no run active:** one atomic load per world tick, and one walk over an empty listener list per action the engine takes out of its queue. Nothing else runs.
-- **During a run:** each interval, per scoped bot, member reads, one read of its own aura list, its cached attacker lists and a by-guid lookup of each hostile on the bot's own map: the same sources as the remote commander's `TBM:VIEW` feed. No world scan, no database access. The JSON lines are built on the world thread (a few microseconds per bot and frame); only the file write is on another thread, through a queue of at most 8192 lines / 4 MiB that drops (and counts) lines instead of blocking.
+- **During a run:** each interval, per scoped bot, member reads, one read of its own aura list, its cached attacker lists and a by-guid lookup of each hostile on the bot's own map: the same sources as the remote commander's `TBM:VIEW` feed. No world scan, no database access. The JSON lines are built on the world thread (a few microseconds per bot and frame); only the file write is on another thread, through a queue of at most 8192 lines / 4 MiB that drops (and counts) lines instead of blocking. The world thread does wait on the disk twice, at start (opening the file, writing the first summary) and at stop (draining what is queued, up to 4 MiB, then writing the summary).
 - **Size:** roughly 200 bytes per bot and 150 per hostile in each frame, plus the action records; five bots in a fight at the default 500 ms is about 0.3-1 MiB a minute (estimate, not measured). `AiPlayerbot.RunTrace.MaxFileMb` ends the run with an intact `end` record.
 - Hostiles are limited to those the bots already track as attackers or targets, not everything in sight; a trace shows who fought whom, not the whole room.
 

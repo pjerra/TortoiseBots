@@ -9457,6 +9457,17 @@ void ClearRemoteCommanders()
 // `trace <verb>`; the ack's last field is the run id.
 // ---------------------------------------------------------------------------
 
+// The run trace asks this for every bot at start and at every frame: a GM, or
+// the player who controls the bot (owner, master or claim), may record it.
+static bool MayTraceBot(uint64_t requesterGuid, Player* bot)
+{
+    Player* requester = ObjectAccessor::FindPlayer(ObjectGuid(requesterGuid));
+    if (!requester || !bot)
+        return false;
+    return IsBotAdministrator(requester) ||
+        CanControlBot(requester, BotManager::Instance().FindBot(bot->GetObjectGuid()));
+}
+
 static bool HandleTrace(ChatHandler* handler, char const* args)
 {
     Player* requester = Requester(handler);
@@ -9537,6 +9548,7 @@ static bool HandleTrace(ChatHandler* handler, char const* args)
     params.runId = parts[1];
     params.requester = requester->GetName();
     params.requesterGuid = requester->GetObjectGuid().GetRawValue();
+    params.mayRecord = &MayTraceBot;
     std::string scope = parts.size() > 2 ? parts[2] : std::string("party");
     for (char& c : scope)
         c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
