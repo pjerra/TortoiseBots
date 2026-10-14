@@ -9775,3 +9775,9 @@ on the test VM (see the PR); build pending; in-game pending.
 - Reason: four stacked gates — (1) potion armed at <40% so the first 2 min cycle slipped 40 s; (2) blanket mage rune block; (3) gem node with no potion fallback; (4) evocation late + SINGLE threat type. Spell 51931 is Turtle Hot Streak proc rank 2 (stacking Pyroblast cast-time reduction, not a mana cost).
 - Validation: `tools/test_caster_mana_policy.cpp`, `bash tools/verify_all.sh` clean, module build green (build-commit.sh 4bacbb58); live raid re-test pending (server busy).
 
+---
+
+- Feature: run leader (`.bot run`, `runtime/DungeonRunPolicy.h` + glue in `commands/BotCommands.cpp`) and the dungeon plan tables it reads (`ai_dungeon_plan`/`leg`/`step`, `ai/playerbot/DungeonPlanPolicy.h`, `DungeonPlanMgr.cpp`).
+- Source: `pjerra/turtle-agent` (the owner's own MIT project) at b017673: plan format v1 (`internal/dungeon/plan.go`), the plan stepper (`internal/dungeon/stepper.go`) and the remote driver's safety rules (`internal/dungeon/remote*.go`, README "Remote mode": gather before pulls, no unseen pack counted cleared, no live boss counted dead, every wait bounded, stop on a wipe). Reimplemented in C++ as a server-side step machine; no code copied. mod-playerbots has no dungeon leader to port (design: TortoiseBots-audit DESIGN-DUNGEON-MODES §2).
+- Reason: owner decision 2026-10-14 (opt-in self-clear, off by default; the agent's plans are the single data source).
+- Validation: `tools/test_dungeon_plan_policy.cpp`, `tools/test_dungeon_run_policy.cpp`, `tools/test_dungeon_plan_sql.py`; module syntax check of the glue; no live run yet.
