@@ -2,6 +2,7 @@
 #include "playerbot/GroupHygienePolicy.h"
 #include "playerbot/playerbot.h"
 #include "../../runtime/PlayerbotAIStorage.h" // Headless storage shim
+#include "../../../../runtime/HireLifecycle.h"
 #include "LeaveGroupAction.h"
 
 namespace ai
@@ -63,6 +64,13 @@ namespace ai
             return false;
 
         if (!bot->GetGroup())
+            return false;
+
+        // Issue #1014: a hire or a bot in a commanded group never leaves on its
+        // own, whoever its master is at the moment.
+        if (!ai::FarAwayLeaveAllowed(
+                TortoiseBots::HireLifecycle::Instance().IsHired(bot->GetObjectGuid()),
+                TortoiseBots::BotCommands::IsInCommandedGroup(bot)))
             return false;
 
         Player* groupMaster = ai->GetGroupMaster();

@@ -54,6 +54,7 @@ python3 -m unittest tools/test_dungeon_plan_sql.py
 python3 -m unittest tools/test_trace_score.py
 python3 -m unittest tools/test_run_trace_glue.py
 python3 -m unittest tools/test_run_leader_wiring.py
+python3 -m unittest tools/test_hire_never_leaves_wiring.py
 echo "✓ Engine unit tests passed."
 
 echo ""
@@ -136,6 +137,7 @@ if command -v g++ >/dev/null 2>&1; then
         test_hire_gear_policy
         test_hire_intro_policy
         test_hire_level_policy
+        test_hire_master_policy
         test_hire_respec_policy
         test_hire_quest_policy
         test_hire_spec_policy

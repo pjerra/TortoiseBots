@@ -24,4 +24,13 @@ namespace ai
             return true;
         return distance2d >= 2 * rpgDistance;
     }
+
+    // Issue #1014: a hired companion, or a bot in a group a commander has
+    // bound, never leaves its group on its own (the same guard the "master
+    // left the party" rule has). The hire ends through the hire lifecycle and
+    // the binding through its release, not through this roll.
+    inline bool FarAwayLeaveAllowed(bool hired, bool inCommandedGroup)
+    {
+        return !hired && !inCommandedGroup;
+    }
 }

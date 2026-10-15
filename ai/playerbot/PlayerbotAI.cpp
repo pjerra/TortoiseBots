@@ -16,6 +16,7 @@
 #include "../../runtime/RunTrace.h"
 #include "../../runtime/BotActivityLease.h"
 #include "../../runtime/HireLifecycle.h"
+#include "../../runtime/HireMasterPolicy.h"
 #include "../../runtime/PoolBotTradePolicy.h"
 #include "../../runtime/QueuedOrderPolicy.h"
 #include "../../runtime/RemoteCommanderTasks.h"
@@ -3424,6 +3425,24 @@ void PlayerbotAI::DoNextAction(bool min, bool forceActivity)
     // mid-fight and, through the BotManager (ClaimForMaster / ReleaseMaster), replace
     // the Dungeon lease that keeps the random-bot services off the crew.
     bool const dungeonCrew = TortoiseBots::BotActivityLeaseManager::Instance().GetActivity(bot->GetGUIDLow()) == TortoiseBots::BotActivity::Dungeon;
+
+    // Issue #1014: a hire keeps its hirer. While the hirer changes maps it is out
+    // of the world (FindPlayer misses it, so UpdateAI dropped the pointer) but
+    // still exists (the not-in-world lookup finds it); the binding stays and the
+    // pointer comes back once the hirer is in the world again. Non-hires skip it.
+    bool const hired = TortoiseBots::HireLifecycle::Instance().IsHired(bot->GetObjectGuid());
+    ObjectGuid const hirerGuid = hired ? TortoiseBots::HireLifecycle::Instance().GetMaster(bot->GetObjectGuid()) : ObjectGuid();
+    Player* const hirer = hirerGuid.IsEmpty() ? nullptr : ObjectAccessor::FindPlayerNotInWorld(hirerGuid);
+    bool const hirerBetweenMaps = hirer && !hirer->IsInWorld();
+    if (hired && !dungeonCrew)
+    {
+        TortoiseBots::BotRecord const* record = TortoiseBots::BotManager::Instance().FindBot(bot->GetObjectGuid());
+        bool const boundToHirer = !hirerGuid.IsEmpty() && masterGuid == hirerGuid &&
+            record && record->masterGuid == hirerGuid;
+        if (TortoiseBots::HireRestoresHirer(hired, boundToHirer, master != nullptr, hirer && hirer->IsInWorld()))
+            master = hirer;
+    }
+
     //Remove bot masters not in our group.
     if (!dungeonCrew && master && master != bot && !HasActivePlayerMaster() && (!group || group->GetLeaderGuid() != master->getObjectGuid()))
     {
@@ -3509,7 +3528,10 @@ void PlayerbotAI::DoNextAction(bool min, bool forceActivity)
                     break;
                 }
 
-        if (newMaster && (!master || master != newMaster) && bot != newMaster)
+        // Issue #1014: never hand a hire to a bot, nor to anyone while its hirer
+        // is only between maps.
+        if (newMaster && (!master || master != newMaster) && bot != newMaster &&
+            TortoiseBots::HireAllowsMasterAdoption(hired, hirerBetweenMaps, IsRealPlayer(newMaster)))
         {
             bool masterChanged = true;
             if (TortoiseBots::BotManager::Instance().IsBot(bot->GetObjectGuid()))

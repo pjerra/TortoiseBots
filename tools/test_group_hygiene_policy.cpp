@@ -10,6 +10,7 @@
     } \
 } while (0)
 
+using ai::FarAwayLeaveAllowed;
 using ai::GroupFarAwayLeave;
 
 int main()
@@ -32,6 +33,13 @@ int main()
     CHECK(!GroupFarAwayLeave(true, 0.0f, 200.0f));
     CHECK(!GroupFarAwayLeave(true, 399.9f, 200.0f));
     std::cout << "  [PASS] nearby group stays\n";
+
+    // Issue #1014: a hire or a bot in a commanded group never leaves on its own.
+    CHECK(FarAwayLeaveAllowed(false, false));
+    CHECK(!FarAwayLeaveAllowed(true, false));
+    CHECK(!FarAwayLeaveAllowed(false, true));
+    CHECK(!FarAwayLeaveAllowed(true, true));
+    std::cout << "  [PASS] hired or commanded bots never leave far away\n";
 
     std::cout << "All TortoiseBots group-hygiene gate tests passed.\n";
     return 0;
