@@ -51,6 +51,7 @@
 #include "../runtime/DungeonRunPolicy.h"
 #include "../ai/playerbot/DungeonPlanMgr.h"
 #include "../ai/playerbot/LootObjectStack.h"
+#include "../runtime/RunTrace.h"
 #include "../ai/playerbot/strategy/Engine.h"
 #include "../ai/playerbot/strategy/Value.h"
 #include "../ai/playerbot/GuidPosition.h"
@@ -9447,6 +9448,221 @@ void ClearRemoteCommanders()
     s_commanderSweepMs = 0;
 }
 
+// ---------------------------------------------------------------------------
+// Run trace (opt-in): `.bot trace start <run_id> [party|bot <Name>]`,
+// `.bot trace stop`, `.bot trace status`. Behind AiPlayerbot.RunTrace.Enabled
+// (default 0). The recorder is runtime/RunTrace.{h,cpp}; this is the command
+// glue: who may trace which bots, and which group a party trace follows.
+// Replies are the usual TBM:ACTION_ACK / TBM:ACTION_ERR lines with the intent
+// `trace <verb>`; the ack's last field is the run id.
+// ---------------------------------------------------------------------------
+
+// True when `requester` is the bound remote commander of the group `bot` is in:
+// the group of the binding's lead bot, the one `.bot trace start party` follows
+// for a commander.
+static bool CommandsBotsGroup(Player* requester, Player* bot)
+{
+    RemoteCommander::Binding const* binding =
+        CommanderBindings().FindByCommander(requester->GetObjectGuid().GetRawValue());
+    if (!binding)
+        return false;
+    Player* lead = FindCharacter(binding->leadGuid);
+    Group* group = lead ? lead->GetGroup() : nullptr;
+    return group && group == bot->GetGroup();
+}
+
+// The run trace asks this for every bot at start and at every frame: a GM, the
+// player who controls the bot (owner, master or claim), or the bound commander
+// of its group may record it (RunTrace::MayRecordBot).
+static bool MayTraceBot(uint64_t requesterGuid, Player* bot)
+{
+    Player* requester = ObjectAccessor::FindPlayer(ObjectGuid(requesterGuid));
+    if (!requester || !bot)
+        return false;
+    return RunTrace::MayRecordBot(IsBotAdministrator(requester),
+        CanControlBot(requester, BotManager::Instance().FindBot(bot->GetObjectGuid())),
+        CommandsBotsGroup(requester, bot));
+}
+
+static bool HandleTrace(ChatHandler* handler, char const* args)
+{
+    Player* requester = Requester(handler);
+    std::vector<std::string> parts;
+    {
+        std::string text = Trim(args ? args : "");
+        size_t pos = 0;
+        while (pos < text.size())
+        {
+            size_t end = text.find_first_of(" \t", pos);
+            if (end == std::string::npos)
+                end = text.size();
+            parts.push_back(text.substr(pos, end - pos));
+            pos = text.find_first_not_of(" \t", end);
+            if (pos == std::string::npos)
+                break;
+        }
+    }
+    std::string verb = parts.empty() ? std::string() : parts[0];
+    for (char& c : verb)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    std::string const intent = "trace " + (verb.empty() ? std::string("unknown") : ProtocolSafe(verb));
+
+    if (verb != "start" && verb != "stop" && verb != "status")
+    {
+        SendActionError(handler, intent, "invalid",
+            "Usage: .bot trace start <run_id> [party|bot <Name>] / stop / status");
+        return true;
+    }
+    if (!requester || !requester->GetSession())
+    {
+        SendActionError(handler, intent, "requester", "You must be in-game.");
+        return true;
+    }
+    RunTraceService& service = RunTraceService::Instance();
+    bool const admin = IsBotAdministrator(requester);
+
+    if (verb == "status")
+    {
+        // The run id and scope only to a GameMaster and the player who started it.
+        bool const detail = RunTrace::MaySeeRunDetail(admin,
+            service.Phase() != RunTrace::RunPhase::Idle &&
+            service.RequesterGuid() == requester->GetObjectGuid().GetRawValue());
+        RunTrace::RunPhase const phase = service.Phase();
+        char const* state = phase == RunTrace::RunPhase::Running ? "running"
+            : phase == RunTrace::RunPhase::Finishing ? "finishing" : "idle";
+        handler->PSendSysMessage("%s", service.Status(detail).c_str());
+        SendActionAck(handler, intent, state, phase == RunTrace::RunPhase::Idle ? 0 : 1,
+            phase != RunTrace::RunPhase::Idle && detail ? service.RunId() : std::string());
+        return true;
+    }
+
+    if (verb == "stop")
+    {
+        if (!service.Active())
+        {
+            SendActionError(handler, intent, "not-running", "No trace is running.");
+            return true;
+        }
+        if (!admin && service.RequesterGuid() != requester->GetObjectGuid().GetRawValue())
+        {
+            SendActionError(handler, intent, "forbidden", "Only a GameMaster or the player who started the trace can stop it.");
+            return true;
+        }
+        std::string const run = service.RunId();
+        std::string message;
+        service.Stop("stop", message);
+        handler->PSendSysMessage("%s", message.c_str());
+        SendActionAck(handler, intent, "stopped", 1, run);
+        return true;
+    }
+
+    // start
+    if (char const* off = RunTrace::TraceOffReason(sPlayerbotAIConfig.enabled, sPlayerbotAIConfig.runTrace))
+    {
+        SendActionError(handler, intent, "disabled", off);
+        return true;
+    }
+    if (!RunTrace::MayStartTrace(sPlayerbotAIConfig.runTraceGmOnly, admin))
+    {
+        SendActionError(handler, intent, "forbidden",
+            "Only a GameMaster may start a trace (AiPlayerbot.RunTrace.GmOnly = 1).");
+        return true;
+    }
+    if (parts.size() < 2)
+    {
+        SendActionError(handler, intent, "invalid", "Usage: .bot trace start <run_id> [party|bot <Name>]");
+        return true;
+    }
+    RunTraceService::StartParams params;
+    params.runId = parts[1];
+    params.requester = requester->GetName();
+    params.requesterGuid = requester->GetObjectGuid().GetRawValue();
+    params.mayRecord = &MayTraceBot;
+    std::string scope = parts.size() > 2 ? parts[2] : std::string("party");
+    for (char& c : scope)
+        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+
+    uint32 botCount = 0;
+    if (scope == "bot")
+    {
+        if (parts.size() < 4)
+        {
+            SendActionError(handler, intent, "invalid", "Usage: .bot trace start <run_id> bot <Name>");
+            return true;
+        }
+        Player* bot = nullptr;
+        BotRecord* record = nullptr;
+        std::string name;
+        if (!ResolveOwnedBot(handler, parts[3].c_str(), bot, record, name))
+        {
+            SendActionError(handler, intent, "no-bot", "That bot is not online or not yours.");
+            return true;
+        }
+        params.wholeParty = false;
+        params.anchorGuid = bot->GetObjectGuid().GetRawValue();
+        params.scopeName = bot->GetName();
+        botCount = 1;
+    }
+    else if (scope == "party")
+    {
+        // A bound commander traces the group it commands (anchored on its lead
+        // bot); anyone else traces the bots of their own party.
+        Player* anchor = requester;
+        bool commanded = false;
+        if (RemoteCommander::Binding const* binding =
+                CommanderBindings().FindByCommander(requester->GetObjectGuid().GetRawValue()))
+            if (Player* lead = FindCharacter(binding->leadGuid))
+            {
+                anchor = lead;
+                commanded = true;
+            }
+        Group* group = anchor->GetGroup();
+        if (!group)
+        {
+            SendActionError(handler, intent, "no-party", "You are not in a party with bots.");
+            return true;
+        }
+        for (Group::MemberSlot const& slot : group->GetMemberSlots())
+        {
+            Player* member = ObjectAccessor::FindPlayer(slot.guid);
+            if (!member || !IsLiveHeadlessBot(member))
+                continue;
+            BotRecord* record = BotManager::Instance().FindBot(member->GetObjectGuid());
+            // The same rule as every frame (MayTraceBot): a GameMaster, the
+            // player who controls the bot, or the commander of its group.
+            if (!RunTrace::MayRecordBot(admin, CanControlBot(requester, record), commanded))
+            {
+                SendActionError(handler, intent, "forbidden", "You can only trace a party whose bots you control.");
+                return true;
+            }
+            ++botCount;
+        }
+        if (!botCount)
+        {
+            SendActionError(handler, intent, "no-bots", "There are no bots in that party.");
+            return true;
+        }
+        params.wholeParty = true;
+        params.anchorGuid = anchor->GetObjectGuid().GetRawValue();
+        params.scopeName = anchor->GetName();
+    }
+    else
+    {
+        SendActionError(handler, intent, "invalid", "Usage: .bot trace start <run_id> [party|bot <Name>]");
+        return true;
+    }
+
+    std::string message;
+    if (!service.Start(params, message))
+    {
+        SendActionError(handler, intent, "refused", message.c_str());
+        return true;
+    }
+    handler->PSendSysMessage("%s", message.c_str());
+    SendActionAck(handler, intent, params.wholeParty ? "party" : "bot:" + params.scopeName, botCount, params.runId);
+    return true;
+}
+
 static bool HandleAhBot(ChatHandler* handler, char const* args)
 {
     if (!handler)
@@ -9810,7 +10026,7 @@ bool HandleChatCommand(ChatHandler* handler, char const* args)
     while (*args == ' ' || *args == '\t') ++args;
     if (!*args)
     {
-        handler->PSendSysMessage("Usage: .bot add/remove/logout/roster/action/commander/cmd/follow/invite/uninvite/kick/stay/guard/free/ready/attack/interrupt/formation/list/stats/status/lease/version/about/pullback/role/summon/command/hire/loot/repair/sell/rest/drink/eat/release/corpse run/learn/trade/inv/item/behavior/strategy/maintenance/autogear/ah/pool");
+        handler->PSendSysMessage("Usage: .bot add/remove/logout/roster/action/commander/cmd/trace/follow/invite/uninvite/kick/stay/guard/free/ready/attack/interrupt/formation/list/stats/status/lease/version/about/pullback/role/summon/command/hire/loot/repair/sell/rest/drink/eat/release/corpse run/learn/trade/inv/item/behavior/strategy/maintenance/autogear/ah/pool");
         return true;
     }
 
@@ -9838,6 +10054,8 @@ bool HandleChatCommand(ChatHandler* handler, char const* args)
         return HandleCommanderOrder(handler, subArgs);
     if (cmd == "run")
         return HandleDungeonRun(handler, subArgs);
+    if (cmd == "trace")
+        return HandleTrace(handler, subArgs);
     if (cmd == "add")
         return HandleAdd(handler, subArgs);
     if (cmd == "remove")

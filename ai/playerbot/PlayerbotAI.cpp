@@ -12,6 +12,7 @@
 #include "playerbot/AiFactory.h"
 
 #include "../../runtime/ObservabilityEmitter.h"
+#include "../../runtime/RunTrace.h"
 #include "../../runtime/BotActivityLease.h"
 #include "../../runtime/HireLifecycle.h"
 #include "../../runtime/PoolBotTradePolicy.h"
@@ -3239,6 +3240,10 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
 
 void PlayerbotAI::SpellInterrupted(uint32 spellid)
 {
+    // Run trace (opt-in): the bot's own cast was cancelled.
+    if (TortoiseBots::RunTraceService::Instance().Active())
+        TortoiseBots::RunTraceService::Instance().NoteSpellInterrupted(this, spellid);
+
     LastSpellCast& lastSpell = aiObjectContext->GetValue<LastSpellCast&>("last spell cast")->Get();
     if (!spellid || lastSpell.id != spellid)
         return;

@@ -453,6 +453,19 @@ public:
     // commander whose feed is on (`.bot commander view on|off`). Clamped to
     // 250..60000; default 1000.
     uint32 remoteCommanderViewMs = 1000;
+    // Run trace (docs/guides/run-trace.md): `.bot trace start <run_id>` records
+    // the party's bots as bt-trace v1 JSONL. Off by default; with 0 the command
+    // answers that the feature is off.
+    bool runTrace = false;
+    // Milliseconds between two trace frames (250..10000).
+    uint32 runTraceIntervalMs = 500;
+    // Output directory; relative paths are under LogsDir.
+    std::string runTraceDir = "traces";
+    // Only a GameMaster may start a trace (traces take disk space); with 0 the
+    // owner of the bots may too.
+    bool runTraceGmOnly = true;
+    // Size cap of one trace file, in MiB (1..1024); the trace stops when reached.
+    uint32 runTraceMaxFileMb = 64;
     bool logInGroupOnly, logValuesPerTick;
     bool fleeingEnabled;
     // Opt-in: pool warriors and rogues get no generic "flee" combat strategy
