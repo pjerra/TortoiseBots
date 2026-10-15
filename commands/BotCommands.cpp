@@ -26,6 +26,7 @@
 #include "../ai/playerbot/ChatHelper.h"
 #include "../ai/playerbot/BotState.h"
 #include "../ai/playerbot/PullOpeningPolicy.h"
+#include "../ai/playerbot/PullStartPolicy.h"
 #include "../ai/playerbot/PullRefusalPolicy.h"
 // pi-lens-ignore: clang:pp_file_not_found
 #include "../ai/playerbot/strategy/generic/PullStrategy.h"
@@ -3753,9 +3754,18 @@ static bool RunPullOrder(ChatHandler* handler, BotCommandContext const& context,
             pullRange = probe->GetRange();
         }
 
-        bool started = !pullTarget || !pullTarget->IsInWorld() ||
-            sServerFacade.isMoving(executor) ||
-            executor->GetDistance(pullTarget) <= pullRange;
+        // A point move is registered with the motion master at once but the
+        // unit reads as moving only after the next movement tick, so a launched
+        // point or chase motion counts as started (ai/playerbot/PullStartPolicy.h).
+        MovementGeneratorType const motion = executor->GetMotionMaster()->GetCurrentMovementGeneratorType();
+        ai::PullStartFacts startFacts;
+        startFacts.hasTarget = pullTarget && pullTarget->IsInWorld();
+        startFacts.moving = sServerFacade.isMoving(executor);
+        startFacts.motionLaunched = motion == POINT_MOTION_TYPE || motion == CHASE_MOTION_TYPE;
+        if (startFacts.hasTarget)
+            startFacts.distance = executor->GetDistance(pullTarget);
+        startFacts.range = pullRange;
+        bool started = ai::PullWalkStarted(startFacts);
 
         if (!started)
         {
