@@ -474,6 +474,10 @@ public:
     bool TellError(Player* player, std::string text, PlayerbotSecurityLevel securityLevel = PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, bool ignoreSilent = false);
     void SpellInterrupted(uint32 spellid);
     int32 CalculateGlobalCooldown(uint32 spellid);
+    // What is left of the global cooldown of the bot's last own cast
+    // (StartRecoveryCategory 133); the core keeps the real one private.
+    // Set right after a successful prepare, a few ms after the core's own.
+    uint32 SpellGlobalCooldownRemainingMs() const;
     void InterruptSpell(bool withMeleeAndAuto = true);
     bool RemoveAura(const std::string& name);
     void RemoveShapeshift();
@@ -830,6 +834,11 @@ public:
     void EnsureAutoToolsKit();
     std::vector<ai::DeathAttackerEntry> deathAttackers_;
     uint32 deathAttackersMs_ = 0; // WorldTimer ms of the last sample, 0 = none
+    // Last own cast that started the global cooldown (see
+    // SpellGlobalCooldownRemainingMs); duration 0 = none yet.
+    uint32 spellGcdStartMs_ = 0;
+    uint32 spellGcdDurationMs_ = 0;
+    void NoteSpellGlobalCooldown(SpellEntry const* spellInfo);
     uint32 prevKillerEntry_ = 0; // the kind that killed the bot before (lethal-kind rule in OnDeath)
     uint32 prevKillerMs_ = 0;
     // Death-cluster escape (see OnDeath): deaths inside one small area within a

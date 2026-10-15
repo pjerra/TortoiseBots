@@ -192,8 +192,9 @@ void WarlockRaidStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 {
     ClassRaidStrategy::InitCombatTriggers(triggers);
 
+    // Only in a real raid group, as for the mage (MageStrategy.cpp).
     triggers.push_back(new TriggerNode(
-        "has aggro",
+        "has aggro in raid group",
         NextAction::array(0, new NextAction("shoot", ACTION_HIGH + 9), NULL)));
 }
 

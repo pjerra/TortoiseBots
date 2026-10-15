@@ -106,6 +106,16 @@ namespace ai
 		virtual bool IsActive() override;
 	};
 
+	// "has aggro" in a real raid group only (RaidAggroWandRow, WandPolicy.h):
+	// the raid class strategies are on in every dungeon, the wand-on-aggro
+	// row is meant for raids.
+	class HasAggroInRaidGroupTrigger : public HasAggroTrigger
+	{
+	public:
+		HasAggroInRaidGroupTrigger(PlayerbotAI* ai) : HasAggroTrigger(ai) {}
+		virtual bool IsActive() override;
+	};
+
 	class SpellTrigger : public Trigger
 	{
 	public:

@@ -14,7 +14,15 @@ public:
     }
 
 private:
-    ACTION_NODE_A(arcane_missiles, "arcane missiles", "shoot");
+    // No "shoot" alternative, as for Frostbolt (MageStrategy.cpp): a GCD
+    // refusal must not start the wand that renews the GCD.
+    static ActionNode* arcane_missiles(PlayerbotAI* ai)
+    {
+        return new ActionNode("arcane missiles",
+            /*P*/ NULL,
+            /*A*/ NULL,
+            /*C*/ NULL);
+    }
 };
 
 ArcaneMageStrategy::ArcaneMageStrategy(PlayerbotAI* ai) : MageStrategy(ai)

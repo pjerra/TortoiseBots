@@ -112,6 +112,7 @@ namespace ai
             creators["tank assist"] = [](PlayerbotAI* ai) { return new TankAssistTrigger(ai); };
             creators["lose aggro"] = [](PlayerbotAI* ai) { return new LoseAggroTrigger(ai); };
             creators["has aggro"] = [](PlayerbotAI* ai) { return new HasAggroTrigger(ai); };
+            creators["has aggro in raid group"] = [](PlayerbotAI* ai) { return new HasAggroInRaidGroupTrigger(ai); };
 
             creators["ranged light aoe"] = [](PlayerbotAI* ai) { return new RangedLightAoeTrigger(ai); };
             creators["ranged medium aoe"] = [](PlayerbotAI* ai) { return new RangedMediumAoeTrigger(ai); };

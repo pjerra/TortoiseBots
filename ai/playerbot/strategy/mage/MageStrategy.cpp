@@ -22,7 +22,17 @@ public:
     }
 
 private:
-    ACTION_NODE_A(frostbolt, "frostbolt", "shoot");
+    // No "shoot" alternative: Frostbolt is refused "not ready" by every
+    // GCD, and on Turtle each wand shot renews the GCD, so one fallback
+    // kept the wand going (Zul'Farrak: frost mages wanded 30-33% of the
+    // fight at 76-83% mana). Out of mana the "no mana" row wands.
+    static ActionNode* frostbolt(PlayerbotAI* ai)
+    {
+        return new ActionNode("frostbolt",
+            /*P*/ NULL,
+            /*A*/ NULL,
+            /*C*/ NULL);
+    }
 
     ACTION_NODE_A(frost_nova, "frost nova", "cone of cold");
 
@@ -197,8 +207,10 @@ void MageRaidStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 {
     ClassRaidStrategy::InitCombatTriggers(triggers);
 
+    // Only in a real raid group: this strategy is on in every dungeon
+    // (PlayerbotAI::IsInRaid), and a 5-man mage with aggro wanded here.
     triggers.push_back(new TriggerNode(
-        "has aggro",
+        "has aggro in raid group",
         NextAction::array(0, new NextAction("shoot", ACTION_HIGH + 9), NULL)));
 }
 

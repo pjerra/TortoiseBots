@@ -165,13 +165,48 @@ namespace ai
         return WandSpellProbe::Blocked;
     }
 
-    // After stopping the wand, the GCD of its last shot runs out when the
-    // next shot would have fired. Sleep that long (plus the react delay) so
-    // the next combat tick finds the spell castable instead of falling back
-    // to "shoot" and restarting the wand. Never longer than one swing.
-    inline std::uint32_t WandStopWaitMs(std::uint32_t rangedTimerMs, std::uint32_t swingMs, std::uint32_t reactDelayMs)
+    // The raid row "has aggro -> shoot" (mage and warlock raid strategies)
+    // and the wand stops that leave it alone ask the same question: a real
+    // raid group, and the bot holds its target's aggro. The "raid" class
+    // strategies are on in every dungeon (PlayerbotAI::IsInRaid counts any
+    // instance map), so the row must check the group itself; a 5-man party
+    // in Zul'Farrak is not a raid group.
+    inline bool RaidAggroWandRow(bool inRaidGroup, bool hasAggro)
     {
-        std::uint32_t const wait = (swingMs && rangedTimerMs > swingMs) ? swingMs : rangedTimerMs;
+        return inRaidGroup && hasAggro;
+    }
+
+    // What is left of a cooldown of durationMs that started at startMs, at
+    // nowMs (WorldTimer::getMSTime() values; uint32 wrap-safe).
+    inline std::uint32_t CooldownRemainingMs(std::uint32_t startMs, std::uint32_t durationMs, std::uint32_t nowMs)
+    {
+        std::uint32_t const elapsed = nowMs - startMs;
+        return elapsed < durationMs ? durationMs - elapsed : 0;
+    }
+
+    // Longest sleep "stop wand" ever asks for, whatever the inputs say: a
+    // slowed caster's ranged timer stays well under this.
+    constexpr std::uint32_t WAND_STOP_MAX_WAIT_MS = 6000;
+
+    // After stopping the wand, sleep until the wanted spell can go out, so
+    // the next combat tick does not find it "not ready", fall through to
+    // "shoot" and restart the wand. Two things hold it back:
+    //  - the last wand shot's GCD, which the core sets to the ranged timer
+    //    at the shot (Unit::_UpdateAutoRepeatSpell), so it ends when the
+    //    ranged timer does, slowed attack speed included;
+    //  - the GCD of a spell the bot cast after that shot (an instant cast
+    //    while the wand ran), which can outlast the ranged timer.
+    // Wait for the later of the two, plus the react delay. Whichever set
+    // the GCD last, the later end is never too early; at worst (a spell
+    // cast before the last shot) it waits out a GCD the shot replaced.
+    // The old rule waited the ranged timer alone, capped at the unmodified
+    // swing: about 70% of frost-mage stops in Zul'Farrak saw Frostbolt
+    // still "not ready" and Shoot again within 1 s.
+    inline std::uint32_t WandStopWaitMs(std::uint32_t rangedTimerMs, std::uint32_t spellGcdRemainingMs, std::uint32_t reactDelayMs)
+    {
+        std::uint32_t wait = rangedTimerMs > spellGcdRemainingMs ? rangedTimerMs : spellGcdRemainingMs;
+        if (wait > WAND_STOP_MAX_WAIT_MS)
+            wait = WAND_STOP_MAX_WAIT_MS;
         return wait + reactDelayMs;
     }
 }

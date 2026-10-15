@@ -1088,7 +1088,9 @@ bool StopWandAction::isUseful()
 
 bool StopWandAction::Execute(Event& event)
 {
-    uint32 const wait = WandStopWaitMs(bot->GetAttackTimer(RANGED_ATTACK), bot->GetAttackTime(RANGED_ATTACK), sPlayerbotAIConfig.reactDelay);
+    // Sleep until both the last shot's GCD (it ends with the ranged timer)
+    // and the GCD of the bot's own last cast have run out (WandPolicy.h).
+    uint32 const wait = WandStopWaitMs(bot->GetAttackTimer(RANGED_ATTACK), ai->SpellGlobalCooldownRemainingMs(), sPlayerbotAIConfig.reactDelay);
     bot->InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
     SetDuration(wait);
     return true;

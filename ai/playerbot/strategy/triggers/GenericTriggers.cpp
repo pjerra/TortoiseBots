@@ -244,7 +244,7 @@ bool WandBlocksCastTrigger::NoManaRowActive()
 bool WandBlocksCastTrigger::RaidAggroWand()
 {
     Group* group = bot->GetGroup();
-    return group && group->isRaidGroup() && AI_VALUE2(bool, "has aggro", "current target");
+    return RaidAggroWandRow(group && group->isRaidGroup(), AI_VALUE2(bool, "has aggro", "current target"));
 }
 
 bool WandBlocksCastTrigger::ThreatVetoesNuke()
@@ -314,6 +314,14 @@ bool LoseAggroTrigger::IsActive()
 bool HasAggroTrigger::IsActive()
 {
     return AI_VALUE2(bool, "has aggro", "current target");
+}
+
+bool HasAggroInRaidGroupTrigger::IsActive()
+{
+    // Same test as WandBlocksCastTrigger::RaidAggroWand, so the stop never
+    // fights this row.
+    Group* group = bot->GetGroup();
+    return RaidAggroWandRow(group && group->isRaidGroup(), HasAggroTrigger::IsActive());
 }
 
 bool PanicTrigger::IsActive()
