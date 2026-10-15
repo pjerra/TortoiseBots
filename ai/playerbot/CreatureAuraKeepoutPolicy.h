@@ -326,6 +326,28 @@ namespace ai
         return CreatureAuraHazardRadius(row) + (landingToTarget > 0.0f ? landingToTarget : 0.0f);
     }
 
+    // Review #882 (Codex): an end point (set behind, rear flank) sits next to
+    // the target, which may stand up to 15 yd from the bot, so a listed
+    // creature near the end point can stand ~24 yd from the bot, outside its
+    // cached 15 yd "possible triggers" list. The list covers the end point
+    // only while every ring that could hold it lies within the list's range of
+    // the bot: botToPoint + the largest hazard radius on the map <= listRange.
+    // Past that, the end point needs a bounded lookup of listed creatures
+    // around it within that largest hazard radius. No row on the map: never.
+    inline float CreatureAuraMaxHazardRadiusOnMap(uint32_t mapId)
+    {
+        float radius = 0.0f;
+        for (CreatureAuraKeepout const& row : kCreatureAuraKeepouts)
+            if (row.mapId == mapId && CreatureAuraHazardRadius(row) > radius)
+                radius = CreatureAuraHazardRadius(row);
+        return radius;
+    }
+
+    inline bool CreatureAuraEndPointNeedsLookup(float botToPoint, float listRange, float maxHazardRadius)
+    {
+        return maxHazardRadius > 0.0f && botToPoint + maxHazardRadius > listRange;
+    }
+
     inline bool CreatureAuraGapCloserVetoed(bool targetIsKeepout, bool landingInRing, bool isTank,
         bool explicitOrder)
     {
@@ -374,11 +396,24 @@ namespace ai
     // remembered per bot for its current gap-closer target for this long, so
     // Charge and Intercept in the same tick, and the next ticks of a chase,
     // reuse one scan. The cached 15 yd list is still read fresh every time.
+    // Review #882 (Codex): the memo is keyed on the target and on the landing
+    // point quantised to kCreatureAuraLandingMemoCellYd cells, so a landing
+    // that moved to another cell (the bot circled the target, or the target
+    // moved) scans again, whatever the cached verdict was; a "clear" verdict
+    // is never reused for a landing in another cell.
     constexpr uint32_t kCreatureAuraLandingMemoMs = 1000;
+    constexpr float kCreatureAuraLandingMemoCellYd = 1.0f;
+
+    inline int32_t CreatureAuraLandingMemoCell(float coord)
+    {
+        return int32_t(std::floor(coord / kCreatureAuraLandingMemoCellYd));
+    }
 
     struct CreatureAuraLandingMemo
     {
         uint64_t targetRaw = 0;
+        int32_t cellX = 0;
+        int32_t cellY = 0;
         uint32_t atMs = 0;
         bool valid = false;
         bool ringed = false;
@@ -387,15 +422,20 @@ namespace ai
     // Unsigned difference, so the wrap of the millisecond clock does not
     // keep an entry alive.
     inline bool CreatureAuraLandingMemoHit(CreatureAuraLandingMemo const& memo, uint64_t targetRaw,
-        uint32_t nowMs, uint32_t ttlMs = kCreatureAuraLandingMemoMs)
+        float landingX, float landingY, uint32_t nowMs, uint32_t ttlMs = kCreatureAuraLandingMemoMs)
     {
-        return memo.valid && memo.targetRaw == targetRaw && uint32_t(nowMs - memo.atMs) < ttlMs;
+        return memo.valid && memo.targetRaw == targetRaw &&
+            memo.cellX == CreatureAuraLandingMemoCell(landingX) &&
+            memo.cellY == CreatureAuraLandingMemoCell(landingY) &&
+            uint32_t(nowMs - memo.atMs) < ttlMs;
     }
 
     inline void CreatureAuraLandingMemoStore(CreatureAuraLandingMemo& memo, uint64_t targetRaw,
-        uint32_t nowMs, bool ringed)
+        float landingX, float landingY, uint32_t nowMs, bool ringed)
     {
         memo.targetRaw = targetRaw;
+        memo.cellX = CreatureAuraLandingMemoCell(landingX);
+        memo.cellY = CreatureAuraLandingMemoCell(landingY);
         memo.atMs = nowMs;
         memo.valid = true;
         memo.ringed = ringed;

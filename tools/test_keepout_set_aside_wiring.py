@@ -134,6 +134,29 @@ class KeepoutSetAsideWiringTest(unittest.TestCase):
         self.assertIn("CreatureAuraLandingMemo landingMemo;", header)
         self.assertNotIn("never per tick", header)
 
+    def test_end_points_look_around_the_destination(self):
+        # Review #882 (Codex): an end point next to a target up to 15 yd away
+        # can lie in the ring of a sludge outside the bot's 15 yd list.
+        move = (ROOT / "ai/playerbot/strategy/actions/MovementActions.cpp").read_text()
+        end = body(move, "bool MovementAction::EndPointInCreatureAuraKeepout(", "\n}\n")
+        self.assertIn("PossibleTriggersValue::EndPointRingAt(ai, x, y, ", end)
+        values = (VALUES / "PossibleTargetsValue.cpp").read_text()
+        ring = body(values, "Unit* PossibleTriggersValue::EndPointRingAt(", "\n}\n")
+        # Cached list first, then the bounded lookup only past its reach.
+        self.assertLess(ring.index("KeepoutRingAt(ai, x, y, extra)"), ring.index("CreatureAuraEndPointNeedsLookup("))
+        self.assertLess(ring.index("CreatureAuraEndPointNeedsLookup("), ring.index("Cell::VisitAllObjects("))
+        self.assertIn("CreatureAuraMaxHazardRadiusOnMap(bot->GetMapId())", ring)
+        self.assertIn("Cell::VisitAllObjects(x, y, map, searcher, maxHazard)", ring)
+        self.assertIn('"explicit attack target"', ring)
+        self.assertIn("KeepoutFor(unit)", ring)
+        self.assertEqual(ring.count("Cell::VisitAllObjects("), 1)
+
+    def test_landing_memo_follows_the_landing(self):
+        values = (VALUES / "PossibleTargetsValue.cpp").read_text()
+        veto = body(values, "bool PossibleTriggersValue::GapCloserIntoKeepout(", "\n}\n")
+        self.assertIn("CreatureAuraLandingMemoHit(self->landingMemo, targetRaw, lx, ly, now)", veto)
+        self.assertIn("CreatureAuraLandingMemoStore(self->landingMemo, targetRaw, lx, ly, now, landingInRing)", veto)
+
 
 if __name__ == "__main__":
     unittest.main()

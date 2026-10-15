@@ -223,6 +223,62 @@ Unit* PossibleTriggersValue::KeepoutRingAt(PlayerbotAI* ai, float x, float y, Un
     return nullptr;
 }
 
+namespace
+{
+    // Listed keep-out creatures of one map within `radius` of a point (2D,
+    // centre measure, the measure the ring uses).
+    struct ListedKeepoutNearPoint
+    {
+        uint32 mapId;
+        float x, y, radius;
+        bool operator()(Unit* unit) const
+        {
+            if (!unit || !unit->IsCreature() || !FindCreatureAuraKeepout(mapId, unit->GetEntry()))
+                return false;
+            float const dx = unit->GetPositionX() - x, dy = unit->GetPositionY() - y;
+            return dx * dx + dy * dy < radius * radius;
+        }
+    };
+}
+
+Unit* PossibleTriggersValue::EndPointRingAt(PlayerbotAI* ai, float x, float y, Unit* extra)
+{
+    if (!sPlayerbotAIConfig.avoidCreatureAuras || !ai)
+        return nullptr;
+    if (Unit* ringed = KeepoutRingAt(ai, x, y, extra))
+        return ringed;
+    // The cached list is centred on the bot; a ring that holds (x, y) can lie
+    // past it when the end point is far from the bot (set behind or rear
+    // flank on a target up to 15 yd away). Then look around the end point,
+    // listed entries on this map only, within the largest hazard radius.
+    Player* bot = ai->GetBot();
+    float const maxHazard = CreatureAuraMaxHazardRadiusOnMap(bot->GetMapId());
+    float const bdx = x - bot->GetPositionX(), bdy = y - bot->GetPositionY();
+    if (!CreatureAuraEndPointNeedsLookup(std::sqrt(bdx * bdx + bdy * bdy), kMaxAoeAvoidRadiusYd, maxHazard))
+        return nullptr;
+    Map* map = bot->GetMap();
+    if (!map)
+        return nullptr;
+    ObjectGuid const explicitTarget =
+        ai->GetAiObjectContext()->GetValue<ObjectGuid>("explicit attack target")->Get();
+    std::list<Unit*> nearby;
+    ListedKeepoutNearPoint check{ bot->GetMapId(), x, y, maxHazard };
+    MaNGOS::UnitListSearcher<ListedKeepoutNearPoint> searcher(nearby, check);
+    Cell::VisitAllObjects(x, y, map, searcher, maxHazard);
+    for (Unit* unit : nearby)
+    {
+        if (!unit || unit == extra || unit->GetObjectGuid() == explicitTarget)
+            continue;
+        CreatureAuraKeepout const* row = KeepoutFor(unit);
+        if (!row)
+            continue;
+        float const dx = unit->GetPositionX() - x, dy = unit->GetPositionY() - y;
+        if (CreatureAuraEndPointBlocked(*row, std::sqrt(dx * dx + dy * dy)))
+            return unit;
+    }
+    return nullptr;
+}
+
 bool PossibleTriggersValue::GapCloserCouldFire(PlayerbotAI* ai, std::string const& spell, Unit* target)
 {
     // Mirrors the refusals of CastSpellAction::isPossible and
@@ -281,13 +337,14 @@ bool PossibleTriggersValue::GapCloserIntoKeepout(PlayerbotAI* ai, std::string co
     // Fast path: the bot's cached 15 yd list, read fresh every time.
     if (KeepoutRingAt(ai, lx, ly))
         return CreatureAuraGapCloserVetoed(false, true, isTank, ordered);
-    // The bounded lookup's result is kept per bot for this target for
-    // kCreatureAuraLandingMemoMs (the memo lives on this bot's value).
+    // The bounded lookup's result is kept per bot for this target and this
+    // landing cell for kCreatureAuraLandingMemoMs (the memo lives on this
+    // bot's value); a landing that moved to another cell scans again.
     PossibleTriggersValue* self = dynamic_cast<PossibleTriggersValue*>(
         context->GetValue<std::list<ObjectGuid>>("possible triggers"));
     uint64 const targetRaw = target->GetObjectGuid().GetRawValue();
     uint32 const now = WorldTimer::getMSTime();
-    if (self && CreatureAuraLandingMemoHit(self->landingMemo, targetRaw, now))
+    if (self && CreatureAuraLandingMemoHit(self->landingMemo, targetRaw, lx, ly, now))
         return CreatureAuraGapCloserVetoed(false, self->landingMemo.ringed, isTank, ordered);
     // Bounded lookup around the target, listed entries on this map only.
     bool landingInRing = false;
@@ -317,6 +374,6 @@ bool PossibleTriggersValue::GapCloserIntoKeepout(PlayerbotAI* ai, std::string co
         }
     }
     if (self)
-        CreatureAuraLandingMemoStore(self->landingMemo, targetRaw, now, landingInRing);
+        CreatureAuraLandingMemoStore(self->landingMemo, targetRaw, lx, ly, now, landingInRing);
     return CreatureAuraGapCloserVetoed(false, landingInRing, isTank, ordered);
 }

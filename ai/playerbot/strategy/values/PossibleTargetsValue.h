@@ -60,6 +60,13 @@ namespace ai
         // nullptr when none or with the toggle off. No new world scan.
         static Unit* KeepoutRingAt(PlayerbotAI* ai, float x, float y, Unit* extra = nullptr);
 
+        // KeepoutRingAt for a move's end point: when the point lies far enough
+        // from the bot that a ring holding it may stand past the cached 15 yd
+        // list (CreatureAuraEndPointNeedsLookup), also a bounded lookup of
+        // listed creatures on this map around the point, within the largest
+        // hazard radius there. Maps without a listed row never look.
+        static Unit* EndPointRingAt(PlayerbotAI* ai, float x, float y, Unit* extra = nullptr);
+
         // AiPlayerbot.AvoidCreatureAuras: true when this bot must not use a
         // gap closer (Charge, Intercept, Feral Charge) onto `target`
         // (CreatureAuraGapCloserVetoed): a non-tank bot without an attack
@@ -73,7 +80,8 @@ namespace ai
         // against the cached 15 yd list, then by a bounded lookup of listed
         // creatures around the target (the cast fires from up to 25 yd), and
         // that lookup's result is kept for this target for
-        // kCreatureAuraLandingMemoMs (one grid visit per bot per second at most).
+        // kCreatureAuraLandingMemoMs while the landing stays in its 1 yd cell
+        // (one grid visit per bot, target and landing cell per second at most).
         static bool GapCloserIntoKeepout(PlayerbotAI* ai, std::string const& spell, Unit* target);
 
         // The cheap readiness test above (CreatureAuraGapCloserCouldFire).

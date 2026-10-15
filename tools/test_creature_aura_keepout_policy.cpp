@@ -610,22 +610,71 @@ int main()
 
         // Memo: one scan per bot and target per second.
         CreatureAuraLandingMemo memo;
+        float const lx = 100.3f, ly = 200.7f; // landing held still
         uint64_t const mob = 0xF130000000001234ull, other = 0xF130000000005678ull;
-        CHECK(!CreatureAuraLandingMemoHit(memo, mob, 5000));               // empty
-        CreatureAuraLandingMemoStore(memo, mob, 5000, true);
-        CHECK(CreatureAuraLandingMemoHit(memo, mob, 5000) && memo.ringed); // same tick (Charge, then Intercept)
-        CHECK(CreatureAuraLandingMemoHit(memo, mob, 5000 + kCreatureAuraLandingMemoMs - 1));
-        CHECK(!CreatureAuraLandingMemoHit(memo, mob, 5000 + kCreatureAuraLandingMemoMs)); // expired: rescan
-        CHECK(!CreatureAuraLandingMemoHit(memo, other, 5100));             // another target: rescan
-        CreatureAuraLandingMemoStore(memo, other, 5100, false);
-        CHECK(CreatureAuraLandingMemoHit(memo, other, 5200) && !memo.ringed);
-        CHECK(!CreatureAuraLandingMemoHit(memo, mob, 5200));
+        CHECK(!CreatureAuraLandingMemoHit(memo, mob, lx, ly, 5000));               // empty
+        CreatureAuraLandingMemoStore(memo, mob, lx, ly, 5000, true);
+        CHECK(CreatureAuraLandingMemoHit(memo, mob, lx, ly, 5000) && memo.ringed); // same tick (Charge, then Intercept)
+        CHECK(CreatureAuraLandingMemoHit(memo, mob, lx, ly, 5000 + kCreatureAuraLandingMemoMs - 1));
+        CHECK(!CreatureAuraLandingMemoHit(memo, mob, lx, ly, 5000 + kCreatureAuraLandingMemoMs)); // expired: rescan
+        CHECK(!CreatureAuraLandingMemoHit(memo, other, lx, ly, 5100));             // another target: rescan
+        CreatureAuraLandingMemoStore(memo, other, lx, ly, 5100, false);
+        CHECK(CreatureAuraLandingMemoHit(memo, other, lx, ly, 5200) && !memo.ringed);
+        CHECK(!CreatureAuraLandingMemoHit(memo, mob, lx, ly, 5200));
         // Millisecond clock wrap: the entry expires on time, it never sticks.
-        CreatureAuraLandingMemoStore(memo, mob, 0xFFFFFF00u, true);
-        CHECK(CreatureAuraLandingMemoHit(memo, mob, 0x00000010u));  // 272 ms later
-        CHECK(!CreatureAuraLandingMemoHit(memo, mob, 0x00000400u)); // 1280 ms later
+        CreatureAuraLandingMemoStore(memo, mob, lx, ly, 0xFFFFFF00u, true);
+        CHECK(CreatureAuraLandingMemoHit(memo, mob, lx, ly, 0x00000010u));  // 272 ms later
+        CHECK(!CreatureAuraLandingMemoHit(memo, mob, lx, ly, 0x00000400u)); // 1280 ms later
+
+        // Review #882 (Codex): the memo follows the landing point. The bot
+        // circles the target inside the memo window, so the landing moves
+        // 6 yd sideways: a cached "clear" must not be reused, the new landing
+        // scans again (and here a sludge stands in its ring).
+        float const movedX = lx, movedY = ly + 6.0f;
+        CreatureAuraLandingMemoStore(memo, mob, lx, ly, 9000, false);
+        CHECK(CreatureAuraLandingMemoHit(memo, mob, lx, ly, 9100) && !memo.ringed);
+        CHECK(!CreatureAuraLandingMemoHit(memo, mob, movedX, movedY, 9100)); // moved: rescan
+        CreatureAuraKeepout const& row = kCreatureAuraKeepouts[0];
+        float const sludgeX = movedX, sludgeY = movedY + 4.0f; // 4 yd from the new landing, 10 from the old (rings are 9 yd)
+        CHECK(!CreatureAuraEndPointBlocked(row, std::hypot(sludgeX - lx, sludgeY - ly)));
+        CHECK(CreatureAuraEndPointBlocked(row, std::hypot(sludgeX - movedX, sludgeY - movedY)));
+        CreatureAuraLandingMemoStore(memo, mob, movedX, movedY, 9100, true);
+        CHECK(CreatureAuraLandingMemoHit(memo, mob, movedX, movedY, 9200) && memo.ringed);
+        // A ringed verdict is not carried to another cell either.
+        CHECK(!CreatureAuraLandingMemoHit(memo, mob, lx, ly, 9200));
+        // Drift inside one 1 yd cell keeps the scan (bounded cost on a straight charge).
+        CHECK(CreatureAuraLandingMemoHit(memo, mob, std::floor(movedX) + 0.9f, std::floor(movedY) + 0.05f, 9200));
+        CHECK(!CreatureAuraLandingMemoHit(memo, mob, std::floor(movedX) + 1.0f, movedY, 9200));
     }
     std::cout << "  [PASS] gap-closer veto looks only when the cast could fire, one scan per second\n";
+
+    // Review #882 (Codex): an end point next to a target 15 yd away can lie
+    // in the ring of a sludge ~24 yd from the bot, outside the bot's cached
+    // 15 yd list. The end-point check then looks around the end point.
+    {
+        CreatureAuraKeepout const& row = kCreatureAuraKeepouts[0];
+        float const listRange = 15.0f; // kMaxAoeAvoidRadiusYd, the "possible triggers" range
+        float const maxHazard = CreatureAuraMaxHazardRadiusOnMap(349);
+        CHECK(maxHazard == CreatureAuraHazardRadius(row)); // 9 yd in Maraudon
+        CHECK(CreatureAuraMaxHazardRadiusOnMap(0) == 0.0f);  // no listed row: no lookup anywhere
+        CHECK(!CreatureAuraEndPointNeedsLookup(30.0f, listRange, 0.0f));
+        // Bot at the origin, target 15 yd east, set-behind end point 2 yd past it,
+        // a sludge 7 yd further east: 24 yd from the bot, 7 yd from the end point.
+        float const bx = 0.0f, by = 0.0f, px = 17.0f, py = 0.0f, sx = 24.0f, sy = 0.0f;
+        float const botToSludge = std::hypot(sx - bx, sy - by);
+        float const pointToSludge = std::hypot(sx - px, sy - py);
+        CHECK(botToSludge > listRange);                             // not in the bot's list
+        CHECK(CreatureAuraEndPointBlocked(row, pointToSludge));      // but the end point is in its ring
+        float const botToPoint = std::hypot(px - bx, py - by);
+        CHECK(CreatureAuraEndPointNeedsLookup(botToPoint, listRange, maxHazard));
+        CHECK(pointToSludge <= maxHazard);                           // the bounded lookup reaches it
+        // Every sludge whose ring holds an end point near the bot is in the list:
+        // no lookup there (move out of collision, a flank of a mob in melee).
+        CHECK(!CreatureAuraEndPointNeedsLookup(3.0f, listRange, maxHazard));
+        CHECK(!CreatureAuraEndPointNeedsLookup(listRange - maxHazard, listRange, maxHazard));
+        CHECK(CreatureAuraEndPointNeedsLookup(listRange - maxHazard + 0.1f, listRange, maxHazard));
+    }
+    std::cout << "  [PASS] end points look around the destination past the 15 yd list\n";
 
     std::cout << "All creature aura keep-out tests passed.\n";
     return 0;

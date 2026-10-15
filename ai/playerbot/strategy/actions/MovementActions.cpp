@@ -1738,7 +1738,7 @@ bool MovementAction::EndPointInCreatureAuraKeepout(float x, float y)
 {
     if (!sPlayerbotAIConfig.avoidCreatureAuras || CreatureAuraCombatExempt(PlayerbotAI::IsTank(bot), bot->IsInCombat()))
         return false;
-    return PossibleTriggersValue::KeepoutRingAt(ai, x, y, AI_VALUE(Unit*, "current target")) != nullptr;
+    return PossibleTriggersValue::EndPointRingAt(ai, x, y, AI_VALUE(Unit*, "current target")) != nullptr;
 }
 
 WorldPosition CalculatePerpendicularPoint(const WorldPosition& A, const WorldPosition& B, float offset, bool left = true)
