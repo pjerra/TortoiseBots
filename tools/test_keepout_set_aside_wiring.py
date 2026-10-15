@@ -94,7 +94,7 @@ class KeepoutSetAsideWiringTest(unittest.TestCase):
         veto = body(values, "bool PossibleTriggersValue::GapCloserIntoKeepout(", "\n}\n")
         self.assertIn('"explicit attack target"', veto)
         self.assertIn("CreatureAuraGapCloserVetoed(", veto)
-        self.assertLess(veto.index("KeepoutRingAt(ai, lx, ly)"), veto.index("SnapshotRingedAt(ai, lx, ly, target)"))
+        self.assertLess(veto.index("KeepoutRingAt(ai, lx, ly)"), veto.index("SnapshotRingedAt(ai, lx, ly, target->GetPositionZ(), target)"))
         self.assertNotIn("Cell::", veto)
         self.assertIn("class CastFeralChargeBearAction : public CastReachTargetSpellAction",
                       (ROOT / "ai/playerbot/strategy/druid/DruidActions.h").read_text())
@@ -130,38 +130,30 @@ class KeepoutSetAsideWiringTest(unittest.TestCase):
 
     def test_end_points_and_landings_read_one_hazard_snapshot(self):
         # Reviews of #995: nothing per bot tick scans the world (AGENTS.md).
-        # End points past the 15 yd list and gap-closer landings read a
-        # snapshot shared per (map, instance, cell), refreshed by at most one
-        # grid visit per window, counted on the BOTPERF line.
+        # The snapshot's behaviour (cell and instance key, budget, live skip,
+        # height, cover, drift) is tested through CreatureAuraSnapshotRinged
+        # in test_creature_aura_keepout_policy.cpp; here only the wiring.
         move = (ROOT / "ai/playerbot/strategy/actions/MovementActions.cpp").read_text()
         end = body(move, "bool MovementAction::EndPointInCreatureAuraKeepout(", "\n}\n")
-        self.assertIn("PossibleTriggersValue::EndPointRinged(ai, x, y, ", end)
+        self.assertIn("PossibleTriggersValue::EndPointRinged(ai, x, y, z, ", end)
         values = (VALUES / "PossibleTargetsValue.cpp").read_text()
         ring = body(values, "bool PossibleTriggersValue::EndPointRinged(", "\n}\n")
-        self.assertLess(ring.index("KeepoutRingAt(ai, x, y, extra)"), ring.index("SnapshotRingedAt(ai, x, y, extra)"))
-        self.assertNotIn("Cell::", ring)
-        ringed = body(values, "bool PossibleTriggersValue::SnapshotRingedAt(", "\n}\n")
-        self.assertIn("HazardSnapshot(ai)", ringed)
-        self.assertIn('"explicit attack target"', ringed)
-        self.assertIn("CreatureAuraSnapshotCovers(", ringed)
-        self.assertNotIn("Cell::", ringed)
-        snap = body(values, "CreatureAuraHazardSnapshot const* PossibleTriggersValue::HazardSnapshot(", "\n}\n")
-        # No visit on a map without a listed row; the key carries the
-        # instance; the one visit sits inside the shared cache's refresh.
-        self.assertLess(snap.index("if (maxHazard <= 0.0f)"), snap.index("CreatureAuraSnapshotCacheGet("))
-        self.assertIn("CreatureAuraSnapshotKeyFor(mapId, bot->GetInstanceId(), ", snap)
-        self.assertIn("CreatureAuraSnapshotCacheGet(KeepoutSnapshotCache(), key, ", snap)
-        self.assertLess(snap.index("CreatureAuraSnapshotCacheGet("), snap.index("Cell::VisitAllObjects("))
-        self.assertEqual(snap.count("Cell::VisitAllObjects("), 1)
-        self.assertIn("Cell::VisitAllObjects(cx, cy, map, searcher, radius)", snap)
-        self.assertIn("hazardSnapshotRefreshCount.fetch_add(1", snap)
-        self.assertIn("KeepoutFor(unit)", snap)
-        self.assertEqual(values.count("Cell::VisitAllObjects("), 3)  # two FindUnits + the snapshot
-        self.assertNotIn("AllCreaturesOfEntryInRange", values)
-        self.assertIn("static CreatureAuraSnapshotCache cache;", values)
+        self.assertLess(ring.index("KeepoutRingAt("), ring.index("SnapshotRingedAt("))
+        snap = body(values, "bool PossibleTriggersValue::SnapshotRingedAt(", "\n}\n")
+        self.assertIn("CreatureAuraSnapshotRinged(", snap)
+        self.assertIn("GetInstanceId()", snap)
+        self.assertIn('"possible triggers"', snap)  # live-list creatures are skipped
+        self.assertLess(snap.index("if (maxHazard <= 0.0f)"), snap.index("CreatureAuraSnapshotRinged("))
+        # The one grid visit: inside the snapshot refresh, never loading a grid.
+        self.assertIn("Cell::VisitAllObjects(cx, cy, map, searcher, radius, true)", snap)
+        for name in ("EndPointRinged", "GapCloserIntoKeepout", "KeepoutRingAt"):
+            fn = body(values, "PossibleTriggersValue::" + name + "(", "\n}\n")
+            self.assertNotIn("Cell::", fn, name)
+        # Budget reset once per world update before any AI runs; counters on BOTPERF.
         manager = (ROOT / "runtime/BotManager.cpp").read_text()
-        self.assertIn("PossibleTriggersValue::hazardSnapshotRefreshCount.exchange(0", manager)
-        self.assertIn("keepoutScans=%u", manager)
+        update = body(manager, "void BotManager::OnWorldUpdate(", "\n}\n")
+        self.assertLess(update.index("PossibleTriggersValue::BeginKeepoutTick()"), update.index("UpdateBots(diff)"))
+        self.assertIn("keepoutScans=%u keepoutBudgetMiss=%u", manager)
 
 
 if __name__ == "__main__":

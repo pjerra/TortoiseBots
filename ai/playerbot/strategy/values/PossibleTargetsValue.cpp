@@ -252,54 +252,63 @@ namespace
 }
 
 std::atomic<uint32_t> PossibleTriggersValue::hazardSnapshotRefreshCount{ 0 };
+std::atomic<uint32_t> PossibleTriggersValue::hazardSnapshotBudgetMissCount{ 0 };
 
-CreatureAuraHazardSnapshot const* PossibleTriggersValue::HazardSnapshot(PlayerbotAI* ai)
+void PossibleTriggersValue::BeginKeepoutTick()
+{
+    CreatureAuraSnapshotBeginTick(KeepoutSnapshotCache());
+}
+
+bool PossibleTriggersValue::SnapshotRingedAt(PlayerbotAI* ai, float x, float y, float z, Unit* skip)
 {
     if (!sPlayerbotAIConfig.avoidCreatureAuras || !ai)
-        return nullptr;
+        return false;
     Player* bot = ai->GetBot();
     uint32 const mapId = bot->GetMapId();
     float const maxHazard = CreatureAuraMaxHazardRadiusOnMap(mapId);
     if (maxHazard <= 0.0f)
-        return nullptr; // no listed creature on this map: never a grid visit
+        return false; // no listed creature on this map: never a grid visit
     Map* map = bot->GetMap();
     if (!map)
-        return nullptr;
+        return false;
+    AiObjectContext* context = ai->GetAiObjectContext();
+    // Judged live already (exact ring, current position): the bot's live
+    // list, `skip` (the target) and the explicit attack target.
+    std::list<ObjectGuid> const& live = context->GetValue<std::list<ObjectGuid>>("possible triggers")->Get();
+    std::vector<uint64_t> judged;
+    judged.reserve(live.size() + 2);
+    for (ObjectGuid const& guid : live)
+        judged.push_back(guid.GetRawValue());
+    if (skip)
+        judged.push_back(skip->GetObjectGuid().GetRawValue());
+    judged.push_back(context->GetValue<ObjectGuid>("explicit attack target")->Get().GetRawValue());
     CreatureAuraSnapshotKey const key =
         CreatureAuraSnapshotKeyFor(mapId, bot->GetInstanceId(), bot->GetPositionX(), bot->GetPositionY());
-    return CreatureAuraSnapshotCacheGet(KeepoutSnapshotCache(), key, WorldTimer::getMSTime(),
+    CreatureAuraSnapshotView view;
+    bool const ringed = CreatureAuraSnapshotRinged(KeepoutSnapshotCache(), key, WorldTimer::getMSTime(), x, y, z, judged,
         [&](std::vector<CreatureAuraHazardEntry>& out, float cx, float cy)
         {
             // The one bounded grid visit per (map, instance, cell) per
-            // kCreatureAuraSnapshotMs, shared by every bot standing there.
-            hazardSnapshotRefreshCount.fetch_add(1, std::memory_order_relaxed);
+            // kCreatureAuraSnapshotMs, shared by every bot standing there,
+            // within the per-world-update refresh budget. Never loads a grid.
             float const radius = CreatureAuraSnapshotRadius(maxHazard);
             std::list<Unit*> nearby;
             ListedKeepoutNearPoint check{ mapId, cx, cy, radius };
             MaNGOS::UnitListSearcher<ListedKeepoutNearPoint> searcher(nearby, check);
-            Cell::VisitAllObjects(cx, cy, map, searcher, radius);
+            Cell::VisitAllObjects(cx, cy, map, searcher, radius, true);
             for (Unit* unit : nearby)
                 if (CreatureAuraKeepout const* row = KeepoutFor(unit))
                     out.push_back({ unit->GetObjectGuid().GetRawValue(), unit->GetPositionX(), unit->GetPositionY(),
-                        CreatureAuraHazardRadius(*row) });
-        });
+                        unit->GetPositionZ(), CreatureAuraHazardRadius(*row) });
+        }, &view) != 0;
+    if (view.refreshed)
+        hazardSnapshotRefreshCount.fetch_add(1, std::memory_order_relaxed);
+    if (view.budgetMiss)
+        hazardSnapshotBudgetMissCount.fetch_add(1, std::memory_order_relaxed);
+    return ringed;
 }
 
-bool PossibleTriggersValue::SnapshotRingedAt(PlayerbotAI* ai, float x, float y, Unit* skip)
-{
-    CreatureAuraHazardSnapshot const* snap = HazardSnapshot(ai);
-    if (!snap)
-        return false;
-    // A point the snapshot does not reach is not called clear by it.
-    if (!CreatureAuraSnapshotCovers(*snap, x, y))
-        return true;
-    uint64 const explicitRaw =
-        ai->GetAiObjectContext()->GetValue<ObjectGuid>("explicit attack target")->Get().GetRawValue();
-    uint64 const skipRaw = skip ? skip->GetObjectGuid().GetRawValue() : 0;
-    return CreatureAuraSnapshotRingAt(*snap, x, y, skipRaw, explicitRaw) != 0;
-}
-
-bool PossibleTriggersValue::EndPointRinged(PlayerbotAI* ai, float x, float y, Unit* extra)
+bool PossibleTriggersValue::EndPointRinged(PlayerbotAI* ai, float x, float y, float z, Unit* extra)
 {
     if (!sPlayerbotAIConfig.avoidCreatureAuras || !ai)
         return false;
@@ -307,7 +316,7 @@ bool PossibleTriggersValue::EndPointRinged(PlayerbotAI* ai, float x, float y, Un
     // shared hazard snapshot for rings past the list.
     if (KeepoutRingAt(ai, x, y, extra))
         return true;
-    return SnapshotRingedAt(ai, x, y, extra);
+    return SnapshotRingedAt(ai, x, y, z, extra);
 }
 
 bool PossibleTriggersValue::GapCloserCouldFire(PlayerbotAI* ai, std::string const& spell, Unit* target)
@@ -370,6 +379,6 @@ bool PossibleTriggersValue::GapCloserIntoKeepout(PlayerbotAI* ai, std::string co
         return CreatureAuraGapCloserVetoed(false, true, isTank, ordered);
     // Rings past the list: the shared hazard snapshot (no grid visit of its
     // own). The target is checked live above.
-    bool const landingInRing = SnapshotRingedAt(ai, lx, ly, target);
+    bool const landingInRing = SnapshotRingedAt(ai, lx, ly, target->GetPositionZ(), target);
     return CreatureAuraGapCloserVetoed(false, landingInRing, isTank, ordered);
 }

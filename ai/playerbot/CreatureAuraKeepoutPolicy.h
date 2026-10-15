@@ -17,11 +17,13 @@
 // header owns the table and the decisions so tools/test_creature_aura_keepout_policy.cpp
 // can test them. No core includes.
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <map>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 namespace ai
@@ -379,29 +381,40 @@ namespace ai
     // ---- Shared hazard snapshot (reviews of #995) --------------------------
     //
     // End points and gap-closer landings can lie past the bot's cached 15 yd
-    // list, and nothing per bot tick may scan the world (AGENTS.md). The
-    // listed creatures carrying their aura are kept in snapshots shared by
-    // every bot, one per (map, instance, 30 yd cell of the bot's position):
-    // at most one bounded grid visit per cell every kCreatureAuraSnapshotMs,
-    // so a party standing together pays one visit, not five, and none on a
-    // map without a listed row. Every end-point and landing check reads the
-    // snapshot of the bot's current cell. A creature can move up to
-    // kCreatureAuraSnapshotDriftYd (run speed over the window) after the
-    // visit, so each snapshot ring is widened by that much: a stale snapshot
-    // never lets the bot end inside a ring. No negative cache: a point the
-    // snapshot does not cover is not called clear by it. The instance is part
-    // of the key, so two instances of one map never share a snapshot, and an
-    // entry only ever answers for the instance it was taken in.
+    // "possible triggers" list, and nothing per bot tick may scan the world
+    // (AGENTS.md). The listed creatures carrying their aura are kept in
+    // snapshots shared by every bot, one per (map, instance, 30 yd cell of the
+    // bot's position): at most one bounded grid visit per cell every
+    // kCreatureAuraSnapshotMs, and at most kKeepoutRefreshesPerTick visits per
+    // world update over all cells, so a party standing together pays one
+    // visit, not five, and none happen on a map without a listed row.
+    //
+    // A snapshot only adds what the live checks cannot see: creatures in the
+    // bot's live list (and the target and the explicit attack target) are
+    // skipped, because the live check already judged them at their exact
+    // ring and current position. A snapshot-only creature can have moved
+    // since the visit, so its ring is widened by the drift: 3.5 yd per
+    // 500 ms of the snapshot's age (run speed), never less than 3.5 yd. It
+    // only counts when it stands within kCreatureAuraSnapshotHeightYd of the
+    // point's height (a creature on another floor does not ring it).
+    // No snapshot (the refresh budget is spent and there is no entry younger
+    // than kCreatureAuraSnapshotMaxAgeMs), or a point outside the snapshot's
+    // cover: the live checks alone decide, as in #882.
     constexpr uint32_t kCreatureAuraSnapshotMs = 500;
-    constexpr float kCreatureAuraSnapshotDriftYd = 3.5f;  // 7 yd/s run speed x 0.5 s
-    constexpr float kCreatureAuraSnapshotReachYd = 30.0f; // 15 yd list + 15 yd end point / landing
+    constexpr uint32_t kCreatureAuraSnapshotMaxAgeMs = 1500; // a stale entry reused while the budget is spent
+    constexpr float kCreatureAuraSnapshotDriftYd = 3.5f;     // 7 yd/s run speed x 0.5 s
+    constexpr float kCreatureAuraSnapshotMaxDriftYd =
+        kCreatureAuraSnapshotDriftYd * (float(kCreatureAuraSnapshotMaxAgeMs) / float(kCreatureAuraSnapshotMs));
+    constexpr float kCreatureAuraSnapshotReachYd = 30.0f;  // 15 yd list + 15 yd end point / landing
     constexpr float kCreatureAuraSnapshotCellYd = 30.0f;
+    constexpr float kCreatureAuraSnapshotHeightYd = 5.0f;  // the ring checks are 2D; one floor
     constexpr uint32_t kCreatureAuraSnapshotPruneMs = 10 * kCreatureAuraSnapshotMs;
+    constexpr uint32_t kKeepoutRefreshesPerTick = 4;
 
     struct CreatureAuraHazardEntry
     {
         uint64_t guidRaw;
-        float x, y;
+        float x, y, z;
         float hazardRadius; // CreatureAuraHazardRadius(row)
     };
 
@@ -436,11 +449,18 @@ namespace ai
         return kCreatureAuraSnapshotCellYd * 0.70710678f + kCreatureAuraSnapshotReachYd;
     }
 
-    // Grid-visit radius around the cell centre: every creature whose widened
-    // ring can hold a covered point.
+    // Grid-visit radius around the cell centre: every creature whose ring,
+    // widened by the largest drift, can hold a covered point.
     inline float CreatureAuraSnapshotRadius(float maxHazardRadius)
     {
-        return CreatureAuraSnapshotCoverYd() + maxHazardRadius + kCreatureAuraSnapshotDriftYd;
+        return CreatureAuraSnapshotCoverYd() + maxHazardRadius + kCreatureAuraSnapshotMaxDriftYd;
+    }
+
+    // How far a creature may have moved since a visit `ageMs` ago.
+    inline float CreatureAuraSnapshotDriftFor(uint32_t ageMs)
+    {
+        float const windows = float(ageMs) / float(kCreatureAuraSnapshotMs);
+        return kCreatureAuraSnapshotDriftYd * (windows > 1.0f ? windows : 1.0f);
     }
 
     struct CreatureAuraHazardSnapshot
@@ -466,20 +486,39 @@ namespace ai
     }
 
     // The shared cache (world thread only: every bot AI update runs in the
-    // module's world-thread pass).
+    // module's world-thread pass, which calls CreatureAuraSnapshotBeginTick
+    // once per world update).
     struct CreatureAuraSnapshotCache
     {
         std::map<CreatureAuraSnapshotKey, CreatureAuraHazardSnapshot> entries;
         uint32_t lastPruneMs = 0;
-        uint32_t refreshes = 0; // grid visits made, for the perf line
+        uint32_t refreshesThisTick = 0;
     };
 
-    // The snapshot for `key`, refreshed through `fill(entries, cx, cy)` (the
-    // one grid visit around the cell centre) only when stale. Entries unused
-    // for kCreatureAuraSnapshotPruneMs are dropped, so the cache stays as
-    // small as the cells bots stand in on listed maps.
+    inline void CreatureAuraSnapshotBeginTick(CreatureAuraSnapshotCache& cache)
+    {
+        cache.refreshesThisTick = 0;
+    }
+
+    // What a lookup may use: the snapshot (nullptr: live checks only) and
+    // the drift its age allows.
+    struct CreatureAuraSnapshotView
+    {
+        CreatureAuraHazardSnapshot const* snap = nullptr;
+        float driftYd = 0.0f;
+        bool refreshed = false;  // this lookup made the grid visit
+        bool budgetMiss = false; // it was due a refresh, the tick's budget was spent
+    };
+
+    // The snapshot for `key`. A fresh entry is used as is. A stale or missing
+    // one is refreshed through `fill(entries, cx, cy)` (the one grid visit
+    // around the cell centre) while this world update's budget lasts;
+    // otherwise a stale entry younger than kCreatureAuraSnapshotMaxAgeMs is
+    // reused with its drift scaled by age, and anything older gives no
+    // snapshot. Entries not refreshed for kCreatureAuraSnapshotPruneMs are
+    // dropped, so the cache stays as small as the cells bots stand in.
     template <class Fill>
-    inline CreatureAuraHazardSnapshot const* CreatureAuraSnapshotCacheGet(CreatureAuraSnapshotCache& cache,
+    inline CreatureAuraSnapshotView CreatureAuraSnapshotCacheGet(CreatureAuraSnapshotCache& cache,
         CreatureAuraSnapshotKey const& key, uint32_t nowMs, Fill&& fill)
     {
         if (uint32_t(nowMs - cache.lastPruneMs) >= kCreatureAuraSnapshotPruneMs)
@@ -493,33 +532,72 @@ namespace ai
             }
             cache.lastPruneMs = nowMs;
         }
-        CreatureAuraHazardSnapshot& snap = cache.entries[key];
-        if (CreatureAuraSnapshotStale(snap, nowMs))
+        CreatureAuraSnapshotView view;
+        auto it = cache.entries.find(key);
+        if (it != cache.entries.end() && !CreatureAuraSnapshotStale(it->second, nowMs))
         {
+            view.snap = &it->second;
+            view.driftYd = kCreatureAuraSnapshotDriftYd;
+            return view;
+        }
+        if (cache.refreshesThisTick < kKeepoutRefreshesPerTick)
+        {
+            CreatureAuraHazardSnapshot& snap = cache.entries[key];
             CreatureAuraSnapshotCellCentre(key, snap.cx, snap.cy);
             snap.entries.clear();
             fill(snap.entries, snap.cx, snap.cy);
             snap.valid = true;
             snap.atMs = nowMs;
-            ++cache.refreshes;
+            ++cache.refreshesThisTick;
+            view.snap = &snap;
+            view.driftYd = kCreatureAuraSnapshotDriftYd;
+            view.refreshed = true;
+            return view;
         }
-        return &snap;
+        view.budgetMiss = true;
+        if (it != cache.entries.end() && it->second.valid &&
+            uint32_t(nowMs - it->second.atMs) < kCreatureAuraSnapshotMaxAgeMs)
+        {
+            view.snap = &it->second;
+            view.driftYd = CreatureAuraSnapshotDriftFor(uint32_t(nowMs - it->second.atMs));
+        }
+        return view;
     }
 
-    // The snapshot creature whose ring, widened by the drift, holds (x, y);
-    // `skipA` and `skipB` (the target and the explicit attack target, checked
-    // live by the callers) are passed over. 0 when none.
-    inline uint64_t CreatureAuraSnapshotRingAt(CreatureAuraHazardSnapshot const& snap, float x, float y,
-        uint64_t skipA = 0, uint64_t skipB = 0)
+    // The snapshot-only creature whose ring, widened by the view's drift,
+    // holds (x, y) on the point's floor. `skip` lists the creatures the live
+    // checks already judged (the bot's live list, the target, the explicit
+    // attack target). 0 when none, when there is no snapshot, or when the
+    // point lies outside its cover (the live checks alone decide then).
+    inline uint64_t CreatureAuraSnapshotRingAt(CreatureAuraSnapshotView const& view, float x, float y, float z,
+        std::vector<uint64_t> const& skip)
     {
-        for (CreatureAuraHazardEntry const& e : snap.entries)
+        if (!view.snap || !CreatureAuraSnapshotCovers(*view.snap, x, y))
+            return 0;
+        for (CreatureAuraHazardEntry const& e : view.snap->entries)
         {
-            if (e.guidRaw == 0 || e.guidRaw == skipA || e.guidRaw == skipB)
+            if (e.guidRaw == 0 || std::find(skip.begin(), skip.end(), e.guidRaw) != skip.end())
+                continue;
+            if (std::fabs(e.z - z) > kCreatureAuraSnapshotHeightYd)
                 continue;
             float const dx = e.x - x, dy = e.y - y;
-            if (std::sqrt(dx * dx + dy * dy) < e.hazardRadius + kCreatureAuraSnapshotDriftYd)
+            if (std::sqrt(dx * dx + dy * dy) < e.hazardRadius + view.driftYd)
                 return e.guidRaw;
         }
         return 0;
+    }
+
+    // The whole snapshot check, the seam the game code and the tests share:
+    // look up the cell's snapshot (refreshing through `fill` within budget)
+    // and test the point. `view` reports what the lookup did.
+    template <class Fill>
+    inline uint64_t CreatureAuraSnapshotRinged(CreatureAuraSnapshotCache& cache, CreatureAuraSnapshotKey const& key,
+        uint32_t nowMs, float x, float y, float z, std::vector<uint64_t> const& skip, Fill&& fill,
+        CreatureAuraSnapshotView* view = nullptr)
+    {
+        CreatureAuraSnapshotView const v = CreatureAuraSnapshotCacheGet(cache, key, nowMs, std::forward<Fill>(fill));
+        if (view)
+            *view = v;
+        return CreatureAuraSnapshotRingAt(v, x, y, z, skip);
     }
 } // namespace ai
