@@ -41,6 +41,7 @@
 #include "../ai/playerbot/TravelMgr.h"
 #include "../ai/playerbot/WorldPosition.h"
 #include "../ai/playerbot/strategy/values/TravelValues.h"
+#include "../ai/playerbot/strategy/values/PossibleTargetsValue.h"
 #include "../ai/playerbot/LowbieGraveyardPolicy.h"
 // Full Corpse type for SweepDeadBots (IsWithinDistInMap on the reclaim check).
 #include "Objects/Corpse.h"
@@ -2093,7 +2094,11 @@ void BotManager::UpdateBots(uint32_t diff)
         // ResolveMovePath calls in this window that were answered from the cached route (routeReuse) or planned the route again (routeRebuild).
         uint32_t const routeReuse = ai::MovementAction::routeReuseCount.exchange(0, std::memory_order_relaxed);
         uint32_t const routeRebuild = ai::MovementAction::routeRebuildCount.exchange(0, std::memory_order_relaxed);
-        TB_LOG_BASIC("TortoiseBots: BOTPERF passUs=%llu playerBots=%u ownedBots=%u masterBots=%u poolBots=%u poolProcessed=%u due=%u budgetHit=%u maxUs=%llu ticks=%u poolBudgetUs=%llu combatBudgetUs=%llu turnLateAvgMs=%u turnLateMaxMs=%u turns=%u usPerTurn=%u coreMs=%u combatTurns=%u combatLateAvgMs=%u otherTurns=%u otherLateAvgMs=%u routeReuse=%u routeRebuild=%u",
+        // Creature aura keep-out: grid visits made for the shared hazard snapshots in this window.
+        uint32_t const keepoutScans = ai::PossibleTriggersValue::hazardSnapshotRefreshCount.exchange(0, std::memory_order_relaxed);
+        // Lookups due a refresh after the world update's refresh budget was spent (stale reuse or live list only).
+        uint32_t const keepoutBudgetMiss = ai::PossibleTriggersValue::hazardSnapshotBudgetMissCount.exchange(0, std::memory_order_relaxed);
+        TB_LOG_BASIC("TortoiseBots: BOTPERF passUs=%llu playerBots=%u ownedBots=%u masterBots=%u poolBots=%u poolProcessed=%u due=%u budgetHit=%u maxUs=%llu ticks=%u poolBudgetUs=%llu combatBudgetUs=%llu turnLateAvgMs=%u turnLateMaxMs=%u turns=%u usPerTurn=%u coreMs=%u combatTurns=%u combatLateAvgMs=%u otherTurns=%u otherLateAvgMs=%u routeReuse=%u routeRebuild=%u keepoutScans=%u keepoutBudgetMiss=%u",
             static_cast<unsigned long long>(m_perfPassUsSum / m_perfPassCount),
             playerBots, ownedAccountBots, masterBots, poolBots, poolProcessed,
             static_cast<uint32_t>(m_dueTurns.size()), budgetHit ? 1u : 0u,
@@ -2105,7 +2110,7 @@ void BotManager::UpdateBots(uint32_t diff)
             static_cast<uint32_t>(coreMs),
             m_perfCombatTurns, m_perfCombatTurns ? static_cast<uint32_t>(m_perfCombatLateMsSum / m_perfCombatTurns) : 0u,
             m_perfOtherTurns, m_perfOtherTurns ? static_cast<uint32_t>(m_perfOtherLateMsSum / m_perfOtherTurns) : 0u,
-            routeReuse, routeRebuild);
+            routeReuse, routeRebuild, keepoutScans, keepoutBudgetMiss);
         m_perfPassUsSum = 0;
         m_perfPassUsMax = 0;
         m_perfPassCount = 0;
@@ -2267,6 +2272,10 @@ void BotManager::OnWorldUpdate(uint32_t diff)
         }
         ++it;
     }
+
+    // Creature aura keep-out: a fresh hazard-snapshot refresh budget for this
+    // world update, before anything here can run bot AI.
+    ai::PossibleTriggersValue::BeginKeepoutTick();
 
     // Mature PlayerbotAI still exposes a donor-shaped population view for
     // perception/social queries. Refresh it from the authoritative native
