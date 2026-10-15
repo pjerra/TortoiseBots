@@ -7,6 +7,8 @@
 #include "PossibleAttackTargetsValue.h"
 #include "CcMarkHoldPolicy.h"
 #include "playerbot/GroupMembers.h"
+#include "../../../../runtime/CommandedGroupQuery.h"
+#include "../../../../runtime/TotemSpellPolicy.h"
 
 using namespace ai;
 
@@ -17,6 +19,9 @@ public:
     {
         this->spell = spell;
         maxDistance = 0;
+        // Once per calculation: the bot's bound party runs a run leader
+        // (`.bot run`), whose crowd control is its ordered mark only.
+        inRun = TortoiseBots::BotCommands::IsInRunningDungeonRun(ai->GetBot());
     }
 
 public:
@@ -37,6 +42,21 @@ public:
         if (result && CcChooserKeepsResult(result == assignedMark))
             return;
 
+        // A totem is never crowd-controlled (immune to it). A unit an NPC
+        // summoned or created (a mob's pet, a skeleton) stays a candidate,
+        // except in a run whose plan lists it kill_first (Zul'Farrak's
+        // Greater Healing Ward 8179: a mage polymorphed one while the party
+        // was told to kill it). runtime/TotemSpellPolicy.h.
+        if (creature->IsCreature())
+        {
+            bool const totem = static_cast<Creature*>(creature)->IsTotem();
+            bool const npcSummoned = creature->GetOwnerGuid().IsCreature() || creature->GetCreatorGuid().IsCreature();
+            bool const runKillFirst = inRun && npcSummoned &&
+                TortoiseBots::BotCommands::IsRunKillFirst(bot, creature->GetEntry());
+            if (TortoiseBots::CcLeavesOut(totem, npcSummoned, inRun, runKillFirst))
+                return;
+        }
+
         // Never CC over another CC (generalized from the Fear mark-only
         // branch): a mob already held by someone's breakable/unbreakable aura
         // stays held. Re-CC of our own aura of the same spell still flows
@@ -55,6 +75,11 @@ public:
         // started on a mark that can leave range before it finishes.
 
         const bool assignedTarget = assignedMark && assignedMark == creature;
+
+        // In a run leader's party only the run's ordered mark is crowd-
+        // controlled (19z5: ten Polymorphs on Blood Drinkers nobody ordered).
+        if (inRun && !assignedTarget)
+            return;
 
         // Never a free pick on a mob the group is fighting: a sheep there is
         // broken by the next hit (Blade Flurry, a swing, a pet). Only an
@@ -248,6 +273,7 @@ private:
     }
 
     std::string spell;
+    bool inRun = false;
     float maxDistance;
 };
 

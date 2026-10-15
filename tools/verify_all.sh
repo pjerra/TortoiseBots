@@ -52,6 +52,7 @@ python3 -m unittest tools/test_boss_tactics_sql.py
 python3 -m unittest tools/test_dungeon_plan_sql.py
 python3 -m unittest tools/test_trace_score.py
 python3 -m unittest tools/test_run_trace_glue.py
+python3 -m unittest tools/test_run_leader_wiring.py
 echo "✓ Engine unit tests passed."
 
 echo ""
@@ -71,6 +72,7 @@ if command -v g++ >/dev/null 2>&1; then
         test_aoe_off_policy
         test_arcane_rupture_policy
         test_attack_order_policy
+        test_totem_spell_policy
         test_auto_tools_kit_policy
         test_autonomous_bg_policy
         test_avoid_aoe_policy

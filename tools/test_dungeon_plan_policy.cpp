@@ -180,8 +180,41 @@ static void TestLongHops()
     CHECK(CountLongHops(plan, 100.0f) == 0);
 }
 
+// Issue #999 item 5: the plan-wide unit lists (ai_dungeon_plan cc_priority,
+// cc_always, kill_first) and their ranks.
+static void TestPlanUnits()
+{
+    DungeonPlanTable table;
+    CHECK(table.AddPlan("zulfarrak", 209));
+    CHECK(!table.SetUnits("nope", "", "", ""));
+    CHECK(!table.SetUnits("zulfarrak", "5650,x", "", "")); // not a list: none kept
+    CHECK(table.SetUnits("zulfarrak", "5650,7247,7246,5648", "5650,7246,9999", "8179,5650,7247"));
+    table.Seal();
+    CHECK(!table.SetUnits("zulfarrak", "", "", ""));
+    const DungeonPlan* plan = table.Find("zulfarrak");
+    CHECK(plan && plan->ccPriority.size() == 4 && plan->killFirst.size() == 3);
+    // cc_always first in its own order (5650, 7246, 9999), then the
+    // cc_priority entries it does not list (7247, 5648).
+    CHECK(plan->CcRank(5650) == 0 && plan->CcRank(7246) == 1 && plan->CcRank(9999) == 2);
+    CHECK(plan->CcRank(7247) == 3 && plan->CcRank(5648) == 4);
+    CHECK(plan->CcRank(1) == -1);
+    // Zul'Farrak's owner values: the Shadowhunter always first.
+    DungeonPlan zf;
+    zf.ccPriority = {7247, 5648, 7246};
+    zf.ccAlways = {7246};
+    CHECK(zf.CcRank(7246) == 0 && zf.CcRank(7247) == 1 && zf.CcRank(5648) == 2);
+    CHECK(plan->KillFirstRank(8179) == 0 && plan->KillFirstRank(7247) == 2 && plan->KillFirstRank(7246) == -1);
+
+    // No lists (the columns' default ''): nothing ranked.
+    DungeonPlanTable bare;
+    CHECK(bare.AddPlan("u", 70) && bare.SetUnits("u", "", "", ""));
+    bare.Seal();
+    CHECK(bare.Find("u")->CcRank(5650) == -1 && bare.Find("u")->KillFirstRank(8179) == -1);
+}
+
 int main()
 {
+    TestPlanUnits();
     TestKinds();
     TestEntries();
     TestNormalize();
