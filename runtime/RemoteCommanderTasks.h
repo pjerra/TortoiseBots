@@ -111,6 +111,19 @@ inline Point3 StandingPoint(float botX, float botY, float objX, float objY, floa
     return point;
 }
 
+// cmd gossip: an NPC can walk (Weegli during his event). The walk's standing
+// point follows it once the point it gives moved this far from the one the bot
+// walks to.
+constexpr float kRetargetYards = 1.0f;
+
+inline bool StandMoved(Point3 const& walkingTo, Point3 const& now, float yards = kRetargetYards)
+{
+    float const dx = now.x - walkingTo.x;
+    float const dy = now.y - walkingTo.y;
+    float const dz = now.z - walkingTo.z;
+    return dx * dx + dy * dy + dz * dz >= yards * yards;
+}
+
 inline uint32_t WalkBudgetMs(float distance)
 {
     float const walking = distance > 0.0f ? distance / kAssumedWalkYardsPerSecond * 1000.0f : 0.0f;
@@ -128,6 +141,7 @@ enum class TaskKind : uint8_t
     Open,
     Use,
     Ritual, // one member of a `cmd ritual` group: the walk is its own, the act belongs to the group (RitualState)
+    Gossip, // `cmd gossip`: talk to an NPC and pick an option (runtime/GossipOrderPolicy.h); the act is over at once
 };
 
 enum class TaskStage : uint8_t
@@ -159,6 +173,7 @@ inline uint32_t ActBudgetMs(TaskKind kind)
         case TaskKind::Open: return kOpenEffectMs;
         case TaskKind::Use: return kUseCastMs;
         case TaskKind::Ritual: return kLootWindowMs; // never used: the group's own clock runs the act
+        case TaskKind::Gossip: return kOpenEffectMs;
     }
     return kLootWindowMs;
 }

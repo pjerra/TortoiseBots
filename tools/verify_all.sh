@@ -46,6 +46,7 @@ python3 -m unittest tools/test_tactical_stay_release.py
 python3 -m unittest tools/test_stay_anchor_wiring.py
 python3 -m unittest tools/test_attack_order_wiring.py
 python3 -m unittest tools/test_bot_area_trigger_wiring.py
+python3 -m unittest tools/test_gossip_order_wiring.py
 python3 -m unittest tools/test_keepout_set_aside_wiring.py
 python3 -m unittest tools/test_pull_end_engaged.py
 python3 -m unittest tools/test_priest_fade_flash_wiring.py
@@ -119,6 +120,7 @@ if command -v g++ >/dev/null 2>&1; then
         test_ghost_stall_policy
         test_gluth_kite_policy
         test_golemagg_policy
+        test_gossip_order_policy
         test_graveyard_teleport_policy
         test_grind_hostility_policy
         test_grind_spot_policy

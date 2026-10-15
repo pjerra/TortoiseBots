@@ -826,14 +826,15 @@ inline OrderTier TierForOrder(std::string const& verb)
         verb == "focus" || verb == "move" || verb == "stay" || verb == "follow" ||
         verb == "rest" || verb == "lootmethod" || verb == "state")
         return OrderTier::Tactical;
-    // revive, summon, loot, open, use, ritual, enter and anything unknown: fail closed.
+    // revive, summon, loot, open, use, ritual, enter, gossip and anything unknown: fail closed.
     return OrderTier::OwnerOrGm;
 }
 
 inline bool IsKnownOrder(std::string const& verb)
 {
     return TierForOrder(verb) == OrderTier::Tactical || verb == "revive" || verb == "summon" ||
-        verb == "loot" || verb == "open" || verb == "use" || verb == "ritual" || verb == "enter";
+        verb == "loot" || verb == "open" || verb == "use" || verb == "ritual" || verb == "enter" ||
+        verb == "gossip";
 }
 
 // enabled: AiPlayerbot.RemoteCommander. boundCommander: the requester holds a
@@ -1223,13 +1224,13 @@ inline bool ParseRitualOrder(std::vector<std::string> const& parts, RitualOrder&
 }
 
 // The bot an owner-or-GM order names, or an empty string when the arguments
-// do not fit the verb (revive/summon take the bot alone; loot/open/use name it
-// second, after the object or item).
+// do not fit the verb (revive/summon take the bot alone; loot/open/use/gossip
+// name it second, after the object, item or NPC entry).
 inline std::string OwnerOrderBotName(std::string const& verb, std::vector<std::string> const& parts)
 {
     if ((verb == "revive" || verb == "summon") && parts.size() == 1)
         return parts[0];
-    if ((verb == "loot" || verb == "open" || verb == "use") && parts.size() >= 2)
+    if ((verb == "loot" || verb == "open" || verb == "use" || verb == "gossip") && parts.size() >= 2)
         return parts[1];
     return std::string();
 }

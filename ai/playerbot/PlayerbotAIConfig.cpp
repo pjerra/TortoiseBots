@@ -10,6 +10,7 @@
 #include "../../runtime/HireUnlockPolicy.h"
 #include "../../runtime/RemoteCommanderView.h"
 #include "../../runtime/RunTrace.h"
+#include "../../runtime/GossipOrderPolicy.h"
 #include <cerrno>
 #include <cstring>
 #include <thread>
@@ -602,6 +603,15 @@ bool PlayerbotAIConfig::Initialize()
     runTraceMaxFileMb = TortoiseBots::RunTrace::ClampMaxFileMb(
         config.GetIntDefault("AiPlayerbot.RunTrace.MaxFileMb",
             static_cast<int>(TortoiseBots::RunTrace::kDefaultMaxFileMb)));
+    {
+        // Issue #1012: the NPCs `.bot cmd gossip` may talk to. Empty (the default) = off.
+        std::string const gossipText = config.GetStringDefault("AiPlayerbot.BotGossipNpcs", "");
+        std::set<uint32_t> gossipNpcs;
+        if (uint32_t const bad = TortoiseBots::GossipOrder::ParseNpcList(gossipText, gossipNpcs))
+            sLog.outError("AiPlayerbot.BotGossipNpcs '%s': %u word(s) are not creature entries and were skipped",
+                gossipText.c_str(), bad);
+        botGossipNpcs = std::set<uint32>(gossipNpcs.begin(), gossipNpcs.end());
+    }
      openGoSpell = config.GetIntDefault("AiPlayerbot.OpenGoSpell", 6477);
 
     randomChangeMultiplier = config.GetFloatDefault("AiPlayerbot.RandomChangeMultiplier", 1.0);

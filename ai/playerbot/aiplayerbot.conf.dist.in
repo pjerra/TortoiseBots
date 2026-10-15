@@ -487,6 +487,18 @@ AiPlayerbot.TravelPickBudgetUs = 4000
 # Size cap of one trace file in MiB (clamped to 1..1024). When it is reached the
 # run ends (end reason size_cap) with its end record intact.
 #AiPlayerbot.RunTrace.MaxFileMb = 64
+# Issue #1012: `.bot cmd gossip <npc entry> <bot> <option>` lets a commanded bot
+# talk to an NPC and pick a gossip option (needs AiPlayerbot.RemoteCommander = 1
+# and a binding). A gossip option can do anything its script says (take money,
+# give items, teleport), so a bot talks only to the creature entries listed
+# here, comma-separated, after you have read what their scripts do. Empty = the
+# order is refused for every NPC (the default). Audited entries:
+#   7607 Weegli Blastfuse (Zul'Farrak): after the pyramid event his one option
+#        sends him to blow the End Door open; before it his menu is empty.
+#   7604 Sergeant Bly (Zul'Farrak): after the pyramid event his one option starts
+#        his fight (he and his crew turn hostile and attack the bot that asked).
+# To allow both: AiPlayerbot.BotGossipNpcs = 7607,7604
+#AiPlayerbot.BotGossipNpcs =
 
 # Bounded AH market population through the native bot/session auction path. Default off.
 # When enabled, online random Headless bots use real inventory items, pricing, deposits,

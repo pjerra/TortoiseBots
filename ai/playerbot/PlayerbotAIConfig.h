@@ -470,6 +470,9 @@ public:
     bool runTraceGmOnly = true;
     // Size cap of one trace file, in MiB (1..1024); the trace stops when reached.
     uint32 runTraceMaxFileMb = 64;
+    // Issue #1012: creature entries a commanded bot may talk to with `.bot cmd
+    // gossip` (AiPlayerbot.BotGossipNpcs). Empty by default: the order is off.
+    std::set<uint32> botGossipNpcs;
     bool logInGroupOnly, logValuesPerTick;
     bool fleeingEnabled;
     // Opt-in: pool warriors and rogues get no generic "flee" combat strategy
