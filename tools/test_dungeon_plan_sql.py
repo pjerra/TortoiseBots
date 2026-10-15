@@ -29,6 +29,8 @@ def created_columns():
             match = re.search(r"CREATE TABLE IF NOT EXISTS `%s` \((.*?)\n\) ENGINE" % table, text, re.S)
             if match:
                 columns.setdefault(table, set()).update(re.findall(r"^\s+`(\w+)`", match.group(1), re.M))
+            for alter in re.findall(r"ALTER TABLE `%s`(.*?);" % table, text, re.S):
+                columns.setdefault(table, set()).update(re.findall(r"ADD COLUMN IF NOT EXISTS `(\w+)`", alter))
     return columns
 
 

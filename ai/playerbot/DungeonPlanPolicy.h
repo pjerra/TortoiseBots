@@ -115,6 +115,39 @@ namespace ai
         std::uint32_t map = 0;
         std::vector<PlanLeg> legs;
         std::vector<PlanStep> steps;  // (leg, seq) order after the seal
+        // Plan-wide unit lists (ai_dungeon_plan columns, plan v1's fields of the
+        // same names; creature entries, best first):
+        std::vector<std::uint32_t> ccPriority; // what the run leader's crowd control takes in a pack
+        std::vector<std::uint32_t> ccAlways;   // ... in any pack it is in (also ranked after ccPriority)
+        std::vector<std::uint32_t> killFirst;  // killed first in a fight (the run leader focuses them)
+
+        // An entry's crowd-control rank (0 best), or -1 when it is not to be
+        // crowd-controlled. cc_priority's order first, then cc_always entries
+        // it does not list.
+        int CcRank(std::uint32_t entry) const
+        {
+            for (std::size_t i = 0; i < ccPriority.size(); ++i)
+                if (ccPriority[i] == entry)
+                    return static_cast<int>(i);
+            for (std::size_t i = 0; i < ccAlways.size(); ++i)
+                if (ccAlways[i] == entry)
+                    return static_cast<int>(ccPriority.size() + i);
+            return -1;
+        }
+
+        bool CcAlways(std::uint32_t entry) const
+        {
+            return std::find(ccAlways.begin(), ccAlways.end(), entry) != ccAlways.end();
+        }
+
+        // An entry's kill-first rank (0 first), or -1.
+        int KillFirstRank(std::uint32_t entry) const
+        {
+            for (std::size_t i = 0; i < killFirst.size(); ++i)
+                if (killFirst[i] == entry)
+                    return static_cast<int>(i);
+            return -1;
+        }
 
         // The leg's name, or "" when it has no ai_dungeon_leg row.
         const std::string& LegName(std::uint8_t leg) const
@@ -253,6 +286,27 @@ namespace ai
             plan.name = name;
             plan.map = map;
             plans_.emplace(name, std::move(plan));
+            return true;
+        }
+
+        // Loading only: the plan's unit lists (comma lists as in `entries`;
+        // empty is none). False after the seal, for an unknown plan, or when a
+        // list is not a valid entry list (the plan then keeps none of them).
+        bool SetUnits(const std::string& planName, const std::string& ccPriority, const std::string& ccAlways,
+            const std::string& killFirst)
+        {
+            if (Sealed())
+                return false;
+            auto it = plans_.find(planName);
+            if (it == plans_.end())
+                return false;
+            std::vector<std::uint32_t> prio, always, kill;
+            if (!ParsePlanEntries(ccPriority, prio) || !ParsePlanEntries(ccAlways, always) ||
+                !ParsePlanEntries(killFirst, kill))
+                return false;
+            it->second.ccPriority = std::move(prio);
+            it->second.ccAlways = std::move(always);
+            it->second.killFirst = std::move(kill);
             return true;
         }
 

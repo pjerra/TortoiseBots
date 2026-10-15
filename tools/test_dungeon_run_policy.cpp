@@ -1028,6 +1028,173 @@ static void TestNearWipeLatchHoldsThroughTheWipe()
     CHECK(r.nearWipes == 2 && r.wipes == 1);
 }
 
+// Issue #999 item 5 (Zul'Farrak): the Sandfury Witch Doctor 5650 heals its
+// pack and drops a Greater Healing Ward 8179. Before the pull the mage
+// polymorphs the best-ranked cc unit (never the pull target); the pull goes
+// on a kill_first unit; in the fight the kill_first units are focused, the
+// ward first as soon as it is up.
+static PlanStep ZfPack()
+{
+    return PullStep(10, {5650, 5648, 7247});
+}
+
+static DungeonPlan ZfPlan()
+{
+    DungeonPlan plan;
+    plan.steps = {ZfPack()};
+    plan.ccPriority = {5650, 7247, 7246, 5648};
+    plan.ccAlways = {5650, 7246};
+    plan.killFirst = {8179, 5650, 7247};
+    return plan;
+}
+
+static UnitFact Engaged(UnitFact u)
+{
+    u.engaged = true;
+    return u;
+}
+
+// A Greater Healing Ward 8179 of `owner`; ownerEngaged: its owner fights the party.
+static UnitFact Ward(std::uint64_t guid, std::uint64_t owner, bool ownerEngaged)
+{
+    UnitFact u = Unit(guid, 8179, 18);
+    u.owner = owner;
+    u.ownerEngaged = ownerEngaged;
+    return u;
+}
+
+static void TestPullCrowdControlsTheHealer()
+{
+    DungeonPlan plan = ZfPlan();
+    Run r = Start(&plan);
+    Facts f = Party(0);
+    f.members = {MemberFact{"Magey", 5, true}};
+    f.units = {Unit(1, 5648, 10), Unit(2, 5650, 20), Unit(3, 7247, 25)};
+    // The witch doctor is the best cc rank: it is sheeped, not pulled.
+    CHECK(Tick(r, f) == "cc moon 2 Magey");
+    CHECK(r.note.find("crowd control on 5650") == 0 && r.state == State::Running);
+    // The pull goes on the soul eater (kill_first) rather than the nearest.
+    CHECK(Tick(r, f) == "pullback 3");
+    CHECK(r.pulls == 1 && r.fruitlessPulls == 0);
+    // In the fight: the soul eater is focused; the sheeped witch doctor is not.
+    f.anyInCombat = true;
+    f.killFirst = {Engaged(Unit(2, 5650, 20)), Engaged(Unit(3, 7247, 5))};
+    CHECK(Tick(r, f) == "focus 3");
+    CHECK(Tick(r, f).empty()); // only on a change
+    // A ward comes up: it is focused first.
+    f.killFirst.push_back(Ward(9, 3, true));
+    CHECK(Tick(r, f) == "focus 9");
+    // The ward dies: back on the soul eater.
+    f.killFirst.pop_back();
+    CHECK(Tick(r, f) == "focus 3");
+    // After the fight: the sheeped witch doctor is left while another can be
+    // pulled, and no second cc goes out while it lives.
+    f.anyInCombat = false;
+    f.killFirst.clear();
+    f.units = {Unit(1, 5648, 10), Unit(2, 5650, 20)};
+    CHECK(Tick(r, f) == "pullback 1");
+    f.anyInCombat = true;
+    Tick(r, f);
+    f.anyInCombat = false;
+    f.units = {Unit(2, 5650, 20)};
+    CHECK(Tick(r, f) == "pullback 2"); // the last one, sheeped or not
+    // A refused cc or focus does not pause.
+    OrderRefused(r, "cc moon 2 Magey", "no-bot");
+    OrderRefused(r, "focus 3", "invalid-target");
+    CHECK(r.state == State::Running);
+}
+
+static void TestNoCrowdControlWithoutAMageOrPlanList()
+{
+    DungeonPlan plan = ZfPlan();
+    Run r = Start(&plan);
+    Facts f = Party(0);
+    f.units = {Unit(1, 5648, 10), Unit(2, 5650, 20)};
+    // No mage: no cc; the pull still prefers kill_first.
+    CHECK(Tick(r, f) == "pullback 2");
+
+    DungeonPlan bare;
+    bare.steps = {ZfPack()};
+    Run b = Start(&bare);
+    Facts g = Party(0);
+    g.members = {MemberFact{"Magey", 5, true}};
+    g.units = {Unit(1, 5648, 10), Unit(2, 5650, 20)};
+    CHECK(Tick(b, g) == "pullback 1"); // the nearest, as before
+    g.anyInCombat = true;
+    g.killFirst = {Engaged(Unit(2, 5650, 20))};
+    CHECK(Tick(b, g).empty());
+
+    // A lone cc unit is pulled, not sheeped.
+    Run c = Start(&plan);
+    Facts h = Party(0);
+    h.members = {MemberFact{"Magey", 5, true}};
+    h.units = {Unit(2, 5650, 20)};
+    CHECK(Tick(c, h) == "pullback 2");
+}
+
+// Codex on #1001: the Polymorph is pending until its aura shows on that unit
+// in the fight (the mage's cc strategy is a combat one): not within
+// kCcLandMs, the mark once more; still not, noted, and the fight goes on.
+static void TestCrowdControlMustLand()
+{
+    DungeonPlan plan = ZfPlan();
+    plan.killFirst.clear();
+    Run r = Start(&plan);
+    Facts f = Party(0);
+    f.members = {MemberFact{"Tanky", 0, false}, MemberFact{"Magey", 5, true}};
+    f.units = {Unit(1, 5648, 10), Unit(2, 5650, 20)};
+    CHECK(Tick(r, f) == "cc moon 2 Magey");
+    CHECK(r.ccPending == 2);
+    CHECK(Tick(r, f) == "pullback 1"); // the mark is out; the pull starts the fight
+    f.anyInCombat = true;
+    CHECK(Tick(r, f).empty() && r.ccPending == 2);
+    f.units[1].polymorphed = true; // landed
+    CHECK(Tick(r, f).empty());
+    CHECK(r.ccPending == 0 && r.note.find("polymorphed") != std::string::npos);
+
+    // Never lands: once more after kCcLandMs, then noted.
+    Run n = Start(&plan);
+    Facts g = Party(0);
+    g.members = {MemberFact{"Magey", 5, true}};
+    g.units = {Unit(1, 5648, 10), Unit(2, 5650, 20)};
+    CHECK(Tick(n, g) == "cc moon 2 Magey");
+    CHECK(Tick(n, g) == "pullback 1");
+    g.anyInCombat = true;
+    std::string order;
+    for (std::uint32_t i = 0; i <= kCcLandMs / kTickMs && order.empty(); ++i)
+        order = Tick(n, g);
+    CHECK(order == "cc moon 2 Magey" && n.ccResent && n.note.find("once more") != std::string::npos);
+    order.clear();
+    for (std::uint32_t i = 0; i <= kCcLandMs / kTickMs && n.ccPending; ++i)
+        order += Tick(n, g);
+    CHECK(order.empty() && n.ccPending == 0 && n.note.find("cc did not land on 5650") != std::string::npos);
+    CHECK(n.state == State::Running);
+
+    // A mage that does not know Polymorph is not the crowd control.
+    Run m = Start(&plan);
+    Facts h = Party(0);
+    h.members = {MemberFact{"Lowmage", 5, false}};
+    h.units = {Unit(1, 5648, 10), Unit(2, 5650, 20)};
+    CHECK(Tick(m, h) == "pullback 1" && m.ccSent.empty());
+}
+
+// Codex on #1001: kill_first is this fight's only. A ward whose owner fights
+// the party is focused; a ward of an unrelated witch doctor nearby is not,
+// nor a kill_first unit that is not engaged.
+static void TestKillFirstIsThisFightsOnly()
+{
+    DungeonPlan plan = ZfPlan();
+    Run r = Start(&plan);
+    Facts f = Party(0);
+    f.units = {Unit(1, 5648, 10)};
+    CHECK(Tick(r, f) == "pullback 1");
+    f.anyInCombat = true;
+    f.killFirst = {Ward(20, 30, false), Unit(30, 5650, 25)}; // unrelated ward and its idle owner
+    CHECK(Tick(r, f).empty());
+    f.killFirst.push_back(Ward(21, 1, true)); // the ward of a unit in this fight
+    CHECK(Tick(r, f) == "focus 21");
+}
+
 static void TestStepIdleCeiling()
 {
     DungeonPlan plan;
@@ -1271,6 +1438,10 @@ int main()
     TestRefusedPullOnlyForInvalidTarget();
     TestWipeWithTheLeadOnTheGraveyardMap();
     TestNearWipeLatchHoldsThroughTheWipe();
+    TestPullCrowdControlsTheHealer();
+    TestNoCrowdControlWithoutAMageOrPlanList();
+    TestCrowdControlMustLand();
+    TestKillFirstIsThisFightsOnly();
     TestEmptyPlan();
     std::cout << "test_dungeon_run_policy: ok\n";
     return 0;

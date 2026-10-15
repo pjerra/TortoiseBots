@@ -61,6 +61,23 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn("if (bossEntry && lead->GetDistance(creature) <= kSeeYd)\n"
                       "                            f.bossDeadNearLead = true;", facts)
 
+    def test_crowd_control_and_kill_first_facts(self):
+        facts = body(COMMANDS, "void ReadRunFacts(", "\n}\n")
+        # The crowd control is a mage that knows Polymorph (the policy picks it from the members).
+        self.assertIn("member.polymorph = bot->GetClass() == CLASS_MAGE && KnowsPolymorph(bot);", facts)
+        self.assertIn("unit.polymorphed = Polymorphed(creature);", facts)
+        # Kill-first units come from the bots' cached attackers lists: no grid or world scan (AGENTS.md).
+        self.assertIn("ReadKillFirst(*slot.run.plan, lead, bots, f);", facts)
+        kill = body(COMMANDS, "void ReadKillFirst(", "\n}\n")
+        self.assertIn('ReadCachedGuidList(PlayerbotAIStorage::Instance().GetAI(bot), "attackers", guids);', kill)
+        for scan in ("GetCreatureListWithEntryInGrid", "Cell::Visit", "VisitAllObjects", "HostileCreaturesAround"):
+            self.assertNotIn(scan, kill)
+        self.assertIn("fact.engaged = EngagedWithParty(unit, party);", kill)
+        self.assertIn("EngagedWithParty(summoner, party);", kill)
+        loader = (ROOT / "ai/playerbot/DungeonPlanMgr.cpp").read_text()
+        self.assertIn("SELECT `plan`, `map`, `cc_priority`, `cc_always`, `kill_first` FROM `ai_dungeon_plan`", loader)
+        self.assertIn("table.SetUnits(plan, fields[2].GetCppString(), fields[3].GetCppString(), fields[4].GetCppString())", loader)
+
     def test_walk_back_reads_facts_for_the_replayed_point(self):
         facts = body(COMMANDS, "void ReadRunFacts(", "\n}\n")
         self.assertIn("ai::PlanStep const* step = FactStep(slot.run);", facts)

@@ -23,13 +23,18 @@ void ai::LoadDungeonPlans()
         return;
 
     uint32 skippedPlans = 0;
-    if (auto result = WorldDatabase.Query("SELECT `plan`, `map` FROM `ai_dungeon_plan`"))
+    if (auto result = WorldDatabase.Query(
+        "SELECT `plan`, `map`, `cc_priority`, `cc_always`, `kill_first` FROM `ai_dungeon_plan`"))
     {
         do
         {
             Field* fields = result->Fetch();
-            if (!table.AddPlan(fields[0].GetCppString(), fields[1].GetUInt32()))
+            std::string const plan = fields[0].GetCppString();
+            if (!table.AddPlan(plan, fields[1].GetUInt32()))
                 ++skippedPlans;
+            else if (!table.SetUnits(plan, fields[2].GetCppString(), fields[3].GetCppString(), fields[4].GetCppString()))
+                sLog.outError("ai_dungeon_plan: plan '%s': cc_priority, cc_always or kill_first is not a list of "
+                    "creature entries; the plan runs without crowd control and kill-first targets", plan.c_str());
         } while (result->NextRow());
     }
 

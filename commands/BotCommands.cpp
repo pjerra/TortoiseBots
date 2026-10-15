@@ -8635,6 +8635,81 @@ bool NearestReachablePoint(Player* lead, float x, float y, float z, float& ox, f
     return false;
 }
 
+bool KnowsPolymorph(Player* bot)
+{
+    for (uint32 spell : TortoiseBots::DungeonRun::kPolymorphSpells)
+        if (bot->HasSpell(spell))
+            return true;
+    return false;
+}
+
+bool Polymorphed(Unit const* unit)
+{
+    for (uint32 spell : TortoiseBots::DungeonRun::kPolymorphSpells)
+        if (unit->HasAura(spell))
+            return true;
+    return false;
+}
+
+// In this fight: a party bot is its victim or attacks it.
+bool EngagedWithParty(Unit* unit, std::unordered_set<uint64> const& party)
+{
+    if (!unit || !unit->IsAlive() || !unit->IsInCombat())
+        return false;
+    if (Unit* victim = unit->GetVictim())
+        if (party.count(victim->GetObjectGuid().GetRawValue()))
+            return true;
+    for (Unit* attacker : unit->GetAttackers())
+        if (attacker && party.count(attacker->GetObjectGuid().GetRawValue()))
+            return true;
+    return false;
+}
+
+// The plan's kill_first units of this fight, from the bots' cached
+// "attackers" lists (no scan): each with whether it is engaged with the party
+// and, for a summoned one (a healing ward), whether its owner is.
+void ReadKillFirst(ai::DungeonPlan const& plan, Player* lead, std::vector<Player*> const& bots,
+    TortoiseBots::DungeonRun::Facts& f)
+{
+    std::unordered_set<uint64> party;
+    for (Player* bot : bots)
+        party.insert(bot->GetObjectGuid().GetRawValue());
+    std::unordered_set<uint64> seen;
+    std::list<ObjectGuid> guids;
+    for (Player* bot : bots)
+    {
+        if (!bot->IsAlive() || !bot->IsInWorld() || bot->GetMap() != lead->GetMap())
+            continue;
+        ReadCachedGuidList(PlayerbotAIStorage::Instance().GetAI(bot), "attackers", guids);
+        for (ObjectGuid const& guid : guids)
+        {
+            if (!seen.insert(guid.GetRawValue()).second)
+                continue;
+            Unit* unit = SeenHostile(bot, guid);
+            if (!unit || plan.KillFirstRank(unit->GetEntry()) < 0)
+                continue;
+            TortoiseBots::DungeonRun::UnitFact fact;
+            fact.guid = guid.GetRawValue();
+            fact.entry = unit->GetEntry();
+            fact.distLead = lead->GetDistance(unit);
+            fact.stealthed = IsStealthed(unit);
+            fact.evading = unit->IsCreature() && static_cast<Creature*>(unit)->IsInEvadeMode();
+            fact.engaged = EngagedWithParty(unit, party);
+            ObjectGuid owner = unit->GetOwnerGuid();
+            if (owner.IsEmpty())
+                owner = unit->GetCreatorGuid();
+            if (!owner.IsEmpty())
+            {
+                fact.owner = owner.GetRawValue();
+                Unit* summoner = lead->GetMap()->GetUnit(owner);
+                fact.ownerEngaged = summoner && !sServerFacade.IsFriendlyTo(summoner, lead) &&
+                    EngagedWithParty(summoner, party);
+            }
+            f.killFirst.push_back(fact);
+        }
+    }
+}
+
 void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*> const& bots,
     TortoiseBots::DungeonRun::Facts& f)
 {
@@ -8657,16 +8732,15 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
         ++f.alive;
         if (bot->IsInCombat())
             f.anyInCombat = true;
-        float const yd = bot->GetMap() == lead->GetMap() ? bot->GetDistance(lead) : 1000.0f;
+        float const yd = bot == lead ? 0.0f : bot->GetMap() == lead->GetMap() ? bot->GetDistance(lead) : 1000.0f;
         f.maxMemberYd = std::max(f.maxMemberYd, yd);
-        if (bot != lead)
-        {
-            // A gather's straggler is summoned by name (DungeonRun::SummonStraggler).
-            MemberFact member;
-            member.name = bot->GetName();
-            member.yd = yd;
-            f.members.push_back(member);
-        }
+        // By name: a gather's straggler is summoned (DungeonRun::SummonStraggler),
+        // and a mage that knows Polymorph is the plan's crowd control (CcBot).
+        MemberFact member;
+        member.name = bot->GetName();
+        member.yd = yd;
+        member.polymorph = bot->GetClass() == CLASS_MAGE && KnowsPolymorph(bot);
+        f.members.push_back(member);
         uint32 const health = bot->GetMaxHealth() ? bot->GetHealth() * 100 / bot->GetMaxHealth() : 100;
         f.minHealthPct = std::min(f.minHealthPct, health);
         if (bot->GetPowerType() == POWER_MANA && bot->GetMaxPower(POWER_MANA))
@@ -8678,6 +8752,13 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                 f.minManaPct = std::min(f.minManaPct, mana);
         }
     }
+
+    // In a fight of a plan with kill_first: those units among what the bots
+    // already hold, their own cached "attackers" lists (which carry the
+    // attackers' totems and guardians, a healing ward too; read only when
+    // already calculated), resolved by guid. No grid or world scan.
+    if (f.anyInCombat && slot.run.plan && !slot.run.plan->killFirst.empty())
+        ReadKillFirst(*slot.run.plan, lead, bots, f);
 
     // The current step, or during a walk back after a regroup the move point
     // it replays (its hop pulls are read for that point).
@@ -8743,6 +8824,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                     unit.hostile = !sServerFacade.IsFriendlyTo(creature, lead);
                     unit.stealthed = IsStealthed(creature);
                     unit.evading = creature->IsInEvadeMode();
+                    unit.polymorphed = Polymorphed(creature);
                     f.units.push_back(unit);
                 }
             }

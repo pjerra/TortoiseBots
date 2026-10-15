@@ -180,8 +180,35 @@ static void TestLongHops()
     CHECK(CountLongHops(plan, 100.0f) == 0);
 }
 
+// Issue #999 item 5: the plan-wide unit lists (ai_dungeon_plan cc_priority,
+// cc_always, kill_first) and their ranks.
+static void TestPlanUnits()
+{
+    DungeonPlanTable table;
+    CHECK(table.AddPlan("zulfarrak", 209));
+    CHECK(!table.SetUnits("nope", "", "", ""));
+    CHECK(!table.SetUnits("zulfarrak", "5650,x", "", "")); // not a list: none kept
+    CHECK(table.SetUnits("zulfarrak", "5650,7247,7246,5648", "5650,7246,9999", "8179,5650,7247"));
+    table.Seal();
+    CHECK(!table.SetUnits("zulfarrak", "", "", ""));
+    const DungeonPlan* plan = table.Find("zulfarrak");
+    CHECK(plan && plan->ccPriority.size() == 4 && plan->killFirst.size() == 3);
+    CHECK(plan->CcRank(5650) == 0 && plan->CcRank(5648) == 3);
+    CHECK(plan->CcRank(9999) == 4 + 2); // cc_always only: after cc_priority, in its own order
+    CHECK(plan->CcRank(1) == -1);
+    CHECK(plan->CcAlways(7246) && !plan->CcAlways(7247));
+    CHECK(plan->KillFirstRank(8179) == 0 && plan->KillFirstRank(7247) == 2 && plan->KillFirstRank(7246) == -1);
+
+    // No lists (the columns' default ''): nothing ranked.
+    DungeonPlanTable bare;
+    CHECK(bare.AddPlan("u", 70) && bare.SetUnits("u", "", "", ""));
+    bare.Seal();
+    CHECK(bare.Find("u")->CcRank(5650) == -1 && bare.Find("u")->KillFirstRank(8179) == -1);
+}
+
 int main()
 {
+    TestPlanUnits();
     TestKinds();
     TestEntries();
     TestNormalize();

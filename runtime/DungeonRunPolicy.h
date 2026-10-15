@@ -21,6 +21,9 @@
 // Safety rules, carried over from turtle-agent's remote driver (its plan
 // stepper is the owner's MIT code; see docs/PROVENANCE.md):
 //   - gather before a pull: every living bot within kGatherYd of the lead bot;
+//   - the plan's cc units get one mage's `cc moon` before a pull (never the
+//     pull target), its kill_first units are pulled first and focused in a
+//     fight (a summoned healing ward too);
 //   - walk in the plan's hops; before each hop, pull what stands near it, but
 //     never what a later pull or boss step owns (OwnedByLaterStep);
 //   - a pack or boss counts as done only when the lead bot stands within
@@ -135,13 +138,25 @@ struct UnitFact
     bool hostile = true;     // not friendly to the party (hostile or neutral): it may be pulled
     bool stealthed = false;
     bool evading = false;    // running home: not pulled this tick
+    bool polymorphed = false; // a mage's Polymorph aura is on it (kPolymorphSpells)
+    // Kill-first candidates (Facts::killFirst): in combat with a party member,
+    // or summoned / owned (a healing ward) by a unit that is.
+    bool engaged = false;
+    std::uint64_t owner = 0;
+    bool ownerEngaged = false;
 };
+
+// The mage's Polymorph (all ranks and forms): the aura the run waits for after
+// a `cc moon`, and the spell a mage must know to be the run's crowd control.
+constexpr std::uint32_t kPolymorphSpells[] = {118, 12824, 12825, 12826, 28270, 28271, 28272};
+constexpr std::uint32_t kCcLandMs = 5000; // in the fight a `cc moon` must show its aura within this, else once more, then noted
 
 // A living bot of the party other than the lead bot.
 struct MemberFact
 {
     std::string name;
     float yd = 0.0f;        // from the lead bot (1000 on another map)
+    bool polymorph = false; // a mage that knows Polymorph (kPolymorphSpells): the run's crowd control
 };
 
 // What the glue reads once a tick for the run's current step.
@@ -153,7 +168,10 @@ struct Facts
     bool anyInCombat = false;
     float leadX = 0.0f, leadY = 0.0f, leadZ = 0.0f;
     float maxMemberYd = 0.0f;           // the living bot farthest from the lead bot
-    std::vector<MemberFact> members;    // the living bots but the lead bot (gather stragglers)
+    std::vector<MemberFact> members;    // the living bots, the lead bot too (at 0 yd)
+    // In a fight, when the plan has kill_first: its living, not friendly units
+    // from the bots' own attacker lists (a summoned healing ward included).
+    std::vector<UnitFact> killFirst;
     std::uint32_t minHealthPct = 100;   // living bots
     std::uint32_t minHealerManaPct = 100;
     std::uint32_t minManaPct = 100;     // mana users that are not healers
@@ -237,6 +255,12 @@ struct Run
     bool gatherWaived = false;
     std::unordered_set<std::string> summoned; // stragglers this step summoned already (once each)
     std::unordered_map<std::string, float> memberYd; // each bot's distance to the lead at the gather's last sample
+    // Crowd control and kill-first (the plan's cc_priority / cc_always / kill_first).
+    std::unordered_set<std::uint64_t> ccSent; // units this step put a `cc moon` on (once each)
+    std::uint64_t focusGuid = 0;              // the kill-first unit focused in this fight
+    std::uint64_t ccPending = 0;              // the `cc moon` sent, its Polymorph not seen yet
+    bool ccResent = false;                    // ... sent a second time
+    std::uint32_t ccWaitMs = 0;               // fight time since the mark (or its second sending)
     // Regroups the run started by itself at this step (a wipe or kWipeDead
     // dead), and the walk back over the plan's move points after one.
     std::uint32_t autoRegroups = 0;
@@ -316,6 +340,11 @@ inline void ResetStep(Run& r)
     r.gatherWaived = false;
     r.summoned.clear();
     r.memberYd.clear();
+    r.ccSent.clear();
+    r.focusGuid = 0;
+    r.ccPending = 0;
+    r.ccResent = false;
+    r.ccWaitMs = 0;
     r.walkBackDue = false;
     r.walkBack = false;
     r.walkBackIdx = 0;
@@ -520,9 +549,11 @@ inline bool PauseForPlayer(Run& r, const std::string& order)
 // refused point of a walk back is passed for the next one.
 inline void OrderRefused(Run& r, const std::string& order, const std::string& answer)
 {
-    if (order == "rest" || order == "revive party" || order.compare(0, 7, "summon ") == 0)
+    if (order == "rest" || order == "revive party" || order.compare(0, 7, "summon ") == 0 ||
+        order.compare(0, 3, "cc ") == 0 || order.compare(0, 6, "focus ") == 0)
     {
-        // The rest gate, the regroup and the gather have their own ceilings.
+        // The rest gate, the regroup and the gather have their own ceilings;
+        // crowd control and a focus are help, the fight goes on without them.
         r.note = order + " refused: " + answer;
         return;
     }
@@ -671,8 +702,161 @@ inline std::size_t OpenUnits(const Run& r, const std::vector<UnitFact>& units)
     return n;
 }
 
-// Gathers the party, then sends `pullback <guid>`.
-inline void PullUnit(Run& r, const Facts& f, const UnitFact& u, std::string& order, bool walkBack = false)
+// Whether a unit may be pulled or crowd-controlled now (PickPull's rules).
+inline bool Pullable(const Run& r, const UnitFact& u)
+{
+    return u.hostile && !u.evading && !u.stealthed && !r.passed.count(u.guid) && !r.unreachable.count(u.guid);
+}
+
+// The party's crowd control: the first living mage that knows Polymorph, "" none.
+inline std::string CcBot(const Facts& f)
+{
+    for (const MemberFact& m : f.members)
+        if (m.polymorph && !m.name.empty())
+            return m.name;
+    return std::string();
+}
+
+// In the fight after a `cc moon`: the Polymorph aura must show on that unit
+// within kCcLandMs. Not there: the mark once more, then noted as not landed.
+// Returns true when it sent an order.
+inline bool CheckCc(Run& r, const Facts& f, std::uint32_t dt, std::string& order)
+{
+    if (!r.ccPending)
+        return false;
+    const UnitFact* held = nullptr;
+    for (const UnitFact& x : f.units)
+        if (x.guid == r.ccPending)
+            held = &x;
+    if (!held || held->polymorphed)
+    {
+        if (held)
+            r.note = "fighting: " + std::to_string(held->entry) + " is polymorphed";
+        r.ccPending = 0;
+        return false;
+    }
+    r.ccWaitMs += dt;
+    if (r.ccWaitMs < kCcLandMs)
+        return false;
+    std::string const bot = CcBot(f);
+    if (!r.ccResent && !bot.empty())
+    {
+        r.ccResent = true;
+        r.ccWaitMs = 0;
+        r.note = "fighting: the crowd control on " + std::to_string(held->entry) + " did not land: once more";
+        order = "cc moon " + std::to_string(held->guid) + " " + bot;
+        return true;
+    }
+    r.note = "fighting: cc did not land on " + std::to_string(held->entry);
+    r.ccPending = 0;
+    return false;
+}
+
+// Whether a unit this step crowd-controlled is still alive among the step's
+// units (one mage holds one Polymorph).
+inline bool CcHeld(const Run& r, const Facts& f)
+{
+    for (const UnitFact& u : f.units)
+        if (r.ccSent.count(u.guid))
+            return true;
+    return false;
+}
+
+// The pack member the run crowd-controls before a pull of `pullGuid`: the
+// best-ranked of the plan's cc entries (cc_priority, then cc_always) among
+// the step's units, never the pull target, not one already done this step,
+// and none while an earlier one is still alive. Null without a mage in the
+// party or a plan list.
+inline const UnitFact* PickCc(const Run& r, const Facts& f, std::uint64_t pullGuid)
+{
+    if (!r.plan || CcBot(f).empty() || CcHeld(r, f))
+        return nullptr;
+    const UnitFact* best = nullptr;
+    int bestRank = 0;
+    for (const UnitFact& u : f.units)
+    {
+        if (u.guid == pullGuid || !Pullable(r, u) || r.ccSent.count(u.guid))
+            continue;
+        int const rank = r.plan->CcRank(u.entry);
+        if (rank < 0)
+            continue;
+        if (!best || rank < bestRank || (rank == bestRank && u.distLead < best->distLead))
+        {
+            best = &u;
+            bestRank = rank;
+        }
+    }
+    return best;
+}
+
+// A pack's pull target (a pull step): a kill_first unit first (best rank,
+// then nearest), else the nearest; never the unit the crowd control is for,
+// or a crowd-controlled one, while another can be pulled. Null for none.
+inline const UnitFact* PickPackPull(const Run& r, const Facts& f)
+{
+    const UnitFact* cc = PickCc(r, f, 0);
+    const UnitFact* best = nullptr;
+    const UnitFact* held = nullptr;
+    int bestRank = -1;
+    for (const UnitFact& u : f.units)
+    {
+        if (!Pullable(r, u))
+            continue;
+        if ((cc && u.guid == cc->guid) || r.ccSent.count(u.guid))
+        {
+            if (!held || u.distLead < held->distLead)
+                held = &u;
+            continue;
+        }
+        int const rank = r.plan ? r.plan->KillFirstRank(u.entry) : -1;
+        bool better = !best;
+        if (best)
+        {
+            if (rank >= 0 && (bestRank < 0 || rank < bestRank))
+                better = true;
+            else if (rank == bestRank && u.distLead < best->distLead)
+                better = true;
+        }
+        if (better)
+        {
+            best = &u;
+            bestRank = rank;
+        }
+    }
+    return best ? best : held;
+}
+
+// In a fight: the kill_first unit to focus (best rank, then nearest; not a
+// crowd-controlled one). Null for none.
+inline const UnitFact* PickKillFirst(const Run& r, const Facts& f)
+{
+    if (!r.plan)
+        return nullptr;
+    const UnitFact* best = nullptr;
+    int bestRank = 0;
+    for (const UnitFact& u : f.killFirst)
+    {
+        if (!u.hostile || u.evading || u.stealthed || r.ccSent.count(u.guid))
+            continue;
+        // Only this fight's: engaged with the party, or the ward of one that is.
+        if (!u.engaged && !(u.owner && u.ownerEngaged))
+            continue;
+        int const rank = r.plan->KillFirstRank(u.entry);
+        if (rank < 0)
+            continue;
+        if (!best || rank < bestRank || (rank == bestRank && u.distLead < best->distLead))
+        {
+            best = &u;
+            bestRank = rank;
+        }
+    }
+    return best;
+}
+
+// Gathers the party, crowd-controls the plan's cc target of the pack (one
+// `cc moon <guid> <mage>`, once per unit and step), then sends `pullback <guid>`.
+inline void PullUnit(Run& r, const Facts& f, const UnitFact& u, std::string& order, const UnitFact* cc = nullptr,
+    bool walkBack = false)
 {
     if (f.maxMemberYd > kGatherYd && !r.gatherWaived)
     {
@@ -700,6 +884,23 @@ inline void PullUnit(Run& r, const Facts& f, const UnitFact& u, std::string& ord
     if (walkBack && r.walkBackPulls >= kMaxWalkBackPulls)
     {
         Pause(r, "walk back: " + std::to_string(kMaxWalkBackPulls) + " pulls on the way did not clear it");
+        return;
+    }
+    if (cc && cc->guid != u.guid && !r.ccSent.count(cc->guid))
+    {
+        // The mark goes out before the pull; the mage's Polymorph comes with
+        // the fight (its `cc` strategy is a combat one), where the fight gate
+        // checks the aura (CheckCc).
+        r.ccSent.insert(cc->guid);
+        r.ccPending = cc->guid;
+        r.ccResent = false;
+        r.ccWaitMs = 0;
+        // Still getting the pull ready: the next tick's pull is not counted
+        // as a second pull attempt (FightStep's fruitless count).
+        EnterPhase(r, Phase::Gather);
+        std::string const bot = CcBot(f);
+        r.note = "crowd control on " + std::to_string(cc->entry) + " (" + bot + ") before the pull";
+        order = "cc moon " + std::to_string(cc->guid) + " " + bot;
         return;
     }
     // A gather left out holds for this pull only: the next one gathers again.
@@ -834,7 +1035,7 @@ inline bool WalkBack(Run& r, const Facts& f, std::uint32_t dt, std::string& orde
     }
     if (const UnitFact* hopUnit = PickPull(r, f.hopUnits, 0))
     {
-        PullUnit(r, f, *hopUnit, order, true);
+        PullUnit(r, f, *hopUnit, order, nullptr, true);
         if (r.state == State::Running)
             r.note = "walk back: " + r.note;
         return true;
@@ -925,7 +1126,7 @@ inline void FightStep(Run& r, const Facts& f, const PlanStep& s, const std::vect
             r.bossSeenAlive = r.bossSeenAlive || u.entry == s.entry;
     const UnitFact* pick = nullptr;
     if (killOrder.empty())
-        pick = PickPull(r, f.units, 0);
+        pick = PickPackPull(r, f);
     for (std::uint32_t entry : killOrder)
         if (!pick)
             pick = PickPull(r, f.units, entry);
@@ -953,7 +1154,7 @@ inline void FightStep(Run& r, const Facts& f, const PlanStep& s, const std::vect
                 " pulls that killed nothing");
             return;
         }
-        PullUnit(r, f, *pick, order);
+        PullUnit(r, f, *pick, order, PickCc(r, f, pick->guid));
         return;
     }
     if (OpenUnits(r, f.units) > 0)
@@ -1309,9 +1510,23 @@ inline std::string Tick(Run& r, const Facts& f, std::uint32_t dt = kTickMs, cons
         r.fightMs += dt;
         std::uint32_t const cap = s->kind == PlanStepKind::Boss ? kBossFightCapMs : kFightCapMs;
         if (r.fightMs > cap)
+        {
             Pause(r, "a fight lasted more than " + std::to_string(cap / 1000) + " s");
-        else
-            r.note = autoRegroup ? std::to_string(f.dead) + " dead: fighting on, a regroup follows" : "fighting";
+            return order;
+        }
+        r.note = autoRegroup ? std::to_string(f.dead) + " dead: fighting on, a regroup follows" : "fighting";
+        if (CheckCc(r, f, dt, order))
+            return order;
+        // The plan's kill_first unit of the fight (a healer, its healing ward)
+        // is focused: skull on it, every bot attacks it. Again only when the
+        // best one changes (it died, or a ward came up).
+        if (const UnitFact* k = PickKillFirst(r, f))
+            if (k->guid != r.focusGuid)
+            {
+                r.focusGuid = k->guid;
+                r.note = "fighting: kill " + std::to_string(k->entry) + " first";
+                order = "focus " + std::to_string(k->guid);
+            }
         return order;
     }
     if (r.fighting)
@@ -1320,6 +1535,7 @@ inline std::string Tick(Run& r, const Facts& f, std::uint32_t dt = kTickMs, cons
         r.fighting = false;
         r.restDue = true;
         r.pullGuid = 0;
+        r.focusGuid = 0;
         if (r.phase != Phase::AwaitTask && r.phase != Phase::Wait)
             EnterPhase(r, Phase::Begin);
     }
