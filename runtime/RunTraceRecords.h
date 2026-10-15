@@ -618,6 +618,19 @@ inline bool MaySeeRunDetail(bool requesterIsGm, bool isStarter)
     return requesterIsGm || isStarter;
 }
 
+// A run needs both the bot AI (AiPlayerbot.Enabled) and the trace switch
+// (AiPlayerbot.RunTrace.Enabled): null when it may start or go on, else the
+// message. A running trace whose switch goes off (a config reload) ends with
+// end_reason "disabled"; a start is refused.
+inline char const* TraceOffReason(bool aiEnabled, bool traceEnabled)
+{
+    if (!aiEnabled)
+        return "The bot AI is off (AiPlayerbot.Enabled = 0).";
+    if (!traceEnabled)
+        return "The run trace is off (AiPlayerbot.RunTrace.Enabled = 0).";
+    return nullptr;
+}
+
 // One run at a time. Ending a run only queues the end marker (the writer
 // thread writes the end record and the summary and closes the file), so a run
 // is `Finishing` until the world thread sees the writer done; a new start is

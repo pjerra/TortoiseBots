@@ -250,9 +250,9 @@ bool RunTraceService::Start(StartParams const& params, std::string& message)
             : "A trace is already running (" + header_.runId + "). Stop it first: .bot trace stop";
         return false;
     }
-    if (!sPlayerbotAIConfig.runTrace)
+    if (char const* off = RunTrace::TraceOffReason(sPlayerbotAIConfig.enabled, sPlayerbotAIConfig.runTrace))
     {
-        message = "The run trace is off (AiPlayerbot.RunTrace.Enabled = 0).";
+        message = off;
         return false;
     }
     if (!params.mayRecord)
@@ -425,7 +425,9 @@ void RunTraceService::Update(uint32_t diff)
         DetachAllListeners();
     if (!Active())
         return;
-    if (!sPlayerbotAIConfig.runTrace)
+    // BotHostAdapter::OnUpdate calls this with the AI off too, so a run
+    // cannot outlive a reload that switched either off.
+    if (RunTrace::TraceOffReason(sPlayerbotAIConfig.enabled, sPlayerbotAIConfig.runTrace))
     {
         Finish("disabled", "complete");
         return;

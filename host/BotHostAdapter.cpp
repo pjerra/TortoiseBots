@@ -167,7 +167,12 @@ void BotHostAdapter::OnUpdate(uint32 diff)
 
     // Read again: a command may have reloaded the configuration.
     if (!sPlayerbotAIConfig.enabled)
+    {
+        // A run trace still going ends here ("disabled"); with none, this is
+        // its usual one atomic load.
+        RunTraceService::Instance().Update(diff);
         return;
+    }
 
     // Issue #839 / #844: the rest of the chat and packets that reached bots on
     // other threads (party / whisper commands included), before the bot update;

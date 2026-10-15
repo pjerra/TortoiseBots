@@ -182,6 +182,29 @@ class EndingNeverWaitsTest(unittest.TestCase):
         self.assertIn("writer_.PushFile(summaryPath_", body)
 
 
+class AiOffTest(unittest.TestCase):
+    def test_host_ticks_the_trace_with_the_ai_off(self):
+        host = (ROOT / "host/BotHostAdapter.cpp").read_text()
+        update = function_body(host, "void BotHostAdapter::OnUpdate(")
+        at = update.index("if (!sPlayerbotAIConfig.enabled)\n    {")
+        branch = function_body(update[at:], "if (!sPlayerbotAIConfig.enabled)")
+        self.assertIn("RunTraceService::Instance().Update(diff);", branch)
+        self.assertLess(branch.index("RunTraceService::Instance().Update(diff);"), branch.index("return;"))
+
+    def test_update_ends_a_run_when_either_switch_is_off(self):
+        body = function_body(RUN_TRACE.read_text(), "void RunTraceService::Update(")
+        check = body.index("RunTrace::TraceOffReason(sPlayerbotAIConfig.enabled, sPlayerbotAIConfig.runTrace)")
+        self.assertLess(body.index("if (!Active())"), check, "the off cost stays one atomic load")
+        self.assertIn('Finish("disabled", "complete");', body[check:check + 200])
+
+    def test_start_is_refused_with_the_ai_off(self):
+        start = function_body(RUN_TRACE.read_text(), "bool RunTraceService::Start(")
+        self.assertIn("RunTrace::TraceOffReason(sPlayerbotAIConfig.enabled, sPlayerbotAIConfig.runTrace)", start)
+        handler = function_body(COMMANDS.read_text(), "static bool HandleTrace(")
+        self.assertIn("RunTrace::TraceOffReason(sPlayerbotAIConfig.enabled, sPlayerbotAIConfig.runTrace)", handler)
+        self.assertNotIn("if (!sPlayerbotAIConfig.runTrace)", handler)
+
+
 class CommandGlueTest(unittest.TestCase):
     def setUp(self):
         self.src = COMMANDS.read_text()

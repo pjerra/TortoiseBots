@@ -9557,9 +9557,9 @@ static bool HandleTrace(ChatHandler* handler, char const* args)
     }
 
     // start
-    if (!sPlayerbotAIConfig.runTrace)
+    if (char const* off = RunTrace::TraceOffReason(sPlayerbotAIConfig.enabled, sPlayerbotAIConfig.runTrace))
     {
-        SendActionError(handler, intent, "disabled", "The run trace is off (AiPlayerbot.RunTrace.Enabled = 0).");
+        SendActionError(handler, intent, "disabled", off);
         return true;
     }
     if (!RunTrace::MayStartTrace(sPlayerbotAIConfig.runTraceGmOnly, admin))

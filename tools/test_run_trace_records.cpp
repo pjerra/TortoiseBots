@@ -474,6 +474,26 @@ static void TestLifecycle()
     CHECK(run.Start());
 }
 
+static void TestTraceNeedsTheAi()
+{
+    CHECK(TraceOffReason(true, true) == nullptr);
+    CHECK_EQ(TraceOffReason(false, true), "The bot AI is off (AiPlayerbot.Enabled = 0).");
+    CHECK_EQ(TraceOffReason(false, false), "The bot AI is off (AiPlayerbot.Enabled = 0).");
+    CHECK_EQ(TraceOffReason(true, false), "The run trace is off (AiPlayerbot.RunTrace.Enabled = 0).");
+
+    // A reload switches the AI off during a run: the next tick ends it (the
+    // glue calls BeginFinish with end_reason "disabled"), and a start is
+    // refused while the AI stays off.
+    RunLifecycle run;
+    CHECK(run.Start());
+    bool aiEnabled = false;
+    if (TraceOffReason(aiEnabled, true))
+        CHECK(run.BeginFinish());
+    CHECK(run.Phase() == RunPhase::Finishing);
+    CHECK(run.Finished());
+    CHECK(TraceOffReason(aiEnabled, true) != nullptr);  // start refused
+}
+
 static void TestScopeSetEmptiesOnLogout()
 {
     // Two bots in scope, then the requester logs out: the next frame selects
@@ -517,6 +537,7 @@ int main()
     TestScopeSetEmptiesOnLogout();
     TestPermissions();
     TestLifecycle();
+    TestTraceNeedsTheAi();
     std::printf("test_run_trace_records: %d checks passed\n", checks);
     return 0;
 }

@@ -25,7 +25,7 @@ It is **off by default** (`AiPlayerbot.RunTrace.Enabled = 0`) and costs nothing 
 .bot trace status
 ```
 
-See [player controls, section 4b](player-controls.md) for who may run them. `party` (the default) follows the bots of your party; for a [remote commander](player-controls.md) with a standing binding it follows the commanded group. `bot <Name>` follows one bot. One run at a time. A run also ends by itself when the size cap is reached (`size_cap`), when the group has no bots for 10 s (`scope_lost`), when the config switch is turned off (`disabled`) or at server shutdown (`shutdown`).
+See [player controls, section 4b](player-controls.md) for who may run them. `party` (the default) follows the bots of your party; for a [remote commander](player-controls.md) with a standing binding it follows the commanded group. `bot <Name>` follows one bot. One run at a time. A run also ends by itself when the size cap is reached (`size_cap`), when the group has no bots for 10 s (`scope_lost`), when the config switch or the bot AI (`AiPlayerbot.Enabled`) is turned off, e.g. by a config reload (`disabled`; a `start` with either off is refused) or at server shutdown (`shutdown`).
 
 The scope is re-read every frame and permission is re-checked each time: a bot is recorded only while the player who started the run is online and is a GameMaster, controls that bot, or is the bound remote commander of its group, so a stranger's bots that join the party later are left out. If the starter logs out, the run ends by itself (`scope_lost`).
 

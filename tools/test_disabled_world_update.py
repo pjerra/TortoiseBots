@@ -59,10 +59,12 @@ int main() {
     BotHostAdapter adapter;
     // More than two 60 s recovery / four 30 s reporting windows.
     // Disabled: only the queued-command drain (#833) runs, every tick, so
-    // player commands never execute off the world thread; services stay inert.
+    // player commands never execute off the world thread, and the run trace,
+    // so a running trace ends ("disabled"); other services stay inert.
+    // The run trace (13) is ticked too, so a trace cannot outlive the AI.
     for (unsigned i = 0; i < 2500; ++i) adapter.OnUpdate(50);
-    assert(calls.size() == 2500);
-    for (unsigned id : calls) assert(id == 10);
+    assert(calls.size() == 5000);
+    for (size_t i = 0; i < calls.size(); i += 2) assert(calls[i] == 10 && calls[i + 1] == 13);
     assert(adapter.m_ticks == 0);
     calls.clear();
     sPlayerbotAIConfig.enabled = true;
@@ -75,7 +77,7 @@ int main() {
     assert(adapter.m_ticks == 1);
     sPlayerbotAIConfig.enabled = false;
     adapter.OnUpdate(50);
-    assert((calls == std::vector<unsigned>{1,10,11,2,12,3,4,5,6,7,8,9,13,10}));
+    assert((calls == std::vector<unsigned>{1,10,11,2,12,3,4,5,6,7,8,9,13,10,13}));
     assert(adapter.m_ticks == 1);
 }
 '''
