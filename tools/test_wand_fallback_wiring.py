@@ -40,6 +40,20 @@ class WandFallbackWiringTest(unittest.TestCase):
     def test_no_mana_row_still_wands(self):
         self.assertRegex(MAGE, r'"no mana",\s*NextAction::array\(0, new NextAction\("shoot", ACTION_NORMAL\)')
 
+    def test_mana_short_row_per_spec(self):
+        ctx = (STRATEGY / "mage/MageAiObjectContext.cpp").read_text()
+        for spell, strat in (("frostbolt", "FrostMageStrategy.cpp"), ("fireball", "FireMageStrategy.cpp"),
+                             ("arcane missiles", "ArcaneMageStrategy.cpp")):
+            self.assertIn('creators["%s unaffordable"] = [](PlayerbotAI* ai) { return new NukeUnaffordableTrigger(ai, "%s unaffordable", "%s"); };'
+                          % (spell, spell, spell), ctx)
+            text = (STRATEGY / "mage" / strat).read_text()
+            fn = body(text, "::InitCombatTriggers(std::list<TriggerNode*>& triggers)")
+            self.assertRegex(fn, r'"%s unaffordable",\s*NextAction::array\(0, new NextAction\("shoot", ACTION_DEFAULT\)' % spell)
+        trig = (STRATEGY / "mage/MageTriggers.cpp").read_text()
+        self.assertIn("return NukeUnaffordable(true, bot->GetPower(POWER_MANA), cost);", trig)
+        stop = body(trig, "bool WandBlocksNukeTrigger::IsActive()")
+        self.assertIn("state.manaShortRowActive = ManaShortForNuke(ai, bot, SpecFillerNuke(ai));", stop)
+
     def test_raid_aggro_row_needs_raid_group(self):
         for text, cls in ((MAGE, "MageRaidStrategy"), (WARLOCK, "WarlockRaidStrategy")):
             fn = body(text, "void %s::InitCombatTriggers(" % cls)

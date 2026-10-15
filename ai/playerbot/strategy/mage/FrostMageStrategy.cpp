@@ -26,6 +26,13 @@ void FrostMageStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode(
         "icicles",
         NextAction::array(0, new NextAction("icicles", ACTION_HIGH), NULL)));
+
+    // The filler has no "shoot" fallback (a GCD or threat-veto refusal
+    // must not start the wand); wand only while its mana cost is out of
+    // reach, below every spell row (NukeUnaffordable, WandPolicy.h).
+    triggers.push_back(new TriggerNode(
+        "frostbolt unaffordable",
+        NextAction::array(0, new NextAction("shoot", ACTION_DEFAULT), NULL)));
 }
 
 void FrostMageStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)

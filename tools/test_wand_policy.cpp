@@ -219,6 +219,32 @@ int main()
     CHECK(!RaidAggroWandRow(true, false));
     CHECK(!RaidAggroWandRow(false, false));
 
+    // Mana-short row: wand only while the filler nuke costs more than the
+    // mana left; never for a GCD or threat refusal (those leave the mana
+    // there), never without a mana pool or a known filler.
+    CHECK(NukeUnaffordable(true, 200, 290));   // 6% of 3500, Frostbolt 290
+    CHECK(NukeUnaffordable(true, 0, 290));
+    CHECK(!NukeUnaffordable(true, 290, 290));  // exactly affordable: cast it
+    CHECK(!NukeUnaffordable(true, 2900, 290)); // high mana: GCD/threat refusals stay unwanded
+    CHECK(!NukeUnaffordable(false, 0, 290));
+    CHECK(!NukeUnaffordable(true, 100, 0));
+    // The stop leaves that wand alone even when a cheaper probe is only
+    // GCD-blocked (arcane/fire mage between Frostbolt's and its filler's
+    // cost), so it does not ping-pong; a wanted heal still stops it.
+    {
+        WandState s{true, P::GlobalCooldownOnly, false, false};
+        CHECK(ShouldStopWandToCast(s));
+        s.manaShortRowActive = true;
+        CHECK(!ShouldStopWandToCast(s));
+        s.bestHeal = P::GlobalCooldownOnly;
+        CHECK(ShouldStopWandToCast(s));
+        WandState h{true, P::Castable, false, false};
+        h.manaShortRowActive = true;
+        h.healerMustStop = true;
+        CHECK(ShouldStopWandToCast(h));
+        CHECK(!WandState{}.manaShortRowActive);
+    }
+
     std::printf("wand policy: %d checks passed\n", checks);
     return 0;
 }

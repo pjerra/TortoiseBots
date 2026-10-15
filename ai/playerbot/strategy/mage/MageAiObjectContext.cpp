@@ -180,6 +180,9 @@ namespace ai
                 creators["blink"] = [](PlayerbotAI* ai) { return new BlinkTrigger(ai); };
                 creators["blink back"] = [](PlayerbotAI* ai) { return new BlinkBackTrigger(ai); };
                 creators["wand blocks nuke"] = [](PlayerbotAI* ai) { return new WandBlocksNukeTrigger(ai); };
+                creators["frostbolt unaffordable"] = [](PlayerbotAI* ai) { return new NukeUnaffordableTrigger(ai, "frostbolt unaffordable", "frostbolt"); };
+                creators["fireball unaffordable"] = [](PlayerbotAI* ai) { return new NukeUnaffordableTrigger(ai, "fireball unaffordable", "fireball"); };
+                creators["arcane missiles unaffordable"] = [](PlayerbotAI* ai) { return new NukeUnaffordableTrigger(ai, "arcane missiles unaffordable", "arcane missiles"); };
                 creators["wand blocks cc"] = [](PlayerbotAI* ai) { return new WandBlocksCcTrigger(ai, {"polymorph"}); };
                 creators["mana shield"] = [](PlayerbotAI* ai) { return new ManaShieldTrigger(ai); };
                 creators["fire spells locked"] = [](PlayerbotAI* ai) { return new FireSpellsLocked(ai); };

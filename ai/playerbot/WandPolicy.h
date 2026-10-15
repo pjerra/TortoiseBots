@@ -90,6 +90,11 @@ namespace ai
         // rule keeps "shoot" from starting it again, so this never
         // ping-pongs.
         bool healerMustStop = false;
+        // The mana-short row ("<filler> unaffordable" -> shoot, mage) owns
+        // this wand: the filler nuke costs more than the mana left. The
+        // stop probes Frostbolt and Fireball, which can be cheaper than an
+        // arcane or fire mage's filler; stopping then only ping-pongs.
+        bool manaShortRowActive = false;
     };
 
     inline bool ShouldStopWandToCast(WandState const& state)
@@ -102,7 +107,7 @@ namespace ai
             return false;
         if (state.bestHeal != WandSpellProbe::Blocked)
             return true;
-        if (state.noManaRowActive || state.nukeThreatVetoed)
+        if (state.noManaRowActive || state.manaShortRowActive || state.nukeThreatVetoed)
             return false;
         return state.bestNuke != WandSpellProbe::Blocked;
     }
@@ -163,6 +168,20 @@ namespace ai
         if (a == WandSpellProbe::GlobalCooldownOnly || b == WandSpellProbe::GlobalCooldownOnly)
             return WandSpellProbe::GlobalCooldownOnly;
         return WandSpellProbe::Blocked;
+    }
+
+    // The mana-short wand row ("<nuke> unaffordable" -> shoot, mage): the
+    // filler nuke has no "shoot" fallback any more (a GCD or threat-veto
+    // refusal must not start the wand), so without this row a mage with
+    // too little mana for its nuke but above the 5% "no mana" line stood
+    // still. Wand exactly when the mana is short: never for the GCD, the
+    // threat veto or any other refusal. The nuke is the spec's filler (the
+    // default action: Frostbolt, Fireball, Arcane Missiles): a cheaper
+    // spell no row casts as filler would not keep the mage busy either.
+    // When the filler is not known (cost 0) the "no mana" row is all there is.
+    inline bool NukeUnaffordable(bool hasManaPool, std::uint32_t mana, std::uint32_t nukeCost)
+    {
+        return hasManaPool && nukeCost && mana < nukeCost;
     }
 
     // The raid row "has aggro -> shoot" (mage and warlock raid strategies)

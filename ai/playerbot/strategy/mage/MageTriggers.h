@@ -41,6 +41,19 @@ namespace ai
         bool IsActive() override;
     };
 
+    // Too little mana for the spec's filler nuke, above or below the 5%
+    // line (NukeUnaffordable, WandPolicy.h).
+    class NukeUnaffordableTrigger : public Trigger
+    {
+    public:
+        NukeUnaffordableTrigger(PlayerbotAI* ai, std::string name, std::string nuke)
+            : Trigger(ai, name), nuke(nuke) {}
+        bool IsActive() override;
+
+    private:
+        std::string nuke;
+    };
+
     class ArcaneIntellectOnPartyTrigger : public BuffOnPartyTrigger
     {
     public:

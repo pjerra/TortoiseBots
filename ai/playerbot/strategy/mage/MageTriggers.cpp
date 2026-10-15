@@ -29,6 +29,38 @@ bool BlinkBackTrigger::IsActive()
     return sServerFacade.getDistance2d(bot, target) <= 8.0f;
 }
 
+namespace
+{
+// Too little mana for this nuke (NukeUnaffordable, WandPolicy.h); false for
+// a spell the bot does not know or one that costs no mana.
+bool ManaShortForNuke(PlayerbotAI* ai, Player* bot, std::string const& nuke)
+{
+    // A mana pool, whatever is left of it (0 included).
+    if (nuke.empty() || bot->GetMaxPower(POWER_MANA) == 0)
+        return false;
+    uint32 const spellId = ai->GetAiObjectContext()->GetValue<uint32>("spell id", nuke)->Get();
+    if (!spellId)
+        return false;
+    SpellEntry const* spellInfo = sServerFacade.LookupSpellInfo(spellId);
+    if (!spellInfo || spellInfo->powerType != POWER_MANA)
+        return false;
+    uint32 const cost = Spell::CalculatePowerCost(spellInfo, bot, nullptr, nullptr);
+    return NukeUnaffordable(true, bot->GetPower(POWER_MANA), cost);
+}
+
+// The filler (default action) of the mage's spec placeholder strategy.
+std::string SpecFillerNuke(PlayerbotAI* ai)
+{
+    if (ai->HasStrategy("arcane", BotState::BOT_STATE_COMBAT))
+        return "arcane missiles";
+    if (ai->HasStrategy("fire", BotState::BOT_STATE_COMBAT))
+        return "fireball";
+    if (ai->HasStrategy("frost", BotState::BOT_STATE_COMBAT))
+        return "frostbolt";
+    return "";
+}
+}
+
 bool WandBlocksNukeTrigger::IsActive()
 {
     if (!IsWanding())
@@ -49,21 +81,29 @@ bool WandBlocksNukeTrigger::IsActive()
     if (noManaRowActive)
         return false;
 
-    // Near the tank's threat the "threat" multiplier vetoes the nukes and
-    // they fall back to the wand on purpose; stopping it would only restart
-    // it a swing later.
+    // Near the tank's threat the "threat" multiplier vetoes the nukes, so
+    // stopping a running wand would only leave the mage idle. The veto no
+    // longer starts the wand (the nukes have no "shoot" fallback).
     bool const nukeThreatVetoed = ThreatVetoesNuke();
     if (nukeThreatVetoed)
         return false;
 
-    WandState const state{
+    WandState state{
         true,
         BetterWandSpellProbe(ProbeSpell("frostbolt", target), ProbeSpell("fireball", target)),
         keepWandForThreat,
         noManaRowActive,
         WandSpellProbe::Blocked,
         nukeThreatVetoed};
+    // Too little mana for the spec's filler: the "<filler> unaffordable"
+    // row wands on purpose (a cheaper Frostbolt probe must not stop it).
+    state.manaShortRowActive = ManaShortForNuke(ai, bot, SpecFillerNuke(ai));
     return ShouldStopWandToCast(state);
+}
+
+bool NukeUnaffordableTrigger::IsActive()
+{
+    return ManaShortForNuke(ai, bot, nuke);
 }
 
 bool AnyMageArmorTrigger::IsActive()
