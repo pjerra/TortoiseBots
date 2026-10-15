@@ -20,6 +20,9 @@
 #include "playerbot/ProtectionPotionPolicy.h"
 #include "playerbot/TravelMgr.h"
 
+// The "opening object/lock" spell target flag in this core; the shim's old 0x100 was TARGET_FLAG_UNIT_UNK.
+static_assert(TARGET_FLAG_LOCKED == 0x4000, "TARGET_FLAG_LOCKED must be the core's lock-opening flag (0x4000)");
+
 using namespace ai;
 
 constexpr std::string_view LOS_GOS_PARAM = "los gos";
@@ -631,7 +634,18 @@ bool UseAction::UseItemInternal(Player* requester, uint32 itemId, Unit* unit, Ga
             }
         }
 
-        if ((spellTargets & TARGET_FLAG_GAMEOBJECT || spellTargets & TARGET_FLAG_LOCKED) && !validTarget)
+        // A key item on a locked object: Targets carries TARGET_FLAG_LOCKED (0x4000), and the effect
+        // targets a game object; either one, given a game object, takes this branch.
+        bool goEffect = false;
+        for (uint8 i = 0; i < MAX_EFFECT_INDEX; ++i)
+        {
+            if (spellInfo->EffectImplicitTargetA[i] == TARGET_GAMEOBJECT)
+            {
+                goEffect = true;
+            }
+        }
+
+        if ((spellTargets & TARGET_FLAG_GAMEOBJECT || spellTargets & TARGET_FLAG_LOCKED || (goEffect && gameObject)) && !validTarget)
         {
             if (gameObject && gameObject->isSpawned())
             {
