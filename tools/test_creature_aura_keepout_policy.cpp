@@ -548,19 +548,22 @@ int main()
             CreatureAuraGapCloserLanding(bx, by, tx, ty, 2.0f, fx, fy);
             float const landingToTarget = std::hypot(fx - tx, fy - ty);
             CHECK(std::fabs(landingToTarget - 2.0f) < 0.01f);
-            float const radius = CreatureAuraLandingSearchRadius(row, landingToTarget);
-            CHECK(std::hypot(sx - tx, sy - ty) <= radius);              // found by the lookup
-            bool const ringed = CreatureAuraEndPointBlocked(row, std::hypot(sx - fx, sy - fy)); // 7 yd
+            // The bot's hazard snapshot (taken here, at the bot) holds it.
+            CreatureAuraHazardSnapshot snap;
+            CreatureAuraSnapshotEnsure(snap, 349, bx, by, 1000, [&](std::vector<CreatureAuraHazardEntry>& out)
+                { out.push_back({ 0x55ull, sx, sy, CreatureAuraHazardRadius(row) }); });
+            CHECK(std::hypot(sx - bx, sy - by) <= CreatureAuraSnapshotRadius(CreatureAuraHazardRadius(row)));
+            CHECK(CreatureAuraSnapshotCovers(snap, fx, fy));
+            bool const ringed = CreatureAuraSnapshotRingAt(snap, fx, fy) != 0; // 7 yd
             CHECK(ringed);
+            CHECK(CreatureAuraEndPointBlocked(row, std::hypot(sx - fx, sy - fy)));
             CHECK(CreatureAuraGapCloserVetoed(false, ringed, false, false)); // vetoed
-            // Any creature whose ring holds the landing is inside the search
-            // radius: the worst case stands just inside the hazard ring on
-            // the far side of the landing.
-            float const far = CreatureAuraHazardRadius(row) - 0.01f;
-            CHECK(std::hypot((fx - far) - tx, fy - ty) <= radius);
-            // A sludge 15 yd beyond the mob: outside its ring, allowed.
+            // A sludge 15 yd beyond the mob: outside its widened ring, allowed.
             CHECK(!CreatureAuraEndPointBlocked(row, std::hypot(35.0f - fx, 0.0f - fy)));
-            CHECK(CreatureAuraLandingSearchRadius(row, -1.0f) == CreatureAuraHazardRadius(row));
+            CreatureAuraHazardSnapshot far;
+            CreatureAuraSnapshotEnsure(far, 349, bx, by, 1000, [&](std::vector<CreatureAuraHazardEntry>& out)
+                { out.push_back({ 0x56ull, 35.0f, 0.0f, CreatureAuraHazardRadius(row) }); });
+            CHECK(CreatureAuraSnapshotRingAt(far, fx, fy) == 0);
         }
     }
     std::cout << "  [PASS] gap closers and end points stay out of the ring (tank and order exempt)\n";
@@ -607,74 +610,75 @@ int main()
         r.rangeKnown = false;
         r.distance = 40.0f;
         CHECK(CreatureAuraGapCloserCouldFire(r)); // no range data: never skip the veto on range
-
-        // Memo: one scan per bot and target per second.
-        CreatureAuraLandingMemo memo;
-        float const lx = 100.3f, ly = 200.7f; // landing held still
-        uint64_t const mob = 0xF130000000001234ull, other = 0xF130000000005678ull;
-        CHECK(!CreatureAuraLandingMemoHit(memo, mob, lx, ly, 5000));               // empty
-        CreatureAuraLandingMemoStore(memo, mob, lx, ly, 5000, true);
-        CHECK(CreatureAuraLandingMemoHit(memo, mob, lx, ly, 5000) && memo.ringed); // same tick (Charge, then Intercept)
-        CHECK(CreatureAuraLandingMemoHit(memo, mob, lx, ly, 5000 + kCreatureAuraLandingMemoMs - 1));
-        CHECK(!CreatureAuraLandingMemoHit(memo, mob, lx, ly, 5000 + kCreatureAuraLandingMemoMs)); // expired: rescan
-        CHECK(!CreatureAuraLandingMemoHit(memo, other, lx, ly, 5100));             // another target: rescan
-        CreatureAuraLandingMemoStore(memo, other, lx, ly, 5100, false);
-        CHECK(CreatureAuraLandingMemoHit(memo, other, lx, ly, 5200) && !memo.ringed);
-        CHECK(!CreatureAuraLandingMemoHit(memo, mob, lx, ly, 5200));
-        // Millisecond clock wrap: the entry expires on time, it never sticks.
-        CreatureAuraLandingMemoStore(memo, mob, lx, ly, 0xFFFFFF00u, true);
-        CHECK(CreatureAuraLandingMemoHit(memo, mob, lx, ly, 0x00000010u));  // 272 ms later
-        CHECK(!CreatureAuraLandingMemoHit(memo, mob, lx, ly, 0x00000400u)); // 1280 ms later
-
-        // Review #882 (Codex): the memo follows the landing point. The bot
-        // circles the target inside the memo window, so the landing moves
-        // 6 yd sideways: a cached "clear" must not be reused, the new landing
-        // scans again (and here a sludge stands in its ring).
-        float const movedX = lx, movedY = ly + 6.0f;
-        CreatureAuraLandingMemoStore(memo, mob, lx, ly, 9000, false);
-        CHECK(CreatureAuraLandingMemoHit(memo, mob, lx, ly, 9100) && !memo.ringed);
-        CHECK(!CreatureAuraLandingMemoHit(memo, mob, movedX, movedY, 9100)); // moved: rescan
-        CreatureAuraKeepout const& row = kCreatureAuraKeepouts[0];
-        float const sludgeX = movedX, sludgeY = movedY + 4.0f; // 4 yd from the new landing, 10 from the old (rings are 9 yd)
-        CHECK(!CreatureAuraEndPointBlocked(row, std::hypot(sludgeX - lx, sludgeY - ly)));
-        CHECK(CreatureAuraEndPointBlocked(row, std::hypot(sludgeX - movedX, sludgeY - movedY)));
-        CreatureAuraLandingMemoStore(memo, mob, movedX, movedY, 9100, true);
-        CHECK(CreatureAuraLandingMemoHit(memo, mob, movedX, movedY, 9200) && memo.ringed);
-        // A ringed verdict is not carried to another cell either.
-        CHECK(!CreatureAuraLandingMemoHit(memo, mob, lx, ly, 9200));
-        // Drift inside one 1 yd cell keeps the scan (bounded cost on a straight charge).
-        CHECK(CreatureAuraLandingMemoHit(memo, mob, std::floor(movedX) + 0.9f, std::floor(movedY) + 0.05f, 9200));
-        CHECK(!CreatureAuraLandingMemoHit(memo, mob, std::floor(movedX) + 1.0f, movedY, 9200));
     }
-    std::cout << "  [PASS] gap-closer veto looks only when the cast could fire, one scan per second\n";
+    std::cout << "  [PASS] gap-closer veto looks only when the cast could fire\n";
 
-    // Review #882 (Codex): an end point next to a target 15 yd away can lie
-    // in the ring of a sludge ~24 yd from the bot, outside the bot's cached
-    // 15 yd list. The end-point check then looks around the end point.
+    // Review of #995: one hazard snapshot per bot, at most one grid visit per
+    // kCreatureAuraSnapshotMs, read by every end-point and landing check.
     {
         CreatureAuraKeepout const& row = kCreatureAuraKeepouts[0];
-        float const listRange = 15.0f; // kMaxAoeAvoidRadiusYd, the "possible triggers" range
-        float const maxHazard = CreatureAuraMaxHazardRadiusOnMap(349);
-        CHECK(maxHazard == CreatureAuraHazardRadius(row)); // 9 yd in Maraudon
-        CHECK(CreatureAuraMaxHazardRadiusOnMap(0) == 0.0f);  // no listed row: no lookup anywhere
-        CHECK(!CreatureAuraEndPointNeedsLookup(30.0f, listRange, 0.0f));
-        // Bot at the origin, target 15 yd east, set-behind end point 2 yd past it,
-        // a sludge 7 yd further east: 24 yd from the bot, 7 yd from the end point.
-        float const bx = 0.0f, by = 0.0f, px = 17.0f, py = 0.0f, sx = 24.0f, sy = 0.0f;
-        float const botToSludge = std::hypot(sx - bx, sy - by);
-        float const pointToSludge = std::hypot(sx - px, sy - py);
-        CHECK(botToSludge > listRange);                             // not in the bot's list
-        CHECK(CreatureAuraEndPointBlocked(row, pointToSludge));      // but the end point is in its ring
-        float const botToPoint = std::hypot(px - bx, py - by);
-        CHECK(CreatureAuraEndPointNeedsLookup(botToPoint, listRange, maxHazard));
-        CHECK(pointToSludge <= maxHazard);                           // the bounded lookup reaches it
-        // Every sludge whose ring holds an end point near the bot is in the list:
-        // no lookup there (move out of collision, a flank of a mob in melee).
-        CHECK(!CreatureAuraEndPointNeedsLookup(3.0f, listRange, maxHazard));
-        CHECK(!CreatureAuraEndPointNeedsLookup(listRange - maxHazard, listRange, maxHazard));
-        CHECK(CreatureAuraEndPointNeedsLookup(listRange - maxHazard + 0.1f, listRange, maxHazard));
+        float const hazard = CreatureAuraHazardRadius(row);
+        CHECK(CreatureAuraMaxHazardRadiusOnMap(349) == hazard); // 9 yd in Maraudon
+        CHECK(CreatureAuraMaxHazardRadiusOnMap(0) == 0.0f);     // no listed row: the caller never visits
+        CHECK(CreatureAuraSnapshotRadius(hazard) >= 15.0f + 15.0f + hazard);
+
+        // Count: rear flank (2 points), set behind (2 tries), move out of
+        // collision (9 tries) and Charge + Intercept in one tick: one visit.
+        CreatureAuraHazardSnapshot snap;
+        int visits = 0;
+        std::vector<CreatureAuraHazardEntry> world = { { 0x77ull, 24.0f, 0.0f, hazard } };
+        auto fill = [&](std::vector<CreatureAuraHazardEntry>& out) { ++visits; out = world; };
+        for (int check = 0; check < 2 + 2 + 9 + 2; ++check)
+            CreatureAuraSnapshotEnsure(snap, 349, 0.0f, 0.0f, 10000, fill);
+        CHECK(visits == 1);
+        CHECK(!CreatureAuraSnapshotEnsure(snap, 349, 0.0f, 0.0f, 10000 + kCreatureAuraSnapshotMs - 1, fill));
+        CHECK(visits == 1);
+        CHECK(CreatureAuraSnapshotEnsure(snap, 349, 0.0f, 0.0f, 10000 + kCreatureAuraSnapshotMs, fill));
+        CHECK(visits == 2);                                    // the next window refreshes once
+        CHECK(CreatureAuraSnapshotEnsure(snap, 1, 0.0f, 0.0f, 10000 + kCreatureAuraSnapshotMs, fill));
+        CHECK(visits == 3);                                    // another map: fresh at once
+        CreatureAuraHazardSnapshot wrap;
+        CreatureAuraSnapshotEnsure(wrap, 349, 0.0f, 0.0f, 0xFFFFFF00u, fill);
+        CHECK(!CreatureAuraSnapshotStale(wrap, 349, 0x00000010u)); // 272 ms later
+        CHECK(CreatureAuraSnapshotStale(wrap, 349, 0x00000200u));  // 768 ms later
+
+        // An end point 24 yd away: bot at the origin, target 15 yd east,
+        // set-behind end point 2 yd past it, sludge 7 yd further (24 yd from
+        // the bot, outside the 15 yd list). The snapshot sees it.
+        CreatureAuraHazardSnapshot endSnap;
+        CreatureAuraSnapshotEnsure(endSnap, 349, 0.0f, 0.0f, 20000, [&](std::vector<CreatureAuraHazardEntry>& out)
+            { out.push_back({ 0x77ull, 24.0f, 0.0f, hazard }); });
+        CHECK(std::hypot(24.0f, 0.0f) > kMaxAoeAvoidRadiusYd);
+        CHECK(CreatureAuraSnapshotCovers(endSnap, 17.0f, 0.0f));
+        CHECK(CreatureAuraSnapshotRingAt(endSnap, 17.0f, 0.0f) == 0x77ull);
+        // The target and the explicit attack target are checked live, not here.
+        CHECK(CreatureAuraSnapshotRingAt(endSnap, 17.0f, 0.0f, 0x77ull) == 0);
+        CHECK(CreatureAuraSnapshotRingAt(endSnap, 17.0f, 0.0f, 0, 0x77ull) == 0);
+        // A point the snapshot does not cover is not called clear by it.
+        CHECK(!CreatureAuraSnapshotCovers(endSnap, 31.0f, 0.0f));
+        CHECK(!CreatureAuraSnapshotCovers(CreatureAuraHazardSnapshot(), 0.0f, 0.0f));
+
+        // A hazard that walks into the landing ring inside the window: the
+        // snapshot put it 11 yd from the landing (outside the 9 yd ring);
+        // 400 ms later it stands 8 yd away. The snapshot is still current,
+        // and the drift margin catches it.
+        float const lx = 50.0f, ly = 0.0f;
+        CreatureAuraHazardSnapshot drift;
+        CreatureAuraSnapshotEnsure(drift, 349, 30.0f, 0.0f, 30000, [&](std::vector<CreatureAuraHazardEntry>& out)
+            { out.push_back({ 0x88ull, lx + 11.0f, ly, hazard }); });
+        CHECK(!CreatureAuraEndPointBlocked(row, 11.0f));          // outside the ring at the visit
+        float const walked = 11.0f - (kCreatureAuraSnapshotDriftYd - 0.5f); // 8 yd 400 ms later
+        CHECK(CreatureAuraEndPointBlocked(row, walked));           // inside the ring now
+        CHECK(!CreatureAuraSnapshotStale(drift, 349, 30400));      // still the same snapshot
+        CHECK(CreatureAuraSnapshotRingAt(drift, lx, ly) == 0x88ull); // the margin catches it
+        // Past ring + drift the creature cannot reach the ring in the window.
+        CreatureAuraHazardSnapshot clear;
+        CreatureAuraSnapshotEnsure(clear, 349, 30.0f, 0.0f, 30000, [&](std::vector<CreatureAuraHazardEntry>& out)
+            { out.push_back({ 0x89ull, lx + hazard + kCreatureAuraSnapshotDriftYd, ly, hazard }); });
+        CHECK(CreatureAuraSnapshotRingAt(clear, lx, ly) == 0);
     }
-    std::cout << "  [PASS] end points look around the destination past the 15 yd list\n";
+    std::cout << "  [PASS] hazard snapshot: one visit per window, end points past 15 yd, drift margin\n";
+
 
     std::cout << "All creature aura keep-out tests passed.\n";
     return 0;

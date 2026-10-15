@@ -88,15 +88,14 @@ class KeepoutSetAsideWiringTest(unittest.TestCase):
             gated = body(warrior, "class " + cls_name, "\n    };\n")
             self.assertIn("PossibleTriggersValue::GapCloserIntoKeepout(ai, GetSpellName(), GetTarget())", gated)
         self.assertIn("PossibleTriggersValue::GapCloserIntoKeepout(ai, GetSpellName(), ", cls)
-        # The shared veto: cached list first, then a bounded lookup of listed
-        # entries around the target (Charge fires past the 15 yd list).
+        # The shared veto: cached list first, then the bot's hazard snapshot
+        # (Charge fires past the 15 yd list).
         values = (VALUES / "PossibleTargetsValue.cpp").read_text()
         veto = body(values, "bool PossibleTriggersValue::GapCloserIntoKeepout(", "\n}\n")
         self.assertIn('"explicit attack target"', veto)
         self.assertIn("CreatureAuraGapCloserVetoed(", veto)
-        self.assertLess(veto.index("KeepoutRingAt(ai, lx, ly)"), veto.index("AllCreaturesOfEntryInRange"))
-        self.assertIn("Cell::VisitAllObjects(target, searcher, radius)", veto)
-        self.assertIn("CreatureAuraLandingSearchRadius(", veto)
+        self.assertLess(veto.index("KeepoutRingAt(ai, lx, ly)"), veto.index("SnapshotRingedAt(ai, lx, ly, target)"))
+        self.assertNotIn("Cell::", veto)
         self.assertIn("class CastFeralChargeBearAction : public CastReachTargetSpellAction",
                       (ROOT / "ai/playerbot/strategy/druid/DruidActions.h").read_text())
         move = (ROOT / "ai/playerbot/strategy/actions/MovementActions.cpp").read_text()
@@ -107,19 +106,14 @@ class KeepoutSetAsideWiringTest(unittest.TestCase):
     def test_gap_closer_lookup_waits_for_a_castable_spell(self):
         # Review #882 round 2: the engine asks isUseful() before the stance
         # prerequisite and isPossible(), every tick the trigger fires. The
-        # landing checks sit behind the readiness gate, and the grid visit
-        # behind the per-bot 1 s memo.
+        # landing checks sit behind the readiness gate; the grid visit lives
+        # only in the per-bot hazard snapshot.
         values = (VALUES / "PossibleTargetsValue.cpp").read_text()
         veto = body(values, "bool PossibleTriggersValue::GapCloserIntoKeepout(", "\n}\n")
         gate = veto.index("if (!GapCloserCouldFire(ai, spell, target))\n        return false;")
         self.assertLess(veto.index("if (isTank || ordered)"), gate)
-        for later in ("KeepoutFor(target)", "KeepoutRingAt(ai, lx, ly)", "CreatureAuraLandingMemoHit(",
-                      "Cell::VisitAllObjects(", "CreatureAuraLandingMemoStore("):
+        for later in ("KeepoutFor(target)", "KeepoutRingAt(ai, lx, ly)", "SnapshotRingedAt("):
             self.assertLess(gate, veto.index(later), later)
-        self.assertLess(veto.index("KeepoutRingAt(ai, lx, ly)"), veto.index("CreatureAuraLandingMemoHit("))
-        self.assertLess(veto.index("CreatureAuraLandingMemoHit("), veto.index("Cell::VisitAllObjects("))
-        self.assertLess(veto.index("Cell::VisitAllObjects("), veto.index("CreatureAuraLandingMemoStore("))
-        self.assertEqual(veto.count("Cell::VisitAllObjects("), 1)
         # The gate mirrors isPossible's refusals and leaves the stance to the
         # prerequisite (gating on it would switch stance, then veto).
         ready = body(values, "bool PossibleTriggersValue::GapCloserCouldFire(", "\n}\n")
@@ -131,31 +125,35 @@ class KeepoutSetAsideWiringTest(unittest.TestCase):
         self.assertNotIn("GetErrorAtShapeshiftedCast", ready)
         self.assertNotIn("Cell::", ready)
         header = (VALUES / "PossibleTargetsValue.h").read_text()
-        self.assertIn("CreatureAuraLandingMemo landingMemo;", header)
+        self.assertIn("CreatureAuraHazardSnapshot hazardSnapshot;", header)
+        self.assertNotIn("LandingMemo", header)
         self.assertNotIn("never per tick", header)
 
-    def test_end_points_look_around_the_destination(self):
-        # Review #882 (Codex): an end point next to a target up to 15 yd away
-        # can lie in the ring of a sludge outside the bot's 15 yd list.
+    def test_end_points_and_landings_read_one_hazard_snapshot(self):
+        # Review of #995: nothing per bot tick scans the world (AGENTS.md).
+        # End points past the 15 yd list and gap-closer landings read one
+        # per-bot snapshot, refreshed by at most one grid visit per window.
         move = (ROOT / "ai/playerbot/strategy/actions/MovementActions.cpp").read_text()
         end = body(move, "bool MovementAction::EndPointInCreatureAuraKeepout(", "\n}\n")
-        self.assertIn("PossibleTriggersValue::EndPointRingAt(ai, x, y, ", end)
+        self.assertIn("PossibleTriggersValue::EndPointRinged(ai, x, y, ", end)
         values = (VALUES / "PossibleTargetsValue.cpp").read_text()
-        ring = body(values, "Unit* PossibleTriggersValue::EndPointRingAt(", "\n}\n")
-        # Cached list first, then the bounded lookup only past its reach.
-        self.assertLess(ring.index("KeepoutRingAt(ai, x, y, extra)"), ring.index("CreatureAuraEndPointNeedsLookup("))
-        self.assertLess(ring.index("CreatureAuraEndPointNeedsLookup("), ring.index("Cell::VisitAllObjects("))
-        self.assertIn("CreatureAuraMaxHazardRadiusOnMap(bot->GetMapId())", ring)
-        self.assertIn("Cell::VisitAllObjects(x, y, map, searcher, maxHazard)", ring)
-        self.assertIn('"explicit attack target"', ring)
-        self.assertIn("KeepoutFor(unit)", ring)
-        self.assertEqual(ring.count("Cell::VisitAllObjects("), 1)
-
-    def test_landing_memo_follows_the_landing(self):
-        values = (VALUES / "PossibleTargetsValue.cpp").read_text()
-        veto = body(values, "bool PossibleTriggersValue::GapCloserIntoKeepout(", "\n}\n")
-        self.assertIn("CreatureAuraLandingMemoHit(self->landingMemo, targetRaw, lx, ly, now)", veto)
-        self.assertIn("CreatureAuraLandingMemoStore(self->landingMemo, targetRaw, lx, ly, now, landingInRing)", veto)
+        ring = body(values, "bool PossibleTriggersValue::EndPointRinged(", "\n}\n")
+        self.assertLess(ring.index("KeepoutRingAt(ai, x, y, extra)"), ring.index("SnapshotRingedAt(ai, x, y, extra)"))
+        self.assertNotIn("Cell::", ring)
+        ringed = body(values, "bool PossibleTriggersValue::SnapshotRingedAt(", "\n}\n")
+        self.assertIn("HazardSnapshot(ai)", ringed)
+        self.assertIn('"explicit attack target"', ringed)
+        self.assertIn("CreatureAuraSnapshotCovers(", ringed)
+        self.assertNotIn("Cell::", ringed)
+        snap = body(values, "CreatureAuraHazardSnapshot const* PossibleTriggersValue::HazardSnapshot(", "\n}\n")
+        # No visit on a map without a listed row; the one visit sits inside
+        # the refresh callback of CreatureAuraSnapshotEnsure.
+        self.assertLess(snap.index("if (maxHazard <= 0.0f)"), snap.index("CreatureAuraSnapshotEnsure("))
+        self.assertLess(snap.index("CreatureAuraSnapshotEnsure("), snap.index("Cell::VisitAllObjects("))
+        self.assertEqual(snap.count("Cell::VisitAllObjects("), 1)
+        self.assertIn("KeepoutFor(unit)", snap)
+        self.assertEqual(values.count("Cell::VisitAllObjects("), 3)  # two FindUnits + the snapshot
+        self.assertNotIn("AllCreaturesOfEntryInRange", values)
 
 
 if __name__ == "__main__":
