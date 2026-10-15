@@ -704,15 +704,21 @@ int main()
 
         // Review round 3 (#882 distances unchanged): a target 11 yd from a
         // sludge in the bot's live list. The live check (exact 9 yd ring)
-        // allows the flank; the snapshot skips the listed sludge, so its
-        // widened 12.5 yd ring does not refuse it.
+        // allows the flank; the snapshot skips the listed sludge, so no
+        // widened ring refuses it.
         float const sludgeX = 5.0f, sludgeY = 0.0f, flankX = 16.0f, flankY = 0.0f;
         CHECK(!CreatureAuraEndPointBlocked(row, std::hypot(flankX - sludgeX, flankY - sludgeY))); // live: allowed
         world[9] = { { 0x99ull, sludgeX, sludgeY, 0.0f, hazard } };
         CreatureAuraSnapshotCache liveCache;
         CHECK(CreatureAuraSnapshotRinged(liveCache, key(9, 0.0f, 0.0f), 20000, flankX, flankY, 0.0f, { 0x99ull }, fillFor(9)) == 0);
-        // The same sludge outside the live list (snapshot only) is widened.
-        CHECK(CreatureAuraSnapshotRinged(liveCache, key(9, 0.0f, 0.0f), 20000, flankX, flankY, 0.0f, none, fillFor(9)) == 0x99ull);
+        // Review round 4: drift by the snapshot's actual age. The same
+        // sludge as a snapshot-only creature, standing still, in a snapshot
+        // taken this tick: no widening, the same 9 yd decision as the live
+        // check (allowed at 11 yd, refused inside 9 yd).
+        CHECK(CreatureAuraSnapshotRinged(liveCache, key(9, 0.0f, 0.0f), 20000, flankX, flankY, 0.0f, none, fillFor(9)) == 0);
+        CHECK(CreatureAuraSnapshotRinged(liveCache, key(9, 0.0f, 0.0f), 20000, sludgeX + 8.9f, sludgeY, 0.0f, none, fillFor(9)) == 0x99ull);
+        // 400 ms later the snapshot widens by 2.8 yd: 11 yd now counts.
+        CHECK(CreatureAuraSnapshotRinged(liveCache, key(9, 0.0f, 0.0f), 20400, flankX, flankY, 0.0f, none, fillFor(9)) == 0x99ull);
 
         // Height: a sludge 10 yd above the point (another floor) never rings it.
         world[10] = { { 0xA0ull, 24.0f, 0.0f, 10.0f, hazard } };
@@ -767,9 +773,12 @@ int main()
                 30.0f * float(cell) + 2.0f, 1.0f, 0.0f, none, fillFor(12));
         CHECK(CreatureAuraSnapshotRinged(budget, key(12, 1.0f, 1.0f), 31600, 1.0f, 1.0f, 0.0f, none, fillFor(12), &sv) == 0);
         CHECK(sv.budgetMiss && !sv.snap);
-        // Drift by age: never below one window, 3.5 yd per 500 ms after.
-        CHECK(CreatureAuraSnapshotDriftFor(0) == kCreatureAuraSnapshotDriftYd);
+        // Drift by actual age: 0 this tick, 3.5 yd per 500 ms, capped at 10.5 yd.
+        CHECK(CreatureAuraSnapshotDriftFor(0) == 0.0f);
+        CHECK(std::fabs(CreatureAuraSnapshotDriftFor(250) - 1.75f) < 0.001f);
+        CHECK(std::fabs(CreatureAuraSnapshotDriftFor(500) - kCreatureAuraSnapshotDriftYd) < 0.001f);
         CHECK(std::fabs(CreatureAuraSnapshotDriftFor(1499) - 10.493f) < 0.01f);
+        CHECK(CreatureAuraSnapshotDriftFor(3000) == kCreatureAuraSnapshotMaxDriftYd);
         CHECK(kCreatureAuraSnapshotMaxDriftYd == 3.0f * kCreatureAuraSnapshotDriftYd);
 
         // Clock wrap: the entry goes stale on time, it never sticks.
@@ -788,21 +797,69 @@ int main()
         CHECK(CreatureAuraSnapshotRinged(endCache, key(7, 0.0f, 0.0f), 40000, 17.0f, 0.0f, 0.0f, none, fillFor(7)) == 0x77ull);
 
         // A hazard that walks into the landing ring inside the window: the
-        // snapshot put it 11 yd from the landing (outside the 9 yd ring);
-        // 400 ms later it stands 8 yd away. The snapshot is still current,
-        // and the drift margin catches it.
+        // snapshot put it 11 yd from the landing (outside the 9 yd ring, and
+        // allowed while the snapshot is this tick's); 400 ms later it may
+        // have walked 2.8 yd, to 8.2 yd. The snapshot is still current, and
+        // the drift for its age catches it.
         float const lx = 50.0f, ly = 0.0f;
         world[13] = { { 0x88ull, lx + 11.0f, ly, 0.0f, hazard } };
         CreatureAuraSnapshotCache driftCache;
         CHECK(!CreatureAuraEndPointBlocked(row, 11.0f));           // outside the ring at the visit
-        CHECK(CreatureAuraSnapshotRinged(driftCache, key(13, 40.0f, 0.0f), 50000, lx, ly, 0.0f, none, fillFor(13)) == 0x88ull);
-        float const walked = 11.0f - (kCreatureAuraSnapshotDriftYd - 0.5f); // 8 yd 400 ms later
+        CHECK(CreatureAuraSnapshotRinged(driftCache, key(13, 40.0f, 0.0f), 50000, lx, ly, 0.0f, none, fillFor(13)) == 0);
+        float const walked = 11.0f - CreatureAuraSnapshotDriftFor(400); // 8.2 yd 400 ms later
         CHECK(CreatureAuraEndPointBlocked(row, walked));            // inside the ring now
         CHECK(CreatureAuraSnapshotRinged(driftCache, key(13, 40.0f, 0.0f), 50400, lx, ly, 0.0f, none, fillFor(13)) == 0x88ull);
-        // Past ring + drift the creature cannot reach the ring in the window.
+        // Past ring + drift the creature cannot have reached the ring yet.
         world[14] = { { 0x89ull, lx + hazard + kCreatureAuraSnapshotDriftYd, ly, 0.0f, hazard } };
         CreatureAuraSnapshotCache clearCache;
         CHECK(CreatureAuraSnapshotRinged(clearCache, key(14, 40.0f, 0.0f), 50000, lx, ly, 0.0f, none, fillFor(14)) == 0);
+        CHECK(CreatureAuraSnapshotRinged(clearCache, key(14, 40.0f, 0.0f), 50499, lx, ly, 0.0f, none, fillFor(14)) == 0);
+
+        // Review round 4: a gap closer never fails open on a busy tick. Four
+        // new cells spend the tick's budget; the fifth new cell has no
+        // snapshot, so its landing gets #882's one bounded lookup around it,
+        // and a sludge 7 yd from the landing still vetoes the charge.
+        world[15] = {};
+        CreatureAuraSnapshotCache busy;
+        CreatureAuraSnapshotBeginTick(busy);
+        visits = 0;
+        for (int cell = 0; cell < 4; ++cell)
+            CreatureAuraSnapshotRinged(busy, key(15, 30.0f * float(cell) + 1.0f, 1.0f), 60000,
+                30.0f * float(cell) + 2.0f, 1.0f, 0.0f, none, fillFor(15));
+        CHECK(visits == 4);
+        float const cx5 = 30.0f * 4.0f + 1.0f, landX = cx5 + 18.0f, landY = 1.0f;
+        int lookups = 0;
+        auto lookup = [&](float x, float y)
+        {
+            ++lookups; // the one bounded grid visit around the landing (counted on keepoutScans)
+            std::vector<CreatureAuraHazardEntry> found;
+            CreatureAuraHazardEntry const sludge{ 0xD0ull, landX + 7.0f, landY, 0.0f, hazard };
+            if (std::hypot(sludge.x - x, sludge.y - y) <= hazard)
+                found.push_back(sludge);
+            return found;
+        };
+        CreatureAuraSnapshotView lv;
+        bool lookedUp = false;
+        uint64_t const vetoBy = CreatureAuraLandingRinged(busy, key(15, cx5, 1.0f), 60000, landX, landY, 0.0f, none,
+            fillFor(15), lookup, &lv, &lookedUp);
+        CHECK(visits == 4 && lv.budgetMiss && !lv.snap); // no snapshot for the fifth cell
+        CHECK(lookedUp && lookups == 1);
+        CHECK(vetoBy == 0xD0ull);
+        CHECK(CreatureAuraGapCloserVetoed(false, vetoBy != 0, false, false));
+        // The live lookup keeps #882's exact ring: a sludge 9.5 yd away passes,
+        // and the explicit attack target is skipped.
+        auto lookupAt = [&](float dist)
+        {
+            return [=](float, float)
+                { return std::vector<CreatureAuraHazardEntry>{ { 0xD1ull, landX + dist, landY, 0.0f, hazard } }; };
+        };
+        CHECK(CreatureAuraLandingRinged(busy, key(15, cx5, 1.0f), 60000, landX, landY, 0.0f, none, fillFor(15), lookupAt(9.5f)) == 0);
+        CHECK(CreatureAuraLandingRinged(busy, key(15, cx5, 1.0f), 60000, landX, landY, 0.0f, { 0xD1ull }, fillFor(15), lookupAt(5.0f)) == 0);
+        // With a usable snapshot the landing never looks up.
+        lookups = 0;
+        CHECK(CreatureAuraLandingRinged(busy, key(15, 1.0f, 1.0f), 60000, 2.0f, 1.0f, 0.0f, none, fillFor(15), lookup,
+            nullptr, &lookedUp) == 0);
+        CHECK(!lookedUp && lookups == 0);
     }
     std::cout << "  [PASS] shared hazard snapshot: per cell and instance, budget, live skip, height, cover, drift\n";
 

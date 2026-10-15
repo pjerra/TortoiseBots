@@ -74,10 +74,14 @@ namespace ai
         // (map, instance, 30 yd cell): ring widened by the drift for the
         // snapshot's age, same floor only (CreatureAuraSnapshotRinged). At
         // most one bounded grid visit per cell per kCreatureAuraSnapshotMs and
-        // kKeepoutRefreshesPerTick per world update; with no usable snapshot,
-        // or a point outside its cover, false (the live checks decide). Never
-        // looks on a map without a listed row.
-        static bool SnapshotRingedAt(PlayerbotAI* ai, float x, float y, float z, Unit* skip);
+        // kKeepoutRefreshesPerTick per world update. With no usable snapshot
+        // (or a point outside its cover): false for an end point (the live
+        // checks decide, as #882); with `landingLookup` (a gap-closer
+        // landing), #882's one bounded lookup of listed creatures around the
+        // point at their exact ring instead. Never looks on a map without a
+        // listed row.
+        static bool SnapshotRingedAt(PlayerbotAI* ai, float x, float y, float z, Unit* skip,
+            bool landingLookup = false);
 
         // Once per world update, before the bots run: resets the snapshot
         // refresh budget.

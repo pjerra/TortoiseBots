@@ -394,15 +394,17 @@ namespace ai
     // skipped, because the live check already judged them at their exact
     // ring and current position. A snapshot-only creature can have moved
     // since the visit, so its ring is widened by the drift: 3.5 yd per
-    // 500 ms of the snapshot's age (run speed), never less than 3.5 yd. It
+    // 500 ms of the snapshot's age (run speed), up to 10.5 yd. It
     // only counts when it stands within kCreatureAuraSnapshotHeightYd of the
     // point's height (a creature on another floor does not ring it).
     // No snapshot (the refresh budget is spent and there is no entry younger
     // than kCreatureAuraSnapshotMaxAgeMs), or a point outside the snapshot's
-    // cover: the live checks alone decide, as in #882.
+    // cover: an end point is left to the live checks, as in #882; a gap-closer
+    // landing gets #882's one bounded lookup around it instead
+    // (CreatureAuraLandingRinged), so a busy tick never lets a charge through.
     constexpr uint32_t kCreatureAuraSnapshotMs = 500;
     constexpr uint32_t kCreatureAuraSnapshotMaxAgeMs = 1500; // a stale entry reused while the budget is spent
-    constexpr float kCreatureAuraSnapshotDriftYd = 3.5f;     // 7 yd/s run speed x 0.5 s
+    constexpr float kCreatureAuraSnapshotDriftYd = 3.5f;     // per 500 ms of age: 7 yd/s run speed
     constexpr float kCreatureAuraSnapshotMaxDriftYd =
         kCreatureAuraSnapshotDriftYd * (float(kCreatureAuraSnapshotMaxAgeMs) / float(kCreatureAuraSnapshotMs));
     constexpr float kCreatureAuraSnapshotReachYd = 30.0f;  // 15 yd list + 15 yd end point / landing
@@ -456,11 +458,14 @@ namespace ai
         return CreatureAuraSnapshotCoverYd() + maxHazardRadius + kCreatureAuraSnapshotMaxDriftYd;
     }
 
-    // How far a creature may have moved since a visit `ageMs` ago.
+    // How far a creature may have moved since a visit `ageMs` ago: run speed
+    // times the age, capped at the largest drift the visit radius allows. A
+    // snapshot taken this tick gets no widening, so a creature standing still
+    // gets the same 9 yd decision on both sides of the live-list boundary.
     inline float CreatureAuraSnapshotDriftFor(uint32_t ageMs)
     {
-        float const windows = float(ageMs) / float(kCreatureAuraSnapshotMs);
-        return kCreatureAuraSnapshotDriftYd * (windows > 1.0f ? windows : 1.0f);
+        float const drift = kCreatureAuraSnapshotDriftYd * float(ageMs) / float(kCreatureAuraSnapshotMs);
+        return drift < kCreatureAuraSnapshotMaxDriftYd ? drift : kCreatureAuraSnapshotMaxDriftYd;
     }
 
     struct CreatureAuraHazardSnapshot
@@ -537,7 +542,7 @@ namespace ai
         if (it != cache.entries.end() && !CreatureAuraSnapshotStale(it->second, nowMs))
         {
             view.snap = &it->second;
-            view.driftYd = kCreatureAuraSnapshotDriftYd;
+            view.driftYd = CreatureAuraSnapshotDriftFor(uint32_t(nowMs - it->second.atMs));
             return view;
         }
         if (cache.refreshesThisTick < kKeepoutRefreshesPerTick)
@@ -550,7 +555,7 @@ namespace ai
             snap.atMs = nowMs;
             ++cache.refreshesThisTick;
             view.snap = &snap;
-            view.driftYd = kCreatureAuraSnapshotDriftYd;
+            view.driftYd = 0.0f; // taken this tick
             view.refreshed = true;
             return view;
         }
@@ -564,27 +569,42 @@ namespace ai
         return view;
     }
 
+    // The first creature in `entries` (not in `skip`) whose ring widened by
+    // `driftYd` holds (x, y); with `checkHeight`, only within
+    // kCreatureAuraSnapshotHeightYd of `z`. 0 when none.
+    inline uint64_t CreatureAuraEntriesRingAt(std::vector<CreatureAuraHazardEntry> const& entries, float x, float y,
+        float z, bool checkHeight, float driftYd, std::vector<uint64_t> const& skip)
+    {
+        for (CreatureAuraHazardEntry const& e : entries)
+        {
+            if (e.guidRaw == 0 || std::find(skip.begin(), skip.end(), e.guidRaw) != skip.end())
+                continue;
+            if (checkHeight && std::fabs(e.z - z) > kCreatureAuraSnapshotHeightYd)
+                continue;
+            float const dx = e.x - x, dy = e.y - y;
+            if (std::sqrt(dx * dx + dy * dy) < e.hazardRadius + driftYd)
+                return e.guidRaw;
+        }
+        return 0;
+    }
+
+    // A view the point can be judged by: a snapshot that covers it.
+    inline bool CreatureAuraSnapshotUsable(CreatureAuraSnapshotView const& view, float x, float y)
+    {
+        return view.snap && CreatureAuraSnapshotCovers(*view.snap, x, y);
+    }
+
     // The snapshot-only creature whose ring, widened by the view's drift,
     // holds (x, y) on the point's floor. `skip` lists the creatures the live
     // checks already judged (the bot's live list, the target, the explicit
     // attack target). 0 when none, when there is no snapshot, or when the
-    // point lies outside its cover (the live checks alone decide then).
+    // point lies outside its cover.
     inline uint64_t CreatureAuraSnapshotRingAt(CreatureAuraSnapshotView const& view, float x, float y, float z,
         std::vector<uint64_t> const& skip)
     {
-        if (!view.snap || !CreatureAuraSnapshotCovers(*view.snap, x, y))
+        if (!CreatureAuraSnapshotUsable(view, x, y))
             return 0;
-        for (CreatureAuraHazardEntry const& e : view.snap->entries)
-        {
-            if (e.guidRaw == 0 || std::find(skip.begin(), skip.end(), e.guidRaw) != skip.end())
-                continue;
-            if (std::fabs(e.z - z) > kCreatureAuraSnapshotHeightYd)
-                continue;
-            float const dx = e.x - x, dy = e.y - y;
-            if (std::sqrt(dx * dx + dy * dy) < e.hazardRadius + view.driftYd)
-                return e.guidRaw;
-        }
-        return 0;
+        return CreatureAuraEntriesRingAt(view.snap->entries, x, y, z, true, view.driftYd, skip);
     }
 
     // The whole snapshot check, the seam the game code and the tests share:
@@ -599,5 +619,30 @@ namespace ai
         if (view)
             *view = v;
         return CreatureAuraSnapshotRingAt(v, x, y, z, skip);
+    }
+
+    // A gap-closer landing (review round 4 of #995): the snapshot when it is
+    // usable; otherwise (the tick's refresh budget spent with no entry young
+    // enough, or the landing outside its cover) #882's one bounded lookup
+    // around the landing: `lookup(x, y)` returns the listed creatures within
+    // the largest hazard radius of it, judged at their exact ring (live, 2D,
+    // as #882). A charge never fails open on a busy tick. `lookedUp` reports
+    // whether the lookup ran.
+    template <class Fill, class Lookup>
+    inline uint64_t CreatureAuraLandingRinged(CreatureAuraSnapshotCache& cache, CreatureAuraSnapshotKey const& key,
+        uint32_t nowMs, float x, float y, float z, std::vector<uint64_t> const& skip, Fill&& fill, Lookup&& lookup,
+        CreatureAuraSnapshotView* view = nullptr, bool* lookedUp = nullptr)
+    {
+        CreatureAuraSnapshotView const v = CreatureAuraSnapshotCacheGet(cache, key, nowMs, std::forward<Fill>(fill));
+        if (view)
+            *view = v;
+        if (lookedUp)
+            *lookedUp = false;
+        if (CreatureAuraSnapshotUsable(v, x, y))
+            return CreatureAuraSnapshotRingAt(v, x, y, z, skip);
+        if (lookedUp)
+            *lookedUp = true;
+        std::vector<CreatureAuraHazardEntry> const live = lookup(x, y);
+        return CreatureAuraEntriesRingAt(live, x, y, z, false, 0.0f, skip);
     }
 } // namespace ai

@@ -94,7 +94,7 @@ class KeepoutSetAsideWiringTest(unittest.TestCase):
         veto = body(values, "bool PossibleTriggersValue::GapCloserIntoKeepout(", "\n}\n")
         self.assertIn('"explicit attack target"', veto)
         self.assertIn("CreatureAuraGapCloserVetoed(", veto)
-        self.assertLess(veto.index("KeepoutRingAt(ai, lx, ly)"), veto.index("SnapshotRingedAt(ai, lx, ly, target->GetPositionZ(), target)"))
+        self.assertLess(veto.index("KeepoutRingAt(ai, lx, ly)"), veto.index("SnapshotRingedAt(ai, lx, ly, target->GetPositionZ(), target, true)"))
         self.assertNotIn("Cell::", veto)
         self.assertIn("class CastFeralChargeBearAction : public CastReachTargetSpellAction",
                       (ROOT / "ai/playerbot/strategy/druid/DruidActions.h").read_text())
@@ -145,7 +145,12 @@ class KeepoutSetAsideWiringTest(unittest.TestCase):
         self.assertIn('"possible triggers"', snap)  # live-list creatures are skipped
         self.assertLess(snap.index("if (maxHazard <= 0.0f)"), snap.index("CreatureAuraSnapshotRinged("))
         # The one grid visit: inside the snapshot refresh, never loading a grid.
-        self.assertIn("Cell::VisitAllObjects(cx, cy, map, searcher, radius, true)", snap)
+        self.assertIn("Cell::VisitAllObjects(px, py, map, searcher, radius, true)", snap)
+        self.assertEqual(snap.count("Cell::VisitAllObjects("), 1)
+        # A gap-closer landing never fails open: without a usable snapshot it
+        # gets #882's bounded lookup (CreatureAuraLandingRinged).
+        self.assertIn("if (landingLookup)", snap)
+        self.assertIn("CreatureAuraLandingRinged(", snap)
         for name in ("EndPointRinged", "GapCloserIntoKeepout", "KeepoutRingAt"):
             fn = body(values, "PossibleTriggersValue::" + name + "(", "\n}\n")
             self.assertNotIn("Cell::", fn, name)
