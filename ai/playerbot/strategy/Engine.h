@@ -14,6 +14,19 @@
 
 namespace ai
 {
+    // How one pass of the engine's action loop ended for one action; reported
+    // to the listeners through ActionExecutionListener::Outcome.
+    enum class ActionOutcome
+    {
+        Ok,         // executed
+        Failed,     // possible, ran, returned false
+        Impossible, // isPossible() said no
+        Useless,    // isUseful() said no
+        Prereq,     // its prerequisites were queued first
+        Vetoed,     // a multiplier zeroed its relevance
+        Backoff     // the failure backoff dropped it
+    };
+
     class ActionExecutionListener
     {
     public:
@@ -21,6 +34,10 @@ namespace ai
         virtual bool AllowExecution(Action* action, const Event& event) = 0;
         virtual void After(Action* action, bool executed, const Event& event) = 0;
         virtual bool OverrideResult(Action* action, bool executed, const Event& event) = 0;
+        // Optional: the outcome of every action the loop took out of the queue
+        // (run trace, runtime/RunTrace.cpp). Not called for actions run outside
+        // the loop. Default: nothing.
+        virtual void Outcome(Action* action, ActionOutcome outcome, const Event& event, float baseRelevance, float relevance) {}
         virtual ~ActionExecutionListener() {};
     };
 
@@ -37,8 +54,17 @@ namespace ai
         virtual bool AllowExecution(Action* action, const Event& event) override;
         virtual void After(Action* action, bool executed, const Event& event) override;
         virtual bool OverrideResult(Action* action, bool executed, const Event& event) override;
+        virtual void Outcome(Action* action, ActionOutcome outcome, const Event& event, float baseRelevance, float relevance) override;
 
     public:
+        template<class T>
+        bool Has() const
+        {
+            for (ActionExecutionListener* listener : listeners)
+                if (dynamic_cast<T*>(listener))
+                    return true;
+            return false;
+        }
         void Add(ActionExecutionListener* listener)
         {
             listeners.push_back(listener);
@@ -46,6 +72,22 @@ namespace ai
         void Remove(ActionExecutionListener* listener)
         {
             listeners.remove(listener);
+        }
+        // Removes and deletes every listener of type T (they are owned here).
+        // Not from inside a listener call: the list is being walked then.
+        template<class T>
+        void RemoveAll()
+        {
+            for (auto it = listeners.begin(); it != listeners.end();)
+            {
+                if (T* listener = dynamic_cast<T*>(*it))
+                {
+                    it = listeners.erase(it);
+                    delete listener;
+                }
+                else
+                    ++it;
+            }
         }
 
     private:
@@ -110,6 +152,16 @@ namespace ai
         void removeActionExecutionListener(ActionExecutionListener* listener)
         {
             actionExecutionListeners.Remove(listener);
+        }
+        template<class T>
+        bool HasActionExecutionListener() const
+        {
+            return actionExecutionListeners.Has<T>();
+        }
+        template<class T>
+        void RemoveActionExecutionListeners()
+        {
+            actionExecutionListeners.RemoveAll<T>();
         }
 
     public:

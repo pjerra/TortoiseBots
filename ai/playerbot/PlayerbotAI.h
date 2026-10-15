@@ -610,6 +610,9 @@ public:
     // cpp can build heartbeat / debug payloads without being
     // a friend class. Read-only.
     Engine* GetCurrentEngine() { return currentEngine; }
+    // The engine registered for a state (combat, non-combat, dead, reaction), or
+    // null. Read-only access for the run trace (runtime/RunTrace.cpp).
+    Engine* GetEngineByState(BotState state) { return static_cast<uint8>(state) < static_cast<uint8>(BotState::BOT_STATE_ALL) ? engines[static_cast<uint8>(state)] : nullptr; }
 
     // Registers an engine in the per-state array. The factory that builds an
     // engine calls this before it attaches that engine's default strategies:

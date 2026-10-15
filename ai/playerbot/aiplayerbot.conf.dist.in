@@ -460,6 +460,34 @@ AiPlayerbot.TravelPickBudgetUs = 4000
 # the bots already track; no extra world scan. Clamped to 250..60000.
 #AiPlayerbot.RemoteCommanderViewMs = 1000
 
+# Run trace (opt-in, off by default). A GM, or the owner of the bots, runs
+# `.bot trace start <run_id> [party|bot <Name>]` and the server records what the
+# party's bots do - hp/power/position/target/strategy, the hostiles they see and
+# who they hold, every action with its result (OK / FAILED / IMPOSSIBLE / USELESS /
+# PREREQ / VETOED / BACKOFF), deaths, combat enter/leave, loot, facing and movement - as one JSONL
+# file (<run_id>.jsonl) plus <run_id>.summary.json, until `.bot trace stop`.
+# tools/trace_score.py scores the file offline. Schema: docs/guides/run-trace.md.
+# Costs nothing while no run is active; a run reads only what the bots already
+# track (no world scan, no database), builds its lines on the world thread and
+# writes them on a separate thread through a bounded queue (lines are dropped and
+# counted if the disk cannot keep up). With 0 `.bot trace start` answers that the
+# feature is off, and a run in progress ends at the next tick.
+#AiPlayerbot.RunTrace.Enabled = 0
+
+# Milliseconds between two frames of a run (clamped to 250..10000).
+#AiPlayerbot.RunTrace.IntervalMs = 500
+
+# Where traces are written; a relative path is under LogsDir.
+#AiPlayerbot.RunTrace.Dir = traces
+
+# Only a GameMaster may start a trace (each takes up to MaxFileMb of disk).
+# With 0 the owner of the bots may start one too.
+#AiPlayerbot.RunTrace.GmOnly = 1
+
+# Size cap of one trace file in MiB (clamped to 1..1024). When it is reached the
+# run ends (end reason size_cap) with its end record intact.
+#AiPlayerbot.RunTrace.MaxFileMb = 64
+
 # Bounded AH market population through the native bot/session auction path. Default off.
 # When enabled, online random Headless bots use real inventory items, pricing, deposits,
 # account limits, and HandleAuctionSellItem. Auctioneer spawns are loaded once and

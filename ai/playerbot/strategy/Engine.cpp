@@ -54,6 +54,14 @@ void ActionExecutionListeners::After(Action* action, bool executed, const Event&
     }
 }
 
+void ActionExecutionListeners::Outcome(Action* action, ActionOutcome outcome, const Event& event, float baseRelevance, float relevance)
+{
+    for (std::list<ActionExecutionListener*>::iterator i = listeners.begin(); i!=listeners.end(); i++)
+    {
+        (*i)->Outcome(action, outcome, event, baseRelevance, relevance);
+    }
+}
+
 bool ActionExecutionListeners::OverrideResult(Action* action, bool executed, const Event& event)
 {
     bool result = executed;
@@ -434,6 +442,7 @@ bool Engine::DoNextAction(Unit* unit, int depth, bool minimal, bool isStunned)
                     {
                         LogAction("A:%s - BACKOFF src=%s base=%.3f eff=%.3f", action->getName().c_str(), event.getSource().c_str(), oldRelevance, relevance);
                         NoteOutcome(action, 'V');
+                        actionExecutionListeners.Outcome(action, ActionOutcome::Backoff, event, oldRelevance, relevance);
                         delete actionNode;
                         continue;
                     }
@@ -452,6 +461,7 @@ bool Engine::DoNextAction(Unit* unit, int depth, bool minimal, bool isStunned)
                         if (MultiplyAndPush(actionNode->getPrerequisites(), relevance + 0.02, false, event, "prereq"))
                         {
                             NoteOutcome(action, 'P');
+                            actionExecutionListeners.Outcome(action, ActionOutcome::Prereq, event, oldRelevance, relevance);
                             PushAgain(actionNode, relevance + 0.01, event);
                             continue;
                         }
@@ -477,6 +487,7 @@ bool Engine::DoNextAction(Unit* unit, int depth, bool minimal, bool isStunned)
                         {
                             LogAction("A:%s - OK src=%s base=%.3f eff=%.3f", action->getName().c_str(), event.getSource().c_str(), oldRelevance, relevance);
                             NoteOutcome(action, 'O');
+                            actionExecutionListeners.Outcome(action, ActionOutcome::Ok, event, oldRelevance, relevance);
                             botdiag::CountAction(ai->GetBot() ? ai->GetBot()->GetClass() : 0, action->getName().c_str(), true);
                             ClearActionFailures(action, event);
                             MultiplyAndPush(actionNode->getContinuers(), 0, false, event, "cont");
@@ -488,6 +499,7 @@ bool Engine::DoNextAction(Unit* unit, int depth, bool minimal, bool isStunned)
                         {
                             LogAction("A:%s - FAILED src=%s base=%.3f eff=%.3f", action->getName().c_str(), event.getSource().c_str(), oldRelevance, relevance);
                             NoteOutcome(action, 'F');
+                            actionExecutionListeners.Outcome(action, ActionOutcome::Failed, event, oldRelevance, relevance);
                             botdiag::CountAction(ai->GetBot() ? ai->GetBot()->GetClass() : 0, action->getName().c_str(), false);
                             RecordFailure(action, event, ACTION_RESULT_FAILED);
                             MultiplyAndPush(actionNode->getAlternatives(), relevance + 0.03, false, event, "alt");
@@ -519,6 +531,8 @@ bool Engine::DoNextAction(Unit* unit, int depth, bool minimal, bool isStunned)
                         }
                         LogAction("A:%s - IMPOSSIBLE src=%s base=%.3f eff=%.3f", action->getName().c_str(), event.getSource().c_str(), oldRelevance, relevance);
                         NoteOutcome(action, 'I');
+                        // A possible action that got here had its relevance zeroed by a multiplier.
+                        actionExecutionListeners.Outcome(action, isPossible ? ActionOutcome::Vetoed : ActionOutcome::Impossible, event, oldRelevance, relevance);
                         botdiag::CountAction(ai->GetBot() ? ai->GetBot()->GetClass() : 0, action->getName().c_str(), false);
                         RecordFailure(action, event, ACTION_RESULT_IMPOSSIBLE);
                         MultiplyAndPush(actionNode->getAlternatives(), relevance + 0.03, false, event, "alt");
@@ -551,6 +565,7 @@ bool Engine::DoNextAction(Unit* unit, int depth, bool minimal, bool isStunned)
                     lastRelevance = relevance;
                     LogAction("A:%s - USELESS src=%s base=%.3f eff=%.3f", action->getName().c_str(), event.getSource().c_str(), oldRelevance, relevance);
                     NoteOutcome(action, 'U');
+                    actionExecutionListeners.Outcome(action, ActionOutcome::Useless, event, oldRelevance, relevance);
                 }
             }
             delete actionNode;

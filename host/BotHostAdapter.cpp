@@ -11,6 +11,7 @@
 #include "../runtime/AhMarketService.h"
 #include "../runtime/BattlegroundQueueService.h"
 #include "../runtime/ObservabilityEmitter.h"
+#include "../runtime/RunTrace.h"
 #include "BotChatAdapter.h"
 #include "BotPacketAdapter.h"
 #include "HireRecruiterScript.h"
@@ -97,6 +98,8 @@ void BotHostAdapter::OnStartup()
     RandomBotService::Instance().Initialize();
     BattlegroundQueueService::Instance().Initialize();
     ClaimLifecycle::Instance().Initialize();
+    // Run trace: mark the summaries of runs the last server never finalised.
+    RunTraceService::Instance().Initialize();
 
     if (sConfig.GetBoolDefault("TortoiseBots.PendingAddRemoveTest", false))
     {
@@ -164,7 +167,12 @@ void BotHostAdapter::OnUpdate(uint32 diff)
 
     // Read again: a command may have reloaded the configuration.
     if (!sPlayerbotAIConfig.enabled)
+    {
+        // A run trace still going ends here ("disabled"); with none, this is
+        // its usual one atomic load.
+        RunTraceService::Instance().Update(diff);
         return;
+    }
 
     // Issue #839 / #844: the rest of the chat and packets that reached bots on
     // other threads (party / whisper commands included), before the bot update;
@@ -183,10 +191,13 @@ void BotHostAdapter::OnUpdate(uint32 diff)
     AhMarketService::Instance().Update(diff);
     BattlegroundQueueService::Instance().Update(diff);
     ObservabilityEmitter::Instance().Update(diff);
+    // Opt-in run trace (one atomic load per tick while no run is active).
+    RunTraceService::Instance().Update(diff);
 }
 
 void BotHostAdapter::OnShutdown()
 {
+    RunTraceService::Instance().Shutdown();
     ObservabilityEmitter::Instance().Shutdown();
     BattlegroundQueueService::Instance().Shutdown();
     BotCommandQueue::Instance().Clear();

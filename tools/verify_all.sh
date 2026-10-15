@@ -50,6 +50,8 @@ python3 -m unittest tools/test_pull_end_engaged.py
 python3 -m unittest tools/test_priest_fade_flash_wiring.py
 python3 -m unittest tools/test_boss_tactics_sql.py
 python3 -m unittest tools/test_dungeon_plan_sql.py
+python3 -m unittest tools/test_trace_score.py
+python3 -m unittest tools/test_run_trace_glue.py
 echo "✓ Engine unit tests passed."
 
 echo ""
@@ -205,6 +207,7 @@ if command -v g++ >/dev/null 2>&1; then
         test_rogue_weapon_policy
         test_rpg_mixer_policy
         test_rpg_relevance_weight_policy
+        test_run_trace_records
         test_sapphiron_ice_policy
         test_seduction_policy
         test_service_trip_policy
@@ -261,6 +264,10 @@ if command -v g++ >/dev/null 2>&1; then
         g++ -std=c++17 -Wall -Wextra "tools/${policy_test}.cpp" -o "${policy_bin}"
         "${policy_bin}"
     done
+    # The run trace's file writer builds from its own source and needs the thread library.
+    writer_bin="${TMPDIR:-/tmp}/test_run_trace_writer"
+    g++ -std=c++17 -Wall -Wextra tools/test_run_trace_writer.cpp runtime/RunTraceWriter.cpp -pthread -o "${writer_bin}"
+    "${writer_bin}" "${TMPDIR:-/tmp}"
     echo "✓ Standalone policy tests verified."
 else
     echo "ℹ Skipping standalone policy tests (no g++ on PATH)."
