@@ -198,24 +198,32 @@ bool HunterStepOutAction::Execute(Event& event)
     uint64 const targetRaw = target->GetObjectGuid().GetRawValue();
     uint32 const nowMs = WorldTimer::getMSTime();
 
-    // The one step is already under way for this mob: let it finish.
+    // A step is already under way for this mob: let it finish. A finished
+    // step that left the hunter inside is retried farther, up to
+    // kHunterStepOutMaxAttempts per episode (HunterSwitchPolicy.h, #1018).
+    bool const moving = !bot->IsStopped() || sServerFacade.isMoving(bot);
     if (HunterStepOutEpisodeOpen(*state, targetRaw, nowMs))
-        return !bot->IsStopped() || sServerFacade.isMoving(bot);
+    {
+        if (moving && nowMs - state->stepOutAttemptMs < kHunterStepOutWindowMs)
+            return true;
+        if (state->stepOutAttempt >= kHunterStepOutMaxAttempts)
+            return false;
+    }
 
     float maxRange = 0.0f;
     float minRange = 0.0f;
     if (!ai->GetSpellRange("auto shot", &maxRange, &minRange) || minRange <= 0.0f)
         return false;
 
-    // Stamp the episode before trying: a step that finds no spot counts as
-    // the one attempt, and the stuck verdict hands over to melee next tick.
+    // Stamp the attempt before trying: a step that finds no spot counts as
+    // an attempt, and the next one aims farther.
     BeginHunterStepOut(*state, targetRaw, nowMs);
 
     float const edge = bot->GetDistance(target, SizeFactor::CombatReach);
     float const center = sServerFacade.getDistance2d(bot, target);
     // Reach terms between centre and edge distance, constant for the step.
     float const reach = std::max(0.0f, center - edge);
-    float const step = HunterStepOutLength(edge, minRange);
+    float const step = HunterStepOutLength(edge, minRange, state->stepOutAttempt);
     float const away = target->GetAngle(bot);
     WorldPosition const botPos(bot);
 
@@ -245,6 +253,7 @@ bool HunterStepOutAction::Execute(Event& event)
         break;
     }
 
-    LogHunterRangedEvent(ai, "StepOut", std::string("moved=") + (moved ? "1" : "0"));
+    LogHunterRangedEvent(ai, "StepOut", std::string("moved=") + (moved ? "1" : "0") +
+        " attempt=" + std::to_string(state->stepOutAttempt));
     return moved;
 }

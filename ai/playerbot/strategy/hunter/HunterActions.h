@@ -26,9 +26,11 @@ namespace ai
 
     // One step straight out of the shot's dead zone while the pet, a tank or
     // anyone else holds the mob (HunterDeadZoneStepOutTrigger). Point move to
-    // a checked spot (LOS, path), fanned up to 90 degrees off straight back
-    // like mod-playerbots 79bd428 MovementAction::MoveAway. While the step
-    // runs it holds without re-dispatching; it never chases or loops.
+    // a checked spot (LOS, path) about 15 yd from the mob, fanned up to 90
+    // degrees off straight back like mod-playerbots 79bd428
+    // MovementAction::MoveAway. While the step runs it holds without
+    // re-dispatching; a step that left the hunter inside is retried farther
+    // (a few times per mob, HunterSwitchPolicy.h).
     class HunterStepOutAction : public MovementAction
     {
     public:
@@ -384,8 +386,28 @@ public:
         std::string GetTargetQualifier() override { return GetTrapSpellName(); }
         ActionThreatType getThreatType() override { return ActionThreatType::ACTION_THREAT_NONE; }
 
+        // Only the CC trap still walks to its target first (a freezing trap
+        // is laid where the CC target will be). The damage/slow traps are
+        // laid at the hunter's feet only when the target is already in melee
+        // reach (HunterTrapTargetInReach): the walk took group hunters into
+        // the tank's mob and the trap was never cast (#1018).
+        virtual bool WalksToTrapTarget() const { return false; }
+
+        bool isUseful() override
+        {
+            if (!CastSpellAction::isUseful())
+                return false;
+            if (WalksToTrapTarget())
+                return true;
+            Unit* trapTarget = AI_VALUE(Unit*, GetTrapTargetName());
+            return trapTarget && (trapTarget == bot || HunterTrapTargetInReach(bot->GetDistance(trapTarget)));
+        }
+
         NextAction** getPrerequisites() override
         {
+            if (!WalksToTrapTarget())
+                return Action::getPrerequisites();
+
             const std::string reachAction = GetReachActionName();
             const std::string spellName = GetSpellName();
             const std::string targetName = GetTrapTargetName();
@@ -416,6 +438,7 @@ private:
     {
     public:
         TrapOnCcTargetAction(PlayerbotAI* ai, std::string spell) : TrapOnTargetAction(ai, spell) {}
+        bool WalksToTrapTarget() const override { return true; }
         bool IsCrowdControlAction() const override { return true; }
         std::string GetCrowdControlSpellName() const override { return GetTrapSpellName(); }
         std::string GetTrapTargetName() override { return "cc target"; }

@@ -22,8 +22,12 @@ using ai::HunterKitDwellElapsed;
 using ai::NoteHunterKitSwitch;
 using ai::BeginHunterStepOut;
 using ai::HunterMeleeRowIgnoresThreatBackoff;
-using ai::HunterStepOutBlocked;
 using ai::HunterStepOutLength;
+using ai::HunterTrapTargetInReach;
+using ai::kHunterStepOutMaxAttempts;
+using ai::kHunterStepOutMaxYd;
+using ai::kHunterStepOutTargetYd;
+using ai::kHunterTrapReachYd;
 using ai::kHunterKitMinDwellMs;
 using ai::kHunterStepOutWindowMs;
 using ai::kHunterStepOutRetryMs;
@@ -107,52 +111,95 @@ int main()
         std::cout << "  [PASS] kit switches wait for the 4 s dwell (out of ammo excepted)\n";
     }
 
-    // Dead-zone step-out: one step per mob, hold while it runs, melee when it
-    // fails - never the old flee every tick.
+    // Dead-zone step-out: a step per mob, hold while it runs, retry farther
+    // when it fails - never the old flee every tick, never a melee trade for
+    // a mob that is not on the hunter (#1018).
     {
         uint64_t const mob = 0xF130001234000042ull;
         uint64_t const otherMob = 0xF130001234000043ull;
         HunterKitState state;
         uint32_t const t0 = 200000u;
+        CHECK(kHunterStepOutMaxAttempts == 3);
         // Out of the dead zone, or the mob is on the hunter: not this row.
         CHECK(DecideHunterDeadZoneStep(state, mob, t0, false, false, false) == HunterDeadZoneStep::None);
         CHECK(DecideHunterDeadZoneStep(state, mob, t0, true, true, false) == HunterDeadZoneStep::None);
-        // Pet-held mob in the dead zone, no episode yet: step out.
+        // Tank-held mob in the dead zone, no episode yet: step out.
         CHECK(DecideHunterDeadZoneStep(state, mob, t0, true, false, false) == HunterDeadZoneStep::StepOut);
         BeginHunterStepOut(state, mob, t0);
+        CHECK(state.stepOutAttempt == 1);
         // Step under way: hold, do not re-dispatch.
         CHECK(DecideHunterDeadZoneStep(state, mob, t0 + 500u, true, false, true) == HunterDeadZoneStep::Hold);
-        // Stopped but still inside (no spot, or the mob came along): melee.
-        CHECK(DecideHunterDeadZoneStep(state, mob, t0 + 500u, true, false, false) == HunterDeadZoneStep::Stuck);
-        // Still moving after the window: give up, melee.
-        CHECK(DecideHunterDeadZoneStep(state, mob, t0 + kHunterStepOutWindowMs, true, false, true) == HunterDeadZoneStep::Stuck);
+        // Stopped but still inside (no spot, or the mob came along): retry.
+        CHECK(DecideHunterDeadZoneStep(state, mob, t0 + 500u, true, false, false) == HunterDeadZoneStep::StepOut);
+        // Still moving after the window: retry too.
+        CHECK(DecideHunterDeadZoneStep(state, mob, t0 + kHunterStepOutWindowMs, true, false, true) == HunterDeadZoneStep::StepOut);
         // Got out: nothing to do.
         CHECK(DecideHunterDeadZoneStep(state, mob, t0 + 1000u, false, false, false) == HunterDeadZoneStep::None);
-        // Back inside within the episode: melee, not a second step.
+        // Second attempt inside the episode: same episode, attempt 2, its
+        // own window.
+        BeginHunterStepOut(state, mob, t0 + 3500u);
+        CHECK(state.stepOutAttempt == 2);
+        CHECK(state.stepOutStartMs == t0);
+        CHECK(DecideHunterDeadZoneStep(state, mob, t0 + 4000u, true, false, true) == HunterDeadZoneStep::Hold);
+        CHECK(DecideHunterDeadZoneStep(state, mob, t0 + 4000u, true, false, false) == HunterDeadZoneStep::StepOut);
+        BeginHunterStepOut(state, mob, t0 + 4000u);
+        CHECK(state.stepOutAttempt == 3);
+        // Every attempt failed: Stuck (hold the ranged kit), not another step.
         CHECK(DecideHunterDeadZoneStep(state, mob, t0 + 6000u, true, false, false) == HunterDeadZoneStep::Stuck);
-        // A different mob, or the episode ran out: a fresh step is allowed.
+        // A different mob, or the episode ran out: a fresh episode, attempt 1.
         CHECK(DecideHunterDeadZoneStep(state, otherMob, t0 + 6000u, true, false, false) == HunterDeadZoneStep::StepOut);
         CHECK(DecideHunterDeadZoneStep(state, mob, t0 + kHunterStepOutRetryMs, true, false, false) == HunterDeadZoneStep::StepOut);
+        BeginHunterStepOut(state, mob, t0 + kHunterStepOutRetryMs);
+        CHECK(state.stepOutAttempt == 1);
+        CHECK(state.stepOutStartMs == t0 + kHunterStepOutRetryMs);
+        BeginHunterStepOut(state, otherMob, t0 + kHunterStepOutRetryMs + 100u);
+        CHECK(state.stepOutAttempt == 1);
+        CHECK(state.stepOutTarget == otherMob);
 
-        // Stuck trades into melee whoever holds the mob, even inside the dwell.
-        CHECK(ShouldSwitchToMelee(true, false, false, false, 3.0f, true, true, false));
+        // Stuck no longer trades into melee for a mob off the hunter, inside
+        // or after the dwell (the old rule did; Zul'Farrak: melee kit 13-20 %
+        // of fight time, the mob on the tank in 47-73 % of those frames).
+        CHECK(!ShouldSwitchToMelee(true, false, false, false, 3.0f, true, true, false));
+        CHECK(!ShouldSwitchToMelee(true, false, false, false, 3.0f, true, true, true));
         CHECK(!ShouldSwitchToMelee(false, false, false, false, 3.0f, true, true, true));
-        // The close kit then holds while that episode stands and the mob is
-        // still in the dead zone; out of it, or after the episode, ranged.
-        CHECK(HunterStepOutBlocked(state, mob, t0 + 6000u, true));
-        CHECK(!HunterStepOutBlocked(state, mob, t0 + 6000u, false));
-        CHECK(!HunterStepOutBlocked(state, mob, t0 + kHunterStepOutRetryMs, true));
-        CHECK(!HunterStepOutBlocked(state, otherMob, t0 + 6000u, true));
-        CHECK(!ShouldSwitchToRanged(true, true, false, false, 3.0f, true, true, true));
+        // A glued mob on the hunter still trades after the dwell, stuck or not.
+        CHECK(ShouldSwitchToMelee(true, true, false, false, 3.0f, true, true, true));
+        CHECK(!ShouldSwitchToMelee(true, true, false, false, 3.0f, true, true, false));
+        // The close kit no longer holds after a failed step-out: a mob off the
+        // hunter hands ranged back after the dwell (the step-out moves it).
+        CHECK(ShouldSwitchToRanged(true, true, false, false, 3.0f, true, true, true));
         CHECK(ShouldSwitchToRanged(true, true, false, false, 3.0f, true, false, true));
         // A rooted mob is shot from where the hunter stands regardless.
         CHECK(ShouldSwitchToRanged(true, true, true, false, 3.0f, true, true, true));
 
-        // Step length: lands 3 yd past the edge, clamped to 4..15 yd.
-        CHECK(HunterStepOutLength(2.0f, 8.0f) == 9.0f);
-        CHECK(HunterStepOutLength(7.5f, 8.0f) == 4.0f);
-        CHECK(HunterStepOutLength(0.0f, 20.0f) == 15.0f);
-        std::cout << "  [PASS] dead zone: one step-out per mob, then melee instead of flee\n";
+        // Step length: aims 15 yd from the target, +5 yd per retry, clamped
+        // to 4..20 yd; never aims inside the dead zone + 3 yd.
+        CHECK(kHunterStepOutTargetYd == 15.0f);
+        CHECK(kHunterStepOutMaxYd == 20.0f);
+        CHECK(HunterStepOutLength(2.0f, 8.0f) == 13.0f);
+        CHECK(HunterStepOutLength(6.0f, 8.0f, 1) == 9.0f);
+        CHECK(HunterStepOutLength(6.0f, 8.0f, 2) == 14.0f);
+        CHECK(HunterStepOutLength(6.0f, 8.0f, 3) == 19.0f);
+        CHECK(HunterStepOutLength(0.0f, 8.0f, 3) == 20.0f);
+        CHECK(HunterStepOutLength(13.0f, 8.0f) == 4.0f);
+        // A longer dead zone raises the aim to its edge + 3 yd.
+        CHECK(HunterStepOutLength(0.0f, 14.0f) == 17.0f);
+        // Attempt 0 (never stamped) aims like the first attempt.
+        CHECK(HunterStepOutLength(2.0f, 8.0f, 0) == 13.0f);
+        std::cout << "  [PASS] dead zone: step out to 15 yd, retry farther, never melee a mob off the hunter\n";
+    }
+
+    // Traps on the target: laid only when the mob is already in melee reach
+    // of the hunter, never after a walk into melee (#1018: 22-29 walks per
+    // Zul'Farrak run, 0 traps cast).
+    {
+        CHECK(kHunterTrapReachYd == 5.0f);
+        CHECK(HunterTrapTargetInReach(0.0f));
+        CHECK(HunterTrapTargetInReach(5.0f));
+        CHECK(!HunterTrapTargetInReach(5.1f));
+        // The tank's mob ~12 yd away: no trap, no walk.
+        CHECK(!HunterTrapTargetInReach(12.0f));
+        std::cout << "  [PASS] traps: only for a mob already in melee reach\n";
     }
 
     {

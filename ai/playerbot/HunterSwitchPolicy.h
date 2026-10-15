@@ -30,9 +30,10 @@
 // range, which the core's chase generator turns into "stay put" while the
 // mob stands still within 1.4x that range - so the flee re-fired without
 // moving and the hunter neither shot nor meleed (flee 57-63 % of combat
-// samples). The dead zone now gets ONE step-out per mob (below), the melee
-// kit if that step does not get the hunter out, and a minimum dwell on the
-// kit so aggro trading inside 8 yd cannot rebuild strategies every tick.
+// samples). The dead zone now gets a step-out per mob (below) and a minimum
+// dwell on the kit so aggro trading inside 8 yd cannot rebuild strategies
+// every tick. Ranged first (#1018): a failed step is retried farther, never
+// answered with a melee trade for a mob that is not on the hunter.
 
 #include <cstdint>
 
@@ -55,12 +56,13 @@ namespace ai
     // for a mob the step-back already handles. A slow mob glued on the bot
     // is what Wing Clip and the step-back are for. Out of ammo always
     // trades: there is nothing to shoot with.
-    // Fix round: a failed dead-zone step-out (stuckInDeadZone, see
-    // DecideHunterDeadZoneStep) also trades into melee, whoever the mob is
-    // on: the hunter cannot shoot from there, so Raptor Strike / Wing Clip
-    // beat standing still. Every trade except out-of-ammo and that stuck case
-    // waits for the kit dwell (dwellElapsed); the stuck case is already
-    // limited to once per step-out episode (kHunterStepOutRetryMs).
+    // Ranged first (issue #1018): a failed dead-zone step-out
+    // (stuckInDeadZone) no longer trades into melee. Stuck only happens for a
+    // mob that is NOT on the hunter (DecideHunterDeadZoneStep), and trading
+    // there walked group hunters onto the tank's mob (Zul'Farrak, 3 hunters:
+    // melee kit 13-20 % of fight time, mob on the tank in 47-73 % of those
+    // frames). A failed step now retries farther instead (see below). Every
+    // trade except out-of-ammo waits for the kit dwell (dwellElapsed).
     inline bool ShouldSwitchToMelee(bool hasRangedKit, bool victimOnBot, bool immobilized,
         bool fastOrFinisher, float distanceYd, bool hasAmmo,
         bool stuckInDeadZone = false, bool dwellElapsed = true)
@@ -68,10 +70,9 @@ namespace ai
         if (!hasAmmo)
             return true;
         (void)fastOrFinisher;
+        (void)stuckInDeadZone;
         if (!hasRangedKit)
             return false;
-        if (stuckInDeadZone)
-            return true;
         return dwellElapsed && victimOnBot && !immobilized &&
             distanceYd <= kHunterMeleeGlueYd;
     }
@@ -93,10 +94,10 @@ namespace ai
     // finding 4): the two rules are complements there, so pet Growl and the
     // hunter's own shots trading aggro flipped the kit every few seconds,
     // each flip rebuilding the combat engine. The kit now has to have been
-    // held kHunterKitMinDwellMs first (dwellElapsed). stepOutBlocked keeps
-    // the melee kit while this mob's failed step-out still stands and the
-    // mob is still inside the dead zone, so the stuck trade above cannot
-    // flip straight back into the same dead zone.
+    // held kHunterKitMinDwellMs first (dwellElapsed). stepOutBlocked used to
+    // hold the melee kit after the stuck trade; that trade is gone (#1018),
+    // so a mob off the hunter now always hands the ranged kit back after the
+    // dwell and the ranged kit's step-out moves the hunter out.
     inline bool ShouldSwitchToRanged(bool hasCloseKit, bool targetOffBot, bool immobilized,
         bool tooSlowToFollow, float distanceYd, bool hasAmmo,
         bool stepOutBlocked = false, bool dwellElapsed = true)
@@ -109,7 +110,8 @@ namespace ai
             return true;
         (void)tooSlowToFollow;
         (void)distanceYd;
-        return targetOffBot && !stepOutBlocked;
+        (void)stepOutBlocked;
+        return targetOffBot;
     }
 
     // Minimum time a kit is held before the next victim- or root-driven
@@ -118,15 +120,24 @@ namespace ai
     // One dead-zone step-out: the move gets this long to carry the hunter
     // out before it counts as failed.
     inline constexpr uint32_t kHunterStepOutWindowMs = 3000;
-    // A step-out episode is per mob and lasts this long: inside it the hunter
-    // does not step out again for that mob (a failed or undone step means
-    // melee instead), after it a fresh step-out is allowed.
+    // A step-out episode is per mob and lasts this long. Inside it a step
+    // that did not get the hunter out is retried, farther each time, up to
+    // kHunterStepOutMaxAttempts; after that the hunter holds the ranged kit
+    // (it never trades into melee for a mob that is not on it) until the
+    // episode runs out and a fresh one starts.
     inline constexpr uint32_t kHunterStepOutRetryMs = 10000;
-    // The step lands this far past the dead zone edge.
+    inline constexpr uint8_t kHunterStepOutMaxAttempts = 3;
+    // The step aims this far from the target (edge to edge): well clear of
+    // the 8 yd dead zone, so a small move of the mob or the tank does not put
+    // the hunter straight back inside (#1018; it used to aim edge + 3 yd).
+    // Each retry aims kHunterStepOutRetryExtraYd farther.
+    inline constexpr float kHunterStepOutTargetYd = 15.0f;
+    inline constexpr float kHunterStepOutRetryExtraYd = 5.0f;
+    // Floor for the aim: never less than this past the dead zone edge.
     inline constexpr float kHunterStepOutMarginYd = 3.0f;
     // Step length bounds: never a shuffle, never a run across the map.
     inline constexpr float kHunterStepOutMinYd = 4.0f;
-    inline constexpr float kHunterStepOutMaxYd = 15.0f;
+    inline constexpr float kHunterStepOutMaxYd = 20.0f;
 
     // Per-bot bookkeeping for the rules above (the "hunter kit state" value).
     // Times are WorldTimer ms, compared with wrap-safe uint32 subtraction;
@@ -136,6 +147,9 @@ namespace ai
         uint32_t lastKitSwitchMs = 0;
         uint64_t stepOutTarget = 0;
         uint32_t stepOutStartMs = 0;
+        // Current attempt inside the episode (1-based) and when it began.
+        uint8_t stepOutAttempt = 0;
+        uint32_t stepOutAttemptMs = 0;
     };
 
     inline bool HunterKitDwellElapsed(HunterKitState const& state, uint32_t nowMs)
@@ -154,28 +168,34 @@ namespace ai
             nowMs - state.stepOutStartMs < kHunterStepOutRetryMs;
     }
 
+    // Starts a step: a fresh episode for a new mob or after the episode ran
+    // out, otherwise the next (farther) attempt inside the open episode.
     inline void BeginHunterStepOut(HunterKitState& state, uint64_t target, uint32_t nowMs)
     {
-        state.stepOutTarget = target;
-        state.stepOutStartMs = nowMs ? nowMs : 1;
-    }
-
-    // Close kit: hold melee while this mob's step-out episode stands and the
-    // mob is still inside the dead zone (see ShouldSwitchToRanged).
-    inline bool HunterStepOutBlocked(HunterKitState const& state, uint64_t target, uint32_t nowMs,
-        bool inDeadZone)
-    {
-        return inDeadZone && HunterStepOutEpisodeOpen(state, target, nowMs);
+        uint32_t const stamp = nowMs ? nowMs : 1;
+        if (HunterStepOutEpisodeOpen(state, target, nowMs))
+        {
+            if (state.stepOutAttempt < 255)
+                ++state.stepOutAttempt;
+        }
+        else
+        {
+            state.stepOutTarget = target;
+            state.stepOutStartMs = stamp;
+            state.stepOutAttempt = 1;
+        }
+        state.stepOutAttemptMs = stamp;
     }
 
     // Ranged kit, mob inside the shot's dead zone:
     //  None    - not in the dead zone, or the mob is on the hunter (the
     //            melee switch / kite flee own that case).
-    //  StepOut - first time for this mob in the episode: step out once.
-    //  Hold    - the step is under way (moving, inside the window): let it
+    //  StepOut - no episode for this mob yet, or the last step did not get
+    //            the hunter out and attempts are left: step out (farther).
+    //  Hold    - a step is under way (moving, inside the window): let it
     //            finish, do not re-dispatch.
-    //  Stuck   - the step did not get the hunter out (no spot, arrived still
-    //            inside, or the window ran out): melee instead of fleeing again.
+    //  Stuck   - every attempt of this episode failed: hold the ranged kit
+    //            until the episode runs out. Never a melee trade (#1018).
     enum class HunterDeadZoneStep { None, StepOut, Hold, Stuck };
 
     inline HunterDeadZoneStep DecideHunterDeadZoneStep(HunterKitState const& state, uint64_t target,
@@ -185,21 +205,41 @@ namespace ai
             return HunterDeadZoneStep::None;
         if (!HunterStepOutEpisodeOpen(state, target, nowMs))
             return HunterDeadZoneStep::StepOut;
-        if (moving && nowMs - state.stepOutStartMs < kHunterStepOutWindowMs)
+        if (moving && nowMs - state.stepOutAttemptMs < kHunterStepOutWindowMs)
             return HunterDeadZoneStep::Hold;
+        if (state.stepOutAttempt < kHunterStepOutMaxAttempts)
+            return HunterDeadZoneStep::StepOut;
         return HunterDeadZoneStep::Stuck;
     }
 
-    // Straight-back step that lands kHunterStepOutMarginYd past the dead
-    // zone edge from edgeDistYd, clamped to [kHunterStepOutMinYd, kHunterStepOutMaxYd].
-    inline float HunterStepOutLength(float edgeDistYd, float minRangeYd)
+    // Straight-back step from edgeDistYd that lands kHunterStepOutTargetYd
+    // from the target (plus kHunterStepOutRetryExtraYd per retry; attempt is
+    // 1-based), clamped to [kHunterStepOutMinYd, kHunterStepOutMaxYd]. The
+    // landing never aims inside the dead zone plus kHunterStepOutMarginYd,
+    // whatever the shot's minimum range is.
+    inline float HunterStepOutLength(float edgeDistYd, float minRangeYd, uint8_t attempt = 1)
     {
-        float const need = minRangeYd + kHunterStepOutMarginYd - edgeDistYd;
+        float aim = kHunterStepOutTargetYd + kHunterStepOutRetryExtraYd * float(attempt > 1 ? attempt - 1 : 0);
+        if (aim < minRangeYd + kHunterStepOutMarginYd)
+            aim = minRangeYd + kHunterStepOutMarginYd;
+        float const need = aim - edgeDistYd;
         if (need < kHunterStepOutMinYd)
             return kHunterStepOutMinYd;
         if (need > kHunterStepOutMaxYd)
             return kHunterStepOutMaxYd;
         return need;
+    }
+
+    // Explosive / frost / immolation trap on the current target: the hunter
+    // lays it at its own feet after Feign Death and no longer walks to the
+    // target first (#1018: 22-29 "reach melee" walks per Zul'Farrak run, 0
+    // traps cast). So the trap is only laid when the target is already in
+    // melee reach of the hunter (edge to edge) - the solo case, a mob on the
+    // hunter. A mob the tank holds 12 yd away gets no trap and no walk.
+    inline constexpr float kHunterTrapReachYd = 5.0f;
+    inline constexpr bool HunterTrapTargetInReach(float edgeDistYd)
+    {
+        return edgeDistYd <= kHunterTrapReachYd;
     }
 
     // Raptor Strike / Mongoose Bite / Wing Clip against a mob that is already

@@ -260,7 +260,7 @@ private:
     }
 
     // The dead-zone step-out verdict (HunterSwitchPolicy.h) for the current
-    // target; shared by the step-out row and the stuck melee trade.
+    // target; shared by the step-out row and the step-out action.
     inline HunterDeadZoneStep HunterDeadZoneStepFor(PlayerbotAI* ai, Unit* target)
     {
         HunterKitState* state = GetHunterKitState(ai);
@@ -298,14 +298,13 @@ private:
             bool const targetOffBot = target->GetVictim() != bot;
             bool const immobilized = IsImmobilizedStateCompat(target);
             bool const tooSlowToFollow = target->GetSpeed(MOVE_RUN) <= (bot->GetSpeed(MOVE_RUN) / 2) && !((!bot->GetPet() || bot->GetPet()->IsDead()) && target->IsCreature() && target->GetHealthPercent() < 50.f && target->GetHealth() < bot->GetHealth());
-            // Kit dwell and the failed-step-out hold (HunterSwitchPolicy.h).
+            // Kit dwell (HunterSwitchPolicy.h). There is no failed-step-out
+            // hold any more: the ranged kit never trades into melee for a mob
+            // off the hunter (#1018), so there is nothing to flip back into.
             HunterKitState* state = GetHunterKitState(ai);
-            uint32 const nowMs = WorldTimer::getMSTime();
-            bool const dwellElapsed = !state || HunterKitDwellElapsed(*state, nowMs);
-            bool const stepOutBlocked = state && HunterStepOutBlocked(*state,
-                target->GetObjectGuid().GetRawValue(), nowMs, HunterTargetInDeadZone(ai, target));
+            bool const dwellElapsed = !state || HunterKitDwellElapsed(*state, WorldTimer::getMSTime());
             return ai::ShouldSwitchToRanged(true, targetOffBot, immobilized, tooSlowToFollow, distance, true,
-                stepOutBlocked, dwellElapsed);
+                false, dwellElapsed);
         }
     };
 
@@ -348,8 +347,9 @@ private:
     // anyone else holds it): one step straight out of the shot's minimum
     // range per mob and episode (mod-playerbots 79bd428 steps out with
     // MoveAway / disengage the same way), held while the step is under way.
-    // If the step does not get the hunter out, the verdict turns Stuck and
-    // SwitchToMeleeTrigger trades into melee instead of fleeing again.
+    // If the step does not get the hunter out it is retried farther (up to
+    // kHunterStepOutMaxAttempts per episode); the hunter never trades into
+    // melee for this mob (#1018).
     class HunterDeadZoneStepOutTrigger : public Trigger
     {
     public:
@@ -413,14 +413,13 @@ private:
             // Same true distance as the ranged half (see above): one call for
             // both switches and the telemetry row.
             float const distance = bot->GetDistance(target);
-            // A failed dead-zone step-out trades too, whoever holds the mob;
-            // everything else waits for the kit dwell (HunterSwitchPolicy.h).
+            // Only a mob on the hunter trades, after the kit dwell; a failed
+            // dead-zone step-out for a mob someone else holds is retried
+            // farther, not answered with melee (HunterSwitchPolicy.h, #1018).
             HunterKitState* state = GetHunterKitState(ai);
             bool const dwellElapsed = !state || HunterKitDwellElapsed(*state, WorldTimer::getMSTime());
-            bool const stuck = HunterHasLoadedRangedWeapon(ai) &&
-                HunterDeadZoneStepFor(ai, target) == HunterDeadZoneStep::Stuck;
             return ai::ShouldSwitchToMelee(true, target->GetVictim() == bot,
-                IsImmobilizedStateCompat(target), fastOrFinisher, distance, true, stuck, dwellElapsed);
+                IsImmobilizedStateCompat(target), fastOrFinisher, distance, true, false, dwellElapsed);
         }
     };
 
