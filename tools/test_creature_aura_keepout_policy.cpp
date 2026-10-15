@@ -781,6 +781,36 @@ int main()
         CHECK(CreatureAuraSnapshotDriftFor(3000) == kCreatureAuraSnapshotMaxDriftYd);
         CHECK(kCreatureAuraSnapshotMaxDriftYd == 3.0f * kCreatureAuraSnapshotDriftYd);
 
+        // Review of 0cbfa6a8: only a creature moving at the visit gets the age
+        // drift. A still sludge in a 1 s old snapshot (reused on a busy tick)
+        // keeps its exact 9 yd ring: a landing 9.5 yd away is allowed; the
+        // same sludge moving at the visit counts out to 9 + 7 yd.
+        {
+            CreatureAuraSnapshotCache still;
+            CreatureAuraHazardEntry sludge{ 0xE0ull, 109.5f, 1.0f, 0.0f, hazard };
+            sludge.moving = false;
+            world[16] = { sludge };
+            CreatureAuraSnapshotBeginTick(still);
+            CreatureAuraSnapshotRinged(still, key(16, 91.0f, 1.0f), 70000, 100.0f, 1.0f, 0.0f, none, fillFor(16));
+            // One second later, budget spent by four other cells.
+            CreatureAuraSnapshotBeginTick(still);
+            for (int cell = 0; cell < 4; ++cell)
+                CreatureAuraSnapshotRinged(still, key(16, 30.0f * float(cell) + 200.0f, 1.0f), 71000,
+                    30.0f * float(cell) + 201.0f, 1.0f, 0.0f, none, fillFor(16));
+            CreatureAuraSnapshotView sv1;
+            CHECK(CreatureAuraSnapshotRinged(still, key(16, 91.0f, 1.0f), 71000, 100.0f, 1.0f, 0.0f, none, fillFor(16), &sv1) == 0);
+            CHECK(sv1.budgetMiss && sv1.snap && std::fabs(sv1.driftYd - 7.0f) < 0.01f); // 1 s old, 7 yd drift unused
+            CHECK(CreatureAuraSnapshotRinged(still, key(16, 91.0f, 1.0f), 71000, 101.0f, 1.0f, 0.0f, none, fillFor(16)) == 0xE0ull); // 8.5 yd: in the ring
+            CHECK(CreatureAuraLandingRinged(still, key(16, 91.0f, 1.0f), 71000, 100.0f, 1.0f, 0.0f, none, fillFor(16),
+                [](float, float) { return std::vector<CreatureAuraHazardEntry>(); }) == 0); // gap closer allowed
+            // The same sludge, moving at the visit.
+            CreatureAuraSnapshotCache mover;
+            sludge.moving = true;
+            world[16] = { sludge };
+            CreatureAuraSnapshotRinged(mover, key(16, 91.0f, 1.0f), 70000, 100.0f, 1.0f, 0.0f, none, fillFor(16));
+            CHECK(CreatureAuraSnapshotRinged(mover, key(16, 91.0f, 1.0f), 70400, 100.0f, 1.0f, 0.0f, none, fillFor(16)) == 0xE0ull);
+        }
+
         // Clock wrap: the entry goes stale on time, it never sticks.
         CreatureAuraSnapshotCache wrap;
         CreatureAuraSnapshotView wv;
@@ -855,6 +885,15 @@ int main()
         };
         CHECK(CreatureAuraLandingRinged(busy, key(15, cx5, 1.0f), 60000, landX, landY, 0.0f, none, fillFor(15), lookupAt(9.5f)) == 0);
         CHECK(CreatureAuraLandingRinged(busy, key(15, cx5, 1.0f), 60000, landX, landY, 0.0f, { 0xD1ull }, fillFor(15), lookupAt(5.0f)) == 0);
+        // Same height filter as the snapshot: a sludge 10 yd above the landing
+        // (another floor) does not veto, one 4 yd above does.
+        auto lookupAbove = [=](float dz)
+        {
+            return [=](float, float)
+                { return std::vector<CreatureAuraHazardEntry>{ { 0xD2ull, landX + 5.0f, landY, dz, hazard } }; };
+        };
+        CHECK(CreatureAuraLandingRinged(busy, key(15, cx5, 1.0f), 60000, landX, landY, 0.0f, none, fillFor(15), lookupAbove(10.0f)) == 0);
+        CHECK(CreatureAuraLandingRinged(busy, key(15, cx5, 1.0f), 60000, landX, landY, 0.0f, none, fillFor(15), lookupAbove(4.0f)) == 0xD2ull);
         // With a usable snapshot the landing never looks up.
         lookups = 0;
         CHECK(CreatureAuraLandingRinged(busy, key(15, 1.0f, 1.0f), 60000, 2.0f, 1.0f, 0.0f, none, fillFor(15), lookup,

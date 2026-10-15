@@ -301,7 +301,8 @@ bool PossibleTriggersValue::SnapshotRingedAt(PlayerbotAI* ai, float x, float y, 
         for (Unit* unit : nearby)
             if (CreatureAuraKeepout const* row = KeepoutFor(unit))
                 out.push_back({ unit->GetObjectGuid().GetRawValue(), unit->GetPositionX(), unit->GetPositionY(),
-                    unit->GetPositionZ(), CreatureAuraHazardRadius(*row) });
+                    unit->GetPositionZ(), CreatureAuraHazardRadius(*row),
+                    !unit->IsStopped() || unit->GetMotionMaster()->GetCurrentMovementGeneratorType() != IDLE_MOTION_TYPE });
         hazardSnapshotRefreshCount.fetch_add(1, std::memory_order_relaxed);
         return out;
     };

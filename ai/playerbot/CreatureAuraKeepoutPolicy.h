@@ -393,8 +393,9 @@ namespace ai
     // bot's live list (and the target and the explicit attack target) are
     // skipped, because the live check already judged them at their exact
     // ring and current position. A snapshot-only creature can have moved
-    // since the visit, so its ring is widened by the drift: 3.5 yd per
-    // 500 ms of the snapshot's age (run speed), up to 10.5 yd. It
+    // since the visit if it was moving then, so its ring is widened by the
+    // drift: 3.5 yd per 500 ms of the snapshot's age (run speed), up to
+    // 10.5 yd; a creature that stood still keeps its exact ring. It
     // only counts when it stands within kCreatureAuraSnapshotHeightYd of the
     // point's height (a creature on another floor does not ring it).
     // No snapshot (the refresh budget is spent and there is no entry younger
@@ -418,6 +419,10 @@ namespace ai
         uint64_t guidRaw;
         float x, y, z;
         float hazardRadius; // CreatureAuraHazardRadius(row)
+        // Moving at the visit (moving now, or any movement generator but
+        // idle). Only a moving creature gets the age drift; a still one keeps
+        // its exact ring at any age. Defaults to moving (the safe side).
+        bool moving = true;
     };
 
     struct CreatureAuraSnapshotKey
@@ -569,20 +574,21 @@ namespace ai
         return view;
     }
 
-    // The first creature in `entries` (not in `skip`) whose ring widened by
-    // `driftYd` holds (x, y); with `checkHeight`, only within
-    // kCreatureAuraSnapshotHeightYd of `z`. 0 when none.
+    // The first creature in `entries` (not in `skip`), within
+    // kCreatureAuraSnapshotHeightYd of `z`, whose ring holds (x, y): widened
+    // by `driftYd` when it was moving at the visit, its exact ring when it
+    // stood still. 0 when none.
     inline uint64_t CreatureAuraEntriesRingAt(std::vector<CreatureAuraHazardEntry> const& entries, float x, float y,
-        float z, bool checkHeight, float driftYd, std::vector<uint64_t> const& skip)
+        float z, float driftYd, std::vector<uint64_t> const& skip)
     {
         for (CreatureAuraHazardEntry const& e : entries)
         {
             if (e.guidRaw == 0 || std::find(skip.begin(), skip.end(), e.guidRaw) != skip.end())
                 continue;
-            if (checkHeight && std::fabs(e.z - z) > kCreatureAuraSnapshotHeightYd)
+            if (std::fabs(e.z - z) > kCreatureAuraSnapshotHeightYd)
                 continue;
             float const dx = e.x - x, dy = e.y - y;
-            if (std::sqrt(dx * dx + dy * dy) < e.hazardRadius + driftYd)
+            if (std::sqrt(dx * dx + dy * dy) < e.hazardRadius + (e.moving ? driftYd : 0.0f))
                 return e.guidRaw;
         }
         return 0;
@@ -604,7 +610,7 @@ namespace ai
     {
         if (!CreatureAuraSnapshotUsable(view, x, y))
             return 0;
-        return CreatureAuraEntriesRingAt(view.snap->entries, x, y, z, true, view.driftYd, skip);
+        return CreatureAuraEntriesRingAt(view.snap->entries, x, y, z, view.driftYd, skip);
     }
 
     // The whole snapshot check, the seam the game code and the tests share:
@@ -625,9 +631,9 @@ namespace ai
     // usable; otherwise (the tick's refresh budget spent with no entry young
     // enough, or the landing outside its cover) #882's one bounded lookup
     // around the landing: `lookup(x, y)` returns the listed creatures within
-    // the largest hazard radius of it, judged at their exact ring (live, 2D,
-    // as #882). A charge never fails open on a busy tick. `lookedUp` reports
-    // whether the lookup ran.
+    // the largest hazard radius of it, judged at their exact ring (live) and
+    // with the same height filter as the snapshot. A charge never fails
+    // open on a busy tick. `lookedUp` reports whether the lookup ran.
     template <class Fill, class Lookup>
     inline uint64_t CreatureAuraLandingRinged(CreatureAuraSnapshotCache& cache, CreatureAuraSnapshotKey const& key,
         uint32_t nowMs, float x, float y, float z, std::vector<uint64_t> const& skip, Fill&& fill, Lookup&& lookup,
@@ -643,6 +649,6 @@ namespace ai
         if (lookedUp)
             *lookedUp = true;
         std::vector<CreatureAuraHazardEntry> const live = lookup(x, y);
-        return CreatureAuraEntriesRingAt(live, x, y, z, false, 0.0f, skip);
+        return CreatureAuraEntriesRingAt(live, x, y, z, 0.0f, skip);
     }
 } // namespace ai
