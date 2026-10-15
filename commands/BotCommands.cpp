@@ -4286,8 +4286,13 @@ static bool HandleRaidAction(ChatHandler* handler, BotCommandContext const& cont
                 if (ai->HasStrategy(strategy, BotState::BOT_STATE_COMBAT))
                     active += (active.empty() ? "" : ",") + std::string(strategy);
             }
+            // No raid strategy active: say whether the bot is in an instance instead of always "outdoor".
+            Map* statusMap = bot->GetMap();
+            std::string const idle = statusMap && statusMap->IsDungeon()
+                ? "instance map " + std::to_string(bot->GetMapId()) + ", no raid strategy"
+                : "outdoor";
             handler->PSendSysMessage("TBM:ACTION_ACK|raid status|bot:%s|1|%s",
-                bot->GetName(), active.empty() ? "outdoor" : active.c_str());
+                bot->GetName(), active.empty() ? idle.c_str() : active.c_str());
             ++count;
         }
         if (!count)

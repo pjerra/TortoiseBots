@@ -72,7 +72,7 @@ The modern control plane operates on **player intent**. Instead of micromanaging
 | `.bot action learn` | None | Commands scoped bots to learn spells from nearby trainers. |
 | `.bot action trade` | Companion Bot Target | Opens trade with the targeted companion bot. |
 | `.bot action ready` | None | Initiates a group ready check across all party bots. |
-| `.bot action raid status` | None | Reports per-bot raid strategy state (`molten core`, `onyxia`, `four horseman`, `solnius`, … or `outdoor`). |
+| `.bot action raid status` | None | Reports per-bot raid strategy state (`molten core`, `onyxia`, `four horseman`, `solnius`, …), or `instance map <id>, no raid strategy` in an instance with none active, or `outdoor`. |
 | `.bot action raid tankface` | Dragon Target | Orders tank bots to drag the current dragon boss away from the raid anchor so breath/cleave miss the raid. |
 | `.bot action raid douse` | None | Orders scoped bots to douse nearby MC runes (Eternal Quintessence first, Aqual fallback). |
 | `.bot action raid custom status` | None | Reports per-bot custom Turtle raid state (`emerald sanctum`, `lower karazhan`, `karazhan crypt`, or `off`). |
