@@ -9,6 +9,8 @@
 #include "Maps/GridNotifiersImpl.h"
 #include "Maps/CellImpl.h"
 
+#include <atomic>
+
 using namespace ai;
 using namespace MaNGOS;
 
@@ -225,9 +227,9 @@ Unit* PossibleTriggersValue::KeepoutRingAt(PlayerbotAI* ai, float x, float y, Un
 
 namespace
 {
-    // Listed keep-out entries of one map within `radius` of the bot (2D,
+    // Listed keep-out entries of one map within `radius` of a point (2D,
     // centre measure, the measure the ring uses).
-    struct ListedKeepoutNearBot
+    struct ListedKeepoutNearPoint
     {
         uint32 mapId;
         float x, y, radius;
@@ -239,7 +241,17 @@ namespace
             return dx * dx + dy * dy < radius * radius;
         }
     };
+
+    // Shared by every bot. World thread only: bot AI updates run in the
+    // module's world-thread pass (BotManager), never on a map thread.
+    CreatureAuraSnapshotCache& KeepoutSnapshotCache()
+    {
+        static CreatureAuraSnapshotCache cache;
+        return cache;
+    }
 }
+
+std::atomic<uint32_t> PossibleTriggersValue::hazardSnapshotRefreshCount{ 0 };
 
 CreatureAuraHazardSnapshot const* PossibleTriggersValue::HazardSnapshot(PlayerbotAI* ai)
 {
@@ -250,26 +262,27 @@ CreatureAuraHazardSnapshot const* PossibleTriggersValue::HazardSnapshot(Playerbo
     float const maxHazard = CreatureAuraMaxHazardRadiusOnMap(mapId);
     if (maxHazard <= 0.0f)
         return nullptr; // no listed creature on this map: never a grid visit
-    PossibleTriggersValue* self = dynamic_cast<PossibleTriggersValue*>(
-        ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid>>("possible triggers"));
-    if (!self)
+    Map* map = bot->GetMap();
+    if (!map)
         return nullptr;
-    float const bx = bot->GetPositionX(), by = bot->GetPositionY();
-    CreatureAuraSnapshotEnsure(self->hazardSnapshot, mapId, bx, by, WorldTimer::getMSTime(),
-        [&](std::vector<CreatureAuraHazardEntry>& out)
+    CreatureAuraSnapshotKey const key =
+        CreatureAuraSnapshotKeyFor(mapId, bot->GetInstanceId(), bot->GetPositionX(), bot->GetPositionY());
+    return CreatureAuraSnapshotCacheGet(KeepoutSnapshotCache(), key, WorldTimer::getMSTime(),
+        [&](std::vector<CreatureAuraHazardEntry>& out, float cx, float cy)
         {
-            // The one bounded grid visit per bot per kCreatureAuraSnapshotMs.
+            // The one bounded grid visit per (map, instance, cell) per
+            // kCreatureAuraSnapshotMs, shared by every bot standing there.
+            hazardSnapshotRefreshCount.fetch_add(1, std::memory_order_relaxed);
             float const radius = CreatureAuraSnapshotRadius(maxHazard);
             std::list<Unit*> nearby;
-            ListedKeepoutNearBot check{ mapId, bx, by, radius };
-            MaNGOS::UnitListSearcher<ListedKeepoutNearBot> searcher(nearby, check);
-            Cell::VisitAllObjects(bot, searcher, radius);
+            ListedKeepoutNearPoint check{ mapId, cx, cy, radius };
+            MaNGOS::UnitListSearcher<ListedKeepoutNearPoint> searcher(nearby, check);
+            Cell::VisitAllObjects(cx, cy, map, searcher, radius);
             for (Unit* unit : nearby)
                 if (CreatureAuraKeepout const* row = KeepoutFor(unit))
                     out.push_back({ unit->GetObjectGuid().GetRawValue(), unit->GetPositionX(), unit->GetPositionY(),
                         CreatureAuraHazardRadius(*row) });
         });
-    return &self->hazardSnapshot;
 }
 
 bool PossibleTriggersValue::SnapshotRingedAt(PlayerbotAI* ai, float x, float y, Unit* skip)
@@ -291,7 +304,7 @@ bool PossibleTriggersValue::EndPointRinged(PlayerbotAI* ai, float x, float y, Un
     if (!sPlayerbotAIConfig.avoidCreatureAuras || !ai)
         return false;
     // `extra` (the current target) and the cached list, live; then the
-    // bot's hazard snapshot for rings past the list.
+    // shared hazard snapshot for rings past the list.
     if (KeepoutRingAt(ai, x, y, extra))
         return true;
     return SnapshotRingedAt(ai, x, y, extra);
@@ -355,7 +368,7 @@ bool PossibleTriggersValue::GapCloserIntoKeepout(PlayerbotAI* ai, std::string co
     // Fast path: the bot's cached 15 yd list, read fresh every time.
     if (KeepoutRingAt(ai, lx, ly))
         return CreatureAuraGapCloserVetoed(false, true, isTank, ordered);
-    // Rings past the list: the bot's hazard snapshot (no grid visit of its
+    // Rings past the list: the shared hazard snapshot (no grid visit of its
     // own). The target is checked live above.
     bool const landingInRing = SnapshotRingedAt(ai, lx, ly, target);
     return CreatureAuraGapCloserVetoed(false, landingInRing, isTank, ordered);

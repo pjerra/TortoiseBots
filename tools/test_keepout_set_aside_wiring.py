@@ -125,14 +125,14 @@ class KeepoutSetAsideWiringTest(unittest.TestCase):
         self.assertNotIn("GetErrorAtShapeshiftedCast", ready)
         self.assertNotIn("Cell::", ready)
         header = (VALUES / "PossibleTargetsValue.h").read_text()
-        self.assertIn("CreatureAuraHazardSnapshot hazardSnapshot;", header)
         self.assertNotIn("LandingMemo", header)
         self.assertNotIn("never per tick", header)
 
     def test_end_points_and_landings_read_one_hazard_snapshot(self):
-        # Review of #995: nothing per bot tick scans the world (AGENTS.md).
-        # End points past the 15 yd list and gap-closer landings read one
-        # per-bot snapshot, refreshed by at most one grid visit per window.
+        # Reviews of #995: nothing per bot tick scans the world (AGENTS.md).
+        # End points past the 15 yd list and gap-closer landings read a
+        # snapshot shared per (map, instance, cell), refreshed by at most one
+        # grid visit per window, counted on the BOTPERF line.
         move = (ROOT / "ai/playerbot/strategy/actions/MovementActions.cpp").read_text()
         end = body(move, "bool MovementAction::EndPointInCreatureAuraKeepout(", "\n}\n")
         self.assertIn("PossibleTriggersValue::EndPointRinged(ai, x, y, ", end)
@@ -146,14 +146,22 @@ class KeepoutSetAsideWiringTest(unittest.TestCase):
         self.assertIn("CreatureAuraSnapshotCovers(", ringed)
         self.assertNotIn("Cell::", ringed)
         snap = body(values, "CreatureAuraHazardSnapshot const* PossibleTriggersValue::HazardSnapshot(", "\n}\n")
-        # No visit on a map without a listed row; the one visit sits inside
-        # the refresh callback of CreatureAuraSnapshotEnsure.
-        self.assertLess(snap.index("if (maxHazard <= 0.0f)"), snap.index("CreatureAuraSnapshotEnsure("))
-        self.assertLess(snap.index("CreatureAuraSnapshotEnsure("), snap.index("Cell::VisitAllObjects("))
+        # No visit on a map without a listed row; the key carries the
+        # instance; the one visit sits inside the shared cache's refresh.
+        self.assertLess(snap.index("if (maxHazard <= 0.0f)"), snap.index("CreatureAuraSnapshotCacheGet("))
+        self.assertIn("CreatureAuraSnapshotKeyFor(mapId, bot->GetInstanceId(), ", snap)
+        self.assertIn("CreatureAuraSnapshotCacheGet(KeepoutSnapshotCache(), key, ", snap)
+        self.assertLess(snap.index("CreatureAuraSnapshotCacheGet("), snap.index("Cell::VisitAllObjects("))
         self.assertEqual(snap.count("Cell::VisitAllObjects("), 1)
+        self.assertIn("Cell::VisitAllObjects(cx, cy, map, searcher, radius)", snap)
+        self.assertIn("hazardSnapshotRefreshCount.fetch_add(1", snap)
         self.assertIn("KeepoutFor(unit)", snap)
         self.assertEqual(values.count("Cell::VisitAllObjects("), 3)  # two FindUnits + the snapshot
         self.assertNotIn("AllCreaturesOfEntryInRange", values)
+        self.assertIn("static CreatureAuraSnapshotCache cache;", values)
+        manager = (ROOT / "runtime/BotManager.cpp").read_text()
+        self.assertIn("PossibleTriggersValue::hazardSnapshotRefreshCount.exchange(0", manager)
+        self.assertIn("keepoutScans=%u", manager)
 
 
 if __name__ == "__main__":

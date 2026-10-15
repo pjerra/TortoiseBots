@@ -20,6 +20,8 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <map>
+#include <tuple>
 #include <vector>
 
 namespace ai
@@ -320,7 +322,7 @@ namespace ai
     // keeps today's behaviour.
     // A gap closer fires from 8-25 yd, and set behind or rear flank end next
     // to a target up to 15 yd away, beyond the bot's cached 15 yd list, so
-    // those points are also checked against the bot's hazard snapshot below.
+    // those points are also checked against the shared hazard snapshot below.
     inline float CreatureAuraMaxHazardRadiusOnMap(uint32_t mapId)
     {
         float radius = 0.0f;
@@ -374,21 +376,27 @@ namespace ai
         return true;
     }
 
-    // ---- Hazard snapshot (review of #995) --------------------------------
+    // ---- Shared hazard snapshot (reviews of #995) --------------------------
     //
     // End points and gap-closer landings can lie past the bot's cached 15 yd
-    // list, and nothing per bot tick may scan the world (AGENTS.md). Each bot
-    // keeps one snapshot of the listed creatures that carry their aura around
-    // it: at most one bounded grid visit per bot per kCreatureAuraSnapshotMs,
-    // and none on a map without a listed row. Every end-point and landing
-    // check in that window reads the snapshot. A creature can move up to
+    // list, and nothing per bot tick may scan the world (AGENTS.md). The
+    // listed creatures carrying their aura are kept in snapshots shared by
+    // every bot, one per (map, instance, 30 yd cell of the bot's position):
+    // at most one bounded grid visit per cell every kCreatureAuraSnapshotMs,
+    // so a party standing together pays one visit, not five, and none on a
+    // map without a listed row. Every end-point and landing check reads the
+    // snapshot of the bot's current cell. A creature can move up to
     // kCreatureAuraSnapshotDriftYd (run speed over the window) after the
     // visit, so each snapshot ring is widened by that much: a stale snapshot
     // never lets the bot end inside a ring. No negative cache: a point the
-    // snapshot does not cover is not called clear by it.
+    // snapshot does not cover is not called clear by it. The instance is part
+    // of the key, so two instances of one map never share a snapshot, and an
+    // entry only ever answers for the instance it was taken in.
     constexpr uint32_t kCreatureAuraSnapshotMs = 500;
     constexpr float kCreatureAuraSnapshotDriftYd = 3.5f;  // 7 yd/s run speed x 0.5 s
     constexpr float kCreatureAuraSnapshotReachYd = 30.0f; // 15 yd list + 15 yd end point / landing
+    constexpr float kCreatureAuraSnapshotCellYd = 30.0f;
+    constexpr uint32_t kCreatureAuraSnapshotPruneMs = 10 * kCreatureAuraSnapshotMs;
 
     struct CreatureAuraHazardEntry
     {
@@ -397,53 +405,105 @@ namespace ai
         float hazardRadius; // CreatureAuraHazardRadius(row)
     };
 
+    struct CreatureAuraSnapshotKey
+    {
+        uint32_t mapId;
+        uint32_t instanceId;
+        int32_t cellX, cellY;
+        bool operator<(CreatureAuraSnapshotKey const& o) const
+        {
+            return std::tie(mapId, instanceId, cellX, cellY) < std::tie(o.mapId, o.instanceId, o.cellX, o.cellY);
+        }
+    };
+
+    inline CreatureAuraSnapshotKey CreatureAuraSnapshotKeyFor(uint32_t mapId, uint32_t instanceId, float x, float y)
+    {
+        return { mapId, instanceId, int32_t(std::floor(x / kCreatureAuraSnapshotCellYd)),
+            int32_t(std::floor(y / kCreatureAuraSnapshotCellYd)) };
+    }
+
+    inline void CreatureAuraSnapshotCellCentre(CreatureAuraSnapshotKey const& key, float& cx, float& cy)
+    {
+        cx = (float(key.cellX) + 0.5f) * kCreatureAuraSnapshotCellYd;
+        cy = (float(key.cellY) + 0.5f) * kCreatureAuraSnapshotCellYd;
+    }
+
+    // Points a bot anywhere in the cell may check: within the reach of any
+    // spot in the cell, i.e. half the cell diagonal plus the reach from the
+    // cell centre.
+    inline float CreatureAuraSnapshotCoverYd()
+    {
+        return kCreatureAuraSnapshotCellYd * 0.70710678f + kCreatureAuraSnapshotReachYd;
+    }
+
+    // Grid-visit radius around the cell centre: every creature whose widened
+    // ring can hold a covered point.
+    inline float CreatureAuraSnapshotRadius(float maxHazardRadius)
+    {
+        return CreatureAuraSnapshotCoverYd() + maxHazardRadius + kCreatureAuraSnapshotDriftYd;
+    }
+
     struct CreatureAuraHazardSnapshot
     {
         bool valid = false;
-        uint32_t mapId = 0;
         uint32_t atMs = 0;
-        float cx = 0.0f, cy = 0.0f; // bot position at the visit
+        float cx = 0.0f, cy = 0.0f; // cell centre
         std::vector<CreatureAuraHazardEntry> entries;
     };
 
-    // Grid-visit radius around the bot: every creature whose widened ring
-    // can hold a point within the reach of the bot.
-    inline float CreatureAuraSnapshotRadius(float maxHazardRadius)
-    {
-        return kCreatureAuraSnapshotReachYd + maxHazardRadius + kCreatureAuraSnapshotDriftYd;
-    }
-
     // Unsigned difference, so the wrap of the millisecond clock does not keep
     // a snapshot alive.
-    inline bool CreatureAuraSnapshotStale(CreatureAuraHazardSnapshot const& snap, uint32_t mapId, uint32_t nowMs)
+    inline bool CreatureAuraSnapshotStale(CreatureAuraHazardSnapshot const& snap, uint32_t nowMs)
     {
-        return !snap.valid || snap.mapId != mapId || uint32_t(nowMs - snap.atMs) >= kCreatureAuraSnapshotMs;
+        return !snap.valid || uint32_t(nowMs - snap.atMs) >= kCreatureAuraSnapshotMs;
     }
 
-    // Refresh through `fill` (the one grid visit) only when stale. Returns
-    // true when it refreshed. `fill(entries)` appends the live entries.
-    template <class Fill>
-    inline bool CreatureAuraSnapshotEnsure(CreatureAuraHazardSnapshot& snap, uint32_t mapId, float botX,
-        float botY, uint32_t nowMs, Fill&& fill)
-    {
-        if (!CreatureAuraSnapshotStale(snap, mapId, nowMs))
-            return false;
-        snap.entries.clear();
-        fill(snap.entries);
-        snap.valid = true;
-        snap.mapId = mapId;
-        snap.atMs = nowMs;
-        snap.cx = botX;
-        snap.cy = botY;
-        return true;
-    }
-
-    // The snapshot holds every creature whose widened ring can reach a point
-    // within kCreatureAuraSnapshotReachYd of where the bot stood at the visit.
     inline bool CreatureAuraSnapshotCovers(CreatureAuraHazardSnapshot const& snap, float x, float y)
     {
         float const dx = x - snap.cx, dy = y - snap.cy;
-        return snap.valid && dx * dx + dy * dy <= kCreatureAuraSnapshotReachYd * kCreatureAuraSnapshotReachYd;
+        float const cover = CreatureAuraSnapshotCoverYd();
+        return snap.valid && dx * dx + dy * dy <= cover * cover;
+    }
+
+    // The shared cache (world thread only: every bot AI update runs in the
+    // module's world-thread pass).
+    struct CreatureAuraSnapshotCache
+    {
+        std::map<CreatureAuraSnapshotKey, CreatureAuraHazardSnapshot> entries;
+        uint32_t lastPruneMs = 0;
+        uint32_t refreshes = 0; // grid visits made, for the perf line
+    };
+
+    // The snapshot for `key`, refreshed through `fill(entries, cx, cy)` (the
+    // one grid visit around the cell centre) only when stale. Entries unused
+    // for kCreatureAuraSnapshotPruneMs are dropped, so the cache stays as
+    // small as the cells bots stand in on listed maps.
+    template <class Fill>
+    inline CreatureAuraHazardSnapshot const* CreatureAuraSnapshotCacheGet(CreatureAuraSnapshotCache& cache,
+        CreatureAuraSnapshotKey const& key, uint32_t nowMs, Fill&& fill)
+    {
+        if (uint32_t(nowMs - cache.lastPruneMs) >= kCreatureAuraSnapshotPruneMs)
+        {
+            for (auto it = cache.entries.begin(); it != cache.entries.end();)
+            {
+                if (uint32_t(nowMs - it->second.atMs) >= kCreatureAuraSnapshotPruneMs)
+                    it = cache.entries.erase(it);
+                else
+                    ++it;
+            }
+            cache.lastPruneMs = nowMs;
+        }
+        CreatureAuraHazardSnapshot& snap = cache.entries[key];
+        if (CreatureAuraSnapshotStale(snap, nowMs))
+        {
+            CreatureAuraSnapshotCellCentre(key, snap.cx, snap.cy);
+            snap.entries.clear();
+            fill(snap.entries, snap.cx, snap.cy);
+            snap.valid = true;
+            snap.atMs = nowMs;
+            ++cache.refreshes;
+        }
+        return &snap;
     }
 
     // The snapshot creature whose ring, widened by the drift, holds (x, y);
