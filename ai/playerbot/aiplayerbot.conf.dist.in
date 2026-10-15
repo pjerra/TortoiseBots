@@ -487,6 +487,7 @@ AiPlayerbot.TravelPickBudgetUs = 4000
 # Size cap of one trace file in MiB (clamped to 1..1024). When it is reached the
 # run ends (end reason size_cap) with its end record intact.
 #AiPlayerbot.RunTrace.MaxFileMb = 64
+
 # Issue #1012: `.bot cmd gossip <npc entry> <bot> <option>` lets a commanded bot
 # talk to an NPC and pick a gossip option (needs AiPlayerbot.RemoteCommander = 1
 # and a binding). A gossip option can do anything its script says (take money,
