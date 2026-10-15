@@ -15,8 +15,10 @@ checks pin how the glue calls the tested parts:
 - ResolveBots() picks its source with PickScopeSource(): a party run whose
   group is gone has no bots; it does not shrink to the anchor bot.
 - Ending a run never waits for the disk: Finish() only queues the end marker;
-  Update() polls the writer and detaches the listeners; Shutdown() is the only
-  wait, bounded by kShutdownFlushMs.
+  Update() polls the writer and detaches the listeners; Shutdown() lets a busy
+  writer go, and Initialize() (server start) marks the summaries of runs that
+  were never finalised "incomplete". A failed end is logged and shown by
+  Status().
 - The command glue asks MayRecordBot (with the commander binding),
   MayStartTrace (GmOnly) and MaySeeRunDetail.
 - Every NoteOutcome site in the engine walk reports to the listeners on the
@@ -134,7 +136,7 @@ class EndingNeverWaitsTest(unittest.TestCase):
     def test_update_polls_the_writer_and_detaches(self):
         body = function_body(self.src, "void RunTraceService::Update(")
         self.assertIn("writer_.Finished()", body)
-        self.assertIn("CompleteFinish(false)", body)
+        self.assertIn("CompleteFinish();", body)
         self.assertIn("DetachAllListeners()", body)
         self.assertLess(body.index("DetachAllListeners()"), body.index("if (!Active())"),
                         "the listeners are detached on the tick after a run ends, active or not")
@@ -146,13 +148,31 @@ class EndingNeverWaitsTest(unittest.TestCase):
         self.assertEqual(len(calls), 1)
         self.assertTrue(start <= calls[0] < start + len(update))
 
-    def test_shutdown_is_the_only_bounded_wait(self):
+    def test_shutdown_does_not_wait(self):
         body = function_body(self.src, "void RunTraceService::Shutdown(")
-        self.assertIn("writer_.WaitFinished(kShutdownFlushMs)", body)
-        self.assertEqual(self.src.count("WaitFinished("), 1)
-        self.assertRegex(self.src, r"kShutdownFlushMs\{2000\}")
+        for wait in self.WAITS:
+            self.assertNotIn(wait, body, wait)
+        self.assertIn("writer_.Detach();", body)
+        self.assertNotIn("WaitFinished(", self.src, "the server never waits for the writer")
+        self.assertNotIn("kShutdownFlushMs", self.src)
+
+    def test_start_of_the_server_reconciles_interrupted_runs(self):
+        body = function_body(self.src, "void RunTraceService::Initialize(")
+        self.assertIn("RunTrace::ReconcileStaleSummaries(DirPath(),", body)
+        host = (ROOT / "host/BotHostAdapter.cpp").read_text()
+        startup = function_body(host, "void BotHostAdapter::OnStartup(")
+        self.assertIn("RunTraceService::Instance().Initialize();", startup)
+        update = function_body(host, "void BotHostAdapter::OnUpdate(")
+        self.assertNotIn("RunTraceService::Instance().Initialize();", update)
+
+    def test_a_failed_end_is_logged_and_shown(self):
         complete = function_body(self.src, "void RunTraceService::CompleteFinish(")
-        self.assertIn("writer_.Detach();", complete)
+        self.assertIn("lastFailure_ = writer_.Failure();", complete)
+        self.assertIn("failed: %s", complete)
+        status = function_body(self.src, "std::string RunTraceService::Status(")
+        self.assertIn("lastFailure_", status)
+        finish = function_body(self.src, "void RunTraceService::Finish(")
+        self.assertIn('failure.empty() ? endStatus.c_str() : "failed"', finish)
 
     def test_start_refuses_while_finishing(self):
         body = function_body(self.src, "bool RunTraceService::Start(")

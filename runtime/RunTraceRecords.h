@@ -446,9 +446,12 @@ public:
     }
 
     // <run_id>.summary.json: one object, rewritten at start, at stop, and by
-    // tools/trace_score.py (which fills "oracles" and "scored_unix").
+    // tools/trace_score.py (which fills "oracles" and "scored_unix"). `error`
+    // (status "failed": the trace file could not be flushed or closed) is
+    // written only when set.
     std::string BuildSummary(Header const& h, char const* status, std::string const& endReason,
-        uint64_t endUnix, uint32_t durationMs, Counters const& c, std::string const& traceFile) const
+        uint64_t endUnix, uint32_t durationMs, Counters const& c, std::string const& traceFile,
+        std::string const& error = std::string()) const
     {
         Line l;
         l.U("v", kSchemaVersion).Str("schema", kSchemaName).Str("run", run_).Str("src", "server")
@@ -456,7 +459,10 @@ public:
             .Str("scope_name", h.scopeName).Str("requester", h.requester).Str("tb_version", h.tbVersion)
             .Str("trace_file", traceFile).U("start_unix", h.startUnix).U("end_unix", endUnix)
             .U("duration_ms", durationMs).U("interval_ms", h.intervalMs).U("map", h.mapId)
-            .U("instance", h.instanceId).Raw("counters", CountersJson(c)).Raw("oracles", "[]");
+            .U("instance", h.instanceId).Raw("counters", CountersJson(c));
+        if (!error.empty())
+            l.Str("error", error);
+        l.Raw("oracles", "[]");
         return l.End();
     }
 

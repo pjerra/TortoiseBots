@@ -1,6 +1,7 @@
 #include "RunTraceWriter.h"
 
 #include <filesystem>
+#include <iterator>
 #include <system_error>
 #include <utility>
 
@@ -30,6 +31,8 @@ struct RunTraceWriter::State
     bool ended = false;     // the end marker is queued: nothing more is taken
     WriterStats stats;
     Counters finalCounters;
+    std::string failure;    // why ending the file failed; empty when it did not
+    bool failFinalFlush = false;  // test seam
     std::atomic<bool> finished{false};
     std::function<void()> beforeWrite;
     std::ofstream out;      // the writer thread's only, once it runs
@@ -137,6 +140,22 @@ Counters RunTraceWriter::FinalCounters() const
         return Counters();
     std::lock_guard<std::mutex> lock(state_->mu);
     return state_->finalCounters;
+}
+
+std::string RunTraceWriter::Failure() const
+{
+    if (!state_)
+        return std::string();
+    std::lock_guard<std::mutex> lock(state_->mu);
+    return state_->failure;
+}
+
+void RunTraceWriter::SetFailFinalFlushForTest(bool fail)
+{
+    if (!state_)
+        return;
+    std::lock_guard<std::mutex> lock(state_->mu);
+    state_->failFinalFlush = fail;
 }
 
 WriterStats RunTraceWriter::Reap()
@@ -295,16 +314,35 @@ void RunTraceWriter::Run(std::shared_ptr<State> state)
                     if (!job.buildEnd || !writeLine(job.buildEnd(c), true))
                         ++c.dropped;
                     publish();
+                    // A trace whose last bytes did not reach the disk is not
+                    // complete: say so in the summary (status "failed").
+                    std::string failure;
+                    bool failFlush = false;
+                    {
+                        std::lock_guard<std::mutex> lock(s.mu);
+                        failFlush = s.failFinalFlush;
+                    }
+                    if (failFlush)
+                        s.out.setstate(std::ios::badbit);
                     s.out.flush();
+                    if (!s.out)
+                        failure = "cannot flush the trace file";
                     s.out.close();
+                    if (failure.empty() && s.out.fail())
+                        failure = "cannot close the trace file";
                     if (job.buildSummary && !job.summaryPath.empty())
                     {
                         std::string err;
-                        WriteFileAtomic(job.summaryPath, job.buildSummary(c), err);
+                        if (!WriteFileAtomic(job.summaryPath, job.buildSummary(c, failure), err))
+                            failure = (failure.empty() ? std::string() : failure + "; ") +
+                                "cannot write the summary: " + err;
                     }
                     {
                         std::lock_guard<std::mutex> lock(s.mu);
                         s.finalCounters = c;
+                        s.failure = failure;
+                        if (!failure.empty())
+                            s.stats.failed = true;
                         s.finished.store(true, std::memory_order_release);
                     }
                     s.doneCv.notify_all();
@@ -370,6 +408,104 @@ bool WriteFileAtomic(std::string const& path, std::string const& content, std::s
         return false;
     }
     return true;
+}
+
+bool MarkSummaryIncomplete(std::string const& json, uint64_t nowUnix, std::string& out)
+{
+    // The summary is one flat JSON object written by Builder::BuildSummary or
+    // rewritten by tools/trace_score.py (compact); its first "status" key is
+    // the run's.
+    auto skipWs = [&json](size_t i)
+    {
+        while (i < json.size() && (json[i] == ' ' || json[i] == '\t' || json[i] == '\n' || json[i] == '\r'))
+            ++i;
+        return i;
+    };
+    // [start, end) of the string value of `key`, or false.
+    auto findString = [&](char const* key, size_t& start, size_t& end)
+    {
+        std::string const quoted = std::string("\"") + key + "\"";
+        size_t at = json.find(quoted);
+        if (at == std::string::npos)
+            return false;
+        size_t i = skipWs(at + quoted.size());
+        if (i >= json.size() || json[i] != ':')
+            return false;
+        i = skipWs(i + 1);
+        if (i >= json.size() || json[i] != '"')
+            return false;
+        size_t j = i + 1;
+        while (j < json.size() && json[j] != '"')
+            j += json[j] == '\\' ? 2 : 1;
+        if (j >= json.size())
+            return false;
+        start = i;
+        end = j + 1;
+        return true;
+    };
+    size_t sStart = 0, sEnd = 0;
+    if (!findString("status", sStart, sEnd) || json.compare(sStart, sEnd - sStart, "\"running\"") != 0)
+        return false;
+    size_t const close = json.find_last_of('}');
+    if (close == std::string::npos || close < sEnd)
+        return false;
+
+    std::string const reason = std::string("\"") + kReconcileReason + "\"";
+    size_t rStart = 0, rEnd = 0;
+    bool const hasReason = findString("end_reason", rStart, rEnd);
+    std::string body = json.substr(0, close);
+    // Replace from the back so earlier offsets stay valid.
+    if (hasReason && rStart > sStart)
+    {
+        body.replace(rStart, rEnd - rStart, reason);
+        body.replace(sStart, sEnd - sStart, "\"incomplete\"");
+    }
+    else if (hasReason)
+    {
+        body.replace(sStart, sEnd - sStart, "\"incomplete\"");
+        body.replace(rStart, rEnd - rStart, reason);
+    }
+    else
+        body.replace(sStart, sEnd - sStart, "\"incomplete\",\"end_reason\":" + reason);
+    while (!body.empty() && (body.back() == ' ' || body.back() == '\n' || body.back() == '\r' || body.back() == '\t'))
+        body.pop_back();
+    out = body + ",\"reconciled_at\":" + std::to_string(nowUnix) + json.substr(close);
+    while (!out.empty() && (out.back() == '\n' || out.back() == '\r'))
+        out.pop_back();
+    return true;
+}
+
+ReconcileResult ReconcileStaleSummaries(std::string const& dir, std::string const& activeRunId, uint64_t nowUnix)
+{
+    ReconcileResult result;
+    static std::string const suffix = ".summary.json";
+    std::error_code ec;
+    std::filesystem::directory_iterator it(dir, ec);
+    if (ec)
+        return result;  // no trace directory yet
+    for (; it != std::filesystem::directory_iterator(); it.increment(ec))
+    {
+        if (ec)
+            break;
+        std::filesystem::path const path = it->path();
+        std::string const name = path.filename().string();
+        if (name.size() <= suffix.size() || name.compare(name.size() - suffix.size(), suffix.size(), suffix) != 0)
+            continue;
+        std::string const runId = name.substr(0, name.size() - suffix.size());
+        if (runId == activeRunId || !it->is_regular_file(ec))
+            continue;
+        std::ifstream in(path, std::ios::in | std::ios::binary);
+        std::string const content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        std::string updated;
+        if (!MarkSummaryIncomplete(content, nowUnix, updated))
+            continue;
+        std::string err;
+        if (WriteFileAtomic(path.string(), updated, err))
+            result.marked.push_back(runId);
+        else
+            result.errors.push_back(runId + ": " + err);
+    }
+    return result;
 }
 
 } // namespace RunTrace

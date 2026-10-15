@@ -98,6 +98,8 @@ void BotHostAdapter::OnStartup()
     RandomBotService::Instance().Initialize();
     BattlegroundQueueService::Instance().Initialize();
     ClaimLifecycle::Instance().Initialize();
+    // Run trace: mark the summaries of runs the last server never finalised.
+    RunTraceService::Instance().Initialize();
 
     if (sConfig.GetBoolDefault("TortoiseBots.PendingAddRemoveTest", false))
     {

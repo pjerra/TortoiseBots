@@ -18,8 +18,9 @@
 // Every disk write after the file is opened is off it: lines, the summary and
 // the end record go through a bounded queue to the writer thread (lines are
 // dropped and counted when it is full), and ending a run only queues the end
-// marker; Update() polls for the writer to be done. Shutdown is the only wait,
-// at most kShutdownFlushMs. Nothing here reads the database or scans the world;
+// marker; Update() polls for the writer to be done. Shutdown does not wait
+// either: a busy writer is let go and Initialize() reconciles its summary at
+// the next start. Nothing here reads the database or scans the world;
 // hostiles come from the bots' own attacker lists and are resolved by guid on
 // the bot's map.
 
@@ -76,8 +77,11 @@ public:
 
     // World thread, every world tick.
     void Update(uint32_t diff);
-    // Module shutdown: ends a run in progress and waits for its writer at most
-    // kShutdownFlushMs; past that the writer thread is left to finish alone.
+    // Module start, before the first world tick: marks the summaries of runs
+    // the last server never finalised "incomplete" (RunTrace::ReconcileStaleSummaries).
+    void Initialize();
+    // Module shutdown: ends a run in progress without waiting for the disk; a
+    // writer still busy is let go (the next start reconciles its summary).
     void Shutdown();
 
     // Hooks (world thread; callers check Active() first).
@@ -113,13 +117,15 @@ private:
     void EmitAction(RunTrace::ActionRecord const& rec);
     void FlushActions(bool all);
     void Finish(char const* reason, char const* status);
-    void CompleteFinish(bool timedOut);
+    void CompleteFinish();
     void DetachAllListeners();
     std::string DirPath() const;
 
     std::atomic<bool> active_{false};  // lifecycle_ is Running (the hooks read this)
     RunTrace::RunLifecycle lifecycle_;
     std::string finishReason_;
+    std::string lastRunId_;
+    std::string lastFailure_;  // why the last run's end failed; shown by Status()
     bool detachPending_ = false;
     std::unordered_set<uint64_t> attachedGuids_;  // bots whose engines carry the listener
     // Hooks that run off the world thread are ignored: the recorder state is not locked.

@@ -18,6 +18,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 using namespace TortoiseBots::RunTrace;
@@ -153,9 +154,9 @@ int main(int argc, char** argv)
                 end.counters = cc;
                 return b.BuildEnd(100, end);
             };
-        job.buildSummary = [b, h, name](Counters const& cc)
+        job.buildSummary = [b, h, name](Counters const& cc, std::string const& failure)
             {
-                return b.BuildSummary(h, "complete", "stop", 1, 100, cc, name);
+                return b.BuildSummary(h, failure.empty() ? "complete" : "failed", "stop", 1, 100, cc, name, failure);
             };
         job.summaryPath = summaryPath;
         CHECK(w.PushEnd(job));
@@ -174,6 +175,8 @@ int main(int argc, char** argv)
         CHECK(endLine.find("\"counters\":" + counters) != std::string::npos);
         CHECK(summary.find("\"counters\":" + counters) != std::string::npos);
         CHECK(summary.find("\"status\":\"complete\"") != std::string::npos);
+        CHECK(w.Failure().empty());
+        CHECK(summary.find("\"error\"") == std::string::npos);
         // The counters count every line before the end line.
         CHECK(c.records == file.size() - 1);
         CHECK(c.bytes == fs::file_size(path) - endLine.size() - 1);
@@ -190,9 +193,9 @@ int main(int argc, char** argv)
         CHECK(c.truncated && c.dropped > 0);
     }
 
-    // A stalled disk: ending a run returns at once, and the shutdown wait gives
-    // up at its deadline; the thread is let go without freeing its state and
-    // finishes once the disk is back.
+    // A stalled disk: ending a run returns at once, and so does shutdown; the
+    // thread is let go without freeing its state and finishes once the disk is
+    // back.
     {
         std::string const path = (dir / "slow.jsonl").string();
         std::string const summaryPath = path + ".summary.json";
@@ -212,7 +215,7 @@ int main(int argc, char** argv)
                 CHECK(w.Push("{\"i\":" + std::to_string(i) + "}"));
             EndJob job;
             job.buildEnd = [b](Counters const& cc) { EndInfo e; e.reason = "shutdown"; e.counters = cc; return b.BuildEnd(1, e); };
-            job.buildSummary = [b, h](Counters const& cc) { return b.BuildSummary(h, "complete", "shutdown", 1, 1, cc, "slow.jsonl"); };
+            job.buildSummary = [b, h](Counters const& cc, std::string const&) { return b.BuildSummary(h, "complete", "shutdown", 1, 1, cc, "slow.jsonl"); };
             job.summaryPath = summaryPath;
             auto const t0 = std::chrono::steady_clock::now();
             CHECK(w.PushEnd(job));
@@ -220,13 +223,13 @@ int main(int argc, char** argv)
                 std::chrono::steady_clock::now() - t0).count();
             CHECK(pushMs < 100);             // stop returns at once
             CHECK(!w.Finished());
+            // Shutdown does not wait: the thread is let go at once.
             auto const t1 = std::chrono::steady_clock::now();
-            timedOut = !w.WaitFinished(std::chrono::milliseconds(2000));
-            auto const waitMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - t1).count();
-            CHECK(timedOut);
-            CHECK(waitMs >= 1900 && waitMs < 3000);  // shutdown returns within the deadline
             w.Detach();
+            auto const detachMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - t1).count();
+            CHECK(detachMs < 100);
+            timedOut = !w.Finished();
             CHECK(!w.IsOpen());
         }   // the writer object is gone; the detached thread still holds its state
         CHECK(timedOut);
@@ -237,6 +240,104 @@ int main(int argc, char** argv)
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         auto const file = ReadLines(path);
         CHECK(file.size() == 101 && file.back().find("\"k\":\"end\"") != std::string::npos);
+    }
+
+    // A failed end: the final flush fails, or the summary cannot be written.
+    // The writer still finishes, but says why; the summary says "failed" when
+    // it can still be written.
+    auto failedEnd = [&](char const* name, bool failFlush, bool blockSummary)
+    {
+        std::string const path = (dir / name).string();
+        std::string const summaryPath = path + ".summary.json";
+        if (blockSummary)
+            fs::create_directories(summaryPath + "/occupied");  // a directory where the summary goes
+        RunTraceWriter w;
+        CHECK(w.Open(path, 1 << 20, 100, 1 << 20, err));
+        w.SetFailFinalFlushForTest(failFlush);
+        CHECK(w.Push("{\"i\":1}"));
+        Builder b("failed");
+        Header h;
+        EndJob job;
+        job.buildEnd = [b](Counters const& cc) { EndInfo e; e.reason = "stop"; e.counters = cc; return b.BuildEnd(1, e); };
+        job.buildSummary = [b, h, name](Counters const& cc, std::string const& failure)
+            {
+                return b.BuildSummary(h, failure.empty() ? "complete" : "failed", "stop", 1, 1, cc, name, failure);
+            };
+        job.summaryPath = summaryPath;
+        CHECK(w.PushEnd(job));
+        CHECK(w.WaitFinished(std::chrono::seconds(30)));
+        w.Reap();
+        CHECK(w.Snapshot().failed);
+        return std::make_pair(w.Failure(), summaryPath);
+    };
+    {
+        auto r = failedEnd("fail-flush.jsonl", true, false);
+        CHECK(r.first == "cannot flush the trace file");
+        std::string const summary = Slurp(r.second);
+        CHECK(summary.find("\"status\":\"failed\"") != std::string::npos);
+        CHECK(summary.find("\"error\":\"cannot flush the trace file\"") != std::string::npos);
+    }
+    {
+        auto r = failedEnd("fail-summary.jsonl", false, true);
+        CHECK(r.first.rfind("cannot write the summary: ", 0) == 0);
+        CHECK(fs::is_directory(r.second));  // nothing half-written in its place
+    }
+    {
+        auto r = failedEnd("fail-both.jsonl", true, true);
+        CHECK(r.first.rfind("cannot flush the trace file; cannot write the summary: ", 0) == 0);
+    }
+
+    // Startup reconciliation, on a fake trace directory.
+    {
+        std::string const out1 = "{\"v\":1,\"run\":\"a\",\"status\":\"running\",\"end_reason\":\"\",\"counters\":{\"frames\":4},\"oracles\":[]}";
+        std::string marked;
+        CHECK(MarkSummaryIncomplete(out1, 1700000000, marked));
+        CHECK(marked == "{\"v\":1,\"run\":\"a\",\"status\":\"incomplete\",\"end_reason\":\"server stopped before the trace was finalised\",\"counters\":{\"frames\":4},\"oracles\":[],\"reconciled_at\":1700000000}");
+        // No end_reason key, spaces and a trailing newline.
+        CHECK(MarkSummaryIncomplete("{ \"status\" : \"running\", \"counters\": {\"frames\":2} }\n", 5, marked));
+        CHECK(marked == "{ \"status\" : \"incomplete\",\"end_reason\":\"server stopped before the trace was finalised\", \"counters\": {\"frames\":2},\"reconciled_at\":5}");
+        // end_reason before status.
+        CHECK(MarkSummaryIncomplete("{\"end_reason\":\"x\",\"status\":\"running\"}", 7, marked));
+        CHECK(marked == "{\"end_reason\":\"server stopped before the trace was finalised\",\"status\":\"incomplete\",\"reconciled_at\":7}");
+        // Only "running" summaries are touched.
+        CHECK(!MarkSummaryIncomplete("{\"status\":\"complete\"}", 1, marked));
+        CHECK(!MarkSummaryIncomplete("{\"status\":\"incomplete\",\"reconciled_at\":1}", 1, marked));
+        CHECK(!MarkSummaryIncomplete("not json", 1, marked));
+
+        fs::path const traces = dir / "traces";
+        fs::create_directories(traces / "nested");
+        auto put = [](fs::path const& p, std::string const& text) { std::ofstream f(p); f << text << '\n'; };
+        Builder b1("stale");
+        Header h;
+        Counters c;
+        c.frames = 9;
+        c.records = 12;
+        put(traces / "stale.summary.json", b1.BuildSummary(h, "running", "", 0, 0, c, "stale.jsonl"));
+        put(traces / "stale.jsonl", "{\"k\":\"header\"}");
+        put(traces / "done.summary.json", Builder("done").BuildSummary(h, "complete", "stop", 1, 1, c, "done.jsonl"));
+        put(traces / "live.summary.json", Builder("live").BuildSummary(h, "running", "", 0, 0, c, "live.jsonl"));
+        put(traces / "nested" / "deep.summary.json", Builder("deep").BuildSummary(h, "running", "", 0, 0, c, "deep.jsonl"));
+        put(traces / "notes.json", "{\"status\":\"running\"}");
+        std::string const doneBefore = Slurp((traces / "done.summary.json").string());
+
+        ReconcileResult r = ReconcileStaleSummaries(traces.string(), "live", 1700000123);
+        CHECK(r.marked.size() == 1 && r.marked[0] == "stale" && r.errors.empty());
+        std::string const stale = Slurp((traces / "stale.summary.json").string());
+        CHECK(stale.find("\"status\":\"incomplete\"") != std::string::npos);
+        CHECK(stale.find("\"end_reason\":\"server stopped before the trace was finalised\"") != std::string::npos);
+        CHECK(stale.find("\"reconciled_at\":1700000123") != std::string::npos);
+        CHECK(stale.find("\"counters\":" + Builder::CountersJson(c)) != std::string::npos);  // counters kept
+        CHECK(Slurp((traces / "stale.jsonl").string()) == "{\"k\":\"header\"}\n");      // trace untouched
+        CHECK(Slurp((traces / "done.summary.json").string()) == doneBefore);
+        CHECK(Slurp((traces / "live.summary.json").string()).find("\"status\":\"running\"") != std::string::npos);
+        CHECK(Slurp((traces / "nested" / "deep.summary.json").string()).find("\"status\":\"running\"") != std::string::npos);
+        CHECK(Slurp((traces / "notes.json").string()) == "{\"status\":\"running\"}\n");
+        CHECK(!fs::exists(traces / "stale.summary.json.tmp"));
+
+        // Idempotent; a missing directory is no error.
+        CHECK(ReconcileStaleSummaries(traces.string(), "", 1).marked.size() == 1);   // now "live" too
+        CHECK(ReconcileStaleSummaries(traces.string(), "", 1).marked.empty());
+        CHECK(ReconcileStaleSummaries((dir / "no-such-dir").string(), "", 1).marked.empty());
     }
 
     // An unwritable location fails cleanly.

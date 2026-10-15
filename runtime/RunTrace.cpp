@@ -1,7 +1,6 @@
 #include "RunTrace.h"
 
 #include <algorithm>
-#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <ctime>
@@ -34,9 +33,6 @@ constexpr size_t kQueueBytes = 4u * 1024u * 1024u;
 // The scope may be empty this long (group disbanded, bots logged out) before
 // the run ends by itself.
 constexpr uint32_t kEmptyScopeMs = 10000;
-// Shutdown waits this long for the writer to write the end record and the
-// summary; it is the only place the world thread waits for the trace's disk.
-constexpr std::chrono::milliseconds kShutdownFlushMs{2000};
 
 // Reports every action outcome of one bot's engine to the service. Owned by the
 // engine (deleted with it); it carries nothing but the bot's guid, so one that
@@ -324,6 +320,7 @@ bool RunTraceService::Start(StartParams const& params, std::string& message)
     writer_.PushFile(summaryPath_, builder_->BuildSummary(header_, "running", "", 0, 0, counters_,
         std::filesystem::path(tracePath_).filename().string()));
     lifecycle_.Start();
+    lastFailure_.clear();
     active_.store(true, std::memory_order_relaxed);
     Sample();
     message = "Tracing " + header_.scope + " " + header_.scopeName + " as run " + params.runId + " -> " + tracePath_;
@@ -345,37 +342,55 @@ bool RunTraceService::Stop(char const* reason, std::string& message)
     return true;
 }
 
+void RunTraceService::Initialize()
+{
+    // Module start, before the first world tick: a summary still "running"
+    // belongs to a run the last server never finalised (a crash, or a shutdown
+    // that let the writer go). Mark it "incomplete"; its trace file stays.
+    RunTrace::ReconcileResult const r = RunTrace::ReconcileStaleSummaries(DirPath(),
+        lifecycle_.Phase() == RunTrace::RunPhase::Idle ? std::string() : header_.runId,
+        static_cast<uint64_t>(std::time(nullptr)));
+    for (std::string const& run : r.marked)
+        TB_LOG_BASIC("TortoiseBots: run trace %s was not finalised before the server stopped; summary marked incomplete",
+            run.c_str());
+    for (std::string const& error : r.errors)
+        TB_LOG_BASIC("TortoiseBots: run trace summary not reconciled: %s", error.c_str());
+}
+
 void RunTraceService::Shutdown()
 {
     if (Active())
         Finish("shutdown", "complete");
     if (lifecycle_.Phase() != RunTrace::RunPhase::Finishing)
         return;
-    // The only wait for the trace's disk, and a bounded one.
-    CompleteFinish(!writer_.WaitFinished(kShutdownFlushMs));
+    if (writer_.Finished())
+    {
+        CompleteFinish();
+        return;
+    }
+    // Shutdown does not wait for the disk either. The writer owns everything it
+    // touches (shared state, copies of the run's builder and header), so it is
+    // let go: it writes the end record and the summary if it gets there before
+    // the process ends; otherwise the next start marks the summary incomplete.
+    writer_.Detach();
+    TB_LOG_BASIC("TortoiseBots: run trace %s (%s): the writer was still busy at shutdown and is left to finish on its own",
+        header_.runId.c_str(), finishReason_.c_str());
+    lifecycle_.Finished();
 }
 
-void RunTraceService::CompleteFinish(bool timedOut)
+void RunTraceService::CompleteFinish()
 {
-    if (timedOut)
-    {
-        // The writer is stalled on the disk. It owns everything it touches
-        // (shared state, copies of the run's builder and header), so it is let
-        // go: it finishes the end record and the summary if the disk comes
-        // back before the process ends. The summary then still says "running".
-        writer_.Detach();
-        TB_LOG_BASIC("TortoiseBots: run trace %s (%s): the writer did not finish within %u ms; left to finish on its own",
-            header_.runId.c_str(), finishReason_.c_str(), static_cast<unsigned>(kShutdownFlushMs.count()));
-    }
-    else
-    {
-        writer_.Reap();
-        RunTrace::Counters const c = writer_.FinalCounters();
-        TB_LOG_BASIC("TortoiseBots: run trace %s ended (%s): %llu frames, %llu actions, %llu events, %llu dropped",
-            header_.runId.c_str(), finishReason_.c_str(), static_cast<unsigned long long>(c.frames),
-            static_cast<unsigned long long>(c.actions), static_cast<unsigned long long>(c.events),
-            static_cast<unsigned long long>(c.dropped));
-    }
+    writer_.Reap();
+    RunTrace::Counters const c = writer_.FinalCounters();
+    lastRunId_ = header_.runId;
+    lastFailure_ = writer_.Failure();
+    if (!lastFailure_.empty())
+        TB_LOG_BASIC("TortoiseBots: run trace %s (%s) failed: %s", header_.runId.c_str(), finishReason_.c_str(),
+            lastFailure_.c_str());
+    TB_LOG_BASIC("TortoiseBots: run trace %s ended (%s): %llu frames, %llu actions, %llu events, %llu dropped",
+        header_.runId.c_str(), finishReason_.c_str(), static_cast<unsigned long long>(c.frames),
+        static_cast<unsigned long long>(c.actions), static_cast<unsigned long long>(c.events),
+        static_cast<unsigned long long>(c.dropped));
     lifecycle_.Finished();
 }
 
@@ -385,7 +400,13 @@ std::string RunTraceService::Status(bool detail) const
         return detail ? "Trace " + header_.runId + " is ending (writing its end record and summary)."
                       : "A trace is ending.";
     if (!Active())
+    {
+        // A failed end is reported until the next run starts.
+        if (!lastFailure_.empty())
+            return detail ? "No trace is running. The last one (" + lastRunId_ + ") failed: " + lastFailure_
+                          : "No trace is running. The last one failed: " + lastFailure_;
         return "No trace is running.";
+    }
     if (!detail)
         return "A trace is running.";
     RunTrace::WriterStats const ws = writer_.Snapshot();
@@ -399,7 +420,7 @@ void RunTraceService::Update(uint32_t diff)
 {
     worldMark_.MarkCurrent();
     if (lifecycle_.Phase() == RunTrace::RunPhase::Finishing && writer_.Finished())
-        CompleteFinish(false);
+        CompleteFinish();
     if (detachPending_)
         DetachAllListeners();
     if (!Active())
@@ -820,9 +841,11 @@ void RunTraceService::Finish(char const* reason, char const* status)
             end.counters = c;
             return builder.BuildEnd(elapsed, end);
         };
-    job.buildSummary = [builder, header, elapsed, endUnix, endReason, endStatus, traceFile](RunTrace::Counters const& c)
+    job.buildSummary = [builder, header, elapsed, endUnix, endReason, endStatus, traceFile](
+        RunTrace::Counters const& c, std::string const& failure)
         {
-            return builder.BuildSummary(header, endStatus.c_str(), endReason, endUnix, elapsed, c, traceFile);
+            return builder.BuildSummary(header, failure.empty() ? endStatus.c_str() : "failed", endReason, endUnix,
+                elapsed, c, traceFile, failure);
         };
     job.summaryPath = summaryPath_;
     if (!writer_.PushEnd(std::move(job)))
