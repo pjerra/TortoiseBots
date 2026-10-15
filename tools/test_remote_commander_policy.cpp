@@ -547,6 +547,28 @@ static void TestMoveVerdict()
     CHECK(CheckMove(facts) == MoveVerdict::NoPath);
     CHECK(std::string(MoveVerdictCode(MoveVerdict::NoPath)) == "unreachable");
 
+    // Issue #999: the run leader's gather on the lead bot's own spot (within
+    // kMoveHereYd of it) is Ok, even when the path finder answers no path or
+    // an off-mesh end at 0 yd. A player's order to the same point is not.
+    facts = Walkable();
+    facts.distanceFromLead = 0.0f;
+    facts.pathType = kPathNoPath;
+    CHECK(CheckMove(facts) == MoveVerdict::NoPath);
+    facts.leadSpotGather = true;
+    CHECK(CheckMove(facts) == MoveVerdict::Ok);
+    facts.distanceFromLead = kMoveHereYd;
+    CHECK(CheckMove(facts) == MoveVerdict::Ok);
+    facts.distanceFromLead = kMoveHereYd + 0.5f;
+    CHECK(CheckMove(facts) == MoveVerdict::NoPath);
+    facts = Walkable();
+    facts.distanceFromLead = 1.0f;
+    facts.endOffset = 12.0f;
+    CHECK(CheckMove(facts) == MoveVerdict::OffMesh); // a player's sub-3 yd off-mesh point
+    facts.leadSpotGather = true;
+    CHECK(CheckMove(facts) == MoveVerdict::Ok);
+    facts.maxDistance = 0.0f; // no ReactDistance: still too far
+    CHECK(CheckMove(facts) == MoveVerdict::TooFar);
+
     // A complete path that ends far from the point: the point is not ground.
     facts = Walkable();
     facts.endOffset = 12.0f;

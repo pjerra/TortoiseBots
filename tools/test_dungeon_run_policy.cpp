@@ -223,12 +223,14 @@ static void TestResumeRegroups()
     DungeonPlan plan;
     plan.steps = {Step(PlanStepKind::Move, 40)};
     Run r = Start(&plan);
+    r.autoRegroups = kAutoRegroupsPerStep; // the regroups by itself are used up: it pauses
     Facts f = Party(0);
     f.dead = 3;
     f.alive = 2;
     Tick(r, f);
     CHECK(r.state == State::Paused);
     CHECK(Resume(r));
+    CHECK(r.autoRegroups == 0);
     CHECK(Tick(r, f) == "revive party");
     CHECK(r.state == State::Running && r.note.find("regroup") == 0);
     CHECK(Tick(r, f).empty());
@@ -241,6 +243,7 @@ static void TestResumeRegroups()
     CHECK(Tick(r, f) == "move 40.0 0.0 0.0");
     // Revive that never works is bounded.
     Run r2 = Start(&plan);
+    r2.autoRegroups = kAutoRegroupsPerStep;
     Facts g = Party(0);
     g.dead = 3;
     g.alive = 2;
@@ -468,6 +471,7 @@ static void TestWipeAndLeadDeathPause()
     DungeonPlan plan;
     plan.steps = {Step(PlanStepKind::Move, 40)};
     Run r = Start(&plan);
+    r.autoRegroups = kAutoRegroupsPerStep;
     Facts f = Party(0);
     f.dead = 3;
     f.alive = 2;
@@ -630,6 +634,567 @@ static void TestPlayerOrderAndRefusalPause()
     CHECK(bars == 7);
 }
 
+// Issue #999: a gather refused (a live ZF run: "cmd move 1420.7 801.1 11.0
+// refused unreachable" with the tank on that very spot) is sent once more,
+// then the pull goes on without it instead of pausing the run.
+static void TestRefusedGatherIsRetriedOnceThenLeftOut()
+{
+    DungeonPlan plan;
+    plan.steps = {PullStep(10, {1})};
+    Run r = Start(&plan);
+    Facts f = Party(0);
+    f.maxMemberYd = 30;
+    f.units = {Unit(7, 1, 20), Unit(8, 1, 25)};
+    std::string const gather = "move 0.0 0.0 0.0";
+    CHECK(Tick(r, f) == gather);
+    OrderRefused(r, gather, "unreachable: The lead bot has no walkable path to that point.");
+    CHECK(r.state == State::Running && r.note.find("once more") != std::string::npos);
+    CHECK(Tick(r, f) == gather);
+    OrderRefused(r, gather, "unreachable: The lead bot has no walkable path to that point.");
+    CHECK(r.state == State::Running && r.note.find("without it") != std::string::npos);
+    CHECK(Tick(r, f) == "pullback 7");
+    // The next pull gathers again: the waiver held for one pull only.
+    f.anyInCombat = true;
+    Tick(r, f);
+    f.anyInCombat = false;
+    f.units = {Unit(8, 1, 25)};
+    CHECK(Tick(r, f) == gather);
+    CHECK(r.state == State::Running);
+
+    // A direct step: refused twice, the direct walk goes out ungathered.
+    DungeonPlan direct;
+    direct.steps = {Step(PlanStepKind::MoveDirect, 5)};
+    Run d = Start(&direct);
+    Facts g = Party(0);
+    g.maxMemberYd = 30;
+    CHECK(Tick(d, g) == gather);
+    OrderRefused(d, gather, "unreachable");
+    CHECK(Tick(d, g) == gather);
+    OrderRefused(d, gather, "unreachable");
+    CHECK(d.state == State::Running && Tick(d, g) == "move 5.0 0.0 0.0 direct");
+
+    // Other refusals still pause, also a gather's text sent on an earlier tick.
+    Run o = Start(&plan);
+    OrderRefused(o, gather, "unreachable");
+    CHECK(o.state == State::Paused);
+}
+
+// Issue #999: a wipe regroups by itself once the fight is over (revive,
+// gather), then walks the plan's own move points back from the entrance to
+// the step; it counts the wipe; the third at one step pauses as before.
+static void TestWipeRegroupsAndWalksBack()
+{
+    DungeonPlan plan;
+    plan.steps = {Step(PlanStepKind::Move, 10), Step(PlanStepKind::Move, 50), Step(PlanStepKind::Move, 90),
+        PullStep(130, {1})};
+    Run r = Start(&plan, 3);
+    Facts f = Party(130);
+    f.dead = 5;
+    f.alive = 0;
+    f.leadAlive = false;
+    CHECK(Tick(r, f).empty());
+    CHECK(r.state == State::Running && r.regroup && r.wipes == 1 && r.autoRegroups == 1);
+    CHECK(r.note.find("(1 wipe this run)") != std::string::npos);
+    CHECK(Tick(r, f) == "revive party");
+    for (int i = 0; i < 30; ++i)
+        Tick(r, f); // the corpse run: still one wipe
+    CHECK(r.wipes == 1 && r.state == State::Running);
+    // Alive at the entrance, spread: gather, then the walk back.
+    f = Party(0);
+    f.maxMemberYd = 40;
+    CHECK(Tick(r, f) == "move 0.0 0.0 0.0");
+    f.maxMemberYd = 5;
+    CHECK(Tick(r, f).empty()); // regrouped; the walk back starts with the facts of its first point
+    CHECK(r.walkBack && r.walkBackIdx == 0 && FactStep(r) == &plan.steps[0] && OwnerFrom(r) == 2);
+    CHECK(Tick(r, f) == "move 10.0 0.0 0.0");
+    CHECK(r.note.find("walk back") == 0);
+    f.leadX = 10;
+    CHECK(Tick(r, f).empty()); // arrived: the next point's facts come next tick
+    CHECK(FactStep(r) == &plan.steps[1]);
+    // A pack that came back beside the replayed point is pulled before the move.
+    f.hopUnits = {Unit(9, 4, 30)};
+    CHECK(Tick(r, f) == "pullback 9");
+    CHECK(r.walkBack && r.note.find("walk back: pulling") == 0);
+    f.hopUnits.clear();
+    f.anyInCombat = true;
+    Tick(r, f);
+    f.anyInCombat = false;
+    CHECK(Tick(r, f) == "move 50.0 0.0 0.0");
+    // A point the navmesh refuses now is passed for the next one.
+    OrderRefused(r, "move 50.0 0.0 0.0", "unreachable");
+    CHECK(r.state == State::Running);
+    CHECK(Tick(r, f) == "move 90.0 0.0 0.0");
+    f.leadX = 90;
+    CHECK(Tick(r, f).empty());
+    CHECK(Tick(r, f).empty() && !r.walkBack && r.note.find("walked back") == 0);
+    CHECK(FactStep(r) == &plan.steps[3] && OwnerFrom(r) == 3);
+    f.units = {Unit(7, 1, 40)};
+    CHECK(Tick(r, f) == "pullback 7");
+    CHECK(r.step == 3);
+
+    // Second wipe at the step: regroups once more; the third pauses.
+    f = Party(130);
+    f.dead = 5;
+    f.alive = 0;
+    f.leadAlive = false;
+    Tick(r, f);
+    CHECK(r.state == State::Running && r.wipes == 2 && r.autoRegroups == 2);
+    f = Party(130); // revived where it stands, near the step: no walk back
+    f.units = {Unit(7, 1, 40)};
+    CHECK(Tick(r, f) == "pullback 7");
+    CHECK(!r.regroup && !r.walkBack);
+    f.dead = 5;
+    f.alive = 0;
+    f.leadAlive = false;
+    Tick(r, f);
+    CHECK(r.state == State::Paused && r.wipes == 3 && r.note.find("did not hold") != std::string::npos);
+    CHECK(r.note.find("(cmd revive party)") != std::string::npos);
+    // A resume gives the step its regroups back; a new step too.
+    CHECK(Resume(r) && r.autoRegroups == 0);
+}
+
+// Three dead while the other two still fight: the fight goes on (bounded by
+// its ceiling), the regroup starts when it ends; no wipe is counted.
+static void TestThreeDeadRegroupAfterTheFight()
+{
+    DungeonPlan plan;
+    plan.steps = {Step(PlanStepKind::Move, 40)};
+    Run r = Start(&plan);
+    Facts f = Party(0);
+    f.dead = 3;
+    f.alive = 2;
+    f.leadAlive = false;
+    f.anyInCombat = true;
+    CHECK(Tick(r, f).empty());
+    CHECK(r.state == State::Running && !r.regroup && r.note.find("regroup follows") != std::string::npos);
+    f.anyInCombat = false;
+    Tick(r, f);
+    CHECK(r.state == State::Running && r.regroup && r.wipes == 0 && r.nearWipes == 1);
+    CHECK(r.note.find("(1 near wipe this run)") != std::string::npos);
+    CHECK(Tick(r, f) == "revive party");
+    // No earlier move point: nothing to walk back, the step goes on.
+    f = Party(0);
+    CHECK(Tick(r, f) == "move 40.0 0.0 0.0");
+    CHECK(!r.walkBack);
+    // The done note carries the wipes.
+    r.wipes = 2;
+    f.leadX = 40;
+    Tick(r, f);
+    CHECK(r.state == State::Done && r.note == "plan done (2 wipes, 1 near wipe)");
+}
+
+// Issue #999 (third observe run, step 35): the healer stood 82 yd behind and
+// did not come; the gather paused the run again and again. At the gather's
+// ceiling the farthest bot over 40 yd that came less than 5 yd closer since
+// the last sample is summoned to the lead bot, once; one on its way is not.
+static void TestGatherSummonsAStalledStraggler()
+{
+    DungeonPlan plan;
+    plan.steps = {PullStep(10, {1})};
+    Run r = Start(&plan);
+    Facts f = Party(0);
+    f.maxMemberYd = 90;
+    f.members = {MemberFact{"Walky", 90}, MemberFact{"Healy", 82}, MemberFact{"Nearby", 30}, MemberFact{"Stuck", 50}};
+    f.units = {Unit(7, 1, 20)};
+    CHECK(Tick(r, f) == "move 0.0 0.0 0.0"); // the gather: first sample
+    // By the ceiling Walky came 30 yd closer; Healy and Stuck did not.
+    f.members = {MemberFact{"Walky", 60}, MemberFact{"Healy", 81}, MemberFact{"Nearby", 30}, MemberFact{"Stuck", 50}};
+    f.maxMemberYd = 81;
+    std::string order;
+    for (std::uint32_t i = 0; i < kGatherCapMs / kTickMs + 2 && order.empty(); ++i)
+        order = Tick(r, f);
+    CHECK(order == "summon Healy"); // the farthest stalled one
+    CHECK(r.state == State::Running && r.phase == Phase::Gather && r.note.find("Healy") != std::string::npos);
+    // A refused summon does not pause: the gather's ceiling does.
+    OrderRefused(r, order, "lead-unavailable");
+    CHECK(r.state == State::Running);
+    // Next ceiling: Walky still comes (no summon), Stuck stalled since the last sample: summoned.
+    f.members = {MemberFact{"Walky", 50}, MemberFact{"Healy", 81}, MemberFact{"Nearby", 30}, MemberFact{"Stuck", 49}};
+    order.clear();
+    for (std::uint32_t i = 0; i < kGatherCapMs / kTickMs + 2 && order.empty(); ++i)
+        order = Tick(r, f);
+    CHECK(order == "summon Stuck");
+    // Nobody left to summon (Walky still makes progress): the next ceiling pauses.
+    f.members = {MemberFact{"Walky", 44}, MemberFact{"Healy", 81}, MemberFact{"Nearby", 30}, MemberFact{"Stuck", 49}};
+    for (std::uint32_t i = 0; i < kGatherCapMs / kTickMs + 2 && r.state == State::Running; ++i)
+        CHECK(Tick(r, f).find("summon") == std::string::npos);
+    CHECK(r.state == State::Paused && r.note.find("did not gather") != std::string::npos);
+
+    // The summoned bot arrives: the pull goes out.
+    Run g = Start(&plan);
+    Facts h = Party(0);
+    h.maxMemberYd = 82;
+    h.members = {MemberFact{"Healy", 82}};
+    h.units = {Unit(7, 1, 20)};
+    Tick(g, h);
+    std::string got;
+    for (std::uint32_t i = 0; i < kGatherCapMs / kTickMs + 2 && got.empty(); ++i)
+        got = Tick(g, h);
+    CHECK(got == "summon Healy");
+    h.maxMemberYd = 5;
+    h.members.clear();
+    CHECK(Tick(g, h) == "pullback 7");
+}
+
+// Codex on #1000: a walk-back point refused for the lead bot's state of the
+// moment is sent again (3 times, then pause); only a path refusal passes it.
+static void TestWalkBackRefusalKinds()
+{
+    DungeonPlan plan;
+    plan.steps = {Step(PlanStepKind::Move, 10), Step(PlanStepKind::Move, 50), PullStep(130, {1})};
+    Run r = Start(&plan, 2);
+    r.walkBack = true;
+    r.walkBackIdx = 0;
+    r.gatherWaived = true;
+    r.gatherRefusals = 2;
+    Facts f = Party(0);
+    CHECK(Tick(r, f) == "move 10.0 0.0 0.0");
+    for (std::uint32_t i = 1; i <= kWalkBackRetries; ++i)
+    {
+        OrderRefused(r, "move 10.0 0.0 0.0", "lead-unavailable: The lead bot is dead, on a taxi or teleporting.");
+        CHECK(r.state == State::Running && r.walkBackIdx == 0 && r.note.find("again") != std::string::npos);
+        CHECK(Tick(r, f) == "move 10.0 0.0 0.0");
+    }
+    OrderRefused(r, "move 10.0 0.0 0.0", "busy: a task runs");
+    CHECK(r.state == State::Paused && r.walkBackIdx == 0);
+
+    Run p = Start(&plan, 2);
+    p.walkBack = true;
+    p.gatherWaived = true;
+    p.gatherRefusals = 2;
+    CHECK(Tick(p, f) == "move 10.0 0.0 0.0");
+    OrderRefused(p, "move 10.0 0.0 0.0", "lead-unavailable: teleporting");
+    OrderRefused(p, "move 10.0 0.0 0.0", "off-mesh: The point is not on walkable ground.");
+    // Passed: the next point, its own refusal count and gather waiver fresh.
+    CHECK(p.state == State::Running && p.walkBackIdx == 1 && p.walkBackRefusals == 0);
+    CHECK(!p.gatherWaived && p.gatherRefusals == 0);
+    CHECK(Tick(p, f) == "move 50.0 0.0 0.0");
+}
+
+// Cold review on #1000: a pullback drags the boss to the party, so his
+// corpse 30 yd from his spot is normal (radius + kSeeYd); and a boss seen
+// alive in this step and now dead near the lead bot is down wherever he fell.
+static void TestBossKilledAwayFromHisSpot()
+{
+    DungeonPlan plan;
+    PlanStep boss = Step(PlanStepKind::Boss, 30);
+    boss.entry = 6910;             // Uldaman: Revelosh, his adds first
+    boss.entries = {7076, 7077};
+    ai::NormalizePlanStep(boss);
+    plan.steps = {boss, Step(PlanStepKind::Move, 60)};
+    Run r = Start(&plan);
+    Facts f = Party(0);
+    f.units = {Unit(5, 6910, 30)};
+    CHECK(Tick(r, f) == "pullback 5");
+    CHECK(r.bossSeenAlive);
+    f.anyInCombat = true;
+    Tick(r, f);
+    f.anyInCombat = false;
+    f.units.clear();
+    f.bossDeadNearSpot = true; // the glue: his corpse 30 yd from the spot, within radius + kSeeYd
+    Tick(r, f);
+    CHECK(r.step == 1 && r.note == "boss down");
+
+    // Fell far from his spot but near the lead bot: down, because he was seen alive.
+    Run n = Start(&plan);
+    Facts g = Party(0);
+    g.units = {Unit(5, 6910, 30)};
+    CHECK(Tick(n, g) == "pullback 5");
+    g.anyInCombat = true;
+    Tick(n, g);
+    g.anyInCombat = false;
+    g.units.clear();
+    g.bossDeadNearLead = true;
+    Tick(n, g);
+    CHECK(n.step == 1 && n.note == "boss down");
+    // Never seen alive this step: a corpse near the lead bot alone is not enough.
+    Run m = Start(&plan);
+    Facts h = Party(0);
+    h.bossDeadNearLead = true;
+    Tick(m, h);
+    CHECK(m.step == 0 && m.note.find("not at his spot") != std::string::npos);
+}
+
+// Cold review on #1000: after a wipe the party stands at the entrance and the
+// nearest walk-back point is more than ReactDistance away: it is approached in
+// navmesh hops (as a resume does), not sent as one refused move; with no path
+// toward it at all it is passed. Walk-back pulls have their own count.
+static void TestWalkBackFarPointIsApproached()
+{
+    DungeonPlan plan;
+    plan.steps = {Step(PlanStepKind::Move, 200), Step(PlanStepKind::Move, 230), PullStep(400, {1})};
+    Run r = Start(&plan, 2);
+    r.walkBack = true;
+    Facts f = Party(0);
+    f.seen = false; // FactStep: the walk-back point, 200 yd away
+    f.approachKnown = true;
+    f.approachX = 40;
+    CHECK(Tick(r, f) == "move 40.0 0.0 0.0");
+    CHECK(r.note.find("walk back: approaching") == 0);
+    f.leadX = 40;
+    CHECK(Tick(r, f).empty()); // at the hop: the next one next tick
+    f.approachX = 80;
+    CHECK(Tick(r, f) == "move 80.0 0.0 0.0");
+    f.leadX = 80;
+    Tick(r, f);
+    f.seen = true;
+    CHECK(Tick(r, f) == "move 200.0 0.0 0.0");
+    // A hostile on the way: pulled, counted apart from the step's pulls.
+    f.hopUnits = {Unit(9, 3, 20)};
+    CHECK(Tick(r, f) == "pullback 9");
+    CHECK(r.pulls == 0 && r.walkBackPulls == 1);
+
+    // No path toward a far point: passed for the next one.
+    Run p = Start(&plan, 2);
+    p.walkBack = true;
+    Facts g = Party(0);
+    g.seen = false;
+    g.approachKnown = false;
+    CHECK(Tick(p, g).empty());
+    CHECK(p.state == State::Running && p.walkBackIdx == 1 && p.note.find("no walkable path") != std::string::npos);
+}
+
+// Codex on #1000: only an invalid-target refusal of a pullback marks the unit
+// for a skip; a busy tank or an unavailable lead bot does not.
+static void TestRefusedPullOnlyForInvalidTarget()
+{
+    DungeonPlan plan;
+    plan.steps = {PullStep(10, {1})};
+    Run r = Start(&plan);
+    OrderRefused(r, "pullback 7", "busy: the tank is pulling");
+    CHECK(r.refusedPull == 0);
+    Run l = Start(&plan);
+    OrderRefused(l, "pullback 7", "lead-unavailable: The lead bot is dead");
+    CHECK(l.refusedPull == 0);
+    Run i = Start(&plan);
+    OrderRefused(i, "pullback 7", "invalid-target: The group cannot attack that target.");
+    CHECK(i.refusedPull == 7);
+}
+
+// Codex on #1001: the dead lead bot already released to the graveyard map;
+// the glue lets the tick run (its map guard pauses only a living lead bot off
+// the map), and the wipe starts the regroup.
+static void TestWipeWithTheLeadOnTheGraveyardMap()
+{
+    DungeonPlan plan;
+    plan.steps = {Step(PlanStepKind::Move, 10), PullStep(130, {1})};
+    Run r = Start(&plan, 1);
+    Facts f = Party(-9000); // the lead's ghost far away on another map
+    f.dead = 5;
+    f.alive = 0;
+    f.leadAlive = false;
+    f.maxMemberYd = 0;
+    f.seen = false;
+    CHECK(Tick(r, f).empty());
+    CHECK(r.state == State::Running && r.regroup && r.wipes == 1);
+    CHECK(Tick(r, f) == "revive party");
+}
+
+// Codex on #1000: a near wipe that becomes a wipe, then the revive one by one
+// (4 dead, 3 dead with someone up again), is one near wipe and one wipe.
+static void TestNearWipeLatchHoldsThroughTheWipe()
+{
+    DungeonPlan plan;
+    plan.steps = {PullStep(10, {1})};
+    Run r = Start(&plan);
+    Facts f = Party(0);
+    f.anyInCombat = true;
+    f.dead = 3;
+    f.alive = 2;
+    Tick(r, f);
+    CHECK(r.nearWipes == 1 && r.wipes == 0);
+    f.anyInCombat = false;
+    f.dead = 5;
+    f.alive = 0;
+    f.leadAlive = false;
+    Tick(r, f);
+    CHECK(r.nearWipes == 1 && r.wipes == 1);
+    for (std::uint32_t dead : {4u, 3u})
+    {
+        f.dead = dead;
+        f.alive = 5 - dead;
+        Tick(r, f);
+        CHECK(r.nearWipes == 1 && r.wipes == 1);
+    }
+    // All up again: a later near wipe counts anew.
+    f = Party(0);
+    f.units = {Unit(7, 1, 20)};
+    Tick(r, f);
+    CHECK(r.state == State::Running);
+    f.anyInCombat = true;
+    f.dead = 3;
+    f.alive = 2;
+    Tick(r, f);
+    CHECK(r.nearWipes == 2 && r.wipes == 1);
+}
+
+// Issue #999 item 5 (Zul'Farrak): the Sandfury Witch Doctor 5650 heals its
+// pack and drops a Greater Healing Ward 8179. Before the pull the mage
+// polymorphs the best-ranked cc unit (never the pull target); the pull goes
+// on a kill_first unit; in the fight the kill_first units are focused, the
+// ward first as soon as it is up.
+static PlanStep ZfPack()
+{
+    return PullStep(10, {5650, 5648, 7247});
+}
+
+static DungeonPlan ZfPlan()
+{
+    DungeonPlan plan;
+    plan.steps = {ZfPack()};
+    plan.ccPriority = {5650, 7247, 7246, 5648};
+    plan.ccAlways = {5650, 7246};
+    plan.killFirst = {8179, 5650, 7247};
+    return plan;
+}
+
+static UnitFact Engaged(UnitFact u)
+{
+    u.engaged = true;
+    return u;
+}
+
+// A Greater Healing Ward 8179 of `owner`; ownerEngaged: its owner fights the party.
+static UnitFact Ward(std::uint64_t guid, std::uint64_t owner, bool ownerEngaged)
+{
+    UnitFact u = Unit(guid, 8179, 18);
+    u.owner = owner;
+    u.ownerEngaged = ownerEngaged;
+    return u;
+}
+
+static void TestPullCrowdControlsTheHealer()
+{
+    DungeonPlan plan = ZfPlan();
+    Run r = Start(&plan);
+    Facts f = Party(0);
+    f.members = {MemberFact{"Magey", 5, true}};
+    f.units = {Unit(1, 5648, 10), Unit(2, 5650, 20), Unit(3, 7247, 25)};
+    // The witch doctor is the best cc rank: it is sheeped, not pulled.
+    CHECK(Tick(r, f) == "cc moon 2 Magey");
+    CHECK(r.note.find("crowd control on 5650") == 0 && r.state == State::Running);
+    // The pull goes on the soul eater (kill_first) rather than the nearest.
+    CHECK(Tick(r, f) == "pullback 3");
+    CHECK(r.pulls == 1 && r.fruitlessPulls == 0);
+    // In the fight: the soul eater is focused; the sheeped witch doctor is not.
+    f.anyInCombat = true;
+    f.killFirst = {Engaged(Unit(2, 5650, 20)), Engaged(Unit(3, 7247, 5))};
+    CHECK(Tick(r, f) == "focus 3");
+    CHECK(Tick(r, f).empty()); // only on a change
+    // A ward comes up: it is focused first.
+    f.killFirst.push_back(Ward(9, 3, true));
+    CHECK(Tick(r, f) == "focus 9");
+    // The ward dies: back on the soul eater.
+    f.killFirst.pop_back();
+    CHECK(Tick(r, f) == "focus 3");
+    // After the fight: the sheeped witch doctor is left while another can be
+    // pulled, and no second cc goes out while it lives.
+    f.anyInCombat = false;
+    f.killFirst.clear();
+    f.units = {Unit(1, 5648, 10), Unit(2, 5650, 20)};
+    CHECK(Tick(r, f) == "pullback 1");
+    f.anyInCombat = true;
+    Tick(r, f);
+    f.anyInCombat = false;
+    f.units = {Unit(2, 5650, 20)};
+    CHECK(Tick(r, f) == "pullback 2"); // the last one, sheeped or not
+    // A refused cc or focus does not pause.
+    OrderRefused(r, "cc moon 2 Magey", "no-bot");
+    OrderRefused(r, "focus 3", "invalid-target");
+    CHECK(r.state == State::Running);
+}
+
+static void TestNoCrowdControlWithoutAMageOrPlanList()
+{
+    DungeonPlan plan = ZfPlan();
+    Run r = Start(&plan);
+    Facts f = Party(0);
+    f.units = {Unit(1, 5648, 10), Unit(2, 5650, 20)};
+    // No mage: no cc; the pull still prefers kill_first.
+    CHECK(Tick(r, f) == "pullback 2");
+
+    DungeonPlan bare;
+    bare.steps = {ZfPack()};
+    Run b = Start(&bare);
+    Facts g = Party(0);
+    g.members = {MemberFact{"Magey", 5, true}};
+    g.units = {Unit(1, 5648, 10), Unit(2, 5650, 20)};
+    CHECK(Tick(b, g) == "pullback 1"); // the nearest, as before
+    g.anyInCombat = true;
+    g.killFirst = {Engaged(Unit(2, 5650, 20))};
+    CHECK(Tick(b, g).empty());
+
+    // A lone cc unit is pulled, not sheeped.
+    Run c = Start(&plan);
+    Facts h = Party(0);
+    h.members = {MemberFact{"Magey", 5, true}};
+    h.units = {Unit(2, 5650, 20)};
+    CHECK(Tick(c, h) == "pullback 2");
+}
+
+// Codex on #1001: the Polymorph is pending until its aura shows on that unit
+// in the fight (the mage's cc strategy is a combat one): not within
+// kCcLandMs, the mark once more; still not, noted, and the fight goes on.
+static void TestCrowdControlMustLand()
+{
+    DungeonPlan plan = ZfPlan();
+    plan.killFirst.clear();
+    Run r = Start(&plan);
+    Facts f = Party(0);
+    f.members = {MemberFact{"Tanky", 0, false}, MemberFact{"Magey", 5, true}};
+    f.units = {Unit(1, 5648, 10), Unit(2, 5650, 20)};
+    CHECK(Tick(r, f) == "cc moon 2 Magey");
+    CHECK(r.ccPending == 2);
+    CHECK(Tick(r, f) == "pullback 1"); // the mark is out; the pull starts the fight
+    f.anyInCombat = true;
+    CHECK(Tick(r, f).empty() && r.ccPending == 2);
+    f.units[1].polymorphed = true; // landed
+    CHECK(Tick(r, f).empty());
+    CHECK(r.ccPending == 0 && r.note.find("polymorphed") != std::string::npos);
+
+    // Never lands: once more after kCcLandMs, then noted.
+    Run n = Start(&plan);
+    Facts g = Party(0);
+    g.members = {MemberFact{"Magey", 5, true}};
+    g.units = {Unit(1, 5648, 10), Unit(2, 5650, 20)};
+    CHECK(Tick(n, g) == "cc moon 2 Magey");
+    CHECK(Tick(n, g) == "pullback 1");
+    g.anyInCombat = true;
+    std::string order;
+    for (std::uint32_t i = 0; i <= kCcLandMs / kTickMs && order.empty(); ++i)
+        order = Tick(n, g);
+    CHECK(order == "cc moon 2 Magey" && n.ccResent && n.note.find("once more") != std::string::npos);
+    order.clear();
+    for (std::uint32_t i = 0; i <= kCcLandMs / kTickMs && n.ccPending; ++i)
+        order += Tick(n, g);
+    CHECK(order.empty() && n.ccPending == 0 && n.note.find("cc did not land on 5650") != std::string::npos);
+    CHECK(n.state == State::Running);
+
+    // A mage that does not know Polymorph is not the crowd control.
+    Run m = Start(&plan);
+    Facts h = Party(0);
+    h.members = {MemberFact{"Lowmage", 5, false}};
+    h.units = {Unit(1, 5648, 10), Unit(2, 5650, 20)};
+    CHECK(Tick(m, h) == "pullback 1" && m.ccSent.empty());
+}
+
+// Codex on #1001: kill_first is this fight's only. A ward whose owner fights
+// the party is focused; a ward of an unrelated witch doctor nearby is not,
+// nor a kill_first unit that is not engaged.
+static void TestKillFirstIsThisFightsOnly()
+{
+    DungeonPlan plan = ZfPlan();
+    Run r = Start(&plan);
+    Facts f = Party(0);
+    f.units = {Unit(1, 5648, 10)};
+    CHECK(Tick(r, f) == "pullback 1");
+    f.anyInCombat = true;
+    f.killFirst = {Ward(20, 30, false), Unit(30, 5650, 25)}; // unrelated ward and its idle owner
+    CHECK(Tick(r, f).empty());
+    f.killFirst.push_back(Ward(21, 1, true)); // the ward of a unit in this fight
+    CHECK(Tick(r, f) == "focus 21");
+}
+
 static void TestStepIdleCeiling()
 {
     DungeonPlan plan;
@@ -713,11 +1278,74 @@ static void TestOtherTeamBossIsLookedAtAndFoughtUnlessFriendly()
     Run r4 = Start(&plan);
     Tick(r4, f);
     CHECK(r4.step == 1 && r4.note == "boss is for the other team and not here: skipped");
-    // The party's own boss in sight and gone: down.
+    // The party's own boss in sight and dead: down.
     f.team = ai::kPlanFlagHorde;
+    f.bossDeadNearSpot = true;
     Run r5 = Start(&plan);
     Tick(r5, f);
     CHECK(r5.step == 1 && r5.note == "boss down");
+}
+
+// Fourth observe run (Theka, ZF steps 54-56): "boss down" 2 s after arriving,
+// with no fight; Theka patrols. A boss neither alive nor dead in sight is
+// waited for at his spot, then the run pauses; never counted down.
+static void TestBossDownNeedsASeenDeath()
+{
+    DungeonPlan plan;
+    PlanStep boss = Step(PlanStepKind::Boss, 30);
+    boss.entry = 7272;
+    ai::NormalizePlanStep(boss);
+    plan.steps = {boss, Step(PlanStepKind::Move, 60)};
+    Run r = Start(&plan);
+    Facts f = Party(0);
+    CHECK(Tick(r, f).empty());
+    CHECK(r.step == 0 && r.state == State::Running && r.note.find("not at his spot") != std::string::npos);
+    // He walks in on his patrol: pulled.
+    for (int i = 0; i < 20; ++i)
+        Tick(r, f);
+    f.units = {Unit(5, 7272, 40)};
+    CHECK(Tick(r, f) == "pullback 5");
+    f.anyInCombat = true;
+    Tick(r, f);
+    f.anyInCombat = false;
+    // Killed: his corpse is seen.
+    f.units.clear();
+    f.bossDeadNearSpot = true;
+    Tick(r, f);
+    CHECK(r.step == 1 && r.note == "boss down");
+
+    // Never there: paused after kBossSearchMs, "not found".
+    Run p = Start(&plan);
+    Facts g = Party(0);
+    for (std::uint32_t i = 0; i <= kBossSearchMs / kTickMs + 1 && p.state == State::Running; ++i)
+        Tick(p, g);
+    CHECK(p.state == State::Paused && p.step == 0 && p.note.find("boss 7272 not found") == 0);
+}
+
+// Fourth observe run (step 43 -> 45): a pullback refused invalid-target, the
+// step skipped; the next pull picked the same unit and was refused again. A
+// skip leaves the refused target out for good and clears the pull state.
+static void TestSkipDropsTheRefusedPullTarget()
+{
+    DungeonPlan plan;
+    plan.steps = {PullStep(10, {1}), Step(PlanStepKind::Move, 20), PullStep(30, {1, 2})};
+    Run r = Start(&plan);
+    Facts f = Party(0);
+    f.units = {Unit(7, 1, 10)};
+    CHECK(Tick(r, f) == "pullback 7");
+    OrderRefused(r, "pullback 7", "invalid-target: The group cannot attack that target.");
+    CHECK(r.state == State::Paused && r.refusedPull == 7);
+    CHECK(Skip(r));
+    CHECK(r.step == 1 && r.pullGuid == 0 && r.pulls == 0 && r.pullTries.empty() && r.refusedPull == 0);
+    Tick(r, Party(0)); // revive/gather of the regroup: nothing to do
+    f = Party(20);
+    CHECK(Tick(r, f).empty() || r.step == 2);
+    // Step 3 sees the same unit and another: only the other is pulled.
+    f.units = {Unit(7, 1, 5), Unit(8, 2, 15)};
+    std::string order;
+    for (int i = 0; i < 3 && order.empty(); ++i)
+        order = Tick(r, f);
+    CHECK(r.step == 2 && order == "pullback 8");
 }
 
 // Round 2: a resume after a wipe in which the lead bot itself is dead: the
@@ -798,6 +1426,22 @@ int main()
     TestStepIdleCeiling();
     TestTeamFlags();
     TestOtherTeamBossIsLookedAtAndFoughtUnlessFriendly();
+    TestRefusedGatherIsRetriedOnceThenLeftOut();
+    TestWipeRegroupsAndWalksBack();
+    TestThreeDeadRegroupAfterTheFight();
+    TestGatherSummonsAStalledStraggler();
+    TestWalkBackRefusalKinds();
+    TestBossDownNeedsASeenDeath();
+    TestSkipDropsTheRefusedPullTarget();
+    TestBossKilledAwayFromHisSpot();
+    TestWalkBackFarPointIsApproached();
+    TestRefusedPullOnlyForInvalidTarget();
+    TestWipeWithTheLeadOnTheGraveyardMap();
+    TestNearWipeLatchHoldsThroughTheWipe();
+    TestPullCrowdControlsTheHealer();
+    TestNoCrowdControlWithoutAMageOrPlanList();
+    TestCrowdControlMustLand();
+    TestKillFirstIsThisFightsOnly();
     TestEmptyPlan();
     std::cout << "test_dungeon_run_policy: ok\n";
     return 0;

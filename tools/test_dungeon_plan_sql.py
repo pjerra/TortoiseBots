@@ -29,6 +29,8 @@ def created_columns():
             match = re.search(r"CREATE TABLE IF NOT EXISTS `%s` \((.*?)\n\) ENGINE" % table, text, re.S)
             if match:
                 columns.setdefault(table, set()).update(re.findall(r"^\s+`(\w+)`", match.group(1), re.M))
+            for alter in re.findall(r"ALTER TABLE `%s`(.*?);" % table, text, re.S):
+                columns.setdefault(table, set()).update(re.findall(r"ADD COLUMN IF NOT EXISTS `(\w+)`", alter))
     return columns
 
 
@@ -54,6 +56,22 @@ class DungeonPlanSql(unittest.TestCase):
         for table, cols in loaded.items():
             missing = cols - created.get(table, set())
             self.assertFalse(missing, "%s: the loader reads columns no migration creates: %s" % (table, missing))
+
+    def test_zulfarrak_keeps_its_crowd_control(self):
+        # The newest Zul'Farrak plan row carries hand-set cc_always and kill_first (pending
+        # pjerra/turtle-agent#190); a re-export from an exporter that does not write them must not
+        # land silently.
+        newest = None
+        for name, text in migrations():
+            for cols, values in re.findall(r"INSERT INTO `ai_dungeon_plan` \(([^)]*)\) VALUES\s*(.*?);", text, re.S):
+                columns = re.findall(r"`(\w+)`", cols)
+                for row in re.findall(r"\(('zulfarrak'.*?)\)\s*(?:,|$)", values, re.S):
+                    fields = [f.strip().strip("'") for f in re.findall(r"'(?:[^']|'')*'|[^,\s][^,]*", row)]
+                    newest = (name, dict(zip(columns, fields)))
+        self.assertIsNotNone(newest, "no migration inserts the zulfarrak plan row")
+        name, row = newest
+        for column in ("cc_always", "kill_first"):
+            self.assertTrue(row.get(column), "%s: the zulfarrak plan row has no %s" % (name, column))
 
     def test_inserted_step_kinds_are_known(self):
         for name, text in migrations():
