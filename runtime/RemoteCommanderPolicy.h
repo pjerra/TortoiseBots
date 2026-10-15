@@ -1321,6 +1321,25 @@ inline char const* TargetVerdictText(TargetVerdict verdict)
 constexpr uint32_t kPathNoPath = 0x0008;
 constexpr uint32_t kPathIncomplete = 0x0004;
 
+// A requested point may sit below (or a little above) the floor; the path
+// finder ignores a navmesh floor more than 3 yd above the point. The point is
+// snapped to the map floor at its x,y, but only a floor this close: a point
+// on another level of a multi-floor room keeps its own height.
+constexpr float kFloorSnapRange = 6.0f;
+
+// floorZ is the map's floor height at the point's x,y found by a search
+// starting kFloorSnapRange above the point; floorValid is false when none was
+// found. Returns the z to use.
+inline float SnapToFloorZ(float pointZ, float floorZ, bool floorValid)
+{
+    if (!floorValid)
+        return pointZ;
+    float const delta = floorZ - pointZ;
+    if (delta > kFloorSnapRange || delta < -kFloorSnapRange)
+        return pointZ;
+    return floorZ;
+}
+
 struct MoveFacts
 {
     float distanceFromLead = 0.0f; // 3D, lead bot to the point

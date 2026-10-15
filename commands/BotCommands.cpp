@@ -5822,7 +5822,7 @@ static bool CommanderMove(ChatHandler* handler, CommanderOrder const& order, std
     }
     if (request.direct)
         return CommanderMoveDirect(handler, order, request.point, intent);
-    RemoteCommander::MovePoint const point = request.point;
+    RemoteCommander::MovePoint point = request.point;
     Player* lead = order.lead;
     if (!lead->IsAlive() || lead->IsTaxiFlying() || lead->IsBeingTeleported())
     {
@@ -5834,6 +5834,21 @@ static bool CommanderMove(ChatHandler* handler, CommanderOrder const& order, std
     {
         SendActionError(handler, intent, "no-ai", "The lead bot has no AI.");
         return true;
+    }
+
+    // Snap the point to the map floor at its x,y (a point a few yd under the
+    // floor has no navmesh poly within the path finder's reach: NOPATH).
+    {
+        float const floorZ = lead->GetMap()->GetHeight(point.x, point.y,
+            point.z + RemoteCommander::kFloorSnapRange, true,
+            2.0f * RemoteCommander::kFloorSnapRange);
+        float const snapped = RemoteCommander::SnapToFloorZ(point.z, floorZ, floorZ > INVALID_HEIGHT);
+        if (snapped != point.z)
+        {
+            point.z = snapped;
+            handler->PSendSysMessage("Move point snapped to the floor: %.1f %.1f %.1f",
+                point.x, point.y, point.z);
+        }
     }
 
     float const dx = point.x - lead->GetPositionX();

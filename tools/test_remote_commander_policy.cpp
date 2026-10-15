@@ -599,6 +599,21 @@ static void TestMoveVerdict()
     CHECK(CheckMove(facts) == MoveVerdict::NoPath);
 }
 
+static void TestSnapToFloorZ()
+{
+    // A point 4.5 yd under the floor snaps up to it (Ragefire Chasm).
+    CHECK(SnapToFloorZ(-10.5f, -6.0f, true) == -6.0f);
+    // A point above the floor snaps down.
+    CHECK(SnapToFloorZ(-2.0f, -6.0f, true) == -6.0f);
+    // Exactly the range still snaps; beyond it the point stays (another level).
+    CHECK(SnapToFloorZ(0.0f, 6.0f, true) == 6.0f);
+    CHECK(SnapToFloorZ(0.0f, -6.0f, true) == -6.0f);
+    CHECK(SnapToFloorZ(0.0f, 6.5f, true) == 0.0f);
+    CHECK(SnapToFloorZ(0.0f, -6.5f, true) == 0.0f);
+    // No floor found: unchanged.
+    CHECK(SnapToFloorZ(3.0f, -100000.0f, false) == 3.0f);
+}
+
 static std::vector<std::string> Args(std::string const& text)
 {
     return SplitOrderArgs(text);
@@ -1111,6 +1126,7 @@ int main()
     TestParseMoveOrder();
     TestTargetVerdict();
     TestMoveVerdict();
+    TestSnapToFloorZ();
     TestDirectVerdict();
     TestParseItemId();
     TestParseTargetSpec();
