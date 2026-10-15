@@ -435,6 +435,22 @@ static void TestPermissions()
         notCommanded.push_back({guid, MayRecordBot(false, false, false)});
     CHECK(SelectScope(true, notCommanded).empty());
 
+    // `.bot trace start party` checks each bot of the party with the same
+    // rule: a GameMaster's party holding a stranger's bots may be traced, a
+    // player's may not.
+    struct PartyBot { bool controlled; };
+    std::vector<PartyBot> party = {{true}, {false}, {false}};
+    auto partyStartAllowed = [&party](bool gm, bool commanded)
+    {
+        for (PartyBot const& bot : party)
+            if (!MayRecordBot(gm, bot.controlled, commanded))
+                return false;
+        return true;
+    };
+    CHECK(partyStartAllowed(true, false));    // GameMaster
+    CHECK(partyStartAllowed(false, true));    // bound commander
+    CHECK(!partyStartAllowed(false, false));  // a player with a stranger's bots
+
     // AiPlayerbot.RunTrace.GmOnly.
     CHECK(MayStartTrace(true, true));
     CHECK(!MayStartTrace(true, false));

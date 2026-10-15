@@ -217,6 +217,12 @@ class CommandGlueTest(unittest.TestCase):
         self.assertIn("CommanderBindings().FindByCommander(", binding)
         self.assertIn("binding->leadGuid", binding)
 
+    def test_party_start_uses_the_frame_rule(self):
+        body = function_body(self.src, "static bool HandleTrace(")
+        party = body[body.index('else if (scope == "party")'):]
+        self.assertIn("RunTrace::MayRecordBot(admin, CanControlBot(requester, record), commanded)", party)
+        self.assertNotIn("!commanded && !CanControlBot(", body, "a GameMaster may trace any party")
+
     def test_start_and_status_use_the_policies(self):
         body = function_body(self.src, "static bool HandleTrace(")
         self.assertIn("RunTrace::MayStartTrace(sPlayerbotAIConfig.runTraceGmOnly, admin)", body)

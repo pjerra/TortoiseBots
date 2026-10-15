@@ -9628,7 +9628,9 @@ static bool HandleTrace(ChatHandler* handler, char const* args)
             if (!member || !IsLiveHeadlessBot(member))
                 continue;
             BotRecord* record = BotManager::Instance().FindBot(member->GetObjectGuid());
-            if (!commanded && !CanControlBot(requester, record))
+            // The same rule as every frame (MayTraceBot): a GameMaster, the
+            // player who controls the bot, or the commander of its group.
+            if (!RunTrace::MayRecordBot(admin, CanControlBot(requester, record), commanded))
             {
                 SendActionError(handler, intent, "forbidden", "You can only trace a party whose bots you control.");
                 return true;
