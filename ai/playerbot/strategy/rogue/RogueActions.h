@@ -1,5 +1,6 @@
 #pragma once
 #include "playerbot/GroupMembers.h"
+#include "../../../runtime/RogueThreatPolicy.h"
 #include "playerbot/strategy/actions/GenericActions.h"
 #include "playerbot/strategy/actions/UseItemAction.h"
 #include "playerbot/strategy/values/TargetValue.h"
@@ -125,12 +126,37 @@ namespace ai
 	public:
 		CastFeintAction(PlayerbotAI* ai) : CastMeleeSpellAction(ai, "feint") {}
 
-		// Feint only sheds threat onto someone else. Solo there is nobody to take
-		// the mob over (the low-health row keeps Feint last "for grouped rogues"),
-		// so it would only cost 20 energy and a GCD every 10 s.
+		// Feint only sheds threat onto someone else, so every Feint row (dungeon,
+		// raid, low-health emergency) needs a living main tank (not the rogue) or a
+		// living party pet to take the mob. Solo, or right after the tank died, it
+		// would only cost 20 energy and a GCD.
 		virtual bool isUseful() override
 		{
-			return bot->GetGroup() != nullptr && CastMeleeSpellAction::isUseful();
+			Group* group = bot->GetGroup();
+			if (!group)
+				return false;
+
+			bool livingOtherTank = false;
+			Unit* tank = AI_VALUE(Unit*, "main tank");
+			if (tank && tank != bot && sServerFacade.IsAlive(tank))
+				livingOtherTank = true;
+
+			bool livingPartyPet = false;
+			if (!livingOtherTank)
+			{
+				for (Player* member : LiveGroupMembers(group))
+				{
+					Pet* pet = member ? member->GetPet() : nullptr;
+					if (pet && sServerFacade.IsAlive(pet))
+					{
+						livingPartyPet = true;
+						break;
+					}
+				}
+			}
+
+			return TortoiseBots::CanRogueFeintShedThreat(true, livingOtherTank, livingPartyPet) &&
+				CastMeleeSpellAction::isUseful();
 		}
 		virtual ActionThreatType getThreatType() override { return ActionThreatType::ACTION_THREAT_NONE; }
 	};

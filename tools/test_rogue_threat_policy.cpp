@@ -51,6 +51,13 @@ int main()
     }
     std::cout << "  [PASS] vanish only on high threat\n";
 
+    // Feint needs a living tank or party pet to take the threat (#915).
+    CHECK(CanRogueFeintShedThreat(true, true, false));
+    CHECK(CanRogueFeintShedThreat(true, false, true));
+    CHECK(!CanRogueFeintShedThreat(true, false, false)); // tank just died
+    CHECK(!CanRogueFeintShedThreat(false, true, true));  // solo
+    std::cout << "  [PASS] feint needs a living tank or pet\n";
+
     // Toggle off: nothing fires.
     {
         RogueThreatInputs in = dungeon();

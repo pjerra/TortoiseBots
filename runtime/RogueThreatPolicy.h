@@ -56,4 +56,14 @@ inline bool ShouldRogueDungeonVanish(RogueThreatInputs const& in)
     return RogueThreatContextOk(in) && in.highThreat && in.victimIsTankOrRogue;
 }
 
+// Every Feint row (dungeon, raid, low-health emergency) goes through the Feint action,
+// which asks this. Feint only sheds threat onto someone else, so it needs a living
+// target to take the mob: a main tank other than the rogue, or a living party pet.
+// With neither it only costs energy and a GCD (issue #915: a Feint 0.07 s after the
+// tank died).
+inline bool CanRogueFeintShedThreat(bool grouped, bool livingOtherTank, bool livingPartyPet)
+{
+    return grouped && (livingOtherTank || livingPartyPet);
+}
+
 } // namespace TortoiseBots
