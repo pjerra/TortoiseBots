@@ -7,6 +7,8 @@
 #include "playerbot/AvoidAoePolicy.h"
 #include "playerbot/CreatureAuraKeepoutPolicy.h"
 
+#include <atomic>
+
 namespace ai
 {
     // List of hostile and neutral targets in a range around the bot
@@ -60,6 +62,31 @@ namespace ai
         // nullptr when none or with the toggle off. No new world scan.
         static Unit* KeepoutRingAt(PlayerbotAI* ai, float x, float y, Unit* extra = nullptr);
 
+        // True when a move's end point (x, y, z) lies in a ring: `extra` and
+        // the cached list (KeepoutRingAt, exact ring), then the shared hazard
+        // snapshot (SnapshotRingedAt), which reaches rings past the 15 yd list
+        // (set behind or rear flank on a target up to 15 yd away).
+        static bool EndPointRinged(PlayerbotAI* ai, float x, float y, float z, Unit* extra = nullptr);
+
+        // (x, y, z) lies in the ring of a listed creature the live checks do
+        // not see (not in the bot's live list, not `skip`, not the explicit
+        // attack target), from the shared hazard snapshot of the bot's
+        // (map, instance, 30 yd cell): ring widened by the drift for the
+        // snapshot's age, same floor only (CreatureAuraSnapshotRinged). At
+        // most one bounded grid visit per cell per kCreatureAuraSnapshotMs and
+        // kKeepoutRefreshesPerTick per world update. With no usable snapshot
+        // (or a point outside its cover): false for an end point (the live
+        // checks decide, as #882); with `landingLookup` (a gap-closer
+        // landing), #882's one bounded lookup of listed creatures around the
+        // point at their exact ring instead. Never looks on a map without a
+        // listed row.
+        static bool SnapshotRingedAt(PlayerbotAI* ai, float x, float y, float z, Unit* skip,
+            bool landingLookup = false);
+
+        // Once per world update, before the bots run: resets the snapshot
+        // refresh budget.
+        static void BeginKeepoutTick();
+
         // AiPlayerbot.AvoidCreatureAuras: true when this bot must not use a
         // gap closer (Charge, Intercept, Feral Charge) onto `target`
         // (CreatureAuraGapCloserVetoed): a non-tank bot without an attack
@@ -70,10 +97,9 @@ namespace ai
         // off cooldown, enough rage, Charge out of combat, within its min/max
         // range); otherwise there is nothing to veto and isPossible() refuses
         // the cast as it does with the option off. The landing is then checked
-        // against the cached 15 yd list, then by a bounded lookup of listed
-        // creatures around the target (the cast fires from up to 25 yd), and
-        // that lookup's result is kept for this target for
-        // kCreatureAuraLandingMemoMs (one grid visit per bot per second at most).
+        // against the cached 15 yd list, then against the shared hazard snapshot
+        // (the cast fires from up to 25 yd; shared by all bots and with the
+        // end-point checks).
         static bool GapCloserIntoKeepout(PlayerbotAI* ai, std::string const& spell, Unit* target);
 
         // The cheap readiness test above (CreatureAuraGapCloserCouldFire).
@@ -85,9 +111,11 @@ namespace ai
         void FindUnits(std::list<Unit*> &targets) override;
         bool AcceptUnit(Unit* unit) override;
 
-    private:
-        // Per bot (one value per AiObjectContext): the last bounded landing
-        // lookup for a gap-closer target.
-        CreatureAuraLandingMemo landingMemo;
+    public:
+        // Grid visits made for the shared hazard snapshots (keepoutScans), and
+        // lookups due a refresh after the world update's budget was spent
+        // (keepoutBudgetMiss); BOTPERF reports and resets both.
+        static std::atomic<uint32_t> hazardSnapshotRefreshCount;
+        static std::atomic<uint32_t> hazardSnapshotBudgetMissCount;
 	};
 }

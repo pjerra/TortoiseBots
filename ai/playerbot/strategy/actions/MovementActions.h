@@ -100,7 +100,8 @@ namespace ai
         // a listed creature's ring (rear flank, set behind, move out of
         // collision refuse it; the hazard registry only bends the path). A
         // tank in combat is exempt, the player's attack target is skipped.
-        bool EndPointInCreatureAuraKeepout(float x, float y);
+        // `z` is the end point's height (the snapshot counts one floor only).
+        bool EndPointInCreatureAuraKeepout(float x, float y, float z);
         bool Flee(Unit *target);
         // Pool-bot flee: one checked point step of `distance` away from
         // target (fanned to the sides), false when no spot is usable.

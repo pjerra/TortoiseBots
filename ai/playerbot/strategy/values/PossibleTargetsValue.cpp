@@ -9,6 +9,8 @@
 #include "Maps/GridNotifiersImpl.h"
 #include "Maps/CellImpl.h"
 
+#include <atomic>
+
 using namespace ai;
 using namespace MaNGOS;
 
@@ -223,6 +225,124 @@ Unit* PossibleTriggersValue::KeepoutRingAt(PlayerbotAI* ai, float x, float y, Un
     return nullptr;
 }
 
+namespace
+{
+    // Listed keep-out entries of one map within `radius` of a point (2D,
+    // centre measure, the measure the ring uses).
+    struct ListedKeepoutNearPoint
+    {
+        uint32 mapId;
+        float x, y, radius;
+        bool operator()(Unit* unit) const
+        {
+            if (!unit || !unit->IsCreature() || !FindCreatureAuraKeepout(mapId, unit->GetEntry()))
+                return false;
+            float const dx = unit->GetPositionX() - x, dy = unit->GetPositionY() - y;
+            return dx * dx + dy * dy < radius * radius;
+        }
+    };
+
+    // Shared by every bot. World thread only: bot AI updates run in the
+    // module's world-thread pass (BotManager), never on a map thread.
+    CreatureAuraSnapshotCache& KeepoutSnapshotCache()
+    {
+        static CreatureAuraSnapshotCache cache;
+        return cache;
+    }
+}
+
+std::atomic<uint32_t> PossibleTriggersValue::hazardSnapshotRefreshCount{ 0 };
+std::atomic<uint32_t> PossibleTriggersValue::hazardSnapshotBudgetMissCount{ 0 };
+
+void PossibleTriggersValue::BeginKeepoutTick()
+{
+    // Called from BotManager::OnWorldUpdate before the bot pass. The direct
+    // DoNextAction paths of chat commands (commands/BotCommandContext.cpp,
+    // BotCommands.cpp) also run on the world thread but between passes, so
+    // they share whatever budget the last pass left; that is safe because
+    // an end point then falls back to the live list (#882) and a gap-closer
+    // landing to #882's bounded lookup, never to "clear".
+    CreatureAuraSnapshotBeginTick(KeepoutSnapshotCache());
+}
+
+bool PossibleTriggersValue::SnapshotRingedAt(PlayerbotAI* ai, float x, float y, float z, Unit* skip,
+    bool landingLookup)
+{
+    if (!sPlayerbotAIConfig.avoidCreatureAuras || !ai)
+        return false;
+    Player* bot = ai->GetBot();
+    uint32 const mapId = bot->GetMapId();
+    float const maxHazard = CreatureAuraMaxHazardRadiusOnMap(mapId);
+    if (maxHazard <= 0.0f)
+        return false; // no listed creature on this map: never a grid visit
+    Map* map = bot->GetMap();
+    if (!map)
+        return false;
+    AiObjectContext* context = ai->GetAiObjectContext();
+    // Judged live already (exact ring, current position): the bot's live
+    // list, `skip` (the target) and the explicit attack target.
+    std::list<ObjectGuid> const& live = context->GetValue<std::list<ObjectGuid>>("possible triggers")->Get();
+    std::vector<uint64_t> judged;
+    judged.reserve(live.size() + 2);
+    for (ObjectGuid const& guid : live)
+        judged.push_back(guid.GetRawValue());
+    if (skip)
+        judged.push_back(skip->GetObjectGuid().GetRawValue());
+    judged.push_back(context->GetValue<ObjectGuid>("explicit attack target")->Get().GetRawValue());
+    // Listed creatures carrying their aura within `radius` of (px, py): one
+    // bounded grid visit that never loads a grid.
+    auto visit = [&](float px, float py, float radius)
+    {
+        std::vector<CreatureAuraHazardEntry> out;
+        std::list<Unit*> nearby;
+        ListedKeepoutNearPoint check{ mapId, px, py, radius };
+        MaNGOS::UnitListSearcher<ListedKeepoutNearPoint> searcher(nearby, check);
+        Cell::VisitAllObjects(px, py, map, searcher, radius, true);
+        for (Unit* unit : nearby)
+            if (CreatureAuraKeepout const* row = KeepoutFor(unit))
+                out.push_back({ unit->GetObjectGuid().GetRawValue(), unit->GetPositionX(), unit->GetPositionY(),
+                    unit->GetPositionZ(), CreatureAuraHazardRadius(*row),
+                    !unit->IsStopped() || unit->GetMotionMaster()->GetCurrentMovementGeneratorType() != IDLE_MOTION_TYPE });
+        hazardSnapshotRefreshCount.fetch_add(1, std::memory_order_relaxed);
+        return out;
+    };
+    // The cell snapshot: one visit per (map, instance, cell) per
+    // kCreatureAuraSnapshotMs, shared by every bot standing there, within
+    // the per-world-update refresh budget.
+    auto fill = [&](std::vector<CreatureAuraHazardEntry>& out, float cx, float cy)
+    {
+        out = visit(cx, cy, CreatureAuraSnapshotRadius(maxHazard));
+    };
+    CreatureAuraSnapshotKey const key =
+        CreatureAuraSnapshotKeyFor(mapId, bot->GetInstanceId(), bot->GetPositionX(), bot->GetPositionY());
+    uint32 const now = WorldTimer::getMSTime();
+    CreatureAuraSnapshotView view;
+    bool ringed;
+    if (landingLookup)
+    {
+        // A gap-closer landing never fails open: without a usable snapshot,
+        // #882's one bounded lookup around the landing.
+        ringed = CreatureAuraLandingRinged(KeepoutSnapshotCache(), key, now, x, y, z, judged, fill,
+            [&](float px, float py) { return visit(px, py, maxHazard); }, &view) != 0;
+    }
+    else
+        ringed = CreatureAuraSnapshotRinged(KeepoutSnapshotCache(), key, now, x, y, z, judged, fill, &view) != 0;
+    if (view.budgetMiss)
+        hazardSnapshotBudgetMissCount.fetch_add(1, std::memory_order_relaxed);
+    return ringed;
+}
+
+bool PossibleTriggersValue::EndPointRinged(PlayerbotAI* ai, float x, float y, float z, Unit* extra)
+{
+    if (!sPlayerbotAIConfig.avoidCreatureAuras || !ai)
+        return false;
+    // `extra` (the current target) and the cached list, live; then the
+    // shared hazard snapshot for rings past the list.
+    if (KeepoutRingAt(ai, x, y, extra))
+        return true;
+    return SnapshotRingedAt(ai, x, y, z, extra);
+}
+
 bool PossibleTriggersValue::GapCloserCouldFire(PlayerbotAI* ai, std::string const& spell, Unit* target)
 {
     // Mirrors the refusals of CastSpellAction::isPossible and
@@ -281,42 +401,9 @@ bool PossibleTriggersValue::GapCloserIntoKeepout(PlayerbotAI* ai, std::string co
     // Fast path: the bot's cached 15 yd list, read fresh every time.
     if (KeepoutRingAt(ai, lx, ly))
         return CreatureAuraGapCloserVetoed(false, true, isTank, ordered);
-    // The bounded lookup's result is kept per bot for this target for
-    // kCreatureAuraLandingMemoMs (the memo lives on this bot's value).
-    PossibleTriggersValue* self = dynamic_cast<PossibleTriggersValue*>(
-        context->GetValue<std::list<ObjectGuid>>("possible triggers"));
-    uint64 const targetRaw = target->GetObjectGuid().GetRawValue();
-    uint32 const now = WorldTimer::getMSTime();
-    if (self && CreatureAuraLandingMemoHit(self->landingMemo, targetRaw, now))
-        return CreatureAuraGapCloserVetoed(false, self->landingMemo.ringed, isTank, ordered);
-    // Bounded lookup around the target, listed entries on this map only.
-    bool landingInRing = false;
-    float const ldx = lx - target->GetPositionX(), ldy = ly - target->GetPositionY();
-    float const landingToTarget = std::sqrt(ldx * ldx + ldy * ldy);
-    for (CreatureAuraKeepout const& row : kCreatureAuraKeepouts)
-    {
-        if (landingInRing)
-            break;
-        if (row.mapId != target->GetMapId())
-            continue;
-        float const radius = CreatureAuraLandingSearchRadius(row, landingToTarget);
-        std::list<Unit*> nearby;
-        MaNGOS::AllCreaturesOfEntryInRange check(target, row.creatureEntry, radius);
-        MaNGOS::UnitListSearcher<MaNGOS::AllCreaturesOfEntryInRange> searcher(nearby, check);
-        Cell::VisitAllObjects(target, searcher, radius);
-        for (Unit* unit : nearby)
-        {
-            if (!unit || unit->GetObjectGuid() == explicitTarget || !KeepoutFor(unit))
-                continue;
-            float const dx = unit->GetPositionX() - lx, dy = unit->GetPositionY() - ly;
-            if (CreatureAuraEndPointBlocked(row, std::sqrt(dx * dx + dy * dy)))
-            {
-                landingInRing = true;
-                break;
-            }
-        }
-    }
-    if (self)
-        CreatureAuraLandingMemoStore(self->landingMemo, targetRaw, now, landingInRing);
+    // Rings past the list: the shared hazard snapshot, or #882's bounded
+    // lookup around the landing when no snapshot is usable. The target is
+    // checked live above.
+    bool const landingInRing = SnapshotRingedAt(ai, lx, ly, target->GetPositionZ(), target, true);
     return CreatureAuraGapCloserVetoed(false, landingInRing, isTank, ordered);
 }
