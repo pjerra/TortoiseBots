@@ -37,6 +37,10 @@ constexpr uint32_t kSweepIntervalMs = 1000;
 // A move point further than this from the walkable end of its path is not on
 // the ground (inside a wall, in the air): refused as off-mesh.
 constexpr float kMaxMoveEndOffset = 5.0f;
+// A move to a point this close to the lead bot is "hold here": there is no path
+// to walk (the path finder answers NOPATH for a zero-length path), the point is
+// reached already.
+constexpr float kAtLeadDistance = 1.0f;
 // Coordinates outside this box are not on any 1.12 map.
 constexpr float kMaxMapCoordinate = 20000.0f;
 
@@ -1344,10 +1348,18 @@ enum class MoveVerdict : uint8_t
 // be NoPath at 0 yd. A player's order to a point that close is judged as any.
 constexpr float kMoveHereYd = 3.0f;
 
+// A move within kAtLeadDistance of the lead bot is reached already (any caller).
+inline bool IsAtLead(float distanceFromLead)
+{
+    return distanceFromLead <= kAtLeadDistance;
+}
+
 inline MoveVerdict CheckMove(MoveFacts const& facts)
 {
     if (facts.maxDistance <= 0.0f || facts.distanceFromLead > facts.maxDistance)
         return MoveVerdict::TooFar;
+    if (IsAtLead(facts.distanceFromLead))
+        return MoveVerdict::Ok;
     if (facts.leadSpotGather && facts.distanceFromLead <= kMoveHereYd)
         return MoveVerdict::Ok;
     if (facts.pathType & kPathNoPath)

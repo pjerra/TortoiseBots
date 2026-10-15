@@ -5843,14 +5843,19 @@ static bool CommanderMove(ChatHandler* handler, CommanderOrder const& order, std
     facts.distanceFromLead = std::sqrt(dx * dx + dy * dy + dz * dz);
     facts.maxDistance = sPlayerbotAIConfig.reactDistance;
     facts.leadSpotGather = s_runIssuing && s_runGather;
-    PathFinder path(lead);
-    path.calculate(point.x, point.y, point.z, false);
-    facts.pathType = static_cast<uint32>(path.getPathType());
-    Vector3 const end = path.getActualEndPosition();
-    float const ex = end.x - point.x;
-    float const ey = end.y - point.y;
-    float const ez = end.z - point.z;
-    facts.endOffset = std::sqrt(ex * ex + ey * ey + ez * ez);
+    // The lead bot already stands on the point ("hold here"): the path finder
+    // answers NOPATH for a zero-length path, so skip it; CheckMove accepts it.
+    if (!RemoteCommander::IsAtLead(facts.distanceFromLead))
+    {
+        PathFinder path(lead);
+        path.calculate(point.x, point.y, point.z, false);
+        facts.pathType = static_cast<uint32>(path.getPathType());
+        Vector3 const end = path.getActualEndPosition();
+        float const ex = end.x - point.x;
+        float const ey = end.y - point.y;
+        float const ez = end.z - point.z;
+        facts.endOffset = std::sqrt(ex * ex + ey * ey + ez * ez);
+    }
     RemoteCommander::MoveVerdict verdict = RemoteCommander::CheckMove(facts);
     if (verdict != RemoteCommander::MoveVerdict::Ok)
     {

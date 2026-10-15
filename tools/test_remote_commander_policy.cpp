@@ -584,6 +584,19 @@ static void TestMoveVerdict()
     facts = Walkable();
     facts.pathType = 0x0010;
     CHECK(CheckMove(facts) == MoveVerdict::Ok);
+
+    // A move to the lead bot's own spot ("hold here"): the path finder says
+    // NOPATH for a zero-length path, and that is not a refusal.
+    facts = Walkable();
+    facts.distanceFromLead = 0.0f;
+    facts.pathType = kPathNoPath;
+    CHECK(IsAtLead(facts.distanceFromLead));
+    CHECK(CheckMove(facts) == MoveVerdict::Ok);
+    facts.distanceFromLead = 1.0f;
+    CHECK(CheckMove(facts) == MoveVerdict::Ok);
+    facts.distanceFromLead = 1.5f; // beyond the hold-here radius: NOPATH stands
+    CHECK(!IsAtLead(facts.distanceFromLead));
+    CHECK(CheckMove(facts) == MoveVerdict::NoPath);
 }
 
 static std::vector<std::string> Args(std::string const& text)
