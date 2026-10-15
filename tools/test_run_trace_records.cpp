@@ -398,6 +398,52 @@ static void TestScopePolicy()
     CHECK(SelectScope(true, {}).empty());
 }
 
+static void TestScopeSource()
+{
+    // A party run reads the group; once the group is gone it has no bots, so
+    // the empty-scope timer runs and the run ends with scope_lost. It does not
+    // shrink to the anchor (the commanded lead bot) on its own.
+    CHECK(PickScopeSource(true, true, true) == ScopeSource::Group);
+    CHECK(PickScopeSource(true, true, false) == ScopeSource::Group);
+    CHECK(PickScopeSource(true, false, true) == ScopeSource::None);
+    CHECK(PickScopeSource(true, false, false) == ScopeSource::None);
+
+    // A bot run follows that one bot, grouped or not.
+    CHECK(PickScopeSource(false, true, true) == ScopeSource::Anchor);
+    CHECK(PickScopeSource(false, false, true) == ScopeSource::Anchor);
+    CHECK(PickScopeSource(false, true, false) == ScopeSource::None);
+    CHECK(PickScopeSource(false, false, false) == ScopeSource::None);
+}
+
+static void TestScopeSetEmptiesOnLogout()
+{
+    // Two bots in scope, then the requester logs out: the next frame selects
+    // no bot, and the set the action hook reads must be empty from that frame
+    // on (no records until the scope_lost timeout).
+    std::vector<ScopeCandidate> group = {{11, true}, {12, true}};
+    ScopeSet scope;
+    std::vector<uint64_t> guids;
+    for (size_t i : SelectScope(true, group))
+        guids.push_back(group[i].guid);
+    scope.Replace(guids);
+    CHECK(scope.Contains(11) && scope.Contains(12));
+
+    guids.clear();
+    for (size_t i : SelectScope(false, group))
+        guids.push_back(group[i].guid);
+    CHECK(guids.empty());
+    scope.Replace(guids);
+    CHECK(scope.Empty());
+    CHECK(!scope.Contains(11) && !scope.Contains(12));
+
+    // A frame that drops one bot drops only that one.
+    scope.Replace({11, 12});
+    scope.Replace({12});
+    CHECK(!scope.Contains(11) && scope.Contains(12));
+    scope.Clear();
+    CHECK(scope.Empty());
+}
+
 int main()
 {
     TestHelpers();
@@ -408,6 +454,8 @@ int main()
     TestCoalescer();
     TestLoopDetector();
     TestScopePolicy();
+    TestScopeSource();
+    TestScopeSetEmptiesOnLogout();
     std::printf("test_run_trace_records: %d checks passed\n", checks);
     return 0;
 }

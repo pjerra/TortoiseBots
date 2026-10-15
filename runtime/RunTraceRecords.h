@@ -35,6 +35,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -546,6 +547,44 @@ inline std::vector<size_t> SelectScope(bool requesterOnline, std::vector<ScopeCa
             allowed.push_back(i);
     return allowed;
 }
+
+// Where a frame's candidates come from. A `party` run reads the anchor's group
+// and nothing else: when that group is gone the run has no bots (and ends with
+// scope_lost after kEmptyScopeMs), it does not shrink to the anchor bot alone.
+// A `bot` run reads the anchor bot itself.
+enum class ScopeSource
+{
+    None,
+    Group,
+    Anchor
+};
+
+inline ScopeSource PickScopeSource(bool wholeParty, bool anchorHasGroup, bool anchorIsControllableBot)
+{
+    if (wholeParty)
+        return anchorHasGroup ? ScopeSource::Group : ScopeSource::None;
+    return anchorIsControllableBot ? ScopeSource::Anchor : ScopeSource::None;
+}
+
+// The bots the engine and spell hooks may record for. Each frame replaces the
+// whole set, an empty frame included, so a bot that left the scope (or every
+// bot, when the requester logged out) stops producing records at once instead
+// of when the run ends.
+class ScopeSet
+{
+public:
+    void Replace(std::vector<uint64_t> const& guids)
+    {
+        guids_.clear();
+        guids_.insert(guids.begin(), guids.end());
+    }
+    void Clear() { guids_.clear(); }
+    bool Contains(uint64_t guid) const { return guids_.count(guid) != 0; }
+    bool Empty() const { return guids_.empty(); }
+
+private:
+    std::unordered_set<uint64_t> guids_;
+};
 
 // ---------------------------------------------------------------------------
 // Merging repeated outcomes

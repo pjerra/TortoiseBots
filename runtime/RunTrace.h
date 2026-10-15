@@ -126,7 +126,7 @@ private:
     uint32_t intervalMs_ = RunTrace::kDefaultIntervalMs;
     std::unordered_map<uint64_t, BotTrack> tracks_;
     std::unordered_set<uint64_t> seenMobs_;
-    std::unordered_set<uint64_t> scopeGuids_;  // read by NoteAction on the world thread only
+    RunTrace::ScopeSet scopeGuids_;  // read by NoteAction on the world thread only
 };
 
 } // namespace TortoiseBots

@@ -281,7 +281,7 @@ bool RunTraceService::Start(StartParams const& params, std::string& message)
     loops_ = RunTrace::LoopDetector();
     tracks_.clear();
     seenMobs_.clear();
-    scopeGuids_.clear();
+    scopeGuids_.Clear();
     wholeParty_ = params.wholeParty;
     anchorGuid_ = params.anchorGuid;
     requesterGuid_ = params.requesterGuid;
@@ -399,7 +399,7 @@ void RunTraceService::FlushActions(bool all)
 void RunTraceService::NoteAction(uint64_t botGuid, std::string const& name, std::string const& source,
     RunTrace::ActionOutcome outcome, float relevance)
 {
-    if (!Active() || !worldMark_.IsCurrent() || !scopeGuids_.count(botGuid))
+    if (!Active() || !worldMark_.IsCurrent() || !scopeGuids_.Contains(botGuid))
         return;
     RunTrace::ActionRecord rec;
     rec.guid = botGuid;
@@ -439,7 +439,7 @@ void RunTraceService::NoteBotEvent(PlayerbotAI* ai, std::string const& eventName
     if (!item && !money)
         return;
     uint64_t const guid = ai->GetBot()->GetObjectGuid().GetRawValue();
-    if (!scopeGuids_.count(guid))
+    if (!scopeGuids_.Contains(guid))
         return;
     RunTrace::Event e;
     e.ev = "loot";
@@ -463,7 +463,7 @@ void RunTraceService::NoteSpellInterrupted(PlayerbotAI* ai, uint32_t spellId)
         return;
     Player* bot = ai->GetBot();
     uint64_t const guid = bot->GetObjectGuid().GetRawValue();
-    if (!scopeGuids_.count(guid))
+    if (!scopeGuids_.Contains(guid))
         return;
     RunTrace::Event e;
     e.ev = "cast_interrupted";
@@ -488,8 +488,10 @@ void RunTraceService::ResolveBots(std::vector<Player*>& bots)
     // its members must hold at every frame, not only at the start.
     static std::vector<Player*> found;
     found.clear();
-    Group* group = wholeParty_ ? anchor->GetGroup() : nullptr;
-    if (group)
+    Group* group = anchor->GetGroup();
+    RunTrace::ScopeSource const source = RunTrace::PickScopeSource(wholeParty_, group != nullptr,
+        BotManager::Instance().IsControllableBot(anchor));
+    if (source == RunTrace::ScopeSource::Group)
     {
         for (Group::MemberSlot const& slot : group->GetMemberSlots())
         {
@@ -498,7 +500,7 @@ void RunTraceService::ResolveBots(std::vector<Player*>& bots)
                 found.push_back(member);
         }
     }
-    else if (BotManager::Instance().IsControllableBot(anchor))
+    else if (source == RunTrace::ScopeSource::Anchor)
         found.push_back(anchor);
 
     std::vector<RunTrace::ScopeCandidate> candidates;
@@ -521,6 +523,13 @@ void RunTraceService::Sample()
     static std::list<ObjectGuid> cached;
 
     ResolveBots(bots);
+    // The hooks record only for this frame's bots: replace the set before the
+    // empty check, so an empty frame stops their records too.
+    static std::vector<uint64_t> scopeList;
+    scopeList.clear();
+    for (Player* bot : bots)
+        scopeList.push_back(bot->GetObjectGuid().GetRawValue());
+    scopeGuids_.Replace(scopeList);
     if (bots.empty())
     {
         emptyScopeMs_ += intervalMs_;
@@ -533,10 +542,6 @@ void RunTraceService::Sample()
     botSamples.clear();
     mobSamples.clear();
     frameMobs.clear();
-    scopeGuids_.clear();
-
-    for (Player* bot : bots)
-        scopeGuids_.insert(bot->GetObjectGuid().GetRawValue());
 
     for (Player* bot : bots)
     {
@@ -756,7 +761,7 @@ void RunTraceService::Finish(char const* reason, char const* status)
         header_.runId.c_str(), reason, static_cast<unsigned long long>(counters_.frames),
         static_cast<unsigned long long>(counters_.actions), static_cast<unsigned long long>(counters_.events),
         static_cast<unsigned long long>(counters_.dropped));
-    scopeGuids_.clear();
+    scopeGuids_.Clear();
     tracks_.clear();
     seenMobs_.clear();
     builder_.reset();
