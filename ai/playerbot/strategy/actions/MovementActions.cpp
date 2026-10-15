@@ -3253,21 +3253,32 @@ bool RearFlankAction::Execute(Event& event)
     float dxl = leftX - bot->getPositionX(), dyl = leftY - bot->getPositionY();
     float dxr = rightX - bot->getPositionX(), dyr = rightY - bot->getPositionY();
     bool leftFirst = (dxl * dxl + dyl * dyl) < (dxr * dxr + dyr * dyr);
+    // Resolve each flank to where the bot would really stand (ground height,
+    // then pulled in by the line of sight from the mob) before the keep-out
+    // check, so its 5 yd height filter judges the destination's floor, not
+    // the mob's.
+    float ox, oy, oz;
+    target->GetPosition(ox, oy, oz);
+    auto resolve = [&](float& x, float& y, float& z)
+    {
+        z = target->getPositionZ();
+        bot->UpdateGroundPositionZ(x, y, z);
+        target->GetMap()->GetLosHitPosition(ox, oy, oz + bot->GetCollisionHeight(), x, y, z, -0.5f);
+    };
+    float leftZ = 0.0f, rightZ = 0.0f;
+    resolve(leftX, leftY, leftZ);
+    resolve(rightX, rightY, rightZ);
     // Creature aura keep-out: a flank inside a listed creature's ring is
     // refused; take the other flank, or stay put when both are ringed.
-    bool const leftRinged = EndPointInCreatureAuraKeepout(leftX, leftY, target->getPositionZ());
-    bool const rightRinged = EndPointInCreatureAuraKeepout(rightX, rightY, target->getPositionZ());
+    bool const leftRinged = EndPointInCreatureAuraKeepout(leftX, leftY, leftZ);
+    bool const rightRinged = EndPointInCreatureAuraKeepout(rightX, rightY, rightZ);
     if (leftRinged && rightRinged)
         return false;
     if (leftRinged || rightRinged)
         leftFirst = !leftRinged;
-    float destX = leftFirst ? leftX : rightX;
-    float destY = leftFirst ? leftY : rightY;
-    float destZ = target->getPositionZ();
-    bot->UpdateGroundPositionZ(destX, destY, destZ);
-    float ox, oy, oz;
-    target->GetPosition(ox, oy, oz);
-    target->GetMap()->GetLosHitPosition(ox, oy, oz + bot->GetCollisionHeight(), destX, destY, destZ, -0.5f);
+    float const destX = leftFirst ? leftX : rightX;
+    float const destY = leftFirst ? leftY : rightY;
+    float const destZ = leftFirst ? leftZ : rightZ;
     if (!target->IsWithinLOS(destX, destY, destZ + bot->GetCollisionHeight(), true))
         return false;
     return MoveTo(bot->GetMapId(), destX, destY, destZ);

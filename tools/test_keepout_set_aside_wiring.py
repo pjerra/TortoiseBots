@@ -160,6 +160,32 @@ class KeepoutSetAsideWiringTest(unittest.TestCase):
         self.assertLess(update.index("PossibleTriggersValue::BeginKeepoutTick()"), update.index("UpdateBots(diff)"))
         self.assertIn("keepoutScans=%u keepoutBudgetMiss=%u", manager)
 
+    def test_end_point_height_is_the_destination_floor(self):
+        # Review of #995 (bdeb36cc): the snapshot's 5 yd height filter must
+        # judge the floor the bot will stand on, so each candidate is ground-
+        # resolved before the keep-out check, never checked at the mob's Z.
+        move = (ROOT / "ai/playerbot/strategy/actions/MovementActions.cpp").read_text()
+        for start in ("bool RearFlankAction::Execute(", "bool SetBehindTargetAction::Execute("):
+            fn = body(move, start, "\n}\n")
+            calls = [m.start() for m in re.finditer(r"EndPointInCreatureAuraKeepout\(", fn)]
+            self.assertTrue(calls, start)
+            for at in calls:
+                self.assertLess(fn.index("UpdateGroundPositionZ("), at, start)
+                call = fn[at:fn.index(")", fn.index(")", at) + 1) + 1]
+                self.assertNotIn("getPositionZ()", call, start)
+        flank = body(move, "bool RearFlankAction::Execute(", "\n}\n")
+        self.assertIn("EndPointInCreatureAuraKeepout(leftX, leftY, leftZ)", flank)
+        self.assertIn("EndPointInCreatureAuraKeepout(rightX, rightY, rightZ)", flank)
+        self.assertLess(flank.index("resolve(rightX, rightY, rightZ)"), flank.index("EndPointInCreatureAuraKeepout("))
+        self.assertIn("float const destZ = leftFirst ? leftZ : rightZ;", flank)
+        # Move out of collision: the random point is already on the ground;
+        # the old-style fallback moves at the bot's own height and is checked there.
+        unstack = body(move, "bool MoveOutOfCollisionAction::Execute(", "\n}\n")
+        self.assertIn("GetReachableRandomPointOnGround(", unstack)
+        self.assertIn("randomPoint.getZ())", unstack)
+        self.assertIn("EndPointInCreatureAuraKeepout(oldX, oldY, bot->getPositionZ())", unstack)
+        self.assertIn("MoveTo(bot->GetMapId(), oldX, oldY, bot->getPositionZ())", unstack)
+
 
 if __name__ == "__main__":
     unittest.main()
