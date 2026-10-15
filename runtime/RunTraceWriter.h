@@ -18,9 +18,12 @@
 #include <cstdint>
 #include <deque>
 #include <fstream>
+#include <functional>
 #include <mutex>
 #include <string>
 #include <thread>
+
+#include "RunTraceRecords.h"
 
 namespace TortoiseBots {
 namespace RunTrace {
@@ -55,6 +58,17 @@ public:
 
     // Drains the queue, joins the thread, closes the file. Idempotent.
     WriterStats Close();
+    // Waits until every line queued so far is written (or dropped) and
+    // returns the counters as of then. The thread keeps running.
+    WriterStats Drain();
+    // Ends the file of a run: drains the queue, stamps records / bytes /
+    // dropped / truncated into `counters` (so they count the lines BEFORE the
+    // end line), writes buildEnd(counters) as the final line, and closes. The
+    // caller writes the summary from the same `counters`, so the end record
+    // and the summary agree. An end line that did not reach the file is added
+    // to `dropped` (the summary then says a line is missing; there is no end
+    // record to disagree with). True when the end line was written.
+    bool CloseWithEnd(std::function<std::string(Counters const&)> const& buildEnd, Counters& counters);
 
     WriterStats Snapshot() const;
     bool IsOpen() const { return open_.load(); }
@@ -66,6 +80,8 @@ private:
     std::thread thread_;
     mutable std::mutex mu_;
     std::condition_variable cv_;
+    std::condition_variable idle_;  // signalled when the writer thread has published a batch
+    bool busy_ = false;             // the writer thread holds a batch it has not published yet
     std::deque<std::pair<std::string, bool>> queue_;
     size_t queuedBytes_ = 0;
     size_t maxQueueRecords_ = 0;

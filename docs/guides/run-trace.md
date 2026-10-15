@@ -62,7 +62,7 @@ Every line is a flat JSON object with the same five leading fields: `"v":1` (sch
 
 **Action outcomes** (`res`): `OK` (executed), `FAILED` (possible, ran, returned false), `IMPOSSIBLE` (not possible now), `USELESS` (not useful now), `PREREQ` (its prerequisites were queued first), `VETOED` (a multiplier zeroed its relevance), `BACKOFF` (the failure backoff dropped it). `rel` is the relevance after the multipliers. A bot repeating the same action with the same outcome and trigger within one second is **one record**: `t` is the first, `tl` the last, `n` how many.
 
-**End counters**: `frames`, `events`, `actions` (records), `party`, `mobs`, `deaths`, `loops`, `records` and `bytes` (written), `dropped` (refused: queue full, size cap or a write error), `truncated` (the size cap closed the file).
+**End counters**: `frames`, `events`, `actions` (records), `party`, `mobs`, `deaths`, `loops`, `records` and `bytes` (written), `dropped` (refused: queue full, size cap or a write error), `truncated` (the size cap closed the file). The writer drains its queue before the `end` record is built, so `records`, `bytes`, `dropped` and `truncated` count every line before the `end` record (not the `end` line itself), and the summary carries the same counters. If the `end` line itself could not be written, the summary counts it in `dropped`.
 
 ## Summary file
 

@@ -94,6 +94,31 @@ WriterStats RunTraceWriter::Snapshot() const
     return stats_;
 }
 
+WriterStats RunTraceWriter::Drain()
+{
+    std::unique_lock<std::mutex> lock(mu_);
+    if (!thread_.joinable())
+        return stats_;
+    cv_.notify_one();
+    idle_.wait(lock, [this] { return queue_.empty() && !busy_; });
+    return stats_;
+}
+
+bool RunTraceWriter::CloseWithEnd(std::function<std::string(Counters const&)> const& buildEnd, Counters& counters)
+{
+    WriterStats const before = Drain();
+    counters.records = before.records;
+    counters.bytes = before.bytes;
+    counters.dropped = before.dropped;
+    counters.truncated = before.truncated;
+    bool const pushed = Push(buildEnd(counters), true);
+    WriterStats const after = Close();
+    bool const written = pushed && after.records == before.records + 1;
+    if (!written)
+        ++counters.dropped;
+    return written;
+}
+
 void RunTraceWriter::Run()
 {
     std::deque<std::pair<std::string, bool>> batch;
@@ -106,6 +131,7 @@ void RunTraceWriter::Run()
             cv_.wait_for(lock, std::chrono::milliseconds(500), [this] { return !queue_.empty() || stopping_; });
             batch.swap(queue_);
             queuedBytes_ = 0;
+            busy_ = true;
             stop = stopping_;
         }
         // Only this thread writes the file and changes bytes / records / failed /
@@ -154,7 +180,9 @@ void RunTraceWriter::Run()
             stats_.dropped += dropped;
             stats_.failed = failed;
             stats_.truncated = truncated;
+            busy_ = false;
         }
+        idle_.notify_all();
         auto const now = std::chrono::steady_clock::now();
         if (stop || now - lastFlush > std::chrono::seconds(1))
         {

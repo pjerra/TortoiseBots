@@ -740,22 +740,18 @@ void RunTraceService::Finish(char const* reason, char const* status)
 {
     active_.store(false, std::memory_order_relaxed);
     FlushActions(true);
-    RunTrace::WriterStats ws = writer_.Snapshot();
-    // Counters as of now; the end record carries them, the closed file settles
-    // the final byte count.
-    counters_.records = ws.records;
-    counters_.bytes = ws.bytes;
-    counters_.dropped = ws.dropped;
-    counters_.truncated = ws.truncated;
-    RunTrace::EndInfo end;
-    end.reason = reason;
-    end.counters = counters_;
-    writer_.Push(builder_->BuildEnd(elapsedMs_, end), true);
-    ws = writer_.Close();
-    counters_.records = ws.records;
-    counters_.bytes = ws.bytes;
-    counters_.dropped = ws.dropped;
-    counters_.truncated = ws.truncated;
+    // The end record and the summary carry the same counters: the writer
+    // drains the queue first (the action records just flushed included), so
+    // records / bytes / dropped / truncated count every line before the end
+    // record. See RunTraceWriter::CloseWithEnd.
+    std::string const endReason = reason;
+    writer_.CloseWithEnd([this, &endReason](RunTrace::Counters const& c)
+        {
+            RunTrace::EndInfo end;
+            end.reason = endReason;
+            end.counters = c;
+            return builder_->BuildEnd(elapsedMs_, end);
+        }, counters_);
     WriteSummary(status, reason);
     TB_LOG_BASIC("TortoiseBots: run trace %s ended (%s): %llu frames, %llu actions, %llu events, %llu dropped",
         header_.runId.c_str(), reason, static_cast<unsigned long long>(counters_.frames),

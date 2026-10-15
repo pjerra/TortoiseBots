@@ -127,6 +127,66 @@ int main(int argc, char** argv)
         CHECK(fs::file_size(path) <= cap);
     }
 
+    // Drain waits for what is queued; the thread keeps running.
+    {
+        std::string const path = (dir / "f.jsonl").string();
+        RunTraceWriter w;
+        CHECK(w.Open(path, 64 << 20, 100000, 64 << 20, err));
+        for (int i = 0; i < 5000; ++i)
+            CHECK(w.Push("{\"i\":" + std::to_string(i) + "}"));
+        WriterStats s = w.Drain();
+        CHECK(s.records == 5000 && s.dropped == 0);
+        CHECK(w.Push("{\"i\":5000}"));
+        s = w.Close();
+        CHECK(s.records == 5001);
+        CHECK(ReadLines(path).size() == 5001);
+    }
+
+    // The end record and the summary agree: the end line is built after the
+    // queue drained (every line pushed just before it counted), and the summary
+    // is written from the same counters.
+    auto endAndSummaryAgree = [&](char const* name, uint64_t cap, int lines, size_t lineLen)
+    {
+        std::string const path = (dir / name).string();
+        RunTraceWriter w;
+        CHECK(w.Open(path, cap, 100000, 64 << 20, err));
+        Builder b("agree");
+        for (int i = 0; i < lines; ++i)
+            w.Push(std::string(lineLen, 'z'));  // still queued when the run ends
+        Counters c;
+        c.frames = 7;
+        c.actions = 3;
+        CHECK(w.CloseWithEnd([&](Counters const& cc)
+            {
+                EndInfo end;
+                end.reason = "stop";
+                end.counters = cc;
+                return b.BuildEnd(100, end);
+            }, c));
+        Header h;
+        std::string const summary = b.BuildSummary(h, "complete", "stop", 1, 100, c, name);
+        auto const file = ReadLines(path);
+        CHECK(!file.empty());
+        std::string const endLine = file.back();
+        std::string const counters = Builder::CountersJson(c);
+        CHECK(endLine.find("\"counters\":" + counters) != std::string::npos);
+        CHECK(summary.find("\"counters\":" + counters) != std::string::npos);
+        // The counters count every line before the end line.
+        CHECK(c.records == file.size() - 1);
+        CHECK(c.bytes == fs::file_size(path) - endLine.size() - 1);
+        CHECK(c.records + c.dropped == static_cast<uint64_t>(lines));
+        return c;
+    };
+    {
+        Counters c = endAndSummaryAgree("g.jsonl", 64 << 20, 5000, 20);
+        CHECK(c.records == 5000 && c.dropped == 0 && !c.truncated);
+    }
+    {
+        // Capped: the truncation and the dropped lines are in both too.
+        Counters c = endAndSummaryAgree("h.jsonl", kWriterTailReserve + 2000, 200, 99);
+        CHECK(c.truncated && c.dropped > 0);
+    }
+
     // An unwritable location fails cleanly.
     {
         RunTraceWriter w;
