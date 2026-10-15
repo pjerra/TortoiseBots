@@ -553,6 +553,8 @@ static void TestMoveVerdict()
     facts = Walkable();
     facts.distanceFromLead = 0.0f;
     facts.pathType = kPathNoPath;
+    CHECK(CheckMove(facts) == MoveVerdict::Ok); // combo-19z9: #1028 accepts any move within 1 yd
+    facts.distanceFromLead = 2.0f; // between kAtLeadDistance and kMoveHereYd: only the gather is Ok
     CHECK(CheckMove(facts) == MoveVerdict::NoPath);
     facts.leadSpotGather = true;
     CHECK(CheckMove(facts) == MoveVerdict::Ok);
@@ -561,9 +563,9 @@ static void TestMoveVerdict()
     facts.distanceFromLead = kMoveHereYd + 0.5f;
     CHECK(CheckMove(facts) == MoveVerdict::NoPath);
     facts = Walkable();
-    facts.distanceFromLead = 1.0f;
+    facts.distanceFromLead = 2.0f;
     facts.endOffset = 12.0f;
-    CHECK(CheckMove(facts) == MoveVerdict::OffMesh); // a player's sub-3 yd off-mesh point
+    CHECK(CheckMove(facts) == MoveVerdict::OffMesh); // a player's 1-3 yd off-mesh point
     facts.leadSpotGather = true;
     CHECK(CheckMove(facts) == MoveVerdict::Ok);
     facts.maxDistance = 0.0f; // no ReactDistance: still too far
