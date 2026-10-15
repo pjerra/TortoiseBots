@@ -1,6 +1,7 @@
 #include "RunTrace.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
 #include <ctime>
@@ -33,6 +34,9 @@ constexpr size_t kQueueBytes = 4u * 1024u * 1024u;
 // The scope may be empty this long (group disbanded, bots logged out) before
 // the run ends by itself.
 constexpr uint32_t kEmptyScopeMs = 10000;
+// Shutdown waits this long for the writer to write the end record and the
+// summary; it is the only place the world thread waits for the trace's disk.
+constexpr std::chrono::milliseconds kShutdownFlushMs{2000};
 
 // Reports every action outcome of one bot's engine to the service. Owned by the
 // engine (deleted with it); it carries nothing but the bot's guid, so one that
@@ -209,6 +213,27 @@ void RunTraceService::AttachListeners(PlayerbotAI* ai)
     }
 }
 
+void RunTraceService::DetachListeners(PlayerbotAI* ai)
+{
+    if (!ai)
+        return;
+    for (uint8 i = 0; i < static_cast<uint8>(BotState::BOT_STATE_ALL); ++i)
+        if (ai::Engine* engine = ai->GetEngineByState(static_cast<BotState>(i)))
+            engine->RemoveActionExecutionListeners<RunTraceListener>();
+}
+
+// Called from Update(), on the world tick and outside every engine's action
+// loop, so no listener list is being walked. A bot that logged out took its
+// engines (and their listeners) with it.
+void RunTraceService::DetachAllListeners()
+{
+    detachPending_ = false;
+    for (uint64_t guid : attachedGuids_)
+        if (Player* bot = ObjectAccessor::FindPlayer(ObjectGuid(guid)))
+            DetachListeners(PlayerbotAIStorage::Instance().GetAI(bot));
+    attachedGuids_.clear();
+}
+
 std::string RunTraceService::DirPath() const
 {
     std::string dir = sPlayerbotAIConfig.runTraceDir;
@@ -222,9 +247,11 @@ std::string RunTraceService::DirPath() const
 
 bool RunTraceService::Start(StartParams const& params, std::string& message)
 {
-    if (Active())
+    if (char const* refusal = lifecycle_.StartRefusal())
     {
-        message = "A trace is already running (" + header_.runId + "). Stop it first: .bot trace stop";
+        message = std::string(refusal) == "finishing"
+            ? "The previous trace (" + header_.runId + ") is still being written; try again in a moment."
+            : "A trace is already running (" + header_.runId + "). Stop it first: .bot trace stop";
         return false;
     }
     if (!sPlayerbotAIConfig.runTrace)
@@ -293,7 +320,10 @@ bool RunTraceService::Start(StartParams const& params, std::string& message)
     emptyScopeMs_ = 0;
 
     Emit(builder_->BuildHeader(header_));
-    WriteSummary("running", "");
+    // The "running" summary is written by the writer thread too.
+    writer_.PushFile(summaryPath_, builder_->BuildSummary(header_, "running", "", 0, 0, counters_,
+        std::filesystem::path(tracePath_).filename().string()));
+    lifecycle_.Start();
     active_.store(true, std::memory_order_relaxed);
     Sample();
     message = "Tracing " + header_.scope + " " + header_.scopeName + " as run " + params.runId + " -> " + tracePath_;
@@ -311,7 +341,7 @@ bool RunTraceService::Stop(char const* reason, std::string& message)
     }
     std::string const run = header_.runId;
     Finish(reason, "complete");
-    message = "Trace " + run + " stopped (" + reason + "): " + summaryPath_;
+    message = "Trace " + run + " stopped (" + reason + "); the summary is written to " + summaryPath_;
     return true;
 }
 
@@ -319,12 +349,45 @@ void RunTraceService::Shutdown()
 {
     if (Active())
         Finish("shutdown", "complete");
+    if (lifecycle_.Phase() != RunTrace::RunPhase::Finishing)
+        return;
+    // The only wait for the trace's disk, and a bounded one.
+    CompleteFinish(!writer_.WaitFinished(kShutdownFlushMs));
 }
 
-std::string RunTraceService::Status() const
+void RunTraceService::CompleteFinish(bool timedOut)
 {
+    if (timedOut)
+    {
+        // The writer is stalled on the disk. It owns everything it touches
+        // (shared state, copies of the run's builder and header), so it is let
+        // go: it finishes the end record and the summary if the disk comes
+        // back before the process ends. The summary then still says "running".
+        writer_.Detach();
+        TB_LOG_BASIC("TortoiseBots: run trace %s (%s): the writer did not finish within %u ms; left to finish on its own",
+            header_.runId.c_str(), finishReason_.c_str(), static_cast<unsigned>(kShutdownFlushMs.count()));
+    }
+    else
+    {
+        writer_.Reap();
+        RunTrace::Counters const c = writer_.FinalCounters();
+        TB_LOG_BASIC("TortoiseBots: run trace %s ended (%s): %llu frames, %llu actions, %llu events, %llu dropped",
+            header_.runId.c_str(), finishReason_.c_str(), static_cast<unsigned long long>(c.frames),
+            static_cast<unsigned long long>(c.actions), static_cast<unsigned long long>(c.events),
+            static_cast<unsigned long long>(c.dropped));
+    }
+    lifecycle_.Finished();
+}
+
+std::string RunTraceService::Status(bool detail) const
+{
+    if (lifecycle_.Phase() == RunTrace::RunPhase::Finishing)
+        return detail ? "Trace " + header_.runId + " is ending (writing its end record and summary)."
+                      : "A trace is ending.";
     if (!Active())
         return "No trace is running.";
+    if (!detail)
+        return "A trace is running.";
     RunTrace::WriterStats const ws = writer_.Snapshot();
     return "Trace " + header_.runId + " running (" + header_.scope + " " + header_.scopeName + "): " +
         std::to_string(elapsedMs_ / 1000) + " s, " + std::to_string(counters_.frames) + " frames, " +
@@ -335,6 +398,10 @@ std::string RunTraceService::Status() const
 void RunTraceService::Update(uint32_t diff)
 {
     worldMark_.MarkCurrent();
+    if (lifecycle_.Phase() == RunTrace::RunPhase::Finishing && writer_.Finished())
+        CompleteFinish(false);
+    if (detachPending_)
+        DetachAllListeners();
     if (!Active())
         return;
     if (!sPlayerbotAIConfig.runTrace)
@@ -548,6 +615,7 @@ void RunTraceService::Sample()
         uint64_t const guid = bot->GetObjectGuid().GetRawValue();
         PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot);
         AttachListeners(ai);
+        attachedGuids_.insert(guid);
         BotTrack& track = tracks_[guid];
         bool const alive = bot->IsAlive();
         bool const inCombat = bot->IsInCombat();
@@ -724,39 +792,47 @@ void RunTraceService::Sample()
     Emit(builder_->BuildFrame(elapsedMs_, botSamples, mobSamples));
 }
 
-void RunTraceService::WriteSummary(char const* status, std::string const& endReason)
-{
-    if (!builder_)
-        return;
-    std::string err;
-    uint64_t const now = static_cast<uint64_t>(std::time(nullptr));
-    std::string const traceFile = std::filesystem::path(tracePath_).filename().string();
-    if (!RunTrace::WriteFileAtomic(summaryPath_, builder_->BuildSummary(header_, status, endReason,
-            std::string(status) == "running" ? 0 : now, elapsedMs_, counters_, traceFile), err))
-        TB_LOG_BASIC("TortoiseBots: run trace summary not written: %s", err.c_str());
-}
-
 void RunTraceService::Finish(char const* reason, char const* status)
 {
     active_.store(false, std::memory_order_relaxed);
+    if (!lifecycle_.BeginFinish())
+        return;  // not running: already ending
+    finishReason_ = reason;
     FlushActions(true);
-    // The end record and the summary carry the same counters: the writer
-    // drains the queue first (the action records just flushed included), so
-    // records / bytes / dropped / truncated count every line before the end
-    // record. See RunTraceWriter::CloseWithEnd.
+
+    // The writer thread ends the file: when it reaches this marker every line
+    // queued before it is written (or dropped), so the end record's records /
+    // bytes / dropped / truncated count the lines before it, and the summary is
+    // built from the same counters. The job carries copies only.
+    RunTrace::EndJob job;
+    job.counters = counters_;
+    RunTrace::Builder const builder = *builder_;
+    RunTrace::Header const header = header_;
+    uint32_t const elapsed = elapsedMs_;
+    uint64_t const endUnix = static_cast<uint64_t>(std::time(nullptr));
     std::string const endReason = reason;
-    writer_.CloseWithEnd([this, &endReason](RunTrace::Counters const& c)
+    std::string const endStatus = status;
+    std::string const traceFile = std::filesystem::path(tracePath_).filename().string();
+    job.buildEnd = [builder, elapsed, endReason](RunTrace::Counters const& c)
         {
             RunTrace::EndInfo end;
             end.reason = endReason;
             end.counters = c;
-            return builder_->BuildEnd(elapsedMs_, end);
-        }, counters_);
-    WriteSummary(status, reason);
-    TB_LOG_BASIC("TortoiseBots: run trace %s ended (%s): %llu frames, %llu actions, %llu events, %llu dropped",
-        header_.runId.c_str(), reason, static_cast<unsigned long long>(counters_.frames),
-        static_cast<unsigned long long>(counters_.actions), static_cast<unsigned long long>(counters_.events),
-        static_cast<unsigned long long>(counters_.dropped));
+            return builder.BuildEnd(elapsed, end);
+        };
+    job.buildSummary = [builder, header, elapsed, endUnix, endReason, endStatus, traceFile](RunTrace::Counters const& c)
+        {
+            return builder.BuildSummary(header, endStatus.c_str(), endReason, endUnix, elapsed, c, traceFile);
+        };
+    job.summaryPath = summaryPath_;
+    if (!writer_.PushEnd(std::move(job)))
+    {
+        // No writer thread took it (never opened): nothing to wait for.
+        writer_.Reap();
+        lifecycle_.Finished();
+    }
+
+    detachPending_ = true;
     scopeGuids_.Clear();
     tracks_.clear();
     seenMobs_.clear();

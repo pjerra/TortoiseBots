@@ -73,6 +73,22 @@ namespace ai
         {
             listeners.remove(listener);
         }
+        // Removes and deletes every listener of type T (they are owned here).
+        // Not from inside a listener call: the list is being walked then.
+        template<class T>
+        void RemoveAll()
+        {
+            for (auto it = listeners.begin(); it != listeners.end();)
+            {
+                if (T* listener = dynamic_cast<T*>(*it))
+                {
+                    it = listeners.erase(it);
+                    delete listener;
+                }
+                else
+                    ++it;
+            }
+        }
 
     private:
         std::list<ActionExecutionListener*> listeners;
@@ -141,6 +157,11 @@ namespace ai
         bool HasActionExecutionListener() const
         {
             return actionExecutionListeners.Has<T>();
+        }
+        template<class T>
+        void RemoveActionExecutionListeners()
+        {
+            actionExecutionListeners.RemoveAll<T>();
         }
 
     public:

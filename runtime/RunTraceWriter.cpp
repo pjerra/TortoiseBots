@@ -1,6 +1,5 @@
 #include "RunTraceWriter.h"
 
-#include <chrono>
 #include <filesystem>
 #include <system_error>
 #include <utility>
@@ -8,14 +7,43 @@
 namespace TortoiseBots {
 namespace RunTrace {
 
+struct RunTraceWriter::State
+{
+    struct Item
+    {
+        enum class Kind { Line, Final, File, End };
+        Kind kind = Kind::Line;
+        std::string text;               // the line, or the file content
+        std::string path;               // Kind::File
+        std::shared_ptr<EndJob> end;    // Kind::End
+    };
+
+    mutable std::mutex mu;
+    std::condition_variable cv;
+    std::condition_variable doneCv;
+    std::deque<Item> queue;
+    size_t queuedBytes = 0;
+    size_t maxQueueRecords = 0;
+    size_t maxQueueBytes = 0;
+    uint64_t maxBytes = 0;
+    bool stopping = false;  // Close(): write what is queued, then stop
+    bool ended = false;     // the end marker is queued: nothing more is taken
+    WriterStats stats;
+    Counters finalCounters;
+    std::atomic<bool> finished{false};
+    std::function<void()> beforeWrite;
+    std::ofstream out;      // the writer thread's only, once it runs
+};
+
 bool RunTraceWriter::Open(std::string const& path, uint64_t maxBytes, size_t maxQueueRecords,
     size_t maxQueueBytes, std::string& err)
 {
-    if (open_.load())
+    if (open_ || thread_.joinable())
     {
         err = "already open";
         return false;
     }
+    auto state = std::make_shared<State>();
     std::error_code ec;
     std::filesystem::path const p(path);
     if (p.has_parent_path())
@@ -27,174 +55,280 @@ bool RunTraceWriter::Open(std::string const& path, uint64_t maxBytes, size_t max
             return false;
         }
     }
-    out_.open(path, std::ios::out | std::ios::trunc | std::ios::binary);
-    if (!out_.is_open())
+    state->out.open(path, std::ios::out | std::ios::trunc | std::ios::binary);
+    if (!state->out.is_open())
     {
         err = "cannot open " + path;
         return false;
     }
-    {
-        std::lock_guard<std::mutex> lock(mu_);
-        queue_.clear();
-        queuedBytes_ = 0;
-        maxQueueRecords_ = maxQueueRecords;
-        maxQueueBytes_ = maxQueueBytes;
-        maxBytes_ = maxBytes;
-        stopping_ = false;
-        stats_ = WriterStats();
-    }
-    open_.store(true);
-    thread_ = std::thread(&RunTraceWriter::Run, this);
+    state->maxQueueRecords = maxQueueRecords;
+    state->maxQueueBytes = maxQueueBytes;
+    state->maxBytes = maxBytes;
+    state_ = state;
+    open_ = true;
+    thread_ = std::thread(&RunTraceWriter::Run, state);
     return true;
 }
 
 bool RunTraceWriter::Push(std::string line, bool final)
 {
-    std::lock_guard<std::mutex> lock(mu_);
-    if (!open_.load() || stopping_)
+    if (!state_)
         return false;
-    if (!final && (queue_.size() >= maxQueueRecords_ || queuedBytes_ + line.size() > maxQueueBytes_))
+    State& s = *state_;
+    std::lock_guard<std::mutex> lock(s.mu);
+    if (!open_ || s.stopping || s.ended)
+        return false;
+    if (!final && (s.queue.size() >= s.maxQueueRecords || s.queuedBytes + line.size() > s.maxQueueBytes))
     {
-        ++stats_.dropped;
+        ++s.stats.dropped;
         return false;
     }
-    queuedBytes_ += line.size();
-    queue_.emplace_back(std::move(line), final);
-    cv_.notify_one();
+    s.queuedBytes += line.size();
+    State::Item item;
+    item.kind = final ? State::Item::Kind::Final : State::Item::Kind::Line;
+    item.text = std::move(line);
+    s.queue.push_back(std::move(item));
+    s.cv.notify_one();
     return true;
+}
+
+bool RunTraceWriter::PushFile(std::string path, std::string content)
+{
+    if (!state_)
+        return false;
+    State& s = *state_;
+    std::lock_guard<std::mutex> lock(s.mu);
+    if (!open_ || s.stopping || s.ended)
+        return false;
+    State::Item item;
+    item.kind = State::Item::Kind::File;
+    item.path = std::move(path);
+    item.text = std::move(content);
+    s.queue.push_back(std::move(item));
+    s.cv.notify_one();
+    return true;
+}
+
+bool RunTraceWriter::PushEnd(EndJob job)
+{
+    if (!state_)
+        return false;
+    State& s = *state_;
+    std::lock_guard<std::mutex> lock(s.mu);
+    if (!open_ || s.stopping || s.ended)
+        return false;
+    State::Item item;
+    item.kind = State::Item::Kind::End;
+    item.end = std::make_shared<EndJob>(std::move(job));
+    s.queue.push_back(std::move(item));
+    s.ended = true;
+    s.cv.notify_one();
+    return true;
+}
+
+bool RunTraceWriter::Finished() const
+{
+    return state_ && state_->finished.load(std::memory_order_acquire);
+}
+
+Counters RunTraceWriter::FinalCounters() const
+{
+    if (!state_)
+        return Counters();
+    std::lock_guard<std::mutex> lock(state_->mu);
+    return state_->finalCounters;
+}
+
+WriterStats RunTraceWriter::Reap()
+{
+    if (thread_.joinable())
+        thread_.join();
+    open_ = false;
+    return Snapshot();
+}
+
+bool RunTraceWriter::WaitFinished(std::chrono::milliseconds deadline)
+{
+    if (!state_)
+        return true;
+    State& s = *state_;
+    std::unique_lock<std::mutex> lock(s.mu);
+    return s.doneCv.wait_for(lock, deadline, [&s] { return s.finished.load(std::memory_order_acquire); });
+}
+
+void RunTraceWriter::Detach()
+{
+    if (thread_.joinable())
+        thread_.detach();
+    open_ = false;
 }
 
 WriterStats RunTraceWriter::Close()
 {
-    if (!open_.load() && !thread_.joinable())
-    {
-        std::lock_guard<std::mutex> lock(mu_);
-        return stats_;
-    }
-    {
-        std::lock_guard<std::mutex> lock(mu_);
-        stopping_ = true;
-    }
-    cv_.notify_all();
+    if (!state_)
+        return WriterStats();
     if (thread_.joinable())
-        thread_.join();
-    if (out_.is_open())
     {
-        out_.flush();
-        out_.close();
+        {
+            std::lock_guard<std::mutex> lock(state_->mu);
+            state_->stopping = true;
+        }
+        state_->cv.notify_all();
+        thread_.join();
     }
-    open_.store(false);
-    std::lock_guard<std::mutex> lock(mu_);
-    return stats_;
+    open_ = false;
+    return Snapshot();
 }
 
 WriterStats RunTraceWriter::Snapshot() const
 {
-    std::lock_guard<std::mutex> lock(mu_);
-    return stats_;
+    if (!state_)
+        return WriterStats();
+    std::lock_guard<std::mutex> lock(state_->mu);
+    return state_->stats;
 }
 
-WriterStats RunTraceWriter::Drain()
+void RunTraceWriter::SetBeforeWriteHookForTest(std::function<void()> hook)
 {
-    std::unique_lock<std::mutex> lock(mu_);
-    if (!thread_.joinable())
-        return stats_;
-    cv_.notify_one();
-    idle_.wait(lock, [this] { return queue_.empty() && !busy_; });
-    return stats_;
+    if (!state_)
+        return;
+    std::lock_guard<std::mutex> lock(state_->mu);
+    state_->beforeWrite = std::move(hook);
 }
 
-bool RunTraceWriter::CloseWithEnd(std::function<std::string(Counters const&)> const& buildEnd, Counters& counters)
+void RunTraceWriter::Run(std::shared_ptr<State> state)
 {
-    WriterStats const before = Drain();
-    counters.records = before.records;
-    counters.bytes = before.bytes;
-    counters.dropped = before.dropped;
-    counters.truncated = before.truncated;
-    bool const pushed = Push(buildEnd(counters), true);
-    WriterStats const after = Close();
-    bool const written = pushed && after.records == before.records + 1;
-    if (!written)
-        ++counters.dropped;
-    return written;
-}
-
-void RunTraceWriter::Run()
-{
-    std::deque<std::pair<std::string, bool>> batch;
+    State& s = *state;
+    std::deque<State::Item> batch;
     auto lastFlush = std::chrono::steady_clock::now();
     for (;;)
     {
         bool stop = false;
-        {
-            std::unique_lock<std::mutex> lock(mu_);
-            cv_.wait_for(lock, std::chrono::milliseconds(500), [this] { return !queue_.empty() || stopping_; });
-            batch.swap(queue_);
-            queuedBytes_ = 0;
-            busy_ = true;
-            stop = stopping_;
-        }
+        std::function<void()> hook;
         // Only this thread writes the file and changes bytes / records / failed /
         // truncated, so it decides and writes without the lock (Push, on the
         // world thread, takes the same mutex and must never wait for the disk);
-        // the lock is taken only to publish the counters.
+        // the lock is taken only to swap the queue and publish the counters.
         uint64_t bytes = 0;
-        uint64_t records = 0;
-        uint64_t dropped = 0;
         bool failed = false;
         bool truncated = false;
         {
-            std::lock_guard<std::mutex> lock(mu_);
-            bytes = stats_.bytes;
-            failed = stats_.failed;
-            truncated = stats_.truncated;
+            std::unique_lock<std::mutex> lock(s.mu);
+            s.cv.wait_for(lock, std::chrono::milliseconds(500), [&s] { return !s.queue.empty() || s.stopping; });
+            batch.swap(s.queue);
+            s.queuedBytes = 0;
+            stop = s.stopping;
+            hook = s.beforeWrite;
+            bytes = s.stats.bytes;
+            failed = s.stats.failed;
+            truncated = s.stats.truncated;
         }
-        for (auto& item : batch)
+        uint64_t records = 0;
+        uint64_t dropped = 0;
+        auto publish = [&]()
         {
-            std::string const& line = item.first;
+            std::lock_guard<std::mutex> lock(s.mu);
+            s.stats.bytes = bytes;
+            s.stats.records += records;
+            s.stats.dropped += dropped;
+            s.stats.failed = failed;
+            s.stats.truncated = truncated;
+            records = 0;
+            dropped = 0;
+        };
+        // One line into the file; false when it was dropped.
+        auto writeLine = [&](std::string const& line, bool final) -> bool
+        {
             uint64_t const need = line.size() + 1;
-            uint64_t const limit = item.second ? maxBytes_ : (maxBytes_ > kWriterTailReserve ? maxBytes_ - kWriterTailReserve : 0);
+            uint64_t const limit = final ? s.maxBytes
+                : (s.maxBytes > kWriterTailReserve ? s.maxBytes - kWriterTailReserve : 0);
             if (failed || bytes + need > limit)
             {
-                if (!failed && !item.second)
+                if (!failed && !final)
                     truncated = true;
                 ++dropped;
-                continue;
+                return false;
             }
-            out_.write(line.data(), static_cast<std::streamsize>(line.size()));
-            out_.put('\n');
-            if (!out_)
+            s.out.write(line.data(), static_cast<std::streamsize>(line.size()));
+            s.out.put('\n');
+            if (!s.out)
             {
                 failed = true;
                 ++dropped;
-                continue;
+                return false;
             }
             bytes += need;
             ++records;
+            return true;
+        };
+
+        for (State::Item& item : batch)
+        {
+            if (hook)
+                hook();
+            switch (item.kind)
+            {
+                case State::Item::Kind::Line:
+                case State::Item::Kind::Final:
+                    writeLine(item.text, item.kind == State::Item::Kind::Final);
+                    break;
+                case State::Item::Kind::File:
+                {
+                    std::string err;
+                    WriteFileAtomic(item.path, item.text, err);
+                    break;
+                }
+                case State::Item::Kind::End:
+                {
+                    // Everything queued before the marker is written or dropped:
+                    // its counters are final for the lines before the end record.
+                    publish();
+                    EndJob& job = *item.end;
+                    Counters c = job.counters;
+                    {
+                        std::lock_guard<std::mutex> lock(s.mu);
+                        c.records = s.stats.records;
+                        c.bytes = s.stats.bytes;
+                        c.dropped = s.stats.dropped;
+                        c.truncated = s.stats.truncated;
+                    }
+                    if (!job.buildEnd || !writeLine(job.buildEnd(c), true))
+                        ++c.dropped;
+                    publish();
+                    s.out.flush();
+                    s.out.close();
+                    if (job.buildSummary && !job.summaryPath.empty())
+                    {
+                        std::string err;
+                        WriteFileAtomic(job.summaryPath, job.buildSummary(c), err);
+                    }
+                    {
+                        std::lock_guard<std::mutex> lock(s.mu);
+                        s.finalCounters = c;
+                        s.finished.store(true, std::memory_order_release);
+                    }
+                    s.doneCv.notify_all();
+                    return;
+                }
+            }
         }
         batch.clear();
-        {
-            std::lock_guard<std::mutex> lock(mu_);
-            stats_.bytes = bytes;
-            stats_.records += records;
-            stats_.dropped += dropped;
-            stats_.failed = failed;
-            stats_.truncated = truncated;
-            busy_ = false;
-        }
-        idle_.notify_all();
+        publish();
         auto const now = std::chrono::steady_clock::now();
         if (stop || now - lastFlush > std::chrono::seconds(1))
         {
-            out_.flush();
+            s.out.flush();
             lastFlush = now;
         }
         if (stop)
         {
             // Anything pushed between the swap and the stop flag.
-            std::lock_guard<std::mutex> lock(mu_);
-            if (queue_.empty())
+            std::lock_guard<std::mutex> lock(s.mu);
+            if (s.queue.empty())
+            {
+                s.out.close();
                 return;
+            }
         }
     }
 }

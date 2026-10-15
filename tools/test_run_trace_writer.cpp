@@ -8,11 +8,13 @@
 
 #include "../runtime/RunTraceWriter.h"
 
+#include <atomic>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -127,50 +129,51 @@ int main(int argc, char** argv)
         CHECK(fs::file_size(path) <= cap);
     }
 
-    // Drain waits for what is queued; the thread keeps running.
-    {
-        std::string const path = (dir / "f.jsonl").string();
-        RunTraceWriter w;
-        CHECK(w.Open(path, 64 << 20, 100000, 64 << 20, err));
-        for (int i = 0; i < 5000; ++i)
-            CHECK(w.Push("{\"i\":" + std::to_string(i) + "}"));
-        WriterStats s = w.Drain();
-        CHECK(s.records == 5000 && s.dropped == 0);
-        CHECK(w.Push("{\"i\":5000}"));
-        s = w.Close();
-        CHECK(s.records == 5001);
-        CHECK(ReadLines(path).size() == 5001);
-    }
-
-    // The end record and the summary agree: the end line is built after the
-    // queue drained (every line pushed just before it counted), and the summary
-    // is written from the same counters.
+    // The end record and the summary agree: the writer thread builds both from
+    // the counters it has when it reaches the end marker, after every line
+    // queued before it (still queued when the run ended) is written or dropped.
     auto endAndSummaryAgree = [&](char const* name, uint64_t cap, int lines, size_t lineLen)
     {
         std::string const path = (dir / name).string();
+        std::string const summaryPath = path + ".summary.json";
         RunTraceWriter w;
         CHECK(w.Open(path, cap, 100000, 64 << 20, err));
         Builder b("agree");
+        Header h;
+        CHECK(w.PushFile(summaryPath, b.BuildSummary(h, "running", "", 0, 0, Counters(), name)));
         for (int i = 0; i < lines; ++i)
-            w.Push(std::string(lineLen, 'z'));  // still queued when the run ends
-        Counters c;
-        c.frames = 7;
-        c.actions = 3;
-        CHECK(w.CloseWithEnd([&](Counters const& cc)
+            w.Push(std::string(lineLen, 'z'));
+        EndJob job;
+        job.counters.frames = 7;
+        job.counters.actions = 3;
+        job.buildEnd = [b](Counters const& cc)
             {
                 EndInfo end;
                 end.reason = "stop";
                 end.counters = cc;
                 return b.BuildEnd(100, end);
-            }, c));
-        Header h;
-        std::string const summary = b.BuildSummary(h, "complete", "stop", 1, 100, c, name);
+            };
+        job.buildSummary = [b, h, name](Counters const& cc)
+            {
+                return b.BuildSummary(h, "complete", "stop", 1, 100, cc, name);
+            };
+        job.summaryPath = summaryPath;
+        CHECK(w.PushEnd(job));
+        CHECK(!w.Push("late"));          // nothing after the end marker
+        CHECK(w.WaitFinished(std::chrono::seconds(30)));
+        CHECK(w.Finished());
+        w.Reap();
+        Counters const c = w.FinalCounters();
+        CHECK(c.frames == 7 && c.actions == 3);
         auto const file = ReadLines(path);
         CHECK(!file.empty());
         std::string const endLine = file.back();
+        std::string const summary = Slurp(summaryPath);
         std::string const counters = Builder::CountersJson(c);
+        CHECK(endLine.find("\"k\":\"end\"") != std::string::npos);
         CHECK(endLine.find("\"counters\":" + counters) != std::string::npos);
         CHECK(summary.find("\"counters\":" + counters) != std::string::npos);
+        CHECK(summary.find("\"status\":\"complete\"") != std::string::npos);
         // The counters count every line before the end line.
         CHECK(c.records == file.size() - 1);
         CHECK(c.bytes == fs::file_size(path) - endLine.size() - 1);
@@ -185,6 +188,55 @@ int main(int argc, char** argv)
         // Capped: the truncation and the dropped lines are in both too.
         Counters c = endAndSummaryAgree("h.jsonl", kWriterTailReserve + 2000, 200, 99);
         CHECK(c.truncated && c.dropped > 0);
+    }
+
+    // A stalled disk: ending a run returns at once, and the shutdown wait gives
+    // up at its deadline; the thread is let go without freeing its state and
+    // finishes once the disk is back.
+    {
+        std::string const path = (dir / "slow.jsonl").string();
+        std::string const summaryPath = path + ".summary.json";
+        auto gate = std::make_shared<std::atomic<bool>>(false);
+        Builder b("slow");
+        Header h;
+        bool timedOut = false;
+        {
+            RunTraceWriter w;
+            CHECK(w.Open(path, 64 << 20, 1000, 1 << 20, err));
+            w.SetBeforeWriteHookForTest([gate]
+                {
+                    while (!gate->load())
+                        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+                });
+            for (int i = 0; i < 100; ++i)
+                CHECK(w.Push("{\"i\":" + std::to_string(i) + "}"));
+            EndJob job;
+            job.buildEnd = [b](Counters const& cc) { EndInfo e; e.reason = "shutdown"; e.counters = cc; return b.BuildEnd(1, e); };
+            job.buildSummary = [b, h](Counters const& cc) { return b.BuildSummary(h, "complete", "shutdown", 1, 1, cc, "slow.jsonl"); };
+            job.summaryPath = summaryPath;
+            auto const t0 = std::chrono::steady_clock::now();
+            CHECK(w.PushEnd(job));
+            auto const pushMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - t0).count();
+            CHECK(pushMs < 100);             // stop returns at once
+            CHECK(!w.Finished());
+            auto const t1 = std::chrono::steady_clock::now();
+            timedOut = !w.WaitFinished(std::chrono::milliseconds(2000));
+            auto const waitMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - t1).count();
+            CHECK(timedOut);
+            CHECK(waitMs >= 1900 && waitMs < 3000);  // shutdown returns within the deadline
+            w.Detach();
+            CHECK(!w.IsOpen());
+        }   // the writer object is gone; the detached thread still holds its state
+        CHECK(timedOut);
+        gate->store(true);
+        for (int i = 0; i < 600 && !fs::exists(summaryPath); ++i)
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        CHECK(fs::exists(summaryPath));
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        auto const file = ReadLines(path);
+        CHECK(file.size() == 101 && file.back().find("\"k\":\"end\"") != std::string::npos);
     }
 
     // An unwritable location fails cleanly.

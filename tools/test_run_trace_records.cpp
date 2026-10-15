@@ -415,6 +415,65 @@ static void TestScopeSource()
     CHECK(PickScopeSource(false, false, false) == ScopeSource::None);
 }
 
+static void TestPermissions()
+{
+    // Who may record a bot at a frame.
+    CHECK(MayRecordBot(true, false, false));    // GameMaster
+    CHECK(MayRecordBot(false, true, false));    // controls it
+    CHECK(MayRecordBot(false, false, true));    // bound commander of its group
+    CHECK(!MayRecordBot(false, false, false));  // a stranger's bot
+
+    // A commanded party trace records the bots: the commander controls none of
+    // them (hired or GM-bound), but commands their group, so every frame keeps
+    // them instead of dropping to an empty scope after the first one.
+    std::vector<ScopeCandidate> commanded;
+    for (uint64_t guid : {21u, 22u, 23u})
+        commanded.push_back({guid, MayRecordBot(false, false, true)});
+    CHECK(SelectScope(true, commanded).size() == 3);
+    std::vector<ScopeCandidate> notCommanded;
+    for (uint64_t guid : {21u, 22u, 23u})
+        notCommanded.push_back({guid, MayRecordBot(false, false, false)});
+    CHECK(SelectScope(true, notCommanded).empty());
+
+    // AiPlayerbot.RunTrace.GmOnly.
+    CHECK(MayStartTrace(true, true));
+    CHECK(!MayStartTrace(true, false));
+    CHECK(MayStartTrace(false, false));
+    CHECK(MayStartTrace(false, true));
+
+    // `.bot trace status` detail.
+    CHECK(MaySeeRunDetail(true, false));
+    CHECK(MaySeeRunDetail(false, true));
+    CHECK(!MaySeeRunDetail(false, false));
+}
+
+static void TestLifecycle()
+{
+    RunLifecycle run;
+    CHECK(run.Phase() == RunPhase::Idle);
+    CHECK(run.StartRefusal() == nullptr);
+    CHECK(!run.BeginFinish());   // stop without a run
+    CHECK(!run.Finished());
+
+    CHECK(run.Start());
+    CHECK(run.Phase() == RunPhase::Running);
+    CHECK_EQ(run.StartRefusal(), "running");
+    CHECK(!run.Start());
+
+    // Stop returns at once: the run is finishing until the writer is done, and
+    // a new start is refused meanwhile.
+    CHECK(run.BeginFinish());
+    CHECK(run.Phase() == RunPhase::Finishing);
+    CHECK_EQ(run.StartRefusal(), "finishing");
+    CHECK(!run.Start());
+    CHECK(!run.BeginFinish());   // a second stop does not end it twice
+
+    CHECK(run.Finished());
+    CHECK(run.Phase() == RunPhase::Idle);
+    CHECK(run.StartRefusal() == nullptr);
+    CHECK(run.Start());
+}
+
 static void TestScopeSetEmptiesOnLogout()
 {
     // Two bots in scope, then the requester logs out: the next frame selects
@@ -456,6 +515,8 @@ int main()
     TestScopePolicy();
     TestScopeSource();
     TestScopeSetEmptiesOnLogout();
+    TestPermissions();
+    TestLifecycle();
     std::printf("test_run_trace_records: %d checks passed\n", checks);
     return 0;
 }

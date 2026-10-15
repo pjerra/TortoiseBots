@@ -9457,15 +9457,31 @@ void ClearRemoteCommanders()
 // `trace <verb>`; the ack's last field is the run id.
 // ---------------------------------------------------------------------------
 
-// The run trace asks this for every bot at start and at every frame: a GM, or
-// the player who controls the bot (owner, master or claim), may record it.
+// True when `requester` is the bound remote commander of the group `bot` is in:
+// the group of the binding's lead bot, the one `.bot trace start party` follows
+// for a commander.
+static bool CommandsBotsGroup(Player* requester, Player* bot)
+{
+    RemoteCommander::Binding const* binding =
+        CommanderBindings().FindByCommander(requester->GetObjectGuid().GetRawValue());
+    if (!binding)
+        return false;
+    Player* lead = FindCharacter(binding->leadGuid);
+    Group* group = lead ? lead->GetGroup() : nullptr;
+    return group && group == bot->GetGroup();
+}
+
+// The run trace asks this for every bot at start and at every frame: a GM, the
+// player who controls the bot (owner, master or claim), or the bound commander
+// of its group may record it (RunTrace::MayRecordBot).
 static bool MayTraceBot(uint64_t requesterGuid, Player* bot)
 {
     Player* requester = ObjectAccessor::FindPlayer(ObjectGuid(requesterGuid));
     if (!requester || !bot)
         return false;
-    return IsBotAdministrator(requester) ||
-        CanControlBot(requester, BotManager::Instance().FindBot(bot->GetObjectGuid()));
+    return RunTrace::MayRecordBot(IsBotAdministrator(requester),
+        CanControlBot(requester, BotManager::Instance().FindBot(bot->GetObjectGuid())),
+        CommandsBotsGroup(requester, bot));
 }
 
 static bool HandleTrace(ChatHandler* handler, char const* args)
@@ -9507,9 +9523,16 @@ static bool HandleTrace(ChatHandler* handler, char const* args)
 
     if (verb == "status")
     {
-        handler->PSendSysMessage("%s", service.Status().c_str());
-        SendActionAck(handler, intent, service.Active() ? "running" : "idle", service.Active() ? 1 : 0,
-            service.Active() ? service.RunId() : std::string());
+        // The run id and scope only to a GameMaster and the player who started it.
+        bool const detail = RunTrace::MaySeeRunDetail(admin,
+            service.Phase() != RunTrace::RunPhase::Idle &&
+            service.RequesterGuid() == requester->GetObjectGuid().GetRawValue());
+        RunTrace::RunPhase const phase = service.Phase();
+        char const* state = phase == RunTrace::RunPhase::Running ? "running"
+            : phase == RunTrace::RunPhase::Finishing ? "finishing" : "idle";
+        handler->PSendSysMessage("%s", service.Status(detail).c_str());
+        SendActionAck(handler, intent, state, phase == RunTrace::RunPhase::Idle ? 0 : 1,
+            phase != RunTrace::RunPhase::Idle && detail ? service.RunId() : std::string());
         return true;
     }
 
@@ -9537,6 +9560,12 @@ static bool HandleTrace(ChatHandler* handler, char const* args)
     if (!sPlayerbotAIConfig.runTrace)
     {
         SendActionError(handler, intent, "disabled", "The run trace is off (AiPlayerbot.RunTrace.Enabled = 0).");
+        return true;
+    }
+    if (!RunTrace::MayStartTrace(sPlayerbotAIConfig.runTraceGmOnly, admin))
+    {
+        SendActionError(handler, intent, "forbidden",
+            "Only a GameMaster may start a trace (AiPlayerbot.RunTrace.GmOnly = 1).");
         return true;
     }
     if (parts.size() < 2)

@@ -1,20 +1,29 @@
 #!/usr/bin/env python3
 """Structural checks for the run trace's glue (PR #927 review findings).
 
-The record layer is tested standalone (tools/test_run_trace_records.cpp); the
-glue in runtime/RunTrace.cpp and the outcome sites in Engine::DoNextAction need
-the game headers, so these checks pin their shape instead:
+The record layer, the run lifecycle and the permission rules are tested as
+behaviour in tools/test_run_trace_records.cpp, and the writer (end marker,
+stalled disk, shutdown deadline) in tools/test_run_trace_writer.cpp. The glue
+in runtime/RunTrace.cpp, commands/BotCommands.cpp and the outcome sites in
+Engine::DoNextAction need the game headers (Player, ObjectAccessor, Group),
+and there is no seam to drive RunTraceService without the core, so these
+checks pin how the glue calls the tested parts:
 
 - Sample() replaces the hook scope before it looks at an empty frame, so a
   requester who logs out stops the action records at the next frame, not at
   the scope_lost timeout.
 - ResolveBots() picks its source with PickScopeSource(): a party run whose
   group is gone has no bots; it does not shrink to the anchor bot.
-- Every way an action leaves the walk early reports an outcome, or re-queues
-  the action (it is reported when it is popped again). The "vetoed earlier
-  this tick" branch only zeroes the relevance and falls through to the
-  ordinary result sites (Vetoed at the IMPOSSIBLE site), so it reports
-  nothing itself; a report there would count each veto twice.
+- Ending a run never waits for the disk: Finish() only queues the end marker;
+  Update() polls the writer and detaches the listeners; Shutdown() is the only
+  wait, bounded by kShutdownFlushMs.
+- The command glue asks MayRecordBot (with the commander binding),
+  MayStartTrace (GmOnly) and MaySeeRunDetail.
+- Every NoteOutcome site in the engine walk reports to the listeners on the
+  very next statement, and every early exit reports or re-queues within its
+  own block. The "vetoed earlier this tick" branch only zeroes the relevance
+  and falls through to the ordinary result sites (Vetoed at the IMPOSSIBLE
+  site), so it reports nothing itself; a report there would count it twice.
 
 Run: python3 tools/test_run_trace_glue.py
 """
@@ -26,6 +35,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 RUN_TRACE = ROOT / "runtime/RunTrace.cpp"
 ENGINE = ROOT / "ai/playerbot/strategy/Engine.cpp"
+COMMANDS = ROOT / "commands/BotCommands.cpp"
+VETO_EARLIER = "if (std::find(vetoedActions.begin(), vetoedActions.end(), action) != vetoedActions.end())"
 
 
 def function_body(src, signature):
@@ -42,10 +53,25 @@ def function_body(src, signature):
     raise AssertionError("unbalanced braces in " + signature)
 
 
-def block_after(src, marker):
-    """The brace block that starts at the first '{' after marker."""
-    at = src.index(marker)
-    return function_body(src, src[at:at + len(marker)])
+def code_lines(text):
+    """Non-empty lines that are not comments or preprocessor lines."""
+    out = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("//") or stripped.startswith("#"):
+            continue
+        out.append(stripped)
+    return out
+
+
+def enclosing_block(lines, index):
+    """The lines of the innermost brace block that contains lines[index]."""
+    depth = 0
+    for i in range(index - 1, -1, -1):
+        depth += lines[i].count("}") - lines[i].count("{")
+        if depth < 0:
+            return lines[i + 1:index]
+    return lines[:index]
 
 
 class SampleScopeTest(unittest.TestCase):
@@ -63,6 +89,11 @@ class SampleScopeTest(unittest.TestCase):
         self.assertNotIn("scopeGuids_.insert(", self.body)
         self.assertEqual(self.body.count("scopeGuids_."), 1)
 
+    def test_attached_bots_are_remembered_for_detach(self):
+        attach = self.body.find("AttachListeners(ai);")
+        self.assertNotEqual(attach, -1)
+        self.assertIn("attachedGuids_.insert(guid);", self.body[attach:attach + 120])
+
 
 class ResolveBotsTest(unittest.TestCase):
     def setUp(self):
@@ -77,12 +108,88 @@ class ResolveBotsTest(unittest.TestCase):
         self.assertIsNone(re.search(r"else\s+if\s*\(\s*BotManager::Instance\(\)\.IsControllableBot\(anchor\)", self.body))
 
 
+class EndingNeverWaitsTest(unittest.TestCase):
+    WAITS = ("WaitFinished(", "writer_.Close(", "WriteFileAtomic(", "Drain(", ".join(", "sleep_for(")
+
+    def setUp(self):
+        self.src = RUN_TRACE.read_text()
+
+    def test_finish_only_queues_the_end_marker(self):
+        body = function_body(self.src, "void RunTraceService::Finish(")
+        self.assertIn("writer_.PushEnd(", body)
+        self.assertIn("lifecycle_.BeginFinish()", body)
+        self.assertIn("detachPending_ = true;", body)
+        for wait in self.WAITS:
+            self.assertNotIn(wait, body, wait)
+        # The job owns copies: no `this` capture reaches the writer thread.
+        self.assertNotIn("[this", body)
+        self.assertNotIn("[&", body)
+
+    def test_stop_and_update_do_not_wait(self):
+        for signature in ("bool RunTraceService::Stop(", "void RunTraceService::Update("):
+            body = function_body(self.src, signature)
+            for wait in self.WAITS:
+                self.assertNotIn(wait, body, signature + " " + wait)
+
+    def test_update_polls_the_writer_and_detaches(self):
+        body = function_body(self.src, "void RunTraceService::Update(")
+        self.assertIn("writer_.Finished()", body)
+        self.assertIn("CompleteFinish(false)", body)
+        self.assertIn("DetachAllListeners()", body)
+        self.assertLess(body.index("DetachAllListeners()"), body.index("if (!Active())"),
+                        "the listeners are detached on the tick after a run ends, active or not")
+
+    def test_detach_only_from_update(self):
+        calls = [m.start() for m in re.finditer(r"\bDetachAllListeners\(\);", self.src)]
+        update = function_body(self.src, "void RunTraceService::Update(")
+        start = self.src.index(update)
+        self.assertEqual(len(calls), 1)
+        self.assertTrue(start <= calls[0] < start + len(update))
+
+    def test_shutdown_is_the_only_bounded_wait(self):
+        body = function_body(self.src, "void RunTraceService::Shutdown(")
+        self.assertIn("writer_.WaitFinished(kShutdownFlushMs)", body)
+        self.assertEqual(self.src.count("WaitFinished("), 1)
+        self.assertRegex(self.src, r"kShutdownFlushMs\{2000\}")
+        complete = function_body(self.src, "void RunTraceService::CompleteFinish(")
+        self.assertIn("writer_.Detach();", complete)
+
+    def test_start_refuses_while_finishing(self):
+        body = function_body(self.src, "bool RunTraceService::Start(")
+        self.assertIn("lifecycle_.StartRefusal()", body)
+        self.assertIn("lifecycle_.Start();", body)
+        self.assertNotIn("WriteFileAtomic(", body, "the running summary goes through the writer")
+        self.assertIn("writer_.PushFile(summaryPath_", body)
+
+
+class CommandGlueTest(unittest.TestCase):
+    def setUp(self):
+        self.src = COMMANDS.read_text()
+
+    def test_may_trace_bot_honours_the_commander_binding(self):
+        body = function_body(self.src, "static bool MayTraceBot(")
+        self.assertIn("RunTrace::MayRecordBot(", body)
+        self.assertIn("CommandsBotsGroup(requester, bot)", body)
+        binding = function_body(self.src, "static bool CommandsBotsGroup(")
+        self.assertIn("CommanderBindings().FindByCommander(", binding)
+        self.assertIn("binding->leadGuid", binding)
+
+    def test_start_and_status_use_the_policies(self):
+        body = function_body(self.src, "static bool HandleTrace(")
+        self.assertIn("RunTrace::MayStartTrace(sPlayerbotAIConfig.runTraceGmOnly, admin)", body)
+        self.assertIn("RunTrace::MaySeeRunDetail(admin,", body)
+        self.assertIn("service.Status(detail)", body)
+        self.assertLess(body.index("RunTrace::MayStartTrace("), body.index("service.Start(params, message)"))
+
+
 class EngineOutcomeSitesTest(unittest.TestCase):
     def setUp(self):
         self.walk = function_body(ENGINE.read_text(), "bool Engine::DoNextAction(")
+        self.lines = code_lines(self.walk)
 
     def test_vetoed_earlier_branch_falls_through(self):
-        branch = block_after(self.walk, "if (std::find(vetoedActions.begin(), vetoedActions.end(), action) != vetoedActions.end())")
+        at = self.walk.index(VETO_EARLIER)
+        branch = function_body(self.walk[at:], VETO_EARLIER)
         self.assertIn("relevance = 0.0f;", branch)
         for word in ("continue;", "break;", "delete actionNode", "return"):
             self.assertNotIn(word, branch, "a vetoed-earlier instance must reach a result site")
@@ -92,14 +199,28 @@ class EngineOutcomeSitesTest(unittest.TestCase):
     def test_impossible_site_reports_vetoed_for_a_zeroed_possible_action(self):
         self.assertIn("isPossible ? ActionOutcome::Vetoed : ActionOutcome::Impossible", self.walk)
 
-    def test_every_early_exit_reports_or_requeues(self):
-        lines = self.walk.splitlines()
-        exits = [i for i, line in enumerate(lines) if line.strip() == "continue;"]
+    def test_outcome_sits_right_at_each_note_outcome(self):
+        sites = [i for i, line in enumerate(self.lines) if line.startswith("NoteOutcome(action,")]
+        self.assertEqual(len(sites), 7)  # vetoed-earlier, backoff, prereq, ok, failed, impossible, useless
+        veto = self.lines.index(VETO_EARLIER)
+        reported = 0
+        for i in sites:
+            nxt = self.lines[i + 1]
+            if veto < i and "}" not in self.lines[veto + 2:i]:
+                self.assertFalse(nxt.startswith("actionExecutionListeners.Outcome("))
+                continue
+            self.assertTrue(nxt.startswith("actionExecutionListeners.Outcome(action, "),
+                            "no listener report right after: " + self.lines[i])
+            reported += 1
+        self.assertEqual(reported, 6)
+
+    def test_every_early_exit_reports_or_requeues_in_its_block(self):
+        exits = [i for i, line in enumerate(self.lines) if line == "continue;"]
         self.assertGreaterEqual(len(exits), 3)
         for i in exits:
-            window = "\n".join(lines[max(0, i - 6):i])
-            self.assertTrue("actionExecutionListeners.Outcome(" in window or "PushAgain(" in window,
-                            "continue without an outcome or a re-queue near line %d of the walk" % i)
+            block = "\n".join(enclosing_block(self.lines, i))
+            self.assertTrue("actionExecutionListeners.Outcome(" in block or "PushAgain(" in block,
+                            "continue without an outcome or a re-queue in its block: " + block[:200])
 
     def test_each_result_site_reports_once(self):
         for outcome in ("Backoff", "Prereq", "Ok", "Failed", "Useless"):

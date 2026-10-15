@@ -463,6 +463,10 @@ AiPlayerbot.TravelPickBudgetUs = 4000
 # Where traces are written; a relative path is under LogsDir.
 #AiPlayerbot.RunTrace.Dir = traces
 
+# Only a GameMaster may start a trace (each takes up to MaxFileMb of disk).
+# With 0 the owner of the bots may start one too.
+#AiPlayerbot.RunTrace.GmOnly = 1
+
 # Size cap of one trace file in MiB (clamped to 1..1024). When it is reached the
 # run ends (end reason size_cap) with its end record intact.
 #AiPlayerbot.RunTrace.MaxFileMb = 64

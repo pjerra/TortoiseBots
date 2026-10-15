@@ -586,6 +586,86 @@ private:
     std::unordered_set<uint64_t> guids_;
 };
 
+// Who may do what. The glue (commands/BotCommands.cpp, runtime/RunTrace.cpp)
+// reads the facts from the core and asks these.
+//
+// A bot may be recorded while the requester is a GameMaster, controls it
+// (owner, master or claim), or is the bound remote commander of the group the
+// bot is in: the same rule `.bot trace start party` applies to a commanded
+// group, so a commander's trace keeps its bots after the first frame.
+inline bool MayRecordBot(bool requesterIsGm, bool controlsBot, bool commandsBotsGroup)
+{
+    return requesterIsGm || controlsBot || commandsBotsGroup;
+}
+
+// AiPlayerbot.RunTrace.GmOnly (default 1): only a GameMaster may start a run
+// (traces take disk space); with 0 the owner of the bots may too.
+inline bool MayStartTrace(bool gmOnly, bool requesterIsGm)
+{
+    return requesterIsGm || !gmOnly;
+}
+
+// `.bot trace status` names the run id and scope to a GameMaster and to the
+// player who started the run; anyone else only learns that one is running.
+inline bool MaySeeRunDetail(bool requesterIsGm, bool isStarter)
+{
+    return requesterIsGm || isStarter;
+}
+
+// One run at a time. Ending a run only queues the end marker (the writer
+// thread writes the end record and the summary and closes the file), so a run
+// is `Finishing` until the world thread sees the writer done; a new start is
+// refused until then.
+enum class RunPhase
+{
+    Idle,
+    Running,
+    Finishing
+};
+
+class RunLifecycle
+{
+public:
+    RunPhase Phase() const { return phase_; }
+    // Null when a run may start, else the refusal code.
+    char const* StartRefusal() const
+    {
+        switch (phase_)
+        {
+            case RunPhase::Running: return "running";
+            case RunPhase::Finishing: return "finishing";
+            default: return nullptr;
+        }
+    }
+    bool Start()
+    {
+        if (phase_ != RunPhase::Idle)
+            return false;
+        phase_ = RunPhase::Running;
+        return true;
+    }
+    // Stop, size cap, write failure, lost scope, disabled, shutdown.
+    bool BeginFinish()
+    {
+        if (phase_ != RunPhase::Running)
+            return false;
+        phase_ = RunPhase::Finishing;
+        return true;
+    }
+    // The writer has written the end record and the summary (or shutdown
+    // stopped waiting for it).
+    bool Finished()
+    {
+        if (phase_ != RunPhase::Finishing)
+            return false;
+        phase_ = RunPhase::Idle;
+        return true;
+    }
+
+private:
+    RunPhase phase_ = RunPhase::Idle;
+};
+
 // ---------------------------------------------------------------------------
 // Merging repeated outcomes
 //

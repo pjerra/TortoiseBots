@@ -461,6 +461,9 @@ public:
     uint32 runTraceIntervalMs = 500;
     // Output directory; relative paths are under LogsDir.
     std::string runTraceDir = "traces";
+    // Only a GameMaster may start a trace (traces take disk space); with 0 the
+    // owner of the bots may too.
+    bool runTraceGmOnly = true;
     // Size cap of one trace file, in MiB (1..1024); the trace stops when reached.
     uint32 runTraceMaxFileMb = 64;
     bool logInGroupOnly, logValuesPerTick;

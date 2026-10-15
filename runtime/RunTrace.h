@@ -7,16 +7,21 @@
 //
 // Off by default (AiPlayerbot.RunTrace.Enabled = 0). Started and stopped by
 // `.bot trace start <run_id> [party|bot <Name>]` / `.bot trace stop` (a GM, or
-// the owner of every bot in scope); one run at a time. While no run is active
-// the only costs are one relaxed atomic load per world tick, and one empty
-// listener-list walk per action in Engine::DoNextAction.
+// the owner of every bot in scope, unless AiPlayerbot.RunTrace.GmOnly); one run
+// at a time. While no run is active the only costs are one relaxed atomic load
+// per world tick, and one walk over the engine's listener list per action in
+// Engine::DoNextAction, which is empty again once a run's listeners are
+// detached (the world tick after the run ends).
 //
 // Threading: the whole recorder runs on the world thread (the bots' AI, the
 // command queue and Update() all do; see docs/concepts/architecture-invariants.md).
-// Only the file write is off it: lines go through a bounded queue to the writer
-// thread, and are dropped (counted) when it is full. Nothing here reads the
-// database or scans the world; hostiles come from the bots' own attacker lists
-// and are resolved by guid on the bot's map.
+// Every disk write after the file is opened is off it: lines, the summary and
+// the end record go through a bounded queue to the writer thread (lines are
+// dropped and counted when it is full), and ending a run only queues the end
+// marker; Update() polls for the writer to be done. Shutdown is the only wait,
+// at most kShutdownFlushMs. Nothing here reads the database or scans the world;
+// hostiles come from the bots' own attacker lists and are resolved by guid on
+// the bot's map.
 
 #include <atomic>
 #include <cstdint>
@@ -52,22 +57,27 @@ public:
         std::string scopeName;      // shown in the header and the status
         std::string requester;      // name, for the header
         uint64_t requesterGuid = 0; // who may stop it (besides a GM)
-        // True while the requester may record this bot (a GM, or controls it).
-        // Called for every bot of the group at start and at every frame.
+        // True while the requester may record this bot (a GM, controls it, or
+        // commands its group: RunTrace::MayRecordBot). Called for every bot of
+        // the group at start and at every frame.
         bool (*mayRecord)(uint64_t requesterGuid, Player* bot) = nullptr;
     };
 
     // World thread. False with `message` filled when the run cannot start.
     bool Start(StartParams const& params, std::string& message);
-    // World thread. False when no run is active.
+    // World thread. False when no run is active. Returns at once: the writer
+    // thread writes the end record and the summary.
     bool Stop(char const* reason, std::string& message);
-    std::string Status() const;
+    // `detail`: name the run id and scope (RunTrace::MaySeeRunDetail).
+    std::string Status(bool detail) const;
+    RunTrace::RunPhase Phase() const { return lifecycle_.Phase(); }
     std::string const& RunId() const { return header_.runId; }
     uint64_t RequesterGuid() const { return requesterGuid_; }
 
     // World thread, every world tick.
     void Update(uint32_t diff);
-    // Module shutdown: ends a run in progress.
+    // Module shutdown: ends a run in progress and waits for its writer at most
+    // kShutdownFlushMs; past that the writer thread is left to finish alone.
     void Shutdown();
 
     // Hooks (world thread; callers check Active() first).
@@ -81,6 +91,8 @@ public:
 
     // Attaches the action listener to the bot's engines (once per engine).
     static void AttachListeners(PlayerbotAI* ai);
+    // Removes them again (world tick, outside every engine loop).
+    static void DetachListeners(PlayerbotAI* ai);
 
 private:
     RunTraceService() = default;
@@ -100,11 +112,16 @@ private:
     void EmitEvent(RunTrace::Event const& e);
     void EmitAction(RunTrace::ActionRecord const& rec);
     void FlushActions(bool all);
-    void WriteSummary(char const* status, std::string const& endReason);
     void Finish(char const* reason, char const* status);
+    void CompleteFinish(bool timedOut);
+    void DetachAllListeners();
     std::string DirPath() const;
 
-    std::atomic<bool> active_{false};
+    std::atomic<bool> active_{false};  // lifecycle_ is Running (the hooks read this)
+    RunTrace::RunLifecycle lifecycle_;
+    std::string finishReason_;
+    bool detachPending_ = false;
+    std::unordered_set<uint64_t> attachedGuids_;  // bots whose engines carry the listener
     // Hooks that run off the world thread are ignored: the recorder state is not locked.
     WorldThreadMark worldMark_;
     std::unique_ptr<RunTrace::Builder> builder_;
