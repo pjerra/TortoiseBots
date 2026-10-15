@@ -760,6 +760,7 @@ public:
     bool jumpFollow;
     bool jumpChase;
     bool useKnockback;
+    std::list<uint32> botAreaTriggerIds;
     float jumpNoCombatChance;
     float jumpMeleeInCombatChance;
     float jumpRandomChance;

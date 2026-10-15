@@ -769,6 +769,31 @@ AiPlayerbot.DungeonTactics = 0
 # 1 - a bound commander may start a run
 AiPlayerbot.DungeonSelfClear = 0
 
+# Scripted area triggers for bots (an audited allowlist of trigger ids, off by default).
+# A bot has no game client, so it never tells the server it walked into an area
+# trigger, and a trigger script never ran for it: Zul'Farrak's Witch Doctor
+# Zum'rah, who only turns hostile through such a script, stayed friendly in
+# front of an all-bot party. A living bot in a group inside a dungeon (not a
+# raid) now runs the script of a listed trigger it walks into, once per entry,
+# as a player's client would - but only when its party is clearing on purpose:
+# bound to a remote commander (every run-leader run is), or with a human member
+# within 40 yd. A follower running ahead of its player cannot start an event
+# alone. Instance entrances and exits, taverns and battleground entrances never
+# fire, listed or not. Each bot checks its own map's listed triggers twice a
+# second (no world scan).
+# Not every trigger script is safe to start from a bot (at_ring_of_law starts
+# the Blackrock Depths arena, the UBRS stadium trigger starts that event,
+# at_shadowforge_bridge spawns guards), so read and document a trigger's script
+# in docs/guides/configuration-tuning.md before adding its id here.
+# Audited ids (set the key to these to opt in):
+#   962 - Zul'Farrak, at_zumrah: if Witch Doctor Zum'rah is alive within 30 yd,
+#         he turns hostile, yells, and his encounter is marked in progress
+#         (nothing else). Opt in with: AiPlayerbot.BotAreaTriggers = 962
+# Comma-separated trigger ids; empty (the default) turns the feature off.
+# New automation, so it is off by default.
+# Default: (empty)
+AiPlayerbot.BotAreaTriggers =
+
 # Keep out of creature auras.
 # Some creatures carry a permanent damaging aura that pulses around them even
 # while they are idle. With this on, every bot steps out when it is within 8 yd

@@ -15,6 +15,7 @@
 #include "playerbot/GatherSpotPolicy.h"
 #include "playerbot/PullJoinWindowPolicy.h"
 #include "playerbot/SurvivePolicy.h"
+#include "playerbot/BotAreaTriggerPolicy.h"
 #include "../../runtime/BotManager.h"
 
 class Player;
@@ -1016,6 +1017,9 @@ protected:
     WorldPosition jumpDestination;
     uint32 jumpTime;
     bool fallAfterJump;
+    // Scripted area triggers the bot stands in (issue #984, BotAreaTriggers.h).
+    ai::BotAreaTriggerState areaTriggerState;
+    uint32 areaTriggerCheckDelay = 0;
     // Issue #84 (P2): bumped by HandleTeleportAck, consumed by engines.
     uint64_t transitionGeneration = 0;
     uint32 faceTargetUpdateDelay = 0;

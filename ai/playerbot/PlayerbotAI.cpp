@@ -10,6 +10,7 @@
 #include <thread>
 
 #include "playerbot/AiFactory.h"
+#include "playerbot/BotAreaTriggers.h"
 
 #include "../../runtime/ObservabilityEmitter.h"
 #include "../../runtime/RunTrace.h"
@@ -34,6 +35,7 @@
 #include "LootObjectStack.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "PlayerbotAI.h"
+#include "BotAreaTriggers.h"
 #include "playerbot/InterruptCastingPolicy.h"
 #include "BotDiagnostics.h"
 #include "BotActionLog.h"
@@ -549,6 +551,22 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
     // read only, no DB/scan; the OnPlayerLogin call keeps owning first login.
     if (bot->watching_cinematic_entry)
         bot->CinematicEnd();
+
+    // Issue #984: a Headless bot never sends CMSG_AREATRIGGER, so a scripted
+    // area trigger (Zum'rah's at_zumrah) never fired for an all-bot party. Run
+    // the script of a trigger the bot just walked into, as the client would
+    // (dungeons only, not raids).
+    // A few position tests against the bot's map's index, twice a second.
+    if (!sPlayerbotAIConfig.botAreaTriggerIds.empty())
+    {
+        if (areaTriggerCheckDelay > elapsed)
+            areaTriggerCheckDelay -= elapsed;
+        else
+        {
+            areaTriggerCheckDelay = ai::kBotAreaTriggerCheckMs;
+            ai::UpdateBotAreaTriggers(bot, areaTriggerState);
+        }
+    }
 
     // revalidate the
     // cached master pointer against ObjectAccessor BEFORE any code
