@@ -651,6 +651,27 @@ namespace ai
         virtual std::string GetTargetName() override { return "snare target"; }
         virtual std::string GetTargetQualifier() override { return GetSpellName(); }
         virtual ActionThreatType getThreatType() { return ActionThreatType::ACTION_THREAT_NONE; }
+        bool isPossible() override
+        {
+            // Same gate as CastBanishOnCcAction: Banish only lands on demons
+            // and elementals, and a target immune to its effects (a boss such
+            // as Magmadar) wastes the cast and the GCD.
+            Unit* target = GetTarget();
+            if (!target || target->IsPlayer())
+                return false;
+            uint32 type = target->GetCreatureType();
+            if (type != CREATURE_TYPE_DEMON && type != CREATURE_TYPE_ELEMENTAL)
+                return false;
+            if (SpellEntry const* spellInfo = sServerFacade.LookupSpellInfo(GetSpellID()))
+            {
+                for (int32 i = EFFECT_INDEX_0; i <= EFFECT_INDEX_2; ++i)
+                {
+                    if (target->IsImmuneToSpellEffect(spellInfo, (SpellEffectIndex)i, false))
+                        return false;
+                }
+            }
+            return CastSpellAction::isPossible();
+        }
     };
 
     class CastBanishOnCcAction : public CastCrowdControlSpellAction
