@@ -91,7 +91,7 @@ The loader skips a row it cannot use and names it in the server log (`ai_dungeon
 | `use_item` | `use_item` (`item` = `expect_item`) |
 | `legs[i].boss` | `boss` (`entries` = `first`, `flags` from `team`); its `loot_item` becomes a `loot` of the boss entry right after it |
 | `legs[i].after_boss` | after the `boss` row, same kinds as `steps` |
-| `cc_priority`, `cc_always`, `kill_first` | `ai_dungeon_plan` columns of the same names, comma lists of creature entries as `entries` (`''` none). The exporter at turtle-agent 6cd0b13 does not write them yet (and its plan has no `kill_first`); the Zul'Farrak rows of `20261015200100_world.sql` carry them written by hand in the exporter's form. |
+| `cc_priority`, `cc_always`, `kill_first` | `ai_dungeon_plan` columns of the same names, comma lists of creature entries as `entries` (`''` none). The exporter at turtle-agent 6cd0b13 does not write them yet (and its plan has no `kill_first`); the Zul'Farrak rows of `20261015200100_world.sql` carry them set by hand in the exporter's form, pending pjerra/turtle-agent#190; `tools/test_dungeon_plan_sql.py` fails if the newest Zul'Farrak row loses `cc_always` or `kill_first` (a re-export from an exporter without them). |
 | `skip`, `rest`, `companions_loot`, `watchdog` | not carried over yet |
 
 ## Run leader

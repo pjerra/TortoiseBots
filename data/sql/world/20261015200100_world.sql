@@ -3,17 +3,20 @@
 -- run with 0 stops) with `turtle-agent plan-export --mmaps <map 209 mmaps> --rev 6cd0b13 --stamp 20261015200100 zulfarrak`:
 --   * the direct hops at 1289.9 816.1, 1420.7 801.1 and 1535 834 are gone (plain moves now: no move_direct row);
 --   * the leg 'STOP not supported (gong)' and its ritual step are gone: the plan ends at Velratha.
--- Crowd control and kill-first (ai_dungeon_plan columns from 20261015200000_world.sql), written by hand the way the
--- exporter writes `entries`, because the exporter at 6cd0b13 does not write them (it reads cc_priority and cc_always
--- into its plan but has no kill_first field and no column for any of the three):
+-- HAND-SET VALUES: the ai_dungeon_plan columns cc_priority, cc_always and kill_first of this row (columns from
+-- 20261015200000_world.sql) were set by hand, pending pjerra/turtle-agent#190 (the exporter will write them). The
+-- exporter at 6cd0b13 does not write them: it reads cc_priority and cc_always into its plan but has no kill_first
+-- field and no column for any of the three, so a re-export from it would write this row WITHOUT them.
+-- tools/test_dungeon_plan_sql.py fails when the newest Zul'Farrak plan row has an empty cc_always or kill_first.
 --   cc_priority 5650,7247,7246,5648  Sandfury Witch Doctor (Flash Heal 17843, Healing Ward 11899 -> Greater Healing Ward
 --                                    8179), Sandfury Soul Eater (Dark Offering), Sandfury Shadowhunter (Hex), Sandfury
 --                                    Shadowcaster
 --   cc_always   5650,7246            in any pack they are in
 --   kill_first  8179,5650,7247       the summoned ward first, then the witch doctor and the soul eater
--- The plan file's own cc_priority (7246,5650,5648) and cc_always (7246) differ; the plan file in
--- turtle-agent should take these values and a kill_first field, so the next export writes them itself.
+-- The plan file's own cc_priority (7246,5650,5648) and cc_always (7246) differ; turtle-agent#190 brings these values
+-- and a kill_first field into the plan file and the exporter.
 --
+-- Everything below is the exporter's output, unchanged but for those three values:
 -- Dungeon plans for the run leader (.bot run), exported by turtle-agent (plan-export). Plan format v1; the mapping is
 -- docs/guides/dungeon-run-leader.md ("From plan v1 to rows"). The plan file in turtle-agent is the single source: edit it
 -- there and export again, never these rows by hand. Never edit this file once applied; export a new one.
