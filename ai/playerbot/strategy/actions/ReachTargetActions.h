@@ -10,6 +10,7 @@
 #include "playerbot/strategy/NamedObjectContext.h"
 #include "playerbot/strategy/values/MoveStyleValue.h"
 #include "GenericSpellActions.h"
+#include "playerbot/strategy/values/HealerCoverage.h"
 #include "playerbot/PlayerbotFactory.h"
 #include "playerbot/PullFiringPolicy.h"
 #include "playerbot/RangedApproachPolicy.h"
@@ -714,6 +715,22 @@ namespace ai
     public:
         ReachPartyMemberToHealAction(PlayerbotAI* ai) : ReachTargetAction(ai, "reach party member to heal", ai->GetRange("heal")) {}
         virtual std::string GetTargetName() override { return "party member to heal"; }
+
+        // Every heal on "party member to heal" queues this action as its walk-up
+        // prerequisite, so the trigger alone does not stop the walk. In combat
+        // the walk is dropped for an ally another healer already covers
+        // (issue #904, HealReachPolicy.h); with no covering healer it stays.
+        virtual bool isUseful() override
+        {
+            if (!ReachTargetAction::isUseful())
+                return false;
+
+            if (!ai->IsStateActive(BotState::BOT_STATE_COMBAT))
+                return true;
+
+            Unit* target = GetTarget();
+            return !target || !AnotherHealerCoversAlly(ai, target, HealReachLimit(ai));
+        }
     };
 
     class ReachPartyMemberToResurrectAction : public ReachTargetAction

@@ -123,7 +123,7 @@ void WorldPacketHandlerStrategy::InitNonCombatTriggers(std::list<TriggerNode*> &
 
     triggers.push_back(new TriggerNode(
         "often",
-        NextAction::array(0, new NextAction("security check", relevance), new NextAction("check mail", relevance), NULL)));
+        NextAction::array(0, new NextAction("check mail", relevance), NULL)));
 
     triggers.push_back(new TriggerNode(
         "guild accept",

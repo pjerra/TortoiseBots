@@ -1456,10 +1456,11 @@ bool AoeThreatNearbyTrigger::IsActive()
     // while the creature is near and alive); it lapses a few seconds after
     // the creature dies or the bot moves on. The creature the
     // player ordered this bot to attack is not registered.
-    // A tank in combat is exempt (it may stand in the ring to hold mobs). The
+    // A tank in combat is exempt from the rows that give tanks a pass (it may
+    // stand in the sludge's ring to hold mobs; not in Living Poison's). The
     // current target is registered too when it is itself a listed creature,
     // so a chase from beyond the 15 yd list is bent before it gets close.
-    if (sPlayerbotAIConfig.avoidCreatureAuras && !CreatureAuraCombatExempt(PlayerbotAI::IsTank(bot), bot->IsInCombat()))
+    if (sPlayerbotAIConfig.avoidCreatureAuras)
     {
         ObjectGuid const explicitTarget = AI_VALUE(ObjectGuid, "explicit attack target");
         std::list<ObjectGuid> keepouts = AI_VALUE(std::list<ObjectGuid>, "possible triggers");
@@ -1475,6 +1476,9 @@ bool AoeThreatNearbyTrigger::IsActive()
         {
             CreatureAuraKeepout const* row = PossibleTriggersValue::KeepoutFor(ai->GetUnit(guid));
             if (!CreatureAuraKeepoutApplies(true, row, true, true, guid == explicitTarget))
+                continue;
+            // A tank in combat is exempt from the rows that give tanks a pass.
+            if (CreatureAuraCombatExempt(*row, PlayerbotAI::IsTank(bot), bot->IsInCombat()))
                 continue;
             Hazard hazard(guid, kCreatureAuraHazardSeconds, CreatureAuraHazardRadius(*row));
             hazard.SetRefreshOnReAdd();

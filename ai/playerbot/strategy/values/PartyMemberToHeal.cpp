@@ -2,11 +2,14 @@
 #include "playerbot/GroupMembers.h"
 #include "playerbot/playerbot.h"
 #include "PartyMemberToHeal.h"
+#include "HealerCoverage.h"
+#include "playerbot/HealReachPolicy.h"
 #include "playerbot/HealerManaPolicy.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/RaidTankRolePolicy.h"
 #include "ObjectAccessor.h"
+#include <algorithm>
 #include <map>
 
 using namespace ai;
@@ -106,6 +109,46 @@ static float effectiveHealthPercent(const Unit* u, bool incomingDamage, std::map
     return hpmax ? hp * 100.0f / hpmax : 100.0f;
 }
 
+float ai::HealReachLimit(PlayerbotAI* ai)
+{
+    return HealReachLimitFor(ai->GetBot()->InBattleGround(), ai->GetRange("heal"), sPlayerbotAIConfig.healDistanceBg,
+        sPlayerbotAIConfig.contactDistance);
+}
+
+bool ai::AnotherHealerCoversAlly(PlayerbotAI* ai, Unit* ally, float maxDistance)
+{
+    Player* bot = ai->GetBot();
+    Group* group = bot ? bot->GetGroup() : nullptr;
+    if (!group || !ally)
+        return false;
+
+    // A critical ally is never "covered": every healer may walk to it.
+    if (!CoverApplies(ally->GetHealthPercent(), float(sPlayerbotAIConfig.criticalHealth)))
+        return false;
+
+    for (Player* member : LiveGroupMembers(group))
+    {
+        if (!member || member == bot || member == ally)
+            continue;
+        uint8 const cls = member->GetClass();
+        bool const classCanHeal = cls == CLASS_PRIEST || cls == CLASS_PALADIN || cls == CLASS_DRUID || cls == CLASS_SHAMAN;
+        bool const sameMap = member->GetMap() == bot->GetMap();
+        if (HealerCoversAlly(member->IsAlive(), sameMap, sameMap ? member->GetDistance(ally, SizeFactor::CombatReach) : 0.0f,
+                maxDistance, classCanHeal,
+                [member]()
+                {
+                    uint32 const maxMana = member->GetMaxPower(POWER_MANA);
+                    float const manaPct = maxMana ? member->GetPower(POWER_MANA) * 100.0f / maxMana : 100.0f;
+                    return HealerFitToCover(member->HasUnitState(UNIT_STAT_CAN_NOT_REACT_OR_LOST_CONTROL),
+                        (member->GetUInt32Value(UNIT_FIELD_FLAGS) & (UNIT_FLAG_SILENCED | UNIT_FLAG_PACIFIED)) != 0, manaPct);
+                },
+                [member]() { return PlayerbotAI::IsHeal(member); },
+                [member, ally]() { return member->IsWithinLOSInMap(ally, true); }))
+            return true;
+    }
+    return false;
+}
+
 Unit* PartyMemberToHeal::Calculate()
 {
     std::vector<Unit*> needHeals;
@@ -190,6 +233,35 @@ Unit* PartyMemberToHeal::Calculate()
     if (needHeals.empty() && tankTargets.empty())
     {
         return nullptr;
+    }
+
+    // Issue #904: in combat an ally this healer cannot reach from where it
+    // stands and another healer covers is that healer's to heal. Dropping it
+    // here (not just refusing the walk) lets this healer fall back to somebody
+    // it can reach, instead of picking the far ally and then standing idle.
+    // The covering healer is in reach of the ally, so it keeps the ally in its
+    // own list: nobody drops an ally nobody else can heal. Out-of-reach is
+    // tested distance first, line of sight only inside the range.
+    if (ai->IsStateActive(BotState::BOT_STATE_COMBAT))
+    {
+        float const reachLimit = HealReachLimit(ai);
+        auto const dropCovered = [this, reachLimit](std::vector<Unit*>& list)
+        {
+            list.erase(std::remove_if(list.begin(), list.end(), [this, reachLimit](Unit* candidate)
+            {
+                return DropCoveredCandidate(candidate->GetHealthPercent(), float(sPlayerbotAIConfig.criticalHealth),
+                    [&]()
+                    {
+                        return bot->GetDistance(candidate, SizeFactor::CombatReach) > reachLimit ||
+                            !bot->IsWithinLOSInMap(candidate, true);
+                    },
+                    [&]() { return AnotherHealerCoversAlly(ai, candidate, reachLimit); });
+            }), list.end());
+        };
+        dropCovered(needHeals);
+        dropCovered(tankTargets);
+        if (needHeals.empty() && tankTargets.empty())
+            return nullptr;
     }
 
     if (needHeals.empty() && !tankTargets.empty())

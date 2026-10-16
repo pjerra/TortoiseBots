@@ -21,7 +21,6 @@
 #include "TellCastFailedAction.h"
 #include "AcceptDuelAction.h"
 #include "ReadyCheckAction.h"
-#include "SecurityCheckAction.h"
 #include "GuildAcceptAction.h"
 #include "PetitionSignAction.h"
 #include "BattleGroundJoinAction.h"
@@ -78,7 +77,6 @@ namespace ai
             creators["ready reply"] = [](PlayerbotAI* ai) { return new ReadyReplyAction(ai); };
             creators["force rebuff"] = [](PlayerbotAI* ai) { return new ForceRebuffAction(ai); };
             creators["uninvite"] = [](PlayerbotAI* ai) { return new UninviteAction(ai); };
-            creators["security check"] = [](PlayerbotAI* ai) { return new SecurityCheckAction(ai); };
             creators["guild accept"] = [](PlayerbotAI* ai) { return new GuildAcceptAction(ai); };
             creators["inventory change failure"] = [](PlayerbotAI* ai) { return new InventoryChangeFailureAction(ai); };
             creators["petition sign"] = [](PlayerbotAI* ai) { return new PetitionSignAction(ai); };

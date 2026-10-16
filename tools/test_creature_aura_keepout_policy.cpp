@@ -35,6 +35,74 @@ int main()
     }
     std::cout << "  [PASS] table lookup by map and entry\n";
 
+    // #906: Naxxramas Living Poison, listed without an aura. Explode 28433 is
+    // an area spell at EffectRadiusIndex 8 (5 yd); the EventAI fires it from 4 yd.
+    {
+        CreatureAuraKeepout const* poison = FindCreatureAuraKeepout(533, 16027);
+        CHECK(poison != nullptr);
+        CHECK(poison->auraSpellId == 0);
+        CHECK(poison->pulseRadius == 5.0f);
+        CHECK(poison->keepoutRadius == 10.0f);
+        CHECK(poison->keepoutRadius >= poison->pulseRadius + 5.0f); // Explode radius plus a 5 yd margin (the sludge gets 3)
+        CHECK(poison->keepoutRadius - poison->pulseRadius > FindCreatureAuraKeepout(349, 12222)->keepoutRadius - FindCreatureAuraKeepout(349, 12222)->pulseRadius);
+        CHECK(poison->keepoutRadius > 4.0f);                // clear of the 4 yd trigger range
+        CHECK(FindCreatureAuraKeepout(349, 16027) == nullptr); // other map
+        CHECK(FindCreatureAuraKeepout(533, 12222) == nullptr);
+        CHECK(FindCreatureAuraKeepout(533, 16028) == nullptr); // Patchwerk's neighbours are not listed
+        // Aura-less row: alive is enough. A row with an aura still needs it.
+        CHECK(CreatureAuraKeepoutMarkedLive(*poison, false));
+        CHECK(CreatureAuraKeepoutApplies(true, poison, true, CreatureAuraKeepoutMarkedLive(*poison, false), false));
+        CHECK(!CreatureAuraKeepoutApplies(true, poison, false, CreatureAuraKeepoutMarkedLive(*poison, false), false)); // dead
+        CHECK(!CreatureAuraKeepoutApplies(false, poison, true, CreatureAuraKeepoutMarkedLive(*poison, false), false)); // toggle off
+        CHECK(!CreatureAuraKeepoutApplies(true, poison, true, CreatureAuraKeepoutMarkedLive(*poison, false), true));   // ordered
+        CreatureAuraKeepout const& sludgeRow = *FindCreatureAuraKeepout(349, 12222);
+        CHECK(!CreatureAuraKeepoutMarkedLive(sludgeRow, false));
+        CHECK(CreatureAuraKeepoutMarkedLive(sludgeRow, true));
+        // The step-out and path rings, and the snapshot gate for the map.
+        CHECK(InsideCreatureAuraKeepout(*poison, 4.0f));
+        CHECK(InsideCreatureAuraKeepout(*poison, 10.0f));
+        CHECK(!InsideCreatureAuraKeepout(*poison, 10.1f));
+        CHECK(CreatureAuraHazardRadius(*poison) == 11.0f); // keep-out + the shared path margin
+        CHECK(CreatureAuraMaxHazardRadiusOnMap(533) == 11.0f);
+        CHECK(CreatureAuraMaxHazardRadiusOnMap(1) == 0.0f); // no snapshot visit on a map without a row
+    }
+    std::cout << "  [PASS] Living Poison (Naxxramas): aura-less row, 5 yd Explode, 10 yd keep-out\n";
+
+    // Codex review of #1038: a step-out with no landing spot. The sludge backs
+    // off 2 s; the lethal row retries on the next tick and steps straight away.
+    {
+        CreatureAuraKeepout const& sludgeRow = *FindCreatureAuraKeepout(349, 12222);
+        CreatureAuraKeepout const& poisonRow = *FindCreatureAuraKeepout(533, 16027);
+        CHECK(CreatureAuraNoLandingUntilMs(sludgeRow, 1000) == 1000 + kCreatureAuraNoLandingBackoffMs);
+        CHECK(CreatureAuraNoLandingUntilMs(poisonRow, 1000) == 1000); // isUseful's "now < until" never holds
+        // Repeated landing failure on the lethal row: the action stays eligible
+        // on every tick, the sludge's does not for 2 s.
+        uint32_t poisonUntil = 0, sludgeUntil = 0;
+        unsigned poisonEligible = 0, sludgeEligible = 0;
+        for (uint32_t now = 1000; now < 1000 + 5000; now += 100)
+        {
+            if (now >= poisonUntil) { ++poisonEligible; poisonUntil = CreatureAuraNoLandingUntilMs(poisonRow, now); }
+            if (now >= sludgeUntil) { ++sludgeEligible; sludgeUntil = CreatureAuraNoLandingUntilMs(sludgeRow, now); }
+        }
+        CHECK(poisonEligible == 50);
+        CHECK(sludgeEligible == 3); // 1000, 3000, 5000
+        // The straight step-away: from 3 yd away, to the 10 yd rim plus 1.5 yd,
+        // along the creature -> bot line.
+        float px = 0.0f, py = 0.0f;
+        CreatureAuraStepAwayPoint(0.0f, 0.0f, 3.0f, 0.0f, poisonRow.keepoutRadius, 0.0f, px, py);
+        CHECK(std::fabs(px - 11.5f) < 0.001f && std::fabs(py) < 0.001f);
+        CreatureAuraStepAwayPoint(100.0f, 50.0f, 100.0f, 54.0f, poisonRow.keepoutRadius, 0.0f, px, py);
+        CHECK(std::fabs(px - 100.0f) < 0.001f && std::fabs(py - 61.5f) < 0.001f); // any heading
+        CHECK(std::hypot(px - 100.0f, py - 50.0f) > poisonRow.keepoutRadius);
+        // Already outside the rim: only the margin, never back toward it.
+        CreatureAuraStepAwayPoint(0.0f, 0.0f, 12.0f, 0.0f, poisonRow.keepoutRadius, 0.0f, px, py);
+        CHECK(std::fabs(px - 13.5f) < 0.001f);
+        // On the centre: the fallback heading.
+        CreatureAuraStepAwayPoint(5.0f, 5.0f, 5.0f, 5.0f, poisonRow.keepoutRadius, 1.5707963f, px, py);
+        CHECK(std::fabs(px - 5.0f) < 0.01f && std::fabs(py - 16.5f) < 0.01f);
+    }
+    std::cout << "  [PASS] lethal keep-out retries every tick and steps straight away on repeated landing failure\n";
+
     // Every row keeps out past its pulse and fits the avoid-aoe radius cap,
     // so the existing strafe-first step-out handles it.
     for (CreatureAuraKeepout const& row : kCreatureAuraKeepouts)
@@ -284,11 +352,33 @@ int main()
     // Roles: tanks are exempt from the chase hold always, from the step-out
     // and the path hazard only in combat.
     {
-        CHECK(CreatureAuraChaseExempt(true));
-        CHECK(!CreatureAuraChaseExempt(false));
-        CHECK(CreatureAuraCombatExempt(true, true));
-        CHECK(!CreatureAuraCombatExempt(true, false)); // a following tank keeps out
-        CHECK(!CreatureAuraCombatExempt(false, true));
+        CreatureAuraKeepout const& sludgeRow = *FindCreatureAuraKeepout(349, 12222);
+        CreatureAuraKeepout const& poisonRow = *FindCreatureAuraKeepout(533, 16027);
+        CHECK(sludgeRow.tankExempt);
+        CHECK(CreatureAuraChaseExempt(sludgeRow, true));
+        CHECK(!CreatureAuraChaseExempt(sludgeRow, false));
+        CHECK(CreatureAuraCombatExempt(sludgeRow, true, true));
+        CHECK(!CreatureAuraCombatExempt(sludgeRow, true, false)); // a following tank keeps out
+        CHECK(!CreatureAuraCombatExempt(sludgeRow, false, true));
+        // #906: Explode one-shot both tanks, so Living Poison gives tanks no pass.
+        CHECK(!poisonRow.tankExempt);
+        CHECK(!CreatureAuraChaseExempt(poisonRow, true));
+        CHECK(!CreatureAuraCombatExempt(poisonRow, true, true));
+        CHECK(!CreatureAuraCombatExempt(poisonRow, true, false));
+        CHECK(!CreatureAuraCombatExempt(poisonRow, false, true));
+        CHECK(CreatureAuraMapHasNonTankExemptRow(533));
+        CHECK(!CreatureAuraMapHasNonTankExemptRow(349)); // a tank in combat skips the lookups there
+        CHECK(!CreatureAuraMapHasNonTankExemptRow(1));
+        // A tank in combat ignores only the exempt entries of a snapshot.
+        std::vector<CreatureAuraHazardEntry> const entries = {
+            { 0xA1ull, 0.0f, 0.0f, 0.0f, 9.0f, false, true },   // sludge ring
+            { 0xA2ull, 30.0f, 0.0f, 0.0f, 11.0f, false, false }, // Living Poison ring
+        };
+        std::vector<uint64_t> const none;
+        CHECK(CreatureAuraEntriesRingAt(entries, 1.0f, 0.0f, 0.0f, 0.0f, none, false) == 0xA1ull);
+        CHECK(CreatureAuraEntriesRingAt(entries, 1.0f, 0.0f, 0.0f, 0.0f, none, true) == 0);  // tank: sludge ring is a pass
+        CHECK(CreatureAuraEntriesRingAt(entries, 31.0f, 0.0f, 0.0f, 0.0f, none, true) == 0xA2ull); // tank: poison ring is not
+        CHECK(CreatureAuraEntriesRingAt(entries, 31.0f, 0.0f, 0.0f, 0.0f, none, false) == 0xA2ull);
     }
     std::cout << "  [PASS] tank exemption\n";
 
