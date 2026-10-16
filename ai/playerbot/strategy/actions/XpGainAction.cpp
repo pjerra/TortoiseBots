@@ -145,7 +145,16 @@ void XpGainAction::GiveXP(int32 xp, Unit* victim)
 
     // Used by Eluna
 #ifdef ENABLE_ELUNA
-    sEluna->OnGiveXP(bot, xp, victim);
+    // Per-map Eluna state, like the core's Player::GiveXP; the hook may change a gain, not a loss.
+    if (xp > 0)
+    {
+        if (Eluna* e = bot->GetEluna())
+        {
+            uint32 gain = uint32(xp);
+            e->OnGiveXP(bot, gain, victim);
+            xp = int32(gain);
+        }
+    }
 #endif /* ENABLE_ELUNA */
 
     // XP to money conversion processed in Player::RewardQuest
