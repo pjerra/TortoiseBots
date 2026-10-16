@@ -542,7 +542,9 @@ HireRaidOutcome HireProvisionService::HireRaid(Player* requester, HireRaidReques
     uint32_t money = requester->GetMoney();
     for (uint32_t i = 0; i < result.planned; ++i)
     {
-        uint32_t fee = QuoteHireFee(owned + i, level, tier);
+        // Staff accounts (AiPlayerbot.HireFreeMinSecurity) hire free, as in Hire().
+        uint32_t fee = TortoiseBots::HireFeeCharged(QuoteHireFee(owned + i, level, tier),
+            static_cast<int>(requester->GetSession()->GetSecurity()), sPlayerbotAIConfig.hireFreeMinSecurity);
         quote += fee;
         if (running + fee <= money && affordable == i)
         {
