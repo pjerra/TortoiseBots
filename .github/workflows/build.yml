@@ -45,8 +45,8 @@ permissions:
   contents: read
 
 env:
-  CORE_REPO: tortoise-wow/tortoise-wow
-  CORE_REF: ${{ inputs.core_ref || 'main' }}
+  CORE_REPO: pjerra/tortoise-wow
+  CORE_REF: ${{ inputs.core_ref || 'feat/eluna' }}
 
 jobs:
   linux:
@@ -60,6 +60,7 @@ jobs:
           repository: ${{ env.CORE_REPO }}
           ref: ${{ env.CORE_REF }}
           path: core
+          submodules: recursive
 
       - name: Checkout module
         uses: actions/checkout@v4
@@ -92,6 +93,7 @@ jobs:
             -DUSE_EXTRACTORS=OFF \
             -DALLOW_TURTLE_ADDONS=ON \
             -DMODULES=static -DMODULE_TORTOISEBOTS=static \
+            -DBUILD_ELUNA=ON \
             -DUSE_PCH=OFF \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
@@ -115,6 +117,7 @@ jobs:
           repository: ${{ env.CORE_REPO }}
           ref: ${{ env.CORE_REF }}
           path: core
+          submodules: recursive
 
       - name: Checkout module
         uses: actions/checkout@v4
@@ -161,6 +164,7 @@ jobs:
             -DUSE_EXTRACTORS=OFF `
             -DALLOW_TURTLE_ADDONS=ON `
             -DMODULES=static -DMODULE_TORTOISEBOTS=static `
+            -DBUILD_ELUNA=ON `
             -DCMAKE_C_COMPILER_LAUNCHER=sccache `
             -DCMAKE_CXX_COMPILER_LAUNCHER=sccache `
             -DACE_ROOT="$env:ACE_ROOT"
