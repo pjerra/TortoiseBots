@@ -454,11 +454,10 @@ HireRaidOutcome HireProvisionService::HireRaid(Player* requester, HireRaidReques
     if (!CheckHireAllowed(requester, false, gate))
         return refuse(gate.message);
 
-    uint32_t level = requester->GetLevel();
-    if (level < 1)
-        level = 1;
-    if (level > kMaxLevel)
-        level = kMaxLevel;
+    // No level request: the same rule Hire() applies (the hirer's level, #936).
+    uint32_t level = ResolveHireLevel(requester->GetLevel(), 0,
+        sPlayerbotAIConfig.hireMaxLevelAboveHirer,
+        requester->GetSession()->GetSecurity() >= static_cast<int>(SEC_GAMEMASTER)).level;
     // Same tier rule as Hire(): validated at 60, ignored below.
     uint8_t tier = request.tier > kHireGearTierMax ? kHireGearTierMax : request.tier;
     if (sPlayerbotAIConfig.hireGearTiersEnabled && level == kHireGearHireLevel && tier > 0)
