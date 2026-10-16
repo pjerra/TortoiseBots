@@ -595,14 +595,17 @@ static void TestWaitObjectTimeoutIsBounded()
 static void TestUnsupportedPausesAndSkip()
 {
     DungeonPlan plan;
-    PlanStep ritual = Step(PlanStepKind::Ritual);
-    ritual.entry = 1;
-    plan.steps = {ritual, Step(PlanStepKind::Move, 10)};
+    // A kind the run does not know (the loader never lets one through; the
+    // machine still pauses on it rather than guess).
+    PlanStep unknown;
+    unknown.kind = PlanStepKind::None;
+    plan.steps = {unknown, Step(PlanStepKind::Move, 10)};
     Run r = Start(&plan);
     Facts f = Party(0);
     Tick(r, f);
     CHECK(r.state == State::Paused && r.note.find("not supported yet") != std::string::npos);
-    CHECK(!Supported(PlanStepKind::Ritual) && Supported(PlanStepKind::Move));
+    CHECK(!Supported(PlanStepKind::None) && Supported(PlanStepKind::Move));
+    CHECK(Supported(PlanStepKind::Ritual) && Supported(PlanStepKind::Hold));
     // Skip from a pause goes on running (after the regroup).
     CHECK(Skip(r));
     CHECK(r.state == State::Running && r.step == 1 && r.regroup);

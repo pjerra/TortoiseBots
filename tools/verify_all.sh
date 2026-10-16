@@ -112,6 +112,7 @@ if command -v g++ >/dev/null 2>&1; then
         test_dispel_target_policy
         test_dps_target_policy
         test_dual_wield_policy
+        test_dungeon_event_policy
         test_dungeon_follow_hold_policy
         test_dungeon_plan_policy
         test_dungeon_run_policy

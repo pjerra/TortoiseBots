@@ -12,7 +12,7 @@ import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 KINDS = {"move", "move_direct", "pull", "boss", "loot", "open", "use_item", "wait_object",
-         "wait_clear", "rest", "ritual"}
+         "wait_clear", "rest", "ritual", "hold"}
 TABLES = ("ai_dungeon_plan", "ai_dungeon_leg", "ai_dungeon_step")
 
 
@@ -79,6 +79,21 @@ class DungeonPlanSql(unittest.TestCase):
             self.assertTrue(row.get(column), "%s: the zulfarrak plan row has no %s" % (name, column))
         self.assertEqual(row.get("cc_always"), "7246")
         self.assertEqual(row.get("kill_first"), "8179,5650,7247")
+
+    def test_uldaman_keeps_its_event_steps(self):
+        # The newest migration that inserts Uldaman's steps carries the two scripted events as hand-set
+        # rows (#984): a re-export from an exporter that has no `hold` kind must not drop them silently.
+        newest = None
+        for name, text in migrations():
+            if re.search(r"INSERT INTO `ai_dungeon_step`.*?\('uldaman',", text, re.S):
+                newest = (name, text)
+        self.assertIsNotNone(newest, "no migration inserts the uldaman steps")
+        name, text = newest
+        for data, units in (("1", "'4857'"), ("2", "'2748,7309,7077,7076,10120'")):
+            self.assertRegex(text, r"\('uldaman', \d+, \d+, 'hold', %s, [^)]*, 3, 40, 600, %s," % (data, units),
+                             "%s: the uldaman hold on instance data %s is missing" % (name, data))
+        self.assertEqual(len(re.findall(r"\('uldaman', \d+, \d+, 'ritual', \d+, [^)]*?, 0, 0, 3, 0, 0,", text)), 2,
+                         "%s: the uldaman rituals need param 3" % name)
 
     def test_inserted_step_kinds_are_known(self):
         for name, text in migrations():

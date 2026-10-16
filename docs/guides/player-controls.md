@@ -215,7 +215,12 @@ TBM:RUN|uldaman|running|7/41|baelog|pull|pull|pulling 4851
 TBM:RUN|uldaman|paused|12/41|baelog|boss|begin|3 dead: regroup (cmd revive party), then .bot run resume (2 regroups by itself at this step did not hold)
 ```
 
-`<state>` is `running`, `paused` or `done`; `<phase>` is `begin`, `gather`, `walk`, `pull`, `task`, `rest` or `wait`; `<note>` says what it does, or why it paused.
+`<state>` is `running`, `paused` or `done`; `<phase>` is `begin`, `gather`, `walk`, `pull`, `task`, `rest`, `wait` or `hold`; `<note>` says what it does, or why it paused. During a scripted event (a `hold` step: Uldaman's Stone Keepers, Archaedas) `<phase>` shows how far the event is instead: `hold <dead>/<seen> down` between fights and `fight <dead>/<seen> down` in one, counting the event's units (`hold 1/4 down`: one of the four Stone Keepers is dead), and `<note>` says the same in words (`event: fighting (1 of 4 down, 1 awake)`). A failed event (the encounter reset) pauses with `event failed (...)` and sets the run back to the step that starts it (the ritual), so `.bot run resume` regroups and starts it again:
+
+```text
+TBM:RUN|uldaman|running|178/204|keepers|hold|fight 1/4 down|event: fighting (1 of 4 down, 1 awake)
+TBM:RUN|uldaman|paused|177/204|keepers_altar|ritual|begin|event failed (data 1 reads 2, fail: the encounter reset (2 of 4 down)): .bot run resume regroups and starts it again at step 177 (ritual)
+```
 
 ## 2. Roster & Lifecycle Commands
 

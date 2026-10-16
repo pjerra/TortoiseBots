@@ -119,6 +119,17 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn("ai::OwnedByLaterStep(*slot.run.plan, OwnerFrom(slot.run), unit->GetEntry(),", facts)
         self.assertNotIn("Current(slot.run)", facts)
 
+    def test_ritual_answer_reaches_the_run(self):
+        # The run's `ritual` step waits for the ritual order's one answer (#984): the group's reply
+        # notes it for the run whose carrier (the lead bot) is a member, and a run's `ritual` order
+        # makes the lead bot its carrier like loot/open/use.
+        reply = body(COMMANDS, "void RitualReply(RitualGroup const& group", "\n}\n")
+        self.assertIn("run->second.taskReply = ok ? 1 : 2;", reply)
+        self.assertIn('order.compare(0, 7, "ritual ") == 0)', COMMANDS)
+        facts = body(COMMANDS, "void ReadRunFacts(", "\n}\n")
+        self.assertIn("case ai::PlanStepKind::Ritual:", facts)
+        self.assertIn("lead->GetMap()->GetInstanceData()", facts)
+
 
 if __name__ == "__main__":
     unittest.main()

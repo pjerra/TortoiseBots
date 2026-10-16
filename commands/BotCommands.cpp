@@ -47,6 +47,7 @@
 #include "../ai/playerbot/AiFactory.h"
 #include "../runtime/RemoteCommanderView.h"
 #include "../runtime/RemoteCommanderTasks.h"
+#include "Maps/InstanceData.h"
 #include "../runtime/RemoteCommanderEnter.h"
 #include "../runtime/GossipOrderPolicy.h"
 #include "../runtime/CommanderTelemetry.h"
@@ -7536,6 +7537,14 @@ void EndRitualMembers(RitualGroup const& group, uint64 exceptBot, bool stopChann
 
 void RitualReply(RitualGroup const& group, bool ok, uint32 count, std::string const& code, std::string const& message)
 {
+    // A run that started this ritual (its lead bot is a member) learns the answer.
+    auto run = DungeonRuns().find(group.commanderRaw);
+    if (run != DungeonRuns().end() &&
+        std::find(group.members.begin(), group.members.end(), run->second.carrierRaw) != group.members.end())
+    {
+        run->second.taskReply = ok ? 1 : 2;
+        run->second.taskText = ok ? std::string("done") : code + ": " + message;
+    }
     Player* commander = FindCharacter(group.commanderRaw);
     if (!commander || !commander->IsInWorld() || !commander->GetSession())
         return;
@@ -9192,6 +9201,84 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
             }
             break;
         }
+        case ai::PlanStepKind::Hold:
+        {
+            // A scripted event: its units within the radius of the hold spot,
+            // living (the dormant, friendly ones too: the event wakes them) and
+            // dead; its done condition. One grid search per entry around the
+            // lead bot, only while the spot is in sight.
+            if (!f.seen)
+            {
+                if (wantsApproach)
+                    f.approachKnown = ApproachOnPath(lead, step->x, step->y, step->z, f.approachX, f.approachY, f.approachZ);
+                break;
+            }
+            float const range = std::min(toPoint + step->radius, 2.0f * kSeeYd);
+            for (uint32 entry : step->entries)
+            {
+                std::list<Creature*> found;
+                lead->GetCreatureListWithEntryInGrid(found, entry, range);
+                for (Creature* creature : found)
+                {
+                    if (DistanceTo(creature, step->x, step->y, step->z) > step->radius)
+                        continue;
+                    if (!creature->IsAlive())
+                    {
+                        ++f.eventDown;
+                        continue;
+                    }
+                    UnitFact unit;
+                    unit.guid = creature->GetObjectGuid().GetRawValue();
+                    unit.entry = creature->GetEntry();
+                    unit.distLead = lead->GetDistance(creature);
+                    unit.hostile = !sServerFacade.IsFriendlyTo(creature, lead);
+                    unit.stealthed = IsStealthed(creature);
+                    unit.evading = creature->IsInEvadeMode();
+                    unit.polymorphed = Polymorphed(creature);
+                    f.units.push_back(unit);
+                }
+            }
+            if (step->flags & ai::kPlanFlagDoneData)
+            {
+                // The instance script's own data (InstanceData::GetData), the
+                // value its encounter state is kept in: no world scan.
+                InstanceData* data = lead->GetMap() ? lead->GetMap()->GetInstanceData() : nullptr;
+                f.eventData = data ? static_cast<long long>(data->GetData(step->entry)) : -1;
+            }
+            else if (step->flags & ai::kPlanFlagDoneObject)
+            {
+                RemoteCommander::TargetSpec spec;
+                spec.entry = step->entry;
+                spec.hasPoint = true;
+                spec.point.x = step->x;
+                spec.point.y = step->y;
+                spec.point.z = step->z;
+                uint64 const guid = FindEntryTarget(lead, spec, false);
+                ObjectGuid const objectGuid(guid);
+                GameObject* go = guid && objectGuid.IsGameObject() ? lead->GetMap()->GetGameObject(objectGuid) : nullptr;
+                if (go)
+                    f.objectState = go->GetGoState() == GO_STATE_READY ? 0 : go->GetGoState() == GO_STATE_ACTIVE ? 1 : 2;
+            }
+            break;
+        }
+        case ai::PlanStepKind::Ritual:
+            // The ritual's bots are the lead bot (the carrier) and the nearest
+            // others; the lead bot's task stands for the whole ritual order.
+            f.carrierBusy = CommanderTasks().count(lead->GetObjectGuid().GetRawValue()) != 0;
+            if (slot.carrierRaw == lead->GetObjectGuid().GetRawValue())
+            {
+                f.taskReply = slot.taskReply;
+                f.taskText = slot.taskText;
+            }
+            // The encounter the ritual starts (its hold's data): a retry waits
+            // for a reset before the ritual goes out (DungeonRun::RitualStep).
+            if (ai::PlanStep const* hold = EventHoldAhead(slot.run))
+                if (hold->flags & ai::kPlanFlagDoneData)
+                {
+                    InstanceData* data = lead->GetMap() ? lead->GetMap()->GetInstanceData() : nullptr;
+                    f.eventData = data ? static_cast<long long>(data->GetData(hold->entry)) : -1;
+                }
+            break;
         case ai::PlanStepKind::Loot:
         case ai::PlanStepKind::Open:
         case ai::PlanStepKind::UseItem:
@@ -9247,7 +9334,8 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
     std::string const order = TortoiseBots::DungeonRun::Tick(slot.run, facts, dt);
     if (!order.empty())
     {
-        if (order.compare(0, 5, "loot ") == 0 || order.compare(0, 5, "open ") == 0 || order.compare(0, 4, "use ") == 0)
+        if (order.compare(0, 5, "loot ") == 0 || order.compare(0, 5, "open ") == 0 || order.compare(0, 4, "use ") == 0 ||
+            order.compare(0, 7, "ritual ") == 0)
         {
             slot.carrierRaw = lead->GetObjectGuid().GetRawValue();
             slot.taskReply = 0;

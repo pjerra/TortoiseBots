@@ -37,7 +37,8 @@ namespace ai
         WaitObject,  // wait until object `entry` near x,y,z is in state `param`
         WaitClear,   // wait until no living hostile stands within `radius` of x,y,z
         Rest,        // a rest gate even when nobody is low
-        Ritual,      // a summoning-style object for several bots (loaded, not run yet)
+        Ritual,      // a summoning ritual object several bots use together (`param` bots; 0 = 3): an event's start
+        Hold,        // a scripted event: stand at x,y,z, fight what comes, until its done condition (flags)
     };
 
     inline PlanStepKind ParsePlanStepKind(const std::string& text)
@@ -48,7 +49,7 @@ namespace ai
             {"loot", PlanStepKind::Loot}, {"open", PlanStepKind::Open},
             {"use_item", PlanStepKind::UseItem}, {"wait_object", PlanStepKind::WaitObject},
             {"wait_clear", PlanStepKind::WaitClear}, {"rest", PlanStepKind::Rest},
-            {"ritual", PlanStepKind::Ritual},
+            {"ritual", PlanStepKind::Ritual}, {"hold", PlanStepKind::Hold},
         };
         for (const auto& k : kinds)
             if (text == k.name)
@@ -71,6 +72,7 @@ namespace ai
             case PlanStepKind::WaitClear: return "wait_clear";
             case PlanStepKind::Rest: return "rest";
             case PlanStepKind::Ritual: return "ritual";
+            case PlanStepKind::Hold: return "hold";
             default: return "none";
         }
     }
@@ -79,10 +81,24 @@ namespace ai
     constexpr std::uint32_t kPlanFlagAmbush = 1;    // pull: the pack is stealthed; walk through, fight what shows
     constexpr std::uint32_t kPlanFlagAlliance = 2;  // pull/boss: only for an Alliance party
     constexpr std::uint32_t kPlanFlagHorde = 4;     // pull/boss: only for a Horde party
+    // hold: what ends the event (at most one of the two; neither: every unit of
+    // `entries` within `radius` is dead, after one was seen awake).
+    constexpr std::uint32_t kPlanFlagDoneData = 8;     // the instance's data `entry` reads `param`
+    constexpr std::uint32_t kPlanFlagDoneObject = 16;  // object `entry` near x,y,z is in state `param` (0-2)
+    // hold with kPlanFlagDoneData: that data is one of the core's encounter
+    // states (EncounterState: 0 not started, 1 in progress, 2 fail, 3 done,
+    // 4 special). The event has failed when it reads 2, or 0 again after it was
+    // seen started, and when it does not start soon after the hold begins.
+    constexpr std::uint32_t kPlanFlagEncounter = 32;
+    constexpr std::uint32_t kPlanEncounterNotStarted = 0;
+    constexpr std::uint32_t kPlanEncounterFail = 2;
+    constexpr std::uint32_t kPlanEncounterMax = 4;
 
     // Defaults and bounds the loader applies.
     constexpr float kPlanDefaultPackRadius = 15.0f;
     constexpr float kPlanDefaultBossRadius = 30.0f;
+    constexpr float kPlanDefaultHoldRadius = 30.0f;
+    constexpr std::uint32_t kPlanDefaultRitualBots = 3;
     constexpr float kPlanMaxRadius = 100.0f;
     constexpr std::uint32_t kPlanDefaultTimeoutS = 60;
     constexpr std::uint32_t kPlanMaxTimeoutS = 600;
@@ -200,10 +216,12 @@ namespace ai
         UnknownPlan,
         UnknownKind,
         Duplicate,
-        MissingEntry,     // pull without entries; boss/loot/open/use_item/wait_object/ritual without entry
+        MissingEntry,     // pull without entries; boss/loot/open/use_item/wait_object/ritual without entry;
+                          // hold done by object without entry, by its units without entries
         BadRadius,        // negative, over kPlanMaxRadius, or a wait_clear without one
         BadTimeout,       // over kPlanMaxTimeoutS
-        BadParam,         // wait_object state other than 0-2
+        BadParam,         // wait_object state other than 0-2; hold with both done flags, an encounter
+                          // flag without the data flag or a state above 4, an object state above 2
         BadPoint,         // not a finite point
         BadEntries,       // `entries` is not a comma list of non-zero creature entries
     };
@@ -263,6 +281,23 @@ namespace ai
                 if (!(step.radius > 0.0f))
                     return PlanStepRefusal::BadRadius;
                 break;
+            case PlanStepKind::Hold:
+            {
+                bool const byData = (step.flags & kPlanFlagDoneData) != 0;
+                bool const byObject = (step.flags & kPlanFlagDoneObject) != 0;
+                bool const encounter = (step.flags & kPlanFlagEncounter) != 0;
+                if ((byData && byObject) || (encounter && !byData))
+                    return PlanStepRefusal::BadParam;
+                if (encounter && step.param > kPlanEncounterMax)
+                    return PlanStepRefusal::BadParam;
+                if (byObject && step.entry == 0)
+                    return PlanStepRefusal::MissingEntry;
+                if (byObject && step.param > 2)
+                    return PlanStepRefusal::BadParam;
+                if (!byData && !byObject && step.entries.empty())
+                    return PlanStepRefusal::MissingEntry;
+                break;
+            }
             default:
                 break;
         }
@@ -270,6 +305,10 @@ namespace ai
             step.radius = kPlanDefaultPackRadius;
         if (step.kind == PlanStepKind::Boss && step.radius == 0.0f)
             step.radius = kPlanDefaultBossRadius;
+        if (step.kind == PlanStepKind::Hold && step.radius == 0.0f)
+            step.radius = kPlanDefaultHoldRadius;
+        if (step.kind == PlanStepKind::Ritual && step.param == 0)
+            step.param = kPlanDefaultRitualBots;
         if (step.timeoutS == 0)
             step.timeoutS = kPlanDefaultTimeoutS;
         return PlanStepRefusal::None;
@@ -426,21 +465,22 @@ namespace ai
         return teams == 0 || team == 0 || (teams & team) != 0;
     }
 
-    // Whether a unit of `entry` standing at x,y,z belongs to a pull or boss
-    // step AFTER step index `from` (the run leader never pulls what a later step
-    // owns: the plan's order says when it is fought). A later step for the
-    // other team (StepForTeam) owns nothing.
+    // Whether a unit of `entry` standing at x,y,z belongs to a pull, boss or
+    // hold step AFTER step index `from` (the run leader never pulls what a later
+    // step owns: the plan's order says when it is fought; a hold owns its
+    // event's units). A later step for the other team (StepForTeam) owns nothing.
     inline bool OwnedByLaterStep(const DungeonPlan& plan, std::size_t from, std::uint32_t entry,
         float x, float y, float z, std::uint32_t team = 0)
     {
         for (std::size_t i = from + 1; i < plan.steps.size(); ++i)
         {
             const PlanStep& step = plan.steps[i];
-            if (step.kind != PlanStepKind::Pull && step.kind != PlanStepKind::Boss)
+            if (step.kind != PlanStepKind::Pull && step.kind != PlanStepKind::Boss && step.kind != PlanStepKind::Hold)
                 continue;
             if (!StepForTeam(step, team))
                 continue;
-            bool listed = step.entry == entry ||
+            // A hold's `entry` is its done condition (instance data, object), not a unit.
+            bool listed = (step.kind != PlanStepKind::Hold && step.entry == entry) ||
                 std::find(step.entries.begin(), step.entries.end(), entry) != step.entries.end();
             if (listed && PlanDistance(x, y, z, step.x, step.y, step.z) <= step.radius)
                 return true;

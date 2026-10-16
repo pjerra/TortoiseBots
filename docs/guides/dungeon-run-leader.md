@@ -2,8 +2,8 @@
 id: guide-dungeon-run-leader
 title: Dungeon Run Leader
 category: guides
-summary: The opt-in run leader (.bot run, AiPlayerbot.DungeonSelfClear) that lets a bound party clear a dungeon plan by itself, its safety rules and supported steps, and the plan tables (ai_dungeon_plan, ai_dungeon_leg, ai_dungeon_step) that turtle-agent's exporter fills.
-tags: [guide, dungeon, plan, commander, self-clear, uldaman]
+summary: The opt-in run leader (.bot run, AiPlayerbot.DungeonSelfClear) that lets a bound party clear a dungeon plan by itself, its safety rules and supported steps (scripted events too, ritual and hold), and the plan tables (ai_dungeon_plan, ai_dungeon_leg, ai_dungeon_step) that turtle-agent's exporter fills.
+tags: [guide, dungeon, plan, commander, self-clear, uldaman, events]
 relates_to:
   - guide-boss-tactics
   - guide-dungeon-tactics
@@ -49,13 +49,13 @@ One row is one thing to do. Steps run in `(leg, seq)` order; the primary key is 
 | :--- | :--- |
 | `plan`, `leg`, `seq` | Where the step sits. `seq` need not be dense. |
 | `kind` | What to do (table below). |
-| `entry` | A creature, game object or item entry, by kind. |
+| `entry` | A creature, game object or item entry, by kind; `hold`: the instance data index or the game object of its done condition. |
 | `x`, `y`, `z` | A point on the plan's map, by kind. |
 | `radius` | Yards, by kind; at most 100. |
 | `item` | An item entry, by kind; `0` for none. |
-| `param` | `wait_object`: the state to wait for (`0` ready / closed, `1` active / open, `2` active_alt). |
-| `flags` | `1` ambush (a stealthed pack), `2` Alliance only, `4` Horde only. |
-| `timeout_s` | `wait_object`, `wait_clear`: seconds before the wait fails; `0` = 60, at most 600. |
+| `param` | `wait_object`: the state to wait for (`0` ready / closed, `1` active / open, `2` active_alt). `ritual`: how many bots use the object (`0` = 3). `hold`: the value of its done condition. |
+| `flags` | `1` ambush (a stealthed pack), `2` Alliance only, `4` Horde only. `hold`: `8` done by instance data, `16` done by object state, `32` the data is an encounter state (see [Events](#events)). |
+| `timeout_s` | `wait_object`, `wait_clear`: seconds before the wait fails; `hold`: the event's ceiling, fights included. `0` = 60, at most 600. |
 | `entries` | Comma-separated creature entries (`4851,4852`), by kind; at most 16. |
 | `comment` | Free text. |
 
@@ -73,9 +73,10 @@ One row is one thing to do. Steps run in `(leg, seq)` order; the primary key is 
 | `wait_object` | `entry`, `x y z` (near), `param`, `timeout_s` | Wait until the object is in that state (the Seal of Khaz'Mul opens). |
 | `wait_clear` | `x y z`, `radius`, `timeout_s` | Wait until no living hostile stands within `radius` of the point. |
 | `rest` | — | A rest gate even when nobody is low. |
-| `ritual` | `entry`, `x y z` (near) | An object several players must use together. Loaded; not run yet. |
+| `ritual` | `entry`, `x y z` (near), `param` (bots, 0: 3) | A summoning ritual object several bots use together (Uldaman's altars): an event's start. |
+| `hold` | `x y z` (the spot), `radius` (0: 30), `entries` (the event's units), `entry` + `param` + `flags` (the done condition), `timeout_s` | A scripted event: stand on the spot and fight what comes until it is done. See [Events](#events). |
 
-The loader skips a row it cannot use and names it in the server log (`ai_dungeon_step: plan ... skipped`): an unknown kind, a `pull` without entries, a `boss`/`loot`/`open`/`use_item`/`wait_object`/`ritual` without `entry`, a negative or over-100 radius, a `wait_clear` without one, a timeout over 600 s, a `wait_object` state above 2, a duplicate key, or a step of a plan with no `ai_dungeon_plan` row, or an `entries` text that is not a comma list of non-zero entries (`BadEntries`). It also logs a plan whose consecutive moves are more than 60 yd apart (the exporter should cut such a leg into via points). The rules are `NormalizePlanStep` in `ai/playerbot/DungeonPlanPolicy.h`; `tools/test_dungeon_plan_policy.cpp` and `tools/test_dungeon_plan_sql.py` test them.
+The loader skips a row it cannot use and names it in the server log (`ai_dungeon_step: plan ... skipped`): an unknown kind, a `pull` without entries, a `boss`/`loot`/`open`/`use_item`/`wait_object`/`ritual` without `entry`, a negative or over-100 radius, a `wait_clear` without one, a timeout over 600 s, a `wait_object` state above 2, a `hold` with both done flags (8 and 16), with flag 32 but not 8 or an encounter state above 4, done by object without `entry` or with a state above 2, or with neither done flag and no `entries`, a duplicate key, or a step of a plan with no `ai_dungeon_plan` row, or an `entries` text that is not a comma list of non-zero entries (`BadEntries`). It also logs a plan whose consecutive moves are more than 60 yd apart (the exporter should cut such a leg into via points). The rules are `NormalizePlanStep` in `ai/playerbot/DungeonPlanPolicy.h`; `tools/test_dungeon_plan_policy.cpp` and `tools/test_dungeon_plan_sql.py` test them.
 
 ### From plan v1 to rows
 
@@ -92,6 +93,8 @@ The loader skips a row it cannot use and names it in the server log (`ai_dungeon
 | `legs[i].boss` | `boss` (`entries` = `first`, `flags` from `team`); its `loot_item` becomes a `loot` of the boss entry right after it |
 | `legs[i].after_boss` | after the `boss` row, same kinds as `steps` |
 | `cc_priority`, `cc_always`, `kill_first` | `ai_dungeon_plan` columns of the same names, comma lists of creature entries as `entries` (`''` none). The exporter at turtle-agent 6cd0b13 does not write them yet (and its plan has no `kill_first`); the Zul'Farrak row carries them set by hand, pending pjerra/turtle-agent#190 (`20261015200100_world.sql` as applied, then the owner's values of 2026-10-15 in `20261015200200_world.sql`, whose header records that they are hand-set: polymorph the Shadowhunter 7246, whose Hex takes the tank out, and kill the ward 8179, then the Witch Doctor 5650, first: `cc_priority` 7246,7247,5648, `cc_always` 7246, `kill_first` 8179,5650,7247); `tools/test_dungeon_plan_sql.py` fails if the newest Zul'Farrak row loses `cc_always` or `kill_first` (a re-export from an exporter without them). |
+| `steps[]` `ritual` | `ritual` (`entry`, `position`); its `participants` go to `param`, set by hand until the exporter writes it (`20261016120000_world.sql`) |
+| `wait_for.gameobject` after a ritual, the event's pull group | a `hold` row, set by hand until the exporter has the kind (`20261016120000_world.sql`; `tools/test_dungeon_plan_sql.py` fails when the newest Uldaman rows lose their two holds) |
 | `skip`, `rest`, `companions_loot`, `watchdog` | not carried over yet |
 
 ## Run leader
@@ -102,7 +105,7 @@ It is the **observe** mode of the dungeon modes: the bots clear, the commander (
 
 ### How it plays
 
-Once a second the run reads the party (alive, dead, in combat, health, mana, spread) and the current step's surroundings, and the step machine (`runtime/DungeonRunPolicy.h`) answers with at most one order. The order is sent exactly as the commander's own `.bot cmd <order>` (`move`, `move ... direct`, `pullback`, `rest`, `loot`, `open`, `use`): same checks, same ACK/ERR lines. The fights are the bots' own combat AI, with the [boss tactics](boss-tactics.md) of a bound party.
+Once a second the run reads the party (alive, dead, in combat, health, mana, spread) and the current step's surroundings, and the step machine (`runtime/DungeonRunPolicy.h`) answers with at most one order. The order is sent exactly as the commander's own `.bot cmd <order>` (`move`, `move ... direct`, `pullback`, `rest`, `loot`, `open`, `use`, `ritual`): same checks, same ACK/ERR lines. The fights are the bots' own combat AI, with the [boss tactics](boss-tactics.md) of a bound party.
 
 | Step | What the run does |
 | :--- | :--- |
@@ -116,7 +119,8 @@ Once a second the run reads the party (alive, dead, in combat, health, mana, spr
 | `wait_object` | Reads the object's state near the point (like `cmd state`) until it matches; `timeout_s` then pause. |
 | `wait_clear` | Walks to the spot if needed; waits until no living hostile is within the radius; `timeout_s` then pause. |
 | `rest` | `cmd rest` and waits as the rest gate does. |
-| `ritual` | **Not supported yet**: the run pauses and names it (do it by hand with `.bot cmd ritual`, then `skip`, `resume`). |
+| `ritual` | `cmd ritual entry:<id>@x,y,z <lead bot> <bot> <bot>` with the lead bot and the nearest living bots, `param` in all (fewer up: pause). Its one answer decides: ACK, the step is done (the event started); ERR pauses with the module's words. Bots free again with no answer for 5 s: pause. |
+| `hold` | See [Events](#events). |
 
 The lead bot is the carrier of every object and item step.
 
@@ -134,16 +138,50 @@ From turtle-agent's remote driver (the same rules, now on the server):
 - **A straggler is summoned before a gather pauses**: at a gather's ceiling (30 s; 60 s in a regroup) the farthest bot more than 40 yd from the lead bot, or more than 8 yd above or below it (another floor), that came less than 5 yd closer since the last look (when the gather went out, then at each ceiling: stuck behind, not on its way) is summoned to the lead bot (`cmd summon <bot>`), once per bot and step, and the gather waits again; still not gathered, the run pauses as before. A refused summon only notes it.
 - **A missing item pauses once**: a `loot` or `use_item` that does not get its item pauses, naming it; after `.bot run skip` the item is noted missing, and the later steps that need it (a `use_item` of it or one that fails because of it, an `open` whose lock needs it, the `wait_object` right after such an `open`) are left out with a note instead of failing one after the other.
 - **Switched off mid-run** (a config reload sets `AiPlayerbot.DungeonSelfClear = 0`): every run ends with a last status line.
-- **Every wait is bounded**: gather 30 s, a pull's fight start 25 s, a fight 180 s (a boss 420 s), a rest 60 s (it then goes on), a task 90 s, a step 300 s out of combat (a wait step: its timeout plus 60 s), at most 20 pulls per step. A ceiling pauses the run with the reason; nothing loops.
+- **Every wait is bounded**: gather 30 s, a pull's fight start 25 s, a fight 180 s (a boss 420 s, a `hold`'s fight its timeout when longer), an event its `timeout_s` (fights included), a ritual's answer 90 s, a rest 60 s (it then goes on), a task 90 s, a step 300 s out of combat (a wait step: its timeout plus 60 s), at most 20 pulls per step. A ceiling pauses the run with the reason; nothing loops.
 - **Any player order pauses it**: `.bot cmd` (but `state`), `.bot action`, and any chat command a real player gives a bot of the party (a whisper such as `stay`, `follow` or `attack`, `.bot command`, party chat) that passes the bot's command check.
 - **Rest gate** after every fight and before every step: when a living bot is under 80 % health, a healer under 50 % mana or another mana user under 35 %, `cmd rest` (again every 20 s) until everyone is at 90 % health, healers 80 % and others 60 % mana, or 60 s.
 
+### Events
+
+A scripted event is two or more steps: a **start** (`ritual`, or an `open` / `use_item` when an object or item starts it), then a **hold**. The hold:
+
+1. Walks the party to its spot (navmesh hops while it is out of sight).
+2. Stands there. The run sends no pull of its own: the bots fight what the event sends with their own combat AI. After a fight that took the lead bot more than 8 yd off the spot, the party walks back to it (the bots chase in a fight; the run brings them back). An awake unit of the event (in `entries`, within `radius`, hostile) that has not come for 10 s is pulled.
+3. Ends on its **done condition**, chosen by `flags`:
+   - `8`: the instance script's data `entry` reads `param` (`InstanceData::GetData`, read once a tick, no world scan). With `32` that data is one of the core's encounter states (`EncounterState`: 0 not started, 1 in progress, 2 fail, 3 done): the event has **failed** when it reads 2, when it is back to 0 after it was seen started (a boss that reset and walked home), and when it does not leave 0 within 30 s of the hold (the start did not take).
+   - `16`: the game object `entry` near the spot is in state `param` (as `wait_object`).
+   - neither: every unit of `entries` within `radius` is dead, after one was seen awake.
+4. Is bounded by `timeout_s` (fights included; a fight in a hold may last that long, not just 180 s): then it pauses (*event not done after N s*); `resume` waits again, `skip` goes on.
+
+An event may start fighting before its hold: the first Stone Keeper wakes with the ritual's cast. A fight while the current step is a start (`ritual`, `open`, `use_item`) or a move with only moves between it and a hold is the event's: it is bounded by the hold's timeout, not 180 s, and a ritual that answered ACK hands over to the hold at once.
+
+Before a `ritual` whose hold reads an encounter state, the run looks at that data: already done, the ritual is left out; in progress or failed (a boss still walking home after a reset), it waits up to 60 s for the reset before the ritual goes out (the Stone Keepers stay at fail for good, so there the wait runs out and the ritual goes). A retry refused because the altar is still active (`busy`, "already in progress": the core leaves a summoning ritual active after its last use, and nothing in the Uldaman scripts resets it) pauses with *the altar is spent; an instance reset is needed to retry the event* (unverified live).
+
+A **failed event** never hangs: the run goes back to the start step (the nearest `ritual`, `open` or `use_item` before the hold, with only moves, rests and waits between) and pauses with the reason (*event failed (data 1 reads 2, fail: the encounter reset): .bot run resume regroups and starts it again at step N (ritual)*). A wipe in a hold regroups by itself as anywhere; the hold then starts over and finds the reset.
+
+A hold owns its event's units: no hop before it pulls them (as a later `pull` or `boss` step owns its pack). The status line's phase shows the event: `hold 1/4 down` between fights, `fight 1/4 down` in one (dead units of the event of all seen, the dormant ones too), the note says it in words (*event: fighting (1 of 4 down, 1 awake)*).
+
+#### Uldaman
+
+Read from the core scripts (tortoise-wow `src/scripts/dungeons/uldaman`) and its world data:
+
+| Event | Start | Waves | Done / failed | Rows (`20261016120000_world.sql`) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Altar of the Keepers** | Three players of one group use the Altar of the Keepers (130511, a summoning ritual: `gameobject_template` data0 3, spell 11568, castersGrouped 1). Spell 11568 sends event 2228 (`event_awaken_stone_keeper`, `uldaman.cpp:56`), which needs a player caster (a bot is one) and sets instance data 1 (`ULDAMAN_ENCOUNTER_STONE_KEEPERS`) to IN_PROGRESS. | The four Stone Keepers (4857) around the altar wake one at a time (`instance_uldaman.cpp:296`): the first stoned one attacks the nearest player within 80 yd; each one's death (EventAI 485702, Self Destruct) wakes the next. | All four dead: DONE (3), the temple door 124367 opens. A keeper that evades (EventAI 485701: everybody dead or gone) sets FAIL (2) and all four stand up stoned again. | `ritual` 130511 (param 3); `hold` at 101.5 271.2 -26.5, radius 30, entries 4857, data 1 = 3, flags 40, 600 s; then `wait_object` 124367 open. |
+| **Archaedas** | Three players use the Altar of Archaedas (133234, a summoning ritual like the other, spell 10340). Event 2268 (`event_awaken_archaedas`, `boss_archaedas.cpp:45`) sets instance data 2 (`ULDAMAN_ENCOUNTER_ARCHAEDAS`) to IN_PROGRESS: the temple door 141869 shuts, Archaedas (2748) wakes 4 s later and attacks the nearest player. | Every 10 s one wall statue wakes (Earthen Custodians 7309, Hallshapers 7077; the Custodians heal him with Reconstruct below 50 %); at 66 % the six Earthen Guardians (7076); at 33 % the two Vault Warders (10120); Ground Tremor every 45 s. | His death: DONE (3), the rest despawn, the vault door 124369 opens. He evades (FAIL, then NOT_STARTED once home) when he or his target is more than 38 yd from his spawn: the hold spot (the altar stand, 11 yd from him) keeps the party in the room. | `open` 141869; `ritual` 133234 (param 3); `hold` at 94 267.8 -52, radius 45, entries 2748,7309,7077,7076,10120, data 2 = 3, flags 40, 600 s; then `wait_object` 124369 open. |
+
+The other gates of the plan are plain steps: the Keystone (124371, `open` with the Staff of Prehistoria 7733), the Seal of Khaz'Mul (124372, `wait_object`: it opens 27 s after the Keystone and Ironaya wakes), the Temple Doors 124368 and 141869 (`open`; plain doors with lock 86, which the first live run must confirm needs no key). The plan uses no GM command.
+
+#### For Zul'Farrak and later plans
+
+The same steps carry other events: a hold done by the instance data a script keeps (flag 8, without 32 when the values are not encounter states), by a door (flag 16) or by its units' death. Not here yet (the ZF part of #984): a `gossip` start step (`cmd gossip`, #1013), a fixed wait, waiting for a spawn, and a hold whose data must reach a value (`>=`) rather than equal it.
+
 ### Not supported yet
 
-- `ritual` steps (Uldaman's Altar of the Keepers, Archaedas) pause the run.
 - A party with a real player in it (a player leading their own party): the run leads bound parties only.
-- Plan v1's `skip`, per-leg `rest`, `companions_loot` (Revelosh's Shaft: the run's `loot` takes the corpse with the lead bot, but other bots may loot it first), `area_trigger`, gossip and waves.
+- Plan v1's `skip`, per-leg `rest`, `companions_loot` (Revelosh's Shaft: the run's `loot` takes the corpse with the lead bot, but other bots may loot it first), `area_trigger` and gossip.
 
 ### Cost
 
-Nothing while no run exists. A running run ticks once a second (never per bot tick) and does at most one local grid search around its lead bot, only when the step's point is within 60 yd. No database access after startup.
+Nothing while no run exists. A running run ticks once a second (never per bot tick) and does at most one local grid search around its lead bot (a `boss` or `hold` step: one per listed entry), only when the step's point is within 60 yd. A `hold` done by data reads one instance data value a tick. No database access after startup.

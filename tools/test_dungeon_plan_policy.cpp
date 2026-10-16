@@ -29,7 +29,7 @@ static PlanStep Step(std::uint8_t leg, std::uint16_t seq, PlanStepKind kind, flo
 static void TestKinds()
 {
     const char* names[] = {"move", "move_direct", "pull", "boss", "loot", "open", "use_item", "wait_object",
-                           "wait_clear", "rest", "ritual"};
+                           "wait_clear", "rest", "ritual", "hold"};
     for (const char* name : names)
     {
         PlanStepKind kind = ParsePlanStepKind(name);
