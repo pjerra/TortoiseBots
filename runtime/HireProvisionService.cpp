@@ -584,6 +584,8 @@ HireRaidOutcome HireProvisionService::HireRaid(Player* requester, HireRaidReques
     job.masterGuid = masterGuid;
     job.roster = roster;
     job.raidSized = raidSized;
+    job.hadGroup = group != nullptr;
+    job.startedInRaid = group && group->isRaidGroup();
     job.progress = result;
     job.progress.started = true;
     m_raidJobs.push_back(job);
@@ -621,14 +623,25 @@ void HireProvisionService::StepRaidJobs()
         }
         while (online && !finished && budget > 0 && job.cursor < job.roster.size())
         {
+            Group* group = master->GetGroup();
+            if (group && group->isBGGroup())
+                group = master->GetOriginalGroup();
+            // Left the group mid-job (#1014 dismissed the companions already
+            // hired): stop, so nothing more is hired or charged into a new group.
+            if (group)
+                job.hadGroup = true;
+            else if (job.hadGroup)
+            {
+                out.stopStatus = HireStatus::Failed;
+                out.message = "you left the group.";
+                finished = true;
+                break;
+            }
             // A master who started solo has no group until the first
             // companions join; once it exists as a party, make it a raid
             // before Hire() would refuse the sixth seat as GroupFull.
             if (job.raidSized)
             {
-                Group* group = master->GetGroup();
-                if (group && group->isBGGroup())
-                    group = master->GetOriginalGroup();
                 if (group && !group->isRaidGroup() && group->IsLeader(master->GetObjectGuid()))
                 {
                     group->ConvertToRaid();
@@ -681,7 +694,26 @@ void HireProvisionService::StepRaidJobs()
                 out.hired, out.requested, out.planned, uint32(out.tier), static_cast<unsigned long long>(out.fee),
                 out.message.empty() ? "" : "; stopped: ", out.message.c_str());
             if (online)
+            {
+                // A small solo raid sends every hire before anyone joins, so
+                // the conversion happens later (EnsureGrouped) and the loop
+                // above never saw it: say so now if it has happened, or that
+                // it will.
+                if (job.raidSized && !job.startedInRaid && !out.convertedToRaid && out.hired)
+                {
+                    Group* group = master->GetGroup();
+                    if (group && group->isBGGroup())
+                        group = master->GetOriginalGroup();
+                    if (group && group->isRaidGroup())
+                    {
+                        out.convertedToRaid = true;
+                        ChatHandler(master).SendSysMessage("Your party became a raid.");
+                    }
+                    else
+                        ChatHandler(master).SendSysMessage("Your party becomes a raid as the companions join.");
+                }
                 ReportRaidJob(master, out);
+            }
             m_raidJobs.erase(m_raidJobs.begin() + i);
             m_raidAccountHint = 0;
         }

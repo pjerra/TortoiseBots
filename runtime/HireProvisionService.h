@@ -100,6 +100,12 @@ struct HireRaidJob
     // forms as the first companions join and is converted before the next
     // hire would hit the party cap.
     bool raidSized = false;
+    // The master was already in a raid when the job was accepted.
+    bool startedInRaid = false;
+    // The master has been seen in a group at job start or at any step. A
+    // later group-less master left the group (#1014 then dismissed the
+    // companions already hired), so the job stops instead of hiring on.
+    bool hadGroup = false;
     HireRaidOutcome progress;
 };
 
