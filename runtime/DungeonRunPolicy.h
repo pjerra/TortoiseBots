@@ -78,6 +78,7 @@ constexpr std::uint32_t kGatherCapMs = 30000;
 constexpr float kSummonYd = 40.0f;                // at a gather's ceiling a bot this far that ...
 constexpr float kStragglerDzYd = 8.0f;            // ... or this far up or down (another floor) ...
 constexpr float kStragglerGainYd = 5.0f;          // ... came less than this closer since the last sample is summoned
+constexpr std::uint32_t kSummonWaitMs = 6000;     // a direct step's summoned follower is waited for this long (the summon takes 3 s)
 constexpr std::uint32_t kWalkRetryMs = 12000;     // no progress for this long: send the move again
 constexpr std::uint32_t kWalkTries = 3;           // ... at most this often, then pause
 constexpr float kWalkProgressYd = 2.0f;
@@ -292,6 +293,9 @@ struct Run
     std::uint32_t gatherRefusals = 0;
     bool gatherWaived = false;
     std::unordered_set<std::string> summoned; // stragglers this step summoned already (once each)
+    std::string summonDue; // a follower a direct step left behind (refused too-far): summoned on the next tick
+    std::string summonWait; // ... the summon sent: the step waits for that bot at the lead bot (kSummonWaitMs at most)
+    std::uint32_t summonWaitMs = 0;
     std::unordered_map<std::string, float> memberYd; // each bot's distance to the lead at the gather's last sample
     // Crowd control and kill-first (the plan's cc_priority / cc_always / kill_first).
     std::unordered_set<std::uint64_t> ccSent; // units this step put a `cc moon` on (once each)
@@ -423,6 +427,9 @@ inline void ResetStep(Run& r)
     r.gatherRefusals = 0;
     r.gatherWaived = false;
     r.summoned.clear();
+    r.summonDue.clear();
+    r.summonWait.clear();
+    r.summonWaitMs = 0;
     r.memberYd.clear();
     r.ccSent.clear();
     r.focusGuid = 0;
@@ -672,8 +679,36 @@ inline bool PauseForPlayer(Run& r, const std::string& order)
 // gate's own ceiling ends the wait. A refused gather is sent once more, then
 // left out (the pull or the step goes on with the party as it stands); a
 // refused point of a walk back is passed for the next one.
+// The follower a refused direct step names: `cmd move ... direct` answers
+// "too-far: <bot> is not with <lead> (...)" when a bot has no way onto the
+// lead bot's line. Empty for any other answer.
+inline std::string DirectStragglerName(const std::string& answer)
+{
+    static const std::string head = "too-far: ";
+    static const std::string mid = " is not with ";
+    if (answer.compare(0, head.size(), head) != 0)
+        return std::string();
+    std::size_t const at = answer.find(mid, head.size());
+    if (at == std::string::npos || at == head.size())
+        return std::string();
+    return answer.substr(head.size(), at - head.size());
+}
+
 inline void OrderRefused(Run& r, const std::string& order, const std::string& answer)
 {
+    // The summon of a direct step's follower: `busy` (a summon of that bot is
+    // pending already) keeps the wait; any other refusal ends it, so the step
+    // goes out again at once (and pauses if that bot is named again).
+    if (order.compare(0, 7, "summon ") == 0 && !r.summonWait.empty() && order.substr(7) == r.summonWait)
+    {
+        if (answer.compare(0, 4, "busy") != 0)
+        {
+            r.summonWait.clear();
+            r.summonWaitMs = 0;
+        }
+        r.note = order + " refused: " + answer + (r.summonWait.empty() ? "" : ": waiting for it");
+        return;
+    }
     if (order == "rest" || order == "revive party" || order.compare(0, 7, "summon ") == 0 ||
         order.compare(0, 3, "cc ") == 0 || order.compare(0, 6, "focus ") == 0)
     {
@@ -695,6 +730,23 @@ inline void OrderRefused(Run& r, const std::string& order, const std::string& an
         return;
     }
     const PlanStep* s = Current(r);
+    // A direct step (the step's own or a walk back's) refused because a
+    // follower has no way onto the lead bot's line and no straight line of its
+    // own (it stands over the navmesh hole the step before crossed, or was left
+    // behind): that follower is summoned to the lead bot, once per bot and
+    // step, and the step goes out again.
+    if (order.size() > 7 && order.compare(order.size() - 7, 7, " direct") == 0)
+    {
+        std::string const name = DirectStragglerName(answer);
+        if (!name.empty() && !r.summoned.count(name))
+        {
+            r.summoned.insert(name);
+            r.summonDue = name;
+            EnterPhase(r, Phase::Begin);
+            r.note = "direct step: " + name + " is not with the lead bot: summoning it";
+            return;
+        }
+    }
     if (SpentRitual(r, order, answer))
     {
         Pause(r, SpentRitualNote("ritual " + std::to_string(s ? s->entry : 0)));
@@ -1208,6 +1260,46 @@ inline bool ReplayWalkBack(Run& r, const Facts& f)
     return true;
 }
 
+// Whether the plan's points from `from` up to the current step hold a direct
+// step: a navmesh hole (Uldaman's scorpid pit) the navmesh hops of a straight
+// walk back cannot cross; only the plan's own points cross it.
+inline bool DirectStepOnWay(const Run& r, std::size_t from)
+{
+    for (std::size_t i = from; i < r.step && i < r.plan->steps.size(); ++i)
+        if (r.plan->steps[i].kind == PlanStepKind::MoveDirect)
+            return true;
+    return false;
+}
+
+// The plan's move point nearest the lead bot before the current step (npos
+// for none), ReplayWalkBack's start.
+inline std::size_t NearestMovePoint(const Run& r, const Facts& f)
+{
+    std::size_t idx = static_cast<std::size_t>(-1);
+    float best = 0.0f;
+    for (std::size_t i = 0; i < r.step; ++i)
+    {
+        const PlanStep& p = r.plan->steps[i];
+        if (!IsMovePoint(p))
+            continue;
+        float const d = ai::PlanDistance(f.leadX, f.leadY, f.leadZ, p.x, p.y, p.z);
+        if (idx == static_cast<std::size_t>(-1) || d < best)
+        {
+            best = d;
+            idx = i;
+        }
+    }
+    return idx;
+}
+
+// After a regroup: the way back to the current step. The party stays only when
+// it stands on the last move point before the step, or within kApproachYd of
+// the step's own point and nearer to it than to that move point (a straight
+// line from the entrance can be shorter to the pack than to its approach stand
+// yet have no path: Galgann pull 108, 2026-10-16, "no walkable path toward the
+// pack" from the entrance). Otherwise it walks the plan's way: straight to the
+// last move point in navmesh hops, or, with a direct step on the way, the
+// plan's own points at once (the hops cannot cross the navmesh hole).
 inline void StartWalkBack(Run& r, const Facts& f)
 {
     r.walkBackDue = false;
@@ -1225,8 +1317,18 @@ inline void StartWalkBack(Run& r, const Facts& f)
     const PlanStep& p = r.plan->steps[last];
     float const toLast = ai::PlanDistance(f.leadX, f.leadY, f.leadZ, p.x, p.y, p.z);
     float const toStep = ai::PlanDistance(f.leadX, f.leadY, f.leadZ, cur->x, cur->y, cur->z);
-    if (toStep <= toLast || toLast <= kArriveYd)
+    if (toLast <= kArriveYd || (toStep <= kApproachYd && toStep <= toLast))
         return; // back near the step already
+    std::size_t const nearest = NearestMovePoint(r, f);
+    if (nearest != static_cast<std::size_t>(-1) && nearest < last && DirectStepOnWay(r, nearest))
+    {
+        r.walkBack = true;
+        r.walkBackIdx = nearest;
+        r.approachHops = 0;
+        r.note = "walk back: a direct step is on the way: replaying the plan's points";
+        EnterPhase(r, Phase::Begin);
+        return;
+    }
     r.walkBack = true;
     r.walkBackDirect = true;
     r.walkBackIdx = last;
@@ -1758,14 +1860,27 @@ inline void RitualStep(Run& r, const Facts& f, const PlanStep& s, std::string& o
 
 // The event's units now (the glue lists the living ones within the hold's
 // radius, the friendly, still dormant ones too, and counts the dead).
-inline void CountEvent(Run& r, const Facts& f)
+// Whether a unit of a hold's radius counts as one of the event's own: awake
+// (hostile), or of the hold's first entry (the event's named mobs: the four
+// Stone Keepers, Archaedas), dormant ones too. The dormant statues of the other
+// entries in the hall (Archaedas's room holds some fifty Earthen Guardians and
+// Custodians, 2026-10-16 live run: "0/53 down") count only once they wake.
+inline bool EventUnitCounts(const PlanStep& s, const UnitFact& u)
 {
-    std::uint32_t up = 0;
+    return u.hostile || s.entries.empty() || u.entry == s.entries.front();
+}
+
+inline void CountEvent(Run& r, const Facts& f, const PlanStep& s)
+{
+    std::uint32_t up = 0, counted = 0;
     for (const UnitFact& u : f.units)
+    {
         up += u.hostile ? 1 : 0;
+        counted += EventUnitCounts(s, u) ? 1 : 0;
+    }
     r.eventUp = up;
     r.eventDown = f.eventDown;
-    r.eventTotal = static_cast<std::uint32_t>(f.units.size()) + f.eventDown;
+    r.eventTotal = counted + f.eventDown;
 }
 
 // "2 of 4 down, 1 awake", or "" before any unit of the event was seen.
@@ -1834,7 +1949,7 @@ inline void HoldStep(Run& r, const Facts& f, const PlanStep& s, std::uint32_t dt
         return;
     }
     r.eventOn = true;
-    CountEvent(r, f);
+    CountEvent(r, f, s);
     std::string const progress = EventProgress(r);
     std::string const tail = progress.empty() ? std::string() : " (" + progress + ")";
     std::string const data = "data " + std::to_string(s.entry);
@@ -2104,7 +2219,7 @@ inline std::string Tick(Run& r, const Facts& f, std::uint32_t dt = kTickMs, cons
                : !f.leadAlive ? std::string("the lead bot is dead: the others fight on") : std::string("fighting");
         if (s->kind == PlanStepKind::Hold && r.eventOn && f.seen)
         {
-            CountEvent(r, f);
+            CountEvent(r, f, *s);
             std::string const progress = EventProgress(r);
             if (!autoRegroup && f.leadAlive)
                 r.note = "event: fighting" + (progress.empty() ? std::string() : " (" + progress + ")");
@@ -2173,6 +2288,36 @@ inline std::string Tick(Run& r, const Facts& f, std::uint32_t dt = kTickMs, cons
             order = "rest";
             return order;
         }
+    }
+
+    // A follower a direct step left behind (OrderRefused): summoned before the
+    // step goes out again.
+    if (!r.summonDue.empty())
+    {
+        order = "summon " + r.summonDue;
+        r.summonWait = r.summonDue;
+        r.summonWaitMs = 0;
+        r.summonDue.clear();
+        return order;
+    }
+    // ... then waits for that bot to stand at the lead bot (the summon is the
+    // 3 s `.bot summon` flow: a step sent at once still finds it away), at most
+    // kSummonWaitMs; then the step goes out again.
+    if (!r.summonWait.empty())
+    {
+        const MemberFact* member = nullptr;
+        for (const MemberFact& m : f.members)
+            if (m.name == r.summonWait)
+                member = &m;
+        r.summonWaitMs += dt;
+        if (member && member->yd > kArriveYd && r.summonWaitMs < kSummonWaitMs)
+        {
+            r.note = "direct step: waiting for " + r.summonWait + " (summoned)";
+            return order;
+        }
+        r.summonWait.clear();
+        r.summonWaitMs = 0;
+        EnterPhase(r, Phase::Begin);
     }
 
     if (WalkBack(r, f, dt, order))

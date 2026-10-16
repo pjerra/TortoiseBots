@@ -81,8 +81,9 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertEqual(row.get("kill_first"), "8179,5650,7247")
 
     def test_uldaman_keeps_its_event_steps(self):
-        # The newest migration that inserts Uldaman's steps carries the two scripted events as hand-set
-        # rows (#984): a re-export from an exporter that has no `hold` kind must not drop them silently.
+        # The newest migration that inserts Uldaman's steps carries the two scripted events as hold rows
+        # (#984; set by hand in 20261016120000, exported since 20261016220000): a re-export from an
+        # exporter that has no `hold` kind must not drop them silently.
         newest = None
         for name, text in migrations():
             if re.search(r"INSERT INTO `ai_dungeon_step`.*?\('uldaman',", text, re.S):

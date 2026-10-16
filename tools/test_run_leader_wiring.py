@@ -131,5 +131,19 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn("lead->GetMap()->GetInstanceData()", facts)
 
 
+    def test_live_fixes_2026_10_16_are_wired(self):
+        # 1. `cmd move` takes the floor at or below the point before a surface above it (a low ceiling).
+        move = body(COMMANDS, "static bool CommanderMove(", "\n}\n")
+        self.assertIn("RemoteCommander::ChooseFloorZ(point.z, belowZ,", move)
+        # 2. A follower off the lead bot's line walks its own; the refusal still names the bot for the summon.
+        direct = body(COMMANDS, "static bool CommanderMoveDirect(ChatHandler* handler, CommanderOrder const& order,\n"
+                      "    RemoteCommander::MovePoint const& point, std::string const& intent)\n{", "\n}\n")
+        self.assertIn("pathComplete, pathLength, ownLine);", direct)
+        self.assertIn("join == RemoteCommander::DirectJoin::Own", direct)
+        self.assertIn('" is not with " + lead->GetName()', direct)
+        # 4. A door whose lock needs no key and no skill opens on a plain use.
+        use = (ROOT / "ai/playerbot/strategy/actions/UseItemAction.cpp").read_text()
+        self.assertIn("TortoiseBots::DoorLock::OpensOnPlainUse(lockTypes, lockIndex)", use)
+
 if __name__ == "__main__":
     unittest.main()

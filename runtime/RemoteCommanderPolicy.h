@@ -1340,6 +1340,30 @@ inline float SnapToFloorZ(float pointZ, float floorZ, bool floorValid)
     return floorZ;
 }
 
+// The floor search under a low ceiling (Uldaman's tunnel north of the
+// Sentinel's hall: the ceiling 5.3 yd over the floor): a search from
+// kFloorSnapRange above the point (the core starts its ray 2 yd higher still)
+// hits the ceiling first and the move is refused off-mesh. So the floor at or
+// just below the point comes first: a search from the point itself (the core's
+// ray starts kFloorBelowHeadroom above it), taken when it lands no more than
+// kFloorBelowBand below the point. Only when nothing is found there does the
+// search from above count (SnapToFloorZ: a point a few yd under the floor).
+constexpr float kFloorBelowBand = 4.0f;
+constexpr float kFloorBelowHeadroom = 2.0f;
+
+inline bool FloorBelowUsable(float pointZ, float belowZ, bool belowValid)
+{
+    return belowValid && std::isfinite(belowZ) && belowZ <= pointZ + kFloorBelowHeadroom &&
+        pointZ - belowZ <= kFloorBelowBand;
+}
+
+inline float ChooseFloorZ(float pointZ, float belowZ, bool belowValid, float aboveZ, bool aboveValid)
+{
+    if (FloorBelowUsable(pointZ, belowZ, belowValid))
+        return belowZ;
+    return SnapToFloorZ(pointZ, aboveZ, aboveValid && std::isfinite(aboveZ));
+}
+
 struct MoveFacts
 {
     float distanceFromLead = 0.0f; // 3D, lead bot to the point
@@ -1502,21 +1526,42 @@ enum class DirectJoin : uint8_t
 {
     Path,     // its complete navmesh path to the lead bot's spot (preferred)
     Straight, // no such path, but on the lead bot's floor nearby and in its sight: a straight walk to its spot
-    None,     // neither: the step is refused (too-far) and nobody moves
+    Own,      // neither, but in reach of the point on the lead bot's floor and in its sight: its own straight line
+    None,     // none of these: the step is refused (too-far) and nobody moves
 };
+
+// A follower with no navmesh path to the lead bot's spot and not next to it
+// (Uldaman's scorpid pit, step 53: a follower still on the line of the direct
+// step before, over the navmesh hole, had no path to the lead bot and the run
+// paused too-far) walks its own straight line to the point when the point is
+// within kDirectMaxDistance horizontally, the follower stands within
+// kDirectOwnLineVertical of the lead bot's height (on its floor: not on the pit
+// floor 2.5 yd below the ramp, the case the lead bot's line exists for) and it
+// sees the point (both ends raised kDirectLosHeight).
+constexpr float kDirectOwnLineVertical = 1.5f;
+
+inline bool OwnDirectLineFits(float horizontalToPoint, float verticalToLead, bool seesPoint)
+{
+    return seesPoint && std::isfinite(horizontalToPoint) && std::isfinite(verticalToLead) &&
+        horizontalToPoint <= kDirectMaxDistance && std::fabs(verticalToLead) <= kDirectOwnLineVertical;
+}
 
 // horizontal / vertical: the follower's distance to the lead bot; seesLead: line
 // of sight between them (both raised kDirectLosHeight); pathComplete: a complete
 // navmesh path to the lead bot's spot (PATHFIND_NORMAL, ending at the spot), and
 // pathLength its length in yards.
+// ownLine: OwnDirectLineFits for the follower (the last resort, after the lead
+// bot's line).
 inline DirectJoin ChooseDirectJoin(float horizontal, float vertical, bool seesLead, bool pathComplete,
-    float pathLength)
+    float pathLength, bool ownLine = false)
 {
     if (pathComplete && std::isfinite(pathLength) && pathLength >= 0.0f && pathLength <= kDirectMaxGatherPath)
         return DirectJoin::Path;
     if (seesLead && std::isfinite(horizontal) && std::isfinite(vertical) && horizontal <= kDirectNearLead &&
         std::fabs(vertical) <= kDirectNearLeadVertical)
         return DirectJoin::Straight;
+    if (ownLine)
+        return DirectJoin::Own;
     return DirectJoin::None;
 }
 

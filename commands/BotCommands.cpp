@@ -5848,12 +5848,20 @@ static bool CommanderMove(ChatHandler* handler, CommanderOrder const& order, std
     }
 
     // Snap the point to the map floor at its x,y (a point a few yd under the
-    // floor has no navmesh poly within the path finder's reach: NOPATH).
+    // floor has no navmesh poly within the path finder's reach: NOPATH). The
+    // floor at or just below the point comes first, so a low ceiling above it
+    // is never taken for the floor (RemoteCommander::ChooseFloorZ).
+    if (MaNGOS::IsValidMapCoord(point.x, point.y, point.z + RemoteCommander::kFloorSnapRange))
     {
-        float const floorZ = lead->GetMap()->GetHeight(point.x, point.y,
-            point.z + RemoteCommander::kFloorSnapRange, true,
-            2.0f * RemoteCommander::kFloorSnapRange);
-        float const snapped = RemoteCommander::SnapToFloorZ(point.z, floorZ, floorZ > INVALID_HEIGHT);
+        float const belowZ = lead->GetMap()->GetHeight(point.x, point.y, point.z, true,
+            RemoteCommander::kFloorBelowBand + RemoteCommander::kFloorBelowHeadroom);
+        float aboveZ = INVALID_HEIGHT;
+        if (!RemoteCommander::FloorBelowUsable(point.z, belowZ, belowZ > INVALID_HEIGHT))
+            aboveZ = lead->GetMap()->GetHeight(point.x, point.y,
+                point.z + RemoteCommander::kFloorSnapRange, true,
+                2.0f * RemoteCommander::kFloorSnapRange);
+        float const snapped = RemoteCommander::ChooseFloorZ(point.z, belowZ, belowZ > INVALID_HEIGHT,
+            aboveZ, aboveZ > INVALID_HEIGHT);
         if (snapped != point.z)
         {
             point.z = snapped;
@@ -6029,8 +6037,18 @@ static bool CommanderMoveDirect(ChatHandler* handler, CommanderOrder const& orde
             if (pathComplete)
                 route = path.getPath();
         }
+        // The last resort: its own straight line to the point (on the lead bot's floor, the point in reach and sight).
+        bool ownLine = false;
+        if (valid && !pathComplete && !(seesLead && nearLead))
+        {
+            float const toPoint = std::sqrt((bx - point.x) * (bx - point.x) + (by - point.y) * (by - point.y));
+            // The sight line only when the rest fits (one query, only for such a follower).
+            ownLine = RemoteCommander::OwnDirectLineFits(toPoint, bz - leadZ, true) &&
+                RemoteCommander::OwnDirectLineFits(toPoint, bz - leadZ,
+                    map->isInLineOfSight(bx, by, bz + h, point.x, point.y, ground + h));
+        }
         RemoteCommander::DirectJoin const join =
-            RemoteCommander::ChooseDirectJoin(horizontal, bz - leadZ, seesLead, pathComplete, pathLength);
+            RemoteCommander::ChooseDirectJoin(horizontal, bz - leadZ, seesLead, pathComplete, pathLength, ownLine);
         if (join == RemoteCommander::DirectJoin::None)
         {
             std::string const message = std::string(bot->GetName()) + " is not with " + lead->GetName() +
@@ -6041,6 +6059,15 @@ static bool CommanderMoveDirect(ChatHandler* handler, CommanderOrder const& orde
             SendActionError(handler, intent, RemoteCommander::DirectVerdictCode(RemoteCommander::DirectVerdict::TooFar),
                 message.c_str());
             return true;
+        }
+        if (join == RemoteCommander::DirectJoin::Own)
+        {
+            // Its own line, straight to the point (the lead bot's spot is not on its way).
+            route = { Vector3(bx, by, bz), target };
+            if ((target - route.front()).length() <= 0.3f)
+                continue; // on the point already: it follows the lead bot afterwards
+            walkers.push_back({ bot, std::move(route) });
+            continue;
         }
         if (join == RemoteCommander::DirectJoin::Straight)
             route = { Vector3(bx, by, bz) };

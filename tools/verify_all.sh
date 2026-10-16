@@ -225,6 +225,7 @@ if command -v g++ >/dev/null 2>&1; then
         test_rogue_weapon_policy
         test_rpg_mixer_policy
         test_rpg_relevance_weight_policy
+        test_run_leader_live_policy
         test_run_trace_records
         test_sapphiron_ice_policy
         test_seduction_policy

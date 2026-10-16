@@ -2,6 +2,7 @@
 #include "playerbot/playerbot.h"
 #include "UseItemAction.h"
 #include "UseItemNamePolicy.h"
+#include "playerbot/DoorLockPolicy.h"
 #include <sstream>
 // Trail (mage-mana-2): item-cast outcome logging needs the AI handle and
 // the action log; both already used the same way from Engine.cpp.
@@ -955,9 +956,21 @@ bool UseAction::UseGameObject(Player* requester, Event& event, GameObject* gameO
                 }
             }
 
-            std::ostringstream out; out << "I can't open " << chat->formatGameobject(gameObject);
-            ai->TellPlayerNoFacing(requester, out.str(), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
-            return false;
+            // A lock that needs no key and no skill (Uldaman's Temple Doors, lock 86: quick open) opens on a
+            // plain use, as a player's click does (an allowlist of lock types: TortoiseBots::DoorLock::OpensOnPlainUse): on to the packet below.
+            uint32 lockTypes[TortoiseBots::DoorLock::kLockSlots];
+            uint32 lockIndex[TortoiseBots::DoorLock::kLockSlots];
+            for (int j = 0; j < TortoiseBots::DoorLock::kLockSlots; ++j)
+            {
+                lockTypes[j] = lockInfo->Type[j];
+                lockIndex[j] = lockInfo->Index[j];
+            }
+            if (!TortoiseBots::DoorLock::OpensOnPlainUse(lockTypes, lockIndex))
+            {
+                std::ostringstream out; out << "I can't open " << chat->formatGameobject(gameObject);
+                ai->TellPlayerNoFacing(requester, out.str(), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+                return false;
+            }
         }
     }
     else if (gameObject->GetGoType() == GAMEOBJECT_TYPE_QUESTGIVER)
