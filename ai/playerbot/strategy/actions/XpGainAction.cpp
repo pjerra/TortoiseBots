@@ -8,6 +8,9 @@
 #ifdef MANGOS
 #include "luaEngine.h"
 #endif
+#ifdef ENABLE_ELUNA
+#include "LuaEngine.h"
+#endif
 
 
 
