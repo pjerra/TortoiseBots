@@ -1364,10 +1364,9 @@ enum class MoveVerdict : uint8_t
 // means the point is not on walkable ground. The run leader's gather on the
 // lead bot's own spot (leadSpotGather, within kMoveHereYd of it) is where the
 // lead bot already stands: it is Ok whatever the path finder answers, which can
-// be NoPath at 0 yd. A player's order to a point that close is judged as any.
+// be NoPath at 0 yd. Any order within kAtLeadDistance is "hold here" (IsAtLead).
 constexpr float kMoveHereYd = 3.0f;
 
-// A move within kAtLeadDistance of the lead bot is reached already (any caller).
 inline bool IsAtLead(float distanceFromLead)
 {
     return distanceFromLead <= kAtLeadDistance;
@@ -1377,9 +1376,8 @@ inline MoveVerdict CheckMove(MoveFacts const& facts)
 {
     if (facts.maxDistance <= 0.0f || facts.distanceFromLead > facts.maxDistance)
         return MoveVerdict::TooFar;
-    if (IsAtLead(facts.distanceFromLead))
-        return MoveVerdict::Ok;
-    if (facts.leadSpotGather && facts.distanceFromLead <= kMoveHereYd)
+    if (IsAtLead(facts.distanceFromLead)
+        || (facts.leadSpotGather && facts.distanceFromLead <= kMoveHereYd))
         return MoveVerdict::Ok;
     if (facts.pathType & kPathNoPath)
         return MoveVerdict::NoPath;

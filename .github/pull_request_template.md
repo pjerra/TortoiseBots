@@ -1,10 +1,23 @@
-## What changed?
+## Issue
 
-<!-- Briefly describe the change and why it is useful. -->
+<!-- Required. Closes #123 for a feature, Fixes #123 for a bug. Only finished features go to dev. -->
 
-## Related issue
+## What this does
 
-<!-- For example: Fixes #123 -->
+<!-- One line per item, in player or operator words. Delete the lists you do not need. -->
+
+Added:
+-
+
+Changed:
+-
+
+Removed:
+-
+
+## How to use it
+
+<!-- The command or config key, and its default. "Nothing to turn on" is fine. -->
 
 ## Testing
 
@@ -16,6 +29,9 @@
 ## Notes
 
 <!-- Optional: add screenshots, logs, SQL notes, or anything reviewers should know. -->
+
+- [ ] An AI agent helped write this change, and I have read and understood every line of it
+      (see [`AGENTIC_GUIDELINES.md`](https://github.com/Sagiroth/TortoiseBots/blob/main/AGENTIC_GUIDELINES.md)).
 
 ## Licence
 

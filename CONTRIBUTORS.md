@@ -16,5 +16,5 @@ row the same way. The commit from your account is the record of your consent.
 | @pjerra | agreed | 2026-10-15 | I agree that my contributions are licensed under AGPL-3.0-or-later. |
 | @waterys419 | pending | | I agree that my contributions are licensed under AGPL-3.0-or-later. |
 | @Shyalya | pending | | I agree that my contributions are licensed under AGPL-3.0-or-later. |
-| @kalistoking | pending | | I agree that my contributions are licensed under AGPL-3.0-or-later. |
+| @kalistoking | agreed | 2026-10-15 | I agree that my contributions are licensed under AGPL-3.0-or-later. |
 | @gabtorman | pending | | I agree that my contributions are licensed under AGPL-3.0-or-later. |

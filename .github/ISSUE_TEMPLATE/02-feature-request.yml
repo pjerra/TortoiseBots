@@ -1,6 +1,6 @@
 name: Feature request
-description: Suggest an improvement to TortoiseBots.
-title: "[Feature]: "
+description: Suggest an idea or an improvement. Going to build it yourself? Use "Feature spec" instead.
+title: "[feature][area]: "
 labels:
   - enhancement
 
@@ -9,13 +9,17 @@ body:
     id: area
     attributes:
       label: What does this relate to?
+      description: "Optional: put a short area in the title too, e.g. [bug][commander], [feature][random-bots], [bug][combat]."
       options:
         - Combat or class behavior
         - Movement or travel
-        - Bot control or ownership
-        - Dungeon, LFT, battleground, or random bots
+        - Levelling, questing, or the random bot pool
+        - Hired companions or my own bots
+        - Remote commander
+        - Dungeon, LFT, raid, or battleground
         - Auction house or economy
-        - Commands or addon
+        - Commands or the TortoiseBotsManager addon
+        - Dashboard
         - Build or documentation
         - Other
     validations:

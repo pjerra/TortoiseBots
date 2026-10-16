@@ -4,11 +4,13 @@
 
 It is a hobby project built for its owner and interested players: pragmatic, small, working changes beat ceremony.
 
+**Before you start:** every change needs an issue, only complete features go into `dev` (unfinished ones live on a feature branch), branches are named `feat/<topic>`, `fix/<topic>` or `docs/<topic>`, and the pull request description must say plainly what is added, changed and removed. Read [`AGENTIC_GUIDELINES.md`](AGENTIC_GUIDELINES.md) and [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
 ## Product direction
 
 - **Gameplay/AI gold standard: mod-playerbots.** When behaviour can be better, port the modern mod-playerbots behaviour adapted to 1.12 rather than the older shyalya/cmangos lineage this module partly inherited.
 - **Player-facing controls follow the owner's spec** in the issue for that command; the issue text is the contract for `.bot action` and the TBM addon.
-- **Player control first.** Explicit orders beat automation; new automation ships behind a toggle, off by default.
+- **Player control first.** Explicit orders beat automation; a big new feature or system ships behind a toggle, off by default (fixes and smaller behaviour improvements need none).
 - **Bots are always alive.** Activity throttling (`DisableActivityPriorities = 0`, `botActiveAlone`) is an opt-in kept for other forks' users, not the direction.
 
 ## Docs (OKF) — read and keep in sync

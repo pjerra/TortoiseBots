@@ -1,0 +1,56 @@
+name: Feature spec
+description: Describe a feature you are going to build. Every pull request needs one of these (or a bug report) first.
+title: "[spec][area]: "
+labels:
+  - enhancement
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This issue is the contract for the change: the pull request is checked against it, and only a finished
+        feature goes into `dev`. Write it for a player, not for the code. See CONTRIBUTING.md.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What does it do?
+      description: In player words. What changes in game, and for whom (hired companions, the random bot pool, all bots)?
+      placeholder: Warlocks soulstone the group healer out of combat; the tank or the leader if there is no healer.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why?
+      description: The problem it solves, or the idea issue it comes from (#123).
+    validations:
+      required: true
+
+  - type: textarea
+    id: use
+    attributes:
+      label: How is it turned on and used?
+      description: The command, and for a big new feature the config key that turns it on (off by default). Fixes and small improvements need no key.
+      placeholder: |
+        Command: .bot ...
+        Config: AiPlayerbot.Something = 0 (default off)
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: What it does not cover
+      description: What is left out on purpose, or comes later. If it needs several pull requests, name the feature branch they go to.
+    validations:
+      required: true
+
+  - type: textarea
+    id: test
+    attributes:
+      label: How will it be tested?
+      description: What you will check, and where (unit test, build, in game).
+    validations:
+      required: true

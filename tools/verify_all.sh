@@ -30,7 +30,6 @@ python3 -m unittest tools/test_instance_grind_target.py
 python3 -m unittest tools/test_disabled_world_update.py
 python3 -m unittest tools/test_loot_content.py
 python3 -m unittest tools/test_target_flag_locked.py
-python3 -m unittest tools/test_raid_status_instance_wiring.py
 python3 -m unittest tools/test_flee_selection.py
 python3 -m unittest tools/test_hazard_waypoint.py
 python3 -m unittest tools/test_talent_link_validation.py
@@ -52,6 +51,11 @@ python3 -m unittest tools/test_gossip_order_wiring.py
 python3 -m unittest tools/test_keepout_set_aside_wiring.py
 python3 -m unittest tools/test_pull_end_engaged.py
 python3 -m unittest tools/test_priest_fade_flash_wiring.py
+python3 -m unittest tools/test_trace_score.py
+python3 -m unittest tools/test_run_trace_glue.py
+python3 -m unittest tools/test_hire_never_leaves_wiring.py
+python3 -m unittest tools/test_raid_status_instance_wiring.py
+python3 -m unittest tools/test_wand_fallback_wiring.py
 python3 -m unittest tools/test_boss_tactics_sql.py
 python3 -m unittest tools/test_dungeon_plan_sql.py
 python3 -m unittest tools/test_trace_score.py

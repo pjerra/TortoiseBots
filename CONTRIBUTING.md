@@ -4,17 +4,46 @@ Thanks for helping make PlayerBots better for Tortoise WoW. Bug reports,
 feature ideas, documentation improvements, testing, and code contributions are
 all welcome.
 
-## Quick start
+## How work flows
 
-1. Search the existing issues before starting.
-2. For a larger change, open or comment on an issue first.
-3. Fork the repository and create a focused branch.
-4. Link the relevant issue in your pull request, for example `Fixes #123`.
-5. Test the change as far as possible and explain what you tested.
+```text
+issue  ->  your branch  ->  PR into dev (owner approves)  ->  dev into main (owner, release)
+```
 
-Small fixes and documentation changes can go straight to a pull request. For
-larger gameplay or architecture changes, an issue first helps avoid duplicated
-work and keeps the design focused.
+1. **Every change has an issue.** Before a pull request, there is a
+   **Feature spec** issue (what it does, how a player turns it on, its
+   default, what it does not cover) or a **Bug report**. A **Feature request**
+   is an idea; it becomes work once someone writes the spec for it. Search the
+   existing issues first. A pull request without an issue is not merged.
+2. **Work on your own branch**, named after what it is:
+
+   | Branch | For |
+   | :--- | :--- |
+   | `feat/<topic>` | a new feature or improvement, e.g. `feat/hire-level` |
+   | `fix/<topic>` | a bug fix, e.g. `fix/wand-on-fresh-mob` |
+   | `docs/<topic>` | documentation only |
+
+   Collaborators with write access push these branches to this repository;
+   everybody else uses the same names on a fork. Never push to `dev` or
+   `main` directly.
+3. **Only finished features go to `dev`.** A pull request into `dev` brings a
+   whole, working feature or a whole fix, never a first part of one. A feature
+   that takes several pull requests lives on its own feature branch (for
+   example `feat/dungeon-self-clear`) and the parts merge there; it comes to
+   `dev` in one pull request once it is complete.
+4. **The owner approves every merge into `dev`.** `dev` is where finished work
+   waits for the next release; only the owner merges `dev` into `main` and
+   makes releases.
+5. **Big new features are opt-in.** A big new feature or system (a new mode,
+   a new way of controlling bots) ships behind a config key that is off by
+   default. Fixes and smaller behaviour improvements do not need one.
+6. **Test it and say how.** Build, run, and check in game where it matters.
+   Say clearly what you did not test.
+
+Small fixes and documentation changes still need their issue, but the issue
+can be short.
+
+Using an AI agent? Read [`AGENTIC_GUIDELINES.md`](AGENTIC_GUIDELINES.md).
 
 ## Current core target
 
@@ -22,8 +51,8 @@ TortoiseBots targets the `main` branch of
 [`tortoise-wow`](https://github.com/tortoise-wow/tortoise-wow). Build and test
 integration changes against `main`.
 
-Pull requests for this repository should normally target TortoiseBots'
-`main` branch unless an issue says otherwise.
+Pull requests for this repository target TortoiseBots' `dev` branch (or a
+feature branch, see above), never `main`.
 
 ## Project guidelines
 
@@ -39,15 +68,20 @@ Pull requests for this repository should normally target TortoiseBots'
 
 ## Pull requests
 
-Keep pull requests small enough to review. Include:
+The description is for a person who has not seen your code. Keep it short and
+plain, and fill in the template:
 
-- what changed and why;
-- the issue or proposal it addresses;
-- build, test, or runtime checks performed;
-- screenshots or logs when they help explain gameplay behavior.
+- **Issue:** the issue it belongs to (`Closes #123`) or the bug it fixes
+  (`Fixes #123`). Required.
+- **Added / Changed / Removed:** one line per item, in player or operator
+  words ("Warlocks soulstone the healer"), not code words. Leave out a list
+  that is empty.
+- **How to use it:** the command or config key, and its default.
+- **Testing:** what you built and checked, and what you did not.
 
 If a full build or runtime test is not available, say so clearly rather than
-leaving the reviewer to guess.
+leaving the reviewer to guess. A description that does not say what changes
+will be sent back.
 
 ## Licence of contributions
 

@@ -549,12 +549,13 @@ static void TestMoveVerdict()
 
     // Issue #999: the run leader's gather on the lead bot's own spot (within
     // kMoveHereYd of it) is Ok, even when the path finder answers no path or
-    // an off-mesh end at 0 yd. A player's order to the same point is not.
+    // an off-mesh end at 0 yd. A player's order is Ok only within
+    // kAtLeadDistance (issue #1026, "hold here").
     facts = Walkable();
     facts.distanceFromLead = 0.0f;
     facts.pathType = kPathNoPath;
-    CHECK(CheckMove(facts) == MoveVerdict::Ok); // combo-19z9: #1028 accepts any move within 1 yd
-    facts.distanceFromLead = 2.0f; // between kAtLeadDistance and kMoveHereYd: only the gather is Ok
+    CHECK(CheckMove(facts) == MoveVerdict::Ok);
+    facts.distanceFromLead = 2.0f;
     CHECK(CheckMove(facts) == MoveVerdict::NoPath);
     facts.leadSpotGather = true;
     CHECK(CheckMove(facts) == MoveVerdict::Ok);

@@ -1581,6 +1581,7 @@ void ObservabilityEmitter::EmitServerInfo()
        << ",\"auto_learn_quest_spells\":\"" << flag(sPlayerbotAIConfig.autoLearnQuestSpells) << "\""
        << ",\"level_up_mounts\":\"" << flag(sPlayerbotAIConfig.levelUpMounts) << "\""
        << ",\"turtle_mount_at_level\":" << sPlayerbotAIConfig.turtleMountAtLevel
+       << ",\"remote_commander\":\"" << flag(sPlayerbotAIConfig.remoteCommander) << "\""
        << "}"
        << ",\"diagnostics\":{"
        << "\"perf_mon\":\"" << flag(sPlayerbotAIConfig.perfMonEnabled) << "\""

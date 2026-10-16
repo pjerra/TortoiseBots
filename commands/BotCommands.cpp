@@ -10488,6 +10488,8 @@ bool HandleChatCommand(ChatHandler* handler, char const* args)
         return HandleCommander(handler, subArgs);
     if (cmd == "cmd")
         return HandleCommanderOrder(handler, subArgs);
+    if (cmd == "trace")
+        return HandleTrace(handler, subArgs);
     if (cmd == "run")
         return HandleDungeonRun(handler, subArgs);
     if (cmd == "trace")

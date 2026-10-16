@@ -1,6 +1,6 @@
 name: Bug report
 description: Report a problem with TortoiseBots.
-title: "[Bug]: "
+title: "[bug][area]: "
 labels:
   - bug
 
@@ -9,13 +9,17 @@ body:
     id: area
     attributes:
       label: What does this relate to?
+      description: "Optional: put a short area in the title too, e.g. [bug][commander], [feature][random-bots], [bug][combat]."
       options:
         - Combat or class behavior
         - Movement or travel
-        - Bot login, logout, or ownership
-        - Dungeon, LFT, battleground, or random bots
+        - Levelling, questing, or the random bot pool
+        - Hired companions or my own bots
+        - Remote commander
+        - Dungeon, LFT, raid, or battleground
         - Auction house or economy
-        - Commands or addon
+        - Commands or the TortoiseBotsManager addon
+        - Dashboard
         - Build or configuration
         - Other
     validations:
@@ -46,12 +50,17 @@ body:
   - type: input
     id: version
     attributes:
-      label: Version or setup
-      description: Optional. Include the commit, branch, client, or configuration if known.
-      placeholder: TortoiseBots commit, branch, or server setup
+      label: TortoiseBots version
+      description: The release (Server tab of the dashboard, or the VERSION file), or the commit if you build from source.
+      placeholder: v1.1.0
+    validations:
+      required: true
 
   - type: textarea
     id: evidence
     attributes:
       label: Screenshots, logs, or other evidence
-      description: Optional. Drag screenshots here or paste relevant logs.
+      description: |
+        Optional, but it helps a lot. Drag screenshots here, and attach the bot logs from the server's logs folder
+        (`bot_events.csv` and `deaths.csv`, or the hourly `.csv.gz` packs from around the time it happened).
+        If you run the dashboard, paste the diagnostic report from its Server tab.

@@ -1,5 +1,106 @@
 # Changelog
 
+## v1.2.1 (2026-10-16)
+
+### Classes & Combat
+- Hunters no longer switch to melee for a mob a tank or pet is holding; they step back and shoot instead. [#1025]
+- Hunters return to ranged as soon as a mob stops attacking them, instead of staying in melee. [#1025]
+- Rogues no longer cast Feint when there is no living tank or party pet to take the threat. [#1024]
+- Mages only fall back to their wand when they cannot afford their main spell, not at high mana. [#1023]
+- Wands no longer restart right after a mage, priest or warlock stops one to cast a spell. [#1023]
+- Warlocks no longer cast Banish on targets that are not demons or elementals, or that are immune to it. [#1020]
+- Ranged pulls no longer end by themselves right after the tank starts walking into position. [#1029]
+- Bots also avoid dangerous creatures they cannot see, and charges no longer land inside hazards. [#995]
+
+### Groups & Dungeons
+- Hired companions, and bots in a group a commander has bound, no longer leave on their own. [#1015]
+- Hired companions keep their hirer as their master while the hirer moves between maps. [#1015]
+
+### Commands
+- Bots can now use a key item on a locked object, such as the Mallet on the Zul'Farrak gong. [#1031]
+- `raid status` now says a bot is in an instance instead of calling it outdoors. [#1022]
+
+### Dungeon Guides
+- The Uldaman guide no longer claims Baelog, Eric and Olaf die together, and points Alliance to Baelog's Chest. [#1021]
+
+### Behind the scenes
+- Hazard checks now share one scan per area, with new counters to watch the cost. [#995]
+- Bug, feature and spec forms now suggest titles like `[bug][area]`, and open issues were renamed to match. [#1033]
+
+---
+
+## v1.2.0 (2026-10-15)
+
+### Classes & Combat
+- Hunters now stop channelling Volley on empty ground, and warriors save Retaliation for enemies that actually hit them. [#885](https://github.com/Sagiroth/TortoiseBots/pull/885)
+- Battle Shout fires when it should, cat druids use the right attack names, and hunters handle running out of ammo better. [#885](https://github.com/Sagiroth/TortoiseBots/pull/885)
+- Melee bots no longer chase an enemy into a poison or damage ring; every role keeps its distance. [#880](https://github.com/Sagiroth/TortoiseBots/pull/880)
+- A bot that avoided an enemy goes back to it as soon as it leaves the danger ring, instead of ignoring it for 30 seconds. [#881](https://github.com/Sagiroth/TortoiseBots/pull/881)
+- Charges and other closing moves no longer put a bot inside an enemy's damaging aura. [#882](https://github.com/Sagiroth/TortoiseBots/pull/882)
+- Priests in a group now use Fade when enemies are on them, and heal earlier while the pack is loose. [#946](https://github.com/Sagiroth/TortoiseBots/pull/946)
+- Rain of Fire, Volley, Multi-Shot and other area spells now hold back when the tank would lose control. [#947](https://github.com/Sagiroth/TortoiseBots/pull/947)
+- Protection warriors now use Thunder Clap on packs before Sunder Armor, so they hold more enemies at once. [#949](https://github.com/Sagiroth/TortoiseBots/pull/949)
+- Healers stop waving their wand while somebody needs healing, and no longer open a fight by wanding a fresh enemy. [#956](https://github.com/Sagiroth/TortoiseBots/pull/956)
+- Warlocks now put a soulstone on the healer out of combat, or on the tank or leader if there is no healer. [#977](https://github.com/Sagiroth/TortoiseBots/pull/977)
+- Warlocks stop spamming a broken Spellstone, tanks stay where they were sent after a fight, and bots stop repeating a failed melee move. [#922](https://github.com/Sagiroth/TortoiseBots/pull/922) [#923](https://github.com/Sagiroth/TortoiseBots/pull/923)
+- Autogear now picks a bow with arrows or a gun with bullets, never a gun for a hunter carrying only arrows. [#921](https://github.com/Sagiroth/TortoiseBots/pull/921)
+- A pull ends the moment the enemy reaches the tank, so the tank turns and fights instead of standing still. [#945](https://github.com/Sagiroth/TortoiseBots/pull/945)
+- Tank pulls can start with a ranged shot when the enemy is far away or unreachable, instead of walking all the way in. [#975](https://github.com/Sagiroth/TortoiseBots/pull/975)
+
+### Companions & Hiring
+- You can now hire a companion at a chosen level, for example `.bot hire warrior level=45`, so one character can field parties for different dungeons. [#940](https://github.com/Sagiroth/TortoiseBots/pull/940)
+- Server owners can give staff accounts free companions with the `AiPlayerbot.HireFreeMinSecurity` setting. [#964](https://github.com/Sagiroth/TortoiseBots/pull/964)
+
+### Remote Commander
+- A game master or owner can now lead a bot-only party of up to five from anywhere with `.bot commander bind`, without being in it. [#898](https://github.com/Sagiroth/TortoiseBots/pull/898)
+- Named orders let you send the party at one specific enemy: attack, pull, pull back, crowd control and focus. [#898](https://github.com/Sagiroth/TortoiseBots/pull/898)
+- While bound you get a report about once a second showing each bot's health, target, spell, and the enemies they see. [#899](https://github.com/Sagiroth/TortoiseBots/pull/899)
+- The commander view stays off until you ask for it; a bound party is capped at five bots and oversized reports are trimmed. [#901](https://github.com/Sagiroth/TortoiseBots/pull/901)
+- The report now shows each bot's newest action, whether it worked, and a short reason when it did not. [#924](https://github.com/Sagiroth/TortoiseBots/pull/924)
+- Misleading reasons like "out of range" or "moving" no longer show when the cast failed for something else. [#925](https://github.com/Sagiroth/TortoiseBots/pull/925)
+- A bound bot can now loot chests and corpses, open doors and levers, use items from its bags, and you can set the party's loot method. [#928](https://github.com/Sagiroth/TortoiseBots/pull/928)
+- Chests, corpses and doors can now be named by their entry number instead of their long ID, and warriors and rogues carry two ammo stacks. [#933](https://github.com/Sagiroth/TortoiseBots/pull/933)
+- Bots now really open locked chests when ordered, and the attempt is no longer interrupted after a second. [#931](https://github.com/Sagiroth/TortoiseBots/pull/931)
+- Bots no longer grab chests on their own while you are bound; they wait for your order. [#932](https://github.com/Sagiroth/TortoiseBots/pull/932)
+- The use order now picks the object or item you named instead of a random nearby one. [#926](https://github.com/Sagiroth/TortoiseBots/pull/926)
+- A bot that is stunned, feared or hexed now keeps your attack order and attacks as soon as it recovers. [#955](https://github.com/Sagiroth/TortoiseBots/pull/955)
+- Attack orders no longer cancel a pull the tank is already running. [#941](https://github.com/Sagiroth/TortoiseBots/pull/941)
+- Commanded parties now watch their threat like a normal group, so the tank keeps hold of its enemy. [#934](https://github.com/Sagiroth/TortoiseBots/pull/934)
+- Bound bots no longer wander off on their own to grind or travel; they stay with the party. [#974](https://github.com/Sagiroth/TortoiseBots/pull/974)
+- Hired companions keep their dungeon when you bind and unbind, instead of being sent home. [#958](https://github.com/Sagiroth/TortoiseBots/pull/958)
+- Binding no longer throws your bots out of the dungeon, and hunters, rogues and warriors now get usable ammo. [#929](https://github.com/Sagiroth/TortoiseBots/pull/929)
+- You can now bind your own hired companions and lead them from outside the group. [#935](https://github.com/Sagiroth/TortoiseBots/pull/935)
+- A new order makes two to five bots use a summoning altar together, for places like Uldaman's altars. [#937](https://github.com/Sagiroth/TortoiseBots/pull/937)
+- A new order walks the whole party into a dungeon through its entrance. [#939](https://github.com/Sagiroth/TortoiseBots/pull/939)
+- A straight-line move order, `cmd move ... direct`, crosses ground the usual pathfinding cannot. [#942](https://github.com/Sagiroth/TortoiseBots/pull/942)
+- With a straight-line move, the rest of the party now follows the lead bot's line instead of finding their own. [#948](https://github.com/Sagiroth/TortoiseBots/pull/948)
+- The view now labels neutral characters and critters, so a driver can skip them when choosing a target. [#943](https://github.com/Sagiroth/TortoiseBots/pull/943)
+- When a rest order is refused, you now get a short reason for each bot, such as "in combat" or "no drink". [#920](https://github.com/Sagiroth/TortoiseBots/pull/920)
+
+### Dashboard
+- A new Commanders tab lists every standing remote-commander binding, its bots, and the orders sent. [#951](https://github.com/Sagiroth/TortoiseBots/pull/951)
+- The tab was redesigned with one clear card per binding, plain-language orders, and a map you can follow and zoom. [#961](https://github.com/Sagiroth/TortoiseBots/pull/961)
+- Commanders maps now use real game maps, with layers you can switch on and characters you can click. [#965](https://github.com/Sagiroth/TortoiseBots/pull/965)
+- Maps now draw enemies, targets and the commander, with a brightness slider and zoom that keeps following. [#972](https://github.com/Sagiroth/TortoiseBots/pull/972)
+- The tab shows what each character is doing, details on hover, boss and rare markers, threat colours and events. [#976](https://github.com/Sagiroth/TortoiseBots/pull/976)
+- Maps can now draw paths, object markers, stall spots, aggro rings and combat lines, with opacity and thickness sliders. [#980](https://github.com/Sagiroth/TortoiseBots/pull/980)
+- A Demo map switch shows a simulated party so you can try every drawing layer. [#981](https://github.com/Sagiroth/TortoiseBots/pull/981)
+- The dashboard now has a Moonwhisper zone map; run `scripts/gen_zone_maps.py` after updating to create it. [#1004](https://github.com/Sagiroth/TortoiseBots/pull/1004)
+
+### Names & World
+- New bots now get realistic, race-flavoured names instead of random syllables, and hunter pets get proper names. [#1006](https://github.com/Sagiroth/TortoiseBots/pull/1006)
+- Server owners can choose how many bots get each name style with the `AiPlayerbot.RandomBotNameStyleWeights` setting. [#1006](https://github.com/Sagiroth/TortoiseBots/pull/1006)
+
+### Behind the scenes
+- The unfinished dungeon self-clear run leader, its dungeon plans and per-boss tactics are held back for a later release. [#957](https://github.com/Sagiroth/TortoiseBots/pull/957) [#962](https://github.com/Sagiroth/TortoiseBots/pull/962) [#963](https://github.com/Sagiroth/TortoiseBots/pull/963) [#978](https://github.com/Sagiroth/TortoiseBots/pull/978) [#979](https://github.com/Sagiroth/TortoiseBots/pull/979) [#1008](https://github.com/Sagiroth/TortoiseBots/pull/1008)
+- The Commanders dashboard tab now appears only when the remote commander feature is switched on. [#1008](https://github.com/Sagiroth/TortoiseBots/pull/1008)
+- Contributors now follow branch naming rules (`feat/`, `fix/`, `docs/`) and an updated contribution guide. [#1011](https://github.com/Sagiroth/TortoiseBots/pull/1011) [#1008](https://github.com/Sagiroth/TortoiseBots/pull/1008)
+- A new contributor's work is confirmed under the project's licence. [#1007](https://github.com/Sagiroth/TortoiseBots/pull/1007)
+- The latest main release was merged in, adding zone maps, faster builds, dashboard setting help, a player changelog and the unofficial-project notice. [#1005](https://github.com/Sagiroth/TortoiseBots/pull/1005)
+- A stale comment about Thunder Clap was corrected; nothing changes in game. [#953](https://github.com/Sagiroth/TortoiseBots/pull/953)
+
+---
+
 ## v1.1.0 (2026-10-15)
 
 ### Dashboard

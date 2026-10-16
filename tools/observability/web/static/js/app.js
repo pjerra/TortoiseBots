@@ -844,6 +844,15 @@
     else if (tab === 'server') renderServerPanel();
   }
 
+  // The Commanders tab belongs to the remote commander: shown only while the server runs AiPlayerbot.RemoteCommander = 1.
+  function applyCommanderTabFlag() {
+    const bots = state.serverInfo && state.serverInfo.bots;
+    const on = !!bots && bots.remote_commander === '1';
+    const item = document.querySelector('.menu-item[data-tab="commanders"]');
+    if (item) item.style.display = on ? '' : 'none';
+    if (!on && state.activeTab === 'commanders') go({ tab: 'overview' }, { replace: true });
+  }
+
   function showTab(tab) {
     if (!TABS[tab]) tab = 'overview';
     state.activeTab = tab;
@@ -1779,6 +1788,7 @@
     'AiPlayerbot.RandomBotGroupNearby': 'Pool bots invite nearby bots into groups. Off by default: bot-only groups slow the pool down.',
     'AiPlayerbot.RandomBotRaidNearby': 'Pool bots invite nearby bots into raids.',
     'AiPlayerbot.RandomBotInvitePlayer': 'Pool bots may invite real players to groups (turn on Do Not Disturb to avoid it).',
+    'AiPlayerbot.RemoteCommander': 'Lets a GM, or a player who owns every bot in it, lead a bot-only party from anywhere with .bot commander / .bot cmd. Also shows the Commanders tab. Off by default.',
     'AiPlayerbot.RandomBotTimedLogout': 'Pool bots log out after their time in world and others log in, so the online set rotates.',
     'AiPlayerbot.ForceActiveWhenNearPlayer': 'Bots near a player always run at full activity.',
     'AiPlayerbot.LimitCombatActivity': 'Reduces bot combat thinking for a small performance gain.',
@@ -1857,6 +1867,7 @@
           ['Raid nearby', flagBadge(bots.raid_nearby), cfg('RandomBotRaidNearby')],
           ['Invite player', flagBadge(bots.invite_player), cfg('RandomBotInvitePlayer')],
           ['Timed logout', flagBadge(bots.timed_logout), cfg('RandomBotTimedLogout')],
+          ['Remote commander', flagBadge(bots.remote_commander), cfg('RemoteCommander')],
           ['Force active near', flagBadge(bots.force_active_near), cfg('ForceActiveWhenNearPlayer')],
           ['Limit combat', flagBadge(bots.limit_combat), cfg('LimitCombatActivity')],
           ['Auto quests', flagBadge(bots.auto_do_quests), cfg('AutoDoQuests')]
@@ -4425,7 +4436,7 @@
       if (!r.ok) return null;
       return r.json();
     }).then(info => {
-      if (info && !info.error) { state.serverInfo = info; renderServerPanel(); }
+      if (info && !info.error) { state.serverInfo = info; renderServerPanel(); applyCommanderTabFlag(); }
     }).catch(() => {});
   }
 
@@ -4499,7 +4510,7 @@
       const prevCount = state.bots.length;
       state.bots = Array.isArray(data.bots) ? data.bots : [];
       if (data.grinding) state.grinding = data.grinding;
-      if (data.info) { state.serverInfo = data.info; renderServerPanel(); }
+      if (data.info) { state.serverInfo = data.info; renderServerPanel(); applyCommanderTabFlag(); }
       state.lastSnapshotAt = Date.now();
       applyServerStatus(data.server);
       applyIssues(data.issues);
