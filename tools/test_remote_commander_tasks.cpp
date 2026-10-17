@@ -837,6 +837,27 @@ static void TestRitualCancelledInSettle()
     CHECK(AdvanceRitual(state, facts, kTaskTickMs).step == RitualStep::Succeed);
 }
 
+// Uldaman run 4: the altar goes back to ready as the keepers wake. The fight is the event starting, not a cancel.
+static void TestRitualAltarResetsAsKeepersWake()
+{
+    RitualState state = Joining();
+    state.stage = RitualStage::Settle;
+    RitualFacts facts = AllReady();
+    facts.goActive = true;
+    CHECK(AdvanceRitual(state, facts, kTaskTickMs).step == RitualStep::Wait);
+    facts.goActive = false;
+    facts.inCombat = true;
+    RitualVerdict verdict = AdvanceRitual(state, facts, kTaskTickMs);
+    CHECK(verdict.step == RitualStep::Succeed);
+    // The same reset with no combat is still the cancel.
+    state = Joining();
+    state.stage = RitualStage::Settle;
+    facts = AllReady();
+    facts.goActive = false;
+    verdict = AdvanceRitual(state, facts, kTaskTickMs);
+    CHECK(verdict.step == RitualStep::Fail && std::strcmp(verdict.code, kCodeInterrupted) == 0);
+}
+
 // All bots joined but the object does not turn active: fewer participants than needed, else a plain failure.
 static void TestRitualNotActive()
 {
@@ -924,12 +945,13 @@ static void TestRitualCombatAfterActiveIsDone()
     AdvanceRitual(state, facts, kTaskTickMs);
     facts.unavailable = true;                    // a bot the Keeper killed
     CHECK(AdvanceRitual(state, facts, kTaskTickMs).step == RitualStep::Succeed);
-    // But the object back at ready while a bot is in combat is the ritual cancelled.
+    // The object back at ready while a bot is in combat is the keepers waking (the event started), not a cancel
+    // (Uldaman run 4); with no combat the same reset is the cancel (TestRitualAltarResetsAsKeepersWake).
     facts = AllReady();
     facts.goActive = false;
     facts.inCombat = true;
     RitualVerdict verdict = AdvanceRitual(state, facts, kTaskTickMs);
-    CHECK(verdict.step == RitualStep::Fail && std::strcmp(verdict.code, kCodeInterrupted) == 0);
+    CHECK(verdict.step == RitualStep::Succeed);
     // Before the object is active a fight fails the order.
     state = Joining();
     facts = AllReady();
@@ -1006,6 +1028,7 @@ int main()
     TestRitualGather();
     TestRitualCeiling();
     TestRitualHappyPath();
+    TestRitualAltarResetsAsKeepersWake();
     TestRitualExtraBotDoesNotUse();
     TestRitualUseNeverRegisters();
     TestRitualUseRefused();

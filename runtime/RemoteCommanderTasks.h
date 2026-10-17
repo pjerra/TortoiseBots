@@ -499,6 +499,13 @@ inline RitualVerdict AdvanceRitual(RitualState& state, RitualFacts const& facts,
     }
     if (state.stage == RitualStage::Settle)
     {
+        // Combat first: the altar goes back to ready as the keepers wake, which is the event starting,
+        // not a participant leaving (Uldaman run 4: it read as "cancelled" and the run never reached its hold).
+        if (facts.inCombat)
+        {
+            verdict.step = RitualStep::Succeed;
+            return verdict;
+        }
         if (!facts.goActive)
         {
             // A ritual that is used up leaves with its cast done; one that went back to ready was cancelled.

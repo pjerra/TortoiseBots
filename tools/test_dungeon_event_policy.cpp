@@ -401,6 +401,59 @@ static void TestFightAtTheRitualIsTheHolds()
     CHECK(r.state == State::Paused && Has(r.note, "more than 600 s"));
 }
 
+static void TestInterruptedReplyWhileEventRunsStillReachesTheHold()
+{
+    // Uldaman run 4 (19z13): the ritual answered "interrupted" as the altar reset
+    // while the keepers woke. The event is in progress (data 1) and fighting: the
+    // step moves on to the hold anyway.
+    DungeonPlan plan;
+    plan.steps = {KeepersRitual(), KeepersHold()};
+    Run r = Start(&plan);
+    Facts f = Party();
+    CHECK(!Tick(r, f).empty());
+    f.taskReply = 2;
+    f.taskText = "interrupted: The ritual was cancelled (a participant stopped channeling)";
+    f.anyInCombat = true;
+    f.eventData = 1;
+    Tick(r, f);
+    CHECK(r.state == State::Running && r.step == 1 && r.eventOn);
+
+    // A real failure in a fight with the event not running stays on the ritual (it pauses).
+    r = Start(&plan);
+    f = Party();
+    CHECK(!Tick(r, f).empty());
+    f.taskReply = 2;
+    f.taskText = "in_combat: A bot is in combat and stopped.";
+    f.anyInCombat = true;
+    f.eventData = 0;
+    Tick(r, f);
+    CHECK(r.step == 0);
+
+    // Another error text while the event reads in progress is no recovery.
+    r = Start(&plan);
+    f = Party();
+    CHECK(!Tick(r, f).empty());
+    f.taskReply = 2;
+    f.taskText = "unavailable: A bot died, left the map or the party, or is teleporting.";
+    f.anyInCombat = true;
+    f.eventData = 1;
+    Tick(r, f);
+    CHECK(r.step == 0);
+
+    // The ritual went out while the data already read in progress (the reset wait ran out): not this order's event.
+    r = Start(&plan);
+    f = Party();
+    f.eventData = 1;
+    for (int i = 0; i < 200 && r.state == State::Running && !r.orderSent; ++i)
+        Tick(r, f);
+    CHECK(r.orderSent && r.dataAtOrder == 1);
+    f.taskReply = 2;
+    f.taskText = "interrupted: The ritual was cancelled (a participant stopped channeling)";
+    f.anyInCombat = true;
+    Tick(r, f);
+    CHECK(r.step == 0);
+}
+
 static void TestRetryWaitsForTheEncounterToReset()
 {
     DungeonPlan plan;
@@ -799,6 +852,7 @@ int main()
     TestHoldDoneByObject();
     TestFarHoldIsApproached();
     TestFightAtTheRitualIsTheHolds();
+    TestInterruptedReplyWhileEventRunsStillReachesTheHold();
     TestRetryWaitsForTheEncounterToReset();
     TestSpentAltarAfterAFailure();
     TestTankGuardsTheHold();

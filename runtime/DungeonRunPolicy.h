@@ -410,6 +410,7 @@ struct Run
     bool restForEating = false; // the rest phase is the meal wait: it also ends when nobody eats any more
     bool stepRested = false; // a `rest` step has had its gate
     bool orderSent = false;  // task steps: the order went out
+    long long dataAtOrder = -1; // a ritual: the hold's instance data when the order went out
     bool walkedThrough = false;
     // The target of the approach hop the walk goes to (hopWalk), to tell it from
     // another walk of the step (the stealth walk through a pack's centre).
@@ -782,6 +783,7 @@ inline void ResetStep(Run& r)
     r.lootTried.clear();
     r.lootRefusal.clear();
     r.lootRights = false;
+    r.dataAtOrder = -1;
     r.walkedThrough = false;
     r.approachHops = 0;
     r.approachBestYd = 0.0f;
@@ -3043,6 +3045,7 @@ inline void RitualStep(Run& r, const Facts& f, const PlanStep& s, std::string& o
             return;
         }
         r.orderSent = true;
+        r.dataAtOrder = f.eventData;
         EnterPhase(r, Phase::AwaitTask);
         order = "ritual " + EntryArg(s.entry, s.x, s.y, s.z);
         std::string list;
@@ -4217,7 +4220,19 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
     {
         // The ritual answered and its event is fighting already (the first
         // Stone Keeper wakes with the cast): the fight is the hold's.
-        if (s->kind == PlanStepKind::Ritual && r.orderSent && f.taskReply == 1)
+        // An interrupted answer counts too while the event reads in progress:
+        // the altar going back to ready as the keepers woke is the event
+        // starting (Uldaman run 4, 19z13: the tank stood on stay all fight).
+        bool eventRunning = false;
+        if (s->kind == PlanStepKind::Ritual && r.orderSent && f.taskReply == 2)
+        {
+            const PlanStep* ahead = EventHoldAhead(r);
+            // Only the module's typed `interrupted` answer, and only when the data was not in progress already
+            // when the order went out (a ritual sent after the reset wait ran out): then this order started it.
+            eventRunning = ahead && (ahead->flags & ai::kPlanFlagDoneData) && (ahead->flags & ai::kPlanFlagEncounter) &&
+                f.eventData == 1 && r.dataAtOrder != 1 && f.taskText.compare(0, 12, "interrupted:") == 0;
+        }
+        if (s->kind == PlanStepKind::Ritual && r.orderSent && (f.taskReply == 1 || eventRunning))
         {
             NextStep(r, "ritual " + std::to_string(s->entry) + " done: the event started");
             s = Current(r);
