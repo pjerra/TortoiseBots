@@ -1,0 +1,87 @@
+{
+ "v": 1,
+ "schema": "bt-trace",
+ "run": "uldaman-clean-1",
+ "src": "server",
+ "status": "complete",
+ "end_reason": "stop",
+ "dungeon": {
+  "map": 70,
+  "name": "Uldaman"
+ },
+ "build": "19z4 / 9adde948",
+ "mode": "commander",
+ "started": "2026-10-16T08:00:00Z",
+ "ended": "2026-10-16T09:20:00Z",
+ "outcome": "cleared",
+ "stop_reason": "plan_done",
+ "plan": {
+  "name": "uldaman-b",
+  "sha": "0c1d2e3f"
+ },
+ "furthest": {
+  "leg": 12,
+  "pull_group": 20
+ },
+ "bosses": [
+  {
+   "entry": 6906,
+   "name": "Baelog",
+   "killed_at_s": 1100
+  },
+  {
+   "entry": 6910,
+   "name": "Revelosh",
+   "killed_at_s": 1400
+  },
+  {
+   "entry": 7228,
+   "name": "Ironaya",
+   "killed_at_s": 2500
+  },
+  {
+   "entry": 6907,
+   "name": "Grimlok",
+   "killed_at_s": 4700
+  }
+ ],
+ "wipes": [],
+ "deaths": [],
+ "party": [
+  {
+   "class": "warrior",
+   "role": "tank",
+   "level": 45
+  },
+  {
+   "class": "priest",
+   "role": "heal",
+   "level": 45
+  },
+  {
+   "class": "mage",
+   "role": "dps",
+   "level": 45
+  },
+  {
+   "class": "rogue",
+   "role": "dps",
+   "level": 45
+  },
+  {
+   "class": "hunter",
+   "role": "dps",
+   "level": 45
+  }
+ ],
+ "gm_assists": {
+  "revive": 3
+ },
+ "trace_file": "uldaman-clean-1.jsonl",
+ "driver": {
+  "model": "sonnet",
+  "effort": "medium",
+  "run": "uldaman-clean-1"
+ },
+ "clear_s": 4700
+}

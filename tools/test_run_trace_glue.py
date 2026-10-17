@@ -277,5 +277,71 @@ class EngineOutcomeSitesTest(unittest.TestCase):
         self.assertEqual(self.walk.count("ActionOutcome::Vetoed"), 1)
 
 
+class SummaryFieldsGlueTest(unittest.TestCase):
+    """Issue #986: the digest of the summary fields is fed by events the recorder already sees."""
+
+    def setUp(self):
+        self.src = RUN_TRACE.read_text()
+        self.cmd = COMMANDS.read_text()
+        self.sample = function_body(self.src, "void RunTraceService::Sample()")
+
+    def test_sample_feeds_deaths_and_wipes_from_the_death_edge(self):
+        self.assertIn("digest_.NoteDeath(track.lastDeath);", self.sample)
+        self.assertIn("digest_.NoteFrame(elapsedMs_, members);", self.sample)
+        # the death is taken at the edge where the existing death event is written
+        edge = self.sample.index("track.alive && !alive")
+        self.assertLess(edge, self.sample.index("digest_.NoteDeath("))
+        self.assertLess(self.sample.index("digest_.NoteDeath("), self.sample.index('e.ev = "death";'))
+
+    def test_boss_kills_are_found_by_guid_not_by_a_scan(self):
+        body = function_body(self.src, "void RunTraceService::CheckBossKills(")
+        self.assertIn("map->GetUnit(ObjectGuid(it->first))", body)
+        # the boss is looked up on the map of a bot in ITS instance, not on the first bot's map
+        self.assertIn("bot->GetMapId() == it->second.map", body)
+        self.assertIn("bot->GetInstanceId() == it->second.instance", body)
+        self.assertNotIn("bots.front()->GetMap()", body)
+        self.assertIn("digest_.NoteBossKill(", body)
+        for scan in ("VisitAll", "CellImpl", "Searcher", "GetCreatureListWithEntryInGrid"):
+            self.assertNotIn(scan, body, scan)
+        self.assertIn("CheckBossKills(bots);", self.sample)
+
+    def test_nothing_in_the_recorder_touches_the_database(self):
+        for needle in ("CharacterDatabase", "WorldDatabase", "LoginDatabase", "PExecute", "PQuery"):
+            self.assertNotIn(needle, self.src, needle)
+
+    def test_context_is_read_at_start_once_a_second_and_at_the_end(self):
+        start = function_body(self.src, "bool RunTraceService::Start(")
+        self.assertIn("digest_.SetDriver(params.driver);", start)
+        self.assertIn("context_ = params.context;", start)
+        self.assertIn("RefreshContext();", start)
+        update = function_body(self.src, "void RunTraceService::Update(")
+        self.assertLess(update.index("checkAccumMs_ >= 1000"), update.index("RefreshContext();"))
+        self.assertIn("RefreshContext();", function_body(self.src, "void RunTraceService::Finish("))
+
+    def test_summary_is_rendered_once_and_handed_to_the_writer_as_text(self):
+        body = function_body(self.src, "void RunTraceService::Finish(")
+        self.assertEqual(body.count("digest_.Render("), 1)
+        self.assertIn("RenderArgs{ true,", body)
+        self.assertIn("traceFile, digest]", body)
+        self.assertIn("failure, digest)", body)
+        # the running summary written at start carries the fields too
+        start = function_body(self.src, "bool RunTraceService::Start(")
+        # ... but as a live run: no outcome, bosses or clear_s until it ends
+        self.assertIn("RenderArgs{ false,", start)
+
+    def test_command_takes_driver_and_passes_the_context(self):
+        body = function_body(self.cmd, "static bool HandleTrace(")
+        self.assertIn("RunTrace::IsDriverToken(parts[i])", body)
+        self.assertIn("RunTrace::DriverRefusal(value)", body)
+        self.assertIn("params.driver = driver;", body)
+        self.assertIn("params.context = &TraceContext;", body)
+        ctx = function_body(self.cmd, "static bool TraceContext(")
+        self.assertIn("RunTrace::RunMode::RunLeader", ctx)
+        self.assertIn("RunTrace::PlanBossEntries(", ctx)
+        self.assertIn("PlansOnMap(", ctx)
+        self.assertIn("DungeonRun::Current(", ctx)
+        self.assertIn("out.knownBosses.push_back(entry)", ctx)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -19,6 +19,7 @@ import (
 
 	"tortoise-observability/internal/armory"
 	"tortoise-observability/internal/auth"
+	"tortoise-observability/internal/dungeons"
 	zoneproject "tortoise-observability/internal/map"
 	"tortoise-observability/internal/mapdir"
 	"tortoise-observability/internal/metrics"
@@ -67,6 +68,10 @@ func main() {
 	// Optional folder of real game-map pictures (turtle-agent `minimap-extract` output) for the Commanders tab maps. Never part of the
 	// repository: the owner's own extracted assets. Unset: the maps keep their plain grid.
 	mapDirRaw := flag.String("map-dir", getEnv("TBDASH_MAP_DIR", ""), "Optional folder of map pictures (<id>.png + <id>.json from `turtle-agent minimap-extract`) drawn under the Commanders tab maps (env TBDASH_MAP_DIR)")
+	// The run summaries the module's run trace recorder writes (`.bot trace`, AiPlayerbot.RunTrace.Dir under LogsDir). Read-only.
+	// Unset: look in the usual places (logs/traces, traces) next to where the daemon runs, and keep looking until one exists.
+	traceDir := flag.String("trace-dir", getEnv("TBDASH_TRACE_DIR", ""), "Folder of run trace summaries (<run>.summary.json) for the Dungeons tab; the module's AiPlayerbot.RunTrace.Dir (env TBDASH_TRACE_DIR)")
+	traceScanSec := flag.Int("trace-scan-sec", getEnvInt("TBDASH_TRACE_SCAN_SEC", 10), "How often the trace folder is checked for new or changed summaries, in seconds")
 	devNoAuth := flag.Bool("dev-no-auth", false, "Disable Game Master authentication check for local dev testing")
 	// The activity rollup is in-memory, so without this a dashboard restart
 	// resets every counter. The file sits in the mounted icon-cache directory
@@ -217,6 +222,19 @@ func main() {
 	} else if mapPics != nil {
 		log.Printf("[Commanders] real map pictures served from %s", mapPics.Root())
 	}
+
+	// Dungeons tab: one pass over the trace folder now, then a cheap directory check every few seconds. Requests read the in-memory index.
+	dungeonIndex := dungeons.NewIndex(*traceDir)
+	dungeonIndex.Scan()
+	if m := dungeonIndex.Meta(); m.DirFound {
+		log.Printf("[Dungeons] %d dungeon runs from %s", m.Runs, m.Dir)
+	} else {
+		log.Printf("[Dungeons] no trace folder yet (%s); runs appear once `.bot trace` has written one (set -trace-dir / TBDASH_TRACE_DIR)", m.Dir)
+	}
+	if *traceScanSec < 2 {
+		*traceScanSec = 2
+	}
+	go dungeonIndex.Loop(time.Duration(*traceScanSec)*time.Second, make(chan struct{}))
 
 	// 5. WebSocket hub and UDP ingestion
 	hub := ws.NewHub()
@@ -461,6 +479,9 @@ func main() {
 		mux.HandleFunc(mapdir.MapsPrefix, requireAuth(mapPics.HandleLayers))
 		mux.HandleFunc(mapdir.FilePrefix, requireAuth(mapPics.HandleFile))
 	}
+
+	// Dungeons: success rate, clear times, boss kill times and wipe spots from the run trace summaries. Files only; GET only.
+	dungeonIndex.Register(mux, requireAuth)
 
 	mux.HandleFunc("/api/v1/server-info", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		if info := store.ServerInfo(); info != nil {

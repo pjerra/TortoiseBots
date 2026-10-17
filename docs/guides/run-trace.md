@@ -20,7 +20,7 @@ It is **off by default** (`AiPlayerbot.RunTrace.Enabled = 0`) and costs nothing 
 ## Start, stop, status
 
 ```text
-.bot trace start <run_id> [party|bot <Name>]
+.bot trace start <run_id> [party|bot <Name>] [driver=<model>:<effort>:<run>]
 .bot trace stop
 .bot trace status
 ```
@@ -30,6 +30,8 @@ See [player controls, section 4b](player-controls.md) for who may run them. `par
 The scope is re-read every frame and permission is re-checked each time: a bot is recorded only while the player who started the run is online and is a GameMaster, controls that bot, or is the bound remote commander of its group, so a stranger's bots that join the party later are left out. If the starter logs out, the run ends by itself (`scope_lost`).
 
 Who may start a run: with `AiPlayerbot.RunTrace.GmOnly = 1` (the default) only a GameMaster, since every run takes disk space; with `0` also the player who controls the bots. `.bot trace status` names the run id and scope to a GameMaster and to the player who started the run; anyone else is told only that a run is going. Stopping a run returns at once; its `end` record and summary are written a moment later, and a new `start` in that moment is refused (`finishing`).
+
+`driver=<model>:<effort>:<run>` names what drove the run (the turtle-agent passes its model, effort and run id; a player leaves it out). It is written to the summary as `driver` and shown by the dashboard as self-reported: the server cannot verify it. It may stand anywhere after the run id, once, and takes 1-96 letters, digits and `. _ - : +`.
 
 A run id is 1-64 characters of letters, digits, `.`, `_` and `-` (it becomes the file name), and a run id that already has a trace file is refused.
 
@@ -60,7 +62,7 @@ Every line is a flat JSON object with the same five leading fields: `"v":1` (sch
 
 **Hostile sample** (in `frame.mobs`): `g`, `hp` (% of max), `x`, `y`, `z`, `cb`, and when set `tg` (what it targets), `cs`, `ev` (evading), `cc` (stunned, confused, fleeing or rooted), `thr` (its threat list, top three as `[guid, pct of the top entry]`, highest first; only for a hostile in combat). Hostiles are what the bots fight, target or are attacked by (deduplicated across the bots, at most 24 per frame); a unit no bot sees does not appear.
 
-**Events** (`ev`): `death` (`a` the bot, `b` a hostile that had it targeted in the previous frame), `combat_on` / `combat_off` (`a` the bot), `loot` (`a` the bot, `s` the item name, `v` the item id; or `s` = `money`, `v` the copper), `cast_interrupted` (`a` the bot, `v` the spell id, `s` = `moving` when the bot was moving at that moment; fired from the same place the AI learns that its cast was cancelled, so a deliberate stop-then-move counts too; the reason code is not available), `action_loop` (`a` the bot, `s` the action, `s2` the outcome, `v` the failures counted: the same action failed more than 8 times in 10 s, flagged live by the recorder). Deaths and combat edges are seen at frame resolution.
+**Events** (`ev`): `death` (`a` the bot, `b` a hostile that had it targeted in the previous frame), `boss_kill` (`a` the boss unit, `v` its entry, `s` its name; seen at frame resolution), `combat_on` / `combat_off` (`a` the bot), `loot` (`a` the bot, `s` the item name, `v` the item id; or `s` = `money`, `v` the copper), `cast_interrupted` (`a` the bot, `v` the spell id, `s` = `moving` when the bot was moving at that moment; fired from the same place the AI learns that its cast was cancelled, so a deliberate stop-then-move counts too; the reason code is not available), `action_loop` (`a` the bot, `s` the action, `s2` the outcome, `v` the failures counted: the same action failed more than 8 times in 10 s, flagged live by the recorder). Deaths and combat edges are seen at frame resolution.
 
 **Action outcomes** (`res`): `OK` (executed), `FAILED` (possible, ran, returned false), `IMPOSSIBLE` (not possible now), `USELESS` (not useful now), `PREREQ` (its prerequisites were queued first), `VETOED` (a multiplier zeroed its relevance), `BACKOFF` (the failure backoff dropped it). `rel` is the relevance after the multipliers. A bot repeating the same action with the same outcome and trigger within one second is **one record**: `t` is the first, `tl` the last, `n` how many.
 
@@ -83,6 +85,30 @@ Every line is a flat JSON object with the same five leading fields: `"v":1` (sch
 ```
 
 `status` is `running`, `complete`, `aborted` (a line could not be written), `failed` (the trace file could not be flushed or closed at the end; `error` says why) or `incomplete`. A trace interrupted by a shutdown or a crash is marked `incomplete` at the next server start: a summary still `running` then gets `status: incomplete`, `end_reason: "server stopped before the trace was finalised"` and `reconciled_at` (unix seconds), and keeps the counters it had; its trace file is left as it is (it usually has no `end` record). A failure to write the summary itself is reported by `.bot trace status` and in the server log. The first block is written by the server; `oracles`, `verdict`, `scored_unix`, `scorer`, `trace_complete` and `bad_lines` by the scorer. An oracle `verdict` is `pass`, `fail` or `na` (the trace has nothing to judge, e.g. no healer).
+
+### Summary fields for the dashboard
+
+The server also writes the fields the dashboard's Dungeons tab reads ([observability dashboard](../../tools/observability/README.md), issue #986). They come from events the recorder already sees; nothing is read from the database, nothing scans the world, and the JSON is rendered once, when the summary is written. The `running` summary written at start carries only the live fields (`mode`, `build`, `driver`, `started`, `plan`, `dungeon`, `furthest`, `wipes`, `deaths`, `party`): no `outcome`, `bosses` or `clear_s` until the run ends, so a live run is never read as a failure. Old summaries without any of these still parse; the dashboard shows their runs with outcome `unknown`.
+
+| Field | Content |
+| :--- | :--- |
+| `mode` | `run_leader` when the module's run leader (`.bot run`) walks a plan for the requester, `commander` when the requester has a bound remote commander, else `observe`. Read at start and once a second; the strongest sign seen wins. |
+| `build` | `{"image", "module", "core"}`: `image` and `module` both hold `TORTOISEBOTS_BUILD_VERSION` (the same string as `tb_version`; the server does not know its image tag or the module's git sha, follow-up), `core` the core revision (8 chars). |
+| `driver` | The `driver=` argument; `human` for an `observe` run without one, `unknown` otherwise. |
+| `started`, `ended` | ISO 8601 UTC (`ended` only in the final summary); `start_unix` / `end_unix` stay. |
+| `plan` | The plan name the bosses come from, when known. |
+| `dungeon` | `{"map": <id>}` once the party stood on an instance map. The top-level `map` is still the map at start. |
+| `furthest` | `{"leg", "pull_group"}`: the highest plan step the run leader reached (`pull_group` is the step's sequence number in its leg). Run leader runs only. |
+| `bosses` | `[{"entry", "name", "killed_at_s"}]`, `killed_at_s` seconds from the run start (one decimal, frame resolution), `null` for a boss not killed. |
+| `outcome`, `stop_reason` | See below; `stop_reason` is the end reason (`stop`, `scope_lost`, `size_cap`, `shutdown`, `disabled`, `write_failed`). |
+| `clear_s` | Seconds from the run start to the last boss kill; written only when `outcome` is `cleared`. |
+| `wipes` | `[{"t_s", "map", "x", "y", "z", "role", "dead", "leg", "pull_group"}]`: every traced bot dead at once (at least two bots in scope; one wipe until somebody is up again). Position: the centroid of where they fell; `role`: of the first to fall. |
+| `deaths` | `[{"t_s", "map", "x", "y", "z", "bot", "role", "leg", "pull_group"}]`: each time a traced bot goes from alive to dead (where it fell). `x`, `y` are game coordinates. `leg` and `pull_group` are the run leader's step (once a second) and are left out without a run leader. |
+| `party` | `[{"class", "role", "level"}]` of the traced bots, as first seen. |
+
+**Boss list.** The run leader's own plan when it runs; otherwise the one plan on the party's map if there is exactly one (a commander's agent keeps its plan to itself). The list is the plan's `boss` steps for the party's team. With several plans on the map and none chosen there is no list: the bosses of all of them are still watched, and the bosses met are reported. A boss counts as killed when a unit the bots saw alive is found dead by guid on the map of a bot in its instance (the `boss_kill` event, `a` the unit, `v` the entry, `s` the name). A boss killed before the trace started was never seen alive, so such a run cannot be `cleared`: start the trace before the first pull.
+
+**Outcome rule** (first match wins). `cleared`: every boss on the plan's list was killed (never without a list). `wiped_out`: not cleared and the run ended while the whole party was dead. `stopped`: there is no list, so nothing says how far it got; or there is a list, no boss was killed and the run was stopped by hand. `partial`: a list and at least one boss killed, not all. `abandoned`: a list, no boss killed, and the run ended by itself. A trace that never stood on an instance map and met no boss carries no `outcome`, `bosses` or `dungeon`, so the dashboard ignores it. At most 200 wipes and 200 deaths are kept. Not written yet (follow-up): `gm_assists`, and the module's git sha in `build`.
 
 ## Scoring
 

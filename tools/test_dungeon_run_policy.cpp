@@ -1927,6 +1927,181 @@ static void TestResumeWithLeadDead()
     CHECK(r2.state == State::Paused && r2.note.find("still dead") != std::string::npos);
 }
 
+static UnitFact Hitter(std::uint64_t guid, std::uint32_t entry, float dist, bool healer = false)
+{
+    UnitFact u = Unit(guid, entry, dist);
+    u.hitting = true;
+    u.victimHealer = healer;
+    return u;
+}
+
+// Uldaman rerun 2026-10-17, the walk to Galgann at -10 337: the tank held
+// "stay" with nothing on it while the party fought 13-31 yd away. With mobs
+// hitting the party for kGuardWaitMs the tank picks the nearest one up
+// (`attack <guid> <tank>`), and after the fight the run walks it back to the
+// stand point.
+static void TestTankGuardsThePartyFromItsStand()
+{
+    DungeonPlan plan;
+    plan.steps = {Step(PlanStepKind::Move, 0), PullStep(40, {4855, 4853})};
+    Run r = Start(&plan);
+    Facts f = Party(0);
+    f.leadIsTank = true;
+    f.leadStaying = true;
+    Tick(r, f); // on the stand point: the anchor, next step
+    CHECK(r.step == 1 && r.anchorKnown);
+    f.units = {Unit(31, 4853, 40)};
+    CHECK(Tick(r, f) == "pullback 31");
+    f.anyInCombat = true;
+    // The pullback's mobs aggroed on the healer and still run in: not hitting yet.
+    UnitFact running = Unit(31, 4853, 30);
+    running.victimHealer = true;
+    f.partyAttackers = {running};
+    for (int i = 0; i < 8; ++i)
+        CHECK(Tick(r, f).empty());
+    // They arrive and hit the party; nothing is on the tank.
+    f.partyAttackers = {Hitter(41, 7320, 35), Hitter(51, 7320, 45), Hitter(31, 4853, 30)};
+    for (std::uint32_t ms = kTickMs; ms < kGuardWaitMs; ms += kTickMs)
+        CHECK(Tick(r, f).empty());
+    CHECK(Tick(r, f) == "attack 31 Tanky"); // the nearest one within kGuardYd
+    CHECK(r.guardReturn);
+    // The order ended the stay; the tank holds that mob now.
+    f.leadStaying = false;
+    f.leadHit = true;
+    f.leadX = 28;
+    f.partyAttackers = {Hitter(41, 7320, 12)};
+    for (int i = 0; i < 10; ++i)
+        CHECK(Tick(r, f).empty()); // a mob on a DPS while the tank holds its own: the tank's own AI
+    // The fight is over: back to the stand point first, then the step goes on.
+    f.anyInCombat = false;
+    f.leadHit = false;
+    f.partyAttackers.clear();
+    f.units.clear();
+    CHECK(Tick(r, f) == "move 0.0 0.0 0.0");
+    f.leadX = 1;
+    f.leadStaying = true;
+    Tick(r, f);
+    CHECK(!r.guardReturn);
+    CHECK(r.state == State::Done);
+}
+
+// Replay of keepers door pull 100 (trace r-...9bbf): a Brawler on the tank in
+// melee reach, a Geomancer casting at the mage from 30 yd, then two Maulers on
+// the mage and the healer. The tank keeps its Brawler while only the mage is
+// hit; a mob hitting the healer is picked up (it needs no stay once the guard
+// took the tank off it), the next one after a fresh wait, and the cap is
+// reached in one fight.
+static void TestTankGuardPull100Replay()
+{
+    DungeonPlan plan;
+    plan.steps = {Step(PlanStepKind::Move, 0), PullStep(40, {4855, 4853})};
+    Run r = Start(&plan);
+    Facts f = Party(0);
+    f.leadIsTank = true;
+    f.leadStaying = true;
+    Tick(r, f);
+    f.units = {Unit(97, 4855, 40)};
+    CHECK(Tick(r, f) == "pullback 97");
+    f.anyInCombat = true;
+    f.leadHit = true; // the Brawler, 1 yd
+    f.partyAttackers = {Hitter(98, 4853, 30)}; // the Geomancer on the mage
+    for (int i = 0; i < 8; ++i)
+        CHECK(Tick(r, f).empty());
+    // A Mauler reaches the healer at T (trace: 7478); she is dead at T+2-3 s
+    // (botwatch 73 % at 03:07:22, 0 % at 03:07:26): the order goes out on the
+    // first tick she is seen hit.
+    f.partyAttackers = {Hitter(98, 4853, 30), Hitter(90, 7320, 14, true)};
+    CHECK(Tick(r, f) == "attack 90 Tanky");
+    // Off its stay now; the second Mauler turns on the healer: picked up once
+    // kGuardRepeatMs have passed since the first, and the cap is reached in
+    // one fight.
+    f.leadStaying = false;
+    f.partyAttackers = {Hitter(98, 4853, 30), Hitter(91, 7320, 20, true)};
+    CHECK(Tick(r, f).empty());
+    CHECK(Tick(r, f) == "attack 91 Tanky");
+    int orders = 2;
+    for (int i = 0; i < 20; ++i)
+        if (Tick(r, f).compare(0, 7, "attack ") == 0)
+            ++orders;
+    CHECK(orders == static_cast<int>(kGuardOrdersPerFight));
+    CHECK(r.state == State::Running);
+}
+
+// The guard stays out of the way: no tank, a tank off its stay the guard did
+// not take off, a polymorphed, evading, too far or not yet hitting mob, a
+// scripted event; a refused pick-up or walk back never pauses the run.
+static void TestTankGuardLimits()
+{
+    auto guardRun = [](DungeonPlan& plan)
+    {
+        plan.steps = {Step(PlanStepKind::Move, 0), PullStep(40, {4855})};
+        Run r = Start(&plan);
+        Facts f = Party(0);
+        Tick(r, f);
+        f.units = {Unit(31, 4855, 40)};
+        Tick(r, f); // pullback 31
+        return r;
+    };
+    auto fight = [](bool tank, bool staying, bool hit)
+    {
+        Facts f = Party(0);
+        f.anyInCombat = true;
+        f.leadIsTank = tank;
+        f.leadStaying = staying;
+        f.leadHit = hit;
+        f.partyAttackers = {Hitter(31, 4855, 20)};
+        return f;
+    };
+    auto ordersIn = [](Run& r, const Facts& f, int ticks)
+    {
+        int n = 0;
+        for (int i = 0; i < ticks; ++i)
+            if (Tick(r, f).compare(0, 7, "attack ") == 0)
+                ++n;
+        return n;
+    };
+    {
+        DungeonPlan plan;
+        Run r = guardRun(plan);
+        CHECK(ordersIn(r, fight(true, true, true), 8) == 0);   // the tank holds a mob; the victim is no healer
+        CHECK(ordersIn(r, fight(false, true, false), 8) == 0); // the lead bot is no tank
+        CHECK(ordersIn(r, fight(true, false, false), 8) == 0); // off its stay by itself: its own AI goes already
+        Facts f = fight(true, true, false);
+        f.partyAttackers[0].polymorphed = true;
+        CHECK(ordersIn(r, f, 8) == 0);
+        f.partyAttackers[0].polymorphed = false;
+        f.partyAttackers[0].evading = true;
+        CHECK(ordersIn(r, f, 8) == 0);
+        f.partyAttackers[0].evading = false;
+        f.partyAttackers[0].hitting = false;
+        CHECK(ordersIn(r, f, 8) == 0);
+        f.partyAttackers[0].hitting = true;
+        f.partyAttackers[0].distLead = kGuardYd + 1;
+        CHECK(ordersIn(r, f, 8) == 0);
+        f.partyAttackers[0].distLead = 20;
+        CHECK(ordersIn(r, f, 5) == 1);
+        OrderRefused(r, "attack 31 Tanky", "failed: That bot did not accept the attack.");
+        CHECK(r.state == State::Running);
+    }
+    {
+        // A scripted event fights in place (the Keepers' and Archaedas' holds).
+        DungeonPlan plan;
+        Run r = guardRun(plan);
+        r.eventOn = true;
+        CHECK(ordersIn(r, fight(true, true, false), 8) == 0);
+    }
+    {
+        // A refused walk back to the stand point goes on from where it stands.
+        DungeonPlan plan;
+        Run r = guardRun(plan);
+        CHECK(ordersIn(r, fight(true, true, false), 5) == 1);
+        Facts after = Party(25);
+        CHECK(Tick(r, after) == "move 0.0 0.0 0.0");
+        OrderRefused(r, "move 0.0 0.0 0.0", "unreachable: The lead bot has no walkable path to that point.");
+        CHECK(r.state == State::Running && !r.guardReturn);
+    }
+}
+
 static void TestEmptyPlan()
 {
     DungeonPlan plan;
@@ -2370,6 +2545,9 @@ int main()
     TestCrowdControlMustLand();
     TestKillFirstIsThisFightsOnly();
     TestCcWindowCountsTheMagesFightTime();
+    TestTankGuardsThePartyFromItsStand();
+    TestTankGuardPull100Replay();
+    TestTankGuardLimits();
     TestEmptyPlan();
     TestStuckStragglerThatMovedIsSummoned();
     TestApproachHopSummonsBeforePause();

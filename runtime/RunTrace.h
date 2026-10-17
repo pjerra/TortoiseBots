@@ -6,7 +6,7 @@
 // runtime/RunTraceRecords.h; file writer: runtime/RunTraceWriter.h.
 //
 // Off by default (AiPlayerbot.RunTrace.Enabled = 0). Started and stopped by
-// `.bot trace start <run_id> [party|bot <Name>]` / `.bot trace stop` (a GM, or
+// `.bot trace start <run_id> [party|bot <Name>] [driver=<model>:<effort>:<run>]` / `.bot trace stop` (a GM, or
 // the owner of every bot in scope, unless AiPlayerbot.RunTrace.GmOnly); one run
 // at a time. While no run is active the only costs are one relaxed atomic load
 // per world tick, and one walk over the engine's listener list per action in
@@ -33,6 +33,7 @@
 #include <vector>
 
 #include "RunTraceRecords.h"
+#include "RunTraceSummary.h"
 #include "RunTraceWriter.h"
 #include "WorldThreadQueue.h"
 
@@ -62,6 +63,13 @@ public:
         // commands its group: RunTrace::MayRecordBot). Called for every bot of
         // the group at start and at every frame.
         bool (*mayRecord)(uint64_t requesterGuid, Player* bot) = nullptr;
+        // `driver=<model>:<effort>:<run>` of the command, already checked
+        // (RunTrace::DriverRefusal); empty = not given. Self-reported.
+        std::string driver;
+        // What the command glue knows about the run: who drives it (mode) and,
+        // when `wantPlan`, the plan whose bosses the outcome is judged against.
+        // Called at start and once a second on the world thread.
+        bool (*context)(uint64_t requesterGuid, Player* anchor, bool wantPlan, RunTrace::Context& out) = nullptr;
     };
 
     // World thread. False with `message` filled when the run cannot start.
@@ -106,11 +114,16 @@ private:
         bool known = false;     // party record written
         bool alive = true;
         bool inCombat = false;
+        std::string name;       // for the summary's deaths
+        std::string role;
+        RunTrace::Spot lastDeath;  // where it last died (the wipe spot)
         std::string strategy;   // last strategy string written
         uint64_t lastAttacker = 0;  // a hostile that targeted it in the previous frame
     };
 
     void Sample();
+    void RefreshContext();
+    void CheckBossKills(std::vector<Player*> const& bots);
     void ResolveBots(std::vector<Player*>& bots);
     void Emit(std::string line);
     void EmitEvent(RunTrace::Event const& e);
@@ -136,6 +149,16 @@ private:
     RunTrace::Counters counters_;
     RunTrace::ActionCoalescer coalescer_;
     RunTrace::LoopDetector loops_;
+    RunTrace::RunDigest digest_;  // what the summary says besides the counters (RunTraceSummary.h)
+    // Boss units seen alive and not yet found dead, with the instance they stand in (the bots may be split across maps).
+    struct BossUnit
+    {
+        uint32_t entry = 0;
+        uint32_t map = 0;
+        uint32_t instance = 0;
+    };
+    std::unordered_map<uint64_t, BossUnit> bossGuids_;
+    bool (*context_)(uint64_t requesterGuid, Player* anchor, bool wantPlan, RunTrace::Context& out) = nullptr;
     std::string tracePath_;
     std::string summaryPath_;
     bool wholeParty_ = true;

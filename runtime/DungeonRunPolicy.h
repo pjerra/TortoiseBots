@@ -118,6 +118,18 @@ constexpr std::uint32_t kEventStartMs = 30000;    // an encounter hold whose dat
 constexpr std::uint32_t kRitualNoReplyMs = 5000;  // a ritual whose bots are free again with no answer this long: pause
 constexpr std::uint32_t kEventResetWaitMs = 60000; // before a ritual: an encounter still in progress or failed (a boss
                                                    // walking home) is waited for this long, then the ritual goes out
+// Guarding the party from a stand point (GuardTarget): the run leader holds the
+// tank on "stay" at its pullback or walk-back point, where it does not go after
+// a mob on someone else. Uldaman rerun 2026-10-17, keepers door pull 100 and the
+// walk back at -10 337: adds killed the healer and the DPS 13-37 yd away while
+// the tank stood 50 s at 53 % with nothing on it.
+constexpr float kGuardYd = 40.0f;                 // party bots this close to the tank, hit by a mob, are guarded
+constexpr std::uint32_t kGuardWaitMs = 4000;      // ... once mobs were hitting them (in melee reach, or standing and
+                                                  // casting: not while a pullback's mobs still run in) for this long
+constexpr std::uint32_t kGuardHealerWaitMs = 0;   // ... a mob hitting a healer at once: at pull 100 two Maulers
+                                                  // took the healer from 73 % to dead in 4 s
+constexpr std::uint32_t kGuardRepeatMs = 2000;    // a further pick-up no sooner than this after the last one
+constexpr std::uint32_t kGuardOrdersPerFight = 3; // pick-up orders one fight may send
 // A party member coming back with attackers runs on to the party (RunBack; the
 // owner's rule of 2026-10-17). Uldaman 2026-10-17 (tests/uldaman-events-2):
 // the revived priest and mage stopped to fight a scorpid at -174 311, 73-76 yd
@@ -179,6 +191,9 @@ struct UnitFact
     bool engaged = false;
     std::uint64_t owner = 0;
     bool ownerEngaged = false;
+    // Facts::partyAttackers only:
+    bool hitting = false;      // it hits its victim now: in melee reach of it, or standing and casting (not running in)
+    bool victimHealer = false; // its victim is a healer
 };
 
 // The mage's Polymorph (all ranks and forms): the aura the run waits for after
@@ -263,6 +278,15 @@ struct Facts
     bool carrierBusy = false;           // a commander task (loot/open/use) runs for the carrier
     int taskReply = 0;                  // the carrier's task answer since the run's order: 0 none, 1 ACK, 2 ERR
     std::string taskText;
+    // Guarding the party (GuardTarget), read in fights only:
+    bool leadIsTank = false;            // the lead bot is a tank
+    bool leadStaying = false;           // the lead bot holds "stay" (the run's move to a stand or walk-back point)
+    bool leadHit = false;               // a living mob with the lead bot as its victim is in melee reach of it
+                                        // (a caster that turns on the tank from 30 yd is not the tank holding it)
+    // Living, not friendly mobs whose victim is a party bot other than the lead
+    // bot within kGuardYd of it; distLead from the lead bot, `hitting` and
+    // `victimHealer` set.
+    std::vector<UnitFact> partyAttackers;
 };
 
 // Where a boss's corpse lay when the boss step saw him down.
@@ -402,6 +426,13 @@ struct Run
     std::uint32_t nearWipes = 0; // kWipeDead or more dead with someone alive, counted once each time
     bool nearWiped = false;
     bool eventRetry = false;     // an event failed this run: a ritual sent now is its retry
+    // Guarding the party from a stand point (GuardTarget): the time the party
+    // has been hit with the tank idle on stay, the pick-up orders this fight
+    // sent, and the walk back to the stand point after the fight.
+    std::uint32_t guardMs = 0;
+    std::uint32_t guardOrders = 0;
+    std::uint32_t guardSinceOrderMs = 0; // fight time since the last pick-up
+    bool guardReturn = false;
     // Members running back to the party with attackers on them (RunBack): the
     // glue keeps each one a passive follower of the lead bot (it does not stop
     // to fight) while its name is here. Per bot: how long it has run, and its
@@ -568,6 +599,9 @@ inline void ResetStep(Run& r)
     r.holdArrived = false;
     r.eventIdleMs = 0;
     r.eventUp = r.eventDown = r.eventTotal = 0;
+    r.guardMs = 0;
+    r.guardOrders = 0;
+    r.guardReturn = false;
     r.hold.clear();
     r.holdDue = false;
 }
@@ -914,10 +948,11 @@ inline void OrderRefused(Run& r, const std::string& order, const std::string& an
         return;
     }
     if (order == "rest" || order == "revive party" || order.compare(0, 7, "summon ") == 0 ||
-        order.compare(0, 3, "cc ") == 0 || order.compare(0, 6, "focus ") == 0)
+        order.compare(0, 3, "cc ") == 0 || order.compare(0, 6, "focus ") == 0 || order.compare(0, 7, "attack ") == 0)
     {
         // The rest gate, the regroup and the gather have their own ceilings;
-        // crowd control and a focus are help, the fight goes on without them.
+        // crowd control, a focus and the tank's pick-up (GuardTarget) are
+        // help, the fight goes on without them.
         r.note = order + " refused: " + answer;
         return;
     }
@@ -931,6 +966,15 @@ inline void OrderRefused(Run& r, const std::string& order, const std::string& an
         else
             EnterPhase(r, Phase::Begin);
         r.note = "gather refused (" + answer + "): " + (again ? "sending it once more" : "going on without it");
+        return;
+    }
+    // The walk back to the stand point after a pick-up (GuardTarget): the
+    // step goes on from where the lead bot stands.
+    if (r.guardReturn && r.anchorKnown && order == MoveOrder(r.anchorX, r.anchorY, r.anchorZ, false))
+    {
+        r.guardReturn = false;
+        EnterPhase(r, Phase::Begin);
+        r.note = "back to the stand point refused (" + answer + "): going on from here";
         return;
     }
     const PlanStep* s = Current(r);
@@ -2280,6 +2324,68 @@ inline void HoldStep(Run& r, const Facts& f, const PlanStep& s, std::uint32_t dt
     r.note = "event: holding the spot" + tail;
 }
 
+// Guarding the party from a stand point. The run leader's moves put the tank
+// (the lead bot) on "stay" at a pullback stand or a walk-back point, and a
+// staying bot does not go after a mob that hits someone else. In a fight, when
+// mobs are hitting party bots within kGuardYd of the tank (in melee reach of
+// them, or standing and casting: a pullback's mobs still running in do not
+// count), the one nearest the tank is the one it goes to pick up
+// (`attack <guid> <tank>`, which ends its stay); after the fight the run walks
+// it back to the stand point. A tank that holds a mob of its own in melee
+// reach picks up only a mob hitting a healer (Uldaman pull 100: a Brawler on
+// the tank while a Geomancer and two Maulers killed the mage and the healer).
+// Once the guard took the tank off its stay this fight, it keeps watching:
+// the next pick-up needs no stay. Not in a scripted event (the Keepers' and
+// Archaedas' holds fight in place), never a polymorphed or evading mob. A
+// player's own order to the party pauses the run, so this never overrides the
+// commander. Null for none.
+inline const UnitFact* GuardTarget(const Run& r, const Facts& f)
+{
+    if (!f.leadAlive || !f.leadIsTank || !(f.leadStaying || r.guardOrders > 0) || f.carrier.empty() || InEvent(r))
+        return nullptr;
+    const PlanStep* s = Current(r);
+    if (s && s->kind == PlanStepKind::Hold)
+        return nullptr;
+    const UnitFact* best = nullptr;
+    for (const UnitFact& u : f.partyAttackers)
+    {
+        if (!u.hostile || u.evading || u.polymorphed || !u.hitting || u.distLead > kGuardYd)
+            continue;
+        if (f.leadHit && !u.victimHealer)
+            continue;
+        if (!best || u.distLead < best->distLead)
+            best = &u;
+    }
+    return best;
+}
+
+// One fight tick of the guard: mobs hitting the party for kGuardWaitMs (a
+// healer: at once) send the pick-up, at most kGuardOrdersPerFight a fight and
+// kGuardRepeatMs apart. True when `order` holds it.
+inline bool CheckGuard(Run& r, const Facts& f, std::uint32_t dt, std::string& order)
+{
+    r.guardSinceOrderMs += dt;
+    const UnitFact* u = GuardTarget(r, f);
+    if (!u)
+    {
+        r.guardMs = 0;
+        return false;
+    }
+    r.guardMs += dt;
+    std::uint32_t const wait = u->victimHealer ? kGuardHealerWaitMs : kGuardWaitMs;
+    if (r.guardMs < wait || r.guardOrders >= kGuardOrdersPerFight ||
+        (r.guardOrders > 0 && r.guardSinceOrderMs < kGuardRepeatMs))
+        return false;
+    r.guardMs = 0;
+    r.guardSinceOrderMs = 0;
+    ++r.guardOrders;
+    r.guardReturn = r.guardReturn || r.anchorKnown;
+    r.note = "fighting: the tank picks up " + std::to_string(u->entry) + " off " +
+        (u->victimHealer ? "the healer" : "the party") + " (" + Num(u->distLead) + " yd)";
+    order = "attack " + std::to_string(u->guid) + " " + f.carrier;
+    return true;
+}
+
 // A party member coming back with attackers on it. The owner's rule
 // (2026-10-17): "the party members running back to party should just run past
 // the mobs and try to run to the party, when its with the party and gets help
@@ -2803,6 +2909,8 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
         }
         if (CheckCc(r, f, dt, order))
             return order;
+        if (CheckGuard(r, f, dt, order))
+            return order;
         // The plan's kill_first unit of the fight (a healer, its healing ward)
         // is focused: skull on it, every bot attacks it. Again only when the
         // best one changes (it died, or a ward came up).
@@ -2825,8 +2933,29 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
         r.eatWaitMs = 0;
         r.pullGuid = 0;
         r.focusGuid = 0;
+        r.guardMs = 0;
+        r.guardOrders = 0;
         if (r.phase != Phase::AwaitTask && r.phase != Phase::Wait)
             EnterPhase(r, Phase::Begin);
+    }
+
+    // After a pick-up (CheckGuard): the tank walks back to the stand point it
+    // left, with the party, before the step goes on.
+    if (r.guardReturn)
+    {
+        if (!r.anchorKnown || InEvent(r) || r.phase == Phase::AwaitTask || r.phase == Phase::Wait)
+            r.guardReturn = false;
+        else if (WalkTo(r, f, r.anchorX, r.anchorY, r.anchorZ, false, dt, order))
+        {
+            r.guardReturn = false;
+            EnterPhase(r, Phase::Begin);
+        }
+        else
+        {
+            if (r.state == State::Running)
+                r.note = "back to the stand point after picking up the party's attackers";
+            return order;
+        }
     }
 
     // A walk back is bounded point by point (WalkTo), not by the step's ceiling.

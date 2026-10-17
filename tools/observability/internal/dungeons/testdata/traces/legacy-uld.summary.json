@@ -1,0 +1,43 @@
+{
+ "v": 1,
+ "schema": "bt-trace",
+ "run": "legacy-uld",
+ "src": "server",
+ "status": "complete",
+ "end_reason": "stop",
+ "scope": "party",
+ "scope_name": "Aldo",
+ "requester": "Aldo",
+ "tb_version": "2026-10-14-v3",
+ "trace_file": "legacy-uld.jsonl",
+ "start_unix": 1760500000,
+ "end_unix": 1760503600,
+ "duration_ms": 3600000,
+ "interval_ms": 500,
+ "map": 70,
+ "instance": 12,
+ "counters": {
+  "frames": 7200,
+  "events": 14,
+  "actions": 3100,
+  "party": 5,
+  "mobs": 22,
+  "deaths": 3,
+  "loops": 1,
+  "records": 10341,
+  "bytes": 2104332,
+  "dropped": 0,
+  "truncated": false
+ },
+ "oracles": [
+  {
+   "id": "deaths",
+   "name": "party deaths",
+   "verdict": "fail",
+   "count": 3,
+   "first_ms": 41200,
+   "detail": "3 deaths"
+  }
+ ],
+ "verdict": "fail"
+}

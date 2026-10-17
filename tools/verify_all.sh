@@ -229,6 +229,7 @@ if command -v g++ >/dev/null 2>&1; then
         test_run_leader_live_policy
         test_run_loot_corpse_policy
         test_run_trace_records
+        test_run_trace_summary
         test_sapphiron_ice_policy
         test_seduction_policy
         test_service_trip_policy

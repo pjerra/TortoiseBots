@@ -9081,6 +9081,55 @@ void ReadKillFirst(ai::DungeonPlan const& plan, Player* lead, std::vector<Player
     }
 }
 
+// In a fight: what the run's guard of the party needs (DungeonRun::GuardTarget).
+// Whether the lead bot is a tank on "stay" and holds a mob in melee reach, and
+// the mobs that have a party bot within kGuardYd of it as their victim, each
+// with whether it hits that bot now (in melee reach of it, or standing and
+// casting: a pullback's mobs running in do not count) and whether that bot is a
+// healer. Read off each bot's own attacker set: no grid or world scan.
+void ReadGuardFacts(Player* lead, std::vector<Player*> const& bots, TortoiseBots::DungeonRun::Facts& f)
+{
+    using namespace TortoiseBots::DungeonRun;
+    PlayerbotAI* leadAi = PlayerbotAIStorage::Instance().GetAI(lead);
+    if (!leadAi || !lead->IsAlive() || !lead->IsInWorld())
+        return;
+    f.leadIsTank = PlayerbotAI::IsTank(lead);
+    if (!f.leadIsTank)
+        return;
+    f.leadStaying = leadAi->HasStrategy("stay", BotState::BOT_STATE_COMBAT) ||
+        leadAi->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT);
+    for (Unit* attacker : lead->GetAttackers())
+        if (attacker && attacker->IsAlive() && attacker->GetVictim() == lead &&
+            attacker->CanReachWithMeleeAutoAttack(lead))
+            f.leadHit = true;
+    std::unordered_set<uint64> seen;
+    for (Player* bot : bots)
+    {
+        if (bot == lead || !bot->IsAlive() || !bot->IsInWorld() || bot->GetMap() != lead->GetMap() ||
+            bot->GetDistance(lead) > kGuardYd)
+            continue;
+        bool const healer = PlayerbotAI::IsHeal(bot);
+        for (Unit* attacker : bot->GetAttackers())
+        {
+            if (!attacker || !attacker->IsAlive() || attacker->GetVictim() != bot ||
+                !seen.insert(attacker->GetObjectGuid().GetRawValue()).second ||
+                sServerFacade.IsFriendlyTo(attacker, lead))
+                continue;
+            UnitFact fact;
+            fact.guid = attacker->GetObjectGuid().GetRawValue();
+            fact.entry = attacker->GetEntry();
+            fact.distLead = lead->GetDistance(attacker);
+            fact.evading = attacker->IsCreature() && static_cast<Creature*>(attacker)->IsInEvadeMode();
+            fact.polymorphed = Polymorphed(attacker);
+            fact.engaged = true;
+            fact.hitting = attacker->CanReachWithMeleeAutoAttack(bot) ||
+                (!attacker->IsMoving() && attacker->IsNonMeleeSpellCasted(false));
+            fact.victimHealer = healer;
+            f.partyAttackers.push_back(fact);
+        }
+    }
+}
+
 void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*> const& bots,
     TortoiseBots::DungeonRun::Facts& f)
 {
@@ -9167,6 +9216,8 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
     // already calculated), resolved by guid. No grid or world scan.
     if (f.anyInCombat && slot.run.plan && !slot.run.plan->killFirst.empty())
         ReadKillFirst(*slot.run.plan, lead, bots, f);
+    if (f.anyInCombat)
+        ReadGuardFacts(lead, bots, f);
 
     // The current step, or during a walk back after a regroup the move point
     // it replays (its hop pulls are read for that point).
@@ -10264,6 +10315,57 @@ static bool MayTraceBot(uint64_t requesterGuid, Player* bot)
         CommandsBotsGroup(requester, bot));
 }
 
+// What the run trace's summary needs from the command side (RunTraceSummary.h):
+// who drives the run and, while `wantPlan`, the plan whose bosses the outcome
+// is judged against. The run leader's own plan when it runs for this
+// commander; otherwise the one plan on the party's map, if there is exactly
+// one (a commander's agent keeps its plan to itself); with several, only their
+// bosses' entries (kills are seen, the outcome has no list). In-memory reads only.
+static bool TraceContext(uint64_t requesterGuid, Player* anchor, bool wantPlan, RunTrace::Context& out)
+{
+    if (!anchor)
+        return false;
+    out.mode = RunTrace::RunMode::Observe;
+    ai::DungeonPlan const* plan = nullptr;
+    std::uint32_t const team = anchor->GetTeam() == ALLIANCE ? ai::kPlanFlagAlliance : ai::kPlanFlagHorde;
+    if (CommanderBindings().FindByCommander(requesterGuid))
+    {
+        out.mode = RunTrace::RunMode::Commander;
+        auto it = DungeonRuns().find(requesterGuid);
+        if (it != DungeonRuns().end())
+        {
+            out.mode = RunTrace::RunMode::RunLeader;
+            plan = it->second.run.plan;
+            if (ai::PlanStep const* step = TortoiseBots::DungeonRun::Current(it->second.run))
+            {
+                out.hasStep = true;
+                out.leg = step->leg;
+                out.seq = step->seq;
+            }
+        }
+    }
+    if (!wantPlan)
+        return true;
+    if (!plan)
+    {
+        std::vector<std::string> const here = ai::GetDungeonPlans().PlansOnMap(anchor->GetMapId());
+        if (here.size() == 1)
+            plan = ai::GetDungeonPlans().Find(here.front());
+        else
+            // Several plans on the map and none chosen: the outcome has no list, but their bosses' deaths are seen.
+            for (std::string const& name : here)
+                if (ai::DungeonPlan const* other = ai::GetDungeonPlans().Find(name))
+                    for (std::uint32_t entry : RunTrace::PlanBossEntries(*other, team))
+                        out.knownBosses.push_back(entry);
+    }
+    if (plan)
+    {
+        out.planName = plan->name;
+        out.bossEntries = RunTrace::PlanBossEntries(*plan, team);
+    }
+    return true;
+}
+
 static bool HandleTrace(ChatHandler* handler, char const* args)
 {
     Player* requester = Requester(handler);
@@ -10290,7 +10392,7 @@ static bool HandleTrace(ChatHandler* handler, char const* args)
     if (verb != "start" && verb != "stop" && verb != "status")
     {
         SendActionError(handler, intent, "invalid",
-            "Usage: .bot trace start <run_id> [party|bot <Name>] / stop / status");
+            "Usage: .bot trace start <run_id> [party|bot <Name>] [driver=<model>:<effort>:<run>] / stop / status");
         return true;
     }
     if (!requester || !requester->GetSession())
@@ -10348,13 +10450,37 @@ static bool HandleTrace(ChatHandler* handler, char const* args)
             "Only a GameMaster may start a trace (AiPlayerbot.RunTrace.GmOnly = 1).");
         return true;
     }
+    // `driver=<model>:<effort>:<run>` may stand anywhere after the run id.
+    std::string driver;
+    bool haveDriver = false;
+    for (size_t i = 2; i < parts.size();)
+    {
+        if (!RunTrace::IsDriverToken(parts[i]))
+        {
+            ++i;
+            continue;
+        }
+        std::string const value = parts[i].substr(7);
+        char const* refusal = haveDriver ? "driver= was given twice." : RunTrace::DriverRefusal(value);
+        if (refusal)
+        {
+            SendActionError(handler, intent, "invalid", refusal);
+            return true;
+        }
+        driver = value;
+        haveDriver = true;
+        parts.erase(parts.begin() + static_cast<std::ptrdiff_t>(i));
+    }
     if (parts.size() < 2)
     {
-        SendActionError(handler, intent, "invalid", "Usage: .bot trace start <run_id> [party|bot <Name>]");
+        SendActionError(handler, intent, "invalid",
+            "Usage: .bot trace start <run_id> [party|bot <Name>] [driver=<model>:<effort>:<run>]");
         return true;
     }
     RunTraceService::StartParams params;
     params.runId = parts[1];
+    params.driver = driver;
+    params.context = &TraceContext;
     params.requester = requester->GetName();
     params.requesterGuid = requester->GetObjectGuid().GetRawValue();
     params.mayRecord = &MayTraceBot;
@@ -10367,7 +10493,7 @@ static bool HandleTrace(ChatHandler* handler, char const* args)
     {
         if (parts.size() < 4)
         {
-            SendActionError(handler, intent, "invalid", "Usage: .bot trace start <run_id> bot <Name>");
+            SendActionError(handler, intent, "invalid", "Usage: .bot trace start <run_id> bot <Name> [driver=<model>:<effort>:<run>]");
             return true;
         }
         Player* bot = nullptr;
@@ -10428,7 +10554,8 @@ static bool HandleTrace(ChatHandler* handler, char const* args)
     }
     else
     {
-        SendActionError(handler, intent, "invalid", "Usage: .bot trace start <run_id> [party|bot <Name>]");
+        SendActionError(handler, intent, "invalid",
+            "Usage: .bot trace start <run_id> [party|bot <Name>] [driver=<model>:<effort>:<run>]");
         return true;
     }
 

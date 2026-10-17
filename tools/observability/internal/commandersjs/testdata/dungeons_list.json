@@ -1,0 +1,355 @@
+{
+ "dungeons": [
+  {
+   "abandoned": 0,
+   "best_run": "zf-ab-2-s1",
+   "best_s": 3420,
+   "bosses": [
+    {
+     "best_run": "zf-ab-2-s1",
+     "best_s": 1800,
+     "entry": 8127,
+     "key": "8127",
+     "kills": 5,
+     "median_s": 2160,
+     "name": "Antu'sul"
+    },
+    {
+     "best_run": "zf-ab-2-s1",
+     "best_s": 1920,
+     "entry": 7272,
+     "key": "7272",
+     "kills": 5,
+     "median_s": 2300,
+     "name": "Theka the Martyr"
+    },
+    {
+     "best_run": "zf-ab-2-s1",
+     "best_s": 3420,
+     "entry": 7267,
+     "key": "7267",
+     "kills": 4,
+     "median_s": 3855,
+     "name": "Velratha"
+    }
+   ],
+   "builds": [
+    {
+     "abandoned": 0,
+     "best_s": 3420,
+     "cleared": 3,
+     "deaths": 9,
+     "key": "19z4 / 9adde948",
+     "label": "19z4 / 9adde948",
+     "median_s": 3900,
+     "partial": 0,
+     "running": 0,
+     "runs": 4,
+     "stopped": 1,
+     "success_rate": 0.75,
+     "unknown": 0,
+     "wiped_out": 0,
+     "wipes": 4
+    },
+    {
+     "abandoned": 0,
+     "best_s": 3810,
+     "cleared": 1,
+     "deaths": 1,
+     "key": "19z4 / 4177b48",
+     "label": "19z4 / 4177b48",
+     "median_s": 3810,
+     "partial": 0,
+     "running": 0,
+     "runs": 1,
+     "stopped": 0,
+     "success_rate": 1,
+     "unknown": 0,
+     "wiped_out": 0,
+     "wipes": 0
+    },
+    {
+     "abandoned": 0,
+     "best_s": null,
+     "cleared": 0,
+     "deaths": 0,
+     "key": "2026-10-17-v1",
+     "label": "2026-10-17-v1",
+     "median_s": null,
+     "partial": 0,
+     "running": 1,
+     "runs": 1,
+     "stopped": 0,
+     "success_rate": null,
+     "unknown": 0,
+     "wiped_out": 0,
+     "wipes": 0
+    }
+   ],
+   "cleared": 4,
+   "deaths": 10,
+   "delta_s": null,
+   "drivers": [
+    {
+     "abandoned": 0,
+     "best_s": 3420,
+     "cleared": 1,
+     "deaths": 4,
+     "key": "haiku · max",
+     "label": "haiku · max",
+     "median_s": 3420,
+     "partial": 0,
+     "running": 0,
+     "runs": 2,
+     "stopped": 1,
+     "success_rate": 0.5,
+     "unknown": 0,
+     "wiped_out": 0,
+     "wipes": 2
+    },
+    {
+     "abandoned": 0,
+     "best_s": 3810,
+     "cleared": 3,
+     "deaths": 6,
+     "key": "sonnet · medium",
+     "label": "sonnet · medium",
+     "median_s": 3900,
+     "partial": 0,
+     "running": 0,
+     "runs": 3,
+     "stopped": 0,
+     "success_rate": 1,
+     "unknown": 0,
+     "wiped_out": 0,
+     "wipes": 2
+    },
+    {
+     "abandoned": 0,
+     "best_s": null,
+     "cleared": 0,
+     "deaths": 0,
+     "key": "unknown",
+     "label": "unknown",
+     "median_s": null,
+     "partial": 0,
+     "running": 1,
+     "runs": 1,
+     "stopped": 0,
+     "success_rate": null,
+     "unknown": 0,
+     "wiped_out": 0,
+     "wipes": 0
+    }
+   ],
+   "last": {
+    "build": "2026-10-17-v1",
+    "clear_s": null,
+    "deaths": 0,
+    "driver": "unknown",
+    "outcome": "running",
+    "run": "zf-running",
+    "started": 1792195200,
+    "wipes": 0
+   },
+   "map": 209,
+   "median_s": 3855,
+   "name": "Zul'Farrak",
+   "partial": 0,
+   "running": 1,
+   "runs": 6,
+   "stopped": 1,
+   "success_rate": 0.8,
+   "unknown": 0,
+   "wiped_out": 0,
+   "wipes": 4
+  },
+  {
+   "abandoned": 0,
+   "best_run": "uldaman-clean-1",
+   "best_s": 4700,
+   "bosses": [
+    {
+     "best_run": "uldaman-clean-1",
+     "best_s": 1100,
+     "entry": 6906,
+     "key": "6906",
+     "kills": 2,
+     "median_s": 1140,
+     "name": "Baelog"
+    },
+    {
+     "best_run": "uldaman-clean-1",
+     "best_s": 1400,
+     "entry": 6910,
+     "key": "6910",
+     "kills": 2,
+     "median_s": 1450,
+     "name": "Revelosh"
+    },
+    {
+     "best_run": "uldaman-clean-1",
+     "best_s": 2500,
+     "entry": 7228,
+     "key": "7228",
+     "kills": 2,
+     "median_s": 2755,
+     "name": "Ironaya"
+    },
+    {
+     "best_run": "uldaman-clean-1",
+     "best_s": 4700,
+     "entry": 6907,
+     "key": "6907",
+     "kills": 1,
+     "median_s": 4700,
+     "name": "Grimlok"
+    }
+   ],
+   "builds": [
+    {
+     "abandoned": 0,
+     "best_s": 4700,
+     "cleared": 1,
+     "deaths": 0,
+     "key": "19z4 / 9adde948",
+     "label": "19z4 / 9adde948",
+     "median_s": 4700,
+     "partial": 0,
+     "running": 0,
+     "runs": 1,
+     "stopped": 0,
+     "success_rate": 1,
+     "unknown": 0,
+     "wiped_out": 0,
+     "wipes": 0
+    },
+    {
+     "abandoned": 0,
+     "best_s": null,
+     "cleared": 0,
+     "deaths": 3,
+     "key": "19z2 / 58292d67",
+     "label": "19z2 / 58292d67",
+     "median_s": null,
+     "partial": 1,
+     "running": 0,
+     "runs": 1,
+     "stopped": 0,
+     "success_rate": 0,
+     "unknown": 0,
+     "wiped_out": 0,
+     "wipes": 2
+    },
+    {
+     "abandoned": 0,
+     "best_s": null,
+     "cleared": 0,
+     "deaths": 3,
+     "key": "2026-10-14-v3",
+     "label": "2026-10-14-v3",
+     "median_s": null,
+     "partial": 0,
+     "running": 0,
+     "runs": 1,
+     "stopped": 0,
+     "success_rate": null,
+     "unknown": 1,
+     "wiped_out": 0,
+     "wipes": 0
+    }
+   ],
+   "cleared": 1,
+   "deaths": 6,
+   "delta_s": 0,
+   "drivers": [
+    {
+     "abandoned": 0,
+     "best_s": 4700,
+     "cleared": 1,
+     "deaths": 0,
+     "key": "sonnet · medium",
+     "label": "sonnet · medium",
+     "median_s": 4700,
+     "partial": 0,
+     "running": 0,
+     "runs": 1,
+     "stopped": 0,
+     "success_rate": 1,
+     "unknown": 0,
+     "wiped_out": 0,
+     "wipes": 0
+    },
+    {
+     "abandoned": 0,
+     "best_s": null,
+     "cleared": 0,
+     "deaths": 6,
+     "key": "unknown",
+     "label": "unknown",
+     "median_s": null,
+     "partial": 1,
+     "running": 0,
+     "runs": 2,
+     "stopped": 0,
+     "success_rate": 0,
+     "unknown": 1,
+     "wiped_out": 0,
+     "wipes": 2
+    }
+   ],
+   "last": {
+    "build": "19z4 / 9adde948",
+    "clear_s": 4700,
+    "deaths": 0,
+    "driver": "sonnet · medium",
+    "duration_s": 4800,
+    "ended": 1792142400,
+    "furthest": "leg 12, group 20",
+    "outcome": "cleared",
+    "run": "uldaman-clean-1",
+    "started": 1792137600,
+    "wipes": 0
+   },
+   "map": 70,
+   "median_s": 4700,
+   "name": "Uldaman",
+   "partial": 1,
+   "running": 0,
+   "runs": 3,
+   "stopped": 0,
+   "success_rate": 0.5,
+   "unknown": 1,
+   "wiped_out": 0,
+   "wipes": 2
+  }
+ ],
+ "facets": {
+  "builds": [
+   "19z2 / 58292d67",
+   "19z4 / 4177b48",
+   "19z4 / 9adde948",
+   "2026-10-14-v3",
+   "2026-10-17-v1"
+  ],
+  "drivers": [
+   "haiku · max",
+   "sonnet · medium",
+   "unknown"
+  ],
+  "modes": [
+   "commander"
+  ]
+ },
+ "hint": "Set AiPlayerbot.RunTrace.Enabled = 1, then a GM starts a run with `.bot trace start \u003crun_id\u003e` and ends it with `.bot trace stop`.",
+ "meta": {
+  "corrupt": 1,
+  "dir": "/home/pk/tb-ci/tmp/TestDumpAPIForNode2177142338/001",
+  "dir_configured": true,
+  "dir_found": true,
+  "files": 11,
+  "ignored": 1,
+  "runs": 9,
+  "scanned_at": 1792190695
+ }
+}

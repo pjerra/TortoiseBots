@@ -56,3 +56,9 @@ func TestDrawingJS(t *testing.T) {
 func TestDemoJS(t *testing.T) {
 	runCheck(t, "demo_check.js", "../../web/static/js/demo.js")
 }
+
+// TestDungeonsJS runs dungeons_check.js: the Dungeons tab and glance panel (formatting, empty states, boss table, wipe map), fed with the
+// daemon's real answers for the Go fixtures.
+func TestDungeonsJS(t *testing.T) {
+	runCheck(t, "dungeons_check.js", "../../web/static/js/dungeons.js")
+}

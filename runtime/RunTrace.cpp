@@ -6,6 +6,7 @@
 #include <ctime>
 #include <filesystem>
 #include <list>
+#include <string_view>
 #include <system_error>
 
 #include "BotManager.h"
@@ -19,6 +20,7 @@
 #include "../host/ModuleVersion.h"
 #include "Creature.h"
 #include "Group.h"
+#include "ObjectMgr.h"
 #include "ObjectAccessor.h"
 #include "Player.h"
 #include "Spell.h"
@@ -302,6 +304,11 @@ bool RunTraceService::Start(StartParams const& params, std::string& message)
     counters_ = RunTrace::Counters();
     coalescer_ = RunTrace::ActionCoalescer();
     loops_ = RunTrace::LoopDetector();
+    digest_.Reset();
+    digest_.SetDriver(params.driver);
+    digest_.SetBuild(header_.tbVersion, CoreRevision().substr(0, 8));
+    bossGuids_.clear();
+    context_ = params.context;
     tracks_.clear();
     seenMobs_.clear();
     scopeGuids_.Clear();
@@ -314,11 +321,13 @@ bool RunTraceService::Start(StartParams const& params, std::string& message)
     frameAccumMs_ = 0;
     checkAccumMs_ = 0;
     emptyScopeMs_ = 0;
+    RefreshContext();
 
     Emit(builder_->BuildHeader(header_));
     // The "running" summary is written by the writer thread too.
     writer_.PushFile(summaryPath_, builder_->BuildSummary(header_, "running", "", 0, 0, counters_,
-        std::filesystem::path(tracePath_).filename().string()));
+        std::filesystem::path(tracePath_).filename().string(), std::string(),
+        digest_.Render(RunTrace::RenderArgs{ false, std::string(), header_.startUnix, 0 })));
     lifecycle_.Start();
     lastFailure_.clear();
     active_.store(true, std::memory_order_relaxed);
@@ -440,6 +449,7 @@ void RunTraceService::Update(uint32_t diff)
     if (checkAccumMs_ >= 1000)
     {
         checkAccumMs_ = 0;
+        RefreshContext();
         RunTrace::WriterStats const ws = writer_.Snapshot();
         if (ws.failed)
         {
@@ -566,6 +576,77 @@ void RunTraceService::NoteSpellInterrupted(PlayerbotAI* ai, uint32_t spellId)
     EmitEvent(e);
 }
 
+// Once a second (and at start and end): the instance map the party stands on,
+// who drives the run and, until one is known, the plan whose bosses the outcome
+// is judged against. In-memory reads only: the plan table is sealed at startup,
+// creature names come from the cached templates.
+void RunTraceService::RefreshContext()
+{
+    Player* anchor = ObjectAccessor::FindPlayer(ObjectGuid(anchorGuid_));
+    if (!anchor)
+        return;
+    if (Map* map = anchor->GetMap())
+        if (map->IsDungeon())
+            digest_.NoteDungeon(map->GetId());
+    if (!context_)
+        return;
+    RunTrace::Context ctx;
+    if (!context_(requesterGuid_, anchor, !digest_.HasPlan(), ctx))
+        return;
+    digest_.NoteMode(ctx.mode);
+    if (ctx.hasStep)
+        digest_.NoteStep(ctx.leg, ctx.seq);
+    digest_.NoteKnownBosses(ctx.knownBosses);
+    if (digest_.HasPlan() || ctx.bossEntries.empty())
+        return;
+    std::vector<RunTrace::BossProgress> bosses;
+    for (uint32_t entry : ctx.bossEntries)
+    {
+        RunTrace::BossProgress boss;
+        boss.entry = entry;
+        CreatureInfo const* info = sObjectMgr.GetCreatureTemplate(entry);
+        boss.name = info && !info->name.empty() ? info->name : "Boss " + std::to_string(entry);
+        bosses.push_back(std::move(boss));
+    }
+    digest_.NotePlan(ctx.planName, std::move(bosses));
+}
+
+// Boss units a bot saw alive: found dead by guid on the bot's map (a corpse
+// stays in the map's object store for a while), once per frame. A lookup per
+// tracked boss, never a scan.
+void RunTraceService::CheckBossKills(std::vector<Player*> const& bots)
+{
+    if (bossGuids_.empty() || bots.empty())
+        return;
+    for (auto it = bossGuids_.begin(); it != bossGuids_.end();)
+    {
+        // The map the boss stands in: that of a bot in the same instance.
+        Map* map = nullptr;
+        for (Player* bot : bots)
+            if (bot->GetMapId() == it->second.map && bot->GetInstanceId() == it->second.instance && bot->GetMap())
+            {
+                map = bot->GetMap();
+                break;
+            }
+        Unit* unit = map ? map->GetUnit(ObjectGuid(it->first)) : nullptr;
+        if (unit && unit->IsInWorld() && !unit->IsAlive())
+        {
+            if (digest_.NoteBossKill(it->second.entry, elapsedMs_))
+            {
+                RunTrace::Event e;
+                e.ev = "boss_kill";
+                e.a = it->first;
+                e.v = it->second.entry;
+                e.s = unit->GetName();
+                EmitEvent(e);
+            }
+            it = bossGuids_.erase(it);
+        }
+        else
+            ++it;
+    }
+}
+
 void RunTraceService::ResolveBots(std::vector<Player*>& bots)
 {
     bots.clear();
@@ -611,6 +692,7 @@ void RunTraceService::Sample()
     static std::vector<RunTrace::MobSample> mobSamples;
     static std::unordered_set<uint64_t> frameMobs;
     static std::list<ObjectGuid> cached;
+    static std::vector<RunTrace::MemberState> members;
 
     ResolveBots(bots);
     // The hooks record only for this frame's bots: replace the set before the
@@ -632,6 +714,7 @@ void RunTraceService::Sample()
     botSamples.clear();
     mobSamples.clear();
     frameMobs.clear();
+    members.clear();
 
     for (Player* bot : bots)
     {
@@ -643,6 +726,19 @@ void RunTraceService::Sample()
         bool const alive = bot->IsAlive();
         bool const inCombat = bot->IsInCombat();
 
+        auto fallSpot = [&]()
+        {
+            RunTrace::Spot spot;
+            spot.tMs = elapsedMs_;
+            spot.map = bot->GetMapId();
+            spot.x = bot->GetPositionX();
+            spot.y = bot->GetPositionY();
+            spot.z = bot->GetPositionZ();
+            spot.bot = track.name;
+            spot.role = track.role;
+            return spot;
+        };
+
         if (!track.known)
         {
             RunTrace::PartyMember member;
@@ -653,6 +749,11 @@ void RunTraceService::Sample()
             member.level = bot->GetLevel();
             ++counters_.party;
             Emit(builder_->BuildParty(elapsedMs_, member));
+            track.name = member.name;
+            track.role = member.role;
+            digest_.NoteParty({ member.cls, member.role, member.level });
+            if (!alive)
+                track.lastDeath = fallSpot();  // first seen dead: the wipe spot still needs a place
             track.known = true;
             track.alive = alive;
             track.inCombat = inCombat;
@@ -662,6 +763,8 @@ void RunTraceService::Sample()
             if (track.alive && !alive)
             {
                 ++counters_.deaths;
+                track.lastDeath = fallSpot();
+                digest_.NoteDeath(track.lastDeath);
                 RunTrace::Event e;
                 e.ev = "death";
                 e.a = guid;
@@ -726,7 +829,12 @@ void RunTraceService::Sample()
             }
         }
         botSamples.push_back(std::move(s));
+        RunTrace::MemberState member;
+        member.alive = alive;
+        member.lastDeath = track.lastDeath;
+        members.push_back(std::move(member));
     }
+    digest_.NoteFrame(elapsedMs_, members);
 
     // Hostiles: what each bot fights, targets, or is attacked by.
     auto addHostile = [&](Player* bot, ObjectGuid guid)
@@ -738,6 +846,18 @@ void RunTraceService::Sample()
         if (!unit || !frameMobs.insert(guid.GetRawValue()).second)
             return;
         uint64_t const raw = guid.GetRawValue();
+        if (bossGuids_.size() < RunTrace::kMaxBosses * 2 && !bossGuids_.count(raw))
+        {
+            // The plan's boss, a boss of a plan on this map, or any world-boss rank unit: its death is a boss kill.
+            Creature const* creature = unit->ToCreature();
+            CreatureInfo const* info = creature ? creature->GetCreatureInfo() : nullptr;
+            uint32_t const entry = unit->GetEntry();
+            if (digest_.IsTrackedBoss(entry, info && info->rank == CREATURE_ELITE_WORLDBOSS))
+            {
+                digest_.NoteSeenBoss(entry, unit->GetName());
+                bossGuids_[raw] = BossUnit{ entry, bot->GetMapId(), bot->GetInstanceId() };
+            }
+        }
         if (seenMobs_.size() < RunTrace::kMaxRegistryMobs && seenMobs_.insert(raw).second)
         {
             RunTrace::Mob mob;
@@ -803,6 +923,8 @@ void RunTraceService::Sample()
             addHostile(bot, guid);
     }
 
+    CheckBossKills(bots);
+
     // Whom each hostile has on its target, for the next frame's death record.
     for (RunTrace::MobSample const& m : mobSamples)
     {
@@ -822,6 +944,8 @@ void RunTraceService::Finish(char const* reason, char const* status)
         return;  // not running: already ending
     finishReason_ = reason;
     FlushActions(true);
+    if (std::string_view(reason) != "shutdown")  // the command glue's tables may be gone at shutdown
+        RefreshContext();
 
     // The writer thread ends the file: when it reaches this marker every line
     // queued before it is written (or dropped), so the end record's records /
@@ -836,6 +960,8 @@ void RunTraceService::Finish(char const* reason, char const* status)
     std::string const endReason = reason;
     std::string const endStatus = status;
     std::string const traceFile = std::filesystem::path(tracePath_).filename().string();
+    // Rendered once, here; the writer thread gets the text.
+    std::string const digest = digest_.Render(RunTrace::RenderArgs{ true, endReason, header.startUnix, endUnix });
     job.buildEnd = [builder, elapsed, endReason](RunTrace::Counters const& c)
         {
             RunTrace::EndInfo end;
@@ -843,11 +969,11 @@ void RunTraceService::Finish(char const* reason, char const* status)
             end.counters = c;
             return builder.BuildEnd(elapsed, end);
         };
-    job.buildSummary = [builder, header, elapsed, endUnix, endReason, endStatus, traceFile](
+    job.buildSummary = [builder, header, elapsed, endUnix, endReason, endStatus, traceFile, digest](
         RunTrace::Counters const& c, std::string const& failure)
         {
             return builder.BuildSummary(header, failure.empty() ? endStatus.c_str() : "failed", endReason, endUnix,
-                elapsed, c, traceFile, failure);
+                elapsed, c, traceFile, failure, digest);
         };
     job.summaryPath = summaryPath_;
     if (!writer_.PushEnd(std::move(job)))
@@ -861,6 +987,7 @@ void RunTraceService::Finish(char const* reason, char const* status)
     scopeGuids_.Clear();
     tracks_.clear();
     seenMobs_.clear();
+    bossGuids_.clear();
     builder_.reset();
 }
 

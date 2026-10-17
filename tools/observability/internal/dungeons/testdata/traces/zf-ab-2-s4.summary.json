@@ -1,0 +1,116 @@
+{
+ "v": 1,
+ "schema": "bt-trace",
+ "run": "zf-ab-2-s4",
+ "src": "server",
+ "status": "complete",
+ "end_reason": "stop",
+ "dungeon": {
+  "map": 209,
+  "name": "Zul'Farrak"
+ },
+ "build": "19z4 / 9adde948",
+ "mode": "commander",
+ "started": "2026-10-15T15:01:00Z",
+ "ended": "2026-10-15T16:13:00Z",
+ "outcome": "stopped",
+ "stop_reason": "escalated",
+ "plan": {
+  "name": "zf-full",
+  "sha": "4177b48a"
+ },
+ "furthest": "leg 8, group 9",
+ "bosses": [
+  {
+   "entry": 8127,
+   "name": "Antu'sul",
+   "killed_at_s": 2160
+  },
+  {
+   "entry": 7272,
+   "name": "Theka the Martyr",
+   "killed_at_s": 2280
+  },
+  {
+   "entry": 7267,
+   "name": "Velratha",
+   "killed_at_s": null
+  }
+ ],
+ "wipes": [
+  {
+   "t_s": 3300,
+   "leg": "8",
+   "pull_group": "9",
+   "x": 1636.1,
+   "y": 1105.3,
+   "role": "heal"
+  },
+  {
+   "t_s": 3980,
+   "leg": "8",
+   "pull_group": "9",
+   "x": 1635.2,
+   "y": 1106.8,
+   "role": "heal"
+  }
+ ],
+ "deaths": [
+  {
+   "t_s": 3300,
+   "leg": "8",
+   "pull_group": "9",
+   "x": 1636.1,
+   "y": 1105.3,
+   "role": "heal"
+  },
+  {
+   "t_s": 3300,
+   "leg": "8",
+   "pull_group": "9",
+   "x": 1638.0,
+   "y": 1109.0,
+   "role": "dps"
+  },
+  {
+   "t_s": 3980,
+   "leg": "8",
+   "pull_group": "9",
+   "x": 1635.2,
+   "y": 1106.8,
+   "role": "heal"
+  }
+ ],
+ "party": [
+  {
+   "class": "warrior",
+   "role": "tank",
+   "level": 45
+  },
+  {
+   "class": "priest",
+   "role": "heal",
+   "level": 45
+  },
+  {
+   "class": "mage",
+   "role": "dps",
+   "level": 45
+  },
+  {
+   "class": "rogue",
+   "role": "dps",
+   "level": 45
+  },
+  {
+   "class": "hunter",
+   "role": "dps",
+   "level": 45
+  }
+ ],
+ "gm_assists": {
+  "setup": 4
+ },
+ "trace_file": "zf-ab-2-s4.jsonl",
+ "driver": "haiku:max:zf-ab-2-s4"
+}

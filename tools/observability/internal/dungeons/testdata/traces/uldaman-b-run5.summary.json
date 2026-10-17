@@ -1,0 +1,123 @@
+{
+ "v": 1,
+ "schema": "bt-trace",
+ "run": "uldaman-b-run5",
+ "src": "server",
+ "status": "complete",
+ "end_reason": "stop",
+ "dungeon": {
+  "map": 70,
+  "name": "Uldaman"
+ },
+ "build": "19z2 / 58292d67",
+ "mode": "commander",
+ "started": "2026-10-14T20:15:00Z",
+ "ended": "2026-10-14T22:03:00Z",
+ "outcome": "partial",
+ "stop_reason": "stale",
+ "plan": {
+  "name": "uldaman-b",
+  "sha": "0c1d2e3f"
+ },
+ "furthest": {
+  "leg": 9,
+  "pull_group": 14
+ },
+ "bosses": [
+  {
+   "entry": 6910,
+   "name": "Revelosh",
+   "killed_at_s": 1500
+  },
+  {
+   "entry": 6906,
+   "name": "Baelog",
+   "killed_at_s": 1180
+  },
+  {
+   "entry": 7228,
+   "name": "Ironaya",
+   "killed_at_s": 3010
+  },
+  {
+   "entry": 6907,
+   "name": "Grimlok",
+   "killed_at_s": null
+  }
+ ],
+ "wipes": [
+  {
+   "t_s": 2100,
+   "leg": "5",
+   "pull_group": "3",
+   "x": -6120.5,
+   "y": -3930.1,
+   "role": "dps"
+  },
+  {
+   "t_s": 4900,
+   "leg": "9",
+   "pull_group": "14",
+   "x": -6240.0,
+   "y": -3790.2,
+   "role": "heal"
+  }
+ ],
+ "deaths": [
+  {
+   "t_s": 2100,
+   "leg": "5",
+   "pull_group": "3",
+   "x": -6120.5,
+   "y": -3930.1,
+   "role": "dps"
+  },
+  {
+   "t_s": 2102,
+   "leg": "5",
+   "pull_group": "3",
+   "x": -6118.0,
+   "y": -3935.0,
+   "role": "tank"
+  },
+  {
+   "t_s": 4900,
+   "leg": "9",
+   "pull_group": "14",
+   "x": -6240.0,
+   "y": -3790.2,
+   "role": "heal"
+  }
+ ],
+ "party": [
+  {
+   "class": "warrior",
+   "role": "tank",
+   "level": 45
+  },
+  {
+   "class": "priest",
+   "role": "heal",
+   "level": 45
+  },
+  {
+   "class": "mage",
+   "role": "dps",
+   "level": 45
+  },
+  {
+   "class": "rogue",
+   "role": "dps",
+   "level": 45
+  },
+  {
+   "class": "hunter",
+   "role": "dps",
+   "level": 45
+  }
+ ],
+ "gm_assists": {
+  "revive": 3
+ },
+ "trace_file": "uldaman-b-run5.jsonl"
+}

@@ -1,0 +1,15 @@
+{
+ "v": 1,
+ "schema": "bt-trace",
+ "run": "zf-running",
+ "src": "server",
+ "status": "running",
+ "scope": "party",
+ "tb_version": "2026-10-17-v1",
+ "start_unix": 1792195200,
+ "map": 209,
+ "instance": 3,
+ "counters": {
+  "deaths": 0
+ }
+}

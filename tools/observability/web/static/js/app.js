@@ -751,6 +751,7 @@
     roster: { hash: 'bots', title: 'Bots' },
     map: { hash: 'map', title: 'Map' },
     commanders: { hash: 'commanders', title: 'Commanders' },
+    dungeons: { hash: 'dungeons', title: 'Dungeons' },
     progress: { hash: 'progress', title: 'Progress' },
     activity: { hash: 'activity', title: 'Activity' },
     auctions: { hash: 'auctions', title: 'Auction House' },
@@ -778,7 +779,8 @@
     const [path, query] = window.location.hash.replace(/^#\/?/, '').split('?');
     const q = new URLSearchParams(query || '');
     const bot = parseInt(q.get('bot'), 10);
-    return { tab: HASH_TO_TAB[path] || null, bot: Number.isFinite(bot) ? bot : null, ptab: q.get('p'), demo: q.get('demo') === '1' };
+    const map = parseInt(q.get('map'), 10);
+    return { tab: HASH_TO_TAB[path] || null, bot: Number.isFinite(bot) ? bot : null, ptab: q.get('p'), demo: q.get('demo') === '1', map: Number.isFinite(map) && map > 0 ? map : null };
   }
 
   function routeHash(r) {
@@ -814,6 +816,7 @@
     if (tab !== state.activeTab || !routeApplied) showTab(tab);
     routeApplied = true;
     if (r.demo && tab === 'commanders') setCmdDemo(true, true); // #/commanders?demo=1
+    if (r.map && tab === 'dungeons') dgSelect(r.map); // #/dungeons?map=209 (the glance panel's links)
     if (r.bot !== null) {
       state.profileTab = PROFILE_TABS.includes(r.ptab) ? r.ptab : 'overview';
       showProfile(r.bot);
@@ -836,6 +839,7 @@
     if (tab === 'overview') { renderOverviewCharts(); renderStates(); renderAttention(); }
     else if (tab === 'map') renderMap();
     else if (tab === 'commanders') renderCommanders();
+    else if (tab === 'dungeons') renderDungeons();
     else if (tab === 'roster') renderBotsTab();
     else if (tab === 'progress') renderProgress();
     else if (tab === 'activity') renderActivityTab();
@@ -867,6 +871,7 @@
     if (tab === 'auctions') fetchAuctions();
     if (tab === 'issues') fetchAnomalyTotals();
     if (tab === 'commanders') fetchCommanders();
+    if (tab === 'dungeons') fetchDungeons();
   }
 
   el.menuItems.forEach(item => item.addEventListener('click', closeNavDrawer));
@@ -4568,6 +4573,128 @@
   }
 
 
+  // ---- Dungeons ---------------------------------------------------------------------------------------------------------------
+  // Success rate, clear times, boss kill times and wipe spots per dungeon, read by the daemon from the run trace summaries
+  // (GET /api/v1/dungeons, /api/v1/dungeons/<map>/runs; files only, no database). The wording, the tables and the wipe map SVG are built
+  // in dungeons.js (DgView, unit-tested under node); this part fetches, keeps the state and sets innerHTML. The glance panel on the
+  // Overview is the same data, off until the viewer ticks its box.
+  const DG_REFRESH_MS = 15000, DG_GLANCE_KEY = 'tbdash.dgGlance';
+  const dg = { list: null, error: null, sel: null, runs: null, filter: { build: '', driver: '', mode: '' }, mapN: 10, pic: null, picFor: null, glance: false, timer: null };
+  const dgPics = new Map(); // map id -> picture layer | null (none) | 'loading'
+
+  function dgQuery() {
+    const q = new URLSearchParams();
+    ['build', 'driver', 'mode'].forEach(k => { if (dg.filter[k]) q.set(k, dg.filter[k]); });
+    const s = q.toString();
+    return s ? `?${s}` : '';
+  }
+
+  function fetchDungeons() {
+    return fetch('/api/v1/dungeons' + dgQuery()).then(jsonOrThrow).then(list => {
+      dg.list = list;
+      dg.error = null;
+      const ds = list.dungeons || [];
+      if (!ds.find(d => d.map === dg.sel)) dg.sel = ds.length ? ds[0].map : null;
+      renderGlance();
+      if (state.activeTab === 'dungeons') { renderDungeons(); fetchDungeonRuns(); }
+    }).catch(err => {
+      dg.error = String(err && err.message ? err.message : err);
+      if (state.activeTab === 'dungeons') renderDungeons();
+    });
+  }
+
+  function fetchDungeonRuns() {
+    const id = dg.sel;
+    if (!id) { dg.runs = null; return; }
+    const want = dg.sel;
+    fetch(`/api/v1/dungeons/${encodeURIComponent(id)}/runs${dgQuery()}`).then(r => (r.ok ? r.json() : null)).then(rv => {
+      if (want !== dg.sel) return; // the viewer picked another dungeon meanwhile
+      dg.runs = rv;
+      ensureDgPic(id);
+      if (state.activeTab === 'dungeons') renderDungeons();
+    }).catch(() => {});
+  }
+
+  // The Commanders tab's real map picture for this dungeon, when the daemon has a folder of them (the layer list is 404 otherwise).
+  function ensureDgPic(mapId) {
+    if (dgPics.has(mapId)) { dg.pic = dgPics.get(mapId) === 'loading' ? null : dgPics.get(mapId); return; }
+    dgPics.set(mapId, 'loading');
+    dg.pic = null;
+    fetch('/api/v1/maps/' + encodeURIComponent(mapId)).then(r => (r.ok ? r.json() : null)).then(ls => {
+      const l = CmdView.pictureLayers(ls);
+      dgPics.set(mapId, l.length ? l[0] : null);
+      if (dg.sel === mapId) { dg.pic = dgPics.get(mapId); if (state.activeTab === 'dungeons') renderDungeons(); }
+    }).catch(() => dgPics.set(mapId, null));
+  }
+
+  function dgSelect(mapId) {
+    if (dg.sel === mapId && dg.runs && dg.runs.map === mapId) return;
+    dg.sel = mapId;
+    dg.runs = null;
+    dg.pic = dgPics.get(mapId) && dgPics.get(mapId) !== 'loading' ? dgPics.get(mapId) : null;
+    if (state.activeTab === 'dungeons') { renderDungeons(); fetchDungeonRuns(); }
+  }
+
+  function renderDungeons() {
+    const root = document.getElementById('dg-root');
+    if (!root) return;
+    const html = DgView.tabHtml({ list: dg.list, error: dg.error, sel: dg.sel, runs: dg.runs, filter: dg.filter, mapN: dg.mapN, pic: dg.pic });
+    if (root._h === html) return;
+    // a filter drop-down being used keeps its focus: only rebuild when the markup changed
+    root._h = html;
+    root.innerHTML = html;
+  }
+
+  function renderGlance() {
+    const box = document.getElementById('dg-glance');
+    if (!box) return;
+    box.hidden = !dg.glance;
+    if (!dg.glance) return;
+    setHtml(box, DgView.glanceHtml(dg.list, Date.now() / 1000));
+  }
+
+  function initDungeons() {
+    const root = document.getElementById('dg-root');
+    if (root) {
+      root.addEventListener('click', e => {
+        const pick = e.target.closest('[data-dg-sel]');
+        if (pick) { dgSelect(parseInt(pick.dataset.dgSel, 10)); return; }
+        if (e.target.closest('[data-dg-clear]')) {
+          dg.filter = { build: '', driver: '', mode: '' };
+          dg.runs = null;
+          fetchDungeons();
+        }
+      });
+      root.addEventListener('change', e => {
+        const t = e.target;
+        if (t.matches('select[data-dg-f]')) {
+          dg.filter[t.dataset.dgF] = t.value;
+          dg.runs = null;
+          fetchDungeons();
+        } else if (t.matches('select[data-dg-mapn]')) {
+          dg.mapN = parseInt(t.value, 10) || 0;
+          renderDungeons();
+        }
+      });
+    }
+    try { dg.glance = localStorage.getItem(DG_GLANCE_KEY) === '1'; } catch (e) { dg.glance = false; }
+    const toggle = document.getElementById('dg-glance-toggle');
+    if (toggle) {
+      toggle.checked = dg.glance;
+      toggle.addEventListener('change', () => {
+        dg.glance = toggle.checked;
+        try { localStorage.setItem(DG_GLANCE_KEY, dg.glance ? '1' : '0'); } catch (e) {}
+        if (dg.glance) fetchDungeons(); else renderGlance();
+      });
+    }
+    // one cheap request per interval, only while something shows the data (the tab, or the glance panel on the Overview)
+    dg.timer = setInterval(() => {
+      if (document.hidden) return;
+      if (state.activeTab === 'dungeons' || (dg.glance && state.activeTab === 'overview')) fetchDungeons();
+    }, DG_REFRESH_MS);
+    if (dg.glance) fetchDungeons();
+  }
+
   // ---- Commanders -----------------------------------------------------------
   // What the MODULE knows about each standing remote-commander binding, as one card per binding: a one-line header, the
   // few warnings worth a glance, the party, the commander's last orders in plain words and a small map. The wording and the
@@ -5908,6 +6035,7 @@
   initCommanderLink();
   initCmdLayers();
   initCmdDemo();
+  initDungeons();
   fetchCommanders();
   setInterval(fetchCommanders, 30000);
   setInterval(expireCommanders, 3000);

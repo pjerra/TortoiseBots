@@ -1,0 +1,84 @@
+{
+ "v": 1,
+ "schema": "bt-trace",
+ "run": "zf-proof-188",
+ "src": "server",
+ "status": "complete",
+ "end_reason": "stop",
+ "dungeon": {
+  "map": 209,
+  "name": "Zul'Farrak"
+ },
+ "build": "19z4 / 4177b48",
+ "mode": "commander",
+ "started": "2026-10-15T18:00:00Z",
+ "ended": "2026-10-15T19:05:00Z",
+ "outcome": "cleared",
+ "stop_reason": "plan_done",
+ "plan": {
+  "name": "zf-full",
+  "sha": "4177b48a"
+ },
+ "furthest": "leg 8, group 12",
+ "bosses": [
+  {
+   "entry": 8127,
+   "name": "Antu'sul",
+   "killed_at_s": 2100
+  },
+  {
+   "entry": 7272,
+   "name": "Theka the Martyr",
+   "killed_at_s": 2300
+  },
+  {
+   "entry": 7267,
+   "name": "Velratha",
+   "killed_at_s": 3810
+  }
+ ],
+ "wipes": [],
+ "deaths": [
+  {
+   "t_s": 1900,
+   "leg": "6",
+   "pull_group": "7",
+   "x": 1650.0,
+   "y": 980.0,
+   "role": "dps"
+  }
+ ],
+ "party": [
+  {
+   "class": "warrior",
+   "role": "tank",
+   "level": 45
+  },
+  {
+   "class": "priest",
+   "role": "heal",
+   "level": 45
+  },
+  {
+   "class": "mage",
+   "role": "dps",
+   "level": 45
+  },
+  {
+   "class": "rogue",
+   "role": "dps",
+   "level": 45
+  },
+  {
+   "class": "hunter",
+   "role": "dps",
+   "level": 45
+  }
+ ],
+ "gm_assists": {
+  "appear": 1
+ },
+ "trace_file": "zf-proof-188.jsonl",
+ "driver": "sonnet:medium:zf-proof-188",
+ "clear_s": 3810
+}

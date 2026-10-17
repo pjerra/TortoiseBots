@@ -50,6 +50,10 @@
       </a>
 
       <div class="menu-category">Insight</div>
+      <a class="menu-item" data-tab="dungeons" href="#/dungeons" title="Dungeon runs: success rate, clear times, boss kill times and where the party wiped">
+        <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21V10a9 9 0 0 1 18 0v11"/><path d="M9 21v-6a3 3 0 0 1 6 0v6"/><line x1="2" y1="21" x2="22" y2="21"/></svg>
+        <span>Dungeons</span>
+      </a>
       <a class="menu-item" data-tab="progress" href="#/progress" title="Levelling speed, XP and gear behind level">
         <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
         <span>Progress</span>
@@ -124,6 +128,11 @@
 
       <!-- TAB: OVERVIEW — is everything running? -->
       <section id="tab-overview" class="tab-view">
+        <!-- Glance panel: the last run of each dungeon. Off by default, one toggle, kept in this browser. -->
+        <div class="dg-glance-bar">
+          <label class="dg-filter" title="Show the last run of each dungeon (result, time, difference to the best). Read from the run trace summaries."><input type="checkbox" id="dg-glance-toggle"> Dungeon runs</label>
+          <div id="dg-glance" class="dg-glance" hidden></div>
+        </div>
         <div class="kpi-row">
           <div class="kpi" title="How long the server takes to react to a player's action (cast, move, loot), last 30 s: 95 % of actions are handled faster than this. Players feel their own ping on top; the in-game latency meter shows only the ping. Green under 100 ms, red over 150 ms.">
             <div class="kpi-label">Player lag (p95)</div>
@@ -445,6 +454,11 @@
         </div>
       </section>
 
+      <!-- TAB: DUNGEONS — how do the dungeon runs go: success rate, clear and boss times, wipes (run trace summaries) -->
+      <section id="tab-dungeons" class="tab-view" style="display: none;">
+        <div id="dg-root"></div>
+      </section>
+
       <!-- TAB: COMMANDERS — who leads which bots, and what did they order -->
       <section id="tab-commanders" class="tab-view" style="display: none;">
         <div class="kpi-row">
@@ -677,7 +691,8 @@
 <script src="/static/js/maplayers.js?v=4"></script>
 <script src="/static/js/unitinfo.js?v=2"></script>
 <script src="/static/js/paths.js?v=1"></script>
+<script src="/static/js/dungeons.js?v=1"></script>
 <script src="/static/js/demo.js?v=1"></script>
-<script src="/static/js/app.js?v=16"></script>
+<script src="/static/js/app.js?v=17"></script>
 </body>
 </html>

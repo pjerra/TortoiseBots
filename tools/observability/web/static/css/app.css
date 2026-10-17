@@ -3041,3 +3041,59 @@ select.input {
 .cmd-demo-bar .empty-hint { margin: 0; }
 .cmd-demo-note { margin-left: auto; }
 .cmd-card.cmd-demo { border: 1px dashed var(--accent-amber, #d29922); }
+
+/* ---- Dungeons tab and glance panel (dungeons.js) ---- */
+.dg-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 14px; margin-bottom: 12px; }
+.dg-filter { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 0.85rem; }
+.dg-filter select { background: var(--bg-input); color: var(--text-main); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 4px 8px; max-width: 220px; }
+.dg-note { margin: 0; }
+.dg-picker { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.dg-pick { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 14px; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); border-radius: var(--radius-sm); cursor: pointer; text-align: left; }
+.dg-pick:hover { background: var(--bg-card-hover); }
+.dg-pick.active { border-color: var(--accent-blue); box-shadow: inset 0 0 0 1px var(--accent-blue); }
+.dg-pick-name { font-weight: 600; }
+.dg-pick-sub { color: var(--text-muted); font-size: 0.78rem; }
+.dg-card { margin-bottom: 12px; }
+.dg-grid { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+@media (max-width: 900px) { .dg-grid { grid-template-columns: minmax(0, 1fr); } }
+.dg-scroll { overflow-x: auto; }
+.dg-runs th, .dg-runs td { white-space: nowrap; }
+.dg-dim { color: var(--text-dim); font-size: 0.78rem; }
+.dg-bestrow td { color: var(--accent-green-bright); font-weight: 600; border-bottom: 1px solid var(--border-strong); }
+.dg-runs td.dg-best { background: rgba(63, 185, 80, 0.16); color: var(--accent-green-bright); font-weight: 600; }
+.dg-runs td.dg-miss { color: var(--text-dim); }
+.dg-sw { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+.dg-sw-off { background: transparent; border: 1px solid var(--border-strong); }
+.dg-pill { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.75rem; background: rgba(139, 148, 158, 0.18); color: var(--text-muted); }
+.dg-pill.dg-cleared { background: rgba(63, 185, 80, 0.18); color: var(--accent-green-bright); }
+.dg-pill.dg-partial, .dg-pill.dg-stopped { background: rgba(210, 153, 34, 0.2); color: var(--accent-yellow); }
+.dg-pill.dg-wiped_out, .dg-pill.dg-abandoned { background: rgba(248, 81, 73, 0.18); color: var(--accent-red); }
+.dg-pill.dg-running { background: rgba(56, 139, 253, 0.2); color: var(--accent-blue-bright); }
+.dg-mapwrap { background: var(--bg-card-subtle); border: 1px solid var(--border-color); border-radius: var(--radius-sm); overflow: hidden; }
+svg.dg-map { display: block; width: 100%; height: auto; aspect-ratio: 640 / 420; background: #0b1017; }
+svg.dg-map .grid { stroke: rgba(255, 255, 255, 0.07); stroke-width: 1; vector-effect: non-scaling-stroke; }
+svg.dg-map image.bg { filter: brightness(0.7); }
+svg.dg-map .dg-death { stroke: #fff; stroke-width: 1; vector-effect: non-scaling-stroke; fill-opacity: 0.85; }
+svg.dg-map .dg-wipe line { stroke-width: 3; vector-effect: non-scaling-stroke; stroke-linecap: round; }
+svg.dg-map .dg-wipe .hit { fill: transparent; stroke: none; }
+svg.dg-map .dg-scale line { stroke: #fff; stroke-width: 2; vector-effect: non-scaling-stroke; }
+svg.dg-map .dg-scale text { fill: #fff; paint-order: stroke; stroke: #000; stroke-width: 3px; }
+.dg-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; color: var(--text-muted); font-size: 0.8rem; }
+.dg-legend .lic { display: inline-flex; align-items: center; gap: 4px; }
+.dg-ic { width: 12px; height: 12px; }
+.dg-x { stroke: var(--text-muted); stroke-width: 1.6; fill: none; }
+.dg-dot { fill: var(--text-muted); }
+.dg-empty { text-align: left; }
+.dg-empty-title { font-size: 1rem; margin: 0 0 6px; }
+.dg-empty .empty-hint { margin: 4px 0; }
+.dg-foot { margin-top: 4px; }
+.dg-glance-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin-bottom: 10px; }
+.dg-glance { display: flex; flex-wrap: wrap; gap: 8px; }
+.dg-g-item { display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); color: var(--text-main); text-decoration: none; font-size: 0.82rem; }
+.dg-g-item:hover { background: var(--bg-card-hover); }
+.dg-g-name { font-weight: 600; }
+.dg-g-time { font-variant-numeric: tabular-nums; color: var(--text-muted); }
+.dg-g-delta { font-variant-numeric: tabular-nums; }
+.dg-g-delta.good { color: var(--accent-green-bright); }
+.dg-g-delta.bad { color: var(--accent-red); }
+.dg-g-empty { color: var(--text-muted); font-size: 0.82rem; }

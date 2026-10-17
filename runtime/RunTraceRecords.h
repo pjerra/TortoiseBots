@@ -188,6 +188,16 @@ public:
     Line& Guid(char const* key, uint64_t guid) { return Str(key, GuidHex(guid)); }
     // A value that is already JSON (an array or object built by the caller).
     Line& Raw(char const* key, std::string const& json) { Key(key); s_ += json; return *this; }
+    // Already-rendered members (`"a":1,"b":"x"`, no braces); nothing when empty.
+    Line& Members(std::string const& members)
+    {
+        if (members.empty())
+            return *this;
+        if (s_.size() > 1)
+            s_ += ',';
+        s_ += members;
+        return *this;
+    }
     std::string End() { s_ += '}'; return std::move(s_); }
 
 private:
@@ -448,10 +458,14 @@ public:
     // <run_id>.summary.json: one object, rewritten at start, at stop, and by
     // tools/trace_score.py (which fills "oracles" and "scored_unix"). `error`
     // (status "failed": the trace file could not be flushed or closed) is
-    // written only when set.
+    // written only when set. `extraMembers` are the run digest's fields
+    // (runtime/RunTraceSummary.h: mode, build, driver, outcome, bosses, wipes,
+    // deaths, ...), already rendered; they come after the counters and before
+    // "oracles", never ahead of "status" (MarkSummaryIncomplete reads the first
+    // "status" key).
     std::string BuildSummary(Header const& h, char const* status, std::string const& endReason,
         uint64_t endUnix, uint32_t durationMs, Counters const& c, std::string const& traceFile,
-        std::string const& error = std::string()) const
+        std::string const& error = std::string(), std::string const& extraMembers = std::string()) const
     {
         Line l;
         l.U("v", kSchemaVersion).Str("schema", kSchemaName).Str("run", run_).Str("src", "server")
@@ -462,6 +476,7 @@ public:
             .U("instance", h.instanceId).Raw("counters", CountersJson(c));
         if (!error.empty())
             l.Str("error", error);
+        l.Members(extraMembers);
         l.Raw("oracles", "[]");
         return l.End();
     }
