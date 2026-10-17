@@ -116,6 +116,11 @@
           <span id="status-dot" class="status-dot"></span>
           <span id="status-label">offline · <strong id="top-bots-val">0</strong> bots · <strong id="players-val">0</strong> players</span>
         </div>
+        <button type="button" class="refresh-badge" data-refresh-badge hidden title="The live views are frozen. Click to resume at the default rate (or pick a rate)">Paused &middot; click to resume</button>
+        <label class="refresh-picker" title="How often the live views (roster, maps, Commanders) show new data. The game server still reports every 2 s; this only changes what this page shows. Kept in this browser.">
+          <span>Refresh every</span>
+          <select data-refresh-select aria-label="Refresh every"></select>
+        </label>
         <button id="refresh-btn" class="btn btn-icon" title="Reload data from the daemon">Refresh</button>
       </div>
     </header>
@@ -472,6 +477,15 @@
           <p id="cmd-empty-why" class="empty-hint"></p>
           <p class="empty-hint">A card appears here within a couple of seconds of a binding. A commander binds a bot-only party of up to five with <code>.bot commander bind &lt;LeadBot&gt; [&lt;Bot&gt; ...]</code> (a GM, or a player who controls every bot of the party; the server needs <code>AiPlayerbot.RemoteCommander = 1</code>). The card goes away when the commander unbinds with <code>.bot commander unbind</code>, logs out, or the party breaks up.</p>
         </div>
+        <!-- Refresh rate: the same choice as in the top bar (one setting for every live view, kept in this browser). -->
+        <div class="card cmd-refresh-bar">
+          <label class="refresh-picker">
+            <span>Refresh every</span>
+            <select data-refresh-select aria-label="Refresh every"></select>
+          </label>
+          <button type="button" class="refresh-badge" data-refresh-badge hidden title="Frozen for a close look. Click to resume">Paused &middot; click to resume</button>
+          <span class="empty-hint">How often the maps and cards show new data. Paused freezes them, paths included; on resume they catch up to the newest data. The game server reports every 2 s either way.</span>
+        </div>
         <!-- Demo map: a simulated group on its own card to try every drawing layer. Off by default; also #/commanders?demo=1. -->
         <div class="card cmd-demo-bar">
           <label class="cmd-demo-switch" title="Show an extra card with a made-up group (nothing comes from the game server) so every map layer can be tried">
@@ -687,11 +701,12 @@
 
 </div>
 
-<script src="/static/js/commanders.js?v=5"></script>
+<script src="/static/js/refresh.js?v=1"></script>
+<script src="/static/js/commanders.js?v=6"></script>
 <script src="/static/js/maplayers.js?v=4"></script>
 <script src="/static/js/unitinfo.js?v=2"></script>
-<script src="/static/js/paths.js?v=1"></script>
 <script src="/static/js/dungeons.js?v=1"></script>
+<script src="/static/js/paths.js?v=2"></script>
 <script src="/static/js/demo.js?v=1"></script>
 <script src="/static/js/app.js?v=17"></script>
 </body>

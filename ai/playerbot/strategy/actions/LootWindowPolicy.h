@@ -42,4 +42,20 @@ namespace ai
     {
         return hasOwner && eventSource == "add all loot";
     }
+
+    // How long the AI sleeps after "open loot" (#1062). A cast on the object
+    // (Herb Gathering 5 s, Mining 3.2 s, Opening, Skinning) must outlast the
+    // action's duration, or the next tick runs the follow action, the bot
+    // walks back into formation and the core cancels the cast on the first
+    // step (Spell::update, SPELL_INTERRUPT_FLAG_MOVEMENT): the gather animation
+    // plays, the node never opens, no loot. Cast actions already sleep for
+    // their cast time (CastSpellAction); the open-loot cast now does the same.
+    // Anything else (a CMSG_LOOT on a corpse, a failed attempt) keeps the
+    // duration it set, never a cast time left over from an earlier call.
+    inline unsigned DecideOpenLootDuration(bool opened, unsigned castMs, unsigned otherMs)
+    {
+        if (opened && castMs > 0)
+            return castMs;
+        return otherMs;
+    }
 }

@@ -7,6 +7,7 @@
 #include "../../runtime/BotNames.h"
 #include "../../runtime/HireLevelPolicy.h"
 #include "../../runtime/HireFeePolicy.h"
+#include "../../runtime/HireRaidPolicy.h"
 #include "../../runtime/HireUnlockPolicy.h"
 #include "../../runtime/RemoteCommanderView.h"
 #include "../../runtime/RunTrace.h"
@@ -516,6 +517,26 @@ bool PlayerbotAIConfig::Initialize()
     hireDisconnectGracePeriod = static_cast<uint32>(config.GetIntDefault("AiPlayerbot.HireDisconnectGracePeriod", 300));
     if (hireDisconnectGracePeriod > 3600)
         hireDisconnectGracePeriod = 3600;
+    // Issue #900: `.bot hire raid` class spread and presets. A malformed value
+    // falls back to the shipped default (fallbacks equal the template).
+    hireRaidSpread = config.GetStringDefault("AiPlayerbot.HireRaidSpread", TortoiseBots::kHireRaidSpreadDefault);
+    {
+        TortoiseBots::HireRaidSpread probe;
+        if (!TortoiseBots::ParseHireRaidSpread(hireRaidSpread, probe))
+        {
+            sLog.outError("AiPlayerbot.HireRaidSpread '%s' is malformed (tank=..;healer=..;dps=.. with class names); using the default", hireRaidSpread.c_str());
+            hireRaidSpread = TortoiseBots::kHireRaidSpreadDefault;
+        }
+    }
+    hireRaidPresets = config.GetStringDefault("AiPlayerbot.HireRaidPresets", TortoiseBots::kHireRaidPresetsDefault);
+    {
+        std::vector<TortoiseBots::HireRaidPreset> probe;
+        if (!TortoiseBots::ParseHireRaidPresets(hireRaidPresets, probe))
+        {
+            sLog.outError("AiPlayerbot.HireRaidPresets '%s' is malformed (name=composition;name=composition); using the default", hireRaidPresets.c_str());
+            hireRaidPresets = TortoiseBots::kHireRaidPresetsDefault;
+        }
+    }
     // Issue #490: static hire-gear tiers. Fallbacks equal the shipped
     // template values.
     hireGearTiersEnabled = config.GetBoolDefault("AiPlayerbot.HireGearTiersEnabled", true);
@@ -852,6 +873,16 @@ bool PlayerbotAIConfig::Initialize()
     observabilityPort = static_cast<uint32>(config.GetIntDefault("AiPlayerbot.ObservabilityPort", 0));
     observabilityHost = config.GetStringDefault("AiPlayerbot.ObservabilityHost", "");
     enableActionLog = config.GetBoolDefault("AiPlayerbot.EnableActionLog", false);
+    {
+        bool scopeKnown = true;
+        actionLogScope = ai::botdiag::ParseActionLogScope(
+            config.GetStringDefault("AiPlayerbot.ActionLogScope", "commanded"), &scopeKnown);
+        if (!scopeKnown)
+            sLog.outError("AiPlayerbot.ActionLogScope must be all, commanded or none; using commanded");
+    }
+    actionLogMaxAgeDays = static_cast<uint32>(std::max(0, config.GetIntDefault("AiPlayerbot.ActionLogMaxAgeDays", 3)));
+    actionLogMaxTotalMB = static_cast<uint32>(std::max(0, config.GetIntDefault("AiPlayerbot.ActionLogMaxTotalMB", 2048)));
+    actionLogMaxFileMB = static_cast<uint32>(std::max(0, config.GetIntDefault("AiPlayerbot.ActionLogMaxFileMB", 100)));
     actionCountsLog = config.GetBoolDefault("AiPlayerbot.ActionCountsLog", false);
     botLogFile = config.GetStringDefault("AiPlayerbot.BotLogFile", "bots.log");
     {

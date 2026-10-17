@@ -31,6 +31,7 @@ class WorldSession;
 class Player;
 class WorldPacket;
 class Unit;
+class PlayerbotAI;
 
 namespace TortoiseBots {
 
@@ -116,6 +117,12 @@ public:
     void OnPlayerLogin(Player* player);
     void OnPlayerBeforeLogout(Player* player);
     void OnPlayerLogout(Player* player);
+    // Issue #1043: checks the bot's current pet once per pet guid and moves a
+    // pet that appeared out of the bot's sight, on another floor or far away
+    // onto the bot (runtime/PetSpawnPolicy.h). Called on the world thread after
+    // the bot's AI turn and, for a clearly misplaced pet, from the map-thread
+    // player update hook; the two never run at the same time.
+    static void CheckNewPetSpawn(::Player* bot, ::PlayerbotAI* ai);
     void ReleaseToClient(Player* player);
     void Shutdown();
 

@@ -9,6 +9,7 @@
 package state
 
 import (
+	"math"
 	"sort"
 	"sync"
 	"time"
@@ -709,7 +710,8 @@ func (s *Store) publishLocked(seq uint64, bots []model.BotSnapshot, now time.Tim
 		var trail []model.Coordinate
 		if !snap.Player {
 			if prev, ok := s.bots[snap.GUID]; ok &&
-				prev.snap.MapID == snap.MapID && prev.snap.ZoneID == snap.ZoneID {
+				prev.snap.MapID == snap.MapID && prev.snap.ZoneID == snap.ZoneID &&
+				!trailJump(prev.snap, snap, now.Sub(s.lastSnapshotAt)) {
 				trail = prev.trail
 			}
 			trail = appendTrail(trail, snap, s.cfg.TrailPoints)
@@ -736,6 +738,16 @@ func (s *Store) publishLocked(seq uint64, bots []model.BotSnapshot, now time.Tim
 		}
 	}
 	s.issues.Observe(bots, now)
+}
+
+// trailJump reports whether a bot moved farther between two snapshots than walking or riding explains (a summon, a teleport, a spirit
+// release): its breadcrumb trail then starts over instead of drawing a straight line, through walls, to the new place. Same rule and
+// numbers as the Commanders trails (JumpLimitYd). gap is the time between the snapshots; unknown (the first cycle) counts as the cap.
+func trailJump(prev, cur model.BotSnapshot, gap time.Duration) bool {
+	if gap <= 0 || gap > time.Duration(TravelMaxGapSec)*time.Second {
+		gap = time.Duration(TravelMaxGapSec) * time.Second
+	}
+	return math.Hypot(prev.X-cur.X, prev.Y-cur.Y) > JumpLimitYd(gap.Seconds())
 }
 
 func appendTrail(trail []model.Coordinate, snap model.BotSnapshot, limit int) []model.Coordinate {

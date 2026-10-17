@@ -50,7 +50,8 @@ env:
 
 jobs:
   linux:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    # A dev -> main release PR builds the same tree the push to dev already built: skip it.
+    if: github.event_name != 'pull_request' || (!github.event.pull_request.draft && !(github.head_ref == 'dev' && github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: ubuntu-22.04
     timeout-minutes: 90
     steps:
@@ -103,7 +104,8 @@ jobs:
         run: cmake --build build -j"$(nproc)"
 
   windows:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    # A dev -> main release PR builds the same tree the push to dev already built: skip it.
+    if: github.event_name != 'pull_request' || (!github.event.pull_request.draft && !(github.head_ref == 'dev' && github.event.pull_request.head.repo.full_name == github.repository))
     runs-on: windows-2022
     timeout-minutes: 120
     env:
@@ -166,5 +168,155 @@ jobs:
             -DACE_ROOT="$env:ACE_ROOT"
 
       - name: Build
+        working-directory: core
+        run: cmake --build build
+
+  linux-eluna:
+    # A dev -> main release PR builds the same tree the push to dev already built: skip it.
+    if: github.event_name != 'pull_request' || (!github.event.pull_request.draft && !(github.head_ref == 'dev' && github.event.pull_request.head.repo.full_name == github.repository))
+    runs-on: ubuntu-22.04
+    timeout-minutes: 90
+    steps:
+      - name: Checkout core
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CORE_REPO }}
+          ref: ${{ env.CORE_REF }}
+          path: core
+          submodules: recursive
+
+      - name: Does the core have Eluna?
+        id: probe
+        shell: bash
+        run: |
+          if grep -q 'option(BUILD_ELUNA' core/CMakeLists.txt; then echo has=true >> "$GITHUB_OUTPUT"; else echo has=false >> "$GITHUB_OUTPUT"; echo "::notice::core has no BUILD_ELUNA option yet; Eluna build skipped"; fi
+
+      - name: Checkout module
+        if: steps.probe.outputs.has == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.module_ref || github.sha }}
+          path: core/modules/TortoiseBots
+
+      - name: Install packages
+        if: steps.probe.outputs.has == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential cmake ninja-build ccache lld pkg-config \
+            libace-dev default-libmysqlclient-dev libssl-dev \
+            zlib1g-dev libbz2-dev libboost-dev
+
+      # PCH is off: GCC rebuilds the precompiled header with different bytes
+      # on every run, so ccache could never reuse anything compiled with it.
+      - name: ccache
+        if: steps.probe.outputs.has == 'true'
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: linux-eluna-${{ env.CORE_REF }}
+          max-size: 2G
+
+      - name: Configure
+        if: steps.probe.outputs.has == 'true'
+        working-directory: core
+        run: |
+          sed -i 's/-march=native/-march=x86-64-v2/g' CMakeLists.txt || true
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DUSE_EXTRACTORS=OFF \
+            -DALLOW_TURTLE_ADDONS=ON \
+            -DMODULES=static -DMODULE_TORTOISEBOTS=static \
+            -DBUILD_ELUNA=ON \
+            -DUSE_PCH=OFF \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_EXE_LINKER_FLAGS=-fuse-ld=lld \
+            -DCMAKE_SHARED_LINKER_FLAGS=-fuse-ld=lld
+
+      - name: Build
+        if: steps.probe.outputs.has == 'true'
+        working-directory: core
+        run: cmake --build build -j"$(nproc)"
+
+  windows-eluna:
+    # A dev -> main release PR builds the same tree the push to dev already built: skip it.
+    if: github.event_name != 'pull_request' || (!github.event.pull_request.draft && !(github.head_ref == 'dev' && github.event.pull_request.head.repo.full_name == github.repository))
+    runs-on: windows-2022
+    timeout-minutes: 120
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-cache
+    steps:
+      - name: Checkout core
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CORE_REPO }}
+          ref: ${{ env.CORE_REF }}
+          path: core
+          submodules: recursive
+
+      - name: Does the core have Eluna?
+        id: probe
+        shell: bash
+        run: |
+          if grep -q 'option(BUILD_ELUNA' core/CMakeLists.txt; then echo has=true >> "$GITHUB_OUTPUT"; else echo has=false >> "$GITHUB_OUTPUT"; echo "::notice::core has no BUILD_ELUNA option yet; Eluna build skipped"; fi
+
+      - name: Checkout module
+        if: steps.probe.outputs.has == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.module_ref || github.sha }}
+          path: core/modules/TortoiseBots
+
+      - name: Cache vcpkg packages (ACE)
+        if: steps.probe.outputs.has == 'true'
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}\vcpkg-cache
+          key: vcpkg-ace-x64-windows-v1
+
+      - name: Install ACE via vcpkg
+        if: steps.probe.outputs.has == 'true'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "$env:VCPKG_DEFAULT_BINARY_CACHE" | Out-Null
+          & "$env:VCPKG_INSTALLATION_ROOT\vcpkg.exe" install ace:x64-windows
+          "ACE_ROOT=$env:VCPKG_INSTALLATION_ROOT\installed\x64-windows" | Out-File $env:GITHUB_ENV -Append
+
+      # Ninja + sccache instead of MSBuild so unchanged files come from the
+      # cache. sccache cannot cache MSVC precompiled headers or /MP, so PCH is
+      # off and /MP (meaningless under Ninja) is stripped, like -march above.
+      - name: MSVC environment
+        if: steps.probe.outputs.has == 'true'
+        uses: ilammy/msvc-dev-cmd@v1.13.0
+        with:
+          arch: x64
+
+      - name: sccache
+        if: steps.probe.outputs.has == 'true'
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          variant: sccache
+          key: windows-eluna-${{ env.CORE_REF }}
+          max-size: 2G
+
+      - name: Configure
+        if: steps.probe.outputs.has == 'true'
+        working-directory: core
+        shell: pwsh
+        run: |
+          (Get-Content CMakeLists.txt) -replace ' /MP', '' | Set-Content CMakeLists.txt
+          cmake -S . -B build -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DUSE_PCH=OFF `
+            -DUSE_EXTRACTORS=OFF `
+            -DALLOW_TURTLE_ADDONS=ON `
+            -DMODULES=static -DMODULE_TORTOISEBOTS=static `
+            -DBUILD_ELUNA=ON `
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache `
+            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache `
+            -DACE_ROOT="$env:ACE_ROOT"
+
+      - name: Build
+        if: steps.probe.outputs.has == 'true'
         working-directory: core
         run: cmake --build build

@@ -10,6 +10,13 @@
   const HEAL_RANGE_YD = 40;   // a healer's spells reach this far (the ring of the healer-range layer)
   const TRAIL_MAX = 240;      // positions of the lead kept for its trail (the trail-length slider shows up to this many)
   const TRAIL_STEP_YD = 2;    // a new trail point after this much movement
+  // Trail breaks: two reports of a bot are joined by a line only while the distance is something a unit can walk or ride in the time
+  // between them (same numbers as the daemon's JumpLimitYd, internal/state/commanders.go): 12 yd of slack for rounding and late reports
+  // plus 20 yd for each second, the seconds counted from 1 to 30. 20 yd/s is above the fastest ground mount of the 1.12 game (about
+  // 14 yd/s with speed buffs); at the 2 s reports that is a break past 52 yd. The gap is capped so a long silence cannot hide a jump.
+  const TRAVEL_SLACK_YD = 12;
+  const TRAVEL_MAX_YD_PER_SEC = 20;
+  const TRAVEL_MAX_GAP_SEC = 30;
   const FIGHT_WINDOW_SEC = 8; // an HP drop this recent counts as a fight
   const MOVE_WINDOW_SEC = 6;  // lead movement this recent counts as walking
 
@@ -234,6 +241,54 @@
 
   // The module reports positions and HP only; "fighting" and "moving" come from how they change, and the lead's trail from where it
   // has been. Keyed by commander. Feed it each fresh report once.
+  // ---- breaks in a trail ------------------------------------------------------------------------------------------
+
+  // A trail point is [x, y, t] or, where something happened, [x, y, t, kind]: "d" the bot died here (the line goes on), "t" it
+  // teleported (a jump no walking explains: summon, portal), "r" the same jump while it was dead before or after (spirit release,
+  // resurrection at the spirit healer), "m" it arrived on another map. A point of kind t, r or m starts a new segment.
+  // "g" is a gap with no icon: reports were lost (a very long pause), so the path is not joined across them.
+  const BREAK_KINDS = { t: 1, r: 1, m: 1, g: 1 };
+  const POINT_KINDS = { d: 1, t: 1, r: 1, m: 1, g: 1 };
+
+  function jumpLimitYd(gapSec) {
+    const g = Math.min(TRAVEL_MAX_GAP_SEC, Math.max(1, num(gapSec) ? gapSec : 1));
+    return TRAVEL_SLACK_YD + TRAVEL_MAX_YD_PER_SEC * g;
+  }
+
+  // What happened between two reports of one bot, {map, x, y, t, alive}: "" nothing, "m" map change, "t" / "r" a jump, "d" died.
+  function trailEvent(prev, cur) {
+    if (!prev || !cur) return "";
+    if (prev.gap) return "g";
+    if (prev.map !== cur.map) return "m";
+    const jump = Math.hypot(prev.x - cur.x, prev.y - cur.y) > jumpLimitYd(cur.t - prev.t);
+    if (jump) return prev.alive === false || cur.alive === false ? "r" : "t";
+    if (prev.alive !== false && cur.alive === false) return "d";
+    return "";
+  }
+
+  // The kind of a point of a trail, or "" (anything else, also from the daemon, is dropped).
+  const pointKind = (p) => (Array.isArray(p) && typeof p[3] === "string" && POINT_KINDS[p[3]] ? p[3] : "");
+
+  // Split a trail (points oldest first) into the stretches that really were walked: [[points], ...], none empty.
+  function trailRuns(pts) {
+    const runs = [];
+    (pts || []).forEach((p) => {
+      if (!runs.length || BREAK_KINDS[pointKind(p)]) runs.push([]);
+      runs[runs.length - 1].push(p);
+    });
+    return runs;
+  }
+
+  // The marks to draw on a trail: [{x, y, t, kind}] for each point that carries a kind (a death, or where a break ends).
+  function trailMarks(pts) {
+    const out = [];
+    (pts || []).forEach((p) => { const kind = pointKind(p); if (kind && num(p[0]) && num(p[1])) out.push({ x: p[0], y: p[1], t: p[2], kind }); });
+    return out;
+  }
+
+  // A very long pause lost reports: the next point of every trail starts a new piece, marked by nothing (see RefreshRate onGap).
+  function markGap(tr) { Object.keys(tr.trail).forEach((k) => { tr.trail[k].seen = { gap: true }; }); }
+
   function newTracker() { return { hp: {}, hpDropAt: {}, leadMovedAt: {}, trail: {} }; }
 
   function note(tr, bind, nowSec) {
@@ -246,12 +301,16 @@
     });
     const lead = leadBot(bind);
     if (!lead) return;
-    let t = tr.trail[key];
-    if (!t || t.map !== lead.map) t = tr.trail[key] = { map: lead.map, pts: [] };
+    const cur = { map: lead.map, x: lead.x, y: lead.y, t: nowSec, alive: lead.alive !== false };
+    let t = tr.trail[key], ev = "";
+    if (!t) t = tr.trail[key] = { map: lead.map, pts: [], seen: null };
+    else if (t.map !== lead.map) { t = tr.trail[key] = { map: lead.map, pts: [], seen: null }; ev = "m"; }
+    else ev = trailEvent(t.seen, cur);
+    t.seen = cur;
     const last = t.pts[t.pts.length - 1];
-    if (!last || Math.hypot(last[0] - lead.x, last[1] - lead.y) >= TRAIL_STEP_YD) {
+    if (ev || !last || Math.hypot(last[0] - lead.x, last[1] - lead.y) >= TRAIL_STEP_YD) {
       if (last) tr.leadMovedAt[key] = nowSec;
-      t.pts.push([lead.x, lead.y, nowSec]);
+      t.pts.push(ev ? [lead.x, lead.y, nowSec, ev] : [lead.x, lead.y, nowSec]);
       if (t.pts.length > TRAIL_MAX) t.pts.shift();
     }
   }
@@ -262,7 +321,7 @@
     const t = tr.trail[commander];
     if (!t || t.map !== mapId || !Array.isArray(pts) || !pts.length) return 0;
     const first = t.pts.length ? t.pts[0][2] : Infinity;
-    const older = pts.filter((p) => Array.isArray(p) && num(p[0]) && num(p[1]) && num(p[2]) && p[2] < first);
+    const older = pts.filter((p) => Array.isArray(p) && num(p[0]) && num(p[1]) && num(p[2]) && p[2] < first).map((p) => (pointKind(p) ? [p[0], p[1], p[2], p[3]] : [p[0], p[1], p[2]]));
     if (!older.length) return 0;
     t.pts = older.concat(t.pts).slice(-TRAIL_MAX);
     return older.length;
@@ -406,10 +465,33 @@
     return out;
   }
 
+  // The same for a trail with breaks (points as [x, y, t, kind?], game coordinates): each stretch between two breaks is chunked on its own,
+  // never joined to the next, and the fade runs over the whole trail. Returns [{points: [{x, y}], alpha}] in the drawing plane.
+  function trailSegmentsBroken(pts, maxSeg, minAlpha) {
+    const lo = minAlpha == null ? 0.2 : minAlpha;
+    const runs = trailRuns(pts).filter((r) => r.length >= 2);
+    if (runs.length <= 1) return runs.length ? trailSegments(runs[0].map((p) => project(p[0], p[1])), maxSeg, lo) : [];
+    const total = runs.reduce((a, r) => a + r.length - 1, 0);
+    const out = [];
+    let done = 0;
+    runs.forEach((r, ri) => {
+      const edges = r.length - 1;
+      const proj = r.map((p) => project(p[0], p[1]));
+      const per = Math.ceil(edges / Math.max(1, Math.round((maxSeg || 12) * edges / total)));
+      for (let i = 0; i < edges; i += per) {
+        const newest = ri === runs.length - 1 && i + per >= edges;
+        out.push({ points: proj.slice(i, Math.min(proj.length, i + per + 1)), alpha: newest ? 1 : lo + (1 - lo) * Math.min(1, (done + i) / Math.max(1, total - 1)) });
+      }
+      done += edges;
+    });
+    return out;
+  }
+
   // The direction the lead is walking, from the trail (positions [x, y, t] in game coordinates, oldest first): the unit vector, in the
   // drawing plane, from the last point that lies at least minYd behind the newest one. null when the lead has not moved that far, or the
   // newest point is older than maxAgeSec (nowSec given): the module reports no facing, so this is the heading of the movement.
   function heading(pts, nowSec, maxAgeSec, minYd) {
+    if (pts && pts.length > 1) { const runs = trailRuns(pts); pts = runs[runs.length - 1]; } // only the stretch after the last break
     if (!pts || pts.length < 2) return null;
     const last = pts[pts.length - 1], min = minYd == null ? 4 : minYd;
     if (nowSec && last[2] && nowSec - last[2] > (maxAgeSec == null ? 20 : maxAgeSec)) return null;
@@ -474,7 +556,7 @@
   const api = {
     HEAL_RANGE_YD, FAR_YD, LOW_HP_PCT, STALE_WARN_SEC, pretty, plural, ageText, roleKey, roleLabel, distance, leadBot, partyRows, orderText, stateWord,
     headerText, headerParts, botHref, warnings, newTracker, note, context, prune, project, fitView, viewBox, zoomAt, panBy, pinch, gridStep, gridLines,
-    trailSegments, clampScale, prependTrail, heading, trailStamps, scaleBar, zonesIn, pictureLayers,
+    trailSegments, markGap, trailSegmentsBroken, trailRuns, trailMarks, trailEvent, jumpLimitYd, TRAVEL_MAX_YD_PER_SEC, TRAVEL_SLACK_YD, TRAVEL_MAX_GAP_SEC, clampScale, prependTrail, heading, trailStamps, scaleBar, zonesIn, pictureLayers,
     AGGRO_RANGE_YD, followView, zoomFollow, pinchFollow, mobsOf, mobClass, threatLines, botTargetLines, aggroMobs, commanderPlace,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.CmdView = api;

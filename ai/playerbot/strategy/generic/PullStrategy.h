@@ -31,6 +31,12 @@ namespace ai
         void RequestPull(Unit* target, bool resetTime = true);
         bool IsPullPendingToStart() const { return pendingToStart; }
         bool HasPullStarted() const { return pullStartTime > 0; }
+        // Approach-headway clock (PullReachPolicy.h): NotePullApproach is fed
+        // the tank-to-target distance while the pull has not landed; the pull
+        // only times out after a full window without headway, or past the
+        // total cap, so a progressing cross-room walk keeps its target.
+        void NotePullApproach(float distanceNow, bool moving);
+        bool HasPullApproachExpired() const;
         bool HasPullActionCompleted() const { return pullActionCompleted; }
         // Ranged pull: the cast only opens the core's ranged auto-repeat, the
         // arrow flies a swing later (Unit::_UpdateAutoRepeatSpell) and any
@@ -114,6 +120,10 @@ namespace ai
         bool pendingToStart;
         bool pullActionCompleted;
         time_t pullStartTime;
+        // Approach-headway clock: last time the walk closed in, and the
+        // distance of that sample (-1 = none yet). See PullReachPolicy.h.
+        time_t approachHeadwayTime;
+        float approachDistance;
         // WorldTimer ms of the ranged pull cast this pull is waiting on, or 0.
         uint32 pullActionCastMs;
         ReactStates petReactState;

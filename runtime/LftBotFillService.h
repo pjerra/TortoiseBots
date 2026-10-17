@@ -12,11 +12,13 @@ namespace TortoiseBots
 {
 
 // Default-on bounded fill of human-waiting LFT queues with live random Headless bots.
-// The service observes the copy-only native queue API from core #416,
-// identifies human groups/instances and missing 1 tank / 1 healer / 3 dps roles,
+// The service observes the copy-only native queue API from core #416 and
+// replays the core offer match (LftCompPolicy) over entries that may join a
+// new offer - core queue order, party blocks atomic, committed in-offer
+// members excluded - to find the missing 1 tank / 1 healer / 3 dps slots,
 // then filters in-memory Headless random candidates by the authoritative
-// Soromeister/LFT v0.0.3.3 LFT.allDungeons minLevel/maxLevel range,
-// team, hardcore, group, state, and AiFactory spec role before QueuePlayer.
+// Soromeister/LFT v0.0.3.3 LFT.allDungeons minLevel/maxLevel range, team,
+// hardcore, group, state, and AiFactory spec role before QueuePlayer.
 // Native core owns offers, acceptance, cancellation, and group formation; the
 // service auto-accepts its own Headless participants and, independently of the
 // fill switch, managed party bots whose real-player master/group leader shares
@@ -57,6 +59,9 @@ private:
     // skip reason when the bot must not fill the role, empty when it may.
     std::string RoleMismatchReason(Player* bot, uint8 needRole) const;
     bool EquipBestShieldFromBags(Player* bot) const;
+    // Issue #966: role bits of the installed combat kit (named spec
+    // strategies only, like BotPlayerAdapter::GetBotRoles); 0 = bare kit.
+    uint8 GetCombatKitRoleMask(Player const* bot) const;
 
     bool m_initialized = false;
     uint32_t m_elapsedMs = 0;

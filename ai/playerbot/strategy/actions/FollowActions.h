@@ -3,6 +3,7 @@
 
 #include "playerbot/strategy/Action.h"
 #include "MovementActions.h"
+#include "playerbot/OpenFollowStepPolicy.h"
 #include "playerbot/DungeonFollowStallPolicy.h"
 
 namespace ai
@@ -24,6 +25,13 @@ namespace ai
         bool RescueStalledDungeonFollow(Unit* followTarget, bool& moved);
         bool ArmFarDungeonFollowRescue(Unit* followTarget);
         DungeonFollowStallWatch followStallWatch;
+        // Open-world rescue of a core follow that stands still on a navmesh
+        // gap (OpenFollowStepPolicy.h): short straight steps toward a seen
+        // leader on the same floor. The dungeon rescue above owns instances.
+        bool ObserveOpenFollowStall(Unit* followTarget);
+        bool RescueStalledOpenFollow(Unit* followTarget, bool& moved);
+        DungeonFollowStallWatch openFollowStallWatch;
+        ai::OpenFollowStepHeadway openFollowStepHeadway;
 
         bool holdGateOpen = false;      // gate state, for the 30/25 yd hysteresis
         bool holdFollowActive = false;  // Execute ran the walk (reset the wait on leaving)

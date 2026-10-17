@@ -63,8 +63,8 @@ feature branch, see above), never `main`.
   `m_bot` into normal core gameplay code.
 - Keep SQL migrations in the appropriate `data/sql/world` or `data/sql/character`
   directory, use a timestamped filename, and comment non-obvious statements.
-- If behavior is adapted from another project, record the source and commit in
-  [`docs/PROVENANCE.md`](docs/PROVENANCE.md).
+- If behavior is adapted from another project, name the source repository and
+  commit in the pull request description.
 
 ## Pull requests
 
@@ -93,8 +93,9 @@ submitting a contribution, you agree that:
   rest of the project;
 - you wrote it yourself, or you have the right to submit it under these terms;
 - code copied or ported from another project (porting is welcome) keeps its original copyright and licence notice, is
-  compatible with AGPL-3.0, and is recorded in
-  [`docs/PROVENANCE.md`](docs/PROVENANCE.md).
+  compatible with AGPL-3.0, and its source repository and commit are named in
+  the pull request (a new donor project also goes in
+  [`docs/LICENSE_AUDIT.md`](docs/LICENSE_AUDIT.md)).
 
 Do not submit code whose licence forbids this (proprietary, "non-commercial
 only", GPL-2.0-only without an "or later" grant, or no licence at all).

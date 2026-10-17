@@ -6,6 +6,7 @@
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/strategy/values/LastMovementValue.h"
 #include "playerbot/CombatSpreadPolicy.h"
+#include "playerbot/CastKeepsRunningPolicy.h"
 #include "playerbot/VaelPolicy.h"
 #include "playerbot/DebuffSpreadPolicy.h"
 #include "playerbot/BombRunoutPolicy.h"
@@ -128,6 +129,12 @@ bool MoveAwayFromHazard::IsHazardNearby(const WorldPosition& point, const std::l
 
 bool MoveAwayFromCreature::Execute(Event& event)
 {
+    // (#903: holding a cast-out position is not a hazard escape - stepping
+    // out mid-cast cancels the bar. Finish the cast first; the trigger
+    // re-fires next tick. Standing in fire keeps escaping via
+    // MoveAwayFromHazard, the bomb carrier via RaidBombRunoutAction.)
+    if (ai::MoveBlockedByCast(bot->IsNonMeleeSpellCasted(false, true, true), false))
+        return false;
     // Get the active attacking creatures
     std::list<Creature*> creatures;
     size_t closestCreatureIdx = 0;
@@ -541,6 +548,10 @@ bool RaidSpreadAction::Execute(Event& event)
     }
     // One step per cooldown: stacked bots settle after a single step-out
     // instead of ping-ponging toward the next friendly every tick.
+    // (#903: spacing is not a hazard escape - a step-out mid-cast cancels
+    // the bar. Finish the cast first; the trigger re-fires next tick.)
+    if (ai::MoveBlockedByCast(bot->IsNonMeleeSpellCasted(false, true, true), false))
+        return false;
     LastMovement& lastMove = AI_VALUE(LastMovement&, "last movement");
     if (IsSpreadOnCooldown(WorldTimer::getMSTime(), lastMove.lastSpreadStepMs))
         return false;
@@ -823,6 +834,11 @@ bool VaelBurningAdrenalineFleeAction::Execute(Event& event)
 
 bool MoveAwayFromPlayerWithDebuff::Execute(Event& event)
 {
+    // (#903: same cast-out hold as MoveAwayFromCreature - spacing from a
+    // debuff carrier is not standing in fire. The carrier's own escape
+    // (RaidBombRunoutAction) is exempt and still runs mid-cast.)
+    if (ai::MoveBlockedByCast(bot->IsNonMeleeSpellCasted(false, true, true), false))
+        return false;
     (void)event;
     Group* group = bot->GetGroup();
     if (!group)

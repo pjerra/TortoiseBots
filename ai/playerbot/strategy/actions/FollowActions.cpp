@@ -1,4 +1,4 @@
-
+#include <cmath>
 #include "playerbot/playerbot.h"
 #include "FollowActions.h"
 #include "playerbot/PlayerbotAIConfig.h"
@@ -8,9 +8,9 @@
 #include "playerbot/TravelMgr.h"
 #include "playerbot/LootObjectStack.h"
 #include "playerbot/JumpPolicy.h"
+#include "playerbot/CastKeepsRunningPolicy.h"
 #include "playerbot/DungeonFollowHoldPolicy.h"
 #include "playerbot/DungeonFollowStallPolicy.h"
-
 using namespace ai;
 
 bool FollowAction::Execute(Event& event)
@@ -31,6 +31,8 @@ bool FollowAction::Execute(Event& event)
     if (FollowHoldingBeforePacks(followTarget, moved))
         return moved;
 
+    if (RescueStalledOpenFollow(followTarget, moved))
+        return moved;
     if (RescueStalledDungeonFollow(followTarget, moved))
         return moved;
 
@@ -77,9 +79,15 @@ bool FollowAction::ArmFarDungeonFollowRescue(Unit* followTarget)
 
 bool FollowAction::isUseful()
 {
+    // A follow step breaks the Mining / Herb Gathering cast, and even a no-op
+    // Follow() stops the cast before checking whether the bot needs to move.
+    // Station-keeping ("update follow") fired every idle tick beside a node
+    // and broke the 3.2 s cast it just started, so the node animated but never
+    // opened (#1062). Finish the cast first; the next tick follows.
+    if (ai::FollowBlockedByCast(bot->IsNonMeleeSpellCasted(false, true, true)))
+        return false;
     if (!ai->CanMove())
         return false;
-
     float distance = 0;
     Unit* followTarget = AI_VALUE(Unit*, "follow target");
     Formation* formation = AI_VALUE(Formation*, "formation");
@@ -136,9 +144,12 @@ bool FollowAction::isUseful()
         sServerFacade.GetChaseTarget(bot) &&
         sServerFacade.GetChaseTarget(bot)->getObjectGuid() == followTarget->getObjectGuid())
     {
-        // A running core follow is trusted, except inside a dungeon where it
-        // can stand still for good (partial path): then the rescue takes over.
-        return ObserveDungeonFollowStall(followTarget);
+        // A running core follow is trusted, except where it can stand still
+        // for good: inside a dungeon (partial path, DungeonFollowStallPolicy.h)
+        // or in the open world on a navmesh gap (OpenFollowStepPolicy.h).
+        if (ObserveDungeonFollowStall(followTarget))
+            return true;
+        return ObserveOpenFollowStall(followTarget);
     }
 
     return true;
@@ -211,6 +222,86 @@ bool FollowAction::RescueStalledDungeonFollow(Unit* followTarget, bool& moved)
     followStallWatch.Walked(nowMs, moved);
     if (moved)
         ai->TellDebug(GetMaster(), "Core follow stood still in a dungeon - walking the path to you", "debug move");
+    return true;
+}
+
+// Feeds the open-world stall watch; true while the rescue is on. Cheap:
+// member reads and one distance, and only outside instances out of combat.
+// Unlike the dungeon watch the leader may be a bot (a hire following its
+// lead bot), and a mounted leader outruns steps: only an unmounted pair.
+bool FollowAction::ObserveOpenFollowStall(Unit* followTarget)
+{
+    Map* map = bot->GetMap();
+    bool const inCombat = bot->IsInCombat() || ai->IsStateActive(BotState::BOT_STATE_COMBAT);
+    if (!followTarget || followTarget == bot || !map || map->IsDungeon() || inCombat ||
+        bot->InBattleGround() || !followTarget->IsInWorld() ||
+        !bot->IsAlive() || !followTarget->IsAlive() || !ai->IsSafe(followTarget) ||
+        bot->GetTransport() || followTarget->GetTransport() || bot->IsTaxiFlying() ||
+        bot->IsMounted() || followTarget->IsMounted())
+    {
+        openFollowStallWatch.Reset();
+        openFollowStepHeadway.Reset();
+        return false;
+    }
+
+    bool const held = bot->IsRooted() || bot->HasUnitState(UNIT_STAT_NO_FREE_MOVE) ||
+        bot->GetStandState() != UNIT_STAND_STATE_STAND || bot->IsNonMeleeSpellCasted(true, false, true);
+
+    return openFollowStallWatch.Observe(WorldTimer::getMSTime(), bot->GetPositionX(), bot->GetPositionY(),
+        bot->GetDistance(followTarget), ai->GetRange("follow"), held);
+}
+
+// In the open world the core follow can stand still for good on a navmesh gap
+// (Windhorn Canyon entrance 2026-10: a missing vmap tile leaves NOPATH while
+// the leader is in sight, so no spline launches). Once the watch has seen 2 s
+// of that, walk short straight steps toward the leader the way `.bot cmd move
+// ... direct` does: a MovePoint without pathfinding, at most 25 yd per step
+// while the leader is seen and on the same floor. A navmesh walk would fail
+// the same way the core follow did, so none is planned. Each step must close
+// the gap by 5 yd or the rescue stops after three flat steps; the watch's
+// give-up still bounds the whole episode. Returns false when the normal
+// follow should run.
+bool FollowAction::RescueStalledOpenFollow(Unit* followTarget, bool& moved)
+{
+    if (!ObserveOpenFollowStall(followTarget))
+        return false;
+
+    // Between steps the normal follow runs (it does not re-issue a core
+    // follow that is already running).
+    uint32 const nowMs = WorldTimer::getMSTime();
+    if (!openFollowStallWatch.WalkDue(nowMs))
+        return false;
+
+    float const dx = followTarget->GetPositionX() - bot->GetPositionX();
+    float const dy = followTarget->GetPositionY() - bot->GetPositionY();
+    float const dz = followTarget->GetPositionZ() - bot->GetPositionZ();
+    float const horizontal = std::sqrt(dx * dx + dy * dy);
+    if (!ai::OpenFollowStepLeaderNear(horizontal, dz))
+    {
+        openFollowStallWatch.Reset();
+        openFollowStepHeadway.Reset();
+        return false;
+    }
+
+    Map* map = bot->GetMap();
+    float const h = 2.0f; // both ends raised, as in `.bot cmd move ... direct`
+    bool const seesLeader = map && map->isInLineOfSight(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ() + h,
+        followTarget->GetPositionX(), followTarget->GetPositionY(), followTarget->GetPositionZ() + h);
+    if (!ai::OpenFollowStepAllowed(horizontal, dz, seesLeader))
+        return true; // stalled but no step fits: hold the rescue, keep watching
+
+    ai::OpenFollowStep step = ai::OpenFollowStepToward(bot->GetPositionX(), bot->GetPositionY(),
+        followTarget->GetPositionX(), followTarget->GetPositionY());
+    float const startDist = bot->GetDistance(followTarget);
+    bot->GetMotionMaster()->MovePoint(bot->GetMapId(), step.x, step.y, bot->GetPositionZ(), MOVE_RUN_MODE);
+    WaitForReach(bot->GetDistance(step.x, step.y, bot->GetPositionZ()));
+    moved = true;
+    openFollowStallWatch.Walked(nowMs, true);
+    if (!openFollowStepHeadway.Stepped(startDist, WorldPosition(bot->GetMapId(), step.x, step.y, bot->GetPositionZ()).distance(WorldPosition(followTarget))))
+    {
+        openFollowStallWatch.Reset();
+        openFollowStepHeadway.Reset();
+    }
     return true;
 }
 

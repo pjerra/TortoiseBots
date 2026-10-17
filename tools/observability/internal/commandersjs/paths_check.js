@@ -184,4 +184,60 @@ const mobs = [{ id: "900", cc: "c", x: 1, y: 1 }, { id: "901", x: 2, y: 2 }];
 assert.deepStrictEqual(P.ccLines(bots, mobs).map((l) => [l.from.name, l.to.id]), [["Mage", "900"]], "only a mob that is crowd controlled");
 assert.deepStrictEqual(P.ccLines([], mobs), []); assert.deepStrictEqual(P.healLines(null), []);
 assert.strictEqual(P.hasCastTargets(bots), true); assert.strictEqual(P.hasCastTargets([{ id: "1" }]), false);
+
+// ---- a trail is never joined across a teleport, a release or a map change
+{
+  const tp = P.newTrails();
+  const mk2 = (x, o) => ({ commander: "C", bots: [Object.assign({ guid: 1, name: "B", map: 209, x, y: 0, alive: true }, o || {})] });
+  P.noteTrails(tp, mk2(0), 100); P.noteTrails(tp, mk2(25), 102); P.noteTrails(tp, mk2(50), 104);
+  assert.deepStrictEqual(P.trailOf(tp, "C", 1).pts, [[0, 0, 100], [25, 0, 102], [50, 0, 104]], "riding hard: plain points");
+  P.noteTrails(tp, mk2(400), 106);                       // a jump faster than any mount: summoned
+  assert.deepStrictEqual(P.trailOf(tp, "C", 1).pts[3], [400, 0, 106, "t"]);
+  P.noteTrails(tp, mk2(401), 108);                       // standing there: nothing new
+  assert.strictEqual(P.trailOf(tp, "C", 1).pts.length, 4);
+  P.noteTrails(tp, mk2(402, { alive: false }), 110);     // died
+  assert.strictEqual(P.trailOf(tp, "C", 1).pts[4][3], "d");
+  P.noteTrails(tp, mk2(402, { alive: false }), 112);     // lies there
+  assert.strictEqual(P.trailOf(tp, "C", 1).pts.length, 5);
+  P.noteTrails(tp, mk2(30, { alive: false }), 114);      // released to the graveyard
+  assert.strictEqual(P.trailOf(tp, "C", 1).pts[5][3], "r");
+  P.noteTrails(tp, mk2(30), 116);                        // raised at the spirit healer, same place
+  assert.strictEqual(P.trailOf(tp, "C", 1).pts.length, 6);
+  P.noteTrails(tp, mk2(5, { map: 70 }), 118);            // another map: a separate trail, never joined
+  assert.deepStrictEqual(P.trailOf(tp, "C", 1).pts, [[5, 0, 118, "m"]]);
+  assert.strictEqual(P.trailOf(tp, "C", 1).map, 70);
+  // the speed rule depends on the time between reports
+  const ts = P.newTrails();
+  P.noteTrails(ts, mk2(0), 100); P.noteTrails(ts, mk2(100), 105); // 100 yd in 5 s = 20 yd/s: within 12 + 100
+  assert.strictEqual(P.trailOf(ts, "C", 1).pts[1].length, 3, "fast but possible");
+  P.noteTrails(ts, mk2(300), 106);                                // 200 yd in 1 s
+  assert.strictEqual(P.trailOf(ts, "C", 1).pts[2][3], "t");
+  // a stationary bot that is summoned a short way (under the step) is still marked when past the limit; a report 28 s later cannot hide it
+  const tl = P.newTrails();
+  P.noteTrails(tl, mk2(0), 100); P.noteTrails(tl, mk2(0), 128); P.noteTrails(tl, mk2(700), 130);
+  assert.strictEqual(P.trailOf(tl, "C", 1).pts[1][3], "t", "the jump is measured from the last report, not the last stored point");
+  // member trails and cuts keep the kinds; seeding keeps them and drops unknown ones
+  const mtp = P.memberTrails(tp, { commander: "C", bots: [{ guid: 1, map: 70 }] }, 70, 120);
+  assert.strictEqual(mtp.length, 0);
+  const sk = P.newTrails();
+  P.noteTrails(sk, mk2(500), 1000);
+  P.seedTrails(sk, { C: { 1: { map: 209, pts: [[1, 0, 10], [2, 0, 20, "t"], [3, 0, 30, "weird"], [4, 0, 40, "d"]] } } });
+  assert.deepStrictEqual(P.trailOf(sk, "C", 1).pts.map((p) => p[3] || ""), ["", "t", "", "d", ""], "daemon history keeps its break kinds");
+  assert.deepStrictEqual(P.cleanPoints([[1, 2, 3, "r"], [1, 2, 3, 9], [1, 2, 3, "x"]]), [[1, 2, 3, "r"], [1, 2, 3], [1, 2, 3]]);
+}
+// gap and seeding
+{
+  const tg = P.newTrails();
+  const mkg = (x) => ({ commander: "C", bots: [{ guid: 1, name: "B", map: 1, x, y: 0, alive: true }] });
+  P.noteTrails(tg, mkg(0), 100); P.markGap(tg); P.noteTrails(tg, mkg(30), 102); P.noteTrails(tg, mkg(50), 104);
+  assert.deepStrictEqual(P.trailOf(tg, "C", 1).pts, [[0, 0, 100], [30, 0, 102, "g"], [50, 0, 104]]);
+  assert.deepStrictEqual(P.cleanPoints([[1, 2, 3, "g"]]), [[1, 2, 3, "g"]]);
+  const ts2 = P.newTrails();
+  assert.deepStrictEqual(P.seedTargets(ts2, [{ commander: "C" }], false), [], "no trail of its own yet: nothing to attach history to");
+  P.noteTrails(ts2, mkg(0), 100);
+  assert.deepStrictEqual(P.seedTargets(ts2, [{ commander: "C" }], true), [], "not while paused");
+  assert.deepStrictEqual(P.seedTargets(ts2, [{ commander: "C" }, { commander: "D" }], false), ["C"]);
+  ts2.seeded.C = true;
+  assert.deepStrictEqual(P.seedTargets(ts2, [{ commander: "C" }], false), [], "once");
+}
 console.log("paths.js ok");

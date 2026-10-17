@@ -10,8 +10,8 @@
 //
 // NOTE: this is new automation, not a donor port — mod-playerbots picks
 // situational totems manually per fight (per-slot strategies) and carries
-// `TODO: tremor totem` in its dungeon code. The donor refs in PROVENANCE
-// are the slot-maintenance triggers and isUseful fallbacks reused here.
+// `TODO: tremor totem` in its dungeon code. Its slot-maintenance triggers
+// and isUseful fallbacks are reused here.
 
 namespace ai
 {

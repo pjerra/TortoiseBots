@@ -16,7 +16,7 @@ using namespace ai;
 // Defined in Helpers.cpp.
 bool istarts_with(std::string_view text, std::string_view prefix);
 
-std::unordered_set<std::string> noReplyMsgs = { "all ?", "attack", "attack rti", "bank", "c", "co ?", "de ?", "dead ?", "do accept invitation", "faction", "flee", "follow", "give leader", "guard", "guild leave", "help", "home", "items", "join", "jump", "leave", "lfg", "loot", "los", "nc ?", "pet aggressive", "pet defensive", "pet passive", "pet follow", "pet stay", "pet attack", "pet dismiss", "pet call", "pull", "pull rti", "quests", "quests co", "quests in", "quests all", "react ?", "release", "repair", "reset", "reset ai", "reset strats", "revive", "roll feedback", "skill", "spells", "stats", "stay", "summon", "talents", "talk", "trainer" "trainer learn", "u go", "who", "where" };
+std::unordered_set<std::string> noReplyMsgs = { "all ?", "attack", "attack rti", "bank", "c", "co ?", "de ?", "dead ?", "do accept invitation", "faction", "flee", "follow", "give leader", "guard", "guild leave", "help", "home", "items", "join", "jump", "leave", "lfg", "loot", "los", "nc ?", "pet aggressive", "pet defensive", "pet passive", "pet follow", "pet stay", "pet attack", "pet dismiss", "pet call", "pull", "pullback", "pull rti", "quests", "quests co", "quests in", "quests all", "react ?", "release", "repair", "reset", "reset ai", "reset strats", "revive", "roll feedback", "skill", "spells", "stats", "stay", "summon", "talents", "talk", "trainer" "trainer learn", "u go", "who", "where" };
 
 std::unordered_set<std::string> noReplyMsgParts = {  };
 

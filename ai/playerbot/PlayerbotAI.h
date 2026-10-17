@@ -12,6 +12,7 @@
 #include "strategy/IterateItemsMask.h"
 #include "BotDiagnostics.h"
 #include "playerbot/DeathClusterPolicy.h"
+#include "playerbot/CastKeepsRunningPolicy.h"
 #include "playerbot/GatherSpotPolicy.h"
 #include "playerbot/PullJoinWindowPolicy.h"
 #include "playerbot/SurvivePolicy.h"
@@ -668,6 +669,12 @@ public:
     // turned off stays off. 0 = nothing held.
     uint8 instanceGuardWithheld = 0;
 
+    // Issue #1043: raw guid of the last pet BotManager::CheckNewPetSpawn
+    // checked (0 = none). Each summon makes a new pet object with a new guid,
+    // so a pet is checked once. World thread and map-thread player hook only,
+    // which never run at the same time for one bot.
+    uint64 lastSpawnCheckedPetGuid = 0;
+
     // BotActionLog: track last combat state so we only log STATE snapshots
     // on actual combat-state transitions (combat-enter / combat-exit).
     // Without this we'd spam the log with "still in combat" lines every
@@ -775,6 +782,11 @@ public:
     void SetJumpTime(uint32 time) { jumpTime = time; }
     bool CanMove();
     void StopMoving();
+    // Before a cast on a game object (Opening, Mining, Herb Gathering): a bot
+    // still moving - by its movement flags or by a server spline its flags do
+    // not show - is stopped and true comes back; the caller casts on a later
+    // tick, once it stands still (the cast breaks on the first step).
+    bool StopForObjectCast();
     bool IsInRealGuild();
     void SetPlayerFriend(bool isFriend) {isPlayerFriend = isFriend;}
     bool IsPlayerFriend() { return isPlayerFriend; }
@@ -1066,10 +1078,26 @@ protected:
     LastKillerInfo lastDamager_; // last non-self damager (UNITHOOK_ON_DAMAGE); SoR fallback for SetLastKiller
     bool deathHandled_ = false; // this death was logged and counted; cleared when the bot is seen alive again
     ai::PullJoinWindow pullWindow_; // see StartPullWindow
+    // Pet stance the pull hold parked passive (PausePartyPullHold): the
+    // stance from before the hold, restored by EndPullWindow on this same
+    // bot - so a member that leaves the group, logs out or dies mid-hold
+    // still gets its own pet back (the tank's pull-end loop only reaches
+    // current members). kNoSavedStance = nothing saved. Saved only from a
+    // non-passive stance, so a re-hold while passive keeps the original.
+    static constexpr int kNoSavedStance = -1;
+    int pullHoldPetStance_ = kNoSavedStance;
     // After a change to "wait for attack" in the engines of `type` by anyone
     // but the window itself: those copies are no longer the pull's, and the
     // hold is over once the combat engine has none left.
     void SyncPullWindow(BotState type);
+public:
+    // Park this bot's own pet passive for a pull hold, remembering the stance
+    // to put back; restore it when the window ends. Member-owned: runs on the
+    // member's own AI, so group-leave, logout and death paths (which all end
+    // the window) restore the pet even when the tank's loop can't reach it.
+    void ParkPetForPullHold();
+    void RestorePullHoldPet();
+protected:
 
     // Evade probe (diagnostics only): samples the health and evade state of the creature
     // this bot is fighting, and logs the cases where the mob evades or regenerates faster

@@ -2,6 +2,10 @@
 
 #include "../runtime/BotManager.h"
 
+#include "../ai/playerbot/PullExecutorPolicy.h"
+
+#include <cstdint>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -45,13 +49,24 @@ std::vector<Player*> ResolveDynamicScope(BotCommandContext const& context);
 // Pull and pullback use a tactical executor rather than broadcasting to every
 // bot. A selected bot is considered first only when the request also resolves
 // a valid enemy target; otherwise a live tank-capable party bot is selected.
+// A tank counts as busy only while its combat flag is backed by a live
+// opponent (a victim or attackers); a bare flag with neither is stale and the
+// tank stays a candidate (issue #908).
 Player* ResolvePullExecutor(BotCommandContext const& context, bool allowSelected = true);
 // True when no executor was free but a tank-capable bot (the selected one or a
-// party bot) is alive and in combat: the pull is refused as `tank-busy`, not
-// `no-tank`. Read only after ResolvePullExecutor returned null.
+// party bot) is alive and really fighting: the pull is refused as `tank-busy`,
+// not `no-tank`. Read only after ResolvePullExecutor returned null.
 bool PullTankIsBusy(BotCommandContext const& context);
+// Why the scope's bots were not pull executors, for the refusal detail: the
+// most common exclusion (for example "in combat", "dead") across the selected
+// bot and the party bots, with a repeat count. Empty when every bot was free
+// (or the scope itself was empty).
+std::string PullBlockerDetail(BotCommandContext const& context);
+// Tally behind PullBlockerDetail, exposed for tests.
+void CountPullBlockers(BotCommandContext const& context, std::map<ai::PullExcludeReason, uint32>& counts);
 // Hold party DPS for the join delay while the tank pulls and
-// establishes threat. Healers and tanks are untouched. For a pullback the
+// establishes threat. Tanks are untouched; healers heal but deal no damage
+// while the hold runs. For a pullback the
 // window additionally covers the tank's return leg and is narrowed to the
 // join delay on arrival.
 void PausePartyDpsForPull(BotCommandContext const& context, Player* executor, uint32 joinDelaySeconds, bool pullback = false);

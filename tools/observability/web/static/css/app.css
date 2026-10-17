@@ -2964,6 +2964,8 @@ select.input {
 .cmd-map .ic .eyeln { stroke: #0b0f14; }
 .cmd-map .ic .head { fill: #d1d5db; }
 .cmd-map .ic .leg { fill: none; stroke: #d1d5db; stroke-width: 1; }
+.cmd-map .ic-swirl, .cmd-legend svg.ic-swirl { color: #c4b5fd; }
+.cmd-map g.trailmark { cursor: help; } .cmd-map g.trailmark .ic { pointer-events: auto; }
 .cmd-map .ic-skull { fill: #e5e7eb; } .cmd-map .ic-spark { fill: #facc15; } .cmd-map .ic-sheep { fill: #f9a8d4; }
 .cmd-map .ic-stun, .cmd-map .ic-arrow, .cmd-map .ic-root, .cmd-map .ic-cup { fill: #7dd3fc; color: #7dd3fc; }
 .cmd-map .ic-stun, .cmd-map .ic-arrow { color: #fb923c; } .cmd-map .ic-root { color: #86efac; }
@@ -3097,3 +3099,12 @@ svg.dg-map .dg-scale text { fill: #fff; paint-order: stroke; stroke: #000; strok
 .dg-g-delta.good { color: var(--accent-green-bright); }
 .dg-g-delta.bad { color: var(--accent-red); }
 .dg-g-empty { color: var(--text-muted); font-size: 0.82rem; }
+/* Refresh rate picker and the "paused" badge (one setting, shown in the top bar and on the Commanders tab). */
+.refresh-picker { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted, #9ca3af); white-space: nowrap; }
+.refresh-picker select { background: var(--bg-input, #0d1117); color: inherit; border: 1px solid var(--border-strong, #30363d); border-radius: 6px; padding: 3px 6px; font: inherit; }
+.refresh-badge { background: #b45309; color: #fff; border: 1px solid #f59e0b; border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.refresh-badge[hidden] { display: none; }
+.refresh-badge:hover { background: #d97706; }
+body.refresh-paused .topbar { box-shadow: inset 0 -2px 0 #f59e0b; }
+.cmd-refresh-bar { margin-bottom: 12px; padding: 10px 16px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+@media (max-width: 720px) { .topbar-right .refresh-picker > span { display: none; } }

@@ -8,7 +8,9 @@
 #include "Movement/WaypointMovementGenerator.h"
 #include "playerbot/strategy/values/HazardsValue.h"
 #include "playerbot/strategy/values/LastMovementValue.h"
+#include "playerbot/CreatureAuraKeepoutPolicy.h"
 #include "playerbot/LedgeStepDownPolicy.h"
+#include "playerbot/SetBehindPolicy.h"
 #include <atomic>
 
 namespace ai
@@ -138,9 +140,10 @@ namespace ai
         // the core generator (follow or chase) stopped when holding.
         // `first` (the chase target) is planned against before the cached
         // 15 yd list, so a target that is itself a keep-out creature is
-        // known from any distance.
+        // known from any distance. `tankChase`: the bot is a tank on a chase,
+        // which skips the rows that give tanks a pass.
         bool HoldOutsideKeepout(float gx, float gy, float ax, float ay, ObjectGuid& engaged,
-            MovementGeneratorType nativeType, Unit* first = nullptr);
+            MovementGeneratorType nativeType, Unit* first = nullptr, bool tankChase = false);
 
         LedgeStepDownClock ledgeStepDown;
         // The keep-out creature the last follow decision held, approached or
@@ -183,12 +186,14 @@ namespace ai
         bool AvoidDamagingTrap(float& outRadius, WorldPosition& outCenter);
         bool AvoidTriggerNpc(float& outRadius, WorldPosition& outCenter);
         bool StrafeToSafety(const WorldPosition& hazardCenter, float radius);
+        void RecallPetFromHazard(float radius, const WorldPosition& center);
 
         // Creature aura keep-out (AiPlayerbot.AvoidCreatureAuras): the listed
         // creature that caused the current step-out (empty otherwise), and a
         // short back-off after a keep-out step-out found no landing spot, so
         // the action does not win the reaction pick every tick without moving.
         ObjectGuid keepoutSource;
+        CreatureAuraKeepout const* keepoutRow = nullptr; // the row of keepoutSource
         uint32 keepoutNoLandingUntilMs = 0;
     };
 
@@ -247,6 +252,10 @@ namespace ai
         virtual bool Execute(Event& event) override;
         virtual bool isUseful() override;
         virtual bool isPossible() override;
+
+    private:
+        // Per-target give-up (issue #911): see SetBehindPolicy.h.
+        SetBehindStreak streak;
     };
 
     // Generic rear-flank (mod-playerbots RearFlankAction shape): a melee

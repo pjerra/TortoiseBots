@@ -7,6 +7,7 @@ using namespace ai;
 WorldPacketHandlerStrategy::WorldPacketHandlerStrategy(PlayerbotAI* ai) : PassTroughStrategy(ai)
 {
     supported.push_back("loot start roll");
+    supported.push_back("loot vote");
     supported.push_back("quest update add kill");
     supported.push_back("quest update add item");
     supported.push_back("quest update failed");
@@ -123,7 +124,7 @@ void WorldPacketHandlerStrategy::InitNonCombatTriggers(std::list<TriggerNode*> &
 
     triggers.push_back(new TriggerNode(
         "often",
-        NextAction::array(0, new NextAction("security check", relevance), new NextAction("check mail", relevance), NULL)));
+        NextAction::array(0, new NextAction("check mail", relevance), NULL)));
 
     triggers.push_back(new TriggerNode(
         "guild accept",

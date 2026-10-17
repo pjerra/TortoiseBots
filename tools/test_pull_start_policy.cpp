@@ -48,7 +48,7 @@ int main()
     facts.distance = 99.0f;
     CHECK(PullWalkStarted(facts));
 
-    // Uldaman rerun (build 19z11): the pullback came a second after the fight,
+    // Uldaman run (build 19z11): the pullback came a second after the fight,
     // the tank sitting with the meal cast (24005) live. The order interrupts
     // the cast and stands the tank up before its decisions.
     PullReadyFacts ready;

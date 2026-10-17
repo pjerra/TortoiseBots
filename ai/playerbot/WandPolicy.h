@@ -147,12 +147,15 @@ namespace ai
         bool targetEngaged = false;   // the wand's mob is attacking the healer or another party member
         bool aloneNear = false;       // no other live group member within SightDistance
         bool explicitOrder = false;   // the wand's mob is this bot's explicit attack target
+        bool pullHold = false;        // the pull's own join window runs: heal, never wand
     };
 
     inline bool HealerMayWand(HealerWandGate const& gate)
     {
         if (!gate.groupedHealer || gate.aloneNear || gate.explicitOrder)
             return true;
+        if (gate.pullHold)
+            return false;
         if (!gate.targetEngaged)
             return false;
         if (gate.noMana)

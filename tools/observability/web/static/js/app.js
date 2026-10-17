@@ -914,6 +914,7 @@
 
   if (el.refreshBtn) {
     el.refreshBtn.addEventListener('click', () => {
+      refreshGate.flush(); // an explicit reload shows what a paused or slowed page was holding back
       fetchBots(true);
       fetchAnomalies();
       fetchIssues(true);
@@ -4459,6 +4460,39 @@
     state.server.bots = s.bots || 0;
   }
 
+  // ---- Refresh rate (the picker "Refresh every 1 / 2 / 5 / 10 / 30 s / paused") ----
+  // The daemon keeps pushing every 2 s; the page applies a live update to the roster, the maps and the Commanders cards no more often than
+  // the viewer chose, or not at all while paused (the newest update waits and shows on resume). The choice is kept per browser. Server
+  // health (heartbeat, the offline watchdog, the snapshot age) always stays live, so a frozen page cannot pass for a healthy server.
+  const refreshStore = (() => { try { return window.localStorage; } catch (e) { return null; } })();
+  const refreshGate = RefreshRate.createGate(RefreshRate.load(refreshStore), {
+    now: () => Date.now(),
+    setTimer: (fn, ms) => setTimeout(fn, ms),
+    clearTimer: h => clearTimeout(h),
+  });
+
+  function paintRefresh() {
+    const sec = refreshGate.interval(), paused = refreshGate.paused();
+    document.querySelectorAll('select[data-refresh-select]').forEach(sel => { sel.value = String(sec); });
+    document.querySelectorAll('[data-refresh-badge]').forEach(b => { b.hidden = !paused; });
+    document.body.classList.toggle('refresh-paused', paused);
+  }
+
+  function setRefresh(sec) {
+    refreshGate.set(sec);
+    RefreshRate.save(refreshStore, refreshGate.interval());
+    paintRefresh();
+  }
+
+  function initRefreshPicker() {
+    document.querySelectorAll('select[data-refresh-select]').forEach(sel => {
+      sel.innerHTML = RefreshRate.OPTIONS.map(n => `<option value="${n}">${n === 0 ? 'paused' : n + ' s'}</option>`).join('');
+      sel.addEventListener('change', () => setRefresh(sel.value));
+    });
+    document.querySelectorAll('[data-refresh-badge]').forEach(b => b.addEventListener('click', () => setRefresh(RefreshRate.DEFAULT_SEC)));
+    paintRefresh();
+  }
+
   // WebSocket Live Streaming
   let reconnectTimer = null;
 
@@ -4512,20 +4546,23 @@
       if (typeof data.seq === 'number' && data.seq < state.snapshotSeq) return;
       state.snapshotSeq = data.seq || 0;
 
-      const prevCount = state.bots.length;
-      state.bots = Array.isArray(data.bots) ? data.bots : [];
-      if (data.grinding) state.grinding = data.grinding;
-      if (data.info) { state.serverInfo = data.info; renderServerPanel(); applyCommanderTabFlag(); }
       state.lastSnapshotAt = Date.now();
       applyServerStatus(data.server);
-      applyIssues(data.issues);
-      updateOverviewMetrics();
+      // The roster, the issues and what draws them follow the refresh rate (frozen while paused); the server's health above does not.
+      refreshGate.submit('snapshot', () => {
+        const prevCount = state.bots.length;
+        state.bots = Array.isArray(data.bots) ? data.bots : [];
+        if (data.grinding) state.grinding = data.grinding;
+        if (data.info) { state.serverInfo = data.info; renderServerPanel(); applyCommanderTabFlag(); }
+        applyIssues(data.issues);
+        updateOverviewMetrics();
 
-      renderLive();
+        renderLive();
 
-      if (state.bots.length !== prevCount) {
-        appendConsoleLog(time, 'roster', `Snapshot #${esc(state.snapshotSeq)}: ${state.bots.length} bots active.`);
-      }
+        if (state.bots.length !== prevCount) {
+          appendConsoleLog(time, 'roster', `Snapshot #${esc(state.snapshotSeq)}: ${state.bots.length} bots active.`);
+        }
+      });
     } else if (msg.event === 'heartbeat') {
       const d = msg.data;
       if (!d) return;
@@ -4734,7 +4771,8 @@
   // The Demo map: a simulated group (demo.js) on its own card, off by default. It goes through the same note / draw functions as a real
   // report; it is never put in state.commanders.list, so the counts, the badge and the real cards never see it.
   const cmdDemo = { on: false, timer: null, start: 0, bind: null };
-  const CMD_DEMO_MS = 2000;
+  const CMD_DEMO_MS = 2000; // the demo is stepped at the refresh rate when that is slower (see cmdDemoMs)
+  const cmdDemoMs = () => Math.max(CMD_DEMO_MS, refreshGate.interval() * 1000);
   const cmdAllBinds = () => (cmdDemo.on && cmdDemo.bind ? state.commanders.list.concat([cmdDemo.bind]) : state.commanders.list);
   const cmdFindBind = key => cmdAllBinds().find(b => b.commander === key);
   const cmdNowFor = bind => (bind && bind.demo ? Date.now() / 1000 : cmdServerNow());
@@ -4771,7 +4809,7 @@
     if (note) note.hidden = !on;
     if (on) {
       cmdDemo.start = Date.now() / 1000;
-      cmdDemo.timer = setInterval(cmdDemoTick, CMD_DEMO_MS);
+      cmdDemo.timer = setInterval(refreshGate.guard(cmdDemoTick), cmdDemoMs()); // the simulated group freezes with the rest
       cmdDemoTick();
     } else {
       cmdDemo.bind = null;
@@ -4804,20 +4842,30 @@
     if (typeof view.real_maps === 'boolean') c.realMaps = view.real_maps; // the daemon was given TBDASH_MAP_DIR (only the REST answer says)
     c.reportedAt = view.updated_at || c.reportedAt || 0;
     if (view.fresh) {
-      c.list = Array.isArray(view.commanders) ? view.commanders : [];
-      c.fresh = true;
-      c.updatedAt = view.updated_at || Math.round(Date.now() / 1000);
-      c.freshAt = Date.now();
-      c.lost = false;
-      c.list.forEach(bind => { CmdView.note(cmdTracker, bind, c.updatedAt); UnitInfo.noteEvents(cmdEvents, bind, c.updatedAt); cmdNotePaths(bind, c.updatedAt); });
-      cmdPruneAll();
-      seedCmdTrails(c.list);
-    } else {
-      // No fresh report: keep what was last shown (see COMMANDERS_KEEP_MS) and say so.
-      c.fresh = false;
+      const list = Array.isArray(view.commanders) ? view.commanders : [];
+      const updatedAt = view.updated_at || Math.round(Date.now() / 1000), receivedAt = Date.now();
+      // What the page remembers (paths, hp changes, events) keeps every report, so a slow refresh rate loses no part of a path; while
+      // paused it is held too, so nothing on the map moves, and it is replayed in order on resume.
+      refreshGate.note(() => list.forEach(bind => { CmdView.note(cmdTracker, bind, updatedAt); UnitInfo.noteEvents(cmdEvents, bind, updatedAt); cmdNotePaths(bind, updatedAt); }));
+      refreshGate.submit('commanders', () => {
+        c.list = list;
+        c.fresh = true;
+        c.updatedAt = updatedAt;
+        c.freshAt = receivedAt;
+        c.lost = false;
+        cmdPruneAll();
+        seedCmdTrails(c.list);
+        paintCommandersBadge();
+        if (state.activeTab === 'commanders') renderCommanders();
+      });
+      return;
     }
-    paintCommandersBadge();
-    if (state.activeTab === 'commanders') renderCommanders();
+    // No fresh report: keep what was last shown (see COMMANDERS_KEEP_MS) and say so.
+    refreshGate.submit('commanders', () => {
+      c.fresh = false;
+      paintCommandersBadge();
+      if (state.activeTab === 'commanders') renderCommanders();
+    });
   }
 
   // What the browser remembers of a binding between reports: every bot's path and the places where the run stalled or an order was refused.
@@ -4831,8 +4879,9 @@
   // A binding the page has not asked the daemon about yet gets its short stored history once: the paths then start with what happened
   // before this page was opened. One request at a time; a failure only means the paths start now.
   function seedCmdTrails(list) {
-    if (cmdTrailsLoading || !list.some(b => !cmdTrails.seeded[b.commander])) return;
-    list.forEach(b => { cmdTrails.seeded[b.commander] = true; });
+    const targets = CmdPaths.seedTargets(cmdTrails, list, refreshGate.paused());
+    if (cmdTrailsLoading || !targets.length) return;
+    targets.forEach(c => { cmdTrails.seeded[c] = true; });
     cmdTrailsLoading = true;
     fetch('/api/v1/commanders/trails').then(jsonOrThrow).then(data => {
       CmdPaths.seedTrails(cmdTrails, data);
@@ -4969,6 +5018,7 @@
     chest: '<path d="M-4 -0.8a4 3.2 0 0 1 8 0V3.6h-8z"/><path class="ln eyeln" d="M-4 0.6h8"/><circle class="eye" cx="0" cy="1.8" r="0.8"/>',
     lever: '<path class="ln" d="M-3.4 3.6h6.8M0 3.4L2.6 -2.6"/><circle cx="2.8" cy="-3.2" r="1.5"/>',
     gong: '<circle class="ring" cx="0" cy="0" r="3.7"/><circle cx="0" cy="0" r="1.5"/>',
+    swirl: '<path class="ln" d="M0 0.6a1 1 0 1 1 1.3 -1.1a2.3 2.3 0 1 1 -3.5 1.7a3.7 3.7 0 1 1 5.6 -2.3"/>',
     stop: '<path d="M-3.4 -3.4h6.8v6.8h-6.8z"/><path class="ln eyeln" d="M-1 -1.8v3.6M1 -1.8v3.6"/>',
   };
   // One icon centred at plane point (x, y); size in drawing units (px * k) on a dark disc so it reads on any picture.
@@ -4985,6 +5035,7 @@
       + '<span><i class="lead"></i>Lead</span><span><i class="dead"></i>Dead</span>'
       + (o.trail ? '<span><i class="trail"></i>Lead\'s path</span>' : '')
       + (o.membertrails ? '<span><i class="mtrail"></i>Group paths</span>' : '')
+      + (o.trail || o.membertrails ? '<span class="lic">teleport / summon <svg viewBox="-6 -6 12 12" class="ic-swirl">' + CMD_MAP_ICONS.swirl + '</svg></span><span class="lic">died <svg viewBox="-6 -6 12 12" class="ic-skull">' + CMD_MAP_ICONS.skull + '</svg></span>' : '')
       + (o.runsteps ? '<span><i class="route"></i>Run route</span><span><i class="lstep"></i>Pull / boss step</span>' : '')
       + (o.stalls ? '<span class="lic">stalled / refused <svg viewBox="-6 -6 12 12" class="ic-x"><path d="M-3.4 -3.4L3.4 3.4M3.4 -3.4L-3.4 3.4"/></svg></span>' : '')
       + (o.objects ? '<span class="lic">door <svg viewBox="-6 -6 12 12" class="ic-door">' + CMD_MAP_ICONS.door + '</svg></span><span class="lic">chest <svg viewBox="-6 -6 12 12" class="ic-chest">' + CMD_MAP_ICONS.chest + '</svg></span>'
@@ -5085,11 +5136,24 @@
 
   const cmdPt = (c, x, y) => { const p = CmdView.project(x, y); return `${c.f(p.x)},${c.f(p.y)}`; };
 
-  // The lead's path (fading with age, brighter than the others') or another bot's, cut to the length set in the panel.
+  // The lead's path (fading with age, brighter than the others') or another bot's, cut to the length set in the panel. A path is drawn in
+  // pieces: never a line across a teleport (summon, portal), a spirit release, a resurrection at the spirit healer or a map change
+  // (points marked t / r / m, see CmdView.trailEvent). Where it broke, a swirl marks the arrival; a skull marks where the bot died.
+  const CMD_TRAIL_MARKS = {
+    d: { icon: 'skull', text: 'Died here' },
+    t: { icon: 'swirl', text: 'Teleported or summoned here (the path is not joined to the place before)' },
+    r: { icon: 'swirl', text: 'Released or resurrected here (the path is not joined to the place before)' },
+    m: { icon: 'swirl', text: 'Arrived on this map' },
+  };
   function cmdTrailSvg(c, key, cls, pts, baseAlpha, basePx) {
     let g = '';
-    CmdView.trailSegments(pts.map(p => CmdView.project(p[0], p[1])), 14, 0.15).forEach(sg => {
+    CmdView.trailSegmentsBroken(pts, 14, 0.15).forEach(sg => {
       g += `<polyline class="${cls}" style="${cmdLineStyle(key, basePx, sg.alpha * baseAlpha)}" points="${sg.points.map(p => `${c.f(p.x)},${c.f(p.y)}`).join(' ')}"/>`;
+    });
+    CmdView.trailMarks(pts).forEach(m => {
+      const def = CMD_TRAIL_MARKS[m.kind], p = CmdView.project(m.x, m.y);
+      const when = typeof m.t === 'number' && m.t > 0 ? ' (' + new Date(m.t * 1000).toLocaleTimeString() + ')' : '';
+      if (def) g += '<g class="trailmark">' + cmdMapIcon(def.icon, p.x, p.y, (basePx > 2.5 ? 12 : 9) * c.k, def.text + when) + '</g>';
     });
     return g;
   }
@@ -6031,15 +6095,18 @@
   fetchIssues();
   fetchHistory();
   fetchActivity();
-  setInterval(fetchActivity, 30000);
+  setInterval(refreshGate.guard(fetchActivity), 30000);
   initCommanderLink();
   initCmdLayers();
   initCmdDemo();
   initDungeons();
+  initRefreshPicker();
+  refreshGate.onGap(() => { CmdView.markGap(cmdTracker); CmdPaths.markGap(cmdTrails); });
+  refreshGate.onChange(() => { seedCmdTrails(state.commanders.list); if (cmdDemo.on) { clearInterval(cmdDemo.timer); cmdDemo.timer = setInterval(refreshGate.guard(cmdDemoTick), cmdDemoMs()); } });
   fetchCommanders();
-  setInterval(fetchCommanders, 30000);
-  setInterval(expireCommanders, 3000);
-  setInterval(fetchRoster, 60000);
+  setInterval(fetchCommanders, 30000); // goes through the refresh gate like the stream's reports
+  setInterval(refreshGate.guard(expireCommanders), 3000); // a paused page keeps what it froze
+  setInterval(refreshGate.guard(fetchRoster), 60000);
   initWebSocket();
 
   // First route: the URL hash wins; without one, return to the last tab used.

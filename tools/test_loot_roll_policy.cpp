@@ -12,9 +12,13 @@
 
 using ai::LootMethodTakesRolls;
 using ai::LootRollVote;
+using ai::LootVoteIsEcho;
+using ai::LootWireVote;
 using ai::PoliteRollVote;
 using ai::RealPlayerCompetes;
 using ai::RecipeRollVote;
+using ai::RollWaitElapsed;
+using ai::RollWaitVoteMarginMs;
 using ai::TokenUsableByClass;
 using ai::UniqueCopyOwned;
 
@@ -66,14 +70,19 @@ int main()
     }
 
     // (5) Real player in the roll: a seen NEED competes, a seen GREED or
-    // PASS steps aside even for an item they could use; an unseen vote
-    // competes exactly when the player can use the item.
+    // PASS steps aside even for an item they could use. An unseen vote
+    // never competes on bare usability alone (#967: in an LFT/pool group
+    // every usable drop is usable by someone, which demoted every upgrade
+    // NEED to GREED); only a hired companion grouped with its master yields
+    // those. Alts wait like pool bots instead.
     {
         CHECK(RealPlayerCompetes(true, LootRollVote::Need, false));
         CHECK(!RealPlayerCompetes(true, LootRollVote::Greed, true));
         CHECK(!RealPlayerCompetes(true, LootRollVote::Pass, true));
-        CHECK(RealPlayerCompetes(false, LootRollVote::Pass, true));
+        CHECK(!RealPlayerCompetes(false, LootRollVote::Pass, true));
         CHECK(!RealPlayerCompetes(false, LootRollVote::Pass, false));
+        CHECK(RealPlayerCompetes(false, LootRollVote::Pass, true, true));
+        CHECK(!RealPlayerCompetes(false, LootRollVote::Pass, false, true));
         std::cout << "  [PASS] real-player competition\n";
     }
 
@@ -87,6 +96,40 @@ int main()
         CHECK(PoliteRollVote(LootRollVote::Greed, true, false) == LootRollVote::Greed);
         CHECK(PoliteRollVote(LootRollVote::Pass, true, false) == LootRollVote::Pass);
         std::cout << "  [PASS] never NEED against a player\n";
+    }
+
+    // (7) Roll wait (#967): the wait ends when every real roller voted, or
+    // when the window ends within the 15 s margin (clears the 5 s "very
+    // often" re-check gap plus tick jitter under load); unknown remaining
+    // time never ends it on its own (the call site votes at once instead).
+    {
+        CHECK(RollWaitVoteMarginMs() == 15000);
+        CHECK(RollWaitElapsed(60000, false) == false);
+        CHECK(RollWaitElapsed(15001, false) == false);
+        CHECK(RollWaitElapsed(15000, false));
+        CHECK(RollWaitElapsed(5000, false));
+        CHECK(RollWaitElapsed(1000, false));
+        CHECK(RollWaitElapsed(60000, true));
+        CHECK(RollWaitElapsed(0, false) == false);
+        std::cout << "  [PASS] roll wait elapses on votes or margin\n";
+    }
+
+    // (8) Wire mapping (#967 M2): live votes are (number 0, type 0) NEED,
+    // (128, 2) GREED, (128, 128) PASS per Group::CountRollVote; anything
+    // with a real roll number is a post-resolution echo (CountTheRoll).
+    {
+        CHECK(LootWireVote(0, 0) == LootRollVote::Need);
+        CHECK(LootWireVote(128, 2) == LootRollVote::Greed);
+        CHECK(LootWireVote(128, 128) == LootRollVote::Pass);
+        CHECK(LootWireVote(42, 1) == LootRollVote::Pass);
+        CHECK(LootWireVote(87, 2) == LootRollVote::Pass);
+        CHECK(!LootVoteIsEcho(0, 0));
+        CHECK(!LootVoteIsEcho(128, 2));
+        CHECK(!LootVoteIsEcho(128, 128));
+        CHECK(LootVoteIsEcho(42, 1));
+        CHECK(LootVoteIsEcho(87, 2));
+        CHECK(LootVoteIsEcho(100, 0));
+        std::cout << "  [PASS] wire vote mapping, echoes ignored\n";
     }
 
     std::cout << "All loot-roll gate checks PASSED!\n";

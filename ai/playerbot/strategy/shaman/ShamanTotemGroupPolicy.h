@@ -4,7 +4,7 @@
 
 // Pure policy for subgroup-aware shaman totem selection (new automation, no
 // donor equivalent: mod-playerbots picks totems manually per fight through
-// per-slot strategies; see docs/PROVENANCE.md).
+// per-slot strategies).
 //
 // Why: totems only affect the shaman's own party (subgroup) in 1.12, but the
 // per-spec totem rows were fixed per spec (every spec dropped Windfury on

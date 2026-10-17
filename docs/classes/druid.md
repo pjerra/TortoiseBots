@@ -67,6 +67,7 @@ The bot's shapeshifting engine maintains the appropriate form based on assigned 
   - Casts *Hibernate* when assigned CC (the bot applies no creature-type filter itself; it relies on core validation).
 - **Interrupts & Stuns:**
   - Casts *Feral Charge* (Bear) as a gap-closer on any out-of-melee enemy.
+  - Runners (shared rule in [overview](overview.md)): casters and moonkin finish a party mob fleeing below 30% health within spell range; a cat druid only takes one it can already hit (*Feral Charge* needs bear form, and bears tank).
   - Casts *Bash* (Bear) as an interrupt (also wired against enemy healers).
 - **Combat Resurrection:**
   - Uses *Rebirth* (Battle Rez) on a dead party member mid-fight through the existing Balance / Feral / Restoration `rebirth` rows (no separate combat-rez gate: the donor's `combat party member dead` trigger feeds only its generic druid rows, which are dead code here). No tank/healer priority.

@@ -30,9 +30,20 @@ namespace ai
         return botThreat > tankThreat * 0.5f;
     }
 
-    // Deferred-spec anchor (review PR #573): no call sites yet — nothing in
-    // TankTargetValue.cpp includes or calls this. Pins the donor rule for a
-    // future explicit-only, stickiness-first split; tank picks are unchanged.
+    // Off-tank assist split (issue #905): anyone but the explicit main
+    // tank peels to loose adds first, while the explicit main tank sticks
+    // to its current target. Explicit-only, so a group with no raid Main
+    // Tank flag keeps the normal loose-add tournament (ai/playerbot/
+    // TankAddPickupPolicy.h: TankHoldsCurrentTarget carries the matching
+    // assist-gate half). Unflagged single-tank groups are untouched.
+    inline bool OffTankPeelsToAdds(bool isExplicitMainTank, unsigned groupTankCount)
+    {
+        return !isExplicitMainTank && groupTankCount > 1;
+    }
+
+    // Deferred-spec anchor (review PR #573): the explicit-only, stickiness-
+    // first split above answers it — tank picks changed for #905, so the
+    // anchor retires to the plain donor rule below.
     // Donor explicit-MT stickiness (TankTargetValue.cpp:76-83): only the
     // explicitly flagged main tank, and only when the group fields more than
     // one tank — a lone tank keeps the normal loose-add tournament.

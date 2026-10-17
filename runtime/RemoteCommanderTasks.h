@@ -783,6 +783,16 @@ inline bool HoldsForAct(bool hasObjectTarget, bool noWalk)
     return hasObjectTarget && !noWalk;
 }
 
+// The hold found the bot still moving: its movement flags, or a server spline
+// still in flight that the flags do not show (MotionMaster::Clear leaves the
+// spline running; the Uldaman chest's Opening broke after 0.2 s on the bot's
+// own last 0.9 yd). The hold stops it, and this attempt does not start the
+// cast: the next look (kTaskTickMs later) starts it on a bot that stands still.
+inline bool ActWaitsForStop(bool flagsMoving, bool splineRunning)
+{
+    return flagsMoving || splineRunning;
+}
+
 // A start attempt that the bot's own movement refused (still on the last yards,
 // a follow step) is retried after the hold stopped it, like any other refusal;
 // after kActTries refused attempts the order ends with the newest refusal.

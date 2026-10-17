@@ -8,6 +8,7 @@
 #include "../ai/playerbot/strategy/Engine.h"
 #include "../ai/playerbot/strategy/Action.h"
 #include "../ai/playerbot/strategy/AiObjectContext.h"
+#include "../ai/playerbot/PullExecutorPolicy.h"
 #include "../ai/playerbot/strategy/generic/PullStrategy.h"
 #include "../ai/playerbot/strategy/values/PositionValue.h"
 #include "../ai/playerbot/WorldPosition.h"
@@ -20,6 +21,7 @@
 // pi-lens-ignore: clang:pp_file_not_found
 #include "Group/Group.h"
 #include <algorithm>
+#include <map>
 #include <set>
 
 namespace TortoiseBots {
@@ -222,31 +224,110 @@ namespace {
 // ContainsStrategy probe: a leveling Arms warrior designated as tank has the
 // STRATEGY_TYPE_TANK bit only after the role kit is applied, and a native
 // Protection bot without the mature pull policy still needs it attached.
+// Readiness follows ai::PullExecutorPolicy: a tank counts as busy only while
+// its combat flag is backed by a live opponent (a victim or attackers). A
+// bare flag with neither is stale and stays a candidate (issue #908).
+static ai::PullCandidateFacts PullCandidateFactsFor(Player* requester, Player* bot)
+{
+    ai::PullCandidateFacts facts;
+    if (!requester || !bot)
+        return facts;
+    facts.inWorld = bot->IsInWorld();
+    facts.alive = bot->IsAlive();
+    facts.sameMap = bot->GetMap() == requester->GetMap();
+    facts.combatFlag = bot->IsInCombat();
+    facts.hasVictim = bot->GetVictim() != nullptr;
+    facts.hasAttackers = !bot->GetAttackers().empty();
+    PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot);
+    if (!ai)
+        return facts;
+    facts.hasAi = true;
+    facts.tankCapable = ai->GetForcedRole() == static_cast<uint8>(BOT_ROLE_TANK) ||
+        PlayerbotAI::IsTank(bot, true);
+    facts.pullReady = PullStrategy::Get(ai) != nullptr;
+    return facts;
+}
+
 bool IsPullCandidate(Player* requester, Player* bot)
 {
-    if (!requester || !bot || !bot->IsInWorld() || !bot->IsAlive() ||
-        bot->IsInCombat() || bot->GetMap() != requester->GetMap())
+    ai::PullCandidateFacts facts = PullCandidateFactsFor(requester, bot);
+    if (ai::PullCandidateBlocked(facts))
         return false;
 
     PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot);
     if (!ai)
         return false;
 
-    if (ai->GetForcedRole() == static_cast<uint8>(BOT_ROLE_TANK) ||
-        PlayerbotAI::IsTank(bot, true))
+    if (!facts.pullReady)
     {
-        if (!PullStrategy::Get(ai))
-        {
-            ai->ChangeStrategy("+pull", BotState::BOT_STATE_NON_COMBAT);
-            ai->ChangeStrategy("+pull", BotState::BOT_STATE_COMBAT);
-        }
-        return PullStrategy::Get(ai) != nullptr;
+        ai->ChangeStrategy("+pull", BotState::BOT_STATE_NON_COMBAT);
+        ai->ChangeStrategy("+pull", BotState::BOT_STATE_COMBAT);
+        facts.pullReady = PullStrategy::Get(ai) != nullptr;
     }
+    return facts.tankCapable && facts.pullReady;
+}
 
-    return false;
+// The refusal detail names the most common blocker across the command scope,
+// so a refused pull says why instead of only that no tank was free.
+static void NotePullBlocker(BotCommandContext const& context, Player* bot, std::map<ai::PullExcludeReason, uint32>& counts)
+{
+    if (!context.requester || !bot)
+        return;
+    ai::PullCandidateFacts facts = PullCandidateFactsFor(context.requester, bot);
+    // A missing "pull" strategy attaches on demand, so it never blocks: the
+    // refusal counts the next reason instead.
+    if (!facts.tankCapable)
+    {
+        ++counts[ai::PullExcludeReason::NotTank];
+        return;
+    }
+    if (ai::PullCandidateInRealFight(facts))
+    {
+        ++counts[ai::PullExcludeReason::Busy];
+        return;
+    }
+    ++counts[ai::ClassifyPullCandidate(facts)];
 }
 
 } // namespace
+
+void CountPullBlockers(BotCommandContext const& context, std::map<ai::PullExcludeReason, uint32>& counts)
+{
+    counts.clear();
+    if (!context.requester)
+        return;
+    if (context.selectedBot)
+        NotePullBlocker(context, context.selectedBot, counts);
+    for (Player* bot : context.partyBots)
+    {
+        if (bot == context.selectedBot)
+            continue;
+        NotePullBlocker(context, bot, counts);
+    }
+    counts.erase(ai::PullExcludeReason::None);
+    counts.erase(ai::PullExcludeReason::NoPullStrategy);
+}
+
+std::string PullBlockerDetail(BotCommandContext const& context)
+{
+    std::map<ai::PullExcludeReason, uint32> counts;
+    CountPullBlockers(context, counts);
+    if (counts.empty())
+        return {};
+    ai::PullExcludeReason top = counts.begin()->first;
+    for (auto const& entry : counts)
+        if (entry.second > counts[top])
+            top = entry.first;
+    std::string detail = ai::PullExcludeWord(top);
+    if (counts[top] > 1)
+    {
+        detail += " (x";
+        detail += std::to_string(counts[top]);
+        detail += ")";
+    }
+    return detail;
+}
+
 
 Player* ResolvePullExecutor(BotCommandContext const& context, bool allowSelected)
 {
@@ -282,12 +363,12 @@ bool PullTankIsBusy(BotCommandContext const& context)
 
     auto busyTank = [&](Player* bot)
     {
-        if (!bot || !bot->IsInWorld() || !bot->IsAlive() || !bot->IsInCombat() ||
-            bot->GetMap() != context.requester->GetMap())
+        if (!bot)
             return false;
-        PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot);
-        return ai && (ai->GetForcedRole() == static_cast<uint8>(BOT_ROLE_TANK) ||
-            PlayerbotAI::IsTank(bot, true));
+        ai::PullCandidateFacts facts = PullCandidateFactsFor(context.requester, bot);
+        if (!facts.inWorld || !facts.alive || !facts.sameMap || !facts.hasAi || !facts.tankCapable)
+            return false;
+        return ai::PullCandidateInRealFight(facts);
     };
 
     if (busyTank(context.selectedBot))
@@ -299,7 +380,8 @@ bool PullTankIsBusy(BotCommandContext const& context)
 }
 
 // Threat window: while the tank pulls and establishes threat, party DPS bots
-// hold at the command anchor. Healers stay active. Uses the mature
+// hold at the command anchor. Healers heal but deal no damage while the
+// hold runs (their off-spec rows are vetoed for the join window). Uses the mature
 // "wait for attack" gate the rotation already honors (AttackAction skips
 // bot->Attack and the multiplier zeroes combat actions), plus an explicit
 // stay hold so the allowed "keep safe distance" action cannot drift the bots

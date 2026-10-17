@@ -45,5 +45,5 @@ Ported code (tick one):
 - [ ] This PR ports or copies code from another project: the original
       licence header is kept, the source licence is AGPL-3.0 compatible
       (e.g. GPL-2.0-or-later, GPL-3.0, AGPL-3.0; not GPL-2.0-only), and the
-      source repo + SHA are in `docs/PROVENANCE.md`.
+      source repo + SHA are named in this PR.
 - [ ] This PR contains only original code.

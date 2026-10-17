@@ -36,17 +36,57 @@ const (
 	TrailMinStepYd = 2.0
 )
 
-// TrailPoint is a place a bot was at: game x, y and the unix second of the report.
-type TrailPoint struct {
-	X float32
-	Y float32
-	T int64
+// A trail must never draw a straight line from where a bot was to where it teleported (a summon, a spirit release, a hearthstone, a
+// portal): that line runs through walls. Two consecutive reports of a bot are joined only while the distance between them is something
+// a unit can walk or ride in the time between them: TravelSlackYd (position rounding, a report that arrives late) plus
+// TravelMaxYdPerSec for each second, the seconds counted from 1 to TravelMaxGapSec. 20 yd/s is above the fastest ground mount of the
+// 1.12 game (about 14 yd/s with speed buffs on top of an epic mount); with the 2 s reports that is a break past 52 yd. The gap is
+// capped so a bot that stood still while reports were missing cannot hide a teleport behind a long silence. The dashboard (commanders.js)
+// uses the same numbers.
+const (
+	TravelMaxYdPerSec = 20.0
+	TravelSlackYd     = 12.0
+	TravelMaxGapSec   = 30.0
+)
+
+// Trail point kinds (TrailPoint.Kind): the event recorded on a point. A point of kind TrailTeleport, TrailRelease or TrailMapChange
+// starts a new segment (no line is drawn from the point before it); TrailDeath only marks where the bot died.
+const (
+	TrailDeath     = 'd' // the bot died here (the line goes on)
+	TrailTeleport  = 't' // a jump no walking or riding explains: a summon, a portal, a teleport
+	TrailRelease   = 'r' // the same jump while the bot was dead (before or after it): a spirit release or a resurrection at the spirit healer
+	TrailMapChange = 'm' // the bot arrived on another map (or instance): the trail starts over
+)
+
+// JumpLimitYd is the farthest two reports gapSec seconds apart may lie and still count as one walk.
+func JumpLimitYd(gapSec float64) float64 {
+	if gapSec < 1 {
+		gapSec = 1
+	}
+	if gapSec > TravelMaxGapSec {
+		gapSec = TravelMaxGapSec
+	}
+	return TravelSlackYd + TravelMaxYdPerSec*gapSec
 }
 
-// BotTrail is one bot's remembered path on one map.
+// TrailPoint is a place a bot was at: game x, y and the unix second of the report. Kind is 0 or one of the Trail* kinds above.
+type TrailPoint struct {
+	X    float32
+	Y    float32
+	T    int64
+	Kind byte
+}
+
+// BotTrail is one bot's remembered path on one map. The unexported fields hold the bot's last report (not copied by Trails).
 type BotTrail struct {
 	Map    uint32
 	Points []TrailPoint
+
+	seen     bool
+	lastX    float64
+	lastY    float64
+	lastT    int64
+	lastDead bool
 }
 
 // commandersState is the latest COMMANDERS payload. It has its own lock so a
@@ -135,17 +175,33 @@ func (st *commandersState) noteTrails(list []model.CommanderBinding, ts int64) {
 			}
 			seen[bot.GUID] = true
 			t := bots[bot.GUID]
-			if t == nil || t.Map != bot.MapID {
+			var kind byte
+			if t == nil {
 				t = &BotTrail{Map: bot.MapID}
 				bots[bot.GUID] = t
+			} else if t.Map != bot.MapID {
+				t = &BotTrail{Map: bot.MapID}
+				bots[bot.GUID] = t
+				kind = TrailMapChange
+			} else if t.seen {
+				jump := math.Hypot(t.lastX-bot.X, t.lastY-bot.Y) > JumpLimitYd(float64(ts-t.lastT))
+				switch {
+				case jump && (t.lastDead || !bot.Alive):
+					kind = TrailRelease
+				case jump:
+					kind = TrailTeleport
+				case !t.lastDead && !bot.Alive:
+					kind = TrailDeath
+				}
 			}
-			if n := len(t.Points); n > 0 {
+			t.seen, t.lastX, t.lastY, t.lastT, t.lastDead = true, bot.X, bot.Y, ts, !bot.Alive
+			if n := len(t.Points); n > 0 && kind == 0 {
 				last := t.Points[n-1]
 				if math.Hypot(float64(last.X)-bot.X, float64(last.Y)-bot.Y) < TrailMinStepYd {
 					continue
 				}
 			}
-			t.Points = append(t.Points, TrailPoint{X: float32(bot.X), Y: float32(bot.Y), T: ts})
+			t.Points = append(t.Points, TrailPoint{X: float32(bot.X), Y: float32(bot.Y), T: ts, Kind: kind})
 			if len(t.Points) > TrailMaxPoints {
 				t.Points = append(t.Points[:0], t.Points[len(t.Points)-TrailMaxPoints:]...)
 			}

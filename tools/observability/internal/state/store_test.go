@@ -695,3 +695,25 @@ func TestPlayersOnlyCycleDoesNotWipeRoster(t *testing.T) {
 		t.Fatalf("expected 1 player row, got %+v", snap.Bots)
 	}
 }
+
+// A bot that jumps farther than it can walk between two snapshots (a summon, a teleport) starts its breadcrumb trail over, so the map
+// never draws a straight line through the world to the new place.
+func TestTrailBreaksOnTeleport(t *testing.T) {
+	c := newClock()
+	s := newTestStore(c)
+	s.ApplyHeartbeat(heartbeat(1, 1))
+	s.ApplyBatch(batch(1, 0, 1, bot(1, "Alpha", 0)))
+	c.Advance(2 * time.Second)
+	s.ApplyHeartbeat(heartbeat(2, 1))
+	s.ApplyBatch(batch(2, 0, 1, bot(1, "Alpha", 40))) // 20 yd/s: a mount at full tilt
+	if got := len(s.Snapshot().Bots[0].Trail); got != 2 {
+		t.Fatalf("a fast ride keeps the trail: %d points", got)
+	}
+	c.Advance(2 * time.Second)
+	s.ApplyHeartbeat(heartbeat(3, 1))
+	s.ApplyBatch(batch(3, 0, 1, bot(1, "Alpha", 400))) // summoned
+	tr := s.Snapshot().Bots[0].Trail
+	if len(tr) != 1 || tr[0].X != 400 {
+		t.Fatalf("a teleport starts the trail over: %+v", tr)
+	}
+}

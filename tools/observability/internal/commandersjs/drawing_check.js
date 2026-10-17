@@ -24,7 +24,7 @@ const ctx = { console };
 vm.createContext(ctx);
 ["commanders.js", "maplayers.js", "unitinfo.js", "paths.js"].forEach((f) => vm.runInContext(fs.readFileSync(path.join(dir, f), "utf8"), ctx, { filename: f }));
 vm.runInContext(
-  [grab("esc"), grabConst("CMD_MAP_ICONS"), grabConst("CMD_OBJECT_ICON"), grab("cmdMapIcon"), grab("cmdLineStyle"), grabConst("cmdPt"), grab("cmdTrailSvg"),
+  [grab("esc"), grabConst("CMD_MAP_ICONS"), grabConst("CMD_OBJECT_ICON"), grab("cmdMapIcon"), grab("cmdLineStyle"), grabConst("cmdPt"), grabConst("CMD_TRAIL_MARKS"), grab("cmdTrailSvg"),
     grab("cmdMemberTrailsSvg"), grab("cmdRunStepsSvg"), grab("cmdStallsSvg"), grab("cmdObjectsSvg"), grab("cmdLineSvg")].join("\n") +
   "\nvar cmdLayers = MapLayers.defaults(); var cmdTrails = CmdPaths.newTrails();", ctx);
 
@@ -108,4 +108,22 @@ ctx.dc = mk();
 vm.runInContext('cmdLayers = MapLayers.setStyle(MapLayers.defaults(), "healline", "th", 300);', ctx);
 const ln = vm.runInContext('cmdLineSvg(dc, "healline", "healline", {x: 1, y: 2}, {x: 3, y: 4}, 0.9)', ctx);
 assert.ok(/<line class="healline" style="stroke-width:4\.80px;opacity:0\.90" x1="-2\.00" y1="-1\.00" x2="-4\.00" y2="-3\.00"\/>/.test(ln), ln);
+
+// ---- a path with a teleport is drawn in pieces, with a swirl where it broke and a skull where the bot died
+{
+  vm.runInContext('cmdLayers = MapLayers.defaults();', ctx);
+  ctx.tpts = [[0, 0, 100], [10, 0, 102], [20, 0, 104], [800, 0, 106, "t"], [810, 0, 108], [820, 0, 110, "d"], [830, 0, 112]];
+  ctx.dc = mk();
+  const svg = vm.runInContext('cmdTrailSvg(dc, "trail", "trail", tpts, 1, 3)', ctx);
+  const lines = (svg.match(/points="[^"]+"/g) || []).map((m) => m.slice(8, -1).split(" ").map((p) => Number(p.split(",")[1]) * -1)); // game x of each vertex
+  assert.ok(lines.length >= 2, "pieces");
+  lines.forEach((xs) => assert.ok(!(Math.min(...xs) <= 20 && Math.max(...xs) >= 800), "one polyline runs from before the teleport to after it: " + xs));
+  assert.ok(lines.some((xs) => Math.max(...xs) >= 830) && lines.some((xs) => Math.min(...xs) === 0), "both sides are drawn");
+  assert.strictEqual((svg.match(/ic-swirl/g) || []).length, 1, "one swirl where it broke");
+  assert.strictEqual((svg.match(/ic-skull/g) || []).length, 1, "one skull where it died");
+  assert.ok(/Teleported or summoned here/.test(svg) && /Died here/.test(svg), "with a hover text");
+  ctx.tpts = [[0, 0, 1], [10, 0, 2], [20, 0, 3]];
+  const plain = vm.runInContext('cmdTrailSvg(dc, "trail", "trail", tpts, 1, 3)', ctx);
+  assert.ok(!/ic-swirl|ic-skull/.test(plain), "no marks on a plain walk");
+}
 console.log("drawing ok");

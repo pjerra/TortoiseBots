@@ -85,7 +85,6 @@ Detailed combat rotations, Turtle WoW 1.18.1 custom abilities, pet handling, and
 
 - [**Host API Contract**](HOST_API.md) — Technical C++ host boundary seams, session lifecycle, and packet bridges.
 - [**Player Control Catalog**](PLAYER_CONTROL.md) — Technical command delivery specification and addon serialization.
-- [**Source Provenance Ledger**](PROVENANCE.md) — Append-oriented attribution and donor lineage ledger.
 - [**License Audit**](LICENSE_AUDIT.md) — Donor license compatibility analysis and release gates.
 - [**Hire Gear Sets**](reference/hire-gear.md) — Generated static level-60 hire sets per class/spec/tier.
 - [**Spell Coverage Reference**](reference/spell-coverage.tsv) — Census of custom Turtle WoW spells mapped into AI strategies.

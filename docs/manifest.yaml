@@ -109,9 +109,6 @@ nodes:
     path: PLAYER_CONTROL.md
     category: reference
     summary: Historical design and delivery contract for the public .bot command catalog; superseded by guides/player-controls.md as the current command surface.
-  - id: ref-provenance
-    path: PROVENANCE.md
-    category: reference
   - id: ref-license-audit
     path: LICENSE_AUDIT.md
     category: reference

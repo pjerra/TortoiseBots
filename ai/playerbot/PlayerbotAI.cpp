@@ -38,6 +38,7 @@
 #include "PlayerbotAI.h"
 #include "BotAreaTriggers.h"
 #include "playerbot/InterruptCastingPolicy.h"
+#include "playerbot/CastKeepsRunningPolicy.h"
 #include "playerbot/WandPolicy.h"
 #include "BotDiagnostics.h"
 #include "BotActionLog.h"
@@ -327,6 +328,7 @@ PacketHandlerSpec const kBotOutgoingPacketHandlers[] =
     { SMSG_TEXT_EMOTE, "receive text emote", false },
     { SMSG_EMOTE, "receive emote", false },
     { SMSG_LOOT_START_ROLL, "loot start roll", true },
+    { SMSG_LOOT_ROLL, "loot vote", true },
     { SMSG_LOOT_ROLL_WON, "loot roll won", true },
     { SMSG_SUMMON_REQUEST, "summon request", false },
     { MSG_RAID_READY_CHECK, "ready check", false },
@@ -545,6 +547,11 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
     }
 
     SC_PHASE("UpdateAI.entry", bot ? bot->GetName() : "(null)");
+
+    // Action log scope (AiPlayerbot.ActionLogScope = commanded): re-read at most
+    // every 15 s per bot, here because the group, binding and hire lookups are
+    // world-thread state. One branch while the log is off.
+    botdiag::BotActionLog::RefreshScope(this);
 
     // A Headless bot has no client to finish a cinematic
     // (CMSG_COMPLETE_CINEMATIC), so any cinematic started mid-session - e.g.
@@ -5544,6 +5551,29 @@ bool PlayerbotAI::CheckCanCastSpell(uint32 spellid, Unit* target, uint8 effectMa
             }
         }
 
+        // Issue #903 (donor mod-playerbots @ 79bd4281,
+        // src/Bot/PlayerbotAI.cpp:3459-3466): a cast-time cast started while
+        // the bot is still moving is cancelled on the first movement packet,
+        // so it only burns the GCD and logs an interrupt. Refuse it here so
+        // the trigger falls through to instant casts instead of firing the
+        // doomed cast. Same cast-time shape as CastSpell below; a spline
+        // still in flight counts as moving (GO-overload clause).
+        {
+            uint32 castTime = GetSpellCastTime(spellInfo, bot);
+            bool spellNeedsStandStill = castTime > 0 ||
+                (IsChanneledSpell(spellInfo) && GetSpellDuration(spellInfo) > 0);
+            if (ai::CastStartBlockedByMove(sServerFacade.isMoving(bot),
+                !bot->movespline->Finalized(), spellNeedsStandStill))
+            {
+                if (checkResult)
+                {
+                    *checkResult = SPELL_FAILED_MOVING;
+                }
+
+                return false;
+            }
+        }
+
         if (!ignoreRange && bot != target && sServerFacade.getDistance2d(bot, target) > sPlayerbotAIConfig.sightDistance)
         {
             if (checkResult)
@@ -6053,7 +6083,10 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
     }
 
     // Fail the cast if the bot is moving and the spell is a casting/channeled spell
-    if (sServerFacade.isMoving(bot) && ((GetSpellCastTime(pSpellInfo, bot, spell) > 0) || (IsChanneledSpell(pSpellInfo) && (GetSpellDuration(pSpellInfo) > 0))))
+    // (#903: CastStartBlockedByMove - the probe above already refused this
+    // case, this is the direct-call backstop for callers that skip it).
+    if (ai::CastStartBlockedByMove(sServerFacade.isMoving(bot), false,
+        (GetSpellCastTime(pSpellInfo, bot, spell) > 0) || (IsChanneledSpell(pSpellInfo) && (GetSpellDuration(pSpellInfo) > 0))))
     {
         // always fail when jumping
         if (IsJumping() || bot->IsFalling())
@@ -6260,8 +6293,11 @@ bool PlayerbotAI::CastSpell(uint32 spellId, GameObject* goTarget, Item* itemTarg
         targets.setDestination(fx, fy, fz);
     }
 
-    // Fail the cast if the bot is moving and the spell is a casting/channeled spell
-    if (sServerFacade.isMoving(bot) && ((GetSpellCastTime(pSpellInfo, bot, spell) > 0) || (IsChanneledSpell(pSpellInfo) && (GetSpellDuration(pSpellInfo) > 0))))
+    // Fail the cast if the bot is moving and the spell is a casting/channeled spell.
+    // A server spline still in flight counts as moving although the movement flags
+    // are clear (MotionMaster::Clear leaves it running): the Opening cast of a
+    // chest broke after 0.2 s on the bot's own last 0.9 yd.
+    if ((sServerFacade.isMoving(bot) || !bot->movespline->Finalized()) && ((GetSpellCastTime(pSpellInfo, bot, spell) > 0) || (IsChanneledSpell(pSpellInfo) && (GetSpellDuration(pSpellInfo) > 0))))
     {
         // always fail when jumping
         if (IsJumping() || bot->IsFalling())
@@ -6649,7 +6685,7 @@ inline int strcmpi(const char* s1, const char* s2)
 // Debuffs a healer must not cleanse (Turtle 1.18.1 spell ids). Mutating Injection (Grobbulus, Naxx, 28169) drops a
 // poison cloud where its carrier stands when it is removed, by dispel or by expiry (core boss_grobbulus.cpp,
 // spell_mutating_injection). A cleanse while the carrier is still in the raid puts the cloud in the raid; bomb runout
-// moves the carrier clear first (BombRunoutPolicy.h). Ported from mod-playerbots dispel_whitelist (docs/PROVENANCE.md).
+// moves the carrier clear first (BombRunoutPolicy.h). Ported from mod-playerbots dispel_whitelist.
 // StoneformTrigger is held back by the same list: Stoneform removes every disease on the bot when it is cast.
 static constexpr uint32 kNeverDispelSpellIds[] = { 28169 };
 
@@ -7767,6 +7803,43 @@ void PlayerbotAI::EndPullWindow()
     // The anchor goes with the window; a no-op when it is already released
     // (combat end, death, a movement order) or when none was placed.
     ReleasePullHold();
+    // Member-owned pet stance: a pet the hold parked passive comes back even
+    // when the tank's pull-end loop can no longer reach this bot (left the
+    // group, logged out, died). Every path that outlives the window funnels
+    // through here (expiry, strategy reset, reload).
+    RestorePullHoldPet();
+}
+
+void PlayerbotAI::ParkPetForPullHold()
+{
+    if (!bot)
+        return;
+    Pet* pet = bot->GetPet();
+    if (!pet || pet->GetReactState() == REACT_PASSIVE)
+        return;
+    // Save once: a re-hold while already parked must not overwrite the
+    // pre-hold stance with REACT_PASSIVE.
+    if (pullHoldPetStance_ == kNoSavedStance)
+        pullHoldPetStance_ = static_cast<int>(pet->GetReactState());
+    pet->SetReactState(REACT_PASSIVE);
+}
+
+void PlayerbotAI::RestorePullHoldPet()
+{
+    if (pullHoldPetStance_ == kNoSavedStance)
+        return;
+    ReactStates stance = static_cast<ReactStates>(pullHoldPetStance_);
+    pullHoldPetStance_ = kNoSavedStance;
+    if (!bot)
+        return;
+    Pet* pet = bot->GetPet();
+    if (!pet)
+        return;
+    // Only undo our own park: a stance the player (or another order) set
+    // meanwhile is theirs, not the hold's.
+    if (pet->GetReactState() != REACT_PASSIVE)
+        return;
+    pet->SetReactState(stance);
 }
 
 size_t PlayerbotAI::DropQueuedMovementOrders()
@@ -9573,6 +9646,14 @@ bool PlayerbotAI::CanMove()
         return false;
     }
 #endif
+    return true;
+}
+
+bool PlayerbotAI::StopForObjectCast()
+{
+    if (!sServerFacade.isMoving(bot) && bot->movespline->Finalized())
+        return false;
+    StopMoving();
     return true;
 }
 

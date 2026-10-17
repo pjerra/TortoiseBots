@@ -226,6 +226,9 @@ public:
     {
     public:
         CastFeignDeathAction(PlayerbotAI* ai) : CastBuffSpellAction(ai, "feign death") {}
+        // Not while a mob on the hunter has only the hunter on its threat list:
+        // it would evade (a scripted event resets). runtime/HunterFeignDeathPolicy.h
+        bool isUseful() override;
     };
 
     REMOVE_BUFF_ACTION(RemoveFeignDeathAction, "feign death");

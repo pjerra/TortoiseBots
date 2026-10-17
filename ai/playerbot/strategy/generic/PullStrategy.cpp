@@ -5,6 +5,7 @@
 #include "../../runtime/PlayerbotAIStorage.h"
 #include "playerbot/GroupMembers.h"
 #include "playerbot/WorldPosition.h"
+#include "playerbot/PullReachPolicy.h"
 #include "PullStrategy.h"
 
 using namespace ai;
@@ -68,6 +69,8 @@ PullStrategy::PullStrategy(PlayerbotAI* ai, std::string pullAction, std::string 
 , pendingToStart(false)
 , pullActionCompleted(false)
 , pullStartTime(0)
+, approachHeadwayTime(0)
+, approachDistance(-1.0f)
 , pullActionCastMs(0)
 , commandPullback(false)
 , commandActive(false)
@@ -407,11 +410,34 @@ uint32 PullStrategy::GetPullActionCastAgeMs() const
     return WorldTimer::getMSTimeDiff(pullActionCastMs, WorldTimer::getMSTime());
 }
 
+void PullStrategy::NotePullApproach(float distanceNow, bool moving)
+{
+    // The reach re-requests every tick while out of range, before the walk
+    // has moved: the policy's first sample always anchors, so this never
+    // expires a pull that just started.
+    if (PullApproachHeadway(distanceNow, approachDistance, approachDistance >= 0.0f, moving))
+    {
+        approachHeadwayTime = time(0);
+        approachDistance = distanceNow;
+    }
+}
+
+bool PullStrategy::HasPullApproachExpired() const
+{
+    PullApproachFacts facts;
+    facts.elapsedOrderSec = pullStartTime ? (long)(time(0) - pullStartTime) : 0;
+    facts.elapsedHeadwaySec = approachHeadwayTime ? (long)(time(0) - approachHeadwayTime) : facts.elapsedOrderSec;
+    facts.baseWindowSec = GetMaxPullTime();
+    return PullApproachExpired(facts);
+}
+
 void PullStrategy::OnPullEnded()
 {
     pendingToStart = false;
     pullActionCompleted = false;
     pullStartTime = 0;
+    approachHeadwayTime = 0;
+    approachDistance = -1.0f;
     pullActionCastMs = 0;
     commandActive = false;
     commandPullback = false;
@@ -461,6 +487,11 @@ void PullStrategy::RequestPull(Unit* target, bool resetTime)
         pullActionCompleted = false;
         pullStartTime = time(0);
         pullActionCastMs = 0;
+        // Anchor the approach-headway clock with the order: the first
+        // approach sample always counts (PullReachPolicy.h), so a pull whose
+        // walk starts late still gets its full first window.
+        approachHeadwayTime = pullStartTime;
+        approachDistance = -1.0f;
         // The opening is decided once per pull, on the first request: a mob
         // that moves while the tank approaches must not flip the pull between
         // walking in and shooting.

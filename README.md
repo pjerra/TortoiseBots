@@ -240,7 +240,6 @@ All architecture, class AI, commands, mechanics, and operational guides are docu
 | 🏛️ [**Architecture Invariants**](docs/concepts/architecture-invariants.md) | The 5 non-negotiable modularity rules and headless session lifecycle |
 | 🔌 [**Host API Contract**](docs/HOST_API.md) | Technical host seams, generic interfaces, and packet routing |
 | 📜 [**Changelog**](CHANGELOG.md) | Chronological log of gameplay fixes, AI updates, and engine releases |
-| 📜 [**Source Provenance**](docs/PROVENANCE.md) | Donor lineage, porting ledger, and commit references |
 
 ---
 
@@ -275,6 +274,6 @@ modified builds (see [`LICENCE.md`](LICENCE.md#attribution-author-notice)).
 
 ## 📜 License & Provenance
 
-Original TortoiseBots work is licensed under **AGPL-3.0-or-later** ([`LICENSE`](LICENSE)). If you distribute it, or run a modified version on a server players connect to, you must publish the full source of that version under the same licence. Contributions are accepted under the same terms. Donor code keeps its own notices (GPL-2.0-or-later / AGPL-3.0 lineages). See [`LICENCE.md`](LICENCE.md), [`docs/PROVENANCE.md`](docs/PROVENANCE.md), and [`docs/LICENSE_AUDIT.md`](docs/LICENSE_AUDIT.md).
+Original TortoiseBots work is licensed under **AGPL-3.0-or-later** ([`LICENSE`](LICENSE)). If you distribute it, or run a modified version on a server players connect to, you must publish the full source of that version under the same licence. Contributions are accepted under the same terms. Donor code keeps its own notices (GPL-2.0-or-later / AGPL-3.0 lineages). See [`LICENCE.md`](LICENCE.md) and [`docs/LICENSE_AUDIT.md`](docs/LICENSE_AUDIT.md).
 
 **Disclaimer:** TortoiseBots is a non-commercial hobby project. Voluntary donations (Ko-fi) only support development; they buy no access, features or service, and are not tied to any server. The author is not affiliated with, does not operate, endorse or receive money from any server that uses this code, and is not responsible for how third parties use it. TortoiseBots is not affiliated with Turtle WoW or its creators. World of Warcraft is a trademark of Blizzard Entertainment; this project is not affiliated with Blizzard.

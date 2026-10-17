@@ -39,4 +39,4 @@ Architecture ownership    → TortoiseBots rules always win
 ### Harvest Behavior, Never Coupling
 - Never copy global bot managers, baked-in player pointers, or core-level bot checks.
 - Keep all state and logic inside `modules/TortoiseBots/`.
-- Record all donor inspirations, file paths, and commit hashes in `docs/reference/donor-map.tsv` and `docs/PROVENANCE.md`.
+- Record all donor inspirations, file paths, and commit hashes in `docs/reference/donor-map.tsv`, and the source commit in the pull request.

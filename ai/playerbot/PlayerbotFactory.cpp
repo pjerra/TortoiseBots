@@ -256,7 +256,11 @@ void PlayerbotFactory::ProvisionSpellsAndGear()
     if ((bot->GetClass() == CLASS_HUNTER && bot->GetLevel() >= TortoiseBots::HUNTER_PET_MIN_LEVEL) ||
         bot->GetClass() == CLASS_WARLOCK)
     {
-        InitPet();
+        // Issue #1043: no pet save here. Each SavePetToDB is its own async
+        // transaction, and back-to-back saves of one pet ran in parallel on
+        // the character DB workers and hit "Duplicate entry" on character_pet.
+        // The hire provisioner saves the bot (and so the pet) once at the end.
+        InitPet(false);
         InitPetSpells();
     }
     // Issue #381: a hire at a level below the character's own (or a stale
@@ -265,7 +269,8 @@ void PlayerbotFactory::ProvisionSpellsAndGear()
     // rank the level still allows.
     PruneOverLevelSpellRanks();
     EnchantEquipment();
-    bot->SaveToDB();
+    // No SaveToDB here: the only caller (HireProvisionService::ProvisionHeavy)
+    // saves the bot once after its own gear step (issue #1043).
 }
 
 
@@ -490,7 +495,7 @@ void PlayerbotFactory::AddConsumables()
    }
 }
 
-void PlayerbotFactory::InitPet()
+void PlayerbotFactory::InitPet(bool saveToDb)
 {
     // Randomize a new pet (only for hunters)
     if (bot->GetClass() != CLASS_HUNTER)
@@ -574,7 +579,8 @@ void PlayerbotFactory::InitPet()
             bot->SetPetGuid(pet->getObjectGuid());
 
             sLog.outDebug(  "Bot %s: assign pet %d (%d level)", bot->GetName(), co->entry, bot->GetLevel());
-            pet->SavePetToDB(PET_SAVE_AS_CURRENT);
+            if (saveToDb)
+                pet->SavePetToDB(PET_SAVE_AS_CURRENT);
             bot->PetSpellInitialize();
             break;
         }
@@ -595,7 +601,8 @@ void PlayerbotFactory::InitPet()
         if (!petName.empty())
         {
             pet->SetName(petName);
-            pet->SavePetToDB(PET_SAVE_AS_CURRENT);
+            if (saveToDb)
+                pet->SavePetToDB(PET_SAVE_AS_CURRENT);
         }
     }
     else
@@ -1859,6 +1866,11 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
                             Item* pItem = bot->EquipNewItem(eDest, newItemId, true);
                             if (pItem)
                             {
+                                // Issue #960: EquipNewItem never rolls a suffix; when no suffix
+                                // scores for this spec (e.g. resistance-only jewelry groups),
+                                // roll one like loot instead of wearing it stat-less.
+                                if (!randomEnchBestId && proto->RandomProperty)
+                                    randomEnchBestId = Item::GenerateItemRandomPropertyId(newItemId);
                                 if (randomEnchBestId)
                                 {
                                     pItem->SetItemRandomProperties(randomEnchBestId);
@@ -1944,8 +1956,11 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
                     if (RandomBotFacade::CanEquipUnseenItem(bot, slot, eDest, fallbackId) != EQUIP_ERR_OK)
                         continue;
                     // Guarded empty above: equip directly, destroy nothing.
-                    if (bot->EquipNewItem(eDest, fallbackId, true))
+                    if (Item* pItem = bot->EquipNewItem(eDest, fallbackId, true))
                     {
+                        // Issue #960: same suffix-blind create as the main loop above.
+                        if (proto->RandomProperty)
+                            pItem->SetItemRandomProperties(Item::GenerateItemRandomPropertyId(fallbackId));
                         sLog.outDetail("Bot #%d <%s>: slot %u low-level fallback equipped %u",
                             bot->GetGUIDLow(), bot->GetName(), slot, fallbackId);
                         found = true;

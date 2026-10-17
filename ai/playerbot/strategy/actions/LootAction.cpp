@@ -3,6 +3,7 @@
 #include "SkinningLootPolicy.h"
 #include "LootWindowPolicy.h"
 #include "LootAction.h"
+#include "playerbot/CastKeepsRunningPolicy.h"
 
 #include "playerbot/LootObjectStack.h"
 #include "playerbot/PlayerbotAIConfig.h"
@@ -22,6 +23,13 @@ using namespace ai;
 
 bool LootAction::Execute(Event& event)
 {
+    // The gather cast clears the loot target when it starts, so without this
+    // the chain re-selected the node mid-cast and "open loot" re-fired into
+    // the cast gate every tick, burning the three open attempts before the
+    // running cast finished (#1062).
+    if (ai::LootChainBlockedByCast(bot->IsNonMeleeSpellCasted(false, true, true)))
+        return false;
+
     if (!AI_VALUE(bool, "has available loot"))
         return false;
 
@@ -70,6 +78,13 @@ enum ProfessionSpells
 
 bool OpenLootAction::Execute(Event& event)
 {
+    // mod-playerbots parity (OpenLootAction::Execute): never re-issue the
+    // gather cast while one is running. The failure count below must not see
+    // this tick either, or the three-strike abandon wedged the node before
+    // the running cast finished (#1062).
+    if (ai::LootChainBlockedByCast(bot->IsNonMeleeSpellCasted(false, true, true)))
+        return false;
+
     LootObject lootObject = AI_VALUE(LootObject, "loot target");
     // DoLoot re-validates the object (Refresh), which empties lootObject.guid when it is
     // no longer lootable; keep the guid the attempt was made on.
@@ -91,7 +106,21 @@ bool OpenLootAction::Execute(Event& event)
         }
     }
 
+    stoppedForCast = false;
+    // The duration is a member: a corpse open set it to lootDelay, and a cast
+    // must not inherit that (or any earlier value) as its sleep.
+    SetDuration(sPlayerbotAIConfig.reactDelay);
     bool result = DoLoot(lootObject);
+
+    // A cast on the object (gather, skin, open) sleeps through its cast time,
+    // like any cast action; waking after 1 s let "update follow" walk the bot
+    // off the node and the core cancelled the cast (#1062).
+    {
+        Spell* cast = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL);
+        uint32 const castMs = (result && cast && cast->getState() == SPELL_STATE_PREPARING && cast->GetCastTime() > 0)
+            ? ai->GetSpellCastDuration(cast) : 0;
+        SetDuration(ai::DecideOpenLootDuration(result, castMs, GetDuration()));
+    }
     LootObjectStack* lootStack = AI_VALUE(LootObjectStack*, "available loot");
 
     // Bounded give-up: count every open attempt per object on the stack's failure memory
@@ -107,7 +136,9 @@ bool OpenLootAction::Execute(Event& event)
     // abandoned for 120 s and the bot moves on. Player-ordered looting only issues the
     // action once per order, so a counter that needs repeated attempts can never veto a
     // fresh order.
-    if (!lootGuid.IsEmpty() && lootStack)
+    // A stop before the cast (DoLoot, StopForObjectCast) is no attempt: the
+    // cast comes on the next tick.
+    if (!lootGuid.IsEmpty() && lootStack && !stoppedForCast)
         lootStack->NoteApproachFailure(lootGuid);
 
     if (result)
@@ -244,6 +275,16 @@ bool OpenLootAction::DoLoot(LootObject& lootObject)
     GameObject* go = ai->GetGameObject(lootObject.guid);
     if (go && (go->getLootState() == GO_ACTIVATED || go->GetGoState() == GO_STATE_ACTIVE))
         return false;
+
+    // The cast on the object (Opening, Mining, Herb Gathering, a key) breaks on
+    // the first step, and a bot that just walked here may still be on its last
+    // yards. Stop it and cast on a later tick, once it stands still.
+    if (ai->StopForObjectCast())
+    {
+        stoppedForCast = true;
+        sLog.outDebug("[BOT LOOT] %s: still moving, stopped before the cast on guid=%lu", bot->GetName(), lootObject.guid.GetRawValue());
+        return false;
+    }
 
     if (lootObject.skillId == SKILL_MINING)
         return ai->HasSkill(SKILL_MINING) ? ai->CastSpell(MINING, bot) : false;

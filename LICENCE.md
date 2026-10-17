@@ -37,10 +37,9 @@ Contributors confirm their consent by adding themselves to
 ### Donor code
 
 Every file ported from a donor must retain its original copyright and licence
-notice. See `ai/playerbot/` headers,
-[`docs/PROVENANCE.md`](docs/PROVENANCE.md), and
-[`docs/LICENSE_AUDIT.md`](docs/LICENSE_AUDIT.md) for source commits and the
-open compatibility audit. Do not strip those notices.
+notice. See `ai/playerbot/` headers and
+[`docs/LICENSE_AUDIT.md`](docs/LICENSE_AUDIT.md) for the donors, their source
+commits and the open compatibility audit. Do not strip those notices.
 
 ## Upstream — tortoise-wow/tortoise-wow
 
@@ -100,7 +99,7 @@ licence text.
   matrix is complete and every included grant is compatible with AGPL-3.0.
 * Keep the TortoiseBots author attribution and source link intact (see
   *Attribution* above).
-* Keep notices intact and record substantial ports in
-  [`docs/PROVENANCE.md`](docs/PROVENANCE.md).
+* Keep notices intact and name the source repository and commit of a port in
+  its pull request.
 * Track evidence and unresolved items in
   [`docs/LICENSE_AUDIT.md`](docs/LICENSE_AUDIT.md).

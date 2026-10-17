@@ -23,7 +23,7 @@ It is a hobby project built for its owner and interested players: pragmatic, sma
 | Config (`PlayerbotAIConfig.*`, `aiplayerbot.conf.dist.in`, `conf/tortoise_bots.conf.dist`) | [`docs/guides/configuration-tuning.md`](docs/guides/configuration-tuning.md) | `python3 tools/verify_okf.py` |
 | Class AI (`strategy/<class>/*`) | the class doc in [`docs/classes/`](docs/classes/) | `python3 tools/verify_okf.py` |
 | Host seams, sessions, lifecycle (`host/*`, `runtime/BotManager.*`) | [`docs/HOST_API.md`](docs/HOST_API.md), [`docs/concepts/architecture-invariants.md`](docs/concepts/architecture-invariants.md) | `tools/verify_penqle_host_contract.sh` |
-| Ported donor behaviour | [`docs/PROVENANCE.md`](docs/PROVENANCE.md) (feature, source repo + SHA + files, copied/ported/reimplemented, reason, validation) | — |
+| Ported donor behaviour | source repo + SHA in the PR description; a new donor project in [`docs/LICENSE_AUDIT.md`](docs/LICENSE_AUDIT.md) | — |
 | Doc structure | `docs/manifest.yaml`, `docs/README.md` | `python3 tools/verify_okf.py` |
 | Observability daemon (`tools/observability`, `runtime/ObservabilityEmitter.*`) | [`tools/observability/README.md`](tools/observability/README.md) | see that file |
 

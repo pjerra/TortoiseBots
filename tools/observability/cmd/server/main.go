@@ -452,19 +452,25 @@ func main() {
 	}))
 
 	// The bound bots' recent paths (a short bounded history kept in memory), so a page opened mid-run starts with the trails drawn:
-	// {"<commander>": {"<bot guid>": {"map": 209, "pts": [[x, y, unix seconds], ...]}}}, oldest point first.
+	// {"<commander>": {"<bot guid>": {"map": 209, "pts": [[x, y, unix seconds], ...]}}}, oldest point first. A point where something
+	// happened carries a fourth element: "d" the bot died here, "t" it teleported (a jump no walking explains), "r" the same while dead
+	// (spirit release or resurrection), "m" it arrived on this map. A point marked t, r or m starts a new segment: draw no line from the
+	// point before it.
 	mux.HandleFunc("/api/v1/commanders/trails", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		type trailJSON struct {
-			Map uint32       `json:"map"`
-			Pts [][3]float64 `json:"pts"`
+			Map uint32  `json:"map"`
+			Pts [][]any `json:"pts"`
 		}
 		out := map[string]map[string]trailJSON{}
 		for c, bots := range store.Trails() {
 			m := make(map[string]trailJSON, len(bots))
 			for g, t := range bots {
-				pts := make([][3]float64, len(t.Points))
+				pts := make([][]any, len(t.Points))
 				for i, p := range t.Points {
-					pts[i] = [3]float64{math.Round(float64(p.X)*10) / 10, math.Round(float64(p.Y)*10) / 10, float64(p.T)}
+					pts[i] = []any{math.Round(float64(p.X)*10) / 10, math.Round(float64(p.Y)*10) / 10, p.T}
+					if p.Kind != 0 {
+						pts[i] = append(pts[i], string(rune(p.Kind)))
+					}
 				}
 				m[strconv.FormatUint(uint64(g), 10)] = trailJSON{Map: t.Map, Pts: pts}
 			}

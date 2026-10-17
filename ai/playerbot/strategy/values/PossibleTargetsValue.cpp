@@ -163,11 +163,13 @@ bool PossibleTriggersValue::AcceptUnit(Unit* unit)
     // Listed permanent-aura creature (opt-in keep-out), selectable or not.
     if (KeepoutFor(unit))
         return true;
-    // Invisible trigger NPCs cannot be selected.
-    if (!unit->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE))
-        return false;
-    // Periodic-trigger aura whose triggered spell deals school damage.
+    // Selectable bosses spin too (Herod's Whirlwind 8989), but a selectable
+    // mob with a permanent burning aura (Fire Shield II 184 on Scarlet
+    // Conjuror 4297) must stay fightable: school damage still lists
+    // invisible emitters only, weapon spins list anyone.
+    bool const selectable = !unit->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
     Unit::AuraList const& triggered = unit->GetAurasByType(SPELL_AURA_PERIODIC_TRIGGER_SPELL);
+    bool spinning = false;
     for (Unit::AuraList::const_iterator it = triggered.begin(); it != triggered.end(); ++it)
     {
         Aura* aura = *it;
@@ -181,10 +183,11 @@ bool PossibleTriggersValue::AcceptUnit(Unit* unit)
         if (!triggerProto)
             continue;
         for (int i = 0; i < MAX_EFFECT_INDEX; ++i)
-            if (triggerProto->Effect[i] == SPELL_EFFECT_SCHOOL_DAMAGE)
-                return true;
+            if (TriggerSpellMarksSpinHazard((int)triggerProto->Effect[i],
+                (int)triggerProto->EffectImplicitTargetA[i], (int)triggerProto->EffectImplicitTargetB[i], selectable))
+                spinning = true;
     }
-    return false;
+    return spinning;
 }
 
 CreatureAuraKeepout const* PossibleTriggersValue::KeepoutFor(Unit* unit)
@@ -195,12 +198,14 @@ CreatureAuraKeepout const* PossibleTriggersValue::KeepoutFor(Unit* unit)
     if (!row)
         return nullptr;
     // The explicit-order exemption is checked by the callers (per bot).
-    if (!CreatureAuraKeepoutApplies(true, row, sServerFacade.IsAlive(unit), unit->HasAura(row->auraSpellId), false))
+    // An aura-less row (Living Poison) needs no aura check.
+    if (!CreatureAuraKeepoutApplies(true, row, sServerFacade.IsAlive(unit),
+            CreatureAuraKeepoutMarkedLive(*row, row->auraSpellId && unit->HasAura(row->auraSpellId)), false))
         return nullptr;
     return row;
 }
 
-Unit* PossibleTriggersValue::KeepoutRingAt(PlayerbotAI* ai, float x, float y, Unit* extra)
+Unit* PossibleTriggersValue::KeepoutRingAt(PlayerbotAI* ai, float x, float y, Unit* extra, bool ignoreTankExempt)
 {
     if (!sPlayerbotAIConfig.avoidCreatureAuras || !ai)
         return nullptr;
@@ -210,6 +215,8 @@ Unit* PossibleTriggersValue::KeepoutRingAt(PlayerbotAI* ai, float x, float y, Un
     {
         CreatureAuraKeepout const* row = KeepoutFor(unit);
         if (!CreatureAuraKeepoutApplies(true, row, true, true, unit && unit->GetObjectGuid() == explicitTarget))
+            return false;
+        if (ignoreTankExempt && row->tankExempt)
             return false;
         float const dx = unit->GetPositionX() - x, dy = unit->GetPositionY() - y;
         return CreatureAuraEndPointBlocked(*row, std::sqrt(dx * dx + dy * dy));
@@ -266,7 +273,7 @@ void PossibleTriggersValue::BeginKeepoutTick()
 }
 
 bool PossibleTriggersValue::SnapshotRingedAt(PlayerbotAI* ai, float x, float y, float z, Unit* skip,
-    bool landingLookup)
+    bool landingLookup, bool ignoreTankExempt)
 {
     if (!sPlayerbotAIConfig.avoidCreatureAuras || !ai)
         return false;
@@ -302,7 +309,8 @@ bool PossibleTriggersValue::SnapshotRingedAt(PlayerbotAI* ai, float x, float y, 
             if (CreatureAuraKeepout const* row = KeepoutFor(unit))
                 out.push_back({ unit->GetObjectGuid().GetRawValue(), unit->GetPositionX(), unit->GetPositionY(),
                     unit->GetPositionZ(), CreatureAuraHazardRadius(*row),
-                    !unit->IsStopped() || unit->GetMotionMaster()->GetCurrentMovementGeneratorType() != IDLE_MOTION_TYPE });
+                    !unit->IsStopped() || unit->GetMotionMaster()->GetCurrentMovementGeneratorType() != IDLE_MOTION_TYPE,
+                    row->tankExempt });
         hazardSnapshotRefreshCount.fetch_add(1, std::memory_order_relaxed);
         return out;
     };
@@ -323,24 +331,26 @@ bool PossibleTriggersValue::SnapshotRingedAt(PlayerbotAI* ai, float x, float y, 
         // A gap-closer landing never fails open: without a usable snapshot,
         // #882's one bounded lookup around the landing.
         ringed = CreatureAuraLandingRinged(KeepoutSnapshotCache(), key, now, x, y, z, judged, fill,
-            [&](float px, float py) { return visit(px, py, maxHazard); }, &view) != 0;
+            [&](float px, float py) { return visit(px, py, maxHazard); }, &view, nullptr, ignoreTankExempt) != 0;
     }
     else
-        ringed = CreatureAuraSnapshotRinged(KeepoutSnapshotCache(), key, now, x, y, z, judged, fill, &view) != 0;
+        ringed = CreatureAuraSnapshotRinged(KeepoutSnapshotCache(), key, now, x, y, z, judged, fill, &view,
+            ignoreTankExempt) != 0;
     if (view.budgetMiss)
         hazardSnapshotBudgetMissCount.fetch_add(1, std::memory_order_relaxed);
     return ringed;
 }
 
-bool PossibleTriggersValue::EndPointRinged(PlayerbotAI* ai, float x, float y, float z, Unit* extra)
+bool PossibleTriggersValue::EndPointRinged(PlayerbotAI* ai, float x, float y, float z, Unit* extra,
+    bool ignoreTankExempt)
 {
     if (!sPlayerbotAIConfig.avoidCreatureAuras || !ai)
         return false;
     // `extra` (the current target) and the cached list, live; then the
     // shared hazard snapshot for rings past the list.
-    if (KeepoutRingAt(ai, x, y, extra))
+    if (KeepoutRingAt(ai, x, y, extra, ignoreTankExempt))
         return true;
-    return SnapshotRingedAt(ai, x, y, z, extra);
+    return SnapshotRingedAt(ai, x, y, z, extra, false, ignoreTankExempt);
 }
 
 bool PossibleTriggersValue::GapCloserCouldFire(PlayerbotAI* ai, std::string const& spell, Unit* target)
@@ -387,23 +397,27 @@ bool PossibleTriggersValue::GapCloserIntoKeepout(PlayerbotAI* ai, std::string co
     bool const isTank = PlayerbotAI::IsTank(bot);
     ObjectGuid const explicitTarget = context->GetValue<ObjectGuid>("explicit attack target")->Get();
     bool const ordered = target->GetObjectGuid() == explicitTarget;
-    if (isTank || ordered)
+    if (ordered)
         return false; // CreatureAuraGapCloserVetoed allows these; skip the lookups
+    // A tank is exempt only from the rows that give tanks a pass; on a map
+    // with none, skip the lookups.
+    if (isTank && !CreatureAuraMapHasNonTankExemptRow(bot->GetMapId()))
+        return false;
     // Asked from isUseful() on every tick the trigger fires: nothing to veto
     // while the cast cannot fire, and isPossible() refuses it then anyway.
     if (!GapCloserCouldFire(ai, spell, target))
         return false;
-    if (KeepoutFor(target))
-        return CreatureAuraGapCloserVetoed(true, false, isTank, ordered);
+    if (CreatureAuraKeepout const* targetRow = KeepoutFor(target))
+        return CreatureAuraGapCloserVetoed(true, false, isTank && targetRow->tankExempt, ordered);
     float lx = 0.0f, ly = 0.0f;
     CreatureAuraGapCloserLanding(bot->GetPositionX(), bot->GetPositionY(),
         target->GetPositionX(), target->GetPositionY(), bot->GetCombatReach(target, true, 0.0f), lx, ly);
     // Fast path: the bot's cached 15 yd list, read fresh every time.
-    if (KeepoutRingAt(ai, lx, ly))
-        return CreatureAuraGapCloserVetoed(false, true, isTank, ordered);
+    if (KeepoutRingAt(ai, lx, ly, nullptr, isTank))
+        return CreatureAuraGapCloserVetoed(false, true, false, ordered);
     // Rings past the list: the shared hazard snapshot, or #882's bounded
     // lookup around the landing when no snapshot is usable. The target is
     // checked live above.
-    bool const landingInRing = SnapshotRingedAt(ai, lx, ly, target->GetPositionZ(), target, true);
-    return CreatureAuraGapCloserVetoed(false, landingInRing, isTank, ordered);
+    bool const landingInRing = SnapshotRingedAt(ai, lx, ly, target->GetPositionZ(), target, true, isTank);
+    return CreatureAuraGapCloserVetoed(false, landingInRing, false, ordered);
 }

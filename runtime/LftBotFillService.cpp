@@ -1,5 +1,7 @@
 #include "LftBotFillService.h"
 #include "BotActivityLease.h"
+#include "LftCompPolicy.h"
+#include "LftRoleKitPolicy.h"
 
 #include "BotManager.h"
 #include "PlayerbotAIStorage.h"
@@ -39,14 +41,6 @@ namespace
 bool HasInstance(std::vector<std::string> const& v, std::string const& s)
 {
     return std::find(v.begin(), v.end(), s) != v.end();
-}
-
-uint8 PickRole(uint8 mask, uint8 tanks, uint8 healers, uint8 dps)
-{
-    if ((mask & LFT_ROLE_TANK) && tanks < 1) return LFT_ROLE_TANK;
-    if ((mask & LFT_ROLE_HEALER) && healers < 1) return LFT_ROLE_HEALER;
-    if ((mask & LFT_ROLE_DAMAGE) && dps < 3) return LFT_ROLE_DAMAGE;
-    return 0;
 }
 
 struct DungeonLevelRange
@@ -359,6 +353,43 @@ bool LftBotFillService::EquipBestShieldFromBags(Player* bot) const
     }
 
     return false;
+}
+
+uint8 LftBotFillService::GetCombatKitRoleMask(Player const* bot) const
+{
+    if (!bot)
+        return 0;
+    PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(const_cast<Player*>(bot));
+    if (!ai)
+        return 0;
+
+    // Same named-spec tables as BotPlayerAdapter::GetBotRoles (ambient
+    // strategies such as "dps assist" ride along with every spec and must not
+    // produce a role bit).
+    bool kitTank = ai->HasStrategy("protection", BotState::BOT_STATE_COMBAT) ||
+        ai->HasStrategy("tank feral", BotState::BOT_STATE_COMBAT) ||
+        ai->HasStrategy("bear", BotState::BOT_STATE_COMBAT) ||
+        ai->HasStrategy("tank", BotState::BOT_STATE_COMBAT);
+    bool kitHealer = ai->HasStrategy("holy", BotState::BOT_STATE_COMBAT) ||
+        ai->HasStrategy("discipline", BotState::BOT_STATE_COMBAT) ||
+        ai->HasStrategy("restoration", BotState::BOT_STATE_COMBAT) ||
+        ai->HasStrategy("heal", BotState::BOT_STATE_COMBAT) ||
+        ai->HasStrategy("resto", BotState::BOT_STATE_COMBAT);
+    static char const* const kitDpsSpecs[] = { "arms", "fury",
+        "retribution", "beast mastery", "marksmanship", "survival",
+        "combat", "assassination", "subtlety", "shadow",
+        "elemental", "enhancement", "frost", "fire", "arcane",
+        "affliction", "demonology", "destruction", "dps feral",
+        "balance", "cat" };
+    bool kitDps = false;
+    for (char const* spec : kitDpsSpecs)
+        if (ai->HasStrategy(spec, BotState::BOT_STATE_COMBAT))
+        {
+            kitDps = true;
+            break;
+        }
+
+    return (kitTank ? kLftRoleTank : 0) | (kitHealer ? kLftRoleHealer : 0) | (kitDps ? kLftRoleDamage : 0);
 }
 
 void LftBotFillService::ClearForcedRole(uint32 guidLow)
@@ -687,40 +718,93 @@ void LftBotFillService::Update(uint32_t diff)
             if (filledThisTick >= maxPerInterval)
                 break;
 
-            // Gather already queued players (humans + bots) for this instance/team/hardcore
-            std::vector<LFTManager::QueuedInfo> together;
-            together.reserve(queued.size());
-            for (auto const& q : queued)
+            // Replay the core offer match over entries that may join a NEW
+            // offer (runtime/LftCompPolicy.h). Committed (in-offer) members
+            // keep their assigned slots and never shape a new offer; joinTime
+            // order is stable (guidLow tiebreak) and a party block is tried
+            // atomically in core group-slot order. A block holding a human
+            // that fits nowhere waits instead of stranding bots around it
+            // (nothing the fill queues can ever place).
+            LftCompResult comp;
             {
-                if (!HasInstance(q.instances, instance))
+                // in-offer guidLows in this partition/instance, for exclusion.
+                std::unordered_set<uint32_t> committed;
+                for (auto const& q : queued)
+                {
+                    if (!HasInstance(q.instances, instance))
+                        continue;
+                    if (q.team != part.team || q.isHardcore != part.hardcore)
+                        continue;
+                    if (sLFTMgr.IsInOffer(q.guid))
+                        committed.insert(q.guid.GetCounter());
+                }
+                std::vector<LftCompEntry> entries;
+                entries.reserve(queued.size());
+                bool hasHuman = false;
+                // blockId approximates the core queueLeaderGuid seam with the
+                // live group the entrant stands in now: leader guidLow as
+                // block, member-slot index as order. Entrants outside a live
+                // group stand alone, like a solo queue in the core.
+                for (auto const& q : queued)
+                {
+                    if (!HasInstance(q.instances, instance))
+                        continue;
+                    if (q.team != part.team || q.isHardcore != part.hardcore)
+                        continue;
+                    if (committed.count(q.guid.GetCounter()))
+                        continue;
+                    bool human = !BotManager::Instance().IsBot(q.guid);
+                    if (human)
+                        hasHuman = true;
+                    uint32_t self = q.guid.GetCounter();
+                    uint32_t block = self;
+                    uint32_t seq = 0;
+                    // The core groups by stored queueLeaderGuid, which this
+                    // world-thread tick cannot read for offline/changed
+                    // parties. Approximate with the live group the entrant
+                    // stands in now: leader guidLow as block, member-slot
+                    // index as order. Entrants outside a live group stand
+                    // alone, like a solo queue (or an unchanged party member
+                    // by the same leader key) in the core.
+                    if (Player* live = sObjectAccessor.FindPlayer(q.guid))
+                        if (Group* group = live->GetGroup())
+                            if (group->GetMembersCount() > 1)
+                            {
+                                block = group->GetLeaderGuid().GetCounter();
+                                uint32_t slot = 0;
+                                for (Group::MemberSlot const& member : group->GetMemberSlots())
+                                {
+                                    if (member.guid == q.guid)
+                                    {
+                                        seq = slot;
+                                        break;
+                                    }
+                                    ++slot;
+                                }
+                            }
+                    LftCompEntry entry;
+                    entry.guidLow = self;
+                    entry.joinTime = static_cast<uint32_t>(q.joinTime);
+                    entry.roleMask = q.roleMask;
+                    entry.blockId = block;
+                    entry.blockSeq = seq;
+                    entry.human = human;
+                    entries.push_back(entry);
+                }
+                if (!hasHuman)
                     continue;
-                if (q.team != part.team || q.isHardcore != part.hardcore)
+                if (entries.empty())
+                    continue; // everyone unqueued is already committed: wait for the offer
+                comp = LftComputeMissingRoles(entries);
+                if (comp.blockedHumans)
+                {
+                    TB_LOG_DETAIL("TortoiseBots: LFT fill waits for instance %s (human party fits no 1/1/3 slot; no bots queued)", instance.c_str());
                     continue;
-                together.push_back(q);
+                }
             }
-
-            if (together.empty())
-                continue;
-            bool hasHuman = false;
-            for (auto const& t : together)
-                if (!BotManager::Instance().IsBot(t.guid)) { hasHuman = true; break; }
-            if (!hasHuman)
-                continue;
-
-            // Compute role assignment for together sorted by joinTime
-            std::sort(together.begin(), together.end(), [](LFTManager::QueuedInfo const& a, LFTManager::QueuedInfo const& b){ return a.joinTime < b.joinTime; });
-            uint8 tanks = 0, healers = 0, dps = 0;
-            for (auto const& q : together)
-            {
-                uint8 role = PickRole(q.roleMask, tanks, healers, dps);
-                if (!role) continue;
-                if (role == LFT_ROLE_TANK) ++tanks;
-                else if (role == LFT_ROLE_HEALER) ++healers;
-                else if (role == LFT_ROLE_DAMAGE) ++dps;
-            }
-            uint8 needTank = (tanks < 1) ? 1 - tanks : 0;
-            uint8 needHeal = (healers < 1) ? 1 - healers : 0;
-            uint8 needDps = (dps < 3) ? 3 - dps : 0;
+            uint8 needTank = comp.needTank;
+            uint8 needHeal = comp.needHeal;
+            uint8 needDps = comp.needDps;
             if (needTank == 0 && needHeal == 0 && needDps == 0)
                 continue;
 
@@ -793,9 +877,22 @@ void LftBotFillService::Update(uint32_t diff)
                     continue;
                 std::vector<std::string> instVec;
                 instVec.push_back(instance);
-                // Forced role only when the operator opted into role borrowing.
-                bool borrowRole = sPlayerbotAIConfig.randomBotLftAllowRoleBorrow;
-                if (borrowRole)
+                // Forced role when the operator opted into role borrowing, or
+                // when the installed kit would not play the slot the spec was
+                // picked for (issue #966): a feral druid masks Tank|DPS but
+                // defaults to its Cat kit, so the queued tank slot must hand
+                // the role to the bot or the group leans on a cat. Single-role
+                // kits already match their slot and skip the handoff.
+                bool assignRole = sPlayerbotAIConfig.randomBotLftAllowRoleBorrow;
+                if (!assignRole)
+                {
+                    LftRoleKitInputs kitDecision;
+                    kitDecision.queuedRole = needRole;
+                    kitDecision.talentRoleMask = GetBotRoleMask(chosen);
+                    kitDecision.kitRoleMask = GetCombatKitRoleMask(chosen);
+                    assignRole = LftKitNeedsRoleAssignment(kitDecision);
+                }
+                if (assignRole)
                     if (PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(chosen))
                     {
                         // Same rebuild as `.bot role`: a stored strategy
@@ -809,7 +906,7 @@ void LftBotFillService::Update(uint32_t diff)
                 bool ok = sLFTMgr.QueuePlayer(chosen, instVec, needRole);
                 if (!ok)
                 {
-                    if (borrowRole)
+                    if (assignRole)
                         if (PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(chosen))
                         {
                             ai->SetForcedRole(0);

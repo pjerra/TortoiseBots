@@ -5,12 +5,45 @@
 #include "AttackersValue.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/FourHorsemenRotationPolicy.h"
+#include "playerbot/GroupMembers.h"
+#include "playerbot/MainTankPolicy.h"
 #include "../../../../runtime/PlayerbotAIStorage.h"
 
 using namespace ai;
 
 namespace
 {
+    // Explicit raid Main Tank flag (`Group::GetMainTankGuid`): the donor's
+    // IsExplicitMainTank, which checks MEMBER_FLAG_MAINTANK in the member
+    // slots. Our core keeps the flag as a guid on Group instead.
+    bool IsExplicitMainTank(Player* bot)
+    {
+        Group* group = bot ? bot->GetGroup() : nullptr;
+        if (!group)
+            return false;
+        ObjectGuid const mainTank = group->GetMainTankGuid();
+        return !mainTank.IsEmpty() && mainTank == bot->getObjectGuid();
+    }
+
+    // Living tanks on the bot's map (donor GetGroupTankNum): decides whether
+    // the explicit-MT pin applies. Ungrouped: this bot alone when a tank.
+    unsigned GroupTankCount(PlayerbotAI* ai, Player* bot)
+    {
+        if (!bot || !ai->IsTank(bot))
+            return 0;
+        Group* group = bot->GetGroup();
+        if (!group)
+            return 1;
+        unsigned count = 0;
+        for (Player* member : LiveGroupMembers(group))
+        {
+            if (member && member->IsAlive() && member->IsInWorld() &&
+                member->GetMapId() == bot->GetMapId() && ai->IsTank(member))
+                ++count;
+        }
+        return count;
+    }
+
     // Four Horsemen mark rotation: a rotating tank keeps the horseman at
     // its new corner the same way DPS does, or "tank assist" (via the tank
     // target) pulls it back to the group tank's horseman every tick while
@@ -78,6 +111,20 @@ public:
     bool IsBetter(Unit* newUnit, Unit* oldUnit)
     {
         Player* bot = ai->GetBot();
+        // Explicit main tank with an off-tank beside it holds the skull-side
+        // mob it has (donor TankTargetValue.cpp:76-83): current first, every
+        // other candidate after, so loose adds never pull it off. Explicit-
+        // only — without the raid Main Tank flag the tournament below runs
+        // unchanged, and off-tanks always peel (OffTankPeelsToAdds).
+        if (MainTankSticksToCurrent(IsExplicitMainTank(bot), GroupTankCount(ai, bot)))
+        {
+            Unit* current = ai->GetAiObjectContext()->GetValue<Unit*>("current target")->Get();
+            if (oldUnit == current)
+                return false;
+            if (newUnit == current)
+                return true;
+        }
+
         float newThreat = sServerFacade.GetThreatManager(newUnit).getThreat(bot);
         float oldThreat = sServerFacade.GetThreatManager(oldUnit).getThreat(bot);
         if (GetIntervalLevel(newUnit) != GetIntervalLevel(oldUnit))
@@ -89,11 +136,6 @@ public:
 
         // Among mobs the tank already holds, stay on the current one; lowest
         // threat only orders the others, so two held mobs never ping-pong.
-        // (Review PR #573: the 2-tank MT/OT split does not belong here — it
-        // gated after the interval check, so it never picked up adds, and it
-        // keyed on the fallback MT instead of the explicit raid flag. The
-        // LD-5 conditional-RTI gate already keeps the off-tank off the MT's
-        // skull; re-add an explicit-only, stickiness-first split if needed.)
         Unit* current = ai->GetAiObjectContext()->GetValue<Unit*>("current target")->Get();
         if (oldUnit == current)
             return false;
@@ -166,6 +208,22 @@ Unit* TankTargetValue::Calculate()
     Unit* rti = RtiTargetValue::Calculate();
     if (rti && AttackersValue::IsKeepoutSetAside(rti, bot))
         rti = nullptr;
+    // Off-tanks take loose adds first: when another tank already holds the
+    // mark, the mark drops out of this tank's pick and the tournament below
+    // (loose bucket first) hands it a loose add instead of doubling up on
+    // the skull. The explicit main tank itself keeps the LD-5 gate below.
+    if (rti && OffTankPeelsToAdds(IsExplicitMainTank(bot), GroupTankCount(ai, bot)))
+    {
+        Unit* victim = rti->GetVictim();
+        if (victim && victim != bot)
+        {
+            if (Player* victimPlayer = dynamic_cast<Player*>(victim))
+            {
+                if (ai->IsTank(victimPlayer))
+                    rti = nullptr;
+            }
+        }
+    }
     if (rti)
     {
         Unit* victim = rti->GetVictim();

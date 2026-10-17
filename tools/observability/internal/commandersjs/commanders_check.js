@@ -301,4 +301,81 @@ assert.strictEqual(C.pictureLayers([Object.assign({}, okLayer, { name: "x".repea
   assert.strictEqual(C.commanderPlace({ commander_pos: { map: 209, x: "5", y: 6 } }, 209), null);
   assert.strictEqual(C.commanderPlace({}, 209), null);
 }
+
+// ---- trails are never joined across a teleport, a death-release or a map change
+assert.strictEqual(C.jumpLimitYd(2), 52, "a 2 s report gap: 12 yd slack + 20 yd/s");
+assert.strictEqual(C.jumpLimitYd(0), 32, "the gap counts at least 1 s");
+assert.strictEqual(C.jumpLimitYd(500), 612, "...and at most 30 s, so a long silence cannot hide a jump");
+{
+  const at = (x, t, o) => Object.assign({ map: 1, x, y: 0, t, alive: true }, o);
+  assert.strictEqual(C.trailEvent(null, at(0, 1)), "");
+  assert.strictEqual(C.trailEvent(at(0, 100), at(28, 102)), "", "14 yd/s on an epic mount is not a jump");
+  assert.strictEqual(C.trailEvent(at(0, 100), at(52, 102)), "", "the limit itself is a walk");
+  assert.strictEqual(C.trailEvent(at(0, 100), at(53, 102)), "t", "past it is a teleport");
+  assert.strictEqual(C.trailEvent(at(0, 100), at(300, 102)), "t");
+  assert.strictEqual(C.trailEvent(at(0, 100), at(300, 110)), "t", "300 yd in 10 s (limit 212)");
+  assert.strictEqual(C.trailEvent(at(0, 100), at(300, 120)), "", "a longer gap allows more: 300 yd in 20 s (limit 412) is a ride");
+  assert.strictEqual(C.trailEvent(at(0, 100), at(700, 400)), "t", "a long silence is capped at 30 s");
+  assert.strictEqual(C.trailEvent(at(0, 100), at(5, 102, { map: 2 })), "m", "another map, however close");
+  assert.strictEqual(C.trailEvent(at(0, 100), at(1, 102, { alive: false })), "d", "a death");
+  assert.strictEqual(C.trailEvent(at(0, 100, { alive: false }), at(1, 102, { alive: false })), "", "lying dead is not a new death");
+  assert.strictEqual(C.trailEvent(at(0, 100, { alive: false }), at(400, 102, { alive: false })), "r", "a spirit release: a jump while dead");
+  assert.strictEqual(C.trailEvent(at(0, 100, { alive: false }), at(400, 102)), "r", "a resurrection at the spirit healer");
+  assert.strictEqual(C.trailEvent(at(0, 100, { alive: false }), at(1, 102)), "", "raised at the corpse: nothing to break");
+}
+{
+  const t3 = C.newTracker(); let q;
+  const step = (x, t, o) => { q = party(); q.bots[0].x = x; q.bots[0].y = 0; Object.assign(q.bots[0], o || {}); C.note(t3, q, t); };
+  step(0, 100); step(20, 102); step(40, 104);
+  assert.deepStrictEqual(t3.trail.Gbmage.pts, [[0, 0, 100], [20, 0, 102], [40, 0, 104]], "walking: plain points");
+  step(500, 106); // summoned
+  assert.deepStrictEqual(t3.trail.Gbmage.pts[3], [500, 0, 106, "t"], "the point after a teleport carries it");
+  step(500.5, 108); assert.strictEqual(t3.trail.Gbmage.pts.length, 4, "standing still adds nothing");
+  step(505, 110, { alive: false }); // died where it stood
+  assert.deepStrictEqual(t3.trail.Gbmage.pts[4], [505, 0, 110, "d"]);
+  const runs = C.trailRuns(t3.trail.Gbmage.pts);
+  assert.strictEqual(runs.length, 2, "split in two at the teleport, not joined");
+  assert.strictEqual(runs[0].length, 3); assert.strictEqual(runs[1].length, 2, "the death does not split");
+  assert.deepStrictEqual(C.trailMarks(t3.trail.Gbmage.pts).map((m) => [m.kind, m.x]), [["t", 500], ["d", 505]]);
+  // a map change: the old map's points are gone, the new trail starts with a marked point
+  step(10, 112, { map: 1 });
+  assert.strictEqual(t3.trail.Gbmage.map, 1); assert.deepStrictEqual(t3.trail.Gbmage.pts, [[10, 0, 112, "m"]]);
+}
+// drawing pieces: no polyline reaches over a break; the fade runs over the whole trail
+{
+  const P = [[0, 0, 1], [10, 0, 2], [20, 0, 3], [900, 0, 4, "t"], [910, 0, 5], [920, 0, 6]];
+  const sg = C.trailSegmentsBroken(P, 6, 0.2);
+  assert.ok(sg.length >= 2);
+  sg.forEach((s) => {
+    const xs = s.points.map((p) => -p.y); // plane y = -game x
+    assert.ok(!(Math.min(...xs) <= 20 && Math.max(...xs) >= 900), "a polyline joins both sides of the teleport: " + JSON.stringify(s.points));
+  });
+  assert.strictEqual(sg[sg.length - 1].alpha, 1); assert.ok(sg[0].alpha < 1);
+  assert.deepStrictEqual(C.trailSegmentsBroken([[0, 0, 1]], 5), []);
+  assert.deepStrictEqual(C.trailSegmentsBroken(null, 5), []);
+  const lone = C.trailSegmentsBroken([[0, 0, 1], [1, 0, 2], [800, 0, 3, "t"]], 5);
+  assert.strictEqual(lone.length, 1, "a lone point after a break has no line"); assert.strictEqual(lone[0].points.length, 2);
+  // no break: the same chunks as before
+  const plain = Array.from({ length: 50 }, (_, i) => [i, 0, i]);
+  assert.deepStrictEqual(C.trailSegmentsBroken(plain, 10, 0.2), C.trailSegments(plain.map((p) => ({ x: -p[1], y: -p[0] })), 10, 0.2));
+  // the heading looks only at the stretch after the last break
+  assert.strictEqual(C.heading([[0, 0, 1], [100, 0, 2], [900, 0, 3, "t"], [901, 0, 4]], 5, 20, 4), null, "not across the teleport");
+  assert.ok(C.heading([[0, 0, 1], [900, 0, 3, "t"], [910, 0, 4]], 5, 20, 4), "a walk after it");
+  // history from the daemon keeps the kinds and drops junk kinds
+  const t4 = C.newTracker(); let q2 = party(); q2.bots[0].x = 500; C.note(t4, q2, 1000);
+  C.prependTrail(t4, "Gbmage", q2.bots[0].map, [[1, 2, 10, "t"], [3, 4, 20, "zzz"], [5, 6, 30, "d"]]);
+  assert.deepStrictEqual(t4.trail.Gbmage.pts.slice(0, 3), [[1, 2, 10, "t"], [3, 4, 20], [5, 6, 30, "d"]]);
+}
+// a gap (reports lost in a very long pause): the next point starts a new piece, with no mark
+{
+  const tg = C.newTracker(); let q;
+  const stepg = (x, t) => { q = party(); q.bots[0].x = x; q.bots[0].y = 0; C.note(tg, q, t); };
+  stepg(0, 100); stepg(20, 102);
+  C.markGap(tg);
+  stepg(40, 104);
+  assert.deepStrictEqual(tg.trail.Gbmage.pts[2], [40, 0, 104, "g"], "the point after a gap is marked");
+  assert.strictEqual(C.trailRuns(tg.trail.Gbmage.pts).length, 2, "not joined to the point before");
+  assert.strictEqual(C.trailEvent({ gap: true }, { map: 1, x: 0, y: 0, t: 1 }), "g");
+  stepg(60, 106); assert.strictEqual(tg.trail.Gbmage.pts[3].length, 3, "only that one point");
+}
 console.log("commanders.js ok");

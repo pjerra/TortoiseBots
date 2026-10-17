@@ -40,7 +40,8 @@ actual files included in a build.
 Before publishing a binary or operating a combined network service:
 
 - [ ] Map every copied or ported file to its donor repository, pinned commit and
-      source path in `docs/PROVENANCE.md`.
+      source path (donor table above; per-change detail in the pull request
+      and Git history).
 - [ ] Record the effective expression for each mapped file
       (`GPL-2.0-only`, `GPL-2.0-or-later`, `GPL-3.0`, `AGPL-3.0`, or
       unresolved) and the evidence supporting it.

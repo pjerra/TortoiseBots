@@ -206,6 +206,7 @@ namespace ai
             creators["skip go loot list"] = [](PlayerbotAI* ai) { return new AlwaysLootListValue(ai, "skip go loot list"); };
             creators["loot strategy"] = [](PlayerbotAI* ai) { return new LootStrategyValue(ai); };
             creators["active rolls"] = [](PlayerbotAI* ai) { return new ActiveRolls(ai); };
+            creators["seen need rolls"] = [](PlayerbotAI* ai) { return new SeenNeedRolls(ai); };
             creators["last movement"] = [](PlayerbotAI* ai) { return new LastMovementValue(ai); };
             creators["stay time"] = [](PlayerbotAI* ai) { return new StayTimeValue(ai); };
             creators["last taxi"] = [](PlayerbotAI* ai) { return new LastMovementValue(ai); };

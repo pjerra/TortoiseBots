@@ -25,10 +25,15 @@ int main()
     CHECK(std::strcmp(ai::PullNoExecutorCode(false), "no-tank") == 0);
     CHECK(std::strcmp(ai::PullNoExecutorCode(true), "tank-busy") == 0);
     // The two answers read differently, and neither is empty.
-    CHECK(std::strcmp(ai::PullNoExecutorText(false), ai::PullNoExecutorText(true)) != 0);
-    CHECK(std::strlen(ai::PullNoExecutorText(true)) > 0);
-    CHECK(std::strstr(ai::PullNoExecutorText(true), "combat") != nullptr);
-    CHECK(std::strstr(ai::PullNoExecutorText(false), "No live tank") != nullptr);
+    CHECK(ai::PullNoExecutorText(false) != ai::PullNoExecutorText(true));
+    CHECK(!ai::PullNoExecutorText(true).empty());
+    CHECK(ai::PullNoExecutorText(true).find("combat") != std::string::npos);
+    CHECK(ai::PullNoExecutorText(false).find("No live tank") != std::string::npos);
+    // The optional detail names the exclusion reason (issue #908); empty by
+    // default, and protocol-safe (no '|' characters).
+    CHECK(ai::PullNoExecutorText(false).find("(") == std::string::npos);
+    CHECK(ai::PullNoExecutorText(false, "dead").find("(dead)") != std::string::npos);
+    CHECK(ai::PullNoExecutorText(true, "in combat").find("(in combat)") != std::string::npos);
     std::printf("pull refusal policy: %d checks passed\n", checks);
     return 0;
 }
