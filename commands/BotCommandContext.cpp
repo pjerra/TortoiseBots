@@ -299,7 +299,8 @@ bool PullTankIsBusy(BotCommandContext const& context)
 }
 
 // Threat window: while the tank pulls and establishes threat, party DPS bots
-// hold at the command anchor. Healers stay active. Uses the mature
+// hold at the command anchor. Healers heal but deal no damage while the
+// hold runs (their off-spec rows are vetoed for the join window). Uses the mature
 // "wait for attack" gate the rotation already honors (AttackAction skips
 // bot->Attack and the multiplier zeroes combat actions), plus an explicit
 // stay hold so the allowed "keep safe distance" action cannot drift the bots

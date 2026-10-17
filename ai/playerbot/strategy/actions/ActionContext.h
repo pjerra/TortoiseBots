@@ -162,6 +162,7 @@ namespace ai
             creators["attack least hp target"] = [](PlayerbotAI* ai) { return new AttackLeastHpTargetAction(ai); };
             creators["attack enemy player"] = [](PlayerbotAI* ai) { return new AttackEnemyPlayerAction(ai); };
             creators["pull my target"] = [](PlayerbotAI* ai) { return new PullMyTargetAction(ai); };
+            creators["pullback my target"] = [](PlayerbotAI* ai) { return new PullbackMyTargetAction(ai); };
             creators["pull rti target"] = [](PlayerbotAI* ai) { return new PullRTITargetAction(ai); };
             creators["pull nearest target"] = [](PlayerbotAI* ai) { return new PullNearestTargetAction(ai); };
             creators["pull start"] = [](PlayerbotAI* ai) { return new PullStartAction(ai); };

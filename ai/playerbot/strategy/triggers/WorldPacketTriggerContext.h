@@ -23,6 +23,7 @@ namespace ai
             creators["quest details"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "quest details"); };
             creators["quest share"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "quest share"); };
             creators["loot start roll"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot start roll"); };
+            creators["loot vote"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot vote"); };
             creators["loot roll"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot roll"); };
             creators["loot roll won"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot roll won"); };
             creators["resurrect request"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "resurrect request"); };

@@ -55,6 +55,7 @@ Warlocks provide sustained Shadow and Fire DPS through curses and damage-over-ti
 
 - **Pet Selection:**
   - *Voidwalker:* The PvE/dungeon default (higher-priority summon, also the non-combat default); off-tanks and uses *Sacrifice* for emergency shields. A solo pool bot that learns *Summon Voidwalker* (level 10) and holds a Soul Shard upgrades its Imp to a Voidwalker on its own (`runtime/WarlockPetPolicy.h`); below that it keeps the Imp, a shardless bot stays quiet (no failed summon queued), and a bot whose player picked a demon manually is never overridden. Facing 3+ mobs solo it AoE-taunts with *Suffering* (never in a real-tank group), and between pulls a hurt Voidwalker heals itself with *Consume Shadows*.
+  - **A new demon starts next to its owner:** each summon is checked once and moved onto the bot if it appeared out of sight, more than 5 yards above or below, or more than 30 yards away (issue #1043, same check as the hunter's pet).
   - **Spec pet (`AiPlayerbot.WarlockPetBySpec`, default on):** in PvE (open world and dungeons; raid and PvP pet choices are unchanged) the warlock summons the demon that fits its tree, reimplemented from mod-playerbots' per-spec pet strategies (`runtime/WarlockPetPolicy.h`). Turtle 1.18.1 has no player Felguard, so the donor's Felguard step is skipped:
 
     | Spec | Preferred demon | Falls back to (what the warlock has learned) |

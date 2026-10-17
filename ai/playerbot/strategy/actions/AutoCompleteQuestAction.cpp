@@ -61,7 +61,7 @@ bool AutoCompleteQuestAction::Execute(Event& event)
             uint8 msg = bot->CanStoreNewItem(NULL_BAG, NULL_SLOT, dest, id, count - curItemCount);
             if (msg == EQUIP_ERR_OK)
             {
-                Item* item = bot->StoreNewItem(dest, id, true);
+                Item* item = bot->StoreNewItem(dest, id, true, Item::GenerateItemRandomPropertyId(id));
                 bot->SendNewItem(item, count - curItemCount, true, false);
             }
         }

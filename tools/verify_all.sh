@@ -14,6 +14,7 @@ echo ""
 echo "=== 2. Verifying Tortoise Core Module Surface ==="
 bash tools/verify_tortoise_surface.sh
 echo "✓ Module surface verified."
+python3 tools/check_eluna_guards.py
 
 echo ""
 echo "=== 3. Verifying Action & Trigger Wiring ==="
@@ -67,6 +68,7 @@ if command -v g++ >/dev/null 2>&1; then
     g++ -std=c++17 -Wall -Wextra -pedantic tools/test_log_file_rotation.cpp -o "${TMPDIR:-/tmp}/test_log_file_rotation"
     "${TMPDIR:-/tmp}/test_log_file_rotation" "${TMPDIR:-/tmp}"
     POLICY_TESTS=(
+        test_action_log_policy
         test_adaptive_budget
         test_ah_buyer_policy
         test_ah_seller_teleport_policy
@@ -94,7 +96,7 @@ if command -v g++ >/dev/null 2>&1; then
         test_bot_turn_scheduler
         test_bwl_bundle1_policy
         test_caster_mana_policy
-        test_chromaggus_sand_policy
+        test_cast_keeps_running_policy
         test_claimed_bot_policy
         test_class_consumable_policy
         test_combat_spread_policy
@@ -145,6 +147,7 @@ if command -v g++ >/dev/null 2>&1; then
         test_hire_intro_policy
         test_hire_level_policy
         test_hire_master_policy
+        test_hire_raid_policy
         test_hire_respec_policy
         test_hire_quest_policy
         test_hire_spec_policy
@@ -163,6 +166,7 @@ if command -v g++ >/dev/null 2>&1; then
         test_jump_policy
         test_kelthuzad_adds_policy
         test_ledge_step_down_policy
+        test_lft_comp_policy
         test_loatheb_spores_policy
         test_local_pick_policy
         test_long_stuck_rescue_policy
@@ -182,6 +186,7 @@ if command -v g++ >/dev/null 2>&1; then
         test_owned_bot_qol_policy
         test_party_help_policy
         test_pet_revive_policy
+        test_pet_spawn_policy
         test_pet_spell_rank_policy
         test_pet_taunt_policy
         test_pet_upkeep_policy
@@ -216,6 +221,7 @@ if command -v g++ >/dev/null 2>&1; then
         test_remote_commander_enter
         test_remote_commander_policy
         test_remote_commander_tasks
+        test_runner_finish_policy
         test_remote_commander_view
         test_resist_aura_policy
         test_retaliation_policy
@@ -230,6 +236,7 @@ if command -v g++ >/dev/null 2>&1; then
         test_sapphiron_ice_policy
         test_seduction_policy
         test_service_trip_policy
+        test_set_behind_policy
         test_shaman_earth_shock_policy
         test_shaman_fire_gate_policy
         test_shaman_healer_dps_policy

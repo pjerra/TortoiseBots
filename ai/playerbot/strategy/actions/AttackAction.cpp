@@ -177,7 +177,12 @@ bool AttackAction::CanPetAttack(PlayerbotAI* ai, Pet* pet, Unit* target)
     if (WaitForAttackStrategy::ShouldWait(ai))
         return false;
 
-    // Don't send the pet to attack if staying and target is outside spell range
+    // An ordered pull holds the pet even when the wait clock does not run
+    // yet (pre-combat) or was just restamped: the party is still parked at
+    // the anchor until the join window elapses.
+    if (ai->HasPullWindow())
+        return false;
+
     if (ai->HasStrategy("stay", BotState::BOT_STATE_COMBAT) &&
         bot->GetDistance(target) >= ai->GetRange("spell"))
         return false;

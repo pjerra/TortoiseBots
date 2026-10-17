@@ -5,6 +5,17 @@
 
 namespace ai
 {
+    // Chat pullback ("pullback [seconds]" in party chat) has no .bot command
+    // layer to hold the party with: hold every non-tank party bot exactly
+    // like PausePartyDpsForPull does (stay at the requester's anchor, "wait
+    // for attack" join window on its own clock). Healers get the window but
+    // no stay: they may heal, never damage, while it runs (see the
+    // heal-only gates in GenericTriggers.cpp / WandPolicy.h). Pets go
+    // passive via their owner's own AI (ParkPetForPullHold, restored by
+    // their own EndPullWindow even on group-leave/logout/death); the tank's
+    // own pet is pinned by PullStartAction and restored by PullEndAction.
+    void PausePartyPullHold(Player* tank, uint32 joinDelaySeconds);
+
     class PullRequestAction : public ChatCommandAction
     {
     public:
@@ -19,6 +30,19 @@ namespace ai
     {
     public:
         PullMyTargetAction(PlayerbotAI* ai) : PullRequestAction(ai, "pull my target") {}
+
+    private:
+        Unit* GetTarget(Event& event) override;
+    };
+
+    // Chat one-word alias for the pullback order ("pullback [seconds]" in
+    // party chat): same target, plus the return-to-anchor intent the
+    // configured join delay belongs to (the params carry "[seconds]").
+    class PullbackMyTargetAction : public PullRequestAction
+    {
+    public:
+        PullbackMyTargetAction(PlayerbotAI* ai) : PullRequestAction(ai, "pullback my target") {}
+        bool Execute(Event& event) override;
 
     private:
         Unit* GetTarget(Event& event) override;

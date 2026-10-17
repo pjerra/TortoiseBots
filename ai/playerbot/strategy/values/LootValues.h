@@ -3,6 +3,8 @@
 #include "playerbot/strategy/AiObjectContext.h"
 #include "ItemUsageValue.h"
 
+#include <tuple>
+
 namespace ai
 {
     // Cheat class copy to hack into the loot system: GetLootTemplate() reinterpret_casts the real
@@ -228,6 +230,30 @@ namespace ai
     };
 
     typedef std::unordered_multimap<ObjectGuid, uint32> LootRollMap;
+
+    // Live human votes seen while the bot waited (#967): (loot guid, slot,
+    // voter guid) -> vote. SMSG_LOOT_ROLL reaches every roller, so a waiting
+    // pool bot sees each vote as it lands; any NEED among them steps its own
+    // NEED down to GREED at vote time, while the per-voter record tells when
+    // every real roller voted. Entries live only while the roll is active.
+    typedef std::map<std::tuple<ObjectGuid, uint32, ObjectGuid>, uint8> LootVoteMap;
+
+    class SeenNeedRolls : public ManualSetValue<LootVoteMap>
+    {
+    public:
+        SeenNeedRolls(PlayerbotAI* ai) : ManualSetValue(ai, {}, "seen need rolls") {}
+        virtual std::string Format() override;
+
+#ifdef GenerateBotHelp
+        virtual std::string GetHelpName() { return "seen need rolls"; } //Must equal iternal name
+        virtual std::string GetHelpTypeName() { return "loot"; }
+        virtual std::string GetHelpDescription()
+        {
+            return "Live group-loot votes seen while the bot waited.";
+        }
+        virtual std::vector<std::string> GetUsedValues() { return { }; }
+#endif
+    };
 
     class ActiveRolls : public ManualSetValue<LootRollMap>
     {

@@ -8,9 +8,9 @@
 #include "playerbot/TravelMgr.h"
 #include "playerbot/LootObjectStack.h"
 #include "playerbot/JumpPolicy.h"
+#include "playerbot/CastKeepsRunningPolicy.h"
 #include "playerbot/DungeonFollowHoldPolicy.h"
 #include "playerbot/DungeonFollowStallPolicy.h"
-
 using namespace ai;
 
 bool FollowAction::Execute(Event& event)
@@ -77,9 +77,15 @@ bool FollowAction::ArmFarDungeonFollowRescue(Unit* followTarget)
 
 bool FollowAction::isUseful()
 {
+    // A follow step breaks the Mining / Herb Gathering cast, and even a no-op
+    // Follow() stops the cast before checking whether the bot needs to move.
+    // Station-keeping ("update follow") fired every idle tick beside a node
+    // and broke the 3.2 s cast it just started, so the node animated but never
+    // opened (#1062). Finish the cast first; the next tick follows.
+    if (ai::FollowBlockedByCast(bot->IsNonMeleeSpellCasted(false, true, true)))
+        return false;
     if (!ai->CanMove())
         return false;
-
     float distance = 0;
     Unit* followTarget = AI_VALUE(Unit*, "follow target");
     Formation* formation = AI_VALUE(Formation*, "formation");

@@ -59,14 +59,19 @@ namespace ai
         // contains the point (x, y): `extra` first (a target the 15 yd list
         // may not reach yet), then the bot's cached "possible triggers" list.
         // The creature the player ordered this bot to attack is skipped.
+        // `ignoreTankExempt` (a tank in combat) also skips the rows that give
+        // tanks a pass (CreatureAuraKeepout::tankExempt); the same flag on
+        // EndPointRinged and SnapshotRingedAt.
         // nullptr when none or with the toggle off. No new world scan.
-        static Unit* KeepoutRingAt(PlayerbotAI* ai, float x, float y, Unit* extra = nullptr);
+        static Unit* KeepoutRingAt(PlayerbotAI* ai, float x, float y, Unit* extra = nullptr,
+            bool ignoreTankExempt = false);
 
         // True when a move's end point (x, y, z) lies in a ring: `extra` and
         // the cached list (KeepoutRingAt, exact ring), then the shared hazard
         // snapshot (SnapshotRingedAt), which reaches rings past the 15 yd list
         // (set behind or rear flank on a target up to 15 yd away).
-        static bool EndPointRinged(PlayerbotAI* ai, float x, float y, float z, Unit* extra = nullptr);
+        static bool EndPointRinged(PlayerbotAI* ai, float x, float y, float z, Unit* extra = nullptr,
+            bool ignoreTankExempt = false);
 
         // (x, y, z) lies in the ring of a listed creature the live checks do
         // not see (not in the bot's live list, not `skip`, not the explicit
@@ -81,7 +86,7 @@ namespace ai
         // point at their exact ring instead. Never looks on a map without a
         // listed row.
         static bool SnapshotRingedAt(PlayerbotAI* ai, float x, float y, float z, Unit* skip,
-            bool landingLookup = false);
+            bool landingLookup = false, bool ignoreTankExempt = false);
 
         // Once per world update, before the bots run: resets the snapshot
         // refresh budget.

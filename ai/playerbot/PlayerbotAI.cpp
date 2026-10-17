@@ -327,6 +327,7 @@ PacketHandlerSpec const kBotOutgoingPacketHandlers[] =
     { SMSG_TEXT_EMOTE, "receive text emote", false },
     { SMSG_EMOTE, "receive emote", false },
     { SMSG_LOOT_START_ROLL, "loot start roll", true },
+    { SMSG_LOOT_ROLL, "loot vote", true },
     { SMSG_LOOT_ROLL_WON, "loot roll won", true },
     { SMSG_SUMMON_REQUEST, "summon request", false },
     { MSG_RAID_READY_CHECK, "ready check", false },
@@ -545,6 +546,11 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
     }
 
     SC_PHASE("UpdateAI.entry", bot ? bot->GetName() : "(null)");
+
+    // Action log scope (AiPlayerbot.ActionLogScope = commanded): re-read at most
+    // every 15 s per bot, here because the group, binding and hire lookups are
+    // world-thread state. One branch while the log is off.
+    botdiag::BotActionLog::RefreshScope(this);
 
     // A Headless bot has no client to finish a cinematic
     // (CMSG_COMPLETE_CINEMATIC), so any cinematic started mid-session - e.g.
@@ -6260,8 +6266,11 @@ bool PlayerbotAI::CastSpell(uint32 spellId, GameObject* goTarget, Item* itemTarg
         targets.setDestination(fx, fy, fz);
     }
 
-    // Fail the cast if the bot is moving and the spell is a casting/channeled spell
-    if (sServerFacade.isMoving(bot) && ((GetSpellCastTime(pSpellInfo, bot, spell) > 0) || (IsChanneledSpell(pSpellInfo) && (GetSpellDuration(pSpellInfo) > 0))))
+    // Fail the cast if the bot is moving and the spell is a casting/channeled spell.
+    // A server spline still in flight counts as moving although the movement flags
+    // are clear (MotionMaster::Clear leaves it running): the Opening cast of a
+    // chest broke after 0.2 s on the bot's own last 0.9 yd.
+    if ((sServerFacade.isMoving(bot) || !bot->movespline->Finalized()) && ((GetSpellCastTime(pSpellInfo, bot, spell) > 0) || (IsChanneledSpell(pSpellInfo) && (GetSpellDuration(pSpellInfo) > 0))))
     {
         // always fail when jumping
         if (IsJumping() || bot->IsFalling())
@@ -7767,6 +7776,43 @@ void PlayerbotAI::EndPullWindow()
     // The anchor goes with the window; a no-op when it is already released
     // (combat end, death, a movement order) or when none was placed.
     ReleasePullHold();
+    // Member-owned pet stance: a pet the hold parked passive comes back even
+    // when the tank's pull-end loop can no longer reach this bot (left the
+    // group, logged out, died). Every path that outlives the window funnels
+    // through here (expiry, strategy reset, reload).
+    RestorePullHoldPet();
+}
+
+void PlayerbotAI::ParkPetForPullHold()
+{
+    if (!bot)
+        return;
+    Pet* pet = bot->GetPet();
+    if (!pet || pet->GetReactState() == REACT_PASSIVE)
+        return;
+    // Save once: a re-hold while already parked must not overwrite the
+    // pre-hold stance with REACT_PASSIVE.
+    if (pullHoldPetStance_ == kNoSavedStance)
+        pullHoldPetStance_ = static_cast<int>(pet->GetReactState());
+    pet->SetReactState(REACT_PASSIVE);
+}
+
+void PlayerbotAI::RestorePullHoldPet()
+{
+    if (pullHoldPetStance_ == kNoSavedStance)
+        return;
+    ReactStates stance = static_cast<ReactStates>(pullHoldPetStance_);
+    pullHoldPetStance_ = kNoSavedStance;
+    if (!bot)
+        return;
+    Pet* pet = bot->GetPet();
+    if (!pet)
+        return;
+    // Only undo our own park: a stance the player (or another order) set
+    // meanwhile is theirs, not the hold's.
+    if (pet->GetReactState() != REACT_PASSIVE)
+        return;
+    pet->SetReactState(stance);
 }
 
 size_t PlayerbotAI::DropQueuedMovementOrders()
@@ -9573,6 +9619,14 @@ bool PlayerbotAI::CanMove()
         return false;
     }
 #endif
+    return true;
+}
+
+bool PlayerbotAI::StopForObjectCast()
+{
+    if (!sServerFacade.isMoving(bot) && bot->movespline->Finalized())
+        return false;
+    StopMoving();
     return true;
 }
 

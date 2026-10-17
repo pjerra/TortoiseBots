@@ -3,6 +3,7 @@
 #include "playerbot/strategy/Trigger.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/HealReachPolicy.h"
+#include "playerbot/strategy/values/HealerCoverage.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/strategy/generic/CombatStrategy.h"
 #include "playerbot/strategy/values/PossibleAttackTargetsValue.h"
@@ -343,7 +344,17 @@ namespace ai
                     float(sPlayerbotAIConfig.almostFullHealth)))
                 return false;
 
-            return target && (bot->GetDistance(target, SizeFactor::CombatReach) > (distance - sPlayerbotAIConfig.contactDistance)) || !bot->IsWithinLOSInMap(target, true);
+            bool const outOfRange = (bot->GetDistance(target, SizeFactor::CombatReach) > (distance - sPlayerbotAIConfig.contactDistance)) ||
+                !bot->IsWithinLOSInMap(target, true);
+            if (!outOfRange)
+                return false;
+
+            // In combat another healer with the ally in heal range covers it
+            // (issue #904): the walk is the one that killed healers. Looked up
+            // only when the ally really is out of reach.
+            bool const inCombat = ai->IsStateActive(BotState::BOT_STATE_COMBAT);
+            return HealReachWanted(inCombat, target->GetHealthPercent(), float(sPlayerbotAIConfig.almostFullHealth),
+                inCombat && AnotherHealerCoversAlly(ai, target, HealReachLimit(ai)));
         }
     };
 

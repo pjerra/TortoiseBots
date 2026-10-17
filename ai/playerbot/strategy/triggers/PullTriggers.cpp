@@ -116,10 +116,22 @@ bool PullEndTrigger::IsActive()
     // the mob to the rotation (PullEndAction). Waiting for the pull action
     // instead kept PullMultiplier muting every action below ACTION_INTERRUPT
     // until the time cap above: in Uldaman the tank stood 8 s with its back to
-    // the mob, no swing, no ability, no turn.
+    // the mob, no swing, no ability, no turn. A pullback must still walk
+    // home: landing it here would end the pull at the meeting point and skip
+    // the return leg entirely (the tank fights where they met instead of
+    // pulling back to the party), so the meet completes the pull action and
+    // the return leg above ends the pull on arrival.
     if (!strategy->HasPullActionCompleted() && target->GetVictim() == bot &&
         bot->CanReachWithMeleeAutoAttack(target))
+    {
+        if (pullback)
+        {
+            // Non-const strategy: meeting the mob is the landing.
+            const_cast<PullStrategy*>(strategy)->OnPullActionCompleted();
+            return false;
+        }
         return true;
+    }
 
     // An ordinary pull hands control back to combat as soon as its pull action
     // succeeds.  Before that, retain the request while the tank closes to its

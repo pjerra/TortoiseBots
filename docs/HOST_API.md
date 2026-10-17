@@ -175,7 +175,7 @@ Current adapters:
 | --- | --- |
 | `BotHostAdapter` | startup, shutdown and world update; at startup registers the observability emitter's commander provider (`ObservabilityEmitter::SetCommanderProvider` -> `BotCommands::CollectCommanderTelemetry`, module-internal: the dashboard's Commanders tab, no core seam; the `COMMANDERS` datagram also carries map data, i.e. the commander's position, each bound bot's target and up to 24 hostile units near the lead from the `TBM:VIEW` feed's own builder, plus unit info (each bot's AI state, newest action, spell being cast, crowd control, drinking/eating and target name; each unit's level, rank, cast and crowd control; the binding's start time), read once per 2 s cycle only while a binding stands: no per-tick cost, no world scan, no new core call; fields in `runtime/CommanderTelemetry.h`, see `tools/observability/README.md`) |
 | `BotSessionAdapter` | Headless session lifecycle |
-| `BotPlayerAdapter` | player lifecycle/reclaim attachment; answers core LFT managed-bot rolecheck (`IsManagedBot`/`GetBotRoles`); logs bot quest completions for `bot_events.csv`; on a bot's own `OnMapChanged` re-applies the Issue #218 instance guard to its non-combat strategies (`AiFactory::ApplyInstanceGuardOnMapChange`) |
+| `BotPlayerAdapter` | player lifecycle/reclaim attachment; answers core LFT managed-bot rolecheck (`IsManagedBot`/`GetBotRoles`); logs bot quest completions for `bot_events.csv`; on a bot's own `OnMapChanged` re-applies the Issue #218 instance guard to its non-combat strategies (`AiFactory::ApplyInstanceGuardOnMapChange`); `OnUpdate` (map thread, end of the owner's update) hands a bot pet more than 100 yd from its owner (the core unsummons at 120) to `BotManager::CheckNewPetSpawn` before the map updates creatures (a summon cast completing inside `Player::Update`); the same check also runs on the world thread after each bot's AI turn. Each pet guid is checked once and a pet that appeared out of sight, more than 5 yd off the owner's height or more than 30 yd away is moved onto its owner (issue #1043, `runtime/PetSpawnPolicy.h`); real players return on the first field read, and the fast path takes no lock |
 | `BotUnitAdapter` | `UnitScript::OnUnitDeath`: killer attribution for `deaths.csv`; `UnitScript::OnDamage`: last-non-self-damager memory so Spirit of Redemption expiries (core self-kill) still log the real killer |
 | `BotChatAdapter` | native `.bot` command integration |
 | `BotPacketAdapter` | packet bridge into Existing PlayerBots (primarily AzerothCore/mod-playerbots) |
@@ -431,8 +431,8 @@ TortoiseBots consumes one chat hook: `BotAddonAdapter` registers
 `PLAYERHOOK_ON_ADDON_MESSAGE` for the `TBM` prefix (below). `BotChatAdapter`
 owns the generic `AllCommandScript` entry for `.bot`, and `BotPlayerAdapter`
 registers `PLAYERHOOK_ON_LOGIN`, `PLAYERHOOK_ON_MAP_CHANGED`,
-`PLAYERHOOK_ON_PLAYER_COMPLETE_QUEST`, `PLAYERHOOK_ON_BEFORE_LOGOUT` and
-`PLAYERHOOK_ON_LOGOUT`. No module code
+`PLAYERHOOK_ON_UPDATE`, `PLAYERHOOK_ON_PLAYER_COMPLETE_QUEST`,
+`PLAYERHOOK_ON_BEFORE_LOGOUT` and `PLAYERHOOK_ON_LOGOUT`. No module code
 registers `OnChatChannel`; do not add it until #498 is merged.
 
 #### Addon command transport
@@ -652,6 +652,10 @@ aliases; see `runtime/LftBotFillService.cpp:FindDungeonLevelRange`).
 Instance names are normalized through the small module alias table; unknown,
 corrupt, and absent (Tortoise-only/custom) ranges fail closed and are logged once. There is no average-human +/-5 approximation,
 role hook, private-map access, addon-string injection, or DB query per tick.
+When the picked bot's installed kit would not play its slot (feral druid
+queued tank with the default cat kit), the fill hands the queued role over
+(`SetForcedRole`, cleared on every pending exit path), so the strategy
+rebuild at group adoption builds the slot's kit (#966).
 Forced roles are cleared on pending exit paths, and reconciliation runs even
 when the fill budget is zero.
 

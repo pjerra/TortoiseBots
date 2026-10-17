@@ -24,6 +24,8 @@ namespace ai
         uint32 GetOpeningSpell(LootObject& lootObject, GameObject* go);
         bool CanOpenLock(LootObject& lootObject, const SpellEntry* pSpellInfo, GameObject* go);
         bool CanOpenLock(uint32 skillId, uint32 reqSkillValue);
+        // DoLoot stopped a still-moving bot instead of casting: no open attempt was made.
+        bool stoppedForCast = false;
     };
 
     class StoreLootAction : public Action

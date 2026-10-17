@@ -1153,6 +1153,14 @@ void RandomBotService::RemoveExpiredBots(uint32_t diff)
             m_ageMs[i] = 0;
             continue;
         }
+        // Issue #968: claimed guild bots are kept like pinned/hired ones; the
+        // random reap must never log them off mid-party. In-memory map
+        // lookup, no DB per tick.
+        if (ClaimLifecycle::Instance().IsClaimed(candidate.characterGuid.GetCounter()))
+        {
+            m_ageMs[i] = 0;
+            continue;
+        }
         // A dungeon crew is not logged out under its run.
         if (BotActivityLeaseManager::Instance().GetActivity(candidate.characterGuid.GetCounter()) == BotActivity::Dungeon)
             continue;
@@ -1190,6 +1198,16 @@ void RandomBotService::RemoveExpiredBots(uint32_t diff)
                     continue;
                 }
             }
+        }
+
+        // Issue #968: a bot grouped with a real player (invited party, no
+        // Dungeon lease) is never reaped mid-run. Age is left alone so it
+        // logs out normally once it leaves the player.
+        if (::Player* masterPlayer = ObjectAccessor::FindPlayer(candidate.characterGuid))
+        {
+            if (::PlayerbotAI* masterAi = PlayerbotAIStorage::Instance().GetAI(masterPlayer))
+                if (masterAi->HasRealPlayerMaster())
+                    continue;
         }
 
         if (!sPlayerbotAIConfig.randomBotTimedLogout || !sPlayerbotAIConfig.maxRandomBotInWorldTime)

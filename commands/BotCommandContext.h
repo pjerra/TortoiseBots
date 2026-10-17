@@ -51,7 +51,8 @@ Player* ResolvePullExecutor(BotCommandContext const& context, bool allowSelected
 // `no-tank`. Read only after ResolvePullExecutor returned null.
 bool PullTankIsBusy(BotCommandContext const& context);
 // Hold party DPS for the join delay while the tank pulls and
-// establishes threat. Healers and tanks are untouched. For a pullback the
+// establishes threat. Tanks are untouched; healers heal but deal no damage
+// while the hold runs. For a pullback the
 // window additionally covers the tank's return leg and is narrowed to the
 // join delay on arrival.
 void PausePartyDpsForPull(BotCommandContext const& context, Player* executor, uint32 joinDelaySeconds, bool pullback = false);

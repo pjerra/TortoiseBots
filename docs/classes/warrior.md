@@ -54,6 +54,7 @@ Warriors serve as primary dungeon tanks or powerful melee DPS. The bot manages r
    - *Whirlwind* is used on cooldown above 20% target health; 2+ nearby targets only raises its priority.
    - Cooldowns: both specs fire *Death Wish* and *Recklessness* as boosts, plus *Retaliation* while near full health (70-90%) with two or more melee attackers on the warrior — all behind the boost toggle.
 3. **Execute Phase:** Below 20% enemy health, *Execute* becomes highest priority, consuming all available rage.
+4. **Runners:** A DPS warrior whose *Intercept* is castable right now (in combat, Berserker Stance, rage, off cooldown; *Charge* is out-of-combat only in 1.12) goes after a party mob that flees below 30% health within 25 yd (not while the group holds with `stay`); see the shared runner rule in [overview](overview.md).
 
 ---
 

@@ -122,6 +122,7 @@ bool ai::HealerWandAllowed(PlayerbotAI* ai, Unit* target)
     gate.explicitOrder = target && ordered && ordered == target->GetObjectGuid();
     gate.noMana = context->GetValue<bool>("has mana", "self target")->Get() &&
         context->GetValue<uint8>("mana", "self target")->Get() < 5;
+    gate.pullHold = ai->HasPullWindow() && !gate.explicitOrder;
 
     // The heal rows' own lines: the party below almost full (the "healer
     // should wand" line), the healer itself below low health (its self-heal
@@ -146,6 +147,13 @@ bool HealerShouldAttackTrigger::IsActive()
 {
     if (!bot->GetGroup())
         return true;
+
+    // Ordered pull hold: while the pull's own join window runs, the healer
+    // heals but never opens fire (a pullback parks the party at the anchor
+    // while the tank walks the mob in). A player-placed "wait for attack"
+    // without a pull window still allows damage, as before.
+    if (ai->HasPullWindow())
+        return false;
 
     // Donor escape (mod-playerbots GenericTriggers.cpp:348): nobody of the
     // group near, the healer fights like a solo bot.
@@ -1456,10 +1464,11 @@ bool AoeThreatNearbyTrigger::IsActive()
     // while the creature is near and alive); it lapses a few seconds after
     // the creature dies or the bot moves on. The creature the
     // player ordered this bot to attack is not registered.
-    // A tank in combat is exempt (it may stand in the ring to hold mobs). The
+    // A tank in combat is exempt from the rows that give tanks a pass (it may
+    // stand in the sludge's ring to hold mobs; not in Living Poison's). The
     // current target is registered too when it is itself a listed creature,
     // so a chase from beyond the 15 yd list is bent before it gets close.
-    if (sPlayerbotAIConfig.avoidCreatureAuras && !CreatureAuraCombatExempt(PlayerbotAI::IsTank(bot), bot->IsInCombat()))
+    if (sPlayerbotAIConfig.avoidCreatureAuras)
     {
         ObjectGuid const explicitTarget = AI_VALUE(ObjectGuid, "explicit attack target");
         std::list<ObjectGuid> keepouts = AI_VALUE(std::list<ObjectGuid>, "possible triggers");
@@ -1475,6 +1484,9 @@ bool AoeThreatNearbyTrigger::IsActive()
         {
             CreatureAuraKeepout const* row = PossibleTriggersValue::KeepoutFor(ai->GetUnit(guid));
             if (!CreatureAuraKeepoutApplies(true, row, true, true, guid == explicitTarget))
+                continue;
+            // A tank in combat is exempt from the rows that give tanks a pass.
+            if (CreatureAuraCombatExempt(*row, PlayerbotAI::IsTank(bot), bot->IsInCombat()))
                 continue;
             Hazard hazard(guid, kCreatureAuraHazardSeconds, CreatureAuraHazardRadius(*row));
             hazard.SetRefreshOnReAdd();

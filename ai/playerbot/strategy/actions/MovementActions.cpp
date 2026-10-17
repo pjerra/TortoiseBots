@@ -1590,7 +1590,10 @@ bool MovementAction::HoldChaseOutsideKeepout(WorldObject* target, float distance
     // melee contact with the creature - inside its pulse (Maraudon live test
     // 2026-10-13: a warrior on "reach melee" stood 2-4 yd from a sludge).
     // Tanks pick up and hold mobs: their chase is never held.
-    if (CreatureAuraChaseExempt(PlayerbotAI::IsTank(bot)))
+    // Not for the rows that give tanks no pass (Living Poison): HoldOutsideKeepout
+    // skips only the exempt rows for a tank.
+    bool const tankChase = PlayerbotAI::IsTank(bot);
+    if (tankChase && !CreatureAuraMapHasNonTankExemptRow(bot->GetMapId()))
     {
         keepoutChaseEngaged = ObjectGuid();
         keepoutChaseHoldTarget = ObjectGuid();
@@ -1603,7 +1606,7 @@ bool MovementAction::HoldChaseOutsideKeepout(WorldObject* target, float distance
     // does not see a sludge chased from farther away until the bot is almost
     // in its pulse.
     Unit* const targetUnit = target->ToUnit();
-    if (!HoldOutsideKeepout(gx, gy, gx, gy, keepoutChaseEngaged, CHASE_MOTION_TYPE, targetUnit))
+    if (!HoldOutsideKeepout(gx, gy, gx, gy, keepoutChaseEngaged, CHASE_MOTION_TYPE, targetUnit, tankChase))
     {
         keepoutChaseHoldTarget = ObjectGuid();
         return false;
@@ -1662,7 +1665,7 @@ bool MovementAction::HoldChaseOutsideKeepout(WorldObject* target, float distance
 }
 
 bool MovementAction::HoldOutsideKeepout(float gx, float gy, float ax, float ay, ObjectGuid& engaged,
-    MovementGeneratorType nativeType, Unit* first)
+    MovementGeneratorType nativeType, Unit* first, bool tankChase)
 {
     float const bx = bot->GetPositionX(), by = bot->GetPositionY();
     ObjectGuid const explicitTarget = AI_VALUE(ObjectGuid, "explicit attack target");
@@ -1691,6 +1694,8 @@ bool MovementAction::HoldOutsideKeepout(float gx, float gy, float ax, float ay, 
         CreatureAuraKeepout const* row = PossibleTriggersValue::KeepoutFor(unit);
         if (!CreatureAuraKeepoutApplies(true, row, true, true, guid == explicitTarget))
             continue;
+        if (tankChase && CreatureAuraChaseExempt(*row, true))
+            continue; // a tank's chase is not held at this row
         bool const wasEngaged = guid == engaged;
         float const cx = unit->GetPositionX(), cy = unit->GetPositionY();
         float hx = 0.0f, hy = 0.0f;
@@ -1736,9 +1741,13 @@ bool MovementAction::HoldOutsideKeepout(float gx, float gy, float ax, float ay, 
 
 bool MovementAction::EndPointInCreatureAuraKeepout(float x, float y, float z)
 {
-    if (!sPlayerbotAIConfig.avoidCreatureAuras || CreatureAuraCombatExempt(PlayerbotAI::IsTank(bot), bot->IsInCombat()))
+    if (!sPlayerbotAIConfig.avoidCreatureAuras)
         return false;
-    return PossibleTriggersValue::EndPointRinged(ai, x, y, z, AI_VALUE(Unit*, "current target"));
+    // A tank in combat is exempt from the rows that give tanks a pass only.
+    bool const tankInCombat = PlayerbotAI::IsTank(bot) && bot->IsInCombat();
+    if (tankInCombat && !CreatureAuraMapHasNonTankExemptRow(bot->GetMapId()))
+        return false;
+    return PossibleTriggersValue::EndPointRinged(ai, x, y, z, AI_VALUE(Unit*, "current target"), tankInCombat);
 }
 
 WorldPosition CalculatePerpendicularPoint(const WorldPosition& A, const WorldPosition& B, float offset, bool left = true)
@@ -2680,6 +2689,7 @@ bool AvoidAoeAction::isUseful()
     float radius = 0.0f;
     WorldPosition center;
     keepoutSource = ObjectGuid();
+    keepoutRow = nullptr;
     // Cheap sensor first (dynobj scan the value already caches); the GO
     // and trigger scans run only when no aura already marks the bot.
     if (AvoidAuraWithDynamicObj(radius, center))
@@ -2700,14 +2710,45 @@ bool AvoidAoeAction::Execute(Event& event)
     float radius = 0.0f;
     WorldPosition center;
     keepoutSource = ObjectGuid();
+    keepoutRow = nullptr;
     if (!AvoidAuraWithDynamicObj(radius, center) &&
         !AvoidDamagingTrap(radius, center) &&
         !AvoidTriggerNpc(radius, center))
         return false;
+    // A pet left on the boss keeps biting inside the spin: pull it out with
+    // the bot when it stands inside the hazard. Packet only, no stance
+    // change (the CC-discipline passive gate in CanPetAttack is untouched).
+    RecallPetFromHazard(radius, center);
     bool const moved = StrafeToSafety(center, radius);
-    if (!moved && !keepoutSource.IsEmpty())
-        keepoutNoLandingUntilMs = WorldTimer::getMSTime() + 2000;
+    if (!moved && !keepoutSource.IsEmpty() && keepoutRow)
+        keepoutNoLandingUntilMs = CreatureAuraNoLandingUntilMs(*keepoutRow, WorldTimer::getMSTime());
     return moved;
+}
+
+void AvoidAoeAction::RecallPetFromHazard(float radius, const WorldPosition& center)
+{
+    Pet* pet = bot->GetPet();
+    if (!pet || !pet->IsInWorld() || !sServerFacade.IsAlive(pet))
+        return;
+    // Only when the pet itself stands inside the hazard: no packet spam
+    // when it already waits outside with the bot.
+    WorldPosition petPos(pet);
+    if (petPos.distance(center) > radius)
+        return;
+    // COMMAND_FOLLOW, the same packet ChooseTargetActions sends when the
+    // fight ends: the pet breaks off and trails the stepping-out bot.
+    // No stance change, so an explicitly passive pet stays passive and the
+    // autonomous stance pin re-sends the attack once the bot re-engages.
+    ObjectGuid const& petGuid = pet->GetObjectGuid();
+    ObjectGuid const targetGuid;
+    uint8 const flag = ACT_COMMAND;
+    uint32 const spellId = COMMAND_FOLLOW;
+    uint32 const command = (uint32(flag) << 24) | spellId;
+    WorldPacket data(CMSG_PET_ACTION);
+    data << petGuid;
+    data << command;
+    data << targetGuid;
+    bot->GetSession()->HandlePetAction(data);
 }
 
 bool AvoidAoeAction::AvoidAuraWithDynamicObj(float& outRadius, WorldPosition& outCenter)
@@ -2782,16 +2823,22 @@ bool AvoidAoeAction::AvoidTriggerNpc(float& outRadius, WorldPosition& outCenter)
             if (!CreatureAuraKeepoutApplies(true, row, true, true, guid == explicitTarget))
                 continue;
             // A tank in combat may stand in the ring to hold its mobs.
-            if (CreatureAuraCombatExempt(PlayerbotAI::IsTank(bot), bot->IsInCombat()))
+            if (CreatureAuraCombatExempt(*row, PlayerbotAI::IsTank(bot), bot->IsInCombat()))
                 continue;
             // Centre to centre, the same measure as the movement hazard.
             if (!InsideCreatureAuraKeepout(*row, WorldPosition(bot).distance(WorldPosition(unit))))
                 continue;
             keepoutSource = guid;
+            keepoutRow = row;
             outRadius = row->keepoutRadius;
             outCenter = WorldPosition(unit->GetMapId(), unit->GetPositionX(), unit->GetPositionY(), unit->GetPositionZ());
             return true;
         }
+        // Selectable spinning bosses (Herod 8989) count; a selectable mob
+        // with a permanent burning aura (Fire Shield II 184) does not — its
+        // school-damage pulse keeps the invisible-emitter-only rule, or
+        // melee would step out forever and never fight it.
+        bool const selectable = !unit->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
         Unit::AuraList const& periodic = unit->GetAurasByType(SPELL_AURA_PERIODIC_TRIGGER_SPELL);
         for (Unit::AuraList::const_iterator it = periodic.begin(); it != periodic.end(); ++it)
         {
@@ -2807,7 +2854,12 @@ bool AvoidAoeAction::AvoidTriggerNpc(float& outRadius, WorldPosition& outCenter)
                 continue;
             for (int i = 0; i < MAX_EFFECT_INDEX; ++i)
             {
-                if (triggerProto->Effect[i] != SPELL_EFFECT_SCHOOL_DAMAGE)
+                // School damage lists invisible emitters only; self-centred
+                // weapon-damage spins (Herod's Whirlwind 8989 -> 15578) list
+                // anyone. The radius gate and the range test below are
+                // unchanged.
+                if (!TriggerSpellMarksSpinHazard((int)triggerProto->Effect[i],
+                    (int)triggerProto->EffectImplicitTargetA[i], (int)triggerProto->EffectImplicitTargetB[i], selectable))
                     continue;
                 SpellRadiusEntry const* radiusEntry = sSpellRadiusStore.LookupEntry(triggerProto->EffectRadiusIndex[i]);
                 float radius = radiusEntry ? radiusEntry->Radius : 0.0f;
@@ -2971,6 +3023,24 @@ bool AvoidAoeAction::StrafeToSafety(const WorldPosition& hazardCenter, float rad
                 target ? sServerFacade.getDistance2d(bot, target) : 0.0f, nowMs, bot->movespline->GetId());
             return true;
         }
+    }
+    // A lethal keep-out (Living Poison) with every landing refused: step
+    // straight away from the creature rather than stand in the blast. Only
+    // the module's own safe-point checks stay (line of sight and a path, then
+    // MoveTo); the heading veto, the target band and the unpulled-hostile
+    // guard are dropped, because they are what refused the landings and
+    // staying put is worse.
+    if (!keepoutSource.IsEmpty() && keepoutRow && !keepoutRow->tankExempt)
+    {
+        float px = 0.0f, py = 0.0f;
+        CreatureAuraStepAwayPoint(hazardCenter.getX(), hazardCenter.getY(), botPos.getX(), botPos.getY(),
+            keepoutRow->keepoutRadius, angleFromHazard, px, py);
+        WorldPosition away(bot->GetMapId(), px, py, botPos.getZ() + 1.0f, 0.0f);
+        away.setZ(away.GetHeight());
+        if (bot->IsWithinLOS(away.getX(), away.getY(), away.getZ() + bot->GetCollisionHeight()) &&
+            botPos.canPathTo(away, bot) &&
+            MoveTo(bot->GetMapId(), away.getX(), away.getY(), away.getZ(), false, IsReaction(), false, true))
+            return true;
     }
     return false;
 }
@@ -3176,14 +3246,26 @@ bool SetBehindTargetAction::isUseful()
         return false;
 
     Unit* target = AI_VALUE(Unit*, "current target");
-    if (target && !bot->IsBehindTarget(target, false))
-    {
-        // Don't move behind if the target is too far away
-        const float distance = bot->GetDistance(target);
-        return distance <= 15.0f;
-    }
+    if (!target)
+        return false;
 
-    return false;
+    // Mirror isPossible/Execute (donor): while the mob attacks the bot or is
+    // moving, set-behind cannot act, so do not count the streak either.
+    if ((target->GetVictim() && target->GetVictim()->getObjectGuid() == bot->getObjectGuid()) || target->IsMoving())
+        return false;
+
+    // Issue #911: position only once in melee reach (donor shape); closing in
+    // is "reach melee"'s job, which this ACTION_HIGH row used to starve.
+    const bool inMeleeReach = bot->CanReachWithMeleeAutoAttack(target);
+    const bool alreadyBehind = bot->IsBehindTarget(target, false);
+    if (!inMeleeReach || alreadyBehind)
+        return false;
+
+    // Bounded per-target streak: a blocked behind spot falls back to
+    // attacking from the front instead of re-issuing the move forever.
+    const uint32 nowMs = WorldTimer::getMSTime();
+    SetBehindStreakPoll(streak, target->getObjectGuid().GetRawValue(), nowMs);
+    return SetBehindUseful(inMeleeReach, alreadyBehind, SetBehindStreakExpired(streak, nowMs));
 }
 
 bool SetBehindTargetAction::isPossible()

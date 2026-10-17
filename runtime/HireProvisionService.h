@@ -1,6 +1,7 @@
 #pragma once
 
 // pi-lens-ignore: clang:pp_file_not_found
+#include "HireRaidPolicy.h"
 #include "ObjectGuid.h"
 
 #include <cstdint>
@@ -55,6 +56,59 @@ struct HireOutcome
     uint32_t cost = 0;
 };
 
+// Issue #900: result of `.bot hire raid`. refused = nothing was hired because
+// a pre-check failed (message says why). Otherwise hired of planned companions
+// joined; message is empty on a full hire or names why the sequence stopped.
+// requested is the player's total, planned the part the cap leaves room for.
+struct HireRaidOutcome
+{
+    bool refused = false;
+    // Plan accepted and queued: the hires run over the next ticks and the
+    // player gets a closing summary plus the TBM line when the job ends.
+    bool started = false;
+    bool capped = false;
+    // The party was converted to a raid (when the job was accepted, or while
+    // it ran for a master who started solo).
+    bool convertedToRaid = false;
+    HireStatus stopStatus = HireStatus::Ok;
+    std::string message;
+    uint32_t requested = 0;
+    uint32_t planned = 0;
+    uint32_t hired = 0;
+    uint32_t tanks = 0;
+    uint32_t healers = 0;
+    uint32_t dps = 0;
+    // Role split of the plan (hired splits above fill in as the job runs).
+    uint32_t planTanks = 0;
+    uint32_t planHealers = 0;
+    uint32_t planDps = 0;
+    uint8_t tier = 0;
+    uint64_t quote = 0;
+    uint64_t fee = 0;
+};
+
+// One accepted `.bot hire raid`, worked off a couple of Hire() calls at a time
+// by HireProvisionService::Update so a 39-companion raid never stalls the
+// world thread inside the chat command.
+struct HireRaidJob
+{
+    ObjectGuid masterGuid;
+    std::vector<HireRaidSlot> roster;
+    size_t cursor = 0;
+    // The finished raid outgrows a party (members + mustering + plan > 5).
+    // A solo master has no group to convert when the job starts; the group
+    // forms as the first companions join and is converted before the next
+    // hire would hit the party cap.
+    bool raidSized = false;
+    // The master was already in a raid when the job was accepted.
+    bool startedInRaid = false;
+    // The master has been seen in a group at job start or at any step. A
+    // later group-less master left the group (#1014 then dismissed the
+    // companions already hired), so the job stops instead of hiring on.
+    bool hadGroup = false;
+    HireRaidOutcome progress;
+};
+
 // Issue #192: on-demand companion hiring. Creates a character on an RNDBOT
 // account matching the requested class/race/gender, levels it to the
 // requester, provisions talents/spells/skills/gear for the requested role,
@@ -73,6 +127,23 @@ public:
     // fromGossip skips the resting check: standing at the recruiter inside the
     // inn is proof of presence. The `.bot hire` fast path enforces it.
     HireOutcome Hire(Player* requester, HireSelection const& sel, bool fromGossip);
+
+    // Issue #900: hire the whole raid described by request (see
+    // runtime/HireRaidPolicy.h) through Hire(), one slot after the other.
+    // Plans, quotes and refuses synchronously; on success the job is queued
+    // (outcome.started) and Update() hires it a couple of slots per step.
+    HireRaidOutcome HireRaid(Player* requester, HireRaidRequest const& request);
+
+    // The gates every hire passes before it picks a class: in-game, enabled,
+    // pool available, account security, recruiter/HireAnywhere. False fills
+    // outcome with the status and message.
+    static bool CheckHireAllowed(Player* requester, bool fromGossip, HireOutcome& outcome);
+    // Fee for the hire that follows ownedBefore live/mustering companions, at
+    // the level and effective gear tier (one formula for Hire and HireRaid).
+    static uint32_t QuoteHireFee(uint32_t ownedBefore, uint32_t level, uint8_t gearTier);
+    // Fills a missing race (random race of the requester's faction that can be
+    // the class) and gender. False when no race of the faction fits the class.
+    static bool FillDefaultRaceGender(Player* requester, HireSelection& sel);
 
     // Completes queued provisions once the hired character is controllable,
     // then groups it with its master. Bounded: at most two provisions per tick.
@@ -151,6 +222,15 @@ public:
     void DropStalePending();
 
     std::vector<PendingProvision> m_pending;
+    // Issue #900: queued raid hires, one step every kRaidStepMs.
+    std::vector<HireRaidJob> m_raidJobs;
+    uint32_t m_raidStepElapsedMs = 0;
+    // Account the previous slot of the running raid job landed on: tried
+    // first so the job does not rescan every full pool account per hire.
+    uint32_t m_raidAccountHint = 0;
+    bool m_raidHireActive = false;
+    void StepRaidJobs();
+    static void ReportRaidJob(Player* master, HireRaidOutcome const& job);
     uint32_t m_updateElapsedMs = 0;
 };
 

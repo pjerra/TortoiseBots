@@ -71,18 +71,72 @@ namespace ai
     }
 
     // "Never NEED against a player": does one real player in the roll stand
-    // between this bot and the item? A vote the bot saw (its owner's own
-    // CMSG_LOOT_ROLL, forwarded to the owner's bots) is the answer: NEED
-    // competes, GREED or PASS steps aside. The core keeps everyone else's
-    // vote private, so an unseen player competes whenever the item is
-    // usable for them (Player::CanUseItem, the same test the core applies
-    // under need-before-greed).
-    inline bool RealPlayerCompetes(bool voteSeen, LootRollVote seenVote, bool canUse)
+    // between this bot and the item? Only a NEED the bot actually saw
+    // competes: the owner's own CMSG_LOOT_ROLL (forwarded to the owner's
+    // bots) is the one vote the core shows it, so GREED or PASS steps aside.
+    // Everyone else's vote stays private in the core, and "can use it" alone
+    // must not demote: in an LFT/pool group every usable drop is usable by
+    // someone, so that reading turned every upgrade NEED into GREED (#967).
+    // The one exception is a hired companion grouped with its master: it
+    // still steps aside for a usable item, because taking the hirer's
+    // upgrade from their own companion is always wrong. Alts (the player's
+    // own-account bots) wait like pool bots instead: if the player wants to
+    // gear the alt, they click greed and the alt needs.
+    inline bool RealPlayerCompetes(bool voteSeen, LootRollVote seenVote, bool canUse, bool yieldUnseenUsable = false)
     {
         if (voteSeen)
             return seenVote == LootRollVote::Need;
 
-        return canUse;
+        return yieldUnseenUsable && canUse;
+    }
+    // Wire mapping for SMSG_LOOT_ROLL (Group::CountRollVote vs CountTheRoll):
+    // a live vote is (number 0, type 0) NEED, (128, 2) GREED, (128, 128)
+    // PASS. Anything with a real roll number is a post-resolution echo and
+    // maps to Pass so the call site ignores it. Pure data rule, unit-tested.
+    inline LootRollVote LootWireVote(std::uint8_t rollNumber, std::uint8_t rollType)
+    {
+        if (rollNumber == 0 && rollType == 0)
+            return LootRollVote::Need;
+        if (rollNumber == 128 && rollType == 2)
+            return LootRollVote::Greed;
+        if (rollNumber == 128 && rollType == 128)
+            return LootRollVote::Pass;
+        return LootRollVote::Pass;
+    }
+
+    // True for a post-resolution echo: any packet carrying a real roll
+    // number. The roll is already decided; the vote recorder ignores it.
+    inline bool LootVoteIsEcho(std::uint8_t rollNumber, std::uint8_t rollType)
+    {
+        return LootWireVote(rollNumber, rollType) == LootRollVote::Pass &&
+            (rollNumber != 128 || rollType != 128);
+    }
+
+    // Roll-wait timing (#967): pool bots in a group with real players hold
+    // their vote so the humans get the whole window. They vote this many
+    // milliseconds before the core's group-loot window ends
+    // (LOOT_ROLL_TIMEOUT = 60 s in Group.cpp): late enough that every human
+    // had their chance, early enough that the vote always lands. The margin
+    // must clear the worst-case gap between two vote checks: the "very
+    // often" roll trigger only re-fires every 5 s (TimeTrigger interval,
+    // second-resolution), plus AI tick jitter under load (1000+ bots slow
+    // every bot's tick), so a 5 s margin could check at 5.01 s left, wait,
+    // and find the window closed on the next tick. 15 s leaves room for a
+    // missed check and slow ticks. Pure data rule, tested on its own; the
+    // call site reads the live deadline.
+    inline std::uint32_t RollWaitVoteMarginMs() { return 15000; }
+
+    // True when the wait is over: the roll ends within the vote margin, or
+    // every real player who can roll on the item already voted. remainingMs
+    // is the live time left on the roll (0 = unknown: keep waiting, the
+    // margin test cannot fire). allVotersVoted arrives precomputed so the
+    // per-tick call stays trivial.
+    inline bool RollWaitElapsed(std::uint32_t remainingMs, bool allVotersVoted)
+    {
+        if (allVotersVoted)
+            return true;
+
+        return remainingMs > 0 && remainingMs <= RollWaitVoteMarginMs();
     }
 
     // An automatic NEED becomes GREED while a real player competes. An

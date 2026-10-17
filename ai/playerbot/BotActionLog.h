@@ -7,10 +7,19 @@
 // fflush()'d on every write so a crash doesn't lose the trail. Gated behind
 // the runtime config flag; ~zero cost when disabled.
 //
+// Disk safeguards (ActionLogPolicy.h): AiPlayerbot.ActionLogScope picks which
+// bots write a file (default: only commander-bound or hired ones, the
+// answer cached per bot and looked up again every 15 s on the world thread);
+// AiPlayerbot.ActionLogMaxFileMB rotates a file that grows past the cap;
+// AiPlayerbot.ActionLogMaxAgeDays / ActionLogMaxTotalMB delete the oldest
+// files at startup and hourly, never one a bot has open.
+//
 
 #include "Common.h"
 #include <cstdio>
+#include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 class Player;
 class PlayerbotAI;
@@ -31,6 +40,23 @@ public:
 
     // Get the open handle for this bot, or null if not open. Cheap.
     static std::FILE* GetHandle(PlayerbotAI* ai);
+
+    // World thread, once per bot AI update: re-reads whether the bot is in
+    // scope (ActionLogScope = commanded) at most every 15 s and closes its
+    // file when it just left the scope. Costs one branch when the log is off or
+    // the scope is all/none.
+    static void RefreshScope(PlayerbotAI* ai);
+
+    // Hook for a bot-trace feature (nothing on dev calls it yet): marks one bot
+    // as traced, so scope commanded logs it, and clears it again when the trace
+    // ends. World thread.
+    static void SetTraced(uint32 botGuidLow, bool traced);
+
+    // World thread, once per world update: runs the retention cleanup at
+    // startup, then hourly (or sooner after heavy writing). One summary line per
+    // cleanup. Works even while EnableActionLog is off, so files left by an
+    // earlier run are still trimmed.
+    static void Maintain();
 
     // Lower-level write: timestamped, tag-prefixed, fflush'd. Format
     // follows printf semantics. Safe to call when log isn't open
@@ -59,12 +85,31 @@ public:
     static void LogAuraRemove(PlayerbotAI* ai, uint32 spellId, ObjectGuid casterGuid, bool force = false);
 
 private:
+    struct OpenFile
+    {
+        std::FILE* file = nullptr;
+        std::string path;
+        uint64 bytes = 0;  // size so far, for the per-file cap
+    };
     // Map keyed by bot character GUID (low). Player* would be unsafe
     // across logout; the GUID stays valid in the map until we Close it.
-    static std::unordered_map<uint32, std::FILE*> sFiles;
+    static std::unordered_map<uint32, OpenFile> sFiles;
+
+    // Cached scope answer per bot (ActionLogScope = commanded).
+    struct ScopeState
+    {
+        bool allowed = false;
+        int64 nextCheckMs = 0;
+    };
+    static std::unordered_map<uint32, ScopeState> sScope;
+    static std::unordered_set<uint32> sTraced;
+
+    static bool ScopeAllowedLocked(uint32 guid);
+    static void AppendLine(PlayerbotAI* ai, const char* line, size_t len);
+    static void Sweep();
 
     // Helper: build the per-bot log path. `<botname>_<sessionId>_<date>.log`.
-    static std::string BuildPath(Player* bot);
+    static std::string BuildPath(Player* bot, uint32 seq = 0);
 
     // Helper: ensure `logs/bots/` exists. Cheap (CreateDirectory ignores
     // ERROR_ALREADY_EXISTS).

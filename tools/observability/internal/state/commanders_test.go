@@ -283,3 +283,67 @@ func TestCommandersKeepTrails(t *testing.T) {
 		t.Fatal("the trails of an ended binding are forgotten")
 	}
 }
+
+// A trail is never joined across a teleport: a jump no walking explains, a map change, a death. The point where it happened carries its kind.
+func TestCommandersTrailBreaks(t *testing.T) {
+	c := newClock()
+	s := newTestStore(c)
+	kinds := func() []byte {
+		var out []byte
+		for _, p := range s.Trails()["A"][1].Points {
+			out = append(out, p.Kind)
+		}
+		return out
+	}
+	same := func(got []byte, want string) {
+		t.Helper()
+		if string(got) != want {
+			t.Fatalf("point kinds %q, want %q", got, want)
+		}
+	}
+	// walking and riding hard are not breaks: 2 s apart, 14 yd/s is 28 yd
+	s.ApplyCommanders(trailPayload(100, 209, 0, 0))
+	s.ApplyCommanders(trailPayload(102, 209, 28, 0))
+	s.ApplyCommanders(trailPayload(104, 209, 56, 0))
+	same(kinds(), "\x00\x00\x00")
+	// a summon 300 yd away within one report
+	s.ApplyCommanders(trailPayload(106, 209, 356, 0))
+	same(kinds(), "\x00\x00\x00t")
+	// the limit for a 2 s gap is 12 + 20*2 = 52 yd: exactly that is a walk, past it a break
+	s.ApplyCommanders(trailPayload(108, 209, 356+52, 0))
+	same(kinds(), "\x00\x00\x00t\x00")
+	s.ApplyCommanders(trailPayload(110, 209, 356+52+53, 0))
+	same(kinds(), "\x00\x00\x00t\x00t")
+	// a long silence allows more (30 s: 612 yd) but does not hide a jump past it
+	s.ApplyCommanders(trailPayload(140, 209, 461+600, 0))
+	same(kinds(), "\x00\x00\x00t\x00t\x00")
+	s.ApplyCommanders(trailPayload(170, 209, 461+600+700, 0))
+	same(kinds(), "\x00\x00\x00t\x00t\x00t")
+	// a map change starts a new trail whose first point is marked
+	s.ApplyCommanders(trailPayload(200, 70, 5, 5))
+	same(kinds(), "m")
+}
+
+func TestCommandersTrailDeathAndRelease(t *testing.T) {
+	c := newClock()
+	s := newTestStore(c)
+	pay := func(ts int64, x float64, alive bool) {
+		p := trailPayload(ts, 209, x, 0)
+		p.Commanders[0].Bots[0].Alive = alive
+		s.ApplyCommanders(p)
+	}
+	pay(100, 0, true)
+	pay(102, 1, false)   // died where it stood (under the step distance, still recorded)
+	pay(104, 1, false)   // lies there: nothing new
+	pay(106, 400, false) // released: a jump while dead
+	pay(108, 400, true)  // resurrected next to the corpse: same place, no break
+	pay(110, 900, true)  // a jump while alive: a teleport
+	var got []byte
+	for _, p := range s.Trails()["A"][1].Points {
+		got = append(got, p.Kind)
+	}
+	// the revive report at the same place adds no point (under the step); the last jump is a teleport
+	if string(got) != "\x00drt" {
+		t.Fatalf("kinds %q, want 0 d r t", got)
+	}
+}

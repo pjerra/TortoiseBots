@@ -7,6 +7,7 @@
 #include "playerbot/DpsTargetPolicy.h"
 #include "playerbot/FourHorsemenRotationPolicy.h"
 #include "playerbot/GroupMembers.h"
+#include "playerbot/RunnerFinishPolicy.h"
 
 using namespace ai;
 
@@ -328,6 +329,89 @@ namespace
 
         return target;
     }
+
+    // A mob running from the fight: the fleeing state (fear-style flee, the
+    // timed flee) or the core's flee-for-assistance walk and its pause at the
+    // helper (Creature::DoFleeToGetAssistance), which carries no fleeing state.
+    bool IsRunningMob(Unit* unit)
+    {
+        if (unit->HasUnitState(UNIT_STAT_FLEEING))
+            return true;
+        switch (unit->GetMotionMaster()->GetCurrentMovementGeneratorType())
+        {
+            case FLEEING_MOTION_TYPE:
+            case TIMED_FLEEING_MOTION_TYPE:
+            case ASSISTANCE_MOTION_TYPE:
+            case ASSISTANCE_DISTRACT_MOTION_TYPE:
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    // A gap closer castable on this mob right now. In 1.12 only Intercept
+    // counts: Charge is out-of-combat only, and Feral Charge needs bear form
+    // (bears tank, and tanks never chase runners). Intercept still needs
+    // Berserker Stance, rage and its cooldown, which CanCastSpell checks; its
+    // range is the runner leash, so range is left to the policy.
+    bool GapCloserReady(PlayerbotAI* ai, Player* bot, Unit* unit)
+    {
+        return bot->GetClass() == CLASS_WARRIOR &&
+            ai->CanCastSpell("intercept", unit, 0, nullptr, true);
+    }
+
+    // Finish a mob of the party's fight that runs away at low health
+    // (RunnerFinishPolicy): ranged in range, melee with a gap closer on a short
+    // leash; during a hold ("stay") only what the bot reaches from its spot.
+    // The current target wins a tie, so a runner is never dropped for a fresh
+    // mob. Reads the cached attackers list only.
+    Unit* FinishRunnerTarget(PlayerbotAI* ai, Player* bot, Unit* current, GeneralDpsStrategy& ccProbe)
+    {
+        ai::RunnerChaser chaser;
+        chaser.healer = PlayerbotAI::IsHeal(bot);
+        chaser.tank = PlayerbotAI::IsTank(bot);
+        if (chaser.healer || chaser.tank)
+            return nullptr;
+        chaser.ranged = ai->IsRanged(bot);
+        chaser.holding = ai->HasStrategy("stay", BotState::BOT_STATE_COMBAT);
+        chaser.spellRange = ai->GetRange("spell");
+        chaser.meleeReach = sPlayerbotAIConfig.meleeDistance + 5.0f;
+
+        Unit* const ccTarget = ai->GetAiObjectContext()->GetValue<Unit*>("cc target")->Get();
+        Unit* best = nullptr;
+        ai::RunnerFacts bestFacts;
+        for (ObjectGuid const& guid : ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid>>("attackers")->Get())
+        {
+            Unit* unit = ai->GetUnit(guid);
+            if (!unit || unit->IsPlayer() || !unit->IsInWorld() || unit->GetMapId() != bot->GetMapId())
+                continue;
+            ai::RunnerFacts facts;
+            facts.alive = unit->IsAlive();
+            facts.inPartyFight = true;
+            facts.running = IsRunningMob(unit);
+            facts.feared = unit->HasAuraType(SPELL_AURA_MOD_FEAR);
+            facts.healthPct = unit->GetHealthPercent();
+            facts.distance = bot->GetDistance(unit);
+            facts.ccTarget = unit == ccTarget || ccProbe.IsCcTarget(unit);
+            if (!ai::IsFinishableRunner(facts))
+                continue;
+            // The gap closer is judged per mob, and only for a melee bot.
+            ai::RunnerChaser mobChaser = chaser;
+            mobChaser.hasGapCloser = !chaser.ranged && GapCloserReady(ai, bot, unit);
+            if (!ai::ShouldFinishRunner(facts, mobChaser))
+                continue;
+            if (IsWastedDpsTarget(ai, unit) || AttackersValue::IsKeepoutSetAside(unit, bot))
+                continue;
+            if (chaser.ranged && !bot->IsWithinLOSInMap(unit))
+                continue;
+            if (!best || ai::RunnerBetter(facts, unit == current, bestFacts, best == current))
+            {
+                best = unit;
+                bestFacts = facts;
+            }
+        }
+        return best;
+    }
 }
 
 
@@ -349,6 +433,12 @@ Unit* DpsTargetValue::Calculate()
     if (rti && !AttackersValue::IsKeepoutSetAside(rti, bot)) return rti;
 
     GeneralDpsStrategy ccProbe(ai, 0.0f);
+
+    // A nearly dead mob running from the fight comes before the tank's victim:
+    // left alone it fetches help or leaves an event wave unfinished.
+    if (Unit* runner = FinishRunnerTarget(ai, bot, AI_VALUE(Unit*, "current target"), ccProbe))
+        return runner;
+
     if (Unit* tankTarget = GetGroupTankTarget(ai))
     {
         if (tankTarget != AI_VALUE(Unit*, "cc target") && !ccProbe.IsCcTarget(tankTarget) &&

@@ -210,6 +210,10 @@ void ChatCommandHandlerStrategy::InitReactionTriggers(std::list<TriggerNode*> &t
         NextAction::array(0, new NextAction("pull my target", relevance), NULL)));
 
     triggers.push_back(new TriggerNode(
+        "pullback",
+        NextAction::array(0, new NextAction("pullback my target", relevance), NULL)));
+
+    triggers.push_back(new TriggerNode(
         "pull back",
         NextAction::array(0, new NextAction("pull my target", relevance), NULL)));
 

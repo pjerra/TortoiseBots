@@ -31,6 +31,28 @@ namespace ai
         return radius > 0.0f && radius <= kMaxAoeAvoidRadiusYd;
     }
 
+    // A periodic-trigger aura whose triggered spell hurts around the caster
+    // marks a hazard — but not the same one for every unit (#971 review):
+    // school damage keeps the old rule (invisible NOT_SELECTABLE emitters
+    // only: selectable mobs with a permanent burning aura such as Fire
+    // Shield II 184 on the Scarlet Conjuror 4297 must stay fightable, or
+    // melee would step out forever), while self-centred weapon-damage spins
+    // (Herod's Whirlwind 8989 -> 15578: EFFECT_WEAPON_DAMAGE_NOSCHOOL at
+    // TgtA CASTER_SRC / TgtB ENEMY_AOE_AT_SRC_LOC, 8 yd) are accepted on any
+    // unit, selectable bosses included. Effect-only test (no radius check):
+    // callers own the radius gate and the range test, and the unit test
+    // feeds bare effect/target/selectable triples.
+    inline bool TriggerSpellMarksSpinHazard(int effect, int targetA, int targetB, bool selectable)
+    {
+        if (effect == 2) // SPELL_EFFECT_SCHOOL_DAMAGE
+            return !selectable;
+        if (targetA != 22 || targetB != 15) // CASTER_SRC + ENEMY_AOE_AT_SRC_LOC
+            return false;
+        return effect == 17 || // SPELL_EFFECT_WEAPON_DAMAGE_NOSCHOOL (Herod 15578)
+            effect == 58 ||    // SPELL_EFFECT_WEAPON_DAMAGE
+            effect == 31;      // SPELL_EFFECT_WEAPON_PERCENT_DAMAGE
+    }
+
     // Strafe-first candidate order. Returns the ordered heading offsets
     // (radians, relative to the angle bot->target) for the melee case:
     // left/right strafe, then straight away from the target.

@@ -100,7 +100,9 @@ public:
     // the bot's own book, never from a trainer row. Idempotent; safe on every
     // hire and re-seed.
     void PruneOverLevelSpellRanks();
-    void InitPet();
+    // saveToDb=false leaves the save to the caller's own Player::SaveToDB
+    // (the hire path, issue #1043: one pet save per hire, not three racing).
+    void InitPet(bool saveToDb = true);
     void InitPetSpells();
 
 private:
