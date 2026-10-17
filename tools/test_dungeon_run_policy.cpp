@@ -706,6 +706,8 @@ static void TestUseItemPausesOnSplitInputs()
     g.carrier = "Healy";
     g.carrierHasEntryItem = true;
     CHECK(Tick(q, g) == "use 7740 Healy");
+}
+
 // Uldaman run 4, archaedas wait_object 135/135: Archaedas was dead and the
 // vault door 124369 active, yet "a fight lasted more than 180 s" paused the run.
 // The hold's long fight had left fightMs over the plain 180 s ceiling, and the
