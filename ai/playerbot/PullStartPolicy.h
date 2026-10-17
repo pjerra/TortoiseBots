@@ -28,4 +28,41 @@ namespace ai
         return !facts.hasTarget || facts.moving || facts.motionLaunched ||
             facts.distance <= facts.range;
     }
+
+    // What the order clears on the tank before its decisions. The run leader
+    // pulls a second after the last fight ends, while the tank sits eating:
+    // in the Uldaman rerun (build 19z11) the meal cast (24005) was live one
+    // second before the refused pullback. "reach pull" will not move a bot
+    // that is casting (ReachTargetAction::isUseful), so the walk was never
+    // launched and the order was refused. A human or commander order beats
+    // the meal: the cast is interrupted and the tank stands up. A ranged
+    // auto-repeat (the shot itself) is not a cast here and is left alone.
+    struct PullReadyFacts
+    {
+        bool casting = false; // a non-melee, non-auto-repeat spell is being cast
+        bool seated = false;  // the tank sits (eating or drinking)
+    };
+
+    struct PullReadySteps
+    {
+        bool interrupt = false;
+        bool stand = false;
+    };
+
+    inline PullReadySteps ReadyTankForPull(PullReadyFacts const& facts)
+    {
+        PullReadySteps steps;
+        steps.interrupt = facts.casting;
+        steps.stand = facts.seated;
+        return steps;
+    }
+
+    // A ranged pull whose walk did not start after the order's decisions gets
+    // one direct "reach pull" before the order is refused: a decision can go
+    // to another action (a shout, the stay) and leave the walk for a later
+    // tick that a synchronous order never sees. A body pull is never judged.
+    inline bool RetryPullWalk(PullStartFacts const& facts, bool bodyPull)
+    {
+        return !bodyPull && !PullWalkStarted(facts);
+    }
 }

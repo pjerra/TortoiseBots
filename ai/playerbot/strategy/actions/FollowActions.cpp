@@ -48,7 +48,31 @@ bool FollowAction::Execute(Event& event)
     else
         moved = Follow(followTarget, 0, 0);
 
+    // Beyond sight range in a dungeon Follow's MoveTo can fail without a
+    // word; arm the stall rescue then (DungeonFollowStallWatch::ArmFar).
+    if (!moved && ArmFarDungeonFollowRescue(followTarget))
+        RescueStalledDungeonFollow(followTarget, moved);
+
     return moved;
+}
+
+// A follow past sight range that did not start moving, inside a dungeon and
+// out of combat: latch the stall rescue (ledge step-down, then the paced
+// MoveTo2 walks, bounded by the watch's give-up). Cheap: one distance.
+bool FollowAction::ArmFarDungeonFollowRescue(Unit* followTarget)
+{
+    Map* map = bot->GetMap();
+    if (!followTarget || followTarget == bot || !map || !followTarget->IsPlayer() || !bot->IsAlive() ||
+        !followTarget->IsAlive() || !ai->IsSafe(followTarget) || bot->GetTransport() ||
+        followTarget->GetTransport() || bot->IsTaxiFlying() || bot->GetMapId() != followTarget->GetMapId())
+        return false;
+    bool const inCombat = bot->IsInCombat() || ai->IsStateActive(BotState::BOT_STATE_COMBAT);
+    bool const held = bot->IsRooted() || bot->HasUnitState(UNIT_STAT_NO_FREE_MOVE) ||
+        bot->GetStandState() != UNIT_STAND_STATE_STAND || bot->IsNonMeleeSpellCasted(true, false, true);
+    if (!UseFarFollowRescue(map->IsDungeon(), inCombat, bot->GetDistance(followTarget),
+            sPlayerbotAIConfig.sightDistance, false, held))
+        return false;
+    return followStallWatch.ArmFar(WorldTimer::getMSTime());
 }
 
 bool FollowAction::isUseful()

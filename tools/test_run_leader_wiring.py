@@ -57,12 +57,64 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn("cx = f.approachX;", facts)
         self.assertIn("f.members.push_back(member);", facts)
 
+    def test_run_hold_is_let_go_on_every_path(self):
+        # The hold (DungeonRun::Run::hold) is synced after every tick that runs, and let go on the
+        # paths that return before Tick: a paused run, the lead bot off the plan's map, `run stop`.
+        tick = body(COMMANDS, "void TickDungeonRun(", "\n}\n")
+        self.assertIn("SyncRunHold(commander, lead, bots, it->second, !order.empty());", tick)
+        early = body(tick, "if (slot.run.state != TortoiseBots::DungeonRun::State::Running || !commander)", "return;")
+        self.assertIn("ReleaseRunHold(commander, binding->leadGuid, slot);", early)
+        offmap = body(tick, "the lead bot is not on the plan's map", "return;")
+        self.assertIn("ReleaseRunHold(commander, binding->leadGuid, slot);", offmap)
+        stop = body(COMMANDS, 'slot.run.note = "stopped by .bot run stop";', "DungeonRuns().erase(it);")
+        self.assertIn("ReleaseRunHold(commander, binding->leadGuid, slot);", stop)
+        facts = body(COMMANDS, "void ReadRunFacts(", "\n}\n")
+        self.assertIn("f.deadNames.push_back(bot->GetName());", facts)
+        self.assertIn("member.x = bot->GetPositionX();", facts)
+
+    def test_run_back_reads_cached_attackers_and_restores_the_ai(self):
+        # A member coming back with attackers (DungeonRun::RunBack): its attackers are counted from the
+        # core's attacker set (no scan); the glue makes a listed bot a passive follower of the lead bot,
+        # never undoes a passive stance it did not set, and gives the AI back once the run lets it go.
+        facts = body(COMMANDS, "void ReadRunFacts(", "\n}\n")
+        self.assertIn("for (Unit* attacker : bot->GetAttackers())", facts)
+        self.assertIn("++member.attackers;", facts)
+        start = body(COMMANDS, "void StartRunBackPassive(", "\n}\n")
+        self.assertIn('ai->HasStrategy("passive", BotState::BOT_STATE_COMBAT)', start)
+        self.assertIn('ai->ChangeStrategy("+passive", BotState::BOT_STATE_COMBAT);', start)
+        self.assertIn("PointFollowerAtLead(commanderRaw, bot, lead);", start)
+        tick = body(COMMANDS, "void TickDungeonRun(", "\n}\n")
+        self.assertIn("for (std::string const& name : slot.run.runBack)", tick)
+        sync = body(COMMANDS, "void SyncRunBackPassive()\n{", "\n}\n")
+        self.assertIn("run->second.run.state == TortoiseBots::DungeonRun::State::Running", sync)
+        self.assertIn("EndRunBackPassive(it->first);", sync)
+        update = body(COMMANDS, "static void UpdateDungeonRuns(", "\n}\n")
+        self.assertIn("SyncRunBackPassive();", update)
+        self.assertIn("f.leadInCombat = member.inCombat;", facts)
+
+    def test_player_order_restores_every_run_back_bot_first(self):
+        # A player's order (a `cmd flee Bob` too) gives every bot the run made passive its own AI back
+        # before the order runs; the order is noted before it executes at every call site, so a flee
+        # then sets the stance on the bots it names only. No bot of the commander stays passive.
+        pause = body(COMMANDS, "static void PauseDungeonRunForPlayer(uint64 commanderRaw, std::string const& order)\n{", "\n}\n")
+        self.assertIn("EndRunBackPassive(passive->first);", pause)
+        self.assertNotIn('order.find("flee")', pause)
+        # The order is noted before it runs: right after parsing in `.bot action`.
+        action = body(COMMANDS, "static bool HandleAction(ChatHandler* handler, char const* args)", "\n}\n")
+        self.assertIn("if (parsed)\n        PauseDungeonRunForPlayer(", action)
+
+
     def test_boss_down_needs_his_corpse(self):
         facts = body(COMMANDS, "void ReadRunFacts(", "\n}\n")
         self.assertIn("if (bossEntry && fromPoint <= step->radius + kSeeYd)\n"
                       "                            f.bossDeadNearSpot = true;", facts)
         self.assertIn("if (bossEntry && lead->GetDistance(creature) <= kSeeYd)\n"
                       "                            f.bossDeadNearLead = true;", facts)
+
+    def test_boss_corpse_guid_is_read_for_the_loot_step(self):
+        facts = body(COMMANDS, "void ReadRunFacts(", "\n}\n")
+        self.assertIn("f.bossCorpseGuid = creature->GetObjectGuid().GetRawValue();", facts)
+        self.assertIn("(!f.bossCorpseGuid || fromPoint < bossCorpseFromSpot)", facts)
 
     def test_gather_anchor_path_is_read(self):
         facts = body(COMMANDS, "void ReadRunFacts(", "\n}\n")

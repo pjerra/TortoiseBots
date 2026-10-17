@@ -208,6 +208,36 @@ int main()
         std::cout << "  [PASS] timer wrap\n";
     }
 
+    // Far follow (Uldaman 19z11, the priest on a pocket at 43,371): beyond
+    // sight range a follow that did not start moving arms the rescue at once,
+    // with no stand-still clock; the walks it plans stay paced and bounded.
+    {
+        using ai::UseFarFollowRescue;
+        CHECK(UseFarFollowRescue(true, false, 140.0f, 60.0f, false, false));
+        CHECK(!UseFarFollowRescue(true, false, 140.0f, 60.0f, true, false));  // it moved
+        CHECK(!UseFarFollowRescue(true, false, 50.0f, 60.0f, false, false));  // in sight: the stall clock owns it
+        CHECK(!UseFarFollowRescue(false, false, 140.0f, 60.0f, false, false)); // not a dungeon
+        CHECK(!UseFarFollowRescue(true, true, 140.0f, 60.0f, false, false));  // in combat
+        CHECK(!UseFarFollowRescue(true, false, 140.0f, 60.0f, false, true));  // eating, casting, rooted
+
+        DungeonFollowStallWatch watch;
+        CHECK(watch.ArmFar(1000));
+        CHECK(watch.rescuing);
+        CHECK(watch.Observe(1000, 43.0f, 371.0f, 140.0f, kRange, false));
+        CHECK(watch.WalkDue(1000));
+        watch.Walked(1000, false);
+        CHECK(!watch.WalkDue(2000));
+        // Five walks that cannot start: given up for a minute, ArmFar refuses.
+        for (uint32_t i = 1; i < 5; ++i)
+            watch.Walked(1000 + i * 8000, false);
+        CHECK(watch.givenUp);
+        CHECK(!watch.ArmFar(40000));
+        CHECK(!watch.rescuing);
+        CHECK(watch.ArmFar(33000 + 60000));
+        CHECK(watch.rescuing && !watch.givenUp);
+        std::cout << "  [PASS] far follow: arms at once, paced, gives up after five failed walks\n";
+    }
+
     std::cout << "All dungeon follow stall policy tests passed.\n";
     return 0;
 }

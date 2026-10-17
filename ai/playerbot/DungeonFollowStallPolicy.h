@@ -27,6 +27,12 @@
 // bot below a platform its leader stands on cannot be rescued, and planning a
 // path every eight seconds for it is wasted work.
 //
+// Beyond sight range (60 yd) there is no core follow to watch: the follow
+// action's MoveTo fails silently on a partial path and the bot stands. Uldaman
+// run-leader rerun (build 19z11, 2026-10-17): the priest stood on a navmesh
+// pocket at (43,371) for minutes while the party walked off. Such a follow
+// that did not start moving arms the same rescue at once (ArmFar).
+//
 // No core includes; tested in tools/test_dungeon_follow_stall_policy.cpp.
 
 #include <cstdint>
@@ -64,6 +70,15 @@ namespace ai
     inline bool UseDungeonFollowWatch(bool inDungeon, bool inCombat)
     {
         return inDungeon && !inCombat;
+    }
+
+    // The far-follow arm (DungeonFollowStallWatch::ArmFar): a follow past
+    // sight range that did not start moving, inside a dungeon, out of combat,
+    // with nothing holding the bot (eating, casting, rooted).
+    inline bool UseFarFollowRescue(bool inDungeon, bool inCombat, float leaderDistance, float sightDistance,
+        bool moveStarted, bool held)
+    {
+        return UseDungeonFollowWatch(inDungeon, inCombat) && !moveStarted && !held && leaderDistance > sightDistance;
     }
 
     struct DungeonFollowStallWatch
@@ -120,6 +135,24 @@ namespace ai
                 rescuing = true;
 
             return rescuing;
+        }
+
+        // A follow beyond sight range (SightDistance, 60 yd) that could not
+        // start moving: MovementAction::Follow's MoveTo fails silently there
+        // (a partial path, the target past a navmesh hole), and the stand-still
+        // clock above only arms behind a running core follow. Latch the rescue
+        // now (a ledge step-down, then the paced path walks); the five-failure
+        // give-up still bounds it. False while given up.
+        bool ArmFar(uint32_t nowMs)
+        {
+            if (givenUp)
+            {
+                if (nowMs - givenUpMs < kDungeonFollowGiveUpMs)
+                    return false;
+                Reset();
+            }
+            rescuing = true;
+            return true;
         }
 
         uint32_t WalkInterval() const

@@ -22,6 +22,7 @@ namespace ai
         // Dungeon rescue of a core follow that stands still (DungeonFollowStallPolicy.h).
         bool ObserveDungeonFollowStall(Unit* followTarget);
         bool RescueStalledDungeonFollow(Unit* followTarget, bool& moved);
+        bool ArmFarDungeonFollowRescue(Unit* followTarget);
         DungeonFollowStallWatch followStallWatch;
 
         bool holdGateOpen = false;      // gate state, for the 30/25 yd hysteresis
