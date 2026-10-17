@@ -45,3 +45,4 @@ AiPlayerbot.ActionLogScope	commanded	commanded	—	restart	PlayerbotAIConfig::In
 AiPlayerbot.ActionLogMaxAgeDays	3	3	—	restart	PlayerbotAIConfig::Initialize + BotActionLog::Maintain (ActionLogPolicy.h)	diagnostics	0-	—	0 = no age limit	shipped (#1056)
 AiPlayerbot.ActionLogMaxTotalMB	2048	2048	—	restart	PlayerbotAIConfig::Initialize + BotActionLog::Maintain (ActionLogPolicy.h)	diagnostics	0-	—	0 = no size limit	shipped (#1056)
 AiPlayerbot.ActionLogMaxFileMB	100	100	—	restart	PlayerbotAIConfig::Initialize + BotActionLog::AppendLine (ActionLogPolicy.h)	diagnostics	0-	—	0 = no cap	shipped (#1056)
+AiPlayerbot.DungeonRunMaxMinutes	180	180	—	restart	PlayerbotAIConfig::Initialize + TickDungeonRun (run leader time limit)	commander	0..n (0 = no limit)	—	—	pending (run leader)
