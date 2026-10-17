@@ -1980,9 +1980,108 @@ static void TestTankGuardsThePartyFromItsStand()
     CHECK(Tick(r, f) == "move 0.0 0.0 0.0");
     f.leadX = 1;
     f.leadStaying = true;
-    Tick(r, f);
+    CHECK(Tick(r, f).empty()); // arrived: the next tick reads fresh facts
     CHECK(!r.guardReturn);
+    Tick(r, f);
     CHECK(r.state == State::Done);
+}
+
+// Uldaman run 3 (19z12, tests/uldaman-events-3), baelog: the leg's pulls have
+// no move step, so the run's anchor stayed the leg's start point; after every
+// guarded fight the tank walked 90 yd back there, and on arrival the step
+// paused at once on "no walkable path toward the pack" (the arrival tick's
+// facts had no approach query: the glue skips it while the run walks). The
+// tank walks back to its own spot at the first pick-up, the arrival ends the
+// tick, and the next tick approaches the unseen pack.
+static void TestTankGuardReturnsToItsOwnSpot()
+{
+    DungeonPlan plan;
+    plan.steps = {Step(PlanStepKind::Move, 0), PullStep(150, {4851})};
+    Run r = Start(&plan);
+    Facts f = Party(0);
+    f.leadIsTank = true;
+    f.leadStaying = true;
+    Tick(r, f); // the leg's start point: the anchor
+    CHECK(r.step == 1 && r.anchorKnown && r.anchorX == 0.0f);
+    // The pull goes out from 90 yd on (the pullback stand, no walk of the run's).
+    f.leadX = 90;
+    f.anchorPathRead = true;
+    f.units = {Unit(31, 4851, 60), Unit(32, 4851, 62)};
+    CHECK(Tick(r, f) == "pullback 31");
+    f.anyInCombat = true;
+    f.partyAttackers = {Hitter(31, 4851, 12, true)};
+    CHECK(Tick(r, f) == "attack 31 Tanky");
+    CHECK(r.guardReturn && r.guardX == 90.0f);
+    // The tank chased its mob 15 yd; the fight is over, one of the pack is left.
+    f.leadStaying = false;
+    f.leadX = 105;
+    f.anyInCombat = false;
+    f.partyAttackers.clear();
+    f.units = {Unit(32, 4851, 60)};
+    CHECK(Tick(r, f) == "move 90.0 0.0 0.0"); // its own spot, not the leg's start
+    // Arrived; the pack is out of sight and this tick's facts have no approach.
+    f.leadX = 90;
+    f.leadStaying = true;
+    f.seen = false;
+    f.approachKnown = false;
+    CHECK(Tick(r, f).empty());
+    CHECK(r.state == State::Running && !r.guardReturn);
+    f.approachKnown = true;
+    f.approachX = 125;
+    std::string order;
+    for (int i = 0; i < 5 && order.empty() && r.state == State::Running; ++i)
+        order = Tick(r, f);
+    CHECK(order == "move 125.0 0.0 0.0");
+    CHECK(r.state == State::Running);
+
+    // A spot the fight took the tank far from is left: it stays near the fight.
+    Run r2 = Start(&plan);
+    Facts g = Party(0);
+    g.leadIsTank = true;
+    g.leadStaying = true;
+    Tick(r2, g);
+    g.leadX = 90;
+    g.anchorPathRead = true;
+    g.units = {Unit(31, 4851, 60)};
+    CHECK(Tick(r2, g) == "pullback 31");
+    g.anyInCombat = true;
+    g.partyAttackers = {Hitter(31, 4851, 12, true)};
+    CHECK(Tick(r2, g) == "attack 31 Tanky");
+    g.leadStaying = false;
+    g.leadX = 90 + kGuardReturnMaxYd + 5;
+    g.anyInCombat = false;
+    g.partyAttackers.clear();
+    std::string const next = Tick(r2, g);
+    CHECK(next != "move 90.0 0.0 0.0" && next != "move 0.0 0.0 0.0");
+    CHECK(!r2.guardReturn);
+    // That spot is the party's anchor now (a later gather does not walk back).
+    CHECK(r2.anchorKnown && r2.anchorX == g.leadX);
+
+    // Uldaman run 3, pull 2: the tank on stay was still dragging the pullback
+    // in (18 yd short of its stand) at the first pick-up. The walk back goes
+    // to its stay point, not to where the pick-up found it.
+    Run r3 = Start(&plan);
+    Facts h = Party(0);
+    h.leadIsTank = true;
+    h.leadStaying = true;
+    Tick(r3, h);
+    h.leadX = 90;
+    h.anchorPathRead = true;
+    h.units = {Unit(31, 4851, 60)};
+    CHECK(Tick(r3, h) == "pullback 31");
+    h.anyInCombat = true;
+    h.leadX = 108; // mid-drag
+    h.leadStayKnown = true;
+    h.leadStayX = 90;
+    h.partyAttackers = {Hitter(31, 4851, 12, true)};
+    CHECK(Tick(r3, h) == "attack 31 Tanky");
+    CHECK(r3.guardX == 90.0f);
+    h.leadStaying = false;
+    h.leadStayKnown = false;
+    h.anyInCombat = false;
+    h.partyAttackers.clear();
+    h.units = {Unit(32, 4851, 60)};
+    CHECK(Tick(r3, h) == "move 90.0 0.0 0.0");
 }
 
 // Replay of keepers door pull 100 (trace r-...9bbf): a Brawler on the tank in
@@ -2084,7 +2183,8 @@ static void TestTankGuardLimits()
         CHECK(r.state == State::Running);
     }
     {
-        // A scripted event fights in place (the Keepers' and Archaedas' holds).
+        // Inside a scripted event but not in its hold (a step leading into it):
+        // nothing (the hold's own guard: tools/test_dungeon_event_policy.cpp).
         DungeonPlan plan;
         Run r = guardRun(plan);
         r.eventOn = true;
@@ -2757,6 +2857,7 @@ int main()
     TestKillFirstIsThisFightsOnly();
     TestCcWindowCountsTheMagesFightTime();
     TestTankGuardsThePartyFromItsStand();
+    TestTankGuardReturnsToItsOwnSpot();
     TestTankGuardPull100Replay();
     TestTankGuardLimits();
     TestEmptyPlan();
