@@ -194,9 +194,15 @@ The other gates of the plan are plain steps: the Keystone (124371, `open` with t
 
 The same steps carry other events: a hold done by the instance data a script keeps (flag 8, without 32 when the values are not encounter states), by a door (flag 16) or by its units' death. Not here yet (the ZF part of #984): a `gossip` start step (`cmd gossip`, #1013), a fixed wait, waiting for a spawn, and a hold whose data must reach a value (`>=`) rather than equal it.
 
+### Plans on the server
+
+`uldaman` (`20261016220000_world.sql`), `zulfarrak` (`20261015200100_world.sql`, its unit lists set in `20261015200200`), and from `20261017130000_world.sql` `ragefire_chasm` (9 legs, 4 bosses), `wailing_caverns` (12 legs, 5 bosses) and `deadmines` (16 legs, 7 bosses; the plan is still a draft in turtle-agent). That migration's header lists every plan field the rows cannot carry (`skip`, patrols, fleers, tactics, `avoid`, the Naralex event, the `gm_cross`).
+
 ### Not supported yet
 
 - A party with a real player in it (a player leading their own party): the run leads bound parties only.
+- **Avoid boxes** (plan v1 `avoid`: ground the navmesh calls walkable that kills, Ragefire Chasm's lava basin at x -226..-142, y -64..6, floor z about -65.4, 605-610 damage a tick). The run leader does not know them: its hops are the server's navmesh paths. The exporter checks every hop between two rows on the plain navmesh and `20261017130000_world.sql` has none that enters the box, but a fight, a knockback or a pull onto the basin is not covered. Follow-up.
+- **`gm_cross`** (a GM moves the party over a gap no walk crosses): Wailing Caverns' ramp to Lord Serpentis is exported as a `move_direct` (a straight walk down 6 yd over a 3.9 yd gap), not tried live.
 - Plan v1's `skip`, per-leg `rest`, `companions_loot` (Revelosh's Shaft: the run's `loot` takes the corpse with the lead bot, but other bots may loot it first), `area_trigger` and gossip.
 
 ### Cost

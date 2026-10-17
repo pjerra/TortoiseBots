@@ -96,6 +96,27 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertEqual(len(re.findall(r"\('uldaman', \d+, \d+, 'ritual', \d+, [^)]*?, 0, 0, 3, 0, 0,", text)), 2,
                          "%s: the uldaman rituals need param 3" % name)
 
+    def test_ragefire_wailing_deadmines_are_whole(self):
+        # 20261017130000 exports the three plans (turtle-agent plan-export): each is deleted, then inserted, with
+        # its bosses in leg order; the Wailing Caverns gm_cross is the only move_direct (a straight walk down to the
+        # Serpentis ramp), and the Deadmines doors, gunpowder and cannon are plain steps (#984: nothing dropped silently).
+        text = dict(migrations()).get("20261017130000_world.sql")
+        self.assertIsNotNone(text, "20261017130000_world.sql is missing")
+        bosses = {"ragefire_chasm": ["11517", "11520", "11518", "11519"],
+                  "wailing_caverns": ["3669", "3670", "3674", "3673", "5775"],
+                  "deadmines": ["644", "642", "61963", "1763", "646", "647", "639"]}
+        for plan, entries in bosses.items():
+            for table in ("ai_dungeon_step", "ai_dungeon_leg", "ai_dungeon_plan"):
+                self.assertIn("DELETE FROM `%s` WHERE `plan` = '%s';" % (table, plan), text)
+            self.assertLess(text.index("DELETE FROM `ai_dungeon_step` WHERE `plan` = '%s'" % plan),
+                            text.index("INSERT INTO `ai_dungeon_plan` (`plan`, `map`, `cc_priority`, `cc_always`, `kill_first`, `source`, `comment`) VALUES\n('%s'" % plan))
+            self.assertEqual(re.findall(r"^\('%s', \d+, \d+, 'boss', (\d+)," % plan, text, re.M), entries)
+        self.assertEqual(re.findall(r"^\('(\w+)', \d+, \d+, 'move_direct'", text, re.M), ["wailing_caverns"])
+        for kind, count in (("open", 3), ("loot", 1), ("wait_object", 6), ("wait_clear", 2)):
+            self.assertEqual(len(re.findall(r"^\('deadmines', \d+, \d+, '%s'," % kind, text, re.M)), count, kind)
+        self.assertRegex(text, r"\('deadmines', 9, \d+, 'open', 16398, [^)]*, 0, 5397, 0, 0, 0,")
+        self.assertIn("gm_cross", text)  # the header names every step the run leader cannot do
+
     def test_inserted_step_kinds_are_known(self):
         for name, text in migrations():
             for block in re.findall(r"INSERT INTO `ai_dungeon_step` \(([^)]*)\) VALUES(.*?);", text, re.S):
