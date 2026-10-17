@@ -6260,8 +6260,11 @@ bool PlayerbotAI::CastSpell(uint32 spellId, GameObject* goTarget, Item* itemTarg
         targets.setDestination(fx, fy, fz);
     }
 
-    // Fail the cast if the bot is moving and the spell is a casting/channeled spell
-    if (sServerFacade.isMoving(bot) && ((GetSpellCastTime(pSpellInfo, bot, spell) > 0) || (IsChanneledSpell(pSpellInfo) && (GetSpellDuration(pSpellInfo) > 0))))
+    // Fail the cast if the bot is moving and the spell is a casting/channeled spell.
+    // A server spline still in flight counts as moving although the movement flags
+    // are clear (MotionMaster::Clear leaves it running): the Opening cast of a
+    // chest broke after 0.2 s on the bot's own last 0.9 yd.
+    if ((sServerFacade.isMoving(bot) || !bot->movespline->Finalized()) && ((GetSpellCastTime(pSpellInfo, bot, spell) > 0) || (IsChanneledSpell(pSpellInfo) && (GetSpellDuration(pSpellInfo) > 0))))
     {
         // always fail when jumping
         if (IsJumping() || bot->IsFalling())
@@ -9573,6 +9576,14 @@ bool PlayerbotAI::CanMove()
         return false;
     }
 #endif
+    return true;
+}
+
+bool PlayerbotAI::StopForObjectCast()
+{
+    if (!sServerFacade.isMoving(bot) && bot->movespline->Finalized())
+        return false;
+    StopMoving();
     return true;
 }
 

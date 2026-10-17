@@ -6959,10 +6959,12 @@ void NudgeTaskWalk(CommanderTask& task, Player* bot, uint32 diff)
 // Its stay moves to the spot it stands on, its movement generator is dropped
 // and a spell of its own is interrupted (the order beats the automation). The
 // stance comes back with the task's end (EndTaskWalk: finish, cancel, timeout).
-void HoldForAct(CommanderTask& task, PlayerbotAI* ai, Player* bot)
+// Returns true when the bot was still moving (RemoteCommander::ActWaitsForStop):
+// it is stopped now, and the caller starts the cast on a later look.
+bool HoldForAct(CommanderTask& task, PlayerbotAI* ai, Player* bot)
 {
     if (!RemoteCommander::HoldsForAct(task.targetRaw != 0, task.noWalk))
-        return;
+        return false;
     if (!task.walking && !task.superseded)
     {
         task.wasStaying = ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT);
@@ -6975,13 +6977,17 @@ void HoldForAct(CommanderTask& task, PlayerbotAI* ai, Player* bot)
     // Feared, confused, charmed or stunned: the core owns its movement; leave it
     // (the start is refused and retried, or the task ends).
     if (bot->HasUnitState(UNIT_STAT_CAN_NOT_REACT_OR_LOST_CONTROL))
-        return;
+        return false;
     if (bot->IsNonMeleeSpellCasted(false))
         bot->InterruptNonMeleeSpells(false);
+    // Read before the clear: the spline keeps running after it either way.
+    bool const moving = RemoteCommander::ActWaitsForStop(sServerFacade.isMoving(bot),
+        !bot->movespline->Finalized());
     bot->GetMotionMaster()->Clear();
     bot->GetMotionMaster()->MoveIdle();
-    if (sServerFacade.isMoving(bot))
+    if (moving)
         ai->StopMoving();
+    return moving;
 }
 
 // While the started cast runs: a movement generator something queued since
@@ -7206,9 +7212,13 @@ ActStart BeginTaskAct(CommanderTask& task, Player* commander, Player* bot, Playe
 {
     task.actStarted = false;
     ++task.actTries;
-    HoldForAct(task, ai, bot);
     ActStart start;
-    if (task.lootLike)
+    // Never start the cast on a bot that is still moving: the hold stopped it,
+    // the retry on the next look starts the cast.
+    if (HoldForAct(task, ai, bot))
+        start = RefuseAct(task, ActStart::Retry, RemoteCommander::CastReasonCode("moving"),
+            RemoteCommander::OpenRefusalText("moving", 0));
+    else if (task.lootLike)
         start = BeginLootAct(task, commander, bot, ai, target);
     else if (task.state.kind == RemoteCommander::TaskKind::Gossip)
         start = BeginGossipAct(task, bot, target);

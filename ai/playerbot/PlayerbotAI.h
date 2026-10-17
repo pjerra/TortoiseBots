@@ -775,6 +775,11 @@ public:
     void SetJumpTime(uint32 time) { jumpTime = time; }
     bool CanMove();
     void StopMoving();
+    // Before a cast on a game object (Opening, Mining, Herb Gathering): a bot
+    // still moving - by its movement flags or by a server spline its flags do
+    // not show - is stopped and true comes back; the caller casts on a later
+    // tick, once it stands still (the cast breaks on the first step).
+    bool StopForObjectCast();
     bool IsInRealGuild();
     void SetPlayerFriend(bool isFriend) {isPlayerFriend = isFriend;}
     bool IsPlayerFriend() { return isPlayerFriend; }

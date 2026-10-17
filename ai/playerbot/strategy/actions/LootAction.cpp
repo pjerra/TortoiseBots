@@ -91,6 +91,7 @@ bool OpenLootAction::Execute(Event& event)
         }
     }
 
+    stoppedForCast = false;
     bool result = DoLoot(lootObject);
     LootObjectStack* lootStack = AI_VALUE(LootObjectStack*, "available loot");
 
@@ -107,7 +108,9 @@ bool OpenLootAction::Execute(Event& event)
     // abandoned for 120 s and the bot moves on. Player-ordered looting only issues the
     // action once per order, so a counter that needs repeated attempts can never veto a
     // fresh order.
-    if (!lootGuid.IsEmpty() && lootStack)
+    // A stop before the cast (DoLoot, StopForObjectCast) is no attempt: the
+    // cast comes on the next tick.
+    if (!lootGuid.IsEmpty() && lootStack && !stoppedForCast)
         lootStack->NoteApproachFailure(lootGuid);
 
     if (result)
@@ -244,6 +247,16 @@ bool OpenLootAction::DoLoot(LootObject& lootObject)
     GameObject* go = ai->GetGameObject(lootObject.guid);
     if (go && (go->getLootState() == GO_ACTIVATED || go->GetGoState() == GO_STATE_ACTIVE))
         return false;
+
+    // The cast on the object (Opening, Mining, Herb Gathering, a key) breaks on
+    // the first step, and a bot that just walked here may still be on its last
+    // yards. Stop it and cast on a later tick, once it stands still.
+    if (ai->StopForObjectCast())
+    {
+        stoppedForCast = true;
+        sLog.outDebug("[BOT LOOT] %s: still moving, stopped before the cast on guid=%lu", bot->GetName(), lootObject.guid.GetRawValue());
+        return false;
+    }
 
     if (lootObject.skillId == SKILL_MINING)
         return ai->HasSkill(SKILL_MINING) ? ai->CastSpell(MINING, bot) : false;

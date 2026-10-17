@@ -562,6 +562,16 @@ static void TestActHold()
     CHECK(!HoldsForAct(false, true));
     CHECK(!HoldsForAct(false, false));
     CHECK(kActTries >= 2);
+    // A bot still moving (flags or a spline the flags do not show) is stopped
+    // and the cast waits for the next look; a still bot casts at once.
+    CHECK(ActWaitsForStop(true, false));
+    CHECK(ActWaitsForStop(false, true));
+    CHECK(ActWaitsForStop(true, true));
+    CHECK(!ActWaitsForStop(false, false));
+    // The wait costs one attempt: a stopped bot still has tries left to cast.
+    CHECK(kActTries >= 2);
+    CHECK(std::string(CastReasonCode("moving")) == kCodeBusy);
+    CHECK(OpenRefusalText("moving", 0).find("moving") != std::string::npos);
 }
 
 // A fight during the act of an order that walked ends it with in-combat at the

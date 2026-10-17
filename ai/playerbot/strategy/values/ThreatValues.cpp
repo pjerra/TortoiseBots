@@ -142,8 +142,10 @@ uint8 ThreatValue::Calculate(Unit* target)
         return 0;
 
     // calculate normal threat for fleeing targets
-    bool fleeing = target->GetMotionMaster()->GetCurrentMovementGeneratorType() == FLEEING_MOTION_TYPE ||
-        target->GetMotionMaster()->GetCurrentMovementGeneratorType() == TIMED_FLEEING_MOTION_TYPE;
+    // (the flee-for-assistance walk and its pause count too: Creature::DoFleeToGetAssistance)
+    MovementGeneratorType const motion = target->GetMotionMaster()->GetCurrentMovementGeneratorType();
+    bool fleeing = motion == FLEEING_MOTION_TYPE || motion == TIMED_FLEEING_MOTION_TYPE ||
+        motion == ASSISTANCE_MOTION_TYPE || motion == ASSISTANCE_DISTRACT_MOTION_TYPE;
 
     // return high threat if tank has no threat
     if (target->IsInCombat() && maxThreat == 0 && !fleeing)

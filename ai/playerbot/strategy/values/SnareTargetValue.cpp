@@ -82,6 +82,8 @@ Unit* SnareTargetValue::Calculate()
         switch (unit->GetMotionMaster()->GetCurrentMovementGeneratorType())
         {
         case FLEEING_MOTION_TYPE:
+        case TIMED_FLEEING_MOTION_TYPE:
+        case ASSISTANCE_MOTION_TYPE:
             return unit;
         case CHASE_MOTION_TYPE:
             chaseTarget = sServerFacade.GetChaseTarget(unit);
