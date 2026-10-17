@@ -150,6 +150,7 @@ if command -v g++ >/dev/null 2>&1; then
         test_hire_intro_policy
         test_hire_level_policy
         test_hire_master_policy
+        test_hire_raid_policy
         test_hire_respec_policy
         test_hire_quest_policy
         test_hire_spec_policy
