@@ -668,6 +668,12 @@ public:
     // turned off stays off. 0 = nothing held.
     uint8 instanceGuardWithheld = 0;
 
+    // Issue #1043: raw guid of the last pet BotManager::CheckNewPetSpawn
+    // checked (0 = none). Each summon makes a new pet object with a new guid,
+    // so a pet is checked once. World thread and map-thread player hook only,
+    // which never run at the same time for one bot.
+    uint64 lastSpawnCheckedPetGuid = 0;
+
     // BotActionLog: track last combat state so we only log STATE snapshots
     // on actual combat-state transitions (combat-enter / combat-exit).
     // Without this we'd spam the log with "still in combat" lines every

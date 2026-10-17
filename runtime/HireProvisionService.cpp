@@ -1122,8 +1122,9 @@ void HireProvisionService::ProvisionHireGear(Player* bot, PendingProvision const
         return;
     if (EquipHireGearSet(bot, ai, bot->GetClass(), specKey, bot->GetRace(), tier))
     {
+        // Saved by ProvisionHeavy right after this (issue #1043: one save per
+        // hire, so the pet is not written by two racing transactions).
         HireLifecycle::Instance().SetGearTier(bot->GetObjectGuid(), tier);
-        bot->SaveToDB();
     }
 }
 

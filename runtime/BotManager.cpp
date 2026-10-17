@@ -3,6 +3,7 @@
 #include "BotActivityLease.h"
 #include "PlayerBotClassification.h"
 #include "HunterPetPolicy.h"
+#include "PetSpawnPolicy.h"
 #include "ProfessionGrantPolicy.h"
 #include "HireLifecycle.h"
 #include "ClaimLifecycle.h"
@@ -45,10 +46,12 @@
 #include "../ai/playerbot/LowbieGraveyardPolicy.h"
 // Full Corpse type for SweepDeadBots (IsWithinDistInMap on the reclaim check).
 #include "Objects/Corpse.h"
+#include "Pet.h"
 #include "Database/DatabaseEnv.h"
 #include "../host/ModuleLog.h"
 
 #include <algorithm>
+#include <cmath>
 #include <chrono>
 #include <ctime>
 
@@ -1818,6 +1821,34 @@ PlayerBotClassificationInputs ClassifyBot(BotEntry const& entry)
 }
 } // namespace
 
+void BotManager::CheckNewPetSpawn(::Player* bot, ::PlayerbotAI* ai)
+{
+    if (!bot || !ai || !bot->IsInWorld() || bot->IsBeingTeleported() || bot->GetTransport())
+        return;
+    ObjectGuid const petGuid = bot->GetPetGuid();
+    if (!IsUncheckedPet(petGuid.GetRawValue(), ai->lastSpawnCheckedPetGuid))
+        return;
+    // Map lookup, not Player::GetPet: that one clears the owner's pet guid
+    // when the pet is not on the map yet.
+    Pet* pet = bot->GetMap()->GetPet(petGuid);
+    if (!pet || !pet->IsInWorld() || pet->GetMap() != bot->GetMap())
+        return; // not placed yet: checked on a later turn
+    ai->lastSpawnCheckedPetGuid = petGuid.GetRawValue();
+
+    PetSpawnCheckInputs inputs;
+    inputs.dx = pet->GetPositionX() - bot->GetPositionX();
+    inputs.dy = pet->GetPositionY() - bot->GetPositionY();
+    inputs.dz = pet->GetPositionZ() - bot->GetPositionZ();
+    inputs.ownerSeesPet = bot->IsWithinLOSInMap(pet);
+    if (!ShouldPullNewPetToOwner(inputs))
+        return;
+
+    TB_LOG_DETAIL("TortoiseBots: pet of %s appeared %.1f yd off (dz %.1f, los %u); moved to its owner",
+        bot->GetName(), std::sqrt(inputs.dx * inputs.dx + inputs.dy * inputs.dy + inputs.dz * inputs.dz),
+        inputs.dz, inputs.ownerSeesPet ? 1u : 0u);
+    pet->NearTeleportTo(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), bot->GetOrientation());
+}
+
 void BotManager::UpdateBots(uint32_t diff)
 {
     // Module-side pass cost. Left in permanently: with a large pool the
@@ -1945,6 +1976,12 @@ void BotManager::UpdateBots(uint32_t diff)
             entry.lastAiUpdateMs = nowMs ? nowMs : 1;
             ++entry.aiVisits;
             entry.aiAdapter->Update(elapsed);
+            // Issue #1043: a pet the AI turn just brought back (the resummon
+            // after a teleport ack) is checked before the maps update, so its
+            // own first update cannot unsummon it for being out of range. An
+            // idle bot on a continent may skip Player::Update entirely.
+            if (PlayerbotAI* petAi = entry.aiAdapter->GetAI())
+                CheckNewPetSpawn(petAi->GetBot(), petAi);
 
             // Next pool turn: when the AI asked to think again, capped by the
             // bot's situation after this turn. A travel-pipeline step (pick a
