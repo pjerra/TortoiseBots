@@ -72,6 +72,7 @@ if command -v g++ >/dev/null 2>&1; then
     g++ -std=c++17 -Wall -Wextra -pedantic tools/test_log_file_rotation.cpp -o "${TMPDIR:-/tmp}/test_log_file_rotation"
     "${TMPDIR:-/tmp}/test_log_file_rotation" "${TMPDIR:-/tmp}"
     POLICY_TESTS=(
+        test_action_log_policy
         test_adaptive_budget
         test_ah_buyer_policy
         test_ah_seller_teleport_policy

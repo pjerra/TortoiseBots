@@ -950,6 +950,32 @@ AiPlayerbot.InviteChat = 1
 # reads a thread-local "last phase" tag set by SC_PHASE when this is on.
 # AiPlayerbot.EnableActionLog = 0
 
+# Safeguards for the per-bot action log files (they once filled a disk: about
+# 8 GB a day, up to 176 MB for one bot). They apply only while EnableActionLog
+# is 1, except the cleanup, which also trims files an earlier run left behind.
+#
+# Which bots get a file:
+#   all        every bot, pool bots included (100+ files on a busy realm)
+#   commanded  only bots in a group a commander bound (.bot commander bind)
+#              and hired companions
+#   none       no files
+# A bot's answer is cached and looked up again every 15 seconds, so a bot that
+# was just bound or hired starts logging within that time.
+AiPlayerbot.ActionLogScope = commanded
+
+# Cleanup of logs/bots: at startup and then every hour (and early once the bots
+# wrote a quarter of the size limit since the last one) the oldest files are
+# deleted until both limits hold. Only files named like the ones this log
+# writes (<bot>_acc<id>_<date>-<time>.log) are ever listed or deleted, never a
+# link, a folder or any other file. A file a bot has open is never deleted. One
+# summary line is written to the server log per cleanup. 0 turns a limit off.
+AiPlayerbot.ActionLogMaxAgeDays = 3
+AiPlayerbot.ActionLogMaxTotalMB = 2048
+
+# One bot's file is closed with a note when it would pass this size, and the log
+# goes on in a new file (the cleanup above removes the old ones). 0 = no cap.
+AiPlayerbot.ActionLogMaxFileMB = 100
+
 # Aggregate counter of executed bot actions for live measurement on large
 # realms: every 5 minutes a cumulative snapshot (utc_time,class,action,
 # ok_count,fail_count) is appended to logs/action_counts.csv. Off in
@@ -2070,6 +2096,9 @@ AiPlayerbot.UseKnockback = 1
 
 # Debug switches
 #AiPlayerbot.SpellDump = 0
+# Unrelated to ActionLogScope: this keeps the engine's per-action detail lines
+# (server log at detail level, and their copy in the action log) to bots that
+# are in a group. Its value 1 is what runs when the line is left out.
 #AiPlayerbot.LogInGroupOnly = 1
 #AiPlayerbot.LogValuesPerTick = 0
 #AiPlayerbot.RandomChangeMultiplier = 1

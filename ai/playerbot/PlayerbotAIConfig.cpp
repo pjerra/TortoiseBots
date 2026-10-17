@@ -852,6 +852,16 @@ bool PlayerbotAIConfig::Initialize()
     observabilityPort = static_cast<uint32>(config.GetIntDefault("AiPlayerbot.ObservabilityPort", 0));
     observabilityHost = config.GetStringDefault("AiPlayerbot.ObservabilityHost", "");
     enableActionLog = config.GetBoolDefault("AiPlayerbot.EnableActionLog", false);
+    {
+        bool scopeKnown = true;
+        actionLogScope = ai::botdiag::ParseActionLogScope(
+            config.GetStringDefault("AiPlayerbot.ActionLogScope", "commanded"), &scopeKnown);
+        if (!scopeKnown)
+            sLog.outError("AiPlayerbot.ActionLogScope must be all, commanded or none; using commanded");
+    }
+    actionLogMaxAgeDays = static_cast<uint32>(std::max(0, config.GetIntDefault("AiPlayerbot.ActionLogMaxAgeDays", 3)));
+    actionLogMaxTotalMB = static_cast<uint32>(std::max(0, config.GetIntDefault("AiPlayerbot.ActionLogMaxTotalMB", 2048)));
+    actionLogMaxFileMB = static_cast<uint32>(std::max(0, config.GetIntDefault("AiPlayerbot.ActionLogMaxFileMB", 100)));
     actionCountsLog = config.GetBoolDefault("AiPlayerbot.ActionCountsLog", false);
     botLogFile = config.GetStringDefault("AiPlayerbot.BotLogFile", "bots.log");
     {

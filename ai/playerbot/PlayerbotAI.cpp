@@ -546,6 +546,11 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
 
     SC_PHASE("UpdateAI.entry", bot ? bot->GetName() : "(null)");
 
+    // Action log scope (AiPlayerbot.ActionLogScope = commanded): re-read at most
+    // every 15 s per bot, here because the group, binding and hire lookups are
+    // world-thread state. One branch while the log is off.
+    botdiag::BotActionLog::RefreshScope(this);
+
     // A Headless bot has no client to finish a cinematic
     // (CMSG_COMPLETE_CINEMATIC), so any cinematic started mid-session - e.g.
     // a camera game object used before RpgUseTrigger excluded the type -

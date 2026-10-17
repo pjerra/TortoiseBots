@@ -14,11 +14,16 @@
 #include "Spells/SpellAuraDefines.h"  // MAX_AURAS
 #include "Spells/SpellMgr.h"
 #include "Log.h"
+#include "runtime/HireLifecycle.h"
+#include "runtime/CommandedGroupQuery.h"
 
+#include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstdarg>
 #include <cstring>
 #include <ctime>
+#include <filesystem>
 #include <iomanip>
 #include <mutex>
 #include <sstream>
@@ -30,13 +35,25 @@
 
 namespace ai { namespace botdiag {
 
-std::unordered_map<uint32, std::FILE*> BotActionLog::sFiles;
+std::unordered_map<uint32, BotActionLog::OpenFile> BotActionLog::sFiles;
+std::unordered_map<uint32, BotActionLog::ScopeState> BotActionLog::sScope;
+std::unordered_set<uint32> BotActionLog::sTraced;
 
 // sFiles is reachable from any map thread (Spell.cpp / Unit.cpp hooks fire
 // on whatever thread is updating that bot's map). Guard every read/write so
 // the unordered_map doesn't get torn under concurrent insert/erase. Only
 // engaged when AiPlayerbot.EnableActionLog=1; default-off path takes no lock.
 static std::mutex sFilesMutex;
+
+// Bytes the bots wrote since the last cleanup; Maintain() sweeps early when
+// the bots wrote a quarter of the size limit.
+static std::atomic<uint64> sWrittenSinceSweep{0};
+
+static int64 NowMs()
+{
+    return std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
+}
 
 static void MakeDirIdempotent(const char* path)
 {
@@ -62,7 +79,7 @@ void BotActionLog::EnsureLogDir()
     }
 }
 
-std::string BotActionLog::BuildPath(Player* bot)
+std::string BotActionLog::BuildPath(Player* bot, uint32 seq)
 {
     if (!bot)
         return "";
@@ -84,8 +101,88 @@ std::string BotActionLog::BuildPath(Player* bot)
 
     std::ostringstream oss;
     oss << "../logs/bots/"
-        << bot->GetName() << "_acc" << sessionId << "_" << tsBuf << ".log";
+        << bot->GetName() << "_acc" << sessionId << "_" << tsBuf;
+    if (seq)
+        oss << "-" << seq;   // a rotation in the same second as the file it follows
+    oss << ".log";
     return oss.str();
+}
+
+// Caller holds sFilesMutex. Only the cached answer is read here: the lookup
+// itself (groups, bindings, the hire ledger) runs on the world thread in
+// RefreshScope. A bot never looked up yet is out of scope until it is.
+bool BotActionLog::ScopeAllowedLocked(uint32 guid)
+{
+    switch (sPlayerbotAIConfig.actionLogScope)
+    {
+        case ActionLogScope::All: return true;
+        case ActionLogScope::None: return false;
+        case ActionLogScope::Commanded: break;
+    }
+    auto it = sScope.find(guid);
+    return it != sScope.end() && it->second.allowed;
+}
+
+void BotActionLog::SetTraced(uint32 botGuidLow, bool traced)
+{
+    std::lock_guard<std::mutex> g(sFilesMutex);
+    if (traced)
+        sTraced.insert(botGuidLow);
+    else
+        sTraced.erase(botGuidLow);
+    auto it = sScope.find(botGuidLow);
+    if (it != sScope.end())
+        it->second.nextCheckMs = 0;   // look again at the bot's next update
+}
+
+void BotActionLog::RefreshScope(PlayerbotAI* ai)
+{
+    if (!sPlayerbotAIConfig.enableActionLog ||
+        sPlayerbotAIConfig.actionLogScope != ActionLogScope::Commanded || !ai)
+        return;
+    Player* bot = ai->GetBot();
+    if (!bot)
+        return;
+
+    uint32 const guid = bot->GetGUIDLow();
+    int64 const now = NowMs();
+    bool traced = false;
+    {
+        std::lock_guard<std::mutex> g(sFilesMutex);
+        auto it = sScope.find(guid);
+        if (it != sScope.end() && now < it->second.nextCheckMs)
+            return;
+        traced = sTraced.count(guid) != 0;
+    }
+
+    bool const commanded = TortoiseBots::BotCommands::IsInCommandedGroup(bot);
+    bool const hired = TortoiseBots::HireLifecycle::Instance().IsHired(bot->GetObjectGuid());
+    bool const allowed = ActionLogScopeAllows(ActionLogScope::Commanded, commanded, hired, traced);
+
+    std::FILE* toClose = nullptr;
+    {
+        std::lock_guard<std::mutex> g(sFilesMutex);
+        ScopeState& st = sScope[guid];
+        st.allowed = allowed;
+        st.nextCheckMs = now + kActionLogScopeRecheckMs;
+        if (!allowed)
+        {
+            // Left the scope: stop writing and let go of the file, which then
+            // counts for the retention cleanup like any other.
+            auto f = sFiles.find(guid);
+            if (f != sFiles.end())
+            {
+                toClose = f->second.file;
+                sFiles.erase(f);
+            }
+        }
+    }
+    if (toClose)
+    {
+        fprintf(toClose, "# end-of-log (bot left the action log scope)\n");
+        fflush(toClose);
+        fclose(toClose);
+    }
 }
 
 std::FILE* BotActionLog::Open(PlayerbotAI* ai)
@@ -102,29 +199,45 @@ std::FILE* BotActionLog::Open(PlayerbotAI* ai)
     {
         std::lock_guard<std::mutex> g(sFilesMutex);
         auto it = sFiles.find(guid);
-        if (it != sFiles.end() && it->second)
-            return it->second;
+        if (it != sFiles.end() && it->second.file)
+            return it->second.file;
+        if (!ScopeAllowedLocked(guid))
+            return nullptr;
     }
 
     EnsureLogDir();
-    std::string path = BuildPath(bot);
-    if (path.empty()) return nullptr;
 
-    // Append rather than truncate: BuildPath embeds a timestamp so collisions
-    // are unlikely, but append is the right default if one ever happens
-    // (e.g. clock-skew, manual file resurrection).
-    FILE* f = fopen(path.c_str(), "a");
-    if (!f)
+    // A file of the same name (a rotation within the same second) is never
+    // appended to: the next free "-N" name is taken instead, so a full file is
+    // not reopened just to rotate again.
+    FILE* f = nullptr;
+    std::string path;
+    for (uint32 seq = 0; seq < 100 && !f; ++seq)
     {
-        // Fallback: mangosd may have been launched from the layout root rather
-        // than from bin/, in which case ../logs/bots/ doesn't exist but
-        // logs/bots/ does. Retry with the bare path.
-        const char* prefix = "../logs/bots/";
-        std::string alt = path;
-        if (alt.compare(0, std::strlen(prefix), prefix) == 0)
-            alt = alt.substr(3); // drop the "../"
-        f = fopen(alt.c_str(), "a");
-        if (f) path = alt;
+        path = BuildPath(bot, seq);
+        if (path.empty()) return nullptr;
+        FILE* candidate = fopen(path.c_str(), "a");
+        if (!candidate)
+        {
+            // Fallback: mangosd may have been launched from the layout root rather
+            // than from bin/, in which case ../logs/bots/ doesn't exist but
+            // logs/bots/ does. Retry with the bare path.
+            const char* prefix = "../logs/bots/";
+            std::string alt = path;
+            if (alt.compare(0, std::strlen(prefix), prefix) == 0)
+                alt = alt.substr(3); // drop the "../"
+            candidate = fopen(alt.c_str(), "a");
+            if (candidate) path = alt;
+        }
+        if (!candidate)
+            break;
+        fseek(candidate, 0, SEEK_END);
+        if (ftell(candidate) > 0 && seq + 1 < 100)
+        {
+            fclose(candidate);
+            continue;
+        }
+        f = candidate;
     }
     if (!f)
     {
@@ -138,22 +251,38 @@ std::FILE* BotActionLog::Open(PlayerbotAI* ai)
         // Another thread may have raced us through the open()+fopen window
         // for the same guid. If so, close our handle and use theirs.
         auto race = sFiles.find(guid);
-        if (race != sFiles.end() && race->second)
+        if (race != sFiles.end() && race->second.file)
         {
             fclose(f);
-            return race->second;
+            return race->second.file;
         }
-        sFiles[guid] = f;
+        OpenFile& entry = sFiles[guid];
+        entry.file = f;
+        entry.path = path;
+        entry.bytes = 0;
     }
     SC_LOG("BotActionLog opened bot=%s path=%s", bot->GetName(), path.c_str());
 
     // Header line: human-readable; subsequent lines are tag-prefixed
     // events.
-    fprintf(f, "# BotActionLog v1 — bot=%s guid=%u accountId=%u opened=%s\n",
+    char header[512];
+    int n = snprintf(header, sizeof(header), "# BotActionLog v1 — bot=%s guid=%u accountId=%u opened=%s\n",
             bot->GetName(), guid,
             bot->GetSession() ? bot->GetSession()->GetAccountId() : 0u,
             path.c_str());
-    fflush(f);
+    if (n > 0)
+    {
+        size_t len = std::min<size_t>(static_cast<size_t>(n), sizeof(header) - 1);
+        std::lock_guard<std::mutex> g(sFilesMutex);
+        auto it = sFiles.find(guid);
+        if (it != sFiles.end() && it->second.file == f)
+        {
+            fwrite(header, 1, len, f);
+            fflush(f);
+            it->second.bytes += len;
+            sWrittenSinceSweep += len;
+        }
+    }
 
     return f;
 }
@@ -168,9 +297,10 @@ void BotActionLog::Close(PlayerbotAI* ai)
     std::FILE* handle = nullptr;
     {
         std::lock_guard<std::mutex> g(sFilesMutex);
+        sScope.erase(guid);
         auto it = sFiles.find(guid);
         if (it == sFiles.end()) return;
-        handle = it->second;
+        handle = it->second.file;
         sFiles.erase(it);
     }
     if (handle)
@@ -185,13 +315,17 @@ void BotActionLog::Close(PlayerbotAI* ai)
 std::FILE* BotActionLog::GetHandle(PlayerbotAI* ai)
 {
     if (!ai) return nullptr;
+    // Off (the default): no lock, no lookup.
+    if (!ai::botdiag::IsActionLogEnabled()) return nullptr;
     Player* bot = ai->GetBot();
     if (!bot) return nullptr;
     {
         std::lock_guard<std::mutex> g(sFilesMutex);
+        if (!ScopeAllowedLocked(bot->GetGUIDLow()))
+            return nullptr;
         auto it = sFiles.find(bot->GetGUIDLow());
-        if (it != sFiles.end() && it->second)
-            return it->second;
+        if (it != sFiles.end() && it->second.file)
+            return it->second.file;
     }
     // Lazy-open on first use. Open() itself gates on AiPlayerbot.EnableActionLog,
     // returning nullptr (and not creating any file) when the flag is off.
@@ -234,8 +368,49 @@ void BotActionLog::Write(PlayerbotAI* ai, const char* tag, const char* fmt, ...)
     vsnprintf(line + prefixLen, sizeof(line) - prefixLen, fmt, ap);
     va_end(ap);
 
-    fprintf(f, "%s\n", line);
-    fflush(f);
+    AppendLine(ai, line, std::strlen(line));
+}
+
+// Appends one line under the lock (a scope change on the world thread may
+// close the file at any time). A file that would pass ActionLogMaxFileMB is
+// closed with a note and the line starts the next file.
+void BotActionLog::AppendLine(PlayerbotAI* ai, const char* line, size_t len)
+{
+    Player* bot = ai->GetBot();
+    if (!bot) return;
+    uint32 const guid = bot->GetGUIDLow();
+
+    for (int attempt = 0; attempt < 2; ++attempt)
+    {
+        std::FILE* full = nullptr;
+        {
+            std::lock_guard<std::mutex> g(sFilesMutex);
+            auto it = sFiles.find(guid);
+            if (it == sFiles.end() || !it->second.file || !ScopeAllowedLocked(guid))
+                return;
+            OpenFile& entry = it->second;
+            if (attempt == 0 && ActionLogFileFull(entry.bytes, len + 1, sPlayerbotAIConfig.actionLogMaxFileMB))
+            {
+                full = entry.file;
+                fprintf(full, "# file cap of %u MB reached; the log continues in a new file\n",
+                        sPlayerbotAIConfig.actionLogMaxFileMB);
+                sFiles.erase(it);
+            }
+            else
+            {
+                fwrite(line, 1, len, entry.file);
+                fputc('\n', entry.file);
+                fflush(entry.file);
+                entry.bytes += len + 1;
+                sWrittenSinceSweep += len + 1;
+                return;
+            }
+        }
+        fflush(full);
+        fclose(full);
+        if (!Open(ai))
+            return;
+    }
 }
 
 void BotActionLog::LogState(PlayerbotAI* ai, const char* reason)
@@ -351,6 +526,118 @@ void BotActionLog::LogAuraRemove(PlayerbotAI* ai, uint32 spellId, ObjectGuid cas
           "spell=%s(%u) caster=0x%llx",
           spellName, spellId,
           (unsigned long long)casterGuid.GetRawValue());
+}
+
+// ---------------------------------------------------------------------------
+// Retention. logs/bots holds one file per summoned bot; left on, a busy realm
+// wrote ~8 GB a day. Sweep() deletes the oldest files until both
+// ActionLogMaxAgeDays and ActionLogMaxTotalMB hold (ActionLogPolicy.h picks
+// them), and never a file a bot has open. It lists one folder and deletes, so
+// it runs at startup and then hourly from Maintain(), never per tick.
+// ---------------------------------------------------------------------------
+namespace fs = std::filesystem;
+
+static fs::path ResolveBotLogDir()
+{
+    // Same two layouts as EnsureLogDir/Open: bin/ as the working directory
+    // ("../logs") or the layout root ("logs").
+    const char* roots[] = { "../logs/bots", "logs/bots", nullptr };
+    for (int i = 0; roots[i]; ++i)
+    {
+        std::error_code ec;
+        if (fs::is_directory(roots[i], ec))
+            return roots[i];
+    }
+    return fs::path();
+}
+
+void BotActionLog::Sweep()
+{
+    sWrittenSinceSweep = 0;
+
+    fs::path const dir = ResolveBotLogDir();
+    if (dir.empty())
+        return;   // nothing was ever written here
+
+    std::unordered_set<std::string> liveNames;
+    {
+        std::lock_guard<std::mutex> g(sFilesMutex);
+        for (auto const& kv : sFiles)
+            liveNames.insert(fs::path(kv.second.path).filename().string());
+    }
+
+    int64 const nowSec = static_cast<int64>(std::time(nullptr));
+    auto const fsNow = fs::file_time_type::clock::now();
+
+    std::vector<ActionLogFile> files;
+    std::vector<fs::path> paths;
+    std::error_code ec;
+    for (fs::directory_iterator it(dir, ec), end; !ec && it != end; it.increment(ec))
+    {
+        std::error_code fileEc;
+        // symlink_status does not follow links: a symlink is never a regular file here.
+        fs::file_status const status = it->symlink_status(fileEc);
+        if (fileEc || !ActionLogEntryDeletable(it->path().filename().string(),
+                                               fs::is_regular_file(status), fs::is_symlink(status)))
+            continue;   // not a file this log wrote: never listed, never deleted
+        uintmax_t const size = it->file_size(fileEc);
+        if (fileEc) continue;
+        auto const written = it->last_write_time(fileEc);
+        if (fileEc) continue;
+
+        ActionLogFile f;
+        f.name = it->path().filename().string();
+        f.bytes = size;
+        f.mtime = nowSec - std::chrono::duration_cast<std::chrono::seconds>(fsNow - written).count();
+        f.live = liveNames.count(f.name) != 0;
+        files.push_back(f);
+        paths.push_back(it->path());
+    }
+    if (ec)
+        return;
+
+    std::vector<size_t> const picked = PickActionLogDeletions(files, nowSec,
+        sPlayerbotAIConfig.actionLogMaxAgeDays, sPlayerbotAIConfig.actionLogMaxTotalMB);
+
+    uint64 freed = 0;
+    uint32 removed = 0;
+    for (size_t i : picked)
+    {
+        std::error_code rmEc;
+        if (fs::remove(paths[i], rmEc) && !rmEc)
+        {
+            freed += files[i].bytes;
+            ++removed;
+        }
+    }
+
+    uint64 kept = 0;
+    uint32 live = 0;
+    for (ActionLogFile const& f : files)
+    {
+        kept += f.bytes;
+        if (f.live) ++live;
+    }
+    kept -= std::min(kept, freed);
+
+    sLog.outString("[BotActionLog] cleanup: %u of %zu files removed (%.1f MB), %zu files / %.1f MB kept (%u open), limits %u days / %u MB",
+        removed, files.size(), double(freed) / double(kActionLogMB),
+        files.size() - removed, double(kept) / double(kActionLogMB), live,
+        sPlayerbotAIConfig.actionLogMaxAgeDays, sPlayerbotAIConfig.actionLogMaxTotalMB);
+}
+
+void BotActionLog::Maintain()
+{
+    static bool everSwept = false;
+    static int64 lastSweepSec = 0;
+
+    int64 const nowSec = static_cast<int64>(std::time(nullptr));
+    if (!ActionLogSweepDue(everSwept, nowSec - lastSweepSec, sWrittenSinceSweep.load(),
+                           sPlayerbotAIConfig.actionLogMaxTotalMB))
+        return;
+    everSwept = true;
+    lastSweepSec = nowSec;
+    Sweep();
 }
 
 }}  // namespace ai::botdiag — close so wrappers below are at global

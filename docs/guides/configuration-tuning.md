@@ -312,6 +312,21 @@ Errors (`sLog.outError`) are always written regardless of this setting. The leve
 
 This setting is separate from the strategy AI's own action trace, which stays gated behind the `debug`/`debug action` bot strategies (`.bot strategy +debug`) rather than a server-wide config key.
 
+### Per-bot action log files (`AiPlayerbot.EnableActionLog`)
+
+`AiPlayerbot.EnableActionLog = 1` (default `0`) writes one file per bot to `logs/bots/<botname>_acc<id>_<timestamp>.log`. Left on, it once produced about 8 GB a day (731 files, up to 176 MB each), so four keys now bound it (issue #1056). They need a restart; the first three only matter while the log is on, but the cleanup also trims files an earlier run left behind.
+
+| Setting | Default | What It Does |
+| :--- | :---: | :--- |
+| `AiPlayerbot.ActionLogScope` | `commanded` | Which bots get a file. `all`: every bot, pool bots included (the old behaviour). `commanded`: only a bot in a group a commander bound (`.bot commander bind`), or a hired companion. `none`: no files. The answer is cached per bot and read again every 15 s on the world thread, so a bot that was just bound or hired starts logging within 15 s, and a bot that left stops and its file is closed. Any other word logs an error and uses `commanded`. |
+| `AiPlayerbot.ActionLogMaxAgeDays` | `3` | Files in `logs/bots` whose last write is older than this many days are deleted. `0` = no age limit. |
+| `AiPlayerbot.ActionLogMaxTotalMB` | `2048` | `logs/bots` may hold this much. While it holds more, the oldest files are deleted first. `0` = no size limit. |
+| `AiPlayerbot.ActionLogMaxFileMB` | `100` | A bot's file that would pass this size gets a note on its last line and is closed; the log continues in a new file for that bot. `0` = no cap. |
+
+The cleanup runs at startup and then every hour on the world thread (one folder listing, never per tick); it also runs early once the bots wrote a quarter of `ActionLogMaxTotalMB` since the last one. It only lists and deletes files named like the ones this log writes (`<bot>_acc<id>_<YYYYMMDD-HHMMSS>[-<n>].log`) directly inside `logs/bots`, never a symlink, a folder or any other file, and it never deletes a file a bot has open, so the folder can exceed the size limit while open files alone are larger than it. Each cleanup writes one line to the server log: `[BotActionLog] cleanup: <n> of <m> files removed (<MB>), <k> files / <MB> kept (<o> open), limits <days> days / <MB> MB`.
+
+`AiPlayerbot.LogInGroupOnly` (commented in the template, code fallback `1`) is a separate, older switch: it keeps the engine's per-action detail lines (server log at detail level, and their copy in the action log) to bots that are in a group. It is not retired and does not replace `ActionLogScope`; both apply.
+
 ### Action counts (live rotation measurement)
 
 | Setting | Default | What It Does |

@@ -4,6 +4,7 @@
 #include <unordered_set>
 #include "Config/Config.h"
 #include "Talentspec.h"
+#include "ActionLogPolicy.h"
 #include "LogFileRotation.h"
 #include "SharedDefines.h"
 #include "SystemConfig.h"
@@ -599,6 +600,13 @@ public:
     // log files (logs/bots/<name>_acc<id>_<timestamp>.log) are emitted. Default
     // off so production servers don't pay disk I/O / branch overhead.
     bool enableActionLog;
+    // Which bots get a per-bot file while enableActionLog is on (all |
+    // commanded | none), and how much the files may hold. Cleanup runs at
+    // startup and hourly; see ActionLogPolicy.h. 0 switches a limit off.
+    ai::botdiag::ActionLogScope actionLogScope;
+    uint32 actionLogMaxAgeDays;
+    uint32 actionLogMaxTotalMB;
+    uint32 actionLogMaxFileMB;
     // Opt-in aggregate counter of executed bot actions (Engine OK/FAILED/
     // IMPOSSIBLE outcomes keyed by bot class + action name), dumped every 5
     // minutes to logs/action_counts.csv. Default off so production servers
