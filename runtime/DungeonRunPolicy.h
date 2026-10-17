@@ -85,6 +85,8 @@ constexpr float kApproachYd = 30.0f;              // an unseen pack is approache
 constexpr float kApproachHopYd = 40.0f;           // ... in navmesh path hops of at most this length
 constexpr std::uint32_t kMaxApproachHops = 8;     // ... and at most this many, then pause
 constexpr std::uint32_t kMaxWalkBackHops = 40;    // a walk back straight to its last point: hops before the replay
+constexpr float kRouteSpotYd = 10.0f;             // a lead bot this close to where it died (or stood at a pause) is
+                                                  // still on its route checkpoint's stretch (Run::routeKnown)
 constexpr float kDetourMaxYd = 15.0f;             // an unreachable move point may be stood in for by a
                                                   // reachable one at most this far from it
 constexpr float kGatherYd = 20.0f;                // every living bot this close to the lead before a pull
@@ -152,6 +154,24 @@ constexpr std::uint32_t kGuardOrdersPerFight = 3; // pick-up orders one fight ma
 // after every guarded pull. Farther than this from that spot once the fight
 // is over, it stays where the fight left it.
 constexpr float kGuardReturnMaxYd = kGuardYd;
+// The healer's stand for a pull (the run leader's commander context): this far
+// behind the lead bot's spot, on the line from the pull target through that spot
+// (Uldaman run 4: the priest stood level with or ahead of the tank and died of
+// the camp's first hits). Within heal range of the tank (40 yd), clear of the
+// pack's first swings. The glue checks the point on the ground and the navmesh
+// and falls back to half the distance, then to the spot itself.
+constexpr float kHealerBackYd = 9.0f;
+inline bool HealerBackPoint(float leadX, float leadY, float targetX, float targetY, float back, float& x, float& y)
+{
+    float const dx = leadX - targetX, dy = leadY - targetY;
+    float const len = std::sqrt(dx * dx + dy * dy);
+    if (len < 1.0f)
+        return false; // standing on the target: no side is behind
+    x = leadX + dx / len * back;
+    y = leadY + dy / len * back;
+    return true;
+}
+
 // A party member coming back with attackers runs on to the party (RunBack; the
 // owner's rule of 2026-10-17). Uldaman 2026-10-17 (tests/uldaman-events-2):
 // the revived priest and mage stopped to fight a scorpid at -174 311, 73-76 yd
@@ -333,6 +353,12 @@ struct Facts
     // bot within kGuardYd of it; distLead from the lead bot, `hitting` and
     // `victimHealer` set.
     std::vector<UnitFact> partyAttackers;
+    // The pull in flight (CheckReach), read in fights only: the lead bot's own
+    // pull command is still reaching its target (the target has not come for
+    // it, it has not turned back), and how many living, not friendly mobs have
+    // a party bot as their victim (any of them, the lead bot too).
+    bool leadReaching = false;
+    std::uint32_t reachAggro = 0;
 };
 
 // A bot's own stand point in a hold (HoldStands): the glue walks it there and
@@ -469,7 +495,24 @@ struct Run
     bool walkBackDue = false;    // walk back once the regroup is over
     bool walkBack = false;
     bool walkBackDirect = false; // straight to the last point in hops (before a replay of every point)
+    std::size_t walkBackStart = 0; // the plan step the walk back began at (the straight target, or the replay's start)
+    bool walkBackRestarted = false; // a replay that could not begin went back to the first point the route allows, once
     std::size_t walkBackIdx = 0; // the plan step whose point is walked now
+    // The route checkpoint (run-wide: kept across steps, wipes and regroups):
+    // the plan index of the move or direct step point the lead bot reached
+    // last, its step done or a walk back's point (npos: none yet). The lead
+    // bot moves only on the navmesh between such points, and the navmesh
+    // never crosses a direct step's hole, so while `routeKnown` holds it has
+    // crossed every direct step up to the checkpoint and none after it
+    // (StartWalkBack). The run cannot vouch for that once the lead bot died
+    // (a release comes back at the entrance) or the run paused (a player may
+    // move it): `routeCheck` then holds the spot it stood on, and on its next
+    // living tick the checkpoint is known again only if it stands within
+    // kRouteSpotYd of that spot (raised where it fell, not moved).
+    std::size_t checkpoint = static_cast<std::size_t>(-1);
+    bool routeKnown = false;
+    bool routeCheck = false;
+    float routeSpotX = 0.0f, routeSpotY = 0.0f, routeSpotZ = 0.0f;
     std::uint32_t walkBackRefusals = 0; // passing refusals of that point
     // A scripted event's hold (Hold steps): its clock runs from the first look,
     // in fights too; a regroup or resume starts it over.
@@ -511,6 +554,10 @@ struct Run
     std::uint32_t guardEventDown = 0;
     bool holdUnstayed = false;
     std::uint64_t holdEngageGuid = 0; // the unit the last engage order sent the tank at
+    // The tank's reach for a pull is cut off once a mob has aggro (CheckReach):
+    // `stopReachDue` asks the glue to end the lead bot's pull, once per pull.
+    bool stopReachDue = false;
+    bool reachStopped = false;
     // Members running back to the party with attackers on them (RunBack): the
     // glue keeps each one a passive follower of the lead bot (it does not stop
     // to fight) while its name is here. Per bot: how long it has run, and its
@@ -616,8 +663,67 @@ inline void ClearRunBack(Run& r)
     r.runBackDone.clear();
 }
 
+// The lead bot reached the point of plan step `idx` (a move or direct step
+// done, or a walk back's point): the route checkpoint (Run::checkpoint).
+inline void NoteCheckpoint(Run& r, std::size_t idx)
+{
+    r.checkpoint = idx;
+    r.routeKnown = true;
+    r.routeCheck = false;
+}
+
+// A walk to the point of plan step `idx` is done (WalkTo): its checkpoint,
+// except a direct step's walk that stopped short of its point (WalkTo also
+// ends a stalled walk within kStalledArriveYd, and a few yards short of a
+// direct point can still be the near side of its hole).
+inline void NoteReached(Run& r, const Facts& f, std::size_t idx)
+{
+    const PlanStep& p = r.plan->steps[idx];
+    if (p.kind == PlanStepKind::MoveDirect && ai::PlanDistance(f.leadX, f.leadY, f.leadZ, p.x, p.y, p.z) > kArriveYd)
+        return;
+    NoteCheckpoint(r, idx);
+}
+
+// The run can no longer vouch that the lead bot stays on its checkpoint's
+// stretch (it died, or the run paused): its last living spot is kept, and the
+// next living tick compares (CheckRoute).
+inline void SuspendRoute(Run& r)
+{
+    if (!r.routeKnown || r.routeCheck)
+        return;
+    if (!r.leadSeen)
+    {
+        r.routeKnown = false;
+        return;
+    }
+    r.routeCheck = true;
+    r.routeSpotX = r.leadLastX;
+    r.routeSpotY = r.leadLastY;
+    r.routeSpotZ = r.leadLastZ;
+}
+
+// Whether the route checkpoint tells where the lead bot is (Run::checkpoint):
+// a point reached, nothing since that could move it off that stretch, and
+// before the current step (an event that failed sends the run back to an
+// earlier step; a checkpoint past the step says nothing about the way to it).
+inline bool CheckpointKnown(const Run& r)
+{
+    return r.routeKnown && r.checkpoint != static_cast<std::size_t>(-1) && r.checkpoint < r.step;
+}
+
+// Whether plan step `idx` is a direct step the lead bot has not crossed (it is
+// after the checkpoint, or the checkpoint is not known): a walk back never
+// passes one on a failure (its hole would be skipped), it pauses instead.
+inline bool DirectStillToCross(const Run& r, std::size_t idx)
+{
+    if (!r.plan || idx >= r.plan->steps.size() || r.plan->steps[idx].kind != PlanStepKind::MoveDirect)
+        return false;
+    return !(CheckpointKnown(r) && idx <= r.checkpoint);
+}
+
 inline void Pause(Run& r, const std::string& why)
 {
+    SuspendRoute(r); // a player may move the lead bot while the run is paused
     r.state = State::Paused;
     r.note = why;
     r.pausedByPlayer = false; // PausePlayer sets it after
@@ -672,6 +778,8 @@ inline void ResetStep(Run& r)
     r.walkBack = false;
     r.walkBackDirect = false;
     r.walkBackIdx = 0;
+    r.walkBackStart = 0;
+    r.walkBackRestarted = false;
     r.walkBackRefusals = 0;
     r.eventOn = false;
     r.eventResetWaitMs = 0;
@@ -688,6 +796,8 @@ inline void ResetStep(Run& r)
     r.guardEventDown = 0;
     r.holdUnstayed = false;
     r.holdEngageGuid = 0;
+    r.stopReachDue = false;
+    r.reachStopped = false;
     r.hold.clear();
     r.holdDue = false;
 }
@@ -1425,6 +1535,12 @@ inline void OrderRefused(Run& r, const std::string& order, const std::string& an
         if (order == MoveOrder(p.x, p.y, p.z, p.kind == PlanStepKind::MoveDirect))
         {
             std::string const point = "walk back: the point of step " + std::to_string(r.walkBackIdx + 1);
+            if (IsPathRefusal(answer) && DirectStillToCross(r, r.walkBackIdx))
+            {
+                Pause(r, point + " refused (" + answer + "): a direct step over a navmesh hole is not passed; " +
+                    "gather the party at the point before it, then .bot run resume");
+                return;
+            }
             if (IsPathRefusal(answer))
             {
                 // The point itself cannot be walked to now: the next one.
@@ -1795,6 +1911,7 @@ inline void PullUnit(Run& r, const Facts& f, const UnitFact& u, std::string& ord
     ++tries;
     ++(walkBack ? r.walkBackPulls : r.pulls);
     r.pullGuid = u.guid;
+    r.reachStopped = false;
     EnterPhase(r, Phase::AwaitPull);
     r.note = "pulling " + std::to_string(u.entry);
     order = "pullback " + std::to_string(u.guid);
@@ -1904,9 +2021,54 @@ inline bool PathCrossesUnclearedPack(const DungeonPlan& plan, std::size_t from, 
     return false;
 }
 
-// The walk back first goes straight to the last move point before the step
-// (in navmesh hops, StartWalkBack); when that fails it replays every point
-// from the one nearest the lead bot (ReplayWalkBack). True when there is one.
+// The lowest plan index a walk back may start at: the checkpoint when it is
+// known (a point before it can lie behind a hole the lead bot crossed since),
+// else 0 (as at the entrance: before every hole).
+inline std::size_t ReplayFloor(const Run& r)
+{
+    return CheckpointKnown(r) ? r.checkpoint : 0;
+}
+
+// The first direct step before the current step that the lead bot has not
+// crossed (npos for none): after the checkpoint when it is known, else the
+// plan's first direct step.
+inline std::size_t FirstUncrossedDirect(const Run& r)
+{
+    std::size_t const from = CheckpointKnown(r) ? r.checkpoint + 1 : 0;
+    for (std::size_t i = from; i < r.step && i < r.plan->steps.size(); ++i)
+        if (r.plan->steps[i].kind == PlanStepKind::MoveDirect)
+            return i;
+    return static_cast<std::size_t>(-1);
+}
+
+// The last move point in [ReplayFloor, hole), before the direct step `hole`:
+// where a walk back stops its navmesh hops and replays the plan's own points
+// over the hole. `hole` itself when no move point is before it.
+inline std::size_t LastPointBeforeDirect(const Run& r, std::size_t hole)
+{
+    std::size_t start = hole;
+    for (std::size_t i = ReplayFloor(r); i < hole; ++i)
+        if (IsMovePoint(r.plan->steps[i]))
+            start = i;
+    return start;
+}
+
+// The first move point at or after ReplayFloor, before the current step (npos
+// for none): where a replay that cannot begin starts over (WalkBack).
+inline std::size_t FirstReplayPoint(const Run& r)
+{
+    for (std::size_t i = ReplayFloor(r); i < r.step && i < r.plan->steps.size(); ++i)
+        if (IsMovePoint(r.plan->steps[i]))
+            return i;
+    return static_cast<std::size_t>(-1);
+}
+
+// The walk back first goes straight to its start point (in navmesh hops,
+// StartWalkBack); when that fails it replays every point from the one nearest
+// the lead bot (ReplayWalkBack), but only among the points the route allows:
+// not before the checkpoint when it is known, and not past the first direct
+// step not crossed yet (that direct step is then always replayed, even from a
+// lead bot nearer the step than any point). True when there is one.
 inline bool ReplayWalkBack(Run& r, const Facts& f)
 {
     r.walkBackDirect = false;
@@ -1915,15 +2077,23 @@ inline bool ReplayWalkBack(Run& r, const Facts& f)
     const PlanStep* cur = Current(r);
     if (!cur)
         return false;
+    std::size_t const hole = FirstUncrossedDirect(r);
+    std::size_t const ceiling = hole != static_cast<std::size_t>(-1) ? hole : r.step;
     float best = ai::PlanDistance(f.leadX, f.leadY, f.leadZ, cur->x, cur->y, cur->z);
     bool found = false;
-    for (std::size_t i = 0; i < r.step; ++i)
+    if (hole != static_cast<std::size_t>(-1))
+    {
+        r.walkBackIdx = LastPointBeforeDirect(r, hole);
+        best = -1.0f;
+        found = true;
+    }
+    for (std::size_t i = ReplayFloor(r); i < ceiling; ++i)
     {
         const PlanStep& p = r.plan->steps[i];
         if (!IsMovePoint(p))
             continue;
         float const d = ai::PlanDistance(f.leadX, f.leadY, f.leadZ, p.x, p.y, p.z);
-        if (d < best)
+        if (best < 0.0f || d < best)
         {
             best = d;
             r.walkBackIdx = i;
@@ -1933,6 +2103,7 @@ inline bool ReplayWalkBack(Run& r, const Facts& f)
     if (!found)
         return false;
     r.walkBack = true;
+    r.walkBackStart = r.walkBackIdx;
     EnterPhase(r, Phase::Begin);
     return true;
 }
@@ -1949,7 +2120,8 @@ inline bool DirectStepOnWay(const Run& r, std::size_t from)
 }
 
 // The plan's move point nearest the lead bot before the current step (npos
-// for none), ReplayWalkBack's start.
+// for none). Proximity only: on a folded route it can lie past a hole the lead
+// bot has not crossed, so no walk back starts from it (StartWalkBack).
 inline std::size_t NearestMovePoint(const Run& r, const Facts& f)
 {
     std::size_t idx = static_cast<std::size_t>(-1);
@@ -1969,14 +2141,26 @@ inline std::size_t NearestMovePoint(const Run& r, const Facts& f)
     return idx;
 }
 
-// After a regroup: the way back to the current step. The party stays only when
-// it stands on the last move point before the step, or within kApproachYd of
-// the step's own point and nearer to it than to that move point (a straight
-// line from the entrance can be shorter to the pack than to its approach stand
-// yet have no path: Galgann pull 108, 2026-10-16, "no walkable path toward the
-// pack" from the entrance). Otherwise it walks the plan's way: straight to the
-// last move point in navmesh hops, or, with a direct step on the way, the
-// plan's own points at once (the hops cannot cross the navmesh hole).
+// After a regroup: the way back to the current step. The rule (route topology,
+// never straight-line proximity: Uldaman's route doubles back, and a point past
+// the scorpid pit lies nearer the entrance than points before it):
+//   - Every direct step the lead bot has not crossed is replayed, in plan
+//     order. It has crossed exactly those up to the route checkpoint while
+//     that is known (Run::checkpoint: the last point it reached, kept across
+//     wipes; lost on a death or a pause unless it is back on the same spot);
+//     otherwise none (a release comes back at the entrance, before every hole).
+//   - With such a direct step: straight (navmesh hops) to the last move point
+//     before the first of them, not before the checkpoint, then the plan's
+//     points from there (the hops over the hole, the rest). Uldaman: step 39
+//     and the pit hops, not step 1 (run 4: 528 yd through Baelog's wing).
+//   - Without one (no direct step in the plan, or all of them crossed): as
+//     before, no walk back when it stands on the last move point before the
+//     step or within kApproachYd of the step's own point and nearer to it than
+//     to that move point (Galgann pull 108, 2026-10-16: a straight line from
+//     the entrance is shorter to the pack than to its stand yet has no path),
+//     else straight to the last move point in navmesh hops.
+// With no direct step left to cross, standing on the last move point sets the
+// checkpoint there.
 inline void StartWalkBack(Run& r, const Facts& f)
 {
     r.walkBackDue = false;
@@ -1993,22 +2177,36 @@ inline void StartWalkBack(Run& r, const Facts& f)
         return;
     const PlanStep& p = r.plan->steps[last];
     float const toLast = ai::PlanDistance(f.leadX, f.leadY, f.leadZ, p.x, p.y, p.z);
-    float const toStep = ai::PlanDistance(f.leadX, f.leadY, f.leadZ, cur->x, cur->y, cur->z);
-    if (toLast <= kArriveYd || (toStep <= kApproachYd && toStep <= toLast))
-        return; // back near the step already
-    std::size_t const nearest = NearestMovePoint(r, f);
-    if (nearest != static_cast<std::size_t>(-1) && nearest < last && DirectStepOnWay(r, nearest))
+    // The holes first: on a folded route the spot a lead bot comes back at can
+    // lie on a later point (the last one too) before the holes it has to cross.
+    std::size_t const hole = FirstUncrossedDirect(r);
+    if (hole != static_cast<std::size_t>(-1))
     {
         r.walkBack = true;
-        r.walkBackIdx = nearest;
+        r.walkBackIdx = LastPointBeforeDirect(r, hole);
+        r.walkBackDirect = r.walkBackIdx < hole; // a navmesh point first; a direct step is replayed as such
+        r.walkBackStart = r.walkBackIdx;
+        r.walkBackRestarted = false;
         r.approachHops = 0;
-        r.note = "walk back: a direct step is on the way: replaying the plan's points";
+        r.note = "walk back: a direct step is on the way (step " + std::to_string(hole + 1) + "): " +
+            (r.walkBackDirect ? "straight to step " + std::to_string(r.walkBackIdx + 1) + ", then the plan's points"
+                              : std::string("the plan's points from it"));
         EnterPhase(r, Phase::Begin);
         return;
     }
+    if (toLast <= kArriveYd)
+    {
+        NoteCheckpoint(r, last);
+        return; // on the last point already
+    }
+    float const toStep = ai::PlanDistance(f.leadX, f.leadY, f.leadZ, cur->x, cur->y, cur->z);
+    if (toStep <= kApproachYd && toStep <= toLast)
+        return; // back near the step already
     r.walkBack = true;
     r.walkBackDirect = true;
     r.walkBackIdx = last;
+    r.walkBackStart = last;
+    r.walkBackRestarted = false;
     r.approachHops = 0;
     EnterPhase(r, Phase::Begin);
 }
@@ -2029,10 +2227,31 @@ inline void NextWalkBackPoint(Run& r)
 // the hostiles within kHopPullYd of it (the glue's hopUnits, read for this
 // point: FactStep) are pulled first, a direct one gathers first, then a
 // WalkTo (bounded by kWalkTries). One point a tick: the facts are read for it.
+inline bool WaitForFallen(Run& r, const Facts& f);
+
+// A dead bot first (the owner's wait rule, 2026-10-17): no walk back point and
+// no direct step goes out while a party member is dead. A direct step takes
+// the lead bot's line, and a dead bot cannot join it. Uldaman run 4, 14:03:
+// the rogue died on his corpse run 120 yd away after the regroup was over;
+// the walk back pushed on to the pit's direct step, named a bot that stood
+// with the lead bot, and paused with the rogue still dead 9 minutes later.
+// The ordinary wait (WaitForFallen) only runs between steps; this asks for
+// the same regroup (revive party, gather, a stuck straggler summoned) on any
+// tick before such an order. True when the regroup starts. Not in a fight,
+// a scripted event or a regroup.
+inline bool FallenFirst(Run& r, const Facts& f)
+{
+    if (f.dead == 0 || r.regroup || f.anyInCombat || InEvent(r))
+        return false;
+    return WaitForFallen(r, f);
+}
+
 inline bool WalkBack(Run& r, const Facts& f, std::uint32_t dt, std::string& order)
 {
     if (!r.walkBack)
         return false;
+    if (r.walkBackIdx < r.step && FallenFirst(r, f))
+        return true;
     while (r.walkBackIdx < r.step && !IsMovePoint(r.plan->steps[r.walkBackIdx]))
         ++r.walkBackIdx;
     if (r.walkBackIdx >= r.step)
@@ -2099,6 +2318,26 @@ inline bool WalkBack(Run& r, const Facts& f, std::uint32_t dt, std::string& orde
                     r.note = "walk back: " + why;
                 return true;
             }
+            // A replay that cannot even begin (its first point has no walkable
+            // path from where the lead bot stands) goes back to the first point
+            // the route allows (ReplayFloor: the checkpoint when known, else
+            // the plan's first point), once.
+            std::size_t const first = FirstReplayPoint(r);
+            if (!r.walkBackRestarted && r.walkBackIdx == r.walkBackStart && first != static_cast<std::size_t>(-1) &&
+                first < r.walkBackIdx)
+            {
+                r.walkBackRestarted = true;
+                r.walkBackIdx = r.walkBackStart = first;
+                r.approachHops = 0;
+                r.note = "walk back: " + why + ": replaying from the first point (step " + std::to_string(first + 1) + ")";
+                return true;
+            }
+            if (DirectStillToCross(r, r.walkBackIdx))
+            {
+                Pause(r, "walk back: " + why + ": a direct step over a navmesh hole is not passed; " +
+                    "gather the party at the point before it, then .bot run resume");
+                return true;
+            }
             r.note = "walk back: " + why + ": on to the next";
             NextWalkBackPoint(r);
             return true;
@@ -2129,7 +2368,16 @@ inline bool WalkBack(Run& r, const Facts& f, std::uint32_t dt, std::string& orde
     }
     r.note = "walk back: to the point of step " + std::to_string(r.walkBackIdx + 1);
     if (WalkTo(r, f, p.x, p.y, p.z, direct, dt, order))
+    {
+        // The straight target is reached: from here the plan's own points go
+        // on (the hole's direct steps, then the rest), each one a hop of its
+        // own, not a straight walk with the straight walk's cap.
+        bool const reachedStraightTarget = r.walkBackDirect && r.walkBackIdx == r.walkBackStart;
+        NoteReached(r, f, r.walkBackIdx);
         NextWalkBackPoint(r);
+        if (reachedStraightTarget)
+            r.walkBackDirect = false;
+    }
     return true;
 }
 
@@ -2299,6 +2547,8 @@ inline void MoveStep(Run& r, const Facts& f, const PlanStep& s, std::uint32_t dt
         ApproachHop(r, f, s, dt, order, "next point");
         return;
     }
+    if (s.kind == PlanStepKind::MoveDirect && r.phase != Phase::Walk && FallenFirst(r, f))
+        return;
     // A direct step takes the lead bot's line: the party gathers on it first
     // (`cmd move ... direct` refuses while a bot has no way to the lead's spot).
     if (s.kind == PlanStepKind::MoveDirect && r.phase != Phase::Walk && f.maxMemberYd > kGatherYd && !r.gatherWaived)
@@ -2323,13 +2573,22 @@ inline void MoveStep(Run& r, const Facts& f, const PlanStep& s, std::uint32_t dt
     {
         r.note = "walking around: the plan's point is off the walkable way";
         if (WalkTo(r, f, r.detourX, r.detourY, r.detourZ, false, dt, order))
+        {
+            // A navmesh walk to a stand-in point: for a direct step it proves
+            // no crossing of its hole, so the checkpoint stays where it was.
+            if (s.kind != PlanStepKind::MoveDirect)
+                NoteCheckpoint(r, r.step);
             NextStep(r, "arrived at the nearest reachable point, " +
                 Num(ai::PlanDistance(r.detourX, r.detourY, r.detourZ, s.x, s.y, s.z)) + " yd from the plan's");
+        }
         return;
     }
     r.note = "walking";
     if (WalkTo(r, f, s.x, s.y, s.z, s.kind == PlanStepKind::MoveDirect, dt, order))
+    {
+        NoteReached(r, f, r.step);
         NextStep(r, "arrived");
+    }
 }
 
 // The glue found that the current move step's point cannot be reached (its
@@ -3117,6 +3376,34 @@ inline bool CheckGuard(Run& r, const Facts& f, std::uint32_t dt, std::string& or
     return true;
 }
 
+// The tank's reach for a pull stops as soon as a mob has aggro. Uldaman run 4
+// (2026-10-17, sentinel pull 2): the tank kept walking toward the west Relic
+// Hunters to reach its pull target, 15.7 yd from the Sentinel, after the camp
+// was awake, and pulled six mobs with the boss. While the lead bot is still
+// reaching (Facts::leadReaching) and any mob has a party bot as its victim
+// (Facts::reachAggro), the glue ends the lead bot's pull (Run::stopReachDue,
+// once per pull): the tank stands where it is and the fight is the party's.
+// True when it asks.
+inline bool CheckReach(Run& r, const Facts& f)
+{
+    if (r.reachStopped || !f.leadReaching || f.reachAggro == 0 || !f.leadAlive || InEvent(r))
+        return false;
+    r.reachStopped = true;
+    r.stopReachDue = true;
+    r.note = "fighting: the pull stops, " + std::to_string(f.reachAggro) +
+        (f.reachAggro == 1 ? " mob has" : " mobs have") + " aggro already";
+    return true;
+}
+
+// Whether a bot is kept to heals (PlayerbotAI::RunHealOnly): only a healer
+// that is in the party of a running run and is not its lead bot. The glue asks
+// it of every bot of every running run once a second; whoever fails it gets
+// its own AI back (a hire removed mid-run, a role change, a pause, the end).
+inline bool HealerKeptToHeals(bool runRunning, bool inRunParty, bool isLead, bool isHealer)
+{
+    return runRunning && inRunParty && !isLead && isHealer;
+}
+
 // A party member coming back with attackers on it. The owner's rule
 // (2026-10-17): "the party members running back to party should just run past
 // the mobs and try to run to the party, when its with the party and gets help
@@ -3236,6 +3523,17 @@ inline void NoteLeadDeath(Run& r, const Facts& f)
     // `revive party`: the regroup walks the plan's way back afterwards.
     if (!f.leadAlive && r.regroup)
         r.walkBackDue = true;
+    if (!f.leadAlive)
+        SuspendRoute(r); // it comes back where it fell, or at the entrance
+    if (f.leadAlive && r.routeCheck)
+    {
+        // Alive again after a death or a pause: still on the checkpoint's
+        // stretch only where it was (a resurrection on its corpse); anywhere
+        // else (the entrance after a release, a player's move) it is not known.
+        r.routeCheck = false;
+        r.routeKnown = ai::PlanDistance(f.leadX, f.leadY, f.leadZ, r.routeSpotX, r.routeSpotY, r.routeSpotZ) <=
+            kRouteSpotYd;
+    }
     if (f.leadAlive)
     {
         r.leadSeen = true;
@@ -3687,6 +3985,7 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
             if (!autoRegroup && f.leadAlive)
                 r.note = "event: fighting" + (progress.empty() ? std::string() : " (" + progress + ")");
         }
+        CheckReach(r, f);
         if (CheckCc(r, f, dt, order))
             return order;
         if (CheckGuard(r, f, dt, order))
@@ -3715,6 +4014,7 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
         r.focusGuid = 0;
         r.guardMs = 0;
         r.guardOrders = 0;
+        r.reachStopped = false;
         if (r.phase != Phase::AwaitTask && r.phase != Phase::Wait)
             EnterPhase(r, Phase::Begin);
     }

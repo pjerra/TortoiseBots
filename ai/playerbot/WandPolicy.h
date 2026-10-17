@@ -148,13 +148,17 @@ namespace ai
         bool aloneNear = false;       // no other live group member within SightDistance
         bool explicitOrder = false;   // the wand's mob is this bot's explicit attack target
         bool pullHold = false;        // the pull's own join window runs: heal, never wand
+        bool healOnly = false;        // the run leader keeps this healer to heals (PlayerbotAI::RunHealOnly)
     };
 
     inline bool HealerMayWand(HealerWandGate const& gate)
     {
         if (!gate.groupedHealer || gate.aloneNear || gate.explicitOrder)
             return true;
-        if (gate.pullHold)
+        // The pull window or the run leader keeps the healer to heals.
+        // The run leader's healer heals: no wand at all (Uldaman run 4: the
+        // priest drew the camp's aggro with Holy Fire, Mind Blast and the wand).
+        if (gate.pullHold || gate.healOnly)
             return false;
         if (!gate.targetEngaged)
             return false;
