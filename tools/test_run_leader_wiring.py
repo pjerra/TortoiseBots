@@ -196,6 +196,26 @@ class RunLeaderWiringTest(unittest.TestCase):
         # 4. A door whose lock needs no key and no skill opens on a plain use.
         use = (ROOT / "ai/playerbot/strategy/actions/UseItemAction.cpp").read_text()
         self.assertIn("TortoiseBots::DoorLock::OpensOnPlainUse(lockTypes, lockIndex)", use)
+    def test_uldaman_run3_hold_fixes_are_wired(self):
+        # A hold's done condition is read on every tick, before the facts' own step (in a walk back too) ...
+        facts = body(COMMANDS, "void ReadRunFacts(", "\n}\n")
+        self.assertLess(facts.index("ReadHoldDone(slot.run.plan->steps[slot.run.step], lead, f);"),
+                        facts.index("ai::PlanStep const* step = FactStep(slot.run);"))
+        # ... and while the run is paused, before the paused early return.
+        tick = body(COMMANDS, "void TickDungeonRun(", "\n}\n")
+        self.assertLess(tick.index("TortoiseBots::DungeonRun::HoldDoneWhilePaused(slot.run, doneFacts)"),
+                        tick.index("if (slot.run.state != TortoiseBots::DungeonRun::State::Running || !commander)"))
+        # The party's places on a hold spot follow every tick and are let go with the run's hold.
+        self.assertIn("SyncHoldStands(commander, lead, bots, it->second, order);", tick)
+        release = body(COMMANDS, "void ReleaseRunHold(", "\n}\n")
+        self.assertIn("slot.placedRaw.clear();", release)
+        stands = body(COMMANDS, "void SyncHoldStands(", "\n}\n")
+        self.assertIn("if (stand && (!placed || newPlaces || drifted))", stands)
+        pause = body(COMMANDS, 'if (verb == "pause")', "else if")
+        self.assertIn('PausePlayer(slot.run, "paused by .bot run pause");', pause)
+        self.assertIn("member.ranged = PlayerbotAI::IsHeal(bot)", facts)
+        self.assertIn("unit.x = creature->GetPositionX();", facts)
+
 
 if __name__ == "__main__":
     unittest.main()

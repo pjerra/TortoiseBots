@@ -55,6 +55,7 @@
 #include "../ai/playerbot/DungeonPlanPolicy.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -121,6 +122,16 @@ constexpr std::uint32_t kEventStartMs = 30000;    // an encounter hold whose dat
 constexpr std::uint32_t kRitualNoReplyMs = 5000;  // a ritual whose bots are free again with no answer this long: pause
 constexpr std::uint32_t kEventResetWaitMs = 60000; // before a ritual: an encounter still in progress or failed (a boss
                                                    // walking home) is waited for this long, then the ritual goes out
+// Placing the party on a hold spot (HoldStands). Uldaman run 3 (19z12): the
+// priest and the mage stood 12-20 yd from the tank on the Keepers' spot and a
+// keeper killed them there while the tank held "stay". The ranged bots (healer
+// too) stand behind the tank, on the side away from the event's mobs, in a
+// row across that line; the others follow the lead bot as before.
+constexpr float kHoldBehindYd = 6.0f;             // the ranged row this far behind the hold spot ...
+constexpr float kHoldSpreadYd = 3.0f;             // ... its bots this far apart across the line ...
+constexpr float kHoldGatherYd = 10.0f;            // ... and none farther than this from the spot (nor out of the radius)
+constexpr float kHoldMobSideYd = 5.0f;            // the event's mobs' middle this far off the spot gives "away"
+                                                  // (the four Stone Keepers ring the spot: 3.4 yd, no side)
 // Guarding the party from a stand point (GuardTarget): the run leader holds the
 // tank on "stay" at its pullback or walk-back point, where it does not go after
 // a mob on someone else. Uldaman rerun 2026-10-17, keepers door pull 100 and the
@@ -203,6 +214,7 @@ struct UnitFact
     std::uint64_t guid = 0;
     std::uint32_t entry = 0;
     float distLead = 0.0f;
+    float x = 0.0f, y = 0.0f; // hold units only: where it stands (HoldStands: the side the event comes from)
     bool hostile = true;     // not friendly to the party (hostile or neutral): it may be pulled
     bool stealthed = false;
     bool evading = false;    // running home: not pulled this tick
@@ -238,6 +250,7 @@ struct MemberFact
     float dz = 0.0f;        // height difference to the lead bot (another floor)
     std::uint32_t attackers = 0; // units attacking it (the core's attacker set of that bot, no scan)
     float x = 0.0f, y = 0.0f, z = 0.0f; // where it stands (the stand-still watch: UpdateStill)
+    bool ranged = false;    // a ranged bot or a healer: it stands behind the tank in a hold (HoldStands)
 };
 
 // What the glue reads once a tick for the run's current step.
@@ -276,6 +289,13 @@ struct Facts
     // navmesh path toward the step's point (kApproachHopYd along it at most,
     // kApproachYd short of the point). approachKnown false: no path.
     bool approachKnown = false;
+    // The glue asked the navmesh for that hop this tick. It does not while a
+    // walk or a regroup is under way, so on the tick such a walk ends no hop
+    // is known yet without that meaning "no path" (Uldaman run 3, 19z12: baelog
+    // pull 7 and the descent move paused with "no walkable path" on the tick
+    // the walk back to the stand point ended, and again on the tick a resume's
+    // regroup ended; both navmesh paths are complete).
+    bool approachRead = true;
     float approachX = 0.0f, approachY = 0.0f, approachZ = 0.0f;
     std::vector<UnitFact> units;        // pull/boss: living units of the step's entries within its radius
     std::vector<UnitFact> hopUnits;     // move: living hostile units within kHopPullYd of the point, not owned by a later step
@@ -312,6 +332,14 @@ struct Facts
     // bot within kGuardYd of it; distLead from the lead bot, `hitting` and
     // `victimHealer` set.
     std::vector<UnitFact> partyAttackers;
+};
+
+// A bot's own stand point in a hold (HoldStands): the glue walks it there and
+// keeps it on "stay" until the list changes.
+struct HoldStand
+{
+    std::string name;
+    float x = 0.0f, y = 0.0f, z = 0.0f;
 };
 
 // Where a boss's corpse lay when the boss step saw him down.
@@ -449,6 +477,16 @@ struct Run
     std::uint32_t eventMs = 0;
     bool eventStarted = false;   // the done data left "not started", or an event unit was seen awake
     bool holdArrived = false;    // the party stood on the hold spot once
+    // The party's places on the hold spot (HoldStands), set once the lead bot
+    // stands there out of a fight and again after each fight; the glue places
+    // the named bots whenever holdStandsGen changes and lets them follow the
+    // lead bot again once the list is empty (the step's end, a pause).
+    std::vector<HoldStand> holdStands;
+    std::uint32_t holdStandsGen = 0;
+    bool holdPlaced = false;
+    // The pause came from a player (an order to the party, `.bot run pause`),
+    // not from the run: it never resumes by itself (HoldDoneWhilePaused).
+    bool pausedByPlayer = false;
     std::uint32_t eventIdleMs = 0; // out of a fight with an awake event unit standing
     std::uint32_t eventUp = 0, eventDown = 0, eventTotal = 0; // the event's units now: awake, dead, all seen
     // Run-wide counts for the report.
@@ -581,9 +619,12 @@ inline void Pause(Run& r, const std::string& why)
 {
     r.state = State::Paused;
     r.note = why;
+    r.pausedByPlayer = false; // PausePlayer sets it after
     ClearRunBack(r); // a paused run leaves every bot to its own AI
     r.hold.clear();
     r.holdDue = false;
+    r.holdStands.clear();
+    r.holdPlaced = false;
 }
 
 // Clears what belongs to one step (also on resume, so a resumed step gets
@@ -638,6 +679,8 @@ inline void ResetStep(Run& r)
     r.holdArrived = false;
     r.eventIdleMs = 0;
     r.eventUp = r.eventDown = r.eventTotal = 0;
+    r.holdStands.clear();
+    r.holdPlaced = false;
     r.guardMs = 0;
     r.guardOrders = 0;
     r.guardReturn = false;
@@ -1032,12 +1075,25 @@ inline bool Skip(Run& r)
     return true;
 }
 
+// The run was paused by a player (PausePlayer: an order to the party, `.bot run pause`).
+inline bool PausedByPlayer(const Run& r)
+{
+    return r.state == State::Paused && r.pausedByPlayer;
+}
+
+// A player's pause: only `.bot run resume` (or skip) goes on from it.
+inline void PausePlayer(Run& r, const std::string& why)
+{
+    Pause(r, why);
+    r.pausedByPlayer = true;
+}
+
 // Any order from a player to the party.
 inline bool PauseForPlayer(Run& r, const std::string& order)
 {
     if (r.state != State::Running)
         return false;
-    Pause(r, "player order (" + order + "): .bot run resume to go on");
+    PausePlayer(r, "player order (" + order + "): .bot run resume to go on");
     return true;
 }
 
@@ -1557,6 +1613,11 @@ inline void ApproachHop(Run& r, const Facts& f, const PlanStep& s, std::uint32_t
             EnterPhase(r, Phase::Begin);
         return;
     }
+    if (!f.approachKnown && !f.approachRead)
+    {
+        r.note += ": reading the way"; // the next tick asks the navmesh
+        return;
+    }
     if (!f.approachKnown)
     {
         Pause(r, "no walkable path toward the " + what + " at " + Num(s.x) + " " + Num(s.y) + " " + Num(s.z));
@@ -1807,6 +1868,11 @@ inline bool WalkBack(Run& r, const Facts& f, std::uint32_t dt, std::string& orde
             return true;
         }
         std::uint32_t const cap = r.walkBackDirect ? kMaxWalkBackHops : kMaxApproachHops;
+        if (!f.approachKnown && !f.approachRead)
+        {
+            r.note = "walk back: approaching " + what + ": reading the way"; // the next tick asks the navmesh
+            return true;
+        }
         if (!f.approachKnown || r.approachHops >= cap)
         {
             std::string const why = !f.approachKnown ? "no walkable path toward " + what
@@ -2348,6 +2414,186 @@ inline void EventFailed(Run& r, const std::string& why)
     Pause(r, "event failed (" + why + ")" + again);
 }
 
+// The hold's done condition from what the glue reads on every tick, with the
+// spot in sight or not, in a fight, a regroup or a pause too (instance data is
+// map-wide; the object counts when it is within the lead bot's reach). Uldaman
+// run 3 (19z12): Archaedas died 12 s after the lead bot; the hold then rested,
+// hopped toward its spot from where the lead bot came back to life and paused
+// after 8 hops, and the agent's pause cap ended the run FAILED with data 2 at 3
+// (DONE) and the vault door 124369 open. "" when not done, else the note.
+inline std::string HoldDoneNote(const PlanStep& s, const Facts& f)
+{
+    if (s.kind != PlanStepKind::Hold)
+        return std::string();
+    if (s.flags & ai::kPlanFlagDoneData)
+    {
+        if (f.eventData >= 0 && f.eventData == static_cast<long long>(s.param))
+            return "event done: data " + std::to_string(s.entry) + " reads " + std::to_string(s.param);
+    }
+    else if ((s.flags & ai::kPlanFlagDoneObject) && f.objectState == static_cast<int>(s.param))
+        return "event done: object " + std::to_string(s.entry) + " is in state " + std::to_string(s.param);
+    return std::string();
+}
+
+// A paused run whose current step is a hold whose event is done (the glue
+// reads HoldDoneNote's facts while paused too): the step ends, and the run
+// resumes by itself with a resume's regroup (revive, gather or summon, walk
+// back), so a pause never outlives the event it waited on (Uldaman run 3: the
+// agent's 10-minute pause cap ended the run FAILED with Archaedas dead). A
+// pause for a player's order stays a pause: the step ends, the note says the
+// event is done, and `.bot run resume` goes on. True when the step ended.
+inline bool HoldDoneWhilePaused(Run& r, const Facts& f)
+{
+    const PlanStep* s = Current(r);
+    if (r.state != State::Paused || !s)
+        return false;
+    std::string const done = HoldDoneNote(*s, f);
+    if (done.empty())
+        return false;
+    bool const byPlayer = PausedByPlayer(r);
+    std::string const why = r.note;
+    r.state = State::Running;
+    r.fighting = false;
+    NextStep(r, done);
+    if (r.state == State::Done)
+        return true;
+    if (byPlayer)
+    {
+        r.state = State::Paused;
+        // The note keeps its "player order" head: the glue lets the held bots
+        // go without forming them up over the player's order (ReleaseRunHold).
+        r.note = why + "; " + done + " meanwhile: .bot run resume goes on with step " + std::to_string(r.step + 1);
+        return true;
+    }
+    BeginRegroup(r);
+    r.walkBackDue = true;
+    r.note = done + " while paused (" + why + "): resumed by itself, regrouping";
+    return true;
+}
+
+// The places of the party on a hold spot (kHoldBehindYd): every living ranged
+// bot (a healer too) but the lead bot, in a row kHoldBehindYd behind the spot
+// on the side away from the event's mobs (the middle of its named mobs, the
+// hold's first entry, else of its awake ones), kHoldSpreadYd apart across that
+// line, each at most kHoldGatherYd from the spot and inside the hold's radius.
+// Units that ring the spot (no side from their middle): the side whose row is
+// nowhere nearer to a unit than the spot is, else the tank's own spot. No
+// units seen: the side the party came from (the nearest earlier move point).
+// The others follow the lead bot (the tank) on the spot. Empty when no side
+// can be told or no ranged bot lives.
+inline std::vector<HoldStand> HoldStands(const Run& r, const Facts& f, const PlanStep& s)
+{
+    std::vector<HoldStand> out;
+    std::vector<std::string> names;
+    for (const MemberFact& m : f.members)
+        if (m.ranged && !m.name.empty() && m.name != f.carrier)
+            names.push_back(m.name);
+    if (names.empty())
+        return out;
+    std::sort(names.begin(), names.end());
+    // The side the event comes from.
+    float bx = 0.0f, by = 0.0f;
+    bool side = false;
+    for (int pass = 0; pass < 2 && !side; ++pass)
+    {
+        float cx = 0.0f, cy = 0.0f;
+        std::uint32_t n = 0;
+        for (const UnitFact& u : f.units)
+            if (pass == 0 ? (!s.entries.empty() && u.entry == s.entries.front()) : u.hostile)
+            {
+                cx += u.x;
+                cy += u.y;
+                ++n;
+            }
+        if (!n)
+            continue;
+        float const dx = cx / n - s.x, dy = cy / n - s.y;
+        float const len = std::sqrt(dx * dx + dy * dy);
+        if (len >= kHoldMobSideYd)
+        {
+            bx = -dx / len;
+            by = -dy / len;
+            side = true;
+        }
+    }
+    float const reach = s.radius > 0.0f ? std::min(kHoldGatherYd, s.radius) : kHoldGatherYd;
+    // The row for a side: kHoldBehindYd behind the spot along (ux, uy).
+    auto row = [&](float ux, float uy)
+    {
+        std::vector<HoldStand> stands;
+        for (std::size_t i = 0; i < names.size(); ++i)
+        {
+            float const across = (static_cast<float>(i) - 0.5f * static_cast<float>(names.size() - 1)) * kHoldSpreadYd;
+            float dx = ux * kHoldBehindYd - uy * across, dy = uy * kHoldBehindYd + ux * across;
+            float const len = std::sqrt(dx * dx + dy * dy);
+            if (len > reach)
+            {
+                dx *= reach / len;
+                dy *= reach / len;
+            }
+            stands.push_back(HoldStand{names[i], s.x + dx, s.y + dy, s.z});
+        }
+        return stands;
+    };
+    if (side)
+        return row(bx, by);
+    if (!f.units.empty())
+    {
+        // The event's units ring the spot (the four Stone Keepers: their middle
+        // 3.4 yd off it), and the script wakes each onto the NEAREST player: a
+        // row toward any side the party came from may stand nearer to a statue
+        // than the tank does. Of 24 sides, the one whose row keeps every stand
+        // at least as far from every unit as the spot is, with the widest
+        // margin; none such: the ranged stand on the tank's own spot.
+        float bestMargin = -1.0f;
+        for (int k = 0; k < 24; ++k)
+        {
+            float const a = static_cast<float>(k) * 3.14159265f / 12.0f;
+            std::vector<HoldStand> stands = row(std::cos(a), std::sin(a));
+            float margin = 1e9f;
+            for (const HoldStand& st : stands)
+                for (const UnitFact& u : f.units)
+                {
+                    float const fromStand = std::sqrt((st.x - u.x) * (st.x - u.x) + (st.y - u.y) * (st.y - u.y));
+                    float const fromSpot = std::sqrt((s.x - u.x) * (s.x - u.x) + (s.y - u.y) * (s.y - u.y));
+                    margin = std::min(margin, fromStand - fromSpot);
+                }
+            if (margin >= 0.0f && margin > bestMargin)
+            {
+                bestMargin = margin;
+                out = std::move(stands);
+            }
+        }
+        if (out.empty())
+            for (const std::string& name : names)
+                out.push_back(HoldStand{name, s.x, s.y, s.z});
+        return out;
+    }
+    for (std::size_t i = r.step; r.plan && i-- > 0;)
+    {
+        const PlanStep& p = r.plan->steps[i];
+        if (p.kind != PlanStepKind::Move && p.kind != PlanStepKind::MoveDirect)
+            continue;
+        float const dx = p.x - s.x, dy = p.y - s.y;
+        float const len = std::sqrt(dx * dx + dy * dy);
+        if (len >= kHoldMobSideYd)
+            return row(dx / len, dy / len);
+    }
+    return out;
+}
+
+// Whether two stand lists name the same bots (positions aside: the event's
+// mobs wake and move, the places stay until the party changes).
+inline bool SameStandNames(const std::vector<HoldStand>& a, const std::vector<HoldStand>& b)
+{
+    if (a.size() != b.size())
+        return false;
+    for (std::size_t i = 0; i < a.size(); ++i)
+        if (a[i].name != b[i].name)
+            return false;
+    return true;
+}
+
 // hold: walks to the spot, then stands there and lets the bots fight what the
 // event sends (no pulls of its own, but for an awake unit of the event that
 // does not come within kHoldIdlePullMs), walks back to the spot after a fight
@@ -2460,6 +2706,17 @@ inline void HoldStep(Run& r, const Facts& f, const PlanStep& s, std::uint32_t dt
     }
     if (r.phase != Phase::Hold)
         EnterPhase(r, Phase::Hold);
+    // The party's places on the spot (HoldStands): set on arrival, again when
+    // the living party changes (a revived bot).
+    {
+        std::vector<HoldStand> stands = HoldStands(r, f, s);
+        if (!r.holdPlaced || !SameStandNames(stands, r.holdStands))
+        {
+            r.holdPlaced = true;
+            r.holdStands = std::move(stands);
+            ++r.holdStandsGen;
+        }
+    }
     // An awake unit of the event that does not come is pulled after a while.
     const UnitFact* idle = PickPull(r, f.units, 0);
     r.eventIdleMs = idle ? r.eventIdleMs + dt : 0;
@@ -2808,12 +3065,23 @@ inline void FillHold(Run& r, const Facts& f)
             r.hold.push_back(m.name);
 }
 
+// The lead bot fell inside an event's hold (and is dead, or came back to life
+// since): with the fight over, the hold cannot go on without it, so the run
+// regroups (revive, gather or hold the party, walk back) instead of hopping
+// toward the spot from wherever the lead bot is (Uldaman run 3, 19z12).
+inline bool LeadLostInHold(const Run& r, const Facts& f)
+{
+    const PlanStep* s = Current(r);
+    return s && s->kind == PlanStepKind::Hold && r.eventOn && (!f.leadAlive || r.leadDied);
+}
+
 inline bool LeadRevivedAway(Run& r, const Facts& f)
 {
     if (!r.leadDied || !f.leadAlive || f.anyInCombat)
         return false;
+    bool const lostInHold = LeadLostInHold(r, f);
     r.leadDied = false;
-    if (r.regroup || InEvent(r) ||
+    if (r.regroup || (InEvent(r) && !lostInHold) ||
         ai::PlanDistance(f.leadX, f.leadY, f.leadZ, r.leadDeathX, r.leadDeathY, r.leadDeathZ) <= kSeeYd)
         return false;
     if (r.autoRegroups >= kAutoRegroupsPerStep)
@@ -2961,6 +3229,23 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
         r.anchorPathWanted = false;
     UpdateStill(r, f, dt);
     NoteLeadDeath(r, f);
+
+    // A hold whose event is done ends on any tick (HoldDoneNote): in a fight,
+    // a regroup, a rest or an approach too, the spot in sight or not.
+    if (s->kind == PlanStepKind::Hold)
+    {
+        std::string const done = HoldDoneNote(*s, f);
+        if (!done.empty())
+        {
+            if (f.seen)
+                CountEvent(r, f, *s);
+            std::string const progress = EventProgress(r);
+            NextStep(r, done + (progress.empty() ? std::string() : " (" + progress + ")"));
+            s = Current(r);
+            if (!s)
+                return order;
+        }
+    }
 
     // A wipe (the whole party dead) counts once, however long it lasts.
     bool const allDead = f.total > 0 && f.alive == 0;
@@ -3115,7 +3400,7 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
     // back with attackers (RunBack). The lead bot dead alone came back far
     // from where it fell: the wipe recovery (LeadRevivedAway). In a fight the
     // others fight on; more dead make it a wipe and the run regroups by itself.
-    if (!autoRegroup && !f.anyInCombat && !r.regroup && !runBackWait && !InEvent(r) &&
+    if (!autoRegroup && !f.anyInCombat && !r.regroup && !runBackWait && (!InEvent(r) || LeadLostInHold(r, f)) &&
         r.phase != Phase::AwaitTask && r.phase != Phase::Wait)
     {
         if (LeadRevivedAway(r, f))
