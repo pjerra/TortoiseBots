@@ -157,6 +157,7 @@ if command -v g++ >/dev/null 2>&1; then
         test_hire_unlock_sync
         test_hot_streak_policy
         test_human_bg_demand_policy
+        test_hunter_feign_death_policy
         test_hunter_pet_policy
         test_hunter_switch_policy
         test_hunter_viper_policy

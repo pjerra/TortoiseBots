@@ -5,6 +5,7 @@
 #include "playerbot/ServerFacade.h"
 #include "HunterActions.h"
 #include "HunterValues.h"
+#include "../../../../runtime/HunterFeignDeathPolicy.h"
 
 using namespace ai;
 
@@ -256,4 +257,27 @@ bool HunterStepOutAction::Execute(Event& event)
     LogHunterRangedEvent(ai, "StepOut", std::string("moved=") + (moved ? "1" : "0") +
         " attempt=" + std::to_string(state->stepOutAttempt));
     return moved;
+}
+
+bool CastFeignDeathAction::isUseful()
+{
+    if (!CastBuffSpellAction::isUseful())
+        return false;
+    // The mobs whose victim is the hunter (its own attacker set, no scan):
+    // the others on each one's threat list.
+    std::vector<uint32_t> others;
+    for (Unit* attacker : bot->GetAttackers())
+    {
+        if (!attacker || !attacker->IsAlive() || attacker->GetVictim() != bot)
+            continue;
+        uint32_t n = 0;
+        for (HostileReference* ref : attacker->GetThreatManager().getThreatList())
+        {
+            Unit* target = ref ? ref->getTarget() : nullptr;
+            if (target && target != bot && target->IsAlive())
+                ++n;
+        }
+        others.push_back(n);
+    }
+    return TortoiseBots::HunterFeignDeathAllowed(others);
 }
