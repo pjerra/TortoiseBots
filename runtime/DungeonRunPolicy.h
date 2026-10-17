@@ -113,6 +113,8 @@ constexpr std::uint32_t kRegroupReviveMs = 240000; // after a resume: the dead m
 constexpr std::uint32_t kRegroupGatherMs = 60000;  // ... and the party gathered within this after that
 constexpr std::uint32_t kFightCapMs = 180000;
 constexpr std::uint32_t kBossFightCapMs = 420000;
+constexpr std::uint32_t kStaleCombatGraceMs = 20000; // a combat flag with nothing hostile engaged is waited out this long in all of one fight, then the fight ceiling runs again
+constexpr std::uint32_t kStaleConfirmMs = 3000;      // ... and it must stand this long without a break before a wait_object is finished over it
 constexpr std::uint32_t kRestCapMs = 60000;
 constexpr std::uint32_t kRestRepeatMs = 20000;
 constexpr std::uint32_t kPartyRezWaitMs = 15000;  // a regroup with a living rezzer (priest, paladin, shaman) waits this
@@ -284,6 +286,10 @@ struct Facts
     bool leadAlive = true;
     bool anyInCombat = false;
     bool leadInCombat = false;          // the lead bot itself is in a fight
+    // anyInCombat, yet no living hostile is engaged with a bot (or its pet): a
+    // combat flag left standing after the last kill, or a non-attackable add.
+    // The fight timer does not run on it (Uldaman run 4, archaedas wait_object).
+    bool staleCombat = false;
     float leadX = 0.0f, leadY = 0.0f, leadZ = 0.0f;
     float maxMemberYd = 0.0f;           // the living bot farthest from the lead bot
     std::vector<MemberFact> members;    // the living bots, the lead bot too (at 0 yd)
@@ -418,6 +424,8 @@ struct Run
     float detourX = 0.0f, detourY = 0.0f, detourZ = 0.0f;
     bool fighting = false;
     std::uint32_t fightMs = 0;
+    std::uint32_t staleMs = 0;          // all the time in this fight the combat flag stood with nothing hostile engaged (Facts::staleCombat)
+    std::uint32_t staleRunMs = 0;       // ... and the time it has stood so without a break
     std::uint32_t restRepeatMs = 0;
     // The last point the run itself walked the party to (a move, an approach
     // hop, a stand point): a gather goes back there when a fight left the lead
@@ -1163,6 +1171,7 @@ inline void NextStep(Run& r, const std::string& note)
     ++r.step;
     r.autoRegroups = 0;
     ResetStep(r);
+    r.fightMs = 0; // a fight that goes on into the next step starts its ceiling over (the hold's 400 s were the wait step's)
     r.note = note;
     if (!Current(r))
     {
@@ -3998,6 +4007,24 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
     UpdateStill(r, f, dt);
     NoteLeadDeath(r, f);
 
+    // The stale flag's clocks: one snapshot of "nothing hostile engaged" proves
+    // nothing (a guardian, a scripted fight), so the grace is spent once per
+    // combat and a wait step is finished over it only when it stands unbroken.
+    // They end with the combat (any early return below included), not with a
+    // step finished over the flag.
+    if (!f.anyInCombat)
+    {
+        r.staleMs = 0;
+        r.staleRunMs = 0;
+    }
+    else if (f.staleCombat)
+    {
+        r.staleMs += dt;
+        r.staleRunMs += dt;
+    }
+    else
+        r.staleRunMs = 0;
+
     // A hold whose event is done ends on any tick (HoldDoneNote): in a fight,
     // a regroup, a rest or an approach too, the spot in sight or not.
     if (s->kind == PlanStepKind::Hold)
@@ -4177,8 +4204,16 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
             return order;
     }
 
+    // A wait_object whose object already is in the wanted state is done, in a
+    // fight or not (a leftover combat flag must not hold it): Uldaman run 4,
+    // Archaedas down, the vault door 124369 active, "a fight lasted more than
+    // 180 s" at the wait step.
+    // Only on a stale flag: a real fight keeps its handling and its timer.
+    bool const objectDone = s->kind == PlanStepKind::WaitObject && r.staleRunMs >= kStaleConfirmMs &&
+        f.objectState >= 0 && f.objectState == static_cast<int>(s->param);
+
     // Fights are the bots' own; the run only bounds them.
-    if (f.anyInCombat)
+    if (f.anyInCombat && !objectDone)
     {
         // The ritual answered and its event is fighting already (the first
         // Stone Keeper wakes with the cast): the fight is the hold's.
@@ -4197,7 +4232,12 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
             r.fightMs = 0;
             DropHopWaiver(r);
         }
-        r.fightMs += dt;
+        // A stale flag (nothing hostile engaged) is waited out for a grace
+        // period; past it the fight ceiling runs again, so a flag that never
+        // clears still ends in a pause.
+        bool const staleGrace = f.staleCombat && r.staleMs <= kStaleCombatGraceMs;
+        if (!staleGrace)
+            r.fightMs += dt;
         // A hold's fights are the event (one wave after the other, no pause
         // between): its own timeout bounds them when that is longer.
         // A start step's fight (or a move's) before its hold is the event's too.
@@ -4220,7 +4260,7 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
                 " of " + std::to_string(kAutoRegroupsPerStep) + " at this step)";
             return order;
         }
-        if (r.fightMs > cap)
+        if (r.fightMs > cap && !staleGrace)
         {
             Pause(r, "a fight lasted more than " + std::to_string(cap / 1000) + " s");
             return order;

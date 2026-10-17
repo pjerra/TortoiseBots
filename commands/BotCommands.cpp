@@ -9500,6 +9500,24 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
     // already hold, their own cached "attackers" lists (which carry the
     // attackers' totems and guardians, a healing ward too; read only when
     // already calculated), resolved by guid. No grid or world scan.
+    // In combat by the flag, yet nothing hostile is engaged with any bot or its
+    // pet: stale (DungeonRun::Facts::staleCombat).
+    if (f.anyInCombat)
+    {
+        bool engaged = false;
+        auto hostileEngaged = [&](Unit* unit)
+        {
+            for (Unit* attacker : unit->GetAttackers())
+                if (attacker && attacker->IsAlive() && !sServerFacade.IsFriendlyTo(attacker, lead))
+                    return true;
+            Unit* victim = unit->GetVictim();
+            return victim && victim->IsAlive() && !sServerFacade.IsFriendlyTo(victim, lead);
+        };
+        for (Player* bot : bots)
+            if (!engaged && bot->IsAlive() && bot->IsInWorld())
+                engaged = hostileEngaged(bot) || (bot->GetPet() && hostileEngaged(bot->GetPet()));
+        f.staleCombat = !engaged;
+    }
     if (f.anyInCombat && slot.run.plan && !slot.run.plan->killFirst.empty())
         ReadKillFirst(*slot.run.plan, lead, bots, f);
     if (f.anyInCombat)

@@ -706,6 +706,120 @@ static void TestUseItemPausesOnSplitInputs()
     g.carrier = "Healy";
     g.carrierHasEntryItem = true;
     CHECK(Tick(q, g) == "use 7740 Healy");
+// Uldaman run 4, archaedas wait_object 135/135: Archaedas was dead and the
+// vault door 124369 active, yet "a fight lasted more than 180 s" paused the run.
+// The hold's long fight had left fightMs over the plain 180 s ceiling, and the
+// combat flag stood a few seconds after the last kill.
+static void TestWaitObjectDoneWinsOverAStaleFightTimer()
+{
+    DungeonPlan plan;
+    PlanStep wait = Step(PlanStepKind::WaitObject, 1, 2, 3);
+    wait.entry = 124369;
+    wait.param = 1;
+    plan.steps = {wait, Step(PlanStepKind::Move, 9)};
+    // The door is in the wanted state and only the combat flag stands: done.
+    Run r = Start(&plan);
+    r.fighting = true;
+    r.fightMs = kFightCapMs + 5000;
+    Facts f = Party(0);
+    f.anyInCombat = true;
+    f.staleCombat = true;
+    f.objectState = 1;
+    // One stale snapshot proves nothing: the wait step is finished once the
+    // flag has stood unbroken for kStaleConfirmMs.
+    Tick(r, f);
+    CHECK(r.step == 0 && r.state == State::Running);
+    for (std::uint32_t i = 0; i < kStaleConfirmMs / kTickMs && r.step == 0; ++i)
+        Tick(r, f);
+    CHECK(r.state == State::Running && r.step == 1);
+    // A break (one engaged tick) starts the confirmation over.
+    Run b = Start(&plan);
+    b.fighting = true;
+    Facts e = f;
+    Tick(b, e);
+    Tick(b, e);
+    e.staleCombat = false;
+    Tick(b, e);
+    e.staleCombat = true;
+    Tick(b, e);
+    CHECK(b.step == 0 && b.staleRunMs == kTickMs);
+    // A real fight (a hostile engaged) with the door open keeps its handling
+    // and its ceiling: the step does not advance.
+    Run q = Start(&plan);
+    q.fighting = true;
+    q.fightMs = kFightCapMs + 5000;
+    Facts g = Party(0);
+    g.anyInCombat = true;
+    g.objectState = 1;
+    Tick(q, g);
+    CHECK(q.state == State::Paused && q.step == 0 &&
+        q.note.find("a fight lasted more than 180 s") != std::string::npos);
+    // A stale flag with the door shut is waited out for the grace period (the
+    // timer does not run), then the ceiling runs again: it ends in a pause.
+    Run p = Start(&plan);
+    p.fighting = true;
+    p.fightMs = kFightCapMs + 5000;
+    Facts h = g;
+    h.objectState = 0;
+    h.staleCombat = true;
+    Tick(p, h);
+    CHECK(p.state == State::Running && p.fightMs == kFightCapMs + 5000);
+    for (std::uint32_t i = 0; i < kStaleCombatGraceMs / kTickMs + 2 && p.state == State::Running; ++i)
+        Tick(p, h);
+    CHECK(p.state == State::Paused && p.note.find("a fight lasted more than 180 s") != std::string::npos);
+    // The grace is spent once per fight: alternating 19 stale ticks with one
+    // engaged tick does not renew it, the ceiling still fires.
+    Run a = Start(&plan);
+    a.fighting = true;
+    a.fightMs = kFightCapMs + 5000;
+    Facts k = h;
+    for (int i = 0; i < 200 && a.state == State::Running; ++i)
+    {
+        k.staleCombat = (i % 20) != 19;
+        Tick(a, k);
+    }
+    CHECK(a.state == State::Paused && a.note.find("a fight lasted more than 180 s") != std::string::npos);
+    // Two satisfied wait_object steps over one uninterrupted stale flag: the
+    // second does not get a fresh grace.
+    DungeonPlan two;
+    two.steps = {plan.steps[0], plan.steps[0]};
+    Run w = Start(&two);
+    w.fighting = true;
+    Facts z = f;
+    for (int i = 0; i < 10 && w.step == 0; ++i)
+        Tick(w, z);
+    CHECK(w.step == 1 && w.staleMs >= kStaleConfirmMs);
+    // The flag has stood this long already; the next step's confirmation is
+    // unbroken too, so it finishes at once, the grace is not renewed.
+    std::uint32_t const spent = w.staleMs;
+    Tick(w, z);
+    CHECK(w.staleMs > spent);
+    // Stale combat, then a wipe regroup by itself when it clears: the next
+    // combat gets a fresh grace and a full confirmation.
+    Run g2 = Start(&plan);
+    g2.fighting = true;
+    g2.staleMs = kStaleCombatGraceMs;
+    g2.staleRunMs = kStaleConfirmMs;
+    Facts wipe = Party(0);
+    wipe.dead = kWipeDead;
+    wipe.alive = 2;
+    wipe.anyInCombat = false;
+    Tick(g2, wipe);
+    CHECK(g2.regroup && g2.staleMs == 0 && g2.staleRunMs == 0);
+    // The flag clearing resets the grace.
+    Run c = Start(&plan);
+    c.fighting = true;
+    Tick(c, h);
+    CHECK(c.staleMs > 0);
+    h.anyInCombat = false;
+    Tick(c, h);
+    CHECK(c.staleMs == 0);
+    // A fight that goes on into the next step starts that step's ceiling over.
+    Run n = Start(&plan);
+    n.fighting = true;
+    n.fightMs = kFightCapMs + 5000;
+    NextStep(n, "hold done");
+    CHECK(n.fightMs == 0 && n.fighting);
 }
 
 static void TestPullThatStartsNoFightIsPassed()
@@ -3298,6 +3412,7 @@ int main()
     TestUseItemPausesOnSplitInputs();
     TestLootStepIsDoneWhenAnyPartyBotHasTheItem();
     TestLootRefusalTriesTheTurnBotThenEachBot();
+    TestWaitObjectDoneWinsOverAStaleFightTimer();
     TestPullThatStartsNoFightIsPassed();
     TestAmbushWalksThrough();
     TestBossKillOrderAndTeamGate();
