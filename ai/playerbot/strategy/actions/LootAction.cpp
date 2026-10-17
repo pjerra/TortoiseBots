@@ -107,7 +107,20 @@ bool OpenLootAction::Execute(Event& event)
     }
 
     stoppedForCast = false;
+    // The duration is a member: a corpse open set it to lootDelay, and a cast
+    // must not inherit that (or any earlier value) as its sleep.
+    SetDuration(sPlayerbotAIConfig.reactDelay);
     bool result = DoLoot(lootObject);
+
+    // A cast on the object (gather, skin, open) sleeps through its cast time,
+    // like any cast action; waking after 1 s let "update follow" walk the bot
+    // off the node and the core cancelled the cast (#1062).
+    {
+        Spell* cast = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL);
+        uint32 const castMs = (result && cast && cast->getState() == SPELL_STATE_PREPARING && cast->GetCastTime() > 0)
+            ? ai->GetSpellCastDuration(cast) : 0;
+        SetDuration(ai::DecideOpenLootDuration(result, castMs, GetDuration()));
+    }
     LootObjectStack* lootStack = AI_VALUE(LootObjectStack*, "available loot");
 
     // Bounded give-up: count every open attempt per object on the stack's failure memory
