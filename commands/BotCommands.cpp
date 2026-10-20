@@ -9706,8 +9706,8 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                     f.units.push_back(unit);
                 }
             }
-            // A pack is not cleared while other living hostiles stand by it
-            // (#255, DungeonRun::NearPack): any entry, one grid search around
+            // Other living hostiles standing by the pack, waited for a little
+            // before "pack cleared" (#255, DungeonRun::NearPack): any entry, one grid search around
             // the lead bot. Line of sight from the step's point itself
             // (Map::isInLineOfSight, both ends raised 2 yd), not from the lead.
             if (step->kind == ai::PlanStepKind::Pull)
@@ -9734,7 +9734,12 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                         continue;
                     if (!map->isInLineOfSight(step->x, step->y, step->z + 2.0f, ox, oy, oz + 2.0f))
                         continue;
-                    ++f.othersNearPack;
+                    UnitFact near;
+                    near.guid = guid;
+                    near.entry = other->GetEntry();
+                    near.distLead = lead->GetDistance(other);
+                    near.evading = creature && creature->IsInEvadeMode();
+                    f.nearPack.push_back(near);
                 }
             }
             break;

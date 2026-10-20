@@ -316,6 +316,25 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn("refusedDead", direct)
         self.assertIn("horizontal > refusedYd", direct)
 
+    def test_near_pack_hostiles_are_read_with_every_filter(self):
+        # #255: the hostiles near a cleared pack (DungeonRun::Facts::nearPack) are read for pull steps only,
+        # around the step's point (NearPack), and every exclusion the policy relies on is applied in the glue.
+        facts = body(COMMANDS, "void ReadRunFacts(", "\n}\n")
+        near = body(facts, "if (step->kind == ai::PlanStepKind::Pull)", "f.nearPack.push_back(near);")
+        self.assertIn("HostileCreaturesAround(lead, std::min(toPoint + step->radius + kNearPackYd, 2.0f * kSeeYd), hostiles);", near)
+        self.assertIn("if (!NearPack(*step, ox, oy, oz))", near)
+        self.assertIn("bool known = slot.run.passed.count(guid) || slot.run.unreachable.count(guid);", near)
+        self.assertIn("known = known || have.guid == guid;", near)
+        self.assertIn("other->GetCreatureType() == CREATURE_TYPE_CRITTER", near)
+        self.assertIn("IsStealthed(other)", near)
+        self.assertIn("!lead->IsValidAttackTarget(other)", near)
+        self.assertIn("if (creature && creature->HasReactState(REACT_PASSIVE))", near)
+        self.assertIn("if (ai::OwnedByLaterStep(*slot.run.plan, slot.run.step, other->GetEntry(), ox, oy, oz, f.team))", near)
+        # Line of sight from the step's point itself, not from the lead bot.
+        self.assertIn("if (!map->isInLineOfSight(step->x, step->y, step->z + 2.0f, ox, oy, oz + 2.0f))", near)
+        self.assertIn("near.entry = other->GetEntry();", near)
+        self.assertEqual(facts.count("f.nearPack.push_back("), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -425,32 +425,64 @@ static void TestPullGatherAndFight()
     CHECK(r.state == State::Done || r.step == 1);
 }
 
-// #255 (WC pull group 2): "pack cleared" in 1 s while mobs of the pack stood
-// alive just past what the step's own unit list holds. Another living hostile
-// near the pack (the glue's othersNearPack) keeps the step from ending; once
-// it is gone, the pack is cleared.
+// #255: other living hostiles near a cleared pack (the glue's nearPack, any
+// entry, just past the radius). The step waits for them a little: it does not
+// end while they stand there for less than kNearPackWaitMs, and carries on
+// after it (it never stalls the run), naming how many and the first entry.
+static std::vector<UnitFact> NearPackUnits(std::size_t n)
+{
+    std::vector<UnitFact> units;
+    for (std::size_t i = 0; i < n; ++i)
+        units.push_back(Unit(900 + i, i == 0 ? 5055 : 3840, 30));
+    return units;
+}
+
 static void TestOtherLiveMobNearPackBlocksCleared()
 {
     DungeonPlan plan;
     plan.steps = {PullStep(10, {5055, 3840}), Step(PlanStepKind::Rest)};
     Run r = Start(&plan);
     Facts f = Party(0);
-    f.othersNearPack = 1;
-    for (int i = 0; i < 5; ++i)
+    f.nearPack = NearPackUnits(1);
+    std::uint32_t waited = 0;
+    while (waited + kTickMs < kNearPackWaitMs)
     {
         CHECK(Tick(r, f).empty());
         CHECK(r.state == State::Running && r.step == 0);
+        waited += kTickMs;
     }
-    CHECK(r.note.find("living hostile units near the pack") != std::string::npos);
-    f.othersNearPack = 0;
+    CHECK(r.note == "waiting: 1 hostile (first: entry 5055) near the pack");
+    // Gone within the wait: the pack is cleared as before.
+    f.nearPack.clear();
     Tick(r, f);
     CHECK(r.step == 1 && r.note == "pack cleared");
-    // Waited for too long: the step's out-of-combat ceiling pauses the run.
-    Run r2 = Start(&plan);
-    f.othersNearPack = 2;
-    for (int i = 0; i < 2000 && r2.state == State::Running; ++i)
+}
+
+static void TestNearPackWaitIsBounded()
+{
+    DungeonPlan plan;
+    plan.steps = {PullStep(10, {5055, 3840}), Step(PlanStepKind::Rest)};
+    Run r = Start(&plan);
+    Facts f = Party(0);
+    f.nearPack = NearPackUnits(2);
+    std::uint32_t waited = 0;
+    for (int i = 0; i < 1000 && r.step == 0 && r.state == State::Running; ++i)
+    {
+        Tick(r, f);
+        if (r.step == 0)
+            waited += kTickMs;
+    }
+    CHECK(r.state == State::Running && r.step == 1);
+    CHECK(waited >= kNearPackWaitMs - kTickMs && waited <= kNearPackWaitMs);
+    CHECK(r.note == "2 hostiles (first: entry 5055) left near pack, carrying on");
+    // The wait is per step: the next pull step waits again from 0.
+    DungeonPlan two;
+    two.steps = {PullStep(10, {5055}), PullStep(12, {3840}), Step(PlanStepKind::Rest)};
+    Run r2 = Start(&two);
+    for (int i = 0; i < 1000 && r2.step == 0; ++i)
         Tick(r2, f);
-    CHECK(r2.state == State::Paused && r2.step == 0);
+    CHECK(r2.step == 1);
+    CHECK(Tick(r2, f).empty() && r2.step == 1 && r2.note.find("waiting: 2 hostiles") == 0);
 }
 
 // Which units count as near the pack: within its radius + kNearPackYd of its
@@ -477,7 +509,7 @@ static void TestNoOthersNearPackLeavesClearedAlone()
     plan.steps = {PullStep(10, {4851}), Step(PlanStepKind::Rest)};
     Run r = Start(&plan);
     Facts f = Party(0);
-    f.othersNearPack = 0;
+    f.nearPack.clear();
     Tick(r, f);
     CHECK(r.state == State::Running && r.step == 1 && r.note == "pack cleared");
     // A boss already down by his spot: "boss down", whatever stands near it.
@@ -488,7 +520,7 @@ static void TestNoOthersNearPackLeavesClearedAlone()
     Run rb = Start(&bossPlan);
     Facts fb = Party(0);
     fb.bossDeadNearSpot = true;
-    fb.othersNearPack = 3;
+    fb.nearPack = NearPackUnits(3);
     Tick(rb, fb);
     CHECK(rb.step == 1 && rb.note == "boss down");
 }
@@ -4153,6 +4185,7 @@ int main()
     TestUnreachableMoveDetours();
     TestPullGatherAndFight();
     TestOtherLiveMobNearPackBlocksCleared();
+    TestNearPackWaitIsBounded();
     TestNearPackReach();
     TestNoOthersNearPackLeavesClearedAlone();
     TestUnseenPackIsApproachedNotCleared();

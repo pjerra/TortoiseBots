@@ -27,9 +27,10 @@
 //   - walk in the plan's hops; before each hop, pull what stands near it, but
 //     never what a later pull or boss step owns (OwnedByLaterStep);
 //   - a pack or boss counts as done only when the lead bot stands within
-//     kSeeYd of it and no living, hostile unit of it is left; a pack also
-//     needs no other living hostile within its radius + kNearPackYd of its
-//     point (NearPack: any entry, in sight of the point, not a later step's);
+//     kSeeYd of it and no living, hostile unit of it is left; a pack with
+//     other living hostiles within its radius + kNearPackYd of its point
+//     (NearPack: any entry, in sight of the point, not a later step's) waits
+//     kNearPackWaitMs for them first, then carries on (it never stalls);
 //   - kWipeDead dead (or all dead) regroups by itself once the fight is over:
 //     revive, gather, then walk back over the plan's own move points (at most
 //     kAutoRegroupsPerStep times a step, then it pauses);
@@ -85,6 +86,7 @@ constexpr float kStalledArriveYd = 6.0f;          // ... or this close once it s
 constexpr float kSeeYd = 60.0f;                   // a pack, boss or spot is judged only from this close
 constexpr float kNearPackYd = 10.0f;              // "pack cleared" also needs no other hostile this far past its radius
 constexpr float kNearPackDz = 8.0f;               // ... and at most this far above or below its point (NearPack)
+constexpr std::uint32_t kNearPackWaitMs = 25000;  // ... is waited for this long at most, then the pack counts cleared
 constexpr float kApproachYd = 30.0f;              // an unseen pack is approached to this far from its centre
 constexpr float kApproachHopYd = 40.0f;           // ... in navmesh path hops of at most this length
 constexpr std::uint32_t kMaxApproachHops = 8;     // ... and at most this many without getting nearer, then pause
@@ -351,9 +353,10 @@ struct Facts
     // pull: other living hostile creatures near the pack (NearPack), of any
     // entry and not in `units`: attackable, not a critter, not passive, not
     // stealthed, in line of sight from the step's point, not passed or out of
-    // reach, not owned by a later step. "Pack cleared" needs 0 (#255: WC
-    // pull group 2 cleared in 1 s with four of its mobs alive).
-    std::uint32_t othersNearPack = 0;
+    // reach, not owned by a later step. "Pack cleared" waits for them at most
+    // kNearPackWaitMs (#255), then carries on. They are never pulled by the
+    // step: one that comes at the party is fought as any attacker is.
+    std::vector<UnitFact> nearPack;
     std::vector<UnitFact> hopUnits;     // move: living hostile units within kHopPullYd of the point, not owned by a later step
     // boss: a dead unit (corpse) of the boss's entry within the step's radius
     // plus kSeeYd of its point (a pullback drags him toward the party), or
@@ -493,6 +496,7 @@ struct Run
     std::unordered_set<std::uint64_t> passed;
     std::size_t openAtLastPull = 0;
     std::uint32_t fruitlessPulls = 0;
+    std::uint32_t nearPackWaitMs = 0; // a pull step: time waited for hostiles near the cleared pack (kNearPackWaitMs)
     std::uint32_t bossWaitMs = 0;   // a boss step: time at the spot with the boss neither alive nor dead in sight
     bool bossSeenAlive = false;     // a boss step: the boss was among the step's living units
     std::uint32_t walkBackPulls = 0; // pulls on the way of the walk back (not counted in `pulls`)
@@ -895,6 +899,7 @@ inline void ResetStep(Run& r)
     r.openAtLastPull = 0;
     r.fruitlessPulls = 0;
     r.bossWaitMs = 0;
+    r.nearPackWaitMs = 0;
     r.bossSeenAlive = false;
     r.walkBackPulls = 0;
     r.gatherOrder.clear();
@@ -2065,12 +2070,19 @@ inline const UnitFact* PickPull(const Run& r, const std::vector<UnitFact>& units
 }
 
 // A unit at (x,y,z) stands near a pack step for "pack cleared" (the glue's
-// Facts::othersNearPack): within its radius + kNearPackYd of its point and
+// Facts::nearPack): within its radius + kNearPackYd of its point and
 // at most kNearPackDz above or below it (another floor does not count).
 inline bool NearPack(const PlanStep& s, float x, float y, float z)
 {
     float const dz = z > s.z ? z - s.z : s.z - z;
     return dz <= kNearPackDz && ai::PlanDistance(x, y, z, s.x, s.y, s.z) <= s.radius + kNearPackYd;
+}
+
+// "N hostiles (first: entry E)" for the units near a pack (Facts::nearPack).
+inline std::string NearPackText(const std::vector<UnitFact>& units)
+{
+    return std::to_string(units.size()) + (units.size() == 1 ? " hostile" : " hostiles") +
+        (units.empty() ? std::string() : " (first: entry " + std::to_string(units.front().entry) + ")");
 }
 
 // Units the step still has to deal with: hostile, alive (the glue lists only
@@ -3001,13 +3013,15 @@ inline void FightStep(Run& r, const Facts& f, const PlanStep& s, const std::vect
     }
     else if (friendlyLeft)
         NextStep(r, what + " is friendly to this party: left alone");
-    else if (s.kind != PlanStepKind::Boss && f.othersNearPack > 0)
+    else if (s.kind != PlanStepKind::Boss && !f.nearPack.empty() && r.nearPackWaitMs < kNearPackWaitMs)
     {
-        // Not cleared while other living hostiles stand by the pack (#255):
-        // the step waits; its out-of-combat ceiling pauses the run.
-        r.note = "waiting: " + std::to_string(f.othersNearPack) +
-            " living hostile units near the pack (not of its entries or radius)";
+        // Other living hostiles stand by the pack (#255): wait a little for
+        // them (one that comes is fought), never longer than kNearPackWaitMs.
+        r.nearPackWaitMs += dt;
+        r.note = "waiting: " + NearPackText(f.nearPack) + " near the pack";
     }
+    else if (s.kind != PlanStepKind::Boss && !f.nearPack.empty())
+        NextStep(r, NearPackText(f.nearPack) + " left near pack, carrying on");
     else if (s.kind != PlanStepKind::Boss)
         NextStep(r, "pack cleared");
     else if (f.bossDeadNearSpot || (r.bossSeenAlive && f.bossDeadNearLead))
