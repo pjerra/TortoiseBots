@@ -3,6 +3,7 @@
 #include "Common.h"
 #include "PlayerLagWindow.h"
 #include "CommanderTelemetry.h"
+#include "DungeonMobTelemetry.h"
 #include <cstdint>
 #include <ctime>
 #include <map>
@@ -160,6 +161,10 @@ public:
     // once per snapshot cycle; the provider returns at once while none exists.
     void SetCommanderProvider(std::function<void(std::vector<CommanderTelemetry::BindingRef>&)> provider);
 
+    // The mobs of every dungeon run (issue #1101) for the dashboard's Dungeons tab, filled by the commands layer on the world
+    // thread once per snapshot cycle for the runs the emitter groups (see EmitDungeonMobs).
+    void SetDungeonMobProvider(std::function<void(std::vector<DungeonMobTelemetry::RunRef>&)> provider);
+
 private:
     ObservabilityEmitter();
     ~ObservabilityEmitter();
@@ -172,7 +177,27 @@ private:
     void PruneState(uint32 nowMs);
     bool AnomalyAllowed(uint32 guid, uint8 typeId, uint32 nowMs);
     void AddStateTime(size_t stateIndex, uint32 diff);
-    void EmitSnapshotCycle(std::vector<Player*> const& activeBots, uint32 diff);
+    void EmitSnapshotCycle(std::vector<Player*> const& activeBots, std::vector<Player*> const& onlinePlayers, uint32 diff);
+    // DUNGEON_MOBS datagrams (issue #1101): inside the snapshot cycle, before the roster batches, one entry per instance copy
+    // (dungeon or raid, not a battleground) holding at least one bot; one "runs":[] datagram when the last run ended. Nothing
+    // while AiPlayerbot.ObservabilityDungeonMobs is 0.
+    void EmitDungeonMobs(std::vector<Player*> const& bots, std::vector<Player*> const& players, uint64 seq);
+    std::function<void(std::vector<DungeonMobTelemetry::RunRef>&)> m_dungeonMobProvider;
+    std::vector<DungeonMobTelemetry::RunRef> m_dungeonRunRefs; // reused between cycles
+    bool m_dungeonMobsEnabled = true;
+    bool m_dungeonMobsSent = false;  // the last DUNGEON_MOBS datagram listed at least one run
+    size_t m_dungeonRunOffset = 0;   // rotation start when more than kMaxRunsPerCycle runs exist
+    // Timing aid for the live check: logged at TortoiseBots.LogLevel 3 (debug) once per 30 cycles (60 s).
+    struct DungeonMobsTiming
+    {
+        uint32 cycles = 0;
+        uint64 sumUs = 0;
+        uint64 maxUs = 0;
+        uint32 maxRuns = 0;
+        uint32 maxMobs = 0;
+        uint32 maxCandidates = 0;
+    };
+    DungeonMobsTiming m_dungeonMobsTiming;
     // COMMANDERS datagram: one per snapshot cycle while a binding stands, and
     // one empty list when the last binding ends. Nothing otherwise.
     void EmitCommanders();

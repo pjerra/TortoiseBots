@@ -365,6 +365,29 @@ inline std::string JsonEscape(std::string const& s)
     return out;
 }
 
+// One mob object as COMMANDERS and DUNGEON_MOBS write it. The stream must be set to fixed, precision 1 (both builders do).
+inline void AppendMobJson(std::ostringstream& ss, MobInfo const& m)
+{
+    ss << "{\"id\":\"" << m.id << "\",\"entry\":" << m.entry
+       << ",\"name\":\"" << JsonEscape(Clip(m.name, kMaxMobName)) << "\""
+       << ",\"hp\":" << m.hpPct
+       << ",\"x\":" << m.x << ",\"y\":" << m.y;
+    if (m.victim)
+        ss << ",\"victim\":\"" << m.victim << "\"";
+    ss << ",\"reaction\":\"" << (m.reaction == 'n' || m.reaction == 'f' ? m.reaction : 'h') << "\"";
+    if (m.kind == 'k' || m.kind == 'v' || m.kind == 'g' || m.kind == 'u')
+        ss << ",\"kind\":\"" << m.kind << "\"";
+    if (m.level)
+        ss << ",\"lvl\":" << m.level;
+    if (m.rank == 'b' || m.rank == 'e' || m.rank == 'r')
+        ss << ",\"rank\":\"" << m.rank << "\"";
+    if (m.cc == 's' || m.cc == 'c' || m.cc == 'f' || m.cc == 'r')
+        ss << ",\"cc\":\"" << m.cc << "\"";
+    if (!m.cast.empty())
+        ss << ",\"cast\":\"" << JsonEscape(Clip(m.cast, kMaxCastName)) << "\"";
+    ss << "}";
+}
+
 // The COMMANDERS datagram. An empty list is a valid payload: it tells the
 // daemon the last binding ended.
 inline std::string BuildPayload(int protocolVersion, uint64_t session, uint64_t seq, int64_t ts,
@@ -497,24 +520,7 @@ inline std::string BuildPayload(int protocolVersion, uint64_t session, uint64_t 
                 if (mobs++)
                     ss << ",";
                 ++mobsTotal;
-                ss << "{\"id\":\"" << m.id << "\",\"entry\":" << m.entry
-                   << ",\"name\":\"" << JsonEscape(Clip(m.name, kMaxMobName)) << "\""
-                   << ",\"hp\":" << m.hpPct
-                   << ",\"x\":" << m.x << ",\"y\":" << m.y;
-                if (m.victim)
-                    ss << ",\"victim\":\"" << m.victim << "\"";
-                ss << ",\"reaction\":\"" << (m.reaction == 'n' || m.reaction == 'f' ? m.reaction : 'h') << "\"";
-                if (m.kind == 'k' || m.kind == 'v' || m.kind == 'g' || m.kind == 'u')
-                    ss << ",\"kind\":\"" << m.kind << "\"";
-                if (m.level)
-                    ss << ",\"lvl\":" << m.level;
-                if (m.rank == 'b' || m.rank == 'e' || m.rank == 'r')
-                    ss << ",\"rank\":\"" << m.rank << "\"";
-                if (m.cc == 's' || m.cc == 'c' || m.cc == 'f' || m.cc == 'r')
-                    ss << ",\"cc\":\"" << m.cc << "\"";
-                if (!m.cast.empty())
-                    ss << ",\"cast\":\"" << JsonEscape(Clip(m.cast, kMaxCastName)) << "\"";
-                ss << "}";
+                AppendMobJson(ss, m);
             }
             ss << "]";
         }

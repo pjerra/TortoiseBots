@@ -10698,6 +10698,107 @@ void CollectCommanderTelemetry(std::vector<CommanderTelemetry::BindingRef>& out)
     CommanderOrderLog().Retain(bound);
 }
 
+// One unit as the Dungeons tab shows it (issue #1101): field reads on the unit and its template, the seeing member's reaction to
+// it. Unlike AddViewHostile it does not walk the unit's threat list (the dashboard does not use it).
+static void FillDungeonMob(Player* seer, Unit* unit, CommanderTelemetry::MobInfo& mob)
+{
+    mob.id = unit->GetObjectGuid().GetRawValue();
+    mob.entry = unit->GetEntry();
+    mob.name = unit->GetName();
+    mob.hpPct = unit->GetMaxHealth() ? static_cast<uint32>(unit->GetHealth() * 100ull / unit->GetMaxHealth()) : 0;
+    mob.x = unit->GetPositionX();
+    mob.y = unit->GetPositionY();
+    mob.victim = unit->GetTargetGuid().GetRawValue();
+    ReputationRank const reaction = seer->GetReactionTo(unit);
+    mob.reaction = reaction <= REP_HOSTILE ? 'h' : (reaction >= REP_FRIENDLY ? 'f' : 'n');
+    Creature* creature = unit->ToCreature();
+    bool const unattackable = unit->HasFlag(UNIT_FIELD_FLAGS,
+        UNIT_FLAG_SPAWNING | UNIT_FLAG_IMMUNE_TO_PLAYER | UNIT_FLAG_NON_ATTACKABLE_2);
+    mob.kind = unit->GetCreatureType() == CREATURE_TYPE_CRITTER ? 'k'
+        : creature && creature->IsCivilian() ? 'v'
+        : creature && creature->IsGuard() ? 'g'
+        : unattackable ? 'u' : 0;
+    mob.level = unit->GetLevel();
+    if (creature)
+        mob.rank = CommanderTelemetry::RankKind(creature->GetCreatureInfo()->rank,
+            creature->HasExtraFlag(CREATURE_FLAG_EXTRA_INSTANCE_BIND));
+    mob.cc = CommanderTelemetry::CcKind(unit->HasUnitState(UNIT_STAT_STUNNED), unit->HasUnitState(UNIT_STAT_CONFUSED),
+        unit->HasUnitState(UNIT_STAT_FLEEING), unit->HasUnitState(UNIT_STAT_ROOT));
+    if (uint32 const spellId = CurrentSpellId(unit))
+        mob.cast = SpellNameOf(spellId);
+}
+
+void CollectDungeonMobs(std::vector<DungeonMobTelemetry::RunRef>& runs)
+{
+    using namespace DungeonMobTelemetry;
+    // World thread only (the emitter's snapshot cycle, outside the map update): reused between runs and cycles.
+    static std::unordered_set<uint64> tried;
+    static std::list<ObjectGuid> cached;
+    for (RunRef& run : runs)
+    {
+        run.candidates.clear();
+        run.mobsReported = false;
+        bool inWorld = false;
+        for (Player* member : run.members)
+            inWorld = inWorld || (member && member->IsInWorld() && member->GetMap());
+        if (!inWorld)
+            continue;
+        run.mobsReported = true;
+        tried.clear();
+        size_t const budget = CandidateBudget(run.cap);
+        // A guid is resolved once per run, whoever lists it first (checked before the lookup, so a guid that 40 bots list or
+        // that was rejected costs one hash probe after the first).
+        auto consider = [&run](Player* seer, ObjectGuid guid, uint8 source)
+        {
+            if (guid.IsEmpty() || !tried.insert(guid.GetRawValue()).second)
+                return;
+            Unit* unit = SeenHostile(seer, guid);
+            if (!unit)
+                return;
+            Candidate candidate;
+            candidate.source = source;
+            FillDungeonMob(seer, unit, candidate.mob);
+            run.candidates.push_back(std::move(candidate));
+        };
+        auto usable = [](Player* member) { return member && member->IsInWorld() && member->IsAlive(); };
+        // What the members fight: victims and selections (real players too), then what attacks them.
+        for (Player* member : run.members)
+        {
+            if (!usable(member))
+                continue;
+            if (Unit* victim = member->GetVictim())
+                consider(member, victim->GetObjectGuid(), kFromSelection);
+            consider(member, member->GetTargetGuid(), kFromSelection);
+        }
+        for (Player* member : run.members)
+        {
+            if (!usable(member))
+                continue;
+            for (Unit* attacker : member->GetAttackers())
+                if (attacker)
+                    consider(member, attacker->GetObjectGuid(), kFromAttackers);
+            ReadCachedGuidList(PlayerbotAIStorage::Instance().GetAI(member), "attackers", cached);
+            for (ObjectGuid const& guid : cached)
+                consider(member, guid, kFromAttackers);
+        }
+        // Then what the sight readers see, until the candidate budget is reached (the pure layer picks and caps).
+        for (Player* reader : run.sightReaders)
+        {
+            if (run.candidates.size() >= budget)
+                break;
+            if (!usable(reader))
+                continue;
+            ReadCachedGuidList(PlayerbotAIStorage::Instance().GetAI(reader), "possible targets", cached);
+            for (ObjectGuid const& guid : cached)
+            {
+                if (run.candidates.size() >= budget)
+                    break;
+                consider(reader, guid, kFromSight);
+            }
+        }
+    }
+}
+
 bool IsCommandedBy(Player* commander, Player* bot)
 {
     if (!commander || !bot)

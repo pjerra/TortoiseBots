@@ -39,6 +39,7 @@
 #include "Battlegrounds/BattleGroundMgr.h"
 #include "Group/Group.h"
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <cstdlib>
@@ -533,6 +534,13 @@ void ObservabilityEmitter::Initialize()
     if (!m_enabled)
         return;
 
+    // Issue #1101: on by default; either config file can turn it off.
+    m_dungeonMobsEnabled = sPlayerbotAIConfig.observabilityDungeonMobs &&
+                           sConfig.GetBoolDefault("AiPlayerbot.ObservabilityDungeonMobs", true);
+    m_dungeonMobsSent = false;
+    m_dungeonRunOffset = 0;
+    m_dungeonMobsTiming = DungeonMobsTiming();
+
     m_port = sPlayerbotAIConfig.observabilityPort;
     if (m_port == 0)
         m_port = sConfig.GetIntDefault("AiPlayerbot.ObservabilityPort", 9195);
@@ -646,6 +654,11 @@ void ObservabilityEmitter::SetExternalRosterProvider(std::function<void(std::vec
 void ObservabilityEmitter::SetCommanderProvider(std::function<void(std::vector<CommanderTelemetry::BindingRef>&)> provider)
 {
     m_commanderProvider = std::move(provider);
+}
+
+void ObservabilityEmitter::SetDungeonMobProvider(std::function<void(std::vector<DungeonMobTelemetry::RunRef>&)> provider)
+{
+    m_dungeonMobProvider = std::move(provider);
 }
 
 void ObservabilityEmitter::SendDatagram(std::string const& payload)
@@ -1163,7 +1176,10 @@ void ObservabilityEmitter::Update(uint32 diff)
     }
 
     PruneState(nowMs);
-    EmitSnapshotCycle(activeBots, diff);
+    // One session walk per cycle: the roster and the dungeon runs share it.
+    std::vector<Player*> onlinePlayers;
+    CollectOnlinePlayers(onlinePlayers);
+    EmitSnapshotCycle(activeBots, onlinePlayers, diff);
     EmitCommanders();
 
     for (size_t i = 0; i < kArmoryBotsPerSnapshot && i < activeBots.size(); ++i)
@@ -1225,7 +1241,8 @@ void ObservabilityEmitter::WriteArmoryStats(Player* bot)
         bot->GetTotalAuraModifierByMiscValue(SPELL_AURA_MOD_POWER_REGEN, POWER_MANA));
 }
 
-void ObservabilityEmitter::EmitSnapshotCycle(std::vector<Player*> const& activeBots, uint32 diff)
+void ObservabilityEmitter::EmitSnapshotCycle(std::vector<Player*> const& activeBots, std::vector<Player*> const& onlinePlayers,
+                                             uint32 diff)
 {
     std::vector<BotTelemetrySnapshot> botSnapshots;
     botSnapshots.reserve(activeBots.size());
@@ -1273,17 +1290,13 @@ void ObservabilityEmitter::EmitSnapshotCycle(std::vector<Player*> const& activeB
     // details come from the roster, not from a separate feed. A player has
     // no AI, so bot-only detail stays empty and state reflects the visible
     // unit (combat, moving, resting, dead, else idle).
+    for (Player* player : onlinePlayers)
     {
-        std::vector<Player*> onlinePlayers;
-        CollectOnlinePlayers(onlinePlayers);
-        for (Player* player : onlinePlayers)
-        {
-            BotTelemetrySnapshot snap;
-            FillLiveUnitSnapshot(player, snap);
-            snap.isPlayer = true;
-            snap.state = MacroStateName(BaseMacroState(player, nullptr));
-            botSnapshots.push_back(snap);
-        }
+        BotTelemetrySnapshot snap;
+        FillLiveUnitSnapshot(player, snap);
+        snap.isPlayer = true;
+        snap.state = MacroStateName(BaseMacroState(player, nullptr));
+        botSnapshots.push_back(snap);
     }
 
     // Rolling window ratios: how bots spent the recent window, not all time.
@@ -1359,6 +1372,11 @@ void ObservabilityEmitter::EmitSnapshotCycle(std::vector<Player*> const& activeB
     // in when the last batch completes the cycle and publishes the roster.
     FlushBotEvents(seq);
 
+    // Mobs of every dungeon run (issue #1101), also before the batches: the
+    // dashboard joins them into the Dungeons view the browser fetches when
+    // the roster publishes, so they match the party's positions.
+    EmitDungeonMobs(activeBots, onlinePlayers, seq);
+
     // Chunked roster batches complete the cycle opened by the heartbeat.
     size_t totalBatches = (botSnapshots.size() + kBatchSize - 1) / kBatchSize;
     for (size_t bIdx = 0; bIdx < totalBatches; ++bIdx)
@@ -1421,6 +1439,149 @@ void ObservabilityEmitter::EmitSnapshotCycle(std::vector<Player*> const& activeB
         SendDatagram(bss.str());
     }
 }
+
+void ObservabilityEmitter::EmitDungeonMobs(std::vector<Player*> const& bots, std::vector<Player*> const& players, uint64 seq)
+{
+    namespace DMT = DungeonMobTelemetry;
+    if (!m_dungeonMobsEnabled || !m_dungeonMobProvider)
+        return;
+    auto const started = std::chrono::steady_clock::now();
+
+    // Group the roster by instance copy: field reads over the lists this cycle already walks. Ordered by (map, instance) so
+    // the rotation below is stable from cycle to cycle.
+    struct RunGroup
+    {
+        uint32 map = 0;
+        uint32 instance = 0;
+        bool raid = false;
+        size_t bots = 0;
+        std::vector<Player*> members;
+        std::vector<DMT::MemberInfo> infos;
+    };
+    std::map<std::pair<uint32, uint32>, RunGroup> groups;
+    std::unordered_set<uint32> listed; // a character listed twice (an external roster) counts once
+    auto add = [&](Player* unit, bool isBot)
+    {
+        if (!unit || !unit->IsInWorld() || unit->InBattleGround())
+            return;
+        Map* map = unit->GetMap();
+        if (!map || !map->IsDungeon() || map->GetInstanceId() == 0)
+            return;
+        if (!listed.insert(unit->GetGUIDLow()).second)
+            return;
+        RunGroup& group = groups[{ unit->GetMapId(), map->GetInstanceId() }];
+        group.map = unit->GetMapId();
+        group.instance = map->GetInstanceId();
+        group.raid = map->IsRaid();
+        if (isBot)
+            ++group.bots;
+        DMT::MemberInfo info;
+        info.guid = unit->GetGUIDLow();
+        info.id = unit->GetObjectGuid().GetRawValue();
+        // What it has selected, else what it fights: two field reads.
+        ::ObjectGuid target = unit->GetTargetGuid();
+        if (target.IsEmpty())
+            if (Unit* victim = unit->GetVictim())
+                target = victim->GetObjectGuid();
+        info.target = target.GetRawValue();
+        info.x = unit->GetPositionX();
+        info.y = unit->GetPositionY();
+        info.bot = isBot;
+        group.members.push_back(unit);
+        group.infos.push_back(info);
+    };
+    for (Player* bot : bots)
+        add(bot, true);
+    for (Player* player : players)
+        add(player, false);
+
+    std::vector<RunGroup*> live; // runs with at least one bot (the dashboard's rule)
+    for (auto& entry : groups)
+        if (entry.second.bots)
+            live.push_back(&entry.second);
+
+    if (live.empty())
+    {
+        if (m_dungeonMobsSent)
+            for (std::string const& payload : DMT::PackRuns(kProtocolVersion, m_sessionId, seq, time(nullptr), {}))
+                SendDatagram(payload); // the end marker, once
+        m_dungeonMobsSent = false;
+        m_dungeonRunOffset = 0;
+        return;
+    }
+
+    std::vector<size_t> const window = DMT::RotationWindow(live.size(), m_dungeonRunOffset);
+    if (live.size() > DMT::kMaxRunsPerCycle)
+        m_dungeonRunOffset = (m_dungeonRunOffset + DMT::kMaxRunsPerCycle) % live.size();
+    else
+        m_dungeonRunOffset = 0;
+
+    m_dungeonRunRefs.clear();
+    m_dungeonRunRefs.reserve(window.size());
+    for (size_t idx : window)
+    {
+        RunGroup& group = *live[idx];
+        // A raid run picks its sight readers tanks first: the role is read only there.
+        if (group.members.size() > DMT::kPartySize)
+            for (size_t i = 0; i < group.members.size(); ++i)
+                if (group.infos[i].bot)
+                    group.infos[i].tank = GetBotRole(group.members[i], GET_PLAYERBOT_AI(group.members[i])) == "tank";
+        DMT::RunRef ref;
+        ref.map = group.map;
+        ref.instance = group.instance;
+        ref.raid = group.raid;
+        ref.members = group.members;
+        for (size_t i : DMT::PickSightReaders(group.infos, seq + idx))
+            ref.sightReaders.push_back(group.members[i]);
+        ref.cap = DMT::PerRunCap(window.size(), group.members.size());
+        m_dungeonRunRefs.push_back(std::move(ref));
+    }
+
+    m_dungeonMobProvider(m_dungeonRunRefs);
+
+    std::vector<DMT::RunInfo> runs;
+    runs.reserve(m_dungeonRunRefs.size());
+    size_t candidates = 0, mobs = 0;
+    for (size_t r = 0; r < m_dungeonRunRefs.size(); ++r)
+    {
+        DMT::RunRef& ref = m_dungeonRunRefs[r];
+        DMT::RunInfo info;
+        info.map = ref.map;
+        info.instance = ref.instance;
+        info.raid = ref.raid;
+        info.members = live[window[r]]->infos;
+        info.mobsReported = ref.mobsReported;
+        candidates += ref.candidates.size();
+        if (ref.mobsReported)
+            info.mobsTotal = DMT::SelectMobs(ref.candidates, info.members, ref.cap, info.mobs);
+        mobs += info.mobs.size();
+        ref.members.clear(); // no Player* kept past this cycle
+        ref.sightReaders.clear();
+        ref.candidates.clear();
+        runs.push_back(std::move(info));
+    }
+    for (std::string const& payload : DMT::PackRuns(kProtocolVersion, m_sessionId, seq, time(nullptr), runs))
+        SendDatagram(payload);
+    m_dungeonMobsSent = true;
+
+    uint64 const us = static_cast<uint64>(std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - started).count());
+    DungeonMobsTiming& t = m_dungeonMobsTiming;
+    ++t.cycles;
+    t.sumUs += us;
+    t.maxUs = std::max(t.maxUs, us);
+    t.maxRuns = std::max<uint32>(t.maxRuns, static_cast<uint32>(live.size()));
+    t.maxMobs = std::max<uint32>(t.maxMobs, static_cast<uint32>(mobs));
+    t.maxCandidates = std::max<uint32>(t.maxCandidates, static_cast<uint32>(candidates));
+    if (t.cycles >= 30) // 60 s of 2 s cycles with a run live
+    {
+        TB_LOG_DEBUG("TortoiseBots: DUNGEON_MOBS over %u cycles: mean %llu us, max %llu us, max %u runs, %u mobs sent, %u candidates",
+            t.cycles, static_cast<unsigned long long>(t.sumUs / t.cycles), static_cast<unsigned long long>(t.maxUs),
+            t.maxRuns, t.maxMobs, t.maxCandidates);
+        t = DungeonMobsTiming();
+    }
+}
+
 void ObservabilityEmitter::EmitCommanders()
 {
     if (!m_commanderProvider)

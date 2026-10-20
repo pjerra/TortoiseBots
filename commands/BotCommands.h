@@ -5,6 +5,7 @@
 
 #include "../runtime/CommandedGroupQuery.h" // IsInCommandedGroup
 #include "../runtime/CommanderTelemetry.h"
+#include "../runtime/DungeonMobTelemetry.h"
 
 class ChatHandler;
 class Player;
@@ -32,6 +33,11 @@ void ClearRemoteCommanders();
 // commander, lead bot, bound bots and the commander's last orders. World
 // thread; read-only (nothing is settled or released); empty while none stands.
 void CollectCommanderTelemetry(std::vector<CommanderTelemetry::BindingRef>& out);
+// Issue #1101: the mobs of every dungeon run for the dashboard's Dungeons tab. The emitter hands over the runs (members, sight
+// readers, cap); this fills each run's candidates from what the members already hold (victims, selections, attackers, the
+// bots' cached "attackers" and the sight readers' cached "possible targets"), each guid resolved at most once per run, no grid
+// or world scan. World thread, once per 2 s snapshot cycle, outside the map update.
+void CollectDungeonMobs(std::vector<DungeonMobTelemetry::RunRef>& runs);
 // True when bot is in the group the commander is bound to: master-relative
 // conveniences (the summon out of a dungeon when the master leaves it) leave
 // such a bot with its lead bot.
