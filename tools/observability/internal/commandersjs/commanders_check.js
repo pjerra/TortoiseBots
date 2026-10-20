@@ -225,17 +225,60 @@ const L = { x: -1625, y: -2052.080078125, w: 1625 - 241.6699981689453, h: 2052.0
 const gp = C.project(2052.080078125 - 100, 1625 - 200); // 100 yd south and 200 yd east of the north-west corner
 assert.ok(Math.abs(gp.x - (L.x + 200)) < 1e-9 && Math.abs(gp.y - (L.y + 100)) < 1e-9);
 assert.ok(gp.x > L.x && gp.x < L.x + L.w && gp.y > L.y && gp.y < L.y + L.h);
-// picture layers from the daemon: only its own file urls and finite rectangles
-const okLayer = { name: "worldmap", source: "worldmap", url: "/api/v1/mapfiles/209.png", x: -1625, y: -2052, w: 1383, h: 923 };
-assert.deepStrictEqual(C.pictureLayers([okLayer, Object.assign({}, okLayer, { name: "navmesh", url: "/api/v1/mapfiles/209.navmesh.png" }),
-  Object.assign({}, okLayer, { name: "2f", url: "/api/v1/mapfiles/189.worldmap-2f.png" })]).map((l) => l.name), ["worldmap", "navmesh", "2f"]);
+// picture slots from the daemon: an available one needs a daemon file url and a finite rectangle, a missing one keeps its label and reason
+const okLayer = { kind: "worldmap", floor: "", label: "World map", name: "worldmap", source: "worldmap", available: true,
+  url: "/api/v1/mapfiles/209.png", x: -1625, y: -2052, w: 1383, h: 923 };
+const missingMinimap = { kind: "minimap", floor: "", label: "Minimap", name: "minimap", available: false, reason: "No minimap picture: indoor dungeon" };
+const navLayer = Object.assign({}, okLayer, { kind: "navmesh", label: "Navmesh", name: "navmesh", url: "/api/v1/mapfiles/209.navmesh.png" });
+let slots = C.pictureSlots([okLayer, missingMinimap, navLayer]);
+assert.deepStrictEqual(slots.map((s) => s.key), ["worldmap", "minimap", "navmesh"]);
+assert.deepStrictEqual(slots.map((s) => s.available), [true, false, true]);
+assert.strictEqual(slots[1].reason, "No minimap picture: indoor dungeon");
+assert.strictEqual(slots[1].url, undefined);
+// the order is the ZF one whatever order the answer came in, and a floor sits right after its main picture
+const floor3f = Object.assign({}, okLayer, { floor: "3f", label: "World map 3f", name: "worldmap 3f", url: "/api/v1/mapfiles/189.worldmap-3f.png" });
+const floor2f = Object.assign({}, okLayer, { floor: "2f", label: "World map 2f", name: "worldmap 2f", url: "/api/v1/mapfiles/189.worldmap-2f.png" });
+const floor10f = Object.assign({}, okLayer, { floor: "10f", label: "World map 10f", name: "worldmap 10f", url: "/api/v1/mapfiles/189.worldmap-10f.png" });
+// floors sort by number: 10f comes after 3f, not between 1f and 2f
+assert.deepStrictEqual(C.pictureSlots([navLayer, floor10f, floor3f, missingMinimap, okLayer, floor2f]).map((s) => s.key),
+  ["worldmap", "worldmap 2f", "worldmap 3f", "worldmap 10f", "minimap", "navmesh"]);
+// duplicates keep the first; a kind that is not one of the three is dropped
+assert.strictEqual(C.pictureSlots([okLayer, Object.assign({}, okLayer, { label: "second" })]).length, 1);
+assert.deepStrictEqual(C.pictureSlots([Object.assign({}, okLayer, { kind: "zone" })]), []);
+// a bad url or rectangle on an available entry drops it
 [ "http://evil.example/x.png", "/api/v1/mapfiles/../../etc/passwd.png", "/api/v1/mapfiles/209.json", "javascript:alert(1)", "/api/v1/mapfiles/209.png\"onload=\"x", "", 5 ]
-  .forEach((u) => assert.deepStrictEqual(C.pictureLayers([Object.assign({}, okLayer, { url: u })]), [], String(u)));
-assert.deepStrictEqual(C.pictureLayers([Object.assign({}, okLayer, { w: NaN })]), []);
-assert.deepStrictEqual(C.pictureLayers([Object.assign({}, okLayer, { w: 0 })]), []);
-assert.deepStrictEqual(C.pictureLayers([Object.assign({}, okLayer, { x: "1" })]), []);
-assert.deepStrictEqual(C.pictureLayers(null), []); assert.deepStrictEqual(C.pictureLayers([null, 3]), []);
-assert.strictEqual(C.pictureLayers([Object.assign({}, okLayer, { name: "x".repeat(100) })])[0].name.length, 40);
+  .forEach((u) => assert.deepStrictEqual(C.pictureSlots([Object.assign({}, okLayer, { url: u })]), [], String(u)));
+assert.deepStrictEqual(C.pictureSlots([Object.assign({}, okLayer, { w: NaN })]), []);
+assert.deepStrictEqual(C.pictureSlots([Object.assign({}, okLayer, { w: 0 })]), []);
+assert.deepStrictEqual(C.pictureSlots([Object.assign({}, okLayer, { x: "1" })]), []);
+assert.deepStrictEqual(C.pictureSlots(null), []); assert.deepStrictEqual(C.pictureSlots([null, 3]), []);
+assert.strictEqual(C.pictureSlots([Object.assign({}, okLayer, { label: "x".repeat(100) })])[0].label.length, 40);
+// a stored choice of a missing kind falls back to the first available slot and says why; a stored available one is kept
+assert.strictEqual(C.pictureChoice(slots, "minimap").slot.key, "worldmap");
+assert.strictEqual(C.pictureChoice(slots, "minimap").missing.reason, "No minimap picture: indoor dungeon");
+assert.strictEqual(C.pictureChoice(slots, "navmesh").slot.key, "navmesh");
+assert.strictEqual(C.pictureChoice(slots, "gone").slot.key, "worldmap");
+assert.strictEqual(C.pictureChoice(slots, "gone").missing, null);
+assert.strictEqual(C.pictureChoice([missingMinimap], "minimap").slot, null);
+// the picker: hidden with nothing available; options for all slots, a missing one disabled with "(none)" and its reason as title
+assert.deepStrictEqual(C.pictureSelect(C.pictureSlots([missingMinimap]), "minimap"), { hidden: true, value: "", reason: "",
+  options: [{ value: "minimap", label: "Minimap (none)", disabled: true, title: "No minimap picture: indoor dungeon" }] });
+let oneAvail = C.pictureSelect(C.pictureSlots([missingMinimap, okLayer]), "");
+assert.strictEqual(oneAvail.hidden, false); assert.strictEqual(oneAvail.value, "worldmap");
+assert.deepStrictEqual(oneAvail.options.map((o) => [o.value, o.disabled]), [["worldmap", false], ["minimap", true]]);
+let threeAvail = C.pictureSelect(slots, "");
+assert.strictEqual(threeAvail.hidden, false); assert.strictEqual(threeAvail.value, "worldmap");
+assert.deepStrictEqual(threeAvail.options.map((o) => o.label), ["World map", "Minimap (none)", "Navmesh"]);
+assert.strictEqual(threeAvail.options[1].title, "No minimap picture: indoor dungeon");
+assert.strictEqual(threeAvail.reason, "", "no stored choice, so no reason line");
+assert.strictEqual(C.pictureSelect(slots, "minimap").reason, "No minimap picture: indoor dungeon");
+assert.strictEqual(C.pictureSelect(slots, "minimap").value, "worldmap");
+// how long a picture list may be kept: no picture at all 30 s (the extractor may have run since), some missing 5 min, complete never
+assert.strictEqual(C.pictureRefreshAfter([]), C.PIC_RETRY_MS);
+assert.strictEqual(C.pictureRefreshAfter(null), C.PIC_RETRY_MS);
+assert.strictEqual(C.pictureRefreshAfter([missingMinimap]), C.PIC_RETRY_MS, "no available picture: look again soon");
+assert.strictEqual(C.pictureRefreshAfter(slots), C.PIC_MISSING_MS, "one missing picture: look again now and then");
+assert.strictEqual(C.pictureRefreshAfter([okLayer]), null, "a complete list is never asked for again");
 
 // ---- zooming while following: the party stays in the middle, only the scale changes
 {

@@ -109,25 +109,36 @@ func (s *Store) noteDungeonsLocked(bots []model.BotSnapshot, now time.Time) {
 
 // dungeonMember trims one roster row to what the Dungeons tab shows.
 func dungeonMember(b model.BotSnapshot) model.DungeonMember {
+	// Power rides along only when the roster row reports one (issue #1112):
+	// a module older than the power fields sends max_power 0, and a class
+	// with no resource does too. The pointers then stay nil, so the member
+	// JSON has no power keys and the tab draws no bar instead of an empty one.
+	var power, maxPower *uint32
+	if b.MaxPower > 0 {
+		power, maxPower = &b.Power, &b.MaxPower
+	}
 	return model.DungeonMember{
-		Name:     b.Name,
-		GUID:     b.GUID,
-		Player:   b.Player,
-		Kind:     b.Kind,
-		Class:    b.Class,
-		Role:     b.Role,
-		Level:    b.Level,
-		HP:       b.HP,
-		MaxHP:    b.MaxHP,
-		Dead:     dungeonMemberDead(b),
-		SubGroup: b.SubGroup,
-		State:    b.State,
-		MapID:    b.MapID,
-		Zone:     b.ZoneID,
-		X:        b.X,
-		Y:        b.Y,
-		Z:        b.Z,
-		O:        b.O,
+		Name:      b.Name,
+		GUID:      b.GUID,
+		Player:    b.Player,
+		Kind:      b.Kind,
+		Class:     b.Class,
+		Role:      b.Role,
+		Level:     b.Level,
+		HP:        b.HP,
+		MaxHP:     b.MaxHP,
+		Power:     power,
+		MaxPower:  maxPower,
+		PowerType: b.PowerType,
+		Dead:      dungeonMemberDead(b),
+		SubGroup:  b.SubGroup,
+		State:     b.State,
+		MapID:     b.MapID,
+		Zone:      b.ZoneID,
+		X:         b.X,
+		Y:         b.Y,
+		Z:         b.Z,
+		O:         b.O,
 	}
 }
 
@@ -150,6 +161,10 @@ func sortRunMembers(members []model.DungeonMember) {
 // Dungeons builds the view behind GET /api/v1/dungeons: the current runs
 // with their members and first-seen ages.
 func (s *Store) Dungeons() model.DungeonsView {
+	// Copy the fresh mob entries first: the mobs mutex is never taken while
+	// the roster lock is held.
+	mobs := s.freshDungeonMobs()
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -203,6 +218,13 @@ func (s *Store) Dungeons() model.DungeonsView {
 		}
 		sortRunMembers(run.Members)
 		runs = append(runs, run)
+	}
+
+	// Match the mob entries onto the runs only now that every run is known:
+	// the roster may report no instance (a module base without #895), where
+	// the match needs the members, and ambiguity is judged per entry.
+	for i, e := range matchDungeonMobs(runs, mobs) {
+		joinDungeonMobs(&runs[i], e)
 	}
 
 	return model.DungeonsView{Runs: runs, GeneratedAt: now.Unix(), StaleModule: staleModule}

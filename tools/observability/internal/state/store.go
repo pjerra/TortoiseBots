@@ -135,6 +135,11 @@ type Store struct {
 	// cleared on a session change, like the roster it derives from.
 	dungeonSeen map[string]time.Time
 
+	// dungeonMobs is the newest DUNGEON_MOBS payload per run (dungeon_mobs.go,
+	// issue #1101): the mobs, member ids and targets the Dungeons tab maps
+	// draw. Its own lock, like commanders; cleared with the session.
+	dungeonMobs dungeonMobsState
+
 	// Activity rollup fed by the BOT_EVENTS datagrams: per-bot counters plus
 	// the pool-wide loot/quest/level feeds. Cleared with the roster.
 	activity  map[uint32]*botActivityState
@@ -187,6 +192,7 @@ func New(cfg Config, anomalies *ringbuf.RingBuffer) *Store {
 		xpTracks:  make(map[uint32]*xpTrack),
 		activity:  make(map[uint32]*botActivityState),
 		gear:      make(map[uint32]model.BotGear),
+		dungeonMobs: dungeonMobsState{runs: make(map[string]dungeonMobsEntry)},
 	}
 }
 

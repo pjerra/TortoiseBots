@@ -88,7 +88,7 @@ func TestDungeonsJS(t *testing.T) {
 		t.Skip("node is not installed")
 	}
 	out, err := exec.Command(node, "dungeons_check.js",
-		"../../web/static/js/commanders.js", "../../web/static/js/dungeons.js").CombinedOutput()
+		"../../web/static/js/commanders.js", "../../web/static/js/dungeons.js", "../../web/static/js/maplayers.js").CombinedOutput()
 	if err != nil {
 		t.Fatalf("dungeons_check.js failed: %v\n%s", err, out)
 	}

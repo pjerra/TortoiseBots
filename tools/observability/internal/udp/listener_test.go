@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	zoneproject "tortoise-observability/internal/map"
+	"tortoise-observability/internal/metrics"
 	"tortoise-observability/internal/model"
 	"tortoise-observability/internal/ringbuf"
 	"tortoise-observability/internal/state"
@@ -21,10 +23,18 @@ func (h *recordingHub) Broadcast(event string, payload interface{}) {
 	h.last = payload
 }
 
+// testMetrics is one registry for every listener test: metrics.New registers
+// on the process-wide Prometheus registry, so a second call would panic.
+var testMetrics = metrics.New()
+
 func newTestListener() (*Listener, *state.Store, *recordingHub) {
 	store := state.New(state.Config{RosterTTL: 30 * time.Second}, ringbuf.New(16))
+	zp, err := zoneproject.New([]byte(`{}`))
+	if err != nil {
+		panic(err)
+	}
 	hub := &recordingHub{}
-	return NewListener("127.0.0.1", 0, store, nil, nil, hub), store, hub
+	return NewListener("127.0.0.1", 0, store, testMetrics, zp, hub), store, hub
 }
 
 // The datagram text is what the module's CommanderTelemetry::BuildPayload writes
@@ -149,5 +159,49 @@ func TestCommandersEmptyMobListIsReported(t *testing.T) {
 	out, _ := json.Marshal(store.Commanders().Commanders[0])
 	if !strings.Contains(string(out), `"mobs":[]`) {
 		t.Fatalf("shape: %s", out)
+	}
+}
+
+// DUNGEON_MOBS (issue #1101): the type reaches the store and joins the run in
+// /api/v1/dungeons, and the datagram is not pushed on the stream (the browser
+// refetches the view on the snapshot broadcast). An unknown type still goes
+// nowhere.
+func TestDungeonMobsDatagramJoinsTheDungeonsView(t *testing.T) {
+	l, store, hub := newTestListener()
+	l.processPacket([]byte(`{"v":12,"session":77,"seq":1,"ts":1791990000,"type":"BOT_BATCH","batch_index":0,"total_batches":1,"bots":[
+		{"name":"Tank","guid":1,"class":"warrior","role":"tank","level":46,"hp":100,"max_hp":100,"map":409,"instance":13,"zone":2437,"x":1,"y":2,"z":3,"state":"combat"}]}`))
+	if view := store.Dungeons(); len(view.Runs) != 1 || view.Runs[0].Key != "409:13" {
+		t.Fatalf("roster run: %+v", view.Runs)
+	}
+	events := len(hub.events)
+
+	l.processPacket([]byte(`{"v":12,"session":77,"seq":2,"ts":1791990002,"type":"DUNGEON_MOBS","part":0,"parts":1,"runs":[
+		{"map":409,"instance":13,"raid":false,"members":[{"guid":1,"id":"10844","target":"17379391094613082370"}],
+		 "mobs_map":409,"mobs_total":57,"mobs":[
+			{"id":"17379391094613082370","entry":4863,"name":"Stonevault Rockchewer","hp":85,"x":1230.5,"y":850,"victim":"10844","reaction":"h"},
+			{"id":"17379391094613082371","entry":4000,"name":"Rat","hp":100,"x":1240,"y":851,"reaction":"n","kind":"k"}]}]}`))
+	if len(hub.events) != events {
+		t.Fatalf("DUNGEON_MOBS must not push a stream event: %v", hub.events)
+	}
+	view := store.Dungeons()
+	run := view.Runs[0]
+	if run.Mobs == nil || len(*run.Mobs) != 2 || run.MobsMap == nil || *run.MobsMap != 409 || run.MobsTotal != 57 {
+		t.Fatalf("mobs not joined: %+v", run)
+	}
+	if run.Members[0].ID != "10844" || run.Members[0].Target != "17379391094613082370" {
+		t.Fatalf("member id/target: %+v", run.Members[0])
+	}
+	if m := (*run.Mobs)[0]; m.ID != "17379391094613082370" || m.Victim != "10844" || m.Reaction != "h" {
+		t.Fatalf("mob: %+v", m)
+	}
+
+	// Garbage and an unknown type change nothing and push nothing.
+	l.processPacket([]byte(`{"v":12,"type":"DUNGEON_MOBS","runs":"nope"}`))
+	l.processPacket([]byte(`{"v":12,"session":77,"seq":3,"type":"DUNGEON_MOBS_OLD","runs":[]}`))
+	if len(hub.events) != events {
+		t.Fatalf("unknown/garbage pushed: %v", hub.events)
+	}
+	if got := store.Dungeons().Runs[0]; got.Mobs == nil || len(*got.Mobs) != 2 {
+		t.Fatalf("last good datagram lost: %+v", got)
 	}
 }

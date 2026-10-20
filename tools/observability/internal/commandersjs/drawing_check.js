@@ -22,24 +22,27 @@ function grabConst(name) {
 }
 const ctx = { console };
 vm.createContext(ctx);
-["commanders.js", "maplayers.js", "unitinfo.js", "paths.js"].forEach((f) => vm.runInContext(fs.readFileSync(path.join(dir, f), "utf8"), ctx, { filename: f }));
+["commanders.js", "maplayers.js", "unitinfo.js", "paths.js", "demo.js"].forEach((f) => vm.runInContext(fs.readFileSync(path.join(dir, f), "utf8"), ctx, { filename: f }));
 vm.runInContext(
   [grab("esc"), grabConst("CMD_MAP_ICONS"), grabConst("CMD_OBJECT_ICON"), grab("cmdMapIcon"), grab("cmdLineStyle"), grabConst("cmdPt"), grabConst("CMD_TRAIL_MARKS"), grab("cmdTrailSvg"),
-    grab("cmdMemberTrailsSvg"), grab("cmdRunStepsSvg"), grab("cmdStallsSvg"), grab("cmdObjectsSvg"), grab("cmdLineSvg")].join("\n") +
-  "\nvar cmdLayers = MapLayers.defaults(); var cmdTrails = CmdPaths.newTrails();", ctx);
+    grab("cmdMemberTrailsSvg"), grab("cmdRunStepsSvg"), grab("cmdStallsSvg"), grab("cmdObjectsSvg"), grab("cmdLineSvg"), grab("cmdCombatLinesSvg"), grab("cmdMapFacts")].join("\n") +
+  "\nvar cmdLayers = MapLayers.defaults(); var cmdTrails = CmdPaths.newTrails();" +
+  "\nvar cmdTracker = CmdView.newTracker(); var cmdEvents = UnitInfo.newEvents(); var cmdStalls = CmdPaths.newStalls();" +
+  "\nvar state = { dungeons: { runs: [] } }; var ZONE_BOUNDS = null;" +
+  "\nfunction ensureCmdPics() { return undefined; } function cmdZoneRect() { return null; } function cmdNowFor() { return 1000; }", ctx);
 
 const f = (n) => n.toFixed(2);
 const mk = () => ({ f, k: 0.5, units: {} });
 const EVIL = '<img src=x onerror=alert(1)>"&';
 
 // ---- line style: thickness and opacity from the panel
-vm.runInContext('cmdLayers = MapLayers.setStyle(MapLayers.setStyle(cmdLayers, "trail", "th", 200), "trail", "op", 50);', ctx);
-assert.strictEqual(vm.runInContext('cmdLineStyle("trail", 3, 0.8)', ctx), "stroke-width:6.00px;opacity:0.40");
+vm.runInContext('cmdLayers = MapLayers.setStyle(MapLayers.setStyle(cmdLayers, "leadpath", "th", 200), "leadpath", "op", 50);', ctx);
+assert.strictEqual(vm.runInContext('cmdLineStyle("leadpath", 3, 0.8)', ctx), "stroke-width:6.00px;opacity:0.40");
 assert.strictEqual(vm.runInContext('cmdLineStyle("grid", 3)', ctx), "stroke-width:3.00px;opacity:1.00", "a layer without a style is drawn as normal");
 
 // ---- trails
 ctx.pts = []; for (let i = 0; i < 30; i++) ctx.pts.push([i * 5, 0, 100 + i]);
-const lead = vm.runInContext('(function(){ var c = ' + JSON.stringify({}) + '; return cmdTrailSvg(' + 'ctx0' + ', "trail", "trail", pts, 1, 3); })', Object.assign(ctx, { ctx0: mk() }));
+const lead = vm.runInContext('(function(){ var c = ' + JSON.stringify({}) + '; return cmdTrailSvg(' + 'ctx0' + ', "leadpath", "trail", pts, 1, 3); })', Object.assign(ctx, { ctx0: mk() }));
 const svg1 = lead();
 assert.ok(/<polyline class="trail" style="stroke-width:6\.00px;opacity:[0-9.]+"/.test(svg1), svg1.slice(0, 200));
 assert.ok((svg1.match(/<polyline/g) || []).length >= 2, "fading chunks");
@@ -103,18 +106,77 @@ assert.ok(/ic-chest/.test(os) && /ic-door/.test(os) && /ic-gong/.test(os) && /ic
 assert.ok(/class="obj st-u"/.test(os) && /class="obj st-a"/.test(os) && /class="obj st-r"/.test(os), "state classes");
 assert.strictEqual(Object.keys(ctx.dc.units).length, 5);
 
-// ---- combat lines
+// ---- combat lines: the three action-line drawings share one style key, actionlines
 ctx.dc = mk();
-vm.runInContext('cmdLayers = MapLayers.setStyle(MapLayers.defaults(), "healline", "th", 300);', ctx);
-const ln = vm.runInContext('cmdLineSvg(dc, "healline", "healline", {x: 1, y: 2}, {x: 3, y: 4}, 0.9)', ctx);
-assert.ok(/<line class="healline" style="stroke-width:4\.80px;opacity:0\.90" x1="-2\.00" y1="-1\.00" x2="-4\.00" y2="-3\.00"\/>/.test(ln), ln);
+vm.runInContext('cmdLayers = MapLayers.setStyle(MapLayers.setStyle(MapLayers.defaults(), "actionlines", "th", 200), "actionlines", "op", 50);', ctx);
+const ln = vm.runInContext('cmdLineSvg(dc, "actionlines", "healline", {x: 1, y: 2}, {x: 3, y: 4}, 0.9)', ctx);
+assert.ok(/<line class="healline" style="stroke-width:3\.20px;opacity:0\.45" x1="-2\.00" y1="-1\.00" x2="-4\.00" y2="-3\.00"\/>/.test(ln), ln);
+ctx.clBots = [
+  { name: "T", id: "1", alive: true, role: "tank", x: 0, y: 0, target: "9" },
+  { name: "H", id: "2", alive: true, role: "healer", x: 1, y: 1, cast: "Heal", ctgt: "1" },
+  { name: "M", id: "3", alive: true, x: 2, y: 2, cast: "Polymorph", ctgt: "9" },
+];
+ctx.clMobs = [{ id: "9", name: "Mob", x: 3, y: 3, reaction: "h", cc: "c" }];
+ctx.dc = mk();
+const cl = vm.runInContext("cmdCombatLinesSvg(dc, { bottarget: true, healline: true, ccline: true }, clBots, clMobs)", ctx);
+assert.ok(/class="bottarget"/.test(cl) && /class="healline"/.test(cl) && /class="ccline"/.test(cl), cl);
+assert.strictEqual((cl.match(/stroke-width:3\.00px;opacity:0\.45/g) || []).length, 1, "the bot-target line uses the actionlines style");
+assert.strictEqual((cl.match(/stroke-width:3\.20px;opacity:0\.45/g) || []).length, 2, "heal and crowd-control lines too");
+assert.strictEqual(vm.runInContext("cmdCombatLinesSvg(dc, {}, clBots, clMobs)", ctx), "", "no layer on, no lines");
+
+// ---- cmdMapFacts: a Commanders card unions its run's DUNGEON_MOBS list (map + shared bot) with the feed
+ctx.umRuns = [{ key: "70:1", map: 70, instance: 1, members: [{ name: "A", guid: 1 }], mobs_map: 70, mobs_total: 30,
+  mobs: [{ id: "1", name: "Run Name", reaction: "h", x: 5, y: 5 }, { id: "2", name: "Extra", reaction: "h", x: 6, y: 6 },
+    { id: "3", name: "Neutral", reaction: "n", x: 7, y: 7 }] }];
+ctx.umBind = { commander: "C", lead: "A", bots: [{ name: "A", guid: 1, map: 70, x: 0, y: 0, role: "tank", id: "1", alive: true }],
+  mobs_map: 70, mobs: [{ id: "1", name: "Feed Name", reaction: "h", x: 1, y: 1, victim: "1" }] };
+vm.runInContext("state.dungeons.runs = umRuns;", ctx);
+const um = vm.runInContext("cmdMapFacts(umBind)", ctx);
+assert.strictEqual(um.mobs.map((m) => m.id).join(","), "1,2,3", "the union by guid");
+assert.strictEqual(um.mobs[0].name, "Feed Name", "the commander feed wins the conflict");
+assert.strictEqual(um.mobsTotal, 30);
+assert.strictEqual(vm.runInContext("MapLayers.enemiesText(cmdMapFacts(umBind).mobs.length, cmdMapFacts(umBind).mobsTotal)", ctx), "3 of 30 enemies shown");
+// no matching run: the feed only, no cap note
+ctx.umOther = { commander: "C2", lead: "Z", bots: [{ name: "Z", guid: 50, map: 70, x: 0, y: 0, role: "tank", id: "50", alive: true }],
+  mobs_map: 70, mobs: [{ id: "9", name: "Feed only", reaction: "h", x: 1, y: 1 }] };
+const noRun = vm.runInContext("cmdMapFacts(umOther)", ctx);
+assert.strictEqual(noRun.mobs.map((m) => m.id).join(","), "9", "no shared bot, no union");
+assert.strictEqual(noRun.mobsTotal, 0);
+assert.strictEqual(vm.runInContext("MapLayers.enemiesText(cmdMapFacts(umOther).mobs.length, cmdMapFacts(umOther).mobsTotal)", ctx), "",
+  "without a run there is no total to compare: no N of M note");
+// ---- the picture slots: the Map picture layer is about a PICTURE, not a list (an all-missing answer must grey it)
+ctx.noPic = [{ kind: "worldmap", floor: "", label: "World map", available: false, reason: "no world map" },
+  { kind: "minimap", floor: "", label: "Minimap", available: false, reason: "no minimap" },
+  { kind: "navmesh", floor: "", label: "Navmesh", available: false, reason: "no navmesh" }];
+ctx.onePic = [Object.assign({}, ctx.noPic[0], { available: true, url: "/api/v1/mapfiles/70.png", x: 0, y: 0, w: 10, h: 10 }),
+  ctx.noPic[1], ctx.noPic[2]];
+vm.runInContext("state.commanders = { realMaps: true }; ensureCmdPics = () => CmdView.pictureSlots(noPic);", ctx);
+const noPic = vm.runInContext("cmdMapFacts(umOther)", ctx);
+assert.strictEqual(noPic.ctx.picture, false, "three missing slots are no picture (a slots.length check would be wrong)");
+assert.strictEqual(noPic.ctx.pictureWhy, "No picture of this map in the map folder");
+vm.runInContext("ensureCmdPics = () => CmdView.pictureSlots(onePic);", ctx);
+assert.strictEqual(vm.runInContext("cmdMapFacts(umOther).ctx.picture", ctx), true, "one available slot is a picture");
+assert.strictEqual(vm.runInContext("cmdMapFacts(umOther).ctx.pictureWhy", ctx), "", "and needs no reason");
+// the demo card gets its made-up slots only while the daemon has a map folder (its URLs are the daemon's files)
+ctx.demoBind = { commander: "DEMO", demo: true, lead: "Simtank", bots: [{ name: "Simtank", guid: 9001, map: 70, x: 0, y: 0, role: "tank", alive: true }], orders: [] };
+vm.runInContext("state.commanders = { realMaps: false };", ctx);
+assert.strictEqual(vm.runInContext("cmdMapFacts(demoBind).ctx.picture", ctx), false, "no map folder, no demo picture");
+vm.runInContext("state.commanders = { realMaps: true };", ctx);
+assert.strictEqual(vm.runInContext("cmdMapFacts(demoBind).ctx.picture", ctx), true, "with a map folder the demo draws its own slots");
+// ---- asking again: a stale list is refreshed behind what is on screen (no loading state over an existing list) and only an empty
+// answer replaces it; a failed refresh never throws away a list
+const picsFn = (() => { const i = src.indexOf("  function ensureCmdPics("); assert.ok(i > 0, "ensureCmdPics"); return src.slice(i, src.indexOf("\n  }\n", i)); })();
+assert.ok(/CmdView\.pictureRefreshAfter\(have\)/.test(picsFn), "the retry interval comes from the slots (30 s none, 5 min partial, never complete)");
+assert.ok(/if \(!cmdPics\.has\(mapId\)\) cmdPics\.set\(mapId, 'loading'\);/.test(picsFn), "only the first ask sets the loading state");
+assert.ok(/if \(have === 'loading'\) return have;/.test(picsFn), "an answer in flight is not asked for again");
+assert.ok(/if \(!Array\.isArray\(cmdPics\.get\(mapId\)\)\) cmdPics\.set\(mapId, null\);/.test(picsFn), "a failed refresh keeps a list on screen");
 
 // ---- a path with a teleport is drawn in pieces, with a swirl where it broke and a skull where the bot died
 {
   vm.runInContext('cmdLayers = MapLayers.defaults();', ctx);
   ctx.tpts = [[0, 0, 100], [10, 0, 102], [20, 0, 104], [800, 0, 106, "t"], [810, 0, 108], [820, 0, 110, "d"], [830, 0, 112]];
   ctx.dc = mk();
-  const svg = vm.runInContext('cmdTrailSvg(dc, "trail", "trail", tpts, 1, 3)', ctx);
+  const svg = vm.runInContext('cmdTrailSvg(dc, "leadpath", "trail", tpts, 1, 3)', ctx);
   const lines = (svg.match(/points="[^"]+"/g) || []).map((m) => m.slice(8, -1).split(" ").map((p) => Number(p.split(",")[1]) * -1)); // game x of each vertex
   assert.ok(lines.length >= 2, "pieces");
   lines.forEach((xs) => assert.ok(!(Math.min(...xs) <= 20 && Math.max(...xs) >= 800), "one polyline runs from before the teleport to after it: " + xs));
@@ -123,7 +185,7 @@ assert.ok(/<line class="healline" style="stroke-width:4\.80px;opacity:0\.90" x1=
   assert.strictEqual((svg.match(/ic-skull/g) || []).length, 1, "one skull where it died");
   assert.ok(/Teleported or summoned here/.test(svg) && /Died here/.test(svg), "with a hover text");
   ctx.tpts = [[0, 0, 1], [10, 0, 2], [20, 0, 3]];
-  const plain = vm.runInContext('cmdTrailSvg(dc, "trail", "trail", tpts, 1, 3)', ctx);
+  const plain = vm.runInContext('cmdTrailSvg(dc, "leadpath", "trail", tpts, 1, 3)', ctx);
   assert.ok(!/ic-swirl|ic-skull/.test(plain), "no marks on a plain walk");
 }
 console.log("drawing ok");

@@ -43,6 +43,17 @@ assert.ok(/simulated/i.test(D.COMMANDER), "labelled as simulated");
 same(D.frame(1000 + D.LOOP, 1000).bots.map((b) => b.x), b0.bots.map((b) => b.x), "the loop repeats exactly");
 D.frame(5, 1000); // a clock before the start is fine
 
+// the demo card's picture slots: the reference Zul'Farrak layout with all three pictures, and Uldaman's (no minimap picture)
+const demoZF = V.pictureSlots(D.pictures(209)), demoUl = V.pictureSlots(D.pictures(70));
+assert.strictEqual(demoZF.length, 3);
+same(demoZF.map((s) => s.available), [true, true, true], "the ZF demo list has all three pictures");
+same(demoUl.map((s) => s.available), [true, false, true], "the Uldaman demo list has no minimap picture");
+assert.strictEqual(V.pictureSelect(demoUl, "minimap").value, "worldmap", "a stored minimap falls back to the World map");
+assert.ok(V.pictureSelect(demoUl, "minimap").reason.length > 0, "and says why");
+assert.strictEqual(V.pictureSelect(demoUl, "").hidden, false, "one picture is enough for the picker");
+assert.strictEqual(V.pictureSelect(V.pictureSlots([]), "").hidden, true, "no picture: no picker");
+same(D.pictures(999), [], "the demo offers no pictures for a map it does not know");
+
 // ---- play two loops, 2 s apart, through the page's own bookkeeping; collect what each layer would draw
 const seen = {}, mark = (k, n) => { if (n > 0) seen[k] = (seen[k] || 0) + 1; };
 const events = new Set();
@@ -57,9 +68,9 @@ for (let sec = 1000; sec <= 1000 + 2 * D.LOOP; sec += 2) {
   const cls = (c) => mobs.filter((m) => V.mobClass(m) === c).length;
   const marks = U.targetMarks(mobs, onMap);
   const steps = P.runSteps(bind.run), stalls = P.stallsOf(ctx.cmdStalls, bind.commander, mapId);
-  mark("bg", 1); mark("grid", 1); mark("scale", 1);
+  mark("bg", V.pictureSlots(D.pictures(mapId)).some((s) => s.available) ? 1 : 0); mark("grid", 1); mark("scale", 1);
   mark("bots", onMap.length); mark("botnames", onMap.length); mark("lead", lead ? 1 : 0);
-  mark("trail", trail.length >= 2 ? run("cmdTrailSvg({f: " + f.toString() + ", k: 0.5, units: {}}, 'trail', 'trail', trail, 1, 3).length") : 0);
+  mark("trail", trail.length >= 2 ? run("cmdTrailSvg({f: " + f.toString() + ", k: 0.5, units: {}}, 'leadpath', 'trail', trail, 1, 3).length") : 0);
   ctx.dcx = dc();
   mark("membertrails", run("cmdMemberTrailsSvg(dcx, bind, 70)").length);
   mark("trailtime", V.trailStamps(trail, 1, 70, 8).length);
@@ -99,8 +110,11 @@ for (let sec = 1000; sec <= 1000 + 2 * D.LOOP; sec += 2) {
 
 // the layers that need the daemon (the real picture, the zone outlines) are the only ones the demo cannot feed itself
 const EXTERNAL = new Set(["zone", "zonelabels"]);
-L.DEFS.forEach((d) => { if (!EXTERNAL.has(d.key)) assert.ok(seen[d.key] > 0, `layer "${d.key}" has nothing to show in the demo`); });
-assert.ok(seen.bg, "the map picture comes from the daemon's map folder for map 70");
+L.DEFS.forEach((d) => {
+  if (d.parts.every((p) => EXTERNAL.has(p))) return;
+  assert.ok(d.parts.some((p) => seen[p] > 0), `layer "${d.key}" has nothing to show in the demo`);
+});
+assert.ok(seen.bg, "the demo card has a picture slot to draw");
 
 // and the pieces the story promises
 ["mobcast", "victim:tank", "victim:healer", "botdead", "rest:d", "rest:e", "cc:c", "cc:f", "botcc:s", "botcc:r", "rank:b", "rank:e",

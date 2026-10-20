@@ -2895,6 +2895,8 @@ select.input {
 .cmd-map .stamp text { fill: #fff; font-weight: 600; paint-order: stroke; stroke: #000; stroke-linejoin: round; }
 .cmd-maptools select { height: 32px; max-width: 120px; border-radius: 6px; border: 1px solid var(--border-color); background: rgba(14, 19, 27, 0.85); color: var(--text-main); font: inherit; }
 .cmd-maptools select[hidden] { display: none; }
+.cmd-picwhy { margin: 6px 0 0; font-size: 0.74rem; color: var(--accent-yellow); }
+.cmd-picwhy[hidden] { display: none; }
 .cmd-scale { position: absolute; right: 8px; bottom: 6px; display: flex; flex-direction: column; align-items: flex-end; font-size: 0.7rem; color: #fff; text-shadow: 0 0 3px #000, 0 0 3px #000; pointer-events: none; }
 .cmd-scale[hidden] { display: none; }
 .cmd-scale i { display: block; height: 5px; border: 2px solid #fff; border-top: 0; box-shadow: 0 1px 2px #000; }

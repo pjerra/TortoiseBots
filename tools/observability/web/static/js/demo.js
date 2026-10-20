@@ -234,6 +234,26 @@
     };
   }
 
-  const api = { frame, LOOP, MAP, COMMANDER, ROUTE: () => ROUTE, T };
+  // The picture slots of the demo card, shaped like the daemon's GET /api/v1/maps/<id> answer: the reference Zul'Farrak layout with all
+  // three pictures, and Uldaman as the indoor dungeon the demo walks, which has no minimap picture. The rectangles span the demo route
+  // (the real ones would put the made-up party off the picture); the URLs are the daemon's, so a map folder makes the demo draw them.
+  const PIC_MAPS = {
+    209: [
+      { kind: "worldmap", floor: "", label: "World map", name: "worldmap", source: "worldmap", available: true, url: "/api/v1/mapfiles/209.png", x: -400, y: -300, w: 800, h: 600 },
+      { kind: "minimap", floor: "", label: "Minimap", name: "minimap", source: "minimap", available: true, url: "/api/v1/mapfiles/209.minimap.png", x: -400, y: -300, w: 800, h: 600 },
+      { kind: "navmesh", floor: "", label: "Navmesh", name: "navmesh", source: "navmesh", available: true, url: "/api/v1/mapfiles/209.navmesh.png", x: -400, y: -300, w: 800, h: 600 },
+    ],
+    70: [
+      { kind: "worldmap", floor: "", label: "World map", name: "worldmap", source: "worldmap", available: true, url: "/api/v1/mapfiles/70.png", x: -400, y: -300, w: 800, h: 600 },
+      { kind: "minimap", floor: "", label: "Minimap", name: "minimap", available: false,
+        reason: "No minimap picture: indoor dungeon (the client draws it from WMO tiles, which minimap-extract does not compose yet)" },
+      { kind: "navmesh", floor: "", label: "Navmesh", name: "navmesh", source: "navmesh", available: true, url: "/api/v1/mapfiles/70.navmesh.png", x: -400, y: -300, w: 800, h: 600 },
+    ],
+  };
+  function pictures(id) {
+    return (PIC_MAPS[id] || []).map((s) => Object.assign({}, s));
+  }
+
+  const api = { frame, pictures, LOOP, MAP, COMMANDER, ROUTE: () => ROUTE, T };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.CmdDemo = api;
 })(typeof self !== "undefined" ? self : this);

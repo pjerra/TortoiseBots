@@ -543,20 +543,81 @@
     return out;
   }
 
-  // The picture layers the daemon lists for a map (GET /api/v1/maps/<id>), as the page may use them: only a name, a daemon file URL
-  // and a finite rectangle in the drawing plane make it through; anything else is dropped.
+  // The picture slots the daemon lists for a map (GET /api/v1/maps/<id>), as the page may use them: the World map and its floors, the
+  // Minimap and the Navmesh, in that order whatever order the answer came in. An available slot keeps only a daemon file URL and a
+  // finite rectangle in the drawing plane; anything else drops it. A missing slot keeps its label and its one-line reason.
   const PIC_URL = /^\/api\/v1\/mapfiles\/[0-9]{1,9}(?:\.[a-z]+(?:-[0-9]+f)?)?\.png$/;
-  function pictureLayers(list) {
+  const PIC_KINDS = ["worldmap", "minimap", "navmesh"];
+  const PIC_LABEL = { worldmap: "World map", minimap: "Minimap", navmesh: "Navmesh" };
+  const PIC_FLOOR = /^[1-9][0-9]?f$/;
+  function pictureSlots(list) {
     if (!Array.isArray(list)) return [];
-    return list.filter((l) => l && typeof l.url === "string" && PIC_URL.test(l.url) && typeof l.name === "string"
-      && [l.x, l.y, l.w, l.h].every((n) => typeof n === "number" && isFinite(n)) && l.w > 0 && l.h > 0)
-      .map((l) => ({ name: l.name.slice(0, 40), url: l.url, x: l.x, y: l.y, w: l.w, h: l.h }));
+    const byKey = {};
+    list.forEach((l) => {
+      if (!l || typeof l !== "object" || PIC_KINDS.indexOf(l.kind) < 0) return;
+      const floor = l.kind === "worldmap" && typeof l.floor === "string" && PIC_FLOOR.test(l.floor) ? l.floor : "";
+      const key = l.kind + (floor ? " " + floor : "");
+      if (byKey[key]) return;
+      const label = typeof l.label === "string" && l.label ? l.label.slice(0, 40) : PIC_LABEL[l.kind] + (floor ? " " + floor : "");
+      if (l.available === true) {
+        if (typeof l.url !== "string" || !PIC_URL.test(l.url)
+          || ![l.x, l.y, l.w, l.h].every((n) => typeof n === "number" && isFinite(n)) || !(l.w > 0) || !(l.h > 0)) return;
+        byKey[key] = { kind: l.kind, floor, key, label, available: true, url: l.url, x: l.x, y: l.y, w: l.w, h: l.h };
+      } else {
+        byKey[key] = { kind: l.kind, floor, key, label, available: false, reason: typeof l.reason === "string" ? l.reason.slice(0, 200) : "" };
+      }
+    });
+    return Object.keys(byKey).map((k) => byKey[k]).sort((a, b) => {
+      const ka = PIC_KINDS.indexOf(a.kind), kb = PIC_KINDS.indexOf(b.kind);
+      if (ka !== kb) return ka - kb;
+      return (a.floor ? parseInt(a.floor, 10) : 0) - (b.floor ? parseInt(b.floor, 10) : 0);
+    });
+  }
+
+  // Which slot a card draws: its stored choice (ms().pic) when that slot has a picture, else the first available slot (the main World
+  // map picture); slot is null when the map has no picture at all. `missing` is the stored choice's slot when it has none, so the page
+  // can say why the picture the user picked is gone while it draws the fallback.
+  function pictureChoice(slots, stored) {
+    const all = Array.isArray(slots) ? slots : [];
+    const want = typeof stored === "string" && stored ? all.find((s) => s.key === stored) || null : null;
+    const slot = (want && want.available ? want : null) || all.find((s) => s.available) || null;
+    return { slot, missing: want && !want.available ? want : null };
+  }
+
+  // How long a map's picture slots may stay as they are before the daemon is asked again: 30 s when there is no picture at all (the
+  // operator may have run minimap-extract since), 5 min while some are missing, never while all are there. A null (or missing) answer
+  // is asked again after 30 s too.
+  const PIC_RETRY_MS = 30000, PIC_MISSING_MS = 5 * 60 * 1000;
+  function pictureRefreshAfter(slots) {
+    if (!Array.isArray(slots) || !slots.length) return PIC_RETRY_MS;
+    const have = slots.filter((s) => s && s.available).length;
+    if (!have) return PIC_RETRY_MS;
+    return have < slots.length ? PIC_MISSING_MS : null;
+  }
+
+  // The picture picker of a card: hidden when no slot has a picture; else one option per slot, a missing one disabled with "(none)" and
+  // its reason as the tooltip. `reason` is the missing stored choice's reason, for the line under the picker ("" when the picker is hidden).
+  function pictureSelect(slots, stored) {
+    const all = Array.isArray(slots) ? slots : [];
+    const choice = pictureChoice(all, stored);
+    return {
+      hidden: !choice.slot,
+      value: choice.slot ? choice.slot.key : "",
+      // no picture at all: the picker is hidden and the bg layer carries the reason, so there is no line to explain
+      reason: choice.slot && choice.missing ? choice.missing.reason : "",
+      options: all.map((s) => ({
+        value: s.key,
+        label: s.available ? s.label : s.label + " (none)",
+        disabled: !s.available,
+        title: s.available ? "" : s.reason,
+      })),
+    };
   }
 
   const api = {
     HEAL_RANGE_YD, FAR_YD, LOW_HP_PCT, STALE_WARN_SEC, pretty, plural, ageText, roleKey, roleLabel, distance, leadBot, partyRows, orderText, stateWord,
     headerText, headerParts, botHref, warnings, newTracker, note, context, prune, project, fitView, viewBox, zoomAt, panBy, pinch, gridStep, gridLines,
-    trailSegments, markGap, trailSegmentsBroken, trailRuns, trailMarks, trailEvent, jumpLimitYd, TRAVEL_MAX_YD_PER_SEC, TRAVEL_SLACK_YD, TRAVEL_MAX_GAP_SEC, clampScale, prependTrail, heading, trailStamps, scaleBar, zonesIn, pictureLayers,
+    trailSegments, markGap, trailSegmentsBroken, trailRuns, trailMarks, trailEvent, jumpLimitYd, TRAVEL_MAX_YD_PER_SEC, TRAVEL_SLACK_YD, TRAVEL_MAX_GAP_SEC, clampScale, prependTrail, heading, trailStamps, scaleBar, zonesIn, pictureSlots, pictureChoice, pictureSelect, pictureRefreshAfter, PIC_RETRY_MS, PIC_MISSING_MS,
     AGGRO_RANGE_YD, followView, zoomFollow, pinchFollow, mobsOf, mobClass, threatLines, botTargetLines, aggroMobs, commanderPlace,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.CmdView = api;

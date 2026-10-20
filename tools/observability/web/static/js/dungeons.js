@@ -61,18 +61,30 @@
     return CmdView.ageText(sec);
   }
 
+  // The power bar of one member: null when the row has none to draw — dead, a module that reports
+  // no power (no max_power) or a class with no resource (max_power 0) — else the Bots tab's fields:
+  // the percentage, the bar kind (mana blue, rage red, energy yellow; anything else reads mana) and
+  // the "current / max" words. A resource that really is 0 still draws, as long as max_power > 0.
+  function powerOf(m) {
+    if (!m || m.dead || m.state === "dead" || !(m.max_power > 0)) return null;
+    const kind = m.power_type === "rage" || m.power_type === "energy" ? m.power_type : "mana";
+    return { power: Math.round(pct(m.power || 0, m.max_power)), kind, text: (m.power || 0) + " / " + m.max_power };
+  }
+
   // The party as rows: the real player(s) first (marked player), then by raid subgroup, then by name —
   // the order the daemon reports and this tab repeats.
   function memberRows(run) {
-    const rows = ((run && run.members) || []).map((m) => ({
-      name: m.name, guid: m.guid || 0, player: !!m.player, dead: !!m.dead,
-      role: roleKey(m), roleLabel: roleLabel(m), cls: pretty(m.class), level: m.level || 0,
-      hp: Math.round(pct(m.hp, m.max_hp)), hpText: m.hp + " / " + m.max_hp,
-      hasPower: m.max_power > 0, power: Math.round(pct(m.power, m.max_power)),
-      powerKind: m.power_type === "rage" || m.power_type === "energy" ? m.power_type : "mana",
-      powerText: m.power + " / " + m.max_power,
-      subgroup: m.subgroup || 0, state: m.state || "",
-    }));
+    const rows = ((run && run.members) || []).map((m) => {
+      const pw = powerOf(m);
+      return {
+        name: m.name, guid: m.guid || 0, player: !!m.player, dead: !!m.dead,
+        role: roleKey(m), roleLabel: roleLabel(m), cls: pretty(m.class), level: m.level || 0,
+        hp: Math.round(pct(m.hp, m.max_hp)), hpText: m.hp + " / " + m.max_hp,
+        hasPower: !!pw, power: pw ? pw.power : 0,
+        powerKind: pw ? pw.kind : "mana", powerText: pw ? pw.text : "",
+        subgroup: m.subgroup || 0, state: m.state || "",
+      };
+    });
     rows.sort((a, b) => (a.player ? -1 : 0) - (b.player ? -1 : 0) || a.subgroup - b.subgroup || (a.name < b.name ? -1 : 1));
     return rows;
   }
@@ -97,9 +109,43 @@
     return groups;
   }
 
+  // A run as the card/map machinery expects it: a pseudo-binding whose bots are the run's members (bots and the real player,
+  // alive from the dead flag). `dungeon` marks it so the Commanders render never picks it up. The members' id/target (raw
+  // guids as decimal strings) ride along for the threat and bot-target layers; the run's mobs ride along only when the daemon
+  // reported a list (an array; absent means an older module, where the layers stay greyed). The lead is the first living tank,
+  // so the lead mark and the aggro radius have a bot and a level on a dungeon card.
+  function bindOf(run) {
+    const r = run || {};
+    const members = r.members || [];
+    const lead = members.find((m) => m && m.role === "tank" && !m.dead && m.state !== "dead");
+    const bind = {
+      commander: "dgn:" + r.key,
+      dungeon: true,
+      dgn: r,
+      online: true, group: 0, lead: lead ? lead.name : "",
+      bots: members.map((m) => {
+        const bot = {
+          name: m.name, guid: m.guid, player: m.player, class: m.class, role: m.role, level: m.level,
+          hp: m.hp, max_hp: m.max_hp, power: m.power, max_power: m.max_power, power_type: m.power_type,
+          map: m.map, zone: m.zone, x: m.x, y: m.y, z: m.z, o: m.o,
+          alive: !m.dead, state: m.state,
+        };
+        if (m.id) bot.id = m.id;
+        if (m.target) bot.target = m.target;
+        return bot;
+      }),
+    };
+    if (Array.isArray(r.mobs)) {
+      bind.mobs = r.mobs;
+      bind.mobs_map = r.mobs_map;
+      bind.mobs_total = r.mobs_total;
+    }
+    return bind;
+  }
+
   const DgnView = {
     RAID_MIN_MEMBERS, RAID_GROUP_SIZE,
-    roleKey, roleLabel, copyLabels, runState, seenText, memberRows, memberGroups,
+    roleKey, roleLabel, copyLabels, runState, seenText, powerOf, memberRows, memberGroups, bindOf,
   };
 
   if (typeof module !== "undefined" && module.exports) module.exports = DgnView;

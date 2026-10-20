@@ -1,6 +1,8 @@
 package state
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -160,6 +162,68 @@ func TestDungeonsViewListsEachRunOnce(t *testing.T) {
 	for _, run := range view.Runs {
 		if run.Players != 1 || run.Bots != 1 || len(run.Members) != 2 {
 			t.Fatalf("run %s: players %d bots %d members %d", run.Key, run.Players, run.Bots, len(run.Members))
+		}
+	}
+}
+
+// The party rows carry the roster's power (issue #1112) — current, max and
+// type, the fields the Bots tab's bar reads — and leave the keys out when
+// the module reports none, so an old module draws no bar.
+func TestDungeonMembersCarryPower(t *testing.T) {
+	s := newTestStore(newClock())
+	caster := du(1, "Caster", false, 409, 13)
+	caster.Power, caster.MaxPower, caster.PowerType = 1183, 1183, "mana"
+	empty := du(2, "Rager", false, 409, 13)
+	empty.Power, empty.MaxPower, empty.PowerType = 0, 100, "rage" // an empty bar is still a bar
+	old := du(3, "OldTimer", false, 409, 13)                      // a pre-power module row
+	if ok := s.ApplyBatch(batch(1, 0, 1, caster, empty, old)); !ok {
+		t.Fatal("batch not published")
+	}
+	view := s.Dungeons()
+	if len(view.Runs) != 1 || len(view.Runs[0].Members) != 3 {
+		t.Fatalf("unexpected runs: %+v", view.Runs)
+	}
+	byName := map[string]model.DungeonMember{}
+	for _, m := range view.Runs[0].Members {
+		byName[m.Name] = m
+	}
+	if m := byName["Caster"]; m.Power == nil || *m.Power != 1183 || m.MaxPower == nil || *m.MaxPower != 1183 || m.PowerType != "mana" {
+		t.Fatalf("Caster power not carried: %+v", m)
+	}
+	if m := byName["Rager"]; m.Power == nil || *m.Power != 0 || m.MaxPower == nil || *m.MaxPower != 100 || m.PowerType != "rage" {
+		t.Fatalf("an empty rage bar must still be present: %+v", m)
+	}
+	if m := byName["OldTimer"]; m.Power != nil || m.MaxPower != nil || m.PowerType != "" {
+		t.Fatalf("a row without power must carry none: %+v", m)
+	}
+
+	raw, err := json.Marshal(view)
+	if err != nil {
+		t.Fatalf("marshal view: %v", err)
+	}
+	// The old row's JSON has no power keys at all (what the tab keys "no bar" on).
+	var decoded struct {
+		Runs []struct {
+			Members []map[string]any `json:"members"`
+		} `json:"runs"`
+	}
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("unmarshal view: %v", err)
+	}
+	members := map[string]map[string]any{}
+	for _, m := range decoded.Runs[0].Members {
+		members[m["name"].(string)] = m
+	}
+	if members["Caster"]["power"] != float64(1183) || members["Caster"]["max_power"] != float64(1183) || members["Caster"]["power_type"] != "mana" {
+		t.Fatalf("Caster JSON power: %v", members["Caster"])
+	}
+	if members["Rager"]["power"] != float64(0) || members["Rager"]["max_power"] != float64(100) {
+		t.Fatalf("Rager JSON power: %v", members["Rager"])
+	}
+	oldJSON, _ := json.Marshal(members["OldTimer"])
+	for _, key := range []string{"power", "max_power", "power_type"} {
+		if strings.Contains(string(oldJSON), `"`+key+`"`) {
+			t.Fatalf("old module member JSON carries %q: %s", key, oldJSON)
 		}
 	}
 }

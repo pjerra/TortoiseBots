@@ -200,6 +200,15 @@ func (l *Listener) processPacket(data []byte) {
 		// event and the next snapshot carries the same payload inline.
 		l.hub.Broadcast("server_info", info)
 
+	case "DUNGEON_MOBS":
+		var dm model.DungeonMobsPayload
+		if err := json.Unmarshal(data, &dm); err != nil {
+			return
+		}
+		// No stream event: the browser refetches /api/v1/dungeons on the
+		// snapshot broadcast, and the module sends this before the batches.
+		l.store.ApplyDungeonMobs(&dm)
+
 	case "COMMANDERS":
 		var cmd model.CommandersPayload
 		if err := json.Unmarshal(data, &cmd); err != nil {

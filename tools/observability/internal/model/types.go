@@ -714,6 +714,43 @@ type CommandersView struct {
 	Fresh  bool    `json:"fresh"`
 }
 
+// DungeonMobsPayload is the DUNGEON_MOBS datagram (issue #1101): the mobs,
+// member ids and member targets of every live dungeon run, sent once per
+// snapshot cycle before the BOT_BATCH datagrams. It is additive: an older
+// dashboard drops the unknown type, and a run without one keeps working.
+type DungeonMobsPayload struct {
+	V       int              `json:"v"`
+	Session uint64           `json:"session"`
+	Seq     uint64           `json:"seq"`
+	TS      int64            `json:"ts"`
+	Type    string           `json:"type"`
+	Part    int              `json:"part"`  // 0-based part of this cycle; informational
+	Parts   int              `json:"parts"` // parts of this cycle; informational
+	Runs    []DungeonMobsRun `json:"runs"` // empty with the newest seq: every run ended
+}
+
+// DungeonMobsRun is one instance copy of DUNGEON_MOBS: the map and instance
+// id that join it to a DungeonRun, its members' ids and targets, and the mobs
+// their bots have seen.
+type DungeonMobsRun struct {
+	Map       uint32              `json:"map"`
+	Instance  uint32              `json:"instance"`
+	Raid      bool                `json:"raid"`
+	Members   []DungeonMobsMember `json:"members"`
+	MobsMap   uint32              `json:"mobs_map"`
+	MobsTotal int                 `json:"mobs_total"` // before the module's cap: "24 of 57 shown"
+	Mobs      *[]CommanderMob     `json:"mobs"`       // nil = not reported, &[] = reported, none near
+}
+
+// DungeonMobsMember is one unit of a run as DUNGEON_MOBS reports it: the low
+// guid joins it to the roster row, id/target are raw guids as decimal strings
+// (what a mob's victim and a bot's target name).
+type DungeonMobsMember struct {
+	GUID   uint32 `json:"guid"`
+	ID     string `json:"id"`
+	Target string `json:"target,omitempty"`
+}
+
 // DungeonMember is one unit (bot or real player) inside a dungeon run: the
 // fields the Dungeons tab shows (party list, map dots, state line).
 type DungeonMember struct {
@@ -726,6 +763,15 @@ type DungeonMember struct {
 	Level  uint32 `json:"level"`
 	HP     uint32 `json:"hp"`
 	MaxHP  uint32 `json:"max_hp"`
+	// Power is the unit's resource, the same fields the Bots tab's bar
+	// draws (issue #1112): current, max and type (mana, rage, energy,
+	// focus, happiness — the tab colours mana blue, rage red, energy
+	// yellow). A pre-power module reports none, so the pointers stay nil
+	// and the JSON omits them: the tab then draws no bar, and a resource
+	// that really is 0 (an empty rage bar) is still present with max > 0.
+	Power     *uint32 `json:"power,omitempty"`
+	MaxPower  *uint32 `json:"max_power,omitempty"`
+	PowerType string  `json:"power_type,omitempty"`
 	// Dead is reported from the snapshot (state "dead" or a 0-HP corpse).
 	Dead bool `json:"dead"`
 	// SubGroup is the raid subgroup the unit sits in (0 outside a raid).
@@ -738,6 +784,11 @@ type DungeonMember struct {
 	Y     float64 `json:"y"`
 	Z     float64 `json:"z"`
 	O     float64 `json:"o"`
+	// ID and Target come from DUNGEON_MOBS (issue #1101): the member's guid
+	// as a decimal string (what a mob's victim names) and its target's guid.
+	// Both absent from an older module.
+	ID     string `json:"id,omitempty"`
+	Target string `json:"target,omitempty"`
 }
 
 // DungeonRun is one live instance copy (map + instance id) of a dungeon or
@@ -759,6 +810,14 @@ type DungeonRun struct {
 	// Members carries bots and players; players first, then by subgroup
 	// (raids) and name.
 	Members []DungeonMember `json:"members"`
+	// Mobs, MobsMap and MobsTotal come from DUNGEON_MOBS (issue #1101).
+	// Mobs nil = not reported (an older module or no datagram yet); a
+	// non-nil empty list = reported and nothing near, so the map layers
+	// stay selectable. MobsMap is the map the mobs are on (always the run's
+	// map: every member of a copy shares it).
+	Mobs      *[]CommanderMob `json:"mobs,omitempty"`
+	MobsMap   *uint32         `json:"mobs_map,omitempty"`
+	MobsTotal int             `json:"mobs_total,omitempty"`
 }
 
 // DungeonsView is what GET /api/v1/dungeons carries.
