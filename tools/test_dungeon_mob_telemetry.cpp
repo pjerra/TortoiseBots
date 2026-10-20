@@ -182,17 +182,19 @@ void TestSelectionOrder()
 
 void TestCaps()
 {
-    Check(PerRunCap(1, 5) == 24, "party cap 24");
-    Check(PerRunCap(1, 6) == 48, "raid cap 48 above 5 members");
-    Check(PerRunCap(16, 5) == 24, "16 parties fit the budget at 24");
+    Check(PerRunCap(1, 5) == 48, "party cap 48");
+    Check(PerRunCap(1, 6) == 64, "raid cap 64 above 5 members");
+    Check(PerRunCap(8, 5) == 48, "8 parties fit the budget at 48");
+    Check(PerRunCap(9, 5) == 42, "9 parties share the budget: 384/9 = 42");
+    Check(PerRunCap(16, 5) == 24, "16 parties share the budget: 384/16 = 24");
     Check(PerRunCap(16, 40) == 24, "16 raids share the budget: 384/16 = 24");
     Check(PerRunCap(10, 40) == 38, "10 raids get 38");
     Check(PerRunCap(32, 5) == 12, "32 runs get 12");
     Check(PerRunCap(100, 5) == kMinMobsPerRun, "floor 8");
-    Check(PerRunCap(0, 5) == 24, "no runs: the normal cap");
+    Check(PerRunCap(0, 5) == 48, "no runs: the normal cap");
     for (size_t runs = 1; runs <= kMaxRunsPerCycle; ++runs)
         Check(runs * PerRunCap(runs, 40) <= kMaxMobsPerCycle, "the cycle total stays within kMaxMobsPerCycle");
-    Check(CandidateBudget(24) == 96, "candidate budget is 4x the cap");
+    Check(CandidateBudget(48) == 192, "candidate budget is 4x the cap");
 }
 
 void TestRotation()
@@ -304,7 +306,7 @@ void TestWriterCaps()
     RunInfo big = Run(409, 3, 60, 70, false);
     std::string const s = BuildRunJson(big);
     Check(Count(s, "{\"guid\":") == kMaxMembersPerRun, "members capped at 40 in the writer");
-    Check(Count(s, "\"entry\":") == kRaidMobCap, "mobs capped at 48 in the writer");
+    Check(Count(s, "\"entry\":") == 64, "mobs capped at 64 in the writer");
 }
 
 void TestPacking()
@@ -321,12 +323,12 @@ void TestPacking()
         Check(Has(p[0], "\"part\":0,\"parts\":3") && Has(p[2], "\"part\":2,\"parts\":3"), "part numbering");
     }
 
-    // 96-mob limit: 5 runs of 24 -> 4 + 1 (96 fits, the fifth would pass it).
+    // 96-mob limit: 2 party runs of 48 -> 2 + 1 (96 fits, the third would pass it).
     runs.clear();
-    for (uint32_t i = 0; i < 5; ++i)
-        runs.push_back(Run(36, i + 1, 5, 24, false));
+    for (uint32_t i = 0; i < 3; ++i)
+        runs.push_back(Run(36, i + 1, 5, 48, false));
     p = PackRuns(12, 1, 2, 3, runs);
-    Check(p.size() == 2 && Count(p[0], "\"instance\":") == 4, "96 mobs per part: 4 runs of 24, then a new part");
+    Check(p.size() == 2 && Count(p[0], "\"instance\":") == 2, "96 mobs per part: 2 runs of 48, then a new part");
 
     // Byte limit: worst-case runs pass 32000 bytes before 96 mobs; every part stays under it, no run is split.
     runs.clear();
@@ -345,16 +347,16 @@ void TestPacking()
     Check(listed == 8, "every run sent exactly once (whole runs)");
 
     // Worst single runs.
-    std::string const worstRaid = BuildRunJson(Run(409, 1, 40, 48, true));
-    std::string const plainRaid = BuildRunJson(Run(409, 1, 40, 48, false));
-    std::string const plainParty = BuildRunJson(Run(36, 1, 5, 24, false));
-    std::printf("worst raid run (40 members, 48 mobs, escaped strings): %zu bytes\n", worstRaid.size());
-    std::printf("plain raid run (40 members, 48 mobs): %zu bytes\n", plainRaid.size());
-    std::printf("plain party run (5 members, 24 mobs): %zu bytes\n", plainParty.size());
-    Check(worstRaid.size() + 200 < kMaxPayloadBytes, "the worst single run fits one part");
-    Check(plainRaid.size() < 16000, "a realistic raid run < 16 KB");
+    std::string const worstRaid = BuildRunJson(Run(409, 1, 40, 64, true));
+    std::string const plainRaid = BuildRunJson(Run(409, 1, 40, 64, false));
+    std::string const plainParty = BuildRunJson(Run(36, 1, 5, 48, false));
+    std::printf("worst raid run (40 members, 64 mobs, escaped strings): %zu bytes\n", worstRaid.size());
+    std::printf("plain raid run (40 members, 64 mobs): %zu bytes\n", plainRaid.size());
+    std::printf("plain party run (5 members, 48 mobs): %zu bytes\n", plainParty.size());
+    Check(worstRaid.size() < 65507, "the worst single run stays below the UDP limit (a run is never split)");
+    Check(plainRaid.size() < 18000, "a realistic raid run < 18 KB");
 
-    // Worst cycle: 32 runs at their shared cap, worst strings.
+    // Worst cycle by total bytes: 32 runs at their shared cap, worst strings.
     runs.clear();
     size_t const cap = PerRunCap(kMaxRunsPerCycle, 40);
     for (uint32_t i = 0; i < kMaxRunsPerCycle; ++i)
@@ -366,8 +368,24 @@ void TestPacking()
         biggest = std::max(biggest, s.size());
         total += s.size();
     }
-    std::printf("worst cycle (32 raid runs x %zu mobs): %zu parts, largest %zu bytes, %zu bytes in all\n", cap, p.size(), biggest, total);
-    Check(biggest <= kMaxPayloadBytes, "worst cycle: every part <= 32000 bytes");
+    std::printf("worst cycle by total (32 raid runs x %zu mobs): %zu parts, largest %zu bytes, %zu bytes in all\n", cap, p.size(), biggest, total);
+    Check(biggest <= kMaxPayloadBytes, "worst cycle: every multi-run part <= 32000 bytes");
+
+    // Worst cycle by part size: 6 raid runs at the full 64 cap (the same 384 mobs), worst strings. Whole runs only, so each
+    // pathological run goes out alone and passes the 32000 packing target while staying under the UDP limit.
+    runs.clear();
+    for (uint32_t i = 0; i < kMaxMobsPerCycle / kRaidMobCap; ++i)
+        runs.push_back(Run(409, i + 1, 40, kRaidMobCap, true));
+    p = PackRuns(12, 1, 2, 3, runs);
+    biggest = 0;
+    total = 0;
+    for (std::string const& s : p)
+    {
+        biggest = std::max(biggest, s.size());
+        total += s.size();
+    }
+    std::printf("worst cycle by part (6 raid runs x 64 mobs): %zu parts, largest %zu bytes, %zu bytes in all\n", p.size(), biggest, total);
+    Check(biggest < 65507, "worst cycle: every part below the UDP limit");
 }
 
 } // namespace

@@ -39,14 +39,14 @@ namespace DungeonMobTelemetry {
 
 using CommanderTelemetry::MobInfo;
 
-constexpr size_t kPartyMobCap = 24;        // a party run (<= kPartySize members): the commander feed's own cap
-constexpr size_t kRaidMobCap = 48;         // a raid run
+constexpr size_t kPartyMobCap = 48;        // a party run (<= kPartySize members): every mob the bots know
+constexpr size_t kRaidMobCap = 64;         // a raid run
 constexpr size_t kMinMobsPerRun = 8;       // the floor when many runs share the cycle budget
 constexpr size_t kMaxMobsPerCycle = 384;   // all runs of one cycle together
 constexpr size_t kMaxRunsPerCycle = 32;    // more runs than this take turns (RotationWindow)
 constexpr size_t kMaxMobsPerPayload = 96;  // one datagram
 constexpr size_t kMaxRunsPerPayload = 8;   // one datagram
-constexpr size_t kMaxPayloadBytes = 32000; // one datagram (UDP allows 65507)
+constexpr size_t kMaxPayloadBytes = 32000; // one datagram's packing target (UDP allows 65507); a run is never split
 constexpr size_t kSightReaders = 10;       // bots of a raid run whose "possible targets" list is read
 constexpr size_t kCandidateFactor = 4;     // stop gathering sight-list candidates at this many times the run's cap
 constexpr size_t kPartySize = 5;
@@ -116,7 +116,7 @@ struct RunRef
     std::vector<Candidate> candidates;
 };
 
-// The mob cap of one run: a party 24, a raid 48; when runCount runs at their normal cap would pass kMaxMobsPerCycle, every
+// The mob cap of one run: a party 48, a raid 64; when runCount runs at their normal cap would pass kMaxMobsPerCycle, every
 // run gets max(kMinMobsPerRun, kMaxMobsPerCycle / runCount) at most. runCount is the number of runs sent this cycle (<=
 // kMaxRunsPerCycle), so the cycle total stays <= kMaxMobsPerCycle.
 inline size_t PerRunCap(size_t runCount, size_t members)
@@ -326,7 +326,8 @@ inline std::string PartHeader(int protocolVersion, uint64_t session, uint64_t se
 }
 
 // The datagrams of one cycle. Whole runs only; a part closes when the next run would pass kMaxMobsPerPayload mobs,
-// kMaxRunsPerPayload runs or kMaxPayloadBytes bytes. No runs: one datagram with "runs":[] (the end marker).
+// kMaxRunsPerPayload runs or kMaxPayloadBytes bytes. One run whose escaped strings alone pass kMaxPayloadBytes still goes
+// out alone (a run is never split; it stays under the UDP limit). No runs: one datagram with "runs":[] (the end marker).
 inline std::vector<std::string> PackRuns(int protocolVersion, uint64_t session, uint64_t seq, int64_t ts,
                                          std::vector<RunInfo> const& runs)
 {
