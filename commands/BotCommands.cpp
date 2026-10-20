@@ -9706,6 +9706,37 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                     f.units.push_back(unit);
                 }
             }
+            // A pack is not cleared while other living hostiles stand by it
+            // (#255, DungeonRun::NearPack): any entry, one grid search around
+            // the lead bot. Line of sight from the step's point itself
+            // (Map::isInLineOfSight, both ends raised 2 yd), not from the lead.
+            if (step->kind == ai::PlanStepKind::Pull)
+            {
+                std::list<Unit*> hostiles;
+                HostileCreaturesAround(lead, std::min(toPoint + step->radius + kNearPackYd, 2.0f * kSeeYd), hostiles);
+                Map* const map = lead->GetMap();
+                for (Unit* other : hostiles)
+                {
+                    float const ox = other->GetPositionX(), oy = other->GetPositionY(), oz = other->GetPositionZ();
+                    if (!NearPack(*step, ox, oy, oz))
+                        continue;
+                    uint64 const guid = other->GetObjectGuid().GetRawValue();
+                    bool known = slot.run.passed.count(guid) || slot.run.unreachable.count(guid);
+                    for (UnitFact const& have : f.units)
+                        known = known || have.guid == guid;
+                    if (known || other->GetCreatureType() == CREATURE_TYPE_CRITTER || IsStealthed(other) ||
+                        !lead->IsValidAttackTarget(other))
+                        continue;
+                    Creature const* const creature = other->ToCreature();
+                    if (creature && creature->HasReactState(REACT_PASSIVE))
+                        continue;
+                    if (ai::OwnedByLaterStep(*slot.run.plan, slot.run.step, other->GetEntry(), ox, oy, oz, f.team))
+                        continue;
+                    if (!map->isInLineOfSight(step->x, step->y, step->z + 2.0f, ox, oy, oz + 2.0f))
+                        continue;
+                    ++f.othersNearPack;
+                }
+            }
             break;
         }
         case ai::PlanStepKind::Move:

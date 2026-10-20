@@ -425,6 +425,74 @@ static void TestPullGatherAndFight()
     CHECK(r.state == State::Done || r.step == 1);
 }
 
+// #255 (WC pull group 2): "pack cleared" in 1 s while mobs of the pack stood
+// alive just past what the step's own unit list holds. Another living hostile
+// near the pack (the glue's othersNearPack) keeps the step from ending; once
+// it is gone, the pack is cleared.
+static void TestOtherLiveMobNearPackBlocksCleared()
+{
+    DungeonPlan plan;
+    plan.steps = {PullStep(10, {5055, 3840}), Step(PlanStepKind::Rest)};
+    Run r = Start(&plan);
+    Facts f = Party(0);
+    f.othersNearPack = 1;
+    for (int i = 0; i < 5; ++i)
+    {
+        CHECK(Tick(r, f).empty());
+        CHECK(r.state == State::Running && r.step == 0);
+    }
+    CHECK(r.note.find("living hostile units near the pack") != std::string::npos);
+    f.othersNearPack = 0;
+    Tick(r, f);
+    CHECK(r.step == 1 && r.note == "pack cleared");
+    // Waited for too long: the step's out-of-combat ceiling pauses the run.
+    Run r2 = Start(&plan);
+    f.othersNearPack = 2;
+    for (int i = 0; i < 2000 && r2.state == State::Running; ++i)
+        Tick(r2, f);
+    CHECK(r2.state == State::Paused && r2.step == 0);
+}
+
+// Which units count as near the pack: within its radius + kNearPackYd of its
+// point and at most kNearPackDz above or below it.
+static void TestNearPackReach()
+{
+    PlanStep s = PullStep(0, {5055});
+    s.y = 0;
+    s.z = 0;
+    s.radius = 14.7f;
+    CHECK(NearPack(s, 14.0f, 0, 0));           // inside the radius
+    CHECK(NearPack(s, 24.0f, 0, 0));           // just outside it, within the margin
+    CHECK(!NearPack(s, 25.5f, 0, 0));          // beyond radius + 10 yd: does not count
+    CHECK(!NearPack(s, 0, 40.0f, 0));
+    CHECK(!NearPack(s, 5.0f, 0, 9.0f));        // another floor
+    CHECK(NearPack(s, 5.0f, 0, -7.5f));
+}
+
+// No other hostile near the pack (count 0): the step ends exactly as before,
+// on the same tick, for a pack and for a boss (a boss step never waits on it).
+static void TestNoOthersNearPackLeavesClearedAlone()
+{
+    DungeonPlan plan;
+    plan.steps = {PullStep(10, {4851}), Step(PlanStepKind::Rest)};
+    Run r = Start(&plan);
+    Facts f = Party(0);
+    f.othersNearPack = 0;
+    Tick(r, f);
+    CHECK(r.state == State::Running && r.step == 1 && r.note == "pack cleared");
+    // A boss already down by his spot: "boss down", whatever stands near it.
+    PlanStep boss = Step(PlanStepKind::Boss, 10, 0, 0);
+    boss.entry = 4421;
+    DungeonPlan bossPlan;
+    bossPlan.steps = {boss, Step(PlanStepKind::Rest)};
+    Run rb = Start(&bossPlan);
+    Facts fb = Party(0);
+    fb.bossDeadNearSpot = true;
+    fb.othersNearPack = 3;
+    Tick(rb, fb);
+    CHECK(rb.step == 1 && rb.note == "boss down");
+}
+
 static void TestUnseenPackIsApproachedNotCleared()
 {
     DungeonPlan plan;
@@ -4084,6 +4152,9 @@ int main()
     TestSkipWhileRunning();
     TestUnreachableMoveDetours();
     TestPullGatherAndFight();
+    TestOtherLiveMobNearPackBlocksCleared();
+    TestNearPackReach();
+    TestNoOthersNearPackLeavesClearedAlone();
     TestUnseenPackIsApproachedNotCleared();
     TestFarPackHopIsNotUndoneByTheGatherBack();
     TestApproachHopCapCountsHopsWithoutProgress();

@@ -27,7 +27,9 @@
 //   - walk in the plan's hops; before each hop, pull what stands near it, but
 //     never what a later pull or boss step owns (OwnedByLaterStep);
 //   - a pack or boss counts as done only when the lead bot stands within
-//     kSeeYd of it and no living, hostile unit of it is left;
+//     kSeeYd of it and no living, hostile unit of it is left; a pack also
+//     needs no other living hostile within its radius + kNearPackYd of its
+//     point (NearPack: any entry, in sight of the point, not a later step's);
 //   - kWipeDead dead (or all dead) regroups by itself once the fight is over:
 //     revive, gather, then walk back over the plan's own move points (at most
 //     kAutoRegroupsPerStep times a step, then it pauses);
@@ -81,6 +83,8 @@ constexpr float kArriveYd = 3.0f;                 // a walk is done this close t
 constexpr float kStalledArriveYd = 6.0f;          // ... or this close once it stopped gaining ground (a point
                                                   // just off the mesh or on a ledge the bot cannot reach)
 constexpr float kSeeYd = 60.0f;                   // a pack, boss or spot is judged only from this close
+constexpr float kNearPackYd = 10.0f;              // "pack cleared" also needs no other hostile this far past its radius
+constexpr float kNearPackDz = 8.0f;               // ... and at most this far above or below its point (NearPack)
 constexpr float kApproachYd = 30.0f;              // an unseen pack is approached to this far from its centre
 constexpr float kApproachHopYd = 40.0f;           // ... in navmesh path hops of at most this length
 constexpr std::uint32_t kMaxApproachHops = 8;     // ... and at most this many without getting nearer, then pause
@@ -344,6 +348,12 @@ struct Facts
     bool approachRead = true;
     float approachX = 0.0f, approachY = 0.0f, approachZ = 0.0f;
     std::vector<UnitFact> units;        // pull/boss: living units of the step's entries within its radius
+    // pull: other living hostile creatures near the pack (NearPack), of any
+    // entry and not in `units`: attackable, not a critter, not passive, not
+    // stealthed, in line of sight from the step's point, not passed or out of
+    // reach, not owned by a later step. "Pack cleared" needs 0 (#255: WC
+    // pull group 2 cleared in 1 s with four of its mobs alive).
+    std::uint32_t othersNearPack = 0;
     std::vector<UnitFact> hopUnits;     // move: living hostile units within kHopPullYd of the point, not owned by a later step
     // boss: a dead unit (corpse) of the boss's entry within the step's radius
     // plus kSeeYd of its point (a pullback drags him toward the party), or
@@ -2054,6 +2064,15 @@ inline const UnitFact* PickPull(const Run& r, const std::vector<UnitFact>& units
     return best;
 }
 
+// A unit at (x,y,z) stands near a pack step for "pack cleared" (the glue's
+// Facts::othersNearPack): within its radius + kNearPackYd of its point and
+// at most kNearPackDz above or below it (another floor does not count).
+inline bool NearPack(const PlanStep& s, float x, float y, float z)
+{
+    float const dz = z > s.z ? z - s.z : s.z - z;
+    return dz <= kNearPackDz && ai::PlanDistance(x, y, z, s.x, s.y, s.z) <= s.radius + kNearPackYd;
+}
+
 // Units the step still has to deal with: hostile, alive (the glue lists only
 // living ones), not passed. Evading ones count (they come back).
 inline std::size_t OpenUnits(const Run& r, const std::vector<UnitFact>& units)
@@ -2982,6 +3001,13 @@ inline void FightStep(Run& r, const Facts& f, const PlanStep& s, const std::vect
     }
     else if (friendlyLeft)
         NextStep(r, what + " is friendly to this party: left alone");
+    else if (s.kind != PlanStepKind::Boss && f.othersNearPack > 0)
+    {
+        // Not cleared while other living hostiles stand by the pack (#255):
+        // the step waits; its out-of-combat ceiling pauses the run.
+        r.note = "waiting: " + std::to_string(f.othersNearPack) +
+            " living hostile units near the pack (not of its entries or radius)";
+    }
     else if (s.kind != PlanStepKind::Boss)
         NextStep(r, "pack cleared");
     else if (f.bossDeadNearSpot || (r.bossSeenAlive && f.bossDeadNearLead))
