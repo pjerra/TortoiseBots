@@ -245,6 +245,9 @@ assert.strictEqual(U.runInfo(bind({ commander: "RR", bound_at: 1000, run }), rr,
   assert.strictEqual(U.runInfo(RB, ri, 1010, dead6906, { run }).text, "Run 00:10 · bosses 2 / 2 killed · next: Ironaya", "a killed boss is not next");
   assert.strictEqual(U.runInfo(RB, ri, 1010, roster, { run: { step: 1, plan_steps: [{ i: 2, k: "boss", e: 6910, n: "Revelosh" }] } }).text,
     "Run 00:10 · bosses 1 / 2 killed", "the step's boss is killed: no next from the plan");
+  assert.strictEqual(U.runInfo(RB, ri, 1010, roster, { run: { step: 7, plan_steps: [{ i: 6, k: "boss", e: 6906, n: "Baelog" }, { i: 9, k: "boss", e: 7228, n: "Ironaya" }] } }).text,
+    "Run 00:10 · bosses 1 / 2 killed · next: Ironaya", "a step before the current one is not next");
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(U.bossCount(roster))), { down: 1, total: 2, outside: [roster[2], roster[3]] }, "the count runInfo uses");
   assert.strictEqual(U.runInfo(RB, ri, 1010, roster, { run: { step: 1, plan_steps: [{ i: 3, k: "boss", e: 6906, sk: true }] } }).text,
     "Run 00:10 · bosses 1 / 2 killed", "a skipped step is not next");
   // always a boss count on a dungeon map: a dash when nothing is known; the open world keeps the seen-only count (nothing here)

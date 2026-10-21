@@ -5252,7 +5252,9 @@
     const others = bind.dungeon ? ((state.commanders && state.commanders.list) || []) : null;
     const sharing = CmdView.sharingBindings(bind, others);
     const bossEvents = [bind].concat(sharing).reduce((a, s) => a.concat(UnitInfo.eventsOf(cmdEvents, s.commander)), []);
-    const roster = first ? CmdView.bossRoster(bind, mapId, { others, mobs, events: bossEvents }) : [];
+    // a kill from before the binding (or its borrowed commander's) began is stale: an instance reset or an earlier run
+    const since = [bind].concat(sharing).reduce((t, s) => Math.max(t, s.bound_at > 0 ? s.bound_at : 0), 0);
+    const roster = first ? CmdView.bossRoster(bind, mapId, { others, mobs, events: bossEvents, since }) : [];
     const bossRun = bind.run || (sharing.find(s => s.run) || {}).run || null;
     const dungeonMap = !!bind.dungeon || CmdView.isDungeonMap(mapId);
     const ctx = {

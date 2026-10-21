@@ -509,7 +509,8 @@ assert.strictEqual(C.jumpLimitYd(500), 612, "...and at most 30 s, so a long sile
   assert.deepStrictEqual(C.bossRoster(dgn, 70, { others: [both] }), [], "another map");
   assert.deepStrictEqual(C.bossRoster(Object.assign({}, dgn, { dungeon: false }), 43, { others: [both] }), [], "a commander card reads only its own");
   // the count for the run line: every boss when none is marked as the plan's
-  const cnt = (r) => { const c = C.bossCount(r); return [c.down, c.total, c.outside.map((b) => b.entry)]; };
+  const U = require(require("path").resolve(require("path").dirname(process.argv[2]), "unitinfo.js"));
+  const cnt = (r) => { const c = U.bossCount(r); return [c.down, c.total, c.outside.map((b) => b.entry)]; };
   assert.deepStrictEqual(cnt(C.bossRoster(mod, 70)), [1, 3, []]);
   assert.deepStrictEqual(cnt([]), [0, 0, []]); assert.deepStrictEqual(cnt(null), [0, 0, []]);
   // the run bosses: the module's p flag (a plan boss step names the entry); the others are outside the plan
@@ -532,5 +533,39 @@ assert.strictEqual(C.jumpLimitYd(500), 612, "...and at most 30 s, so a long sile
 {
   assert.strictEqual(C.isDungeonMap(70), true); assert.strictEqual(C.isDungeonMap(409), true);
   [0, 1, 530, 571, null, undefined, "70", -1].forEach((m) => assert.strictEqual(C.isDungeonMap(m), false, String(m)));
+}
+// ---- review fixes (2026-10-21): a kill seen before this binding began (an instance reset, a new run) does not mark a boss killed; a name
+// alone never shares a binding when both sides have guids; a name match prefers a boss not killed yet; battlegrounds are no dungeons
+{
+  const lead = (o) => Object.assign({ name: "Tankie", guid: 1, lead: true, map: 70, x: 0, y: 0 }, o);
+  const U = require(require("path").resolve(require("path").dirname(process.argv[2]), "unitinfo.js"));
+  const mod = { commander: "Gb", bound_at: 5000, bots: [lead()], bosses_map: 70, bosses: [
+    { e: 6910, n: "Revelosh", x: 1, y: 1, s: "u", p: 1 }, { e: 6906, n: "Baelog", x: 2, y: 2, s: "u", p: 1 }] };
+  const ev = (o) => Object.assign({ kind: "boss", map: 70, x: 3, y: 3 }, o);
+  const stale = [ev({ t: 4000, entry: 6910, name: "Revelosh" }), ev({ t: 4990, name: "Baelog" })];
+  let r = C.bossRoster(mod, 70, { events: stale, since: 5000 });
+  assert.deepStrictEqual(r.map((b) => b.state), ["unknown", "unknown"], "kills from before the binding began are stale");
+  const ri = U.newEvents();
+  assert.strictEqual(U.runInfo(mod, ri, 5010, r).text, "Run 00:10 · bosses 0 / 2 killed");
+  r = C.bossRoster(mod, 70, { events: [ev({ t: 5000, entry: 6910 }), ev({ t: 6000, name: "Baelog" })], since: 5000 });
+  assert.deepStrictEqual(r.map((b) => b.state), ["dead", "dead"], "kills since the binding began count");
+  assert.strictEqual(C.bossRoster(mod, 70, { events: [ev({ t: 10, entry: 6910 })] })[0].state, "dead", "no start known: every kill counts");
+  assert.strictEqual(C.bossRoster(mod, 70, { events: [ev({ entry: 6910 })], since: 5000 })[0].state, "unknown", "a kill with no time is not trusted once a start is known");
+  assert.strictEqual(C.bossRoster(mod, 70, { events: [ev({ t: 100, entry: 999, name: "Old", x: 1, y: 1 })], since: 5000 }).length, 2, "a stale kill adds no boss");
+  // the name fallback takes a boss not killed yet before a killed one of the same name
+  const twins = { bots: [lead()], bosses_map: 70, bosses: [{ e: 7, n: "Executioner", x: 1, y: 1, s: "d" }, { e: 8, n: "Executioner", x: 2, y: 2, s: "u" }] };
+  r = C.bossRoster(twins, 70, { events: [ev({ t: 1, name: "Executioner" })] });
+  assert.deepStrictEqual(r.map((b) => b.state), ["dead", "dead"], "the second one, not the killed one again");
+  r = C.bossRoster(twins, 70, { events: [ev({ t: 1, name: "Executioner" }), ev({ t: 2, name: "Executioner" })] });
+  assert.strictEqual(r.length, 2, "a kill of an already killed name adds no duplicate");
+  // a binding with a different guid and the same name never shares (both sides have guids)
+  const dgn = { commander: "dgn:70:1", dungeon: true, bots: [{ name: "Tankie", guid: 11, map: 70 }] };
+  const sameName = { commander: "Zz", bots: [{ name: "Tankie", guid: 99, map: 70, lead: true }], bosses_map: 70, bosses: [{ e: 5, n: "X", x: 0, y: 0, s: "a" }] };
+  assert.deepStrictEqual(C.sharingBindings(dgn, [sameName]), [], "same name, other guid: not the same bot");
+  assert.deepStrictEqual(C.bossRoster(dgn, 70, { others: [sameName] }), []);
+  assert.strictEqual(C.sharingBindings({ dungeon: true, bots: [{ name: "Tankie", map: 70 }] }, [sameName]).length, 1, "a missing guid falls back to the name");
+  // battlegrounds and arenas are not dungeons
+  [30, 489, 529, 566, 607, 618, 559, 562, 572].forEach((m) => assert.strictEqual(C.isDungeonMap(m), false, "bg/arena " + m));
+  assert.strictEqual(C.bossCount, undefined, "the count lives in UnitInfo (one place)");
 }
 console.log("commanders.js ok");

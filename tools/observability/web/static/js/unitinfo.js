@@ -321,6 +321,13 @@
   // name the next boss (default bind.run). next: the first plan boss step at or after the run's step whose boss is not killed; else the
   // first boss seen alive. Without a roster: the bosses seen here, killed of seen (the open world, an older page).
   const BOSS_WORD = { alive: "alive", dead: "killed", unknown: "not seen" };
+  // How many bosses of a roster (CmdView.bossRoster) are killed, of how many: {down, total, outside}. The run bosses are the ones a plan
+  // names (plan); when none is marked (an older module, a dungeon without a plan) every boss counts. outside: the bosses left out.
+  function bossCount(roster) {
+    const r = Array.isArray(roster) ? roster.filter(Boolean) : [];
+    const run = r.some((b) => b.plan) ? r.filter((b) => b.plan) : r;
+    return { down: run.filter((b) => b.state === "dead").length, total: run.length, outside: r.filter((b) => run.indexOf(b) < 0) };
+  }
   function runInfo(bind, ev, nowSec, roster, opt) {
     const o = opt || {};
     const m = ev.by[bind.commander];
@@ -336,9 +343,8 @@
     const all = Array.isArray(roster) ? roster.filter(Boolean) : [];
     let title = "", next = "";
     if (all.length) {
-      const runB = all.some((b) => b.plan) ? all.filter((b) => b.plan) : all;
-      const outside = all.filter((b) => runB.indexOf(b) < 0);
-      parts.push("bosses " + runB.filter((b) => b.state === "dead").length + " / " + runB.length + " killed");
+      const count = bossCount(all), outside = count.outside;
+      parts.push("bosses " + count.down + " / " + count.total + " killed");
       if (outside.length) {
         title = outside.length + " more boss" + (outside.length === 1 ? "" : "es") + " outside the plan: "
           + outside.map((b) => str(b.name) + " (" + (BOSS_WORD[b.state] || "not seen") + ")").join(", ");
@@ -390,7 +396,7 @@
 
   const api = {
     runBrief,
-    activity, actionPhrase, describeBot, describeMob, describeBoss, describeCommander, describeObject, describeNote, describeEvent, boxPosition, hpBar, hpClass, threatClass, targetMarks, statusIcons,
+    activity, actionPhrase, describeBot, describeMob, describeBoss, bossCount, describeCommander, describeObject, describeNote, describeEvent, boxPosition, hpBar, hpClass, threatClass, targetMarks, statusIcons,
     newEvents, noteEvents, eventsOf, firstSeen, pruneEvents, clockText, feedLine, pinsOn, runInfo, dist, CC_WORD,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.UnitInfo = api;

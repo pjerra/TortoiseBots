@@ -243,6 +243,12 @@ assert.ok(/boss = on\.bossmark && CmdView\.isBoss\(m, planBosses\)/.test(src) &&
   const rf = vm.runInContext("cmdMapFacts(rbBind)", ctx);
   assert.deepStrictEqual(J(rf.roster.map((b) => [b.entry, b.state])), [[6910, "dead"], [2748, "unknown"]]);
   assert.strictEqual(rf.ctx.bossRoster, true); assert.strictEqual(rf.dungeonMap, true, "map 70 is a dungeon");
+  // a kill from before the binding began (an instance reset) does not count; one after it does
+  vm.runInContext('cmdEvents.by.RB = { first: 0, alive: {}, bosses: {}, orders: {}, list: [{ kind: "boss", map: 70, t: 900, entry: 2748, name: "Archaedas", x: 3, y: 4 }] }; rbBind.bound_at = 1000;', ctx);
+  assert.strictEqual(vm.runInContext("cmdMapFacts(rbBind)", ctx).roster[1].state, "unknown", "a stale kill is ignored");
+  vm.runInContext("cmdEvents.by.RB.list[0].t = 1001;", ctx);
+  assert.strictEqual(vm.runInContext("cmdMapFacts(rbBind)", ctx).roster[1].state, "dead", "a kill since the binding began counts");
+  vm.runInContext("delete cmdEvents.by.RB; delete rbBind.bound_at;", ctx);
   ctx.rbOpen = Object.assign({}, ctx.rbBind, { commander: "RO", bosses: undefined, bots: [Object.assign({}, ctx.rbBind.bots[0], { map: 1 })] });
   const ro = vm.runInContext("cmdMapFacts(rbOpen)", ctx);
   assert.deepStrictEqual(J(ro.roster), []); assert.strictEqual(ro.ctx.bossRoster, false); assert.strictEqual(ro.dungeonMap, false, "Kalimdor is the open world");

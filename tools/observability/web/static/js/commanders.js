@@ -451,7 +451,9 @@
 
   // Whether a map id is a dungeon or raid (anything but the open-world continents: Eastern Kingdoms, Kalimdor, and the later clients'
   // Outland and Northrend); false for a missing id.
-  const CONTINENTS = { 0: 1, 1: 1, 530: 1, 571: 1 };
+  // ... nor a battleground or arena: Alterac Valley, Warsong Gulch, Arathi Basin, Eye of the Storm, Strand of the Ancients, Isle of Conquest
+  // and the arenas (Nagrand, Blade's Edge, Ruins of Lordaeron, Dalaran, Ring of Valor)
+  const CONTINENTS = { 0: 1, 1: 1, 530: 1, 571: 1, 30: 1, 489: 1, 529: 1, 566: 1, 607: 1, 628: 1, 559: 1, 562: 1, 572: 1, 617: 1, 618: 1 };
   function isDungeonMap(mapId) { return num(mapId) && mapId >= 0 && !CONTINENTS[mapId]; }
 
   const BOSSES_MAX = 32;
@@ -459,7 +461,8 @@
   const posOk = (o) => !!o && num(o.x) && num(o.y);
 
   // Every known boss of mapId for one card: [{entry, name, x, y, state: alive|dead|unknown, source: module|plan|seen, live}], at most
-  // BOSSES_MAX. o = {others (the commander bindings, for a Dungeons-tab card), mobs (the units drawn on this map), events (this card's)}.
+  // BOSSES_MAX. o = {others (the commander bindings, for a Dungeons-tab card), mobs (the units drawn on this map), events (this card's),
+  // since (unix seconds the binding began, bound_at: a kill from before it, or with no time, is stale - an instance reset, an earlier run)}.
   // Where a boss is: its spawn point from the module's list (bosses/bosses_map, the instance the lead is in), else the run plan's boss
   // step (of the lead's map), else where it was seen alive or killed. Its state, strongest first: a living unit of that entry in the
   // feed (alive), the module's letter (a, d), a "boss down" event of this card on this map (dead, by entry or name), else unknown.
@@ -504,8 +507,12 @@
     });
     (opt.events || []).forEach((e) => {
       if (!e || e.kind !== "boss" || e.map !== mapId) return;
+      if (num(opt.since) && opt.since > 0 && !(num(e.t) && e.t >= opt.since)) return;
       let i = num(e.entry) && e.entry > 0 ? at[e.entry] : undefined;
-      if (i === undefined && e.name) i = out.findIndex((b) => b.name === e.name);
+      if (i === undefined && e.name) {
+        i = out.findIndex((b) => b.name === e.name && b.state !== "dead");
+        if (i < 0) i = out.findIndex((b) => b.name === e.name);
+      }
       let b = i !== undefined && i >= 0 ? out[i] : null;
       if (!b && posOk(e) && num(e.entry) && e.entry > 0) b = add(e.entry, e.name, e.x, e.y, "dead", "seen");
       if (!b && posOk(e) && e.name && out.length < BOSSES_MAX) {
@@ -517,14 +524,6 @@
     });
     out.forEach((b) => { if (b.entry > 0 && plan[b.entry]) b.plan = true; });
     return out.map((b) => ({ entry: b.entry, name: b.name, x: b.x, y: b.y, state: b.state, source: b.source, live: b.live, plan: b.plan }));
-  }
-
-  // How many bosses of a roster are killed, of how many: {down, total, outside}. The run bosses are the ones a plan names (plan); when
-  // none is marked (an older module, a dungeon without a plan) every boss counts. outside: the bosses left out of the count.
-  function bossCount(roster) {
-    const r = Array.isArray(roster) ? roster.filter(Boolean) : [];
-    const run = r.some((b) => b.plan) ? r.filter((b) => b.plan) : r;
-    return { down: run.filter((b) => b.state === "dead").length, total: run.length, outside: r.filter((b) => run.indexOf(b) < 0) };
   }
 
   // Lines from each mob to the bot it targets: [{mob, bot}] (both with game x, y). Only bots on the list count.
@@ -727,7 +726,7 @@
     HEAL_RANGE_YD, FAR_YD, LOW_HP_PCT, STALE_WARN_SEC, pretty, plural, ageText, roleKey, roleLabel, distance, leadBot, partyRows, orderText, stateWord,
     headerText, headerParts, botHref, warnings, newTracker, note, context, prune, project, fitView, viewBox, zoomAt, panBy, pinch, gridStep, gridLines,
     trailSegments, markGap, trailSegmentsBroken, trailRuns, trailMarks, trailEvent, jumpLimitYd, TRAVEL_MAX_YD_PER_SEC, TRAVEL_SLACK_YD, TRAVEL_MAX_GAP_SEC, clampScale, prependTrail, heading, trailStamps, scaleBar, zonesIn, pictureSlots, pictureChoice, pictureSelect, pictureRefreshAfter, PIC_RETRY_MS, PIC_MISSING_MS,
-    AGGRO_RANGE_YD, followView, zoomFollow, pinchFollow, mobsOf, mobClass, bossEntries, isBoss, bossRoster, bossCount, sharingBindings, isDungeonMap, BOSSES_MAX, threatLines, botTargetLines, aggroMobs, commanderPlace,
+    AGGRO_RANGE_YD, followView, zoomFollow, pinchFollow, mobsOf, mobClass, bossEntries, isBoss, bossRoster, sharingBindings, isDungeonMap, BOSSES_MAX, threatLines, botTargetLines, aggroMobs, commanderPlace,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.CmdView = api;
 })(typeof self !== "undefined" ? self : this);
