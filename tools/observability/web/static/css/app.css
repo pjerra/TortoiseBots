@@ -2929,7 +2929,7 @@ select.input {
 .cmd-map .cmdr polygon { fill: #facc15; stroke: #000; stroke-width: 1; vector-effect: non-scaling-stroke; }
 .cmd-map .cmdr text { fill: #facc15; font-weight: 600; paint-order: stroke; stroke: #000; stroke-linejoin: round; }
 .cmd-legend i.mobh, .cmd-legend i.mobn, .cmd-legend i.mobc { border-color: #000; }
-.cmd-legend i.mobh { background: #ef4444; } .cmd-legend i.mobn { background: #9ca3af; } .cmd-legend i.mobc { background: #a8a29e; width: 8px; height: 8px; }
+.cmd-legend i.mobh { background: #ef4444; } .cmd-legend i.mobn { background: #eab308; } .cmd-legend i.mobc { background: #a8a29e; width: 8px; height: 8px; }
 .cmd-legend i.lthreat, .cmd-legend i.ltarget { width: 16px; height: 0; border: 0; border-radius: 0; border-top: 2px solid #ef4444; vertical-align: 3px; }
 .cmd-legend i.ltarget { border-top: 2px dashed #58a6ff; }
 .cmd-legend i.cmdr { width: 9px; height: 9px; border: 1px solid #000; border-radius: 0; background: #facc15; transform: rotate(45deg); }
@@ -2972,7 +2972,7 @@ select.input {
 .cmd-map .hit { fill: transparent; stroke: none; pointer-events: all; }
 .cmd-map .mob circle.body { stroke: #000; stroke-width: 1; vector-effect: non-scaling-stroke; }
 .cmd-map .mob.hostile circle.body { fill: #ef4444; }
-.cmd-map .mob.neutral circle.body { fill: #9ca3af; }
+.cmd-map .mob.neutral circle.body { fill: #eab308; } /* WoW yellow: a grey neutral read as dead */
 .cmd-map .mob.critter circle.body { fill: #a8a29e; stroke: rgba(0, 0, 0, 0.5); }
 .cmd-map .mob.boss circle.body { stroke: #facc15; stroke-width: 2; }
 .cmd-map text.mname { fill: #fecaca; font-weight: 600; paint-order: stroke; stroke: #000; stroke-linejoin: round; pointer-events: none; }

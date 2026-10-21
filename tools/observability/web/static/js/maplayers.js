@@ -2,7 +2,7 @@
 // Commanders tab map layers: which things a map draws. One choice for every card (and every map), kept in the browser once, not per
 // map. Pure logic (no page, no markup) so a test can run it under node (internal/commandersjs). app.js draws and shows the panel.
 //
-// The panel offers 19 layers in 5 groups. Several of them are merges of the finer switches the maps used before: `effective(state)`
+// The panel offers 20 layers in 5 groups. Several of them are merges of the finer switches the maps used before: `effective(state)`
 // returns those older keys (mobhostile, mobneutral, trail, threatcolors, ...) computed from the new ones, and app.js's drawing code
 // reads them, so the draw code did not have to change shape.
 //
@@ -59,7 +59,7 @@
     objects: { def: false, needs: "objects", why: "the game server does not report objects yet (it needs the newer module)" },
   };
 
-  // The 19 layers the panel offers. `parts` are the old switches each one replaces; `styleFrom` is the old line key whose opacity and
+  // The 20 layers the panel offers. `parts` are the old switches each one replaces; `styleFrom` is the old line key whose opacity and
   // thickness a merged line layer takes over (its first old key that had a style).
   const DEFS = [
     { key: "bg", label: "Map picture", group: "Map", def: true, parts: ["bg"],
@@ -68,8 +68,10 @@
       tip: "The distance grid over the map and the scale bar under it." },
     { key: "zone", label: "Zone names", group: "Map", def: true, parts: ["zone", "zonelabels"],
       tip: "The outline and name of the party's zone, and the names of the zones around." },
-    { key: "bots", label: "Bots and lead mark", group: "Party", def: true, parts: ["bots", "botnames", "lead"],
-      tip: "A dot with its name for every bot on the map; the lead's name is starred and ringed." },
+    { key: "bots", label: "Bots and lead mark", group: "Party", def: true, parts: ["bots", "lead"],
+      tip: "A dot for every bot on the map; the lead is ringed." },
+    { key: "botnames", label: "Bot names", group: "Party", def: true, parts: ["botnames"],
+      tip: "The name next to every bot on the map (the lead's is starred). Turn it off when the names cover a fight." },
     { key: "hpbars", label: "Health bars and status icons", group: "Party", def: true, parts: ["hpbars", "statusicons"],
       tip: "A health bar over every unit, and icons for dead, casting, crowd controlled, drinking or eating, and fleeing." },
     { key: "leadpath", label: "Lead path", group: "Party", def: true, line: true, styleFrom: "trail", parts: ["trail", "trailtime", "heading"],
@@ -134,6 +136,8 @@
     const out = defaults();
     if (raw && typeof raw === "object" && !Array.isArray(raw)) {
       DEFS.forEach((d) => { if (typeof raw[d.key] === "boolean") out[d.key] = raw[d.key]; });
+      // a choice saved before the names had their own layer: they were part of "bots", so they follow it
+      if (typeof raw.botnames !== "boolean" && typeof raw.bots === "boolean") out.botnames = raw.bots;
       if ("dim" in raw) out.dim = clampDim(raw.dim);
       if ("trailLen" in raw) out.trailLen = clampTrailLen(raw.trailLen);
       if (raw.style && typeof raw.style === "object" && !Array.isArray(raw.style)) {
@@ -245,7 +249,7 @@
     return out;
   }
 
-  // What each of the 19 layers can be drawn from, for one map (one card): {key: {ok, why}}. ctx has the booleans named in
+  // What each of the 20 layers can be drawn from, for one map (one card): {key: {ok, why}}. ctx has the booleans named in
   // OLD_LAYERS' `needs`; a missing one counts as false. ok when ANY of the layer's parts has its data (the rest is simply not drawn);
   // why lists the missing parts' reasons.
   function availability(ctx) {

@@ -421,4 +421,22 @@ assert.strictEqual(C.jumpLimitYd(500), 612, "...and at most 30 s, so a long sile
   assert.strictEqual(C.trailEvent({ gap: true }, { map: 1, x: 0, y: 0, t: 1 }), "g");
   stepg(60, 106); assert.strictEqual(tg.trail.Gbmage.pts[3].length, 3, "only that one point");
 }
+// ---- bosses: a dungeon boss is an elite (rank 1) to the game server, so the module's rank letter is "e"; the run plan's boss steps
+// name the bosses (live 2026-10-21: Kresh 3653, Lord Cobrahn 3669 and Lady Anacondra 3671 all came as rank "e").
+{
+  const run = { plan_steps: [{ i: 1, k: "move", x: 0, y: 0, e: 3669 }, { i: 2, k: "boss", x: 5, y: 5, e: 3669 }, { i: 3, k: "boss", x: 9, y: 9 },
+    { i: 4, k: "pull", x: 1, y: 1, e: 3840 }, { i: 5, k: "boss", x: 7, y: 7, e: 3671, sk: true }] };
+  const be = C.bossEntries({ run });
+  assert.deepStrictEqual(Object.keys(be).sort(), ["3669", "3671"], "only boss steps with an entry (a skipped one still names a boss)");
+  assert.deepStrictEqual(C.bossEntries({}), {}, "no run, no plan bosses");
+  assert.deepStrictEqual(C.bossEntries({ run: { plan_steps: null } }), {});
+  assert.deepStrictEqual(C.bossEntries(null), {});
+  const cobrahn = { id: "1", entry: 3669, rank: "e", reaction: "h" }, trash = { id: "2", entry: 3840, rank: "e", reaction: "h" };
+  assert.strictEqual(C.isBoss(cobrahn, be), true, "an elite the plan calls a boss is a boss");
+  assert.strictEqual(C.isBoss(trash, be), false, "an elite pull target is not");
+  assert.strictEqual(C.isBoss(cobrahn, {}), false, "without the plan an elite is not a boss");
+  assert.strictEqual(C.isBoss({ id: "3", entry: 1, rank: "b" }, {}), true, "the module's boss rank always counts");
+  assert.strictEqual(C.isBoss({ id: "3", entry: 1, rank: "b" }), true, "no plan map given");
+  assert.strictEqual(C.isBoss(null, be), false);
+}
 console.log("commanders.js ok");

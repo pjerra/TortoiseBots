@@ -418,6 +418,22 @@
     return m.reaction === "h" ? "hostile" : "neutral";
   }
 
+  // The creature entries the run plan's boss steps name, as {entry: true} ({} without a run or plan steps). The module's rank letter
+  // says "b" only for a world boss or a boss that binds the instance, so a five-man dungeon boss (an elite to the game) comes as "e";
+  // the plan is what knows it is a boss. Only the current section's steps are reported, which is where the party is.
+  function bossEntries(bind) {
+    const out = {};
+    const steps = bind && bind.run && Array.isArray(bind.run.plan_steps) ? bind.run.plan_steps : [];
+    steps.forEach((s) => { if (s && s.k === "boss" && num(s.e) && s.e > 0) out[s.e] = true; });
+    return out;
+  }
+
+  // Whether a mob is drawn as a boss: the module says so, or the run plan names its entry as a boss.
+  function isBoss(m, entries) {
+    if (!m) return false;
+    return m.rank === "b" || !!(entries && num(m.entry) && entries[m.entry]);
+  }
+
   // Lines from each mob to the bot it targets: [{mob, bot}] (both with game x, y). Only bots on the list count.
   function threatLines(mobs, bots) {
     const byId = {};
@@ -618,7 +634,7 @@
     HEAL_RANGE_YD, FAR_YD, LOW_HP_PCT, STALE_WARN_SEC, pretty, plural, ageText, roleKey, roleLabel, distance, leadBot, partyRows, orderText, stateWord,
     headerText, headerParts, botHref, warnings, newTracker, note, context, prune, project, fitView, viewBox, zoomAt, panBy, pinch, gridStep, gridLines,
     trailSegments, markGap, trailSegmentsBroken, trailRuns, trailMarks, trailEvent, jumpLimitYd, TRAVEL_MAX_YD_PER_SEC, TRAVEL_SLACK_YD, TRAVEL_MAX_GAP_SEC, clampScale, prependTrail, heading, trailStamps, scaleBar, zonesIn, pictureSlots, pictureChoice, pictureSelect, pictureRefreshAfter, PIC_RETRY_MS, PIC_MISSING_MS,
-    AGGRO_RANGE_YD, followView, zoomFollow, pinchFollow, mobsOf, mobClass, threatLines, botTargetLines, aggroMobs, commanderPlace,
+    AGGRO_RANGE_YD, followView, zoomFollow, pinchFollow, mobsOf, mobClass, bossEntries, isBoss, threatLines, botTargetLines, aggroMobs, commanderPlace,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.CmdView = api;
 })(typeof self !== "undefined" ? self : this);

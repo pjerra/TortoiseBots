@@ -188,4 +188,26 @@ assert.ok(/if \(!Array\.isArray\(cmdPics\.get\(mapId\)\)\) cmdPics\.set\(mapId, 
   const plain = vm.runInContext('cmdTrailSvg(dc, "leadpath", "trail", tpts, 1, 3)', ctx);
   assert.ok(!/ic-swirl|ic-skull/.test(plain), "no marks on a plain walk");
 }
+// ---- a neutral mob must not look dead: WoW draws neutral units yellow, and the map's dead tone is grey (owner 2026-10-21: Kresh, a
+// neutral turtle in Wailing Caverns, read as a dead unit while it walked). The legend shows the same colour as the map.
+{
+  const css = fs.readFileSync(path.join(dir, "..", "css", "app.css"), "utf8");
+  const colour = (sel, prop) => {
+    const i = css.indexOf(sel + " {");
+    assert.ok(i >= 0, sel + " not in app.css");
+    const m = new RegExp(prop + ":\\s*(#[0-9a-fA-F]{6})").exec(css.slice(i, css.indexOf("}", i)));
+    assert.ok(m, sel + " has no " + prop);
+    return m[1].toLowerCase();
+  };
+  const rgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+  const chroma = (h) => { const c = rgb(h); return Math.max(...c) - Math.min(...c); };
+  const neutral = colour(".cmd-map .mob.neutral circle.body", "fill");
+  assert.ok(chroma(neutral) >= 80, "neutral mobs are a colour, not a grey: " + neutral);
+  assert.strictEqual(colour(".cmd-legend i.mobn", "background"), neutral, "the legend's neutral swatch is the map's");
+  assert.notStrictEqual(neutral, colour(".cmd-legend i.dead", "background"));
+  assert.ok(chroma(colour(".cmd-legend i.dead", "background")) < 40, "dead stays grey");
+}
+// ---- the map crowns a mob the run plan names as a boss, not only one the module ranks "b"
+assert.ok(/boss = on\.bossmark && CmdView\.isBoss\(m, planBosses\)/.test(src) && /const planBosses = CmdView\.bossEntries\(bind\)/.test(src),
+  "drawCmdMap marks bosses through CmdView.isBoss with the plan's boss entries");
 console.log("drawing ok");
