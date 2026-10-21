@@ -2975,6 +2975,7 @@ select.input {
 .cmd-map .mob.neutral circle.body { fill: #eab308; } /* WoW yellow: a grey neutral read as dead */
 .cmd-map .mob.critter circle.body { fill: #a8a29e; stroke: rgba(0, 0, 0, 0.5); }
 .cmd-map .mob.boss circle.body { stroke: #facc15; stroke-width: 2; }
+.cmd-map .mob.neutral.boss circle.body { stroke: #ffffff; } /* the yellow ring would vanish on a yellow (neutral) body */
 .cmd-map text.mname { fill: #fecaca; font-weight: 600; paint-order: stroke; stroke: #000; stroke-linejoin: round; pointer-events: none; }
 .cmd-map text.mname.boss { fill: #facc15; font-weight: 700; }
 .cmd-map .bot text, .cmd-map .cmdr text { pointer-events: none; }

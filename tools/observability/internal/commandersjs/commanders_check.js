@@ -438,5 +438,17 @@ assert.strictEqual(C.jumpLimitYd(500), 612, "...and at most 30 s, so a long sile
   assert.strictEqual(C.isBoss({ id: "3", entry: 1, rank: "b" }, {}), true, "the module's boss rank always counts");
   assert.strictEqual(C.isBoss({ id: "3", entry: 1, rank: "b" }), true, "no plan map given");
   assert.strictEqual(C.isBoss(null, be), false);
+  // A Dungeons-tab card is a pseudo-binding with no run of its own (the live run report has no plan): it borrows the boss steps of
+  // the commander binding whose party shares a bot with it, and only of that one.
+  const dgn = { commander: "dgn:43:1", dungeon: true, bots: [{ name: "Tankie", guid: 11, map: 43 }, { name: "Heals", guid: 12, map: 43 }] };
+  const mine = { commander: "Gb", bots: [{ name: "Heals", guid: 12, map: 43 }], run };
+  const other = { commander: "Zz", bots: [{ name: "Else", guid: 99, map: 43 }], run: { plan_steps: [{ i: 1, k: "boss", x: 0, y: 0, e: 5775 }] } };
+  assert.deepStrictEqual(Object.keys(C.bossEntries(dgn, [other, mine])).sort(), ["3669", "3671"], "the run's own commander's plan");
+  assert.deepStrictEqual(C.bossEntries(dgn, [other]), {}, "no shared bot, no plan");
+  assert.deepStrictEqual(C.bossEntries(dgn), {}, "no commanders given");
+  assert.deepStrictEqual(Object.keys(C.bossEntries(Object.assign({}, dgn, { dungeon: false }), [mine])), [], "a commander card reads only its own run");
+  assert.deepStrictEqual(Object.keys(C.bossEntries({ dungeon: true, bots: [{ name: "Heals", map: 43 }] }, [{ bots: [{ name: "Heals", map: 43 }], run }])).sort(),
+    ["3669", "3671"], "matched by name when there is no guid");
+  assert.strictEqual(C.isBoss(cobrahn, C.bossEntries(dgn, [mine])), true, "Cobrahn is crowned on the Dungeons card");
 }
 console.log("commanders.js ok");

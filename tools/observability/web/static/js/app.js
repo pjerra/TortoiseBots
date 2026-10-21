@@ -5510,7 +5510,8 @@
       return o;
     };
     const marks = on.threatcolors ? UnitInfo.targetMarks(mobs, onMap) : { tank: {}, pull: {} };
-    const planBosses = CmdView.bossEntries(bind); // a dungeon boss is an elite to the server: the run plan's boss steps name it
+    // a dungeon boss is an elite to the server: the run plan's boss steps name it (a Dungeons-tab card borrows its commander's plan)
+    const planBosses = CmdView.bossEntries(bind, bind.dungeon ? state.commanders.list : null);
     shown.forEach(m => {
       const p = CmdView.project(m.x, m.y), cls = CmdView.mobClass(m), boss = on.bossmark && CmdView.isBoss(m, planBosses);
       const r = (boss ? 9 : cls === 'critter' ? 3 : 5) * k, uid = 'm:' + m.id;

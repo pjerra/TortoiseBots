@@ -421,10 +421,22 @@
   // The creature entries the run plan's boss steps name, as {entry: true} ({} without a run or plan steps). The module's rank letter
   // says "b" only for a world boss or a boss that binds the instance, so a five-man dungeon boss (an elite to the game) comes as "e";
   // the plan is what knows it is a boss. Only the current section's steps are reported, which is where the party is.
-  function bossEntries(bind) {
+  // A Dungeons-tab card (bind.dungeon) has no run of its own: it takes the plans of the commander bindings in `others` whose party
+  // shares a bot with it (by guid, or by name when a guid is missing).
+  function bossEntries(bind, others) {
     const out = {};
-    const steps = bind && bind.run && Array.isArray(bind.run.plan_steps) ? bind.run.plan_steps : [];
-    steps.forEach((s) => { if (s && s.k === "boss" && num(s.e) && s.e > 0) out[s.e] = true; });
+    const add = (b) => {
+      const steps = b && b.run && Array.isArray(b.run.plan_steps) ? b.run.plan_steps : [];
+      steps.forEach((s) => { if (s && s.k === "boss" && num(s.e) && s.e > 0) out[s.e] = true; });
+    };
+    add(bind);
+    if (bind && bind.dungeon && Array.isArray(others)) {
+      const mine = Array.isArray(bind.bots) ? bind.bots.filter(Boolean) : [];
+      const same = (a, b) => (a.guid != null && b.guid != null ? a.guid === b.guid : !!a.name && a.name === b.name);
+      others.forEach((o) => {
+        if (o && !o.dungeon && Array.isArray(o.bots) && o.bots.some((b) => b && mine.some((m) => same(m, b)))) add(o);
+      });
+    }
     return out;
   }
 

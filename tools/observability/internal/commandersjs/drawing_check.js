@@ -206,8 +206,13 @@ assert.ok(/if \(!Array\.isArray\(cmdPics\.get\(mapId\)\)\) cmdPics\.set\(mapId, 
   assert.strictEqual(colour(".cmd-legend i.mobn", "background"), neutral, "the legend's neutral swatch is the map's");
   assert.notStrictEqual(neutral, colour(".cmd-legend i.dead", "background"));
   assert.ok(chroma(colour(".cmd-legend i.dead", "background")) < 40, "dead stays grey");
+  // a neutral boss (Kresh) keeps a visible outline: the boss ring is yellow, so on a yellow body it gets its own, far from both
+  const dist = (a, b) => { const x = rgb(a), y = rgb(b); return Math.hypot(x[0] - y[0], x[1] - y[1], x[2] - y[2]); };
+  const nb = colour(".cmd-map .mob.neutral.boss circle.body", "stroke");
+  assert.ok(dist(nb, neutral) >= 150, "neutral boss outline stands out from its body: " + nb);
+  assert.ok(dist(nb, colour(".cmd-map .mob.boss circle.body", "stroke")) >= 150, "and is not the yellow boss ring");
 }
 // ---- the map crowns a mob the run plan names as a boss, not only one the module ranks "b"
-assert.ok(/boss = on\.bossmark && CmdView\.isBoss\(m, planBosses\)/.test(src) && /const planBosses = CmdView\.bossEntries\(bind\)/.test(src),
+assert.ok(/boss = on\.bossmark && CmdView\.isBoss\(m, planBosses\)/.test(src) && /const planBosses = CmdView\.bossEntries\(bind, bind\.dungeon \? state\.commanders\.list : null\)/.test(src),
   "drawCmdMap marks bosses through CmdView.isBoss with the plan's boss entries");
 console.log("drawing ok");
