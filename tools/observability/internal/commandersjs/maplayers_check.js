@@ -1,5 +1,5 @@
 "use strict";
-// Run by commandersjs_test.go under node: the Commanders tab's map layer state: the 20 layers and their defaults, the migration from
+// Run by commandersjs_test.go under node: the Commanders tab's map layer state: the 21 layers and their defaults, the migration from
 // the 32-switch v2 (and the v1 booleans), effective() (the old keys the drawing code reads), the per-layer greying rule, the mob
 // union of a commander card with its dungeon run, and the "N of M" note.
 const assert = require("assert");
@@ -10,16 +10,16 @@ const mem = () => { const d = {}; return { d, getItem: (k) => (k in d ? d[k] : n
 const oldAll = (v) => { const o = {}; L.OLD_KEYS.forEach((k) => { o[k] = v; }); return o; };
 const oldDefaults = () => { const o = {}; L.OLD_KEYS.forEach((k) => { o[k] = L.OLD_LAYERS[k].def; }); return o; };
 
-// ---- the 20 layers, 5 groups, and the defaults the brief asks for
+// ---- the 21 layers, 5 groups, and the defaults the brief asks for
 const def = L.defaults();
 assert.deepStrictEqual(Object.keys(def).sort(), L.keys().concat(["dim", "trailLen", "style"]).sort());
-assert.strictEqual(L.keys().length, 20);
+assert.strictEqual(L.keys().length, 21);
 assert.deepStrictEqual(L.groups(), ["Map", "Party", "Enemies", "Lines and run", "Objects"]);
-assert.deepStrictEqual(L.keys(), ["bg", "grid", "zone", "bots", "botnames", "hpbars", "leadpath", "memberpaths", "partyextras", "enemies", "critters", "enemynames", "threat", "aggro",
+assert.deepStrictEqual(L.keys(), ["bg", "grid", "zone", "bots", "botnames", "hpbars", "leadpath", "memberpaths", "partyextras", "enemies", "critters", "enemynames", "bosses", "threat", "aggro",
   "actionlines", "runsteps", "events", "stalls", "runinfo", "objects"]);
-["bg", "grid", "zone", "bots", "botnames", "hpbars", "leadpath", "enemies", "enemynames", "threat", "runsteps", "events", "runinfo"].forEach((k) => assert.strictEqual(def[k], true, k));
+["bg", "grid", "zone", "bots", "botnames", "hpbars", "leadpath", "enemies", "enemynames", "bosses", "threat", "runsteps", "events", "runinfo"].forEach((k) => assert.strictEqual(def[k], true, k));
 ["memberpaths", "partyextras", "critters", "aggro", "actionlines", "stalls", "objects"].forEach((k) => assert.strictEqual(def[k], false, k));
-assert.strictEqual(L.DEFS.filter((d) => d.def).length, 13);
+assert.strictEqual(L.DEFS.filter((d) => d.def).length, 14);
 assert.strictEqual(new Set(L.keys()).size, L.keys().length);
 L.DEFS.forEach((d) => {
   assert.ok(d.label && d.group && d.tip, d.key + " has a label, a group and a tooltip");
@@ -36,7 +36,7 @@ assert.strictEqual(new Set(owned).size, owned.length);
 const eff = L.effective(def);
 assert.deepStrictEqual(Object.keys(eff).sort(), L.OLD_KEYS.slice().sort());
 ["bg", "grid", "scale", "zone", "zonelabels", "bots", "botnames", "lead", "trail", "trailtime", "heading", "hpbars", "statusicons", "mobhostile", "mobneutral",
-  "hostilenames", "bossmark", "threatcolors", "threat", "runsteps", "events", "feed", "runinfo"].forEach((k) => assert.strictEqual(eff[k], true, k));
+  "hostilenames", "bossmark", "bossroster", "threatcolors", "threat", "runsteps", "events", "feed", "runinfo"].forEach((k) => assert.strictEqual(eff[k], true, k));
 ["membertrails", "healring", "commander", "mobcritter", "aggro", "bottarget", "healline", "ccline", "stalls", "objects"].forEach((k) => assert.strictEqual(eff[k], false, k));
 const e2 = L.effective(L.set(L.set(L.set(def, "enemies", false), "critters", true), "bots", false));
 assert.strictEqual(e2.mobhostile, false); assert.strictEqual(e2.mobneutral, false); assert.strictEqual(e2.mobcritter, true);
@@ -49,7 +49,7 @@ assert.strictEqual(e3.botnames, false); assert.strictEqual(e3.bots, true); asser
 let av = L.availability({});
 assert.deepStrictEqual(Object.keys(av).sort(), L.keys().slice().sort());
 ["grid", "hpbars", "runinfo"].forEach((k) => assert.strictEqual(av[k].ok, true, k));
-let grey = ["bg", "zone", "bots", "botnames", "leadpath", "memberpaths", "partyextras", "enemies", "critters", "enemynames", "threat", "aggro", "actionlines", "runsteps", "events", "stalls", "objects"];
+let grey = ["bg", "zone", "bots", "botnames", "leadpath", "memberpaths", "partyextras", "enemies", "critters", "enemynames", "bosses", "threat", "aggro", "actionlines", "runsteps", "events", "stalls", "objects"];
 grey.forEach((k) => { assert.strictEqual(av[k].ok, false, k); assert.ok(av[k].why.length > 5, k + " says why"); });
 // the map folder's own reason (the missing minimap's) stands in for the built-in one of the map picture
 assert.strictEqual(L.availability({ pictureWhy: "No minimap picture: indoor dungeon" }).bg.why, "No minimap picture: indoor dungeon");
@@ -335,5 +335,25 @@ assert.strictEqual(L.enemiesText("x", "y"), "");
   const boom = { getItem() { throw new Error("denied"); }, setItem() { throw new Error("denied"); } };
   assert.strictEqual(L.load(boom).botnames, true);
   assert.strictEqual(L.save(boom, L.set(L.defaults(), "botnames", false)), false);
+}
+// ---- the boss roster layer (owner 2026-10-21: every boss of the map, alive or dead, all the time): on by default, its own switch,
+// drawn only with a roster; a choice saved before it existed (v3 without the key, v2, v1) gets it on.
+{
+  const d = L.DEFS.find((x) => x.key === "bosses");
+  assert.strictEqual(d.group, "Enemies"); assert.strictEqual(d.def, true); assert.deepStrictEqual(d.parts, ["bossroster"]);
+  assert.strictEqual(L.availability({}).bosses.ok, false, "no roster, greyed");
+  assert.ok(/boss/.test(L.availability({}).bosses.why));
+  assert.strictEqual(L.availability({ bossRoster: true }).bosses.ok, true);
+  assert.strictEqual(L.availability({ mobs: true }).bosses.ok, false, "the mob feed alone is not a roster");
+  assert.strictEqual(L.active(L.defaults(), L.availability({ bossRoster: true }), { bossRoster: true }).bossroster, true);
+  assert.strictEqual(L.active(L.set(L.defaults(), "bosses", false), L.availability({ bossRoster: true }), { bossRoster: true }).bossroster, false, "switched off");
+  assert.strictEqual(L.active(L.defaults(), L.availability({}), {}).bossroster, false, "no roster, not drawn");
+  assert.strictEqual(L.normalize({ bots: false }).bosses, true, "a v3 choice from before the layer: on");
+  assert.strictEqual(L.normalize({ bosses: false }).bosses, false, "kept off once switched off");
+  const st = mem(); st.setItem(L.PREV_STORAGE_KEY, JSON.stringify(oldDefaults()));
+  assert.strictEqual(L.load(st).bosses, true, "migrated from v2: on");
+  const s1 = mem(); const v1 = oldAll(false); delete v1.bossroster; s1.setItem(L.OLD_STORAGE_KEY, JSON.stringify(v1));
+  assert.strictEqual(L.load(s1).bosses, true, "a v1 choice never had the switch: it stays at its default");
+  assert.strictEqual(L.effective(L.set(L.defaults(), "enemynames", false)).bossroster, true, "not tied to the enemy names");
 }
 console.log("maplayers.js ok");

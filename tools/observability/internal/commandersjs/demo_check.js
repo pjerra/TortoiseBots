@@ -25,7 +25,7 @@ vm.createContext(ctx);
 ["commanders.js", "maplayers.js", "unitinfo.js", "paths.js", "demo.js"].forEach((f) => vm.runInContext(fs.readFileSync(path.join(dir, f), "utf8"), ctx, { filename: f }));
 vm.runInContext(
   [grab("esc"), grabConst("CMD_MAP_ICONS"), grabConst("CMD_OBJECT_ICON"), grab("cmdMapIcon"), grab("cmdLineStyle"), grabConst("cmdPt"), grabConst("CMD_TRAIL_MARKS"), grab("cmdTrailSvg"),
-    grab("cmdMemberTrailsSvg"), grab("cmdRunStepsSvg"), grab("cmdStallsSvg"), grab("cmdObjectsSvg"), grab("cmdLineSvg"), grab("cmdNotePaths")].join("\n") +
+    grab("cmdMemberTrailsSvg"), grab("cmdRunStepsSvg"), grab("cmdStallsSvg"), grab("cmdObjectsSvg"), grab("cmdBossRosterSvg"), grab("cmdLineSvg"), grab("cmdNotePaths")].join("\n") +
   "\nvar cmdLayers = MapLayers.defaults(); var cmdTrails = CmdPaths.newTrails(); var cmdStalls = CmdPaths.newStalls(); var cmdTracker = CmdView.newTracker(); var cmdEvents = UnitInfo.newEvents();" +
   "\ncmdLayers.trailLen = 240;", ctx);
 const same = (a, b, m) => assert.strictEqual(JSON.stringify(a), JSON.stringify(b), m);
@@ -97,7 +97,12 @@ for (let sec = 1000; sec <= 1000 + 2 * D.LOOP; sec += 2) {
   const evs = U.eventsOf(ctx.cmdEvents, bind.commander);
   evs.forEach((e) => events.add(e.kind));
   mark("events", U.pinsOn(evs, mapId, 30).length); mark("feed", evs.length);
-  const ri = U.runInfo(bind, ctx.cmdEvents, sec); mark("runinfo", ri && ri.text ? 1 : 0);
+  const roster = V.bossRoster(bind, mapId, { mobs, events: U.eventsOf(ctx.cmdEvents, bind.commander) });
+  ctx.roster = roster; ctx.dcx = dc();
+  mark("bossroster", roster.length ? run("cmdBossRosterSvg(dcx, roster)").length : 0);
+  roster.forEach((b) => { seen["boss:" + b.state] = 1; });
+  const ri = U.runInfo(bind, ctx.cmdEvents, sec, roster, { dungeon: V.isDungeonMap(mapId), run: bind.run }); mark("runinfo", ri && ri.text ? 1 : 0);
+  if (ri && ri.title) seen["bossoutside"] = 1;
   ctx.objs = P.objectsOf(bind, mapId); ctx.dcx = dc();
   mark("objects", ctx.objs.length ? run("cmdObjectsSvg(dcx, objs)").length : 0);
   ctx.objStates = (ctx.objStates || new Set()); ctx.objs.forEach((o) => ctx.objStates.add(o.type + o.state));
@@ -117,6 +122,7 @@ L.DEFS.forEach((d) => {
 assert.ok(seen.bg, "the demo card has a picture slot to draw");
 
 // and the pieces the story promises
+["boss:alive", "boss:dead", "boss:unknown", "bossoutside"].forEach((k) => assert.ok(seen[k], "the demo shows " + k));
 ["mobcast", "victim:tank", "victim:healer", "botdead", "rest:d", "rest:e", "cc:c", "cc:f", "botcc:s", "botcc:r", "rank:b", "rank:e",
   "step:cleared", "step:next", "step:skipped", "step:todo", "stall:pause", "stall:refused", "stepk:boss", "stepk:pull", "stepk:move", "stepk:open", "stepk:rest",
   "icon:skull", "icon:spark", "icon:sheep", "icon:arrow", "icon:cup", "icon:stun", "icon:root"].forEach((k) => assert.ok(seen[k], `the demo never shows ${k}`));

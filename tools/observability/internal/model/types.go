@@ -593,6 +593,22 @@ type CommanderBinding struct {
 
 	// Doors, chests, altars and gongs the bots have seen near them (on the map of MobsMap), capped; null = not reported, [] = reported, none seen.
 	Objects []CommanderObject `json:"objects"`
+
+	// Every known boss of the map the lead is on, with its state in the lead's instance (owner 2026-10-21: all bosses on the map, alive or
+	// dead); null = not reported (an older module, or the lead is not in a dungeon or raid), [] = reported, no boss known for the map.
+	BossesMap uint32          `json:"bosses_map,omitempty"`
+	Bosses    []CommanderBoss `json:"bosses"`
+}
+
+// CommanderBoss is one known boss of a dungeon or raid map: where it spawns and whether it lives in the lead's instance. Short keys, as
+// the module sends them (the list rides every 2 s).
+type CommanderBoss struct {
+	Entry uint32  `json:"e"`
+	Name  string  `json:"n"`
+	X     float64 `json:"x"`
+	Y     float64 `json:"y"`
+	State string  `json:"s"`           // a alive, d dead (killed in this instance), u unknown (not loaded or not spawned yet)
+	Plan  uint8   `json:"p,omitempty"` // 1: a plan of this map has a boss step for it (the run's bosses); absent = a boss outside the plan
 }
 
 // CommanderObject is a game object a bot of the binding has seen near it. IDs are decimal strings, as the mobs' are.

@@ -203,6 +203,15 @@
     };
   }
 
+  // ---- the boss list the module sends (bosses/bosses_map): Revelosh lives until he falls, an earlier boss is already killed, the next is
+  // not seen yet, and one boss is outside the plan
+  function bossesAt(t) {
+    const rev = packBoss(24, 0), keeper = ahead(partyAt(0), -30, 20), ironaya = ahead(partyAt(137), 60, -10), archa = ahead(partyAt(137), 120, 30);
+    const b = (e, n, p, st, plan) => { const o = { e, n, x: round1(p.x), y: round1(p.y), s: st }; if (plan) o.p = 1; return o; };
+    return [b(7206, "Ancient Stone Keeper", keeper, "d", true), b(6906, "Revelosh", rev, t >= 124 ? "d" : "a", true), b(7228, "Ironaya", ironaya, "u", true),
+      b(2748, "Archaedas", archa, "u", false)];
+  }
+
   // ---- the orders the commander gave (oldest first, only those already given in this loop)
   function ordersAt(t, start) {
     const bad = ahead(partyAt(T.refused), 40, 30);
@@ -230,7 +239,7 @@
     return {
       commander: COMMANDER, commander_guid: 9000, online: true, view: true, group: 4242, lead: "Simtank", demo: true, bots,
       orders: ordersAt(t, base), commander_pos: { map: MAP, x: round1(cp.x), y: round1(cp.y) }, mobs_map: MAP, mobs, bound_at: Math.floor(start),
-      run: runAt(t, base), objects: objectsAt(t),
+      run: runAt(t, base), objects: objectsAt(t), bosses_map: MAP, bosses: bossesAt(t),
     };
   }
 

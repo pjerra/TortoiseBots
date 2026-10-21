@@ -187,4 +187,70 @@ assert.strictEqual(U.runInfo(bind({ commander: "RR", bound_at: 1000, run }), rr,
   assert.deepStrictEqual([n.title, n.sub, n.tone, n.rows.length], ["Run step 7", "Pull, radius 15 yd", "event", 0]);
   assert.strictEqual(U.describeNote(null, undefined).title, "");
 }
+// ---- the boss roster (owner 2026-10-21): a boss kill names its entry, an elite the module lists (or the plan names) is tracked as a boss,
+// the hover box of a roster mark, and the run line counts the roster
+{
+  const kb = (o) => Object.assign({ commander: "K", bots: [bot({ lead: true })], mobs_map: 70, mobs: [] }, o);
+  let e = U.newEvents();
+  const rev = mob({ id: "77", entry: 6910, rank: "b", hp: 30 });
+  U.noteEvents(e, kb({ mobs: [rev] }), 10);
+  let made = U.noteEvents(e, kb({ mobs: [] }), 12);
+  assert.strictEqual(made[0].kind, "boss"); assert.strictEqual(made[0].entry, 6910, "the kill names the boss's entry");
+  // an elite (the module's rank before the boss table) that the module's boss list names
+  e = U.newEvents();
+  const lst = [{ e: 3669, n: "Lord Cobrahn", x: 0, y: 0, s: "a" }];
+  const cob = mob({ id: "78", entry: 3669, name: "Lord Cobrahn", rank: "e", hp: 20 });
+  U.noteEvents(e, kb({ bosses_map: 70, bosses: lst, mobs: [cob] }), 10);
+  made = U.noteEvents(e, kb({ bosses_map: 70, bosses: lst, mobs: [] }), 12);
+  assert.deepStrictEqual(made.map((x) => [x.kind, x.entry, x.name]), [["boss", 3669, "Lord Cobrahn"]], "a listed elite's kill is a boss kill");
+  e = U.newEvents();
+  U.noteEvents(e, kb({ bosses_map: 43, bosses: lst, mobs: [cob] }), 10);
+  assert.deepStrictEqual(U.noteEvents(e, kb({ bosses_map: 43, bosses: lst, mobs: [] }), 12), [], "another map's list does not count");
+  // the plan's boss entries, passed in
+  e = U.newEvents();
+  U.noteEvents(e, kb({ mobs: [cob] }), 10, { 3669: true });
+  assert.strictEqual(U.noteEvents(e, kb({ mobs: [] }), 12, { 3669: true }).length, 1, "a plan boss's kill counts");
+  e = U.newEvents();
+  U.noteEvents(e, kb({ mobs: [cob] }), 10);
+  assert.deepStrictEqual(U.noteEvents(e, kb({ mobs: [] }), 12), [], "an unlisted elite's death is no boss kill");
+  // the hover box
+  let d = U.describeBoss({ entry: 6910, name: "Revelosh", x: 3, y: 4, state: "dead", source: "module", live: false }, { lead: bot({ x: 0, y: 0 }) });
+  assert.deepStrictEqual([d.title, d.sub, d.tone], ["Revelosh", "Boss · killed", "dead"]);
+  assert.deepStrictEqual(d.rows, [["State", "killed"], ["Where", "its spawn point"], ["From the lead", "5 yd"], ["Known from", "the game server"], ["Entry", "6910"]]);
+  d = U.describeBoss({ entry: 3669, name: "Lord Cobrahn", x: 0, y: 0, state: "alive", source: "plan", live: true }, {});
+  assert.deepStrictEqual([d.sub, d.tone, d.rows[0][1], d.rows[1][1]], ["Boss · alive", "boss", "alive (in sight)", "the run plan's boss step"]);
+  d = U.describeBoss({ entry: 0, name: "", x: 0, y: 0, state: "unknown", source: "seen" }, null);
+  assert.deepStrictEqual([d.title, d.sub, d.rows[0][1], d.rows[1][1]], ["Boss", "Boss · not seen yet", "not seen yet", "where it was seen"]);
+  assert.strictEqual(d.rows.some((r) => r[0] === "Entry"), false, "no entry, no row");
+  // the run line counts the roster when there is one
+  const ri = U.newEvents();
+  U.noteEvents(ri, kb({ commander: "RI", bound_at: 1000 }), 1000);
+  const B = (name, state, plan, entry) => ({ name, state, plan: !!plan, entry: entry || 0 });
+  const RB = kb({ commander: "RI", bound_at: 1000 });
+  let roster = [B("A", "dead"), B("B", "alive"), B("C", "unknown")];
+  let ri2 = U.runInfo(RB, ri, 1010, roster);
+  assert.strictEqual(ri2.text, "Run 00:10 · bosses 1 / 3 killed", "killed of every known boss when no plan marks any");
+  assert.strictEqual(ri2.title, "", "nothing outside the count");
+  // the run bosses are the plan's; the others go to the tooltip
+  roster = [B("Revelosh", "dead", 1, 6910), B("Baelog", "unknown", 1, 6906), B("Kresh", "unknown", 0, 3653), B("Mutanus", "dead", 0, 3654)];
+  ri2 = U.runInfo(RB, ri, 1010, roster);
+  assert.strictEqual(ri2.text, "Run 00:10 · bosses 1 / 2 killed");
+  assert.strictEqual(ri2.title, "2 more bosses outside the plan: Kresh (not seen), Mutanus (killed)");
+  assert.strictEqual(U.runInfo(RB, ri, 1010, [B("A", "dead"), B("Kresh", "alive", 0)].map((b, i) => (i ? b : Object.assign(b, { plan: true })))).title,
+    "1 more boss outside the plan: Kresh (alive)");
+  // next: the first plan boss step at or after the run's step whose boss is not killed
+  const run = { step: 5, plan_steps: [{ i: 2, k: "boss", e: 6910, n: "Revelosh" }, { i: 6, k: "boss", e: 6906, n: "Baelog" }, { i: 9, k: "boss", e: 7228, n: "Ironaya" }] };
+  assert.strictEqual(U.runInfo(RB, ri, 1010, roster, { run }).text, "Run 00:10 · bosses 1 / 2 killed · next: Baelog");
+  const dead6906 = roster.map((b) => (b.entry === 6906 ? Object.assign({}, b, { state: "dead" }) : b));
+  assert.strictEqual(U.runInfo(RB, ri, 1010, dead6906, { run }).text, "Run 00:10 · bosses 2 / 2 killed · next: Ironaya", "a killed boss is not next");
+  assert.strictEqual(U.runInfo(RB, ri, 1010, roster, { run: { step: 1, plan_steps: [{ i: 2, k: "boss", e: 6910, n: "Revelosh" }] } }).text,
+    "Run 00:10 · bosses 1 / 2 killed", "the step's boss is killed: no next from the plan");
+  assert.strictEqual(U.runInfo(RB, ri, 1010, roster, { run: { step: 1, plan_steps: [{ i: 3, k: "boss", e: 6906, sk: true }] } }).text,
+    "Run 00:10 · bosses 1 / 2 killed", "a skipped step is not next");
+  // always a boss count on a dungeon map: a dash when nothing is known; the open world keeps the seen-only count (nothing here)
+  assert.strictEqual(U.runInfo(RB, ri, 1010, [], { dungeon: true }).text, "Run 00:10 · bosses –");
+  assert.strictEqual(U.runInfo(RB, ri, 1010, null, { dungeon: true }).text, "Run 00:10 · bosses –");
+  assert.strictEqual(U.runInfo(RB, ri, 1010, []).text, "Run 00:10", "the open world with nothing known says nothing");
+  assert.strictEqual(U.runInfo(RB, ri, 1010).title, "");
+}
 console.log("unitinfo.js ok");

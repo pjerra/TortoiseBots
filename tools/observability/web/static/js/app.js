@@ -4905,7 +4905,7 @@
     cmdDemo.bind = bind;
     cmdTrails.seeded[bind.commander] = true; // the daemon has no history of it
     CmdView.note(cmdTracker, bind, now);
-    UnitInfo.noteEvents(cmdEvents, bind, now);
+    UnitInfo.noteEvents(cmdEvents, bind, now, CmdView.bossEntries(bind));
     cmdNotePaths(bind, now);
     cmdPruneAll();
     if (state.activeTab === 'commanders') renderCommanders();
@@ -4968,7 +4968,7 @@
       const updatedAt = view.updated_at || Math.round(Date.now() / 1000), receivedAt = Date.now();
       // What the page remembers (paths, hp changes, events) keeps every report, so a slow refresh rate loses no part of a path; while
       // paused it is held too, so nothing on the map moves, and it is replayed in order on resume.
-      refreshGate.note(() => list.forEach(bind => { CmdView.note(cmdTracker, bind, updatedAt); UnitInfo.noteEvents(cmdEvents, bind, updatedAt); cmdNotePaths(bind, updatedAt); }));
+      refreshGate.note(() => list.forEach(bind => { CmdView.note(cmdTracker, bind, updatedAt); UnitInfo.noteEvents(cmdEvents, bind, updatedAt, CmdView.bossEntries(bind)); cmdNotePaths(bind, updatedAt); }));
       refreshGate.submit('commanders', () => {
         c.list = list;
         c.fresh = true;
@@ -5174,6 +5174,9 @@
       + (o.commander ? '<span><i class="cmdr"></i>Commander</span>' : '')
       + (o.aggro ? '<span><i class="aggro"></i>Aggro range (by level)</span>' : '')
       + (o.bossmark ? '<span><i class="lboss"></i>Boss (crown, name shown)</span>' : '')
+      + (o.bossroster ? '<span class="lic lbr alive">boss alive <svg viewBox="-6 -6 12 12" class="ic-crown">' + CMD_MAP_ICONS.crown + '</svg></span>'
+        + '<span class="lic lbr dead">boss killed <svg viewBox="-6 -6 12 12" class="ic-crown">' + CMD_MAP_ICONS.crown + '</svg></span>'
+        + '<span class="lic lbr unknown">boss not seen <svg viewBox="-6 -6 12 12" class="ic-crown">' + CMD_MAP_ICONS.crown + '</svg></span>' : '')
       + (o.hpbars ? '<span><i class="lhp"></i>Health bar</span>' : '')
       + (o.threatcolors ? '<span><i class="tc-tank"></i>On the tank</span><span><i class="tc-other"></i>On someone else</span><span><i class="tc-target"></i>Tank\'s target</span><span><i class="tc-pull"></i>Pull target</span>' : '')
       + (o.statusicons ? '<span class="lic">dead <svg viewBox="-6 -6 12 12" class="ic-skull">' + CMD_MAP_ICONS.skull + '</svg></span><span class="lic">casting <svg viewBox="-6 -6 12 12" class="ic-spark">' + CMD_MAP_ICONS.spark + '</svg></span>'
@@ -5244,6 +5247,14 @@
     const stalls = first ? CmdPaths.stallsOf(cmdStalls, bind.commander, mapId) : [];
     const objs = first ? CmdPaths.objectsOf(bind, mapId) : [];
     const objsReported = !!first && Array.isArray(bind.objects) && bind.mobs_map === mapId;
+    // every known boss of this map, alive, dead or not seen: the module's list of the lead's instance, else the plan's boss steps, the
+    // bosses in sight and this card's kills. A Dungeons-tab card borrows the list, the run and the kills of its own commander binding.
+    const others = bind.dungeon ? ((state.commanders && state.commanders.list) || []) : null;
+    const sharing = CmdView.sharingBindings(bind, others);
+    const bossEvents = [bind].concat(sharing).reduce((a, s) => a.concat(UnitInfo.eventsOf(cmdEvents, s.commander)), []);
+    const roster = first ? CmdView.bossRoster(bind, mapId, { others, mobs, events: bossEvents }) : [];
+    const bossRun = bind.run || (sharing.find(s => s.run) || {}).run || null;
+    const dungeonMap = !!bind.dungeon || CmdView.isDungeonMap(mapId);
     const ctx = {
       memberTrails: !!first && CmdPaths.memberTrails(cmdTrails, bind, mapId, CmdPaths.TRAIL_MAX).length > 0,
       runSteps: steps.length > 0, stalls: stalls.length > 0, objects: objsReported,
@@ -5254,8 +5265,9 @@
       commanderPos: !!commanderAt, mobs: reported, mobTargets: reported, botTargets: reported && onMap.some(b => !!b.id),
       activity: onMap.some(b => b.st != null) || mobs.some(m => m.cast || m.cc),
       events: UnitInfo.eventsOf(cmdEvents, bind.commander).length > 0,
+      bossRoster: roster.length > 0,
     };
-    return { lead, first, onMap, slots, trail, heading, zr, ctx, mobs, mobsTotal, commanderAt, steps, stalls, objs };
+    return { lead, first, onMap, slots, trail, heading, zr, ctx, mobs, mobsTotal, commanderAt, steps, stalls, objs, roster, bossRun, dungeonMap };
   }
 
   // A clock time for a label on the path: the game server's seconds in the browser's locale.
@@ -5369,6 +5381,30 @@
       c.units[uid] = { kind: 'o', obj: o };
       g += `<g class="obj st-${esc(o.state)}" data-u="${esc(uid)}"><circle class="hit" cx="${c.f(p.x)}" cy="${c.f(p.y)}" r="${c.f(11 * c.k)}"/>`
         + cmdMapIcon(CMD_OBJECT_ICON[o.type] || 'gong', p.x, p.y, 12 * c.k) + '</g>';
+    });
+    return g;
+  }
+
+  // Every known boss of the map at its spawn point (CmdView.bossRoster), always named: a gold crown while it lives, a grey one with a tick
+  // and its name struck through once killed, an outlined one when it has not been seen. Drawn under the live mobs: a boss in sight is also
+  // its own mob mark where it stands.
+  function cmdBossRosterSvg(c, roster) {
+    let g = '';
+    const k = c.k;
+    roster.forEach((b, i) => {
+      const p = CmdView.project(b.x, b.y), uid = 'k:' + (b.entry > 0 ? b.entry : 'n' + i);
+      const st = b.state === 'alive' || b.state === 'dead' ? b.state : 'unknown', fs = 11.5 * k;
+      c.units[uid] = { kind: 'k', obj: b };
+      g += `<g class="bossr ${st}" data-u="${esc(uid)}"><circle class="hit" cx="${c.f(p.x)}" cy="${c.f(p.y)}" r="${c.f(12 * k)}"/>`
+        + `<circle class="spawn" cx="${c.f(p.x)}" cy="${c.f(p.y)}" r="${c.f(8 * k)}"/>`
+        + cmdMapIcon('crown', p.x, p.y, 13 * k).replace('class="ic ic-crown"', 'class="ic ic-crown bosscrown"')
+        + `<text class="bname" x="${c.f(p.x + 11 * k)}" y="${c.f(p.y + 4 * k)}" style="font-size:${c.f(fs)}px;stroke-width:${c.f(3 * k)}px">${esc(b.name)}</text>`;
+      if (st === 'dead') {
+        const w = String(b.name || '').length * fs * 0.56;
+        g += `<line class="bstrike" x1="${c.f(p.x + 11 * k)}" y1="${c.f(p.y)}" x2="${c.f(p.x + 11 * k + w)}" y2="${c.f(p.y)}"/>`
+          + `<path class="btick" d="M${c.f(p.x + 2 * k)},${c.f(p.y + 6 * k)}l${c.f(2.5 * k)},${c.f(2.5 * k)}l${c.f(5 * k)},${c.f(-6 * k)}"/>`;
+      }
+      g += '</g>';
     });
     return g;
   }
@@ -5495,6 +5531,7 @@
     }
     g += cmdCombatLinesSvg(dc, on, onMap, mobs);
     if (on.objects) g += cmdObjectsSvg(dc, objs);
+    if (on.bossroster) g += cmdBossRosterSvg(dc, facts.roster);
     // the health bar and status icons over a unit at plane point p, radius r (drawing units)
     const overlay = (u, kind, p, r) => {
       let o = '';
@@ -5584,7 +5621,11 @@
     const evs = UnitInfo.eventsOf(cmdEvents, bind.commander), now = cmdNowFor(bind);
     const run = card.querySelector('.cmd-run');
     run.hidden = !on.runinfo;
-    if (on.runinfo) run.textContent = UnitInfo.runInfo(bind, cmdEvents, now).text;
+    if (on.runinfo) {
+      const ri = UnitInfo.runInfo(bind, cmdEvents, now, facts.roster, { dungeon: facts.dungeonMap, run: facts.bossRun });
+      run.textContent = ri.text;
+      run.title = ri.title;
+    }
     const start = bind.bound_at > 0 ? bind.bound_at : UnitInfo.firstSeen(cmdEvents, bind.commander);
     const feed = card.querySelector('.cmd-feed');
     feed.hidden = !(on.feed && evs.length);
@@ -5621,6 +5662,7 @@
     if (!facts) { tip.hidden = true; return; }
     const ctx = { lead: facts.lead && facts.first && facts.lead.map === facts.first.map ? facts.lead : null, bots: facts.onMap, mobs: facts.mobs };
     const d = u.kind === 'b' ? UnitInfo.describeBot(u.obj, ctx) : u.kind === 'm' ? UnitInfo.describeMob(u.obj, ctx)
+      : u.kind === 'k' ? UnitInfo.describeBoss(u.obj, ctx)
       : u.kind === 'c' ? UnitInfo.describeCommander(u.obj.name, u.obj, ctx)
       : u.kind === 'o' ? UnitInfo.describeObject(u.obj, ctx)
       : u.kind === 's' ? UnitInfo.describeNote('Run step ' + u.obj.i, CmdPaths.stepText(u.obj), 'event')

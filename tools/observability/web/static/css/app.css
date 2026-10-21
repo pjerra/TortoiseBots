@@ -3006,6 +3006,22 @@ select.input {
 .cmd-map .evpin .ic-skull .bgd { stroke: #ef4444; stroke-width: 1.2; }
 .cmd-map .evpin .ic-crown .bgd { stroke: #facc15; stroke-width: 1.2; }
 .cmd-map g.evpin, .cmd-map g.mob, .cmd-map g.cmdr { cursor: help; }
+/* the boss roster: every known boss at its spawn point (gold alive, grey struck-through killed, outlined not seen) */
+.cmd-map g.bossr { cursor: help; }
+.cmd-map g.bossr circle.spawn { fill: rgba(0, 0, 0, 0.35); stroke: #facc15; stroke-width: 1.2px; vector-effect: non-scaling-stroke; }
+.cmd-map g.bossr .ic-crown.bosscrown { fill: #facc15; }
+.cmd-map g.bossr .ic.bosscrown .bgd { fill: none; stroke: none; }
+.cmd-map g.bossr text.bname { fill: #facc15; font-weight: 700; paint-order: stroke; stroke: #000; stroke-linejoin: round; pointer-events: none; }
+.cmd-map g.bossr.dead circle.spawn { stroke: #9ca3af; stroke-dasharray: 2 2; }
+.cmd-map g.bossr.dead .ic-crown.bosscrown { fill: #9ca3af; }
+.cmd-map g.bossr.dead text.bname { fill: #9ca3af; font-weight: 600; text-decoration: line-through; }
+.cmd-map g.bossr line.bstrike { stroke: #d1d5db; stroke-width: 1.4px; vector-effect: non-scaling-stroke; pointer-events: none; }
+.cmd-map g.bossr path.btick { fill: none; stroke: #4ade80; stroke-width: 2px; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.cmd-map g.bossr.unknown circle.spawn { fill: none; stroke-dasharray: 3 2; }
+.cmd-map g.bossr.unknown .ic-crown.bosscrown { fill: none; stroke: #facc15; stroke-width: 1.3; }
+.cmd-map g.bossr.unknown text.bname { fill: #fde68a; opacity: 0.8; font-weight: 600; }
+.cmd-legend .lbr.alive svg.ic-crown { fill: #facc15; } .cmd-legend .lbr.dead svg.ic-crown { fill: #9ca3af; }
+.cmd-legend .lbr.unknown svg.ic-crown { fill: none; stroke: #facc15; stroke-width: 1.3; }
 
 .cmd-legend svg { width: 14px; height: 14px; vertical-align: -3px; margin-left: 3px; fill: #fff; background: rgba(10, 14, 20, 0.82); border-radius: 50%; }
 .cmd-legend svg .eye { fill: #0b0f14; }

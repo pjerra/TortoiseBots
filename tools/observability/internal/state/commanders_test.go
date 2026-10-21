@@ -2,6 +2,7 @@ package state
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -345,5 +346,57 @@ func TestCommandersTrailDeathAndRelease(t *testing.T) {
 	// the revive report at the same place adds no point (under the step); the last jump is a teleport
 	if string(got) != "\x00drt" {
 		t.Fatalf("kinds %q, want 0 d r t", got)
+	}
+}
+
+// The boss list of the lead's instance (owner 2026-10-21: every boss of the map, alive or dead) rides in the binding, capped; an older
+// module sends none and the view then says null (as for objects), so the page falls back to the plan and what it sees.
+func TestCommandersCarryBosses(t *testing.T) {
+	var bosses string
+	for i := 0; i < 40; i++ {
+		if i > 0 {
+			bosses += ","
+		}
+		bosses += `{"e":` + strconv.Itoa(6900+i) + `,"n":"Boss","x":1.5,"y":-2.5,"s":"d","p":1}`
+	}
+	raw := `{"v":9,"session":3,"seq":1,"ts":50,"type":"COMMANDERS","commanders":[
+{"commander":"A","online":true,"group":1,"lead":"W","bots":[],"orders":[],"bosses_map":70,"bosses":[{"e":2748,"n":"Archaedas","x":3,"y":4,"s":"u"},` + bosses + `]},
+{"commander":"B","online":true,"group":2,"lead":"X","bots":[],"orders":[],"bosses_map":43,"bosses":[]},
+{"commander":"C","online":true,"group":3,"lead":"Y","bots":[],"orders":[]}]}`
+	var p model.CommandersPayload
+	if err := json.Unmarshal([]byte(raw), &p); err != nil {
+		t.Fatal(err)
+	}
+	s := newTestStore(newClock())
+	s.ApplyCommanders(&p)
+	v := s.Commanders().Commanders
+	if v[0].BossesMap != 70 || len(v[0].Bosses) != maxCommanderBosses {
+		t.Fatalf("map %d, %d bosses: the list must be kept and capped at %d", v[0].BossesMap, len(v[0].Bosses), maxCommanderBosses)
+	}
+	b := v[0].Bosses[0]
+	if b.Entry != 2748 || b.Name != "Archaedas" || b.X != 3 || b.Y != 4 || b.State != "u" || b.Plan != 0 {
+		t.Fatalf("first boss: %+v", b)
+	}
+	if v[0].Bosses[1].Plan != 1 || v[0].Bosses[1].State != "d" {
+		t.Fatalf("second boss: %+v", v[0].Bosses[1])
+	}
+	if len(p.Commanders[0].Bosses) != 41 {
+		t.Fatal("the caller's payload must not be trimmed")
+	}
+	out, _ := json.Marshal(v[0])
+	if !strings.Contains(string(out), `"bosses_map":70`) || !strings.Contains(string(out), `{"e":2748,"n":"Archaedas","x":3,"y":4,"s":"u"}`) ||
+		!strings.Contains(string(out), `"s":"d","p":1}`) {
+		t.Fatalf("the view keeps the module's short keys: %s", out)
+	}
+	if v[1].Bosses == nil || len(v[1].Bosses) != 0 {
+		t.Fatalf("[] means reported, no boss known: %v", v[1].Bosses)
+	}
+	out, _ = json.Marshal(v[1])
+	if !strings.Contains(string(out), `"bosses":[]`) {
+		t.Fatalf("an empty list stays in the view: %s", out)
+	}
+	out, _ = json.Marshal(v[2])
+	if !strings.Contains(string(out), `"bosses":null`) || strings.Contains(string(out), `"bosses_map"`) {
+		t.Fatalf("absent from an older module: null in the view, no map: %s", out)
 	}
 }

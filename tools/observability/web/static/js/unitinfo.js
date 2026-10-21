@@ -133,6 +133,21 @@
     return { title: str(o.name) || OBJ_KIND_WORD[o.type] || "Object", sub: OBJ_KIND_WORD[o.type] || "Object", tone: "object", rows };
   }
 
+  // A mark of the boss roster (CmdView.bossRoster): its name, alive / killed / not seen yet, where the mark stands, the distance to the
+  // lead and where the dashboard knows it from.
+  const BOSS_STATE_WORD = { alive: "alive", dead: "killed", unknown: "not seen yet" };
+  const BOSS_SOURCE_WORD = { module: "the game server", plan: "the run plan's boss step", seen: "seen by the party" };
+  function describeBoss(b, ctx) {
+    const word = BOSS_STATE_WORD[b.state] || "not seen yet";
+    const rows = [["State", word + (b.state === "alive" && b.live ? " (in sight)" : "")]];
+    rows.push(["Where", b.source === "seen" ? "where it was seen" : b.source === "plan" ? "the run plan's boss step" : "its spawn point"]);
+    const d = dist(b, (ctx || {}).lead);
+    if (d != null) rows.push(["From the lead", Math.round(d) + " yd"]);
+    if (b.source !== "plan") rows.push(["Known from", BOSS_SOURCE_WORD[b.source] || "the game server"]);
+    if (b.entry > 0) rows.push(["Entry", String(b.entry)]);
+    return { title: str(b.name) || "Boss", sub: "Boss · " + word, tone: b.state === "dead" ? "dead" : "boss", rows };
+  }
+
   // A plain note over a map mark (a run step, a stall spot): a title and one line.
   function describeNote(title, sub, tone) {
     return { title: str(title), sub: str(sub), tone: tone || "event", rows: [] };
@@ -211,8 +226,9 @@
     return e;
   }
 
-  // Take one fresh report of a binding in; returns the events it produced.
-  function noteEvents(ev, bind, nowSec) {
+  // Take one fresh report of a binding in; returns the events it produced. A boss is a unit of rank "b", an entry of the module's boss
+  // list for the mobs' map (bind.bosses), or an entry of `plan` ({entry: true}, the run plan's boss steps): a five-man boss is an elite.
+  function noteEvents(ev, bind, nowSec, plan) {
     const m = mem(ev, bind.commander, nowSec), made = [];
     const bots = (bind.bots || []), lead = bots.find((b) => b.lead) || bots[0] || null;
     const at = (u) => ({ x: u && num(u.x) ? u.x : null, y: u && num(u.y) ? u.y : null, map: u ? (u.map != null ? u.map : bind.mobs_map) : null });
@@ -232,16 +248,18 @@
 
     // boss kills
     if (Array.isArray(bind.mobs) && bind.mobs_map != null) {
-      const here = {};
+      const here = {}, listed = {};
+      if (Array.isArray(bind.bosses) && bind.bosses_map === bind.mobs_map) bind.bosses.forEach((b) => { if (b && num(b.e)) listed[b.e] = true; });
+      const bossy = (mob) => mob.rank === "b" || (num(mob.entry) && (listed[mob.entry] || !!(plan && plan[mob.entry])));
       bind.mobs.forEach((mob) => { if (mob && mob.id) here[mob.id] = mob; });
       Object.keys(m.bosses).forEach((id) => {
         const b = m.bosses[id], cur = here[id];
         if (cur && cur.hp > 0) return;
-        if (!m.wiped && ((cur && cur.hp <= 0) || b.hp <= BOSS_GONE_HP)) made.push(push(m, { t: nowSec, kind: "boss", name: b.name, x: b.x, y: b.y, map: b.map }));
+        if (!m.wiped && ((cur && cur.hp <= 0) || b.hp <= BOSS_GONE_HP)) made.push(push(m, { t: nowSec, kind: "boss", name: b.name, entry: b.entry, x: b.x, y: b.y, map: b.map }));
         delete m.bosses[id];
       });
       bind.mobs.forEach((mob) => {
-        if (mob && mob.id && mob.rank === "b" && mob.hp > 0) m.bosses[mob.id] = { name: str(mob.name) || (mob.entry ? "creature " + mob.entry : "boss"), hp: mob.hp, x: mob.x, y: mob.y, map: bind.mobs_map, seen: nowSec };
+        if (mob && mob.id && bossy(mob) && mob.hp > 0) m.bosses[mob.id] = { name: str(mob.name) || (mob.entry ? "creature " + mob.entry : "boss"), entry: num(mob.entry) ? mob.entry : 0, hp: mob.hp, x: mob.x, y: mob.y, map: bind.mobs_map, seen: nowSec };
       });
       Object.keys(m.bosses).forEach((id) => { if (!here[id] && nowSec - m.bosses[id].seen > BOSS_FORGET_SEC) delete m.bosses[id]; });
     }
@@ -296,9 +314,15 @@
 
   // ---- the run line of a card ------------------------------------------------------------------------------------------
 
-  // {elapsed (seconds), text}: the run timer from the binding's start (module) or its first report here, and the bosses: how many were
-  // killed, out of the ones seen so far, and the next one seen alive. The module reports no dungeon plan, so no section count.
-  function runInfo(bind, ev, nowSec) {
+  // {elapsed (seconds), text, title}: the run timer from the binding's start (module) or its first report here, and the bosses.
+  // roster (optional): the card's boss roster (CmdView.bossRoster). With one, the count is "bosses K / N killed" of the RUN bosses (the ones
+  // a plan names; every boss when none is marked) in this instance, and title names the bosses outside the plan. opt.dungeon: the card
+  // shows a dungeon or raid map, where the count is always shown ("bosses –" when nothing is known). opt.run: the run whose plan steps
+  // name the next boss (default bind.run). next: the first plan boss step at or after the run's step whose boss is not killed; else the
+  // first boss seen alive. Without a roster: the bosses seen here, killed of seen (the open world, an older page).
+  const BOSS_WORD = { alive: "alive", dead: "killed", unknown: "not seen" };
+  function runInfo(bind, ev, nowSec, roster, opt) {
+    const o = opt || {};
     const m = ev.by[bind.commander];
     const start = bind.bound_at > 0 ? bind.bound_at : m ? m.first : nowSec;
     const elapsed = Math.max(0, nowSec - start);
@@ -309,10 +333,35 @@
     const parts = ["Run " + clockText(elapsed)];
     const brief = runBrief(bind, nowSec);
     if (brief && brief.text) parts.push(brief.text);
-    if (down.length || alive.length) parts.push("bosses " + down.length + " / " + (down.length + alive.length) + " seen");
-    if (alive.length) parts.push("next: " + alive[0].name);
-    else if (down.length) parts.push("last: " + down[down.length - 1]);
-    return { elapsed, start, down, next: alive.length ? alive[0].name : "", text: parts.join(" · ") };
+    const all = Array.isArray(roster) ? roster.filter(Boolean) : [];
+    let title = "", next = "";
+    if (all.length) {
+      const runB = all.some((b) => b.plan) ? all.filter((b) => b.plan) : all;
+      const outside = all.filter((b) => runB.indexOf(b) < 0);
+      parts.push("bosses " + runB.filter((b) => b.state === "dead").length + " / " + runB.length + " killed");
+      if (outside.length) {
+        title = outside.length + " more boss" + (outside.length === 1 ? "" : "es") + " outside the plan: "
+          + outside.map((b) => str(b.name) + " (" + (BOSS_WORD[b.state] || "not seen") + ")").join(", ");
+      }
+      const r = o.run || bind.run, cur = r && num(r.step) ? r.step : 0;
+      const steps = r && Array.isArray(r.plan_steps) ? r.plan_steps.filter((s) => s && s.k === "boss" && !s.sk && num(s.i) && s.i >= cur).sort((a, b) => a.i - b.i) : [];
+      for (const s of steps) {
+        const b = all.find((x) => num(s.e) && x.entry === s.e);
+        if (b && b.state === "dead") continue;
+        next = (b && b.name) || str(s.n) || (num(s.e) ? "creature " + s.e : "");
+        break;
+      }
+      if (!next && alive.length) next = alive[0].name;
+      if (next) parts.push("next: " + next);
+    } else if (o.dungeon) {
+      parts.push("bosses –");
+    } else {
+      if (down.length || alive.length) parts.push("bosses " + down.length + " / " + (down.length + alive.length) + " seen");
+      if (alive.length) parts.push("next: " + alive[0].name);
+      else if (down.length) parts.push("last: " + down[down.length - 1]);
+      next = alive.length ? alive[0].name : "";
+    }
+    return { elapsed, start, down, next, title, text: parts.join(" · ") };
   }
 
   // The run leader's run of a binding (`.bot run`; the "observe" mode: the bots clear, the commander watches), in words:
@@ -341,7 +390,7 @@
 
   const api = {
     runBrief,
-    activity, actionPhrase, describeBot, describeMob, describeCommander, describeObject, describeNote, describeEvent, boxPosition, hpBar, hpClass, threatClass, targetMarks, statusIcons,
+    activity, actionPhrase, describeBot, describeMob, describeBoss, describeCommander, describeObject, describeNote, describeEvent, boxPosition, hpBar, hpClass, threatClass, targetMarks, statusIcons,
     newEvents, noteEvents, eventsOf, firstSeen, pruneEvents, clockText, feedLine, pinsOn, runInfo, dist, CC_WORD,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.UnitInfo = api;

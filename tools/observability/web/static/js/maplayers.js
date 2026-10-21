@@ -2,7 +2,7 @@
 // Commanders tab map layers: which things a map draws. One choice for every card (and every map), kept in the browser once, not per
 // map. Pure logic (no page, no markup) so a test can run it under node (internal/commandersjs). app.js draws and shows the panel.
 //
-// The panel offers 20 layers in 5 groups. Several of them are merges of the finer switches the maps used before: `effective(state)`
+// The panel offers 21 layers in 5 groups. Several of them are merges of the finer switches the maps used before: `effective(state)`
 // returns those older keys (mobhostile, mobneutral, trail, threatcolors, ...) computed from the new ones, and app.js's drawing code
 // reads them, so the draw code did not have to change shape.
 //
@@ -44,6 +44,7 @@
     aggro: { def: false, needs: "mobs", why: "the game server does not report mobs yet (it needs the newer module)", line: true },
     hostilenames: { def: false, needs: "mobs", why: "the game server does not report mobs yet (it needs the newer module)" },
     bossmark: { def: true, needs: "mobs", why: "the game server does not report mobs yet (it needs the newer module)" },
+    bossroster: { def: true, needs: "bossRoster", why: "no boss is known for this map yet (the game server sends the boss list with the newer module; without it a run plan's boss steps or a boss in sight are needed)" },
     threatcolors: { def: false, needs: "mobTargets", why: "the game server does not report mobs yet (it needs the newer module)" },
     threat: { def: false, needs: "mobTargets", why: "the game server does not report mobs yet (it needs the newer module)", line: true },
     bottarget: { def: false, needs: "botTargets", why: "the game server does not report bot targets yet (it needs the newer module)", line: true },
@@ -59,7 +60,7 @@
     objects: { def: false, needs: "objects", why: "the game server does not report objects yet (it needs the newer module)" },
   };
 
-  // The 20 layers the panel offers. `parts` are the old switches each one replaces; `styleFrom` is the old line key whose opacity and
+  // The 21 layers the panel offers. `parts` are the old switches each one replaces; `styleFrom` is the old line key whose opacity and
   // thickness a merged line layer takes over (its first old key that had a style).
   const DEFS = [
     { key: "bg", label: "Map picture", group: "Map", def: true, parts: ["bg"],
@@ -86,6 +87,8 @@
       tip: "Critters (small harmless units) the game server reports." },
     { key: "enemynames", label: "Enemy names and boss marker", group: "Enemies", def: true, parts: ["hostilenames", "bossmark"],
       tip: "The name of every hostile unit; a boss is bigger, crowned and always named." },
+    { key: "bosses", label: "Bosses (alive, killed, not seen)", group: "Enemies", def: true, parts: ["bossroster"],
+      tip: "Every known boss of the map at its spawn point, all the time, with its name: a gold crown while it lives, a grey crossed-out one once killed, an outlined one when it has not been seen. From the game server's boss list, else the run plan's boss steps, the bosses in sight and the bosses down." },
     { key: "threat", label: "Threat colours and lines", group: "Enemies", def: true, line: true, styleFrom: "threat", parts: ["threatcolors", "threat"],
       tip: "A ring in the colour of whom the unit attacks (tank blue, others red), the tank's and the pull target marked, and a line to the unit it attacks." },
     { key: "aggro", label: "Aggro range", group: "Enemies", def: false, line: true, styleFrom: "aggro", parts: ["aggro"],
@@ -249,7 +252,7 @@
     return out;
   }
 
-  // What each of the 20 layers can be drawn from, for one map (one card): {key: {ok, why}}. ctx has the booleans named in
+  // What each of the 21 layers can be drawn from, for one map (one card): {key: {ok, why}}. ctx has the booleans named in
   // OLD_LAYERS' `needs`; a missing one counts as false. ok when ANY of the layer's parts has its data (the rest is simply not drawn);
   // why lists the missing parts' reasons.
   function availability(ctx) {

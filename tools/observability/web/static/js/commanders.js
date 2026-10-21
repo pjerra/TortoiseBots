@@ -430,13 +430,7 @@
       steps.forEach((s) => { if (s && s.k === "boss" && num(s.e) && s.e > 0) out[s.e] = true; });
     };
     add(bind);
-    if (bind && bind.dungeon && Array.isArray(others)) {
-      const mine = Array.isArray(bind.bots) ? bind.bots.filter(Boolean) : [];
-      const same = (a, b) => (a.guid != null && b.guid != null ? a.guid === b.guid : !!a.name && a.name === b.name);
-      others.forEach((o) => {
-        if (o && !o.dungeon && Array.isArray(o.bots) && o.bots.some((b) => b && mine.some((m) => same(m, b)))) add(o);
-      });
-    }
+    sharingBindings(bind, others).forEach(add);
     return out;
   }
 
@@ -444,6 +438,93 @@
   function isBoss(m, entries) {
     if (!m) return false;
     return m.rank === "b" || !!(entries && num(m.entry) && entries[m.entry]);
+  }
+
+  // ---- the boss roster: every known boss of the map, alive, dead or not seen (owner 2026-10-21) --------------------------------
+  // The commander bindings in `others` whose party shares a bot with a Dungeons-tab card (by guid, or by name when a guid is missing).
+  function sharingBindings(bind, others) {
+    if (!bind || !bind.dungeon || !Array.isArray(others)) return [];
+    const mine = Array.isArray(bind.bots) ? bind.bots.filter(Boolean) : [];
+    const same = (a, b) => (a.guid != null && b.guid != null ? a.guid === b.guid : !!a.name && a.name === b.name);
+    return others.filter((o) => o && !o.dungeon && Array.isArray(o.bots) && o.bots.some((b) => b && mine.some((m) => same(m, b))));
+  }
+
+  // Whether a map id is a dungeon or raid (anything but the open-world continents: Eastern Kingdoms, Kalimdor, and the later clients'
+  // Outland and Northrend); false for a missing id.
+  const CONTINENTS = { 0: 1, 1: 1, 530: 1, 571: 1 };
+  function isDungeonMap(mapId) { return num(mapId) && mapId >= 0 && !CONTINENTS[mapId]; }
+
+  const BOSSES_MAX = 32;
+  const BOSS_STATE = { a: "alive", d: "dead", u: "unknown" };
+  const posOk = (o) => !!o && num(o.x) && num(o.y);
+
+  // Every known boss of mapId for one card: [{entry, name, x, y, state: alive|dead|unknown, source: module|plan|seen, live}], at most
+  // BOSSES_MAX. o = {others (the commander bindings, for a Dungeons-tab card), mobs (the units drawn on this map), events (this card's)}.
+  // Where a boss is: its spawn point from the module's list (bosses/bosses_map, the instance the lead is in), else the run plan's boss
+  // step (of the lead's map), else where it was seen alive or killed. Its state, strongest first: a living unit of that entry in the
+  // feed (alive), the module's letter (a, d), a "boss down" event of this card on this map (dead, by entry or name), else unknown.
+  function bossRoster(bind, mapId, o) {
+    const opt = o || {}, out = [], at = Object.create(null);
+    if (!bind || mapId == null) return out;
+    const srcs = [bind].concat(sharingBindings(bind, opt.others));
+    const add = (entry, name, x, y, state, source) => {
+      if (!num(entry) || entry <= 0 || at[entry] !== undefined || !num(x) || !num(y) || out.length >= BOSSES_MAX) return null;
+      const b = { entry, name: typeof name === "string" && name ? name.slice(0, 40) : "creature " + entry, x, y, state, source, live: false, said: "", plan: source === "plan" };
+      at[entry] = out.length;
+      out.push(b);
+      return b;
+    };
+    srcs.forEach((s) => {
+      if (!Array.isArray(s.bosses) || s.bosses_map !== mapId) return;
+      s.bosses.forEach((r) => {
+        if (!r || typeof r !== "object") return;
+        const b = add(r.e, r.n, r.x, r.y, BOSS_STATE[r.s] || "unknown", "module");
+        if (b) { b.said = BOSS_STATE[r.s] ? r.s : "u"; b.plan = r.p === 1 || r.p === true; }
+      });
+    });
+    srcs.forEach((s) => {
+      const l = leadBot(s) || ((s.bots || [])[0]) || null;
+      const steps = s.run && Array.isArray(s.run.plan_steps) ? s.run.plan_steps : [];
+      if (!l || l.map !== mapId) return;
+      steps.forEach((st) => {
+        if (!st || st.k !== "boss" || !num(st.e)) return;
+        if (at[st.e] !== undefined) out[at[st.e]].plan = true; else add(st.e, st.n, st.x, st.y, "unknown", "plan");
+      });
+    });
+    // a unit of a listed entry is that boss, whatever its rank letter; a boss nobody listed is placed where it stands
+    const plan = bossEntries(bind, opt.others);
+    (opt.mobs || []).forEach((m) => {
+      if (!m || !num(m.entry) || m.entry <= 0 || !num(m.hp) || m.hp <= 0) return;
+      let b = at[m.entry] !== undefined ? out[at[m.entry]] : null;
+      if (!b && isBoss(m, plan)) b = add(m.entry, m.name, m.x, m.y, "alive", "seen");
+      if (!b) return;
+      b.state = "alive";
+      b.live = true;
+      if (typeof m.name === "string" && m.name && b.name === "creature " + b.entry) b.name = m.name.slice(0, 40);
+    });
+    (opt.events || []).forEach((e) => {
+      if (!e || e.kind !== "boss" || e.map !== mapId) return;
+      let i = num(e.entry) && e.entry > 0 ? at[e.entry] : undefined;
+      if (i === undefined && e.name) i = out.findIndex((b) => b.name === e.name);
+      let b = i !== undefined && i >= 0 ? out[i] : null;
+      if (!b && posOk(e) && num(e.entry) && e.entry > 0) b = add(e.entry, e.name, e.x, e.y, "dead", "seen");
+      if (!b && posOk(e) && e.name && out.length < BOSSES_MAX) {
+        // a kill of an unknown entry: kept by name where it fell
+        b = { entry: 0, name: String(e.name).slice(0, 40), x: e.x, y: e.y, state: "dead", source: "seen", live: false, said: "", plan: false };
+        out.push(b);
+      }
+      if (b && !b.live && b.said !== "a") b.state = "dead";
+    });
+    out.forEach((b) => { if (b.entry > 0 && plan[b.entry]) b.plan = true; });
+    return out.map((b) => ({ entry: b.entry, name: b.name, x: b.x, y: b.y, state: b.state, source: b.source, live: b.live, plan: b.plan }));
+  }
+
+  // How many bosses of a roster are killed, of how many: {down, total, outside}. The run bosses are the ones a plan names (plan); when
+  // none is marked (an older module, a dungeon without a plan) every boss counts. outside: the bosses left out of the count.
+  function bossCount(roster) {
+    const r = Array.isArray(roster) ? roster.filter(Boolean) : [];
+    const run = r.some((b) => b.plan) ? r.filter((b) => b.plan) : r;
+    return { down: run.filter((b) => b.state === "dead").length, total: run.length, outside: r.filter((b) => run.indexOf(b) < 0) };
   }
 
   // Lines from each mob to the bot it targets: [{mob, bot}] (both with game x, y). Only bots on the list count.
@@ -646,7 +727,7 @@
     HEAL_RANGE_YD, FAR_YD, LOW_HP_PCT, STALE_WARN_SEC, pretty, plural, ageText, roleKey, roleLabel, distance, leadBot, partyRows, orderText, stateWord,
     headerText, headerParts, botHref, warnings, newTracker, note, context, prune, project, fitView, viewBox, zoomAt, panBy, pinch, gridStep, gridLines,
     trailSegments, markGap, trailSegmentsBroken, trailRuns, trailMarks, trailEvent, jumpLimitYd, TRAVEL_MAX_YD_PER_SEC, TRAVEL_SLACK_YD, TRAVEL_MAX_GAP_SEC, clampScale, prependTrail, heading, trailStamps, scaleBar, zonesIn, pictureSlots, pictureChoice, pictureSelect, pictureRefreshAfter, PIC_RETRY_MS, PIC_MISSING_MS,
-    AGGRO_RANGE_YD, followView, zoomFollow, pinchFollow, mobsOf, mobClass, bossEntries, isBoss, threatLines, botTargetLines, aggroMobs, commanderPlace,
+    AGGRO_RANGE_YD, followView, zoomFollow, pinchFollow, mobsOf, mobClass, bossEntries, isBoss, bossRoster, bossCount, sharingBindings, isDungeonMap, BOSSES_MAX, threatLines, botTargetLines, aggroMobs, commanderPlace,
   };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.CmdView = api;
 })(typeof self !== "undefined" ? self : this);

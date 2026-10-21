@@ -26,6 +26,7 @@ const (
 	maxCommanderOrders   = 16
 	maxCommanderObjects  = 24
 	maxCommanderSteps    = 24
+	maxCommanderBosses   = 32
 )
 
 // Short server-side history of where the bound bots have been, so a browser that opens the page mid-run starts with the paths already
@@ -133,6 +134,9 @@ func (s *Store) ApplyCommanders(p *model.CommandersPayload) bool {
 		}
 		if len(b.Objects) > maxCommanderObjects {
 			b.Objects = b.Objects[:maxCommanderObjects]
+		}
+		if len(b.Bosses) > maxCommanderBosses {
+			b.Bosses = b.Bosses[:maxCommanderBosses]
 		}
 		if b.Run != nil && len(b.Run.PlanSteps) > maxCommanderSteps {
 			run := *b.Run // a copy: the payload's own struct is not changed

@@ -25,7 +25,7 @@ vm.createContext(ctx);
 ["commanders.js", "maplayers.js", "unitinfo.js", "paths.js", "demo.js"].forEach((f) => vm.runInContext(fs.readFileSync(path.join(dir, f), "utf8"), ctx, { filename: f }));
 vm.runInContext(
   [grab("esc"), grabConst("CMD_MAP_ICONS"), grabConst("CMD_OBJECT_ICON"), grab("cmdMapIcon"), grab("cmdLineStyle"), grabConst("cmdPt"), grabConst("CMD_TRAIL_MARKS"), grab("cmdTrailSvg"),
-    grab("cmdMemberTrailsSvg"), grab("cmdRunStepsSvg"), grab("cmdStallsSvg"), grab("cmdObjectsSvg"), grab("cmdLineSvg"), grab("cmdCombatLinesSvg"), grab("cmdMapFacts")].join("\n") +
+    grab("cmdMemberTrailsSvg"), grab("cmdRunStepsSvg"), grab("cmdStallsSvg"), grab("cmdObjectsSvg"), grab("cmdBossRosterSvg"), grab("cmdLineSvg"), grab("cmdCombatLinesSvg"), grab("cmdMapFacts")].join("\n") +
   "\nvar cmdLayers = MapLayers.defaults(); var cmdTrails = CmdPaths.newTrails();" +
   "\nvar cmdTracker = CmdView.newTracker(); var cmdEvents = UnitInfo.newEvents(); var cmdStalls = CmdPaths.newStalls();" +
   "\nvar state = { dungeons: { runs: [] } }; var ZONE_BOUNDS = null;" +
@@ -215,4 +215,57 @@ assert.ok(/if \(!Array\.isArray\(cmdPics\.get\(mapId\)\)\) cmdPics\.set\(mapId, 
 // ---- the map crowns a mob the run plan names as a boss, not only one the module ranks "b"
 assert.ok(/boss = on\.bossmark && CmdView\.isBoss\(m, planBosses\)/.test(src) && /const planBosses = CmdView\.bossEntries\(bind, bind\.dungeon \? state\.commanders\.list : null\)/.test(src),
   "drawCmdMap marks bosses through CmdView.isBoss with the plan's boss entries");
+// ---- the boss roster layer (owner 2026-10-21): every known boss at its spawn point with its name and state, one hover entry each
+{
+  const J = (v) => JSON.parse(JSON.stringify(v));
+  ctx.dc = mk();
+  ctx.roster = [
+    { entry: 6910, name: "Revelosh", x: 1, y: 2, state: "alive", source: "module", live: true, plan: true },
+    { entry: 6906, name: EVIL, x: 3, y: 4, state: "dead", source: "module", live: false, plan: true },
+    { entry: 7228, name: "Ironaya", x: 5, y: 6, state: "unknown", source: "plan", live: false, plan: true },
+    { entry: 0, name: "By name", x: 7, y: 8, state: "dead", source: "seen", live: false, plan: false },
+    { entry: 9, name: "Odd", x: 7, y: 8, state: "weird", source: "seen", live: false, plan: false }];
+  const bs = vm.runInContext("cmdBossRosterSvg(dc, roster)", ctx);
+  assert.ok(!/<img/.test(bs), "boss names never reach the markup unescaped");
+  assert.strictEqual((bs.match(/class="bossr alive"/g) || []).length, 1);
+  assert.strictEqual((bs.match(/class="bossr dead"/g) || []).length, 2);
+  assert.strictEqual((bs.match(/class="bossr unknown"/g) || []).length, 2, "an unknown state letter is drawn as not seen");
+  assert.strictEqual((bs.match(/class="bstrike"/g) || []).length, 2, "a killed boss's name is struck through");
+  assert.strictEqual((bs.match(/class="btick"/g) || []).length, 2, "and ticked");
+  assert.strictEqual((bs.match(/ic-crown bosscrown/g) || []).length, 5, "a crown for every boss");
+  assert.ok(/>Revelosh</.test(bs) && /&lt;img/.test(bs), "every boss is named");
+  assert.deepStrictEqual(J(Object.keys(ctx.dc.units).sort()), ["k:6906", "k:6910", "k:7228", "k:9", "k:n3"], "one hover entry per boss");
+  assert.strictEqual(ctx.dc.units["k:6906"].kind, "k");
+  assert.strictEqual(vm.runInContext("cmdBossRosterSvg(dc, [])", ctx), "");
+  // cmdMapFacts builds the roster of the map the card shows and tells the layer it has one
+  ctx.rbBind = { commander: "RB", lead: "A", bots: [{ name: "A", guid: 1, map: 70, x: 0, y: 0, role: "tank", id: "1", alive: true, lead: true }],
+    mobs_map: 70, mobs: [], bosses_map: 70, bosses: [{ e: 6910, n: "Revelosh", x: 1, y: 2, s: "d", p: 1 }, { e: 2748, n: "Archaedas", x: 3, y: 4, s: "u" }] };
+  const rf = vm.runInContext("cmdMapFacts(rbBind)", ctx);
+  assert.deepStrictEqual(J(rf.roster.map((b) => [b.entry, b.state])), [[6910, "dead"], [2748, "unknown"]]);
+  assert.strictEqual(rf.ctx.bossRoster, true); assert.strictEqual(rf.dungeonMap, true, "map 70 is a dungeon");
+  ctx.rbOpen = Object.assign({}, ctx.rbBind, { commander: "RO", bosses: undefined, bots: [Object.assign({}, ctx.rbBind.bots[0], { map: 1 })] });
+  const ro = vm.runInContext("cmdMapFacts(rbOpen)", ctx);
+  assert.deepStrictEqual(J(ro.roster), []); assert.strictEqual(ro.ctx.bossRoster, false); assert.strictEqual(ro.dungeonMap, false, "Kalimdor is the open world");
+  // a Dungeons-tab card borrows its own commander's roster (and run) and is always a dungeon
+  vm.runInContext("state.commanders = { list: [rbBind] };", ctx);
+  ctx.rbDgn = { commander: "dgn:70:1", dungeon: true, bots: [{ name: "A", guid: 1, map: 70, x: 0, y: 0 }] };
+  const rd = vm.runInContext("cmdMapFacts(rbDgn)", ctx);
+  assert.deepStrictEqual(J(rd.roster.map((b) => b.entry)), [6910, 2748]); assert.strictEqual(rd.dungeonMap, true);
+  ctx.rbDgn0 = { commander: "dgn:0:9", dungeon: true, bots: [{ name: "Q", guid: 77, map: 0, x: 0, y: 0 }] };
+  assert.strictEqual(vm.runInContext("cmdMapFacts(rbDgn0)", ctx).dungeonMap, true, "a Dungeons-tab card always counts its bosses, whatever its map id");
+  vm.runInContext("state.commanders = undefined;", ctx);
+}
+// ---- the wiring: the roster is drawn under the mobs when its layer is on, hovered as a boss, and the run line always takes the roster
+// and the dungeon flag (owner 2026-10-21: "bosses 3 / 8 killed" wherever the run line is shown)
+{
+  const draw = grab("drawCmdMap");
+  assert.ok(/if \(on\.bossroster\) g \+= cmdBossRosterSvg\(dc, facts\.roster\);/.test(draw), "drawCmdMap draws the roster");
+  assert.ok(draw.indexOf("cmdBossRosterSvg(") < draw.indexOf("shown.forEach("), "under the live mobs");
+  assert.ok(/UnitInfo\.runInfo\(bind, cmdEvents, now, facts\.roster, \{ dungeon: facts\.dungeonMap, run: facts\.bossRun \}\)/.test(draw), "the run line counts the roster");
+  assert.ok(/run\.title = ri\.title/.test(draw), "and names the bosses outside the plan");
+  assert.ok(/run\.hidden = !on\.runinfo;/.test(draw), "the run line hangs on its own layer only");
+  assert.ok(/u\.kind === 'k' \? UnitInfo\.describeBoss\(u\.obj, ctx\)/.test(grab("paintCmdTip")), "a roster mark is hovered as a boss");
+  assert.ok(/o\.bossroster \?/.test(grab("cmdLegendHtml")), "the legend shows the roster's crowns");
+  assert.strictEqual((src.match(/UnitInfo\.noteEvents\(cmdEvents, bind, (now|updatedAt), CmdView\.bossEntries\(bind\)\)/g) || []).length, 2, "kills of plan bosses are events");
+}
 console.log("drawing ok");

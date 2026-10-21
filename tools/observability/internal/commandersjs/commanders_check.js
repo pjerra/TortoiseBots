@@ -451,4 +451,86 @@ assert.strictEqual(C.jumpLimitYd(500), 612, "...and at most 30 s, so a long sile
     ["3669", "3671"], "matched by name when there is no guid");
   assert.strictEqual(C.isBoss(cobrahn, C.bossEntries(dgn, [mine])), true, "Cobrahn is crowned on the Dungeons card");
 }
+// ---- the boss roster: every known boss of the map, alive, dead or not seen (owner 2026-10-21). Sources in priority order: a live boss in
+// the feed (alive), the module's list (bosses/bosses_map: a, d, u), a "boss down" event of this card (dead), then unknown; positions are
+// the spawn points (module) or the plan's boss steps, and a boss only seen live or killed is placed where it was seen.
+{
+  const lead = (o) => Object.assign({ name: "Tankie", guid: 1, lead: true, map: 70, x: 0, y: 0 }, o);
+  const mod = { commander: "Gb", bots: [lead()], bosses_map: 70, bosses: [
+    { e: 6910, n: "Revelosh", x: 10, y: 20, s: "a" }, { e: 6906, n: "Baelog", x: 30, y: 40, s: "d" }, { e: 7228, n: "Ironaya", x: 50, y: 60, s: "u" },
+    { e: 0, n: "bad", x: 1, y: 1, s: "a" }, { e: 7, n: "nopos", s: "a" }, null, { e: 6906, n: "Baelog again", x: 9, y: 9, s: "a" }] };
+  let r = C.bossRoster(mod, 70);
+  assert.deepStrictEqual(r.map((b) => [b.entry, b.name, b.x, b.y, b.state, b.source]), [
+    [6910, "Revelosh", 10, 20, "alive", "module"], [6906, "Baelog", 30, 40, "dead", "module"], [7228, "Ironaya", 50, 60, "unknown", "module"]],
+  "module rows in order, malformed and repeated entries dropped");
+  assert.deepStrictEqual(C.bossRoster(mod, 43), [], "the module's list is for its own map only");
+  assert.deepStrictEqual(C.bossRoster(Object.assign({}, mod, { bosses: [{ e: 1, n: "X", x: 0, y: 0, s: "?" }] }), 70)[0].state, "unknown", "an unknown letter is unknown");
+  assert.deepStrictEqual(C.bossRoster(null, 70), []); assert.deepStrictEqual(C.bossRoster(mod, null), []);
+  // a live boss in the feed is alive, whatever the module said; the mark stays at the spawn point
+  r = C.bossRoster(mod, 70, { mobs: [{ id: "5", entry: 6906, name: "Baelog", hp: 80, x: 99, y: 99, rank: "b" }] });
+  assert.strictEqual(r[1].state, "alive", "seen alive in the feed"); assert.strictEqual(r[1].live, true); assert.strictEqual(r[1].x, 30, "spawn point kept");
+  assert.strictEqual(C.bossRoster(mod, 70, { mobs: [{ id: "5", entry: 6906, hp: 0, x: 1, y: 1, rank: "b" }] })[1].state, "dead", "a 0 hp unit is no live boss");
+  assert.strictEqual(C.bossRoster(mod, 70, { mobs: [{ id: "5", entry: 6906, hp: 50, x: 1, y: 1, rank: "e" }] })[1].state, "alive", "a unit of a listed entry is that boss, whatever its rank letter");
+  assert.strictEqual(C.bossRoster(mod, 70, { mobs: [{ id: "5", entry: 4851, hp: 50, x: 1, y: 1, rank: "e" }] }).length, 3, "an elite nobody calls a boss is not added");
+  // a live boss nobody listed is added where it stands
+  r = C.bossRoster(mod, 70, { mobs: [{ id: "6", entry: 2748, name: "Archaedas", hp: 100, x: 7, y: 8, rank: "b" }] });
+  assert.deepStrictEqual(r.slice(-1).map((b) => [b.entry, b.name, b.x, b.y, b.state, b.source]), [[2748, "Archaedas", 7, 8, "alive", "seen"]]);
+  // a "boss down" event: dead, matched by entry or by name, on this map only; the module's alive beats the browser's guess
+  const ev = (o) => Object.assign({ kind: "boss", map: 70, x: 3, y: 3 }, o);
+  r = C.bossRoster(mod, 70, { events: [ev({ entry: 7228, name: "Ironaya" })] });
+  assert.strictEqual(r[2].state, "dead", "event by entry");
+  assert.strictEqual(C.bossRoster(mod, 70, { events: [ev({ name: "Ironaya" })] })[2].state, "dead", "event by name");
+  assert.strictEqual(C.bossRoster(mod, 70, { events: [ev({ entry: 7228, map: 43 })] })[2].state, "unknown", "event of another map");
+  assert.strictEqual(C.bossRoster(mod, 70, { events: [ev({ kind: "death", entry: 7228 })] })[2].state, "unknown", "a bot's death is no boss kill");
+  assert.strictEqual(C.bossRoster(mod, 70, { events: [ev({ entry: 6910 })] })[0].state, "alive", "the module says alive (a reset after a wipe)");
+  assert.strictEqual(C.bossRoster(mod, 70, { events: [ev({ entry: 6910 })], mobs: [] })[0].state, "alive");
+  r = C.bossRoster(mod, 70, { events: [ev({ entry: 999, name: "Lost Boss", x: 4, y: 5 })] });
+  assert.deepStrictEqual(r.slice(-1).map((b) => [b.entry, b.name, b.x, b.y, b.state, b.source]), [[999, "Lost Boss", 4, 5, "dead", "seen"]], "a kill nobody listed is kept where it fell");
+  assert.strictEqual(C.bossRoster(mod, 70, { events: [ev({ entry: 0, name: "", x: null })] }).length, 3, "an event with no name or place adds nothing");
+  // fallback without the module: the plan's boss steps (unknown), the feed, the events
+  const run = { step: 3, plan_steps: [{ i: 1, k: "boss", x: 5, y: 6, e: 3669, n: "Lord Cobrahn" }, { i: 2, k: "pull", x: 1, y: 1, e: 3840 },
+    { i: 4, k: "boss", x: 7, y: 8, e: 3671 }, { i: 5, k: "boss", x: 7, y: 8 }] };
+  const plain = { commander: "Gb", bots: [lead({ map: 43 })], run };
+  r = C.bossRoster(plain, 43);
+  assert.deepStrictEqual(r.map((b) => [b.entry, b.name, b.x, b.y, b.state, b.source]), [[3669, "Lord Cobrahn", 5, 6, "unknown", "plan"], [3671, "creature 3671", 7, 8, "unknown", "plan"]]);
+  assert.deepStrictEqual(C.bossRoster(plain, 70), [], "the plan is the lead's map's plan");
+  r = C.bossRoster(plain, 43, { mobs: [{ id: "1", entry: 3671, name: "Lady Anacondra", hp: 40, x: 0, y: 0, rank: "e" }], events: [ev({ map: 43, entry: 3669 })] });
+  assert.deepStrictEqual(r.map((b) => b.state), ["dead", "alive"], "a plan boss elite in the feed is alive; the event kills Cobrahn");
+  assert.strictEqual(r[1].name, "Lady Anacondra", "the live unit names a step that had no name");
+  // the module wins over the plan for the same entry (it has the spawn point)
+  const both = Object.assign({}, plain, { bosses_map: 43, bosses: [{ e: 3669, n: "Lord Cobrahn", x: 50, y: 60, s: "d" }] });
+  r = C.bossRoster(both, 43);
+  assert.deepStrictEqual(r.map((b) => [b.entry, b.x, b.state, b.source]), [[3669, 50, "dead", "module"], [3671, 7, "unknown", "plan"]]);
+  // a Dungeons-tab card borrows the roster of the commander binding that shares a bot with it, on the card's map only
+  const dgn = { commander: "dgn:43:1", dungeon: true, bots: [{ name: "Tankie", guid: 1, map: 43 }] };
+  const other = { commander: "Zz", bots: [{ name: "Else", guid: 99, map: 43, lead: true }], bosses_map: 43, bosses: [{ e: 5775, n: "Verdan", x: 1, y: 1, s: "a" }] };
+  assert.deepStrictEqual(C.bossRoster(dgn, 43, { others: [other, both] }).map((b) => b.entry), [3669, 3671], "its own commander's, not the other copy's");
+  assert.deepStrictEqual(C.bossRoster(dgn, 43, { others: [other] }), [], "no shared bot, nothing borrowed");
+  assert.deepStrictEqual(C.bossRoster(dgn, 70, { others: [both] }), [], "another map");
+  assert.deepStrictEqual(C.bossRoster(Object.assign({}, dgn, { dungeon: false }), 43, { others: [both] }), [], "a commander card reads only its own");
+  // the count for the run line: every boss when none is marked as the plan's
+  const cnt = (r) => { const c = C.bossCount(r); return [c.down, c.total, c.outside.map((b) => b.entry)]; };
+  assert.deepStrictEqual(cnt(C.bossRoster(mod, 70)), [1, 3, []]);
+  assert.deepStrictEqual(cnt([]), [0, 0, []]); assert.deepStrictEqual(cnt(null), [0, 0, []]);
+  // the run bosses: the module's p flag (a plan boss step names the entry); the others are outside the plan
+  const flagged = Object.assign({}, mod, { bosses: [{ e: 6910, n: "Revelosh", x: 1, y: 1, s: "d", p: 1 }, { e: 6906, n: "Baelog", x: 1, y: 1, s: "u", p: 1 },
+    { e: 2748, n: "Archaedas", x: 1, y: 1, s: "d" }] });
+  r = C.bossRoster(flagged, 70);
+  assert.deepStrictEqual(r.map((b) => b.plan), [true, true, false]);
+  assert.deepStrictEqual(cnt(r), [1, 2, [2748]], "Archaedas is killed but outside the plan: not counted, named apart");
+  // the plan steps mark their entries too (also an entry the module listed without p), and a boss seen live of a plan entry
+  r = C.bossRoster(both, 43);
+  assert.deepStrictEqual(r.map((b) => [b.entry, b.plan]), [[3669, true], [3671, true]]);
+  assert.deepStrictEqual(cnt(r), [1, 2, []]);
+  r = C.bossRoster({ bots: [lead({ map: 43 })], bosses_map: 43, bosses: [{ e: 3653, n: "Kresh", x: 0, y: 0, s: "u" }], run }, 43);
+  assert.deepStrictEqual(r.map((b) => [b.entry, b.plan]), [[3653, false], [3669, true], [3671, true]]);
+  assert.deepStrictEqual(cnt(r), [0, 2, [3653]], "Kresh is outside the plan");
+  // a capped roster
+  const many = { bots: [lead()], bosses_map: 70, bosses: Array.from({ length: 60 }, (_, i) => ({ e: i + 1, n: "B" + i, x: i, y: i, s: "u" })) };
+  assert.strictEqual(C.bossRoster(many, 70).length, C.BOSSES_MAX);
+}
+{
+  assert.strictEqual(C.isDungeonMap(70), true); assert.strictEqual(C.isDungeonMap(409), true);
+  [0, 1, 530, 571, null, undefined, "70", -1].forEach((m) => assert.strictEqual(C.isDungeonMap(m), false, String(m)));
+}
 console.log("commanders.js ok");
