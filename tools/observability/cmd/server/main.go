@@ -52,6 +52,7 @@ func main() {
 	httpPort := flag.Int("http-port", getEnvInt("HTTP_PORT", 8095), "HTTP server port")
 	udpHost := flag.String("udp-host", getEnv("UDP_HOST", "127.0.0.1"), "UDP telemetry listen address")
 	udpPort := flag.Int("udp-port", getEnvInt("UDP_PORT", 9195), "UDP telemetry listener port")
+	forwardUDP := flag.String("forward-udp", "", "Comma-separated host:port list; every telemetry datagram is also sent to each (empty = no forwarding)")
 	dbHost := flag.String("db-host", getEnv("DB_HOST", "127.0.0.1"), "MariaDB / MySQL host")
 	dbPort := flag.Int("db-port", getEnvInt("DB_PORT", 3306), "MariaDB / MySQL port")
 	dbUser := flag.String("db-user", getEnv("DB_USER", "mangos"), "MariaDB / MySQL user")
@@ -251,6 +252,18 @@ func main() {
 	// 5. WebSocket hub and UDP ingestion
 	hub := ws.NewHub()
 	udpListener := udp.NewListener(*udpHost, *udpPort, store, metricsRegistry, projectionEngine, hub)
+	var forwards []string
+	for _, f := range strings.Split(*forwardUDP, ",") {
+		if f = strings.TrimSpace(f); f != "" {
+			forwards = append(forwards, f)
+		}
+	}
+	if err := udpListener.SetForwards(forwards); err != nil {
+		log.Fatalf("Refusing -forward-udp: %v", err)
+	}
+	if len(forwards) > 0 {
+		log.Printf("[UDP] Forwarding every telemetry datagram to %s", strings.Join(forwards, ", "))
+	}
 	if err := udpListener.Start(); err != nil {
 		log.Fatalf("Failed to start UDP listener: %v", err)
 	}

@@ -28,6 +28,7 @@ type Listener struct {
 	metricsReg *metrics.Registry
 	zoneProj   *zoneproject.Engine
 	hub        Hub
+	forwards   []*forwardTarget
 	stopChan   chan struct{}
 }
 
@@ -72,6 +73,7 @@ func (l *Listener) Stop() {
 	if l.conn != nil {
 		_ = l.conn.Close()
 	}
+	l.closeForwards()
 }
 
 func (l *Listener) readLoop() {
@@ -97,6 +99,8 @@ func (l *Listener) readLoop() {
 		}
 
 		if n > 0 {
+			// Forward first: the copy goes out whatever the parse makes of it.
+			l.forwardDatagram(buf[:n])
 			l.processPacket(buf[:n])
 		}
 	}
