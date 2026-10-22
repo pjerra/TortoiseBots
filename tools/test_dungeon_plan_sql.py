@@ -22,7 +22,8 @@ KINDS = {"move", "move_direct", "move_hop_exact", "pull", "boss", "loot", "open"
 OPT_IN = pathlib.Path(ROOT) / "tools/optional-plans/zulfarrak-gahzrilla.sql"
 TABLES = ("ai_dungeon_plan", "ai_dungeon_leg", "ai_dungeon_step", "ai_dungeon_boss")
 # The plans whose bosses ai_dungeon_boss lists, and their maps.
-BOSS_PLANS = {"ragefire_chasm": 389, "wailing_caverns": 43, "uldaman": 70, "zulfarrak": 209, "deadmines": 36}
+BOSS_PLANS = {"ragefire_chasm": 389, "wailing_caverns": 43, "uldaman": 70, "zulfarrak": 209, "deadmines": 36,
+              "blackfathom_deeps": 48}
 # Every ai_dungeon_boss row, by (map, entry): the creature_template name and rank in the core's data (Tortoise V2
 # sql/base tw_world_creature_template.sql, read 2026-10-21). All rank 1 (elite) and no instance bind, hence the table.
 SEEDED_BOSSES = {
@@ -39,10 +40,13 @@ SEEDED_BOSSES = {
     (36, 644): "Rhahk'Zor", (36, 642): "Sneed's Shredder", (36, 643): "Sneed", (36, 1763): "Gilnid",
     (36, 61963): "Masterpiece Harvester", (36, 646): "Mr. Smite", (36, 647): "Captain Greenskin",
     (36, 639): "Edwin VanCleef", (36, 645): "Cookie",
+    (48, 4887): "Ghamoo-ra", (48, 4831): "Lady Sarevess", (48, 6243): "Gelihast",
+    (48, 62530): "Velthelaxx the Defiler", (48, 4830): "Old Serra'kis", (48, 4832): "Twilight Lord Kelris",
+    (48, 4829): "Aku'mai",
 }
 # Not bosses here: adds of a boss step (Eric 6907, Olaf 6908, Nekrum 7796, Ruuzlu 7797), the friendly Naralex 3679 and his
 # Disciple 3678, the Sergeant Bly event 7604, Miner Johnson 3586 (a rare in the original game), rares (Deviate Faerie Dragon 5912, Zerillis 10082, Sandarr Dunereaver 10080).
-NOT_BOSSES = {6907, 6908, 7796, 7797, 3679, 3678, 7604, 5912, 10082, 10080, 3586}
+NOT_BOSSES = {6907, 6908, 7796, 7797, 3679, 3678, 7604, 5912, 10082, 10080, 3586, 4787, 12876}
 # Zum'rah's 31 Shallow Graves (128403), in the order the leg opens them: the nearest-neighbour walk of the plan from 1859 1058
 # (the exporter writes each as a stand move, a loot and a sweep pull, in this order). A reorder is a deliberate change.
 ZUMRAH_GRAVES = (
@@ -257,6 +261,29 @@ class DungeonPlanSql(unittest.TestCase):
                          [("1763", "1731", "-177.362", "-574.458")])
         self.assertNotIn(("622,1731", 11, -187.1), pulls(8))
         self.assertEqual([r["entry"] for r in rows if r["kind"] == "boss"], ["644", "642", "61963", "1763", "646", "647", "639"])
+
+    def test_blackfathom_deeps_is_the_draft_as_exported(self):
+        # 20261022210700 (turtle-agent abd37a3, 2026-10-22): the Blackfathom Deeps draft as the exporter writes it, with the boss rows of map 48.
+        # 7 legs, 580 steps (46 + 9 + 51 + 14 + 18 + 29 + 3 pulls), the seven bosses in leg order, and no door, event or shrine step: the draft has
+        # none. The unit lists are empty in this export; the fix round fills them (PREP-BFD-DS-2026-10-22.md). Every pin below fails when its rows are cut.
+        name, text = newest_plan_text("blackfathom_deeps")
+        self.assertEqual(name, "20261022210700_world.sql")
+        self.assertIn("('blackfathom_deeps', 48, '', '', '', 'turtle-agent abd37a3 dungeons/blackfathom_deeps.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(re.findall(r"^\('blackfathom_deeps', \d+, '((?:[^']|'')*)', '((?:[^']|'')*)'\)[,;]$", text, re.M),
+                         [("ghamoo-ra", ""), ("lady_sarevess", ""), ("gelihast", ""), ("velthelaxx_the_defiler", ""),
+                          ("old_serra''kis", ""), ("twilight_lord_kelris", ""), ("aku''mai", "")])
+        rows = [r for r in self.step_rows(text) if r["plan"] == "blackfathom_deeps"]
+        self.assertEqual(len(rows), 580)
+        self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(7)],
+                         [46, 9, 51, 14, 18, 29, 3])
+        self.assertEqual([r["entry"] for r in rows if r["kind"] == "boss"],
+                         ["4887", "4831", "6243", "62530", "4830", "4832", "4829"])
+        self.assertEqual({r["kind"] for r in rows}, {"move", "pull", "boss"})
+        for leg in range(7):
+            self.assertEqual(leg_steps(rows, leg)[-1]["kind"], "boss", leg)
+        # One plan per file, and its steps are deleted before they are inserted.
+        self.assertEqual(re.findall(r"(?m)^DELETE FROM `ai_dungeon_step` WHERE `plan` = '(\w+)';", text), ["blackfathom_deeps"])
+        self.assertIn("DELETE FROM `ai_dungeon_boss` WHERE `map` IN (48);", text)
 
     def step_rows(self, text):
         # Each ai_dungeon_step row of a migration as a dict of its columns, in file order.
