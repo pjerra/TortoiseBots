@@ -1,6 +1,6 @@
--- Blackfathom Deeps (map 48): the plan for the run leader (.bot run), exported from turtle-agent b690e92
+-- Blackfathom Deeps (map 48): the plan for the run leader (.bot run), exported from turtle-agent 7a62b78
 -- (dungeons/blackfathom_deeps.json, status 'draft (not mapped, not live-checked)') with the options of the header of 20261017130000:
---   turtle-agent plan-export --mmaps <map 48 mmaps> --allow-draft --gm-cross-direct --approach-hops --rev b690e92 \
+--   turtle-agent plan-export --mmaps <map 48 mmaps> --allow-draft --gm-cross-direct --approach-hops --rev 7a62b78 \
 --     --stamp 20261022210700 --out <dir> blackfathom_deeps
 -- Stacks on 20261022210000. NO ROW IS HAND-SET. This file replaces the first export of the same name (the draft as the world export gave
 -- it), which was never merged or applied anywhere. The fixes it carries over that draft are in ~/TortoiseBots-audit/PREP-BFD-DS-2026-10-22.md
@@ -49,7 +49,7 @@ DELETE FROM `ai_dungeon_step` WHERE `plan` = 'blackfathom_deeps';
 DELETE FROM `ai_dungeon_leg` WHERE `plan` = 'blackfathom_deeps';
 DELETE FROM `ai_dungeon_plan` WHERE `plan` = 'blackfathom_deeps';
 INSERT INTO `ai_dungeon_plan` (`plan`, `map`, `cc_priority`, `cc_always`, `kill_first`, `source`, `comment`) VALUES
-('blackfathom_deeps', 48, '4809,4820,4799,4805,4811,4812,4813', '4809,4820', '4814', 'turtle-agent b690e92 dungeons/blackfathom_deeps.json', 'plan v1, draft (not mapped, not live-checked)');
+('blackfathom_deeps', 48, '4809,4820,4799,4805,4811,4812,4813', '4809,4820', '4814', 'turtle-agent 7a62b78 dungeons/blackfathom_deeps.json', 'plan v1, draft (not mapped, not live-checked)');
 INSERT INTO `ai_dungeon_leg` (`plan`, `leg`, `name`, `comment`) VALUES
 ('blackfathom_deeps', 0, 'ghamoo-ra', ''),
 ('blackfathom_deeps', 1, 'lady_sarevess', ''),

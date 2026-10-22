@@ -263,13 +263,13 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertEqual([r["entry"] for r in rows if r["kind"] == "boss"], ["644", "642", "61963", "1763", "646", "647", "639"])
 
     def test_blackfathom_deeps_is_the_plan_with_the_pack_fixes(self):
-        # 20261022210700 (turtle-agent b690e92, 2026-10-22): the Blackfathom Deeps draft with the pack fixes of PREP-BFD-DS-2026-10-22.md, no row
+        # 20261022210700 (turtle-agent 7a62b78, 2026-10-22): the Blackfathom Deeps draft with the pack fixes of PREP-BFD-DS-2026-10-22.md, no row
         # hand-set, with the boss rows of map 48. 7 legs, 573 steps (44 + 8 + 48 + 12 + 17 + 29 + 3 pulls), the seven bosses in leg order, and no door,
         # event or shrine step: the draft has none (the shrine event that opens the portal door to Aku'mai is in no step yet). Every pin below fails
         # when its rows are cut.
         name, text = newest_plan_text("blackfathom_deeps")
         self.assertEqual(name, "20261022210700_world.sql")
-        self.assertIn("('blackfathom_deeps', 48, '4809,4820,4799,4805,4811,4812,4813', '4809,4820', '4814', 'turtle-agent b690e92 dungeons/blackfathom_deeps.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertIn("('blackfathom_deeps', 48, '4809,4820,4799,4805,4811,4812,4813', '4809,4820', '4814', 'turtle-agent 7a62b78 dungeons/blackfathom_deeps.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         self.assertEqual(re.findall(r"^\('blackfathom_deeps', \d+, '((?:[^']|'')*)', '((?:[^']|'')*)'\)[,;]$", text, re.M),
                          [("ghamoo-ra", ""), ("lady_sarevess", ""), ("gelihast", ""), ("velthelaxx_the_defiler", ""),
                           ("old_serra''kis", ""), ("twilight_lord_kelris", ""), ("aku''mai", "")])
