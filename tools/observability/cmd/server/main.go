@@ -348,10 +348,7 @@ func main() {
 		})
 	})
 
-	mux.HandleFunc("/api/v1/auth/logout", func(w http.ResponseWriter, r *http.Request) {
-		authService.ClearSessionCookie(w)
-		http.Redirect(w, r, "/login", http.StatusFound)
-	})
+	mux.HandleFunc("/api/v1/auth/logout", logoutHandler(authService))
 
 	requireAuth := func(next http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
@@ -653,6 +650,21 @@ func main() {
 
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("HTTP server failed: %v", err)
+	}
+}
+
+// logoutHandler ends the session. Logout is POST-only: a GET or HEAD must not
+// clear the cookie, or a sandboxed page could log a GM out with a plain request.
+// The dashboard's button posts with fetch and navigates to /login itself.
+func logoutHandler(authService *auth.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", http.MethodPost)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		authService.ClearSessionCookie(w)
+		w.WriteHeader(http.StatusNoContent)
 	}
 }
 

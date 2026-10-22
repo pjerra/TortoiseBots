@@ -628,7 +628,8 @@
     tickNow: document.getElementById('tick-now'),
     consoleBody: document.getElementById('console-body'),
     consoleRate: document.getElementById('console-rate'),
-    refreshBtn: document.getElementById('refresh-btn')
+    refreshBtn: document.getElementById('refresh-btn'),
+    logoutBtn: document.getElementById('logoutBtn')
   };
 
   // All dynamic values rendered via innerHTML must pass through this.
@@ -945,6 +946,18 @@
   }
   window.addEventListener('resize', onWindowResize);
   window.addEventListener('orientationchange', onWindowResize);
+
+  if (el.logoutBtn) {
+    el.logoutBtn.addEventListener('click', async () => {
+      try {
+        const resp = await fetch('/api/v1/auth/logout', { method: 'POST', credentials: 'same-origin' });
+        if (!resp.ok) throw new Error(`logout failed: HTTP ${resp.status}`);
+        window.location = '/login';
+      } catch (err) {
+        console.error(err); // stay put: navigating now would leave the session cookie live
+      }
+    });
+  }
 
   if (el.refreshBtn) {
     el.refreshBtn.addEventListener('click', () => {
