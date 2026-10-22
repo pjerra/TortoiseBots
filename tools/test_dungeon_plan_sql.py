@@ -262,25 +262,41 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertNotIn(("622,1731", 11, -187.1), pulls(8))
         self.assertEqual([r["entry"] for r in rows if r["kind"] == "boss"], ["644", "642", "61963", "1763", "646", "647", "639"])
 
-    def test_blackfathom_deeps_is_the_draft_as_exported(self):
-        # 20261022210700 (turtle-agent abd37a3, 2026-10-22): the Blackfathom Deeps draft as the exporter writes it, with the boss rows of map 48.
-        # 7 legs, 580 steps (46 + 9 + 51 + 14 + 18 + 29 + 3 pulls), the seven bosses in leg order, and no door, event or shrine step: the draft has
-        # none. The unit lists are empty in this export; the fix round fills them (PREP-BFD-DS-2026-10-22.md). Every pin below fails when its rows are cut.
+    def test_blackfathom_deeps_is_the_plan_with_the_pack_fixes(self):
+        # 20261022210700 (turtle-agent b690e92, 2026-10-22): the Blackfathom Deeps draft with the pack fixes of PREP-BFD-DS-2026-10-22.md, no row
+        # hand-set, with the boss rows of map 48. 7 legs, 573 steps (44 + 8 + 48 + 12 + 17 + 29 + 3 pulls), the seven bosses in leg order, and no door,
+        # event or shrine step: the draft has none (the shrine event that opens the portal door to Aku'mai is in no step yet). Every pin below fails
+        # when its rows are cut.
         name, text = newest_plan_text("blackfathom_deeps")
         self.assertEqual(name, "20261022210700_world.sql")
-        self.assertIn("('blackfathom_deeps', 48, '', '', '', 'turtle-agent abd37a3 dungeons/blackfathom_deeps.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertIn("('blackfathom_deeps', 48, '4809,4820,4799,4805,4811,4812,4813', '4809,4820', '4814', 'turtle-agent b690e92 dungeons/blackfathom_deeps.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         self.assertEqual(re.findall(r"^\('blackfathom_deeps', \d+, '((?:[^']|'')*)', '((?:[^']|'')*)'\)[,;]$", text, re.M),
                          [("ghamoo-ra", ""), ("lady_sarevess", ""), ("gelihast", ""), ("velthelaxx_the_defiler", ""),
                           ("old_serra''kis", ""), ("twilight_lord_kelris", ""), ("aku''mai", "")])
         rows = [r for r in self.step_rows(text) if r["plan"] == "blackfathom_deeps"]
-        self.assertEqual(len(rows), 580)
+        self.assertEqual(len(rows), 573)
         self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(7)],
-                         [46, 9, 51, 14, 18, 29, 3])
+                         [44, 8, 48, 12, 17, 29, 3])
         self.assertEqual([r["entry"] for r in rows if r["kind"] == "boss"],
                          ["4887", "4831", "6243", "62530", "4830", "4832", "4829"])
         self.assertEqual({r["kind"] for r in rows}, {"move", "pull", "boss"})
         for leg in range(7):
             self.assertEqual(leg_steps(rows, leg)[-1]["kind"], "boss", leg)
+        # Lady Sarevess' linked guard (a Myrmidon of her creature group) is her boss row's entries, not a pull of its own.
+        self.assertEqual([(r["entry"], r["entries"]) for r in rows if r["kind"] == "boss"][1], ("4831", "4807"))
+        # The merged camps are one pull each, with the members the draft split across two rows (the exporter writes the entries
+        # deduplicated, so the row names the entry once): the leg 0 ambush pair at -613.7 186.5, the sea witch's camp, the leg 3
+        # stalker camp of five and the leg 4 pair.
+        pulls = [(r["leg"], r["entries"], float(r["radius"]), float(r["x"]), float(r["y"])) for r in rows if r["kind"] == "pull"]
+        self.assertEqual([(p[1], p[2], p[3], p[4]) for p in pulls if p[0] == "0" and p[3] == -613.66],
+                         [("4798", 8.0, -613.66, 186.45)])
+        self.assertEqual([(p[1], p[2]) for p in pulls if p[1] == "4805,4798" and p[0] == "0"], [("4805,4798", 8.0)])
+        self.assertEqual([(p[1], p[2]) for p in pulls if p[1] == "4799,4798,62529"], [("4799,4798,62529", 8.0)])
+        self.assertEqual([(p[1], p[2]) for p in pulls if p[1] == "4807,4798"], [("4807,4798", 7.0)])
+        # The radii that keep a neighbour out (the draft's default reached it): the split leg 2 camp, its threshfin neighbour and the
+        # three leg 5 pulls that reached a unit on the floor below.
+        self.assertEqual(sorted(p[2] for p in pulls if p[0] == "2" and p[2] in (7.0, 12.0)), [7.0, 7.0, 7.0, 7.0, 12.0])
+        self.assertEqual([p[2] for p in pulls if p[0] == "5" and p[2] in (8.0, 9.0, 11.0)], [9.0, 8.0, 11.0])
         # One plan per file, and its steps are deleted before they are inserted.
         self.assertEqual(re.findall(r"(?m)^DELETE FROM `ai_dungeon_step` WHERE `plan` = '(\w+)';", text), ["blackfathom_deeps"])
         self.assertIn("DELETE FROM `ai_dungeon_boss` WHERE `map` IN (48);", text)
