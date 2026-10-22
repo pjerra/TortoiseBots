@@ -255,11 +255,26 @@ static void TestStalledLeadInFollowRangeCountsAsArrived()
     // The edge of the deadband counts: 5.0 yd on the ground, 4.6 above.
     RunStalledWalk(kFollowDeadbandYd, 4.6f, PlanStepKind::Move, arrived, stuck);
     CHECK(arrived && !stuck);
+    // ... pinned to the config default (5.0 yd) by a literal, so a smaller constant turns red.
+    RunStalledWalk(5.0f, 4.6f, PlanStepKind::Move, arrived, stuck);
+    CHECK(arrived && !stuck);
+    RunStalledWalk(5.05f, 4.6f, PlanStepKind::Move, arrived, stuck); // 6.8 yd in 3D
+    CHECK(!arrived && stuck);
+    // A 45 degree ramp and a real second floor look the same to the policy without
+    // navmesh evidence (5.0 yd on the ground, 5.0 above: the old ledge test's "other
+    // floor"). Accepted: the walk only counts after a 3 s stall that the executor
+    // itself caused.
+    RunStalledWalk(5.0f, 5.0f, PlanStepKind::Move, arrived, stuck); // 7.1 yd in 3D
+    CHECK(arrived && !stuck);
     // A rise a little steeper than the ground distance is still the same floor (4.0 on the
     // ground, 4.8 above: 6.2 yd in 3D, within kSharedFloorRiseYd).
     RunStalledWalk(4.0f, 4.8f, PlanStepKind::Move, arrived, stuck);
     CHECK(arrived && !stuck);
-    // Just beyond the follow range on the ground: the executor moves the bot, so a stall is stuck.
+    // Just beyond kFollowDeadbandYd on the ground: stuck. The executor itself may still
+    // not move the bot here: the core's GetDistance2d subtracts the bot's bounding radius
+    // (Object.cpp WorldObject::GetDistance2d, SizeFactor::BoundingRadius by default) and
+    // ServerFacade::GetDistance2d rounds to 0.1 yd, so its real deadband is about 5.0 +
+    // the radius (roughly 5.3-6.0 yd by race); the 5.0 yd constant is conservative.
     RunStalledWalk(5.1f, 4.6f, PlanStepKind::Move, arrived, stuck); // 6.9 yd in 3D
     CHECK(!arrived && stuck);
     // A real other floor below or above: stuck.

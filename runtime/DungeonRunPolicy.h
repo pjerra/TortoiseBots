@@ -3193,10 +3193,17 @@ inline float StandDistance(float lx, float ly, float lz, float x, float y, float
 // than GetRange("follow") from the point on the ground; inside a dungeon or raid that
 // range is AiPlayerbot.RaidFollowDistance (PlayerbotAI::GetRange "followraid",
 // default 5.0 in PlayerbotAIConfig.cpp). A lead bot this close does not move at all.
+// Conservative: the core's GetDistance2d subtracts the bot's bounding radius by
+// default (Object.cpp WorldObject::GetDistance2d, SizeFactor::BoundingRadius) and
+// ServerFacade::GetDistance2d rounds to 0.1 yd, so the executor's real deadband is
+// about 5.0 + the radius (roughly 5.3-6.0 yd by race). The constant is the config
+// default: a server with a larger RaidFollowDistance keeps the old pause for a lead
+// bot between 5.0 yd and that value away.
 constexpr float kFollowDeadbandYd = 5.0f;
 // The lead bot and the point share a floor (a ramp, not a ledge over another
 // floor) when the point is at most its ground distance plus this much above or
-// below it: a slope of about 45 degrees.
+// below it: a slope of about 45 degrees. A slope bound, not navmesh evidence: a
+// ledge over a second floor within that bound reads as the same floor.
 constexpr float kSharedFloorRiseYd = 1.0f;
 
 // A stalled plain walk the executor would not move: within kFollowDeadbandYd on the
