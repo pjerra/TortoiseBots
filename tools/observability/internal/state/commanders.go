@@ -93,12 +93,26 @@ type BotTrail struct {
 // commandersState is the latest COMMANDERS payload. It has its own lock so a
 // 2 s datagram never waits on the roster lock.
 type commandersState struct {
-	mu      sync.Mutex
-	session uint64
-	ts      int64
-	at      time.Time
-	list    []model.CommanderBinding
-	trails  map[string]map[uint32]*BotTrail // commander -> bot guid -> trail
+	mu       sync.Mutex
+	session  uint64
+	ts       int64
+	at       time.Time
+	list     []model.CommanderBinding
+	trails   map[string]map[uint32]*BotTrail // commander -> bot guid -> trail
+	bossKeep map[string]keptBosses           // commander -> its last boss list
+}
+
+// commanderBossKeep is how long a binding's last boss list is kept when a
+// snapshot carries none: the module rotates which binding's roster rides each
+// 2 s datagram, so a binding often has no list in the datagram that reports it.
+const commanderBossKeep = 30 * time.Second
+
+// keptBosses is a binding's last boss list, with the map it was reported for and
+// when it was received.
+type keptBosses struct {
+	mapID  uint32
+	bosses []model.CommanderBoss
+	at     time.Time
 }
 
 // ApplyCommanders replaces the standing bindings with the datagram's list. A
@@ -122,7 +136,14 @@ func (s *Store) ApplyCommanders(p *model.CommandersPayload) bool {
 		list = list[:maxCommanderBindings]
 	}
 	out := make([]model.CommanderBinding, 0, len(list))
+	if st.bossKeep == nil {
+		st.bossKeep = map[string]keptBosses{}
+	}
+	now := s.now()
+	reported := map[string]bool{}
 	for _, b := range list {
+		reported[b.Commander] = true
+		leadMap := leadMapOf(b)
 		if len(b.Bots) > maxCommanderBots {
 			b.Bots = b.Bots[:maxCommanderBots]
 		}
@@ -149,11 +170,36 @@ func (s *Store) ApplyCommanders(p *model.CommandersPayload) bool {
 		if b.Orders == nil {
 			b.Orders = []model.CommanderOrder{}
 		}
+		// Bosses nil = the snapshot carries no list (absent); [] is a list that says no boss is known.
+		if b.Bosses != nil {
+			st.bossKeep[b.Commander] = keptBosses{mapID: b.BossesMap, bosses: append([]model.CommanderBoss(nil), b.Bosses...), at: now}
+		} else if k, ok := st.bossKeep[b.Commander]; ok {
+			if leadMap != 0 && k.mapID == leadMap && now.Sub(k.at) <= commanderBossKeep {
+				b.Bosses, b.BossesMap = append([]model.CommanderBoss{}, k.bosses...), k.mapID
+			} else {
+				delete(st.bossKeep, b.Commander)
+			}
+		}
 		out = append(out, b)
 	}
-	st.session, st.ts, st.at, st.list = p.Session, p.TS, s.now(), out
+	for c := range st.bossKeep {
+		if !reported[c] {
+			delete(st.bossKeep, c)
+		}
+	}
+	st.session, st.ts, st.at, st.list = p.Session, p.TS, now, out
 	st.noteTrails(out, p.TS)
 	return true
+}
+
+// leadMapOf is the map the binding's lead stands on, 0 when the datagram does not say.
+func leadMapOf(b model.CommanderBinding) uint32 {
+	for _, bot := range b.Bots {
+		if bot.Lead {
+			return bot.MapID
+		}
+	}
+	return 0
 }
 
 // noteTrails adds the bots' places to their trails and forgets the commanders (and bots) that are no longer reported. Called with the lock held.

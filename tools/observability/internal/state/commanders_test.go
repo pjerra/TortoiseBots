@@ -400,3 +400,116 @@ func TestCommandersCarryBosses(t *testing.T) {
 		t.Fatalf("absent from an older module: null in the view, no map: %s", out)
 	}
 }
+
+// bossBinding is a binding whose lead stands on mapID; bosses nil = the snapshot carries no list (the module's lists take turns).
+func bossBinding(name string, mapID uint32, bosses []model.CommanderBoss) model.CommanderBinding {
+	b := commandersPayload(0, 0, name).Commanders[0]
+	b.Bots[0].MapID = mapID
+	b.Bosses = bosses
+	if bosses != nil { // bosses_map rides with a list only
+		b.BossesMap = mapID
+	}
+	return b
+}
+
+func bossList(entries ...uint32) []model.CommanderBoss {
+	out := []model.CommanderBoss{}
+	for _, e := range entries {
+		out = append(out, model.CommanderBoss{Entry: e, Name: "Boss", State: "a"})
+	}
+	return out
+}
+
+func bossPayload(ts int64, bindings ...model.CommanderBinding) *model.CommandersPayload {
+	return &model.CommandersPayload{V: model.ProtocolVersion, Session: 5, TS: ts, Type: "COMMANDERS", Commanders: bindings}
+}
+
+func bossEntries(list []model.CommanderBoss) []uint32 {
+	var out []uint32
+	for _, b := range list {
+		out = append(out, b.Entry)
+	}
+	return out
+}
+
+func TestCommandersKeepBossListWhenSnapshotHasNone(t *testing.T) {
+	c := newClock()
+	s := newTestStore(c)
+	s.ApplyCommanders(bossPayload(100, bossBinding("A", 209, bossList(1, 2, 3))))
+	c.Advance(10 * time.Second)
+	s.ApplyCommanders(bossPayload(110, bossBinding("A", 209, nil)))
+	v := s.Commanders().Commanders[0]
+	if got := bossEntries(v.Bosses); len(got) != 3 || got[0] != 1 || v.BossesMap != 209 {
+		t.Fatalf("10 s after the list the kept list must be carried: map %d, %v", v.BossesMap, got)
+	}
+	c.Advance(20 * time.Second) // 30 s since the list: still within the limit
+	s.ApplyCommanders(bossPayload(130, bossBinding("A", 209, nil)))
+	if v := s.Commanders().Commanders[0]; len(v.Bosses) != 3 {
+		t.Fatalf("at 30 s the kept list must still be carried: %v", bossEntries(v.Bosses))
+	}
+	c.Advance(time.Second) // 31 s since the list
+	s.ApplyCommanders(bossPayload(131, bossBinding("A", 209, nil)))
+	if v := s.Commanders().Commanders[0]; v.Bosses != nil || v.BossesMap != 0 {
+		t.Fatalf("after 31 s without a list the kept list must be gone: map %d, %v", v.BossesMap, bossEntries(v.Bosses))
+	}
+}
+
+func TestCommandersNewBossListReplacesKeptOne(t *testing.T) {
+	s := newTestStore(newClock())
+	s.ApplyCommanders(bossPayload(100, bossBinding("A", 209, bossList(1, 2))))
+	s.ApplyCommanders(bossPayload(102, bossBinding("A", 209, bossList(7))))
+	if v := s.Commanders().Commanders[0]; fmtEntries(v.Bosses) != "7," {
+		t.Fatalf("a new list replaces the kept one: %v", bossEntries(v.Bosses))
+	}
+	// An explicit empty list is "reported, no boss known": it replaces the kept list too.
+	s.ApplyCommanders(bossPayload(104, bossBinding("A", 209, []model.CommanderBoss{})))
+	if v := s.Commanders().Commanders[0]; v.Bosses == nil || len(v.Bosses) != 0 {
+		t.Fatalf("[] must be kept as reported, not replaced by the old list: %v", bossEntries(v.Bosses))
+	}
+}
+
+func TestCommandersDropBossListOnMapChange(t *testing.T) {
+	s := newTestStore(newClock())
+	s.ApplyCommanders(bossPayload(100, bossBinding("A", 209, bossList(1, 2))))
+	// The lead left the dungeon: the old list is not carried to the new map...
+	s.ApplyCommanders(bossPayload(102, bossBinding("A", 230, nil)))
+	if v := s.Commanders().Commanders[0]; v.Bosses != nil || v.BossesMap != 0 {
+		t.Fatalf("a list of another map must not be carried: map %d, %v", v.BossesMap, bossEntries(v.Bosses))
+	}
+	// ...and it is gone for good: back on the first map, still no list is carried.
+	s.ApplyCommanders(bossPayload(104, bossBinding("A", 209, nil)))
+	if v := s.Commanders().Commanders[0]; v.Bosses != nil {
+		t.Fatalf("the kept list must be dropped on the map change: %v", bossEntries(v.Bosses))
+	}
+}
+
+func TestCommandersDropBossKeepOfRemovedCommander(t *testing.T) {
+	s := newTestStore(newClock())
+	s.ApplyCommanders(bossPayload(100, bossBinding("A", 209, bossList(1)), bossBinding("B", 209, bossList(2))))
+	s.ApplyCommanders(bossPayload(102, bossBinding("B", 209, nil)))
+	s.ApplyCommanders(bossPayload(104, bossBinding("A", 209, nil)))
+	if v := s.Commanders().Commanders; len(v) != 1 || v[0].Commander != "A" || v[0].Bosses != nil {
+		t.Fatalf("A was not reported in between: its kept list must be dropped with it: %+v", v)
+	}
+}
+
+func TestCommandersBossKeepIsCapped(t *testing.T) {
+	var entries []uint32
+	for i := uint32(0); i < 40; i++ {
+		entries = append(entries, 6900+i)
+	}
+	s := newTestStore(newClock())
+	s.ApplyCommanders(bossPayload(100, bossBinding("A", 209, bossList(entries...))))
+	s.ApplyCommanders(bossPayload(102, bossBinding("A", 209, nil)))
+	if v := s.Commanders().Commanders[0]; len(v.Bosses) != maxCommanderBosses {
+		t.Fatalf("the carried list must stay capped at %d, got %d", maxCommanderBosses, len(v.Bosses))
+	}
+}
+
+func fmtEntries(list []model.CommanderBoss) string {
+	s := ""
+	for _, b := range list {
+		s += strconv.Itoa(int(b.Entry)) + ","
+	}
+	return s
+}
