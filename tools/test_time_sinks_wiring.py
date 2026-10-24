@@ -106,8 +106,10 @@ class TimeSinksWiringTest(unittest.TestCase):
 
     def test_self_regroups_rearm_the_rescue(self):
         revived = body(POLICY, "inline bool LeadRevivedAway(Run& r, const Facts& f)", "\n}\n")
-        self.assertLess(revived.index("ResetStep(r);"), revived.index("RearmRescueAfterDeath(r);"))
-        self.assertLess(revived.index("RearmRescueAfterDeath(r);"), revived.index("BeginRegroup(r);"))
+        # Two calls: the pause past kAutoRegroupsPerStep (test_death_pauses_rearm_the_rescue), then the regroup's.
+        self.assertEqual(revived.count("RearmRescueAfterDeath(r);"), 2)
+        rearm = revived.index("RearmRescueAfterDeath(r);", revived.index("ResetStep(r);"))
+        self.assertLess(rearm, revived.index("BeginRegroup(r);"))
         wipe = body(POLICY, "if (autoRegroup && !f.anyInCombat)", "return order;")
         self.assertLess(wipe.index("ResetStep(r);"), wipe.index("RearmRescueAfterDeath(r);"))
         self.assertLess(wipe.index("RearmRescueAfterDeath(r);"), wipe.index("BeginRegroup(r);"))
@@ -115,6 +117,29 @@ class TimeSinksWiringTest(unittest.TestCase):
         self.assertNotIn("RearmRescueAfterDeath", reset)
         resume = body(POLICY, "inline bool Resume(Run& r)", "\n}\n")
         self.assertNotIn("RearmRescueAfterDeath", resume)
+
+    def test_placed_rescue_targets_the_safe_point_by_the_wipe(self):
+        placed = body(POLICY, "inline bool PlacedRunRescue(Run& r, const Facts& f)", "\n}\n")
+        # Bot-only: the safe point on the way it came, first; the first safe point from the start only as the fall-back.
+        players = placed.index("if (f.players.empty())")
+        latest = placed.index("SafePointAtOrBefore(r, f.team, last)")
+        first = placed.index("for (std::size_t j = r.startStep; !byTheWipe &&")
+        self.assertLess(placed.index("LastReachedBefore(r, r.step)"), latest)
+        self.assertLess(players, latest)
+        self.assertLess(latest, first)
+        self.assertIn("last >= r.startStep", placed)
+        self.assertIn("RescueDue(r, f, target);", placed)
+        self.assertNotIn("strandBotOnly", placed)
+
+    def test_death_pauses_rearm_the_rescue(self):
+        for start, pause in (
+                ("inline bool LeadRevivedAway(Run& r, const Facts& f)", 'Pause(r, "the lead bot died and came back "'),
+                ("inline bool WaitForFallen(Run& r, const Facts& f)", 'Pause(r, "the lead bot is dead: revive it, then .bot run resume ("'),
+                ("    if (wipe && !autoRegroup)\n", 'Pause(r, std::to_string(partyDead) + " dead: regroup (cmd revive party), then .bot run resume ("')):
+            block = body(POLICY, start, pause)
+            self.assertTrue(block.rstrip().endswith("RearmRescueAfterDeath(r); // a death: the resume's walk back may teleport once more"), start)
+        # Resume and ResetStep still never re-arm (test_self_regroups_rearm_the_rescue), nor Pause itself.
+        self.assertNotIn("RearmRescueAfterDeath", body(POLICY, "inline void Pause(Run& r, const std::string& why)", "\n}\n"))
 
     def test_walk_back_rescues_off_an_island(self):
         walk = body(POLICY, "inline bool WalkBack(Run& r, const Facts& f, std::uint32_t dt, std::string& order)", "\n}\n")

@@ -279,8 +279,10 @@ static void TestPlacedRunNeverWalksBackBeforeItsStartStep()
     CHECK(ReplayFloor(r) == start);
     StartWalkBack(r, f);
     CHECK(r.walkBack && r.walkBackIdx >= start);
-    // Up behind its start step (the entrance): teleported at once to the run's first safe point (round 1 of 0d9957be).
-    CHECK(r.strandDue && r.walkBackIdx == start && r.note.find("is up behind the run's start step") != std::string::npos);
+    // Up behind its start step (the entrance): teleported at once to the safe point by the wipe (590 0: 600 0 and the
+    // stand 608 0 lie within the wiping pack's reach), never before the start step (Hateforge r32 slot E).
+    CHECK(r.strandDue && r.walkBackIdx == IndexOf(plan, 590.0f, 0.0f) &&
+        r.note.find("is up behind the run's start step") != std::string::npos);
     WalkBackSim const sim = SimulateWalkBack(r, f);
     CHECK(sim.lowest >= start && sim.teleports == 1);
     // AiPlayerbot.DungeonRunWalkBackRescue 0: no teleport, the walk from there (never before the start step).
@@ -1474,7 +1476,19 @@ static void TestPlacedRescueTargetIsSafe()
     r.startStep = 3;
     Facts f = Party(0, 0);
     StartWalkBack(r, f);
-    CHECK(r.strandDue && r.strandIdx == 4); // 540 0: 500 0 lies 5 yd from the pre-start pack at 505 0
+    CHECK(r.strandDue && r.strandIdx == 5); // 580 0: the last point reached, out of every live pack's reach
+    // With a real player in the party: the first safe point from the start step, as before (he walks back with the
+    // party from there): 540 0, as 500 0 lies 5 yd from the pre-start pack at 505 0.
+    Run q = Start(&plan, 6);
+    q.startStep = 3;
+    Facts g = Party(0, 0);
+    PlayerFact pl;
+    pl.name = "Hypeer";
+    g.players.push_back(pl);
+    StartWalkBack(q, g);
+    CHECK(q.strandDue && q.strandIdx == 4);
+    CHECK(q.note == "walk back: the lead bot is up behind the run's start step (step 4; the plan point nearest it is "
+        "step 1): it is teleported to step 5 out of combat");
 }
 // BFD r29 slot 6: the first wipe's rescue succeeded on this step, then a second wipe came on the same step. The
 // regroup the run starts by itself re-arms the rescue's once-a-step latch (strandStep), so the walk back after it
@@ -1494,7 +1508,8 @@ static void TestSecondWipeOnTheStepIsRescuedToo()
     CHECK(r.strandStep == static_cast<std::size_t>(-1));     // re-armed by the regroup
     Facts up = Party(0.0f, 0.0f);
     StartWalkBack(r, up);
-    CHECK(r.strandDue && r.walkBackIdx == start && r.note.find("is up behind the run's start step") != std::string::npos);
+    CHECK(r.strandDue && r.walkBackIdx == IndexOf(plan, 590.0f, 0.0f) &&
+        r.note.find("is up behind the run's start step") != std::string::npos);
     // The failed tries stay counted.
     Run t = Start(&plan, wipe);
     t.startStep = start;
@@ -1524,6 +1539,133 @@ static void TestLeadRevivedAwayRearmsTheRescue()
     Tick(r, f);
     CHECK(r.regroup && r.note.find("came back to life away from the party") != std::string::npos);
     CHECK(r.strandStep == static_cast<std::size_t>(-1));
+}
+
+// Hateforge Quarry r32 slot E (placed at step 83, six wipes at step 224) and Windhorn Canyon r34 slot B (placed at 727,
+// wipes at 1025): after each wipe the placed run's rescue teleported the lead bot to the FIRST safe point after the
+// start (steps 84 and 734), and the walk back replayed the whole placed route to the wipe (270-525 s a wipe). It goes
+// to the safe point on the way it came instead (SafePointAtOrBefore of LastReachedBefore, as every other rescue).
+static void TestPlacedRescueGoesToTheSafePointByTheWipe()
+{
+    std::size_t wipe = 0, side = 0;
+    DungeonPlan plan = GnomereganShape(wipe, side);
+    std::size_t const start = side + 1; // placed at the main route's first point, 310 0
+    std::size_t const safe = IndexOf(plan, 590.0f, 0.0f);
+    Run r = Start(&plan, wipe);
+    r.startStep = start;
+    Facts f = Party(0.0f, 0.0f); // revived at the entrance, behind the start step
+    StartWalkBack(r, f);
+    CHECK(r.strandDue && r.strandIdx == safe && r.walkBackIdx == safe);
+    CHECK(r.note == "walk back: the lead bot is up behind the run's start step (step " + std::to_string(start + 1) +
+        "; the plan point nearest it is step 1): it is teleported to the safe point on the way it came (step " +
+        std::to_string(safe + 1) + ") out of combat");
+    WalkBackSim const sim = SimulateWalkBack(r, f);
+    CHECK(r.state == State::Running && !r.walkBack && r.step == wipe);
+    CHECK(sim.teleports == 1 && sim.lowest >= safe);
+    CHECK(sim.walked < 60.0f); // 590 0 to the stand at 608 0, not the route from 310 0
+    std::cout << "placed rescue by the wipe: walked " << sim.walked << " yd after the teleport (old: from step "
+              << start + 1 << ", " << RouteYards(plan, start, wipe, 310.0f, 0.0f) << " yd)\n";
+    // The route checkpoint known and before the step: the safe point at or before it (the stand 608 0 is the
+    // checkpoint: back to 590 0, never the stand beside the pack that wiped the party).
+    Run c = Start(&plan, wipe);
+    c.startStep = start;
+    c.routeKnown = true;
+    c.checkpoint = wipe - 1;
+    StartWalkBack(c, f);
+    CHECK(c.strandDue && c.strandIdx == safe);
+    // A checkpoint before the start step (never a point of this run): the first safe point from the start, as before.
+    Run b = Start(&plan, wipe);
+    b.startStep = start;
+    b.routeKnown = true;
+    b.checkpoint = 0;
+    StartWalkBack(b, f);
+    CHECK(b.strandDue && b.strandIdx == start);
+}
+
+// The fall-back to the first safe point from the start step: a direct step (a navmesh hole) between the start and the
+// last point reached, and every point after it by a live pack: no safe point on the way it came (ClearPointBefore
+// never goes back over a direct step), so the first safe point from the start, as before.
+static void TestPlacedRescueFallsBackToTheFirstSafePoint()
+{
+    DungeonPlan plan;
+    plan.steps = {Move(0, 0), Move(100, 0), Move(300, 0), Direct(340, 0), Move(600, 0), Pull(610, 0, 9)};
+    Run r = Start(&plan, 5);
+    r.startStep = 2;
+    Facts f = Party(0, 0);
+    StartWalkBack(r, f);
+    CHECK(r.strandDue && r.strandIdx == 2);
+    CHECK(r.note == "walk back: the lead bot is up behind the run's start step (step 3; the plan point nearest it is "
+        "step 1): it is teleported to step 3 out of combat");
+    // With the pack away from the last point: the last point itself, past the direct step.
+    DungeonPlan far = plan;
+    far.steps[5] = Pull(610, 100, 9);
+    Run g = Start(&far, 5);
+    g.startStep = 2;
+    StartWalkBack(g, f);
+    CHECK(g.strandDue && g.strandIdx == 4);
+}
+
+// Windhorn Canyon r34 slot B wipe 3 and Hateforge Quarry r32 slot E wipe 5: the wipe past kAutoRegroupsPerStep paused
+// ('regroups by itself at this step did not hold'); the resume found the rescue's latch used by the wipe before
+// (Run::strandStep), so no rescue fired and the walk back replayed the placed route from its start (Windhorn: '8 hops
+// did not reach the point of step 828: replaying from the first point (step 727)', fights with respawned packs, 9
+// min; Hateforge: 84-223, 525 s). Each death pause arms the rescue again; the resume itself still does not.
+static void TestDeathPauseRearmsTheRescue()
+{
+    std::size_t wipe = 0, side = 0;
+    DungeonPlan plan = GnomereganShape(wipe, side);
+    std::size_t const start = side + 1;
+    std::size_t const safe = IndexOf(plan, 590.0f, 0.0f);
+    // The wipe's pause.
+    Run r = Start(&plan, wipe);
+    r.startStep = start;
+    r.strandStep = wipe;                      // the wipe before was rescued on this step
+    r.autoRegroups = kAutoRegroupsPerStep;    // both regroups by itself used
+    Facts f = Party(0.0f, 0.0f);
+    f.dead = 3;
+    f.alive = 2;
+    Tick(r, f);
+    CHECK(r.state == State::Paused && r.note.find("3 dead: regroup (cmd revive party), then .bot run resume") == 0);
+    CHECK(r.strandStep == static_cast<std::size_t>(-1));
+    CHECK(Resume(r));
+    StartWalkBack(r, Party(0.0f, 0.0f));
+    CHECK(r.strandDue && r.strandIdx == safe);
+    // LeadRevivedAway's pause.
+    Run a = Start(&plan, wipe);
+    a.startStep = start;
+    a.strandStep = wipe;
+    a.autoRegroups = kAutoRegroupsPerStep;
+    a.leadDied = true;
+    a.leadDeathX = plan.steps[wipe].x;
+    a.leadDeathY = plan.steps[wipe].y;
+    a.leadDeathZ = 0.0f;
+    Tick(a, Party(0.0f, 0.0f));
+    CHECK(a.state == State::Paused && a.note.find("the lead bot died and came back") == 0);
+    CHECK(a.strandStep == static_cast<std::size_t>(-1));
+    // WaitForFallen's pause (the lead bot dead).
+    Run w = Start(&plan, wipe);
+    w.startStep = start;
+    w.strandStep = wipe;
+    w.autoRegroups = kAutoRegroupsPerStep;
+    Facts d = Party(0.0f, 0.0f);
+    d.leadAlive = false;
+    d.dead = 1;
+    d.alive = 4;
+    Tick(w, d);
+    CHECK(w.state == State::Paused && w.note.find("the lead bot is dead: revive it") == 0);
+    CHECK(w.strandStep == static_cast<std::size_t>(-1));
+    // The failed tries of the step stay counted: spent, no teleport after the resume.
+    Run t = Start(&plan, wipe);
+    t.startStep = start;
+    t.strandStep = wipe;
+    t.strandCountStep = wipe;
+    t.strandTries = kStrandTries;
+    t.autoRegroups = kAutoRegroupsPerStep;
+    Tick(t, f);
+    CHECK(t.state == State::Paused && t.strandStep == static_cast<std::size_t>(-1) && t.strandTries == kStrandTries);
+    CHECK(Resume(t));
+    StartWalkBack(t, Party(0.0f, 0.0f));
+    CHECK(!t.strandDue);
 }
 
 // The kept design: a resume (ResetStep) does NOT re-arm the latch.
@@ -1570,6 +1712,9 @@ int main()
     TestSecondWipeOnTheStepIsRescuedToo();
     TestLeadRevivedAwayRearmsTheRescue();
     TestResumeKeepsTheRescueLatch();
+    TestPlacedRescueGoesToTheSafePointByTheWipe();
+    TestPlacedRescueFallsBackToTheFirstSafePoint();
+    TestDeathPauseRearmsTheRescue();
     std::cout << "test_run_time_sinks_policy: ok\n";
     return 0;
 }

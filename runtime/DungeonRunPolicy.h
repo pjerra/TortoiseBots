@@ -4376,7 +4376,11 @@ inline void StrandCountsForStep(Run& r)
 // new spot (a corpse run), so the rescue's once-a-step latch (Run::strandStep) is armed again and the walk back after
 // it may teleport again on the same step (Blackfathom Deeps r29 slot 6: a placed run's second wipe at step 574 found
 // the latch used by the first and walked from the entrance for 23 minutes). Bounded by kAutoRegroupsPerStep; a resume
-// (ResetStep) still keeps the latch, and this step's failed tries (strandTries, strandWaits) stay counted.
+// (ResetStep) still keeps the latch, and this step's failed tries (strandTries, strandWaits) stay counted. The death
+// pauses past kAutoRegroupsPerStep (the wipe's, LeadRevivedAway's, WaitForFallen's: 'regroups by itself at this step
+// did not hold') arm it too, so the walk back after their resume may teleport once more (Windhorn Canyon r34 slot B
+// wipe 3 and Hateforge Quarry r32 slot E wipe 5: the resume found the latch used by the wipe before and replayed the
+// placed route from its start, 5-9 min); a resume after any other pause does not.
 inline void RearmRescueAfterDeath(Run& r)
 {
     r.strandStep = static_cast<std::size_t>(-1);
@@ -7264,9 +7268,15 @@ inline std::size_t StraightWalkBackTarget(const Run& r, std::uint32_t team, std:
 // A placed run's lead bot revived behind its start step (the lead's decision on round 1 of 0d9957be; Gnomeregan r27
 // slot 4: placed at step 543, revived at the entrance, the run never walked the steps between): the plan point
 // nearest it lies before the start step and none of the run's own points (start step to the current one) is within
-// kSeeYd of it. It is teleported at once to the first plain move point from the start step on that no live pack is
-// near (the safe-point rule of StraightWalkBackTarget), by the stranded lead bot's rescue (RescueDue), when the rescue
-// is allowed (RescueAllowed: AiPlayerbot.DungeonRunWalkBackRescue, out of combat, once a step). True when it is due.
+// kSeeYd of it. It is teleported at once by the stranded lead bot's rescue (RescueDue), when the rescue is allowed
+// (RescueAllowed: AiPlayerbot.DungeonRunWalkBackRescue, out of combat, once a step). The target, in a party with no
+// real player (Facts::players): the safe point on the way it came, as every other rescue (SafePointAtOrBefore of
+// LastReachedBefore: the last point reached, or the latest one before it out of every live pack's reach), never before
+// the start step. Hateforge Quarry r32 slot E (placed at step 83, six wipes at step 224): teleported to step 84 every
+// time, then the replay 84-223, 270-525 s a wipe; Windhorn Canyon r34 slot B (placed at 727, wipes at 1025): to step
+// 734, then about 5 min to step 1021. With a real player in the party, or no such point (a direct step between it and
+// the last point reached), the first plain move point from the start step on that no live pack is near, as before:
+// he walks back with the party from there. True when it is due.
 inline bool PlacedRunRescue(Run& r, const Facts& f)
 {
     if (r.startStep == 0 || !RescueAllowed(r, f) || r.step <= r.startStep)
@@ -7290,7 +7300,14 @@ inline bool PlacedRunRescue(Run& r, const Facts& f)
     if (nearest == static_cast<std::size_t>(-1) || nearest >= r.startStep || (ownBest >= 0.0f && ownBest <= kSeeYd))
         return false;
     std::size_t target = static_cast<std::size_t>(-1);
-    for (std::size_t j = r.startStep; j < r.step && j < r.plan->steps.size(); ++j)
+    if (f.players.empty())
+    {
+        std::size_t const last = LastReachedBefore(r, r.step);
+        if (last != static_cast<std::size_t>(-1) && last >= r.startStep && last < r.plan->steps.size())
+            target = SafePointAtOrBefore(r, f.team, last); // never before the start step (ClearPointBefore's floor)
+    }
+    bool const byTheWipe = target != static_cast<std::size_t>(-1);
+    for (std::size_t j = r.startStep; !byTheWipe && j < r.step && j < r.plan->steps.size(); ++j)
     {
         const PlanStep& p = r.plan->steps[j];
         if (p.kind == PlanStepKind::MoveDirect)
@@ -7305,8 +7322,10 @@ inline bool PlacedRunRescue(Run& r, const Facts& f)
         return false;
     RescueDue(r, f, target);
     r.note = "walk back: the lead bot is up behind the run's start step (step " + std::to_string(r.startStep + 1) +
-        "; the plan point nearest it is step " + std::to_string(nearest + 1) + "): it is teleported to step " +
-        std::to_string(target + 1) + " out of combat";
+        "; the plan point nearest it is step " + std::to_string(nearest + 1) + "): it is teleported to " +
+        (byTheWipe ? "the safe point on the way it came (step " + std::to_string(target + 1) + ")"
+                   : "step " + std::to_string(target + 1)) +
+        " out of combat";
     return true;
 }
 
@@ -10724,6 +10743,7 @@ inline bool LeadRevivedAway(Run& r, const Facts& f)
     }
     if (r.autoRegroups >= kAutoRegroupsPerStep)
     {
+        RearmRescueAfterDeath(r); // a death: the resume's walk back may teleport once more
         Pause(r, "the lead bot died and came back " + Num(ai::PlanDistance(f.leadX, f.leadY, f.leadZ, r.leadDeathX,
             r.leadDeathY, r.leadDeathZ)) + " yd from where it fell (" + std::to_string(kAutoRegroupsPerStep) +
             " regroups by itself at this step did not hold): .bot run resume");
@@ -10767,6 +10787,7 @@ inline bool WaitForFallen(Run& r, const Facts& f)
     {
         if (r.autoRegroups >= kAutoRegroupsPerStep)
         {
+            RearmRescueAfterDeath(r); // a death: the resume's walk back may teleport once more
             Pause(r, "the lead bot is dead: revive it, then .bot run resume (" +
                 std::to_string(kAutoRegroupsPerStep) + " regroups by itself at this step did not hold)");
             return true;
@@ -11944,6 +11965,7 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
     bool const autoRegroup = wipe && r.autoRegroups < kAutoRegroupsPerStep;
     if (wipe && !autoRegroup)
     {
+        RearmRescueAfterDeath(r); // a death: the resume's walk back may teleport once more
         Pause(r, std::to_string(partyDead) + " dead: regroup (cmd revive party), then .bot run resume (" +
             std::to_string(kAutoRegroupsPerStep) + " regroups by itself at this step did not hold)");
         return order;
