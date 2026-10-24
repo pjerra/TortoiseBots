@@ -1240,36 +1240,37 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertIn("DELETE FROM `ai_dungeon_boss` WHERE `map` IN (329) AND `entry` IN (10811, 10813, 10997);", text)
         self.assertIn("(329, 10811, 'Archivist Galford'),\n(329, 10813, 'Balnazzar'),\n(329, 10997, 'Cannon Master Willey');", text)
 
-    def test_stratholme_undead_has_the_slaughter_square_hold_and_the_rivendare_tactic(self):
-        # 20261024150200 (turtle-agent prep/stratholme_undead ff1fe4d, 2026-10-24): 20261024020200 again with the
-        # Slaughter Square fix for RUN-LESSONS r28d slotD (abomination pulls 228-242 said 'pack cleared' while members
-        # had wandered out of the radius; Bile Spewer 10416 and Venom Belcher 10417 still alive, Ramstein never began;
-        # Rivendare walked to 7 yd at 100 % and was never engaged). Leg 4's 13 abomination pulls go 5 -> 18 yd (one
-        # spawn each, wander_distance 8: census spread 0 + 10, loader max 100); the leg's last row is the whole-square
-        # units hold instead of the boss row (kind hold, entry 0, param 0, flags 0, spot the square centre 4040.01
-        # -3413.15 117.77, radius 68, timeout 300, entries 10440,10416,10417), same shape as the ST Atal'alarion hold
-        # (f5d5f20f 20261024140000). Legs 0-3 byte-identical to 20261024020200. 5 legs, 243 steps (15 + 20 + 22 + 13 +
-        # 13 pulls; 155 moves; 4 boss rows + 1 hold); 249 rows. Boss table unchanged (all five); new ai_boss_tactic row
-        # (329, 10440, kill_first 10440) so DPS engage Rivendare the moment he is in combat with the party.
+    def test_stratholme_undead_has_the_rivendare_room_leg(self):
+        # 20261024152300 (turtle-agent prep/stratholme_undead 47c914f, 2026-10-24): 20261024150200 again with the
+        # Rivendare pull for RUN-LESSONS r32 slotD (round 1's hold worked through Slaughter Square: every abomination
+        # pull passed, the hold ended '13 of 13 down', the Black Guards fought, Ramstein met; but the run ended
+        # 'plan done' with Baron Rivendare 10440 ALIVE at 100 %, ~85 yd from the hold spot, never pulled: the plan
+        # format cannot hold a boss row after a hold in the same leg, so the boss is a new last leg 5
+        # 'baron_rivendare_room'. Its 'to' walks from the hold spot to Rivendare's room (through the gate the event
+        # opens) and its boss row pulls 10440 at his spawn (the normal boss row shape, entries ''). Legs 0-4
+        # byte-identical to 20261024150200. 6 legs, 253 steps (15 + 20 + 22 + 13 + 13 + 0 pulls; 164 moves;
+        # 5 boss rows + 1 hold); the new leg's 10 rows are the only step rows added. Boss table unchanged (all five);
+        # the ai_boss_tactic row (329, 10440, kill_first 10440) is carried over, now with its own DELETE first
+        # (20261024152000's plain INSERT failed on boots that already had the row from 20261024150200; replaced here).
         name, text = newest_plan_text("stratholme_undead")
-        self.assertEqual(name, "20261024150200_world.sql")
-        self.assertIn("('stratholme_undead', 329, '', '', '10393,10411,10400,10398', 'turtle-agent ff1fe4d dungeons/stratholme_undead.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261024152300_world.sql")
+        self.assertIn("('stratholme_undead', 329, '', '', '10393,10411,10400,10398', 'turtle-agent 47c914f dungeons/stratholme_undead.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         legs = leg_rows(text, "stratholme_undead")
-        self.assertEqual([legs[i][0] for i in range(5)],
+        self.assertEqual([legs[i][0] for i in range(6)],
                          ["magistrate_barthilas", "nerub'enkan", "maleki_the_pallid",
-                          "baroness_anastari", "baron_rivendare"])
+                          "baroness_anastari", "baron_rivendare", "baron_rivendare_room"])
         rows = [r for r in self.step_rows(text) if r["plan"] == "stratholme_undead"]
-        self.assertEqual(len(rows), 243)
+        self.assertEqual(len(rows), 253)
         self.assertEqual({r["kind"] for r in rows}, {"move", "pull", "boss", "hold"})
-        self.assertEqual(len([r for r in rows if r["kind"] == "move"]), 155)
-        self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(5)],
-                         [15, 20, 22, 13, 13])
+        self.assertEqual(len([r for r in rows if r["kind"] == "move"]), 164)
+        self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(6)],
+                         [15, 20, 22, 13, 13, 0])
         bosses = [r for r in rows if r["kind"] == "boss"]
-        self.assertEqual([r["entry"] for r in bosses], ["10435", "10437", "10438", "10436"])
-        self.assertEqual([r["entries"] for r in bosses], ["", "", "10398,10400", ""])
+        self.assertEqual([r["entry"] for r in bosses], ["10435", "10437", "10438", "10436", "10440"])
+        self.assertEqual([r["entries"] for r in bosses], ["", "", "10398,10400", "", ""])
         for leg in range(4):
             self.assertEqual(leg_steps(rows, leg)[-1]["kind"], "boss", leg)
-        # leg 4 ends in the units hold, not a boss row: entry 0, no param/flags, 300 s, boss first (counts friendly)
+        # leg 4 still ends in the whole-square units hold (round 1, unchanged)
         leg4 = leg_steps(rows, 4)
         self.assertEqual(leg4[-1]["kind"], "hold")
         hold = [r for r in leg4 if r["kind"] == "hold"]
@@ -1279,12 +1280,22 @@ class DungeonPlanSql(unittest.TestCase):
                          ("68", "0", "0", "300", "10440,10416,10417"))
         self.assertIn("10440 counts while still friendly", hold[0]["comment"])
         self.assertEqual(leg4[-1]["seq"], hold[0]["seq"])
-        # the 13 Slaughter Square pulls cover their wander area (radius 18 = spread 0 + 10 over wander 8)
+        # the 13 Slaughter Square pulls still cover their wander area (radius 18 = spread 0 + 10 over wander 8)
         pulls4 = [r for r in leg4 if r["kind"] == "pull"]
         self.assertEqual(len(pulls4), 13)
         self.assertEqual({r["entries"] for r in pulls4}, {"10416", "10417"})
         for r in pulls4:
             self.assertEqual(float(r["radius"]), 18.0, r["comment"])
+        # leg 5 walks from the hold spot to Rivendare's room and pulls him at his spawn
+        leg5 = leg_steps(rows, 5)
+        self.assertEqual(len(leg5), 10)
+        self.assertEqual([r["kind"] for r in leg5], ["move"] * 9 + ["boss"])
+        self.assertEqual((leg5[0]["x"], leg5[0]["y"]), ("4036.5332", "-3398.6667"))
+        self.assertEqual((leg5[-2]["x"], leg5[-2]["y"], leg5[-2]["z"]), ("4032.79", "-3333.02", "115.061"))
+        self.assertEqual(leg5[-2]["comment"], "to")
+        boss5 = leg5[-1]
+        self.assertEqual((boss5["entry"], boss5["x"], boss5["y"], boss5["z"]), ("10440", "4032.79", "-3333.02", "115.061"))
+        self.assertEqual((boss5["entries"], boss5["comment"]), ("", "boss"))
         pulls = [r for r in rows if r["kind"] == "pull"]
         # the neutral units of faction 7 and the crystals are in no pull
         listed = {e for r in pulls for e in r["entries"].split(",") if e}
@@ -1306,8 +1317,9 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertIn("DELETE FROM `ai_dungeon_boss` WHERE `map` IN (329) AND `entry` IN (10435, 10437, 10438, 10436, 10440);", text)
         self.assertEqual([(m, e) for m, e, _n in self.boss_rows(text)],
                          [(329, 10435), (329, 10437), (329, 10438), (329, 10436), (329, 10440)])
-        # Rivendare's tactic: DPS take him before anything else while he attacks the party
-        self.assertIn("(329, 10440, 'kill_first', 0, 0, 1, 0, 'Rivendare: engage him the moment he is in combat with the party (r28d slotD)');", text)
+        # Rivendare's tactic: DPS take him before anything else while he attacks the party (unchanged from round 1,
+        # with its own DELETE first: the hand-boss block deletes what it inserts, scoped to map 329 entry 10440)
+        self.assertIn("DELETE FROM `ai_boss_tactic` WHERE `map` = 329 AND `boss_entry` IN (10440);", text)
 
     def test_stormwrought_ruins_is_the_census_fixed_draft(self):
         # 20261024151200 (turtle-agent 839e703, 2026-10-24): SW-FIX2b re-export of the 20261024150700 SW-FIX2
@@ -2811,6 +2823,31 @@ class DungeonPlanSql(unittest.TestCase):
             if scoped[0][1]:
                 self.assertEqual({int(e) for e in scoped[0][1].split(",")}, {e for _m, e in seeded_entries}, name)
             self.assertEqual({int(m) for m in scoped[0][0].split(",")}, seeded, name)
+
+    def test_boss_tactic_inserts_delete_their_own_keys_first(self):
+        # ai_boss_tactic's key is (map, boss_entry, kind, target_entry, spell_id): a migration that re-INSERTs a
+        # tactic row an earlier migration already wrote, without DELETEing it, fails on a boot that runs both
+        # (20261024152000 re-INSERTed 20261024150200's (329, 10440) kill_first row). The first migration that
+        # INSERTs a (map, boss_entry) key needs no DELETE (fresh table); every later migration that INSERTs the
+        # same key first DELETEs it: a whole-map DELETE, or a DELETE scoped to its own boss entries (the shape
+        # the other plan migrations use for their boss rows).
+        seen = set()
+        for name, text in migrations():
+            if "INSERT INTO `ai_boss_tactic`" not in text:
+                continue
+            inserted = set()
+            for block in re.findall(r"INSERT INTO `ai_boss_tactic` \(([^)]*)\) VALUES(.*?);\n", text, re.S):
+                cols = [c.strip(" `") for c in block[0].split(",")]
+                map_at, entry_at = cols.index("map"), cols.index("boss_entry")
+                for row in re.findall(r"(?m)^\((\d+), (\d+), '", block[1]):
+                    inserted.add((row[0], row[1]))
+            whole = set(re.findall(r"DELETE FROM `ai_boss_tactic` WHERE `map` = (\d+);", text))
+            scoped = {}
+            for map_id, entries in re.findall(r"DELETE FROM `ai_boss_tactic` WHERE `map` = (\d+) AND `boss_entry` IN \(([\d, ]+)\);", text):
+                scoped.setdefault(map_id, set()).update(e.strip() for e in entries.split(","))
+            missing = sorted((m, e) for m, e in (inserted & seen) if not (m in whole or e in scoped.get(m, set())))
+            self.assertFalse(missing, "%s: tactic INSERTs with no DELETE of the same (map, boss_entry): %s" % (name, missing))
+            seen |= inserted
 
 
     def test_scholomance_is_the_census_fixed_draft(self):
