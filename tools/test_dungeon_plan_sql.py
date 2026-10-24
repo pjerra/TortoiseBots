@@ -821,12 +821,21 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertIn("DELETE FROM `ai_dungeon_boss` WHERE `map` IN (35) AND `entry` IN (80851, 80854, 80853, 80850, 80852, 93107);", text)
 
     def test_sunken_temple_boss_order_puts_jammalan_before_the_drakes(self):
-        # 20261024151400 (turtle-agent a76e004, 2026-10-24): 20261024151100 again, with one server-path
-        # approach waypoint on each of the two long dreamscythe approach hops the live server refuses
-        # (2048-node search answers 'unreachable'): leg-3 group-2 approach 1 (-381.6 102.4 -90.83 ->
-        # -536.0 152.0 -69.33, 880.7 yd offline) gains -354.13 160.27 -109.03 (halves 448.7 + 437.3 yd,
-        # both server type 0x1 ok), and group-3 approach 1 (-568.53 175.47 -69.33 -> -544.18 154.95 -53.32)
-        # gains -361.33 28.27 -106.43 (halves 476.9 + 411.7 yd, both type 0x1 ok). Run 3
+        # 20261024151900 (turtle-agent a76e004, 2026-10-24): 20261024151400 again, with the Jammal'an-leg
+        # corridor split (RUN-LESSONS.md r33s2 slotS steps 901-903, z -90.8): old pull groups 1 (-446.6 -53.7,
+        # 5263+5271) and 2 (-462.9 -76.9, 5271+5273+5263) chained (3 wipes; joiners 5263, 5273 and 8317, the
+        # spirit a dying 5271 summons, so no census pack to pre-pull). From the map-109 census: group 1 ->
+        # 2 pulls (5271 pair radius 6, 5263 single radius 10), group 2 -> 3 pulls (5271 east pair radius 5,
+        # 5271+5273 middle radius 5, 5263+5271 west triple radius 8); group 6 moves before them (fought on
+        # arrival, no approach row) so no walk crosses an unpulled pack; groups 3/4/5 keep members and radii
+        # and gain stands. Every new stand is 15-25 yd from its own pull point on the z -90.8 floor
+        # (mesh-checked with plan-check --mmaps), outside every other unpulled unit's aggro (20 yd - level
+        # diff, party 52) + 5 yd. 20261024151400's own story stays: one server-path approach waypoint on each
+        # of the two long dreamscythe approach hops the live server refuses (2048-node search answers
+        # 'unreachable'): leg-3 group-2 approach 1 (-381.6 102.4 -90.83 -> -536.0 152.0 -69.33, 880.7 yd
+        # offline) gains -354.13 160.27 -109.03 (halves 448.7 + 437.3 yd, both server type 0x1 ok), and
+        # group-3 approach 1 (-568.53 175.47 -69.33 -> -544.18 154.95 -53.32) gains -361.33 28.27 -106.43
+        # (halves 476.9 + 411.7 yd, both type 0x1 ok). The r30 run then stopped at the Weaver: alive at 100 %,
         # not pullable, 'took more than 300 s out of combat' twice. The instance script keeps Weaver 5720 and
         # Dreamscythe 5721 VISIBILITY_OFF / NOT_SELECTABLE / IMMUNE_TO_NPC (patrol idle) while m_auiEncounter[2] !=
         # DONE (TYPE_JAMMALAN), and reveals them only in SetData(TYPE_JAMMALAN, DONE)
@@ -834,18 +843,18 @@ class DungeonPlanSql(unittest.TestCase):
         # Atal'ai statues 148830-148835 (guids 27898, 27899, 28111-28114) are used in that exact entry order
         # (a wrong statue triggers a trap and does not advance the counter); the right one sets
         # GO_FLAG_NO_INTERACT on itself and respawns the green light 148883 within INTERACTION_DISTANCE of it.
-        # Census unit lists, radii, pulls and boss rows are unchanged. 6 legs, 2461 steps
-        # (16 + 8 + 37 + 25 + 2 + 1 pulls), boss order 5710, 5720, 5721, 5719, 5709; 6 open_proof rows and 1 hold
-        # row in leg 0.
+        # Census unit lists, radii (but for the five new corridor pulls), pulls (but for the corridor split) and
+        # boss rows are unchanged. 6 legs, 2472 steps (11 + 37 + 25 + 2 + 1 pulls), boss order 5710, 5720, 5721,
+        # 5719, 5709; 6 open_proof rows and 1 hold row in leg 0.
         name, text = newest_plan_text("sunken_temple")
-        self.assertEqual(name, "20261024151400_world.sql")
-        self.assertIn("('sunken_temple', 109, '5259,5273,5269,5226', '5259', '5271,5280,5291', 'turtle-agent a76e004 dungeons/s', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261024151900_world.sql")
+        self.assertIn("('sunken_temple', 109, '5259,5273,5269,5226', '5259', '5271,5280,5291', 'turtle-agent a76e004 dungeons/sunken_temple.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         self.assertEqual(len(re.findall(r"(?m)^\('sunken_temple', \d+, '(?:[^']|'')*', '(?:[^']|'')*'\)[,;]$", text)), 6)
         self.assertEqual([n.replace("''", "'") for n in re.findall(r"(?m)^\('sunken_temple', \d+, '((?:[^']|'')*)', '(?:[^']|'')*'\)[,;]$", text)],
                          ["atal'alarion", "jammal'an_the_prophet", "weaver", "dreamscythe", "morphaz", "shade_of_eranikus"])
         rows = [r for r in self.step_rows(text) if r["plan"] == "sunken_temple"]
-        self.assertEqual(len(rows), 2461)
-        self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(6)], [16, 8, 37, 25, 2, 1])
+        self.assertEqual(len(rows), 2472)
+        self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(6)], [16, 11, 37, 25, 2, 1])
         self.assertEqual([r["entry"] for r in rows if r["kind"] == "boss"], ["5710", "5720", "5721", "5719", "5709"])
         self.assertEqual({r["kind"] for r in rows}, {"move", "pull", "boss", "open_proof", "hold"})
         self.assertEqual(leg_steps(rows, 0)[-1]["kind"], "hold")
@@ -911,19 +920,50 @@ class DungeonPlanSql(unittest.TestCase):
         # The three radii that reached the next pack (same entries 14.4-26.8 yd out) and the seven 5291 pulls with its 15 yd wander.
         self.assertEqual(float([r for r in leg_steps(rows, 0) if r["kind"] == "pull"][5]["radius"]), 17.5)
         # The 23 detour pulls have two approach moves each, plus the new single-stand pull group 8, plus the
-        # two server-path waypoints (one extra approach move each on dreamscythe groups 2 and 3); the last stands on
+        # two server-path waypoints (one extra approach move each on dreamscythe groups 2 and 3), plus the ten
+        # Jammal'an corridor stands (two dogleg waypoints on the split groups 2 and 4); the last stands on
         # the pack's own floor, 30 yd or less from the pull row (a cut path's move rows may lie between the two
         # approach points and the pull, and the statue walks put open_proof rows between, so find the last approach
         # move scanning back over those kinds).
         approaches = [r for r in rows if r["kind"] == "move" and r["comment"].startswith("pull group ") and r["comment"].endswith(" approach")]
-        self.assertEqual(len(approaches), 49)
-        self.assertEqual(len({(r["leg"], r["comment"].split()[2]) for r in approaches}), 24)
+        self.assertEqual(len(approaches), 59)
+        self.assertEqual(len({(r["leg"], r["comment"].split()[2]) for r in approaches}), 32)
         # The server-path waypoints: one inserted approach move on each of the two long dreamscythe hops.
         leg3 = leg_steps(rows, 3)
         self.assertIn(("move", "-354.13", "160.27", "-109.03", "pull group 2 approach"),
                       [(r["kind"], r["x"], r["y"], r["z"], r["comment"]) for r in leg3])
         self.assertIn(("move", "-361.33", "28.27", "-106.43", "pull group 3 approach"),
                       [(r["kind"], r["x"], r["y"], r["z"], r["comment"]) for r in leg3])
+        # The corridor split: leg 1 holds 11 pulls (group 6 first, fought on arrival with no approach row, then
+        # the 5271 pair, the 5263 single, the three group-2 splits, groups 3/4/5 with new stands, group 7).
+        # 8317 is the spirit a dying 5271 summons (no census pack, so no pull carries it: every pull's entries
+        # are census units only).
+        leg1 = leg_steps(rows, 1)
+        leg1pulls = [r for r in leg1 if r["kind"] == "pull"]
+        self.assertEqual([(r["entries"], r["radius"]) for r in leg1pulls],
+                         [("8318,5256,5259", "16.1"),
+                          ("5263,5271", "14.7"), ("5271", "6"), ("5263", "10"), ("5271", "5"),
+                          ("5271,5273", "5"), ("5263,5271", "8"), ("5271,5273,5263,5269", "15.6"),
+                          ("5263,5271", "13.3"), ("5271", "12.8"), ("5267,8318,5270,5259", "18.6")])
+        for r in leg1pulls:
+            self.assertNotIn("8317", r["entries"].split(","))
+        # The new stands: dogleg waypoints on split groups 2 and 4, single stands elsewhere; each stand is
+        # 15-25 yd from its own pull point on the corridor floor (group 4's stand rides the east rim at -90.11).
+        leg1stands = [(r["x"], r["y"], r["z"]) for r in leg1
+                       if r["kind"] == "move" and r["comment"].startswith("pull group ") and r["comment"].endswith(" approach")]
+        self.assertEqual(leg1stands,
+                         [("-485", "-50", "-90.73"), ("-467", "-49.6", "-90.73"), ("-469", "-50", "-90.73"),
+                          ("-460", "-49.6", "-90.73"), ("-438", "-58", "-90.11"), ("-462", "-53.5", "-90.73"),
+                          ("-475", "-57", "-90.73"), ("-452.5", "-73", "-90.73"), ("-467.5", "-100", "-90.73"),
+                          ("-458", "-108", "-90.73")])
+        # Pair each pull with its last stand (dogleg first waypoints pair with nothing): g1a/g2e take stands
+        # 1/4, the singles take theirs in order; g6 (arrival fight) and group 0 have no stand.
+        for (sx, sy, sz), pull in zip([leg1stands[1], leg1stands[2], leg1stands[4], leg1stands[5],
+                                       leg1stands[6], leg1stands[7], leg1stands[8], leg1stands[9]],
+                                      leg1pulls[2:10]):
+            d = math.dist((float(sx), float(sy)), (float(pull["x"]), float(pull["y"])))
+            self.assertGreaterEqual(d, 15.0, (pull["comment"], pull["entries"]))
+            self.assertLessEqual(d, 25.0, (pull["comment"], pull["entries"]))
         for leg in range(6):
             steps = leg_steps(rows, leg)
             for i, pull in enumerate(steps):
