@@ -1199,26 +1199,27 @@ class DungeonPlanSql(unittest.TestCase):
             self.assertIn("(429, %d, '%s')" % (entry, boss.replace("'", "''")), text)
 
     def test_dire_maul_west_is_the_plan_with_the_census_fixes(self):
-        # 20261024020500 (turtle-agent 5d938b3, 2026-10-24): the Dire Maul West draft with the census fixes of
-        # PREP-DIRE-MAUL-WEST-2026-10-24.md, no row hand-set, with the boss rows of map 429 scoped to this plan's own six
-        # entries. 6 legs, 490 steps (45 + 0 + 18 + 13 + 29 + 4 pulls), bosses in leg order, no door or event step. The plan
+        # 20261024152100 (turtle-agent 32c9cc8, 2026-10-24): the Dire Maul West draft with the census fixes of
+        # PREP-DIRE-MAUL-WEST-2026-10-24.md plus the r33 fix round (the two hall packs the leg-1 walk crosses are
+        # Revanchion-leg pulls before the boss walk), with the boss rows of map 429 scoped to this plan's own six
+        # entries. 6 legs, 496 steps (45 + 2 + 18 + 13 + 29 + 4 pulls), bosses in leg order, no door or event step. The plan
         # row's kill_first is the two healers/regrowthers (14303, 11473), the Polymorphing Sorcerer (11470) and the summoner
         # (11484); cc_priority and cc_always stay empty (no trash is polymorphable). The 29 Shen'dralar Wisps (14361) and the
         # 16 neutral Highborne Summoners (11466) are out of every pull, and so are the courtyard's Gordok mobs; Revanchion
-        # 14690 has a leg of its own, first in the hall; Ferra 14308 is Illyanna's boss.first; Tsu'zee 11467 (rare) is a
+        # 14690 has a leg of his own, first in the hall; Ferra 14308 is Illyanna's boss.first; Tsu'zee 11467 (rare) is a
         # member of the Kalendris hall's pull; every pull is at most 6 units and every radius <= 19 yd.
         name, text = newest_plan_text("dire_maul_west")
-        self.assertEqual(name, "20261024020500_world.sql")
-        self.assertIn("('dire_maul_west', 429, '', '', '14303,11473,11470,11484', 'turtle-agent 5d938b3 dungeons/dire_maul_west.json', 'plan v1, draft (census 2026-10-24, not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261024152100_world.sql")
+        self.assertIn("('dire_maul_west', 429, '', '', '14303,11473,11470,11484', 'turtle-agent 32c9cc8 dungeons/dire_maul_west.json', 'plan v1, draft (census 2026-10-24, not mapped, not live-checked)');", text)
         legs = leg_rows(text, "dire_maul_west")
         self.assertEqual([legs[i][0] for i in range(6)],
                          ["tendris_warpwood", "revanchion", "illyanna_ravenoak", "magister_kalendris", "immol'thar",
                           "prince_tortheldrin"])
         rows = [r for r in self.step_rows(text) if r["plan"] == "dire_maul_west"]
-        self.assertEqual(len(rows), 490)
-        self.assertEqual([len(leg_steps(rows, leg)) for leg in range(6)], [114, 16, 110, 93, 75, 82])
+        self.assertEqual(len(rows), 496)
+        self.assertEqual([len(leg_steps(rows, leg)) for leg in range(6)], [114, 22, 110, 93, 75, 82])
         self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(6)],
-                         [45, 0, 18, 13, 29, 4])
+                         [45, 2, 18, 13, 29, 4])
         self.assertEqual([r["entry"] for r in rows if r["kind"] == "boss"], ["11489", "14690", "11488", "11487", "11496", "11486"])
         self.assertEqual({r["kind"] for r in rows}, {"move", "pull", "boss"})
         for leg in range(6):
@@ -1235,9 +1236,16 @@ class DungeonPlanSql(unittest.TestCase):
         # Tsu'zee 11467 is the rare of the Kalendris hall: a member of the pull nearest him (leg 3, pull group 6, radius 8.6).
         self.assertEqual([(r["entries"], float(r["radius"])) for r in pulls if "11467" in r["entries"].split(",")],
                          [("11467,11471", 8.6)])
-        # Revanchion's leg is the walk into the hall and his boss row only.
+        # Revanchion's leg pulls the two hall packs the old walk died on (r33 step 128: groups 6 and 2, stands
+        # (120 505) and (67 522) on the mesh, outside the other packs' reach) before his boss row.
         rev = leg_steps(rows, 1)
-        self.assertEqual([r["kind"] for r in rev if r["kind"] != "move"], ["boss"])
+        self.assertEqual([(r["kind"], r["entries"], r["comment"]) for r in rev if r["kind"] != "move"],
+                         [("pull", "11471,11472", "pull group 0"), ("pull", "11472,11471,11475", "pull group 1"),
+                          ("boss", "", "boss")])
+        revmoves = [r for r in rev if r["kind"] == "move"]
+        self.assertEqual([(r["x"], r["y"], r["z"], r["comment"]) for r in revmoves if r["comment"].endswith("approach")],
+                         [("120", "505", "-4.3", "pull group 0 approach"),
+                          ("67", "522", "-4.3", "pull group 1 approach")])
         self.assertEqual(re.findall(r"(?m)^DELETE FROM `ai_dungeon_step` WHERE `plan` = '(\w+)';", text), ["dire_maul_west"])
         self.assertIn("DELETE FROM `ai_dungeon_boss` WHERE `map` IN (429) AND `entry` IN (11489, 14690, 11488, 11487, 11496, 11486);", text)
 
