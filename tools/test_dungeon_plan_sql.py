@@ -1481,21 +1481,23 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertIn("DELETE FROM `ai_dungeon_boss` WHERE `map` IN (800) AND `entry` IN (91916, 91917, 91920, 91929, 91919, 92935);", text)
 
     def test_lower_blackrock_spire_is_the_plan_with_the_census_fixes(self):
-        # 20261024020600 (turtle-agent f33b92e, PREP-LOWER-BLACKROCK-SPIRE-2026-10-24): the generator draft of map 229 after the
-        # census, no row hand-set, with the boss rows scoped to this plan's seven entries (map 229 is shared with the
-        # upper_blackrock_spire raid plan). 7 legs, 487 steps (115 pulls: 22 + 25 + 32 + 5 + 4 + 22 + 5; 365 moves; 7 bosses).
-        # The draft's 11 UBRS-level packs (z 106-111, x 8-29) are out, the four static rares are pack members, Mor Grayhoof and
-        # his trigger are out, no pull lists more than six units and every radius covers its own pack (<= 16 yd).
+        # 20261024152200 (turtle-agent 8b44fd6, PREP-LOWER-BLACKROCK-SPIRE-2026-10-24 and RUN-LESSONS r33 slot5): the generator draft
+        # of map 229 after the census and the server-path route fix, no row hand-set, with the boss rows scoped to this plan's seven
+        # entries (map 229 is shared with the upper_blackrock_spire raid plan). 7 legs, 420 steps (115 pulls: 22 + 25 + 32 + 5 + 4 +
+        # 22 + 5; 298 moves; 7 bosses). The draft's 11 UBRS-level packs (z 106-111, x 8-29) are out, the four static rares are pack
+        # members, Mor Grayhoof and his trigger are out, no pull lists more than six units and every radius covers its own pack
+        # (<= 16 yd). Leg 0 now walks from the z 31 pit floor a refused or skipped pull leaves the party on (r33 steps 52-54 were
+        # refused from the z 50 shelf row): pull group 14's approach starts at -45.3 -404 31.5.
         name, text = newest_plan_text("lower_blackrock_spire")
-        self.assertEqual(name, "20261024020600_world.sql")
+        self.assertEqual(name, "20261024152200_world.sql")
         self.assertIn("('lower_blackrock_spire', 229, '9240,9257,9261,9262,9269', '', '9217,9045,9198,9239,9717,9266', "
-                      "'turtle-agent f33b92e dungeons/lower_blackrock_spire.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+                      "'turtle-agent 8b44fd6 dungeons/lower_blackrock_spire.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         legs = leg_rows(text, "lower_blackrock_spire")
         self.assertEqual([legs[i][0] for i in range(7)],
                          ["highlord_omokk", "shadow_hunter_vosh'gajin", "war_master_voone", "mother_smolderweb",
                           "quartermaster_zigris", "halycon", "overlord_wyrmthalak"])
         rows = [r for r in self.step_rows(text) if r["plan"] == "lower_blackrock_spire"]
-        self.assertEqual(len(rows), 487)
+        self.assertEqual(len(rows), 420)
         self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(7)],
                          [22, 25, 32, 5, 4, 22, 5])
         self.assertEqual([r["entry"] for r in rows if r["kind"] == "boss"],
