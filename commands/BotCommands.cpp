@@ -10427,6 +10427,34 @@ void ReadHoldDone(ai::PlanStep const& step, Player* lead, TortoiseBots::DungeonR
     }
 }
 
+// An open_proof's proof (DungeonRun::OpenProofStep): a spawned game object (EntryGameObjectCheck: isSpawned, so a
+// placed but despawned light is no proof), or with kPlanFlagProofCreature a living creature, of the step's one
+// `entries` entry within its radius (at most kPlanMaxProofRadius) of the step's point. One bounded grid search of
+// the lead bot's map, only while that step is the current one.
+bool OpenProofUp(Player* lead, ai::PlanStep const& step)
+{
+    Map* map = lead->GetMap();
+    if (!map || step.entries.empty())
+        return false;
+    RemoteCommander::MovePoint point;
+    point.x = step.x;
+    point.y = step.y;
+    point.z = step.z;
+    if (step.flags & ai::kPlanFlagProofCreature)
+    {
+        std::list<Creature*> found;
+        EntryLivingCreatureCheck check(step.entries.front(), point, step.radius);
+        MaNGOS::CreatureListSearcher<EntryLivingCreatureCheck> searcher(found, check);
+        Cell::VisitGridObjects(point.x, point.y, map, searcher, step.radius);
+        return !found.empty();
+    }
+    std::list<GameObject*> found;
+    EntryGameObjectCheck check(step.entries.front(), point, step.radius);
+    MaNGOS::GameObjectListSearcher<EntryGameObjectCheck> searcher(found, check);
+    Cell::VisitGridObjects(point.x, point.y, map, searcher, step.radius);
+    return !found.empty();
+}
+
 // The pull aggro estimate (AiPlayerbot.DungeonRunAggroEstimate, ai::EstimateAggro): for every unit of a pull
 // step, how many other creatures come if the tank pulls it. The hostiles near the step are read once (their level,
 // detection range, faction, creature_groups pack, creature_linking edges, assist flags); the tank is taken to fire
@@ -11308,6 +11336,11 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
             {
                 f.taskReply = slot.taskReply;
                 f.taskText = slot.taskText;
+            }
+            if (step->kind == ai::PlanStepKind::Open && step->openProof)
+            {
+                f.proofRead = true;
+                f.proofUp = OpenProofUp(lead, *step);
             }
             if (step->kind == ai::PlanStepKind::UseOn)
             {

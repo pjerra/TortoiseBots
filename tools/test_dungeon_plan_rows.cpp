@@ -46,7 +46,7 @@ int main()
         PlanStep step;
         step.leg = static_cast<std::uint8_t>(std::stoul(f[2]));
         step.seq = static_cast<std::uint16_t>(std::stoul(f[3]));
-        ParsePlanStepRowKind(f[4], step.kind, step.exactLaunch);
+        ParsePlanStepRowKind(f[4], step.kind, step.exactLaunch, step.openProof);
         step.entry = static_cast<std::uint32_t>(std::stoul(f[5]));
         step.x = std::stof(f[6]);
         step.y = std::stof(f[7]);

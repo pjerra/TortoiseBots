@@ -46,7 +46,7 @@ class RunLeaderWiringTest(unittest.TestCase):
         # loader reads a move_hop_exact row as a MoveDirect with exactLaunch (DungeonPlanPolicy.h ParsePlanStepRowKind).
         self.assertIn("f.leadMoving = lead->IsMoving();", body(COMMANDS, "void ReadRunFacts(", "\n}\n"))
         loader = (ROOT / "ai/playerbot/DungeonPlanMgr.cpp").read_text()
-        self.assertIn("ParsePlanStepRowKind(fields[3].GetCppString(), step.kind, step.exactLaunch);", loader)
+        self.assertIn("ParsePlanStepRowKind(fields[3].GetCppString(), step.kind, step.exactLaunch, step.openProof);", loader)
         self.assertNotIn("step.kind = ParsePlanStepKind(", loader)
 
     def test_cmd_move_checks_the_lead_distance(self):
@@ -318,6 +318,38 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn("Player* const carrier = RunTaskBot(slot, lead, bots, step, &f.itemsSplit);", facts)
         # A new order picks afresh: the previous order's bot is cleared before the pick.
         self.assertIn("slot.carrierRaw = 0;\n            slot.carrierRaw = RunTaskBot(slot, lead, bots,", COMMANDS)
+
+    def test_open_proof_is_read_only_for_its_step(self):
+        # open_proof: the proof facts are read only while that step is current, in the Loot/Open/UseItem/UseOn facts case.
+        facts = body(COMMANDS, "void ReadRunFacts(", "\n}\n")
+        self.assertIn("if (step->kind == ai::PlanStepKind::Open && step->openProof)", facts)
+        self.assertIn("f.proofUp = OpenProofUp(lead, *step);", facts)
+        self.assertIn("case ai::PlanStepKind::Loot:", facts)
+        self.assertLess(facts.index("case ai::PlanStepKind::Loot:"), facts.index("f.proofUp = OpenProofUp(lead, *step);"))
+
+    def test_open_proof_object_must_be_spawned(self):
+        # A placed but despawned light is no proof: the object search uses EntryGameObjectCheck (isSpawned).
+        proof = body(COMMANDS, "bool OpenProofUp(", "\n}\n")
+        self.assertIn("EntryGameObjectCheck check(step.entries.front(), point, step.radius);", proof)
+        check = body(COMMANDS, "class EntryGameObjectCheck", "\n};\n")
+        self.assertIn("sServerFacade.isSpawned(go)", check)
+
+    def test_open_proof_creature_must_be_alive(self):
+        proof = body(COMMANDS, "bool OpenProofUp(", "\n}\n")
+        self.assertIn("EntryLivingCreatureCheck check(step.entries.front(), point, step.radius);", proof)
+        self.assertIn("creature->IsAlive()", COMMANDS)
+
+    def test_open_proof_search_is_bounded(self):
+        proof = body(COMMANDS, "bool OpenProofUp(", "\n}\n")
+        self.assertEqual(proof.count("Cell::VisitGridObjects(point.x, point.y, map, searcher, step.radius)"), 2)
+
+    def test_loader_reads_the_open_proof_kind(self):
+        loader = (ROOT / "ai/playerbot/DungeonPlanMgr.cpp").read_text()
+        self.assertIn("ParsePlanStepRowKind(fields[3].GetCppString(), step.kind, step.exactLaunch, step.openProof);", loader)
+
+    def test_reload_compares_open_proof(self):
+        reload = (ROOT / "ai/playerbot/DungeonPlanReloadPolicy.h").read_text()
+        self.assertIn("a.openProof == b.openProof", reload)
 
     def test_use_on_is_wired_like_an_open(self):
         # use_on (Zul'Farrak's gong with the Mallet): its carrier is the bot that carries the step's `item`, picked, pinned and

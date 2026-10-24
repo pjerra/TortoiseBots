@@ -16,7 +16,7 @@ import tempfile
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-KINDS = {"move", "move_direct", "move_hop_exact", "pull", "boss", "loot", "open", "use_item", "wait_object",
+KINDS = {"move", "move_direct", "move_hop_exact", "pull", "boss", "loot", "open", "open_proof", "use_item", "wait_object",
          "wait_clear", "rest", "ritual", "hold", "gossip", "use_on"}
 # The opt-in Gahz'rilla plan for test runs (never applied automatically: not under data/sql/world).
 OPT_IN = pathlib.Path(ROOT) / "tools/optional-plans/zulfarrak-gahzrilla.sql"
@@ -473,55 +473,72 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertEqual(re.findall(r"(?m)^DELETE FROM `ai_dungeon_step` WHERE `plan` = '(\w+)';", text), ["stormwind_stockade"])
         self.assertIn("DELETE FROM `ai_dungeon_boss` WHERE `map` IN (34);", text)
 
-    def test_sunken_temple_is_the_plan_with_the_statue_steps(self):
-        # 20261024060100 (turtle-agent st-statues 20c8f17, 2026-10-24): 20261024030000 again, with leg 0
-        # (atal'alarion) gaining the six statue steps in the verified order plus the Atal'alarion wait, before the
-        # boss row. Run 4 (r28 slot6) reached the leg-0 boss row (step 606) and waited 300 s there: Atal'alarion 8580
-        # stands at home faction 37 friendly and no statue was used (the plan had no statue steps). The six Atal'ai
-        # statues 148830-148835 (guids 27898, 27899, 28111-28114) must be used in that exact entry order
-        # (instance_sunken_temple.cpp ProcessStatueEvent: a wrong statue triggers a trap and does not advance the
-        # counter); only then does TYPE_ATALARION (instance data 4) read DONE and the boss turn selectable.
-        # Census unit lists, radii, pulls and boss rows are unchanged. 6 legs, 2404 steps
-        # (16 + 37 + 25 + 8 + 2 + 1 pulls), bosses in leg order; 6 open rows and 1 hold row in leg 0.
+    def test_sunken_temple_statues_are_proved_and_the_boss_is_a_units_hold(self):
+        # 20261024140000 (turtle-agent st-proof 067f8ed, 2026-10-24): 20261024060100 again, with leg 0
+        # (atal'alarion)'s six statue steps as open_proof rows (done by the respawned light 148883) and the
+        # Atal'alarion hold done by its units instead of instance data 4. Run 2 (r28 slot6) paused six times with
+        # "failed: The object showed no change after the bot used it." (one per statue: a plain open never sees the
+        # light) and twice on the data-4 hold (SetData(TYPE_ATALARION, IN_PROGRESS) ends by writing IN_PROGRESS (1)
+        # over the DONE (3) the sixth statue set, instance_sunken_temple.cpp:351, so data 4 never reads 3 with the
+        # boss dead). The six Atal'ai statues 148830-148835 (guids 27898, 27899, 28111-28114) are used in that exact
+        # entry order (a wrong statue triggers a trap and does not advance the counter); the right one sets
+        # GO_FLAG_NO_INTERACT on itself and respawns the green light 148883 within INTERACTION_DISTANCE of it.
+        # Census unit lists, radii, pulls and boss rows are unchanged. 6 legs, 2397 steps
+        # (16 + 37 + 25 + 8 + 2 + 1 pulls), bosses in leg order; 6 open_proof rows and 1 hold row in leg 0.
         name, text = newest_plan_text("sunken_temple")
-        self.assertEqual(name, "20261024060100_world.sql")
-        self.assertIn("('sunken_temple', 109, '5259,5273,5269,5226', '5259', '5271,5280,5291', 'turtle-agent 20c8f17 dungeons/sunken_temple.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261024140000_world.sql")
+        self.assertIn("('sunken_temple', 109, '5259,5273,5269,5226', '5259', '5271,5280,5291', 'turtle-agent 067f8ed dungeons/sunken_temple.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         self.assertEqual(len(re.findall(r"(?m)^\('sunken_temple', \d+, '(?:[^']|'')*', '(?:[^']|'')*'\)[,;]$", text)), 6)
         self.assertEqual([n.replace("''", "'") for n in re.findall(r"(?m)^\('sunken_temple', \d+, '((?:[^']|'')*)', '(?:[^']|'')*'\)[,;]$", text)],
                          ["atal'alarion", "weaver", "dreamscythe", "jammal'an_the_prophet", "morphaz", "shade_of_eranikus"])
         rows = [r for r in self.step_rows(text) if r["plan"] == "sunken_temple"]
-        self.assertEqual(len(rows), 2404)
+        self.assertEqual(len(rows), 2397)
         self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(6)], [16, 37, 25, 8, 2, 1])
-        self.assertEqual([r["entry"] for r in rows if r["kind"] == "boss"], ["8580", "5720", "5721", "5710", "5719", "5709"])
-        self.assertEqual({r["kind"] for r in rows}, {"move", "pull", "boss", "open", "hold"})
-        for leg in range(6):
+        self.assertEqual([r["entry"] for r in rows if r["kind"] == "boss"], ["5720", "5721", "5710", "5719", "5709"])
+        self.assertEqual({r["kind"] for r in rows}, {"move", "pull", "boss", "open_proof", "hold"})
+        self.assertEqual(leg_steps(rows, 0)[-1]["kind"], "hold")
+        for leg in range(1, 6):
             self.assertEqual(leg_steps(rows, leg)[-1]["kind"], "boss", leg)
-        # The hold comes after the last open and before the boss approach walks back down to the boss floor.
+        # The six statue rows are open_proof at the same points as before, radius 10, no item/param/flags/timeout,
+        # entries 148883, in the same order.
         leg0 = leg_steps(rows, 0)
-        opens = [r for r in leg0 if r["kind"] == "open"]
-        self.assertEqual([(r["entry"], r["x"], r["y"], r["z"]) for r in opens],
+        proofs = [r for r in leg0 if r["kind"] == "open_proof"]
+        self.assertEqual([(r["entry"], r["x"], r["y"], r["z"]) for r in proofs],
                          [("148830", "-515.553", "95.2582", "-148.74"),
                           ("148831", "-419.849", "94.4837", "-148.74"),
                           ("148832", "-491.4", "135.97", "-148.74"),
                           ("148833", "-491.491", "53.4818", "-148.74"),
                           ("148834", "-443.855", "136.101", "-148.74"),
                           ("148835", "-443.417", "53.8312", "-148.74")])
+        for r in proofs:
+            self.assertEqual((r["radius"], r["item"], r["param"], r["flags"], r["timeout_s"], r["entries"]),
+                             ("10", "0", "0", "0", "0", "148883"), r["seq"])
+        # No hold row between the last statue and the boss approach (the old entry-4 flags-40 row is gone);
+        # leg 0's last row is the units hold.
         hold = [r for r in leg0 if r["kind"] == "hold"]
         self.assertEqual(len(hold), 1)
-        self.assertEqual((hold[0]["entry"], hold[0]["x"], hold[0]["y"], hold[0]["z"]), ("4", "-460", "96.8", "-189.58"))
+        self.assertEqual((hold[0]["entry"], hold[0]["x"], hold[0]["y"], hold[0]["z"]), ("0", "-460", "96.8", "-189.58"))
         self.assertEqual((hold[0]["radius"], hold[0]["param"], hold[0]["flags"], hold[0]["timeout_s"], hold[0]["entries"]),
-                         ("30", "3", "40", "30", "8580"))
-        # The boss approach still runs along the walkway (z -172.9) and down the ramp to the boss floor (-189.6):
-        # it now follows the hold, and the boss row is the leg's last row. Leg 1 walks the same points back.
-        floor_points = [(-349.6, 99.4, -172.86), (-400.0, 98.2, -172.93), (-435.0, 97.4, -181.49), (-460.0, 96.8, -189.58)]
+                         ("30", "0", "0", "300", "8580"))
+        self.assertEqual(leg0[-1]["seq"], hold[0]["seq"])
+        self.assertIn("8580 counts while still friendly", hold[0]["comment"])
+        # The boss approach is the three walkway points (the fourth, the hold spot, is dropped by hold());
+        # the hold is the leg's last row, so nothing follows the approach but the hold.
         approach = [r for r in leg0 if r["comment"] == "boss approach"]
-        self.assertEqual([(float(r["x"]), float(r["y"]), float(r["z"])) for r in approach], floor_points)
-        self.assertLess(leg0.index(hold[0]), leg0.index(approach[0]))
+        self.assertEqual([(float(r["x"]), float(r["y"]), float(r["z"])) for r in approach],
+                         [(-349.6, 99.4, -172.86), (-400.0, 98.2, -172.93), (-435.0, 97.4, -181.49)])
+        self.assertLess(leg0.index(proofs[-1]), leg0.index(approach[0]))
+        # THE Z FIX: the interpolated rows of old seq 764, 765, 767, 768 (z -177.55, -182.97, -182.09, -174.60 at
+        # x -349.7, -399.4, -410.6, -361.2) are gone: nothing is cut between -300 100.5 and the first approach
+        # point, or after the hold. No leg-0 move row with x in [-420, -345] stands below z -173.5 (the lessons
+        # floor is -172.9 there).
+        for r in leg0:
+            if r["kind"] == "move" and -420 <= float(r["x"]) <= -345:
+                self.assertGreaterEqual(float(r["z"]), -173.5, (r["seq"], r["x"], r["z"]))
         via = [r for r in leg_steps(rows, 1) if r["comment"] == "via"]
         self.assertEqual([(float(r["x"]), float(r["y"]), float(r["z"])) for r in via],
-                         list(reversed(floor_points)) + [(-300.0, 100.5333, -172.13)])
-        self.assertLessEqual(math.dist((float(approach[-1]["x"]), float(approach[-1]["y"]), float(approach[-1]["z"])),
-                                       (float(leg0[-1]["x"]), float(leg0[-1]["y"]), float(leg0[-1]["z"]))), 50.0)
+                         [(-460.0, 96.8, -189.58), (-435.0, 97.4, -181.49), (-400.0, 98.2, -172.93),
+                          (-349.6, 99.4, -172.86), (-300.0, 100.5333, -172.13)])
         # Pull group 8's stand is unchanged: on the pack floor, 15-25 yd from the pack, same z band.
         pg8 = [r for r in leg0 if r["kind"] == "pull" and r["comment"] == "pull group 8"][0]
         stand8 = [r for r in leg0 if r["kind"] == "move" and r["comment"] == "pull group 8 approach"]
@@ -533,8 +550,8 @@ class DungeonPlanSql(unittest.TestCase):
                                           (float(pg8["x"]), float(pg8["y"]))), 15.0)
         self.assertLessEqual(abs(float(stand8[0]["z"]) - float(pg8["z"])), 4.0)
         # Jammal'an's Ogom 5711 and Morphaz's Hazzas 5722 are the boss rows' `first` (their creature groups aggro together); the other
-        # four have no linked add.
-        self.assertEqual([r["entries"] for r in rows if r["kind"] == "boss"], ["", "", "", "5711", "5722", ""])
+        # three have no linked add (no boss row of 8580: leg 0 ends in the units hold).
+        self.assertEqual([r["entries"] for r in rows if r["kind"] == "boss"], ["", "", "5711", "5722", ""])
         pulls = [r for r in rows if r["kind"] == "pull"]
         # The three radii that reached the next pack (same entries 14.4-26.8 yd out) and the seven 5291 pulls with its 15 yd wander.
         self.assertEqual(float([r for r in leg_steps(rows, 0) if r["kind"] == "pull"][5]["radius"]), 17.5)
@@ -542,7 +559,7 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertEqual([float(r["radius"]) for r in pulls if r["entries"] == "5291"], [17.0] * 7)
         # The 23 detour pulls have two approach moves each, plus the new single-stand pull group 8; the last stands on
         # the pack's own floor, 30 yd or less from the pull row (a cut path's move rows may lie between the two
-        # approach points and the pull, and the statue walks put open/hold rows between, so find the last approach
+        # approach points and the pull, and the statue walks put open_proof rows between, so find the last approach
         # move scanning back over those kinds).
         approaches = [r for r in rows if r["kind"] == "move" and r["comment"].startswith("pull group ") and r["comment"].endswith(" approach")]
         self.assertEqual(len(approaches), 47)

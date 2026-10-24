@@ -228,6 +228,7 @@ constexpr std::uint32_t kTaskResends = 2;         // loot, open, use: an interru
 constexpr std::uint32_t kTaskCapMs = 90000;       // loot, open, use: the commander task's own budget is shorter
 constexpr std::uint32_t kUseOnResends = 1;        // use_on: an answer that says the cast did not happen is sent again once
 constexpr std::uint32_t kUseOnProofMs = 30000;    // use_on: after the ACK, the object's change or its boss must show this soon
+constexpr std::uint32_t kOpenProofWaitMs = 5000; // open_proof: after the task answered, its proof must show this soon
 constexpr float kUseOnSummonYd = 150.0f;          // use_on: how far around the lead bot the glue looks for the summoned boss
 constexpr std::uint32_t kStepIdleCapMs = 300000;  // out-of-combat time one step may take
 constexpr std::uint32_t kBossSearchMs = 60000;    // a boss not at his spot (a patrol) is waited for this long, then pause
@@ -745,6 +746,11 @@ struct Facts
     bool taskActStarted = false;
     bool objectReacted = false;
     bool summonSeen = false;
+    // open_proof (the current step only): the glue looked for the proof this tick (proofRead), and a spawned game object
+    // (a living creature with kPlanFlagProofCreature) of the step's one `entries` entry stands within its radius of x,y,z
+    // (proofUp). Not read is never proof.
+    bool proofRead = false;
+    bool proofUp = false;
     bool carrierHasItem = false;        // the step's `item` is in the carrier's bags
     bool carrierHasEntryItem = false;   // use_item: the item to use is in the bags
     bool carrierBusy = false;           // a commander task (loot/open/use) runs for the carrier
@@ -844,6 +850,7 @@ struct Run
     bool stepRested = false; // a `rest` step has had its gate
     bool orderSent = false;  // task steps: the order went out
     std::uint32_t taskResends = 0; // task steps: orders sent again after an interrupted cast or an in-combat answer
+    std::uint32_t proofWaitMs = 0; // open_proof: waited for the proof after the task answered (kOpenProofWaitMs)
     std::set<std::size_t> useOnRang; // use_on steps whose order was ACKed (or went unanswered) this run: never sent again; ResetStep keeps it
     long long dataAtOrder = -1; // a ritual: the hold's instance data when the order went out
     bool walkedThrough = false;
@@ -1582,6 +1589,7 @@ inline void ResetStep(Run& r)
     r.stepRested = false;
     r.orderSent = false;
     r.taskResends = 0;
+    r.proofWaitMs = 0;
     r.taskBot.clear();
     r.lootTried.clear();
     r.lootRefusal.clear();
@@ -6534,6 +6542,47 @@ inline std::string FirstSentence(const std::string& text)
     return out;
 }
 
+inline std::string OpenProofName(const PlanStep& s)  // "object 148883 within 10 yd"
+{
+    std::uint32_t const proof = s.entries.empty() ? 0 : s.entries.front();
+    return std::string((s.flags & ai::kPlanFlagProofCreature) ? "creature " : "object ") + std::to_string(proof) +
+        " within " + std::to_string(std::lround(s.radius)) + " yd";
+}
+inline std::string OpenProofAnswer(const Facts& f)
+{
+    if (f.taskReply == 1) return "the task said done";
+    if (f.taskReply == 2) return "the task said: " + FirstSentence(f.taskText);
+    return "the bot is free again with no answer";
+}
+// open_proof after its order: the step waits for the use's task to answer (or the bot to be free again: the task
+// holds the bot still while it acts, so the next step never starts under it), then the PROOF alone decides:
+// up -> done; not up -> wait kOpenProofWaitMs, then pause. An in-combat / busy / interrupted answer without the
+// proof goes the plain open's way (sent again, kTaskResends). False: not handled, TaskStep goes on as for an open.
+inline bool OpenProofStep(Run& r, const Facts& f, const PlanStep& s)
+{
+    bool const up = f.proofRead && f.proofUp;
+    bool const answered = f.taskReply != 0 || !f.carrierBusy;
+    if (!answered)
+        return false;
+    if (f.taskReply == 2 && !up && TaskResendable(f.taskText) && r.taskResends < kTaskResends)
+        return false;
+    std::string const what = "open " + std::to_string(s.entry);
+    if (up)
+    {
+        NextStep(r, what + " done: " + OpenProofName(s) + " is up");
+        return true;
+    }
+    if (r.proofWaitMs < kOpenProofWaitMs)
+    {
+        r.proofWaitMs += kTickMs;
+        r.note = what + ": the use answered (" + OpenProofAnswer(f) + "); waiting for " + OpenProofName(s);
+        return true;
+    }
+    Pause(r, what + ": " + OpenProofName(s) + " did not show in " + std::to_string(kOpenProofWaitMs / 1000) +
+        " s after the use (" + OpenProofAnswer(f) + "): the use did not take; .bot run resume uses it again, " +
+        ".bot run skip goes on");
+    return true;
+}
 // loot, open, use_item: one commander task for the carrier, then its result.
 inline void TaskStep(Run& r, const Facts& f, const PlanStep& s, std::string& order)
 {
@@ -6575,6 +6624,13 @@ inline void TaskStep(Run& r, const Facts& f, const PlanStep& s, std::string& ord
                 return;
             }
             r.taskBot = next;
+        }
+        if (s.kind == PlanStepKind::Open && s.openProof && f.proofRead && f.proofUp)
+        {
+            // A resumed run, or a use whose answer was lost: the script's own success sign is up. Not used again
+            // (a second use of a used statue is refused "already used").
+            NextStep(r, "open " + std::to_string(s.entry) + ": " + OpenProofName(s) + " is up already: done before the use (not used again)");
+            return;
         }
         if ((s.kind == PlanStepKind::Open || s.kind == PlanStepKind::UseItem) && !f.itemsSplit.empty())
         {
@@ -6628,6 +6684,7 @@ inline void TaskStep(Run& r, const Facts& f, const PlanStep& s, std::string& ord
             order = "use " + std::to_string(s.entry) + " " + f.carrier;
         return;
     }
+    if (s.kind == PlanStepKind::Open && s.openProof && OpenProofStep(r, f, s)) return;
     bool const consequence = s.kind == PlanStepKind::UseItem && s.item && !r.missing.empty();
     if (f.taskReply == 2)
     {

@@ -177,7 +177,7 @@ namespace ai
     {
         return a.leg == b.leg && a.seq == b.seq && a.kind == b.kind && a.entry == b.entry && a.x == b.x && a.y == b.y &&
             a.z == b.z && a.radius == b.radius && a.item == b.item && a.param == b.param && a.flags == b.flags &&
-            a.timeoutS == b.timeoutS && a.entries == b.entries && a.exactLaunch == b.exactLaunch;
+            a.timeoutS == b.timeoutS && a.entries == b.entries && a.exactLaunch == b.exactLaunch && a.openProof == b.openProof;
     }
 
     inline bool SamePlan(const DungeonPlan& a, const DungeonPlan& b)

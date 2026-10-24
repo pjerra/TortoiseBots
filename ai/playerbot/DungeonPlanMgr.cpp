@@ -88,7 +88,7 @@ static void ReadDungeonPlanRows(DungeonPlanTable& table, PlanLoadCounts& counts)
             PlanStep step;
             step.leg = fields[1].GetUInt8();
             step.seq = fields[2].GetUInt16();
-            ParsePlanStepRowKind(fields[3].GetCppString(), step.kind, step.exactLaunch);
+            ParsePlanStepRowKind(fields[3].GetCppString(), step.kind, step.exactLaunch, step.openProof);
             step.entry = fields[4].GetUInt32();
             step.x = fields[5].GetFloat();
             step.y = fields[6].GetFloat();

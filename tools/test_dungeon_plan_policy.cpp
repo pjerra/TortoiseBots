@@ -222,16 +222,17 @@ static void TestNormalize()
     // move_hop_exact: a MoveDirect with exactLaunch, and back to its text.
     PlanStepKind kind = PlanStepKind::None;
     bool exactLaunch = false;
-    ParsePlanStepRowKind("move_hop_exact", kind, exactLaunch);
+    bool openProof = false;
+    ParsePlanStepRowKind("move_hop_exact", kind, exactLaunch, openProof);
     CHECK(kind == PlanStepKind::MoveDirect && exactLaunch);
     PlanStep landing = Step(0, 11, kind, -287.5f, 5.0f, -63.6f);
     landing.exactLaunch = exactLaunch;
     CHECK(NormalizePlanStep(landing) == PlanStepRefusal::None);
     CHECK(std::string(PlanStepRowKindName(landing)) == "move_hop_exact");
     CHECK(std::string(PlanStepKindName(landing.kind)) == "move_direct");
-    ParsePlanStepRowKind("move_direct", kind, exactLaunch);
+    ParsePlanStepRowKind("move_direct", kind, exactLaunch, openProof);
     CHECK(kind == PlanStepKind::MoveDirect && !exactLaunch);
-    ParsePlanStepRowKind("move", kind, exactLaunch);
+    ParsePlanStepRowKind("move", kind, exactLaunch, openProof);
     CHECK(kind == PlanStepKind::Move && !exactLaunch);
     // exactLaunch on anything but a MoveDirect is refused.
     PlanStep wrong = Step(0, 12, PlanStepKind::Move, 1, 1, 1);
@@ -245,6 +246,121 @@ static void TestNormalize()
     PlanStep oldRow = Step(10, 4, ParsePlanStepKind("move_hop_exact"), -287.5f, 5.0f, -63.6f);
     CHECK(old.AddStep("wailing_caverns", oldRow) == PlanStepRefusal::UnknownKind);
 }
+
+// open_proof (a use of object `entry` done by a spawned proof object, or with
+// kPlanFlagProofCreature a living creature, of the one entry in `entries`
+// within `radius` of x,y,z): the kind text parses to Open with openProof set,
+// and NormalizePlanStep takes the row only under its own rules.
+static PlanStep StatueProofStep()
+{
+    PlanStep s = Step(0, 100, PlanStepKind::Open, -515.553f, 95.2582f, -148.74f);
+    s.entry = 148830;
+    s.entries = {148883};
+    s.radius = 10.0f;
+    s.openProof = true;
+    return s;
+}
+
+static void TestOpenProofRowParses()
+{
+    PlanStepKind kind = PlanStepKind::None;
+    bool exact = true, proof = false;
+    ParsePlanStepRowKind("open_proof", kind, exact, proof);
+    CHECK(kind == PlanStepKind::Open && !exact && proof);
+    ParsePlanStepRowKind("open", kind, exact, proof);
+    CHECK(kind == PlanStepKind::Open && proof == false);
+    PlanStep statue = StatueProofStep();
+    CHECK(std::string(PlanStepRowKindName(statue)) == "open_proof");
+    PlanStep plain = Step(0, 101, PlanStepKind::Open, 1.0f, 2.0f, 3.0f);
+    plain.entry = 124371;
+    CHECK(std::string(PlanStepRowKindName(plain)) == "open");
+}
+
+static void TestOpenProofIsNoPlainKind()
+{
+    // The kind-only parser (all an old module has) does not know the text, so
+    // that loader refuses the row as UnknownKind instead of loading it as a
+    // plain open.
+    CHECK(ParsePlanStepKind("open_proof") == PlanStepKind::None);
+    DungeonPlanTable old;
+    CHECK(old.AddPlan("sunken_temple", 109));
+    PlanStep oldRow = Step(0, 200, ParsePlanStepKind("open_proof"), -515.553f, 95.2582f, -148.74f);
+    CHECK(old.AddStep("sunken_temple", oldRow) == PlanStepRefusal::UnknownKind);
+}
+
+static void TestOpenProofNormalize()
+{
+    PlanStep good = StatueProofStep();
+    CHECK(NormalizePlanStep(good) == PlanStepRefusal::None);
+    CHECK(good.timeoutS == kPlanDefaultTimeoutS);
+    PlanStep noEntry = StatueProofStep();
+    noEntry.entry = 0;
+    CHECK(NormalizePlanStep(noEntry) == PlanStepRefusal::MissingEntry);
+    PlanStep noProof = StatueProofStep();
+    noProof.entries.clear();
+    CHECK(NormalizePlanStep(noProof) == PlanStepRefusal::MissingEntry);
+    PlanStep twoProof = StatueProofStep();
+    twoProof.entries = {148883, 148884};
+    CHECK(NormalizePlanStep(twoProof) == PlanStepRefusal::BadEntries);
+    PlanStep flat = StatueProofStep();
+    flat.radius = 0.0f;
+    CHECK(NormalizePlanStep(flat) == PlanStepRefusal::BadRadius);
+    PlanStep wide = StatueProofStep();
+    wide.radius = kPlanMaxProofRadius + 0.5f;
+    CHECK(NormalizePlanStep(wide) == PlanStepRefusal::BadRadius);
+    PlanStep noPoint = StatueProofStep();
+    noPoint.x = noPoint.y = noPoint.z = 0.0f;
+    CHECK(NormalizePlanStep(noPoint) == PlanStepRefusal::BadPoint);
+    PlanStep withParam = StatueProofStep();
+    withParam.param = 1;
+    CHECK(NormalizePlanStep(withParam) == PlanStepRefusal::BadParam);
+    PlanStep badFlag = StatueProofStep();
+    badFlag.flags = 256;
+    CHECK(NormalizePlanStep(badFlag) == PlanStepRefusal::BadParam);
+    PlanStep reserved = StatueProofStep();
+    reserved.flags = 128;
+    CHECK(NormalizePlanStep(reserved) == PlanStepRefusal::BadParam);
+    PlanStep itself = StatueProofStep();
+    itself.entries = {148830};
+    CHECK(NormalizePlanStep(itself) == PlanStepRefusal::BadParam);
+    PlanStep withTimeout = StatueProofStep();
+    withTimeout.timeoutS = 30;
+    CHECK(NormalizePlanStep(withTimeout) == PlanStepRefusal::BadTimeout);
+    // A creature of the same number is not the used object itself.
+    PlanStep creatureSame = StatueProofStep();
+    creatureSame.entries = {148830};
+    creatureSame.flags = kPlanFlagProofCreature;
+    CHECK(NormalizePlanStep(creatureSame) == PlanStepRefusal::None);
+    // openProof on anything but an open is a row the exporter got wrong.
+    PlanStep wrongKind = Step(0, 201, PlanStepKind::Pull);
+    wrongKind.entries = {4851};
+    wrongKind.openProof = true;
+    CHECK(NormalizePlanStep(wrongKind) == PlanStepRefusal::BadParam);
+}
+
+static void TestProofCreatureFlagOnlyOnOpenProof()
+{
+    PlanStep open = Step(0, 202, PlanStepKind::Open, 1.0f, 2.0f, 3.0f);
+    open.entry = 124371;
+    open.flags = kPlanFlagProofCreature;
+    CHECK(NormalizePlanStep(open) == PlanStepRefusal::BadParam);
+    PlanStep pull = Step(0, 203, PlanStepKind::Pull);
+    pull.entries = {7286};
+    pull.flags = kPlanFlagProofCreature;
+    CHECK(NormalizePlanStep(pull) == PlanStepRefusal::BadParam);
+}
+
+static void TestPlainOpenUnchanged()
+{
+    // A plain open with a radius, extra entries and no param still loads: none
+    // of the proof rules touches it.
+    PlanStep open = Step(0, 205, PlanStepKind::Open, 1858.7f, 1053.8f, 8.9f);
+    open.entry = 128403;
+    open.radius = 12.0f;
+    open.entries = {5};
+    CHECK(NormalizePlanStep(open) == PlanStepRefusal::None);
+}
+
 
 static void TestTable()
 {
@@ -417,6 +533,11 @@ static void TestBossRows()
 
 int main()
 {
+    TestOpenProofRowParses();
+    TestOpenProofIsNoPlainKind();
+    TestOpenProofNormalize();
+    TestProofCreatureFlagOnlyOnOpenProof();
+    TestPlainOpenUnchanged();
     TestPlanUnits();
     TestKinds();
     TestEntries();

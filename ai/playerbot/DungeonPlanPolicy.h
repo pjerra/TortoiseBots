@@ -71,13 +71,20 @@ namespace ai
     // old module does with the row after the hop is not guarded here
     // (docs/play/dungeon-run-leader.md "Exact waypoints").
     constexpr const char* kPlanKindMoveHopExact = "move_hop_exact";
+    // The kind text of an open done by a PROOF: the object `entry` is used as by `open`, and the step is done once a
+    // spawned game object (flag kPlanFlagProofCreature: a living creature) of the one entry in `entries` stands within
+    // `radius` of x,y,z after the use's task answered (runtime/DungeonRunPolicy.h OpenProofStep). It is PlanStepKind::Open
+    // with PlanStep::openProof set. A module without it does not know the kind and refuses the row (UnknownKind).
+    // Sunken Temple's Atal'ai statues 148830-148835 change no state when used; the right one respawns the light 148883.
+    constexpr const char* kPlanKindOpenProof = "open_proof";
 
-    // A row's kind text into the step: its kind, and exactLaunch for
-    // "move_hop_exact". An unknown text leaves the kind None.
-    inline void ParsePlanStepRowKind(const std::string& text, PlanStepKind& kind, bool& exactLaunch)
+    // A row's kind text into the step: its kind, exactLaunch for
+    // "move_hop_exact", and openProof for "open_proof". An unknown text leaves the kind None.
+    inline void ParsePlanStepRowKind(const std::string& text, PlanStepKind& kind, bool& exactLaunch, bool& openProof)
     {
         exactLaunch = text == kPlanKindMoveHopExact;
-        kind = exactLaunch ? PlanStepKind::MoveDirect : ParsePlanStepKind(text);
+        openProof = text == kPlanKindOpenProof;
+        kind = exactLaunch ? PlanStepKind::MoveDirect : openProof ? PlanStepKind::Open : ParsePlanStepKind(text);
     }
 
     inline const char* PlanStepKindName(PlanStepKind kind)
@@ -134,6 +141,8 @@ namespace ai
     // event's troll waves in some runs. A gossip row without it pauses as before (Weegli: the End Door stays shut without him).
     // Any other kind with this flag is refused (BadParam), and a gossip row with any other flag.
     constexpr std::uint32_t kPlanFlagDeadNpcIsDone = 512;
+    // open_proof only: the proof entry is a creature (alive).
+    constexpr std::uint32_t kPlanFlagProofCreature = 2048;
     constexpr std::uint32_t kPlanEncounterNotStarted = 0;
     constexpr std::uint32_t kPlanEncounterFail = 2;
     constexpr std::uint32_t kPlanEncounterMax = 4;
@@ -144,6 +153,7 @@ namespace ai
     constexpr float kPlanDefaultHoldRadius = 30.0f;
     constexpr std::uint32_t kPlanDefaultRitualBots = 3;
     constexpr float kPlanMaxRadius = 100.0f;
+    constexpr float kPlanMaxProofRadius = 20.0f;
     constexpr std::uint32_t kPlanDefaultTimeoutS = 60;
     constexpr std::uint32_t kPlanMaxTimeoutS = 600;
     constexpr std::size_t kPlanMaxEntries = 16;
@@ -169,14 +179,19 @@ namespace ai
         // The row's kind was "move_hop_exact" (kPlanKindMoveHopExact):
         // a MoveDirect whose launch point is the exact move right before it.
         bool exactLaunch = false;
+        // The row's kind was "open_proof" (kPlanKindOpenProof): an Open done by its proof (radius, the one `entries` entry).
+        bool openProof = false;
     };
 
-    // The kind text of a step's row: "move_hop_exact" for an exact launch,
+    // The kind text of a step's row: "move_hop_exact" for an exact launch, "open_proof" for an open by proof,
     // else PlanStepKindName.
     inline const char* PlanStepRowKindName(const PlanStep& step)
     {
-        return step.exactLaunch && step.kind == PlanStepKind::MoveDirect ? kPlanKindMoveHopExact
-                                                                         : PlanStepKindName(step.kind);
+        if (step.exactLaunch && step.kind == PlanStepKind::MoveDirect)
+            return kPlanKindMoveHopExact;
+        if (step.openProof && step.kind == PlanStepKind::Open)
+            return kPlanKindOpenProof;
+        return PlanStepKindName(step.kind);
     }
 
     struct PlanLeg
@@ -277,16 +292,18 @@ namespace ai
         UnknownKind,
         Duplicate,
         MissingEntry,     // pull without entries; boss/loot/open/use_item/wait_object/ritual/gossip/use_on without entry;
-                          // use_on without item;
+                          // use_on without item; open_proof without proof entries;
                           // hold done by object without entry, by its units without entries
-        BadRadius,        // negative, over kPlanMaxRadius, or a wait_clear without one
-        BadTimeout,       // over kPlanMaxTimeoutS
+        BadRadius,        // negative, over kPlanMaxRadius (over kPlanMaxProofRadius on an open_proof), or a wait_clear without one
+        BadTimeout,       // over kPlanMaxTimeoutS; any timeout_s on an open_proof (the proof wait is kOpenProofWaitMs)
         BadParam,         // wait_object state other than 0-2; hold with both done flags, an encounter
                           // flag without the data flag or a state above 4, an object state above 2;
                           // the exact flag on a step that is not a move; gossip with an option
-                          // outside 1-15 or with any flag; use_on with any flag or param
-        BadPoint,         // not a finite point; a use_on without a point (0,0,0)
-        BadEntries,       // `entries` is not a comma list of non-zero creature entries
+                          // outside 1-15 or with any flag; use_on with any flag or param;
+                          // an open_proof whose proof equals its entry (no 2048), with param, a flag but 2048,
+                          // or 2048 on any row that is not open_proof
+        BadPoint,         // not a finite point; a use_on or an open_proof without a point (0,0,0)
+        BadEntries,       // `entries` is not a comma list of non-zero creature entries; an open_proof names exactly one
     };
 
     inline const char* PlanStepRefusalName(PlanStepRefusal refusal)
@@ -328,6 +345,10 @@ namespace ai
             return PlanStepRefusal::BadParam;
         if (step.exactLaunch && step.kind != PlanStepKind::MoveDirect)
             return PlanStepRefusal::BadParam;
+        if (step.openProof && step.kind != PlanStepKind::Open)
+            return PlanStepRefusal::BadParam;
+        if ((step.flags & kPlanFlagProofCreature) && !step.openProof)
+            return PlanStepRefusal::BadParam;
         switch (step.kind)
         {
             case PlanStepKind::Pull:
@@ -336,11 +357,31 @@ namespace ai
                 break;
             case PlanStepKind::Boss:
             case PlanStepKind::Loot:
-            case PlanStepKind::Open:
             case PlanStepKind::UseItem:
             case PlanStepKind::Ritual:
                 if (step.entry == 0)
                     return PlanStepRefusal::MissingEntry;
+                break;
+            case PlanStepKind::Open:
+                if (step.entry == 0)
+                    return PlanStepRefusal::MissingEntry;
+                if (step.openProof)
+                {
+                    if (step.entries.empty())
+                        return PlanStepRefusal::MissingEntry;
+                    if (step.entries.size() != 1)
+                        return PlanStepRefusal::BadEntries;
+                    if (!(step.radius > 0.0f) || step.radius > kPlanMaxProofRadius)
+                        return PlanStepRefusal::BadRadius;
+                    if (step.x == 0.0f && step.y == 0.0f && step.z == 0.0f)
+                        return PlanStepRefusal::BadPoint;
+                    if (step.param != 0 || (step.flags & ~kPlanFlagProofCreature) != 0)
+                        return PlanStepRefusal::BadParam;
+                    if (!(step.flags & kPlanFlagProofCreature) && step.entries.front() == step.entry)
+                        return PlanStepRefusal::BadParam;
+                    if (step.timeoutS != 0)
+                        return PlanStepRefusal::BadTimeout;
+                }
                 break;
             case PlanStepKind::Gossip:
                 if (step.entry == 0)
