@@ -79,7 +79,7 @@ using ai::PlanStepKind;
 
 constexpr std::uint32_t kTickMs = 1000;           // the glue ticks every run this often
 // The test speed (`.bot run start ... speed=<x>`, owner request 2026-10-25): bot-only test runs only; a clear is 1.0.
-constexpr float kTestSpeedMax = 3.0f;
+constexpr float kTestSpeedMax = 4.0f;
 constexpr std::uint32_t kSpeedSettleMs = 2000; // the walking rule holds this long without a break before the rate goes up
 constexpr std::uint32_t kWipeDead = 3;            // this many dead bots stop the step for a regroup
 // Real players in the bound party (2026-10-23, `.bot commander bind ... inparty`; Facts::players):
@@ -1440,7 +1440,7 @@ struct Run
     // goes to a point before it: the party never walked those steps in this run (Gnomeregan r27 slot 4, placed at
     // step 543: after the wipe at step 615 the walk back replayed the plan's points from step 53, 23 minutes).
     std::size_t startStep = 0;
-    // The test speed (`.bot run start ... speed=<1.0-3.0>`, owner request 2026-10-25; set by the glue next to Start,
+    // The test speed (`.bot run start ... speed=<1.0-4.0>`, owner request 2026-10-25; set by the glue next to Start,
     // never changed by the run). Above 1.0 the glue gives the party's bots and pets this rate while the run walks
     // (SpeedRateNow); 1.0, every clear, touches nothing. The status line and the done note say it (SpeedLabel).
     float testSpeed = 1.0f;

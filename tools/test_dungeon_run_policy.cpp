@@ -19308,13 +19308,15 @@ static void TestTakeSpeedWords()
     CHECK(s.ok && s.plan == "uldaman" && s.from == StartFrom::Step && s.value == "57");
     a = TakeSpeed("speed=1.5");
     CHECK(a.given && a.ok && a.rate == 1.5f && a.rest.empty());
-    a = TakeSpeed("  uldaman  from 4   speed=3.0 ");
-    CHECK(a.ok && a.rate == 3.0f && a.rest == "uldaman from 4");
+    a = TakeSpeed("  uldaman  from 4   speed=4.0 ");
+    CHECK(a.ok && a.rate == 4.0f && a.rest == "uldaman from 4");
+    a = TakeSpeed("uldaman speed=3.0");
+    CHECK(a.given && a.ok && a.rate == 3.0f && a.rest == "uldaman");
     a = TakeSpeed("speed=1");
     CHECK(a.given && a.ok && a.rate == 1.0f);
     a = TakeSpeed("SPEED=2");
     CHECK(a.given && a.ok && a.rate == 2.0f);
-    for (const char* bad : {"speed=", "speed=3.1", "speed=0.9", "speed=0", "speed=2.25", "speed=2x", "speed=.5",
+    for (const char* bad : {"speed=", "speed=4.1", "speed=0.9", "speed=0", "speed=2.25", "speed=2x", "speed=.5",
              "speed=-2", "speed=2,0", "speed=10", "speed=2 speed=2"})
         CHECK(!TakeSpeed(bad).ok);
 }

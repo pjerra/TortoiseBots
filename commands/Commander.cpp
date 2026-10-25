@@ -9342,7 +9342,7 @@ bool HandleDungeonRun(ChatHandler* handler, char const* args)
     if (verb != "start" && verb != "pause" && verb != "resume" && verb != "skip" && verb != "stop" &&
         verb != "status" && verb != "list" && verb != "mode")
     {
-        SendActionError(handler, intent, "invalid", "Usage: .bot run start [plan] [from <leg|step N>] [speed=<1.0-3.0>] [player [tank <Bot>]] / pause / resume / skip / stop [reason] / status / mode / list / reloadplans (GameMaster)");
+        SendActionError(handler, intent, "invalid", "Usage: .bot run start [plan] [from <leg|step N>] [speed=<1.0-4.0>] [player [tank <Bot>]] / pause / resume / skip / stop [reason] / status / mode / list / reloadplans (GameMaster)");
         return true;
     }
     Player* commander = Requester(handler);
@@ -9436,12 +9436,12 @@ bool HandleDungeonRun(ChatHandler* handler, char const* args)
             SendActionError(handler, intent, "lead-unavailable", "The lead bot is between maps. Try again in a moment.");
             return true;
         }
-        // The test speed (`speed=<1.0-3.0>`, owner request 2026-10-25): GameMasters' bot-only test runs only; a clear,
+        // The test speed (`speed=<1.0-4.0>`, owner request 2026-10-25): GameMasters' bot-only test runs only; a clear,
         // a player-led run and any run with a real player in the party walk at 1.0.
         SpeedArgs const speedArgs = TakeSpeed(arg);
         if (!speedArgs.ok)
         {
-            SendActionError(handler, intent, "invalid", "Usage: .bot run start [plan] [from ...] [speed=<1.0-3.0>] (a test run's walking speed)");
+            SendActionError(handler, intent, "invalid", "Usage: .bot run start [plan] [from ...] [speed=<1.0-4.0>] (a test run's walking speed)");
             return true;
         }
         if (speedArgs.rate > 1.0f)
@@ -9470,7 +9470,7 @@ bool HandleDungeonRun(ChatHandler* handler, char const* args)
         if (!startArgs.ok)
         {
             SendActionError(handler, intent, "invalid",
-                "Usage: .bot run start [plan] [from <leg name|leg number|step N>] [speed=<1.0-3.0>] (.bot run list)");
+                "Usage: .bot run start [plan] [from <leg name|leg number|step N>] [speed=<1.0-4.0>] (.bot run list)");
             return true;
         }
         std::string name = startArgs.plan;

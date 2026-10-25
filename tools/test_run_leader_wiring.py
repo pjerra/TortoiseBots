@@ -1162,7 +1162,7 @@ class BossTacticsJoinWiringTest(unittest.TestCase):
 
 
 class RunTestSpeedWiringTest(unittest.TestCase):
-    """Owner request 2026-10-25: `.bot run start ... speed=<1.0-3.0>` (DungeonRun::TakeSpeed, SpeedRateNow, tested in
+    """Owner request 2026-10-25: `.bot run start ... speed=<1.0-4.0>` (DungeonRun::TakeSpeed, SpeedRateNow, tested in
     tools/test_dungeon_run_policy.cpp). The glue's parts: the start's guards, the apply before the tick's order, and the
     sync that sends every listed bot back."""
 

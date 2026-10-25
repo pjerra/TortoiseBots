@@ -17,7 +17,7 @@
 - `AiPlayerbot.RandomGearBlacklist` is now a hard ban on every auto-gear path: the empty-slot fallback, shirts and tabards, and the level-60 hire gear sets all skip blocked items. A blocked item also wins over the whitelist, and a pool or hired bot already wearing one gets it replaced or removed on its next gear pass. Real players and owned bots never have their own gear taken off, and found loot is unaffected.
 
 ### Dungeons & Maps
-- New: GameMasters can start bot-only dungeon test runs at up to 3x walking speed (`.bot run start ... speed=2`); fights stay at normal speed and the status line marks the run as a test.
+- New: GameMasters can start bot-only dungeon test runs at up to 4x walking speed (`.bot run start ... speed=2`); fights stay at normal speed and the status line marks the run as a test.
 - Fixed the run leader pausing after a wipe that brought the bot-only party back in another part of the instance: the lead is now teleported back to the run's way.
 - Fixed the run leader still pausing (and refusing resume) when a bot was a ghost a few seconds longer than the lead in another part of the instance: it waits, then teleports.
 - Fixed the run leader dropping a focus skull with no retry and keeping a stale skull across pauses.
