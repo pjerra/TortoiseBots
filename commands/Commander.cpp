@@ -717,6 +717,7 @@ void GiveRunItems(DungeonRunSlot& slot, Player* lead, const std::vector<RunGiveO
 // equipment, keyring, bags, bank and bank bags, so one lookup finds the given
 // instance wherever it sits.
 void TakeRunItems(DungeonRunSlot& slot, uint64_t guid /*0 = all*/)
+{
     for (auto it = slot.given.begin(); it != slot.given.end();)
     {
         if (guid && it->first != guid)
