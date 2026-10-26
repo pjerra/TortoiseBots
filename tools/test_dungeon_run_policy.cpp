@@ -5496,7 +5496,7 @@ static void TestDoorHoldReleasesOnlyWhenOpen()
     spot.alive = true;
     spot.onPlanMap = true;
     std::string refusal;
-    CHECK(!ResumeChecked(r, spot, refusal));
+    CHECK(!ResumeChecked(r, spot, refusal, DoorRead::Closed));
     CHECK(r.state == State::Paused && r.doorPaused);
     CHECK(refusal.find("still hold at the closed door: open it with Shadowforge Key (item 11000) or Lockpicking 250") != std::string::npos);
     CHECK(refusal.find(".bot run resume does not pass a closed door") != std::string::npos);
@@ -5508,6 +5508,7 @@ static void TestDoorHoldReleasesOnlyWhenOpen()
     CHECK(r.legNeedDecided.count(1) == 0);
     Facts open = DoorFacts("Hypeer", false);
     CHECK(DoorOpenWhilePaused(r, open)); // the glue's paused-branch call (tools/test_run_item_need_wiring.py)
+    CHECK(r.state == State::Running && !r.doorPaused);
     CHECK(r.legNeedDecided.count(1) == 1);
     CHECK(r.note == "door to leg arena reads open: going on by itself (regrouping)");
     // The run walks the leg (after the resume's regroup), never held at this door again even if it reads closed.
@@ -5539,6 +5540,27 @@ static void TestDoorNotFoundIsNotClosed()
 // Review round 3 Opus fix 3: a resume while the door is out of the lead bot's
 // sight (the door object NOT FOUND) must not say 'closed': the hold stays, but
 // the refusal names the true cause.
+
+// il4a: a resume while the door hold waits and the door already reads open goes
+// on by itself (the tick's DoorOpenWhilePaused, with its note), not refused.
+static void TestDoorHoldResumeWhileOpen()
+{
+    DungeonPlan plan = DoorPlan();
+    Run r = Start(&plan);
+    Facts closed = DoorFacts("Hypeer", true);
+    CHECK(GlueDoorTick(r, closed).empty());
+    CHECK(r.state == State::Paused && r.doorPaused);
+    LeadSpot spot;
+    spot.read = true;
+    spot.alive = true;
+    spot.onPlanMap = true;
+    std::string refusal;
+    CHECK(ResumeChecked(r, spot, refusal, DoorRead::Open));
+    CHECK(refusal.empty() && r.state == State::Running && !r.doorPaused);
+    CHECK(r.note == "door to leg arena reads open: going on by itself (regrouping)");
+    CHECK(r.legNeedDecided.count(1) == 1);
+}
+
 static void TestDoorHoldResumeOutOfSightNamesIt()
 {
     DungeonPlan plan = DoorPlan();
@@ -5551,9 +5573,9 @@ static void TestDoorHoldResumeOutOfSightNamesIt()
     spot.alive = true;
     spot.onPlanMap = true;
     std::string refusal;
-    CHECK(!ResumeChecked(r, spot, refusal, true));
+    CHECK(!ResumeChecked(r, spot, refusal, DoorRead::Closed));
     CHECK(refusal.find("still hold at the closed door") != std::string::npos);
-    CHECK(!ResumeChecked(r, spot, refusal, false));
+    CHECK(!ResumeChecked(r, spot, refusal, DoorRead::Unread));
     CHECK(refusal == "the door is out of sight of the lead bot: .bot run skip to go on, or bring the party to the door");
     CHECK(r.state == State::Paused && r.doorPaused);
 }
@@ -22062,6 +22084,7 @@ int main()
     TestBotKeysFlagOpensDoor();
     TestDoorHoldReleasesOnlyWhenOpen();
     TestDoorNotFoundIsNotClosed();
+    TestDoorHoldResumeWhileOpen();
     TestDoorHoldResumeOutOfSightNamesIt();
     TestDoorHoldOnlyNearTheDoor();
     TestBotKeysFlagDoorThatNeverOpensHolds();

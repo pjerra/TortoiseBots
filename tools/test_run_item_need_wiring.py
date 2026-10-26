@@ -162,14 +162,16 @@ class DoorAndLegFactsWiringTest(unittest.TestCase):
     def test_resume_goes_through_resume_checked(self):
         run = body(COMMANDS, "bool HandleDungeonRun(ChatHandler* handler, char const* args)")
         resume = body(run, 'else if (verb == "resume")', "\n    }\n")
-        self.assertIn("done = ResumeChecked(slot.run, spot, refusal, doorRead);", resume)
+        self.assertIn("done = ResumeChecked(slot.run, spot, refusal, door);", resume)
         self.assertNotIn("Resume(slot.run)", resume.replace("ResumeChecked(slot.run", ""))
 
     def test_resume_tells_door_not_found_from_closed(self):
         run = body(COMMANDS, "bool HandleDungeonRun(ChatHandler* handler, char const* args)")
         resume = body(run, 'else if (verb == "resume")', "\n    }\n")
         self.assertIn("ReadRunNeedFacts(slot, doorLead, doorFacts);", resume)
-        self.assertIn("ResumeChecked(slot.run, spot, refusal, doorRead)", resume)
+        self.assertIn("ResumeChecked(slot.run, spot, refusal, door)", resume)
+        self.assertIn("DoorRead::Open", resume)
+        self.assertIn("doorNeedState", resume)
         self.assertIn("the door is out of sight of the lead bot",
             (ROOT / "runtime" / "DungeonRunPolicy.h").read_text())
 
@@ -189,6 +191,13 @@ class GiveTickWiringTest(unittest.TestCase):
         self.assertIn("giveIn.groupBots.push_back(binding->leadGuid);", group)
         self.assertLess(group.index("giveIn.groupBots.push_back(binding->leadGuid);"),
                         group.index("TortoiseBots::RunItemNeed::DecideGiveTick(giveIn)"))
+
+    def test_tick_calls_the_pure_decision(self):
+        tick = self.tick()
+        self.assertIn("TortoiseBots::RunItemNeed::DecideGiveTick(giveIn)", tick)
+        self.assertIn("giveIn.givenBots.push_back(entry.first);", tick)
+        self.assertIn("giveIn.groupBots.push_back(member.guid.GetRawValue());", tick)
+        self.assertIn("giveIn.system = binding->system;", tick)
     def test_tick_acts_on_every_field(self):
         tick = self.tick()
         self.assertIn("for (uint64 leftBot : givePlan.takeBots)\n            TakeRunItems(slot, leftBot);", tick)

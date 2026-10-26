@@ -4060,6 +4060,17 @@ struct LeadSpot
     float x = 0.0f, y = 0.0f, z = 0.0f;
 };
 
+// The door as `.bot run resume` read it near the lead bot (unread when the
+// lead bot is not in the world or the door is out of its sight).
+enum class DoorRead
+{
+    Unread,
+    Closed,
+    Open,
+};
+
+inline bool DoorOpenWhilePaused(Run& r, const Facts& f);
+
 inline void RearmRescueAfterDeath(Run& r);
 
 // `.bot run resume` from the glue (SM-REVIVE-PATH-2026-10-23 fix 5): a pause for
@@ -4073,14 +4084,23 @@ inline void RearmRescueAfterDeath(Run& r);
 // rescue's latch armed again (the pause came after a death) and its rescues fresh (Resume), and the regroup's next
 // tick runs the rescue (OtherPartRescue) with the facts it reads then (a joined player still pauses). Every other case
 // resumes as Resume does. True when the run resumed; refusal is set only when it was refused for this reason.
-inline bool ResumeChecked(Run& r, const LeadSpot& lead, std::string& refusal, bool doorRead = true)
+inline bool ResumeChecked(Run& r, const LeadSpot& lead, std::string& refusal, DoorRead door = DoorRead::Closed)
 {
     refusal.clear();
-    // The door hold (DoorNeedHold, lead decision 2026-10-26, review round 2): with a real player in the party only
-    // the door read open lets the bots on (DoorOpenWhilePaused); a resume while it reads closed keeps the hold.
+    // The door hold: only the door read open ends it, through the same read
+    // the tick runs (DoorOpenWhilePaused, with its note), so a resume after
+    // the player opened the door goes on instead of being refused; closed
+    // keeps the hold, unread names the true cause instead of 'closed'.
     if (r.state == State::Paused && r.doorPaused)
     {
-        if (!doorRead)
+        if (door == DoorRead::Open)
+        {
+            Facts open;
+            open.doorNeedRead = true;
+            open.doorNeedState = 1;
+            return DoorOpenWhilePaused(r, open);
+        }
+        if (door == DoorRead::Unread)
         {
             refusal = "the door is out of sight of the lead bot: .bot run skip to go on, or bring the party to the door";
             return false;

@@ -679,7 +679,7 @@ void GiveRunItems(DungeonRunSlot& slot, Player* lead, const std::vector<RunGiveO
                     order.item, bot->GetName());
                 if (!slot.run.note.empty())
                     slot.run.note += " ";
-                slot.run.note += std::string(bot->GetName()) + "'s bags are full: make room, then .bot run resume gives the item again";
+                slot.run.note += std::string(bot->GetName()) + "'s bags are full: item " + std::to_string(order.item) + " not given (the leg gate / step pause covers it)";
             }
             continue;
         }
@@ -10679,16 +10679,17 @@ bool HandleDungeonRun(ChatHandler* handler, char const* args)
                 spot.z = lead->GetPositionZ();
             }
         std::string refusal;
-        bool doorRead = true;
+        DoorRead door = DoorRead::Unread;
         if (slot.run.doorPaused && spot.read && spot.onPlanMap)
             if (Player* doorLead = FindCharacter(binding->leadGuid))
                 if (doorLead->IsInWorld() && doorLead->GetMapId() == slot.run.plan->map)
                 {
                     TortoiseBots::DungeonRun::Facts doorFacts;
                     ReadRunNeedFacts(slot, doorLead, doorFacts);
-                    doorRead = doorFacts.doorNeedRead; // the door out of sight: the refusal says so, not 'closed'
+                    door = !doorFacts.doorNeedRead ? DoorRead::Unread :
+                        (doorFacts.doorNeedState == 1 ? DoorRead::Open : DoorRead::Closed);
                 }
-        done = ResumeChecked(slot.run, spot, refusal, doorRead);
+        done = ResumeChecked(slot.run, spot, refusal, door);
         if (!refusal.empty())
         {
             if (slot.run.doorPaused) // the door hold: only the door read open ends it (item-leg skip)

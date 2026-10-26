@@ -56,7 +56,7 @@ class LeadOtherPartWiringTest(unittest.TestCase):
         # ResumeChecked with the lead bot as it stands, and a refusal answers ACTION_ERR and keeps the pause.
         resume = body(COMMANDS, 'else if (verb == "resume")', "else // skip")
         self.assertNotIn("done = Resume(slot.run);", resume)
-        self.assertIn("done = ResumeChecked(slot.run, spot, refusal, doorRead);", resume)
+        self.assertIn("done = ResumeChecked(slot.run, spot, refusal, door);", resume)
         self.assertIn("Player* lead = FindCharacter(binding->leadGuid)", resume)
         self.assertIn("if (lead->IsInWorld())", resume)
         self.assertIn("spot.read = true;", resume)
