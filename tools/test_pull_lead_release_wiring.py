@@ -148,7 +148,7 @@ class FightStartHoldWiring(unittest.TestCase):
 
     def test_fight_start_hold_builds_the_gate_and_lands_at_once(self):
         fn = body(PLAYERBOT_AI_CPP, "void PlayerbotAI::StartFightStartHold()")
-        self.assertIn("ai::FightStartHoldOpens(", fn)
+        self.assertIn("ai::FightStartHoldSkipReason(", fn)
         self.assertIn("kFightStartHoldSeconds", fn)
         self.assertIn("RestampPullWindow(true)", fn)
 
@@ -165,6 +165,34 @@ class FightStartHoldWiring(unittest.TestCase):
         end = body(PLAYERBOT_AI_CPP, "void PlayerbotAI::EndPullWindow(")
         self.assertIn("pull-release", end)
         self.assertIn("reason=", end)
+
+
+class FightStartGateIgnoresMaster(unittest.TestCase):
+    def test_fight_start_gate_ignores_the_master(self):
+        fn = body(PLAYERBOT_AI_CPP, "void PlayerbotAI::StartFightStartHold()")
+        self.assertNotIn("HasRealPlayerMaster", fn)
+        self.assertNotIn("GetMaster", fn)
+        self.assertIn("FillFightStartGroupFacts(", fn)
+        self.assertIn("IsRealPlayer(member)", fn)
+        self.assertIn("FightStartHoldSkipReason(", fn)
+        self.assertIn("fight-start-hold open", fn)
+        self.assertIn("fight-start-hold skip", fn)
+        self.assertIn("facts.runningRun)", fn)
+        self.assertLess(fn.index("facts.runningRun)"), fn.index("fight-start-hold skip"))
+
+    def test_fight_start_early_return_does_not_hide_the_window(self):
+        fn = body(PLAYERBOT_AI_CPP, "void PlayerbotAI::StartFightStartHold()")
+        first = fn.index("return;")
+        window = fn.index("facts.pullWindow =")
+        self.assertLess(first, window)
+        early = fn[:first]
+        self.assertNotIn("HasPullWindow", early)
+        window_line = fn[fn.index("facts.pullWindow ="):fn.index("facts.pullWindow =") + 80]
+        self.assertIn("HasPullWindow()", window_line)
+
+    def test_policy_has_no_master_fact(self):
+        policy = (ROOT / "ai/playerbot/PullJoinWindowPolicy.h").read_text()
+        self.assertNotIn("realPlayerMaster", policy)
 
 
 if __name__ == "__main__":

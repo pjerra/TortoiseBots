@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <vector>
 
 #define CHECK(x) do { \
     if (!(x)) { \
@@ -494,13 +495,162 @@ int main()
     }
     std::cout << "  [PASS] releases_wraps_the_reason\n";
 
+    // hired_run_member_list_opens: the live hired case (5 bots; the
+    // real-player hirer commands from outside the party, so nobody in the
+    // list is a real player).
+    auto HiredRunMembers = []() -> std::vector<ai::FightStartMember>
+    {
+        std::vector<ai::FightStartMember> members;
+        ai::FightStartMember self;
+        self.self = true; self.alive = true; self.inWorld = true; self.sameMap = true;
+        members.push_back(self);
+        ai::FightStartMember tank;
+        tank.alive = true; tank.inWorld = true; tank.sameMap = true; tank.tank = true;
+        members.push_back(tank);
+        ai::FightStartMember healer;
+        healer.alive = true; healer.inWorld = true; healer.sameMap = true;
+        members.push_back(healer);
+        for (int i = 0; i < 2; ++i)
+        {
+            ai::FightStartMember dps;
+            dps.alive = true; dps.inWorld = true; dps.sameMap = true;
+            members.push_back(dps);
+        }
+        return members;
+    };
+    {
+        std::vector<ai::FightStartMember> members = HiredRunMembers();
+        ai::FightStartHoldFacts f;
+        f.runningRun = true;
+        ai::FillFightStartGroupFacts(f, members);
+        CHECK(f.playerInGroup == false);
+        CHECK(f.tankInGroup == true);
+        CHECK(ai::FightStartHoldOpens(f));
+        CHECK(ai::FightStartHoldSkipReason(f) == nullptr);
+    }
+    std::cout << "  [PASS] hired_run_member_list_opens\n";
+
+    // player_in_group_skips: a real player in the group skips even dead and
+    // off-map (still that player's party).
+    {
+        std::vector<ai::FightStartMember> members = HiredRunMembers();
+        ai::FightStartMember player;
+        player.realPlayer = true; player.inWorld = true;
+        members.push_back(player);
+        ai::FightStartHoldFacts f;
+        f.runningRun = true;
+        ai::FillFightStartGroupFacts(f, members);
+        CHECK(f.playerInGroup == true);
+        CHECK(f.tankInGroup == true);
+        CHECK(!ai::FightStartHoldOpens(f));
+        const char* skip = ai::FightStartHoldSkipReason(f);
+        CHECK(skip != nullptr);
+        CHECK(std::string(skip) == "player-in-group");
+    }
+    std::cout << "  [PASS] player_in_group_skips\n";
+
+    // self_and_out_of_world_members_ignored
+    {
+        std::vector<ai::FightStartMember> members;
+        ai::FightStartMember self;
+        self.self = true; self.alive = true; self.inWorld = true; self.sameMap = true;
+        self.tank = true; self.realPlayer = true;
+        members.push_back(self);
+        ai::FightStartMember ghost;
+        ghost.realPlayer = true; ghost.alive = true; ghost.sameMap = true; ghost.tank = true;
+        members.push_back(ghost);
+        ai::FightStartHoldFacts f;
+        f.runningRun = true;
+        ai::FillFightStartGroupFacts(f, members);
+        CHECK(f.playerInGroup == false);
+        CHECK(f.tankInGroup == false);
+    }
+    std::cout << "  [PASS] self_and_out_of_world_members_ignored\n";
+
+    // dead_or_other_map_tank_is_no_tank
+    {
+        ai::FightStartHoldFacts f;
+        f.runningRun = true;
+        std::vector<ai::FightStartMember> dead;
+        ai::FightStartMember tank;
+        tank.alive = false; tank.inWorld = true; tank.sameMap = true; tank.tank = true;
+        dead.push_back(tank);
+        ai::FillFightStartGroupFacts(f, dead);
+        CHECK(f.tankInGroup == false);
+        CHECK(!ai::FightStartHoldOpens(f));
+        CHECK(ai::FightStartHoldSkipReason(f) != nullptr);
+        CHECK(std::string(ai::FightStartHoldSkipReason(f)) == "no-tank");
+        ai::FightStartHoldFacts g;
+        g.runningRun = true;
+        std::vector<ai::FightStartMember> away;
+        ai::FightStartMember farTank;
+        farTank.alive = true; farTank.inWorld = true; farTank.sameMap = false; farTank.tank = true;
+        away.push_back(farTank);
+        ai::FillFightStartGroupFacts(g, away);
+        CHECK(g.tankInGroup == false);
+        CHECK(!ai::FightStartHoldOpens(g));
+        CHECK(ai::FightStartHoldSkipReason(g) != nullptr);
+        CHECK(std::string(ai::FightStartHoldSkipReason(g)) == "no-tank");
+    }
+    std::cout << "  [PASS] dead_or_other_map_tank_is_no_tank\n";
+
+    // skip_reason_order: each fact alone names its rule, in fixed order.
+    {
+        ai::FightStartHoldFacts base;
+        base.runningRun = true; base.tankInGroup = true;
+        CHECK(ai::FightStartHoldSkipReason(base) == nullptr);
+        ai::FightStartHoldFacts f = base;
+        f.runningRun = false;
+        CHECK(std::string(ai::FightStartHoldSkipReason(f)) == "no-run");
+        f = base; f.playerInGroup = true;
+        CHECK(std::string(ai::FightStartHoldSkipReason(f)) == "player-in-group");
+        f = base; f.pullWindow = true;
+        CHECK(std::string(ai::FightStartHoldSkipReason(f)) == "pull-window");
+        f = base; f.isTank = true;
+        CHECK(std::string(ai::FightStartHoldSkipReason(f)) == "tank");
+        f = base; f.isHealer = true;
+        CHECK(std::string(ai::FightStartHoldSkipReason(f)) == "healer");
+        f = base; f.tankInGroup = false;
+        CHECK(std::string(ai::FightStartHoldSkipReason(f)) == "no-tank");
+        f = base; f.botIsVictim = true;
+        CHECK(std::string(ai::FightStartHoldSkipReason(f)) == "hit");
+        f = base; f.ccMark = true;
+        CHECK(std::string(ai::FightStartHoldSkipReason(f)) == "cc-mark");
+        ai::FightStartHoldFacts all;
+        all.runningRun = false; all.playerInGroup = true; all.pullWindow = true;
+        all.isTank = true; all.isHealer = true; all.tankInGroup = false;
+        all.botIsVictim = true; all.ccMark = true;
+        CHECK(std::string(ai::FightStartHoldSkipReason(all)) == "no-run");
+        all.runningRun = true;
+        CHECK(std::string(ai::FightStartHoldSkipReason(all)) == "player-in-group");
+    }
+    std::cout << "  [PASS] skip_reason_order\n";
+
+    // opens_wraps_skip_reason
+    {
+        ai::FightStartHoldFacts cases[10] = {};
+        cases[0].runningRun = true; cases[0].tankInGroup = true;
+        cases[1] = cases[0]; cases[1].runningRun = false;
+        cases[2] = cases[0]; cases[2].playerInGroup = true;
+        cases[3] = cases[0]; cases[3].pullWindow = true;
+        cases[4] = cases[0]; cases[4].isTank = true;
+        cases[5] = cases[0]; cases[5].isHealer = true;
+        cases[6] = cases[0]; cases[6].tankInGroup = false;
+        cases[7] = cases[0]; cases[7].botIsVictim = true;
+        cases[8] = cases[0]; cases[8].ccMark = true;
+        cases[9] = cases[0]; cases[9].pullWindow = true; cases[9].isTank = true; cases[9].ccMark = true;
+        for (int i = 0; i < 10; ++i)
+            CHECK(ai::FightStartHoldOpens(cases[i]) == (ai::FightStartHoldSkipReason(cases[i]) == nullptr));
+    }
+    std::cout << "  [PASS] opens_wraps_skip_reason\n";
+
     // fight_start_opens_only_unheld_bot_only_dps
     {
         ai::FightStartHoldFacts base;
         base.runningRun = true; base.tankInGroup = true;
         CHECK(ai::FightStartHoldOpens(base));
         ai::FightStartHoldFacts f = base;
-        f.realPlayerMaster = true;
+        f.playerInGroup = true;
         CHECK(!ai::FightStartHoldOpens(f));
         f = base; f.pullWindow = true;
         CHECK(!ai::FightStartHoldOpens(f));

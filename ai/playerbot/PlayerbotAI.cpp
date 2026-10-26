@@ -1,3 +1,4 @@
+#include <vector>
 #include "playerbot/GroupMembers.h"
 #include "playerbot/playerbot.h"
 #include "playerbot/PerformanceMonitor.h"
@@ -1237,24 +1238,28 @@ void PlayerbotAI::OnCombatStarted()
 }
 void PlayerbotAI::StartFightStartHold()
 {
-    if (!bot || !aiObjectContext || HasPullWindow())
+    if (!bot || !aiObjectContext)
         return;
     ai::FightStartHoldFacts facts;
     facts.runningRun = TortoiseBots::BotCommands::IsInRunningDungeonRun(bot);
-    facts.realPlayerMaster = HasRealPlayerMaster();
     facts.pullWindow = HasPullWindow();
     facts.isTank = IsTank(bot, true);
     facts.isHealer = IsHeal(bot, true);
+    std::vector<ai::FightStartMember> members;
     for (Player* member : LiveGroupMembers(bot->GetGroup()))
     {
-        if (!member || member == bot || !member->IsAlive() || !member->IsInWorld() || member->GetMapId() != bot->GetMapId())
+        if (!member)
             continue;
-        if (IsTank(member, true))
-        {
-            facts.tankInGroup = true;
-            break;
-        }
+        ai::FightStartMember described;
+        described.self = member == bot;
+        described.alive = member->IsAlive();
+        described.inWorld = member->IsInWorld();
+        described.sameMap = member->GetMapId() == bot->GetMapId();
+        described.tank = IsTank(member, true);
+        described.realPlayer = IsRealPlayer(member);
+        members.push_back(described);
     }
+    ai::FillFightStartGroupFacts(facts, members);
     for (Unit* attacker : bot->GetAttackers())
     {
         if (!attacker || !attacker->IsAlive())
@@ -1269,11 +1274,15 @@ void PlayerbotAI::StartFightStartHold()
     if (auto* ccValue = aiObjectContext->GetValue<Unit*>("rti cc target"))
         ccMark = ccValue->Get();
     facts.ccMark = ccMark != nullptr;
-    if (ai::FightStartHoldOpens(facts))
+    const char* skip = ai::FightStartHoldSkipReason(facts);
+    if (skip == nullptr)
     {
         StartPullWindow(ai::kFightStartHoldSeconds, true, 0, true);
         RestampPullWindow(true);
+        sLog.outBasic("[BOT] fight-start-hold open %s", bot->GetName());
     }
+    else if (facts.runningRun)
+        sLog.outBasic("[BOT] fight-start-hold skip %s reason=%s", bot->GetName(), skip);
 }
 
 void PlayerbotAI::OnCombatEnded()

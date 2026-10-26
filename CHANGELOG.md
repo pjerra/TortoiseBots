@@ -12,6 +12,7 @@
 - Fixed: a stealthed rogue no longer stays held after the pull while the rest of the party fights.
 - In a run leader's pull, the held DPS open once every mob near the tank is on it (join delay at the earliest, 10 s after the tank is back at the latest), or at once when a mob hits them or the tank drops under 60 %.
 - A fight the run leader did not pull holds the damage dealers for up to 4 s the same way: they open once every mob near the tank or near them is on the tank, or at once when one hits them.
+- Fixed: the fight-start DPS hold now opens in hired dungeon runs (it was gated on the hirer).
 
 ### Commands
 - New `.autogear` command gears a real player the way a spawned bot gets geared: items picked for the level and spec from the same gear pool the bots use, upgrades only, replaced items to the bags or the mailbox. GameMasters can gear any player; `AiPlayerbot.PlayerAutogearForAll` (default `0`) lets every player gear themselves.

@@ -130,10 +130,11 @@ bool WaitForAttackStrategy::ShouldWait(PlayerbotAI* ai)
     // Only check if the bot has the strategy enabled
     if (ai->HasStrategy("wait for attack", BotState::BOT_STATE_COMBAT))
     {
-        // Only check if bot is in a group with a real player, or in a party
-        // bound to a dungeon run while a run-leader pull holds it (bot-only
-        // run parties have no player master; the run leader issues the pull
-        // and owns the hold). A bot's own stored "wait for attack" never
+        // Only check if the bot is in a group with a real player, or in a party
+        // bound to a dungeon run while a run-leader pull holds it (a hired run
+        // party's master is its hirer, often a real player outside the group,
+        // so the first clause is usually true there; the second covers a
+        // masterless bound party). A bot's own stored "wait for attack" never
         // holds at every fight start in a bot-only run: without a pull window
         // there is no pull to wait for (lead decision on ta265).
         Player* bot = ai->GetBot();

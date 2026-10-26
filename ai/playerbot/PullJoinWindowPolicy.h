@@ -157,7 +157,7 @@ namespace ai
     struct FightStartHoldFacts
     {
         bool runningRun = false;       // TortoiseBots::BotCommands::IsInRunningDungeonRun(bot)
-        bool realPlayerMaster = false; // ai->HasRealPlayerMaster(): a player's party keeps its own "wait for attack"
+        bool playerInGroup = false;    // a real player (network session) other than the bot is a live member of its group
         bool pullWindow = false;       // ai->HasPullWindow(): a run-leader pull already holds it
         bool isTank = false;           // PlayerbotAI::IsTank(bot, true) or forced role tank
         bool isHealer = false;         // PlayerbotAI::IsHeal(bot, true)
@@ -165,9 +165,40 @@ namespace ai
         bool botIsVictim = false;      // a live unit in bot->GetAttackers() has the bot as victim
         bool ccMark = false;           // AI_VALUE(Unit*, "rti cc target") is set: its CC must not be held
     };
-    inline bool FightStartHoldOpens(FightStartHoldFacts const& f)
+    // Why a fight start holds no DPS, or nullptr when the hold opens.
+    inline const char* FightStartHoldSkipReason(FightStartHoldFacts const& f)
     {
-        return f.runningRun && !f.realPlayerMaster && !f.pullWindow && !f.isTank && !f.isHealer && f.tankInGroup &&
-            !f.botIsVictim && !f.ccMark;
+        if (!f.runningRun)    return "no-run";
+        if (f.playerInGroup)  return "player-in-group";
+        if (f.pullWindow)     return "pull-window";
+        if (f.isTank)         return "tank";
+        if (f.isHealer)       return "healer";
+        if (!f.tankInGroup)   return "no-tank";
+        if (f.botIsVictim)    return "hit";
+        if (f.ccMark)         return "cc-mark";
+        return nullptr;
+    }
+    inline bool FightStartHoldOpens(FightStartHoldFacts const& f) { return FightStartHoldSkipReason(f) == nullptr; }
+    struct FightStartMember
+    {
+        bool self = false;        // the bot itself
+        bool alive = false;
+        bool inWorld = false;
+        bool sameMap = false;     // member->GetMapId() == bot->GetMapId()
+        bool tank = false;        // PlayerbotAI::IsTank(member, true)
+        bool realPlayer = false;  // member->GetSession() && member->GetSession()->HasNetworkTransport()
+    };
+    template <class Members>
+    inline void FillFightStartGroupFacts(FightStartHoldFacts& f, Members const& members)
+    {
+        for (FightStartMember const& m : members)
+        {
+            if (m.self || !m.inWorld)
+                continue;
+            if (m.realPlayer)
+                f.playerInGroup = true;           // alive or dead, any map: still that player's party
+            if (m.alive && m.sameMap && m.tank)
+                f.tankInGroup = true;
+        }
     }
 }
