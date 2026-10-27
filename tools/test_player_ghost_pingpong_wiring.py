@@ -71,9 +71,11 @@ class PlayerGhostPingpongWiringTest(unittest.TestCase):
         self.assertNotIn("GetSecurity", stop)
         self.assertNotIn("SEC_", stop)
         self.assertNotIn('"forbidden"', stop)
+        # bl32 (pip S3): the only `speed=` GameMaster refusal lives in CheckTestSpeed (runtime/DungeonRunPolicy.h),
+        # the glue only forwards its code; the stop surface keeps no gate of its own.
         forbiddens = [m.start() for m in re.finditer('"forbidden"', run)]
-        self.assertEqual(len(forbiddens), 1)
-        self.assertIn("test-speed run (speed=)", run[forbiddens[0]:forbiddens[0] + 200])
+        self.assertEqual(forbiddens, [])
+        self.assertIn('"forbidden", "Only a GameMaster may start a test-speed run', strip_comments(POLICY))
 
 
 if __name__ == "__main__":

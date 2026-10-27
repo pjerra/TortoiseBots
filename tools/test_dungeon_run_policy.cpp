@@ -20181,6 +20181,22 @@ static void TestTakeSpeedWords()
         CHECK(!TakeSpeed(bad).ok);
 }
 
+static void TestCheckTestSpeedOrder()
+{
+    CHECK(CheckTestSpeed(1.0f, true, "Pip", false).code.empty());
+    CHECK(CheckTestSpeed(2.0f, true, "", false).code == "real-player");
+    CHECK(CheckTestSpeed(2.0f, true, "", false).text ==
+        "speed= is for bot-only test runs: a player-led run walks at normal speed.");
+    CHECK(CheckTestSpeed(2.0f, false, "Pipwren", false).code == "real-player");
+    CHECK(CheckTestSpeed(2.0f, false, "Pipwren", false).text.find("Pipwren is a real player in the party") !=
+        std::string::npos);
+    CHECK(CheckTestSpeed(2.0f, false, "Pipwren", true).code == "real-player");
+    CHECK(CheckTestSpeed(2.0f, false, "", false).code == "forbidden");
+    CHECK(CheckTestSpeed(2.0f, false, "", false).text.find("without speed= the run walks at normal speed") !=
+        std::string::npos);
+    CHECK(CheckTestSpeed(3.0f, false, "", true).code.empty());
+}
+
 static void TestSpeedRisesOnlyAfterTheWalkSettles()
 {
     DungeonPlan plan;
@@ -22229,6 +22245,7 @@ int main()
     TestBotWalkLeavesTheStartOutOfThePackChecks();
     TestStragglerLadderKeepsItsRungWhenTheBotCycles();
     TestTakeSpeedWords();
+    TestCheckTestSpeedOrder();
     TestSpeedRisesOnlyAfterTheWalkSettles();
     TestSpeedWalkingRule();
     TestSpeedSettleNeedsAnUnbrokenWalk();

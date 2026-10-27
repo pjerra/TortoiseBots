@@ -3816,6 +3816,31 @@ inline SpeedArgs TakeSpeed(const std::string& arg)
     return out;
 }
 
+// Who may walk a run at test speed (`speed=` above 1.0): a player-led run never, a party with a real player never,
+// then a GameMaster only, in that order, so the refusal names the reason that holds for anyone first (pip S3
+// 2026-10-26: a rank-0 player's player-led start heard `forbidden`). realPlayer: the first real player of the lead
+// bot's group by name ("" for none). Empty code: allowed.
+struct SpeedRefusal
+{
+    std::string code;
+    std::string text;
+};
+
+inline SpeedRefusal CheckTestSpeed(float rate, bool playerLed, const std::string& realPlayer, bool gameMaster)
+{
+    if (rate <= 1.0f)
+        return {};
+    if (playerLed)
+        return {"real-player", "speed= is for bot-only test runs: a player-led run walks at normal speed."};
+    if (!realPlayer.empty())
+        return {"real-player", "speed= is for bot-only test runs: " + realPlayer +
+            " is a real player in the party; a run with a player in it walks at normal speed."};
+    if (!gameMaster)
+        return {"forbidden", "Only a GameMaster may start a test-speed run (speed=); without speed= the run walks at "
+            "normal speed."};
+    return {};
+}
+
 enum class FromResult : std::uint8_t
 {
     Ok,

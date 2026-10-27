@@ -10463,8 +10463,9 @@ bool HandleDungeonRun(ChatHandler* handler, char const* args)
     // Player-led (`start ... player [tank <Bot>]`, PlayerLedPolicy.h): the start makes its own binding of the
     // commander's party; the rest of the start is the bot-led one, with the tank as the lead bot. A start refused
     // after the bind releases it again (PlayerLedStartGuard).
+    SpeedArgs const speedArgs = verb == "start" ? TakeSpeed(rawArg) : SpeedArgs();
     TortoiseBots::PlayerLed::StartArgs const playerLedStart =
-        verb == "start" ? TortoiseBots::PlayerLed::TakeStart(rawArg) : TortoiseBots::PlayerLed::StartArgs();
+        verb == "start" ? TortoiseBots::PlayerLed::TakeStart(speedArgs.rest) : TortoiseBots::PlayerLed::StartArgs();
     PlayerLedStartGuard playerLedGuard;
     if (playerLedStart.playerLed)
     {
@@ -10507,35 +10508,31 @@ bool HandleDungeonRun(ChatHandler* handler, char const* args)
             return true;
         }
         // The test speed (`speed=<1.0-3.0>`, owner request 2026-10-25): GameMasters' bot-only test runs only; a clear,
-        // a player-led run and any run with a real player in the party walk at 1.0.
-        SpeedArgs const speedArgs = TakeSpeed(arg);
+        // a player-led run and any run with a real player in the party walk at 1.0. The order names the reason
+        // first that holds for anyone (DungeonRunPolicy.h CheckTestSpeed).
         if (!speedArgs.ok)
         {
             SendActionError(handler, intent, "invalid", "Usage: .bot run start [plan] [from ...] [speed=<1.0-3.0>] (a test run's walking speed)");
             return true;
         }
-        if (speedArgs.rate > 1.0f)
-        {
-            if (!IsBotAdministrator(commander))
-            {
-                SendActionError(handler, intent, "forbidden", "Only a GameMaster may start a test-speed run (speed=).");
-                return true;
-            }
-            if (playerLedStart.playerLed)
-            {
-                SendActionError(handler, intent, "real-player", "speed= is for bot-only test runs: a player-led run walks at normal speed.");
-                return true;
-            }
+        std::string realPlayer;
+        if (speedArgs.rate > 1.0f && !playerLedStart.playerLed)
             if (Group* speedGroup = lead->GetGroup())
                 for (Group::MemberSlot const& member : speedGroup->GetMemberSlots())
                     if (!BotManager::Instance().IsBot(member.guid))
                     {
-                        SendActionError(handler, intent, "real-player", ("speed= is for bot-only test runs: " + member.name +
-                            " is a real player in the party; a run with a player in it walks at normal speed.").c_str());
-                        return true;
+                        realPlayer = member.name;
+                        break;
                     }
+        SpeedRefusal const speedRefusal =
+            CheckTestSpeed(speedArgs.rate, playerLedStart.playerLed, realPlayer, IsBotAdministrator(commander));
+        if (!speedRefusal.code.empty())
+        {
+            SendActionError(handler, intent, speedRefusal.code.c_str(), speedRefusal.text.c_str());
+            return true;
         }
-        arg = speedArgs.rest;
+        if (!playerLedStart.playerLed)
+            arg = LowerCopy(speedArgs.rest);
         StartArgs const startArgs = ParseStartArgs(arg);
         if (!startArgs.ok)
         {

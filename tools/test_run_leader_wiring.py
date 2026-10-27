@@ -1170,13 +1170,12 @@ class RunTestSpeedWiringTest(unittest.TestCase):
         code = strip_comments(COMMANDS)
         run = body(code, "bool HandleDungeonRun(ChatHandler* handler, char const* args)", "\n}\n")
         start = run[run.index('if (verb == "start")\n'):]
-        self.assertLess(start.index("SpeedArgs const speedArgs = TakeSpeed(arg);"),
-                        start.index("StartArgs const startArgs = ParseStartArgs(arg);"))
-        self.assertLess(start.index("arg = speedArgs.rest;"), start.index("StartArgs const startArgs = ParseStartArgs(arg);"))
-        guard = start[start.index("if (speedArgs.rate > 1.0f)"):start.index("arg = speedArgs.rest;")]
-        self.assertIn("IsBotAdministrator(commander)", guard)
-        self.assertIn("playerLedStart.playerLed", guard)
-        self.assertIn("!BotManager::Instance().IsBot(member.guid)", guard)
+        self.assertIn("CheckTestSpeed(speedArgs.rate, playerLedStart.playerLed, realPlayer, IsBotAdministrator(commander))", start)
+        self.assertIn("if (!playerLedStart.playerLed)", start)
+        self.assertIn("arg = LowerCopy(speedArgs.rest);", start)
+        self.assertLess(start.index("CheckTestSpeed(speedArgs.rate,"), start.index("arg = LowerCopy(speedArgs.rest);"))
+        self.assertLess(start.index("arg = LowerCopy(speedArgs.rest);"), start.index("StartArgs const startArgs = ParseStartArgs(arg);"))
+        self.assertIn("!BotManager::Instance().IsBot(member.guid)", start[:start.index("CheckTestSpeed(speedArgs.rate,")])
         self.assertLess(start.index("slot.run.testSpeed = speedArgs.rate;"),
                         start.index("DungeonRunSlot& stored = DungeonRuns()[commanderRaw] = slot;"))
 

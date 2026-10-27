@@ -57,7 +57,7 @@ class PlayerLedBindWiringTest(unittest.TestCase):
 
     def test_run_start_player_word(self):
         run = strip_comments(body(COMMANDS, "bool HandleDungeonRun(", "\n}\n"))
-        self.assertIn("TortoiseBots::PlayerLed::TakeStart(rawArg)", run)
+        self.assertIn("TortoiseBots::PlayerLed::TakeStart(speedArgs.rest)", run)
         self.assertIn("BindPlayerLed(handler, commander, playerLedStart.tank, intent)", run)
         self.assertIn("arg = playerLedStart.rest;", run)
         self.assertIn("slot.playerLed.on = playerLedStart.playerLed;", run)

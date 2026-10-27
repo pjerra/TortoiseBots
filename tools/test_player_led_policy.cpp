@@ -51,6 +51,15 @@ static void TestStartWords()
     CHECK(!PL::TakeStart("player from 3").ok);
 }
 
+static void TestSpeedWordAfterTheTank()
+{
+    SpeedArgs const sp = TakeSpeed("deadmines player tank Bred speed=2.0");
+    CHECK(sp.ok && sp.rate == 2.0f);
+    PL::StartArgs const a = PL::TakeStart(sp.rest);
+    CHECK(a.ok && a.playerLed && a.tank == "Bred" && a.rest == "deadmines");
+    CHECK(!PL::TakeStart("deadmines player tank Bred speed=2.0").ok);
+}
+
 // ---------------------------------------------------------------------------
 // S1: the bind gate
 // ---------------------------------------------------------------------------
@@ -1473,6 +1482,7 @@ int main()
     TestPlayerOrdersNeverPause();
     TestStayAndFightOrders();
     TestStartWords();
+    TestSpeedWordAfterTheTank();
     TestBindPicksTheTank();
     TestBindWithPlayers();
     TestBindRefusals();
