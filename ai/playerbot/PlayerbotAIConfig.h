@@ -573,6 +573,8 @@ public:
     bool dungeonTactics;
     // `.bot run`: the run leader (default on).
     bool dungeonSelfClear;
+    // Raid bindings for the run leader (`.bot commander bind <LeadBot> raid`); read with dungeonSelfClear.
+    bool dungeonRunRaid = false;
     // The run leader's time limit from `run start`, in minutes (0 = none; default 180 = 3 h).
     uint32 dungeonRunMaxMinutes;
     // The run leader estimates how many creatures a pull brings (PullAggroEstimatePolicy.h) and rests the party
@@ -877,6 +879,8 @@ public:
     // Hour (unix time / 3600) each live log was opened in.
     std::unordered_map<std::string, time_t> logHour;
 
+    // Per-fight combat numbers of every bound group for the observability dashboard.
+    bool combatMonitor = false;
     bool raidBossDiagnostics = false;
     std::list<std::string> allowedLogFiles;
     std::list<std::string> debugFilter;
