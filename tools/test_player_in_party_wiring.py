@@ -142,6 +142,7 @@ class PlayerInPartyWiringTest(unittest.TestCase):
         self.assertIn("f.lootTurnPlayer", fn)
         self.assertIn("p.online = false;", fn)
         self.assertIn("member->IsInCombat()", fn)
+        self.assertIn("p.gm = IsBotAdministrator(member);", fn)
         self.assertIn("if (p.inCombat)\n            fighting.push_back(member);", fn)
         self.assertIn("ReadEngagedUnits(lead, fighting, f);", fn)
         self.assertIn("if (fresh)\n        ReadGuardFacts(lead, bots, f, hold);", fn)

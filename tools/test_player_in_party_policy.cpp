@@ -810,6 +810,96 @@ static void TestMixedDeaths()
     }
 }
 
+// pip S5 (2026-10-26): every bot dead and a GameMaster commander still fighting at the hp clamp: his fight never ended,
+// the wipe's regroup never revived the bots and the run noted "3 dead: fighting on, a regroup follows" until its
+// regroups ran out. With every bot dead and only GameMasters fighting, their fight is not the party's: the regroup
+// revives the bots (`revive party`). A real player's fight still holds it, as does any bot alive.
+static void TestGmFightOverDeadBots()
+{
+    DungeonPlan plan;
+    plan.steps = {Step(PlanStepKind::Move, 40), PullStep(60, {1})};
+    // The failing case: 3 bots dead, Pipmira (GM) fighting at the clamp, Pipwren dead.
+    {
+        Run r = Start(&plan);
+        Facts f = Party(3, {Player("Pipmira", 5, true), Player("Pipwren", 5)});
+        CHECK(PTick(r, f) == "move 40.0 0.0 0.0");
+        f.dead = 3;
+        f.alive = 0;
+        f.leadAlive = false;
+        f.members.clear();
+        f.deadNames = {"Tanky", "Healy", "Stabby"};
+        f.players[0].gm = true;
+        f.players[0].inCombat = true;
+        f.players[0].healthPct = 0;
+        f.players[1].alive = false;
+        PTick(r, f);
+        CHECK(r.regroup && r.autoRegroups == 1);
+        CHECK(r.note.find("fighting on") == std::string::npos);
+        CHECK(PTick(r, f) == "revive party");
+    }
+    // Control: the same fight by a real player still holds the wipe's regroup and revive.
+    {
+        Run r = Start(&plan);
+        Facts f = Party(3, {Player("Pipmira", 5, true), Player("Pipwren", 5)});
+        CHECK(PTick(r, f) == "move 40.0 0.0 0.0");
+        f.dead = 3;
+        f.alive = 0;
+        f.leadAlive = false;
+        f.members.clear();
+        f.deadNames = {"Tanky", "Healy", "Stabby"};
+        f.players[0].gm = false;
+        f.players[0].inCombat = true;
+        f.players[0].healthPct = 0;
+        f.players[1].alive = false;
+        for (int i = 0; i < 10; ++i)
+            CHECK(PTick(r, f).find("revive") == std::string::npos);
+        CHECK(!r.regroup);
+    }
+    // Mixed: Pipwren alive and fighting too (not a GM) still holds it.
+    {
+        Run r = Start(&plan);
+        Facts f = Party(3, {Player("Pipmira", 5, true), Player("Pipwren", 5)});
+        CHECK(PTick(r, f) == "move 40.0 0.0 0.0");
+        f.dead = 3;
+        f.alive = 0;
+        f.leadAlive = false;
+        f.members.clear();
+        f.deadNames = {"Tanky", "Healy", "Stabby"};
+        f.players[0].gm = true;
+        f.players[0].inCombat = true;
+        f.players[0].healthPct = 0;
+        f.players[1].alive = true;
+        f.players[1].inCombat = true;
+        for (int i = 0; i < 10; ++i)
+            CHECK(PTick(r, f).find("revive") == std::string::npos);
+        CHECK(!r.regroup);
+    }
+    // A bot alive: the GM's fight still counts as the party's fight.
+    {
+        Facts f = Party(3, {Player("Pipmira", 5, true), Player("Pipwren", 5)});
+        f.dead = 3;
+        f.alive = 1;
+        f.players[0].gm = true;
+        f.players[0].inCombat = true;
+        Facts copy = f;
+        ApplyPlayerFacts(copy);
+        CHECK(copy.anyInCombat);
+    }
+    // Direct unit checks: no bots read, and a GM alive but not fighting, are not the override.
+    {
+        Facts empty = Party(0, {Player("Pipmira", 5, true)});
+        empty.players[0].gm = true;
+        empty.players[0].inCombat = true;
+        CHECK(!OnlyGmFightOverDeadBots(empty));
+        Facts quiet = Party(3, {Player("Pipmira", 5, true), Player("Pipwren", 5)});
+        quiet.dead = 3;
+        quiet.alive = 0;
+        quiet.players[0].gm = true;
+        CHECK(!OnlyGmFightOverDeadBots(quiet));
+    }
+}
+
+
 // Every player hold is bounded: kPlayerHoldCapMs, then a pause naming the player, the reason and the distance.
 static void TestHoldCap()
 {
@@ -936,6 +1026,7 @@ int main()
     TestPartyHealth();
     TestPlayerInCombat();
     TestMixedDeaths();
+    TestGmFightOverDeadBots();
     TestHoldCap();
     TestLootItemNeededLater();
     std::cout << "test_player_in_party_policy: all checks passed\n";

@@ -8978,6 +8978,7 @@ void ReadRunPlayers(DungeonRunSlot const& slot, uint64 commanderRaw, Player* lea
         p.ghost = member->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST);
         p.yd = p.onMap && lead->IsInWorld() && member->GetMap() == lead->GetMap() ? member->GetDistance(lead) : 1000.0f;
         p.healthPct = member->GetMaxHealth() ? member->GetHealth() * 100 / member->GetMaxHealth() : 100;
+        p.gm = IsBotAdministrator(member); // the hp clamp (DungeonRun::OnlyGmFightOverDeadBots)
         // C3: itemPlayer is read for loot AND use_on steps (the pause then names the player carrier).
         if (lootItem && f.itemPlayer.empty() && member->HasItemCount(step->item))
             f.itemPlayer = p.name;
