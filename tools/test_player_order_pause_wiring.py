@@ -1,4 +1,4 @@
-"""A `cmd summon` from the commander keeps the run going; every other player order still pauses it
+"""A `cmd summon` and `cmd revive` from the commander keep the run going; every other player order still pauses it
 (turtle-agent #270).
 
 The policy (tools/test_dungeon_run_policy.cpp) decides; these checks pin that the decision lives in

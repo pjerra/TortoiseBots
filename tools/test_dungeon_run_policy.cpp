@@ -6359,9 +6359,10 @@ static void TestCommanderSummonKeepsTheRunGoing()
     CHECK(PauseForPlayer(r, "cmd move") && r.state == State::Paused && PausedByPlayer(r));
     CHECK(r.note == "player order (cmd move): .bot run resume to go on");
     CHECK(Resume(r));
-    CHECK(PauseForPlayer(r, "cmd revive") && r.state == State::Paused);
-    CHECK(Resume(r));
+    CHECK(!PauseForPlayer(r, "cmd revive") && r.state == State::Running);
+    CHECK(!PausedByPlayer(r));
     CHECK(PauseForPlayer(r, "chat 'summon' to Tanky") && r.state == State::Paused);
+    CHECK(!PlayerOrderKeepsRun("cmd revivex") && !PlayerOrderKeepsRun("chat 'revive' to Tanky"));
 }
 
 static void TestPlayerOrderAndRefusalPause()

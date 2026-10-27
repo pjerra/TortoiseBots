@@ -4310,10 +4310,11 @@ inline void PausePlayer(Run& r, const std::string& why)
 // A player's order the run goes on through (turtle-agent #270): `cmd summon <bot>` brings that bot to the lead bot, the
 // run's own straggler summon (the summon point is the lead bot: CommanderSummon; a bot in combat is refused), so the run
 // is not paused for it (RFC 2026-10-20 run 2b: the observer's regroup summons were the run's only manual resume). Every
-// other order still pauses.
+// other order still pauses. `cmd revive <bot>` and `cmd revive party` (pip S5 2026-10-26: the run's own pause notes ask
+// the commander for them, and all three pauses of the run were his revive) are the run's own regroup revive too.
 inline bool PlayerOrderKeepsRun(const std::string& order)
 {
-    return order == "cmd summon";
+    return order == "cmd summon" || order == "cmd revive";
 }
 
 
