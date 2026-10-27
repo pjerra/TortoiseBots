@@ -2901,17 +2901,7 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertEqual(re.findall(r"(?m)^DELETE FROM `ai_dungeon_step` WHERE `plan` = '(\w+)';", text), ["black_morass"])
 
     def test_razorfen_kraul_is_the_plan_with_the_pack_fixes(self):
-        # 20261027100000 (turtle-agent bbfe571, 2026-10-27, after live run proofdevfu1 slot 7: the run's only wipe was the
-        # rotthorn leg's pull group 1, step 348). The 4623 pair and its patroller had no approach, so the run leader pulled them
-        # from the spot the group-0 fight ended on (2090.3 1751) - 25.6 yd from the 6035/4525/4518 pack the leg pulls last at
-        # 2066-2073 1728-1743. The party's hunter stepped to 2088.8 1736.2 (22.8 yd from that pack's nearest spawn), the trio
-        # entered combat 2.8-3.2 yd from its spawns (t 3744771 ms), the tank picked 6035/4525/4518 off the healer and the party
-        # wiped (5 dead at t 3829403 ms). Pull group 1 now has the corridor stand 2097.79 1793.42 74.92: 20.0/20.1 yd from the
-        # pair with a clear mesh ray, 59.7 yd from the trio, a complete server path from the group-0 fight spot (0x1, 60.4 yd);
-        # it is one row, every other row is 20261025003100's. 9 legs, 837 steps, 129 pulls (31 + 20 + 8 + 8 + 12 + 10 + 6 + 23
-        # + 4), no row hand-set. Server-exact plan-check: ok, 288 points (287), 5 warnings, 62 hop notices.
-        #
-        # before it: 20261025003100 (turtle-agent e8ee268, 2026-10-26, after live run proof20d4 slotD: the Ramtusk leg's six pit packs
+        # 20261025003100 (turtle-agent e8ee268, 2026-10-26, after live run proof20d4 slotD: the Ramtusk leg's six pit packs
         # (steps 322-327) have no firing stand from the leg's z 80-83 floor: step 322 x3 "no firing stand found", step 323
         # "pack skipped, not cleared: 2 units out of reach", steps 324-326 deferred "not reachable from this floor", 4 packs left
         # alive; step 1's "cmd move 1951.0 1570.0 83.3 refused: unreachable" is the run's only pause). The six lower-floor packs
@@ -2993,11 +2983,11 @@ class DungeonPlanSql(unittest.TestCase):
         # packs that stand with a boss are that boss row's entries, not pulls; Halmgar 4842 and the Blind Hunter 4425 are pull
         # members.
         name, text = newest_plan_text("razorfen_kraul")
-        self.assertEqual(name, "20261027100000_world.sql")
-        self.assertIn("('razorfen_kraul', 47, '4427,4515,4522,4440', '4427', '', 'turtle-agent bbfe571 dungeons/razorfen_kraul.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261025003100_world.sql")
+        self.assertIn("('razorfen_kraul', 47, '4427,4515,4522,4440', '4427', '', 'turtle-agent e8ee268 dungeons/razorfen_kraul.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         self.assertEqual(len(leg_rows(text, "razorfen_kraul")), 9)
         rows = [r for r in self.step_rows(text) if r["plan"] == "razorfen_kraul"]
-        self.assertEqual(len(rows), 837)
+        self.assertEqual(len(rows), 836)
         # The opening stand is the lower-floor pocket 1994 1615 (the old 1987.53 1600.03 has the upper walkway overhead); the five
         # corridor groups all have radius 10 (group 0 was 25 and owned the next group's Quilguards; group 5's default was 19.3), and
         # seq 5 is the explicit corridor regroup move before pull group 4 (r19-19z37: the two ranged bots climbed the west ramp while
@@ -3140,20 +3130,6 @@ class DungeonPlanSql(unittest.TestCase):
                          [("2102.67", "1728", "78.19")])
         self.assertEqual([(r["entries"], r["x"], r["y"], r["radius"]) for r in leg_steps(rows, 4)
                           if r["comment"] == "pull group 1"], [("4623", "2092.61", "1774.1", "6")])
-        # proofdevfu1 step 348: the patroller pair's stand is the corridor 20 yd north of it, so the fight is far from the
-        # 6035/4525/4518 pack the leg pulls last (the party's hunter had aggroed it from 22.8 yd and the leg wiped).
-        rot = leg_steps(rows, 4)
-        at1 = next(i for i, r in enumerate(rot) if r["comment"] == "pull group 1")
-        stand1 = rot[at1 - 1]
-        self.assertEqual((stand1["kind"], stand1["x"], stand1["y"], stand1["z"], stand1["comment"]),
-                         ("move", "2097.79", "1793.42", "74.92", "pull group 1 approach"))
-        self.assertAlmostEqual(((float(stand1["x"]) - float(rot[at1]["x"])) ** 2 +
-                                (float(stand1["y"]) - float(rot[at1]["y"])) ** 2) ** 0.5, 20.0, places=1)
-        trio = [r for r in rot if r["kind"] == "pull"][-1]
-        self.assertEqual(trio["entries"], "6035,4525,4518")
-        self.assertGreater(((float(stand1["x"]) - float(trio["x"])) ** 2 +
-                            (float(stand1["y"]) - float(trio["y"])) ** 2) ** 0.5, 55.0,
-                           "the group-1 stand is within a hunter's shot of the leg's last pack")
         self.assertFalse([r for r in up if r["kind"] == "pull" and abs(float(r["x"]) - 2094.39) < 0.5
                           and abs(float(r["y"]) - 1773.56) < 0.5], "87430 is booked twice")
         self.assertEqual(re.findall(r"(?m)^DELETE FROM `ai_dungeon_step` WHERE `plan` = '(\w+)';", text), ["razorfen_kraul"])
