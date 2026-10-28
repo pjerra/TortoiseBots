@@ -1302,6 +1302,7 @@ static void TestRaidBindRefusals()
     CHECK(with([](BindFacts& f) { f.leadGroupIsBg = true; }) == BindRefusal::RaidNotInRaid);
     CHECK(with([](BindFacts& f) { f.leadInCommanderParty = false; }) == BindRefusal::RaidNotInRaid);
     CHECK(with([](BindFacts& f) { f.leadIsTank = false; }) == BindRefusal::RaidLeadNotTank);
+    // A raid with another real player in it is refused (never command a human).
     CHECK(with([](BindFacts& f) { f.leadGroupHasRealPlayer = true; }) == BindRefusal::GroupHasPlayer);
     CHECK(with([](BindFacts& f) { f.lead.hired = true; }) == BindRefusal::LeadHired);
     CHECK(with([](BindFacts& f) { f.members[3].hired = true; }) == BindRefusal::MemberHired);
@@ -1339,8 +1340,10 @@ static void TestRaidBindPlan()
 {
     BindPlanFacts f; f.raidBind = true; f.leadInCommanderParty = true; f.partyIsRaidOrBg = true;
     CHECK(DecideBindGroup(f) == BindGroupPlan::KeepCommanderRaid);
+    // A raid binds with another real player in it too: the commander is
+    // taken out of the raid, the kept group standing as it is.
     f.partyHasOtherPlayer = true;
-    CHECK(DecideBindGroup(f) == BindGroupPlan::ReformFromCommanderParty);
+    CHECK(DecideBindGroup(f) == BindGroupPlan::KeepCommanderRaid);
     BindPlanFacts party; party.leadInCommanderParty = true; party.partyIsRaidOrBg = true;
     CHECK(DecideBindGroup(party) == BindGroupPlan::ReformFromCommanderParty);
     std::vector<std::string> names{"Tanky", "RAID"};
