@@ -123,3 +123,8 @@ func TestDungeonsJS(t *testing.T) {
 		t.Fatalf("dungeons_check.js failed: %v\n%s", err, out)
 	}
 }
+
+// TestAggroLanesJS runs aggrolanes_check.js: the aggro lanes of a fight (who each enemy targeted, sampled every 2 s).
+func TestAggroLanesJS(t *testing.T) {
+	runCheck(t, "aggrolanes_check.js", "../../web/static/js/aggrolanes.js")
+}
