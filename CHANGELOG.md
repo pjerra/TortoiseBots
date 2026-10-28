@@ -55,6 +55,8 @@
 - Fixed: a hired mercenary in your party now accepts the LFT dungeon offer, so the group forms (#1284).
 
 ### Dashboard
+- Fixed: a fight that goes on after `.bot run stop` is now recorded and listed.
+- Deaths, pulls, taunts, interrupts, elite and boss casts and kills or wipes reach the dashboard as they happen.
 - The dashboard now reads a dungeon or raid plan straight from the world database — its legs, steps, stands and each pull's pack mobs — so the raid map can show where the run leader means to go and which enemies belong to which pack.
 - The Fight debugger numbers the group's fights Pack 1, 2, 3 from the oldest up and names the mob on each card, a bot's name in the checks, the role tables, a death recap or the member panel opens that character's gear and talents, a fight that ends while watched live falls back to the finish that went worst, and one broken fight no longer holds back the others or the rest of the page.
 - The dashboard's raid card now names the raid's layout in one row: the main tank, the off-tanks, which healer follows which tank, and the raid healers. The run line also names the current step in its own words, from the plan.
