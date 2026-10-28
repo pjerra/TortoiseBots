@@ -54,6 +54,9 @@
 - New: bots interrupt the Wailing Caverns lords, Mutanus, Grimlok and Captain Greenskin.
 - Fixed: a hired mercenary in your party now accepts the LFT dungeon offer, so the group forms (#1284).
 
+### Dashboard
+- The dashboard's raid card now names the raid's layout in one row: the main tank, the off-tanks, which healer follows which tank, and the raid healers. The run line also names the current step in its own words, from the plan.
+
 ## v1.8.0 (2026-10-22)
 
 ### Classes & Combat
