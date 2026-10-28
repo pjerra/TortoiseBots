@@ -509,6 +509,8 @@ inline BindRefusal CheckRaidBind(BindFacts const& facts)
         return BindRefusal::RaidNotInRaid;
     if (!facts.leadIsTank)
         return BindRefusal::RaidLeadNotTank;
+    // A raid with another real player in it is refused: the binding takes
+    // the commander out and commands the raid, never a human in it.
     if (facts.leadGroupHasRealPlayer)
         return BindRefusal::GroupHasPlayer;
     if (facts.leadGroupBound)
@@ -650,7 +652,7 @@ inline char const* BindRefusalText(BindRefusal refusal)
         case BindRefusal::RaidInParty: return "A raid is bound with the commander outside it: drop inparty.";
         case BindRefusal::RaidNotInRaid: return "With raid the lead bot must be in your raid group (convert your party to a raid first, e.g. .bot hire raid).";
         case BindRefusal::RaidLeadNotTank: return "The lead bot of a raid must be a tank: it is the main tank.";
-        case BindRefusal::RaidTooSmall: return "A raid binding holds 6 to 40 bots; bind a party of five without raid.";
+        case BindRefusal::RaidTooSmall: return "A raid binding holds 6 to 39 bots; bind a party of five without raid.";
     }
     return "Request rejected.";
 }
@@ -760,7 +762,7 @@ inline std::string RunBoundRefusalText(std::string const& commanderName)
 
 inline BindGroupPlan DecideBindGroup(BindPlanFacts const& facts)
 {
-    if (facts.raidBind && facts.leadInCommanderParty && facts.partyIsRaidOrBg && !facts.partyHasOtherPlayer)
+    if (facts.raidBind && facts.leadInCommanderParty && facts.partyIsRaidOrBg)
         return BindGroupPlan::KeepCommanderRaid;
     if (facts.leadInCommanderParty)
         return (facts.partyIsRaidOrBg || facts.partyHasOtherPlayer)
