@@ -268,6 +268,10 @@ constexpr std::uint32_t kBossFightCapMs = 420000;
 constexpr std::uint32_t kFightProgressWindowMs = 60000;
 constexpr std::uint32_t kFightProgressPermille = 20; // 2 percentage points
 constexpr std::uint32_t kFightHardCapMs = 1800000;
+// A raid's boss fight gets a ceiling of its own in place of kBossFightCapMs: the community's Onyxia kills ran
+// 408-806 s, and a raid loses members routinely (FightProgressTick: while the fight still loses hp, a death in the
+// window does not pause it; the raid's wipe level catches a real loss).
+constexpr std::uint32_t kRaidBossFightCapMs = 1200000;
 constexpr std::uint32_t kCeilingQuietMs = 5000; // a ceiling pause whose party stays out of combat this long goes on by itself
 constexpr std::uint32_t kLeadBackSettleMs = 5000; // a lead bot back on the plan's map this long resumes its off-map pause
 constexpr std::uint32_t kPlayerHoldBackSettleMs = 5000; // a player back with the party this long resumes his hold pause
@@ -499,6 +503,9 @@ struct UnitFact
     bool auraOnEngaged = false;
     bool victimHealer = false; // its victim is a healer (Facts::partyAttackers, and a hold's units)
     bool victimLead = false;   // a hold's units: its victim is the lead bot (the tank holds it)
+    // Facts::partyAttackers only: its victim is a bot tank (the lead bot's own attackers are leadHit/leadAttacker, so
+    // in a raid this is an off-tank: the boss on a non-tank is taken off him, RaidGuardTick).
+    bool victimTank = false;
     // Facts::partyAttackers only:
     bool hitting = false;      // it hits its victim now: in melee reach of it, or standing and casting (not running in)
     bool victimPet = false;    // its victim is a party bot's pet (the lead bot's own too), not a bot (victimHealer false)
@@ -712,6 +719,9 @@ struct RaidFacts
     bool on = false;                                                    // a raid binding with AiPlayerbot.DungeonRunRaid
     std::uint32_t tanksTotal = 0, tanksDead = 0;                        // tanks, and dead tanks (the wipe level)
     std::uint32_t healersTotal = 0, healersDead = 0;                    // healers, and dead healers (the wipe level)
+    // The living tanks that are not the lead bot (the main tank), in the glue's order: in a boss fight the adds
+    // that hit the party go to them in turn (RaidGuardTick).
+    std::vector<std::string> offTanksAlive;
 };
 
 // What the glue reads once a tick for the run's current step.
@@ -1788,6 +1798,9 @@ struct Run
     std::uint32_t fightOrders = 0;
     bool guardRefilled = false; // a refill since the last order: that order's note says so
     std::uint32_t guardRefills = 0; // refills this fight: the per-unit cap applies only once there was one
+    // RaidGuardTick: the off-tank (RaidFacts::offTanksAlive) the last order of a raid's boss fight went to, so the
+    // next one goes to the next off-tank; and whether any went out this fight (the first is sent at once).
+    std::uint32_t offTankTurn = 0;
     // Members running back to the party with attackers on them (RunBack): the
     // glue keeps each one a passive follower of the lead bot (it does not stop
     // to fight) while its name is here. Per bot: how long it has run, and its
@@ -1803,6 +1816,9 @@ struct Run
     std::unordered_set<std::string> runBackDone; // stalled or out of time in this wait: not again until it ends
     std::uint32_t runBacks = 0;  // run backs this run (the report)
 };
+
+// The guard of a raid's boss fight asks for it before its definition next to FightProgressTick.
+inline bool EngagedPlanBoss(const Run& r, const Facts& f);
 
 inline const PlanStep* Current(const Run& r)
 {
@@ -2243,6 +2259,7 @@ inline void ResetStep(Run& r)
     r.guardRefilled = false;
     r.guardRefills = 0;
     r.fightOrders = 0;
+    r.offTankTurn = 0;
     r.guardReturn = false;
     r.stopReachDue = false;
     r.reachStopped = false;
@@ -11620,6 +11637,70 @@ inline bool CcOrderOut(const Run& r, std::uint64_t guid)
     return false;
 }
 
+// A unit entry one of the plan's boss steps names.
+inline bool PlanBossEntry(const Run& r, std::uint32_t entry)
+{
+    if (!r.plan || !entry)
+        return false;
+    for (const PlanStep& s : r.plan->steps)
+        if (s.kind == PlanStepKind::Boss && s.entry && s.entry == entry)
+            return true;
+    return false;
+}
+
+// One fight tick of the guard in a raid's boss fight (CheckGuard): the main tank (the lead bot) stays on the boss,
+// and the whelps and adds that hit the party go to an off-tank in turn (`attack <guid> <offTank>`), bounded by
+// kGuardOrdersPerUnit and kGuardRepeatMs, not by the fight's order cap: a raid's whelps keep coming, and the lead
+// bot is never drawn off the boss (Onyxia walk 1: the whelps took the healers while the main tank held her). With
+// the lead bot dead, the boss itself on a party member that is no tank is taken off him by an off-tank. True when
+// `order` holds it.
+inline bool RaidGuardTick(Run& r, const Facts& f, std::string& order)
+{
+    if (f.raid.offTanksAlive.empty() || (r.offTankTurn > 0 && r.guardSinceOrderMs < kGuardRepeatMs))
+        return false;
+    const UnitFact* pick = nullptr;
+    bool boss = false;
+    if (!f.leadAlive)
+        for (const UnitFact& u : f.partyAttackers)
+        {
+            if (!PlanBossEntry(r, u.entry) || !u.hostile || !u.attackable || !u.hitting || u.evading ||
+                u.polymorphed || u.victimTank || u.victimPet || u.distLead > kGuardYd)
+                continue;
+            auto const had = r.guardUnitOrders.find(u.guid);
+            if (had != r.guardUnitOrders.end() && had->second >= kGuardOrdersPerUnit)
+                continue;
+            pick = &u;
+            boss = true;
+            break;
+        }
+    if (!pick)
+        for (const UnitFact& u : f.partyAttackers)
+        {
+            if (!u.hostile || !u.attackable || u.evading || u.polymorphed || !u.hitting || u.distLead > kGuardYd)
+                continue;
+            if (PlanBossEntry(r, u.entry))
+                continue; // the boss is the main tank's, never a pick-up
+            auto const had = r.guardUnitOrders.find(u.guid);
+            if (had != r.guardUnitOrders.end() && had->second >= kGuardOrdersPerUnit)
+                continue;
+            if (CcOrderOut(r, u.guid))
+                continue;
+            if (!pick || u.distLead < pick->distLead)
+                pick = &u;
+        }
+    if (!pick)
+        return false;
+    std::string const& tank = f.raid.offTanksAlive[r.offTankTurn % f.raid.offTanksAlive.size()];
+    ++r.offTankTurn;
+    ++r.guardUnitOrders[pick->guid];
+    r.guardSinceOrderMs = 0;
+    r.note = std::string("fighting: ") + (boss ? "the lead bot is dead, the off-tank " : "the off-tank ") + tank +
+        " takes " + std::to_string(pick->entry) + " off " + (pick->victimHealer ? "the healer" : "the party") + " (" +
+        Num(pick->distLead) + " yd)";
+    order = "attack " + std::to_string(pick->guid) + " " + tank;
+    return true;
+}
+
 
 // A caster hitting the party from its own camp (UnitFact::castingAtRange, campIdle) that the tank would have to walk to
 // (kGuardNoWalkYd): the guard leaves it to the DPS (kGuardCampYd).
@@ -11851,6 +11932,10 @@ inline bool CheckGuard(Run& r, const Facts& f, std::uint32_t dt, std::string& or
         r.guardEventDown = r.eventDown;
         r.guardOrders = 0;
     }
+    // A raid's boss fight has its own guard (RaidGuardTick): the lead bot never leaves the boss, the adds go to the
+    // off-tanks. A hold keeps its own rule.
+    if (!hold && f.raid.on && EngagedPlanBoss(r, f))
+        return RaidGuardTick(r, f, order);
     if (!hold)
     {
         // A unit not seen in this fight before joins it (a summon, a mob that
@@ -12930,7 +13015,9 @@ inline FightProgress FightProgressTick(Run& r, const Facts& f, std::uint32_t dt)
     }
     if (!read)
         return FightProgress::Unread;
-    if (r.fightHpDeath && now - r.fightHpDeathAt < kFightProgressWindowMs)
+    // A raid loses members routinely: while the fight still loses hp, a death in the window is no reason to pause
+    // it (the raid's wipe level catches a real loss).
+    if (r.fightHpDeath && now - r.fightHpDeathAt < kFightProgressWindowMs && !(f.raid.on && losing))
         return FightProgress::Dying;
     if (losing)
         return FightProgress::Losing;
@@ -13950,9 +14037,11 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
         const PlanStep* const event = s->kind == PlanStepKind::Hold ? s : EventHoldAhead(r);
         std::uint32_t const holdCap = event && event->timeoutS * 1000u > kBossFightCapMs ? event->timeoutS * 1000u
                                                                                        : kBossFightCapMs;
-        // A boss step's entry engaged on any step gets the boss ceiling too (EngagedPlanBoss).
+        // A boss step's entry engaged on any step gets the boss ceiling too (EngagedPlanBoss), and in a raid the
+        // raid's own (kRaidBossFightCapMs).
+        bool const bossStep = s->kind == PlanStepKind::Boss || EngagedPlanBoss(r, f);
         std::uint32_t const cap = event ? holdCap
-                                : s->kind == PlanStepKind::Boss || EngagedPlanBoss(r, f) ? kBossFightCapMs : kFightCapMs;
+                                : bossStep ? (f.raid.on ? kRaidBossFightCapMs : kBossFightCapMs) : kFightCapMs;
         FightProgress const progress = FightProgressTick(r, f, dt);
         // A unit the party hits that cannot die now (HpHeldTick) pauses before any ceiling: the ceiling's pause
         // would be resumed into the same fight. Not in a wipe (kWipeDead or more dead): the regroup that follows
@@ -14080,6 +14169,7 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
         r.guardRefilled = false;
         r.guardRefills = 0;
         r.fightOrders = 0;
+        r.offTankTurn = 0;
         r.reachStopped = false;
         // A fight may have moved the lead bot: an exact point's tighten starts
         // over and its proof is taken again before a direct step goes out.

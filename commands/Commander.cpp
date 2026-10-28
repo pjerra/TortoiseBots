@@ -7569,6 +7569,7 @@ void ReadGuardFacts(Player* lead, std::vector<Player*> const& bots, TortoiseBots
                 fact.campIdle = IdleHostilesNear(lead, attacker, TortoiseBots::DungeonRun::kGuardCampYd);
             fact.victimHealer = healer;
             fact.victimPet = petVictim;
+            fact.victimTank = victim->IsPlayer() && PlayerbotAI::IsTank(static_cast<Player*>(victim));
             fact.attackable = GroupCanAttack(lead, attacker); // never picked up when it cannot be attacked
             if (hold)
                 fact.distSpot = DistanceTo(attacker, hold->x, hold->y, hold->z);
@@ -8363,6 +8364,8 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
             continue;
         }
         ++f.alive;
+        if (f.raid.on && isTank && bot != lead)
+            f.raid.offTanksAlive.push_back(bot->GetName()); // a raid boss fight sends its adds to them (RaidGuardTick)
         bool const fighting = MemberInCombat(bot); // the bot or its living pet
         if (fighting)
             f.anyInCombat = true;

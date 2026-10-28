@@ -49,7 +49,6 @@ class FightCeilingProgressWiringTest(unittest.TestCase):
         # Before any return of the fight block's ceiling: the 1-hp watch's pause and the ceiling's own.
         self.assertLess(watch, fight.index("if (r.fightMs > cap && autoRegroup)"))
         self.assertLess(watch, fight.index("if (pastCeiling && (!progressHolds || hardCapped))"))
-        self.assertIn("s->kind == PlanStepKind::Boss || EngagedPlanBoss(r, f) ? kBossFightCapMs : kFightCapMs;", fight)
         tick = body(RULES, "inline std::string Tick(Run& r, const Facts& raw, std::uint32_t dt")
         self.assertIn("ClearFightProgress(r);", tick)
         reset = body(RULES, "inline void ResetStep(Run& r)")

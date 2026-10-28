@@ -53,6 +53,8 @@
 - Fixed the run leader sending the tank at a mob its own crowd control was about to take, and bots keeping that sheep as their target after it landed: the guard and the engage on arrival leave an ordered-but-unlanded CC mark to its CC bot, and every bot's order on a landed one is dropped.
 - New: bots interrupt the Wailing Caverns lords, Mutanus, Grimlok and Captain Greenskin.
 - Fixed: a hired mercenary in your party now accepts the LFT dungeon offer, so the group forms (#1284).
+- In a raid, the run leader lets a boss fight run for up to 20 minutes instead of the 7 minutes a dungeon boss gets, and a member dying does not stop it while the boss is still losing health.
+- In a raid's boss fight, the run leader sends the whelps and adds that hit the party to the off-tanks in turn instead of pulling the main tank off the boss, with no limit of 12 orders a fight; with the main tank dead, an off-tank takes the boss off a non-tank.
 
 ## v1.8.0 (2026-10-22)
 
