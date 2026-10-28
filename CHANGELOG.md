@@ -56,6 +56,7 @@
 
 ### Dashboard
 - The dashboard's raid card now names the raid's layout in one row: the main tank, the off-tanks, which healer follows which tank, and the raid healers. The run line also names the current step in its own words, from the plan.
+- The Fight debugger card view has its own dark layout: raid frames with health and mana, the fight rail, the checks, the map with the fight's death spots, the timeline with the death recap, and the role tables; on a phone it reads as one column.
 
 ## v1.8.0 (2026-10-22)
 
