@@ -56,6 +56,7 @@
 
 ### Dashboard
 - The dashboard's raid card now names the raid's layout in one row: the main tank, the off-tanks, which healer follows which tank, and the raid healers. The run line also names the current step in its own words, from the plan.
+- The dashboard now receives a commanders raid's live fight numbers while it fights: each bot's damage, healing, casts and last spell in the last ten seconds, so a fight can be read before it ends.
 
 ## v1.8.0 (2026-10-22)
 
