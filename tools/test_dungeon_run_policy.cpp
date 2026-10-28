@@ -20640,6 +20640,35 @@ static void TestSpeedLeashIgnoresOffMapBots()
     CHECK(!r.speedLeash); // an off-map bot never holds the lead
 }
 
+// Karazhan Crypt kcleg6-t1028 step 293: the leash's hold on the lead bot's own spot (swimming under the shaft's ramp
+// lip, -11209.8 -1496.3 1.0) was snapped onto the floor above and refused unreachable, and the refusal paused the run.
+// The refused hold changed nothing on the lead bot (cmd move refuses before it touches it): the walk goes on, the
+// leash is spent for the step, never a pause.
+static void TestSpeedLeashRefusedHoldWalksOn()
+{
+    DungeonPlan plan;
+    Facts f;
+    Run r = SpeedLeashRun(plan, f, 10);
+    CHECK(Tick(r, f) == "move 400.0 0.0 0.0");
+    f.leadX = 40;
+    SpeedLeashStraggler(f, 30);
+    CHECK(Tick(r, f) == "move 40.0 0.0 0.0");
+    CHECK(r.speedLeash);
+    OrderRefused(r, "move 40.0 0.0 0.0",
+        "unreachable: The lead bot has no walkable path to that point (no navmesh route reaches it).");
+    CHECK(r.state == State::Running);
+    CHECK(!r.speedLeash);
+    CHECK(r.speedLeashSpent);
+    CHECK(r.phase == Phase::Walk);
+    CHECK(r.note.find("the hold for the party was refused") != std::string::npos);
+    CHECK(Tick(r, f) == ""); // the walk to 400 is still under way: no new hold, no pause
+    CHECK(!r.speedLeash);
+    CHECK(r.state == State::Running);
+    // Any other refused move on the walk still pauses as before.
+    OrderRefused(r, "move 40.0 0.0 0.0", "unreachable: The lead bot has no walkable path to that point.");
+    CHECK(r.state == State::Paused);
+}
+
 static void TestSpeedLeashNeedsSpeedWalking()
 {
     DungeonPlan plan;
@@ -22688,6 +22717,7 @@ int main()
     TestSpeedLeashHoldsAFastWalkForAStraggler();
     TestSpeedLeashNeedsNoRealPlayerThisTick();
     TestSpeedLeashIgnoresOffMapBots();
+    TestSpeedLeashRefusedHoldWalksOn();
     TestSpeedLeashNeedsSpeedWalking();
     TestSpeedLeashLeavesOtherRunsAlone();
     TestSpeedLeashSkipsDirectWaterFightsAndEvents();

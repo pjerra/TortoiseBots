@@ -1534,6 +1534,7 @@ struct Run
     bool speedLeash = false;
     std::uint32_t speedLeashMs = 0;
     bool speedLeashSpent = false;
+    std::string speedLeashOrder; // the hold's own move on the lead bot's spot (OrderRefused tells it from the walk's)
     // Times a straight walk back moved its target to an earlier point after its path passed an uncleared pack
     // (ClearPointBefore, kStraightBackoffs), this walk back.
     std::uint32_t straightBackoffs = 0;
@@ -2263,6 +2264,7 @@ inline void ResetStep(Run& r)
     r.speedLeash = false;
     r.speedLeashMs = 0;
     r.speedLeashSpent = false;
+    r.speedLeashOrder.clear();
 }
 
 // "N wipe(s), M near wipe(s)", or "" for none.
@@ -5400,6 +5402,20 @@ inline void OrderRefused(Run& r, const std::string& order, const std::string& an
         r.note = "retreat refused (" + answer + "): fighting";
         return;
     }
+    // The test speed leash's hold on the lead bot's own spot (SpeedLeashTick) refused: cmd move refuses before it
+    // touches the lead bot, so its walk is still under way. The walk goes on, the leash spent for the step; never a
+    // pause (Karazhan Crypt kcleg6-t1028 step 293: the lead bot swam under the shaft's ramp lip, the floor snap lifted
+    // its spot onto the ramp above and the path from the water to it was refused unreachable).
+    if (r.speedLeash && !r.speedLeashOrder.empty() && order == r.speedLeashOrder)
+    {
+        r.speedLeash = false;
+        r.speedLeashMs = 0;
+        r.speedLeashSpent = true;
+        r.speedLeashOrder.clear();
+        r.walkStillMs = 0;
+        r.note = "test speed: the hold for the party was refused (" + answer + "): walking on";
+        return;
+    }
     // The stranded lead bot's teleport (StrandedTeleportTick): nothing changed on
     // the lead bot. "wait" (a fight, the lead bot moved since the facts were read)
     // keeps it due, kStrandWaits times a step, then pauses; any other refusal is a
@@ -6205,6 +6221,7 @@ inline bool SpeedLeashTick(Run& r, const Facts& f, float x, float y, float z, bo
     r.speedLeashMs = 0;
     r.walkStillMs = 0;
     order = MoveOrder(f.leadX, f.leadY, f.leadZ, false); // the lead bot holds where it stands (as the firing-stand hold)
+    r.speedLeashOrder = order;
     r.note = "test speed: the walk waits for the party (" + who + ")";
     return true;
 }
