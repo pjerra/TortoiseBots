@@ -4677,16 +4677,17 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertEqual(sum(1 for r in leg6 if r["kind"] == "pull"), 26)
 
     def test_onyxias_lair_is_the_raid_prep(self):
-        # 20261029120000 (turtle-agent prep/raid-ony 9097884, 2026-10-29): the 40-man Onyxia's Lair draft with the B1 prep
+        # 20261029130000 (turtle-agent prep/raid-ony 9015cf46, 2026-10-29): the 40-man Onyxia's Lair draft with the B1 prep
         # of RAID-PREP-ony.md, no row hand-set. The map has 6 creature spawns: Onyxia 10184 and five Onyxian Warders 12129,
         # no two warders within 15 yd (the closest pair 35.4 yd), so the five pull groups stay five singles of radius 1 and
-        # nothing merges. The leg's `to` is the first pack's stand (59.46 -103.12 -22.98); packs 2-5 and the boss each get
-        # one approach stand, so the run leader walks no hop of its own (the draft had 5 of 105-270 yd). The four patrolling
-        # warders carry patrol blocks in the plan, which the rows cannot hold. The boss is the leg's last step, pulled from
-        # a stand outside her ~62 yd 3D wake and the raid's follow ring (see test_onyxias_lair_stands_outside_her_aggro).
+        # nothing merges. The leg's `to` is the first pack's stand (59.46 -103.12 -22.98); packs 2-5 each get one approach
+        # stand and the boss three (walk 3's two floor points and the stand), so the run leader walks no hop of its own (the
+        # draft had 5 of 105-270 yd). The four patrolling warders carry patrol blocks in the plan, which the rows cannot
+        # hold. The boss is the leg's last step, pulled from a stand outside her ~62 yd 3D wake and the raid's follow ring
+        # (see test_onyxias_lair_stands_outside_her_aggro).
         name, text = newest_plan_text("onyxias_lair")
-        self.assertEqual(name, "20261029120000_world.sql")
-        self.assertIn("('onyxias_lair', 249, '', '', '', 'turtle-agent 9097884 dungeons/onyxias_lair.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261029130000_world.sql")
+        self.assertIn("('onyxias_lair', 249, '', '', '', 'turtle-agent 9015cf46 dungeons/onyxias_lair.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         self.assertEqual([v[0] for v in leg_rows(text, "onyxias_lair").values()], ["onyxia"])
         rows = [r for r in self.step_rows(text) if r["plan"] == "onyxias_lair"]
         leg0 = leg_steps(rows, 0)
@@ -4704,15 +4705,23 @@ class DungeonPlanSql(unittest.TestCase):
                          [("49.82", "-114.61", "-24.31"), ("-52.97", "-96.88", "-38.64"),
                           ("-131.2", "-137.47", "-52.52"), ("-166.62", "-196", "-66.26"),
                           ("-199.1", "-209.83", "-68.91")])
-        # One stand per pack after the first (15-20 yd from it) and one for the boss: 80.7 yd out, outside her ~62 yd
-        # 3D wake plus the raid's follow ring (75.1 yd needed; test_onyxias_lair_stands_outside_her_aggro).
+        # One stand per pack after the first (15-20 yd from it) and three for the boss: the two floor points of walk 3 and
+        # the stand 80.7 yd out, outside her ~62 yd 3D wake plus the raid's follow ring (75.1 yd needed;
+        # test_onyxias_lair_stands_outside_her_aggro).
         approach = [r for r in leg0 if r["kind"] == "move" and r["comment"] in ("pull group 1 approach", "pull group 2 approach",
                                                                               "pull group 3 approach", "pull group 4 approach",
+                                                                              "boss approach",
                                                                               "boss stand outside her ~62 yd 3D wake radius and the raid''s follow ring")]
         self.assertEqual([(r["x"], r["y"], r["z"]) for r in approach],
                          [("-33.05", "-95.14", "-36.06"), ("-113.88", "-127.47", "-48.98"),
                           ("-163.15", "-176.31", "-63.21"), ("-184.95", "-195.68", "-67.15"),
+                          ("-149.46", "-210.48", "-66.7"), ("-114.73", "-210.94", "-72.4"),
                           ("-80", "-211.4", "-83")])
+        # After the last pull: the two floor moves, the stand, her. Not a path row (the exporter's cut of that hop is gone).
+        last_pull = max(i for i, r in enumerate(leg0) if r["kind"] == "pull")
+        self.assertEqual([(r["kind"], r["comment"]) for r in leg0[last_pull + 1:]],
+                         [("move", "boss approach"), ("move", "boss approach"),
+                          ("move", "boss stand outside her ~62 yd 3D wake radius and the raid''s follow ring"), ("boss", "boss")])
         self.assertEqual((leg0[-1]["kind"], leg0[-1]["entry"], leg0[-1]["x"], leg0[-1]["y"], leg0[-1]["z"]),
                          ("boss", "10184", "0.69628", "-211.972", "-86.075"))
         self.assertEqual(leg0[-2]["comment"], "boss stand outside her ~62 yd 3D wake radius and the raid''s follow ring")
@@ -4741,6 +4750,27 @@ class DungeonPlanSql(unittest.TestCase):
         nearest = min(outside, key=lambda o: o[2])
         self.assertEqual(nearest[1], "boss stand outside her ~62 yd 3D wake radius and the raid''s follow ring")
         self.assertGreaterEqual(nearest[2], 75.1)
+
+    def test_onyxias_lair_walk3_step26_is_on_the_floor(self):
+        # Walk 3 (2026-10-28) skipped step 26: the 120000 export's cut of the 120 yd hop from pull group 4 to the boss stand
+        # interpolated z linearly and put -149.46112 -210.48434 at -74.62397, 7.9 yd under the navmesh there (-66.7); the
+        # server's path search reaches about 5 yd up or down, so the row was no_path/NOPATH. The boss approach carries the
+        # two measured floor points now, so the hop is not cut and every row between the last pull and the stand has its
+        # floor's z (20261029120000's path row fails this).
+        name, text = newest_plan_text("onyxias_lair")
+        self.assertNotIn("-74.62397", text)
+        rows = [r for r in self.step_rows(text) if r["plan"] == "onyxias_lair"]
+        leg0 = leg_steps(rows, 0)
+        last_pull = max(i for i, r in enumerate(leg0) if r["kind"] == "pull")
+        stand = next(i for i, r in enumerate(leg0) if r["comment"].startswith("boss stand"))
+        floors = {(-149.46, -210.48): -66.7, (-114.73, -210.94): -72.4}
+        between = leg0[last_pull + 1:stand]
+        self.assertEqual(len(between), 2)
+        for r in between:
+            near = [z for (x, y), z in floors.items() if dist(r, x, y) <= 0.5]
+            self.assertTrue(near, "step %s (%s %s %s) is not one of the measured floor points" % (r["seq"], r["x"], r["y"], r["z"]))
+            self.assertLessEqual(abs(float(r["z"]) - near[0]), 1.0,
+                                 "step %s (%s %s %s) stands %.1f yd off the floor %.1f" % (r["seq"], r["x"], r["y"], r["z"], abs(float(r["z"]) - near[0]), near[0]))
 
 if __name__ == "__main__":
     unittest.main()

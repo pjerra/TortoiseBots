@@ -67,6 +67,7 @@
 
 ### Dashboard
 - The dashboard's raid card now names the raid's layout in one row: the main tank, the off-tanks, which healer follows which tank, and the raid healers. The run line also names the current step in its own words, from the plan.
+- Fixed: the walk from the last warder to Onyxia's boss stand no longer has a point under the floor that the party skipped; the whole walk in runs on the ground.
 
 ## v1.8.0 (2026-10-22)
 
