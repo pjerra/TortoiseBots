@@ -60,6 +60,8 @@
 - Fixed: Karazhan Crypt's run leader plan clears Corpsemuncher (leg 6, a swim up the shaft).
 - Fixed `cmd move` lifting a point in open water onto a ledge above the surface that no path reaches: the point stays in the water (a pier the bots can walk onto still wins), so the run leader's swim up Karazhan Crypt's shaft no longer pauses.
 - Fixed the test speed's party hold pausing a run when `cmd move` refused the hold on the lead bot's own spot (a swim under a ledge): the walk goes on.
+- Raids: in trash fights the run leader now sends a loose mob to an off-tank instead of the main tank, turn by turn; the main tank keeps its stand, and a mob an off-tank already holds is left to it.
+- Raids: a bot left far behind the lead (for example after a teleport) is now summoned to it after about 8 seconds instead of the run's waits taking turns for a minute and a half, at most twice per step.
 
 ## v1.8.0 (2026-10-22)
 

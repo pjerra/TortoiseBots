@@ -148,6 +148,13 @@ constexpr std::uint32_t kStuckSummonMs = 15000;   // in a regroup's gather: a fa
 constexpr std::uint32_t kStragglerWalkMs = 45000;
 constexpr std::uint32_t kStragglerSummonMs = 45000;
 constexpr std::uint32_t kStragglerSettleMs = 10000;
+// A raid member left far behind (a stale follow after a teleport): a raid's gather radius (30 yd) times three, past
+// every formation station. Out of reach this long with no fight on (RunawaySummon), the farthest such bot is summoned
+// to the lead bot: kRunawaySummonsPerStep bots a step at most, kRunawayResummonMs apart, never on a boss step.
+constexpr float kRunawayYd = 100.0f;
+constexpr std::uint32_t kRunawayMs = 8000;
+constexpr std::uint32_t kRunawaySummonsPerStep = 2;
+constexpr std::uint32_t kRunawayResummonMs = 30000;
 constexpr std::uint32_t kSummonWaitMs = 6000;     // a direct step's summoned follower is waited for this long (the summon takes 3 s)
 // A direct step's straggler (refused too-far, or not with the lead bot at its gather's ceiling) is summoned again
 // once more than kDirectResummonMs passed since its last summon of the step, or once it died and came back since
@@ -508,6 +515,8 @@ struct UnitFact
     bool auraOnEngaged = false;
     bool victimHealer = false; // its victim is a healer (Facts::partyAttackers, and a hold's units)
     bool victimLead = false;   // a hold's units: its victim is the lead bot (the tank holds it)
+    // Facts::partyAttackers only: its victim is a living tank other than the lead bot (an off-tank holds it).
+    bool victimTank = false;
     // Facts::partyAttackers only:
     bool hitting = false;      // it hits its victim now: in melee reach of it, or standing and casting (not running in)
     bool victimPet = false;    // its victim is a party bot's pet (the lead bot's own too), not a bot (victimHealer false)
@@ -721,6 +730,9 @@ struct RaidFacts
     bool on = false;                                                    // a raid binding with AiPlayerbot.DungeonRunRaid
     std::uint32_t tanksTotal = 0, tanksDead = 0;                        // tanks, and dead tanks (the wipe level)
     std::uint32_t healersTotal = 0, healersDead = 0;                    // healers, and dead healers (the wipe level)
+    // Living tanks other than the lead bot, on its map within kGuardYd of it and out of a commander task, in the
+    // layout's order: the raid trash fights send a loose mob to them (RaidTrashFight, CheckGuard).
+    std::vector<std::string> offTanksAlive;
 };
 
 // What the glue reads once a tick for the run's current step.
@@ -1370,6 +1382,15 @@ struct Run
         std::uint64_t lastMs = 0;
     };
     std::unordered_map<std::string, StepSummon> stepSummons;
+    // A raid bot out of reach far behind the lead bot (RunawaySummon): how long it has been out (a bot back in reach
+    // is erased), the step's summons and the run clock of the last one (kRunawaySummonsPerStep a step,
+    // kRunawayResummonMs apart: one clock for the step, not one per bot). Cleared with the step's summons.
+    std::unordered_map<std::string, std::uint32_t> runawayMs;
+    std::uint32_t runawaySummons = 0;
+    std::uint64_t runawayLastMs = 0;
+    // The plan step the runaway budget belongs to: a pause/resume or a wipe recovery restarts the same step
+    // (ResetStep) and keeps its budget; only a new step index clears it.
+    std::size_t runawayStep = static_cast<std::size_t>(-1);
     std::unordered_map<std::string, std::uint64_t> deadSeenMs; // the run clock a bot was last seen dead (NoteDeadSeen), the whole run
     bool directRefusedOn = false;     // this step's direct step was refused too-far (or its gather hit the ceiling) ...
     std::uint64_t directRefusedMs = 0; // ... first at this run clock (DirectPauseDue)
@@ -1775,6 +1796,8 @@ struct Run
     std::uint32_t guardOrders = 0;
     std::uint32_t guardSinceOrderMs = 0; // fight time since the last pick-up
     bool guardReturn = false;
+    // The off-tank a raid trash pick-up goes to next (RaidTrashFight): round-robin over RaidFacts::offTanksAlive.
+    std::size_t offTankTurn = 0;
     // The tank's reach for a pull is cut off once a mob has aggro (CheckReach):
     // `stopReachDue` asks the glue to end the lead bot's pull, once per pull.
     bool stopReachDue = false;
@@ -2178,6 +2201,13 @@ inline void ResetStep(Run& r)
     r.summonWait.clear();
     r.summonWaitMs = 0;
     r.stepSummons.clear();
+    r.runawayMs.clear();
+    if (r.runawayStep != r.step)
+    {
+        r.runawaySummons = 0;
+        r.runawayLastMs = 0;
+        r.runawayStep = r.step;
+    }
     r.directRefusedOn = false;
     r.directRefusedMs = 0;
     r.directRefusedIdx = 0;
@@ -2254,6 +2284,7 @@ inline void ResetStep(Run& r)
     r.guardRefills = 0;
     r.fightOrders = 0;
     r.guardReturn = false;
+    r.offTankTurn = 0;
     r.stopReachDue = false;
     r.reachStopped = false;
     r.guardEventDown = 0;
@@ -2881,6 +2912,55 @@ inline bool StragglerLadderTick(Run& r, const Facts& f, std::string& order)
     }
     ++s.rung;
     s.rungMs = 0;
+    return true;
+}
+
+inline bool EngagedPlanBoss(const Run& r, const Facts& f); // declared here (used from RunawaySummon), defined by the fight progress
+
+// A raid bot left far behind the lead bot with no fight on (a stale follow after a teleport): the gather and the
+// speed leash take turns waiting for it and neither timer runs out, so the run summons it to the lead bot before the
+// step's own wait looks at it again. Out of reach is kRunawayYd from the lead bot or another map; the farthest one is
+// picked, kRunawaySummonsPerStep a step at most and kRunawayResummonMs after the step's last summon. Never on a boss
+// step or with a plan boss engaged (RaidTrashFight's own protection: the summon would drop the bot on the boss).
+// Party runs keep their ladder and ceilings. True: the tick ends with that order (a refused summon is the existing
+// summon-refused path).
+inline bool RunawaySummon(Run& r, const Facts& f, std::uint32_t dt, std::string& order)
+{
+    const PlanStep* s = Current(r);
+    if (!f.raid.on || !f.leadAlive || f.anyInCombat || r.fighting || LeadInOtherPart(r, f) || r.state != State::Running ||
+        !order.empty() || !s || s->kind == PlanStepKind::Boss || EngagedPlanBoss(r, f))
+        return false;
+    const MemberFact* pick = nullptr;
+    for (const MemberFact& m : f.members)
+    {
+        if (m.name.empty())
+            continue;
+        if (m.inCombat || m.attackers > 0)
+            continue; // never one in a fight or with something on it (cmd summon refuses it too)
+        if (!m.offPlanMap && m.yd < kRunawayYd)
+        {
+            r.runawayMs.erase(m.name); // back in reach: its clock starts over
+            continue;
+        }
+        std::uint32_t const outMs = (r.runawayMs[m.name] += dt);
+        if (outMs < kRunawayMs)
+            continue;
+        if (r.runawaySummons >= kRunawaySummonsPerStep)
+            continue; // the step's summons are spent
+        if (r.runawaySummons > 0 && r.runMs - r.runawayLastMs < kRunawayResummonMs)
+            continue; // too soon after the step's last summon, whatever bot it was
+        if (!pick || (m.offPlanMap && !pick->offPlanMap) || (m.offPlanMap == pick->offPlanMap && m.yd > pick->yd))
+            pick = &m;
+    }
+    if (!pick)
+        return false;
+    order = "summon " + pick->name;
+    MarkSummoned(r, pick->name);
+    ++r.runawaySummons;
+    r.runawayLastMs = r.runMs;
+    r.note = pick->name +
+        (pick->offPlanMap ? std::string(" is on another map") : " is " + Num(pick->yd) + " yd from the lead bot") + " (" +
+        std::to_string(r.runawayMs[pick->name] / 1000) + " s out of reach): summoned";
     return true;
 }
 
@@ -11657,12 +11737,25 @@ inline bool GuardLeavesCampAlone(const UnitFact& u)
     return u.castingAtRange && u.campIdle > 0 && u.distLead > kGuardNoWalkYd;
 }
 
-inline const UnitFact* GuardPick(const Facts& f, float holdRadius, const Run* capped = nullptr, const Run* ccRun = nullptr)
+// A raid's trash fight: the guard hands a loose mob to an off-tank instead of
+// the lead bot, which holds its stand for the boss. Never on a boss step or a
+// boss of the plan's fight (EngagedPlanBoss), never in a hold or an event, and
+// never in a party run (the party rules are unchanged).
+inline bool RaidTrashFight(const Run& r, const Facts& f)
+{
+    return f.raid.on && Current(r) && Current(r)->kind != PlanStepKind::Boss && !EngagedPlanBoss(r, f) && !InEvent(r);
+}
+
+inline const UnitFact* GuardPick(const Facts& f, float holdRadius, const Run* capped = nullptr, const Run* ccRun = nullptr,
+    bool raidTrash = false)
 {
     const UnitFact* best = nullptr;
     for (const UnitFact& u : f.partyAttackers)
     {
         if (!u.hostile || !u.attackable || u.evading || u.polymorphed || !u.hitting || u.distLead > kGuardYd)
+            continue;
+        // A mob an off-tank holds is not loose: the raid trash guard never sends the main tank off its stand for it.
+        if (raidTrash && u.victimTank)
             continue;
         if (capped && GuardUnitCapped(*capped, u.guid))
             continue;
@@ -11710,7 +11803,7 @@ inline const UnitFact* GuardTarget(const Run& r, const Facts& f)
             r.focusUnstayed) ||
         f.carrier.empty() || InEvent(r))
         return nullptr;
-    return GuardPick(f, 0.0f, &r, &r);
+    return GuardPick(f, 0.0f, &r, &r, RaidTrashFight(r, f));
 }
 
 // The guard inside a hold (Uldaman Keepers, 19z12 attempt 1: the tank held
@@ -11959,6 +12052,18 @@ inline bool CheckGuard(Run& r, const Facts& f, std::uint32_t dt, std::string& or
     {
         ++r.fightOrders;
         ++r.guardUnitOrders[u->guid];
+    }
+    // A raid trash fight hands a loose mob to an off-tank, round-robin, and the
+    // main tank keeps its stand (no guardReturn): the mob is on a healer or a
+    // DPS, not on the lead bot.
+    if (!hold && RaidTrashFight(r, f) && !f.raid.offTanksAlive.empty() && !u->victimLead)
+    {
+        std::string const& offTank = f.raid.offTanksAlive[r.offTankTurn++ % f.raid.offTanksAlive.size()];
+        r.note = "fighting: off-tank " + offTank + " picks up " + std::to_string(u->entry) + " off " +
+            (u->victimHealer ? "the healer" : u->victimPet ? "a pet" : "the party") + " (" + Num(u->distLead) +
+            " yd)" + RefillNote(r);
+        order = "attack " + std::to_string(u->guid) + " " + offTank;
+        return true;
     }
     if (hold)
     {
@@ -14112,6 +14217,7 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
         r.guardRefilled = false;
         r.guardRefills = 0;
         r.fightOrders = 0;
+        r.offTankTurn = 0;
         r.reachStopped = false;
         // A fight may have moved the lead bot: an exact point's tighten starts
         // over and its proof is taken again before a direct step goes out.
@@ -14373,6 +14479,11 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
     }
 
     if (WalkBack(r, f, dt, order))
+        return order;
+
+    // A raid bot far behind the lead bot with no fight on is summoned before the step's own wait (the leash, the
+    // gather, the ladder), so whichever wait is current cannot take turns with it and leave it there.
+    if (RunawaySummon(r, f, dt, order))
         return order;
 
     // After a won fight: the next pack pulled from where the tank stands (FightForwardTick), else the step's rules.
