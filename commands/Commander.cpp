@@ -11363,6 +11363,7 @@ void CollectCommanderTelemetry(std::vector<CommanderTelemetry::BindingRef>& out)
         CommanderOrderLog().Clear();
         return;
     }
+    std::unordered_set<uint64_t> bound;
     for (uint64 commanderRaw : CommanderBindings().Commanders())
     {
         bound.insert(commanderRaw);
