@@ -226,6 +226,13 @@ SEEDED_BOSSES.update({(229, 9196): "Highlord Omokk", (229, 9236): "Shadow Hunter
                       (229, 9568): "Overlord Wyrmthalak"})
 NOT_BOSSES.update({9217, 9218, 9219, 9718, 10376, 16080, 16044})
 
+# Onyxia's Lair (20261028140000), the 40-man raid of map 249: its one boss step, Onyxia 10184, name and rank (3) from the
+# core's creature_template. The Onyxian Warders 12129 are the map's only other spawns and are trash pulls; the whelps
+# 11262 and the Turtle 1.18.1 templates (49016-49018, 50143, 50144) have no spawn on the map: Onyxia summons the whelps,
+# and nothing in the effective world DB or boss_onyxia.cpp spawns the others (RAID-PREP-ony.md).
+BOSS_PLANS["onyxias_lair"] = 249
+SEEDED_BOSSES.update({(249, 10184): "Onyxia"})
+
 def migrations():
     for path in sorted(glob.glob(os.path.join(ROOT, "data/sql/world/*_world.sql"))):
         with open(path, encoding="utf-8") as handle:
@@ -4664,6 +4671,49 @@ class DungeonPlanSql(unittest.TestCase):
                          ["10505", "10507", "10901", "10502", "10503", "11622", "10432", "10508", "11261", "10504"])
         self.assertFalse([r for r in rows if r["kind"] == "pull" and r["leg"] != "6" and "10475" in r["entries"].split(",")])
         self.assertEqual(sum(1 for r in leg6 if r["kind"] == "pull"), 26)
+
+    def test_onyxias_lair_is_the_raid_prep(self):
+        # 20261028140000 (turtle-agent prep/raid-ony e07233f, 2026-10-28): the 40-man Onyxia's Lair draft with the B1 prep
+        # of RAID-PREP-ony.md, no row hand-set. The map has 6 creature spawns: Onyxia 10184 and five Onyxian Warders 12129,
+        # no two warders within 15 yd (the closest pair 35.4 yd), so the five pull groups stay five singles of radius 1 and
+        # nothing merges. The leg's `to` is the first pack's stand (59.46 -103.12 -22.98); packs 2-5 and the boss each get
+        # one approach stand, so the run leader walks no hop of its own (the draft had 5 of 105-270 yd). The four patrolling
+        # warders carry patrol blocks in the plan, which the rows cannot hold. The boss is the leg's last step.
+        name, text = newest_plan_text("onyxias_lair")
+        self.assertEqual(name, "20261028140000_world.sql")
+        self.assertIn("('onyxias_lair', 249, '', '', '', 'turtle-agent e07233f dungeons/onyxias_lair.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual([v[0] for v in leg_rows(text, "onyxias_lair").values()], ["onyxia"])
+        rows = [r for r in self.step_rows(text) if r["plan"] == "onyxias_lair"]
+        leg0 = leg_steps(rows, 0)
+        self.assertEqual(len(leg0), 30)
+        self.assertEqual([r["kind"] for r in leg0].count("move"), 24)
+        self.assertEqual([r["kind"] for r in leg0].count("pull"), 5)
+        self.assertEqual({r["kind"] for r in rows}, {"move", "pull", "boss"})
+        self.assertEqual((leg0[0]["kind"], leg0[0]["x"], leg0[0]["y"], leg0[0]["z"]), ("move", "59.46", "-103.12", "-22.98"))
+        pulls = [r for r in rows if r["kind"] == "pull"]
+        self.assertEqual([(r["entries"], r["radius"]) for r in pulls], [("12129", "1")] * 5)
+        self.assertEqual([(r["x"], r["y"], r["z"]) for r in pulls],
+                         [("49.82", "-114.61", "-24.31"), ("-52.97", "-96.88", "-38.64"),
+                          ("-131.2", "-137.47", "-52.52"), ("-166.62", "-196", "-66.26"),
+                          ("-199.1", "-209.83", "-68.91")])
+        # One stand per pack after the first and one for the boss, each 15-20 yd from what it is a stand for.
+        approach = [r for r in leg0 if r["kind"] == "move" and r["comment"] in ("pull group 1 approach", "pull group 2 approach",
+                                                                              "pull group 3 approach", "pull group 4 approach",
+                                                                              "boss approach")]
+        self.assertEqual([(r["x"], r["y"], r["z"]) for r in approach],
+                         [("-33.05", "-95.14", "-36.06"), ("-113.88", "-127.47", "-48.98"),
+                          ("-163.15", "-176.31", "-63.21"), ("-184.95", "-195.68", "-67.15"),
+                          ("-19.3", "-211.97", "-88.65")])
+        self.assertEqual((leg0[-1]["kind"], leg0[-1]["entry"], leg0[-1]["x"], leg0[-1]["y"], leg0[-1]["z"]),
+                         ("boss", "10184", "0.69628", "-211.972", "-86.075"))
+        self.assertEqual(leg0[-2]["comment"], "boss approach")
+        self.assertEqual(re.findall(r"(?m)^DELETE FROM `ai_dungeon_step` WHERE `plan` = '(\w+)';", text), ["onyxias_lair"])
+        self.assertIn("DELETE FROM `ai_dungeon_boss` WHERE `map` IN (249) AND `entry` IN (10184);", text)
+        self.assertIn("(249, 10184, 'Onyxia');", text)
+        # No tactic row: the universal dragon flank and the module's Onyxia fight strategy already handle her cones,
+        # air phase, whelps, eggs and Deep Breath (the header says so).
+        self.assertNotIn("INSERT INTO `ai_boss_tactic`", text)
+        self.assertNotIn("DELETE FROM `ai_boss_tactic`", text)
 
 if __name__ == "__main__":
     unittest.main()
