@@ -33,6 +33,7 @@
 // Standard library only (Player is a forward declaration), so
 // tools/test_commander_telemetry.cpp compiles it without a game header.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
@@ -208,6 +209,7 @@ struct RunStepInfo
     float radius = 0.0f;   // pull, boss and wait_clear: the area the step cares about
     uint32_t entry = 0;    // the creature or object the step is about (a boss, a chest), 0 = none
     std::string name;      // that creature's name when known, empty = unknown
+    std::string label;     // the row's own comment (the plan step's short description), empty = none
     bool skipped = false;  // the step was left out with `.bot run skip`
 };
 
@@ -423,6 +425,7 @@ struct RunInfo
     std::string leg;        // the current leg's name (the section)
     std::string kind;       // the step kind (move, pull, boss ...)
     std::string phase;      // what the step is doing (walk, pull, rest ...)
+    std::string label;      // the current step's own comment (the plan row's short description), empty = none
     std::string note;       // what it does now, or why it paused
     int64_t changedAt = 0;  // unix seconds the step, phase, state or note last changed
     std::vector<RunStepInfo> stepList; // the current section's steps (see RunStepWindow); empty = not reported
@@ -442,6 +445,16 @@ struct BotExtra
     bool moving = false;
     std::string targetName; // name of its target, empty = none or unknown
     uint64_t castTarget = 0; // the unit the spell being cast is aimed at (raw guid), 0 = none or not a unit
+};
+
+// The raid layout the module applied to the binding's group (TBM:RAID_LAYOUT), so the card names the tanks and healers it placed.
+struct RaidLayoutInfo
+{
+    bool present = false;
+    std::string mainTank;                                      // the lead bot the layout made main tank
+    std::vector<std::string> offTanks;                         // the assist tanks, in layout order
+    std::vector<std::pair<std::string, std::string>> tankHealers; // healer, the tank it was given focus on
+    std::vector<std::string> raidHealers;                      // the healers left healing the raid
 };
 
 // A standing binding as the commands layer reports it: live objects, read on
@@ -467,6 +480,7 @@ struct BindingRef
     std::vector<BotExtra> botExtras; // one per bot read from the view snapshot, matched by id
     int64_t boundAt = 0;             // unix seconds the binding was first seen standing, 0 = unknown
     RunInfo run;                     // the run leader's run of this binding, when it has one
+    RaidLayoutInfo layout;           // the raid layout the module applied to its group, when it applied one
     std::unordered_set<uint64_t> awayBots; // raw guids of bots off the run's gather rule or the lead's map
     bool objectsReported = false;    // the object list was read (it may be empty)
     std::vector<ObjectInfo> objects; // game objects the bots have seen, on the lead's map
@@ -523,6 +537,7 @@ struct BindingInfo
     std::vector<MobInfo> mobs;
     int64_t boundAt = 0;
     RunInfo run;
+    RaidLayoutInfo layout;
     bool objectsReported = false;
     std::vector<ObjectInfo> objects;
     bool bossesReported = false;
@@ -530,6 +545,34 @@ struct BindingInfo
     std::vector<BossInfo> bosses;
     std::string combatJson;          // the live fight window (`combat` object), "" outside a fight
 };
+
+// The layout as the card may show it, read against the binding's current members: a name whose bot left the group
+// is not among them any more, so it leaves the layout with it (main tank, off-tank, tank healer, the tank it heals,
+// raid healer). An empty member list is the lead bot between maps, not a departure, so the stored record then stands.
+inline RaidLayoutInfo CurrentRaidLayout(RaidLayoutInfo const& stored, std::vector<std::string> const& members)
+{
+    if (members.empty())
+        return stored;
+    auto const present = [&members](std::string const& name)
+    {
+        for (std::string const& member : members)
+            if (member == name)
+                return true;
+        return false;
+    };
+    auto const gone = [&present](std::string const& name) { return !present(name); };
+    RaidLayoutInfo layout = stored;
+    if (!present(layout.mainTank))
+        layout.mainTank.clear();
+    layout.offTanks.erase(std::remove_if(layout.offTanks.begin(), layout.offTanks.end(), gone), layout.offTanks.end());
+    layout.raidHealers.erase(std::remove_if(layout.raidHealers.begin(), layout.raidHealers.end(), gone), layout.raidHealers.end());
+    layout.tankHealers.erase(std::remove_if(layout.tankHealers.begin(), layout.tankHealers.end(),
+        [&present](std::pair<std::string, std::string> const& pair) { return !present(pair.first) || !present(pair.second); }),
+        layout.tankHealers.end());
+    layout.present = stored.present && (!layout.mainTank.empty() || !layout.offTanks.empty() ||
+        !layout.tankHealers.empty() || !layout.raidHealers.empty());
+    return layout;
+}
 
 inline std::string JsonEscape(std::string const& s)
 {
@@ -685,6 +728,7 @@ inline std::string BuildPayload(int protocolVersion, uint64_t session, uint64_t 
                << ",\"leg\":\"" << JsonEscape(Clip(r.leg, kMaxRunWord)) << "\""
                << ",\"kind\":\"" << JsonEscape(Clip(r.kind, kMaxRunWord)) << "\""
                << ",\"phase\":\"" << JsonEscape(Clip(r.phase, kMaxRunWord)) << "\""
+               << ",\"label\":\"" << JsonEscape(Clip(r.label, kMaxRunNote)) << "\""
                << ",\"note\":\"" << JsonEscape(Clip(r.note, kMaxRunNote)) << "\""
                << ",\"changed\":" << r.changedAt;
             if (!r.notes.empty())
@@ -726,6 +770,8 @@ inline std::string BuildPayload(int protocolVersion, uint64_t session, uint64_t 
                         ss << ",\"e\":" << st.entry;
                     if (!st.name.empty())
                         ss << ",\"n\":\"" << JsonEscape(Clip(st.name, kMaxMobName)) << "\"";
+                    if (!st.label.empty())
+                        ss << ",\"c\":\"" << JsonEscape(Clip(st.label, kMaxRunNote)) << "\"";
                     if (st.skipped)
                         ss << ",\"sk\":true";
                     ss << "}";
@@ -733,6 +779,34 @@ inline std::string BuildPayload(int protocolVersion, uint64_t session, uint64_t 
                 ss << "]";
             }
             ss << "}";
+        }
+        if (b.layout.present)
+        {
+            ss << ",\"layout\":{\"mt\":\"" << JsonEscape(b.layout.mainTank) << "\",\"ot\":[";
+            size_t listed = 0;
+            for (std::string const& name : b.layout.offTanks)
+            {
+                if (listed++)
+                    ss << ",";
+                ss << "\"" << JsonEscape(name) << "\"";
+            }
+            ss << "],\"th\":[";
+            listed = 0;
+            for (auto const& pair : b.layout.tankHealers)
+            {
+                if (listed++)
+                    ss << ",";
+                ss << "{\"h\":\"" << JsonEscape(pair.first) << "\",\"t\":\"" << JsonEscape(pair.second) << "\"}";
+            }
+            ss << "],\"rh\":[";
+            listed = 0;
+            for (std::string const& name : b.layout.raidHealers)
+            {
+                if (listed++)
+                    ss << ",";
+                ss << "\"" << JsonEscape(name) << "\"";
+            }
+            ss << "]}";
         }
         if (b.commanderPlaced)
             ss << ",\"commander_pos\":{\"map\":" << b.commanderMap << ",\"x\":" << b.commanderX << ",\"y\":" << b.commanderY << "}";

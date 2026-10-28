@@ -887,6 +887,44 @@ void TestControlCharacters()
     Check(Has(json, "a\\u0001b\\tc"), "control characters are escaped");
 }
 
+// F5: the dashboard's raid layout (what TBM:RAID_LAYOUT applied) and the run's step label (the plan row's comment).
+void TestDashLayoutAndLabel()
+{
+    BindingInfo b;
+    b.commander = "Glacienne";
+    b.run.present = true;
+    b.run.plan = "onyxias_lair";
+    b.run.step = 28;
+    b.run.steps = 40;
+    b.run.label = "boss stand outside her \"62\" yd wake";
+    RunStepInfo st;
+    st.index = 28;
+    st.kind = "move";
+    st.label = "boss stand outside her ~62 yd 3D wake radius and the raid's follow ring";
+    b.run.stepList.push_back(st);
+    std::string const json = BuildPayload(9, 1, 1, 1, {b});
+    Check(Has(json, ",\"label\":\"boss stand outside her \\\"62\\\" yd wake\""), "the current step's label, escaped");
+    Check(Has(json, ",\"c\":\"boss stand outside her ~62 yd 3D wake radius and the raid's follow ring\""), "a listed step carries its own label");
+    Check(!Has(json, "\"layout\""), "no layout: no layout key");
+
+    b.layout.present = true;
+    b.layout.mainTank = "Ragemeister";
+    b.layout.offTanks = {"Irelanthe", "Brun"};
+    b.layout.tankHealers = {{"Sera", "Ragemeister"}};
+    b.layout.raidHealers = {"Prayer"};
+    std::string const laid = BuildPayload(9, 1, 1, 1, {b});
+    Check(Has(laid, "\"layout\":{\"mt\":\"Ragemeister\",\"ot\":[\"Irelanthe\",\"Brun\"],\"th\":[{\"h\":\"Sera\",\"t\":\"Ragemeister\"}],\"rh\":[\"Prayer\"]}"),
+        "the raid layout, with its tank healer pairs");
+
+    // F5: the layout follows the group. Off-tank Brun left, so the next datagram no longer names it.
+    BindingInfo departed = b;
+    departed.layout = CurrentRaidLayout(b.layout, {"Ragemeister", "Irelanthe", "Sera", "Prayer"});
+    std::string const shrunk = BuildPayload(9, 1, 1, 1, {departed});
+    Check(Has(shrunk, "\"layout\":{\"mt\":\"Ragemeister\",\"ot\":[\"Irelanthe\"],\"th\":[{\"h\":\"Sera\",\"t\":\"Ragemeister\"}],\"rh\":[\"Prayer\"]}"),
+        "a departed off-tank is gone from the next layout");
+    Check(!Has(shrunk, "Brun"), "the departed off-tank's name is nowhere in the datagram");
+}
+
 } // namespace
 
 int main()
@@ -907,6 +945,7 @@ int main()
     TestBossRotation();
     TestBossKillLatch();
     TestControlCharacters();
+    TestDashLayoutAndLabel();
     TestRaidPayload();
     if (g_failures)
     {
