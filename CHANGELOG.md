@@ -55,6 +55,7 @@
 - Fixed: a hired mercenary in your party now accepts the LFT dungeon offer, so the group forms (#1284).
 
 ### Dashboard
+- The Fight debugger numbers the group's fights Pack 1, 2, 3 from the oldest up and names the mob on each card, a bot's name in the checks, the role tables, a death recap or the member panel opens that character's gear and talents, a fight that ends while watched live falls back to the finish that went worst, and one broken fight no longer holds back the others or the rest of the page.
 - The dashboard's raid card now names the raid's layout in one row: the main tank, the off-tanks, which healer follows which tank, and the raid healers. The run line also names the current step in its own words, from the plan.
 - Every Commanders card can switch to a Fight debugger: finished fights in a rail with the worst one opened first, plain-language checks (tank deaths, the main tank's Sunder rate, missed debuffs, overheal, idle bots, off-tank taunts, server rule warnings), a damage timeline with death recaps and skulls on the map, raid frames and per-role tables, plus a live view while the group is fighting.
 - That switch is remembered per commander: Live stays as it was, the debugger opens on the fight that went worst and draws its deaths as skulls on the same map (one click frames a death), and picking a member rings them on the map and opens what they cast.
