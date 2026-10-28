@@ -159,6 +159,7 @@ void PlayerbotAIConfig::LoadDungeonRunKeys()
     botLfgGroupsPer100Bots = static_cast<uint32>(std::min(20, std::max(0, config.GetIntDefault("AiPlayerbot.BotLfgGroupsPer100Bots", 1))));
     botLfgMaxGroups = static_cast<uint32>(std::min(20, std::max(0, config.GetIntDefault("AiPlayerbot.BotLfgMaxGroups", 5))));
     botLfgOnlyWithPlayersOnline = config.GetBoolDefault("AiPlayerbot.BotLfgOnlyWithPlayersOnline", true);
+    botLfgChat = config.GetBoolDefault("AiPlayerbot.BotLfgChat", true);
     if (botLfgGroups && !dungeonSelfClear)
         sLog.outString("TortoiseBots: AiPlayerbot.BotLfgGroups = 1 needs AiPlayerbot.DungeonSelfClear = 1: bot LFG groups stay dormant.");
 }

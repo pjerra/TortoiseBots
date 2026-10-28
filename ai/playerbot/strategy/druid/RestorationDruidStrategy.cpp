@@ -77,10 +77,6 @@ void RestorationDruidStrategy::InitCombatTriggers(std::list<TriggerNode*>& trigg
         NextAction::array(0, new NextAction("regrowth on party", ACTION_MEDIUM_HEAL), NULL)));
 
     triggers.push_back(new TriggerNode(
-        "medium aoe heal",
-        NextAction::array(0, new NextAction("tranquility", ACTION_MEDIUM_HEAL + 2), NULL)));
-
-    triggers.push_back(new TriggerNode(
         "medium health",
         NextAction::array(0, new NextAction("regrowth", ACTION_MEDIUM_HEAL + 1), NULL)));
 
@@ -327,10 +323,6 @@ void RestorationDruidBuffRaidStrategy::InitNonCombatTriggers(std::list<TriggerNo
 void RestorationDruidBoostStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 {
     DruidBoostStrategy::InitCombatTriggers(triggers);
-
-    triggers.push_back(new TriggerNode(
-        "nature's swiftness",
-        NextAction::array(0, new NextAction("nature's swiftness", ACTION_HIGH), NULL)));
 }
 
 void RestorationDruidBoostStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)

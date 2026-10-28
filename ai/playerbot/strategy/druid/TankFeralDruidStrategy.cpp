@@ -12,7 +12,6 @@ public:
     {
         creators["omen of clarity"] = &omen_of_clarity;
         creators["feral charge - bear"] = &feral_charge_bear;
-        creators["mangle (bear)"] = &mangle_bear;
     }
 
 private:
@@ -20,8 +19,6 @@ private:
     ACTION_NODE_P(omen_of_clarity, "omen of clarity", "caster form");
 
     ACTION_NODE_A(feral_charge_bear, "feral charge - bear", "reach melee");
-
-    ACTION_NODE_A(mangle_bear, "mangle (bear)", "maul");
 };
 
 TankFeralDruidStrategy::TankFeralDruidStrategy(PlayerbotAI* ai) : DruidStrategy(ai)
@@ -70,8 +67,12 @@ void TankFeralDruidStrategy::InitCombatTriggers(std::list<TriggerNode*>& trigger
         NextAction::array(0, new NextAction("faerie fire (feral)", ACTION_HIGH), NULL)));
 
     triggers.push_back(new TriggerNode(
-        "medium rage available",
-        NextAction::array(0, new NextAction("mangle (bear)", ACTION_NORMAL + 1), NULL)));
+        "savage bite",
+        NextAction::array(0, new NextAction("savage bite", ACTION_HIGH + 1), NULL)));
+
+    triggers.push_back(new TriggerNode(
+        "maul rage available",
+        NextAction::array(0, new NextAction("maul", ACTION_NORMAL + 1), NULL)));
 
     triggers.push_back(new TriggerNode(
         "enemy too close for melee",
@@ -212,8 +213,8 @@ void TankFeralDruidAoeStrategy::InitCombatTriggers(std::list<TriggerNode*>& trig
     DruidAoeStrategy::InitCombatTriggers(triggers);
 
     triggers.push_back(new TriggerNode(
-        "melee medium aoe",
-        NextAction::array(0, new NextAction("challenging roar", ACTION_HIGH + 3), NULL)));
+        "loose adds near",
+        NextAction::array(0, new NextAction("challenging roar", ACTION_INTERRUPT + 2), NULL)));
 
     triggers.push_back(new TriggerNode(
         "melee medium aoe",

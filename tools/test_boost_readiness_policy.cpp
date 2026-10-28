@@ -14,6 +14,7 @@
 } while (0)
 
 using ai::BoostReady;
+using ai::HealBoostReady;
 using ai::RacialBoostReady;
 
 int main()
@@ -25,6 +26,15 @@ int main()
     CHECK(!BoostReady(false, true));   // never trained (night elf "berserking")
     CHECK(!BoostReady(true, false));   // trained, cooldown running
     CHECK(!BoostReady(false, false));
+
+    // A heal boost (Ascendance) arms only when trained, off cooldown, and
+    // someone needs healing: a low party member or a hurt group.
+    CHECK(!HealBoostReady(true, true, false, false));
+    CHECK(HealBoostReady(true, true, true, false));
+    CHECK(HealBoostReady(true, true, false, true));
+    CHECK(HealBoostReady(true, true, true, true));
+    CHECK(!HealBoostReady(false, true, true, true));
+    CHECK(!HealBoostReady(true, false, true, true));
 
     // The shared racial row arms when at least one of its spells is castable.
     CHECK(RacialBoostReady(true, false));

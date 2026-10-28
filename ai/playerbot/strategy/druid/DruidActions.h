@@ -1,5 +1,6 @@
 #pragma once
 #include "playerbot/GroupMembers.h"
+#include "playerbot/policy/class/BearRagePolicy.h"
 #include "playerbot/strategy/actions/GenericActions.h"
 
 namespace ai
@@ -603,7 +604,13 @@ namespace ai
     {
     public:
         CastMaulAction(PlayerbotAI* ai) : CastMeleeSpellAction(ai, "maul") {}
-        virtual bool isUseful() override { return CastMeleeSpellAction::isUseful() && AI_VALUE2(uint8, "rage", "self target") >= 45; }
+        virtual bool isUseful() override { return CastMeleeSpellAction::isUseful() && ShouldQueueMaul(AI_VALUE2(uint8, "rage", "self target")); }
+    };
+
+    class CastSavageBiteAction : public CastMeleeSpellAction
+    {
+    public:
+        CastSavageBiteAction(PlayerbotAI* ai) : CastMeleeSpellAction(ai, "savage bite") {}
     };
 
     class CastBashAction : public CastMeleeInterruptSpellAction

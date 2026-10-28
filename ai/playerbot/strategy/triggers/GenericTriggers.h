@@ -96,6 +96,7 @@ namespace ai
     {
 	public:
 		LoseAggroTrigger(PlayerbotAI* ai) : Trigger(ai, "lose aggro") {}
+		LoseAggroTrigger(PlayerbotAI* ai, std::string name) : Trigger(ai, name) {}
 		virtual bool IsActive() override;
 	};
 
@@ -111,6 +112,17 @@ namespace ai
         {
             return AI_VALUE(Unit*, "attacker of non-tank target") != NULL;
         }
+    };
+    // Loose-add emergency for the tank AoE taunts (Challenging Shout/Roar):
+    // fires only while 3+ mobs inside the 10 yd shout radius are hitting
+    // non-tank group members (one Taunt fixes one or two). The pure count
+    // rule lives in AoeTauntPolicy.h.
+    class LooseAddsNearTrigger : public Trigger
+    {
+    public:
+        LooseAddsNearTrigger(PlayerbotAI* ai) : Trigger(ai, "loose adds near") {}
+
+        virtual bool IsActive() override;
     };
 
 	class HasAggroTrigger : public Trigger

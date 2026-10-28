@@ -1,5 +1,6 @@
 #pragma once
 #include "playerbot/strategy/actions/GenericActions.h"
+#include "playerbot/policy/heal/ShieldTargetPolicy.h"
 #include "playerbot/AoeFearPolicy.h"
 
 namespace ai
@@ -34,6 +35,13 @@ namespace ai
         {
             Unit* target = GetTarget();
             if (target && ai->HasAura(6788, target))
+                return false;
+            // A shield eats the hits a rage tank lives on (absorbed hits
+            // give no rage), so above the critical band the rows fall
+            // through to direct heals; the critical rows keep the shield.
+            if (target && !ShouldShieldTarget(target->IsPlayer() && ai->IsTank((Player*)target, false),
+                target->GetPowerType() == POWER_RAGE, target->IsInCombat(),
+                (unsigned)target->GetHealthPercent(), sPlayerbotAIConfig.criticalHealth))
                 return false;
             return HealPartyMemberAction::isUseful();
         }

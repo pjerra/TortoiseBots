@@ -5,6 +5,7 @@
 
 #include "policy/lfg/BotLfgSelectionPolicy.h"
 #include "policy/lfg/BotLfgLifecyclePolicy.h"
+#include "BotLfgWhisperInbox.h"
 
 #include <cstdint>
 #include <string>
@@ -48,6 +49,13 @@ struct BotLfgGroup
     bool forceFill = false;
     bool everFormed = false;
     uint32 formedAtMs = 0;
+    uint32 posts = 0;
+    uint32 lastPostMs = 0;
+    ObjectGuid invitee;
+    uint32 inviteAtMs = 0;
+    std::unordered_map<uint64, uint32> invitesSent;
+    std::unordered_map<uint64, uint32> repliedAtMs;
+    std::unordered_map<uint64, uint32> hintedAtMs;
 };
 
 class BotLfgService
@@ -105,11 +113,24 @@ private:
     void TickGroups(bool enabled);
     void TickGroup(BotLfgGroup& group, bool enabled);
     bool RealPlayerInGroup(BotLfgGroup const& group) const;
+    bool Advertising(BotLfgGroup const& group) const;
+    void AdvertiseGroups();
+    void PostInChannel(BotLfgGroup& group, Player* leader);
+    void StopAdvertising(BotLfgGroup& group);
+    void PublishLeaders() const;
+    void HandleWhispers();
+    void HandleWhisper(LfgWhisper const& whisper);
+    void Reply(Player* leader, Player* to, std::string const& text) const;
+    bool InviteHeld(BotLfgGroup const& group) const;
+    BotLfgGroup* FindByLeader(ObjectGuid leader);
+    bool RealPlayerOfTeamOnline(uint8 team) const;
     void Log(BotLfgGroup const& group, std::string const& text) const;
     bool m_initialized = false;
     bool m_shutDown = false;
     bool m_wasEnabled = false;
     uint32 m_elapsedMs = 0, m_nowMs = 0, m_sinceFormMs = BotLfg::kFormIntervalMs, m_formedCount = 0, m_nextId = 1;
+    uint32 m_channelPostMs[3] = {0, 0, 0};
+    bool m_channelPosted[3] = {false, false, false};
     std::vector<PlanRow> m_plans;
     std::vector<BotLfgGroup> m_groups;
     struct FormStamp

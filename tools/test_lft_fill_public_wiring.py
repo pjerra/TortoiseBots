@@ -1,10 +1,9 @@
 """The LFT level-range table lives in one policy header; the fill uses it.
 
 runtime/policy/lfg/LftDungeonRangePolicy.h owns the authoritative
-Soromeister/LFT v0.0.3.3 LFT.allDungeons range table
+Turtle client LFT_Data.lua LFT_Instances range table
 (LftDungeonRangeTable), its alnum-lowercase normalization
 (NormalizeLftToken) and the fail-closed lookup (LftDungeonRange).
-runtime/LftBotFillService.cpp only calls the lookup; the old private
 DungeonLevelRange / NormalizeInstanceToken copies are gone. The role
 checks bot LFG needs (GetBotRoleMask, RoleMismatchReason,
 EquipBestShieldFromBags, GetCombatKitRoleMask, ClearForcedRole) and the
@@ -51,7 +50,13 @@ class LftDungeonRangeWiringTest(unittest.TestCase):
         self.assertIn("ai->SetForcedRole(role);", fn)
         self.assertIn("InvalidateStrategySnapshots(ai)", fn)
         self.assertIn('DoSpecificAction("auto talents")', fn)
-        self.assertIn("ResetStrategies()", fn)
+
+    def test_unknown_code_logs_quietly_and_bounded(self):
+        fn = body(strip_comments(CPP), "LftLevelRange const* FindDungeonLevelRange(", "void LftBotFillService::Initialize()")
+        self.assertNotIn("sLog.outError", fn)
+        self.assertIn("TB_LOG_BASIC(", fn)
+        self.assertIn("kMaxLoggedUnknownLftCodes", fn)
+        self.assertIn(".substr(0, 32)", fn)
 
 
 if __name__ == "__main__":

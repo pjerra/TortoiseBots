@@ -19,6 +19,14 @@ namespace ai
         return spellKnown && spellReady;
     }
 
+    // A heal boost (Ascendance) must not fire on the first quiet combat
+    // tick: trained and off cooldown is not enough, someone must actually
+    // need healing - a low party member or a hurt group.
+    inline bool HealBoostReady(bool spellKnown, bool spellReady, bool partyMemberLow, bool groupHurt)
+    {
+        return BoostReady(spellKnown, spellReady) && (partyMemberLow || groupHurt);
+    }
+
     // The shared "generic boost" racial row offers berserking then blood fury
     // to every class. Arm it only when one of the two is castable right now:
     // a bot trained in neither - or with its racial on cooldown - must not

@@ -367,7 +367,7 @@ public:
     float botLootRateRare = 1.0f;
     // Default-on bounded LFT fill: observe native queue (GetQueuedPlayers),
     // identify human groups/instances and missing 1/1/3 roles, filter in-memory
-    // Headless random candidates by authoritative Soromeister/LFT ranges,
+    // Headless random candidates by authoritative Turtle client LFT ranges,
     // team/hardcore/state/role (AiFactory), and call core QueuePlayer through
     // native offers. Unknown ranges fail closed; no role hook or DB tick scan.
     bool randomBotLftEnabled = true;
@@ -622,6 +622,8 @@ public:
     uint32 botLfgMaxGroups;
     // Groups form only while a real player is online.
     bool botLfgOnlyWithPlayersOnline;
+    // A waiting bot LFG group posts in LookingForGroup and answers "inv" whispers.
+    bool botLfgChat;
     // Bots stay out of listed creatures' permanent damaging auras, e.g. Maraudon's Creeping Sludge (opt-in).
     bool avoidCreatureAuras;
     // Bots may fly the taxi paths a core repair fixes (TaxiPathPolicy.h).

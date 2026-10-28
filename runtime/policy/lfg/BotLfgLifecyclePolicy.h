@@ -110,6 +110,7 @@ struct Facts
     uint32_t lostMembers = 0;
     bool replacementFound = false;
     bool fillCandidateFound = false;
+    bool invitePending = false;
 };
 
 enum class Step : uint8_t { None, ToWaiting, FillWithBot, Replace, ToReady, End };
@@ -178,6 +179,9 @@ inline Decision DecideStep(Facts const& f)
         }
         case State::Waiting:
         {
+            // A player holds the invite for the open slot: neither fill it nor give up on it.
+            if (f.invitePending && !f.forceFill)
+                return Decision{};
             if (FillDue(f.state, f.elapsedMs, f.fillAfterMs, f.forceFill))
             {
                 if (f.fillCandidateFound)

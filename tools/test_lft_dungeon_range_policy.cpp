@@ -25,19 +25,25 @@ int checks = 0;
 static void TestLookups()
 {
     LftLevelRange const* rfc = LftDungeonRange("Ragefire Chasm");
-    CHECK(rfc && rfc->minLevel == 13 && rfc->maxLevel == 18);
+    CHECK(rfc && rfc->minLevel == 13 && rfc->maxLevel == 19);
     CHECK(LftDungeonRange("RFC") && LftDungeonRange("RFC")->minLevel == rfc->minLevel && LftDungeonRange("RFC")->maxLevel == rfc->maxLevel);
-    CHECK(LftDungeonRange("dm") && LftDungeonRange("dm")->minLevel == 17 && LftDungeonRange("dm")->maxLevel == 24);
-    CHECK(LftDungeonRange("stockade") && LftDungeonRange("stockade")->minLevel == 22);
+    CHECK(LftDungeonRange("dm") && LftDungeonRange("dm")->minLevel == 16 && LftDungeonRange("dm")->maxLevel == 24);
+    CHECK(LftDungeonRange("stockade") && LftDungeonRange("stockade")->minLevel == 23);
     CHECK(LftDungeonRange("cotbm") && LftDungeonRange("cotbm")->minLevel == 60);
-    CHECK(LftDungeonRange("dragonmawretreat") == nullptr);
+    CHECK(LftDungeonRange("dmr") && LftDungeonRange("dmr")->minLevel == 26 && LftDungeonRange("dmr")->maxLevel == 35);
+    CHECK(LftDungeonRange("Dragonmaw Retreat") && LftDungeonRange("Dragonmaw Retreat")->minLevel == LftDungeonRange("dmr")->minLevel && LftDungeonRange("Dragonmaw Retreat")->maxLevel == LftDungeonRange("dmr")->maxLevel);
+    CHECK(LftDungeonRange("swc") && LftDungeonRange("swc")->minLevel == 32 && LftDungeonRange("swc")->maxLevel == 40);
+    CHECK(LftDungeonRange("Stormwrought Castle") && LftDungeonRange("Stormwrought Castle")->minLevel == LftDungeonRange("swc")->minLevel && LftDungeonRange("Stormwrought Castle")->maxLevel == LftDungeonRange("swc")->maxLevel);
+    CHECK(LftDungeonRange("swd") && LftDungeonRange("swd")->minLevel == 35 && LftDungeonRange("swd")->maxLevel == 44);
+    CHECK(LftDungeonRange("Stormwrought Descent") && LftDungeonRange("Stormwrought Descent")->minLevel == LftDungeonRange("swd")->minLevel && LftDungeonRange("Stormwrought Descent")->maxLevel == LftDungeonRange("swd")->maxLevel);
+    CHECK(LftDungeonRange("emeraldsanctum") == nullptr);
     CHECK(LftDungeonRange("") == nullptr);
     CHECK(NormalizeLftToken("Zul'Farrak") == "zulfarrak");
 }
 
 static void TestEveryRangeValid()
 {
-    CHECK(LftDungeonRangeTable().size() == 76);
+    CHECK(LftDungeonRangeTable().size() == 86);
     for (auto const& entry : LftDungeonRangeTable())
     {
         CHECK(entry.first == NormalizeLftToken(entry.first));

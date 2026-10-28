@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 
 // Rage/cooldown gates for the warrior trigger rows, so an ability the bot
@@ -10,8 +11,33 @@ namespace ai
     // Vanilla 1.12 rage costs / thresholds.
     constexpr uint32_t WARRIOR_DISARM_RAGE_COST = 20;
     constexpr uint32_t WARRIOR_BATTLE_SHOUT_RAGE_COST = 10;
+    constexpr uint32_t WARRIOR_MOCKING_BLOW_RAGE_COST = 10;
     // Bloodrage only tops up below this rage.
     constexpr uint32_t WARRIOR_BLOODRAGE_RAGE_FLOOR = 20;
+
+    // Tactical Mastery (Arms talent 128, 3 ranks: 12295 / 12676 / 12677 in
+    // Talent.dbc; 12678 is the separate Stance Mastery talent and 12679
+    // does not exist) keeps 5 rage per rank across a stance swap. The
+    // premade prot build takes it only from level 50, so below that the
+    // tank keeps 0 rage through the Mocking Blow dance.
+    constexpr uint32_t WARRIOR_TACTICAL_MASTERY_RANK_1 = 12295;
+    constexpr uint32_t WARRIOR_TACTICAL_MASTERY_RANK_2 = 12676;
+    constexpr uint32_t WARRIOR_TACTICAL_MASTERY_RANK_3 = 12677;
+    constexpr uint32_t WARRIOR_TACTICAL_MASTERY_KEPT_PER_RANK = 5;
+
+    // Highest learned Tactical Mastery rank; highest-wins covers both
+    // spellbook shapes (lower ranks kept or replaced on train).
+    inline unsigned TacticalMasteryRank(bool hasRank1, bool hasRank2, bool hasRank3)
+    {
+        return hasRank3 ? 3 : hasRank2 ? 2 : hasRank1 ? 1 : 0;
+    }
+
+    // Rage the bot holds in Battle Stance after the swap: already there it
+    // keeps everything, otherwise only what Tactical Mastery lets through.
+    inline uint32_t RageAfterStanceSwap(bool inBattleStance, uint32_t rage, unsigned tmRank)
+    {
+        return inBattleStance ? rage : std::min(rage, WARRIOR_TACTICAL_MASTERY_KEPT_PER_RANK * tmRank);
+    }
 
     // Disarm is only worth casting on a target that carries a weapon;
     // without one the disarm aura does nothing and the rage is wasted.
@@ -31,5 +57,16 @@ namespace ai
     inline bool ShouldBattleShout(uint32_t rage)
     {
         return rage >= WARRIOR_BATTLE_SHOUT_RAGE_COST;
+    }
+    // Taunt is on cooldown (or resisted) and the current target left the tank:
+    // Mocking Blow (Battle Stance, 2 min) is the second taunt. `rage` is the
+    // rage paid in Battle Stance (RageAfterStanceSwap): the swap keeps only
+    // what Tactical Mastery allows, so the pre-swap bar would arm a cast the
+    // bot arrives too poor to fire.
+    inline bool ShouldMockingBlow(bool known, bool lostAggro, bool tauntReady, bool mockingReady,
+                                  bool inMelee, uint32_t rage)
+    {
+        return known && lostAggro && !tauntReady && mockingReady && inMelee &&
+            rage >= WARRIOR_MOCKING_BLOW_RAGE_COST;
     }
 } // namespace ai

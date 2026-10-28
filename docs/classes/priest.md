@@ -30,12 +30,12 @@ Priests select healing spells based on defined health bands (bands follow [Comba
 - **Low (20%–50%):** *Power Word: Shield* + *Greater Heal* (+ *Heal* / *Lesser Heal* fallbacks at low level). The same heavy-damage and low-mana pace rule as the medium band applies here, so the pick never downgrades from fast *Flash Heal* to a slow cast as the bar crosses the band line; loose mobs on non-tanks keep *Flash Heal* ahead.
 - **Medium (50%–70%):** *Power Word: Shield* + *Greater Heal* / *Heal* / *Lesser Heal* by deficit, *Renew* for light wounds. Heavy incoming damage (the bar would leave the band before a slow cast lands) switches the pick to fast *Flash Heal* while the healer's mana is comfortable; a low-mana healer keeps the efficient heals unless the member is about to fall into the critical band.
 - **Almost-Full (70%–90%):** *Renew* (Discipline shields first).
-- **Multiple Injured:** *Prayer of Healing* when 2 or more members in 30 yards are medium-hurt.
+- **Multiple Injured:** *Prayer of Healing* when 3 or more members of the priest's own party within 30 yards are hurt (the spell only reaches the priest's party, so hurt raid members in other parties do not trigger it). Rotation reference: stevemcqueenz/turtle-knowledge-base- (Turtle WoW class guides).
 
 Direct heals are downranked to match target wounds per [shared downranking rules](overview.md#spell-downranking), using the lowest rank covering missing health. Full ranks are enforced whenever the target falls at or below 20% health — or when heavy incoming damage would push the target below it before the cast lands. *Desperate Prayer* serves as a self-only emergency heal.
 
 ### Power Word: Shield & Weakened Soul Refusal
-The bot verifies that the target does not have the *Weakened Soul* debuff before casting *Power Word: Shield*. If present, the shield is skipped in favor of direct heals.
+The bot verifies that the target does not have the *Weakened Soul* debuff before casting *Power Word: Shield*. If present, the shield is skipped in favor of direct heals. Above 20 % health the shield is also held off a warrior or bear tank that is fighting, since absorbed hits give no rage and starve the tank's threat; the shield still lands as the save at or below 20 %. Rotation reference: stevemcqueenz/turtle-knowledge-base- (Turtle WoW class guides).
 
 ### Threat Drops & Loose Adds
 - **Fade:** Casts *Fade* at high priority when climbing toward the tank's threat on a mob the tank holds, or immediately when attacked by a mob in a group.
@@ -63,7 +63,7 @@ The bot verifies that the target does not have the *Weakened Soul* debuff before
 ## Turtle WoW custom spells
 
 - **Chastise (Spell ID 51478):** Custom talent providing a ranged disorient interrupt, locking enemy casters at high priority.
-- **Ascendance (Spell ID 52962):** Holy capstone talent providing an emergency crowd control purge and massive healing throughput boost during intense phases.
+- **Ascendance (Spell ID 52962):** Holy capstone talent providing an emergency crowd control purge and massive healing throughput boost during intense phases. The bot holds the 5-minute cooldown until someone actually needs healing (a party member low or the group hurt), instead of firing it on a quiet tick. Rotation reference: stevemcqueenz/turtle-knowledge-base- (Turtle WoW class guides).
 
 ---
 

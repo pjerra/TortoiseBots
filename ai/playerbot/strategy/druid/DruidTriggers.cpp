@@ -2,6 +2,7 @@
 #include "playerbot/playerbot.h"
 #include "playerbot/GroupMembers.h"
 #include "playerbot/policy/heal/OocRebirthPolicy.h"
+#include "playerbot/policy/class/BearRagePolicy.h"
 #include "DruidTriggers.h"
 #include "DruidActions.h"
 
@@ -139,4 +140,12 @@ bool OocRebirthTrigger::IsTargetValid(Unit* target)
 bool NoOffdpsTrigger::IsActive()
 {
     return !ai->HasStrategy("offdps", BotState::BOT_STATE_COMBAT);
+}
+
+bool SavageBiteTrigger::IsActive()
+{
+    if (!SpellCanBeCastedTrigger::IsActive())
+        return false;
+
+    return ShouldSavageBite(AI_VALUE2(uint8, "rage", "self target"), ai->HasAura("clearcasting", bot));
 }

@@ -191,6 +191,7 @@ namespace ai
                 creators["party member medium health loose pack"] = [](PlayerbotAI* ai) { return new PartyMemberMediumHealthLoosePackTrigger(ai); };
                 creators["party member fast damage"] = [](PlayerbotAI* ai) { return new PartyMemberFastDamageTrigger(ai); };
                 creators["low health loose pack"] = [](PlayerbotAI* ai) { return new LowHealthLoosePackTrigger(ai); };
+                creators["prayer of healing party"] = [](PlayerbotAI* ai) { return new PrayerOfHealingPartyTrigger(ai); };
                 creators["ascendance"] = [](PlayerbotAI* ai) { return new AscendanceTrigger(ai); };
                 // Fade rows arm only while the spell is trained and off
                 // cooldown, instead of queueing an impossible cast every

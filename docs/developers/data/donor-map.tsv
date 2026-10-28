@@ -26,7 +26,7 @@ Holy Shock split	tortoise-wow	spell_paladin.cpp + shyalya mirror	dual heal/damag
 Exorcism correctness	tortoise-wow	CheckCast (undead/demon-only)	mana-only gate	PaladinTriggers.cpp	adapt	vanilla-correct gating, conservative vs players	Art of War OR creature type
 Bear/Cat NEW stack	mod-playerbots@5397110 forward-port	NEW Bear/Cat/Resto files	none	none	reject (unwired)	editing NEW files is runtime no-op until context wiring lands	stay on OLD stack
 Eclipse IDs	tortoise-wow	spell_druid.cpp:860-907	51442/51443/51444	BalanceDruidStrategy	keep	donor solar/lunar IDs must not port	OLD triggers already correct
-Savage Bite	none (no Tortoise evidence)	—	none	none	reject	likely Savage Roar confusion	do not implement
+Savage Bite	tortoise-wow spell_template + trainer rows	45736 / 47325	SavageBiteTrigger/CastSavageBiteAction	DruidTriggers/DruidActions	implemented: 45736, trained at 58 via 47325 (Tortoise DB)	Bear/Dire Bear stances 144, 30 rage, 6 s cooldown	high-threat rage dump at 58+
 Tree of Life form	tortoise-wow	spell_druid.cpp:570+	45705	none	defer	form-restriction audit first	unresolved
 Earthquake splash	tortoise-wow	spell_shaman.cpp:1495-1544	primary-safe splash	ElementalShamanStrategy	adapt	density triggers carry CC safety	medium-aoe HIGH+1
 Spirit Link tank pair	TortoiseBots local	earth-shield tank pair	BuffOnTank pair	ShamanActions/Triggers	adapt	group dupe guard mirrored	tank recipient

@@ -10810,10 +10810,14 @@ static bool HandleBotLfgRun(ChatHandler* handler, std::string const& args, std::
                     TortoiseBots::BotLfg::RoleName(g->members[i].role) + "," +
                     std::to_string(bot ? bot->GetLevel() : 0) + ")";
             }
-            handler->PSendSysMessage("#%u %s %s %s %us open:%s leader:%s members:%s", g->id, g->plan.c_str(),
-                TortoiseBots::BotLfg::TeamName(g->team), TortoiseBots::BotLfgLifecycle::StateName(g->state),
-                (svc.NowMs() - g->stateSinceMs) / 1000, TortoiseBots::BotLfg::RoleName(g->openRole),
-                leader.c_str(), members.c_str());
+            std::string invite = "-";
+            if (Player* invited = ObjectAccessor::FindPlayer(g->invitee))
+                invite = invited->GetName();
+            handler->PSendSysMessage("#%u %s %s %s %us open:%s leader:%s members:%s posts:%u invite:%s", g->id,
+                g->plan.c_str(), TortoiseBots::BotLfg::TeamName(g->team),
+                TortoiseBots::BotLfgLifecycle::StateName(g->state), (svc.NowMs() - g->stateSinceMs) / 1000,
+                TortoiseBots::BotLfg::RoleName(g->openRole), leader.c_str(), members.c_str(), g->posts,
+                invite.c_str());
         }
         SendActionAck(handler, intent, "groups", uint32(groups.size()));
         return true;

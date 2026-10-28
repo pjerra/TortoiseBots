@@ -124,6 +124,12 @@ On 2026-10-21 the commander telemetry got a boss list: the `boss` steps' `entry`
 | `wait_for.hold` | the wait's run leader form: the hold row in place of the wait (a unit wait has no row of its own); the agent's driver still runs the wait. Zul'Farrak's stairs: the cage leg's Weegli wait holds the stairs top to phase 3, `stairs_top`'s Nekrum wait to phase 7 (`20261021005900_world.sql`) |
 | `skip`, `rest`, `companions_loot` (without `--carrier-chests`), `watchdog` | not carried over yet. The exporter (turtle-agent plan-export, since pjerra/turtle-agent branch feat/planexport-exact) warns, per attribute and naming where it stands, about every plan attribute the rows cannot carry (`skip`, `leftover_entries`, leg `rest`, `patrol`, `equiv`, `boss.tactics`, `fleers`, `no_cc`, `summoned_kill_first`, `hire_composition`, `watchdog`, `raid`, `avoid` without a navmesh, a `stand` of a ritual or loot step, an object's `spawn` or `range`, a `loot_object` `batch`, ...) instead of dropping it silently; the migration header should list them |
 
+## Joining a bot LFG group
+
+While a bot LFG group waits for its fifth member, its leader posts one line in your faction's LookingForGroup channel, again every few minutes: `LF1M tank Deadmines 17-24, w me inv`, `Deadmines need tank (17-24), /w inv`, or `LF tank for Deadmines, lvl 17-24, whisper inv`. Whisper the leader `inv` to join.
+
+You get the invite when you are the group's faction, inside its level band, and your class and talents fit the open role (only damage fits everything; a tank or healer needs a class that can play it and talents leaning that way, unless you spent fewer than 10 talent points). Otherwise the leader answers once: the group is full, someone else is joining, leave your group first, the wrong level band, the wrong role, hardcore characters are refused, or your earlier invite fell through and the slot is already taken. Only one player is invited at a time, and the invite waits 60 seconds for you to accept; once the slot is taken the posts stop.
+
 ## Run leader
 
 Owner decision (2026-10-14, in force since 2026-10-25): the run leader is on by default. It needs `AiPlayerbot.DungeonSelfClear = 1` (default `1`) and a binding (`.bot commander bind <LeadBot>` for a bot-led party, `inparty` for your own party, or the server's own system binding): the run leads the bound party, nobody else's. The commands and the `TBM:RUN` status line are in [Player Controls §1b](commands/commander.md#run-leader-bot-run).

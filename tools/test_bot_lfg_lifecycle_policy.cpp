@@ -148,6 +148,25 @@ static void TestParseArgs()
     CHECK(ParseArgs("").verb == Verb::Invalid && ParseArgs("start").verb == Verb::Invalid);
 }
 
+// An outstanding invite to a player holds the open slot; a GM fill does not wait.
+static void TestInviteHoldsTheFill()
+{
+    Facts f = At(State::Waiting, 600000);
+    f.fillCandidateFound = true; f.invitePending = true;
+    CHECK(DecideStep(f).step == Step::None);
+    Facts late = At(State::Waiting, 600000 + kFillRetryMs);
+    late.invitePending = true;
+    CHECK(DecideStep(late).step == Step::None);          // no no-fill end while he may still accept
+    f.forceFill = true;
+    CHECK(DecideStep(f).step == Step::FillWithBot);
+    Facts joined = At(State::Waiting, 10);
+    joined.invitePending = true; joined.realPlayerInGroup = true;
+    CHECK(DecideStep(joined).step == Step::ToReady);     // he accepted
+    Facts off = At(State::Waiting, 10);
+    off.invitePending = true; off.enabled = false;
+    CHECK(DecideStep(off).reason == EndReason::SwitchedOff);
+}
+
 int main()
 {
     TestFormingAndWaiting();
@@ -157,6 +176,7 @@ int main()
     TestTexts();
     TestFillNowAnswer();
     TestParseArgs();
+    TestInviteHoldsTheFill();
     std::printf("bot lfg lifecycle policy: %d checks passed\n", checks);
     return 0;
 }

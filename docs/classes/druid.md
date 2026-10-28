@@ -28,7 +28,9 @@ Druids fulfill Tank, Healer, Melee DPS, or Ranged Caster roles using flexible sh
 ### Feral (Bear Tank)
 - Fights in Dire Bear Form throughout combat, generating threat using *Swipe* and *Demoralizing Roar*.
 - Taunts loose mobs using *Growl* and *Challenging Roar*.
-- Uses *Mangle (Bear)*, *Faerie Fire (Feral)*, and *Enrage* on cooldown.
+- Keeps *Maul* queued every swing from 15 rage instead of waiting for 40, and spends excess rage (or a free *Clearcasting* proc) on *Savage Bite* from level 58 (rotation reference: stevemcqueenz/turtle-knowledge-base-, Turtle WoW class guides).
+- Uses *Faerie Fire (Feral)* and *Enrage* on cooldown.
+- Saves *Challenging Roar* (10-min cooldown) for real emergencies: 3 or more loose mobs on non-tanks, not for a pack it already holds (rotation reference: stevemcqueenz/turtle-knowledge-base-, Turtle WoW class guides).
 - Activates *Frenzied Regeneration* when health drops low.
 
 ### Feral (Cat Melee DPS)
@@ -42,8 +44,8 @@ Druids fulfill Tank, Healer, Melee DPS, or Ranged Caster roles using flexible sh
 ### Restoration (Healer)
 - Maintains *Rejuvenation* and *Regrowth* HoTs (Heal-over-Time spells) on injured allies.
 - Casts direct heals (*Healing Touch*) downranked to match target wounds per [shared downranking rules](overview.md#spell-downranking).
-- Chains *Nature's Swiftness* into an instant *Healing Touch* when allies suffer critical damage.
-- Channels *Tranquility* when 2 or more members in 30 yards are medium-hurt.
+- Chains *Nature's Swiftness* into an instant *Healing Touch* when allies suffer critical damage (held for that emergency, never popped on a quiet tick). Rotation reference: stevemcqueenz/turtle-knowledge-base- (Turtle WoW class guides).
+- Channels *Tranquility* only when the group is hurt together (never on two scratches). Rotation reference: stevemcqueenz/turtle-knowledge-base- (Turtle WoW class guides).
 - Spends *Omen of Clarity* procs on free *Rejuvenation* casts.
 - Supports party damage via the `+offdps` strategy per [healer off-DPS rules](overview.md#healer-off-dps-offdps), shifting out of Tree of Life Form to cast *Moonfire* and *Wrath*.
 
