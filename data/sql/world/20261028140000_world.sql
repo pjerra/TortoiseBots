@@ -1,9 +1,10 @@
 -- Onyxia's Lair (map 249, the 40-man raid): the plan for the run leader (.bot run), exported from turtle-agent
--- prep/raid-ony e07233f (dungeons/onyxias_lair.json, status 'draft (not mapped, not live-checked)') with
+-- prep/raid-ony 1e4e066 (dungeons/onyxias_lair.json, status 'draft (not mapped, not live-checked)') with
 --   turtle-agent plan-export --dir dungeons --mmaps <map 249 mmaps> --allow-draft --gm-cross-direct --approach-hops \
---     --rev e07233f --stamp 20261028140000 --out <this file> onyxias_lair
--- NO ROW IS HAND-SET: the plan, leg and step rows below are the exporter's output; this header and the
--- ai_dungeon_boss block are the prep's own (task B1, ~/TortoiseBots-audit/RAID-PREP-ony.md).
+--     --rev 1e4e066 --stamp 20261028140000 --out <this file> onyxias_lair
+-- The plan, leg and step rows below are that export; this header, the ai_dungeon_boss block and the boss stand's
+-- comment ("boss stand outside her 58 yd aggro": plan v1 has no comment on an approach point) are the prep's own
+-- (~/TortoiseBots-audit/RAID-PREP-ony.md).
 --
 -- What the prep changed from the dungeongen draft (1 leg, 5 pull groups, no approach points):
 --   * the census of map 249 has 6 creature spawns and no other hostile unit: Onyxia 10184 (rank 3, level 63,
@@ -14,22 +15,26 @@
 --   * four warders are on waypoint patrols (creature_movement 52050 80.5 yd, 52049 110.5 yd, 52052 158.9 yd,
 --     52048 98.3 yd; periods estimated at 2.5 yd/s: 32, 44, 64 and 39 s). The plan carries the four patrol blocks and
 --     the rows do not: the run leader pulls the pack where it stands when it comes.
---   * one approach stand per pack (pack 2 on) and one for the boss, each on its own floor 15-20 yd from the pack,
---     with a complete server path from the row before it; the leg's `to` is the first pack's stand. The draft had 5
---     run-leader hops of 105-270 yd; this plan has none.
---   * the boss step is Onyxia at her spawn (0.70 -211.97 -86.08) after all five warders, approached from
---     -19.30 -211.97 -88.65 (20 yd, inside her 58 yd aggro range and east of x -95, where LeashIfOutOfCombatArea
---     starts her evade).
+--   * one approach stand per pack (pack 2 on), 15-20 yd from it, and one for the boss at -62.0 -211.5 -84.54, 62.7 yd
+--     out: she wakes on the first player within 58 yd (CheckForTargetsInAggroRadius), so no non-boss row of the plan
+--     stands inside that radius and the boss step pulls her from the stand. Every stand is on its own floor with a
+--     complete server path from the row before it; the leg's `to` is the first pack's stand. The draft had 5 run-leader
+--     hops of 105-270 yd; this plan has one (the 63 yd walk from the stand to her, which no row can shorten).
+--   * the boss step is Onyxia at her spawn (0.70 -211.97 -86.08) after all five warders, pulled from that stand
+--     (-62.0 -211.5 -84.54), east of x -95, where LeashIfOutOfCombatArea starts her evade.
 --   * no use_on, wait_object, gossip or hold step: the map's 149 game objects are 95 Onyxia Eggs 176511, 52 lava
 --     fissures and the two lava traps 177984/177985, all at state 1, the instance script has no door, and no object
 --     starts the fight.
 --
--- plan-check (turtle-agent plan-check --mmaps <map 249 mmaps>): ok, 12 points on the navmesh, 0 failures, 4 warnings,
--- all "the patrol of ... has only an estimated period_s": the mapping walk (B2) measures the rounds. The ROWS: 1 leg,
--- 30 steps (24 move, 5 pull, 1 boss), 32 rows with the plan and leg rows.
+-- plan-check (turtle-agent plan-check --mmaps <map 249 mmaps>): ok, 12 points on the navmesh, 0 failures, 1 run-leader
+-- hop notice (the 63 yd walk from the boss stand to her: a row may not stand nearer and outside the 58 yd) and 4
+-- warnings, all "the patrol of ... has only an estimated period_s": the mapping walk (B2) measures the rounds. The ROWS:
+-- 1 leg, 29 steps (23 move, 5 pull, 1 boss), 31 rows with the plan and leg rows.
 --
 -- WHAT THE RUN LEADER CANNOT DO (nothing is dropped silently). Not in these rows:
 --   * the patrol paths and periods (4 groups): no column; the run leader pulls the pack where it stands when it comes.
+--   * the 63 yd hop from the boss stand to her: one long row hop the run leader walks in navmesh hops of its own (it sees
+--     60 yd): a row may stand 62.7 yd out, outside her 58 yd aggro, and no nearer.
 --   * Onyxia's Aggro respawns every dead Onyxian Warder within 200 yd (boss_onyxia.cpp Aggro; the grid check in
 --     GridNotifiers.h AllCreaturesOfEntryInRange is IsWithinDist(..., false), i.e. 2D), and the five stand 109.1,
 --     127.0, 151.5, 168.1 and 199.8 yd from her in 2D: all five come back alive when she is pulled. No step kind
@@ -59,12 +64,12 @@
 --
 -- Idempotent: each plan's rows are deleted, then inserted. The tables come from 20261014150000_world.sql.
 
--- onyxias_lair: map 249, 1 legs, 30 steps
+-- onyxias_lair: map 249, 1 legs, 29 steps
 DELETE FROM `ai_dungeon_step` WHERE `plan` = 'onyxias_lair';
 DELETE FROM `ai_dungeon_leg` WHERE `plan` = 'onyxias_lair';
 DELETE FROM `ai_dungeon_plan` WHERE `plan` = 'onyxias_lair';
 INSERT INTO `ai_dungeon_plan` (`plan`, `map`, `cc_priority`, `cc_always`, `kill_first`, `source`, `comment`) VALUES
-('onyxias_lair', 249, '', '', '', 'turtle-agent e07233f dungeons/onyxias_lair.json', 'plan v1, draft (not mapped, not live-checked)');
+('onyxias_lair', 249, '', '', '', 'turtle-agent 1e4e066 dungeons/onyxias_lair.json', 'plan v1, draft (not mapped, not live-checked)');
 INSERT INTO `ai_dungeon_leg` (`plan`, `leg`, `name`, `comment`) VALUES
 ('onyxias_lair', 0, 'onyxia', '');
 INSERT INTO `ai_dungeon_step` (`plan`, `leg`, `seq`, `kind`, `entry`, `x`, `y`, `z`, `radius`, `item`, `param`, `flags`, `timeout_s`, `entries`, `comment`) VALUES
@@ -93,11 +98,10 @@ INSERT INTO `ai_dungeon_step` (`plan`, `leg`, `seq`, `kind`, `entry`, `x`, `y`, 
 ('onyxias_lair', 0, 22, 'pull', 0, -166.62, -196, -66.26, 1, 0, 0, 0, 0, '12129', 'pull group 3'),
 ('onyxias_lair', 0, 23, 'move', 0, -184.95, -195.68, -67.15, 0, 0, 0, 0, 0, '', 'pull group 4 approach'),
 ('onyxias_lair', 0, 24, 'pull', 0, -199.1, -209.83, -68.91, 1, 0, 0, 0, 0, '12129', 'pull group 4'),
-('onyxias_lair', 0, 25, 'move', 0, -149.40968, -210.42142, -74.18596, 0, 0, 0, 0, 0, '', 'path'),
-('onyxias_lair', 0, 26, 'move', 0, -99.71936, -211.01285, -79.71062, 0, 0, 0, 0, 0, '', 'path'),
-('onyxias_lair', 0, 27, 'move', 0, -50.029037, -211.60426, -85.23528, 0, 0, 0, 0, 0, '', 'path'),
-('onyxias_lair', 0, 28, 'move', 0, -19.3, -211.97, -88.65, 0, 0, 0, 0, 0, '', 'boss approach'),
-('onyxias_lair', 0, 29, 'boss', 10184, 0.69628, -211.972, -86.075, 0, 0, 0, 0, 0, '', 'boss');
+('onyxias_lair', 0, 25, 'move', 0, -149.43553, -210.43495, -74.41231, 0, 0, 0, 0, 0, '', 'path'),
+('onyxias_lair', 0, 26, 'move', 0, -99.77106, -211.03992, -80.16332, 0, 0, 0, 0, 0, '', 'path'),
+('onyxias_lair', 0, 27, 'move', 0, -62, -211.5, -84.54, 0, 0, 0, 0, 0, '', 'boss stand outside her 58 yd aggro'),
+('onyxias_lair', 0, 28, 'boss', 10184, 0.69628, -211.972, -86.075, 0, 0, 0, 0, 0, '', 'boss');
 
 -- The one boss of the plan's boss step (map 249), for the boss rank and the dashboard: a DELETE of this map and
 -- entry, then REPLACE.
