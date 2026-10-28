@@ -1,7 +1,7 @@
 -- Onyxia's Lair (map 249, the 40-man raid): the plan for the run leader (.bot run), exported from turtle-agent
--- prep/raid-ony aae55e8 (dungeons/onyxias_lair.json, status 'draft (not mapped, not live-checked)') with
+-- prep/raid-ony e07233f (dungeons/onyxias_lair.json, status 'draft (not mapped, not live-checked)') with
 --   turtle-agent plan-export --dir dungeons --mmaps <map 249 mmaps> --allow-draft --gm-cross-direct --approach-hops \
---     --rev aae55e8 --stamp 20261028140000 --out <this file> onyxias_lair
+--     --rev e07233f --stamp 20261028140000 --out <this file> onyxias_lair
 -- NO ROW IS HAND-SET: the plan, leg and step rows below are the exporter's output; this header and the
 -- ai_dungeon_boss block are the prep's own (task B1, ~/TortoiseBots-audit/RAID-PREP-ony.md).
 --
@@ -64,7 +64,7 @@ DELETE FROM `ai_dungeon_step` WHERE `plan` = 'onyxias_lair';
 DELETE FROM `ai_dungeon_leg` WHERE `plan` = 'onyxias_lair';
 DELETE FROM `ai_dungeon_plan` WHERE `plan` = 'onyxias_lair';
 INSERT INTO `ai_dungeon_plan` (`plan`, `map`, `cc_priority`, `cc_always`, `kill_first`, `source`, `comment`) VALUES
-('onyxias_lair', 249, '', '', '', 'turtle-agent aae55e8 dungeons/onyxias_lair.json', 'plan v1, draft (not mapped, not live-checked)');
+('onyxias_lair', 249, '', '', '', 'turtle-agent e07233f dungeons/onyxias_lair.json', 'plan v1, draft (not mapped, not live-checked)');
 INSERT INTO `ai_dungeon_leg` (`plan`, `leg`, `name`, `comment`) VALUES
 ('onyxias_lair', 0, 'onyxia', '');
 INSERT INTO `ai_dungeon_step` (`plan`, `leg`, `seq`, `kind`, `entry`, `x`, `y`, `z`, `radius`, `item`, `param`, `flags`, `timeout_s`, `entries`, `comment`) VALUES

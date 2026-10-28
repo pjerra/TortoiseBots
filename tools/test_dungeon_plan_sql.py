@@ -4599,7 +4599,7 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertEqual(sum(1 for r in leg6 if r["kind"] == "pull"), 26)
 
     def test_onyxias_lair_is_the_raid_prep(self):
-        # 20261028140000 (turtle-agent prep/raid-ony 77dc103, 2026-10-28): the 40-man Onyxia's Lair draft with the B1 prep
+        # 20261028140000 (turtle-agent prep/raid-ony e07233f, 2026-10-28): the 40-man Onyxia's Lair draft with the B1 prep
         # of RAID-PREP-ony.md, no row hand-set. The map has 6 creature spawns: Onyxia 10184 and five Onyxian Warders 12129,
         # no two warders within 15 yd (the closest pair 35.4 yd), so the five pull groups stay five singles of radius 1 and
         # nothing merges. The leg's `to` is the first pack's stand (59.46 -103.12 -22.98); packs 2-5 and the boss each get
@@ -4607,7 +4607,7 @@ class DungeonPlanSql(unittest.TestCase):
         # warders carry patrol blocks in the plan, which the rows cannot hold. The boss is the leg's last step.
         name, text = newest_plan_text("onyxias_lair")
         self.assertEqual(name, "20261028140000_world.sql")
-        self.assertIn("('onyxias_lair', 249, '', '', '', 'turtle-agent aae55e8 dungeons/onyxias_lair.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertIn("('onyxias_lair', 249, '', '', '', 'turtle-agent e07233f dungeons/onyxias_lair.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         self.assertEqual([v[0] for v in leg_rows(text, "onyxias_lair").values()], ["onyxia"])
         rows = [r for r in self.step_rows(text) if r["plan"] == "onyxias_lair"]
         leg0 = leg_steps(rows, 0)
