@@ -37,6 +37,7 @@
 - The companion app can now page through the last day of loot picked up by your party bots, 40 rows at a time.
 
 ### Dungeons & Maps
+- New: `.bot run start ... until boss|step N|leg X` ends the run before that step, so a trash walk stops at the boss stand.
 - Fixed: a player's ghost outside no longer pulls the run's bots in and out through the portal; the lead-off-map pause resumes by itself.
 - New: GameMasters can start bot-only dungeon test runs at up to 3x walking speed (`.bot run start ... speed=2`); fights stay at normal speed and the status line marks the run as a test.
 - Fixed: at test speed the lead bot waits for the party when a bot falls 25 yd behind, so the party no longer reaches packs split.
