@@ -194,6 +194,7 @@ an avoidance action succeeds.
   - *Garr & Shazzrah:* Garr holds DPS AoE off (Firesworn die single-target); Shazzrah pushes ranged out to 26 yd.
   - *Golemagg:* Melee back off at 20 Magma Splash stacks; assist tanks hold Core Ragers at fixed camps (30 yd Trust separation); healers work the camp midpoint; DPS leave ragers alone while Golemagg lives (burn below 10%).
 - **Onyxia:** In Phase 2, bots switch to ranged attacks and spread out. Bots take cover in safe zones during *Deep Breath*. With [`AiPlayerbot.OnyxiaWhelpsAndEggs`](../server/settings/dungeons-raids.md#aiplayerbotonyxiawhelpsandeggs) enabled, ranged DPS clear hatched whelps while avoiding unbroken egg clusters.
+  - *After a wipe:* all five warder packs respawn when she is aggroed again (`boss_onyxia`'s `Aggro()` brings them back within 200 yd). Bots that released to the entrance walk back through them, so a wipe costs about five minutes of re-clearing warders before the boss can be pulled again. Raising the dead where they fell avoids that walk; releasing and walking back does not.
 - **Blackwing Lair:**
   - *Razorgore:* Bots assist the orb controller and intercept add waves without attacking the controller. Non-victims clear the frontal cone; assist tank holds the boss while eggs live.
   - *Vaelastrasz:* Tanks face away; Burning Adrenaline carriers flee from clean bots (tank holds).
