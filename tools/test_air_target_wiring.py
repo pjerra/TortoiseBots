@@ -101,10 +101,11 @@ class AirTargetWiring(unittest.TestCase):
         self.assertIn("OnyxiaAirborneTrigger::IsActive()", fn)
 
     def test_reach_walks_the_floor_under_the_air_target(self):
-        fn = body(REACH, "bool MoveUnderAirborneTarget(Unit* target, float distance)", end="\n        }\n")
+        fn = body(REACH, "AirTargetReach MoveUnderAirborneTarget(Unit* target, float distance)", end="\n        }\n")
         self.assertIn("IsAirTargetKept(ai, bot, target)", fn)
+        self.assertIn("AirTargetReachPlan(", fn)
+        self.assertIn("AirTargetReach::NoGroundPoint", fn)
         self.assertIn("UpdateGroundPositionZ", fn)
-        self.assertIn("AirTargetGroundDistance(distance,", fn)
         self.assertIn("MoveTo(bot->GetMapId(), x, y, z)", fn)
         self.assertNotIn("ChaseTo", fn)
         # Never the target's own (flight) height.
@@ -113,6 +114,8 @@ class AirTargetWiring(unittest.TestCase):
     def test_the_caster_reach_tries_the_floor_walk_first(self):
         fn = body(REACH, "class ReachSpellAction", end="\n    };\n")
         self.assertIn("bool MoveIntoRange(Unit* target, float distance) override", fn)
+        self.assertIn("AirTargetReach const reach = MoveUnderAirborneTarget(target, distance)", fn)
+        self.assertIn("AirTargetGenericReachApplies(reach)", fn)
         walk = fn.index("MoveUnderAirborneTarget(target, distance)")
         fallback = fn.index("ReachTargetAction::MoveIntoRange(target, distance)")
         self.assertLess(walk, fallback)

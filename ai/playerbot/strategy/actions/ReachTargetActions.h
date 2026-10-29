@@ -374,24 +374,29 @@ namespace ai
         // reaches it and the bot stands still out of range the whole phase.
         // Walk on the floor to the point under it instead - at most
         // kAirTargetGroundRange yd (2D) from its footprint, at the distance
-        // whose 3D range still lands the cast (AirTargetGroundDistance) - and
-        // let the next tick cast from there. The destination z is always the
+        // whose 3D range still lands the cast (AirTargetReachPlan) - and let
+        // the next tick cast from there. The destination z is always the
         // ground's, never the target's.
-        bool MoveUnderAirborneTarget(Unit* target, float distance)
+        //
+        // From the moment the tactic keeps the target, every answer is
+        // Positioned or NoGroundPoint; only a target the tactic does not cover
+        // is NotAirTarget, so the caller never falls back to a chase of a
+        // flight height it cannot path to.
+        AirTargetReach MoveUnderAirborneTarget(Unit* target, float distance)
         {
             if (distance <= 0.0f || !IsAirTargetKept(ai, bot, target))
-                return false;
+                return AirTargetReach::NotAirTarget;
 
             Map* map = bot->GetMap();
             if (!map || bot->GetTransport())
-                return false;
+                return AirTargetReach::NoGroundPoint;
             if (!bot->IsWithinLOSInMap(target, true) || !ai->CanMove() || !ai->IsSafe(target))
-                return false;
+                return AirTargetReach::NoGroundPoint;
 
             // A bot already walking its approach is not re-pathed (MoveTo
             // relaunches the spline on every call).
             if (!bot->IsStopped() && !bot->movespline->Finalized())
-                return true;
+                return AirTargetReach::Positioned;
 
             float const targetX = target->GetPositionX();
             float const targetY = target->GetPositionY();
@@ -401,29 +406,28 @@ namespace ai
             float groundZ = flightZ;
             bot->UpdateGroundPositionZ(targetX, targetY, groundZ);
             float const flightHeight = flightZ - groundZ;
-            float const stopDistance = AirTargetGroundDistance(distance, flightHeight);
-            if (stopDistance <= 0.0f)
-                return false; // the height alone is beyond the cast: no floor point helps
 
-            float const dx = targetX - bot->GetPositionX();
-            float const dy = targetY - bot->GetPositionY();
-            float const footprintDistance = std::sqrt(dx * dx + dy * dy);
-            if (footprintDistance <= stopDistance)
-                return false; // already inside the cast's ground reach
+            float const botX = bot->GetPositionX();
+            float const botY = bot->GetPositionY();
+            float x = botX;
+            float y = botY;
+            AirTargetReach const plan =
+                AirTargetReachPlan(true, distance, flightHeight, botX, botY, targetX, targetY, x, y);
+            if (plan != AirTargetReach::Positioned)
+                return plan;
+            if (x == botX && y == botY)
+                return AirTargetReach::Positioned; // already inside the cast's ground reach
 
-            // On the straight line towards the footprint, stopDistance short of
-            // it; MoveTo pathfinds from there. The ground under that point is
-            // the floor this bot walks on - a missed floor (a bridge, an
-            // instanced platform) would drop the bot under the world.
-            float const scale = (footprintDistance - stopDistance) / footprintDistance;
-            float const x = bot->GetPositionX() + dx * scale;
-            float const y = bot->GetPositionY() + dy * scale;
+            // The ground under that point is the floor this bot walks on - a
+            // missed floor (a bridge, an instanced platform) would drop the bot
+            // under the world.
             float z = bot->GetPositionZ();
             bot->UpdateGroundPositionZ(x, y, z);
             if (std::fabs(z - bot->GetPositionZ()) > 10.0f)
-                return false;
+                return AirTargetReach::NoGroundPoint;
 
-            return MoveTo(bot->GetMapId(), x, y, z);
+            return MoveTo(bot->GetMapId(), x, y, z) ? AirTargetReach::Positioned
+                                                   : AirTargetReach::NoGroundPoint;
         }
 
         // Inside a dungeon the core's chase generator refuses a destination
@@ -660,11 +664,14 @@ namespace ai
 
         // A cast on an airborne boss walks the floor under it (see
         // MoveUnderAirborneTarget); every other target keeps the path walk and
-        // the chase.
+        // the chase. A kept air target with no floor point to cast from is left
+        // alone: the generic chase aims at the flight height and never arrives,
+        // and the target values may still pick a reachable one (an add).
         bool MoveIntoRange(Unit* target, float distance) override
         {
-            if (MoveUnderAirborneTarget(target, distance))
-                return true;
+            AirTargetReach const reach = MoveUnderAirborneTarget(target, distance);
+            if (!AirTargetGenericReachApplies(reach))
+                return reach == AirTargetReach::Positioned;
             return ReachTargetAction::MoveIntoRange(target, distance);
         }
     };

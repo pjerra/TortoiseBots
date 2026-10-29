@@ -98,6 +98,55 @@ namespace ai
         return ground < kAirTargetGroundRange ? ground : kAirTargetGroundRange;
     }
 
+    // How a cast reach treats the target the air tactic keeps. A boolean could
+    // not tell "not an air target" from "an air target no floor point reaches":
+    // both fell back to the generic reach, whose chase aims at the flight
+    // height and never arrives. Only NotAirTarget may take that path.
+    enum class AirTargetReach : std::uint8_t
+    {
+        NotAirTarget = 0,   // the tactic does not apply: the generic reach decides
+        Positioned = 1,     // a floor point lands the cast: walk to it, or already there
+        NoGroundPoint = 2,  // kept as a target, but no floor point lands the cast: stay put
+    };
+
+    inline bool AirTargetGenericReachApplies(AirTargetReach reach)
+    {
+        return reach == AirTargetReach::NotAirTarget;
+    }
+
+    // The floor point a caster walks to for an airborne target: `stopDistance`
+    // (AirTargetGroundDistance) short of the footprint on the bot's line to it,
+    // so the cast's 3D range from the ground still lands there. Already inside
+    // the stop distance means no walk; outX/outY are then the bot's position.
+    // Both are only meaningful when the result is Positioned. Pure: the caller
+    // supplies the positions and the flight height over the target's floor.
+    inline AirTargetReach AirTargetReachPlan(bool airTarget, float spellRange, float flightHeight,
+                                             float botX, float botY, float targetX, float targetY,
+                                             float& outX, float& outY)
+    {
+        if (!airTarget)
+            return AirTargetReach::NotAirTarget;
+
+        float const stopDistance = AirTargetGroundDistance(spellRange, flightHeight);
+        if (stopDistance <= 0.0f)
+            return AirTargetReach::NoGroundPoint;
+
+        float const dx = targetX - botX;
+        float const dy = targetY - botY;
+        float const footprintDistance = std::sqrt(dx * dx + dy * dy);
+        if (footprintDistance <= stopDistance)
+        {
+            outX = botX;
+            outY = botY;
+            return AirTargetReach::Positioned;
+        }
+
+        float const scale = (footprintDistance - stopDistance) / footprintDistance;
+        outX = botX + dx * scale;
+        outY = botY + dy * scale;
+        return AirTargetReach::Positioned;
+    }
+
     class BossTacticTable
     {
     public:

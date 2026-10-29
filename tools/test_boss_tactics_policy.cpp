@@ -134,6 +134,43 @@ int main()
     CHECK(AirTargetGroundDistance(15.0f, 19.0f) == 0.0f);
     CHECK(AirTargetGroundDistance(0.0f, 0.0f) == 0.0f);
 
+    // Air target reach: a target the tactic does not cover leaves the decision
+    // to the generic reach; every kept one either has a floor point or is left
+    // alone. In particular a flight height at or beyond the cast range is
+    // NoGroundPoint, never the generic chase that aims at the flight height.
+    {
+        float x = -1, y = -1;
+
+        // Not an air target: the generic reach decides.
+        CHECK(AirTargetReachPlan(false, 30.0f, 10.0f, 0, 0, 20, 0, x, y) == AirTargetReach::NotAirTarget);
+        CHECK(AirTargetReachPlan(false, 0.0f, 99.0f, 0, 0, 20, 0, x, y) == AirTargetReach::NotAirTarget);
+
+        // Kept but the height alone is beyond the cast: stay put, and the base
+        // reach must not be chosen.
+        CHECK(AirTargetReachPlan(true, 30.0f, 30.0f, 0, 0, 40, 0, x, y) == AirTargetReach::NoGroundPoint);
+        CHECK(AirTargetReachPlan(true, 30.0f, 45.0f, 0, 0, 10, 0, x, y) == AirTargetReach::NoGroundPoint);
+        CHECK(AirTargetReachPlan(true, 0.0f, 0.0f, 0, 0, 10, 0, x, y) == AirTargetReach::NoGroundPoint);
+        CHECK(!AirTargetGenericReachApplies(AirTargetReach::NoGroundPoint));
+        CHECK(!AirTargetGenericReachApplies(AirTargetReach::Positioned));
+        CHECK(AirTargetGenericReachApplies(AirTargetReach::NotAirTarget));
+
+        // Below the cast: a ground point on the line to the footprint, at the
+        // ground leg whose 3D cast still lands inside the spell range.
+        CHECK(AirTargetReachPlan(true, 30.0f, 10.0f, 0, 0, 40, 0, x, y) == AirTargetReach::Positioned);
+        float const leg = AirTargetGroundDistance(30.0f, 10.0f);
+        CHECK(x > 0.0f && x < 40.0f && std::fabs(y) < 0.01f);
+        CHECK(std::fabs((40.0f - x) - leg) < 0.01f);  // exactly `leg` short of the footprint
+        CHECK(std::sqrt((40.0f - x) * (40.0f - x) + 10.0f * 10.0f) <= 30.0f + 0.01f);
+
+        // The point follows the bot's own line to the footprint.
+        CHECK(AirTargetReachPlan(true, 30.0f, 10.0f, 0, 40, 0, 0, x, y) == AirTargetReach::Positioned);
+        CHECK(y > 0.0f && y < 40.0f && std::fabs(x) < 0.01f);
+
+        // Already inside the ground reach: no walk, the bot's own position.
+        CHECK(AirTargetReachPlan(true, 30.0f, 10.0f, 35, 0, 40, 0, x, y) == AirTargetReach::Positioned);
+        CHECK(std::fabs(x - 35.0f) < 0.01f && std::fabs(y) < 0.01f);
+    }
+
     // Interrupt matching: spell and caster both have to match; only interrupt rows count.
     {
         const std::vector<BossTacticRow> rows = {
