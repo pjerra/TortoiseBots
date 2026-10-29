@@ -664,19 +664,15 @@ func (s *Service) SetClock(now func() time.Time) {
 // does not query a broken or empty database on every draw.
 func (s *Service) Get(name string) (*Plan, error) {
 	s.mu.Lock()
+	// The paths are built into every plan, so a changed patrol file drops the
+	// whole cache; the check itself is at most once a minute.
+	if patrolsState.refresh(s.now()) {
+		s.byID = make(map[string]*cacheEntry, PlanCacheMax)
+	}
 	if c, ok := s.byID[name]; ok && s.now().Before(c.expires) {
 		p, err := c.plan, c.err
 		s.mu.Unlock()
 		return p, err
-	defer s.mu.Unlock()
-	now := s.now()
-	// The paths are built into every plan, so a changed patrol file drops the
-	// whole cache; the check itself is at most once a minute.
-	if patrolsState.refresh(now) {
-		s.byID = make(map[string]*cacheEntry, PlanCacheMax)
-	}
-	if c, ok := s.byID[name]; ok && now.Before(c.expires) {
-		return c.plan, c.err
 	}
 	if w, ok := s.inflight[name]; ok {
 		s.mu.Unlock()
