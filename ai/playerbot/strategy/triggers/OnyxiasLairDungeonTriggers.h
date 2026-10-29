@@ -77,9 +77,20 @@ namespace ai
     class OnyxiaAirborneTrigger : public Trigger
     {
     public:
-        OnyxiaAirborneTrigger(PlayerbotAI* ai) : Trigger(ai, "onyxia airborne", 1) {}
+        OnyxiaAirborneTrigger(PlayerbotAI* ai, std::string name = "onyxia airborne") : Trigger(ai, name, 1) {}
         std::string GetTargetName() override { return "current target"; }
         bool IsActive() override;
+    };
+
+    // She is airborne and this kit has no ranged rotation (PlayerbotAI::IsRanged:
+    // warrior, rogue, paladin and every melee-spec kit): the wand is all it has
+    // on her. Casters keep their own rotation on the target and are excluded
+    // here, so a wand row can never outrank a nuke.
+    class OnyxiaAirborneWandTrigger : public OnyxiaAirborneTrigger
+    {
+    public:
+        OnyxiaAirborneWandTrigger(PlayerbotAI* ai) : OnyxiaAirborneTrigger(ai, "onyxia airborne wand") {}
+        bool IsActive() override { return !ai->IsRanged(bot) && OnyxiaAirborneTrigger::IsActive(); }
     };
 
     // Phase 2 whelp duty (AiPlayerbot.OnyxiaWhelpsAndEggs, on by default):

@@ -510,4 +510,67 @@ assert.strictEqual(C.layoutText({ layout: { mt: "Ragemeister", ot: ["Irelanthe",
 assert.strictEqual(C.layoutText({ layout: { mt: "Ragemeister", ot: [], th: [], rh: [] } }), "MT Ragemeister", "the parts it has");
 assert.strictEqual(C.layoutText(party()), null, "no layout reported: no row");
 assert.strictEqual(C.layoutText({ layout: { mt: "", ot: [], th: [], rh: [] } }), null, "an empty layout says nothing");
+// ---- threat lines: a victim that is not a tank (the raid layout's MT and OTs count as tanks)
+{
+  const tmobs = [
+    { id: "21", x: 0, y: 0, reaction: "h", victim: "700" },
+    { id: "22", x: 0, y: 0, reaction: "h", victim: "701" },
+    { id: "23", x: 0, y: 0, reaction: "h", victim: "702" },
+    { id: "24", x: 0, y: 0, reaction: "h", victim: "703" },
+    { id: "25", x: 0, y: 0, reaction: "h", victim: "704" },
+  ];
+  const tb = [
+    { id: "700", name: "Heals", role: "healer" },
+    { id: "701", name: "Ireni", role: "dps" },
+    { id: "702", name: "Shieldy", role: "tank" },
+    { id: "703", name: "Mage", role: "dps" },
+    { id: "704", name: "Ragemeister", role: "dps" },
+  ];
+  const tl = C.threatLines(tmobs, tb, { mt: "Ragemeister", ot: ["Ireni"] });
+  assert.deepStrictEqual(tl.map((l) => [l.mob.id, l.bot.name, l.nonTank]), [
+    ["21", "Heals", true], ["22", "Ireni", false], ["23", "Shieldy", false], ["24", "Mage", true], ["25", "Ragemeister", false],
+  ], "a healer or a damage dealer off the tanks; the layout's MT and an OT count as tanks");
+  assert.deepStrictEqual(C.threatLines(tmobs, tb).map((l) => l.nonTank), [true, true, false, true, true], "no layout: the role alone");
+  assert.deepStrictEqual(C.threatLines(tmobs, tb, { mt: "Ragemeister" }).map((l) => l.nonTank), [true, true, false, true, false],
+    "a layout without an OT list");
+  assert.deepStrictEqual(C.threatLines([{ id: "1", x: 0, y: 0, reaction: "h", victim: "999" }], tb, { mt: "Ragemeister", ot: ["Ireni"] }), [],
+    "a victim that is not a listed bot");
+}
+// ---- the boss overlay (fight debugger phase 2): where a boss looks, the area of its spell and the cast clock
+// the plane puts north up: a unit facing 0 (game +x) looks up (-y in the plane), a quarter turn looks west (-x)
+assert.deepStrictEqual(C.facingVec(0), { x: 0, y: -1 });
+const fv = C.facingVec(Math.PI / 2);
+assert.ok(Math.abs(fv.x + 1) < 1e-9 && Math.abs(fv.y) < 1e-9, JSON.stringify(fv));
+// a 120 degree cone of 20 yd ends 10 yd up and 17.32 yd to either side of the unit
+const cone = C.shapePath(0, 0, 0, { k: "cone", a: 120, l: 20 });
+assert.ok(cone.indexOf("17.32,-10.00") >= 0 && cone.indexOf("-17.32,-10.00") >= 0, cone);
+assert.ok(/^M0\.00,0\.00L/.test(cone) && /A20\.00 20\.00 0 0 1/.test(cone) && /Z$/.test(cone), cone);
+const back = C.shapePath(0, 0, 0, { k: "back-cone", a: 120, l: 20 });
+assert.ok(back.indexOf("17.32,10.00") >= 0 && back.indexOf("-17.32,10.00") >= 0, back);
+const wide = C.shapePath(0, 0, 0, { k: "cone", a: 240, l: 20 });
+assert.ok(/A20\.00 20\.00 0 1 1/.test(wide), "a cone past a half turn takes the large arc: " + wide);
+const band = C.shapePath(0, 0, 0, { k: "line", l: 60, w: 20 });
+["-10.00,0.00", "10.00,0.00", "-10.00,-60.00", "10.00,-60.00"].forEach((pt) => assert.ok(band.includes(pt), pt + " in " + band));
+assert.strictEqual(C.shapePath(0, 0, 0, { k: "cone", a: 120 }), "", "a cone without reach is not drawn");
+assert.strictEqual(C.shapePath(0, 0, 0, { k: "cone", a: 0, l: 20 }), "", "a cone without an arc is not drawn");
+assert.strictEqual(C.shapePath(0, 0, 0, { k: "wibble", l: 20, w: 10 }), "", "an unknown area is not drawn");
+assert.strictEqual(C.shapePath(0, 0, 0, null), "");
+const nw = C.facingVec(Math.PI / 4);
+assert.ok(Math.abs(nw.x + Math.SQRT1_2) < 1e-9 && Math.abs(nw.y + Math.SQRT1_2) < 1e-9, "a diagonal faces north-west");
+// the cast clock between two reports, never below zero
+assert.strictEqual(C.castLeft({ cleft: 2000 }, 1000, 2500), 500);
+assert.strictEqual(C.castLeft({ cleft: 2000 }, 1000, 4000), 0);
+assert.strictEqual(C.castLeft({ cleft: 0 }, 0, 0), 0);
+assert.strictEqual(C.castLeft({}, 0, 100), 0);
+assert.strictEqual(C.castLeft({ cleft: 1000 }, undefined, 500), 1000, "no arrival time: nothing is counted");
+assert.strictEqual(C.castFrac({ ctot: 2000 }, 500), 0.75);
+assert.strictEqual(C.castFrac({ ctot: 2000 }, 2500), 0, "clamped");
+assert.strictEqual(C.castFrac({ ctot: 0 }, 0), 0);
+assert.strictEqual(C.castFrac({}, 0), 0);
+// the shorter arc across the seam, never through zero
+const seam = C.angleLerp(3.1, -3.1, 0.5);
+assert.ok(Math.abs(Math.abs(seam) - Math.PI) < 0.05, String(seam));
+assert.strictEqual(C.angleLerp(0, Math.PI / 2, 0.5), Math.PI / 4);
+assert.ok(Math.abs(C.angleLerp(0, 0, 0.5)) < 1e-12);
+
  console.log("commanders.js ok");

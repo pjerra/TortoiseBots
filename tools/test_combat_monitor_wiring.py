@@ -136,7 +136,7 @@ class CombatMonitorWiringTest(unittest.TestCase):
 
     def test_telemetry_writes_the_window_raw(self):
         self.assertIn("std::string combatJson", TELEMETRY)
-        payload = body(TELEMETRY, "inline std::string BuildPayload(", "\n}\n")
+        payload = body(TELEMETRY, "inline std::string BuildPayloadOf(", "\n}\n")
         self.assertIn('combat', payload)
         self.assertIn('<< b.combatJson', payload)
         self.assertIn("combatJson", payload)
@@ -148,6 +148,105 @@ class CombatMonitorWiringTest(unittest.TestCase):
         after = cycle[cycle.index("EmitCommanders()"):]
         self.assertIn("m_combatProvider", after)
         self.assertIn("SendDatagram", after.split("EmitCommanders()", 1)[-1] if "EmitCommanders()" in after else after)
+
+    # Live fight events, and a fight that outlives its run.
+
+    def test_bound_sampler_feeds_fights_without_a_run(self):
+        # Every standing binding keeps its combat book: the run tick feeds the
+        # ones with a run, and the sampler feeds the rest at 1 Hz.
+        code = strip_comments(COMMANDER)
+        fill = definition(code, "static void FillCommanderCombat(")
+        self.assertNotIn("Forget(", fill, "a standing binding is never forgotten")
+        self.assertNotIn("DungeonRuns()", fill, "the sampler, not this snapshot, owns the no-run case")
+        update = definition(code, "void UpdateRemoteCommanders(")
+        self.assertIn("SampleBoundFights(diff)", update)
+        self.assertLess(update.index("UpdateDungeonRuns(diff)"), update.index("SampleBoundFights(diff)"),
+                        "the sampler runs after the run ticks that stamp their feed")
+        sample = definition(code, "static void SampleBoundFights(")
+        self.assertIn("SamplerFeeds(", sample)
+        self.assertIn("FeedCombatMonitor(", sample)
+        self.assertIn("NoteBoss(", sample)
+        # A lead in another group (it left and rejoined elsewhere) is away for
+        # this binding: it never feeds the fight, and the grace closes it.
+        self.assertIn("LeadUsable(", sample)
+        self.assertIn("group ? group->GetId() : 0, binding->groupId", sample)
+        self.assertLess(sample.index("LeadUsable("), sample.index(".Overdue("),
+                        "the away clock uses the group-matched lead, not any group")
+        self.assertLess(sample.index("if (!leadUsable)"), sample.index("FeedCombatMonitor("),
+                        "an unusable lead is never fed")
+        enabled = sample.index("Enabled()")
+        self.assertLess(enabled, sample.index("SamplerFeeds("), "nothing is sampled while the monitor is off")
+        self.assertNotIn("DungeonRuns()", sample[:sample.index("SamplerFeeds(")],
+                         "the feed decision is the run's stamp, not a run slot")
+        for scan in ("GetCreatureListWithEntry", "VisitNearby", "Cell::", "GetPlayers()"):
+            self.assertNotIn(scan, sample, scan)
+        self.assertIn("ctx, nullptr)", sample, "the sampler hands no engaged facts")
+        refresh = definition(code, "static void RefreshCombatMonitor(")
+        self.assertIn("s_runFedAt()[commanderRaw]", refresh)
+        self.assertLess(refresh.index("s_runFedAt()[commanderRaw]"), refresh.index("FeedCombatMonitor("),
+                        "the run's feed is stamped before the sample it feeds")
+        self.assertIn("&facts.engagedUnits", refresh, "the run path keeps its own engaged facts")
+        sources = sorted((ROOT / "runtime").glob("*.h")) + sorted((ROOT / "runtime").glob("*.cpp"))
+        sources.append(ROOT / "commands" / "Commander.cpp")
+        for path in sources:
+            self.assertNotIn("RefreshNoRun", path.read_text(), path)
+
+    def test_forget_retires_instead_of_dropping(self):
+        fn = body(strip_comments(SERVICE), "CombatMonitorService::Forget(", "\n}\n")
+        self.assertIn("Close(", fn)
+        self.assertIn("m_retired", fn)
+        self.assertIn("HasEvents(", fn)
+
+    def test_cast_hook_classifies_by_spell_effects(self):
+        cast = body(strip_comments(ADAPTER), "CombatMonitorCastAdapter::OnSpellCast(", "\n}\n")
+        for constant in ("SPELL_EFFECT_ATTACK_ME", "SPELL_AURA_MOD_TAUNT", "SPELL_EFFECT_INTERRUPT_CAST"):
+            self.assertIn(constant, cast, constant)
+        self.assertIn("getUnitTargetGuid()", cast)
+        self.assertLess(cast.index("SPELL_EFFECT_ATTACK_ME"), cast.index("OnCast("), "classification first")
+
+    def test_event_drain_runs_before_the_snapshot_gate(self):
+        code = strip_comments(EMITTER)
+        update = definition(code, "void ObservabilityEmitter::Update(")
+        self.assertIn("m_combatEventProvider(", update)
+        self.assertLess(update.index("m_combatEventProvider("),
+                        update.index("if (m_snapshotTimerMs < kSnapshotIntervalMs)"),
+                        "the 100 ms drain is not inside the 2 s gate")
+        self.assertIn("m_enemyCastPoller", update)
+
+    def test_enemy_cast_poll_has_no_world_scan(self):
+        code = strip_comments(COMMANDER)
+        fn = definition(code, "void PollEnemyCasts(")
+        self.assertIn("AnyInFight()", fn)
+        self.assertIn("CurrentSpellId(", fn)
+        self.assertIn("NoteEnemyCast(", fn)
+        for scan in ("GetCreatureListWithEntry", "VisitNearby", "Cell::"):
+            self.assertNotIn(scan, fn, scan)
+
+    def test_conf_dist_carries_the_realtime_keys(self):
+        conf = (ROOT / "conf" / "tortoise_bots.conf.dist").read_text()
+        self.assertIn("AiPlayerbot.ObservabilityRealtime = 1", conf)
+        self.assertIn("AiPlayerbot.ObservabilityRealtime.Events = 1", conf)
+        self.assertIn("AiPlayerbot.ObservabilityRealtime.EventGapMs = 250", conf)
+
+    def test_config_reload_sets_the_realtime_flag(self):
+        startup = (ROOT / "host" / "BotHostAdapter.cpp").read_text()
+        self.assertIn("s_realtimeKeysDue", startup)
+        self.assertIn("ReloadRealtimeKeys()", startup)
+        self.assertIn("ObservabilityEmitter::Instance().SetCombatEventProvider(", startup)
+        self.assertIn("ObservabilityEmitter::Instance().SetEnemyCastPoller(", startup)
+
+    def test_run_slot_erase_leaves_the_open_fight_to_the_sampler(self):
+        # A run that ends while its binding stands (`.bot run stop`, the time
+        # limit, a switched-off gate) erases its run slot without dropping the
+        # group's combat book: the sampler feeds the open fight to its end, so a
+        # fight continuing after the stop is still recorded. Only the binding's
+        # removal forgets.
+        code = strip_comments(COMMANDER)
+        erase = body(code, "void EraseRunSlot(", "\n}\n")
+        self.assertIn("TakeRunItems(", erase)
+        self.assertNotIn("Forget(", erase, "the run slot's erase must not close the open fight")
+        release = body(code, "uint32 ReleaseBinding(", "\n}\n")
+        self.assertIn("Forget(removed.groupId)", release, "the binding's removal still forgets")
 
 
 if __name__ == "__main__":

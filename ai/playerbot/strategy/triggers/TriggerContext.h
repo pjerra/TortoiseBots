@@ -324,6 +324,7 @@ namespace ai
             creators["boss tactics interrupt"] = [](PlayerbotAI* ai) { return new BossTacticsInterruptTrigger(ai); };
             creators["boss tactics kill first"] = [](PlayerbotAI* ai) { return new BossTacticsKillFirstTrigger(ai); };
             creators["boss tactics front"] = [](PlayerbotAI* ai) { return new BossTacticsFrontTrigger(ai); };
+            creators["boss tactics stand"] = [](PlayerbotAI* ai) { return new BossTacticsStandTrigger(ai); };
             creators["enter onyxia's lair"] = [](PlayerbotAI* ai) { return new OnyxiasLairEnterDungeonTrigger(ai); };
             creators["leave onyxia's lair"] = [](PlayerbotAI* ai) { return new OnyxiasLairLeaveDungeonTrigger(ai); };
             creators["enter molten core"] = [](PlayerbotAI* ai) { return new MoltenCoreEnterDungeonTrigger(ai); };
@@ -358,6 +359,7 @@ namespace ai
             creators["start onyxia fight"] = [](PlayerbotAI* ai) { return new OnyxiaStartFightTrigger(ai); };
             creators["end onyxia fight"] = [](PlayerbotAI* ai) { return new OnyxiaEndFightTrigger(ai); };
             creators["onyxia airborne"] = [](PlayerbotAI* ai) { return new OnyxiaAirborneTrigger(ai); };
+            creators["onyxia airborne wand"] = [](PlayerbotAI* ai) { return new OnyxiaAirborneWandTrigger(ai); };
             creators["onyxia deep breath"] = [](PlayerbotAI* ai) { return new OnyxiaDeepBreathTrigger(ai); };
             creators["onyxia whelps"] = [](PlayerbotAI* ai) { return new OnyxiaWhelpsTrigger(ai); };
             creators["onyxia eggs near"] = [](PlayerbotAI* ai) { return new OnyxiaEggsNearTrigger(ai); };

@@ -27,14 +27,25 @@ void OnyxiasLairDungeonStrategy::InitCombatTriggers(std::list<TriggerNode*>& tri
 
 void OnyxiaFightStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 {
-    // Phase 2 airborne: melee cannot reach; wands/shoot keep DPS on the
-    // boss while whelp packs are the valid melee targets. Ranged spread
-    // trims Fireball (18392) splash; universal flank keeps Deep Breath
-    // lane clear via the reaction engine.
+    // Phase 2 airborne: the boss hovers out of melee reach at hover points far
+    // from the raid, past the 60-yd sight ceiling of "current target" - the
+    // air_target tactics row (ai_boss_tactic) keeps her a target for the
+    // ranged bots out to the react distance, and the casters cast their own
+    // rotation on her from the floor instead of a wand.
+    // The row only spreads the raid: Fireball (18392) splash and the breath
+    // lanes stay the melee's problem, and the universal flank keeps Deep
+    // Breath lane clear via the reaction engine.
     triggers.push_back(new TriggerNode(
         "onyxia airborne",
-        NextAction::array(0, new NextAction("shoot", ACTION_HIGH),
-                             new NextAction("raid spread", ACTION_HIGH - 1), NULL)));
+        NextAction::array(0, new NextAction("raid spread", ACTION_HIGH), NULL)));
+
+    // Classes without a ranged rotation (PlayerbotAI::IsRanged false: warrior,
+    // rogue, paladin and a melee-spec kit) have no cast to send up at her, so
+    // the wand stays theirs alone. Every caster class is excluded here, not
+    // outgunned by a wand row above its rotation.
+    triggers.push_back(new TriggerNode(
+        "onyxia airborne wand",
+        NextAction::array(0, new NextAction("shoot", ACTION_HIGH), NULL)));
 
     // Toggle (AiPlayerbot.OnyxiaWhelpsAndEggs, on by default; the triggers
     // stay silent while it is off). Phase 2 whelp duty for AoE-capable

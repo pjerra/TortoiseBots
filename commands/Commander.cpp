@@ -63,10 +63,13 @@
 #include "../runtime/RemoteCommanderEnter.h"
 #include "../runtime/GossipOrderPolicy.h"
 #include "../runtime/CommanderTelemetry.h"
+#include "../runtime/StandWindowMarks.h"
+#include "../runtime/ReadyCheckPolicy.h"
 #include "../runtime/DungeonRunPolicy.h"
 #include "../runtime/SystemRunPolicy.h"
 #include "../runtime/CombatMonitorService.h"
 #include "../runtime/CombatMonitorPolicy.h"
+#include "../runtime/BoundFightPolicy.h"
 #include "../runtime/ObservabilityEmitter.h"
 #include "../runtime/RunItemNeedPolicy.h" // item-leg skip (spec C1/D): needs + ledger, namespace TortoiseBots::RunItemNeed
 #include "../runtime/RunItemNeedFacts.h" // the leg's need facts from the party's bags (item-leg skip review round 2)
@@ -76,6 +79,7 @@
 #include "../runtime/PlayerLedPolicy.h"
 #include "../ai/playerbot/DungeonPlanMgr.h"
 #include "../ai/playerbot/BossTacticsMgr.h"
+#include "../ai/playerbot/BossTacticsStand.h"
 #include "../ai/playerbot/PullAggroEstimatePolicy.h"
 #include "../ai/playerbot/WorldPosition.h"
 #include "CreatureGroups.h"
@@ -146,6 +150,7 @@
 #include <sstream>
 #include <set>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -185,6 +190,20 @@ RemoteCommander::BindingTable& CommanderBindings()
     static RemoteCommander::BindingTable table;
     return table;
 }
+
+// The unit whose stand window is timed, in the instance it stands in: a creature's raw guid repeats across copies of a
+// map, so the key carries the map and the instance (runtime/StandWindowMarks.h).
+static StandWindow::Key StandWindowKeyOf(Unit* unit)
+{
+    return StandWindow::Key{unit->GetMapId(), unit->GetMap()->GetInstanceId(), unit->GetObjectGuid().GetRawValue()};
+}
+
+// When each stand window (BossStandPolicy.h StandStoppedWindowOpen) was first seen, by unit and by the binding that
+// reported it: a triggered cast has no cast slot to read a timer from, so the countdown starts when the module first sees
+// the window; the mark is dropped when the window closes, pruned by every snapshot cycle, and a binding teardown forgets
+// the keys that binding reported, so a window that disappears without a closing read cannot survive its encounter. World
+// thread only, like the rest of the commander snapshot.
+static StandWindow::OwnedMarks s_standWindowMarks;
 
 // Each follower's own "manual follow target" from before the binding pointed
 // it at the lead bot, put back on release.
@@ -758,16 +777,15 @@ void TakeRunItems(DungeonRunSlot& slot, uint64_t guid /*0 = all*/)
     }
 }
 // Every place a run slot goes away routes through this (it takes back the
-// given items first); the only caller of DungeonRuns().erase.
+// given items first); the only caller of DungeonRuns().erase. The group's
+// combat book stays: a binding still standing has its open fight fed by the
+// bound-group sampler, and only the binding's release forgets it.
 void EraseRunSlot(uint64_t commanderRaw)
 {
     auto it = DungeonRuns().find(commanderRaw);
     if (it == DungeonRuns().end())
         return;
     TakeRunItems(it->second, 0);
-    if (RemoteCommander::Binding const* binding = CommanderBindings().FindByCommander(commanderRaw))
-        if (binding->groupId)
-            TortoiseBots::CombatMonitorService::Instance().Forget(binding->groupId);
     DungeonRuns().erase(it);
 }
 // Every run slot at once (no commander bound any more, the module's clear): the given items go back first.
@@ -1099,6 +1117,7 @@ uint32 ReleaseBinding(uint64 commanderRaw, RemoteCommander::ReleaseReason reason
         CancelCommanderTasks(commanderRaw);
     }
     RemoteCommander::Binding removed = CommanderBindings().Unbind(commanderRaw);
+    s_standWindowMarks.ForgetOwner(commanderRaw);
     CommanderViews().erase(commanderRaw);
     EraseRunSlot(commanderRaw);
     if (!removed.commanderGuid)
@@ -6310,12 +6329,17 @@ bool HandleCommanderOrder(ChatHandler* handler, char const* args)
 // ---------------------------------------------------------------------------
 
 // Combat monitor glue (task A8b): the 1 Hz sample in the run tick and the
-// snapshot's window read.
-static void FillCommanderCombat(uint64 commanderRaw, RemoteCommander::Binding const& binding, Player* lead,
+// snapshot's window read, and the bound-group sampler for the groups no run
+// tick feeds (task R1).
+static void FillCommanderCombat(RemoteCommander::Binding const& binding, Player* lead,
     CommanderTelemetry::BindingRef& ref);
 static void RefreshCombatMonitor(uint64 commanderRaw, RemoteCommander::Binding const& binding, Player* lead,
     std::vector<Player*> const& bots, TortoiseBots::DungeonRun::Facts const& facts, DungeonRunSlot const& slot);
+static void SampleBoundFights(uint32 diff);
 static void ForgetReleasedCombatGroups(void);
+// The sampler's per-binding state, pruned beside the snapshot that fed it.
+static std::unordered_map<uint64, uint32>& s_runFedAt();
+static std::unordered_map<uint64, TortoiseBots::BoundFight::LeadAway>& s_leadAway();
 
 namespace {
 
@@ -11872,6 +11896,8 @@ void UpdateRemoteCommanders(uint32_t diff)
     UpdateCommanderTasks(diff);
     // The run leaders (`.bot run`), after the tasks so they see this tick's answers.
     UpdateDungeonRuns(diff);
+    // The combat books of the bound groups whose run did not feed them this second.
+    SampleBoundFights(diff);
 }
 
 void NoteCommanderOrderResult(ChatHandler* handler, std::string const& intent, bool ok,
@@ -11915,6 +11941,72 @@ static uint64 CurrentSpellTargetGuid(Unit* unit)
         if (Spell* spell = unit->GetCurrentSpell(type))
             return spell->m_targets.getUnitTargetGuid().GetRawValue();
     return 0;
+}
+
+// The cast time a spell's casting time index gives it, without a caster's modifiers: the total a triggered cast is
+// reported with. Core: SpellEntry::CastingTimeIndex (Spells/SpellEntry.h:559), sSpellCastTimesStore
+// (Database/DBCStores.h:86), SpellCastTimesEntry (Database/DBCStructure.h:536-541).
+static uint32 SpellCastTimeMs(SpellEntry const* entry)
+{
+    if (!entry)
+        return 0;
+    SpellCastTimesEntry const* times = sSpellCastTimesStore.LookupEntry(entry->CastingTimeIndex);
+    if (!times)
+        return 0;
+    return static_cast<uint32>(times->CastTime > times->MinCastTime ? times->CastTime : times->MinCastTime);
+}
+
+// The facing and the cast a boss or elite is running, for the dashboard's boss overlay: the unit's orientation, its
+// current spell's id and time left and total, the spell's unit target, whether it channels, and the area the spell
+// covers from the committed shape table (runtime/SpellShape.h; a spell absent from it sends no shape). A spell cast
+// triggered never shows as the current spell (Spells/Spell.cpp:3640-3642 and :3667), so a boss stopped at its stand
+// anchor with no target is also read for the row's window spell (BossStandPolicy.h): a Deep Breath then reports a cast
+// the way a cast-slot spell would. The window's countdown is recorded under ownerRaw, the binding whose report this is
+// (StandWindow::kNoOwner for a report that belongs to no binding). Read from what the unit already holds, no scan. Core:
+// Objects/Object.h:835 (facing) and :1145 (cast slots), Spells/Spell.h:428-429, SpellEntry.h:1110.
+static void FillMobFacingAndCast(Unit* unit, uint64 ownerRaw, CommanderTelemetry::MobInfo& mob)
+{
+    mob.hasO = true;
+    mob.o = unit->GetOrientation();
+    const StandWindow::Key windowKey = StandWindowKeyOf(unit);
+    for (CurrentSpellTypes type : { CURRENT_GENERIC_SPELL, CURRENT_CHANNELED_SPELL })
+    {
+        Spell* spell = unit->GetCurrentSpell(type);
+        if (!spell || !spell->m_spellInfo)
+            continue;
+        s_standWindowMarks.Forget(windowKey);
+        mob.castId = spell->m_spellInfo->Id;
+        mob.castLeftMs = spell->GetCastedTime();
+        mob.channel = type == CURRENT_CHANNELED_SPELL;
+        mob.castTotalMs = mob.channel ? static_cast<uint32>(spell->m_spellInfo->GetDuration())
+                                      : static_cast<uint32>(spell->GetCastTime());
+        mob.castTarget = spell->m_targets.getUnitTargetGuid().GetRawValue();
+        if (CommanderTelemetry::SpellShape::Shape const* shape = CommanderTelemetry::SpellShape::For(mob.castId))
+        {
+            mob.hasShape = true;
+            mob.shape = *shape;
+        }
+        return;
+    }
+    uint32 const windowSpell = ai::ActiveStandWindowSpell(unit);
+    SpellEntry const* entry = windowSpell ? sSpellMgr.GetSpellEntry(windowSpell) : nullptr;
+    if (!entry)
+    {
+        s_standWindowMarks.Forget(windowKey);
+        return;
+    }
+    const uint32 totalMs = SpellCastTimeMs(entry);
+    mob.cast = SpellNameOf(windowSpell);
+    mob.castId = windowSpell;
+    mob.castLeftMs = s_standWindowMarks.CastLeft(ownerRaw, windowKey, WorldTimer::getMSTime(), totalMs);
+    mob.castTotalMs = totalMs;
+    mob.channel = false;
+    mob.castTarget = 0;
+    if (CommanderTelemetry::SpellShape::Shape const* shape = CommanderTelemetry::SpellShape::For(mob.castId))
+    {
+        mob.hasShape = true;
+        mob.shape = *shape;
+    }
 }
 
 // What the dashboard calls a game object: a letter for its type, or 0 for the kinds it does not draw (mailboxes, fishing holes ...).
@@ -12162,6 +12254,160 @@ static void FillCommanderObjects(Player* lead, CommanderTelemetry::BindingRef& r
         ref.objects.push_back(std::move(found[i].second));
 }
 
+// The live cast poller's watch, one per bound commander: the mobs of its last
+// full report (guid, entry, rank) and the spell each was last seen casting, so
+// an elite or boss cast is announced once when it starts. World thread only.
+struct CommanderMobWatch
+{
+    uint32 groupId = 0;
+    uint64 leadRaw = 0;
+    std::vector<std::tuple<uint64, uint32, char>> mobs;
+    std::unordered_map<uint64, uint32> lastCast;
+};
+
+static std::unordered_map<uint64, CommanderMobWatch>& s_mobWatch()
+{
+    static std::unordered_map<uint64, CommanderMobWatch> watch;
+    return watch;
+}
+
+// The ready check's facts per bound bot, read out of combat only: the auras
+// (raid buffs and consumables) every kReadyRefreshMs, which spells are key
+// cooldowns every kKeySpellsRefreshMs, and the cooldown state with each aura
+// read. In combat the cached values are sent as they are, so a fight costs no
+// aura or spell read. World thread only.
+struct ReadyCacheEntry
+{
+    uint32 atMs = 0;
+    uint32 keySpellsAtMs = 0;
+    std::vector<uint32> keySpells;
+    uint32 buffs = 0;
+    uint32 cons = 0;
+    uint8 cdReady = 0;
+    uint8 cdKnown = 0;
+    uint32 cdLongestS = 0;
+};
+
+static std::unordered_map<uint64, ReadyCacheEntry>& s_readyCache()
+{
+    static std::unordered_map<uint64, ReadyCacheEntry> cache;
+    return cache;
+}
+
+static void ApplyReadyCache(ReadyCacheEntry const& entry, CommanderTelemetry::BotExtra& extra)
+{
+    extra.hasReady = true;
+    extra.readyBuffs = entry.buffs;
+    extra.readyCons = entry.cons;
+    extra.cdReady = entry.cdReady;
+    extra.cdKnown = entry.cdKnown;
+    extra.cdLongestS = entry.cdLongestS;
+}
+
+// One AuraFact per effect of each live, non-passive aura holder (the same skip
+// as the fight monitor's aura read). Field reads only, no map access.
+static void ReadReadyAuras(Player* bot, ReadyCacheEntry& entry)
+{
+    std::vector<TortoiseBots::ReadyCheck::AuraFact> facts;
+    for (auto const& aura : bot->GetSpellAuraHolderMap())
+    {
+        SpellAuraHolder const* holder = aura.second;
+        if (!holder || holder->IsDeleted() || holder->IsPassive())
+            continue;
+        SpellEntry const* proto = holder->GetSpellProto();
+        if (!proto)
+            continue;
+        uint32 const mask = sSpellMgr.GetSpellElixirMask(proto->Id);
+        bool const positive = holder->IsPositive();
+        bool const fromPlayer = holder->GetCasterGuid().IsPlayer();
+        for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+        {
+            if (!proto->EffectApplyAuraName[i])
+                continue;
+            TortoiseBots::ReadyCheck::AuraFact fact;
+            fact.auraType = proto->EffectApplyAuraName[i];
+            fact.misc = proto->EffectMiscValue[i];
+            fact.family = proto->SpellFamilyName;
+            fact.elixirMask = mask;
+            fact.positive = positive;
+            fact.fromPlayer = fromPlayer;
+            facts.push_back(fact);
+        }
+    }
+    entry.buffs = TortoiseBots::ReadyCheck::BuffBits(facts);
+    entry.cons = TortoiseBots::ReadyCheck::ConsumableBits(facts);
+}
+
+// The bot's known spells as SpellCd rows: the spell map is the learned set,
+// removed and disabled entries are not castable.
+static void ReadReadyKeySpells(Player* bot, ReadyCacheEntry& entry)
+{
+    std::vector<TortoiseBots::ReadyCheck::SpellCd> spells;
+    for (auto const& known : bot->GetSpellMap())
+    {
+        if (known.second.state == PLAYERSPELL_REMOVED || known.second.disabled)
+            continue;
+        SpellEntry const* proto = sSpellMgr.GetSpellEntry(known.first);
+        if (!proto)
+            continue;
+        TortoiseBots::ReadyCheck::SpellCd cd;
+        cd.spell = known.first;
+        cd.chainFirst = sSpellMgr.GetFirstSpellInChain(known.first);
+        cd.recoveryMs = proto->RecoveryTime;
+        cd.categoryRecoveryMs = proto->CategoryRecoveryTime;
+        cd.passive = proto->IsPassiveSpell();
+        cd.family = proto->SpellFamilyName;
+        spells.push_back(cd);
+    }
+    entry.keySpells = TortoiseBots::ReadyCheck::KeySpells(spells);
+}
+
+static void ReadReadyCooldowns(Player* bot, ReadyCacheEntry& entry)
+{
+    uint8 ready = 0;
+    uint8 known = 0;
+    uint32 longest = 0;
+    for (uint32 spell : entry.keySpells)
+    {
+        ++known;
+        if (bot->HasSpellCooldown(spell))
+            longest = std::max(longest, static_cast<uint32>(bot->GetSpellCooldownDelay(spell)));
+        else
+            ++ready;
+    }
+    entry.cdReady = ready;
+    entry.cdKnown = known;
+    entry.cdLongestS = longest;
+}
+
+static void ReadReadyFacts(Player* bot, CommanderTelemetry::BotExtra& extra, uint32 nowMs)
+{
+    uint64 const raw = bot->GetObjectGuid().GetRawValue();
+    auto it = s_readyCache().find(raw);
+    if (bot->IsInCombat())
+    {
+        if (it != s_readyCache().end())
+            ApplyReadyCache(it->second, extra);
+        return;
+    }
+    bool const fresh = it == s_readyCache().end();
+    if (fresh)
+        it = s_readyCache().emplace(raw, ReadyCacheEntry()).first;
+    ReadyCacheEntry& entry = it->second;
+    if (fresh || nowMs - entry.atMs >= TortoiseBots::ReadyCheck::kReadyRefreshMs)
+    {
+        ReadReadyAuras(bot, entry);
+        if (fresh || nowMs - entry.keySpellsAtMs >= TortoiseBots::ReadyCheck::kKeySpellsRefreshMs)
+        {
+            ReadReadyKeySpells(bot, entry);
+            entry.keySpellsAtMs = nowMs;
+        }
+        ReadReadyCooldowns(bot, entry);
+        entry.atMs = nowMs;
+    }
+    ApplyReadyCache(entry, extra);
+}
+
 // The map data of one binding for the dashboard (once per 2 s snapshot cycle, only while a binding stands): the commander's
 // position when it is online and in the world, and the hostile units the commander's perception feed would list for this binding
 // (the same builder: the bots' own cached lists, resolved by guid on the lead's map, capped at kMaxHostiles; no grid or world
@@ -12169,6 +12415,10 @@ static void FillCommanderObjects(Player* lead, CommanderTelemetry::BindingRef& r
 static void FillCommanderMapData(RemoteCommander::Binding const& binding, Player* commander, Player* lead,
     CommanderTelemetry::BindingRef& ref)
 {
+    CommanderMobWatch& watch = s_mobWatch()[binding.commanderGuid];
+    watch.groupId = ref.groupId;
+    watch.leadRaw = binding.leadGuid;
+    watch.mobs.clear();
     if (commander && ref.commanderOnline && commander->IsInWorld())
     {
         ref.commanderPlaced = true;
@@ -12191,7 +12441,8 @@ static void FillCommanderMapData(RemoteCommander::Binding const& binding, Player
         CommanderTelemetry::MobInfo mob;
         mob.id = h.guid;
         mob.entry = h.entry;
-        if (Unit* unit = map ? map->GetUnit(::ObjectGuid(h.guid)) : nullptr)
+        Unit* unit = map ? map->GetUnit(::ObjectGuid(h.guid)) : nullptr;
+        if (unit)
             mob.name = unit->GetName();
         mob.hpPct = h.hpPct;
         mob.x = h.x;
@@ -12204,6 +12455,8 @@ static void FillCommanderMapData(RemoteCommander::Binding const& binding, Player
         mob.cc = h.ccKind;
         if (h.casting)
             mob.cast = SpellNameOf(h.casting);
+        if (unit && (mob.rank == 'b' || mob.rank == 'e'))
+            FillMobFacingAndCast(unit, binding.commanderGuid, mob);
         ref.mobs.push_back(std::move(mob));
     }
     // What each bound bot is doing: the view snapshot already holds its state, newest action, cast and target; the rest are
@@ -12233,20 +12486,51 @@ static void FillCommanderMapData(RemoteCommander::Binding const& binding, Player
         if (member.target && map)
             if (Unit* target = map->GetUnit(::ObjectGuid(member.target)))
                 extra.targetName = target->GetName();
+        ReadReadyFacts(bot, extra, WorldTimer::getMSTime());
         ref.botExtras.push_back(std::move(extra));
     }
     FillCommanderObjects(lead, ref);
     FillCommanderBosses(lead, ref);
+    // The cast poller watches the mobs of this report only; the rank rides along for its boss-first order.
+    for (CommanderTelemetry::MobInfo const& mob : ref.mobs)
+        watch.mobs.emplace_back(mob.id, mob.entry, mob.rank);
+    // Forget the last-seen casts of mobs no longer reported: the map stays bounded by one report.
+    for (auto it = watch.lastCast.begin(); it != watch.lastCast.end();)
+    {
+        bool listed = false;
+        for (auto const& mob : watch.mobs)
+            if (std::get<0>(mob) == it->first)
+            {
+                listed = true;
+                break;
+            }
+        it = listed ? std::next(it) : watch.lastCast.erase(it);
+    }
+}
+
+// The name the dashboard shows for a binding's commander that has a character: its name, or "offline #<n>" while it is not in
+// the world. A system binding's "system" is the COMMANDERS branch's own word (a committed test pins it), and the position
+// report names it the same way.
+static std::string CommanderDisplayName(RemoteCommander::Binding const& binding, Player* commander)
+{
+    return commander ? commander->GetName()
+                     : "offline #" + std::to_string(::ObjectGuid(binding.commanderGuid).GetCounter());
 }
 
 void CollectCommanderTelemetry(std::vector<CommanderTelemetry::BindingRef>& out)
 {
     out.clear();
     ForgetReleasedCombatGroups();
+    s_standWindowMarks.Prune(WorldTimer::getMSTime());
     // Nothing to read while no commander is bound: the common case costs a lookup.
     if (CommanderBindings().Empty())
     {
         CommanderOrderLog().Clear();
+        s_mobWatch().clear();
+        s_readyCache().clear();
+        s_runFedAt().clear();
+        s_leadAway().clear();
+        s_standWindowMarks.Clear();
         return;
     }
     std::unordered_set<uint64_t> bound;
@@ -12254,7 +12538,7 @@ void CollectCommanderTelemetry(std::vector<CommanderTelemetry::BindingRef>& out)
     {
         bound.insert(commanderRaw);
         RemoteCommander::Binding const* binding = CommanderBindings().FindByCommander(commanderRaw);
-        if (!binding || out.size() >= CommanderTelemetry::kMaxBindings)
+        if (!binding || out.size() >= CommanderTelemetry::kMaxCommandersReported)
             continue;
         CommanderTelemetry::BindingRef ref;
         Player* commander = FindCharacter(commanderRaw);
@@ -12267,7 +12551,7 @@ void CollectCommanderTelemetry(std::vector<CommanderTelemetry::BindingRef>& out)
         }
         else
         {
-            ref.commander = commander ? commander->GetName() : "offline #" + std::to_string(::ObjectGuid(commanderRaw).GetCounter());
+            ref.commander = CommanderDisplayName(*binding, commander);
             ref.commanderGuid = ::ObjectGuid(commanderRaw).GetCounter();
             ref.commanderOnline = commander && commander->GetSession() && commander->GetSession()->HasNetworkTransport();
         }
@@ -12298,7 +12582,7 @@ void CollectCommanderTelemetry(std::vector<CommanderTelemetry::BindingRef>& out)
         }
         ref.orders = CommanderOrderLog().Recent(commanderRaw);
         FillCommanderMapData(*binding, commander, lead, ref);
-        FillCommanderCombat(commanderRaw, *binding, lead, ref);
+        FillCommanderCombat(*binding, lead, ref);
         // The run leader's run of this binding (the dashboard's "why it waits"):
         // StatusParts reads the run's fields, so the JSON carries the same run the chat line shows.
         if (auto const run = DungeonRuns().find(commanderRaw); run != DungeonRuns().end())
@@ -12337,6 +12621,105 @@ void CollectCommanderTelemetry(std::vector<CommanderTelemetry::BindingRef>& out)
         out.push_back(std::move(ref));
     }
     CommanderOrderLog().Retain(bound);
+    std::unordered_set<uint64> boundBots;
+    for (CommanderTelemetry::BindingRef const& ref : out)
+        for (Player* bot : ref.bots)
+            if (bot)
+                boundBots.insert(bot->GetObjectGuid().GetRawValue());
+    for (auto it = s_mobWatch().begin(); it != s_mobWatch().end();)
+        it = bound.count(it->first) ? std::next(it) : s_mobWatch().erase(it);
+    for (auto it = s_readyCache().begin(); it != s_readyCache().end();)
+        it = boundBots.count(it->first) ? std::next(it) : s_readyCache().erase(it);
+    for (auto it = s_runFedAt().begin(); it != s_runFedAt().end();)
+        it = bound.count(it->first) ? std::next(it) : s_runFedAt().erase(it);
+    for (auto it = s_leadAway().begin(); it != s_leadAway().end();)
+        it = bound.count(it->first) ? std::next(it) : s_leadAway().erase(it);
+}
+
+// The dashboard's live positions (task S3): the bots of a bound group and the enemies its lead's last full report listed,
+// sent every 0.5 s while the group fights (and on the idle period, when one is asked for). Field reads on the bound members
+// and one guid lookup per watched enemy on the lead's map: no grid, world or DB read, nothing per bot tick. At most
+// kMaxPosBindings bindings per call from a rotating start, so more bindings than that all get a turn.
+void CollectCommanderPositions(std::vector<CommanderTelemetry::PosRef>& out, bool wantCombat, bool wantIdle)
+{
+    out.clear();
+    // Nothing to read while no commander is bound: the common case costs a lookup.
+    if (CommanderBindings().Empty())
+        return;
+    std::vector<uint64> const commanders = CommanderBindings().Commanders();
+    static size_t start = 0;
+    size_t const first = commanders.size() > CommanderTelemetry::kMaxPosBindings ? start % commanders.size() : 0;
+    size_t const count = std::min(commanders.size(), CommanderTelemetry::kMaxPosBindings);
+    start = first + count;
+    for (size_t i = 0; i < count; ++i)
+    {
+        uint64 const commanderRaw = commanders[(first + i) % commanders.size()];
+        RemoteCommander::Binding const* binding = CommanderBindings().FindByCommander(commanderRaw);
+        if (!binding)
+            continue;
+        Player* lead = FindCharacter(binding->leadGuid);
+        Group* group = lead ? lead->GetGroup() : nullptr;
+        if (!lead || !group || !lead->IsInWorld() || group->GetId() != binding->groupId)
+            continue;
+        std::vector<Player*> members;
+        FillCommandedBots(group, lead, members);
+        bool combat = false;
+        for (Player* bot : members)
+            if (bot && bot->IsInCombat())
+            {
+                combat = true;
+                break;
+            }
+        if (combat ? !wantCombat : !wantIdle)
+            continue;
+        CommanderTelemetry::PosRef ref;
+        ref.commander = binding->system ? "system" : CommanderDisplayName(*binding, FindCharacter(commanderRaw));
+        ref.commanderGuid = ::ObjectGuid(commanderRaw).GetCounter();
+        ref.combat = combat;
+        ref.bots.reserve(std::min(members.size(), CommanderTelemetry::kMaxPosBots));
+        for (Player* bot : members)
+        {
+            if (ref.bots.size() >= CommanderTelemetry::kMaxPosBots)
+                break;
+            if (!bot || !bot->IsInWorld())
+                continue;
+            CommanderTelemetry::PosBot pos;
+            pos.g = bot->GetGUIDLow();
+            pos.map = bot->GetMapId();
+            pos.x = bot->GetPositionX();
+            pos.y = bot->GetPositionY();
+            pos.z = bot->GetPositionZ();
+            pos.o = bot->GetOrientation();
+            pos.alive = bot->IsAlive();
+            pos.hp = pos.alive ? bot->GetHealth() : 0;
+            pos.maxHp = bot->GetMaxHealth();
+            ref.bots.push_back(pos);
+        }
+        auto const watch = s_mobWatch().find(commanderRaw);
+        Map* map = lead->GetMap();
+        if (watch != s_mobWatch().end() && map)
+        {
+            ref.mobs.reserve(std::min(watch->second.mobs.size(), CommanderTelemetry::kMaxPosMobs));
+            for (auto const& row : watch->second.mobs)
+            {
+                if (ref.mobs.size() >= CommanderTelemetry::kMaxPosMobs)
+                    break;
+                uint64 const guid = std::get<0>(row);
+                Unit* unit = map->GetUnit(::ObjectGuid(guid));
+                if (!unit)
+                    continue;
+                CommanderTelemetry::PosMob mob;
+                mob.id = guid;
+                mob.x = unit->GetPositionX();
+                mob.y = unit->GetPositionY();
+                mob.hpPct = unit->GetMaxHealth()
+                    ? static_cast<uint32>(unit->GetHealth() * 100ull / unit->GetMaxHealth()) : 0;
+                mob.victim = unit->GetTargetGuid().GetRawValue();
+                ref.mobs.push_back(mob);
+            }
+        }
+        out.push_back(std::move(ref));
+    }
 }
 
 // One unit as the Dungeons tab shows it (issue #1101): field reads on the unit and its template, the seeing member's reaction to
@@ -12368,10 +12751,28 @@ static void FillDungeonMob(Player* seer, Unit* unit, CommanderTelemetry::MobInfo
         unit->HasUnitState(UNIT_STAT_FLEEING), unit->HasUnitState(UNIT_STAT_ROOT));
     if (uint32 const spellId = CurrentSpellId(unit))
         mob.cast = SpellNameOf(spellId);
+    if (mob.rank == 'b' || mob.rank == 'e')
+        FillMobFacingAndCast(unit, StandWindow::kNoOwner, mob);
 }
 
 // The combat monitor's 1 Hz run tick (task A8b): the bound bots, in-combat
 // state, aura sample; only when Enabled(). Other workers edit the bind code.
+// The run tick stamps the commander it fed, so the bound-group sampler leaves
+// that binding to it; both are cleared with the binding.
+static std::unordered_map<uint64, uint32>& s_runFedAt()
+{
+    static std::unordered_map<uint64, uint32> fed;
+    return fed;
+}
+
+// The sampler's clock of each binding's lead being unusable, kept only while
+// its binding stands (CollectCommanderTelemetry prunes it).
+static std::unordered_map<uint64, TortoiseBots::BoundFight::LeadAway>& s_leadAway()
+{
+    static std::unordered_map<uint64, TortoiseBots::BoundFight::LeadAway> away;
+    return away;
+}
+
 // Groups the snapshot has fed before: a released binding's book is forgotten
 // here (the bind code is owned by parallel workers).
 static std::unordered_set<uint32_t>& s_combatGroups()
@@ -12400,21 +12801,52 @@ static void ForgetReleasedCombatGroups()
     }
 }
 
-static void FillCommanderCombat(uint64 commanderRaw, RemoteCommander::Binding const& binding, Player* lead,
+// The elite and boss cast starts of the bound groups (once per 250 ms on the
+// world thread, only while a fight runs): a guid lookup on the lead's map per
+// watched unit, no grid or world scan, at most 8 units per binding.
+void PollEnemyCasts()
+{
+    if (!TortoiseBots::CombatMonitorService::Instance().AnyInFight() || s_mobWatch().empty())
+        return;
+    for (auto& entry : s_mobWatch())
+    {
+        CommanderMobWatch& watch = entry.second;
+        if (!TortoiseBots::CombatMonitorService::Instance().InFight(watch.groupId))
+            continue;
+        Player* lead = FindCharacter(watch.leadRaw);
+        if (!lead || !lead->IsInWorld())
+            continue;
+        Map* map = lead->GetMap();
+        size_t polled = 0;
+        for (int pass = 0; pass < 2 && polled < 8; ++pass)   // rank b first, then e
+        {
+            for (auto const& mob : watch.mobs)
+            {
+                if (polled >= 8)
+                    break;
+                char const rank = std::get<2>(mob);
+                if ((rank == 'b' ? 0 : rank == 'e' ? 1 : -1) != pass)
+                    continue;
+                ++polled;
+                uint64 const guid = std::get<0>(mob);
+                Unit* unit = map->GetUnit(::ObjectGuid(guid));
+                uint32 const spellId = unit ? CurrentSpellId(unit) : 0;
+                if (spellId && spellId != watch.lastCast[guid])
+                    TortoiseBots::CombatMonitorService::Instance().NoteEnemyCast(watch.groupId, std::get<1>(mob), guid,
+                        unit->GetName(), SpellNameOf(spellId), rank);
+                watch.lastCast[guid] = spellId;
+            }
+        }
+    }
+}
+
+static void FillCommanderCombat(RemoteCommander::Binding const& binding, Player* lead,
     CommanderTelemetry::BindingRef& ref)
 {
     TortoiseBots::CombatMonitorService::Instance().SyncConfig(sPlayerbotAIConfig.combatMonitor &&
         TortoiseBots::ObservabilityEmitter::Instance().IsEnabled());
     if (!TortoiseBots::CombatMonitorService::Instance().Enabled() || !lead)
         return;
-    if (DungeonRuns().find(commanderRaw) == DungeonRuns().end())
-    {
-        // No run: nothing aggregates (the live window would go stale).
-        TortoiseBots::CombatMonitorService::Instance().Forget(ref.groupId);
-        s_combatGroups().erase(ref.groupId);
-        ref.combatJson.clear();
-        return;
-    }
     TortoiseBots::CombatMonitorService::Instance().NoteBinding(ref.groupId, ref.commander, ref.commanderGuid,
         lead->GetMapId());
     s_combatGroups().insert(ref.groupId);
@@ -12456,8 +12888,64 @@ static std::vector<TortoiseBots::CombatMonitor::MemberInfo> CombatMonitorMembers
     return members;
 }
 
+// One combat sample of a bound group (task R1): the focus unit's tracked
+// debuffs and one Refresh. The run tick hands its own engaged facts; the
+// bound-group sampler hands none and finds the fight's boss (the entry its
+// context carries) among the book's engaged creatures.
+static void FeedCombatMonitor(RemoteCommander::Binding const& binding, Player* lead,
+    std::vector<Player*> const& bots, bool anyInCombat, bool allDead,
+    TortoiseBots::CombatMonitor::FightContext const& ctx,
+    std::vector<TortoiseBots::DungeonRun::UnitFact> const* engaged)
+{
+    using namespace TortoiseBots;
+    // The focus unit (L15): the run's boss when the step is a boss step and it
+    // is engaged, else the engaged unit with the most maximum health; without
+    // engaged facts (the sampler), the fight's boss.
+    uint64_t focusGuid = 0;
+    uint32_t focusMaxHealth = 0;
+    if (engaged)
+        for (DungeonRun::UnitFact const& u : *engaged)
+        {
+            if (ctx.bossEntry && u.entry == ctx.bossEntry)
+            {
+                focusGuid = u.guid;
+                break;
+            }
+            if (u.maxHealth > focusMaxHealth)
+            {
+                focusMaxHealth = u.maxHealth;
+                focusGuid = u.guid;
+            }
+        }
+    else
+        for (CombatMonitor::EngagedUnit const& u : CombatMonitorService::Instance().EngagedNow(binding.groupId))
+            if (ctx.bossEntry && u.entry == ctx.bossEntry)
+            {
+                focusGuid = u.guid;
+                break;
+            }
+    std::vector<std::string> debuffKeysUp;
+    if (focusGuid)
+        if (Unit* focus = ObjectAccessor::GetUnit(*lead, ::ObjectGuid(focusGuid)))
+            for (auto const& entry : focus->GetSpellAuraHolderMap())
+            {
+                SpellAuraHolder const* holder = entry.second;
+                if (!holder || holder->IsDeleted() || holder->IsPassive())
+                    continue;
+                SpellEntry const* proto = holder->GetSpellProto();
+                if (!proto)
+                    continue;
+                for (std::string const& key : CombatMonitor::DebuffKeys(proto->SpellName[0],
+                    holder->GetStackAmount()))
+                    debuffKeysUp.push_back(key);
+            }
+    CombatMonitorService::Instance().Refresh(binding.groupId, CombatMonitorMembers(bots), anyInCombat, allDead,
+        ctx, debuffKeysUp, WorldTimer::getMSTime());
+}
+
 // The 1 Hz run tick's combat sample (task A8b): the bound bots, in-combat
 // state, run context and one focus unit's aura sample; only when Enabled().
+// The stamp tells the bound-group sampler this binding is the run's.
 static void RefreshCombatMonitor(uint64 commanderRaw, RemoteCommander::Binding const& binding, Player* lead,
     std::vector<Player*> const& bots, TortoiseBots::DungeonRun::Facts const& facts, DungeonRunSlot const& slot)
 {
@@ -12466,6 +12954,7 @@ static void RefreshCombatMonitor(uint64 commanderRaw, RemoteCommander::Binding c
         ObservabilityEmitter::Instance().IsEnabled());
     if (!CombatMonitorService::Instance().Enabled() || !lead || !lead->IsInWorld())
         return;
+    s_runFedAt()[commanderRaw] = WorldTimer::getMSTime();
     DungeonRun::StatusFields const fields = DungeonRun::StatusParts(slot.run);
     CombatMonitor::FightContext ctx;
     ctx.plan = fields.plan;
@@ -12482,47 +12971,116 @@ static void RefreshCombatMonitor(uint64 commanderRaw, RemoteCommander::Binding c
         }
         ctx.planned = step->entries;
     }
-    // The focus unit (L15): the run's boss when the step is a boss step and he
-    // is engaged, else the engaged unit with the most maximum health.
-    uint64_t focusGuid = 0;
-    uint32_t focusMaxHealth = 0;
-    for (DungeonRun::UnitFact const& u : facts.engagedUnits)
-    {
-        if (ctx.bossEntry && u.entry == ctx.bossEntry)
-        {
-            focusGuid = u.guid;
-            break;
-        }
-        if (u.maxHealth > focusMaxHealth)
-        {
-            focusMaxHealth = u.maxHealth;
-            focusGuid = u.guid;
-        }
-    }
-    std::vector<std::string> debuffKeysUp;
-    if (focusGuid)
-        if (Unit* focus = ObjectAccessor::GetUnit(*lead, ::ObjectGuid(focusGuid)))
-            for (auto const& entry : focus->GetSpellAuraHolderMap())
-            {
-                SpellAuraHolder const* holder = entry.second;
-                if (!holder || holder->IsDeleted() || holder->IsPassive())
-                    continue;
-                SpellEntry const* proto = holder->GetSpellProto();
-                if (!proto)
-                    continue;
-                for (std::string const& key : CombatMonitor::DebuffKeys(proto->SpellName[0],
-                    holder->GetStackAmount()))
-                    debuffKeysUp.push_back(key);
-            }
     bool const allDead = facts.total > 0 && facts.alive == 0;
-    (void)commanderRaw;
-    CombatMonitorService::Instance().Refresh(binding.groupId, CombatMonitorMembers(bots), facts.anyInCombat,
-        allDead, ctx, debuffKeysUp, WorldTimer::getMSTime());
+    FeedCombatMonitor(binding, lead, bots, facts.anyInCombat, allDead, ctx, &facts.engagedUnits);
+}
+
+// The bound-group sampler (task R1): every standing binding whose run did not
+// feed the combat monitor in the last kRunFedWindowMs gets a 1 Hz sample, so a
+// fight pulled without a run (or after `.bot run stop`) is recorded. The run
+// path is untouched; one sampler per second feeds the rest. A binding whose
+// lead is unusable is not sampled, and the fight it left open is closed as
+// unfinished after the lead-away grace.
+static void SampleBoundFights(uint32 diff)
+{
+    using namespace TortoiseBots;
+    static uint32 s_boundFightMs = 0;
+    static uint64 s_samples = 0, s_sumUs = 0, s_maxUs = 0;
+    static uint32 s_loggedAt = 0;
+    s_boundFightMs += diff;
+    if (s_boundFightMs < BoundFight::kSampleMs)
+        return;
+    s_boundFightMs = 0;
+    CombatMonitorService::Instance().SyncConfig(sPlayerbotAIConfig.combatMonitor &&
+        ObservabilityEmitter::Instance().IsEnabled());
+    if (!CombatMonitorService::Instance().Enabled())
+        return;
+    std::chrono::steady_clock::time_point const started = std::chrono::steady_clock::now();
+    uint32 const now = WorldTimer::getMSTime();
+    for (uint64 commanderRaw : CommanderBindings().Commanders())
+    {
+        RemoteCommander::Binding const* binding = CommanderBindings().FindByCommander(commanderRaw);
+        if (!binding)
+            continue;
+        auto const fed = s_runFedAt().find(commanderRaw);
+        bool const fedEver = fed != s_runFedAt().end();
+        if (!BoundFight::SamplerFeeds(true, fedEver, fedEver ? fed->second : 0, now))
+            continue;
+        Player* lead = FindCharacter(binding->leadGuid);
+        Group* group = lead ? lead->GetGroup() : nullptr;
+        bool const leadUsable = BoundFight::LeadUsable(lead != nullptr, lead && lead->IsInWorld(),
+            group ? group->GetId() : 0, binding->groupId);
+        // The lead is gone (out of world through a map transition, no group or
+        // another one after a rejoin) and the sampler cannot feed: past the
+        // grace the fight it left open closes.
+        if (s_leadAway()[commanderRaw].Overdue(leadUsable, now))
+            CombatMonitorService::Instance().CloseUnfinished(binding->groupId, now);
+        if (!leadUsable)
+            continue;
+        std::vector<Player*> const bots = CommandedBots(group, lead);
+        bool anyInCombat = false;
+        bool allDead = !bots.empty();
+        for (Player* bot : bots)
+        {
+            anyInCombat = anyInCombat || MemberInCombat(bot);
+            allDead = allDead && !bot->IsAlive();
+        }
+        // A paused or done run keeps its plan on the fight; otherwise none.
+        CombatMonitor::FightContext ctx;
+        ctx.kind = "commander";
+        if (auto const slot = DungeonRuns().find(commanderRaw); slot != DungeonRuns().end())
+        {
+            DungeonRun::StatusFields const fields = DungeonRun::StatusParts(slot->second.run);
+            ctx.plan = fields.plan;
+            ctx.leg = fields.leg;
+            ctx.step = static_cast<uint32_t>(fields.step);
+        }
+        FeedCombatMonitor(*binding, lead, bots, anyInCombat, allDead, ctx, nullptr);
+        if (!CombatMonitorService::Instance().InFight(binding->groupId))
+            continue;
+        // The boss from data: world-boss rank, an instance-bind flag, or a plan
+        // boss step of the lead's map (the boss list's rule), most health first.
+        std::vector<BoundFight::BossCandidate> candidates;
+        for (CombatMonitor::EngagedUnit const& u : CombatMonitorService::Instance().EngagedNow(binding->groupId))
+        {
+            BoundFight::BossCandidate c;
+            c.entry = u.entry;
+            c.guid = u.guid;
+            c.name = u.name;
+            if (CreatureInfo const* info = sObjectMgr.GetCreatureTemplate(u.entry))
+                c.boss = info->rank == CREATURE_ELITE_WORLDBOSS ||
+                    (info->flags_extra & CREATURE_FLAG_EXTRA_INSTANCE_BIND);
+            c.boss = c.boss || ai::GetDungeonPlans().IsBossEntry(lead->GetMapId(), u.entry);
+            if (Unit* unit = ObjectAccessor::GetUnit(*lead, ::ObjectGuid(u.guid)))
+                c.maxHealth = unit->GetMaxHealth();
+            candidates.push_back(std::move(c));
+        }
+        int const picked = BoundFight::PickBoss(candidates);
+        if (picked >= 0)
+            CombatMonitorService::Instance().NoteBoss(binding->groupId, candidates[picked].entry,
+                candidates[picked].name.c_str());
+    }
+    int64_t const us = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - started).count();
+    ++s_samples;
+    s_sumUs += static_cast<uint64>(us);
+    s_maxUs = std::max(s_maxUs, static_cast<uint64>(us));
+    if (now - s_loggedAt >= 60000)
+    {
+        TB_LOG_DEBUG("TortoiseBots: bound fights 60s: %u samples, avg %llu us max %llu us",
+            static_cast<uint32>(s_samples), static_cast<unsigned long long>(s_sumUs / std::max<uint64>(s_samples, 1)),
+            static_cast<unsigned long long>(s_maxUs));
+        s_loggedAt = now;
+        s_samples = 0;
+        s_sumUs = 0;
+        s_maxUs = 0;
+    }
 }
 
 void CollectDungeonMobs(std::vector<DungeonMobTelemetry::RunRef>& runs)
 {
     using namespace DungeonMobTelemetry;
+    s_standWindowMarks.Prune(WorldTimer::getMSTime());
     // World thread only (the emitter's snapshot cycle, outside the map update): reused between runs and cycles.
     static std::unordered_set<uint64> tried;
     static std::list<ObjectGuid> cached;

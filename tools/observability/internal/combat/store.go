@@ -8,8 +8,10 @@
 package combat
 
 import (
+	"sort"
 	"strconv"
 	"sync"
+	"time"
 )
 
 // maxFightsPerCommander bounds memory: a raid night is a handful of fights,
@@ -29,7 +31,14 @@ type Store struct {
 	rules   []Rule
 	fights  map[string][]keptFight // commander -> newest first
 	seenIDs map[string]map[string]bool
+	live    map[string]*liveFight // commander -> the one open fight (live.go)
+	engaged EngagedFunc           // whether a live row is a real fight now (nil: every row is listed)
+	now     func() time.Time      // tests inject a clock; nil is time.Now
 }
+
+// EngagedFunc tells whether a commander's group has a hostile unit engaged right now (Engaged over the module's
+// snapshot). It must not call back into the store.
+type EngagedFunc func(commander string) bool
 
 // NewStore builds a store judging with rules (nil rules: store only, every
 // summary reads 0 warnings).
@@ -38,7 +47,36 @@ func NewStore(rules []Rule) *Store {
 		rules:   rules,
 		fights:  make(map[string][]keptFight),
 		seenIDs: make(map[string]map[string]bool),
+		live:    make(map[string]*liveFight),
 	}
+}
+
+// SetClock replaces the store's clock (live-fight expiry); nil restores time.Now.
+func (s *Store) SetClock(now func() time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.now = now
+}
+
+// SetEngaged installs the check that keeps a live row off the lists while no hostile is engaged (Engaged over the
+// module's snapshot); nil lists every open row. A row the check refuses is kept, not filed: the fight may still be
+// the one it opens, and COMBAT_FIGHT closes it either way.
+func (s *Store) SetEngaged(fn EngagedFunc) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.engaged = fn
+}
+
+// liveListedLocked reports whether the open row of commander is a fight now; called with the lock held.
+func (s *Store) liveListedLocked(commander string) bool {
+	return s.engaged == nil || s.engaged(commander)
+}
+
+func (s *Store) nowLocked() time.Time {
+	if s.now != nil {
+		return s.now()
+	}
+	return time.Now()
 }
 
 // Rules returns the table the store judges with.
@@ -58,8 +96,24 @@ func Key(commander string, session uint64, id string) string {
 // Add files a fight under its commander. False when the (session, id) was
 // seen before: the module's second take of the same fight.
 func (s *Store) Add(session uint64, f Fight) bool {
+	_, ok := s.AddSummary(session, f)
+	return ok
+}
+
+// AddSummary files a fight like Add and returns its list row, which the live
+// stream pushes as the "fight" frame. Filing it closes the live row of the
+// same (session, id) the COMBAT_EVENTS datagrams opened.
+func (s *Store) AddSummary(session uint64, f Fight) (FightSummary, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if !s.addLocked(session, f) {
+		return FightSummary{}, false
+	}
+	return s.summaryLocked(f.Commander, keptFight{session: session, fight: f}), true
+}
+
+// addLocked files one fight; called with the lock held.
+func (s *Store) addLocked(session uint64, f Fight) bool {
 	seen := s.seenIDs[f.Commander]
 	if seen == nil {
 		seen = make(map[string]bool)
@@ -70,6 +124,9 @@ func (s *Store) Add(session uint64, f Fight) bool {
 		return false
 	}
 	seen[key] = true
+	if lf := s.live[f.Commander]; lf != nil && lf.session == session && lf.id == f.ID {
+		delete(s.live, f.Commander)
+	}
 	list := append([]keptFight{{session: session, fight: f}}, s.fights[f.Commander]...)
 	if len(list) > maxFightsPerCommander {
 		for _, dropped := range list[maxFightsPerCommander:] {
@@ -81,26 +138,60 @@ func (s *Store) Add(session uint64, f Fight) bool {
 	return true
 }
 
-// List returns the newest-first summaries of a commander's kept fights.
+// List returns the newest-first summaries of a commander's kept fights, the
+// live fight first while one runs.
 func (s *Store) List(commander string) []FightSummary {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	var out []FightSummary
-	for _, k := range s.fights[commander] {
-		out = append(out, FightSummary{
-			ID:       k.fight.ID,
-			Key:      Key(commander, k.session, k.fight.ID),
-			Session:  k.session,
-			Start:    k.fight.Start,
-			Dur:      k.fight.DurMS,
-			Outcome:  k.fight.Outcome,
-			BossName: k.fight.BossName,
-			Leg:      k.fight.Leg,
-			Step:     k.fight.Step,
-			Deaths:   len(k.fight.Deaths),
-			Warnings: len(Judge(k.fight, s.rules)),
-		})
+	s.expireLocked(s.nowLocked())
+	out := make([]FightSummary, 0, len(s.fights[commander])+1)
+	if lf := s.live[commander]; lf != nil && s.liveListedLocked(commander) {
+		out = append(out, s.liveSummaryLocked(commander, lf))
 	}
+	for _, k := range s.fights[commander] {
+		out = append(out, s.summaryLocked(commander, k))
+	}
+	return out
+}
+
+// summaryLocked builds one list row; called with the lock held.
+func (s *Store) summaryLocked(commander string, k keptFight) FightSummary {
+	return FightSummary{
+		ID:       k.fight.ID,
+		Key:      Key(commander, k.session, k.fight.ID),
+		Session:  k.session,
+		Start:    k.fight.Start,
+		Dur:      k.fight.DurMS,
+		Outcome:  k.fight.Outcome,
+		BossName: k.fight.BossName,
+		Leg:      k.fight.Leg,
+		Step:     k.fight.Step,
+		Deaths:   len(k.fight.Deaths),
+		Warnings: len(Judge(k.fight, s.rules)),
+	}
+}
+
+// LiveRows returns the summaries of the open fights, of the given commanders
+// or of all of them when names is empty (the SSE snapshot frame).
+func (s *Store) LiveRows(names []string) []FightSummary {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.expireLocked(s.nowLocked())
+	want := make(map[string]bool, len(names))
+	for _, n := range names {
+		want[n] = true
+	}
+	out := make([]FightSummary, 0, len(s.live))
+	for c, lf := range s.live {
+		if len(want) > 0 && !want[c] {
+			continue
+		}
+		if !s.liveListedLocked(c) {
+			continue
+		}
+		out = append(out, s.liveSummaryLocked(c, lf))
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Key < out[j].Key })
 	return out
 }
 
@@ -108,6 +199,10 @@ func (s *Store) List(commander string) []FightSummary {
 func (s *Store) Get(commander string, session uint64, id string) (Fight, []Warning, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.expireLocked(s.nowLocked())
+	if lf := s.live[commander]; lf != nil && lf.session == session && lf.id == id {
+		return s.liveFightLocked(commander, lf), nil, true
+	}
 	for _, k := range s.fights[commander] {
 		if k.session == session && k.fight.ID == id {
 			return k.fight, Judge(k.fight, s.rules), true
@@ -120,6 +215,12 @@ func (s *Store) Get(commander string, session uint64, id string) (Fight, []Warni
 func (s *Store) GetKey(key string) (Fight, []Warning, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.expireLocked(s.nowLocked())
+	for commander, lf := range s.live {
+		if Key(commander, lf.session, lf.id) == key {
+			return s.liveFightLocked(commander, lf), nil, true
+		}
+	}
 	for commander, list := range s.fights {
 		for _, k := range list {
 			if Key(commander, k.session, k.fight.ID) == key {
