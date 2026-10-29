@@ -1,4 +1,5 @@
 #include "LootObjectStack.h"
+#include "policy/loot/CorpseLootPolicy.h"
 #include "playerbot.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/ServerFacade.h"
@@ -130,8 +131,10 @@ void LootObject::Refresh(Player* bot, ObjectGuid guid, bool debug)
         // corpse is refused (Spell::CheckCast -> SPELL_FAILED_TARGET_NOT_LOOTED while
         // !loot.isLooted()), so preferring the skin path here parked skinners next to an
         // unlootable-and-unskinnable beast casting Skinning every tick.
-        if (creature->HasFlag(UNIT_DYNAMIC_FLAGS, UNIT_DYNFLAG_LOOTABLE))
-        {
+        // A corpse whose only loot left is this bot's quest item can lack the raw flag (the core masks
+        // it per viewer), so ai::CorpseHasBodyLootFor opens the branch on the viewer's own answer too;
+        // MayLootCorpse stays the gate.
+        if (ai::CorpseHasBodyLootFor(bot, creature))
             // The lootable flag is not a right: the core masks it per viewer with Player::IsAllowedToLoot
             // (Object::BuildValuesUpdate), where the round-robin rule lives. Without that test every
             // grouped bot queues the same corpse and walks to it -- opening an empty window and taking
