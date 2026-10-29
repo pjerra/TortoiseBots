@@ -94,7 +94,7 @@ class DeepBreathSnapshot(unittest.TestCase):
         self.assertIn("mob.castTotalMs = totalMs;", fn)
         self.assertIn("mob.channel = false;", fn)
         self.assertIn("mob.castTarget = 0;", fn)
-        self.assertIn("CommanderTelemetry::SpellShape::For(mob.castId)", fn)
+        self.assertIn("TortoiseBots::SpellShape::For(mob.castId)", fn)
         # A closed window forgets its mark; a real cast does too.
         self.assertGreaterEqual(fn.count("s_standWindowMarks.Forget(windowKey);"), 2)
 
