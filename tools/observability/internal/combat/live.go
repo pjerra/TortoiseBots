@@ -15,6 +15,22 @@ import (
 // detail builds from them). The module queues at most this many per book.
 const LiveEventsMax = 200
 
+// LiveLogMax bounds the events of the kinds a fight log keeps (cast,
+// interrupt, taunt and death): those are what a long fight is replayed from,
+// so they get their own, higher ring. The fight the row becomes keeps at most
+// as many.
+const LiveLogMax = 1000
+
+// isLogKind reports whether a finished fight keeps an event of this kind in its
+// log: the casts, interrupts, taunts and deaths the debugger replays.
+func isLogKind(k string) bool {
+	switch k {
+	case "cast", "interrupt", "taunt", "death":
+		return true
+	}
+	return false
+}
+
 // LiveExpire is how long a live fight may go without a datagram before it is
 // filed as unfinished (the module's keepalive is 5 s).
 const LiveExpire = 15 * time.Minute
@@ -78,6 +94,10 @@ type liveFight struct {
 	mapID    uint32
 	header   LiveHeader
 	events   []json.RawMessage
+	kinds    []bool // kinds[i]: events[i] is of a kind the fight log keeps
+	logged   int    // events of the log kinds held in events
+	dropped  int    // log-kind events trimmed past LiveLogMax, so the filed fight can report them
+	other    int    // events of every other kind held in events
 	deaths   []FightDeath
 	lastSeen time.Time
 	outcome  string
@@ -124,6 +144,12 @@ func (s *Store) ApplyEvents(dg EventsDatagram, now time.Time) (FightSummary, boo
 			// The finished fight is already filed: a late datagram of it.
 			return FightSummary{}, false, false
 		default:
+			if row != nil {
+				// The new fight replaces the live row, whose own end may
+				// never arrive: file it the way the expiry path files a
+				// quiet row, so neither the fight nor its log is lost.
+				s.fileLiveLocked(dg.Commander, row, "unfinished")
+			}
 			row = &liveFight{session: dg.Session, seq: dg.Seq, id: h.ID, group: dg.Group, mapID: dg.Map, header: *h}
 			s.live[dg.Commander] = row
 			changed = true
@@ -156,10 +182,7 @@ func (s *Store) ApplyEvents(dg EventsDatagram, now time.Time) (FightSummary, boo
 			row.ended, row.outcome, row.endDur = true, ev.O, ev.Dur
 			changed = true
 		}
-		row.events = append(row.events, raw)
-		if len(row.events) > LiveEventsMax {
-			row.events = append(row.events[:0], row.events[len(row.events)-LiveEventsMax:]...)
-		}
+		row.noteEvent(raw, ev.K)
 		if ev.K == "death" {
 			row.deaths = append(row.deaths, FightDeath{Name: ev.N, TMs: ev.T, X: ev.X, Y: ev.Y, Killer: ev.By})
 			if len(row.deaths) > LiveEventsMax {
@@ -168,6 +191,69 @@ func (s *Store) ApplyEvents(dg EventsDatagram, now time.Time) (FightSummary, boo
 		}
 	}
 	return s.liveSummaryLocked(dg.Commander, row), changed, true
+}
+
+// noteEvent adds one event to the row's ring, oldest first. Each class has its own cap: the kinds a fight log keeps up to
+// LiveLogMax, every other kind LiveEventsMax. Past a cap, the oldest event of that class goes, so a busy fight keeps its
+// newest casts without losing the events that only the live view reads.
+func (lf *liveFight) noteEvent(raw json.RawMessage, kind string) {
+	logged := isLogKind(kind)
+	lf.events = append(lf.events, raw)
+	lf.kinds = append(lf.kinds, logged)
+	if logged {
+		lf.logged++
+		if lf.logged > LiveLogMax {
+			lf.dropOldest(true)
+			lf.dropped++
+		}
+		return
+	}
+	lf.other++
+	if lf.other > LiveEventsMax {
+		lf.dropOldest(false)
+	}
+}
+
+// dropOldest removes the oldest event of one class from the ring; true is the log kinds, false the others.
+func (lf *liveFight) dropOldest(log bool) {
+	for i, isLog := range lf.kinds {
+		if isLog != log {
+			continue
+		}
+		n := len(lf.events)
+		copy(lf.events[i:], lf.events[i+1:])
+		lf.events[n-1] = nil // the copy left the old last event referenced past the slice
+		lf.events = lf.events[:n-1]
+		copy(lf.kinds[i:], lf.kinds[i+1:])
+		lf.kinds = lf.kinds[:n-1]
+		if log {
+			lf.logged--
+		} else {
+			lf.other--
+		}
+		return
+	}
+}
+
+// logForFile returns the events a filed fight keeps: the log kinds in order, their newest LiveLogMax of them, and how many
+// were dropped for the cap.
+func (lf *liveFight) logForFile() ([]json.RawMessage, int) {
+	out := make([]json.RawMessage, 0, lf.logged)
+	for i, raw := range lf.events {
+		if lf.kinds[i] {
+			out = append(out, raw)
+		}
+	}
+	dropped := lf.dropped
+	if len(out) > LiveLogMax {
+		extra := len(out) - LiveLogMax
+		dropped += extra
+		out = out[extra:]
+	}
+	if len(out) == 0 {
+		return nil, 0
+	}
+	return out, dropped
 }
 
 // seenLocked reports whether a finished fight of this (session, id) is filed.
