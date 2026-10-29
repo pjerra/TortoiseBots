@@ -35,8 +35,9 @@
 //   - the owner's rule (2026-10-17): a fallen member (the lead bot too) is
 //     waited for until it is alive and back with the party before the next
 //     pull, boss, task or move (WaitForFallen), fight first, never mid-event;
-//     a lead bot back at the entrance alone walks back while the living
-//     party holds where it is (LeadRevivedAway);
+//     a lead bot back at the entrance alone gets the living party summoned
+//     to it and the party walks back together (LeadRevivedAway,
+//     SummonHeldToLead);
 //   - a refused gather is sent once more, then the run goes on without it;
 //     at a gather's ceiling (and an approach hop's) a far straggler that
 //     stands still or stalled (kSummonYd) is summoned once;
@@ -92,6 +93,13 @@ constexpr std::uint32_t kPlayerGatherWaitMs = 60000; // a regroup waits this lon
 constexpr std::uint32_t kPlayerHoldCapMs = 300000;   // a step held (or a regroup waiting) for a player this long pauses
 constexpr std::uint32_t kAutoRegroupsPerStep = 2; // regroups the run does by itself per step, then it pauses
 constexpr std::uint32_t kGatherTries = 2;         // a gather refused this often: the run goes on without it
+constexpr std::uint32_t kHeldSummonTries = 3;     // a held bot's summon refused this often: it stays held, the party walks back without it
+// A held bot's accepted summon that never brings it to the lead bot answers nothing: PlayerConvenience drops it
+// without an OrderRefused (the bot, its anchor or its master changed, the teleport was refused, the arrival
+// timed out). This is that subsystem's own clock, its 3 s delay (kSummonDelayMs) and 10 s arrival timeout
+// (kSummonArrivalTimeoutMs, both in behavior/PlayerConvenience.cpp) plus a margin; past it a pending mark counts
+// as a failed try.
+constexpr std::uint64_t kHeldSummonExpiryMs = 15000;
 constexpr std::uint32_t kWalkBackRetries = 3;     // a walk-back point refused for a passing reason is sent again this often
 constexpr float kArriveYd = 3.0f;                 // a walk is done this close to its point
 constexpr float kStalledArriveYd = 6.0f;          // ... or this close once it stopped gaining ground (a point
@@ -684,6 +692,10 @@ struct MemberFact
     // own wording; the rest (battleground, instance map, transport) is the open-world check. Unread: OpenWorld.
     enum class OffMapBlock : std::uint8_t { Busy, OpenWorld };
     OffMapBlock offMapBlock = OffMapBlock::OpenWorld;
+    // ta252 (Dire Maul West rf-B-4, 2026-10-25): the bot is on the plan's map id but in another copy of it (another
+    // instance id than the lead bot's); the glue gives it kOtherMapYd. A summon cannot reach it there (a same-map
+    // teleport stays in its copy): InstanceRejoinTick moves it. Unread: false.
+    bool otherCopy = false;
 };
 
 // An instance door: where an area trigger into the plan's map puts a player
@@ -1433,7 +1445,25 @@ struct Run
     // and the run leaves them out of its gathers and summons (HoldView). A bot
     // drops out once the lead bot is within kGatherYd of it; the list ends with
     // the walk back, on a pause and with the step.
+    // ta263: in a running run each held bot is summoned to the lead bot
+    // (SummonHeldToLead) and stays held until the facts show it arrived; only
+    // the other-part pause keeps bots held (holdWhilePaused).
     std::vector<std::string> hold;
+    // ta263: a held bot a summon took toward the lead bot and that is not there
+    // yet, with the run's clock of that order and the refusals since. It stays
+    // in `hold` meantime (no gather, no second summon), and only the facts that
+    // show it at the lead bot end the wait: removing it on the order alone lost
+    // a bot whose summon was refused. A refused summon clears `pending` (a later
+    // tick sends it again); a `busy` one keeps it pending until its own clock
+    // runs out; kHeldSummonTries refusals leave it held while the party
+    // walks back without it.
+    struct HeldSummon
+    {
+        std::uint64_t ms = 0;       // the run's clock when its summon went out
+        std::uint32_t refusals = 0; // ... refused or never landed this often since it was held
+        bool pending = false;       // sent, its answer (a refusal) or its arrival not in yet
+    };
+    std::unordered_map<std::string, HeldSummon> heldSummons;
     // A regroup for a dead lead bot (WaitForFallen): once the lead bot is up
     // again more than kSeeYd from where it fell, the hold is filled before the
     // regroup gathers (19z11 03:24: the fight ended with the lead bot a ghost).
@@ -1689,6 +1719,11 @@ struct Run
     // per bot per step, and an earlier copy of the same note is replaced, not appended to).
     std::size_t offMapNotedStep = static_cast<std::size_t>(-1);
     std::unordered_set<std::string> offMapNoted;
+    // ta252: the rejoin of a bot in another copy of the instance (InstanceRejoinTick): each bot's last rejoin (runMs)
+    // and its rejoins at the step rejoinStep (kRejoinTries a step and bot; Resume starts the count over).
+    std::unordered_map<std::string, std::uint64_t> rejoinAt;
+    std::size_t rejoinStep = static_cast<std::size_t>(-1);
+    std::unordered_map<std::string, std::uint32_t> rejoinTries;
     // The walk-back point last sent, from where, and how often (kWalkBackResends).
     std::size_t resendIdx = static_cast<std::size_t>(-1);
     float resendX = 0.0f, resendY = 0.0f, resendZ = 0.0f;
@@ -2065,6 +2100,7 @@ inline void Pause(Run& r, const std::string& why)
     r.doorPaused = false; // PauseDoor sets it after
     ClearRunBack(r); // a paused run leaves every bot to its own AI
     r.hold.clear();
+    r.heldSummons.clear();
     r.holdDue = false;
     r.holdWhilePaused = false;
     r.otherPartPaused = false; // PauseOtherPart sets it after
@@ -2308,6 +2344,7 @@ inline void ResetStep(Run& r)
     r.holdUnstayed = false;
     r.holdEngageGuid = 0;
     r.hold.clear();
+    r.heldSummons.clear();
     r.holdDue = false;
     r.speedLeash = false;
     r.speedLeashMs = 0;
@@ -3182,7 +3219,7 @@ inline std::string WaitNote(const Run& r, const Facts& f)
     for (const MemberFact& m : f.members)
         if (!m.name.empty() && (m.yd > kGatherYd || m.dz > kStragglerDzYd) &&
             (r.waitFor.count(m.name) || r.regroup))
-            add(m.name, m.offPlanMap ? "outside the instance" : "running back");
+            add(m.name, m.offPlanMap ? "outside the instance" : m.otherCopy ? "in another copy of the instance" : "running back");
     if (out.empty() && f.dead)
         out = std::to_string(f.dead) + " dead";
     return out.empty() ? std::string("waiting for the party") : "waiting for " + out;
@@ -4374,6 +4411,7 @@ inline bool Resume(Run& r)
     r.autoRegroups = 0;
     r.otherPartRescues = 0; // a resume gives the lead bot in another part fresh rescue teleports
     r.offMapReturnTries.clear();
+    r.rejoinTries.clear();
     r.offMapNoted.clear();
     ResetStep(r);
     r.standPullShotGuid = 0; // a resume never keeps a stale in-shot authorization
@@ -5680,6 +5718,8 @@ inline bool PullbackRefusedUnreachable(Run& r, const std::string& order, const s
 
 constexpr std::uint64_t kOffMapReturnRepeatMs = 30000; // one bot's returns at least this far apart
 constexpr std::uint32_t kOffMapReturnTries = 3;        // returns a step per bot, then the pause naming it
+constexpr std::uint64_t kRejoinRepeatMs = 15000; // one bot's rejoins at least this far apart
+constexpr std::uint32_t kRejoinTries = 3;        // rejoins a step per bot, then the pause naming it
 
 inline bool OffMapReturnTick(Run& r, const Facts& f, std::string& order);
 
@@ -5783,6 +5823,38 @@ inline void OrderRefused(Run& r, const std::string& order, const std::string& an
         r.note = order + " refused: " + answer + (r.summonWait.empty() ? "" : ": waiting for it");
         return;
     }
+    // A bot held where the lead bot fell and summoned to it (SummonHeldToLead): a refused
+    // summon takes nobody to the lead bot, so the bot stays held and the mark is cleared
+    // for a later tick (a bot in combat stays held and fights, and the facts then drop it
+    // from the hold). A `busy` one is the subsystem's "one of it is pending already": a
+    // resend the next tick would be refused again, so the mark stays in flight and the
+    // first summon's own clock bounds the wait (no try of its own). kHeldSummonTries
+    // refusals leave it held and the party walks back without it.
+    if (order.compare(0, 7, "summon ") == 0)
+    {
+        auto const mark = r.heldSummons.find(order.substr(7));
+        if (mark != r.heldSummons.end() && mark->second.pending)
+        {
+            std::string const name = mark->first;
+            bool const busy = answer.compare(0, 4, "busy") == 0;
+            if (!busy)
+            {
+                mark->second.pending = false;
+                ++mark->second.refusals;
+            }
+            if (busy)
+                r.note = "the lead bot came back to life away from the party: " + name + " summoned to it, refused (" +
+                    answer + "): waiting for the summon already pending";
+            else if (mark->second.refusals >= kHeldSummonTries)
+                r.note = "the lead bot came back to life away from the party: " + name +
+                    " could not be summoned to it (" + std::to_string(mark->second.refusals) + " refusals: " + answer +
+                    "): it stays held and the party walks back without it";
+            else
+                r.note = "the lead bot came back to life away from the party: " + name + " summoned to it, refused (" +
+                    answer + "): summoning it again";
+            return;
+        }
+    }
     // The loot method orders of a loot step's free-for-all detour (LootFfaStep). A refused `ffa` ends the
     // detour: the step goes on the old way. A refused restore only notes it: the next tick sees the method
     // is not back, and the glue puts it back when the run pauses or stops.
@@ -5819,6 +5891,13 @@ inline void OrderRefused(Run& r, const std::string& order, const std::string& an
     {
         r.note = order + " refused: " + answer + ": tried again in " + std::to_string(kOffMapReturnRepeatMs / 1000) +
             " s";
+        return;
+    }
+    // The rejoin of a bot in another copy of the instance (InstanceRejoinTick): never a pause; the next one after
+    // its 15 s.
+    if (order.compare(0, 7, "rejoin ") == 0)
+    {
+        r.note = order + " refused: " + answer + ": tried again in " + std::to_string(kRejoinRepeatMs / 1000) + " s";
         return;
     }
     // The run leader's walk of one bot (the straggler ladder, a rogue back from a failed Sap): help, never a pause.
@@ -12411,6 +12490,12 @@ inline bool GuardWalkBackWanted(const Run& r, const Facts& f, const PlanStep& s)
     }
 }
 
+// ta265 r4: a mob within kReachPackYd of the pull target is the target's own pack (the core's assistance radius):
+// its aggro does not stop the tank's reach, so the pullback still brings the pack to the party. One farther away
+// (another camp, the Uldaman sentinel at 15.7 yd) still stops it.
+constexpr float kReachPackYd = 10.0f;
+inline bool ReachAggroCounts(float ydFromPullTarget) { return ydFromPullTarget > kReachPackYd; }
+
 // The tank's reach for a pull stops as soon as a mob has aggro. Uldaman run 4
 // (2026-10-17, sentinel pull 2): the tank kept walking toward the west Relic
 // Hunters to reach its pull target, 15.7 yd from the Sentinel, after the camp
@@ -12632,14 +12717,14 @@ inline void NoteLeadDeath(Run& r, const Facts& f)
 // summon` brings a bot to the lead bot, not the lead bot to a bot). Counted
 // against kAutoRegroupsPerStep; past that it pauses. A lead bot raised where
 // it fell (a party resurrection) needs nothing.
-// The living party stays where it won the fight: only the revived few walk
-// back (19z11 03:24: the three alive deep in the hall were summoned to the
-// entrance by hand and the whole party walked the way again). Held: every
+// The living party near where the lead bot fell is picked here and
+// summoned to it (SummonHeldToLead). Held: every
 // living bot more than kGatherYd from the lead bot and within kSeeYd of where
 // the lead bot fell.
 inline void FillHold(Run& r, const Facts& f)
 {
     r.hold.clear();
+    r.heldSummons.clear(); // a new hold: its summons start over
     for (const MemberFact& m : f.members)
         if (!m.name.empty() && m.yd > kGatherYd &&
             ai::PlanDistance(m.x, m.y, m.z, r.leadDeathX, r.leadDeathY, r.leadDeathZ) <= kSeeYd)
@@ -12706,7 +12791,7 @@ inline bool LeadRevivedAway(Run& r, const Facts& f)
     FillHold(r, f);
     r.note = "the lead bot died and came back to life away from the party: regrouping by itself (" +
         std::to_string(r.autoRegroups) + " of " + std::to_string(kAutoRegroupsPerStep) + " at this step)" +
-        (r.hold.empty() ? std::string() : ", the party holds while it walks back");
+        (r.hold.empty() ? std::string() : ", the party is summoned to it and walks back with it");
     return true;
 }
 
@@ -12783,6 +12868,7 @@ inline void UpdateHold(Run& r, const Facts& f)
     if (!r.walkBack && !r.walkBackDue && !r.regroup)
     {
         r.hold.clear();
+        r.heldSummons.clear();
         return;
     }
     r.hold.erase(std::remove_if(r.hold.begin(), r.hold.end(), [&](const std::string& name)
@@ -12795,6 +12881,106 @@ inline void UpdateHold(Run& r, const Facts& f)
                     return m.yd <= nearYd;
             return true;
         }), r.hold.end());
+    // A bot out of the hold keeps no summon mark (there or gone).
+    for (auto it = r.heldSummons.begin(); it != r.heldSummons.end();)
+        it = std::find(r.hold.begin(), r.hold.end(), it->first) == r.hold.end() ? r.heldSummons.erase(it) : std::next(it);
+}
+
+// ta263 (owner 2026-10-20: "regroup the survivors at the lead's revive point instead of walking the lead back";
+// RFC 10-20 leg 7: three held bots attacked 55-77 yd from the staying tank, four deaths): the bots held where the
+// lead bot fell are summoned to it, one a tick, then the whole party walks back. A bot stays in the hold until the
+// facts show it at the lead bot: the order alone takes nobody there, and a refused summon (busy, into a fight,
+// teleporting) must not drop it from the recovery. A refused summon clears the pending mark
+// (OrderRefused), so a later tick sends it again; a `busy` one, a summon of that bot pending
+// already, keeps it in flight until its own clock runs out; kHeldSummonTries refusals leave it
+// held while the party walks back without it. A held bot
+// in a fight leaves the hold at once (the guard and the gather see it). Not while paused, walking back (a direct
+// step's own summon wait owns the hold then), in an event, with the lead bot dead or in another part, or while
+// the stranded lead bot's teleport runs. True when it set a summon.
+inline bool SummonHeldToLead(Run& r, const Facts& f, std::string& order)
+{
+    r.hold.erase(std::remove_if(r.hold.begin(), r.hold.end(), [&](const std::string& name)
+        {
+            for (const MemberFact& m : f.members)
+                if (m.name == name)
+                    return m.inCombat || m.attackers > 0;
+            return false;
+        }), r.hold.end());
+    // A summoned bot leaves the hold only on facts that show it arrived; one
+    // dead, gone or in a fight left it above and keeps no mark. A summon the
+    // subsystem accepted and then dropped answers nothing (PlayerConvenience
+    // cancels it when the bot, its anchor or its master changes, the teleport is
+    // refused or the arrival times out): past its own clock the bot is not
+    // there, so the mark clears and the try counts as a refusal does (sent
+    // again below, or at the cap the bot stays held and the party walks back).
+    for (auto it = r.heldSummons.begin(); it != r.heldSummons.end();)
+    {
+        const MemberFact* m = nullptr;
+        for (const MemberFact& c : f.members)
+            if (c.name == it->first)
+                m = &c;
+        bool const atLead = m && m->yd <= kArriveYd;
+        bool const held = std::find(r.hold.begin(), r.hold.end(), it->first) != r.hold.end();
+        if (atLead)
+            r.hold.erase(std::remove(r.hold.begin(), r.hold.end(), it->first), r.hold.end());
+        else if (held && it->second.pending && r.runMs - it->second.ms > kHeldSummonExpiryMs)
+        {
+            it->second.pending = false;
+            ++it->second.refusals;
+            if (it->second.refusals >= kHeldSummonTries)
+                r.note = "the lead bot came back to life away from the party: " + it->first +
+                    " could not be summoned to it (" + std::to_string(it->second.refusals) +
+                    " failed summons): it stays held and the party walks back without it";
+            else
+                r.note = "the lead bot came back to life away from the party: " + it->first +
+                    " summoned to it, did not arrive (" + std::to_string(it->second.refusals) + " of " +
+                    std::to_string(kHeldSummonTries) + "): summoning it again";
+        }
+        it = held && !atLead ? std::next(it) : r.heldSummons.erase(it);
+    }
+    if (r.hold.empty() || r.state != State::Running || r.holdWhilePaused || r.walkBack || !f.leadAlive || f.anyInCombat ||
+        InEvent(r) || r.strandDue || r.strandOn || LeadInOtherPart(r, f))
+        return false;
+    for (auto it = r.hold.begin(); it != r.hold.end(); ++it)
+    {
+        const MemberFact* m = nullptr;
+        for (const MemberFact& c : f.members)
+            if (c.name == *it)
+                m = &c;
+        if (!m || m->offPlanMap || m->name == f.carrier)
+            continue;
+        auto const mark = r.heldSummons.find(*it);
+        if (mark != r.heldSummons.end() && (mark->second.pending || mark->second.refusals >= kHeldSummonTries))
+            continue; // sent, its answer not in yet, or given up: it stays held
+        std::string const name = *it;
+        Run::HeldSummon& summon = r.heldSummons[name];
+        summon.ms = r.runMs;
+        summon.pending = true;
+        MarkSummoned(r, name);
+        if (r.regroup)
+            r.RestartRegroupClock();
+        order = "summon " + name;
+        r.note = "the lead bot came back to life away from the party: " + name + " summoned to it (" + Num(m->yd) +
+            " yd; the party walks back together)";
+        return true;
+    }
+    return false;
+}
+
+// The held bot whose summon is still in flight (sent, its answer and its
+// arrival not in yet), or "" (2026-10-29): Tick holds the step for it instead
+// of running it on HoldView, which leaves the bot out (the regroup completes
+// at once and the walk back starts before the bot lands). The hold's own order
+// names which, so the note is stable across ticks.
+inline std::string PendingHeldSummon(const Run& r)
+{
+    for (const std::string& name : r.hold)
+    {
+        auto const mark = r.heldSummons.find(name);
+        if (mark != r.heldSummons.end() && mark->second.pending)
+            return name;
+    }
+    return std::string();
 }
 
 // The party is in combat (Facts::anyInCombat) and every unit engaged with it is one the group cannot attack
@@ -12908,7 +13094,7 @@ inline bool PlanMapFightView(const Facts& f, Facts& out)
     for (const MemberFact& m : f.members)
         if (m.inCombat)
         {
-            if (m.offPlanMap)
+            if (m.offPlanMap || m.otherCopy)
                 offMapFight = true;
             else
                 onMapFight = true;
@@ -13027,6 +13213,176 @@ inline bool OffMapReturnTick(Run& r, const Facts& f, std::string& order)
         order = "return " + m.name + " " + std::to_string(r.plan->map);
         r.note += (r.note.empty() ? "" : "; ") + m.name + " is outside the instance: teleported back to the lead bot " +
             "(try " + std::to_string(tries + 1) + " of " + std::to_string(kOffMapReturnTries) + " at this step)";
+        return true;
+    }
+    return false;
+}
+
+// ta252: what the glue may change so the core puts a bot into the lead bot's copy. The copy a far teleport enters
+// is Player::GetBoundInstanceSaveForSelfOrGroup's: a permanent solo bind first, else the group's, else the solo one.
+// Round 2 (Codex HIGH, 2026-10-29: a failed rejoin left binds mutated): the core's own entry checks run first (the
+// glue's preflight, enterOk) and nothing is written when they fail; the GROUP's bind is never written (a group bound
+// to another copy refuses); the only write is the bot's own solo bind, when the group has none, and the glue undoes
+// it (PlanRejoinSettle, PlanRejoinRestore) when the bot is not in the lead bot's copy kRejoinArriveMs later.
+struct RejoinBindFacts
+{
+    bool enterOk = false;                                         // the core's entry checks for the lead's copy
+    bool soloBind = false, soloPerm = false, soloIsLeads = false; // the bot's own bind on the map
+    bool groupBind = false, groupIsLeads = false;                 // its group's bind on the map
+};
+enum class RejoinBindPlan
+{
+    EntryRefused,   // the core would refuse the entry: refused, nothing written
+    Locked,         // a permanent solo bind to another copy (a saved lockout): refused, nothing written
+    GroupElsewhere, // the group is bound to another copy: only a group rebind would help, refused, nothing written
+    Teleport,       // the binds already lead into the lead bot's copy: the forced map change only
+    BindSolo,       // the group has no bind: Player::BindToInstance(lead's state, false), undone on a failure
+};
+inline RejoinBindPlan PlanRejoinBind(const RejoinBindFacts& b)
+{
+    if (!b.enterOk)
+        return RejoinBindPlan::EntryRefused;
+    if (b.soloBind && b.soloPerm)
+        return b.soloIsLeads ? RejoinBindPlan::Teleport : RejoinBindPlan::Locked;
+    if (b.groupBind)
+        return b.groupIsLeads ? RejoinBindPlan::Teleport : RejoinBindPlan::GroupElsewhere;
+    return RejoinBindPlan::BindSolo;
+}
+inline bool RejoinBindWrites(RejoinBindPlan p)
+{
+    return p == RejoinBindPlan::BindSolo;
+}
+
+// ta252 round 2: a rejoin that wrote the solo bind waits for the bot in the lead bot's copy. TeleportTo returning
+// true does not mean it arrived: the far teleport can still fail later (Player::ExecuteTeleportFar's entry checks,
+// DungeonMap::Add in the worldport ack, then HandleReturnOnTeleportFail). Undone before the run's next try.
+constexpr std::uint32_t kRejoinArriveMs = 10000;
+static_assert(kRejoinArriveMs < kRejoinRepeatMs, "a failed rejoin is undone before the run tries that bot again");
+struct RejoinSettleFacts
+{
+    bool pending = false; // a solo bind the rejoin wrote waits for the arrival
+    bool refused = false; // TeleportTo returned false
+    bool arrived = false; // in the world on the map, in the lead bot's instance id, not teleporting
+    std::uint32_t msSince = 0;
+    // Round 3 (Codex HIGH, 2026-10-29: a logout mid-rejoin dropped the only snapshot): online = the Player exists
+    // (the undo needs it); settleNow = the logout hook or the next login, no more waiting.
+    bool online = true;
+    bool settleNow = false;
+};
+enum class RejoinSettle
+{
+    None,    // nothing pending
+    Wait,    // in flight
+    Done,    // in the lead bot's copy: the snapshot goes
+    Restore, // undo the write, then the snapshot goes
+    Hold,    // offline: keep the snapshot until the logout hook or the next login can undo it
+};
+inline RejoinSettle PlanRejoinSettle(const RejoinSettleFacts& s)
+{
+    if (!s.pending)
+        return RejoinSettle::None;
+    if (!s.online)
+        return RejoinSettle::Hold;
+    if (s.refused)
+        return RejoinSettle::Restore;
+    if (s.arrived)
+        return RejoinSettle::Done;
+    if (s.settleNow)
+        return RejoinSettle::Restore;
+    return s.msSince < kRejoinArriveMs ? RejoinSettle::Wait : RejoinSettle::Restore;
+}
+
+// ta252 round 2: the undo of the solo bind a failed rejoin wrote.
+struct RejoinRestoreFacts
+{
+    bool soloIsOurs = false;    // its solo bind is still the one the rejoin wrote (lead's instance id, not permanent)
+    bool hadSolo = false;       // it had a solo bind before (to the other copy)
+    bool oldStateFound = false; // that bind's save still exists (MapPersistentStateManager::GetPersistentState)
+};
+enum class RejoinRestore
+{
+    Unbind,      // it had none: Player::UnbindInstance(map)
+    Rebind,      // Player::BindToInstance(old save, old permanence)
+    KeepOldGone, // the old copy's save is gone: nothing to go back to
+    KeepChanged, // the bind changed since (the core): not ours to undo
+};
+inline RejoinRestore PlanRejoinRestore(const RejoinRestoreFacts& r)
+{
+    if (!r.soloIsOurs)
+        return RejoinRestore::KeepChanged;
+    if (!r.hadSolo)
+        return RejoinRestore::Unbind;
+    return r.oldStateFound ? RejoinRestore::Rebind : RejoinRestore::KeepOldGone;
+}
+
+// ta252 cold review (2026-10-29): the lead bot's own corpse run can land IT in a fresh copy of the instance (on entry
+// the core binds an unbound group there, DungeonMap::BindPlayerOrGroupOnEnter), and every other bot then reads
+// otherCopy: rejoining them would move the whole party into the lead bot's respawned copy and lose the run's progress.
+// True when every other living bot on the plan's map, at least 2 of them, is in another copy than the lead bot's
+// (the glue lists living bots only; one outside the instance, offPlanMap, does not count). With one such bot the lead
+// bot's copy is taken as the party's, as before.
+inline bool LeadInAnotherCopy(const Facts& f)
+{
+    std::size_t onMap = 0, otherCopy = 0;
+    for (const MemberFact& m : f.members)
+    {
+        if (m.name.empty() || m.name == f.carrier || m.offPlanMap)
+            continue;
+        ++onMap;
+        if (m.otherCopy)
+            ++otherCopy;
+    }
+    return onMap >= 2 && otherCopy == onMap;
+}
+
+// ta252: a living bot of the party in another copy of the instance is moved into the lead bot's copy
+// (`rejoin <name>`, the glue's RunInstanceRejoin): the regroup's summon cannot reach it there. With a real player
+// in the party the run does not rebind anyone: it pauses naming the bot. True when it set the order or paused.
+inline bool InstanceRejoinTick(Run& r, const Facts& f, std::string& order)
+{
+    if (r.rejoinStep != r.step)
+    {
+        r.rejoinStep = r.step;
+        r.rejoinTries.clear();
+    }
+    if (r.state == State::Running && r.plan && f.leadAlive && LeadInAnotherCopy(f))
+    {
+        // Any order of this tick goes too: a regroup summon of such a bot would be rerouted to a rejoin by the glue.
+        order.clear();
+        Pause(r, "the lead bot is in another copy of this instance than the party (every other bot is in one copy, "
+            "the lead bot alone in another, after its own corpse run): the run does not move the party into it; "
+            "bring the lead bot to the party, then .bot run resume");
+        return true;
+    }
+    if (!order.empty() || r.state != State::Running || !r.plan || !f.leadAlive || r.strandDue || r.strandOn)
+        return false;
+    for (const MemberFact& m : f.members)
+    {
+        if (m.name.empty() || !m.otherCopy || m.name == f.carrier)
+            continue;
+        if (!f.players.empty())
+        {
+            Pause(r, m.name + " is in another copy of this instance (the lead bot's summon cannot reach it there) and a "
+                "real player is in the party, so the run does not move it: bring it to the lead bot, then .bot run resume");
+            return true;
+        }
+        auto const last = r.rejoinAt.find(m.name);
+        if (last != r.rejoinAt.end() && r.runMs < last->second + kRejoinRepeatMs)
+            continue;
+        std::uint32_t const tries = r.rejoinTries.count(m.name) ? r.rejoinTries[m.name] : 0;
+        if (tries >= kRejoinTries)
+        {
+            Pause(r, m.name + " is still in another copy of this instance after " + std::to_string(kRejoinTries) +
+                " moves at this step: bring it to the lead bot, then .bot run resume");
+            return true;
+        }
+        r.rejoinTries[m.name] = tries + 1;
+        r.rejoinAt[m.name] = r.runMs;
+        r.reviveSummons.erase(m.name); // its revive summon landed in the wrong copy: the rejoin replaces it
+        order = "rejoin " + m.name;
+        r.note += (r.note.empty() ? "" : "; ") + m.name + " is in another copy of this instance (a summon cannot "
+            "reach it there): moved into the lead bot's (try " + std::to_string(tries + 1) + " of " +
+            std::to_string(kRejoinTries) + " at this step)";
         return true;
     }
     return false;
@@ -13602,7 +13958,25 @@ inline std::string Tick(Run& r, const Facts& raw, std::uint32_t dt = kTickMs, co
         UpdateHold(r, f);
         if (!r.hold.empty())
         {
-            order = TickBody(r, HoldView(r, f), dt, lines);
+            if (!SummonHeldToLead(r, f, order))
+            {
+                // A held summon still in flight: the step must not run on a
+                // view that leaves it out (HoldView) before the bot lands. The
+                // regroup then completes at once and the walk back starts; the
+                // summon fixes its spot where the lead bot stood when the order
+                // went out, so the bot lands there while the party walks away and
+                // stays anchored at the entrance. The tick's clock runs on (the
+                // run's own, so the summon's expiry bounds the wait) but the
+                // step does not.
+                std::string const pending = PendingHeldSummon(r);
+                if (!pending.empty() && !f.anyInCombat)
+                {
+                    r.runMs += dt;
+                    r.note = "waiting for the summoned " + pending;
+                }
+                else
+                    order = TickBody(r, HoldView(r, f), dt, lines);
+            }
             held = true;
         }
     }
@@ -13617,6 +13991,7 @@ inline std::string Tick(Run& r, const Facts& raw, std::uint32_t dt = kTickMs, co
         return std::string(); // the step the tick reached was the stop
     }
     OffMapReturnTick(r, f, order); // a bot outside the instance in a bot-only run (lead decision 2026-10-24)
+    InstanceRejoinTick(r, f, order); // ta252: a bot in another copy of the instance
     if (!r.shotGateRan)
         EndShotHold(r); // the pull stand's hold ends with any tick its gate did not run on
     ArmReachedTriggers(r); // the steps this tick reached
@@ -14059,6 +14434,7 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
                 r.leadDied = false;
                 r.holdDue = false;
                 r.hold.clear();
+                r.heldSummons.clear();
                 r.walkBackDue = false; // the rescue's walk back is set (RescueDue)
                 return order;
             }
@@ -14087,7 +14463,7 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
                 FillHold(r, f);
                 if (!r.hold.empty())
                 {
-                    r.note = "regroup: the lead bot is up away from the party: the party holds while it walks back";
+                    r.note = "regroup: the lead bot is up away from the party: the party is summoned to it";
                     return order;
                 }
             }
