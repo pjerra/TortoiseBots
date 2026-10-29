@@ -78,6 +78,7 @@
 #include "../runtime/PlayerLedPolicy.h"
 #include "../ai/playerbot/DungeonPlanMgr.h"
 #include "../ai/playerbot/BossTacticsMgr.h"
+#include "../ai/playerbot/BossTacticsStand.h"
 #include "../ai/playerbot/PullAggroEstimatePolicy.h"
 #include "../ai/playerbot/WorldPosition.h"
 #include "CreatureGroups.h"
@@ -11578,19 +11579,52 @@ static uint64 CurrentSpellTargetGuid(Unit* unit)
     return 0;
 }
 
+// The cast time a spell's casting time index gives it, without a caster's modifiers: the total a triggered cast is
+// reported with. Core: SpellEntry::CastingTimeIndex (Spells/SpellEntry.h:559), sSpellCastTimesStore
+// (Database/DBCStores.h:86), SpellCastTimesEntry (Database/DBCStructure.h:536-541).
+static uint32 SpellCastTimeMs(SpellEntry const* entry)
+{
+    if (!entry)
+        return 0;
+    SpellCastTimesEntry const* times = sSpellCastTimesStore.LookupEntry(entry->CastingTimeIndex);
+    if (!times)
+        return 0;
+    return static_cast<uint32>(times->CastTime > times->MinCastTime ? times->CastTime : times->MinCastTime);
+}
+
+// When each boss's stand window (BossStandPolicy.h StandStoppedWindowOpen) first opened, by guid: a triggered cast has
+// no cast slot to read a timer from, so the countdown starts when the module first sees the window and the entry is
+// dropped when the window closes. World thread only, like the rest of the commander snapshot.
+static std::unordered_map<uint64, uint32> s_standWindowStart;
+
+// The cast left of a window that opened at `startMs`, for a spell of `totalMs`: the countdown the dashboard draws.
+static uint32 StandWindowCastLeft(uint64 guid, uint32 nowMs, uint32 totalMs)
+{
+    auto it = s_standWindowStart.find(guid);
+    if (it == s_standWindowStart.end())
+        it = s_standWindowStart.emplace(guid, nowMs).first;
+    const uint32 elapsed = nowMs - it->second;
+    return elapsed < totalMs ? totalMs - elapsed : 0;
+}
+
 // The facing and the cast a boss or elite is running, for the dashboard's boss overlay: the unit's orientation, its
 // current spell's id and time left and total, the spell's unit target, whether it channels, and the area the spell
-// covers from the committed shape table (runtime/SpellShape.h; a spell absent from it sends no shape). Read from what
-// the unit already holds, no scan. Core: Objects/Object.h:835 and :1145, Spells/Spell.h:428-429, SpellEntry.h:1110.
+// covers from the committed shape table (runtime/SpellShape.h; a spell absent from it sends no shape). A spell cast
+// triggered never shows as the current spell (Spells/Spell.cpp:3640-3642 and :3667), so a boss stopped at its stand
+// anchor with no target is also read for the row's window spell (BossStandPolicy.h): a Deep Breath then reports a cast
+// the way a cast-slot spell would. Read from what the unit already holds, no scan. Core: Objects/Object.h:835
+// (facing) and :1145 (cast slots), Spells/Spell.h:428-429, SpellEntry.h:1110.
 static void FillMobFacingAndCast(Unit* unit, CommanderTelemetry::MobInfo& mob)
 {
     mob.hasO = true;
     mob.o = unit->GetOrientation();
+    const uint64 guid = unit->GetObjectGuid().GetRawValue();
     for (CurrentSpellTypes type : { CURRENT_GENERIC_SPELL, CURRENT_CHANNELED_SPELL })
     {
         Spell* spell = unit->GetCurrentSpell(type);
         if (!spell || !spell->m_spellInfo)
             continue;
+        s_standWindowStart.erase(guid);
         mob.castId = spell->m_spellInfo->Id;
         mob.castLeftMs = spell->GetCastedTime();
         mob.channel = type == CURRENT_CHANNELED_SPELL;
@@ -11603,6 +11637,25 @@ static void FillMobFacingAndCast(Unit* unit, CommanderTelemetry::MobInfo& mob)
             mob.shape = *shape;
         }
         return;
+    }
+    uint32 const windowSpell = ai::ActiveStandWindowSpell(unit);
+    SpellEntry const* entry = windowSpell ? sSpellMgr.GetSpellEntry(windowSpell) : nullptr;
+    if (!entry)
+    {
+        s_standWindowStart.erase(guid);
+        return;
+    }
+    const uint32 totalMs = SpellCastTimeMs(entry);
+    mob.cast = SpellNameOf(windowSpell);
+    mob.castId = windowSpell;
+    mob.castLeftMs = StandWindowCastLeft(guid, WorldTimer::getMSTime(), totalMs);
+    mob.castTotalMs = totalMs;
+    mob.channel = false;
+    mob.castTarget = 0;
+    if (CommanderTelemetry::SpellShape::Shape const* shape = CommanderTelemetry::SpellShape::For(mob.castId))
+    {
+        mob.hasShape = true;
+        mob.shape = *shape;
     }
 }
 

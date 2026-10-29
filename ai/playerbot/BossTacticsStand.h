@@ -9,8 +9,11 @@
 // Declarations only, so the reach actions and the reactive boss dodge can ask
 // without pulling in the action headers.
 
+#include <cstdint>
+
 class PlayerbotAI;
 class Player;
+class Unit;
 
 namespace ai
 {
@@ -26,4 +29,9 @@ namespace ai
     // invalid: no row applies (map, strategy, boss, role, window), or every
     // seat is taken. Invalid changes nothing for the bot.
     BossStandTarget FindBossStand(PlayerbotAI* ai, Player* bot);
+
+    // The window spell of the `ai_boss_stand` row the boss is stopped at now (its aura worn, no target), or 0: the
+    // triggered cast the core never puts in a cast slot (BossStandPolicy.h StandStoppedWindowOpen). The commander
+    // snapshot reports it as the boss's cast; FindBossStand opens the same windows.
+    std::uint32_t ActiveStandWindowSpell(Unit* boss);
 }

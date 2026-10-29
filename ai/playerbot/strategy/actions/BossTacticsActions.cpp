@@ -203,6 +203,22 @@ void ForgetStand(uint64 key)
 }
 }
 
+// The window spell of the row the boss is stopped at: the same detection FindBossStand feeds StandPointsNow (the aura,
+// the anchor radius and the stopped-without-a-target state), read for the commander snapshot, whose cast read only sees
+// cast slots a triggered spell never reaches. Core: Unit::IsStopped (Objects/Unit.h:1544), Unit::GetTargetGuid
+// (Objects/Unit.h:1358).
+std::uint32_t ai::ActiveStandWindowSpell(Unit* boss)
+{
+    if (!boss)
+        return 0;
+    const std::vector<BossStandRow>* rows = GetBossStands().Rows(boss->GetMapId(), boss->GetEntry());
+    if (!rows)
+        return 0;
+    return StoppedStandWindowSpell(*rows, boss->GetPositionX(), boss->GetPositionY(),
+                                   [boss](uint32 aura) { return boss->HasAura(aura); }, boss->IsStopped(),
+                                   !boss->GetTargetGuid().IsEmpty());
+}
+
 BossStandTarget ai::FindBossStand(PlayerbotAI* ai, Player* bot)
 {
     BossStandTarget target;

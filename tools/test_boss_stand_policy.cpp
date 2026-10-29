@@ -432,6 +432,47 @@ int main()
         CHECK(table.Add(row));
     }
 
+    // The same stopped-without-a-target detection read on its own (the commander snapshot's cast read): the window
+    // spell of the row the boss is stopped at, 0 for every other state.
+    {
+        CHECK(StandStoppedNoTarget(true, false));
+        CHECK(!StandStoppedNoTarget(false, false));  // moving
+        CHECK(!StandStoppedNoTarget(true, true));    // has a target
+        CHECK(!StandStoppedNoTarget(false, true));
+        BossStandRow row = Row(1, 10, 20, 8, StandRole::Ranged, 18617, 0, 0, 0, 32, 1, 0, 5, 17131);
+        row.windowSignal = StandSignal::StoppedNoTarget;
+        CHECK(StandStoppedWindowOpen(row, 10, 20, true, true));
+        CHECK(!StandStoppedWindowOpen(row, 10, 20, false, true));   // the aura is missing
+        CHECK(!StandStoppedWindowOpen(row, 40, 20, true, true));    // outside the anchor radius
+        CHECK(!StandStoppedWindowOpen(row, 10, 20, true, false));   // moving or has a target
+        BossStandRow cast = row;
+        cast.windowSignal = StandSignal::Cast;
+        CHECK(!StandStoppedWindowOpen(cast, 10, 20, true, true));   // a cast-signal row is not this window
+        std::vector<BossStandRow> rows = { row };
+        CHECK(StoppedStandWindowSpell(rows, 10, 20, AllAuras, true, false) == 18617);
+        CHECK(StoppedStandWindowSpell(rows, 10, 20, AllAuras, false, false) == 0);  // moving
+        CHECK(StoppedStandWindowSpell(rows, 10, 20, AllAuras, true, true) == 0);    // has a target
+        CHECK(StoppedStandWindowSpell(rows, 10, 20, NoAura, true, false) == 0);     // the aura is missing
+        CHECK(StoppedStandWindowSpell(rows, 40, 20, AllAuras, true, false) == 0);   // outside the radius
+        std::vector<BossStandRow> onlyCast = { cast };
+        CHECK(StoppedStandWindowSpell(onlyCast, 10, 20, AllAuras, true, false) == 0);
+        // A second row of the boss's set: the first open row answers; another row answers for its own lane.
+        std::vector<BossStandRow> two = rows;
+        BossStandRow other = Row(2, 10, 20, 8, StandRole::Healer, 18576, 0, 0, 0, -32, 1, 0, 3, 17131);
+        other.windowSignal = StandSignal::StoppedNoTarget;
+        two.push_back(other);
+        CHECK(StoppedStandWindowSpell(two, 10, 20, AllAuras, true, false) == 18617);
+        std::vector<BossStandRow> onlyOther = { other };
+        CHECK(StoppedStandWindowSpell(onlyOther, 10, 20, AllAuras, true, false) == 18576);
+        std::vector<BossStandRow> none;
+        CHECK(StoppedStandWindowSpell(none, 10, 20, AllAuras, true, false) == 0);
+        // A row without a window spell never answers (the table refuses one, the predicate too).
+        BossStandRow noWindow = row;
+        noWindow.windowSpell = 0;
+        std::vector<BossStandRow> onlyNoWindow = { noWindow };
+        CHECK(StoppedStandWindowSpell(onlyNoWindow, 10, 20, AllAuras, true, false) == 0);
+    }
+
     // The ground probe starts above the seat's floor and the bot's own: a far seat's floor can lie above the row z.
     {
         CHECK(std::fabs(StandProbeZ(-85.0f, -88.0f) - (-81.0f)) < 0.001f);   // the row's z is the higher

@@ -258,6 +258,23 @@ namespace ai
         std::atomic<bool> sealed_{false};
     };
 
+    // The state a triggered cast leaves: the boss stands still and has no target. A triggered spell never reaches a
+    // cast slot (core Spells/Spell.cpp:3640-3642 adds only a non-triggered or a channelled spell, :3667), so the boss
+    // script clears the target instead (src/scripts/dungeons/onyxias_lair/boss_onyxia.cpp:522-525).
+    inline bool StandStoppedNoTarget(bool stopped, bool hasTarget)
+    {
+        return stopped && !hasTarget;
+    }
+
+    // Whether the row's window is open: a row without a window spell always is; else the boss is casting the window
+    // spell, or the row opens on the triggered-cast state (StoppedNoTarget) and the boss is in it.
+    inline bool StandWindowOpen(const BossStandRow& row, std::uint32_t castingSpell, bool stoppedNoTarget)
+    {
+        if (row.windowSpell == 0 || castingSpell == row.windowSpell)
+            return true;
+        return row.windowSignal == StandSignal::StoppedNoTarget && stoppedNoTarget;
+    }
+
     // Whether a row applies to a boss at (bossX, bossY): it is at the anchor
     // (2D, on the radius counts), wears the row's aura when the row names one,
     // and its window is open when the row names a window spell: the boss is
@@ -272,10 +289,35 @@ namespace ai
             return false;
         if (row.aura != 0 && !bossHasAura)
             return false;
-        if (row.windowSpell != 0 && castingSpell != row.windowSpell &&
-            !(row.windowSignal == StandSignal::StoppedNoTarget && stoppedNoTarget))
+        if (!StandWindowOpen(row, castingSpell, stoppedNoTarget))
             return false;
         return true;
+    }
+
+    // Whether the row's triggered-cast window is open for a boss at (bossX, bossY) that is in the state above: the
+    // same anchor, aura and window rule the stand sets read (StandRowActive), held to the row that names the signal.
+    inline bool StandStoppedWindowOpen(const BossStandRow& row, float bossX, float bossY, bool bossHasAura,
+                                       bool stoppedNoTarget)
+    {
+        return row.windowSignal == StandSignal::StoppedNoTarget &&
+               StandRowActive(row, bossX, bossY, bossHasAura, 0, stoppedNoTarget);
+    }
+
+    // The window spell a boss is breathing now: the first row of its set whose triggered-cast window is open
+    // (StandStoppedWindowOpen), 0 for none. `hasAura` answers whether the boss wears an aura id. The commander
+    // snapshot reports this spell as the boss's cast, so the dashboard and the stand sets agree on one detection.
+    template <typename HasAura>
+    inline std::uint32_t StoppedStandWindowSpell(const std::vector<BossStandRow>& rows, float bossX, float bossY,
+                                                 HasAura hasAura, bool stopped, bool hasTarget)
+    {
+        if (!StandStoppedNoTarget(stopped, hasTarget))
+            return 0;
+        for (const BossStandRow& row : rows)
+        {
+            if (StandStoppedWindowOpen(row, bossX, bossY, row.aura != 0 && hasAura(row.aura), true))
+                return row.windowSpell;
+        }
+        return 0;
     }
 
     // The points a bot of `role` can stand at for this boss now: the active

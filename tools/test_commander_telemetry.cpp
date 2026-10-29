@@ -463,6 +463,39 @@ void TestBossOverlay()
     Check(!Has(MobJson(old), "\"shape\""), "a shape without a cast is left out");
 }
 
+// A Deep Breath is cast triggered, so it never reaches a cast slot: the module reports it from the stand row's window
+// (BossStandPolicy.h). The mob row then carries the lane head's cast and its line, with no unit target and no channel.
+void TestBreathOverlay()
+{
+    MobInfo boss = Mob(5, "Onyxia");
+    boss.entry = 10184;
+    boss.hpPct = 80;
+    boss.x = 1.5f;
+    boss.y = -2.5f;
+    boss.level = 63;
+    boss.rank = 'b';
+    boss.cast = "Breath";
+    boss.hasO = true;
+    boss.o = -1.2f;
+    boss.castId = 18617;
+    boss.castLeftMs = 4200;
+    boss.castTotalMs = 5000;
+    TortoiseBots::SpellShape::Shape const* lane = TortoiseBots::SpellShape::For(18617);
+    Check(lane != nullptr && lane->kind == TortoiseBots::SpellShape::Kind::Line, "18617 is a line");
+    if (lane)
+    {
+        boss.hasShape = true;
+        boss.shape = *lane;
+    }
+    std::string const json = MobJson(boss);
+    Check(Has(json, "\"cast\":\"Breath\",\"o\":-1.20,\"cid\":18617,\"cleft\":4200,\"ctot\":5000,"),
+        "the window spell rides the mob row as a cast");
+    Check(Has(json, "\"shape\":{\"k\":\"line\",\"l\":90.3,\"w\":60.0}"),
+        "the Deep Breath lane is drawn 90.3 yd long and 60 yd wide");
+    Check(!Has(json, "\"ctg\"") && !Has(json, "\"ch\""),
+        "a triggered breath has no unit target and is not a channel");
+}
+
 // The 0.5 s position report (task S3/R3m): a bot row in one decimal with its facing at two, a dead bot at hp 0 and
 // alive 0, and the mob rows of the lead's last full report.
 void TestPosPayload()
@@ -1578,6 +1611,7 @@ int main()
     TestMapDataCapsAndSize();
     TestUnitInfo();
     TestBossOverlay();
+    TestBreathOverlay();
     TestPosPayload();
     TestPosCapsAndSize();
     TestRunInfo();

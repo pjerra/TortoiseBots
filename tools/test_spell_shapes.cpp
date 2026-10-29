@@ -76,14 +76,19 @@ void TestKnownShapes()
     Check(lava && lava->kind == Kind::Cone && lava->angle == 90 && Near(lava->length, 35.0f),
         "a target-54 cone is the core's 90 degree arc (Lava Breath, 35 yd)");
     Shape const* north = For(17086);
-    Check(north && north->kind == Kind::Line && Near(north->length, 154.0f) && Near(north->width, 60.0f),
-        "the north-to-south Deep Breath lane is a 154 yd line 60 yd wide");
+    Check(north && north->kind == Kind::Line && Near(north->length, 88.8f) && Near(north->width, 60.0f),
+        "the north-to-south Deep Breath lane is the 88.8 yd hover-point lane, 60 yd wide");
     Shape const* east = For(18576);
-    Check(east && east->kind == Kind::Line && Near(east->length, 62.0f), "the east-to-west lane is 62 yd long");
+    Check(east && east->kind == Kind::Line && Near(east->length, 67.5f), "the east-to-west lane is 67.5 yd long");
+    // Every Deep Breath lane head: a line, 60 yd wide, as long as the anchor lane the stand rows seat against
+    // (67.5-92.4 yd here), never a cone.
     for (uint32_t lane : {17086u, 18351u, 18576u, 18609u, 18564u, 18584u, 18596u, 18617u})
     {
         Shape const* shape = For(lane);
         Check(shape && shape->kind == Kind::Line, "every Deep Breath lane head has a line");
+        Check(shape && Near(shape->width, 60.0f), "every Deep Breath lane is 60 yd wide (30 yd either side)");
+        Check(shape && shape->length >= 60.0f && shape->length <= 95.0f,
+            "every Deep Breath lane is the hover-point to hover-point lane (60-95 yd)");
     }
 }
 
