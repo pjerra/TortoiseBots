@@ -23,11 +23,17 @@ constexpr uint32_t kOutOfCombatEndMs = 3000;  // a fight ends this long after th
 constexpr uint32_t kWindowMs = 10000;         // the rolling window
 constexpr uint32_t kMaxDeathsPerFight = 200;  // death recaps kept per fight, oldest dropped past it
 constexpr uint32_t kMaxEngagedPerFight = 500; // distinct engaged creature guids tracked per fight (all entries together)
+constexpr size_t kMaxEnemyDeathsPerFight = kMaxEngagedPerFight; // enemy entries remembered for the sampler's later boss pick
 constexpr size_t kMaxDroppedTracked = 4096;   // distinct guids past that cap counted as dropped; the count stops here
 constexpr size_t kLastHits = 5;               // death recap
 constexpr size_t kMaxSpellsPerBot = 12;
 constexpr size_t kMaxFightsKept = 5;          // finished fights waiting to be sent, per book
 constexpr size_t kPayloadByteBudget = 60000;
+constexpr size_t kMaxLiveEvents = 64;          // queued per book, oldest dropped (counted)
+constexpr size_t kMaxEventsPerDatagram = 32;
+constexpr size_t kEventsByteBudget = 16000;
+constexpr size_t kEventTextBytes = 256;   // last-resort clip of every event and header text
+constexpr uint32_t kEventKeepaliveMs = 5000;
 constexpr size_t kSeqDigitsMax = 20;   // UINT64_MAX in decimal
 // The truncated (last-resort) payload bounds every variable-length field, so its
 // size has a fixed ceiling well under the budget: about 2.5 KB of header (five
@@ -73,9 +79,9 @@ inline std::vector<std::string> DebuffKeys(std::string const& spellName, uint32_
 }
 
 enum class Role : uint8_t { Tank, Healer, Damage };
-enum class Outcome : uint8_t { Kill, Wipe, End };
+enum class Outcome : uint8_t { Kill, Wipe, Unfinished, End };
 
-inline char const* OutcomeName(Outcome o)    // "kill", "wipe", "end"
+inline char const* OutcomeName(Outcome o)    // "kill", "wipe", "unfinished", "end"
 {
     switch (o)
     {
@@ -83,6 +89,8 @@ inline char const* OutcomeName(Outcome o)    // "kill", "wipe", "end"
         return "kill";
     case Outcome::Wipe:
         return "wipe";
+    case Outcome::Unfinished:
+        return "unfinished";
     case Outcome::End:
     default:
         return "end";
@@ -102,6 +110,25 @@ inline char const* RoleName(Role r)
         return "dps";
     }
 }
+
+// One line of the live fight stream (COMBAT_EVENTS): what happened at atMs of
+// the fight, before the service cuts the queue into datagrams.
+enum class EventKind : uint8_t { Start, Engage, Death, Taunt, Interrupt, Cast, End };
+
+struct LiveEvent
+{
+    EventKind kind = EventKind::Start;
+    uint32_t atMs = 0;   // world tick time of the event (End: the fight's end)
+    uint32_t guid = 0;   // the bot (death, taunt, interrupt)
+    std::string name, by, spell, targetName;
+    uint64_t target = 0;   // taunt/interrupt target raw guid, or the casting unit's guid
+    uint32_t entry = 0, count = 0;
+    char rank = 0;         // cast: 'b' or 'e'
+    float x = 0, y = 0;
+    Outcome outcome = Outcome::End;
+    uint32_t durMs = 0;
+    bool kept = false;
+};
 
 struct MemberInfo
 {
@@ -198,6 +225,118 @@ inline std::string F1(float v)
     return buf;
 }
 
+// The fight a COMBAT_EVENTS datagram belongs to; the datagram sends "fight":null
+// when its last event is the fight's end, and a fight header when it carries
+// events or nothing went out yet while a fight is open (inFight).
+struct EventsFightHeader
+{
+    bool inFight = false;
+    uint32_t number = 0;
+    uint32_t startMs = 0;   // world tick time the fight started
+    int64_t startUnix = 0;
+    uint32_t fightMs = 0;   // nowMs - startMs
+    FightContext ctx;
+};
+
+// One COMBAT_EVENTS datagram (protocol v12, "fmt":1). At most kMaxEventsPerDatagram
+// events go out; past kEventsByteBudget the count is halved until it fits, and a
+// single event still too big is sent with every text clipped to kEventTextBytes,
+// so one huge name can never cross the datagram budget or push an event out.
+// *emitted reports how many of the handed events were serialized (the rest stay
+// the caller's to requeue); the fight header follows exactly that prefix. Every
+// event's `t` is its offset from the fight start (the end event carries its
+// duration).
+inline std::string BuildEventsJson(int protocolVersion, uint64_t session, uint64_t seq, int64_t ts, int64_t tsMs,
+                                   std::string const& commander, uint32_t commanderGuid, uint32_t groupId,
+                                   uint32_t mapId, EventsFightHeader const& fight,
+                                   std::vector<LiveEvent> const& events, uint32_t dropped,
+                                   size_t* emitted = nullptr)
+{
+    size_t count = std::min(events.size(), kMaxEventsPerDatagram);
+    bool clipped = false;
+    for (;;)
+    {
+        auto text = [clipped](std::string const& s) {
+            return clipped ? BoundedJson(s, kEventTextBytes) : JsonEscape(s);
+        };
+        bool const present = count == 0 ? fight.inFight : events[count - 1].kind != EventKind::End;
+        std::ostringstream ss;
+        ss.setf(std::ios::fixed);
+        ss.precision(1);
+        ss << "{\"v\":" << protocolVersion << ",\"fmt\":1,\"session\":" << session << ",\"seq\":" << seq
+           << ",\"ts\":" << ts << ",\"ts_ms\":" << tsMs << ",\"type\":\"COMBAT_EVENTS\",\"commander\":\""
+           << text(commander) << "\",\"commander_guid\":" << commanderGuid << ",\"group\":" << groupId
+           << ",\"map\":" << mapId << ",\"fight\":";
+        if (present)
+        {
+            int64_t const startMsUnix = tsMs > 0 ? tsMs - static_cast<int64_t>(fight.fightMs) : fight.startUnix * 1000;
+            ss << "{\"id\":\"" << groupId << "-" << fight.number << "\",\"start\":" << fight.startUnix
+               << ",\"start_ms\":" << startMsUnix << ",\"plan\":\"" << text(fight.ctx.plan) << "\",\"leg\":\""
+               << text(fight.ctx.leg) << "\",\"step\":" << fight.ctx.step << ",\"kind\":\""
+               << text(fight.ctx.kind) << "\",\"boss\":" << fight.ctx.bossEntry << ",\"boss_name\":\""
+               << text(fight.ctx.bossName) << "\",\"fight_ms\":" << fight.fightMs << "}";
+        }
+        else
+            ss << "null";
+        ss << ",\"dropped\":" << dropped << ",\"events\":[";
+        for (size_t i = 0; i < count; ++i)
+        {
+            LiveEvent const& e = events[i];
+            uint32_t const t = e.kind == EventKind::End
+                ? e.durMs
+                : (e.atMs >= fight.startMs ? e.atMs - fight.startMs : 0);
+            if (i)
+                ss << ",";
+            switch (e.kind)
+            {
+            case EventKind::Start:
+                ss << "{\"k\":\"start\",\"t\":0}";
+                break;
+            case EventKind::Engage:
+                ss << "{\"k\":\"engage\",\"t\":" << t << ",\"e\":" << e.entry << ",\"n\":\"" << text(e.name)
+                   << "\",\"c\":" << e.count << "}";
+                break;
+            case EventKind::Death:
+                ss << "{\"k\":\"death\",\"t\":" << t << ",\"g\":" << e.guid << ",\"n\":\"" << text(e.name)
+                   << "\",\"by\":\"" << text(e.by) << "\",\"x\":" << F1(e.x) << ",\"y\":" << F1(e.y) << "}";
+                break;
+            case EventKind::Taunt:
+            case EventKind::Interrupt:
+                ss << "{\"k\":\"" << (e.kind == EventKind::Taunt ? "taunt" : "interrupt") << "\",\"t\":" << t
+                   << ",\"g\":" << e.guid << ",\"n\":\"" << text(e.name) << "\",\"s\":\"" << text(e.spell)
+                   << "\"";
+                if (e.target)
+                    ss << ",\"tg\":\"" << e.target << "\",\"tn\":\"" << text(e.targetName) << "\"";
+                ss << "}";
+                break;
+            case EventKind::Cast:
+                ss << "{\"k\":\"cast\",\"t\":" << t << ",\"id\":\"" << e.target << "\",\"e\":" << e.entry
+                   << ",\"n\":\"" << text(e.name) << "\",\"s\":\"" << text(e.spell) << "\",\"r\":\""
+                   << (e.rank == 'e' ? 'e' : 'b') << "\"}";
+                break;
+            case EventKind::End:
+                ss << "{\"k\":\"end\",\"t\":" << t << ",\"o\":\"" << OutcomeName(e.outcome) << "\",\"dur\":" << e.durMs
+                   << ",\"kept\":" << (e.kept ? "true" : "false") << "}";
+                break;
+            }
+        }
+        ss << "]}";
+        std::string out = ss.str();
+        if (out.size() <= kEventsByteBudget || (count == 0 && clipped))
+        {
+            if (emitted)
+                *emitted = count;
+            return out;
+        }
+        if (count > 1)
+            count /= 2;
+        else if (!clipped)
+            clipped = true;
+        else if (count == 1)
+            count = 0;
+    }
+}
+
 // Spells for one bot line: every AlwaysListed spell cast, then the rest by
 // count (ties by name), up to maxN.
 inline std::vector<std::pair<std::string, uint32_t>> SpellList(BotTotals const& t, size_t maxN)
@@ -236,6 +375,15 @@ inline void PruneBefore(std::vector<uint32_t>& times, uint32_t nowMs)
     while (!times.empty() && (static_cast<int64_t>(times.front()) <= cut || times.front() > nowMs))
         times.erase(times.begin());
 }
+
+// One engaged creature entry of the open fight, as the world thread reads it to
+// pick the fight's boss.
+struct EngagedUnit
+{
+    uint32_t entry = 0;
+    uint64_t guid = 0;
+    std::string name;
+};
 
 class Book   // one per bound group
 {
@@ -285,6 +433,7 @@ public:
         startUnix_ = unixNow;
         ctx_ = ctx;
         bossDied_ = false;
+        enemyDeaths_.clear();
         outOfCombat_ = false;
         outOfCombatSince_ = 0;
         engaged_.clear();
@@ -306,9 +455,14 @@ public:
             m.recentHits.clear();
         }
         fightNumber_ = number;
+        LiveEvent start;
+        start.kind = EventKind::Start;
+        start.atMs = startMs_;
+        Push(std::move(start));
     }
 
-    void OnCast(uint32_t caster, std::string const& spell, bool heal, uint32_t nowMs)
+    void OnCast(uint32_t caster, std::string const& spell, bool heal, uint32_t nowMs, char castKind = 0,
+                uint64_t target = 0, std::string const& targetName = std::string())
     {
         if (!inFight_ || !IsMember(caster))
             return;
@@ -321,6 +475,18 @@ public:
         PruneBefore(m.castTimes, nowMs);
         m.lastSpell = spell;
         m.lastSpellMs = nowMs;
+        if (castKind == 't' || castKind == 'i')
+        {
+            LiveEvent ev;
+            ev.kind = castKind == 't' ? EventKind::Taunt : EventKind::Interrupt;
+            ev.atMs = nowMs;
+            ev.guid = caster;
+            ev.name = m.info.name;
+            ev.spell = spell;
+            ev.target = target;
+            ev.targetName = targetName;
+            Push(std::move(ev));
+        }
     }
 
     void OnDamage(uint32_t attackerMember, uint32_t victimMember, uint32_t amount,
@@ -338,7 +504,7 @@ public:
             m.totals.damage += amount;
             m.dmgDone.emplace_back(nowMs, amount);
             PruneBefore(m.dmgDone, nowMs);
-            AddEngaged(enemyEntry, enemyGuid, enemyName);
+            AddEngaged(enemyEntry, enemyGuid, enemyName, nowMs);
         }
         else if (!atk && vic)
         {
@@ -348,7 +514,7 @@ public:
             m.recentHits.push_back(Hit{attackerName, amount, at});
             while (m.recentHits.size() > kLastHits)
                 m.recentHits.pop_front();
-            AddEngaged(enemyEntry, enemyGuid, enemyName);
+            AddEngaged(enemyEntry, enemyGuid, enemyName, nowMs);
         }
         // Member-on-member damage (charm, Mind Control) and pairs with no
         // member on either side are not counted.
@@ -383,6 +549,15 @@ public:
         while (deaths_.size() > kMaxDeathsPerFight)
             deaths_.pop_front();
         dead_.insert(member);
+        LiveEvent ev;
+        ev.kind = EventKind::Death;
+        ev.atMs = nowMs;
+        ev.guid = member;
+        ev.name = m.info.name;
+        ev.by = killer;
+        ev.x = x;
+        ev.y = y;
+        Push(std::move(ev));
         if (dead_.size() >= order_.size())
             EndFight(nowMs, true);
     }
@@ -420,12 +595,123 @@ public:
             EndFight(outOfCombatSince_, false);
     }
 
-    void NoteBossDied(uint32_t entry)   // the context's boss died inside the fight
+    void NoteBossDied(uint32_t entry)   // an enemy of the open fight died
     {
-        if (!inFight_ || entry == 0 || entry != ctx_.bossEntry)
+        if (!inFight_ || entry == 0)
             return;
-        bossDied_ = true;
+        if (entry == ctx_.bossEntry)
+        {
+            bossDied_ = true;
+            return;
+        }
+        // The sampler picks the boss after the tick's Refresh, so a boss can die
+        // before any pick: the entry is kept for the pick that comes later.
+        if (enemyDeaths_.size() < kMaxEnemyDeathsPerFight)
+            enemyDeaths_.insert(entry);
     }
+
+    // The sampler's boss: set once per fight, and never over a run's own boss.
+    void NoteBoss(uint32_t entry, std::string const& name)
+    {
+        if (!inFight_ || entry == 0 || ctx_.bossEntry != 0)
+            return;
+        ctx_.bossEntry = entry;
+        ctx_.bossName = name;
+        if (enemyDeaths_.count(entry))
+            bossDied_ = true;
+    }
+
+    // The open fight's engaged creatures, one row per entry (its lowest guid and
+    // the entry's name), in engaged_ order; empty outside a fight.
+    std::vector<EngagedUnit> EngagedNow() const
+    {
+        std::vector<EngagedUnit> out;
+        if (!inFight_)
+            return out;
+        out.reserve(engaged_.size());
+        for (auto const& kv : engaged_)
+        {
+            if (kv.second.guids.empty())
+                continue;
+            out.push_back(EngagedUnit{kv.first, *std::min_element(kv.second.guids.begin(), kv.second.guids.end()),
+                kv.second.name});
+        }
+        return out;
+    }
+
+    // A creature's cast start seen by the poller: only elite and boss units, only in a fight.
+    void NoteEnemyCast(uint32_t entry, uint64_t guid, std::string const& name, std::string const& spell, char rank,
+                       uint32_t nowMs)
+    {
+        if (!inFight_ || (rank != 'b' && rank != 'e'))
+            return;
+        LiveEvent ev;
+        ev.kind = EventKind::Cast;
+        ev.atMs = nowMs;
+        ev.target = guid;
+        ev.entry = entry;
+        ev.name = name;
+        ev.spell = spell;
+        ev.rank = rank;
+        Push(std::move(ev));
+    }
+
+    // The binding is gone: end the open fight (a wipe when every member is dead) instead of losing it.
+    void Close(uint32_t nowMs)
+    {
+        if (inFight_)
+            EndFight(nowMs, !order_.empty() && dead_.size() >= order_.size());
+    }
+
+    // The lead stayed unavailable past the sampler's grace: end the fight it
+    // left open, unfinished unless it was a wipe or the boss already fell.
+    void CloseUnfinished(uint32_t nowMs)
+    {
+        if (inFight_)
+            EndFight(nowMs, false, true);
+    }
+
+    bool HasEvents() const { return !events_.empty() || !newEngaged_.empty(); }
+
+    // The queued events, oldest first, at most kMaxEventsPerDatagram; the coalesced
+    // engagements go out first. dropped = events the queue cap lost since the last take.
+    void TakeEvents(std::vector<LiveEvent>& out, uint32_t& dropped)
+    {
+        for (auto const& kv : newEngaged_)
+        {
+            LiveEvent ev;
+            ev.kind = EventKind::Engage;
+            ev.atMs = engagedAtMs_;
+            ev.entry = kv.first;
+            ev.name = kv.second.first;
+            ev.count = kv.second.second;
+            Push(std::move(ev));
+        }
+        newEngaged_.clear();
+        dropped = eventsDropped_;
+        eventsDropped_ = 0;
+        size_t const count = std::min(events_.size(), kMaxEventsPerDatagram);
+        for (size_t i = 0; i < count; ++i)
+        {
+            out.push_back(std::move(events_.front()));
+            events_.pop_front();
+        }
+    }
+
+    // Events taken for a datagram but not serialized (the budget shrank the
+    // count) go back to the front in order: the next datagram carries them
+    // before anything newer, and nothing leaves the queue unrecorded.
+    void RequeueEvents(std::vector<LiveEvent> const& taken, size_t from)
+    {
+        for (size_t i = taken.size(); i > from; --i)
+            events_.push_front(taken[i - 1]);
+    }
+
+    uint32_t FightNumber() const { return fightNumber_; }
+    uint32_t StartMs() const { return startMs_; }
+    int64_t StartUnix() const { return startUnix_; }
+    uint32_t LastFightMs() const { return lastDurMs_; }
+    FightContext const& Context() const { return ctx_; }
 
     bool HasTakeablePayloads() const   // a finished fight still owed to the emitter
     {
@@ -699,7 +985,17 @@ private:
 
     MemberState& At(uint32_t guid) { return order_[index_[guid]]; }
 
-    void AddEngaged(uint32_t entry, uint64_t guid, std::string const& name)
+    void Push(LiveEvent ev)
+    {
+        events_.push_back(std::move(ev));
+        while (events_.size() > kMaxLiveEvents)
+        {
+            events_.pop_front();
+            ++eventsDropped_;
+        }
+    }
+
+    void AddEngaged(uint32_t entry, uint64_t guid, std::string const& name, uint32_t nowMs)
     {
         if (guid == 0)
             return;
@@ -718,16 +1014,31 @@ private:
             e.name = name;
         e.guids.insert(guid);
         ++engagedGuids_;
+        std::pair<std::string, uint32_t>& engaged = newEngaged_[entry];
+        if (engaged.first.empty())
+            engaged.first = e.name;
+        ++engaged.second;
+        engagedAtMs_ = nowMs;
     }
 
-    void EndFight(uint32_t endMs, bool allDead)
+    void EndFight(uint32_t endMs, bool allDead, bool unfinished = false)
     {
         Outcome o = Outcome::End;
         if (allDead)
             o = Outcome::Wipe;
         else if (bossDied_ && ctx_.bossEntry != 0)
             o = Outcome::Kill;
+        else if (unfinished)
+            o = Outcome::Unfinished;
         uint32_t const dur = endMs >= startMs_ ? endMs - startMs_ : 0;
+        lastDurMs_ = dur;
+        LiveEvent ev;
+        ev.kind = EventKind::End;
+        ev.atMs = endMs;
+        ev.outcome = o;
+        ev.durMs = dur;
+        ev.kept = dur >= kMinFightMs;
+        Push(std::move(ev));
         if (dur >= kMinFightMs)
         {
             FinishedFight f;
@@ -750,6 +1061,7 @@ private:
         }
         inFight_ = false;
         bossDied_ = false;
+        enemyDeaths_.clear();
         outOfCombat_ = false;
         outOfCombatSince_ = 0;
     }
@@ -761,6 +1073,7 @@ private:
     int64_t startUnix_ = 0;
     FightContext ctx_;
     bool bossDied_ = false;
+    std::unordered_set<uint32_t> enemyDeaths_;   // enemy entries that died before the sampler picked a boss
     bool outOfCombat_ = false;
     uint32_t outOfCombatSince_ = 0;
     std::map<uint32_t, EngagedData> engaged_;
@@ -772,7 +1085,12 @@ private:
     std::deque<Death> deaths_;
     std::unordered_set<uint32_t> dead_;
     uint32_t fightNumber_ = 0;
+    uint32_t lastDurMs_ = 0;
     std::deque<FinishedFight> finished_;
+    std::deque<LiveEvent> events_;   // live fight stream, oldest first, capped at kMaxLiveEvents
+    uint32_t eventsDropped_ = 0;
+    std::map<uint32_t, std::pair<std::string, uint32_t>> newEngaged_;   // entry -> (name, new distinct guids)
+    uint32_t engagedAtMs_ = 0;
 };
 
 }  // namespace CombatMonitor

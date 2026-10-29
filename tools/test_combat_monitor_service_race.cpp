@@ -1,10 +1,11 @@
 // A8b: the combat monitor service under ThreadSanitizer. Two hook threads
 // record events (casts, damage, heals, combat, deaths) while the world thread
-// refreshes the books, drains payloads and windows; every access must stay
-// race-free (the hooks run on map threads, the tick and the emitter on the
-// world thread). The tick steps nowMs by 1000, six ticks in combat and four
-// out, so each 6 s fight ends and TakeFightPayloads/BuildFightJson run while
-// hooks fire; every tick waits for a hook pass, so the threads interleave:
+// refreshes the books, notes the fight's boss, reads the engaged rows, drains
+// payloads and windows; every access must stay race-free (the hooks run on map
+// threads, the tick and the emitter on the world thread). The tick steps nowMs
+// by 1000, six ticks in combat and four out, so each 6 s fight ends and
+// TakeFightPayloads/BuildFightJson run while hooks fire; every tick waits for a
+// hook pass, so the threads interleave:
 //   g++ -std=c++17 -O1 -g -fsanitize=thread -DCOMBAT_MONITOR_TEST_CONFIG -I. -Itools/tsan_stubs
 //       tools/test_combat_monitor_service_race.cpp runtime/CombatMonitorService.cpp
 //       -o /tmp/x -lpthread && setarch "$(uname -m)" -R /tmp/x
@@ -59,6 +60,7 @@ static void HookLoop(CombatMonitorService& svc, std::atomic<bool> const& stop, u
         ++tick;
         g_hookPasses.fetch_add(1, std::memory_order_relaxed);
         svc.OnCast(7, "Sunder Armor", false);
+        svc.OnCast(7, "Taunt", false, 't', 777, "Magmadar");
         svc.OnDamage(11, 0, 500, "Magey", 11502, 777, "Magmadar");
         svc.OnDamage(0, 7, 300, "Magmadar", 11502, 777, "Magmadar");
         svc.OnHeal(9, 800, 200);
@@ -96,7 +98,12 @@ int main()
             nowMs += 1000;
             bool const inCombat = (tick % 10) < 6;
             svc.Refresh(55, Members(), inCombat, false, Ctx(), {"sunder"}, nowMs);
+            svc.NoteBoss(55, 11502, "Magmadar");
+            std::vector<TortoiseBots::CombatMonitor::EngagedUnit> const engaged = svc.EngagedNow(55);
+            (void)engaged;
             svc.TakePayloads(out, 12, 77, nextSeq, 1791990020);
+            std::vector<std::string> events;
+            svc.TakeEventPayloads(events, 12, 77, nextSeq, 1791990021, 1791990021000, nowMs, 0);
             payloads.fetch_add(out.size());
             for (std::string const& p : out)
                 if (p.find("COMBAT_FIGHT") == std::string::npos)
