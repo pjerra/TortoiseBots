@@ -18,9 +18,14 @@ import (
 // and the daemon never pages this to disk.
 const maxFightsPerCommander = 50
 
+// keptFight is one filed fight: provisional marks a filing made without the
+// fight's COMBAT_FIGHT (the replacement and expiry paths file the live row as
+// unfinished), and the delayed COMBAT_FIGHT for the same (session, id) still
+// replaces it instead of being dropped as a duplicate.
 type keptFight struct {
-	session uint64
-	fight   Fight
+	session     uint64
+	fight       Fight
+	provisional bool
 }
 
 // Store keeps finished fights per commander, newest first. Reads served by
@@ -94,7 +99,9 @@ func Key(commander string, session uint64, id string) string {
 }
 
 // Add files a fight under its commander. False when the (session, id) was
-// seen before: the module's second take of the same fight.
+// seen before: the module's second take of the same fight. True when the
+// fight arrives late for a provisional entry: the stored unfinished filing
+// is replaced and filed like any other.
 func (s *Store) Add(session uint64, f Fight) bool {
 	_, ok := s.AddSummary(session, f)
 	return ok
@@ -104,23 +111,43 @@ func (s *Store) Add(session uint64, f Fight) bool {
 // stream pushes as the "fight" frame. Filing it closes the live row of the
 // same (session, id) the COMBAT_EVENTS datagrams opened.
 func (s *Store) AddSummary(session uint64, f Fight) (FightSummary, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if !s.addLocked(session, f) {
-		return FightSummary{}, false
-	}
-	return s.summaryLocked(f.Commander, keptFight{session: session, fight: f}), true
+	summary, _, ok := s.AddFiled(session, f)
+	return summary, ok
 }
 
-// addLocked files one fight; called with the lock held.
-func (s *Store) addLocked(session uint64, f Fight) bool {
+// AddFiled is AddSummary that also returns the fight as stored: with the cast log the closed live row or a replaced
+// provisional filing handed it, which the caller writes to history (the datagram's own fight carries no log).
+func (s *Store) AddFiled(session uint64, f Fight) (FightSummary, Fight, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.addLocked(session, f, false) {
+		return FightSummary{}, Fight{}, false
+	}
+	stored := keptFight{session: session, fight: f}
+	for _, k := range s.fights[f.Commander] {
+		if k.session == session && k.fight.ID == f.ID {
+			stored = k
+			break
+		}
+	}
+	return s.summaryLocked(f.Commander, stored), stored.fight, true
+}
+
+// addLocked files one fight; called with the lock held. provisional marks a
+// filing made without the fight's own COMBAT_FIGHT (the replacement and
+// expiry paths); a COMBAT_FIGHT arriving for a provisional (session, id)
+// replaces the stored entry and keeps its log instead of being dropped.
+func (s *Store) addLocked(session uint64, f Fight, provisional bool) bool {
 	seen := s.seenIDs[f.Commander]
 	if seen == nil {
 		seen = make(map[string]bool)
 		s.seenIDs[f.Commander] = seen
 	}
 	key := strconv.FormatUint(session, 10) + "\x00" + f.ID
-	if seen[key] {
+	if seen[key] && !provisional {
+		if s.replaceLocked(f.Commander, session, f) {
+			return true
+		}
 		return false
 	}
 	seen[key] = true
@@ -130,7 +157,7 @@ func (s *Store) addLocked(session uint64, f Fight) bool {
 		f.Log, f.LogDropped = lf.logForFile()
 		delete(s.live, f.Commander)
 	}
-	list := append([]keptFight{{session: session, fight: f}}, s.fights[f.Commander]...)
+	list := append([]keptFight{{session: session, fight: f, provisional: provisional}}, s.fights[f.Commander]...)
 	if len(list) > maxFightsPerCommander {
 		for _, dropped := range list[maxFightsPerCommander:] {
 			delete(seen, strconv.FormatUint(dropped.session, 10)+"\x00"+dropped.fight.ID)
@@ -139,6 +166,27 @@ func (s *Store) addLocked(session uint64, f Fight) bool {
 	}
 	s.fights[f.Commander] = list
 	return true
+}
+
+// replaceLocked swaps a provisional entry for the fight's own COMBAT_FIGHT,
+// keeping the provisional entry's retained log. Called with the lock held.
+// False when no provisional entry of this (session, id) is stored: the
+// COMBAT_FIGHT is the module's second take and stays a duplicate.
+func (s *Store) replaceLocked(commander string, session uint64, f Fight) bool {
+	for i, k := range s.fights[commander] {
+		if k.session != session || k.fight.ID != f.ID || !k.provisional {
+			continue
+		}
+		if len(f.Log) == 0 && f.LogDropped == 0 {
+			f.Log, f.LogDropped = k.fight.Log, k.fight.LogDropped
+		}
+		s.fights[commander][i] = keptFight{session: session, fight: f}
+		if lf := s.live[commander]; lf != nil && lf.session == session && lf.id == f.ID {
+			delete(s.live, commander)
+		}
+		return true
+	}
+	return false
 }
 
 // List returns the newest-first summaries of a commander's kept fights, the
