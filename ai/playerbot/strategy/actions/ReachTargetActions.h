@@ -15,6 +15,7 @@
 #include "playerbot/policy/pull/PullFiringPolicy.h"
 #include "playerbot/policy/combat/RangedApproachPolicy.h"
 #include "playerbot/strategy/values/PossibleTargetsValue.h"
+#include "playerbot/BossTacticsAirTarget.h"
 #include "AI/CreatureAI.h"
 #include <ctime>
 
@@ -368,6 +369,63 @@ namespace ai
             return ChaseTo(target, distance, bot->GetAngle(target));
         }
 
+        // A boss the air_target tactic keeps (BossTacticsPolicy.h) hovers above
+        // the floor, so the core chase aims at its flight height: no floor path
+        // reaches it and the bot stands still out of range the whole phase.
+        // Walk on the floor to the point under it instead - at most
+        // kAirTargetGroundRange yd (2D) from its footprint, at the distance
+        // whose 3D range still lands the cast (AirTargetGroundDistance) - and
+        // let the next tick cast from there. The destination z is always the
+        // ground's, never the target's.
+        bool MoveUnderAirborneTarget(Unit* target, float distance)
+        {
+            if (distance <= 0.0f || !IsAirTargetKept(ai, bot, target))
+                return false;
+
+            Map* map = bot->GetMap();
+            if (!map || bot->GetTransport())
+                return false;
+            if (!bot->IsWithinLOSInMap(target, true) || !ai->CanMove() || !ai->IsSafe(target))
+                return false;
+
+            // A bot already walking its approach is not re-pathed (MoveTo
+            // relaunches the spline on every call).
+            if (!bot->IsStopped() && !bot->movespline->Finalized())
+                return true;
+
+            float const targetX = target->GetPositionX();
+            float const targetY = target->GetPositionY();
+            float const flightZ = target->GetPositionZ();
+
+            // The flight height above the floor under the target's footprint.
+            float groundZ = flightZ;
+            bot->UpdateGroundPositionZ(targetX, targetY, groundZ);
+            float const flightHeight = flightZ - groundZ;
+            float const stopDistance = AirTargetGroundDistance(distance, flightHeight);
+            if (stopDistance <= 0.0f)
+                return false; // the height alone is beyond the cast: no floor point helps
+
+            float const dx = targetX - bot->GetPositionX();
+            float const dy = targetY - bot->GetPositionY();
+            float const footprintDistance = std::sqrt(dx * dx + dy * dy);
+            if (footprintDistance <= stopDistance)
+                return false; // already inside the cast's ground reach
+
+            // On the straight line towards the footprint, stopDistance short of
+            // it; MoveTo pathfinds from there. The ground under that point is
+            // the floor this bot walks on - a missed floor (a bridge, an
+            // instanced platform) would drop the bot under the world.
+            float const scale = (footprintDistance - stopDistance) / footprintDistance;
+            float const x = bot->GetPositionX() + dx * scale;
+            float const y = bot->GetPositionY() + dy * scale;
+            float z = bot->GetPositionZ();
+            bot->UpdateGroundPositionZ(x, y, z);
+            if (std::fabs(z - bot->GetPositionZ()) > 10.0f)
+                return false;
+
+            return MoveTo(bot->GetMapId(), x, y, z);
+        }
+
         // Inside a dungeon the core's chase generator refuses a destination
         // that is not melee-reachable from the target and stands still while
         // the target is in sight (TargetedMovementGenerator), so a healer or
@@ -599,6 +657,16 @@ namespace ai
 	{
     public:
         ReachSpellAction(PlayerbotAI* ai) : ReachTargetAction(ai, "reach spell", ai->GetRange("spell")) {}
+
+        // A cast on an airborne boss walks the floor under it (see
+        // MoveUnderAirborneTarget); every other target keeps the path walk and
+        // the chase.
+        bool MoveIntoRange(Unit* target, float distance) override
+        {
+            if (MoveUnderAirborneTarget(target, distance))
+                return true;
+            return ReachTargetAction::MoveIntoRange(target, distance);
+        }
     };
 
     // Reach for a crowd-control cast: the spell's range minus

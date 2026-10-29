@@ -49,10 +49,11 @@ int main()
 {
     std::cout << "Starting TortoiseBots boss tactics policy tests...\n";
 
-    // Kind text: exactly the three lowercase spellings the table holds.
+    // Kind text: exactly the four lowercase spellings the table holds.
     CHECK(ParseBossTacticKind("interrupt") == BossTacticKind::Interrupt);
     CHECK(ParseBossTacticKind("kill_first") == BossTacticKind::KillFirst);
     CHECK(ParseBossTacticKind("behind") == BossTacticKind::Behind);
+    CHECK(ParseBossTacticKind("air_target") == BossTacticKind::AirTarget);
     CHECK(ParseBossTacticKind("Interrupt") == BossTacticKind::None);
     CHECK(ParseBossTacticKind("") == BossTacticKind::None);
     CHECK(ParseBossTacticKind("dispel") == BossTacticKind::None);
@@ -89,8 +90,12 @@ int main()
         CHECK(!table.Add(Row(70, 6910, BossTacticKind::Interrupt, 0, 0)));             // interrupt without a spell
         CHECK(!table.Add(Row(70, 7228, BossTacticKind::Behind, 0, 8374, 0, 0.0f)));    // behind without a radius
         CHECK(!table.Add(Row(70, 7228, BossTacticKind::Behind, 0, 8374, 0, -3.0f)));
-        CHECK(table.Size() == 0);
+        CHECK(!table.Add(Row(249, 10184, BossTacticKind::AirTarget, 0, 0)));           // air_target without an aura
+        CHECK(table.Add(Row(249, 10184, BossTacticKind::AirTarget, 0, 17131)));        // the aura marks the phase
+        CHECK(!table.Add(Row(249, 10184, BossTacticKind::AirTarget, 0, 17131)));       // same key
+        CHECK(table.Size() == 1);
         table.Seal();
+        CHECK(table.HasMap(249));
         CHECK(!table.HasMap(70));  // an empty sealed table has no map: the tactics stay off
     }
 
@@ -105,6 +110,29 @@ int main()
     // Subject: the row's target, or the boss itself.
     CHECK(TacticSubjectEntry(Row(70, 7023, BossTacticKind::KillFirst, 7209)) == 7209);
     CHECK(TacticSubjectEntry(Row(70, 6910, BossTacticKind::Interrupt, 0, 16006)) == 6910);
+
+    // Air target: kept while the row matches, its aura is up and she is not
+    // evading. The core's "cannot path to her" flag is not a reason to drop
+    // her - a flying boss has no floor path, and that is the case the kind
+    // exists for.
+    CHECK(AirTargetKeep(true, true, false, false));
+    CHECK(!AirTargetKeep(true, false, false, false));    // aura down: landed or not airborne yet
+    CHECK(!AirTargetKeep(false, true, false, false));    // no row, or the row is another entry
+    CHECK(!AirTargetKeep(true, true, true, false));      // evade mode: the reset is underway
+    CHECK(AirTargetKeep(true, true, false, true));       // unreachable is ignored ...
+    CHECK(!AirTargetKeep(true, true, true, true));       // ... but not an evade mode
+    CHECK(AirTargetKeep(true, true, false, true));
+
+    // Air target ground stop: the 2D leg of a 3D cast from the floor under a
+    // flying boss, never further than kAirTargetGroundRange out, and nothing
+    // when the flight height alone is beyond the cast.
+    CHECK(std::fabs(AirTargetGroundDistance(30.0f, 19.0f) - std::sqrt(30.0f * 30.0f - 19.0f * 19.0f)) < 0.01f);
+    CHECK(AirTargetGroundDistance(30.0f, 19.0f) < kAirTargetGroundRange);
+    CHECK(std::fabs(AirTargetGroundDistance(40.0f, 19.0f) - kAirTargetGroundRange) < 0.01f);  // capped
+    CHECK(std::fabs(AirTargetGroundDistance(30.0f, 0.0f) - kAirTargetGroundRange) < 0.01f);   // capped on the ground
+    CHECK(AirTargetGroundDistance(20.0f, 20.0f) == 0.0f);   // the height alone is out of range
+    CHECK(AirTargetGroundDistance(15.0f, 19.0f) == 0.0f);
+    CHECK(AirTargetGroundDistance(0.0f, 0.0f) == 0.0f);
 
     // Interrupt matching: spell and caster both have to match; only interrupt rows count.
     {

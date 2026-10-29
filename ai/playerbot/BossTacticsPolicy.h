@@ -36,6 +36,7 @@ namespace ai
         Interrupt = 1,  // interrupt `spell_id` while the caster casts it
         KillFirst = 2,  // DPS bots kill `target_entry` before anything else; lowest `priority` first
         Behind = 3,     // non-tank bots stay out of the boss's front within `param` yd (frontal cleave)
+        AirTarget = 4,  // the boss stays a target while it wears the `spell_id` aura in the air
     };
 
     inline BossTacticKind ParseBossTacticKind(const std::string& text)
@@ -46,6 +47,8 @@ namespace ai
             return BossTacticKind::KillFirst;
         if (text == "behind")
             return BossTacticKind::Behind;
+        if (text == "air_target")
+            return BossTacticKind::AirTarget;
         return BossTacticKind::None;
     }
 
@@ -55,7 +58,7 @@ namespace ai
         std::uint32_t bossEntry = 0;    // creature whose presence in the fight activates the row
         BossTacticKind kind = BossTacticKind::None;
         std::uint32_t targetEntry = 0;  // creature the row is about; 0 = the boss itself
-        std::uint32_t spellId = 0;      // interrupt: the spell
+        std::uint32_t spellId = 0;      // interrupt: the spell; air_target: the air-phase aura
         std::uint8_t priority = 0;      // kill_first: lower is killed first
         float param = 0.0f;             // behind: radius in yards
     };
@@ -64,6 +67,35 @@ namespace ai
     inline std::uint32_t TacticSubjectEntry(const BossTacticRow& row)
     {
         return row.targetEntry ? row.targetEntry : row.bossEntry;
+    }
+
+    // Whether an air_target row keeps the boss as a target: the row matches the
+    // creature, the creature wears the row's aura (it is in the air phase), and
+    // it has not gone home. `evadeUnreachable` is deliberately not part of the
+    // answer - the core flags a flying boss as unable to reach (no floor path
+    // leads to its height), which is exactly the case this kind exists for. An
+    // evade mode is still a drop, in the callers as well: the reset is underway
+    // and nothing done to it lands.
+    inline bool AirTargetKeep(bool rowMatches, bool hasAura, bool evading, bool evadeUnreachable)
+    {
+        (void)evadeUnreachable;
+        return rowMatches && hasAura && !evading;
+    }
+
+    // A flying boss is cast on from the floor under it, never chased to its
+    // flight height. This is how far (2D) from its footprint to stand so the
+    // cast's 3D range reaches it: the other leg of the triangle is the flight
+    // height, and no floor point is worth standing further than
+    // kAirTargetGroundRange out. Zero means no floor point can reach it (the
+    // height alone is out of range), so the bot does not walk for nothing.
+    constexpr float kAirTargetGroundRange = 25.0f;
+
+    inline float AirTargetGroundDistance(float spellRange, float flightHeight)
+    {
+        if (!(spellRange > 0.0f) || !(flightHeight < spellRange))
+            return 0.0f;
+        float const ground = std::sqrt(spellRange * spellRange - flightHeight * flightHeight);
+        return ground < kAirTargetGroundRange ? ground : kAirTargetGroundRange;
     }
 
     class BossTacticTable
@@ -81,6 +113,8 @@ namespace ai
             if (row.kind == BossTacticKind::Interrupt && row.spellId == 0)
                 return false;
             if (row.kind == BossTacticKind::Behind && !(row.param > 0.0f))
+                return false;
+            if (row.kind == BossTacticKind::AirTarget && row.spellId == 0)
                 return false;
             std::vector<BossTacticRow>& rows = rows_[Key(row.map, row.bossEntry)];
             for (const BossTacticRow& have : rows)

@@ -41,14 +41,14 @@ Why the commander binding counts: those runs are the ones that exist to clear a 
 | :--- | :--- |
 | `map` | Map id (Uldaman is 70). |
 | `boss_entry` | Creature entry whose presence among the bots' attackers activates the row. |
-| `kind` | `interrupt`, `kill_first` or `behind` (below). |
+| `kind` | `interrupt`, `kill_first`, `behind` or `air_target` (below). |
 | `target_entry` | The creature the row is about; `0` means the boss itself. |
-| `spell_id` | `interrupt`: the spell to interrupt. |
+| `spell_id` | `interrupt`: the spell to interrupt; `air_target`: the aura that marks the air phase. |
 | `priority` | `kill_first`: lower is killed first. |
 | `param` | `behind`: yards around the boss in which its front is kept clear. |
 | `comment` | Free text; where the row came from. |
 
-The primary key is `(map, boss_entry, kind, target_entry, spell_id)`. The loader skips a row it cannot use (unknown kind, an `interrupt` without a spell, a `behind` without a radius, a duplicate key) and logs how many it skipped; `tools/test_boss_tactics_sql.py` rejects the same rows at commit time.
+The primary key is `(map, boss_entry, kind, target_entry, spell_id)`. The loader skips a row it cannot use (unknown kind, an `interrupt` or `air_target` without a spell, a `behind` without a radius, a duplicate key) and logs how many it skipped; `tools/test_boss_tactics_sql.py` rejects the same rows at commit time.
 
 ### Kinds
 
@@ -57,8 +57,9 @@ The primary key is `(map, boss_entry, kind, target_entry, spell_id)`. The loader
 | `interrupt` | While a creature in the fight (`target_entry`, or the boss) casts `spell_id`, a bot that knows an interrupt and has it ready in range uses it: *Pummel*, *Shield Bash*, *Kick*, *Counterspell* or *Earth Shock*, first castable wins. The class interrupts that already fire on the bot's current target are unchanged. | any bot with an interrupt |
 | `kill_first` | Takes the listed creature as its target before anything else; among several listed creatures the lowest `priority` goes first, the nearer one breaks a tie, nothing further than 40 yd is picked. While on that target the generic assist and AoE rows do not pull it back to the boss. | DPS only; never tanks or healers; an explicit `attack` order from a player wins |
 | `behind` | A bot that stands within `param` yd of the boss, in its front half, steps to a point 120 degrees off its facing at the same distance (the same geometry as the generic rear flank). | everyone except the bot the boss is attacking |
+| `air_target` | A boss that wears the `spell_id` aura (its air phase) stays the bot's target: the core flags a flying boss as unable to reach (no floor path leads to its height), which used to drop it from `current target` and the caster's spell. The caster then walks the floor under the target (at most 25 yd, 2D, from its footprint and inside the cast's 3D range) and casts from there; it never chases the flight height. Evade mode still drops the boss. | every bot on the map while the aura is up |
 
-Not in the table yet, and why: tank swap and re-grab (Ironaya's *Knock Away*), dispel priorities, spread and ground-effect avoidance. The generic raid hazard, spread and dispel code already covers part of it, and each of these needs a live fight to tune before it gets a kind. Adding one means a new `BossTacticKind`, a scan function and an action next to the existing three.
+Not in the table yet, and why: tank swap and re-grab (Ironaya's *Knock Away*), dispel priorities, spread and ground-effect avoidance. The generic raid hazard, spread and dispel code already covers part of it, and each of these needs a live fight to tune before it gets a kind. Adding one means a new `BossTacticKind`, a scan function and an action next to the existing four.
 
 ## Uldaman rows (map 70)
 
@@ -203,6 +204,18 @@ Rows added 2026-10-24 (`data/sql/world/20261024153900_world.sql`), read from `to
 Kill order reason: the whole-party shadow damage of Marduk (Volley plus aura, hitting even the 4.1k hp priest) runs longer if Vectus dies first. No CC on either (both undead, immune masks; the plan's `cc_priority` never applies to a boss row).
 
 What needs a live check: that Marduk dies first with Vectus on the tank, that Flamestrike is kicked in time.
+
+## Onyxia's Lair rows (map 249)
+
+Row added 2026-10-29 (`data/sql/world/20261029150000_world.sql`), read from `tortoise-wow` 5d79486. Map 249 had no rows before, so the `boss tactics` strategy now also activates for a bound raid on map 249.
+
+| Boss (entry) | Row | Data behind it |
+| :--- | :--- | :--- |
+| Onyxia (10184) | `air_target`, aura 17131 | Below 65 % health `boss_onyxia.cpp` stops her, lifts her off with Hover 17131 and flies her to one of 8 hover points about 20 yd above the arena floor; below 40 % she lands and the aura goes. The core flags her unable to reach while she flies (no floor path leads to her height), which dropped her from the bots' target and collapsed the raid's damage between 65 % and 40 %. The aura id is the one the module's Onyxia fight triggers already read. |
+
+The row keeps her a target for every bot on the map while the aura is up (a melee bot still cannot hit her and goes for the whelps on its own rows), and the `reach spell` of a caster walks the floor under her instead of her flight height. The fight's own airborne rows are unchanged: `raid spread` for the whole raid, the wand only for kits without a ranged rotation, whelp duty and the Deep Breath dodge.
+
+What needs a live check: that the ranged keep her as `current target` through all 8 hover points and that the phase-2 damage drop is at least 1 % of her health per 10 s (`/api/v1/combat/fights`, the commander-bound fight record).
 
 ## Adding a boss
 
