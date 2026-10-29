@@ -3838,7 +3838,7 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertEqual((hop["kind"], hop["x"], hop["y"], hop["z"]), ("move_hop_exact", "-287.5", "5", "-63.6"), name)
 
     def test_wailing_caverns_kresh_is_a_boss_leg(self):
-        # 20261028180000 (turtle-agent 8a98e1c, 2026-10-28) re-exports the whole wailing_caverns plan on top of 20261025002700. Kresh 3653
+        # 20261028180000 (turtle-agent 8a7f7d0, 2026-10-28) re-exports the whole wailing_caverns plan on top of 20261025002700. Kresh 3653
         # (faction 7: neutral to every player, so only a step that makes the party attack him fights him) is no longer a pull member: he
         # is the boss of a new leg `kresh` between cobrahn_a and cobrahn_b, at the middle of his 525.9 yd river beat (his third waypoint
         # -3.64081 229.268), where he passes within the row's 30 yd radius at most 96 s apart. The row's timeout_s is 300 (the plan's
