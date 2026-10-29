@@ -94,6 +94,12 @@ constexpr std::uint32_t kPlayerHoldCapMs = 300000;   // a step held (or a regrou
 constexpr std::uint32_t kAutoRegroupsPerStep = 2; // regroups the run does by itself per step, then it pauses
 constexpr std::uint32_t kGatherTries = 2;         // a gather refused this often: the run goes on without it
 constexpr std::uint32_t kHeldSummonTries = 3;     // a held bot's summon refused this often: it stays held, the party walks back without it
+// A held bot's accepted summon that never brings it to the lead bot answers nothing: PlayerConvenience drops it
+// without an OrderRefused (the bot, its anchor or its master changed, the teleport was refused, the arrival
+// timed out). This is that subsystem's own clock, its 3 s delay (kSummonDelayMs) and 10 s arrival timeout
+// (kSummonArrivalTimeoutMs, both in behavior/PlayerConvenience.cpp) plus a margin; past it a pending mark counts
+// as a failed try.
+constexpr std::uint64_t kHeldSummonExpiryMs = 15000;
 constexpr std::uint32_t kWalkBackRetries = 3;     // a walk-back point refused for a passing reason is sent again this often
 constexpr float kArriveYd = 3.0f;                 // a walk is done this close to its point
 constexpr float kStalledArriveYd = 6.0f;          // ... or this close once it stopped gaining ground (a point
@@ -1441,9 +1447,9 @@ struct Run
     // walks back without it.
     struct HeldSummon
     {
-        std::uint32_t ms = 0;       // the run's clock when its summon went out
-        std::uint32_t refusals = 0; // ... refused this often since it was held
-        bool pending = false;       // sent, its answer (a refusal) not in yet
+        std::uint64_t ms = 0;       // the run's clock when its summon went out
+        std::uint32_t refusals = 0; // ... refused or never landed this often since it was held
+        bool pending = false;       // sent, its answer (a refusal) or its arrival not in yet
     };
     std::unordered_map<std::string, HeldSummon> heldSummons;
     // A regroup for a dead lead bot (WaitForFallen): once the lead bot is up
@@ -12782,7 +12788,12 @@ inline bool SummonHeldToLead(Run& r, const Facts& f, std::string& order)
             return false;
         }), r.hold.end());
     // A summoned bot leaves the hold only on facts that show it arrived; one
-    // dead, gone or in a fight left it above and keeps no mark.
+    // dead, gone or in a fight left it above and keeps no mark. A summon the
+    // subsystem accepted and then dropped answers nothing (PlayerConvenience
+    // cancels it when the bot, its anchor or its master changes, the teleport is
+    // refused or the arrival times out): past its own clock the bot is not
+    // there, so the mark clears and the try counts as a refusal does (sent
+    // again below, or at the cap the bot stays held and the party walks back).
     for (auto it = r.heldSummons.begin(); it != r.heldSummons.end();)
     {
         const MemberFact* m = nullptr;
@@ -12793,6 +12804,19 @@ inline bool SummonHeldToLead(Run& r, const Facts& f, std::string& order)
         bool const held = std::find(r.hold.begin(), r.hold.end(), it->first) != r.hold.end();
         if (atLead)
             r.hold.erase(std::remove(r.hold.begin(), r.hold.end(), it->first), r.hold.end());
+        else if (held && it->second.pending && r.runMs - it->second.ms > kHeldSummonExpiryMs)
+        {
+            it->second.pending = false;
+            ++it->second.refusals;
+            if (it->second.refusals >= kHeldSummonTries)
+                r.note = "the lead bot came back to life away from the party: " + it->first +
+                    " could not be summoned to it (" + std::to_string(it->second.refusals) +
+                    " failed summons): it stays held and the party walks back without it";
+            else
+                r.note = "the lead bot came back to life away from the party: " + it->first +
+                    " summoned to it, did not arrive (" + std::to_string(it->second.refusals) + " of " +
+                    std::to_string(kHeldSummonTries) + "): summoning it again";
+        }
         it = held && !atLead ? std::next(it) : r.heldSummons.erase(it);
     }
     if (r.hold.empty() || r.state != State::Running || r.holdWhilePaused || r.walkBack || !f.leadAlive || f.anyInCombat ||
@@ -13105,16 +13129,31 @@ struct RejoinSettleFacts
     bool refused = false; // TeleportTo returned false
     bool arrived = false; // in the world on the map, in the lead bot's instance id, not teleporting
     std::uint32_t msSince = 0;
+    // Round 3 (Codex HIGH, 2026-10-29: a logout mid-rejoin dropped the only snapshot): online = the Player exists
+    // (the undo needs it); settleNow = the logout hook or the next login, no more waiting.
+    bool online = true;
+    bool settleNow = false;
 };
-enum class RejoinSettle { None, Wait, Done, Restore };
+enum class RejoinSettle
+{
+    None,    // nothing pending
+    Wait,    // in flight
+    Done,    // in the lead bot's copy: the snapshot goes
+    Restore, // undo the write, then the snapshot goes
+    Hold,    // offline: keep the snapshot until the logout hook or the next login can undo it
+};
 inline RejoinSettle PlanRejoinSettle(const RejoinSettleFacts& s)
 {
     if (!s.pending)
         return RejoinSettle::None;
+    if (!s.online)
+        return RejoinSettle::Hold;
     if (s.refused)
         return RejoinSettle::Restore;
     if (s.arrived)
         return RejoinSettle::Done;
+    if (s.settleNow)
+        return RejoinSettle::Restore;
     return s.msSince < kRejoinArriveMs ? RejoinSettle::Wait : RejoinSettle::Restore;
 }
 
