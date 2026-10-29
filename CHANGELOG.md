@@ -13,7 +13,7 @@
 - In a run leader's pull, the held DPS open once every mob near the tank is on it (join delay at the earliest, 10 s after the tank is back at the latest), or at once when a mob hits them or the tank drops under 60 %.
 - A fight the run leader did not pull holds the damage dealers for up to 4 s the same way: they open once every mob near the tank or near them is on the tank, or at once when one hits them.
 - Fixed: the fight-start DPS hold now opens in hired dungeon runs (it was gated on the hirer).
-- Damage dealers in a fight-start hold wait at least 2 s before opening on a pack the tank just tagged, and a pull no longer stops halfway when the target's own pack-mates aggro first.
+- Damage dealers in a fight-start hold wait about 2-3 s (whole-second clock) before opening on a pack the tank just tagged, and a pull no longer stops halfway when the target's own pack-mates aggro first.
 - Protection warriors open with Shield Slam when it is ready and treat Sunder Armor as the filler while the stack builds, so snap threat lands on every pull.
 - Protection warriors fall back to Mocking Blow (ducking into Battle Stance and back) when Taunt is on cooldown and the mob left the tank, recovering taunt-resist wipes on bosses.
 - Protection warriors save Challenging Shout for real emergencies (3 or more loose mobs on non-tanks) instead of firing it on every pack they already hold.
@@ -48,6 +48,7 @@
 - Fixed the run leader still pausing (and refusing resume) when a bot was a ghost a few seconds longer than the lead in another part of the instance: it waits, then teleports.
 - The run leader no longer leaves the party standing where the lead bot fell: when the lead bot comes back to life away from it, the survivors are summoned to it and the party walks back together.
 - Fixed: a survivor whose summon to the revived lead bot was refused no longer dropped out of the recovery; the bot stays held and is summoned again a few seconds later, and after three refusals it stays held while the party walks back without it.
+- Fixed the run leader walking back before the summoned survivors landed: while a summon is in flight it waits, so the bot arrives at the lead bot instead of being left anchored where it stood; a summon refused as busy is not resent every tick.
 - Fixed the run leader dropping a focus skull with no retry and keeping a stale skull across pauses.
 - Fixed bots in deep water standing still on a swim the server allows: their move now goes to the server's own swim, or up and out onto a shore within 30 yd.
 - Fixed: a long winding walk refused too-far no longer pauses after six legs (up to 16; a leg back at an earlier leg's end still pauses).

@@ -13432,6 +13432,85 @@ static void TestLeadDeadAfterTheFightSummonsTheParty()
     CHECK(q.hold.empty() && !q.holdDue);
 }
 
+// ta263 (Opus cold review, round 4): the walk back started before the summoned
+// bots landed. HoldView leaves the held bots out of the step, so the regroup
+// completed at once while their summons were still in flight: the walk back
+// ran, PlayerConvenience fixed each summon's spot where the lead bot stood when
+// the order went out and the bot landed there ~3 s later, and the glue anchored
+// it at the entrance while the party walked away. While a held summon is in
+// flight the tick sends no order and runs no step. The no-gate mutation starts
+// the walk back on the first pending tick.
+static void TestNoWalkBackBeforeHeldSummonsLand()
+{
+    DungeonPlan plan;
+    plan.steps = {Step(PlanStepKind::Move, 10), Step(PlanStepKind::Move, 200), PullStep(220, {1})};
+    Run r = Start(&plan, 1);
+    r.step = 2;
+    BeginRegroup(r);
+    r.walkBackDue = true;
+    r.hold = {"Fyran", "Walky"};
+    Facts f = Party(-90); // the lead bot came back to life at the entrance
+    f.members = {Mem("Tanky", 0), Mem("Fyran", 305), Mem("Walky", 310)};
+    f.maxMemberYd = 310;
+    CHECK(Tick(r, f) == "summon Fyran");
+    CHECK(Tick(r, f) == "summon Walky");
+    CHECK(!r.walkBack && r.hold.size() == 2);
+    // Both in flight: no order and no walk back, the note names the bot waited for.
+    for (int i = 0; i < 5; ++i)
+    {
+        CHECK(Tick(r, f).empty());
+        CHECK(!r.walkBack && r.regroup && r.hold.size() == 2);
+        CHECK(r.note == "waiting for the summoned Fyran");
+    }
+    // Fyran lands: the wait goes on for Walky, still no walk back.
+    f.members[1].yd = f.members[1].x = 5;
+    f.maxMemberYd = 310;
+    CHECK(Tick(r, f).empty());
+    CHECK(!r.walkBack && r.hold.size() == 1 && r.hold[0] == "Walky");
+    CHECK(r.note == "waiting for the summoned Walky");
+    // Walky lands too: the regroup is over and the walk back runs with both.
+    f.members[2].yd = f.members[2].x = 6;
+    f.maxMemberYd = 6;
+    CHECK(Tick(r, f).empty()); // the walk back starts; the next tick reads the facts for its point
+    CHECK(!r.regroup && r.walkBack && r.hold.empty() && r.heldSummons.empty());
+    CHECK(Tick(r, f).compare(0, 5, "move ") == 0);
+}
+
+// ta263 (round 4): the wait for a held summon is bounded by the summon's own
+// clock. Each expiry counts a failed try and sends it again; at kHeldSummonTries
+// the bot stays held and the walk back goes on without it. The frozen-clock
+// mutation never expires and never walks back here.
+static void TestHeldSummonWaitIsBounded()
+{
+    DungeonPlan plan;
+    plan.steps = {Step(PlanStepKind::Move, 10), Step(PlanStepKind::Move, 200), PullStep(220, {1})};
+    Run r = Start(&plan, 1);
+    r.step = 2;
+    BeginRegroup(r);
+    r.walkBackDue = true;
+    r.hold = {"Fyran"};
+    Facts f = Party(-90);
+    f.members = {Mem("Tanky", 0), Mem("Fyran", 305)};
+    f.maxMemberYd = 305;
+    CHECK(Tick(r, f) == "summon Fyran");
+    auto const expire = [&]() {
+        // The tick that sends a summon does not run the step's clock; each
+        // waiting tick adds it, so the expiry fires on the tick after the clock
+        // passes kHeldSummonExpiryMs.
+        for (std::uint32_t i = 0; i < kHeldSummonExpiryMs / kTickMs + 1; ++i)
+            CHECK(Tick(r, f).empty());
+        CHECK(!r.walkBack);
+        return Tick(r, f);
+    };
+    CHECK(expire() == "summon Fyran"); // past its clock: the try counts, sent again
+    CHECK(r.heldSummons["Fyran"].refusals == 1 && r.heldSummons["Fyran"].pending);
+    CHECK(expire() == "summon Fyran");
+    CHECK(r.heldSummons["Fyran"].refusals == 2);
+    CHECK(expire().empty()); // at the cap no summon goes out: the walk back runs without it
+    CHECK(r.heldSummons["Fyran"].refusals == kHeldSummonTries && !r.heldSummons["Fyran"].pending);
+    CHECK(!r.regroup && r.walkBack && r.hold.size() == 1);
+}
+
 // ta263: a bot held where the lead bot fell that gets into a fight leaves the
 // hold at once (the guard and the gather see it again).
 static void TestHeldBotInAFightLeavesTheHold()
@@ -13491,14 +13570,19 @@ static void TestRefusedHeldSummonStaysHeld()
     order.clear();
     CHECK(!SummonHeldToLead(r, f, order) && order.empty()); // one summon in flight
     OrderRefused(r, "summon Fyran", "busy");
-    // Refused: still held, the mark cleared for a retry; busy is no try of its own.
+    // Busy is "that bot has a summon pending already": still held, still in
+    // flight, no try of its own, and no resend every tick: the first summon's
+    // own clock bounds the backoff.
     CHECK(r.hold.size() == 1 && r.hold[0] == "Fyran");
-    CHECK(r.heldSummons.count("Fyran") == 1 && !r.heldSummons["Fyran"].pending);
+    CHECK(r.heldSummons.count("Fyran") == 1 && r.heldSummons["Fyran"].pending);
     CHECK(r.heldSummons["Fyran"].refusals == 0);
-    CHECK(r.note.find("refused") != std::string::npos && r.note.find("summoning it again") != std::string::npos);
+    CHECK(r.note.find("refused") != std::string::npos && r.note.find("already pending") != std::string::npos);
+    order.clear();
+    CHECK(!SummonHeldToLead(r, f, order) && order.empty());
+    r.runMs = r.heldSummons["Fyran"].ms + kHeldSummonExpiryMs + kTickMs;
     order.clear();
     CHECK(SummonHeldToLead(r, f, order) && order == "summon Fyran");
-    CHECK(r.heldSummons["Fyran"].pending && r.hold.size() == 1);
+    CHECK(r.heldSummons["Fyran"].pending && r.heldSummons["Fyran"].refusals == 1);
 }
 
 // ta263: a summon refused because the bot got into a fight leaves it held where
@@ -16504,15 +16588,15 @@ static void TestNearWipeSummonsTheLivingToTheLead()
     f.members = {Mem("Tanky", 0), Mem("Healy", 3), Mem("Magey", 3), Mem("Fyran", 305)};
     f.members[3].x = 215;
     int summons = 0;
-    for (int i = 0; i < 40 && r.regroup; ++i)
+    for (int i = 0; i < 10; ++i)
     {
         std::string const order = Tick(r, f);
         if (order == "summon Fyran")
             ++summons;
         else
-            CHECK(order.find("summon") != 0);
+            CHECK(order.empty()); // nothing else (no gather at the door, no walk back) while he is in flight
     }
-    CHECK(summons == 1 && r.state == State::Running);
+    CHECK(summons == 1 && r.state == State::Running && r.regroup);
     CHECK(r.hold.size() == 1 && r.hold[0] == "Fyran" && r.heldSummons["Fyran"].pending);
     // Arrived: out of the hold, the mark gone.
     f.members[3].yd = 2;
@@ -19077,6 +19161,45 @@ static void TestOtherCopyBotIsRejoinedNotSummoned()
     CHECK(rejoined);
     CHECK(Has(r.note, "(try 1 of 3 at this step)"));
     CHECK(r.rejoinTries["Aimboi"] == 1);
+}
+// ta252 cold review (2026-10-29): the lead bot's own corpse run can land IT in a fresh copy; on entry the core binds an
+// unbound group there, and rejoining every other bot would move the whole party into the respawned copy. When every
+// other living bot on the plan's map (at least 2) is in another copy, the lead bot is the odd one out: pause.
+static void TestLeadInAnotherCopyPausesNotRejoins()
+{
+    DungeonPlan plan = GraveyardPlan();
+    Run r = Start(&plan);
+    BeginRegroup(r);
+    Facts f = Party(0);
+    f.carrier = "Nara";
+    f.alive = 3;
+    f.total = 3;
+    f.members = {Mem("Nara", 0), OtherCopy("Aimboi"), OtherCopy("Brakk")};
+    f.maxMemberYd = kOtherMapYd;
+    std::string order = Tick(r, f);
+    CHECK(order.empty());
+    CHECK(r.state == State::Paused);
+    CHECK(Has(r.note, "the lead bot is in another copy of this instance than the party"));
+    CHECK(r.rejoinTries.empty());
+    // the tick body's regroup summon of such a bot is dropped too (the glue would reroute it to a rejoin).
+    Run r2 = Start(&plan);
+    std::string summon = "summon Aimboi";
+    CHECK(InstanceRejoinTick(r2, f, summon));
+    CHECK(summon.empty() && r2.state == State::Paused);
+    // a bot outside the instance is no member on the plan's map: it does not hide the lead bot's copy.
+    MemberFact outside = Mem("Cleo", kOtherMapYd);
+    outside.offPlanMap = true;
+    f.members = {Mem("Nara", 0), OtherCopy("Aimboi"), OtherCopy("Brakk"), outside};
+    CHECK(LeadInAnotherCopy(f));
+    // one in the lead's copy with them: the two are the odd ones, rejoined as before.
+    f.members = {Mem("Nara", 0), OtherCopy("Aimboi"), OtherCopy("Brakk"), Mem("Cleo", 3)};
+    CHECK(!LeadInAnotherCopy(f));
+    // a single other bot in another copy: rejoined as before (cannot tell which side is wrong; the lead bot leads).
+    f.members = {Mem("Nara", 0), OtherCopy("Aimboi")};
+    CHECK(!LeadInAnotherCopy(f));
+    Run r3 = Start(&plan);
+    std::string order3;
+    CHECK(InstanceRejoinTick(r3, f, order3) && order3 == "rejoin Aimboi" && r3.state == State::Running);
 }
 static void TestRejoinRepeatAndPause()
 {
@@ -23628,6 +23751,8 @@ int main()
     TestRegroupWaitsForTheFight();
     TestDeathDuringRegroup();
     TestLeadDeadAfterTheFightSummonsTheParty();
+    TestNoWalkBackBeforeHeldSummonsLand();
+    TestHeldSummonWaitIsBounded();
     TestNearWipeSummonsTheLivingToTheLead();
     TestHeldBotInAFightLeavesTheHold();
     TestHeldSummonsOneATick();
@@ -23834,6 +23959,7 @@ int main()
     TestRejoinWithARealPlayerPauses();
     TestRejoinRefusalIsNoPause();
     TestOtherCopyFightIsNoPartyFight();
+    TestLeadInAnotherCopyPausesNotRejoins();
     TestPlanRejoinBind();
     TestRejoinSettle();
     TestRejoinSettleAcrossLogout();
