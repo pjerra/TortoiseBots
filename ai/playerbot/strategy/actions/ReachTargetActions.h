@@ -16,6 +16,7 @@
 #include "playerbot/policy/combat/RangedApproachPolicy.h"
 #include "playerbot/strategy/values/PossibleTargetsValue.h"
 #include "playerbot/BossTacticsAirTarget.h"
+#include "playerbot/BossTacticsStand.h"
 #include "AI/CreatureAI.h"
 #include <ctime>
 
@@ -756,8 +757,15 @@ namespace ai
         // of ~9 yd, and every caster bunches inside Fireball's (18392) 8-yd
         // splash. The floor walk uses the spell's range less a 2-yd margin
         // instead (AirTargetReachDistance): ~20 yd out for the same cast.
+        //
+        // A stand set that seats this bot (ai_boss_stand: the boss casts the Deep Breath of its hover point) wins
+        // over the floor walk: the bot is on its way to its seat (the stand action, a higher row) or standing on it,
+        // and a walk back under the boss would put it in the lane. The reach does nothing until the cast ends and
+        // the row stops applying; then the floor walk above takes over again from wherever the bot stands.
         bool MoveIntoRange(Unit* target, float distance) override
         {
+            if (FindBossStand(ai, bot).valid)
+                return false;
             AirTargetReach const reach = MoveUnderAirborneTarget(target, AirTargetReachDistance(range));
             if (!AirTargetGenericReachApplies(reach))
                 return reach == AirTargetReach::Positioned;
