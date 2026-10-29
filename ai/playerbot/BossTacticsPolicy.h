@@ -251,16 +251,38 @@ namespace ai
     }
 
     // Bounded recovery: per target, kAirTargetLosAttempts tries, then none
-    // until kAirTargetLosRetryMs after the last; seeing the target again or a
-    // new target resets it (AirTargetLosBudgetReset).
+    // until kAirTargetLosRetryMs after the last. Only a new target
+    // (AirTargetLosBudgetReset) or sight held without a break for
+    // kAirTargetLosVisibleResetMs (AirTargetLosSeen) gives the tries back: a
+    // boss on a pillar edge, in sight one tick and out the next, must not buy
+    // a fresh round every time it shows.
+    constexpr std::uint32_t kAirTargetLosVisibleResetMs = 3000;
+
     struct AirTargetLosBudget
     {
         std::uint8_t attempts = 0;
         std::uint32_t lastMs = 0;
+        bool visible = false;           // in sight since visibleSinceMs, without a break
+        std::uint32_t visibleSinceMs = 0;
     };
 
+    // The bot sees the target this tick.
+    inline void AirTargetLosSeen(AirTargetLosBudget& budget, std::uint32_t nowMs)
+    {
+        if (!budget.visible)
+        {
+            budget.visible = true;
+            budget.visibleSinceMs = nowMs;
+            return;
+        }
+        if (nowMs - budget.visibleSinceMs >= kAirTargetLosVisibleResetMs)
+            budget.attempts = 0;
+    }
+
+    // The bot does not see the target this tick and asks for a recovery walk.
     inline bool AirTargetLosTryAttempt(AirTargetLosBudget& budget, std::uint32_t nowMs)
     {
+        budget.visible = false;
         if (budget.attempts >= kAirTargetLosAttempts)
         {
             if (nowMs - budget.lastMs < kAirTargetLosRetryMs)
@@ -274,8 +296,24 @@ namespace ai
 
     inline void AirTargetLosBudgetReset(AirTargetLosBudget& budget)
     {
-        budget.attempts = 0;
-        budget.lastMs = 0;
+        budget = AirTargetLosBudget();
+    }
+
+    // Whether a candidate, at the ground z the caller resolved for it, is a
+    // floor point worth walking to: on the bot's own floor (a platform above
+    // or a pit below is another floor) and within the cast's range in 3D from
+    // that ground z to the target's flight position. The ring is laid out from
+    // the flight height over the footprint's floor; this re-checks every
+    // candidate against the floor it actually lands on.
+    inline bool AirTargetLosPointFits(float spellRange, float botZ, float pointX, float pointY, float pointZ,
+                                      float targetX, float targetY, float targetZ)
+    {
+        if (std::fabs(pointZ - botZ) > kAirTargetSameFloorZ)
+            return false;
+        float const dx = targetX - pointX;
+        float const dy = targetY - pointY;
+        float const dz = targetZ - pointZ;
+        return dx * dx + dy * dy + dz * dz <= spellRange * spellRange;
     }
 
     class BossTacticTable

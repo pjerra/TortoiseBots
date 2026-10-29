@@ -263,6 +263,68 @@ int main()
         CHECK(!AirTargetLosTryAttempt(budget, 60));
     }
 
+    // Sight that flickers (a pillar edge, a boss turning at its hover point)
+    // does not refill the budget: in sight one tick, out the next, for 10 s,
+    // still at most kAirTargetLosAttempts recovery rounds. Sight held without
+    // a break for kAirTargetLosVisibleResetMs does refill it.
+    {
+        AirTargetLosBudget budget;
+        int granted = 0;
+        for (std::uint32_t now = 1000; now < 1000 + kAirTargetLosRetryMs - 1; now += 100)
+        {
+            if ((now / 100) % 2 == 0)
+                AirTargetLosSeen(budget, now);
+            else if (AirTargetLosTryAttempt(budget, now))
+                ++granted;
+        }
+        CHECK(granted == kAirTargetLosAttempts);
+
+        // Seen for a moment only, then hidden again: still spent.
+        AirTargetLosBudget held;
+        for (int i = 0; i < kAirTargetLosAttempts; ++i)
+            CHECK(AirTargetLosTryAttempt(held, 100 + i));
+        AirTargetLosSeen(held, 200);
+        AirTargetLosSeen(held, 200 + kAirTargetLosVisibleResetMs - 1);
+        CHECK(!AirTargetLosTryAttempt(held, 200 + kAirTargetLosVisibleResetMs));
+        // Sight held the full window: the tries come back.
+        AirTargetLosSeen(held, 5000);
+        AirTargetLosSeen(held, 5000 + kAirTargetLosVisibleResetMs);
+        CHECK(AirTargetLosTryAttempt(held, 5000 + kAirTargetLosVisibleResetMs + 1));
+        // A break in sight restarts the window.
+        AirTargetLosBudget broken;
+        for (int i = 0; i < kAirTargetLosAttempts; ++i)
+            CHECK(AirTargetLosTryAttempt(broken, 100 + i));
+        AirTargetLosSeen(broken, 200);
+        CHECK(!AirTargetLosTryAttempt(broken, 1000));
+        AirTargetLosSeen(broken, 1100);
+        AirTargetLosSeen(broken, 200 + kAirTargetLosVisibleResetMs + 100);  // 3.1 s after the first sight, 2.2 s after the break
+        CHECK(!AirTargetLosTryAttempt(broken, 200 + kAirTargetLosVisibleResetMs + 200));
+    }
+
+    // Stacked floors: the ring is laid out from the flight height over the
+    // bot's floor (z 0, boss at z 20, cast 30 yd), and every candidate is
+    // re-checked at the ground z it actually resolves to.
+    {
+        float const range = 30.0f;
+        float const leg = AirTargetGroundDistance(range, 20.0f);
+        // On the bot's floor at the outer ring: fits.
+        CHECK(AirTargetLosPointFits(range, 0.0f, leg * 0.9f, 0.0f, 0.0f, 0.0f, 0.0f, 20.0f));
+        // The same x/y resolved onto a platform 12 yd up: another floor.
+        CHECK(!AirTargetLosPointFits(range, 0.0f, leg * 0.9f, 0.0f, 12.0f, 0.0f, 0.0f, 20.0f));
+        // A pit 12 yd down: another floor as well.
+        CHECK(!AirTargetLosPointFits(range, 0.0f, leg * 0.9f, 0.0f, -12.0f, 0.0f, 0.0f, 20.0f));
+        // A dip 6 yd down at the outer ring: the same floor, but the 3D cast
+        // from there (26 yd up, ~20 yd across) is out of range.
+        CHECK(!AirTargetLosPointFits(range, 0.0f, leg * 0.9f, 0.0f, -6.0f, 0.0f, 0.0f, 20.0f));
+        // ... while the inner ring in the same dip still lands.
+        CHECK(AirTargetLosPointFits(range, 0.0f, leg * 0.5f, 0.0f, -6.0f, 0.0f, 0.0f, 20.0f));
+        // A rise of 5 yd: closer to the boss, fits.
+        CHECK(AirTargetLosPointFits(range, 0.0f, leg * 0.9f, 0.0f, 5.0f, 0.0f, 0.0f, 20.0f));
+        // Exactly at the range: fits; a hair beyond: not.
+        CHECK(AirTargetLosPointFits(range, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 30.0f));
+        CHECK(!AirTargetLosPointFits(range, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 30.1f));
+    }
+
     // Interrupt matching: spell and caster both have to match; only interrupt rows count.
     {
         const std::vector<BossTacticRow> rows = {

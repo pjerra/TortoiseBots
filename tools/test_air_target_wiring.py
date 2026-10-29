@@ -120,9 +120,18 @@ class AirTargetWiring(unittest.TestCase):
         self.assertIn("bool const inLos = bot->IsWithinLOSInMap(target, true);", fn)
         self.assertIn("AirTargetReachPlan(true, inLos, distance, flightHeight,", fn)
         self.assertIn("if (plan == AirTargetReach::NeedLosPoint)\n                return MoveToAirTargetLosPoint(map, target, distance, flightHeight);", fn)
-        # The budget is per target.
+        # The budget is per target, and only sustained sight refills it: a
+        # plain in-sight tick never resets it (Codex round 3).
         self.assertIn("if (airLosTarget != target->getObjectGuid())", fn)
-        self.assertIn("AirTargetLosBudgetReset(airLosBudget);", fn)
+        self.assertEqual(fn.count("AirTargetLosBudgetReset(airLosBudget);"), 1)
+        reset = fn.index("AirTargetLosBudgetReset(airLosBudget);")
+        self.assertLess(reset, fn.index("bool const inLos"))
+        self.assertIn("if (inLos)\n                AirTargetLosSeen(airLosBudget, WorldTimer::getMSTime());", fn)
+
+    def test_flight_height_is_measured_from_the_bots_floor(self):
+        fn = body(REACH, "AirTargetReach MoveUnderAirborneTarget(Unit* target, float distance)", end="\n        }\n")
+        self.assertIn("float groundZ = botZ;\n            bot->UpdateGroundPositionZ(targetX, targetY, groundZ);", fn)
+        self.assertNotIn("float groundZ = flightZ;", fn)
 
     def test_los_recovery_walks_a_bounded_floor_point(self):
         fn = body(REACH, "AirTargetReach MoveToAirTargetLosPoint(Map* map, Unit* target, float distance, float flightHeight)",
@@ -133,7 +142,11 @@ class AirTargetWiring(unittest.TestCase):
                       "                                                     kAirTargetLosPathProbes, usable, reachable)", fn)
         # Floor, sight from the floor point, hazard, navmesh path.
         self.assertIn("bot->UpdateGroundPositionZ(point.x, point.y, z);", fn)
-        self.assertIn("std::fabs(z - botZ) > kAirTargetSameFloorZ", fn)
+        self.assertIn("AirTargetLosPointFits(distance, botZ, point.x, point.y, z, goalX, goalY, goalZ)", fn)
+        fits = fn.index("AirTargetLosPointFits(")
+        self.assertLess(fn.index("bot->UpdateGroundPositionZ(point.x, point.y, z);"), fits)
+        self.assertLess(fits, fn.index("map->isInLineOfSight("))
+        self.assertLess(fits, fn.index("isPathTo("))
         self.assertIn("map->isInLineOfSight(point.x, point.y, z + botHeight, goalX, goalY, goalZ + targetHeight, true)", fn)
         self.assertIn("IsHazardNearPosition(", fn)
         self.assertIn("destination.isPathTo(destination.getPathStepFrom(botPosition, bot), 2.0f)", fn)

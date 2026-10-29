@@ -418,23 +418,27 @@ namespace ai
             float const targetX = target->GetPositionX();
             float const targetY = target->GetPositionY();
             float const flightZ = target->GetPositionZ();
+            float const botX = bot->GetPositionX();
+            float const botY = bot->GetPositionY();
+            float const botZ = bot->GetPositionZ();
 
-            // The flight height above the floor under the target's footprint.
-            float groundZ = flightZ;
+            // The flight height above the floor under the target's footprint,
+            // on the bot's own floor: the height search starts at the bot's z
+            // (Map::GetHeight searches down from it), not the flight z, so a
+            // platform between the floor and the boss is not taken for it.
+            float groundZ = botZ;
             bot->UpdateGroundPositionZ(targetX, targetY, groundZ);
             float const flightHeight = flightZ - groundZ;
 
             bool const inLos = bot->IsWithinLOSInMap(target, true);
-            float const botX = bot->GetPositionX();
-            float const botY = bot->GetPositionY();
-            float const botZ = bot->GetPositionZ();
+            if (inLos)
+                AirTargetLosSeen(airLosBudget, WorldTimer::getMSTime());
             float x = botX;
             float y = botY;
             AirTargetReach const plan =
                 AirTargetReachPlan(true, inLos, distance, flightHeight, botX, botY, targetX, targetY, x, y);
             if (plan == AirTargetReach::NeedLosPoint)
                 return MoveToAirTargetLosPoint(map, target, distance, flightHeight);
-            AirTargetLosBudgetReset(airLosBudget);
             if (plan != AirTargetReach::Positioned)
                 return plan;
             if (x == botX && y == botY)
@@ -453,7 +457,8 @@ namespace ai
         }
 
         // NeedLosPoint: walk to the nearest floor point around the airborne
-        // target's footprint that is on the bot's floor, sees the target (the
+        // target's footprint that is on the bot's floor and inside the cast's
+        // 3D range from its own ground z (AirTargetLosPointFits), sees the target (the
         // sight ray of MoveIntoRangeAlongPath), has no hazard and has a navmesh
         // path from the bot. Only the ground z of the bot's floor is used, never
         // the flight height.
@@ -483,7 +488,7 @@ namespace ai
                 AirTargetGroundPoint const& point = candidates[index];
                 float z = botZ;
                 bot->UpdateGroundPositionZ(point.x, point.y, z);
-                if (std::fabs(z - botZ) > kAirTargetSameFloorZ)
+                if (!AirTargetLosPointFits(distance, botZ, point.x, point.y, z, goalX, goalY, goalZ))
                     return false;
                 if (!map->isInLineOfSight(point.x, point.y, z + botHeight, goalX, goalY, goalZ + targetHeight, true))
                     return false;
