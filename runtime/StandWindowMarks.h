@@ -7,8 +7,8 @@
 // time the next encounter.
 //
 // A window can disappear without a closing observation: the unit leaves the report, the binding is released, the run
-// ends. Every snapshot cycle prunes marks not observed for kStaleMs, a binding teardown prunes them too, and a mark that
-// somehow outlived both is never reused (a stale one starts a new window on its next sighting).
+// ends. Every snapshot cycle prunes marks not observed for kStaleMs, a binding teardown forgets the keys that binding
+// reported, and a mark that somehow outlived both is never reused (a stale one starts a new window on its next sighting).
 //
 // Standard library only, so tools/test_stand_window_marks.cpp compiles it without a game header.
 
@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <iterator>
 #include <unordered_map>
+#include <unordered_set>
 
 namespace TortoiseBots {
 namespace StandWindow {
@@ -81,6 +82,8 @@ public:
             it = IsStale(it->second, nowMs) ? marks_.erase(it) : std::next(it);
     }
 
+    bool Contains(Key const& key) const { return marks_.find(key) != marks_.end(); }
+
     std::size_t Size() const { return marks_.size(); }
     void Clear() { marks_.clear(); }
 
@@ -88,6 +91,88 @@ private:
     static bool IsStale(Mark const& mark, uint32_t nowMs) { return nowMs - mark.seenMs > kStaleMs; }
 
     std::unordered_map<Key, Mark, KeyHash> marks_;
+};
+
+// A mark's reporter: the binding (a commander's raw guid) whose snapshot observed the window, or kNoOwner for a report
+// that belongs to no binding (the Dungeons tab reads runs, not bindings).
+constexpr uint64_t kNoOwner = 0;
+
+// The marks with the binding that reported each one. A binding's teardown forgets exactly its keys at once: the mark of
+// a window it saw moments before the release is fresh, so the stale prune would keep it, and another binding still
+// reporting the same unit would keep it alive until that binding ended too. A unit reported by two bindings keeps one
+// countdown; a teardown drops the mark only when no other binding still claims it.
+class OwnedMarks
+{
+public:
+    // As Marks::CastLeft, recorded under the binding that reported it.
+    uint32_t CastLeft(uint64_t owner, Key const& key, uint32_t nowMs, uint32_t totalMs)
+    {
+        uint32_t const left = marks_.CastLeft(key, nowMs, totalMs);
+        owners_[owner].insert(key);
+        return left;
+    }
+
+    // The window closed: the mark and every binding's claim on it go.
+    void Forget(Key const& key)
+    {
+        marks_.Forget(key);
+        for (auto it = owners_.begin(); it != owners_.end();)
+        {
+            it->second.erase(key);
+            it = it->second.empty() ? owners_.erase(it) : std::next(it);
+        }
+    }
+
+    // A binding's teardown: drops its marks, keeping one that another binding still reports.
+    void ForgetOwner(uint64_t owner)
+    {
+        auto const owned = owners_.find(owner);
+        if (owned == owners_.end())
+            return;
+        for (Key const& key : owned->second)
+        {
+            bool shared = false;
+            for (auto const& other : owners_)
+                if (other.first != owner && other.second.count(key))
+                {
+                    shared = true;
+                    break;
+                }
+            if (!shared)
+                marks_.Forget(key);
+        }
+        owners_.erase(owned);
+    }
+
+    // Drops every mark not observed for kStaleMs, and the claims on it.
+    void Prune(uint32_t nowMs)
+    {
+        marks_.Prune(nowMs);
+        for (auto it = owners_.begin(); it != owners_.end();)
+        {
+            for (auto claim = it->second.begin(); claim != it->second.end();)
+                claim = marks_.Contains(*claim) ? std::next(claim) : it->second.erase(claim);
+            it = it->second.empty() ? owners_.erase(it) : std::next(it);
+        }
+    }
+
+    std::size_t Size() const { return marks_.Size(); }
+    // How many marks the binding reported (a mark two bindings report counts for each of them).
+    std::size_t OwnerSize(uint64_t owner) const
+    {
+        auto const owned = owners_.find(owner);
+        return owned == owners_.end() ? 0 : owned->second.size();
+    }
+
+    void Clear()
+    {
+        marks_.Clear();
+        owners_.clear();
+    }
+
+private:
+    Marks marks_;
+    std::unordered_map<uint64_t, std::unordered_set<Key, KeyHash>> owners_;
 };
 
 } // namespace StandWindow

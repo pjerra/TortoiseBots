@@ -197,11 +197,12 @@ static StandWindow::Key StandWindowKeyOf(Unit* unit)
     return StandWindow::Key{unit->GetMapId(), unit->GetMap()->GetInstanceId(), unit->GetObjectGuid().GetRawValue()};
 }
 
-// When each stand window (BossStandPolicy.h StandStoppedWindowOpen) was first seen, by unit: a triggered cast has no cast
-// slot to read a timer from, so the countdown starts when the module first sees the window; the mark is dropped when the
-// window closes and pruned by every snapshot cycle and by a binding teardown, so a window that disappears without a
-// closing read cannot survive its encounter. World thread only, like the rest of the commander snapshot.
-static StandWindow::Marks s_standWindowMarks;
+// When each stand window (BossStandPolicy.h StandStoppedWindowOpen) was first seen, by unit and by the binding that
+// reported it: a triggered cast has no cast slot to read a timer from, so the countdown starts when the module first sees
+// the window; the mark is dropped when the window closes, pruned by every snapshot cycle, and a binding teardown forgets
+// the keys that binding reported, so a window that disappears without a closing read cannot survive its encounter. World
+// thread only, like the rest of the commander snapshot.
+static StandWindow::OwnedMarks s_standWindowMarks;
 
 // Each follower's own "manual follow target" from before the binding pointed
 // it at the lead bot, put back on release.
@@ -1115,7 +1116,7 @@ uint32 ReleaseBinding(uint64 commanderRaw, RemoteCommander::ReleaseReason reason
         CancelCommanderTasks(commanderRaw);
     }
     RemoteCommander::Binding removed = CommanderBindings().Unbind(commanderRaw);
-    s_standWindowMarks.Prune(WorldTimer::getMSTime());
+    s_standWindowMarks.ForgetOwner(commanderRaw);
     CommanderViews().erase(commanderRaw);
     EraseRunSlot(commanderRaw);
     if (!removed.commanderGuid)
@@ -11612,9 +11613,10 @@ static uint32 SpellCastTimeMs(SpellEntry const* entry)
 // covers from the committed shape table (runtime/SpellShape.h; a spell absent from it sends no shape). A spell cast
 // triggered never shows as the current spell (Spells/Spell.cpp:3640-3642 and :3667), so a boss stopped at its stand
 // anchor with no target is also read for the row's window spell (BossStandPolicy.h): a Deep Breath then reports a cast
-// the way a cast-slot spell would. Read from what the unit already holds, no scan. Core: Objects/Object.h:835
-// (facing) and :1145 (cast slots), Spells/Spell.h:428-429, SpellEntry.h:1110.
-static void FillMobFacingAndCast(Unit* unit, CommanderTelemetry::MobInfo& mob)
+// the way a cast-slot spell would. The window's countdown is recorded under ownerRaw, the binding whose report this is
+// (StandWindow::kNoOwner for a report that belongs to no binding). Read from what the unit already holds, no scan. Core:
+// Objects/Object.h:835 (facing) and :1145 (cast slots), Spells/Spell.h:428-429, SpellEntry.h:1110.
+static void FillMobFacingAndCast(Unit* unit, uint64 ownerRaw, CommanderTelemetry::MobInfo& mob)
 {
     mob.hasO = true;
     mob.o = unit->GetOrientation();
@@ -11648,7 +11650,7 @@ static void FillMobFacingAndCast(Unit* unit, CommanderTelemetry::MobInfo& mob)
     const uint32 totalMs = SpellCastTimeMs(entry);
     mob.cast = SpellNameOf(windowSpell);
     mob.castId = windowSpell;
-    mob.castLeftMs = s_standWindowMarks.CastLeft(windowKey, WorldTimer::getMSTime(), totalMs);
+    mob.castLeftMs = s_standWindowMarks.CastLeft(ownerRaw, windowKey, WorldTimer::getMSTime(), totalMs);
     mob.castTotalMs = totalMs;
     mob.channel = false;
     mob.castTarget = 0;
@@ -12106,7 +12108,7 @@ static void FillCommanderMapData(RemoteCommander::Binding const& binding, Player
         if (h.casting)
             mob.cast = SpellNameOf(h.casting);
         if (unit && (mob.rank == 'b' || mob.rank == 'e'))
-            FillMobFacingAndCast(unit, mob);
+            FillMobFacingAndCast(unit, binding.commanderGuid, mob);
         ref.mobs.push_back(std::move(mob));
     }
     // What each bound bot is doing: the view snapshot already holds its state, newest action, cast and target; the rest are
@@ -12402,7 +12404,7 @@ static void FillDungeonMob(Player* seer, Unit* unit, CommanderTelemetry::MobInfo
     if (uint32 const spellId = CurrentSpellId(unit))
         mob.cast = SpellNameOf(spellId);
     if (mob.rank == 'b' || mob.rank == 'e')
-        FillMobFacingAndCast(unit, mob);
+        FillMobFacingAndCast(unit, StandWindow::kNoOwner, mob);
 }
 
 // The combat monitor's 1 Hz run tick (task A8b): the bound bots, in-combat

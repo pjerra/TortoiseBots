@@ -13,8 +13,8 @@ These pins prove the live code keeps that path:
    and reads the stop/no-target state from the unit;
  - a reported breath carries cid, the spell's cast time from its casting time index, a countdown that starts when the
    window opened, no channel and no target;
- - the countdown is keyed by (map, instance, raw guid) and pruned both by every snapshot cycle and by a binding teardown
-   (the state itself is pinned by tools/test_stand_window_marks.cpp, which compiles);
+ - the countdown is keyed by (map, instance, raw guid), pruned by every snapshot cycle, and a binding teardown forgets
+   the keys that binding reported (the state itself is pinned by tools/test_stand_window_marks.cpp, which compiles);
  - the committed shape table has all 8 breath ids as a `line`, 60 yd wide, from the first to the last point of the
    core's own spell_target_position chain for that spell (the stand anchors are where the bots stand, not the damage).
 
@@ -90,7 +90,7 @@ class DeepBreathSnapshot(unittest.TestCase):
         fn = fill_body()
         self.assertIn("mob.cast = SpellNameOf(windowSpell);", fn)
         self.assertIn("mob.castId = windowSpell;", fn)
-        self.assertIn("s_standWindowMarks.CastLeft(windowKey, WorldTimer::getMSTime(), totalMs)", fn)
+        self.assertIn("s_standWindowMarks.CastLeft(ownerRaw, windowKey, WorldTimer::getMSTime(), totalMs)", fn)
         self.assertIn("mob.castTotalMs = totalMs;", fn)
         self.assertIn("mob.channel = false;", fn)
         self.assertIn("mob.castTarget = 0;", fn)
@@ -110,19 +110,24 @@ class DeepBreathSnapshot(unittest.TestCase):
         self.assertIn("unit->GetMap()->GetInstanceId()", key)
         self.assertIn("unit->GetObjectGuid().GetRawValue()", key)
         self.assertIn('#include "../runtime/StandWindowMarks.h"', COMMANDER)
-        # The state is the tested header, keyed by the unit's own map and instance (never a bare guid).
-        self.assertIn("static StandWindow::Marks s_standWindowMarks;", COMMANDER)
+        # The state is the tested header, keyed by the unit's own map and instance (never a bare guid), with the binding
+        # that reported each mark so a teardown can forget its own.
+        self.assertIn("static StandWindow::OwnedMarks s_standWindowMarks;", COMMANDER)
+        self.assertIn("s_standWindowMarks.CastLeft(ownerRaw, windowKey,", COMMANDER)
         self.assertNotIn("s_standWindowStart", COMMANDER)
         self.assertIn("constexpr uint32_t kStaleMs = 30000;", MARKS)
         self.assertIn("std::unordered_map<Key, Mark, KeyHash> marks_;", MARKS)
+        self.assertIn("std::unordered_map<uint64_t, std::unordered_set<Key, KeyHash>> owners_;", MARKS)
+        self.assertIn("void ForgetOwner(uint64_t owner)", MARKS)
 
     def test_a_window_that_never_closes_is_pruned(self):
-        # Both snapshot cycles that can report a breath prune, and a binding teardown prunes too.
+        # Both snapshot cycles that can report a breath prune, and a binding teardown forgets what it reported even
+        # when the mark is fresh (the prune only drops marks older than 30 s).
         collect = body(COMMANDER, "void CollectCommanderTelemetry(")
         self.assertIn("s_standWindowMarks.Prune(WorldTimer::getMSTime());", collect)
         self.assertIn("s_standWindowMarks.Prune(WorldTimer::getMSTime());",
                       body(COMMANDER, "void CollectDungeonMobs("))
-        self.assertIn("s_standWindowMarks.Prune(WorldTimer::getMSTime());",
+        self.assertIn("s_standWindowMarks.ForgetOwner(commanderRaw);",
                       body(COMMANDER, "uint32 ReleaseBinding("))
         # Nothing bound: no mark can be needed.
         nothing = collect[collect.index("if (CommanderBindings().Empty())"):].split("return;")[0]
