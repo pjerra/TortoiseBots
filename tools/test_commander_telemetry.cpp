@@ -386,8 +386,13 @@ void TestUnitInfo()
         m.castTarget = 0xFFFFFFFFFFFFFFFFull;
         m.hasShape = true;
         m.shape.kind = TortoiseBots::SpellShape::Kind::Line;
-        m.shape.length = 154.0f;
+        m.shape.length = 151.53f;
         m.shape.width = 60.0f;
+        m.shape.hasSegment = true;
+        m.shape.x0 = -130.788300f;
+        m.shape.y0 = -213.424026f;
+        m.shape.x1 = 20.730539f;
+        m.shape.y1 = -215.237610f;
         big.mobs.push_back(m);
     }
     std::vector<BindingInfo> many(kMaxBindings + 3, big);
@@ -442,10 +447,10 @@ void TestBossOverlay()
     boss.channel = true;
     boss.shape.kind = TortoiseBots::SpellShape::Kind::Line;
     boss.shape.angle = 0;
-    boss.shape.length = 154.0f;
+    boss.shape.length = 151.5f;
     boss.shape.width = 60.0f;
-    Check(Has(MobJson(boss), "\"ch\":1,\"shape\":{\"k\":\"line\",\"l\":154.0,\"w\":60.0}"),
-        "a channel is flagged and a line carries its width");
+    Check(Has(MobJson(boss), "\"ch\":1,\"shape\":{\"k\":\"line\",\"l\":151.5,\"w\":60.0}"),
+        "a channel is flagged and a line along the facing carries its width, with no ends");
 
     MobInfo plain = Mob(6, "Rat");
     plain.rank = 'b';
@@ -490,8 +495,9 @@ void TestBreathOverlay()
     std::string const json = MobJson(boss);
     Check(Has(json, "\"cast\":\"Breath\",\"o\":-1.20,\"cid\":18617,\"cleft\":4200,\"ctot\":5000,"),
         "the window spell rides the mob row as a cast");
-    Check(Has(json, "\"shape\":{\"k\":\"line\",\"l\":90.3,\"w\":60.0}"),
-        "the Deep Breath lane is drawn 90.3 yd long and 60 yd wide");
+    Check(Has(json, "\"shape\":{\"k\":\"line\",\"l\":89.0,\"w\":60.0,"
+                    "\"seg\":[12.12,-243.44,-58.25,-189.02]}"),
+        "the Deep Breath lane is its chain's 88.96 yd, 60 yd wide, with its two absolute ends");
     Check(!Has(json, "\"ctg\"") && !Has(json, "\"ch\""),
         "a triggered breath has no unit target and is not a channel");
 }

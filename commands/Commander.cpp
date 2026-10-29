@@ -63,6 +63,7 @@
 #include "../runtime/RemoteCommanderEnter.h"
 #include "../runtime/GossipOrderPolicy.h"
 #include "../runtime/CommanderTelemetry.h"
+#include "../runtime/StandWindowMarks.h"
 #include "../runtime/ReadyCheckPolicy.h"
 #include "../runtime/DungeonRunPolicy.h"
 #include "../runtime/SystemRunPolicy.h"
@@ -188,6 +189,19 @@ RemoteCommander::BindingTable& CommanderBindings()
     static RemoteCommander::BindingTable table;
     return table;
 }
+
+// The unit whose stand window is timed, in the instance it stands in: a creature's raw guid repeats across copies of a
+// map, so the key carries the map and the instance (runtime/StandWindowMarks.h).
+static StandWindow::Key StandWindowKeyOf(Unit* unit)
+{
+    return StandWindow::Key{unit->GetMapId(), unit->GetMap()->GetInstanceId(), unit->GetObjectGuid().GetRawValue()};
+}
+
+// When each stand window (BossStandPolicy.h StandStoppedWindowOpen) was first seen, by unit: a triggered cast has no cast
+// slot to read a timer from, so the countdown starts when the module first sees the window; the mark is dropped when the
+// window closes and pruned by every snapshot cycle and by a binding teardown, so a window that disappears without a
+// closing read cannot survive its encounter. World thread only, like the rest of the commander snapshot.
+static StandWindow::Marks s_standWindowMarks;
 
 // Each follower's own "manual follow target" from before the binding pointed
 // it at the lead bot, put back on release.
@@ -1101,6 +1115,7 @@ uint32 ReleaseBinding(uint64 commanderRaw, RemoteCommander::ReleaseReason reason
         CancelCommanderTasks(commanderRaw);
     }
     RemoteCommander::Binding removed = CommanderBindings().Unbind(commanderRaw);
+    s_standWindowMarks.Prune(WorldTimer::getMSTime());
     CommanderViews().erase(commanderRaw);
     EraseRunSlot(commanderRaw);
     if (!removed.commanderGuid)
@@ -11592,21 +11607,6 @@ static uint32 SpellCastTimeMs(SpellEntry const* entry)
     return static_cast<uint32>(times->CastTime > times->MinCastTime ? times->CastTime : times->MinCastTime);
 }
 
-// When each boss's stand window (BossStandPolicy.h StandStoppedWindowOpen) first opened, by guid: a triggered cast has
-// no cast slot to read a timer from, so the countdown starts when the module first sees the window and the entry is
-// dropped when the window closes. World thread only, like the rest of the commander snapshot.
-static std::unordered_map<uint64, uint32> s_standWindowStart;
-
-// The cast left of a window that opened at `startMs`, for a spell of `totalMs`: the countdown the dashboard draws.
-static uint32 StandWindowCastLeft(uint64 guid, uint32 nowMs, uint32 totalMs)
-{
-    auto it = s_standWindowStart.find(guid);
-    if (it == s_standWindowStart.end())
-        it = s_standWindowStart.emplace(guid, nowMs).first;
-    const uint32 elapsed = nowMs - it->second;
-    return elapsed < totalMs ? totalMs - elapsed : 0;
-}
-
 // The facing and the cast a boss or elite is running, for the dashboard's boss overlay: the unit's orientation, its
 // current spell's id and time left and total, the spell's unit target, whether it channels, and the area the spell
 // covers from the committed shape table (runtime/SpellShape.h; a spell absent from it sends no shape). A spell cast
@@ -11618,13 +11618,13 @@ static void FillMobFacingAndCast(Unit* unit, CommanderTelemetry::MobInfo& mob)
 {
     mob.hasO = true;
     mob.o = unit->GetOrientation();
-    const uint64 guid = unit->GetObjectGuid().GetRawValue();
+    const StandWindow::Key windowKey = StandWindowKeyOf(unit);
     for (CurrentSpellTypes type : { CURRENT_GENERIC_SPELL, CURRENT_CHANNELED_SPELL })
     {
         Spell* spell = unit->GetCurrentSpell(type);
         if (!spell || !spell->m_spellInfo)
             continue;
-        s_standWindowStart.erase(guid);
+        s_standWindowMarks.Forget(windowKey);
         mob.castId = spell->m_spellInfo->Id;
         mob.castLeftMs = spell->GetCastedTime();
         mob.channel = type == CURRENT_CHANNELED_SPELL;
@@ -11642,13 +11642,13 @@ static void FillMobFacingAndCast(Unit* unit, CommanderTelemetry::MobInfo& mob)
     SpellEntry const* entry = windowSpell ? sSpellMgr.GetSpellEntry(windowSpell) : nullptr;
     if (!entry)
     {
-        s_standWindowStart.erase(guid);
+        s_standWindowMarks.Forget(windowKey);
         return;
     }
     const uint32 totalMs = SpellCastTimeMs(entry);
     mob.cast = SpellNameOf(windowSpell);
     mob.castId = windowSpell;
-    mob.castLeftMs = StandWindowCastLeft(guid, WorldTimer::getMSTime(), totalMs);
+    mob.castLeftMs = s_standWindowMarks.CastLeft(windowKey, WorldTimer::getMSTime(), totalMs);
     mob.castTotalMs = totalMs;
     mob.channel = false;
     mob.castTarget = 0;
@@ -12171,6 +12171,7 @@ void CollectCommanderTelemetry(std::vector<CommanderTelemetry::BindingRef>& out)
 {
     out.clear();
     ForgetReleasedCombatGroups();
+    s_standWindowMarks.Prune(WorldTimer::getMSTime());
     // Nothing to read while no commander is bound: the common case costs a lookup.
     if (CommanderBindings().Empty())
     {
@@ -12179,6 +12180,7 @@ void CollectCommanderTelemetry(std::vector<CommanderTelemetry::BindingRef>& out)
         s_readyCache().clear();
         s_runFedAt().clear();
         s_leadAway().clear();
+        s_standWindowMarks.Clear();
         return;
     }
     std::unordered_set<uint64_t> bound;
@@ -12728,6 +12730,7 @@ static void SampleBoundFights(uint32 diff)
 void CollectDungeonMobs(std::vector<DungeonMobTelemetry::RunRef>& runs)
 {
     using namespace DungeonMobTelemetry;
+    s_standWindowMarks.Prune(WorldTimer::getMSTime());
     // World thread only (the emitter's snapshot cycle, outside the map update): reused between runs and cycles.
     static std::unordered_set<uint64> tried;
     static std::list<ObjectGuid> cached;
