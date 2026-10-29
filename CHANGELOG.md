@@ -29,6 +29,7 @@
 
 ### Commands
 - New `.autogear` command gears a real player the way a spawned bot gets geared: items picked for the level and spec from the same gear pool the bots use, upgrades only, replaced items to the bags or the mailbox. GameMasters can gear any player; `AiPlayerbot.PlayerAutogearForAll` (default `0`) lets every player gear themselves.
+- `.bot hire raid` accepts `level=<n>` like `.bot hire` (the whole roster arrives at that level), and its `onyxia` preset now hires tier 3 gear to match the `onyxia` gear preset.
 
 ### Items & Loot
 - New `AiPlayerbot.HireLoot` (default `1`): set it to `0` and hired companions stop looting and pass on every roll, so the party keeps all the loot. Hired companions no longer take part in any quest, including orders from a player.
@@ -37,6 +38,10 @@
 - The companion app can now page through the last day of loot picked up by your party bots, 40 rows at a time.
 
 ### Dungeons & Maps
+- New `AiPlayerbot.RaidEntryByCommander` (default `1`): a commanded raid can enter a raid whose entrance asks for something only a player has (Onyxia's Lair and its Drakefire Amulet) when the commander is a real player of the same raid and meets the requirement himself; the entrance's other checks are unchanged, and a five-player dungeon's or a scripted entrance's condition is never waived.
+- Fixed: the raid entry waiver now works for a bound raid, whose commander stands outside the group.
+- The raid guide now explains that Onyxia's five warder packs respawn whenever she is aggroed, so a wipe that sends the dead back to the entrance costs about five minutes of re-clearing them.
+- New: `.bot run start ... until boss|step N|leg X` ends the run before that step, so a trash walk stops at the boss stand.
 - Fixed: a player's ghost outside no longer pulls the run's bots in and out through the portal; the lead-off-map pause resumes by itself.
 - New: GameMasters can start bot-only dungeon test runs at up to 3x walking speed (`.bot run start ... speed=2`); fights stay at normal speed and the status line marks the run as a test.
 - Fixed: at test speed the lead bot waits for the party when a bot falls 25 yd behind, so the party no longer reaches packs split.
@@ -53,6 +58,12 @@
 - Fixed the run leader sending the tank at a mob its own crowd control was about to take, and bots keeping that sheep as their target after it landed: the guard and the engage on arrival leave an ordered-but-unlanded CC mark to its CC bot, and every bot's order on a landed one is dropped.
 - New: bots interrupt the Wailing Caverns lords, Mutanus, Grimlok and Captain Greenskin.
 - Fixed: a hired mercenary in your party now accepts the LFT dungeon offer, so the group forms (#1284).
+- Fixed: Karazhan Crypt's run leader plan clears Corpsemuncher (leg 6, a swim up the shaft).
+- Fixed `cmd move` lifting a point in open water onto a ledge above the surface that no path reaches: the point stays in the water (a pier the bots can walk onto still wins), so the run leader's swim up Karazhan Crypt's shaft no longer pauses.
+- Fixed the test speed's party hold pausing a run when `cmd move` refused the hold on the lead bot's own spot (a swim under a ledge): the walk goes on.
+- Raids: in trash fights the run leader now sends a loose mob to an off-tank instead of the main tank, turn by turn; the main tank keeps its stand, and a mob an off-tank already holds is left to it.
+- Raids: a bot left far behind the lead (for example after a teleport) is now summoned to it after about 8 seconds instead of the run's waits taking turns for a minute and a half, at most twice per step.
+- Fixed: in a raid trash fight the main tank no longer stands idle while an off-tank holds the pack; it joins in (no taunt).
 
 ### Dashboard
 - Fixed: a fight that goes on after `.bot run stop` is now recorded and listed.
@@ -70,6 +81,7 @@
 - The new raid map and fight replay read at a glance: a dashed plan route with its stands, packs and aggro rings, layer presets as chips in the existing Layers panel, subgroup colours and healer-to-tank lines on the raid, and a scrub bar with one coloured lane per enemy under the timeline.
 - On a raid's map the bot trails can be cut to the last 30 seconds, the healer → tank links come from the raid's saved layout instead of subgroups, and a mob's line to a party member who is not a tank is drawn red.
 - The map's layer panel now has raid presets (Pathing, Trash pull, Healing, Boss, All) and the plan's route, stand and aggro/wake rings as separate layers; a boss that wakes by script, like Onyxia, draws its own dashed wake ring from the server's data.
+- Fixed: the walk from the last warder to Onyxia's boss stand no longer has a point under the floor that the party skipped; the whole walk in runs on the ground.
 
 ## v1.8.0 (2026-10-22)
 

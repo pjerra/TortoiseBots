@@ -3,6 +3,7 @@
 #include "playerbot/playerbot.h"
 #include "playerbot/AmmoStackPolicy.h"
 #include "playerbot/BossTacticsMgr.h"
+#include "playerbot/BossStandMgr.h"
 #include "playerbot/DungeonPlanMgr.h"
 #include "../../runtime/BotNames.h"
 #include "../../runtime/HireLevelPolicy.h"
@@ -712,6 +713,7 @@ bool PlayerbotAIConfig::Initialize()
     remoteCommanderViewMs = TortoiseBots::RemoteCommander::View::ClampIntervalMs(
         config.GetIntDefault("AiPlayerbot.RemoteCommanderViewMs",
             static_cast<int>(TortoiseBots::RemoteCommander::View::kDefaultIntervalMs)));
+    raidEntryByCommander = config.GetBoolDefault("AiPlayerbot.RaidEntryByCommander", true);
     // Run trace (opt-in): see docs/server/run-trace.md.
     runTrace = config.GetBoolDefault("AiPlayerbot.RunTrace.Enabled", false);
     runTraceIntervalMs = TortoiseBots::RunTrace::ClampIntervalMs(
@@ -1291,6 +1293,8 @@ bool PlayerbotAIConfig::Initialize()
     sRandomBotFacade.LoadNamedLocationCache();
     sLog.outString("Loading boss tactics.");
     ai::LoadBossTactics();
+    sLog.outString("Loading boss stand sets.");
+    ai::LoadBossStands();
     sLog.outString("Loading dungeon plans.");
     ai::LoadDungeonPlans();
     sRandomBotFacade.LoadBattleMastersCache();

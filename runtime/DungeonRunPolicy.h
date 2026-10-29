@@ -66,6 +66,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <functional>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -148,6 +149,13 @@ constexpr std::uint32_t kStuckSummonMs = 15000;   // in a regroup's gather: a fa
 constexpr std::uint32_t kStragglerWalkMs = 45000;
 constexpr std::uint32_t kStragglerSummonMs = 45000;
 constexpr std::uint32_t kStragglerSettleMs = 10000;
+// A raid member left far behind (a stale follow after a teleport): a raid's gather radius (30 yd) times three, past
+// every formation station. Out of reach this long with no fight on (RunawaySummon), the farthest such bot is summoned
+// to the lead bot: kRunawaySummonsPerStep bots a step at most, kRunawayResummonMs apart, never on a boss step.
+constexpr float kRunawayYd = 100.0f;
+constexpr std::uint32_t kRunawayMs = 8000;
+constexpr std::uint32_t kRunawaySummonsPerStep = 2;
+constexpr std::uint32_t kRunawayResummonMs = 30000;
 constexpr std::uint32_t kSummonWaitMs = 6000;     // a direct step's summoned follower is waited for this long (the summon takes 3 s)
 // A direct step's straggler (refused too-far, or not with the lead bot at its gather's ceiling) is summoned again
 // once more than kDirectResummonMs passed since its last summon of the step, or once it died and came back since
@@ -287,6 +295,15 @@ constexpr std::uint32_t kOpenProofWaitMs = 5000; // open_proof: after the task a
 constexpr float kUseOnSummonYd = 150.0f;          // use_on: how far around the lead bot the glue looks for the summoned boss
 constexpr std::uint32_t kStepIdleCapMs = 300000;  // out-of-combat time one step may take
 constexpr std::uint32_t kBossSearchMs = 60000;    // a boss not at his spot (a patrol) is waited for this long, then pause
+// ... unless his row says longer: a boss step's `timeout_s` (the plan's `wait_s`) is the wait at his point before
+// the instance search and the pause (1-kPlanMaxTimeoutS, 600 s; 0: kBossSearchMs). The rows carry no patrol path,
+// so the party can only stand where the patrol passes and wait for it: Wailing Caverns' Kresh walks a 525.9 yd
+// round in the river (about 210 s at the walk speed), and the 60 s default missed him 9 runs in 10.
+inline std::uint32_t BossAwayWaitMs(const PlanStep& s)
+{
+    std::uint32_t const secs = s.timeoutS ? std::min(s.timeoutS, ai::kPlanMaxTimeoutS) : kBossSearchMs / 1000u;
+    return secs * 1000u;
+}
 constexpr std::uint32_t kStandPullWaitMs = 600000;
 constexpr float kStandPullMarginYd = 1.0f;
 // A unit a party member has as its victim that stays at 1 hp (or at 1 % or less, unchanged) this long cannot die
@@ -346,6 +363,8 @@ constexpr std::uint32_t kGuardHealerWaitMs = 0;   // ... a mob hitting a healer 
                                                   // took the healer from 73 % to dead in 4 s
 constexpr std::uint32_t kGuardRepeatMs = 2000;    // a further pick-up no sooner than this after the last one
 constexpr std::uint32_t kGuardOrdersPerFight = 3; // pick-up orders one fight may send (per budget: see below)
+constexpr std::uint32_t kRaidAssistWaitMs = 3000; // a main tank on stay with no mob of its own
+                                                  // helps on an off-tank's mob after this (the off-tank takes it first)
 // A mob hitting the party only by a spell from where it stands (UnitFact::castingAtRange), with a living hostile out of
 // combat within kGuardCampYd of it (UnitFact::campIdle: its own camp, a pack not pulled yet), is not picked up or engaged
 // when the tank would walk more than kGuardNoWalkYd to it (GuardLeavesCampAlone). Scholomance r30 slot C step 16
@@ -499,6 +518,8 @@ struct UnitFact
     bool auraOnEngaged = false;
     bool victimHealer = false; // its victim is a healer (Facts::partyAttackers, and a hold's units)
     bool victimLead = false;   // a hold's units: its victim is the lead bot (the tank holds it)
+    // Facts::partyAttackers only: its victim is a living tank other than the lead bot (an off-tank holds it).
+    bool victimTank = false;
     // Facts::partyAttackers only:
     bool hitting = false;      // it hits its victim now: in melee reach of it, or standing and casting (not running in)
     bool victimPet = false;    // its victim is a party bot's pet (the lead bot's own too), not a bot (victimHealer false)
@@ -712,6 +733,9 @@ struct RaidFacts
     bool on = false;                                                    // a raid binding with AiPlayerbot.DungeonRunRaid
     std::uint32_t tanksTotal = 0, tanksDead = 0;                        // tanks, and dead tanks (the wipe level)
     std::uint32_t healersTotal = 0, healersDead = 0;                    // healers, and dead healers (the wipe level)
+    // Living tanks other than the lead bot, on its map within kGuardYd of it and out of a commander task, in the
+    // layout's order: the raid trash fights send a loose mob to them (RaidTrashFight, CheckGuard).
+    std::vector<std::string> offTanksAlive;
 };
 
 // What the glue reads once a tick for the run's current step.
@@ -902,7 +926,7 @@ struct Facts
     // lies, not where the plan says he spawns (Revelosh dies 50-60 yd from his spot).
     std::uint64_t bossCorpseGuid = 0;
     float bossCorpseX = 0.0f, bossCorpseY = 0.0f, bossCorpseZ = 0.0f;
-    // boss: the instance-wide search for the boss's entry (Run::bossSearchWanted, once per kBossSearchMs window):
+    // boss: the instance-wide search for the boss's entry (Run::bossSearchWanted, once per BossAwayWaitMs window):
     // read (bossSearchRead) by the glue on the tick after the policy asked, from the entry's spawns on the lead
     // bot's map, wherever they stand. Alive: one of them lives (where); dead: one lies dead (that corpse).
     // Scarlet Cathedral r23 slot 5: Mograine died at the door, 290 yd from his spot, and the boss step paused
@@ -1237,7 +1261,7 @@ struct Run
     std::uint32_t fruitlessPulls = 0;
     std::uint32_t bossWaitMs = 0;   // a boss step: time at the spot with the boss neither alive nor dead in sight
     bool bossSeenAlive = false;     // a boss step: the boss was among the step's living units
-    // A boss step past kBossSearchMs with the boss neither alive nor dead in sight asked the glue for the
+    // A boss step past BossAwayWaitMs with the boss neither alive nor dead in sight asked the glue for the
     // instance-wide search (Facts::bossSearchRead, next tick); one per window (ResetStep clears it).
     bool bossSearchWanted = false;
     // A stand-pull boss step: time waited out of combat with the boss in the radius but out of the tank's shot
@@ -1361,6 +1385,15 @@ struct Run
         std::uint64_t lastMs = 0;
     };
     std::unordered_map<std::string, StepSummon> stepSummons;
+    // A raid bot out of reach far behind the lead bot (RunawaySummon): how long it has been out (a bot back in reach
+    // is erased), the step's summons and the run clock of the last one (kRunawaySummonsPerStep a step,
+    // kRunawayResummonMs apart: one clock for the step, not one per bot). Cleared with the step's summons.
+    std::unordered_map<std::string, std::uint32_t> runawayMs;
+    std::uint32_t runawaySummons = 0;
+    std::uint64_t runawayLastMs = 0;
+    // The plan step the runaway budget belongs to: a pause/resume or a wipe recovery restarts the same step
+    // (ResetStep) and keeps its budget; only a new step index clears it.
+    std::size_t runawayStep = static_cast<std::size_t>(-1);
     std::unordered_map<std::string, std::uint64_t> deadSeenMs; // the run clock a bot was last seen dead (NoteDeadSeen), the whole run
     bool directRefusedOn = false;     // this step's direct step was refused too-far (or its gather hit the ceiling) ...
     std::uint64_t directRefusedMs = 0; // ... first at this run clock (DirectPauseDue)
@@ -1517,6 +1550,12 @@ struct Run
     // never changed by the run). Above 1.0 the glue gives the party's bots and pets this rate while the run walks
     // (SpeedRateNow); 1.0, every clear, touches nothing. The status line and the done note say it (SpeedLabel).
     float testSpeed = 1.0f;
+    // The stop the start asked for (`.bot run start ... until boss|step N|leg X`): the step it stops before (-1: no
+    // until), the clause as typed ("until boss"), and whether the stop happened (StopAtUntil; NextStep returns at once
+    // once it did). The glue resolves it with ResolveUntilStep, never the run.
+    std::size_t untilStep = static_cast<std::size_t>(-1);
+    std::string untilText;
+    bool untilHit = false;
     bool speedPlayerBlocked = false; // a real player was in the party on a tick: 1.0 for the rest of the run
     std::uint32_t speedOnMs = 0;     // the walking rule (SpeedWalking) has held this long without a break
     float speedNow = 1.0f;           // the rate of the last tick (the glue's SyncRunSpeed reads it)
@@ -1525,6 +1564,7 @@ struct Run
     bool speedLeash = false;
     std::uint32_t speedLeashMs = 0;
     bool speedLeashSpent = false;
+    std::string speedLeashOrder; // the hold's own move on the lead bot's spot (OrderRefused tells it from the walk's)
     // Times a straight walk back moved its target to an earlier point after its path passed an uncleared pack
     // (ClearPointBefore, kStraightBackoffs), this walk back.
     std::uint32_t straightBackoffs = 0;
@@ -1765,6 +1805,13 @@ struct Run
     std::uint32_t guardOrders = 0;
     std::uint32_t guardSinceOrderMs = 0; // fight time since the last pick-up
     bool guardReturn = false;
+    // The off-tank a raid trash pick-up goes to next (RaidTrashFight): round-robin over RaidFacts::offTanksAlive.
+    std::size_t offTankTurn = 0;
+    // A raid trash fight's main tank on stay with no mob of its own (RaidAssist): how long a mob an off-tank holds
+    // has waited for it (the wait belongs to one mob: raidAssistGuid), and the units it was sent at this fight.
+    std::uint32_t raidAssistMs = 0;
+    std::uint64_t raidAssistGuid = 0;
+    std::unordered_set<std::uint64_t> raidAssisted;
     // The tank's reach for a pull is cut off once a mob has aggro (CheckReach):
     // `stopReachDue` asks the glue to end the lead bot's pull, once per pull.
     bool stopReachDue = false;
@@ -2168,6 +2215,13 @@ inline void ResetStep(Run& r)
     r.summonWait.clear();
     r.summonWaitMs = 0;
     r.stepSummons.clear();
+    r.runawayMs.clear();
+    if (r.runawayStep != r.step)
+    {
+        r.runawaySummons = 0;
+        r.runawayLastMs = 0;
+        r.runawayStep = r.step;
+    }
     r.directRefusedOn = false;
     r.directRefusedMs = 0;
     r.directRefusedIdx = 0;
@@ -2244,6 +2298,10 @@ inline void ResetStep(Run& r)
     r.guardRefills = 0;
     r.fightOrders = 0;
     r.guardReturn = false;
+    r.offTankTurn = 0;
+    r.raidAssistMs = 0;
+    r.raidAssistGuid = 0;
+    r.raidAssisted.clear();
     r.stopReachDue = false;
     r.reachStopped = false;
     r.guardEventDown = 0;
@@ -2254,6 +2312,7 @@ inline void ResetStep(Run& r)
     r.speedLeash = false;
     r.speedLeashMs = 0;
     r.speedLeashSpent = false;
+    r.speedLeashOrder.clear();
 }
 
 // "N wipe(s), M near wipe(s)", or "" for none.
@@ -2303,6 +2362,23 @@ inline std::string SpeedLabel(const Run& r)
     if (r.testSpeed <= 1.0f)
         return std::string();
     return "speed " + Num(r.testSpeed) + (r.speedPlayerBlocked ? " (test; 1.0 since a real player joined)" : " (test)");
+}
+// The until clause in the status line's label field: "until boss (step 38)" while the stop has not come; "" once it
+// has (the done note says it then).
+inline std::string UntilLabel(const Run& r)
+{
+    if (r.untilHit || r.untilStep == static_cast<std::size_t>(-1) || r.untilText.empty())
+        return std::string();
+    return r.untilText + " (step " + std::to_string(r.untilStep + 1) + ")";
+}
+// StatusLine's trailing label field: the test speed and the until clause, "; "-joined; "" for neither.
+inline std::string TrailLabel(const Run& r)
+{
+    std::string const speed = SpeedLabel(r);
+    std::string const until = UntilLabel(r);
+    if (speed.empty())
+        return until;
+    return until.empty() ? speed : speed + "; " + until;
 }
 // Forward: the item-need gates (spec item-leg-skip C2/C2b, defined beside
 // PausePlayer, past NextStep) for the reports above.
@@ -2870,6 +2946,55 @@ inline bool StragglerLadderTick(Run& r, const Facts& f, std::string& order)
     }
     ++s.rung;
     s.rungMs = 0;
+    return true;
+}
+
+inline bool EngagedPlanBoss(const Run& r, const Facts& f); // declared here (used from RunawaySummon), defined by the fight progress
+
+// A raid bot left far behind the lead bot with no fight on (a stale follow after a teleport): the gather and the
+// speed leash take turns waiting for it and neither timer runs out, so the run summons it to the lead bot before the
+// step's own wait looks at it again. Out of reach is kRunawayYd from the lead bot or another map; the farthest one is
+// picked, kRunawaySummonsPerStep a step at most and kRunawayResummonMs after the step's last summon. Never on a boss
+// step or with a plan boss engaged (RaidTrashFight's own protection: the summon would drop the bot on the boss).
+// Party runs keep their ladder and ceilings. True: the tick ends with that order (a refused summon is the existing
+// summon-refused path).
+inline bool RunawaySummon(Run& r, const Facts& f, std::uint32_t dt, std::string& order)
+{
+    const PlanStep* s = Current(r);
+    if (!f.raid.on || !f.leadAlive || f.anyInCombat || r.fighting || LeadInOtherPart(r, f) || r.state != State::Running ||
+        !order.empty() || !s || s->kind == PlanStepKind::Boss || EngagedPlanBoss(r, f))
+        return false;
+    const MemberFact* pick = nullptr;
+    for (const MemberFact& m : f.members)
+    {
+        if (m.name.empty())
+            continue;
+        if (m.inCombat || m.attackers > 0)
+            continue; // never one in a fight or with something on it (cmd summon refuses it too)
+        if (!m.offPlanMap && m.yd < kRunawayYd)
+        {
+            r.runawayMs.erase(m.name); // back in reach: its clock starts over
+            continue;
+        }
+        std::uint32_t const outMs = (r.runawayMs[m.name] += dt);
+        if (outMs < kRunawayMs)
+            continue;
+        if (r.runawaySummons >= kRunawaySummonsPerStep)
+            continue; // the step's summons are spent
+        if (r.runawaySummons > 0 && r.runMs - r.runawayLastMs < kRunawayResummonMs)
+            continue; // too soon after the step's last summon, whatever bot it was
+        if (!pick || (m.offPlanMap && !pick->offPlanMap) || (m.offPlanMap == pick->offPlanMap && m.yd > pick->yd))
+            pick = &m;
+    }
+    if (!pick)
+        return false;
+    order = "summon " + pick->name;
+    MarkSummoned(r, pick->name);
+    ++r.runawaySummons;
+    r.runawayLastMs = r.runMs;
+    r.note = pick->name +
+        (pick->offPlanMap ? std::string(" is on another map") : " is " + Num(pick->yd) + " yd from the lead bot") + " (" +
+        std::to_string(r.runawayMs[pick->name] / 1000) + " s out of reach): summoned";
     return true;
 }
 
@@ -3478,8 +3603,25 @@ inline void EndRunEarly(Run& r, const std::string& note)
     r.note = with.empty() ? note : note + " (" + with + ")";
 }
 
+// The until stop (`.bot run start ... until`): the run ends before any order of `r.untilStep` goes out, the party
+// standing where it stands. True when it stopped this call. A deferred retry that went back below the stop is not a
+// stop; its return forward is.
+inline bool StopAtUntil(Run& r)
+{
+    if (!r.plan || r.untilHit || r.state == State::Done || r.untilStep == static_cast<std::size_t>(-1) ||
+        r.untilStep >= r.plan->steps.size() || r.step < r.untilStep)
+        return false;
+    r.step = r.untilStep;
+    r.untilHit = true;
+    EndRunEarly(r, "stopped before step " + std::to_string(r.untilStep + 1) + " (" + r.untilText +
+        "): the party stays where it stands");
+    return true;
+}
+
 inline void NextStep(Run& r, const std::string& note)
 {
+    if (r.untilHit)
+        return;
     r.pendingMissing = 0;
     r.unreachableSkips.clear(); // a step done (MoveRefusedUnreachable puts its own skips back)
     ClearApproachStand(r);
@@ -3489,6 +3631,8 @@ inline void NextStep(Run& r, const std::string& note)
     ResetStep(r);
     r.fightMs = 0; // a fight that goes on into the next step starts its ceiling over (the hold's 400 s were the wait step's)
     r.note = full;
+    if (StopAtUntil(r))
+        return;
     if (!Current(r))
     {
         r.state = State::Done;
@@ -3834,6 +3978,86 @@ inline SpeedArgs TakeSpeed(const std::string& arg)
     return out;
 }
 
+inline bool AllDigits(const std::string& v); // below, with the start's words
+
+// `.bot run start ... until boss | until step <N> | until leg <name|number>`: the one clause (any place after the plan
+// name) that ends the run before that step. `arg` is already lower-cased. given: an `until` word was there; ok false:
+// no clause, a bare number or word after `until`, `step` without a number, or a second clause. text: the clause as
+// typed ("until boss"); rest: the other words, single-spaced, in order, for ParseStartArgs.
+enum class UntilKind : std::uint8_t
+{
+    None,
+    Boss,
+    Step,
+    Leg,
+};
+
+struct UntilArgs
+{
+    bool given = false;
+    bool ok = true;
+    UntilKind kind = UntilKind::None;
+    std::string value;
+    std::string text;
+    std::string rest;
+};
+
+inline UntilArgs TakeUntil(const std::string& arg)
+{
+    UntilArgs out;
+    std::size_t i = 0;
+    while (i < arg.size())
+    {
+        while (i < arg.size() && (arg[i] == ' ' || arg[i] == '\t'))
+            ++i;
+        std::size_t const begin = i;
+        while (i < arg.size() && arg[i] != ' ' && arg[i] != '\t')
+            ++i;
+        if (i == begin)
+            break;
+        std::string const word = arg.substr(begin, i - begin);
+        auto const next = [&arg, &i]() -> std::string {
+            while (i < arg.size() && (arg[i] == ' ' || arg[i] == '\t'))
+                ++i;
+            std::size_t const b = i;
+            while (i < arg.size() && arg[i] != ' ' && arg[i] != '\t')
+                ++i;
+            return arg.substr(b, i - b);
+        };
+        if (word != "until")
+        {
+            out.rest += (out.rest.empty() ? "" : " ") + word;
+            continue;
+        }
+        if (out.given)
+        {
+            out.ok = false; // at most one clause
+            break;
+        }
+        out.given = true;
+        std::string const kind = next();
+        if (kind == "boss")
+        {
+            out.kind = UntilKind::Boss;
+            out.text = "until boss";
+            continue;
+        }
+        std::string const value = kind == "step" || kind == "leg" ? next() : std::string();
+        if (kind == "step" && AllDigits(value))
+            out.kind = UntilKind::Step;
+        else if (kind == "leg" && !value.empty())
+            out.kind = UntilKind::Leg;
+        else
+        {
+            out.ok = false; // nothing consumed past the bad word
+            break;
+        }
+        out.value = value;
+        out.text = "until " + kind + " " + value;
+    }
+    return out;
+}
+
 // Who may walk a run at test speed (`speed=` above 1.0): a player-led run never, a party with a real player never,
 // then a GameMaster only, in that order, so the refusal names the reason that holds for anyone first (pip S3
 // 2026-10-26: a rank-0 player's player-led start heard `forbidden`). realPlayer: the first real player of the lead
@@ -3904,6 +4128,24 @@ inline std::size_t EventStartStep(const DungeonPlan& plan, std::size_t idx)
     return idx;
 }
 
+// The first step of the leg `value` names (its number, or its name in any case): the start's `from leg` and the
+// until's `until leg` both find a leg this way.
+inline bool FindLegStart(const DungeonPlan& plan, const std::string& value, std::size_t& idx)
+{
+    bool const numeric = AllDigits(value);
+    int const number = numeric ? std::atoi(value.c_str()) : -1;
+    for (std::size_t i = 0; i < plan.steps.size(); ++i)
+    {
+        std::uint8_t const leg = plan.steps[i].leg;
+        if (numeric ? static_cast<int>(leg) == number : LowerCopy(plan.LegName(leg)) == value)
+        {
+            idx = i;
+            return true;
+        }
+    }
+    return false;
+}
+
 // The index of the step the run starts at. `movedBack` is set when a start
 // inside an event was moved back to the step that starts it.
 inline FromResult ResolveStartStep(const DungeonPlan& plan, StartFrom from, const std::string& value,
@@ -3926,20 +4168,80 @@ inline FromResult ResolveStartStep(const DungeonPlan& plan, StartFrom from, cons
             *movedBack = step != n - 1;
         return FromResult::Ok;
     }
-    bool const numeric = AllDigits(value);
-    int const number = numeric ? std::atoi(value.c_str()) : -1;
-    for (std::size_t i = 0; i < plan.steps.size(); ++i)
+    std::size_t i = 0;
+    if (!FindLegStart(plan, value, i))
+        return FromResult::NoSuchLeg;
+    step = EventStartStep(plan, i);
+    if (movedBack)
+        *movedBack = step != i;
+    return FromResult::Ok;
+}
+
+enum class UntilResult : std::uint8_t
+{
+    Ok,
+    NoBoss,      // no boss step at or after the start
+    NoSuchLeg,
+    NoSuchStep,
+    AtStart,     // the stop would be at or before the start step
+};
+
+// A boss step: a Boss row, or a hold (a scripted event) whose own `entry` or one of its `entries` is a boss of the
+// plan's map (BWL's Vaelastrasz and Nefarian holds, AQ40's boss hold). `isBossEntry` may be empty: Boss rows only.
+inline bool IsBossStep(const PlanStep& s, const std::function<bool(std::uint32_t)>& isBossEntry)
+{
+    if (s.kind == PlanStepKind::Boss)
+        return true;
+    if (s.kind != PlanStepKind::Hold || !isBossEntry)
+        return false;
+    if (s.entry && isBossEntry(s.entry))
+        return true;
+    for (std::uint32_t entry : s.entries)
+        if (isBossEntry(entry))
+            return true;
+    return false;
+}
+
+// The step the run stops before (`.bot run start ... until`), from the start step `startStep` (after `from` and its
+// EventStartStep move-back): a boss step at or after it, the step N (1-based), or the first step of a leg. An event's
+// hold, or a move into one, goes back to the step that starts the event (EventStartStep), so the gossip that starts
+// it is never sent. `stop <= startStep` is refused (AtStart).
+inline UntilResult ResolveUntilStep(const DungeonPlan& plan, UntilKind kind, const std::string& value, std::size_t startStep,
+    const std::function<bool(std::uint32_t)>& isBossEntry, std::size_t& stop)
+{
+    stop = startStep;
+    std::size_t i = startStep;
+    if (kind == UntilKind::Step)
     {
-        std::uint8_t const leg = plan.steps[i].leg;
-        if (numeric ? static_cast<int>(leg) == number : LowerCopy(plan.LegName(leg)) == value)
-        {
-            step = EventStartStep(plan, i);
-            if (movedBack)
-                *movedBack = step != i;
-            return FromResult::Ok;
-        }
+        if (!AllDigits(value))
+            return UntilResult::NoSuchStep;
+        std::size_t const n = static_cast<std::size_t>(std::atoi(value.c_str()));
+        if (n < 1 || n > plan.steps.size())
+            return UntilResult::NoSuchStep;
+        i = n - 1;
     }
-    return FromResult::NoSuchLeg;
+    else if (kind == UntilKind::Leg)
+    {
+        if (!FindLegStart(plan, value, i))
+            return UntilResult::NoSuchLeg;
+    }
+    else if (kind == UntilKind::Boss)
+    {
+        i = plan.steps.size();
+        for (std::size_t j = startStep; j < plan.steps.size(); ++j)
+            if (IsBossStep(plan.steps[j], isBossEntry))
+            {
+                i = j;
+                break;
+            }
+        if (i >= plan.steps.size())
+            return UntilResult::NoBoss;
+    }
+    // UntilKind::None: no clause (the glue never asks): the stop is the start step, refused below.
+    stop = EventStartStep(plan, i);
+    if (stop <= startStep)
+        return UntilResult::AtStart;
+    return UntilResult::Ok;
 }
 
 // A start partway needs the whole party inside the instance: the steps before
@@ -5391,6 +5693,20 @@ inline void OrderRefused(Run& r, const std::string& order, const std::string& an
         r.note = "retreat refused (" + answer + "): fighting";
         return;
     }
+    // The test speed leash's hold on the lead bot's own spot (SpeedLeashTick) refused: cmd move refuses before it
+    // touches the lead bot, so its walk is still under way. The walk goes on, the leash spent for the step; never a
+    // pause (Karazhan Crypt kcleg6-t1028 step 293: the lead bot swam under the shaft's ramp lip, the floor snap lifted
+    // its spot onto the ramp above and the path from the water to it was refused unreachable).
+    if (r.speedLeash && !r.speedLeashOrder.empty() && order == r.speedLeashOrder)
+    {
+        r.speedLeash = false;
+        r.speedLeashMs = 0;
+        r.speedLeashSpent = true;
+        r.speedLeashOrder.clear();
+        r.walkStillMs = 0;
+        r.note = "test speed: the hold for the party was refused (" + answer + "): walking on";
+        return;
+    }
     // The stranded lead bot's teleport (StrandedTeleportTick): nothing changed on
     // the lead bot. "wait" (a fight, the lead bot moved since the facts were read)
     // keeps it due, kStrandWaits times a step, then pauses; any other refusal is a
@@ -6196,6 +6512,7 @@ inline bool SpeedLeashTick(Run& r, const Facts& f, float x, float y, float z, bo
     r.speedLeashMs = 0;
     r.walkStillMs = 0;
     order = MoveOrder(f.leadX, f.leadY, f.leadZ, false); // the lead bot holds where it stands (as the firing-stand hold)
+    r.speedLeashOrder = order;
     r.note = "test speed: the walk waits for the party (" + who + ")";
     return true;
 }
@@ -9487,7 +9804,7 @@ inline bool BigPackWalkGate(Run& r, const Facts& f, std::uint32_t dt, std::strin
 // step 66: the Stone Steward's lane reaches the 10 yd radius only at its north
 // end; the step said "pack cleared" in 0 s, and the Steward came into the
 // Keeper's fight two steps later. A hostile patroller is waited for, like a
-// boss away from his spot (kBossSearchMs), up to kPatrolWaitMs or the step's
+// boss away from his spot (BossAwayWaitMs), up to kPatrolWaitMs or the step's
 // shorter timeout_s, until it walks into the radius: there it is one of the
 // step's units and the usual pick takes it (the way back, the aggro estimate,
 // the fruitless count). Never in a fight, never for a friendly unit, one a
@@ -9893,16 +10210,19 @@ inline void FightStep(Run& r, const Facts& f, const PlanStep& s, const std::vect
             }
         // Not seen alive and not seen dead: he is away (a patrol, Theka in
         // Zul'Farrak), not killed. The plan rows carry no patrol path: the
-        // party waits at his spot for him to come by, then pauses.
+        // party waits at his spot for him to come by (the row's timeout_s, or
+        // kBossSearchMs when it is 0: a round longer than that needs the
+        // plan's wait_s), then pauses.
+        std::uint32_t const awayMs = BossAwayWaitMs(s);
         r.bossWaitMs += dt;
         r.note = "boss " + std::to_string(s.entry) + " not at his spot: waiting for him";
-        if (r.bossWaitMs < kBossSearchMs)
+        if (r.bossWaitMs < awayMs)
             return;
         // The window is over: the glue searches the whole instance for him once (next tick, Facts::bossSearch*).
         if (!r.bossSearchWanted)
         {
             r.bossSearchWanted = true;
-            r.note = "boss " + std::to_string(s.entry) + " not at his spot for " + std::to_string(kBossSearchMs / 1000) +
+            r.note = "boss " + std::to_string(s.entry) + " not at his spot for " + std::to_string(awayMs / 1000) +
                 " s: searching the instance for him";
             return;
         }
@@ -9914,7 +10234,7 @@ inline void FightStep(Run& r, const Facts& f, const PlanStep& s, const std::vect
             NextStep(r, "boss down: his corpse lies at " + Num(f.bossSearchCorpseX) + " " + Num(f.bossSearchCorpseY) + " " +
                 Num(f.bossSearchCorpseZ) + ", " +
                 Num(ai::PlanDistance(f.bossSearchCorpseX, f.bossSearchCorpseY, f.bossSearchCorpseZ, s.x, s.y, s.z)) +
-                " yd from his spot (an instance search after " + std::to_string(kBossSearchMs / 1000) + " s)");
+                " yd from his spot (an instance search after " + std::to_string(awayMs / 1000) + " s)");
             return;
         }
         if (f.bossSearchRead && f.bossSearchAlive)
@@ -9923,7 +10243,7 @@ inline void FightStep(Run& r, const Facts& f, const PlanStep& s, const std::vect
             // instance); the pause says where he stands.
             std::string const aliveAt = "boss " + std::to_string(s.entry) + " is alive at " + Num(f.bossAliveX) + " " + Num(f.bossAliveY) +
                 " " + Num(f.bossAliveZ) + ", " + Num(ai::PlanDistance(f.bossAliveX, f.bossAliveY, f.bossAliveZ, s.x, s.y, s.z)) +
-                " yd from his spot (an instance search after " + std::to_string(kBossSearchMs / 1000) + " s), " +
+                " yd from his spot (an instance search after " + std::to_string(awayMs / 1000) + " s), " +
                 FromLeadBot(ai::PlanDistance(f.leadX, f.leadY, f.leadZ, f.bossAliveX, f.bossAliveY, f.bossAliveZ),
                     f.bossAliveZ - f.leadZ);
             if (s.flags & ai::kPlanFlagSkipUnreachable)
@@ -9942,7 +10262,7 @@ inline void FightStep(Run& r, const Facts& f, const PlanStep& s, const std::vect
             NextStep(r, "boss down: his corpse lies at " + Num(f.bossSearchCorpseX) + " " + Num(f.bossSearchCorpseY) + " " +
                 Num(f.bossSearchCorpseZ) + ", " +
                 Num(ai::PlanDistance(f.bossSearchCorpseX, f.bossSearchCorpseY, f.bossSearchCorpseZ, s.x, s.y, s.z)) +
-                " yd from his spot (an instance search after " + std::to_string(kBossSearchMs / 1000) + " s)");
+                " yd from his spot (an instance search after " + std::to_string(awayMs / 1000) + " s)");
             return;
         }
         // Seen neither alive nor dead, and every spawn of his belongs to a game event that is not active: he cannot be
@@ -9960,7 +10280,7 @@ inline void FightStep(Run& r, const Facts& f, const PlanStep& s, const std::vect
                                    : std::string(" nor anywhere in the instance");
         Pause(r, "boss " + std::to_string(s.entry) + " not found: not alive or dead within " + Num(s.radius) +
             " yd of " + Num(s.x) + " " + Num(s.y) + " " + Num(s.z) + " for " +
-            std::to_string(kBossSearchMs / 1000) + " s" + searched + " (.bot run skip if he is already dead)");
+            std::to_string(awayMs / 1000) + " s" + searched + " (.bot run skip if he is already dead)");
     }
 }
 
@@ -11628,12 +11948,25 @@ inline bool GuardLeavesCampAlone(const UnitFact& u)
     return u.castingAtRange && u.campIdle > 0 && u.distLead > kGuardNoWalkYd;
 }
 
-inline const UnitFact* GuardPick(const Facts& f, float holdRadius, const Run* capped = nullptr, const Run* ccRun = nullptr)
+// A raid's trash fight: the guard hands a loose mob to an off-tank instead of
+// the lead bot, which holds its stand for the boss. Never on a boss step or a
+// boss of the plan's fight (EngagedPlanBoss), never in a hold or an event, and
+// never in a party run (the party rules are unchanged).
+inline bool RaidTrashFight(const Run& r, const Facts& f)
+{
+    return f.raid.on && Current(r) && Current(r)->kind != PlanStepKind::Boss && !EngagedPlanBoss(r, f) && !InEvent(r);
+}
+
+inline const UnitFact* GuardPick(const Facts& f, float holdRadius, const Run* capped = nullptr, const Run* ccRun = nullptr,
+    bool raidTrash = false)
 {
     const UnitFact* best = nullptr;
     for (const UnitFact& u : f.partyAttackers)
     {
         if (!u.hostile || !u.attackable || u.evading || u.polymorphed || !u.hitting || u.distLead > kGuardYd)
+            continue;
+        // A mob an off-tank holds is not loose: the raid trash guard never sends the main tank off its stand for it.
+        if (raidTrash && u.victimTank)
             continue;
         if (capped && GuardUnitCapped(*capped, u.guid))
             continue;
@@ -11681,7 +12014,34 @@ inline const UnitFact* GuardTarget(const Run& r, const Facts& f)
             r.focusUnstayed) ||
         f.carrier.empty() || InEvent(r))
         return nullptr;
-    return GuardPick(f, 0.0f, &r, &r);
+    return GuardPick(f, 0.0f, &r, &r, RaidTrashFight(r, f));
+}
+
+// A raid trash fight (RaidTrashFight) in which the main tank, a living tank on stay, has no mob of its own: a mob an
+// off-tank holds (UnitFact::victimTank) that it has not been sent at this fight. The mob picked already (raidAssistGuid)
+// stays the pick while it is still eligible, so two mobs trading which one is nearer do not restart the wait every tick;
+// only once it is no longer eligible does the nearest one take over (with its own full wait). Null otherwise.
+inline const UnitFact* RaidAssistTarget(const Run& r, const Facts& f)
+{
+    if (!RaidTrashFight(r, f) || !f.leadAlive || !f.leadIsTank || !f.leadStaying || f.leadHasAttacker || f.carrier.empty())
+        return nullptr;
+    auto const eligible = [&r](const UnitFact& u)
+    {
+        return u.victimTank && u.hostile && u.attackable && !u.evading && !u.polymorphed && u.hitting &&
+            u.distLead <= kGuardYd && !GuardLeavesCampAlone(u) && !CcOrderOut(r, u.guid) &&
+            !r.raidAssisted.count(u.guid);
+    };
+    const UnitFact* best = nullptr;
+    for (const UnitFact& u : f.partyAttackers)
+    {
+        if (!eligible(u))
+            continue;
+        if (u.guid == r.raidAssistGuid)
+            return &u;
+        if (!best || u.distLead < best->distLead)
+            best = &u;
+    }
+    return best;
 }
 
 // The guard inside a hold (Uldaman Keepers, 19z12 attempt 1: the tank held
@@ -11836,6 +12196,45 @@ inline std::string RefillNote(Run& r)
     return "; a new unit joined: the orders start over";
 }
 
+// A raid trash fight's main tank, a living tank on stay with no mob of its own, goes once at the nearest mob an off-tank
+// holds: `attack <guid> <carrier>` ends its stay and its own AI takes the pack from there (loose adds first, then held
+// mobs), so the off-tank keeps what it holds and no further order is needed. Loose mobs still go to the off-tanks first
+// (GuardTarget). Not a pick-up: guardOrders and guardUnitOrders are untouched.
+inline bool RaidAssist(Run& r, const Facts& f, std::uint32_t dt, std::string& order)
+{
+    const UnitFact* u = RaidAssistTarget(r, f);
+    if (!u)
+    {
+        r.raidAssistMs = 0;
+        r.raidAssistGuid = 0;
+        return false;
+    }
+    if (u->guid != r.raidAssistGuid)
+    {
+        // a different mob: its own full wait, so the off-tank holds it before the main tank comes
+        r.raidAssistGuid = u->guid;
+        r.raidAssistMs = 0;
+    }
+    r.raidAssistMs += dt;
+    if (r.raidAssistMs < kRaidAssistWaitMs || r.fightOrders >= kGuardOrdersFightCap ||
+        (r.fightOrders > 0 && r.guardSinceOrderMs < kGuardRepeatMs))
+        return false;
+    r.raidAssistMs = 0;
+    r.guardSinceOrderMs = 0;
+    ++r.fightOrders;
+    r.raidAssisted.insert(u->guid);
+    if (!r.guardReturn)
+    {
+        r.guardReturn = true; // it leaves its stand, as at a pick-up
+        r.guardX = f.leadStayKnown ? f.leadStayX : f.leadX;
+        r.guardY = f.leadStayKnown ? f.leadStayY : f.leadY;
+        r.guardZ = f.leadStayKnown ? f.leadStayZ : f.leadZ;
+    }
+    r.note = "fighting: the main tank helps on " + std::to_string(u->entry) + " held by an off-tank (" + Num(u->distLead) + " yd)";
+    order = "attack " + std::to_string(u->guid) + " " + f.carrier;
+    return true;
+}
+
 // One fight tick of the guard: mobs hitting the party for kGuardWaitMs (a
 // healer: at once) send the pick-up, at most kGuardOrdersPerFight a fight and
 // kGuardRepeatMs apart. In a hold the tank on stay is sent at the event's
@@ -11914,7 +12313,7 @@ inline bool CheckGuard(Run& r, const Facts& f, std::uint32_t dt, std::string& or
     if (!u && !engage)
     {
         r.guardMs = 0;
-        return false;
+        return !hold && RaidAssist(r, f, dt, order);
     }
     if (u)
         r.guardMs += dt;
@@ -11930,6 +12329,18 @@ inline bool CheckGuard(Run& r, const Facts& f, std::uint32_t dt, std::string& or
     {
         ++r.fightOrders;
         ++r.guardUnitOrders[u->guid];
+    }
+    // A raid trash fight hands a loose mob to an off-tank, round-robin, and the
+    // main tank keeps its stand (no guardReturn): the mob is on a healer or a
+    // DPS, not on the lead bot.
+    if (!hold && RaidTrashFight(r, f) && !f.raid.offTanksAlive.empty() && !u->victimLead)
+    {
+        std::string const& offTank = f.raid.offTanksAlive[r.offTankTurn++ % f.raid.offTanksAlive.size()];
+        r.note = "fighting: off-tank " + offTank + " picks up " + std::to_string(u->entry) + " off " +
+            (u->victimHealer ? "the healer" : u->victimPet ? "a pet" : "the party") + " (" + Num(u->distLead) +
+            " yd)" + RefillNote(r);
+        order = "attack " + std::to_string(u->guid) + " " + offTank;
+        return true;
     }
     if (hold)
     {
@@ -12356,7 +12767,10 @@ inline std::uint32_t StepIdleCapMs(const PlanStep& s)
 {
     bool const wait = s.kind == PlanStepKind::WaitObject || s.kind == PlanStepKind::WaitClear ||
         s.kind == PlanStepKind::Hold;
-    std::uint32_t const own = wait ? s.timeoutS * 1000 + 60000 : 0;
+    // A boss's wait for him at his point (BossAwayWaitMs) counts as a wait too: the plan's wait_s may exceed the
+    // 300 s idle ceiling (Wailing Caverns' Kresh, 300 s), and the idle pause must not end the step before it.
+    std::uint32_t const own = wait ? s.timeoutS * 1000 + 60000
+        : s.kind == PlanStepKind::Boss ? BossAwayWaitMs(s) + 60000 : 0;
     return own > kStepIdleCapMs ? own : kStepIdleCapMs;
 }
 
@@ -13179,6 +13593,8 @@ inline std::string Tick(Run& r, const Facts& raw, std::uint32_t dt = kTickMs, co
     r.shotGateRan = false;
     SyncCcIcons(r, f);
     ArmReachedTriggers(r); // a step reached by a skip, a resume or a jump since the last tick
+    if (StopAtUntil(r))
+        return std::string(); // a jump set r.step straight at the stop (AbandonDeferRetry): no order this tick
     std::string order;
     bool held = false;
     if (r.state == State::Running && !r.hold.empty())
@@ -13192,6 +13608,14 @@ inline std::string Tick(Run& r, const Facts& raw, std::uint32_t dt = kTickMs, co
     }
     if (!held)
         order = TickBody(r, f, dt, lines);
+    // A jump in the tick body set r.step straight at the stop, after the check at the tick's start
+    // (AbandonDeferRetry): any order built for the stop step is dropped.
+    if (r.untilHit || StopAtUntil(r))
+    {
+        if (!r.shotGateRan)
+            EndShotHold(r);
+        return std::string(); // the step the tick reached was the stop
+    }
     OffMapReturnTick(r, f, order); // a bot outside the instance in a bot-only run (lead decision 2026-10-24)
     if (!r.shotGateRan)
         EndShotHold(r); // the pull stand's hold ends with any tick its gate did not run on
@@ -13246,6 +13670,8 @@ inline std::size_t FightForwardTarget(const Run& r, const Facts& f)
     std::size_t moves = 0;
     for (std::size_t i = r.step; i < r.plan->steps.size(); ++i)
     {
+        if (r.untilStep != static_cast<std::size_t>(-1) && i >= r.untilStep)
+            return static_cast<std::size_t>(-1); // never skip past the stop
         const PlanStep& p = r.plan->steps[i];
         if (p.leg != leg)
             return static_cast<std::size_t>(-1);
@@ -13338,7 +13764,7 @@ inline bool FightForwardTick(Run& r, const Facts& f)
     std::size_t const first = r.step;
     const PlanStep& p = r.plan->steps[target];
     float const yd = ai::PlanDistance(f.leadX, f.leadY, f.leadZ, p.x, p.y, p.z);
-    while (r.step < target && Current(r) && Current(r)->kind == PlanStepKind::Move)
+    while (r.step < target && r.state == State::Running && Current(r) && Current(r)->kind == PlanStepKind::Move)
         NextStep(r, "fight forward");
     if (r.step != target)
         return true; // StepAfter went another way (a step for the other team): its own rules from here
@@ -14080,6 +14506,10 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
         r.guardRefilled = false;
         r.guardRefills = 0;
         r.fightOrders = 0;
+        r.offTankTurn = 0;
+        r.raidAssistMs = 0;
+        r.raidAssistGuid = 0;
+        r.raidAssisted.clear();
         r.reachStopped = false;
         // A fight may have moved the lead bot: an exact point's tighten starts
         // over and its proof is taken again before a direct step goes out.
@@ -14343,6 +14773,11 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
     if (WalkBack(r, f, dt, order))
         return order;
 
+    // A raid bot far behind the lead bot with no fight on is summoned before the step's own wait (the leash, the
+    // gather, the ladder), so whichever wait is current cannot take turns with it and leave it there.
+    if (RunawaySummon(r, f, dt, order))
+        return order;
+
     // After a won fight: the next pack pulled from where the tank stands (FightForwardTick), else the step's rules.
     if (s->kind != PlanStepKind::Move)
         r.fightForwardDue = false;
@@ -14452,9 +14887,11 @@ inline std::string PhaseText(const Run& r)
 }
 
 // The status line for the commander:
-//   TBM:RUN|<plan>|<state>|<step>/<steps>|<leg>|<kind>|<phase>|<note>[|left <K>][|speed <x> (test)]
+//   TBM:RUN|<plan>|<state>|<step>/<steps>|<leg>|<kind>|<phase>|<note>[|left <K>][|label]
 // <step> counts from 1 (0 before the first, steps+1 is never sent: a done run
-// shows the last). '|' and line breaks in the note become spaces.
+// shows the last). '|' and line breaks in the note become spaces. The label is
+// "speed <x> (test)" and "until <clause> (step N)", "; "-joined, either alone;
+// the until half is gone once the stop came.
 // The fields StatusLine prints, read by the commands layer (SendRunLine and
 // CollectCommanderTelemetry) so the dashboard gets the same run without the
 // line. The note is already cleaned of '|' and line breaks.
@@ -14485,7 +14922,7 @@ inline StatusFields StatusParts(const Run& r)
         if (c == '|' || c == '\n' || c == '\r')
             c = ' ';
     f.left = r.deferGivenUp.size() + r.deferredPulls.size() + (DeferRetryOn(r) ? 1 : 0);
-    f.speed = SpeedLabel(r);
+    f.speed = TrailLabel(r);
     return f;
 }
 inline std::string StatusLine(const Run& r)

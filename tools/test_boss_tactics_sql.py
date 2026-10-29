@@ -11,7 +11,7 @@ import re
 import unittest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-KINDS = {"interrupt", "kill_first", "behind"}
+KINDS = {"interrupt", "kill_first", "behind", "air_target"}
 ROW = re.compile(r"^\((\d+), (\d+), '(\w+)', (\d+), (\d+), (\d+), (-?[\d.]+), '(?:[^']|'')*'\)[,;]$")
 
 
@@ -51,6 +51,10 @@ class BossTacticsSql(unittest.TestCase):
             self.assertLess(int(priority), 256, where)
             if kind == "interrupt":
                 self.assertGreater(int(spell), 0, where)
+            if kind == "air_target":
+                self.assertGreater(int(spell), 0, where)
+                # Looked up by the flying creature's own entry: a target never acts.
+                self.assertEqual(int(target), 0, where)
             if kind == "behind":
                 self.assertGreater(float(param), 0.0, where)
 
@@ -91,6 +95,16 @@ class BossTacticsSql(unittest.TestCase):
                 have,
                 "missing ai_boss_tactic interrupt row map %s boss %s spell %s" % (map_id, boss, spell),
             )
+
+    def test_onyxia_air_target_row(self):
+        # Onyxia's air phase is the Hover aura 17131 (core boss_onyxia.cpp);
+        # the row is what keeps her a target, so it may not disappear.
+        self.assertIn(
+            ("249", "10184", "air_target", "0", "17131"),
+            set((map_id, boss, kind, target, spell)
+                for _, map_id, boss, kind, target, spell, _priority, _param in migration_rows()),
+            "missing ai_boss_tactic air_target row map 249 boss 10184 spell 17131",
+        )
 
 
 if __name__ == "__main__":
