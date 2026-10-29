@@ -17,6 +17,7 @@
 // the same lifecycle as runtime/NamedLocationIndex.h: one loading thread adds
 // rows, calls Seal() once, and readers see nothing before the seal.
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstddef>
@@ -107,6 +108,8 @@ namespace ai
         NotAirTarget = 0,   // the tactic does not apply: the generic reach decides
         Positioned = 1,     // a floor point lands the cast: walk to it, or already there
         NoGroundPoint = 2,  // kept as a target, but no floor point lands the cast: stay put
+        NeedLosPoint = 3,   // a floor point would land the cast, but the bot has no line of
+                            // sight: walk to a floor point that sees it (AirTargetLosCandidates)
     };
 
     inline bool AirTargetGenericReachApplies(AirTargetReach reach)
@@ -119,8 +122,12 @@ namespace ai
     // so the cast's 3D range from the ground still lands there. Already inside
     // the stop distance means no walk; outX/outY are then the bot's position.
     // Both are only meaningful when the result is Positioned. Pure: the caller
-    // supplies the positions and the flight height over the target's floor.
-    inline AirTargetReach AirTargetReachPlan(bool airTarget, float spellRange, float flightHeight,
+    // supplies the positions, the flight height over the target's floor and
+    // whether the bot sees the target. Out of sight the line to the footprint
+    // is no use (the obstacle sits on it): NeedLosPoint asks for a floor point
+    // that sees the target instead. A flight height at or beyond the cast is
+    // NoGroundPoint first, in sight or not.
+    inline AirTargetReach AirTargetReachPlan(bool airTarget, bool inLos, float spellRange, float flightHeight,
                                              float botX, float botY, float targetX, float targetY,
                                              float& outX, float& outY)
     {
@@ -130,6 +137,8 @@ namespace ai
         float const stopDistance = AirTargetGroundDistance(spellRange, flightHeight);
         if (stopDistance <= 0.0f)
             return AirTargetReach::NoGroundPoint;
+        if (!inLos)
+            return AirTargetReach::NeedLosPoint;
 
         float const dx = targetX - botX;
         float const dy = targetY - botY;
@@ -145,6 +154,128 @@ namespace ai
         outX = botX + dx * scale;
         outY = botY + dy * scale;
         return AirTargetReach::Positioned;
+    }
+
+    // A floor point under a flying boss more than this far above or below the
+    // bot's own floor is another floor (a bridge, a ledge, the cave below): the
+    // bot would drop under the world or path somewhere else entirely.
+    constexpr float kAirTargetSameFloorZ = 10.0f;
+
+    // Line-of-sight recovery for an airborne target (NeedLosPoint). The
+    // candidates are a small fixed set of floor points around the target's
+    // footprint: the footprint itself and two rings of kAirTargetLosRingPoints
+    // each, at 90 % and 50 % of the ground leg (AirTargetGroundDistance), so
+    // every one of them still lands the cast in 3D from the floor. They carry
+    // no height: the caller takes the ground z of the bot's own floor, never
+    // the target's flight height.
+    constexpr int kAirTargetLosRingPoints = 8;
+    constexpr int kAirTargetLosCandidateCount = 1 + 2 * kAirTargetLosRingPoints;
+    // At most this many candidates pay a navmesh path search per attempt; the
+    // cheap checks (floor, sight ray, hazard) run on all of them.
+    constexpr int kAirTargetLosPathProbes = 3;
+    // At most this many recovery attempts on one target, then the bot stays
+    // put until kAirTargetLosRetryMs have passed since the last one (the boss
+    // moves between hover points, so sight may come back on its own).
+    constexpr std::uint8_t kAirTargetLosAttempts = 3;
+    constexpr std::uint32_t kAirTargetLosRetryMs = 10000;
+
+    struct AirTargetGroundPoint
+    {
+        float x = 0.0f;
+        float y = 0.0f;
+    };
+
+    inline std::vector<AirTargetGroundPoint> AirTargetLosCandidates(float spellRange, float flightHeight,
+                                                                    float targetX, float targetY)
+    {
+        std::vector<AirTargetGroundPoint> out;
+        float const leg = AirTargetGroundDistance(spellRange, flightHeight);
+        if (leg <= 0.0f)
+            return out;
+
+        out.reserve(kAirTargetLosCandidateCount);
+        AirTargetGroundPoint footprint;
+        footprint.x = targetX;
+        footprint.y = targetY;
+        out.push_back(footprint);
+
+        float const radii[2] = { leg * 0.9f, leg * 0.5f };
+        for (float const radius : radii)
+        {
+            for (int i = 0; i < kAirTargetLosRingPoints; ++i)
+            {
+                float const angle = 2.0f * 3.14159265f * static_cast<float>(i) / static_cast<float>(kAirTargetLosRingPoints);
+                AirTargetGroundPoint point;
+                point.x = targetX + radius * std::cos(angle);
+                point.y = targetY + radius * std::sin(angle);
+                out.push_back(point);
+            }
+        }
+        return out;
+    }
+
+    // The candidate to walk to: the nearest to the bot (2D, the shortest walk)
+    // that passes `usable` (the cheap checks: same floor, sight ray to the
+    // target, no hazard) and then `reachable` (the navmesh path). `reachable`
+    // runs at most `maxPathProbes` times, nearest first. Both take the
+    // candidate's index. -1: none, stay put.
+    template <typename Usable, typename Reachable>
+    int SelectAirTargetLosPoint(const std::vector<AirTargetGroundPoint>& candidates, float botX, float botY,
+                                int maxPathProbes, Usable usable, Reachable reachable)
+    {
+        std::vector<int> order;
+        order.reserve(candidates.size());
+        for (int i = 0; i < static_cast<int>(candidates.size()); ++i)
+            order.push_back(i);
+
+        auto const distSq = [&](int i)
+        {
+            float const dx = candidates[i].x - botX;
+            float const dy = candidates[i].y - botY;
+            return dx * dx + dy * dy;
+        };
+        std::stable_sort(order.begin(), order.end(), [&](int a, int b) { return distSq(a) < distSq(b); });
+
+        int probes = 0;
+        for (int const i : order)
+        {
+            if (probes >= maxPathProbes)
+                break;
+            if (!usable(i))
+                continue;
+            ++probes;
+            if (reachable(i))
+                return i;
+        }
+        return -1;
+    }
+
+    // Bounded recovery: per target, kAirTargetLosAttempts tries, then none
+    // until kAirTargetLosRetryMs after the last; seeing the target again or a
+    // new target resets it (AirTargetLosBudgetReset).
+    struct AirTargetLosBudget
+    {
+        std::uint8_t attempts = 0;
+        std::uint32_t lastMs = 0;
+    };
+
+    inline bool AirTargetLosTryAttempt(AirTargetLosBudget& budget, std::uint32_t nowMs)
+    {
+        if (budget.attempts >= kAirTargetLosAttempts)
+        {
+            if (nowMs - budget.lastMs < kAirTargetLosRetryMs)
+                return false;
+            budget.attempts = 0;
+        }
+        ++budget.attempts;
+        budget.lastMs = nowMs;
+        return true;
+    }
+
+    inline void AirTargetLosBudgetReset(AirTargetLosBudget& budget)
+    {
+        budget.attempts = 0;
+        budget.lastMs = 0;
     }
 
     class BossTacticTable

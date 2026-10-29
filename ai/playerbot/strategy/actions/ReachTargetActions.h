@@ -45,6 +45,11 @@ namespace ai
         float stoodDist = 0.0f;
         uint32 lastExecuteMs = 0;
 
+        // Line-of-sight recovery budget for an airborne target (see
+        // MoveUnderAirborneTarget), per target.
+        ObjectGuid airLosTarget;
+        AirTargetLosBudget airLosBudget;
+
         static uint32 const kNoHeadwayMs = 15000;
         static uint32 const kNoMoveMs = 10000;
         static uint32 const kStandResetMs = 2000;
@@ -378,6 +383,12 @@ namespace ai
         // the next tick cast from there. The destination z is always the
         // ground's, never the target's.
         //
+        // Out of sight (a pillar, the cave wall between the bot and the boss)
+        // the line to the footprint is blocked, so the bot walks to one of a
+        // few floor points around the footprint that sees the boss
+        // (AirTargetLosCandidates / SelectAirTargetLosPoint), a bounded number
+        // of times per target (AirTargetLosTryAttempt); none found is a stay.
+        //
         // From the moment the tactic keeps the target, every answer is
         // Positioned or NoGroundPoint; only a target the tactic does not cover
         // is NotAirTarget, so the caller never falls back to a chase of a
@@ -390,13 +401,19 @@ namespace ai
             Map* map = bot->GetMap();
             if (!map || bot->GetTransport())
                 return AirTargetReach::NoGroundPoint;
-            if (!bot->IsWithinLOSInMap(target, true) || !ai->CanMove() || !ai->IsSafe(target))
+            if (!ai->CanMove() || !ai->IsSafe(target))
                 return AirTargetReach::NoGroundPoint;
 
             // A bot already walking its approach is not re-pathed (MoveTo
             // relaunches the spline on every call).
             if (!bot->IsStopped() && !bot->movespline->Finalized())
                 return AirTargetReach::Positioned;
+
+            if (airLosTarget != target->getObjectGuid())
+            {
+                airLosTarget = target->getObjectGuid();
+                AirTargetLosBudgetReset(airLosBudget);
+            }
 
             float const targetX = target->GetPositionX();
             float const targetY = target->GetPositionY();
@@ -407,12 +424,17 @@ namespace ai
             bot->UpdateGroundPositionZ(targetX, targetY, groundZ);
             float const flightHeight = flightZ - groundZ;
 
+            bool const inLos = bot->IsWithinLOSInMap(target, true);
             float const botX = bot->GetPositionX();
             float const botY = bot->GetPositionY();
+            float const botZ = bot->GetPositionZ();
             float x = botX;
             float y = botY;
             AirTargetReach const plan =
-                AirTargetReachPlan(true, distance, flightHeight, botX, botY, targetX, targetY, x, y);
+                AirTargetReachPlan(true, inLos, distance, flightHeight, botX, botY, targetX, targetY, x, y);
+            if (plan == AirTargetReach::NeedLosPoint)
+                return MoveToAirTargetLosPoint(map, target, distance, flightHeight);
+            AirTargetLosBudgetReset(airLosBudget);
             if (plan != AirTargetReach::Positioned)
                 return plan;
             if (x == botX && y == botY)
@@ -421,13 +443,69 @@ namespace ai
             // The ground under that point is the floor this bot walks on - a
             // missed floor (a bridge, an instanced platform) would drop the bot
             // under the world.
-            float z = bot->GetPositionZ();
+            float z = botZ;
             bot->UpdateGroundPositionZ(x, y, z);
-            if (std::fabs(z - bot->GetPositionZ()) > 10.0f)
+            if (std::fabs(z - botZ) > kAirTargetSameFloorZ)
                 return AirTargetReach::NoGroundPoint;
 
             return MoveTo(bot->GetMapId(), x, y, z) ? AirTargetReach::Positioned
                                                    : AirTargetReach::NoGroundPoint;
+        }
+
+        // NeedLosPoint: walk to the nearest floor point around the airborne
+        // target's footprint that is on the bot's floor, sees the target (the
+        // sight ray of MoveIntoRangeAlongPath), has no hazard and has a navmesh
+        // path from the bot. Only the ground z of the bot's floor is used, never
+        // the flight height.
+        AirTargetReach MoveToAirTargetLosPoint(Map* map, Unit* target, float distance, float flightHeight)
+        {
+            if (!AirTargetLosTryAttempt(airLosBudget, WorldTimer::getMSTime()))
+                return AirTargetReach::NoGroundPoint;
+
+            std::vector<AirTargetGroundPoint> const candidates =
+                AirTargetLosCandidates(distance, flightHeight, target->GetPositionX(), target->GetPositionY());
+            if (candidates.empty())
+                return AirTargetReach::NoGroundPoint;
+
+            WorldPosition const botPosition(bot);
+            float const botZ = bot->GetPositionZ();
+            float const botHeight = bot->GetCollisionHeight();
+            float const targetHeight = target->GetCollisionHeight();
+            float const goalX = target->GetPositionX();
+            float const goalY = target->GetPositionY();
+            float const goalZ = target->GetPositionZ();
+
+            // Ground z per candidate, filled by the cheap check and read by the
+            // path check and the move.
+            std::vector<float> groundZ(candidates.size(), botZ);
+            auto const usable = [&](int index)
+            {
+                AirTargetGroundPoint const& point = candidates[index];
+                float z = botZ;
+                bot->UpdateGroundPositionZ(point.x, point.y, z);
+                if (std::fabs(z - botZ) > kAirTargetSameFloorZ)
+                    return false;
+                if (!map->isInLineOfSight(point.x, point.y, z + botHeight, goalX, goalY, goalZ + targetHeight, true))
+                    return false;
+                if (IsHazardNearPosition(WorldPosition(bot->GetMapId(), point.x, point.y, z)))
+                    return false;
+                groundZ[index] = z;
+                return true;
+            };
+            auto const reachable = [&](int index)
+            {
+                WorldPosition const destination(bot->GetMapId(), candidates[index].x, candidates[index].y, groundZ[index]);
+                return destination.isPathTo(destination.getPathStepFrom(botPosition, bot), 2.0f);
+            };
+
+            int const pick = SelectAirTargetLosPoint(candidates, botPosition.getX(), botPosition.getY(),
+                                                     kAirTargetLosPathProbes, usable, reachable);
+            if (pick < 0)
+                return AirTargetReach::NoGroundPoint;
+
+            AirTargetGroundPoint const& point = candidates[pick];
+            return MoveTo(bot->GetMapId(), point.x, point.y, groundZ[pick]) ? AirTargetReach::Positioned
+                                                                            : AirTargetReach::NoGroundPoint;
         }
 
         // Inside a dungeon the core's chase generator refuses a destination

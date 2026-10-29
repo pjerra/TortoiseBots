@@ -111,6 +111,38 @@ class AirTargetWiring(unittest.TestCase):
         # Never the target's own (flight) height.
         self.assertNotIn("MoveTo(bot->GetMapId(), target->GetPositionX()", fn)
 
+    def test_lost_sight_is_not_a_stay(self):
+        # Codex round 2: a lost line of sight used to answer NoGroundPoint, so a
+        # bot behind a pillar never moved again. Sight now goes into the plan,
+        # and NeedLosPoint walks to a floor point that sees the target.
+        fn = body(REACH, "AirTargetReach MoveUnderAirborneTarget(Unit* target, float distance)", end="\n        }\n")
+        self.assertNotIn("!bot->IsWithinLOSInMap(target, true) ||", fn)
+        self.assertIn("bool const inLos = bot->IsWithinLOSInMap(target, true);", fn)
+        self.assertIn("AirTargetReachPlan(true, inLos, distance, flightHeight,", fn)
+        self.assertIn("if (plan == AirTargetReach::NeedLosPoint)\n                return MoveToAirTargetLosPoint(map, target, distance, flightHeight);", fn)
+        # The budget is per target.
+        self.assertIn("if (airLosTarget != target->getObjectGuid())", fn)
+        self.assertIn("AirTargetLosBudgetReset(airLosBudget);", fn)
+
+    def test_los_recovery_walks_a_bounded_floor_point(self):
+        fn = body(REACH, "AirTargetReach MoveToAirTargetLosPoint(Map* map, Unit* target, float distance, float flightHeight)",
+                  end="\n        }\n")
+        self.assertIn("AirTargetLosTryAttempt(airLosBudget, WorldTimer::getMSTime())", fn)
+        self.assertIn("AirTargetLosCandidates(distance, flightHeight, target->GetPositionX(), target->GetPositionY())", fn)
+        self.assertIn("SelectAirTargetLosPoint(candidates, botPosition.getX(), botPosition.getY(),\n"
+                      "                                                     kAirTargetLosPathProbes, usable, reachable)", fn)
+        # Floor, sight from the floor point, hazard, navmesh path.
+        self.assertIn("bot->UpdateGroundPositionZ(point.x, point.y, z);", fn)
+        self.assertIn("std::fabs(z - botZ) > kAirTargetSameFloorZ", fn)
+        self.assertIn("map->isInLineOfSight(point.x, point.y, z + botHeight, goalX, goalY, goalZ + targetHeight, true)", fn)
+        self.assertIn("IsHazardNearPosition(", fn)
+        self.assertIn("destination.isPathTo(destination.getPathStepFrom(botPosition, bot), 2.0f)", fn)
+        # The move goes to the floor point's ground z, never the flight height.
+        self.assertIn("MoveTo(bot->GetMapId(), point.x, point.y, groundZ[pick])", fn)
+        self.assertNotIn("ChaseTo", fn)
+        self.assertNotIn("MoveTo(bot->GetMapId(), target->", fn)
+        self.assertNotIn("goalZ)", fn.split("SelectAirTargetLosPoint(")[1])
+
     def test_the_caster_reach_tries_the_floor_walk_first(self):
         fn = body(REACH, "class ReachSpellAction", end="\n    };\n")
         self.assertIn("bool MoveIntoRange(Unit* target, float distance) override", fn)

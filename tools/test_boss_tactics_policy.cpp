@@ -142,33 +142,125 @@ int main()
         float x = -1, y = -1;
 
         // Not an air target: the generic reach decides.
-        CHECK(AirTargetReachPlan(false, 30.0f, 10.0f, 0, 0, 20, 0, x, y) == AirTargetReach::NotAirTarget);
-        CHECK(AirTargetReachPlan(false, 0.0f, 99.0f, 0, 0, 20, 0, x, y) == AirTargetReach::NotAirTarget);
+        CHECK(AirTargetReachPlan(false, true, 30.0f, 10.0f, 0, 0, 20, 0, x, y) == AirTargetReach::NotAirTarget);
+        CHECK(AirTargetReachPlan(false, true, 0.0f, 99.0f, 0, 0, 20, 0, x, y) == AirTargetReach::NotAirTarget);
 
         // Kept but the height alone is beyond the cast: stay put, and the base
         // reach must not be chosen.
-        CHECK(AirTargetReachPlan(true, 30.0f, 30.0f, 0, 0, 40, 0, x, y) == AirTargetReach::NoGroundPoint);
-        CHECK(AirTargetReachPlan(true, 30.0f, 45.0f, 0, 0, 10, 0, x, y) == AirTargetReach::NoGroundPoint);
-        CHECK(AirTargetReachPlan(true, 0.0f, 0.0f, 0, 0, 10, 0, x, y) == AirTargetReach::NoGroundPoint);
+        CHECK(AirTargetReachPlan(true, true, 30.0f, 30.0f, 0, 0, 40, 0, x, y) == AirTargetReach::NoGroundPoint);
+        CHECK(AirTargetReachPlan(true, true, 30.0f, 45.0f, 0, 0, 10, 0, x, y) == AirTargetReach::NoGroundPoint);
+        CHECK(AirTargetReachPlan(true, true, 0.0f, 0.0f, 0, 0, 10, 0, x, y) == AirTargetReach::NoGroundPoint);
         CHECK(!AirTargetGenericReachApplies(AirTargetReach::NoGroundPoint));
         CHECK(!AirTargetGenericReachApplies(AirTargetReach::Positioned));
         CHECK(AirTargetGenericReachApplies(AirTargetReach::NotAirTarget));
 
         // Below the cast: a ground point on the line to the footprint, at the
         // ground leg whose 3D cast still lands inside the spell range.
-        CHECK(AirTargetReachPlan(true, 30.0f, 10.0f, 0, 0, 40, 0, x, y) == AirTargetReach::Positioned);
+        CHECK(AirTargetReachPlan(true, true, 30.0f, 10.0f, 0, 0, 40, 0, x, y) == AirTargetReach::Positioned);
         float const leg = AirTargetGroundDistance(30.0f, 10.0f);
         CHECK(x > 0.0f && x < 40.0f && std::fabs(y) < 0.01f);
         CHECK(std::fabs((40.0f - x) - leg) < 0.01f);  // exactly `leg` short of the footprint
         CHECK(std::sqrt((40.0f - x) * (40.0f - x) + 10.0f * 10.0f) <= 30.0f + 0.01f);
 
         // The point follows the bot's own line to the footprint.
-        CHECK(AirTargetReachPlan(true, 30.0f, 10.0f, 0, 40, 0, 0, x, y) == AirTargetReach::Positioned);
+        CHECK(AirTargetReachPlan(true, true, 30.0f, 10.0f, 0, 40, 0, 0, x, y) == AirTargetReach::Positioned);
         CHECK(y > 0.0f && y < 40.0f && std::fabs(x) < 0.01f);
 
         // Already inside the ground reach: no walk, the bot's own position.
-        CHECK(AirTargetReachPlan(true, 30.0f, 10.0f, 35, 0, 40, 0, x, y) == AirTargetReach::Positioned);
+        CHECK(AirTargetReachPlan(true, true, 30.0f, 10.0f, 35, 0, 40, 0, x, y) == AirTargetReach::Positioned);
         CHECK(std::fabs(x - 35.0f) < 0.01f && std::fabs(y) < 0.01f);
+    }
+
+    // Air target out of sight: a floor point would land the cast, but the
+    // line to the footprint is blocked, so the plan asks for a point that sees
+    // the target - never the generic chase, and never a stay while one exists.
+    // A flight height at or beyond the cast stays NoGroundPoint out of sight too.
+    {
+        float x = -1, y = -1;
+        CHECK(AirTargetReachPlan(true, false, 30.0f, 10.0f, 0, 0, 40, 0, x, y) == AirTargetReach::NeedLosPoint);
+        CHECK(AirTargetReachPlan(true, false, 30.0f, 10.0f, 35, 0, 40, 0, x, y) == AirTargetReach::NeedLosPoint);  // inside the leg, still blind
+        CHECK(!AirTargetGenericReachApplies(AirTargetReach::NeedLosPoint));
+        CHECK(AirTargetReachPlan(true, false, 30.0f, 30.0f, 0, 0, 40, 0, x, y) == AirTargetReach::NoGroundPoint);
+        CHECK(AirTargetReachPlan(true, false, 30.0f, 45.0f, 0, 0, 10, 0, x, y) == AirTargetReach::NoGroundPoint);
+        CHECK(AirTargetReachPlan(false, false, 30.0f, 10.0f, 0, 0, 40, 0, x, y) == AirTargetReach::NotAirTarget);
+    }
+
+    // LoS candidates: the footprint and two rings, every point inside the
+    // ground leg, so a cast from any of them reaches the flight height in 3D.
+    // No candidate when the height alone is out of range.
+    {
+        std::vector<AirTargetGroundPoint> const points = AirTargetLosCandidates(30.0f, 10.0f, 100.0f, -50.0f);
+        CHECK(static_cast<int>(points.size()) == kAirTargetLosCandidateCount);
+        CHECK(points[0].x == 100.0f && points[0].y == -50.0f);
+        float const leg = AirTargetGroundDistance(30.0f, 10.0f);
+        bool anyOnOuterRing = false;
+        for (AirTargetGroundPoint const& p : points)
+        {
+            float const dx = p.x - 100.0f;
+            float const dy = p.y + 50.0f;
+            float const ground = std::sqrt(dx * dx + dy * dy);
+            CHECK(ground <= leg + 0.01f);
+            CHECK(std::sqrt(ground * ground + 10.0f * 10.0f) <= 30.0f + 0.01f);
+            if (ground > leg * 0.8f)
+                anyOnOuterRing = true;
+        }
+        CHECK(anyOnOuterRing);
+        CHECK(AirTargetLosCandidates(30.0f, 30.0f, 0, 0).empty());
+        CHECK(AirTargetLosCandidates(30.0f, 45.0f, 0, 0).empty());
+        CHECK(AirTargetLosCandidates(0.0f, 0.0f, 0, 0).empty());
+    }
+
+    // LoS point selection: nearest usable and reachable candidate to the bot;
+    // a blocked sight line or no path skips the point; path searches are
+    // bounded; nothing usable is -1 (stay).
+    {
+        std::vector<AirTargetGroundPoint> pts(4);
+        pts[0].x = 0;  pts[0].y = 0;    // footprint, 20 yd from the bot
+        pts[1].x = 15; pts[1].y = 0;    // 5 yd from the bot
+        pts[2].x = 10; pts[2].y = 0;    // 10 yd
+        pts[3].x = -10; pts[3].y = 0;   // 30 yd
+        auto const all = [](int) { return true; };
+        auto const none = [](int) { return false; };
+
+        // Everything passes: the nearest walk wins.
+        CHECK(SelectAirTargetLosPoint(pts, 20, 0, kAirTargetLosPathProbes, all, all) == 1);
+        // The nearest is blind (the obstacle): the next nearest that sees it.
+        CHECK(SelectAirTargetLosPoint(pts, 20, 0, kAirTargetLosPathProbes, [](int i) { return i != 1; }, all) == 2);
+        // Sees it but no path: skipped as well.
+        CHECK(SelectAirTargetLosPoint(pts, 20, 0, kAirTargetLosPathProbes, all, [](int i) { return i == 0; }) == 0);
+        // No usable point, or no path anywhere: stay.
+        CHECK(SelectAirTargetLosPoint(pts, 20, 0, kAirTargetLosPathProbes, none, all) == -1);
+        CHECK(SelectAirTargetLosPoint(pts, 20, 0, kAirTargetLosPathProbes, all, none) == -1);
+        CHECK(SelectAirTargetLosPoint(std::vector<AirTargetGroundPoint>(), 20, 0, kAirTargetLosPathProbes, all, all) == -1);
+
+        // Path searches are bounded: only the nearest `maxPathProbes` usable
+        // points pay one; blind points do not count against the bound.
+        int searches = 0;
+        auto const countingNoPath = [&searches](int) { ++searches; return false; };
+        CHECK(SelectAirTargetLosPoint(pts, 20, 0, 2, all, countingNoPath) == -1);
+        CHECK(searches == 2);
+        searches = 0;
+        auto const lastReachable = [&searches](int i) { ++searches; return i == 3; };
+        CHECK(SelectAirTargetLosPoint(pts, 20, 0, 2, [](int i) { return i != 1 && i != 2; }, lastReachable) == 3);
+        CHECK(searches == 2);
+    }
+
+    // LoS recovery budget: kAirTargetLosAttempts tries, then none until the
+    // retry window has passed since the last; a reset gives the full budget.
+    {
+        AirTargetLosBudget budget;
+        std::uint32_t now = 1000;
+        for (int i = 0; i < kAirTargetLosAttempts; ++i)
+            CHECK(AirTargetLosTryAttempt(budget, now + i * 100));
+        std::uint32_t const last = now + (kAirTargetLosAttempts - 1) * 100;
+        CHECK(!AirTargetLosTryAttempt(budget, last + 1));
+        CHECK(!AirTargetLosTryAttempt(budget, last + kAirTargetLosRetryMs - 1));
+        CHECK(AirTargetLosTryAttempt(budget, last + kAirTargetLosRetryMs));   // window passed: a fresh round
+        CHECK(budget.attempts == 1);
+        AirTargetLosBudgetReset(budget);
+        for (int i = 0; i < kAirTargetLosAttempts; ++i)
+            CHECK(AirTargetLosTryAttempt(budget, 50));
+        CHECK(!AirTargetLosTryAttempt(budget, 60));
     }
 
     // Interrupt matching: spell and caster both have to match; only interrupt rows count.
