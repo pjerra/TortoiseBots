@@ -4,10 +4,13 @@ The rule lives in ai/playerbot/BossTacticsPolicy.h (AirTargetKeep, pure, tested 
 tools/test_boss_tactics_policy.cpp) and its game-state translation in
 ai/playerbot/BossTacticsAirTarget.h. These pins prove the live code calls it:
 
- - a ranged bot keeps the airborne boss as its target: the core flags a flying
-   boss IsEvadeBecauseTargetNotReachable (no floor path reaches her), and the
-   target values used to drop her on exactly that flag;
- - "current target" keeps her out to reactDistance instead of sightDistance;
+ - only a ranged bot (PlayerbotAI::IsRanged) keeps the airborne boss as its
+   target; melee bots and tanks keep the base target values and reach;
+ - "current target" keeps her out to reactDistance (150 yd) instead of
+   sightDistance (60 yd): her hover points sit past the sight ceiling. (She is
+   not flagged IsEvadeBecauseTargetNotReachable on this core: that timer only
+   counts in a chase, Creature.cpp:916-933, and phase 2 flies her by point
+   moves; the target values still ignore the flag for a kept air target);
  - the caster's reach walks the floor under her instead of chasing her flight
    height;
  - the Onyxia fight strategy no longer hands "shoot" to every bot while she is
@@ -62,6 +65,20 @@ class AirTargetWiring(unittest.TestCase):
         self.assertIn("IsInEvadeMode()", fn)
         self.assertIn("IsEvadeBecauseTargetNotReachable()", fn)
         self.assertIn("unit->HasAura(row.spellId)", fn)
+
+    def test_glue_covers_ranged_kits_only(self):
+        # Melee bots and tanks keep the base target values (the 60-yd sight
+        # ceiling, the unreachable drop) and the base reach.
+        fn = body(AIR_TARGET, "inline bool IsAirTargetKept(", end="\n    }\n")
+        self.assertIn("if (!ai->IsRanged(bot))\n            return false;", fn)
+        self.assertIn("if (!GetBossTactics().HasMap(bot->GetMapId()))\n            return false;", fn)
+        has_map = fn.index("GetBossTactics().HasMap(")
+        strategy = fn.index('ai->HasStrategy("boss tactics"')
+        ranged = fn.index("ai->IsRanged(bot)")
+        rows = fn.index("GetBossTactics().Rows(")
+        self.assertLess(has_map, strategy)
+        self.assertLess(strategy, ranged)
+        self.assertLess(ranged, rows)
 
     def test_invalid_target_ignores_unreachable_for_the_air_target(self):
         fn = body(INVALID_TARGET, "bool InvalidTargetValue::Calculate()")
@@ -159,9 +176,12 @@ class AirTargetWiring(unittest.TestCase):
     def test_the_caster_reach_tries_the_floor_walk_first(self):
         fn = body(REACH, "class ReachSpellAction", end="\n    };\n")
         self.assertIn("bool MoveIntoRange(Unit* target, float distance) override", fn)
-        self.assertIn("AirTargetReach const reach = MoveUnderAirborneTarget(target, distance)", fn)
+        # The floor walk plans with the spell's range less the margin, not the
+        # 75 % chase distance Execute hands in (casters bunched at ~9 yd).
+        self.assertIn("AirTargetReach const reach = MoveUnderAirborneTarget(target, AirTargetReachDistance(range))", fn)
+        self.assertNotIn("MoveUnderAirborneTarget(target, distance)", fn)
         self.assertIn("AirTargetGenericReachApplies(reach)", fn)
-        walk = fn.index("MoveUnderAirborneTarget(target, distance)")
+        walk = fn.index("MoveUnderAirborneTarget(target, AirTargetReachDistance(range))")
         fallback = fn.index("ReachTargetAction::MoveIntoRange(target, distance)")
         self.assertLess(walk, fallback)
 

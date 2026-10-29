@@ -750,9 +750,15 @@ namespace ai
         // the chase. A kept air target with no floor point to cast from is left
         // alone: the generic chase aims at the flight height and never arrives,
         // and the target values may still pick a reachable one (an add).
+        //
+        // Execute hands in range * 0.75 - contact (the comfortable chase
+        // distance), which under a 20-yd hover leaves a 30-yd cast a ground leg
+        // of ~9 yd, and every caster bunches inside Fireball's (18392) 8-yd
+        // splash. The floor walk uses the spell's range less a 2-yd margin
+        // instead (AirTargetReachDistance): ~20 yd out for the same cast.
         bool MoveIntoRange(Unit* target, float distance) override
         {
-            AirTargetReach const reach = MoveUnderAirborneTarget(target, distance);
+            AirTargetReach const reach = MoveUnderAirborneTarget(target, AirTargetReachDistance(range));
             if (!AirTargetGenericReachApplies(reach))
                 return reach == AirTargetReach::Positioned;
             return ReachTargetAction::MoveIntoRange(target, distance);

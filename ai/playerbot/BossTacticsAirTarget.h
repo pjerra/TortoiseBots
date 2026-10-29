@@ -18,9 +18,17 @@ namespace ai
     {
         if (!ai || !bot || !unit || !bot->IsInWorld())
             return false;
+        // A map without rows costs one lookup and nothing else.
+        if (!GetBossTactics().HasMap(bot->GetMapId()))
+            return false;
         // The rows only act for a bot whose tactics are armed (the same gate
         // as BossTacticsTriggers.cpp Ready); every other bot behaves as before.
         if (!ai->HasStrategy("boss tactics", BotState::BOT_STATE_COMBAT))
+            return false;
+        // Only a ranged kit (PlayerbotAI::IsRanged) has a cast to send up at a
+        // flying boss. A melee bot or a tank keeps the base target values and
+        // reach: the 150-yd keep would hold it on a target it cannot hit.
+        if (!ai->IsRanged(bot))
             return false;
 
         const std::vector<BossTacticRow>* rows = GetBossTactics().Rows(bot->GetMapId(), unit->GetEntry());

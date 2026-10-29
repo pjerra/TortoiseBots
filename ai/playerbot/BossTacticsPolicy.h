@@ -73,14 +73,28 @@ namespace ai
     // Whether an air_target row keeps the boss as a target: the row matches the
     // creature, the creature wears the row's aura (it is in the air phase), and
     // it has not gone home. `evadeUnreachable` is deliberately not part of the
-    // answer - the core flags a flying boss as unable to reach (no floor path
-    // leads to its height), which is exactly the case this kind exists for. An
-    // evade mode is still a drop, in the callers as well: the reset is underway
+    // answer - a core or boss script that chases a flying boss flags it unable
+    // to reach (no floor path leads to its height), and that must not drop it.
+    // (Onyxia on this core is not flagged: her phase 2 flies by point moves,
+    // and the unreachable timer only counts in a chase, Creature.cpp:916-933.)
+    // An evade mode is still a drop, in the callers as well: the reset is underway
     // and nothing done to it lands.
     inline bool AirTargetKeep(bool rowMatches, bool hasAura, bool evading, bool evadeUnreachable)
     {
         (void)evadeUnreachable;
         return rowMatches && hasAura && !evading;
+    }
+
+    // The cast range the floor walk plans with: the reach's own spell range
+    // less a margin for the boss drifting between ticks, not the generic
+    // reach's 75 % chase distance (that bunches every caster under her).
+    // Zero or less is "no range": MoveUnderAirborneTarget then answers
+    // NotAirTarget.
+    constexpr float kAirTargetRangeMargin = 2.0f;
+
+    inline float AirTargetReachDistance(float spellRange)
+    {
+        return spellRange - kAirTargetRangeMargin;
     }
 
     // A flying boss is cast on from the floor under it, never chased to its
@@ -332,7 +346,10 @@ namespace ai
                 return false;
             if (row.kind == BossTacticKind::Behind && !(row.param > 0.0f))
                 return false;
-            if (row.kind == BossTacticKind::AirTarget && row.spellId == 0)
+            // An air_target row is looked up by the flying creature's own entry
+            // (IsAirTargetKept: Rows(map, unit entry)), so a target_entry other
+            // than the boss could never act.
+            if (row.kind == BossTacticKind::AirTarget && (row.spellId == 0 || row.targetEntry != 0))
                 return false;
             std::vector<BossTacticRow>& rows = rows_[Key(row.map, row.bossEntry)];
             for (const BossTacticRow& have : rows)

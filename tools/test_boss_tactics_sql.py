@@ -53,6 +53,8 @@ class BossTacticsSql(unittest.TestCase):
                 self.assertGreater(int(spell), 0, where)
             if kind == "air_target":
                 self.assertGreater(int(spell), 0, where)
+                # Looked up by the flying creature's own entry: a target never acts.
+                self.assertEqual(int(target), 0, where)
             if kind == "behind":
                 self.assertGreater(float(param), 0.0, where)
 

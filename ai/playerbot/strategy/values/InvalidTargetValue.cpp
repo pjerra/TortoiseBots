@@ -38,9 +38,9 @@ bool InvalidTargetValue::Calculate()
     // path to after 3 s (IsEvadeBecauseTargetNotReachable), a full 21 s before the
     // evade reset. A held order in that window only ever misses, so drop it now and
     // let the reach give-up blacklist the guid instead of holding a ghost.
-    // Exception: an air_target row keeps the boss while it is in the air - a flying
-    // boss has no floor path, and the reach walks to the floor under it instead
-    // (BossTacticsPolicy.h AirTargetKeep). The evade-mode drop above still applies.
+    // Exception: an air_target row keeps the boss while it is in the air - a boss
+    // chased in flight has no floor path and may carry this flag, and the reach walks
+    // to the floor under it instead (BossTacticsPolicy.h AirTargetKeep). The evade-mode drop above still applies.
     if (creature && creature->IsEvadeBecauseTargetNotReachable() && !IsAirTargetKept(ai, bot, creature))
     {
         return true;

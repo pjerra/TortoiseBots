@@ -27,10 +27,11 @@ void OnyxiasLairDungeonStrategy::InitCombatTriggers(std::list<TriggerNode*>& tri
 
 void OnyxiaFightStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 {
-    // Phase 2 airborne: the boss hovers out of melee reach, and the generic
-    // assist drops her (a flying boss has no floor path), so nothing keeps
-    // damage on her - the air_target tactics row (ai_boss_tactic) keeps her a
-    // target and the casters cast their own rotation on her from the floor.
+    // Phase 2 airborne: the boss hovers out of melee reach at hover points far
+    // from the raid, past the 60-yd sight ceiling of "current target" - the
+    // air_target tactics row (ai_boss_tactic) keeps her a target for the
+    // ranged bots out to the react distance, and the casters cast their own
+    // rotation on her from the floor instead of a wand.
     // The row only spreads the raid: Fireball (18392) splash and the breath
     // lanes stay the melee's problem, and the universal flank keeps Deep
     // Breath lane clear via the reaction engine.

@@ -91,6 +91,7 @@ int main()
         CHECK(!table.Add(Row(70, 7228, BossTacticKind::Behind, 0, 8374, 0, 0.0f)));    // behind without a radius
         CHECK(!table.Add(Row(70, 7228, BossTacticKind::Behind, 0, 8374, 0, -3.0f)));
         CHECK(!table.Add(Row(249, 10184, BossTacticKind::AirTarget, 0, 0)));           // air_target without an aura
+        CHECK(!table.Add(Row(249, 10184, BossTacticKind::AirTarget, 10185, 17131)));   // air_target with a target: never looked up
         CHECK(table.Add(Row(249, 10184, BossTacticKind::AirTarget, 0, 17131)));        // the aura marks the phase
         CHECK(!table.Add(Row(249, 10184, BossTacticKind::AirTarget, 0, 17131)));       // same key
         CHECK(table.Size() == 1);
@@ -113,8 +114,7 @@ int main()
 
     // Air target: kept while the row matches, its aura is up and she is not
     // evading. The core's "cannot path to her" flag is not a reason to drop
-    // her - a flying boss has no floor path, and that is the case the kind
-    // exists for.
+    // her - a boss chased in flight has no floor path and may carry it.
     CHECK(AirTargetKeep(true, true, false, false));
     CHECK(!AirTargetKeep(true, false, false, false));    // aura down: landed or not airborne yet
     CHECK(!AirTargetKeep(false, true, false, false));    // no row, or the row is another entry
@@ -122,6 +122,16 @@ int main()
     CHECK(AirTargetKeep(true, true, false, true));       // unreachable is ignored ...
     CHECK(!AirTargetKeep(true, true, true, true));       // ... but not an evade mode
     CHECK(AirTargetKeep(true, true, false, true));
+
+    // Air target reach distance: the spell's range less the 2-yd margin, not
+    // the generic 75 % chase distance. A 30-yd cast under a 20-yd hover stands
+    // ~19.6 yd out (sqrt(28^2 - 20^2)), not ~9 yd (sqrt(22.5^2 - 20^2) - contact)
+    // where every caster bunches in Fireball's 8-yd splash.
+    CHECK(std::fabs(AirTargetReachDistance(30.0f) - 28.0f) < 0.001f);
+    CHECK(std::fabs(AirTargetGroundDistance(AirTargetReachDistance(30.0f), 20.0f) - std::sqrt(28.0f * 28.0f - 20.0f * 20.0f)) < 0.01f);
+    CHECK(AirTargetGroundDistance(AirTargetReachDistance(30.0f), 20.0f) > 19.5f);
+    CHECK(AirTargetGroundDistance(28.0f, 20.0f) > 19.5f && AirTargetGroundDistance(28.0f, 20.0f) < 19.7f);
+    CHECK(AirTargetReachDistance(2.0f) <= 0.0f);   // no range left: the guard answers NotAirTarget
 
     // Air target ground stop: the 2D leg of a 3D cast from the floor under a
     // flying boss, never further than kAirTargetGroundRange out, and nothing
