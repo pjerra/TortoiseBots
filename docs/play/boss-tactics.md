@@ -41,14 +41,14 @@ Why the commander binding counts: those runs are the ones that exist to clear a 
 | :--- | :--- |
 | `map` | Map id (Uldaman is 70). |
 | `boss_entry` | Creature entry whose presence among the bots' attackers activates the row. |
-| `kind` | `interrupt`, `kill_first` or `behind` (below). |
+| `kind` | `interrupt`, `kill_first`, `behind` or `air_target` (below). |
 | `target_entry` | The creature the row is about; `0` means the boss itself. |
-| `spell_id` | `interrupt`: the spell to interrupt. |
+| `spell_id` | `interrupt`: the spell to interrupt; `air_target`: the aura that marks the air phase. |
 | `priority` | `kill_first`: lower is killed first. |
 | `param` | `behind`: yards around the boss in which its front is kept clear. |
 | `comment` | Free text; where the row came from. |
 
-The primary key is `(map, boss_entry, kind, target_entry, spell_id)`. The loader skips a row it cannot use (unknown kind, an `interrupt` without a spell, a `behind` without a radius, a duplicate key) and logs how many it skipped; `tools/test_boss_tactics_sql.py` rejects the same rows at commit time.
+The primary key is `(map, boss_entry, kind, target_entry, spell_id)`. The loader skips a row it cannot use (unknown kind, an `interrupt` or `air_target` without a spell, a `behind` without a radius, a duplicate key) and logs how many it skipped; `tools/test_boss_tactics_sql.py` rejects the same rows at commit time.
 
 ### Kinds
 
@@ -57,8 +57,9 @@ The primary key is `(map, boss_entry, kind, target_entry, spell_id)`. The loader
 | `interrupt` | While a creature in the fight (`target_entry`, or the boss) casts `spell_id`, a bot that knows an interrupt and has it ready in range uses it: *Pummel*, *Shield Bash*, *Kick*, *Counterspell* or *Earth Shock*, first castable wins. The class interrupts that already fire on the bot's current target are unchanged. | any bot with an interrupt |
 | `kill_first` | Takes the listed creature as its target before anything else; among several listed creatures the lowest `priority` goes first, the nearer one breaks a tie, nothing further than 40 yd is picked. While on that target the generic assist and AoE rows do not pull it back to the boss. | DPS only; never tanks or healers; an explicit `attack` order from a player wins |
 | `behind` | A bot that stands within `param` yd of the boss, in its front half, steps to a point 120 degrees off its facing at the same distance (the same geometry as the generic rear flank). | everyone except the bot the boss is attacking |
+| `air_target` | A boss that wears the `spell_id` aura (its air phase) stays a ranged bot's target (`PlayerbotAI::IsRanged`; melee bots and tanks keep the base target values and reach): `current target` keeps it out to the react distance (150 yd) instead of the 60-yd sight ceiling, and the core's "unable to reach" flag, which a boss chased in flight can carry, does not drop it. The caster then walks the floor under the target (at most 25 yd, 2D, from its footprint and inside the cast's 3D range) and casts from there; it never chases the flight height. Out of line of sight (a pillar or wall between them) it walks to the nearest of 17 floor points around the footprint (the footprint and two rings, all inside the cast's 3D range) that is on its own floor, sees the boss, has no hazard and has a navmesh path; each point is re-checked at its own ground z (same floor, within the cast's 3D range), and the flight height is measured from the bot's floor, not a platform under the boss; at most 3 path searches and 3 attempts per target, then it waits 10 s, and only 3 s of unbroken sight refills the attempts. If the flight height alone is beyond the cast, no floor point helps: the boss stays a target but the caster does not move, and another reachable target can be picked. Evade mode still drops the boss. | every ranged bot on the map while the aura is up |
 
-Not in the table yet, and why: tank swap and re-grab (Ironaya's *Knock Away*), dispel priorities, spread and ground-effect avoidance. The generic raid hazard, spread and dispel code already covers part of it, and each of these needs a live fight to tune before it gets a kind. Adding one means a new `BossTacticKind`, a scan function and an action next to the existing three.
+Not in the table yet, and why: tank swap and re-grab (Ironaya's *Knock Away*), dispel priorities, spread and ground-effect avoidance. The generic raid hazard, spread and dispel code already covers part of it, and each of these needs a live fight to tune before it gets a kind. Adding one means a new `BossTacticKind`, a scan function and an action next to the existing four.
 
 ## Uldaman rows (map 70)
 
@@ -204,10 +205,51 @@ Kill order reason: the whole-party shadow damage of Marduk (Volley plus aura, hi
 
 What needs a live check: that Marduk dies first with Vectus on the tank, that Flamestrike is kicked in time.
 
+## Onyxia's Lair rows (map 249)
+
+Row added 2026-10-29 (`data/sql/world/20261029150000_world.sql`), read from `tortoise-wow` 5d79486. Map 249 had no rows before, so the `boss tactics` strategy now also activates for a bound raid on map 249.
+
+| Boss (entry) | Row | Data behind it |
+| :--- | :--- | :--- |
+| Onyxia (10184) | `air_target`, aura 17131 | Below 65 % health `boss_onyxia.cpp` stops her, lifts her off with Hover 17131 and flies her to one of 8 hover points about 20 yd above the arena floor; below 40 % she lands and the aura goes. She is not flagged unable to reach on this core (the timer only counts in a chase, `Creature.cpp:916-933`; phase 2 switches combat movement off and flies her by point moves, `boss_onyxia.cpp` ~576-609). What lost her: `current target` dropped her past the 60-yd sight ceiling, the fight strategy gave every bot the wand, and the casters' reach chased her flight height; the raid's damage collapsed between 65 % and 40 %. The aura id is the one the module's Onyxia fight triggers already read. |
+
+The row keeps her a target for the ranged bots on the map while the aura is up, out to 150 yd, and the `reach spell` of a caster walks the floor under her (planned at the spell's range less 2 yd, so a 30-yd cast under a 20-yd hover stands ~20 yd out, clear of Fireball's 8-yd splash) instead of her flight height. Melee bots and tanks are not covered and keep the base target values; there is no melee whelp row yet (code item C4). The fight's own airborne rows are unchanged: `raid spread` for the whole raid, the wand only for kits without a ranged rotation, whelp duty and the Deep Breath dodge.
+
+What needs a live check: that the ranged keep her as `current target` through all 8 hover points and that the phase-2 damage drop is at least 1 % of her health per 10 s (`/api/v1/combat/fights`, the commander-bound fight record).
+
+## Stand sets (`ai_boss_stand`)
+
+A stand set says where bots of a role stand while a boss is at a place and casting a spell. It is its own table, read once at startup (`LoadBossStands`, `ai/playerbot/BossStandMgr.cpp`, called next to the tactics loader); unlike the tactics it is not part of `.bot run reloadplans`, so a change needs a restart. It only acts for a bot with the `boss tactics` strategy armed (the same gate as the rows above); the strategy is armed on a map that has a row in either table, so a stand set does not need an `ai_boss_tactic` row.
+
+| Column | Meaning |
+| :--- | :--- |
+| `map`, `boss_entry` | Which boss. |
+| `anchor`, `anchor_x`, `anchor_y`, `anchor_r` | A place the boss stops at; the boss is "at" it within `anchor_r` yd (2D). Rows of one `anchor` id share the three numbers. |
+| `role` | `ranged`, `healer` or `melee` (a tank counts as melee, a healer as a healer before it counts as ranged). |
+| `window_spell` | `0`: always. Else the rows apply only while the boss is casting this spell (read from its current cast). |
+| `aura` | `0`: none. Else the boss has to wear this aura. |
+| `side`, `seq` | The side of the boss's lane a point lies on (0 or 1) and its order there. |
+| `x`, `y`, `z` | The point. The module puts z back on the ground before a move: a move whose z is off the floor is silently ignored. |
+| `dx`, `dy`, `slots` | The point seats up to `slots` bots in a line, 9 yd apart (Fireball's splash is 8 yd), in the direction `dx dy`; `0 0` is straight out from the anchor. |
+| `window_signal` | How the window opens: `cast` (default; the boss is casting `window_spell`, read from its current spell) or `stopped_no_target` (the boss wears the row's `aura`, stands still and has no target: the state a **triggered** cast leaves; a triggered spell never shows as the boss's current spell, so a cast-signal row would never open). A `stopped_no_target` row needs an `aura` and a `window_spell`. |
+| `hold_ms`, `release_anchor` | A seat taken in a window outlives the cast: up to `hold_ms` after it (default 8000, bounded to 1000-15000 so a row cannot park bots) or until the boss is within the radius of anchor `release_anchor` (the lane's far end; `0` none; it has to name an anchor of the same boss), whichever comes first. |
+
+The primary key is `(map, boss_entry, anchor, role, window_spell, side, seq)`. A row the loader cannot use is skipped with a log line: unknown role, a zero map or boss, no `anchor_r`, a side above 1, `slots` outside 1-8, a `release_anchor` equal to the anchor, a `hold_ms` outside 1000-15000, an anchor id with two places, a second row of the key. When the table is sealed, a boss whose `release_anchor` names an anchor none of its rows holds is refused as a whole (every row of that boss dropped, one log line), so a half-valid set never runs.
+
+How a bot picks its seat: the bots of the group with the same role (and the strategy armed) that take part are seated in id order from the same positions, so each bot reaches the same plan. A bot takes part when it is on the boss's threat list (or is its victim) within 80 yd of the anchor, or already holds a stand for that boss and anchor; a bot elsewhere in the instance, or one the boss is not fighting, reserves no seat, and a bot that does not take part gets none. A bot takes the side of the lane it stands on: the sign of the cross product of the lane (anchor to `release_anchor`) with the vector from the anchor to the bot, side 0 being the positive one (with no `release_anchor` the side of the nearest point stands in; within half a yard of the lane line a tie goes to the side with fewer bots). It then takes the nearest point of that side with a free seat. It never crosses the lane for a seat: with no seat free on its own side it gets nothing and plays as before (the reactive dodge). When no row applies (other place, other spell, other role, no aura) nothing changes for any bot.
+
+How it combines with the rest: while a row seats the bot, the stand action (`boss tactics stand`, `ACTION_EMERGENCY`) walks it to the seat once (it puts the seat's z back on the ground, probing from 4 yd above the higher of the row's z and the bot's own, since a far seat's floor can lie above the row's; it stops a running cast unless the bot is already within 6 yd of the seat; a seat the mover refuses three times in a row is given up and the bot is treated as unseated), the caster reach (`reach spell`, including `air_target`'s floor walk) and the heal walk (`reach party member to heal`) do nothing, and the reactive Deep Breath dodge stands down. The seat is held past the cast (the breath's links keep firing along the lane for seconds after it): the bot keeps it until `hold_ms` have passed since the window was last open or the boss is within the radius of the `release_anchor`; during the hold the reach still does nothing (the bot may cast from its seat if the boss is in range); a bot that has not arrived at its seat by then is still walked to it. After the hold the reach resumes from wherever the bot stands, with no walk back. A new window (the next cast, at any anchor) seats the bot from that anchor again. The hold is kept per bot in memory. The reactive dodge stays the fallback for every bot no row seats.
+
+### Onyxia's stand sets (map 249)
+
+Rows in `data/sql/world/20261029170000_world.sql`: one anchor per hover point (radius 8), `hold_ms` 8000 and `release_anchor` = the opposite hover point (anchor ids are the core's hover point id + 1), window spell = the Deep Breath of that point (the spell she casts AT it: NE 18617, E 18576, SE 18564, S 18351, SW 18596, W 18609, NW 18584, N 17086), aura Hover 17131, `window_signal` `stopped_no_target` (the core casts the breath triggered, `boss_onyxia.cpp:522`, so it is never her current spell; the window opens on the state the cast leaves, `boss_onyxia.cpp:525` clears her target, the same signal the reactive dodge reads), rows for `ranged` and `healer` only (melee stays on her when she lands). The points are the nearest walkable floor 31 yd or more from the breath lane (the segment between the hover point and its opposite, the N to S lane continuing into the tunnel), outside the egg fields, on both sides of the lane, with seats for both roles on both sides (a bot never crosses the lane for a seat); ranged take the points nearest the firing ring, healers the next ones of the same side, and a side with a single point is split between them. The module's old far spots (50-76 yd from the hover point) could not hold the damage C1 restored, so these rows apply only for the cast and the hold after it. The migration header lists the path-check of every seat from the raid stand and the walk from the firing ring.
+
+What needs a live check: that the breath's signal (Hover, stopped, no target) opens the window at the cast's start and not earlier (she also stops at a hover point without breathing, but then she keeps her target), that bots reach their seats inside the cast, the death count at Deep Breath, and that the hold keeps casters out of the lane until the sweep ends. The N and S anchors sit on the room's narrow axis and seat fewer bots (12-13 ranged, 4-7 healers); the bots that do not fit on their own side keep the reactive dodge.
+
 ## Adding a boss
 
 1. Read the boss from the core: `creature_template` (`spell_list_id`, `ai_name`), `creature_spells`, the `creature_ai_events`/`creature_ai_scripts` rows or the `src/scripts` boss file, and `spell_template` for each spell. Do not use another core's ids.
 2. Add the rows in a **new** migration `data/sql/world/YYYYMMDDHHMMSS_world.sql` (idempotent: `DELETE` the map's rows, `INSERT` them again). Never edit an applied migration.
-3. Run `python3 tools/test_boss_tactics_sql.py`, then check it in game with `AiPlayerbot.DungeonTactics = 1` or a commander binding and a boss pull.
+3. Run `python3 tools/test_boss_tactics_sql.py` (and `python3 tools/test_boss_stand_sql.py` for stand rows), then check it in game with `AiPlayerbot.DungeonTactics = 1` or a commander binding and a boss pull.
 
 Behaviour is based on the mod-playerbots per-map raid strategy pattern, reimplemented as data (no donor code; the source is named in its PR).

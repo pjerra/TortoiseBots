@@ -3,6 +3,7 @@
 #include "CurrentTargetValue.h"
 
 #include "playerbot/ServerFacade.h"
+#include "playerbot/BossTacticsAirTarget.h"
 using namespace ai;
 
 Unit* CurrentTargetValue::Get()
@@ -13,9 +14,14 @@ Unit* CurrentTargetValue::Get()
     Unit* unit = sObjectAccessor.GetUnit(*bot, selection);
     // An explicit attack order carries the walk to the target: keep it as the current
     // target out to the order range so the reach chain can close the distance. Every
-    // other target keeps the background sight-distance ceiling.
+    // other target keeps the background sight-distance ceiling - except an air_target
+    // the tactics keep (BossTacticsPolicy.h AirTargetKeep): a flying boss moves across
+    // a raid room wider than the sight distance while the reach walks the floor under
+    // her, so she stays the current target out to the order range as well.
     float maxDistance = sPlayerbotAIConfig.sightDistance;
     if (unit && ai->GetAiObjectContext()->GetValue<ObjectGuid>("explicit attack target")->Get() == unit->getObjectGuid())
+        maxDistance = sPlayerbotAIConfig.reactDistance;
+    else if (IsAirTargetKept(ai, bot, unit))
         maxDistance = sPlayerbotAIConfig.reactDistance;
     if (unit && !bot->IsWithinDistInMap(unit, maxDistance))
         return NULL;

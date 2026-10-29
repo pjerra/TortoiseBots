@@ -17,6 +17,7 @@
 // the same lifecycle as runtime/NamedLocationIndex.h: one loading thread adds
 // rows, calls Seal() once, and readers see nothing before the seal.
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstddef>
@@ -36,6 +37,7 @@ namespace ai
         Interrupt = 1,  // interrupt `spell_id` while the caster casts it
         KillFirst = 2,  // DPS bots kill `target_entry` before anything else; lowest `priority` first
         Behind = 3,     // non-tank bots stay out of the boss's front within `param` yd (frontal cleave)
+        AirTarget = 4,  // the boss stays a target while it wears the `spell_id` aura in the air
     };
 
     inline BossTacticKind ParseBossTacticKind(const std::string& text)
@@ -46,6 +48,8 @@ namespace ai
             return BossTacticKind::KillFirst;
         if (text == "behind")
             return BossTacticKind::Behind;
+        if (text == "air_target")
+            return BossTacticKind::AirTarget;
         return BossTacticKind::None;
     }
 
@@ -55,7 +59,7 @@ namespace ai
         std::uint32_t bossEntry = 0;    // creature whose presence in the fight activates the row
         BossTacticKind kind = BossTacticKind::None;
         std::uint32_t targetEntry = 0;  // creature the row is about; 0 = the boss itself
-        std::uint32_t spellId = 0;      // interrupt: the spell
+        std::uint32_t spellId = 0;      // interrupt: the spell; air_target: the air-phase aura
         std::uint8_t priority = 0;      // kill_first: lower is killed first
         float param = 0.0f;             // behind: radius in yards
     };
@@ -64,6 +68,266 @@ namespace ai
     inline std::uint32_t TacticSubjectEntry(const BossTacticRow& row)
     {
         return row.targetEntry ? row.targetEntry : row.bossEntry;
+    }
+
+    // Whether an air_target row keeps the boss as a target: the row matches the
+    // creature, the creature wears the row's aura (it is in the air phase), and
+    // it has not gone home. `evadeUnreachable` is deliberately not part of the
+    // answer - a core or boss script that chases a flying boss flags it unable
+    // to reach (no floor path leads to its height), and that must not drop it.
+    // (Onyxia on this core is not flagged: her phase 2 flies by point moves,
+    // and the unreachable timer only counts in a chase, Creature.cpp:916-933.)
+    // An evade mode is still a drop, in the callers as well: the reset is underway
+    // and nothing done to it lands.
+    inline bool AirTargetKeep(bool rowMatches, bool hasAura, bool evading, bool evadeUnreachable)
+    {
+        (void)evadeUnreachable;
+        return rowMatches && hasAura && !evading;
+    }
+
+    // The cast range the floor walk plans with: the reach's own spell range
+    // less a margin for the boss drifting between ticks, not the generic
+    // reach's 75 % chase distance (that bunches every caster under her).
+    // Zero or less is "no range": MoveUnderAirborneTarget then answers
+    // NotAirTarget.
+    constexpr float kAirTargetRangeMargin = 2.0f;
+
+    inline float AirTargetReachDistance(float spellRange)
+    {
+        return spellRange - kAirTargetRangeMargin;
+    }
+
+    // A flying boss is cast on from the floor under it, never chased to its
+    // flight height. This is how far (2D) from its footprint to stand so the
+    // cast's 3D range reaches it: the other leg of the triangle is the flight
+    // height, and no floor point is worth standing further than
+    // kAirTargetGroundRange out. Zero means no floor point can reach it (the
+    // height alone is out of range), so the bot does not walk for nothing.
+    constexpr float kAirTargetGroundRange = 25.0f;
+
+    inline float AirTargetGroundDistance(float spellRange, float flightHeight)
+    {
+        if (!(spellRange > 0.0f) || !(flightHeight < spellRange))
+            return 0.0f;
+        float const ground = std::sqrt(spellRange * spellRange - flightHeight * flightHeight);
+        return ground < kAirTargetGroundRange ? ground : kAirTargetGroundRange;
+    }
+
+    // How a cast reach treats the target the air tactic keeps. A boolean could
+    // not tell "not an air target" from "an air target no floor point reaches":
+    // both fell back to the generic reach, whose chase aims at the flight
+    // height and never arrives. Only NotAirTarget may take that path.
+    enum class AirTargetReach : std::uint8_t
+    {
+        NotAirTarget = 0,   // the tactic does not apply: the generic reach decides
+        Positioned = 1,     // a floor point lands the cast: walk to it, or already there
+        NoGroundPoint = 2,  // kept as a target, but no floor point lands the cast: stay put
+        NeedLosPoint = 3,   // a floor point would land the cast, but the bot has no line of
+                            // sight: walk to a floor point that sees it (AirTargetLosCandidates)
+    };
+
+    inline bool AirTargetGenericReachApplies(AirTargetReach reach)
+    {
+        return reach == AirTargetReach::NotAirTarget;
+    }
+
+    // The floor point a caster walks to for an airborne target: `stopDistance`
+    // (AirTargetGroundDistance) short of the footprint on the bot's line to it,
+    // so the cast's 3D range from the ground still lands there. Already inside
+    // the stop distance means no walk; outX/outY are then the bot's position.
+    // Both are only meaningful when the result is Positioned. Pure: the caller
+    // supplies the positions, the flight height over the target's floor and
+    // whether the bot sees the target. Out of sight the line to the footprint
+    // is no use (the obstacle sits on it): NeedLosPoint asks for a floor point
+    // that sees the target instead. A flight height at or beyond the cast is
+    // NoGroundPoint first, in sight or not.
+    inline AirTargetReach AirTargetReachPlan(bool airTarget, bool inLos, float spellRange, float flightHeight,
+                                             float botX, float botY, float targetX, float targetY,
+                                             float& outX, float& outY)
+    {
+        if (!airTarget)
+            return AirTargetReach::NotAirTarget;
+
+        float const stopDistance = AirTargetGroundDistance(spellRange, flightHeight);
+        if (stopDistance <= 0.0f)
+            return AirTargetReach::NoGroundPoint;
+        if (!inLos)
+            return AirTargetReach::NeedLosPoint;
+
+        float const dx = targetX - botX;
+        float const dy = targetY - botY;
+        float const footprintDistance = std::sqrt(dx * dx + dy * dy);
+        if (footprintDistance <= stopDistance)
+        {
+            outX = botX;
+            outY = botY;
+            return AirTargetReach::Positioned;
+        }
+
+        float const scale = (footprintDistance - stopDistance) / footprintDistance;
+        outX = botX + dx * scale;
+        outY = botY + dy * scale;
+        return AirTargetReach::Positioned;
+    }
+
+    // A floor point under a flying boss more than this far above or below the
+    // bot's own floor is another floor (a bridge, a ledge, the cave below): the
+    // bot would drop under the world or path somewhere else entirely.
+    constexpr float kAirTargetSameFloorZ = 10.0f;
+
+    // Line-of-sight recovery for an airborne target (NeedLosPoint). The
+    // candidates are a small fixed set of floor points around the target's
+    // footprint: the footprint itself and two rings of kAirTargetLosRingPoints
+    // each, at 90 % and 50 % of the ground leg (AirTargetGroundDistance), so
+    // every one of them still lands the cast in 3D from the floor. They carry
+    // no height: the caller takes the ground z of the bot's own floor, never
+    // the target's flight height.
+    constexpr int kAirTargetLosRingPoints = 8;
+    constexpr int kAirTargetLosCandidateCount = 1 + 2 * kAirTargetLosRingPoints;
+    // At most this many candidates pay a navmesh path search per attempt; the
+    // cheap checks (floor, sight ray, hazard) run on all of them.
+    constexpr int kAirTargetLosPathProbes = 3;
+    // At most this many recovery attempts on one target, then the bot stays
+    // put until kAirTargetLosRetryMs have passed since the last one (the boss
+    // moves between hover points, so sight may come back on its own).
+    constexpr std::uint8_t kAirTargetLosAttempts = 3;
+    constexpr std::uint32_t kAirTargetLosRetryMs = 10000;
+
+    struct AirTargetGroundPoint
+    {
+        float x = 0.0f;
+        float y = 0.0f;
+    };
+
+    inline std::vector<AirTargetGroundPoint> AirTargetLosCandidates(float spellRange, float flightHeight,
+                                                                    float targetX, float targetY)
+    {
+        std::vector<AirTargetGroundPoint> out;
+        float const leg = AirTargetGroundDistance(spellRange, flightHeight);
+        if (leg <= 0.0f)
+            return out;
+
+        out.reserve(kAirTargetLosCandidateCount);
+        AirTargetGroundPoint footprint;
+        footprint.x = targetX;
+        footprint.y = targetY;
+        out.push_back(footprint);
+
+        float const radii[2] = { leg * 0.9f, leg * 0.5f };
+        for (float const radius : radii)
+        {
+            for (int i = 0; i < kAirTargetLosRingPoints; ++i)
+            {
+                float const angle = 2.0f * 3.14159265f * static_cast<float>(i) / static_cast<float>(kAirTargetLosRingPoints);
+                AirTargetGroundPoint point;
+                point.x = targetX + radius * std::cos(angle);
+                point.y = targetY + radius * std::sin(angle);
+                out.push_back(point);
+            }
+        }
+        return out;
+    }
+
+    // The candidate to walk to: the nearest to the bot (2D, the shortest walk)
+    // that passes `usable` (the cheap checks: same floor, sight ray to the
+    // target, no hazard) and then `reachable` (the navmesh path). `reachable`
+    // runs at most `maxPathProbes` times, nearest first. Both take the
+    // candidate's index. -1: none, stay put.
+    template <typename Usable, typename Reachable>
+    int SelectAirTargetLosPoint(const std::vector<AirTargetGroundPoint>& candidates, float botX, float botY,
+                                int maxPathProbes, Usable usable, Reachable reachable)
+    {
+        std::vector<int> order;
+        order.reserve(candidates.size());
+        for (int i = 0; i < static_cast<int>(candidates.size()); ++i)
+            order.push_back(i);
+
+        auto const distSq = [&](int i)
+        {
+            float const dx = candidates[i].x - botX;
+            float const dy = candidates[i].y - botY;
+            return dx * dx + dy * dy;
+        };
+        std::stable_sort(order.begin(), order.end(), [&](int a, int b) { return distSq(a) < distSq(b); });
+
+        int probes = 0;
+        for (int const i : order)
+        {
+            if (probes >= maxPathProbes)
+                break;
+            if (!usable(i))
+                continue;
+            ++probes;
+            if (reachable(i))
+                return i;
+        }
+        return -1;
+    }
+
+    // Bounded recovery: per target, kAirTargetLosAttempts tries, then none
+    // until kAirTargetLosRetryMs after the last. Only a new target
+    // (AirTargetLosBudgetReset) or sight held without a break for
+    // kAirTargetLosVisibleResetMs (AirTargetLosSeen) gives the tries back: a
+    // boss on a pillar edge, in sight one tick and out the next, must not buy
+    // a fresh round every time it shows.
+    constexpr std::uint32_t kAirTargetLosVisibleResetMs = 3000;
+
+    struct AirTargetLosBudget
+    {
+        std::uint8_t attempts = 0;
+        std::uint32_t lastMs = 0;
+        bool visible = false;           // in sight since visibleSinceMs, without a break
+        std::uint32_t visibleSinceMs = 0;
+    };
+
+    // The bot sees the target this tick.
+    inline void AirTargetLosSeen(AirTargetLosBudget& budget, std::uint32_t nowMs)
+    {
+        if (!budget.visible)
+        {
+            budget.visible = true;
+            budget.visibleSinceMs = nowMs;
+            return;
+        }
+        if (nowMs - budget.visibleSinceMs >= kAirTargetLosVisibleResetMs)
+            budget.attempts = 0;
+    }
+
+    // The bot does not see the target this tick and asks for a recovery walk.
+    inline bool AirTargetLosTryAttempt(AirTargetLosBudget& budget, std::uint32_t nowMs)
+    {
+        budget.visible = false;
+        if (budget.attempts >= kAirTargetLosAttempts)
+        {
+            if (nowMs - budget.lastMs < kAirTargetLosRetryMs)
+                return false;
+            budget.attempts = 0;
+        }
+        ++budget.attempts;
+        budget.lastMs = nowMs;
+        return true;
+    }
+
+    inline void AirTargetLosBudgetReset(AirTargetLosBudget& budget)
+    {
+        budget = AirTargetLosBudget();
+    }
+
+    // Whether a candidate, at the ground z the caller resolved for it, is a
+    // floor point worth walking to: on the bot's own floor (a platform above
+    // or a pit below is another floor) and within the cast's range in 3D from
+    // that ground z to the target's flight position. The ring is laid out from
+    // the flight height over the footprint's floor; this re-checks every
+    // candidate against the floor it actually lands on.
+    inline bool AirTargetLosPointFits(float spellRange, float botZ, float pointX, float pointY, float pointZ,
+                                      float targetX, float targetY, float targetZ)
+    {
+        if (std::fabs(pointZ - botZ) > kAirTargetSameFloorZ)
+            return false;
+        float const dx = targetX - pointX;
+        float const dy = targetY - pointY;
+        float const dz = targetZ - pointZ;
+        return dx * dx + dy * dy + dz * dz <= spellRange * spellRange;
     }
 
     class BossTacticTable
@@ -81,6 +345,11 @@ namespace ai
             if (row.kind == BossTacticKind::Interrupt && row.spellId == 0)
                 return false;
             if (row.kind == BossTacticKind::Behind && !(row.param > 0.0f))
+                return false;
+            // An air_target row is looked up by the flying creature's own entry
+            // (IsAirTargetKept: Rows(map, unit entry)), so a target_entry other
+            // than the boss could never act.
+            if (row.kind == BossTacticKind::AirTarget && (row.spellId == 0 || row.targetEntry != 0))
                 return false;
             std::vector<BossTacticRow>& rows = rows_[Key(row.map, row.bossEntry)];
             for (const BossTacticRow& have : rows)

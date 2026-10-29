@@ -386,8 +386,13 @@ void TestUnitInfo()
         m.castTarget = 0xFFFFFFFFFFFFFFFFull;
         m.hasShape = true;
         m.shape.kind = TortoiseBots::SpellShape::Kind::Line;
-        m.shape.length = 154.0f;
+        m.shape.length = 151.53f;
         m.shape.width = 60.0f;
+        m.shape.hasSegment = true;
+        m.shape.x0 = -130.788300f;
+        m.shape.y0 = -213.424026f;
+        m.shape.x1 = 20.730539f;
+        m.shape.y1 = -215.237610f;
         big.mobs.push_back(m);
     }
     std::vector<BindingInfo> many(kMaxBindings + 3, big);
@@ -442,10 +447,10 @@ void TestBossOverlay()
     boss.channel = true;
     boss.shape.kind = TortoiseBots::SpellShape::Kind::Line;
     boss.shape.angle = 0;
-    boss.shape.length = 154.0f;
+    boss.shape.length = 151.5f;
     boss.shape.width = 60.0f;
-    Check(Has(MobJson(boss), "\"ch\":1,\"shape\":{\"k\":\"line\",\"l\":154.0,\"w\":60.0}"),
-        "a channel is flagged and a line carries its width");
+    Check(Has(MobJson(boss), "\"ch\":1,\"shape\":{\"k\":\"line\",\"l\":151.5,\"w\":60.0}"),
+        "a channel is flagged and a line along the facing carries its width, with no ends");
 
     MobInfo plain = Mob(6, "Rat");
     plain.rank = 'b';
@@ -461,6 +466,40 @@ void TestBossOverlay()
         "an older module's mob keeps the old shape: no facing and no cast id");
     old.hasShape = true; // a shape without a cast is never written
     Check(!Has(MobJson(old), "\"shape\""), "a shape without a cast is left out");
+}
+
+// A Deep Breath is cast triggered, so it never reaches a cast slot: the module reports it from the stand row's window
+// (BossStandPolicy.h). The mob row then carries the lane head's cast and its line, with no unit target and no channel.
+void TestBreathOverlay()
+{
+    MobInfo boss = Mob(5, "Onyxia");
+    boss.entry = 10184;
+    boss.hpPct = 80;
+    boss.x = 1.5f;
+    boss.y = -2.5f;
+    boss.level = 63;
+    boss.rank = 'b';
+    boss.cast = "Breath";
+    boss.hasO = true;
+    boss.o = -1.2f;
+    boss.castId = 18617;
+    boss.castLeftMs = 4200;
+    boss.castTotalMs = 5000;
+    TortoiseBots::SpellShape::Shape const* lane = TortoiseBots::SpellShape::For(18617);
+    Check(lane != nullptr && lane->kind == TortoiseBots::SpellShape::Kind::Line, "18617 is a line");
+    if (lane)
+    {
+        boss.hasShape = true;
+        boss.shape = *lane;
+    }
+    std::string const json = MobJson(boss);
+    Check(Has(json, "\"cast\":\"Breath\",\"o\":-1.20,\"cid\":18617,\"cleft\":4200,\"ctot\":5000,"),
+        "the window spell rides the mob row as a cast");
+    Check(Has(json, "\"shape\":{\"k\":\"line\",\"l\":89.0,\"w\":60.0,"
+                    "\"seg\":[12.12,-243.44,-58.25,-189.02]}"),
+        "the Deep Breath lane is its chain's 88.96 yd, 60 yd wide, with its two absolute ends");
+    Check(!Has(json, "\"ctg\"") && !Has(json, "\"ch\""),
+        "a triggered breath has no unit target and is not a channel");
 }
 
 // The 0.5 s position report (task S3/R3m): a bot row in one decimal with its facing at two, a dead bot at hp 0 and
@@ -1187,6 +1226,384 @@ void TestReadyCheckPayload()
     std::printf("40 bots with ready facts: %zu bytes\n", size.size());
 }
 
+// `count` bindings of `size` bots each, every commander, lead and bot named apart.
+std::vector<BindingInfo> Parties(size_t count, size_t size)
+{
+    std::vector<BindingInfo> out;
+    out.reserve(count);
+    for (size_t i = 0; i < count; ++i)
+    {
+        BindingInfo b;
+        b.commander = "Party" + std::to_string(i);
+        b.commanderGuid = static_cast<uint32_t>(100 + i);
+        b.groupId = static_cast<uint32_t>(500 + i);
+        b.lead = "Lead" + std::to_string(i);
+        for (size_t j = 0; j < size; ++j)
+            b.bots.push_back(Bot("Bot" + std::to_string(i) + "_" + std::to_string(j), j == 0));
+        out.push_back(std::move(b));
+    }
+    return out;
+}
+
+// More than eight bindings (task R8m): a cycle goes out in parts, each part built exactly as a whole cycle is today,
+// so a single-part cycle (eight bindings, 64 bots) is byte-identical to the payload before the split.
+void TestCommandersPartsSingle()
+{
+    std::vector<BindingInfo> const parties = Parties(8, 5);
+    std::vector<std::string> const parts = BuildPayloadParts(9, 7, 3, 1791990010, parties, 1791990010123);
+    Check(parts.size() == 1, "eight parties are one part");
+    Check(!Has(parts[0], "\"parts\""), "a single part writes no parts key");
+    Check(parts[0] == BuildPayload(9, 7, 3, 1791990010, parties, 1791990010123),
+        "a single part is byte-identical to the plain payload");
+    Check(Count(parts[0], "\"commander\":") == 8, "every binding is in it");
+}
+
+void TestCommandersPartsSplit()
+{
+    std::vector<std::string> const parts = BuildPayloadParts(9, 7, 3, 1791990010, Parties(9, 5), 1791990010123);
+    Check(parts.size() == 2, "nine parties are two parts");
+    if (parts.size() != 2)
+        return;
+    Check(Has(parts[0], "\"seq\":3,\"part\":0,\"parts\":2,\"ts\":1791990010,\"ts_ms\":1791990010123,\"type\":\"COMMANDERS\""),
+        "part 0 carries the cycle's seq and ts");
+    Check(Has(parts[1], "\"seq\":3,\"part\":1,\"parts\":2,\"ts\":1791990010,\"ts_ms\":1791990010123,\"type\":\"COMMANDERS\""),
+        "part 1 carries the same seq and ts");
+    Check(Count(parts[0], "\"commander\":") == 8 && Count(parts[1], "\"commander\":") == 1, "eight bindings, then the ninth");
+    Check(Count(parts[0], "\"guid\":") == 40 && Count(parts[1], "\"guid\":") == 5, "the bots follow their binding");
+}
+
+void TestCommandersPartsCaps()
+{
+    // Eight small parties at the bot cap still fit one part.
+    std::vector<std::string> const full = BuildPayloadParts(9, 1, 43, 1, Parties(8, 8), 0);
+    Check(full.size() == 1, "eight bindings of eight bots are one part");
+    if (!full.empty())
+        Check(Count(full[0], "\"guid\":") == 64, "and 64 bots in it");
+    // Two raids of 40: 64 bots per part, so each raid goes alone.
+    std::vector<std::string> const two = BuildPayloadParts(9, 1, 40, 1, Parties(2, 40), 0);
+    Check(two.size() == 2, "two 40-bot raids are two parts");
+    if (two.size() == 2)
+        Check(Count(two[0], "\"guid\":") == 40 && Count(two[1], "\"guid\":") == 40,
+            "each raid keeps its whole roster");
+    // A raid of 40 and five parties of 5: the raid and four parties (60 bots) go together.
+    std::vector<BindingInfo> mixed = Parties(1, 40);
+    std::vector<BindingInfo> const parties = Parties(5, 5);
+    mixed.insert(mixed.end(), parties.begin(), parties.end());
+    std::vector<std::string> const parts = BuildPayloadParts(9, 1, 41, 1, mixed, 0);
+    Check(parts.size() == 2, "a raid and five parties are two parts");
+    if (parts.size() == 2)
+    {
+        Check(Count(parts[0], "\"commander\":") == 5 && Count(parts[0], "\"guid\":") == 60, "the raid and four parties in part 0");
+        Check(Count(parts[1], "\"commander\":") == 1 && Count(parts[1], "\"guid\":") == 5, "the fifth party alone");
+    }
+    // Twenty 40-bot bindings: one part each, and no binding is ever split.
+    std::vector<std::string> const many = BuildPayloadParts(9, 1, 42, 1, Parties(20, 40), 0);
+    Check(many.size() == 20, "twenty raids are twenty parts");
+    bool whole = true;
+    for (std::string const& part : many)
+        whole = whole && Count(part, "\"commander\":") == 1 && Count(part, "\"guid\":") == 40;
+    Check(whole, "a binding is never split across parts");
+    // At most one part per binding, so no more than kMaxCommandersReported of them.
+    std::vector<std::string> const beyond = BuildPayloadParts(9, 1, 44, 1, Parties(21, 40), 0);
+    Check(beyond.size() == kMaxCommandersReported, "twenty-one bindings are twenty parts");
+    size_t reported = 0;
+    for (std::string const& part : beyond)
+        reported += Count(part, "\"commander\":");
+    Check(reported == kMaxCommandersReported, "the twenty-first binding is not reported");
+}
+
+void TestCommandersPartsBudget()
+{
+    // The worst datagram this module writes (the shape of TestUnitInfo's caps case, with the ready facts): 8 bindings,
+    // 48 bots and 64 mobs, ids at 20 digits and every name at its clip.
+    std::vector<BindingInfo> many;
+    for (int i = 0; i < 8; ++i)
+    {
+        BindingInfo b;
+        b.commander = std::string(40, 'C');
+        b.commanderGuid = 0xFFFFFFFFu;
+        b.boundAt = 1791990000;
+        b.lead = std::string(12, 'L');
+        for (int j = 0; j < 6; ++j)
+        {
+            BotInfo bot = Bot("Botname" + std::to_string(i * 8 + j), j == 0);
+            bot.id = 0xFFFFFFFFFFFFFFFFull;
+            bot.target = 0xFFFFFFFFFFFFFFFFull;
+            bot.hasExtra = true;
+            bot.extra.state = 'c';
+            bot.extra.action = std::string(kMaxActionName, 'a');
+            bot.extra.result = 'O';
+            bot.extra.cast = std::string(kMaxCastName, 'c');
+            bot.extra.targetName = std::string(kMaxTargetName, 't');
+            bot.extra.hasReady = true;
+            bot.extra.readyBuffs = 0xFFFFFFFFu;
+            bot.extra.readyCons = 0xFFFFFFFFu;
+            bot.extra.cdReady = 8;
+            bot.extra.cdKnown = 8;
+            bot.extra.cdLongestS = 0xFFFFFFFFu;
+            b.bots.push_back(bot);
+        }
+        b.mobsReported = true;
+        b.mobsMap = 249;
+        for (int j = 0; j < 8; ++j)
+        {
+            MobInfo m = Mob(0xFFFFFFFFFFFFFFFFull, std::string(kMaxMobName, 'M'), 'h', 'k', 0xFFFFFFFFFFFFFFFFull);
+            m.level = 63;
+            m.rank = 'b';
+            m.cast = std::string(kMaxCastName, 'c');
+            m.hasO = true;
+            m.o = -3.14159f;
+            m.castId = 4294967295u;
+            m.castLeftMs = 0xFFFFFFFFu;
+            m.castTotalMs = 0xFFFFFFFFu;
+            m.castTarget = 0xFFFFFFFFFFFFFFFFull;
+            m.hasShape = true;
+            m.shape.kind = TortoiseBots::SpellShape::Kind::Line;
+            m.shape.length = 154.0f;
+            m.shape.width = 60.0f;
+            b.mobs.push_back(m);
+        }
+        for (int j = 0; j < 8; ++j)
+            b.orders.push_back(Order(j, std::string(kMaxOrderResult / 15, 'v'), true, std::string(kMaxOrderResult, 'r'),
+                std::string(kMaxOrderDetail, 'd')));
+        many.push_back(std::move(b));
+    }
+    std::vector<std::string> const parts = BuildPayloadParts(9, 1, 77, 1791990010, many, 1791990010123);
+    Check(parts.size() == 1, "eight fat bindings with their mobs are still one part");
+    if (!parts.empty())
+    {
+        Check(Count(parts[0], "\"guid\":") == 48, "every bot is in it");
+        Check(Count(parts[0], "\"entry\":") == 64, "the part sits at the mob cap");
+    }
+    bool under = true;
+    size_t largest = 0;
+    for (std::string const& part : parts)
+    {
+        under = under && part.size() < kPayloadByteBudget;
+        largest = std::max(largest, part.size());
+    }
+    Check(under, "every part stays under the payload budget");
+    std::printf("worst part (%zu parts): %zu bytes\n", parts.size(), largest);
+
+    // Twenty full bindings: twenty parts, each under the budget.
+    std::vector<std::string> const raidParts = BuildPayloadParts(9, 1, 78, 1, Parties(20, 40), 0);
+    bool raidUnder = true;
+    for (std::string const& part : raidParts)
+        raidUnder = raidUnder && part.size() < kPayloadByteBudget;
+    Check(raidUnder, "every part of twenty raids stays under the payload budget");
+}
+
+// One bot carrying every per-bot section at its cap: unit info, cast target, ready facts.
+BotInfo CombinedBot(std::string name, bool lead)
+{
+    BotInfo b = Bot(std::move(name), lead);
+    b.id = 0xFFFFFFFFFFFFFFFFull;
+    b.target = 0xFFFFFFFFFFFFFFFFull;
+    b.hasExtra = true;
+    b.extra.state = 'c';
+    b.extra.action = std::string(kMaxActionName, 'a');
+    b.extra.result = 'O';
+    b.extra.cast = std::string(kMaxCastName, 'c');
+    b.extra.castTarget = 0xFFFFFFFFFFFFFFFFull;
+    b.extra.cc = 's';
+    b.extra.rest = 'e';
+    b.extra.moving = true;
+    b.extra.targetName = std::string(kMaxTargetName, 't');
+    b.extra.hasReady = true;
+    b.extra.readyBuffs = 0xFFFFFFFFu;
+    b.extra.readyCons = 0xFFFFFFFFu;
+    b.extra.cdReady = 8;
+    b.extra.cdKnown = 8;
+    b.extra.cdLongestS = 0xFFFFFFFFu;
+    b.subgroup = 0;
+    return b;
+}
+
+// One binding with the sections that can coexist, each at its cap: bots with ready facts, the run with its step list and
+// its notes ring, orders, objects, an overlay on every mob, and a fight window of `combat` bytes (the window itself is
+// not one of the sections a trim drops).
+BindingInfo CombinedBinding(size_t bots, size_t notes, size_t mobs, std::string combat = "")
+{
+    BindingInfo b;
+    b.commander = std::string(40, 'C');
+    b.commanderGuid = 0xFFFFFFFFu;
+    b.boundAt = 1791990000;
+    b.commanderOnline = true;
+    b.viewOn = true;
+    b.groupId = 0xFFFFFFFFu;
+    b.lead = std::string(12, 'L');
+    b.commanderPlaced = true;
+    b.commanderMap = 249;
+    b.commanderX = b.commanderY = -12345.67f;
+    for (size_t i = 0; i < bots; ++i)
+        b.bots.push_back(CombinedBot("Botname" + std::to_string(i), i == 0));
+    b.run.present = true;
+    b.run.plan = std::string(kMaxRunWord, 'p');
+    b.run.state = "running";
+    b.run.step = 4000000000u;
+    b.run.steps = 4000000000u;
+    b.run.leg = std::string(kMaxRunWord, 'l');
+    b.run.kind = std::string(kMaxRunWord, 'k');
+    b.run.phase = std::string(kMaxRunWord, 'h');
+    b.run.label = std::string(kMaxRunNote, 'L');
+    b.run.note = std::string(kMaxRunNote, 'n');
+    b.run.changedAt = 1791990000;
+    for (size_t i = 0; i < notes; ++i)
+    {
+        RunNoteInfo n;
+        n.at = 1791990000;
+        n.step = 4000000000u;
+        n.leg = std::string(kMaxRunWord, 'l');
+        n.kind = std::string(kMaxRunWord, 'k');
+        n.phase = std::string(kMaxRunWord, 'h');
+        n.state = std::string(kMaxRunWord, 's');
+        n.note = std::string(kMaxRunNote, 'n');
+        b.run.notes.push_back(n);
+    }
+    for (uint32_t i = 0; i < kMaxRunSteps; ++i)
+    {
+        RunStepInfo st;
+        st.index = 4000000000u + i;
+        st.kind = "move_direct";
+        st.x = st.y = -12345.67f;
+        st.radius = 100.0f;
+        st.entry = 4000000000u;
+        st.name = std::string(kMaxMobName, 'S');
+        st.label = std::string(kMaxRunNote, 'c');
+        st.skipped = true;
+        b.run.stepList.push_back(st);
+    }
+    b.mobsReported = true;
+    b.mobsMap = 249;
+    for (size_t i = 0; i < mobs; ++i)
+    {
+        MobInfo m = Mob(0xFFFFFFFFFFFFFFFFull, std::string(kMaxMobName, 'M'), 'h', 'k', 0xFFFFFFFFFFFFFFFFull);
+        m.level = 63;
+        m.rank = 'b';
+        m.cast = std::string(kMaxCastName, 'c');
+        m.hasO = true;
+        m.o = -3.14159f;
+        m.castId = 4294967295u;
+        m.castLeftMs = 0xFFFFFFFFu;
+        m.castTotalMs = 0xFFFFFFFFu;
+        m.castTarget = 0xFFFFFFFFFFFFFFFFull;
+        m.hasShape = true;
+        m.shape.kind = TortoiseBots::SpellShape::Kind::Line;
+        m.shape.length = 154.0f;
+        m.shape.width = 60.0f;
+        b.mobs.push_back(m);
+    }
+    b.objectsReported = true;
+    for (size_t i = 0; i < kMaxObjectsPerBinding; ++i)
+    {
+        ObjectInfo o;
+        o.id = 0xFFFFFFFFFFFFFFFFull;
+        o.entry = 4294967295u;
+        o.name = std::string(kMaxObjectName, 'O');
+        o.x = o.y = -12345.67f;
+        o.type = 'c';
+        o.state = 'u';
+        b.objects.push_back(o);
+    }
+    for (int i = 0; i < 8; ++i)
+        b.orders.push_back(Order(1791990000, std::string(10, 'v'), true, std::string(kMaxOrderResult, 'r'),
+                                 std::string(kMaxOrderDetail, 'd')));
+    b.combatJson = std::move(combat);
+    return b;
+}
+
+// The byte cap holds on the fully serialized part, not on its counts: every section a binding can carry rides along,
+// and a part that would go past kPartByteCap moves bindings to a new part (never splits one).
+void TestCommandersPartsCombinedCap()
+{
+    // Twenty commanders, 40 bots each: every section at its cap, and each part (one binding) under the cap.
+    std::vector<BindingInfo> raids;
+    for (int i = 0; i < 20; ++i)
+        raids.push_back(CombinedBinding(40, kMaxRunNotes, kMaxMobsPerBinding, std::string(4000, 'x')));
+    std::vector<std::string> const raidParts = BuildPayloadParts(9, 1, 91, 1, raids, 0);
+    Check(raidParts.size() == 20, "twenty 40-bot bindings are twenty parts");
+    bool under = true;
+    for (std::string const& part : raidParts)
+        under = under && part.size() <= kPartByteCap && part.size() <= kDatagramByteLimit;
+    Check(under, "every part of twenty full commanders is at or under the datagram cap");
+
+    // Twenty commanders, 40 bots in all (2 each) with the payload's 64 mobs and 16 overlays filled: the counts alone
+    // packed eight such bindings (173,034 bytes) into one datagram.
+    std::vector<BindingInfo> combined;
+    for (int i = 0; i < 20; ++i)
+        combined.push_back(CombinedBinding(2, kMaxRunNotes, 8, std::string(4000, 'x')));
+    std::vector<BindingInfo> firstEight(combined.begin(), combined.begin() + 8);
+    std::string const countsOnly = BuildPayload(9, 1, 91, 1, firstEight);
+    std::printf("eight combined bindings by counts alone: %zu bytes\n", countsOnly.size());
+    Check(countsOnly.size() > kDatagramByteLimit, "the counts-only packing would exceed the UDP limit");
+    std::vector<TrimEvent> packTrims;
+    std::vector<std::string> const parts = BuildPayloadParts(9, 1, 91, 1, combined, 0, &packTrims);
+    size_t largest = 0;
+    size_t listed = 0;
+    bool fit = true;
+    for (std::string const& part : parts)
+    {
+        fit = fit && part.size() <= kPartByteCap && part.size() <= kDatagramByteLimit;
+        largest = std::max(largest, part.size());
+        listed += Count(part, "\"commander\":");
+    }
+    Check(fit, "every combined part is at or under the datagram cap");
+    Check(listed == 20, "every commander is still reported");
+    Check(parts.size() > 2, "the byte cap moved bindings to new parts");
+    Check(packTrims.empty(), "a part over the cap moves bindings to a new part instead of trimming them");
+    std::printf("twenty combined commanders (40 bots): %zu parts, largest %zu bytes\n", parts.size(), largest);
+
+    // A part that is one binding still over the cap drops its optional sections in the fixed order, and keeps the rest.
+    std::vector<BindingInfo> single{CombinedBinding(40, kMaxRunNotes, kMaxMobsPerBinding, std::string(15000, 'x'))};
+    std::vector<BindingInfo const*> refs{&single[0]};
+    static char const* const kSectionNames[] = {"none", "overlays", "objects", "step notes", "ready facts"};
+    for (uint8_t level = 0; level <= kMaxTrimLevel; ++level)
+    {
+        std::vector<uint8_t> const levels{level};
+        std::string const json = BuildPayloadOf(9, 1, 91, 1, refs, 0, 0, 1, &levels);
+        bool const overlay = Has(json, "\"cid\":");
+        bool const objects = Has(json, "\"objects\":[");
+        bool const notes = Has(json, "\"notes\":[");
+        bool const ready = Has(json, "\"rdy\":{");
+        Check(overlay == (level < 1), "overlays are the first section a trim drops");
+        Check(objects == (level < 2), "objects go after the overlays");
+        Check(notes == (level < 3), "the step notes go after the objects");
+        Check(ready == (level < 4), "the ready facts go last");
+        Check(Has(json, "\"plan_steps\":["), "the run's step list stays at every trim level");
+        Check(Has(json, "\"trimmed\":true") == (level > 0), "a trimmed binding says so");
+        Check(std::string(TrimSectionName(level)) == kSectionNames[level], "the trim level names the section it dropped");
+    }
+
+    // The cap picks the first level that fits, and reports it once in the trim log.
+    std::vector<TrimEvent> trimLog;
+    std::vector<std::string> const trimmed = BuildPayloadParts(9, 1, 91, 1, single, 0, &trimLog);
+    Check(trimmed.size() == 1, "a binding alone over the cap is still one part");
+    Check(trimmed[0].size() <= kPartByteCap, "the trimmed part fits the datagram cap");
+    Check(Has(trimmed[0], "\"trimmed\":true"), "the trimmed binding is marked");
+    Check(!Has(trimmed[0], "\"cid\":") && !Has(trimmed[0], "\"objects\":[") && !Has(trimmed[0], "\"notes\":["),
+        "overlays, objects and the notes are gone");
+    Check(Has(trimmed[0], "\"rdy\":{"), "the ready facts are kept when the earlier trims were enough");
+    Check(trimLog.size() == 1 && trimLog[0].level == 3, "the log names the last section dropped");
+    Check(trimLog.size() == 1 && trimLog[0].commanderGuid == 0xFFFFFFFFu && trimLog[0].commander == std::string(40, 'C'),
+        "the log names the binding");
+    Check(std::string(TrimSectionName(3)) == "step notes", "the level-3 section is the step notes");
+
+    // A binding that fits is not trimmed and logs nothing.
+    std::vector<BindingInfo> const small{CombinedBinding(2, 3, 2)};
+    trimLog.clear();
+    std::vector<std::string> const plain = BuildPayloadParts(9, 1, 91, 1, small, 0, &trimLog);
+    Check(plain.size() == 1 && !Has(plain[0], "\"trimmed\":true"), "a binding under the cap is not trimmed");
+    Check(trimLog.empty(), "no trim, no log line");
+}
+
+void TestCommandersPartsEmpty()
+{
+    std::vector<std::string> const parts = BuildPayloadParts(9, 1, 2, 3, {}, 4);
+    Check(parts.size() == 1, "no binding is still one payload");
+    Check(parts[0] == BuildPayload(9, 1, 2, 3, {}, 4), "the last binding ended payload is unchanged");
+    Check(!Has(parts[0], "\"part\""), "no parts key on it");
+}
+
 } // namespace
 
 int main()
@@ -1200,6 +1617,7 @@ int main()
     TestMapDataCapsAndSize();
     TestUnitInfo();
     TestBossOverlay();
+    TestBreathOverlay();
     TestPosPayload();
     TestPosCapsAndSize();
     TestRunInfo();
@@ -1213,6 +1631,12 @@ int main()
     TestDashLayoutAndLabel();
     TestPayloadTsMs();
     TestReadyCheckPayload();
+    TestCommandersPartsSingle();
+    TestCommandersPartsSplit();
+    TestCommandersPartsCaps();
+    TestCommandersPartsBudget();
+    TestCommandersPartsCombinedCap();
+    TestCommandersPartsEmpty();
     TestRaidPayload();
     if (g_failures)
     {

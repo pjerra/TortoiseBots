@@ -1778,7 +1778,6 @@ void ObservabilityEmitter::EmitCommanders()
 
     std::vector<CommanderTelemetry::BindingInfo> infos;
     infos.reserve(m_commanderRefs.size());
-    size_t botsTotal = 0; // bots over all bindings: stops at kMaxBotsPerPayload (one raid plus a party)
     for (CommanderTelemetry::BindingRef const& ref : m_commanderRefs)
     {
         CommanderTelemetry::BindingInfo info;
@@ -1811,8 +1810,7 @@ void ObservabilityEmitter::EmitCommanders()
         info.layout = ref.layout;
         for (Player* bot : ref.bots)
         {
-            if (!bot || !bot->IsInWorld() || info.bots.size() >= CommanderTelemetry::kMaxBotsPerBinding ||
-                botsTotal >= CommanderTelemetry::kMaxBotsPerPayload)
+            if (!bot || !bot->IsInWorld() || info.bots.size() >= CommanderTelemetry::kMaxBotsPerBinding)
                 continue;
             CommanderTelemetry::BotInfo b;
             b.name = bot->GetName();
@@ -1853,7 +1851,6 @@ void ObservabilityEmitter::EmitCommanders()
                     b.extra = extra;
                     break;
                 }
-            ++botsTotal;
             info.bots.push_back(std::move(b));
         }
         infos.push_back(std::move(info));
@@ -1866,9 +1863,32 @@ void ObservabilityEmitter::EmitCommanders()
             standing = standing || ref.commanderGuid == it->first;
         it = standing ? std::next(it) : m_commanderSince.erase(it);
     }
+    for (auto it = m_commanderTrimLoggedAt.begin(); it != m_commanderTrimLoggedAt.end();)
+    {
+        bool standing = false;
+        for (CommanderTelemetry::BindingRef const& ref : m_commanderRefs)
+            standing = standing || ref.commanderGuid == it->first;
+        it = standing ? std::next(it) : m_commanderTrimLoggedAt.erase(it);
+    }
     m_commandersSent = !infos.empty();
-    SendDatagram(CommanderTelemetry::BuildPayload(kProtocolVersion, m_sessionId, m_snapshotSeq, time(nullptr), infos,
-                                                  NowUnixMs()));
+    // Twenty commanders are more bindings than one datagram holds: the partition keeps each part within the datagram
+    // caps (eight bindings, 64 bots, 64 mobs, kPartByteCap serialized bytes) and every part goes out with this cycle's
+    // seq and ts. A binding that alone cannot fit gives up its optional sections; the log says so once a minute.
+    std::vector<CommanderTelemetry::TrimEvent> trims;
+    time_t const now = time(nullptr);
+    std::vector<std::string> const parts = CommanderTelemetry::BuildPayloadParts(kProtocolVersion, m_sessionId,
+        m_snapshotSeq, now, infos, NowUnixMs(), &trims);
+    for (std::string const& payload : parts)
+        SendDatagram(payload);
+    for (CommanderTelemetry::TrimEvent const& trim : trims)
+    {
+        int64_t& loggedAt = m_commanderTrimLoggedAt[trim.commanderGuid];
+        if (loggedAt && now - loggedAt < 60)
+            continue;
+        loggedAt = now;
+        TB_LOG_BASIC("TortoiseBots: COMMANDERS binding '%s' (commander %u) did not fit one datagram; its %s were left out",
+            trim.commander.c_str(), trim.commanderGuid, CommanderTelemetry::TrimSectionName(trim.level));
+    }
 }
 
 // Effective running settings for the dashboard Server panel. Reads live core

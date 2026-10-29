@@ -56,12 +56,14 @@
 #include "runtime/OwnedBotQolPolicy.h"
 #include "../runtime/RaidLayoutPolicy.h"
 #include "../runtime/RemoteCommanderPolicy.h"
+#include "../ai/playerbot/SwimPathPolicy.h" // ChooseFloorZ's water fact (cmd move keeps a water point in the water)
 #include "../ai/playerbot/AiFactory.h"
 #include "../runtime/RemoteCommanderView.h"
 #include "../runtime/RemoteCommanderTasks.h"
 #include "../runtime/RemoteCommanderEnter.h"
 #include "../runtime/GossipOrderPolicy.h"
 #include "../runtime/CommanderTelemetry.h"
+#include "../runtime/StandWindowMarks.h"
 #include "../runtime/ReadyCheckPolicy.h"
 #include "../runtime/DungeonRunPolicy.h"
 #include "../runtime/SystemRunPolicy.h"
@@ -77,6 +79,7 @@
 #include "../runtime/PlayerLedPolicy.h"
 #include "../ai/playerbot/DungeonPlanMgr.h"
 #include "../ai/playerbot/BossTacticsMgr.h"
+#include "../ai/playerbot/BossTacticsStand.h"
 #include "../ai/playerbot/PullAggroEstimatePolicy.h"
 #include "../ai/playerbot/WorldPosition.h"
 #include "CreatureGroups.h"
@@ -94,6 +97,8 @@
 #include "Chat.h"
 // pi-lens-ignore: clang:pp_file_not_found
 #include "ObjectMgr.h"
+// pi-lens-ignore: clang:pp_file_not_found
+#include "ScriptMgr.h"
 // pi-lens-ignore: clang:pp_file_not_found
 #include "GameEventMgr.h"
 // pi-lens-ignore: clang:pp_file_not_found
@@ -184,6 +189,19 @@ RemoteCommander::BindingTable& CommanderBindings()
     static RemoteCommander::BindingTable table;
     return table;
 }
+
+// The unit whose stand window is timed, in the instance it stands in: a creature's raw guid repeats across copies of a
+// map, so the key carries the map and the instance (runtime/StandWindowMarks.h).
+static StandWindow::Key StandWindowKeyOf(Unit* unit)
+{
+    return StandWindow::Key{unit->GetMapId(), unit->GetMap()->GetInstanceId(), unit->GetObjectGuid().GetRawValue()};
+}
+
+// When each stand window (BossStandPolicy.h StandStoppedWindowOpen) was first seen, by unit: a triggered cast has no cast
+// slot to read a timer from, so the countdown starts when the module first sees the window; the mark is dropped when the
+// window closes and pruned by every snapshot cycle and by a binding teardown, so a window that disappears without a
+// closing read cannot survive its encounter. World thread only, like the rest of the commander snapshot.
+static StandWindow::Marks s_standWindowMarks;
 
 // Each follower's own "manual follow target" from before the binding pointed
 // it at the lead bot, put back on release.
@@ -1097,6 +1115,7 @@ uint32 ReleaseBinding(uint64 commanderRaw, RemoteCommander::ReleaseReason reason
         CancelCommanderTasks(commanderRaw);
     }
     RemoteCommander::Binding removed = CommanderBindings().Unbind(commanderRaw);
+    s_standWindowMarks.Prune(WorldTimer::getMSTime());
     CommanderViews().erase(commanderRaw);
     EraseRunSlot(commanderRaw);
     if (!removed.commanderGuid)
@@ -3038,12 +3057,61 @@ static bool CommanderMove(ChatHandler* handler, CommanderOrder const& order, std
         float const belowZ = lead->GetMap()->GetHeight(point.x, point.y, point.z, true,
             RemoteCommander::kFloorBelowBand + RemoteCommander::kFloorBelowHeadroom);
         float aboveZ = INVALID_HEIGHT;
+        // A point in water is not lifted out of it onto a surface the lead bot cannot reach (Karazhan Crypt
+        // kc316 step 292; RemoteCommander::WaterSnapAsksPath). Its liquid is read only when the search from
+        // above counts, with the swim line's own test (all liquids, water or ocean by type flags, in or under
+        // the surface: SwimPathPolicy.h). Only in the rare case (that floor would lift a water point out of
+        // the water) is the core asked for the lead bot's path to the raised point and whether the water
+        // point is swimmable: a pier the lead bot has a path onto keeps the old snap.
+        bool pointInWater = false;
+        float waterLevel = 0.0f;
+        bool waterSwimmable = false;
+        bool raisedReachable = true;
+        uint32 raisedPathType = 0;
         if (!RemoteCommander::FloorBelowUsable(point.z, belowZ, belowZ > INVALID_HEIGHT))
+        {
             aboveZ = lead->GetMap()->GetHeight(point.x, point.y,
                 point.z + RemoteCommander::kFloorSnapRange, true,
                 2.0f * RemoteCommander::kFloorSnapRange);
+            if (aboveZ > INVALID_HEIGHT)
+            {
+                GridMapLiquidData liquid{};
+                uint32 const status = static_cast<uint32>(lead->GetMap()->GetTerrain()->getLiquidStatus(point.x,
+                    point.y, point.z, ai::kSwimLiquidRequest, &liquid));
+                pointInWater = ai::SwimSampleInWater(status, status != LIQUID_MAP_NO_WATER ? liquid.type_flags : 0);
+                waterLevel = liquid.level;
+            }
+            if (RemoteCommander::WaterSnapAsksPath(point.z, belowZ, belowZ > INVALID_HEIGHT, aboveZ,
+                    aboveZ > INVALID_HEIGHT, pointInWater, waterLevel))
+            {
+                waterSwimmable = lead->GetMap()->GetTerrain()->IsSwimmable(point.x, point.y, point.z);
+                if (waterSwimmable)
+                {
+                    float const rx = point.x - lead->GetPositionX();
+                    float const ry = point.y - lead->GetPositionY();
+                    float const rz = aboveZ - lead->GetPositionZ();
+                    bool const atLead = RemoteCommander::IsAtLead(std::sqrt(rx * rx + ry * ry + rz * rz));
+                    float raisedEndOffset = 0.0f;
+                    if (!atLead)
+                    {
+                        PathFinder raisedPath(lead);
+                        raisedPath.calculate(point.x, point.y, aboveZ, false);
+                        raisedPathType = static_cast<uint32>(raisedPath.getPathType());
+                        Vector3 const raisedEnd = raisedPath.getActualEndPosition();
+                        float const ex = raisedEnd.x - point.x;
+                        float const ey = raisedEnd.y - point.y;
+                        float const ez = raisedEnd.z - aboveZ;
+                        raisedEndOffset = std::sqrt(ex * ex + ey * ey + ez * ez);
+                    }
+                    raisedReachable = RemoteCommander::RaisedFloorPathUsable(raisedPathType, raisedEndOffset, atLead);
+                }
+            }
+        }
         float const snapped = RemoteCommander::ChooseFloorZ(point.z, belowZ, belowZ > INVALID_HEIGHT,
-            aboveZ, aboveZ > INVALID_HEIGHT);
+            aboveZ, aboveZ > INVALID_HEIGHT, pointInWater, waterLevel, waterSwimmable, raisedReachable);
+        if (snapped == point.z && !raisedReachable && waterSwimmable)
+            handler->PSendSysMessage("Move point kept in the water: %.1f %.1f %.1f (surface %.1f; the floor above it at "
+                "%.1f has no usable path: type 0x%x)", point.x, point.y, point.z, waterLevel, aboveZ, raisedPathType);
         if (snapped != point.z)
         {
             point.z = snapped;
@@ -4587,14 +4655,19 @@ void CompleteCommanderTask(CommanderTask& task)
 // session the same packet a client sends, WorldSession::HandleAreaTriggerOpcode, which
 // runs the core's own entry path (the trigger's phase, level and condition, the raid group,
 // the per-account instance limit in MapManager::CanPlayerEnter, Player::TeleportTo with
-// the instance and group binds, Map::CanEnter). Nothing is skipped or reimplemented
-// there; JudgeEntry below only names the reason of a refusal. The lead bot goes first
+// the instance and group binds, Map::CanEnter). JudgeEntry below only names the reason of
+// a refusal, save for the commander's condition waiver (AiPlayerbot.RaidEntryByCommander):
+// a bot that fails only the trigger's condition at a raid entrance that has no area-trigger
+// script, and whose commander meets it, goes in by the same Player::TeleportTo the core
+// would use, since the core cannot be told the commander's condition for a bot. The lead
+// bot goes first
 // (it creates the group's instance bind); the followers hold at the trigger until it
 // stands in the dungeon.
 // ---------------------------------------------------------------------------
 
 // What the core's entry path asks of this bot at this trigger, for the readable reason of a refusal.
-RemoteCommander::EntryFacts GatherEntryFacts(Player* bot, AreaTriggerTeleport const* tele, MapEntry const* targetMap)
+RemoteCommander::EntryFacts GatherEntryFacts(Player* bot, uint32 triggerId, AreaTriggerTeleport const* tele,
+    MapEntry const* targetMap)
 {
     RemoteCommander::EntryFacts facts;
     facts.gm = bot->IsGameMaster();
@@ -4612,6 +4685,27 @@ RemoteCommander::EntryFacts GatherEntryFacts(Player* bot, AreaTriggerTeleport co
         !sObjectMgr.IsConditionSatisfied(tele->requiredCondition, bot, bot->GetMap(), bot, CONDITION_FROM_AREATRIGGER);
     facts.conditionMessage = tele->message;
     facts.raidMap = targetMap->IsDungeon() && targetMap->IsRaid();
+    bool const unscriptedTrigger = sScriptMgr.GetAreaTriggerScriptId(triggerId) == 0;
+    // AiPlayerbot.RaidEntryByCommander: the commander's own condition stands for the bot's when he commands the
+    // bot's raid (its member, or the binding's commander, whom a raid binding keeps out of the group) and meets
+    // it himself (the amulet Onyxia's lair asks for). A raid's entrance only, and only one with no
+    // area-trigger script: the fallback teleport would skip the script.
+    if (facts.conditionFailed && facts.raidMap && unscriptedTrigger && sPlayerbotAIConfig.raidEntryByCommander)
+    {
+        Group* group = bot->GetGroup();
+        RemoteCommander::Binding const* binding = group ? CommanderBindings().FindByGroup(group->GetId()) : nullptr;
+        Player* commander = binding ? FindCharacter(binding->commanderGuid) : nullptr;
+        bool const commanderIsRealPlayer = commander && !BotManager::Instance().IsBot(commander->GetObjectGuid());
+        // commanderIsRealPlayer implies the binding and the commander: both are found through it.
+        bool const inRaid = commanderIsRealPlayer && group && group->isRaidGroup();
+        bool const commanderOfRaid = inRaid && (group->IsMember(commander->GetObjectGuid()) ||
+            RemoteCommander::BindingCommandsBot(*binding, bot->GetObjectGuid().GetRawValue(), group->GetId()));
+        bool const commanderMeets = commanderOfRaid && commander->GetMap() &&
+            sObjectMgr.IsConditionSatisfied(tele->requiredCondition, commander, commander->GetMap(), commander,
+                CONDITION_FROM_AREATRIGGER);
+        facts.conditionWaived = RemoteCommander::WaiveCondition(sPlayerbotAIConfig.raidEntryByCommander,
+            facts.raidMap, unscriptedTrigger, commanderIsRealPlayer, commanderOfRaid, commanderMeets);
+    }
     facts.ignoreRaid = sWorld.getConfig(CONFIG_BOOL_INSTANCE_IGNORE_RAID);
     Group* group = bot->GetGroup();
     facts.inRaidGroup = group && group->isRaidGroup();
@@ -4640,7 +4734,8 @@ AreaTriggerTeleport const* InstanceEntranceOf(AreaTriggerEntry const* trigger, M
 bool SendEnterTrigger(CommanderTask& task, Player* bot, PlayerbotAI* ai, AreaTriggerTeleport const* tele,
     MapEntry const* targetMap)
 {
-    RemoteCommander::EntryVerdict const verdict = RemoteCommander::JudgeEntry(GatherEntryFacts(bot, tele, targetMap));
+    RemoteCommander::EntryFacts const facts = GatherEntryFacts(bot, task.triggerId, tele, targetMap);
+    RemoteCommander::EntryVerdict const verdict = RemoteCommander::JudgeEntry(facts);
     if (!verdict.ok)
     {
         FinishCommanderTask(task, false, 0, "", verdict.code, verdict.message);
@@ -4653,9 +4748,15 @@ bool SendEnterTrigger(CommanderTask& task, Player* bot, PlayerbotAI* ai, AreaTri
     bot->GetSession()->HandleAreaTriggerOpcode(packet);
     if (bot->IsBeingTeleported())
         return false;
+    // The core judges the bot's own trigger condition and cannot be told the commander meets it; when
+    // that waiver is what let the checks above pass, the bot goes in by the core's own teleport
+    // (MapManager::CanPlayerEnter, the instance count and Map::CanEnter still decide).
+    if (facts.conditionWaived && bot->TeleportTo(tele->destination))
+        return false;
     // The core refused: say why when the reason can be read now (the bot's state may have
     // changed with the attempt), else name the checks that only the core sees.
-    RemoteCommander::EntryVerdict const again = RemoteCommander::JudgeEntry(GatherEntryFacts(bot, tele, targetMap));
+    RemoteCommander::EntryVerdict const again = RemoteCommander::JudgeEntry(
+        GatherEntryFacts(bot, task.triggerId, tele, targetMap));
     if (!again.ok)
         FinishCommanderTask(task, false, 0, "", again.code, again.message);
     else
@@ -5670,7 +5771,8 @@ static bool CommanderEnter(ChatHandler* handler, CommanderOrder const& order,
                 (name + " is farther from the entrance than AiPlayerbot.ReactDistance. Move the group closer first.").c_str());
             return true;
         }
-        RemoteCommander::EntryVerdict const verdict = RemoteCommander::JudgeEntry(GatherEntryFacts(bot, tele, targetMap));
+        RemoteCommander::EntryVerdict const verdict = RemoteCommander::JudgeEntry(
+            GatherEntryFacts(bot, triggerId, tele, targetMap));
         if (!verdict.ok)
         {
             SendActionError(handler, intent, verdict.code, (name + ": " + verdict.message).c_str());
@@ -7563,7 +7665,8 @@ void ReadGuardFacts(Player* lead, std::vector<Player*> const& bots, TortoiseBots
     }
     std::unordered_set<uint64> seen;
     // The mobs that have `victim` (a bot or a pet) as their victim, each once.
-    auto const addAttackers = [&](Unit* victim, bool healer, bool petVictim)
+    // `tankVictim`: the victim is a tank (an off-tank holding the mob).
+    auto const addAttackers = [&](Unit* victim, bool healer, bool petVictim, bool tankVictim)
     {
         for (Unit* attacker : victim->GetAttackers())
         {
@@ -7585,6 +7688,7 @@ void ReadGuardFacts(Player* lead, std::vector<Player*> const& bots, TortoiseBots
                 fact.campIdle = IdleHostilesNear(lead, attacker, TortoiseBots::DungeonRun::kGuardCampYd);
             fact.victimHealer = healer;
             fact.victimPet = petVictim;
+            fact.victimTank = tankVictim;
             fact.attackable = GroupCanAttack(lead, attacker); // never picked up when it cannot be attacked
             if (hold)
                 fact.distSpot = DistanceTo(attacker, hold->x, hold->y, hold->z);
@@ -7598,12 +7702,12 @@ void ReadGuardFacts(Player* lead, std::vector<Player*> const& bots, TortoiseBots
             continue;
         // The lead bot's own mobs are leadHit / leadAttacker, not partyAttackers.
         if (bot != lead)
-            addAttackers(bot, PlayerbotAI::IsHeal(bot), false);
+            addAttackers(bot, PlayerbotAI::IsHeal(bot), false, PlayerbotAI::IsTank(bot));
         // A living pet in the world (a hunter's or warlock's, the lead's too):
         // the mobs on it come last in GuardPick, after every mob on a bot.
         Unit* pet = bot->GetPet();
         if (pet && pet->IsAlive() && pet->IsInWorld())
-            addAttackers(pet, false, true);
+            addAttackers(pet, false, true, false);
     }
 }
 
@@ -8390,6 +8494,11 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
         MemberFact member;
         member.name = bot->GetName();
         member.yd = yd;
+        // The raid trash guard sends a loose mob to a living off-tank near the
+        // lead bot and not busy with a commander task (DungeonRun::RaidTrashFight).
+        if (f.raid.on && isTank && bot != lead && bot->GetMap() == lead->GetMap() && yd <= kGuardYd &&
+            !CommanderTasks().count(bot->GetObjectGuid().GetRawValue()))
+            f.raid.offTanksAlive.push_back(member.name);
         member.core = isTank || isHeal; // the raid's gather (the glue reads roles on raid ticks only)
         member.offPlanMap = bot->GetMapId() != slot.run.plan->map; // outside the instance (DungeonRun::PlanMapFightView)
         // Round 1 (2026-10-24): a return teleport can reach the bot only in the open world: not in a battleground,
@@ -11053,7 +11162,7 @@ static bool RunVerbAs(ChatHandler* handler, Player* commander, std::string const
         // first that holds for anyone (DungeonRunPolicy.h CheckTestSpeed).
         if (!speedArgs.ok)
         {
-            SendActionError(handler, intent, "invalid", "Usage: .bot run start [plan] [from ...] [speed=<1.0-3.0>] (a test run's walking speed)");
+            SendActionError(handler, intent, "invalid", "Usage: .bot run start [plan] [from <leg|step N>] [until boss|step N|leg <name|N>] [speed=<1.0-3.0>] (a test run's walking speed)");
             return true;
         }
         std::string realPlayer;
@@ -11076,11 +11185,26 @@ static bool RunVerbAs(ChatHandler* handler, Player* commander, std::string const
         }
         if (!playerLedStart.playerLed)
             arg = LowerCopy(speedArgs.rest);
+        // The until clause (`.bot run start ... until boss|step N|leg X`): a bot-led run's stop before a step.
+        // `arg` is the player-led start's rest for that mode, already lower-cased.
+        UntilArgs const untilArgs = TakeUntil(arg);
+        arg = untilArgs.rest;
+        if (playerLedStart.playerLed && untilArgs.given)
+        {
+            SendActionError(handler, intent, "invalid", "until is for bot-led runs: a player-led run follows the player.");
+            return true;
+        }
+        if (!untilArgs.ok)
+        {
+            SendActionError(handler, intent, "invalid",
+                "Usage: .bot run start [plan] [from <leg|step N>] [until boss|step N|leg <name|N>] [speed=<1.0-3.0>]");
+            return true;
+        }
         StartArgs const startArgs = ParseStartArgs(arg);
         if (!startArgs.ok)
         {
             SendActionError(handler, intent, "invalid",
-                "Usage: .bot run start [plan] [from <leg name|leg number|step N>] [speed=<1.0-3.0>] (.bot run list)");
+                "Usage: .bot run start [plan] [from <leg name|leg number|step N>] [until boss|step N|leg <name|N>] [speed=<1.0-3.0>] (.bot run list)");
             return true;
         }
         std::string name = startArgs.plan;
@@ -11125,6 +11249,41 @@ static bool RunVerbAs(ChatHandler* handler, Player* commander, std::string const
                     : ("The plan has steps 1 to " + std::to_string(plan->steps.size()) + ".").c_str());
             return true;
         }
+        // The stop the run ends before (ResolveUntilStep), from the step it starts at: the gossip that starts an
+        // event is never sent, so the stop is the step that starts it.
+        std::size_t untilStop = 0;
+        if (untilArgs.given)
+        {
+            UntilResult const until = ResolveUntilStep(*plan, untilArgs.kind, untilArgs.value, startStep,
+                [plan](std::uint32_t entry) { return ai::GetDungeonPlans().IsBossEntry(plan->map, entry); }, untilStop);
+            if (until != UntilResult::Ok)
+            {
+                switch (until)
+                {
+                    case UntilResult::NoBoss:
+                        SendActionError(handler, intent, "no-boss",
+                            ("No boss step from step " + std::to_string(startStep + 1) + " on.").c_str());
+                        break;
+                    case UntilResult::NoSuchLeg:
+                        SendActionError(handler, intent, "no-leg",
+                            "The plan has no such leg (a leg name or number from .bot run status).");
+                        break;
+                    case UntilResult::NoSuchStep:
+                        SendActionError(handler, intent, "no-step",
+                            ("The plan has steps 1 to " + std::to_string(plan->steps.size()) + ".").c_str());
+                        break;
+                    case UntilResult::AtStart:
+                        SendActionError(handler, intent, "until-at-start",
+                            ("The run would stop before its first step: until names step " +
+                                std::to_string(untilStop + 1) + ", the start is step " +
+                                std::to_string(startStep + 1) + ".").c_str());
+                        break;
+                    case UntilResult::Ok:
+                        break;
+                }
+                return true;
+            }
+        }
         // A start partway is only for a party that already stands in the instance: the steps before
         // are neither done nor checked here (the retry after a failed run, or a hand-walked party).
         if (startStep > 0)
@@ -11163,6 +11322,11 @@ static bool RunVerbAs(ChatHandler* handler, Player* commander, std::string const
         slot.run = Start(plan, startStep);
         slot.run.startStep = startStep; // a walk back never goes before it (DungeonRun::ReplayFloor)
         slot.run.testSpeed = speedArgs.rate; // 1.0 unless speed= (DungeonRun::SpeedLabel marks every line)
+        if (untilArgs.given)
+        {
+            slot.run.untilStep = untilStop;
+            slot.run.untilText = untilArgs.text;
+        }
         slot.playerLed.on = playerLedStart.playerLed;
         if (slot.playerLed.on)
             slot.playerLed.tank = lead->GetName();
@@ -11197,6 +11361,15 @@ static bool RunVerbAs(ChatHandler* handler, Player* commander, std::string const
         if (stored.run.testSpeed > 1.0f)
             handler->PSendSysMessage("Test speed %s: the party walks %s times as fast between fights (1.0 in a fight, a pull, a rest); this run is a test, never a clear.",
                 TortoiseBots::DungeonRun::Num(stored.run.testSpeed).c_str(), TortoiseBots::DungeonRun::Num(stored.run.testSpeed).c_str());
+        if (untilArgs.given)
+        {
+            ai::PlanStep const& stopStep = plan->steps[untilStop];
+            std::string const stopLeg = plan->LegName(stopStep.leg);
+            handler->PSendSysMessage("The run stops before step %u of %u (%s, %s): the party stays where it stands.",
+                static_cast<uint32>(untilStop + 1), static_cast<uint32>(plan->steps.size()),
+                ai::PlanStepKindName(stopStep.kind),
+                stopLeg.empty() ? std::to_string(stopStep.leg).c_str() : stopLeg.c_str());
+        }
         if (stored.playerLed.on)
             handler->PSendSysMessage("Run mode: %s.", TortoiseBots::PlayerLed::ModeText(stored.playerLed, true).c_str());
         SendActionAck(handler, intent, "party", static_cast<uint32>(plan->steps.size()), plan->name);
@@ -11329,7 +11502,7 @@ bool HandleDungeonRun(ChatHandler* handler, char const* args)
     if (verb != "start" && verb != "pause" && verb != "resume" && verb != "skip" && verb != "stop" &&
         verb != "status" && verb != "list" && verb != "mode" && verb != "here")
     {
-        SendActionError(handler, intent, "invalid", "Usage: .bot run start [plan] [from <leg|step N>] [speed=<1.0-3.0>] [player [tank <Bot>]] / pause / resume / skip / stop [reason] / status / mode / list / reloadplans (GameMaster)");
+        SendActionError(handler, intent, "invalid", "Usage: .bot run start [plan] [from <leg|step N>] [until boss|step N|leg <name|N>] [speed=<1.0-3.0>] [player [tank <Bot>]] / pause / resume / skip / stop [reason] / status / mode / list / reloadplans (GameMaster)");
         return true;
     }
     return RunVerbAs(handler, Requester(handler), verb, rawArg, intent);
@@ -11421,19 +11594,37 @@ static uint64 CurrentSpellTargetGuid(Unit* unit)
     return 0;
 }
 
+// The cast time a spell's casting time index gives it, without a caster's modifiers: the total a triggered cast is
+// reported with. Core: SpellEntry::CastingTimeIndex (Spells/SpellEntry.h:559), sSpellCastTimesStore
+// (Database/DBCStores.h:86), SpellCastTimesEntry (Database/DBCStructure.h:536-541).
+static uint32 SpellCastTimeMs(SpellEntry const* entry)
+{
+    if (!entry)
+        return 0;
+    SpellCastTimesEntry const* times = sSpellCastTimesStore.LookupEntry(entry->CastingTimeIndex);
+    if (!times)
+        return 0;
+    return static_cast<uint32>(times->CastTime > times->MinCastTime ? times->CastTime : times->MinCastTime);
+}
+
 // The facing and the cast a boss or elite is running, for the dashboard's boss overlay: the unit's orientation, its
 // current spell's id and time left and total, the spell's unit target, whether it channels, and the area the spell
-// covers from the committed shape table (runtime/SpellShape.h; a spell absent from it sends no shape). Read from what
-// the unit already holds, no scan. Core: Objects/Object.h:835 and :1145, Spells/Spell.h:428-429, SpellEntry.h:1110.
+// covers from the committed shape table (runtime/SpellShape.h; a spell absent from it sends no shape). A spell cast
+// triggered never shows as the current spell (Spells/Spell.cpp:3640-3642 and :3667), so a boss stopped at its stand
+// anchor with no target is also read for the row's window spell (BossStandPolicy.h): a Deep Breath then reports a cast
+// the way a cast-slot spell would. Read from what the unit already holds, no scan. Core: Objects/Object.h:835
+// (facing) and :1145 (cast slots), Spells/Spell.h:428-429, SpellEntry.h:1110.
 static void FillMobFacingAndCast(Unit* unit, CommanderTelemetry::MobInfo& mob)
 {
     mob.hasO = true;
     mob.o = unit->GetOrientation();
+    const StandWindow::Key windowKey = StandWindowKeyOf(unit);
     for (CurrentSpellTypes type : { CURRENT_GENERIC_SPELL, CURRENT_CHANNELED_SPELL })
     {
         Spell* spell = unit->GetCurrentSpell(type);
         if (!spell || !spell->m_spellInfo)
             continue;
+        s_standWindowMarks.Forget(windowKey);
         mob.castId = spell->m_spellInfo->Id;
         mob.castLeftMs = spell->GetCastedTime();
         mob.channel = type == CURRENT_CHANNELED_SPELL;
@@ -11446,6 +11637,25 @@ static void FillMobFacingAndCast(Unit* unit, CommanderTelemetry::MobInfo& mob)
             mob.shape = *shape;
         }
         return;
+    }
+    uint32 const windowSpell = ai::ActiveStandWindowSpell(unit);
+    SpellEntry const* entry = windowSpell ? sSpellMgr.GetSpellEntry(windowSpell) : nullptr;
+    if (!entry)
+    {
+        s_standWindowMarks.Forget(windowKey);
+        return;
+    }
+    const uint32 totalMs = SpellCastTimeMs(entry);
+    mob.cast = SpellNameOf(windowSpell);
+    mob.castId = windowSpell;
+    mob.castLeftMs = s_standWindowMarks.CastLeft(windowKey, WorldTimer::getMSTime(), totalMs);
+    mob.castTotalMs = totalMs;
+    mob.channel = false;
+    mob.castTarget = 0;
+    if (CommanderTelemetry::SpellShape::Shape const* shape = CommanderTelemetry::SpellShape::For(mob.castId))
+    {
+        mob.hasShape = true;
+        mob.shape = *shape;
     }
 }
 
@@ -11961,6 +12171,7 @@ void CollectCommanderTelemetry(std::vector<CommanderTelemetry::BindingRef>& out)
 {
     out.clear();
     ForgetReleasedCombatGroups();
+    s_standWindowMarks.Prune(WorldTimer::getMSTime());
     // Nothing to read while no commander is bound: the common case costs a lookup.
     if (CommanderBindings().Empty())
     {
@@ -11969,6 +12180,7 @@ void CollectCommanderTelemetry(std::vector<CommanderTelemetry::BindingRef>& out)
         s_readyCache().clear();
         s_runFedAt().clear();
         s_leadAway().clear();
+        s_standWindowMarks.Clear();
         return;
     }
     std::unordered_set<uint64_t> bound;
@@ -11976,7 +12188,7 @@ void CollectCommanderTelemetry(std::vector<CommanderTelemetry::BindingRef>& out)
     {
         bound.insert(commanderRaw);
         RemoteCommander::Binding const* binding = CommanderBindings().FindByCommander(commanderRaw);
-        if (!binding || out.size() >= CommanderTelemetry::kMaxBindings)
+        if (!binding || out.size() >= CommanderTelemetry::kMaxCommandersReported)
             continue;
         CommanderTelemetry::BindingRef ref;
         Player* commander = FindCharacter(commanderRaw);
@@ -12518,6 +12730,7 @@ static void SampleBoundFights(uint32 diff)
 void CollectDungeonMobs(std::vector<DungeonMobTelemetry::RunRef>& runs)
 {
     using namespace DungeonMobTelemetry;
+    s_standWindowMarks.Prune(WorldTimer::getMSTime());
     // World thread only (the emitter's snapshot cycle, outside the map update): reused between runs and cycles.
     static std::unordered_set<uint64> tried;
     static std::list<ObjectGuid> cached;

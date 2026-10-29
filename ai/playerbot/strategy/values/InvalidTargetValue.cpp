@@ -5,6 +5,7 @@
 #include "EnemyPlayerValue.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/ServerFacade.h"
+#include "playerbot/BossTacticsAirTarget.h"
 
 using namespace ai;
 
@@ -37,7 +38,10 @@ bool InvalidTargetValue::Calculate()
     // path to after 3 s (IsEvadeBecauseTargetNotReachable), a full 21 s before the
     // evade reset. A held order in that window only ever misses, so drop it now and
     // let the reach give-up blacklist the guid instead of holding a ghost.
-    if (creature && creature->IsEvadeBecauseTargetNotReachable())
+    // Exception: an air_target row keeps the boss while it is in the air - a boss
+    // chased in flight has no floor path and may carry this flag, and the reach walks
+    // to the floor under it instead (BossTacticsPolicy.h AirTargetKeep). The evade-mode drop above still applies.
+    if (creature && creature->IsEvadeBecauseTargetNotReachable() && !IsAirTargetKept(ai, bot, creature))
     {
         return true;
     }
@@ -79,8 +83,13 @@ bool InvalidTargetValue::Calculate()
     }
     // An explicit order carries the walk to the target: keep the same wider ceiling
     // here or the order is accepted and then discarded as invalid on the next tick.
+    // An air_target the tactics keep gets the same ceiling: her hover points are
+    // further than the sight distance from the raid's floor, and the reach walks
+    // the floor under her from there (CurrentTargetValue keeps her the same way).
+    const bool airTargetKept = IsAirTargetKept(ai, bot, target);
     const bool validTarget = PossibleAttackTargetsValue::IsValid(target, bot,
-        explicitAttackTarget ? sPlayerbotAIConfig.reactDistance : sPlayerbotAIConfig.sightDistance, false, !explicitAttackTarget);
+        (explicitAttackTarget || airTargetKept) ? sPlayerbotAIConfig.reactDistance : sPlayerbotAIConfig.sightDistance,
+        false, !explicitAttackTarget);
     if (!validTarget)
     {
         std::list<ObjectGuid> attackers = AI_VALUE(std::list<ObjectGuid>, "possible attack targets");
