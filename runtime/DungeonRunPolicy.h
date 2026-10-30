@@ -324,6 +324,16 @@ constexpr std::uint32_t kHpHeldMs = 60000;
 // the patrol was decided whether it came alone or into the Keeper's fight.
 constexpr std::uint32_t kPatrolWaitMs = 60000;    // ... waited for this long at most (a shorter timeout_s of the step caps it)
 constexpr float kPatrolSeeYd = 30.0f;             // the glue reads patrollers of the step's entries this far outside its radius
+// The pack-cleared gate (AiPlayerbot.DungeonRunPackClearMarginYd): a pull step
+// is done only when no unit of its entries is left in the band around its
+// radius, and a unit that spawned inside the radius belongs to the step
+// wherever its patrol has walked (Zul'Gurub walk 2, display 31: a bat pack at
+// the far end of its leader's loop said "pack cleared" in 1 s and the next
+// move walked into it).
+constexpr float kPackResidueZYd = 10.0f;          // the band's height around the step point: a unit on another floor is no residue
+constexpr float kSpawnOwnTolYd = 1.0f;            // a DB spawn this close to the radius still belongs to the step
+constexpr float kSpawnPatrolSeeYd = 60.0f;        // ... and a spawn-owned patroller is listed this far out (any movement type)
+constexpr float kPackClearMarginMaxYd = kPatrolSeeYd; // the margin's ceiling (the key clamps to it)
 // A big pack's firing stand walk (BigPackWalkGate; Uldaman r10-19z29 step 79):
 // the lead walked to the stand of a 9-joiner scorpid pack with the healer and
 // the mage 27-30 yd behind on the ramp, and the pack woke on a dps first.
@@ -536,7 +546,12 @@ struct UnitFact
     // ... and for such a caster farther than kGuardNoWalkYd from the lead bot: how many living hostile creatures out of
     // combat stand within kGuardCampYd of it (a pack not pulled yet). 0: none, or not read.
     std::uint32_t campIdle = 0;
-    float distSpot = -1.0f;    // ... during a hold: its distance from the hold spot (-1: not read)
+    float distSpot = -1.0f;    // ... during a hold: its distance from the hold spot (-1: not read); residue: 2D from the step point
+    // The pack-cleared gate: its DB spawn lies within the step's radius + kSpawnOwnTolYd
+    // (PullRead::Residue, the patroller list), and how far that spawn is from the step point
+    // (-1: not read).
+    bool spawnOwned = false;
+    float spawnYd = -1.0f;
     // Pull step units only, when Facts::joinerCeiling is set: how many other
     // creatures an estimate (ai::EstimateAggro) says come if this one is pulled.
     std::uint32_t joiners = 0;
@@ -786,6 +801,10 @@ struct Facts
     // The party (the commander's bound bots, the lead bot included).
     std::uint32_t total = 0, alive = 0, dead = 0;
     RaidFacts raid;                       // set on a raid binding with AiPlayerbot.DungeonRunRaid (off: every rule below as before)
+    // The near-wipe stop (AiPlayerbot.DungeonRunNearWipeStop): this many near-wipe events within nearWipeStopWindowMs
+    // pause the run once the fight is over (0: off; NearWipeStopCount keeps it to raids unless the party key is on).
+    std::uint32_t nearWipeStopCount = 0;
+    std::uint32_t nearWipeStopWindowMs = 0;
     bool leadAlive = true;
     // The instance's doors (every area trigger into the plan's map), read by the glue from the core's trigger table
     // once per map. A living lead bot on one of them far from every point of the plan revived in another part of the
@@ -923,10 +942,19 @@ struct Facts
     bool goodSpotCut = false;
     std::vector<UnitFact> units;        // pull/boss: living units of the step's entries within its radius
     // pull (not boss): living units of the step's entries that walk a
-    // waypoint patrol (the core's default movement type), outside its radius
-    // and within kPatrolSeeYd beyond it, none a later step owns
-    // (OwnedByLaterStep). distSpot: from the step's point; x, y, z: where it is.
+    // waypoint patrol (the core's default movement type), or that follow a
+    // waypoint leader, or that spawned inside the step's radius (any movement
+    // type, within kSpawnPatrolSeeYd, not dropped for a later step's radius),
+    // outside its radius while the gate is on; none a later step owns
+    // (OwnedByLaterStep), unless spawn-owned. distSpot: from the step's point;
+    // x, y, z: where it is.
     std::vector<UnitFact> patrollers;
+    // The pack-cleared gate (AiPlayerbot.DungeonRunPackClearMarginYd; 0: off, every list below empty).
+    std::vector<UnitFact> packResidue; // living units of a pull step's entries outside its radius, 2D within
+                                       // radius + packClearMarginYd and |dz| <= kPackResidueZYd (ClassifyPullRead)
+    float packClearMarginYd = 0.0f;    // the key, read every tick (a reload switches it mid-run)
+    std::uint32_t packClearRepulls = 0; // AiPlayerbot.DungeonRunPackClearRepulls
+    UnitFact packNearestLeft;           // nearest living unit of the entries the read listed nowhere (guid 0: none)
     std::vector<UnitFact> hopUnits;     // move: living hostile units within kHopPullYd of the point, not owned by a later step
     // boss: a dead unit (corpse) of the boss's entry within the step's radius
     // plus kSeeYd of its point (a pullback drags him toward the party), or
@@ -1285,6 +1313,7 @@ struct Run
     std::uint32_t standPullMs = 0;
     std::uint64_t standPullShotGuid = 0;
     std::uint32_t patrolWaitMs = 0; // a pull step: time spent waiting for a patroller outside the radius (WaitForPatroller)
+    std::uint32_t packRepulls = 0;  // ... and residue pulls this step (PackResidueTick)
     std::unordered_set<std::uint64_t> patrolSeen; // ... the patrollers this step saw (a pass of one is remembered run-wide)
     // A big pack's stand walk (BigPackWalkGate): the walk's unit, stand and
     // joiner count; the hold for the party, its time, and whether its ceiling
@@ -1316,6 +1345,9 @@ struct Run
     // listing the same entry does not wait for it again; cleared like neverCame
     // by every regroup (a resume, a wipe recovery).
     std::unordered_set<std::uint64_t> patrolGaveUp;
+    // Spawn-owned patrollers a pull step gave up on at its wait's cap (the pause says so). A resume keeps them (the
+    // step it paused on no longer waits for them); the next step judges them afresh.
+    std::unordered_set<std::uint64_t> spawnPatrolGaveUp;
     // loot: the bot the order goes to ("": the carrier), the bots a refusal on the
     // loot rules has been tried with, and the refusal's pause text while the
     // next bot is tried.
@@ -1825,6 +1857,16 @@ struct Run
     bool wiped = false;
     std::uint32_t nearWipes = 0; // kWipeDead or more dead with someone alive, counted once each time
     bool nearWiped = false;
+    // The near-wipe stop: one mark per wipe event (a near wipe, a wipe, the revive after either: the event latch
+    // holds until the party is below the wipe level). A resume clears the marks.
+    struct WipeMark
+    {
+        std::uint64_t runMs = 0;
+        std::size_t step = 0;
+    };
+    std::vector<WipeMark> nearWipeMarks;
+    bool wipeEventOn = false;    // the party was at the wipe level on the last running tick
+    bool wipeStopDue = false;    // enough marks in the window: the run pauses once the fight is over
     std::uint32_t leadDeaths = 0;   // the lead bot's deaths (a living to dead edge of Facts::leadAlive), run-wide
     bool leadDown = false;          // ... the lead bot was dead on the last running tick
     bool windowWiped = false;       // a window wipe was counted; re-armed once fewer than kWipeDead are dead
@@ -2238,6 +2280,7 @@ inline void ResetStep(Run& r)
     r.hpWatch.clear();
     ClearFightProgress(r);
     r.patrolWaitMs = 0;
+    r.packRepulls = 0;
     r.patrolSeen.clear();
     EndBigWalk(r);
     r.joinerSeen.clear();
@@ -3665,6 +3708,7 @@ inline void NextStep(Run& r, const std::string& note)
     std::string full = note;
     r.step = StepAfter(r, full);
     r.autoRegroups = 0;
+    r.spawnPatrolGaveUp.clear(); // the step a spawn-owned patroller was given up on is over; a new step judges it afresh
     ResetStep(r);
     r.fightMs = 0; // a fight that goes on into the next step starts its ceiling over (the hold's 400 s were the wait step's)
     r.note = full;
@@ -4409,6 +4453,8 @@ inline bool Resume(Run& r)
     r.doorPaused = false;
     r.fighting = false;
     r.autoRegroups = 0;
+    r.nearWipeMarks.clear(); // the commander's resume starts a fresh near-wipe count
+    r.wipeStopDue = false;
     r.otherPartRescues = 0; // a resume gives the lead bot in another part fresh rescue teleports
     r.offMapReturnTries.clear();
     r.rejoinTries.clear();
@@ -9878,6 +9924,155 @@ inline bool BigPackWalkGate(Run& r, const Facts& f, std::uint32_t dt, std::strin
     return true;
 }
 
+// The pack-cleared gate's read of one living creature of a pull step's entries (the glue calls this inside the
+// existing per-entry grid loop; the tests pin it). `fromPoint`/`fromPoint2d`/`dz`: the creature's current position
+// against the step's point; the spawn fields: its DB row; the movement fields: how it walks.
+enum class PullRead : std::uint8_t { Unit, Residue, Patroller, Left };
+struct PullReadIn
+{
+    float fromPoint = 0.0f;   // 3D, current position to the step centre
+    float fromPoint2d = 0.0f; // 2D, the same
+    float dz = 0.0f;          // current z - centre z
+    bool hasSpawn = false;    // a DB spawn row (CreatureData)
+    float spawnYd = -1.0f;    // 3D, spawn to the step centre
+    bool ownWaypoint = false; // its default movement type is WAYPOINT
+    bool followsWaypointLeader = false; // formation member (not the leader), its living leader on WAYPOINT
+};
+inline bool SpawnOwned(const PullReadIn& in, float radius)
+{
+    return in.hasSpawn && in.spawnYd >= 0.0f && in.spawnYd <= radius + kSpawnOwnTolYd;
+}
+inline PullRead ClassifyPullRead(const PullReadIn& in, float radius, float marginYd)
+{
+    if (in.fromPoint <= radius)
+        return PullRead::Unit;
+    if (marginYd <= 0.0f) // the gate off: today's patroller rule exactly
+        return in.ownWaypoint && in.fromPoint <= radius + kPatrolSeeYd ? PullRead::Patroller : PullRead::Left;
+    if (in.fromPoint2d <= radius + marginYd && std::fabs(in.dz) <= kPackResidueZYd)
+        return PullRead::Residue;
+    if (SpawnOwned(in, radius) && in.fromPoint <= radius + kSpawnPatrolSeeYd)
+        return PullRead::Patroller;
+    if ((in.ownWaypoint || in.followsWaypointLeader) && in.fromPoint <= radius + kPatrolSeeYd)
+        return PullRead::Patroller;
+    return PullRead::Left;
+}
+
+// Whether a residue unit (Facts::packResidue) is still open: hostile, attackable, not passed, not out of reach, and
+// not standing where another step fights it (unless it spawned in this step's radius).
+inline bool PackResidueOpenUnit(const Run& r, const Facts& f, const UnitFact& u)
+{
+    if (!u.hostile || !u.attackable || r.passed.count(u.guid) || r.unreachable.count(u.guid))
+        return false;
+    return u.spawnOwned || !(r.plan && ai::OwnedByOtherStep(*r.plan, r.step, u.entry, u.x, u.y, u.z, f.team));
+}
+
+// The open residue of a pull step; 0 with the gate off or on another kind.
+inline std::size_t PackResidueOpen(const Run& r, const Facts& f, const PlanStep& s)
+{
+    if (f.packClearMarginYd <= 0.0f || s.kind != PlanStepKind::Pull)
+        return 0;
+    std::size_t n = 0;
+    for (const UnitFact& u : f.packResidue)
+        if (PackResidueOpenUnit(r, f, u))
+            ++n;
+    return n;
+}
+
+// The residue units of the step's entries that pulls drew no fight with (Run::passed) or that are out of reach:
+// named in the clear note so a live run shows what the gate left behind.
+inline std::string PassedResidueNote(const Run& r, const Facts& f, const PlanStep& s)
+{
+    if (f.packClearMarginYd <= 0.0f || s.kind != PlanStepKind::Pull)
+        return std::string();
+    std::string list;
+    std::size_t n = 0;
+    for (const UnitFact& u : f.packResidue)
+    {
+        if (!u.hostile || !(r.passed.count(u.guid) || r.unreachable.count(u.guid)))
+            continue;
+        if (!u.spawnOwned && r.plan && ai::OwnedByOtherStep(*r.plan, r.step, u.entry, u.x, u.y, u.z, f.team))
+            continue;
+        ++n;
+        if (!list.empty())
+            list += ", ";
+        list += std::to_string(u.entry) + " " + GuidArg(u.guid);
+    }
+    if (!n)
+        return std::string();
+    return "; " + std::to_string(n) + " left within " + Num(s.radius + f.packClearMarginYd) +
+        " yd that pulls drew no fight (" + list + ")";
+}
+
+// A pull step cleared with no pull at all (the gate's own diagnostic): the nearest living unit of its entries the
+// read listed nowhere. Read before NextStep (its ResetStep zeroes Run::pulls).
+inline std::string NearestLeftNote(const Run& r, const Facts& f)
+{
+    if (f.packClearMarginYd <= 0.0f || r.pulls != 0 || !f.packNearestLeft.guid)
+        return std::string();
+    return "; nearest of its units left: " + std::to_string(f.packNearestLeft.entry) + " " +
+        GuidArg(f.packNearestLeft.guid) + " " + Num(f.packNearestLeft.distSpot) + " yd from the centre";
+}
+
+// The residue band around a pull step (ClassifyPullRead's Residue): the units are pulled nearest first, like the
+// step's own, with the same way back and PullUnit. True: the step waits or pulls; false: nothing is open.
+inline bool PackResidueTick(Run& r, const Facts& f, const PlanStep& s, std::uint32_t dt, std::string& order)
+{
+    if (f.packClearMarginYd <= 0.0f || f.anyInCombat || s.kind != PlanStepKind::Pull)
+        return false;
+    std::size_t const open = PackResidueOpen(r, f, s);
+    if (open == 0)
+        return false;
+    std::string const left = std::to_string(open) + " left within " + Num(s.radius + f.packClearMarginYd) +
+        " yd of the pull centre";
+    if (r.packRepulls >= f.packClearRepulls)
+    {
+        std::vector<const UnitFact*> units;
+        for (const UnitFact& u : f.packResidue)
+            if (PackResidueOpenUnit(r, f, u))
+                units.push_back(&u);
+        std::sort(units.begin(), units.end(), [](const UnitFact* a, const UnitFact* b)
+        {
+            return a->distSpot < b->distSpot;
+        });
+        std::string list;
+        for (const UnitFact* u : units)
+        {
+            if (!list.empty())
+                list += ", ";
+            list += std::to_string(u->entry) + " " + GuidArg(u->guid) + " " + Num(u->distSpot) + " yd";
+        }
+        Pause(r, "pack not cleared after " + std::to_string(f.packClearRepulls) + " re-pulls: " + left + " (" + list +
+            "): clear it, then .bot run resume, or .bot run skip");
+        return true;
+    }
+    const UnitFact* pick = nullptr;
+    for (const UnitFact& u : f.packResidue)
+    {
+        if (!PackResidueOpenUnit(r, f, u) || !Pullable(r, u))
+            continue;
+        if (!pick || u.distLead < pick->distLead)
+            pick = &u;
+    }
+    if (!pick)
+    {
+        r.note = "waiting for the pack to settle (" + left + ")";
+        return true;
+    }
+    if (r.phase != Phase::Gather && !r.gatherWaived && !r.shotStandPrep && CheckAnchor(r, f) == AnchorState::Unknown)
+    {
+        r.note = "checking the way back to " + Num(r.anchorX) + " " + Num(r.anchorY) + " " + Num(r.anchorZ);
+        return true;
+    }
+    auto const before = r.pulls;
+    PullUnit(r, f, *pick, order, 0, false, dt);
+    if (r.pulls == before)
+        return true; // no pull went out (a gather, a death, a sap): not a re-pull
+    ++r.packRepulls;
+    r.note = "pack not cleared: " + left + " (re-pull " + std::to_string(r.packRepulls) + " of " +
+        std::to_string(f.packClearRepulls) + "); " + r.note;
+    return true;
+}
+
 // A pull step whose units are all gone may still have one of its entries
 // walking a patrol outside the radius (Facts::patrollers). Uldaman r10-19z29
 // step 66: the Stone Steward's lane reaches the 10 yd radius only at its north
@@ -9895,8 +10090,11 @@ inline bool BigPackWalkGate(Run& r, const Facts& f, std::uint32_t dt, std::strin
 // not passed, reachable, not given up on, not a later step's.
 inline bool PatrollerToWaitFor(const Run& r, const Facts& f, const UnitFact& u)
 {
-    if (!u.hostile || r.passed.count(u.guid) || r.unreachable.count(u.guid) || r.patrolGaveUp.count(u.guid))
+    if (!u.hostile || r.passed.count(u.guid) || r.unreachable.count(u.guid) || r.patrolGaveUp.count(u.guid) ||
+        r.spawnPatrolGaveUp.count(u.guid))
         return false;
+    if (f.packClearMarginYd > 0.0f && u.spawnOwned)
+        return true; // it spawned in this step's radius: the step's wherever it walked, whatever a later step holds
     return !(r.plan && ai::OwnedByLaterStep(*r.plan, r.step, u.entry, u.x, u.y, u.z, f.team));
 }
 
@@ -9919,13 +10117,25 @@ inline bool WaitForPatroller(Run& r, const Facts& f, const PlanStep& s, std::uin
     std::string const what = std::to_string(p->entry) + " " + GuidArg(p->guid);
     if (r.patrolWaitMs >= capMs)
     {
+        if (f.packClearMarginYd > 0.0f && p->spawnOwned)
+        {
+            // It spawned in this step's radius and the wait is over: not "cleared", a pause that says so (the step
+            // no longer waits for it after a resume).
+            r.spawnPatrolGaveUp.insert(p->guid);
+            Pause(r, "pack not cleared: " + what + " of this pack (spawned " + Num(p->spawnYd) + " yd from the centre) is " +
+                Num(p->distSpot) + " yd out and did not come within " + std::to_string(capMs / 1000) +
+                " s: pull it, then .bot run resume (the step no longer waits for it), or .bot run skip");
+            return true;
+        }
         r.patrolGaveUp.insert(p->guid);
         timedOut = "; the patroller " + what + " did not come within " + std::to_string(capMs / 1000) + " s";
         return false;
     }
     r.patrolWaitMs += dt;
-    r.note = "waiting for the patroller " + what + " (outside the " + Num(s.radius) + " yd radius; up to " +
-        std::to_string(capMs / 1000) + " s)";
+    r.note = "waiting for the patroller " + what + (f.packClearMarginYd > 0.0f && p->spawnOwned
+        ? " (outside the " + Num(s.radius) + " yd radius, spawned " + Num(p->spawnYd) + " yd from the centre; up to " +
+            std::to_string(capMs / 1000) + " s)"
+        : " (outside the " + Num(s.radius) + " yd radius; up to " + std::to_string(capMs / 1000) + " s)");
     return true;
 }
 
@@ -9983,6 +10193,8 @@ inline FightEnd FightStepEnd(const Run& r, const Facts& f, const PlanStep& s)
             return FightEnd::Friendly;
     if (s.kind != PlanStepKind::Boss)
     {
+        if (PackResidueOpen(r, f, s) > 0)
+            return FightEnd::NotYet;
         for (const UnitFact& u : f.patrollers)
             if (PatrollerToWaitFor(r, f, u))
                 return FightEnd::NotYet;
@@ -10247,12 +10459,17 @@ inline void FightStep(Run& r, const Facts& f, const PlanStep& s, const std::vect
         NextStep(r, what + " is friendly to this party: left alone");
     else if (s.kind != PlanStepKind::Boss)
     {
-        // Cleared, or a patroller to wait for (NotYet): WaitForPatroller decides.
+        // Cleared, or a patroller to wait for (NotYet): WaitForPatroller decides. Residue is pulled first.
+        if (PackResidueTick(r, f, s, dt, order))
+            return;
         std::string timedOut;
         if (WaitForPatroller(r, f, s, dt, timedOut))
             return;
         bool const fought = r.pulls > 0;
-        NextStep(r, "pack cleared" + timedOut);
+        // Read before NextStep: its ResetStep clears the step's passes and zeroes its pulls.
+        std::string const passedNote = PassedResidueNote(r, f, s);
+        std::string const nearestNote = NearestLeftNote(r, f);
+        NextStep(r, "pack cleared" + timedOut + passedNote + nearestNote);
         r.fightForwardDue = fought; // FightForwardTick
     }
     else if (end == FightEnd::BossDown)
@@ -14265,6 +14482,49 @@ inline bool WindowWipe(const Run& r, const Facts& f)
     return true;
 }
 
+// The near-wipe stop's gating: a raid binding gets it (AiPlayerbot.DungeonRunNearWipeStop), a party only with the
+// party key (self-regroup is the designed party recovery and the per-step cap already pauses a failing step).
+inline std::uint32_t NearWipeStopCount(bool raidOn, bool partyOn, std::uint32_t key)
+{
+    return raidOn || partyOn ? key : 0;
+}
+
+// Prunes the marks older than the window and says whether the run has had enough of them.
+inline bool NearWipeStopDue(Run& r, const Facts& f)
+{
+    if (f.nearWipeStopCount == 0 || f.nearWipeStopWindowMs == 0)
+        return false;
+    r.nearWipeMarks.erase(std::remove_if(r.nearWipeMarks.begin(), r.nearWipeMarks.end(),
+        [&](const Run::WipeMark& m) { return r.runMs - m.runMs > f.nearWipeStopWindowMs; }),
+        r.nearWipeMarks.end());
+    return r.nearWipeMarks.size() >= f.nearWipeStopCount;
+}
+
+// "21 and 32", "21, 32 and 35": the marked steps, 1-based in mark order.
+inline std::string WipeStepsList(const std::vector<Run::WipeMark>& marks)
+{
+    std::string out;
+    for (std::size_t i = 0; i < marks.size(); ++i)
+    {
+        if (i > 0)
+            out += i + 1 == marks.size() ? " and " : ", ";
+        out += std::to_string(marks[i].step + 1);
+    }
+    return out;
+}
+
+// The stop's pause line: the dead, the marks in the window, their steps, the span, and the run's counts.
+inline std::string NearWipeStopNote(const Run& r, const Facts& f, std::uint32_t partyDead)
+{
+    std::uint64_t const gapMs = r.nearWipeMarks.empty() ? 0 : r.nearWipeMarks.back().runMs - r.nearWipeMarks.front().runMs;
+    std::string const counts = WipeCounts(r);
+    return std::to_string(partyDead) + " dead: " + std::to_string(r.nearWipeMarks.size()) + " near wipe" +
+        (r.nearWipeMarks.size() == 1 ? "" : "s") + " within " + std::to_string(f.nearWipeStopWindowMs / 60000) +
+        " min (steps " + WipeStepsList(r.nearWipeMarks) + ", " + std::to_string(gapMs / 60000) + " min " +
+        std::to_string((gapMs % 60000) / 1000) + " s apart" + (counts.empty() ? "" : "; " + counts + " this run") +
+        "): the run stops here. Regroup (cmd revive party), then .bot run resume, or .bot run stop";
+}
+
 // The run's wipe, near-wipe and lead-death counts for the report, once per running tick (TickBody).
 inline void NoteWipes(Run& r, const Facts& f)
 {
@@ -14300,6 +14560,16 @@ inline void NoteWipes(Run& r, const Facts& f)
         r.nearWiped = true;
     else if (!WipeLevel(f, partyDead))
         r.nearWiped = false;
+    // The near-wipe stop's events: a near wipe, a wipe, and the revive after either are one mark (the latch holds
+    // until the party is below the wipe level again). runMs counts running time only, so a pause does not age them.
+    bool const eventNow = partyWiped || windowWipe || WipeLevel(f, partyDead);
+    if (eventNow && !r.wipeEventOn)
+    {
+        r.nearWipeMarks.push_back({r.runMs, r.step});
+        if (NearWipeStopDue(r, f))
+            r.wipeStopDue = true;
+    }
+    r.wipeEventOn = eventNow;
 }
 
 inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const RestLines& lines)
@@ -14386,6 +14656,16 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
     // A wipe also ends the run's own fight below (the bots' all-dead: a dead player cannot be revived by the run).
     bool const allDead = f.total > 0 && f.alive == 0;
     std::uint32_t const partyDead = PartyDead(f);
+    // The near-wipe stop: enough wipe events in the window pause the run once the fight is over, before any regroup
+    // (a regroup would only walk the party back into the same cost).
+    if (r.wipeStopDue && (!f.anyInCombat || OnlyGmFightOverDeadBots(f) || (f.staleCombat && r.staleMs > kStaleCombatGraceMs)))
+    {
+        r.wipeStopDue = false;
+        r.fighting = false;
+        RearmRescueAfterDeath(r);
+        Pause(r, NearWipeStopNote(r, f, partyDead));
+        return order;
+    }
 
     // A party member coming back with attackers runs on to the party; the run
     // waits for it where it stands (RunBack): no regroup or step order, but
@@ -14645,8 +14925,8 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
     // The party's dead, the players counted: three of them (or every bot) are a wipe the run regroups after. The
     // regroup waits for a dead player too (RegroupPlayerWait), so it is not started over while he is down.
     bool const wipe = WipeLevel(f, partyDead) || allDead;
-    bool const autoRegroup = wipe && r.autoRegroups < kAutoRegroupsPerStep;
-    if (wipe && !autoRegroup)
+    bool const autoRegroup = wipe && r.autoRegroups < kAutoRegroupsPerStep && !r.wipeStopDue;
+    if (wipe && !autoRegroup && !r.wipeStopDue)
     {
         RearmRescueAfterDeath(r); // a death: the resume's walk back may teleport once more
         Pause(r, std::to_string(partyDead) + " dead: regroup (cmd revive party), then .bot run resume (" +
@@ -14763,6 +15043,16 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
             r.hpWatch.clear();
         else if (HpHeldTick(r, f, dt))
             return order;
+        if (r.fightMs > cap && r.wipeStopDue)
+        {
+            // The stop is due and the fight goes on past its ceiling: pause with the stop's line rather than the old
+            // mid-fight regroup pause (the resume regroups).
+            r.wipeStopDue = false;
+            r.fighting = false;
+            RearmRescueAfterDeath(r);
+            Pause(r, NearWipeStopNote(r, f, partyDead) + "; the fight went past " + std::to_string(cap / 1000) + " s");
+            return order;
+        }
         if (r.fightMs > cap && autoRegroup)
         {
             // kWipeDead or more dead and one left fighting past the ceiling:
@@ -14807,8 +15097,13 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
         if (RetreatTick(r, f, *s, dt, order))
             return order;
         r.note = autoRegroup ? std::to_string(f.dead) + " dead: fighting on, a regroup follows"
-               : !f.leadAlive ? std::string("the lead bot is dead: the others fight on") : std::string("fighting");
-        if (runBackWait && !autoRegroup)
+               : r.wipeStopDue
+                     ? std::to_string(f.dead) + " dead: fighting on, the run stops after the fight (" +
+                           std::to_string(r.nearWipeMarks.size()) + " near wipes within " +
+                           std::to_string(f.nearWipeStopWindowMs / 60000) + " min)"
+                     : !f.leadAlive ? std::string("the lead bot is dead: the others fight on")
+                                    : std::string("fighting");
+        if (runBackWait && !autoRegroup && !r.wipeStopDue)
             r.note = runBackNote;
         if (pastCeiling)
             r.note += "; past the " + std::to_string(cap / 1000) + " s ceiling: " +
