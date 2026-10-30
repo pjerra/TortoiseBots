@@ -439,6 +439,16 @@ def derived_needs(flags):
     return needs
 
 
+def spells_with_ok(rows, need, reason):
+    """Spell ids whose row marks one need `ok.<need>=<reason>`."""
+    return {
+        int(row["key"])
+        for row in rows
+        if row["row"] == "ability"
+        and parse_flags(row["d"])["okNeeds"].get(need) == reason
+    }
+
+
 def _check_ok(flags, text):
     """The `ok=`/`ok.<need>=` rules that need only this row's flags."""
     ok = flags["ok"]
@@ -934,6 +944,54 @@ def not_persistent_area(connect, spell_ids):
     return sorted(sid for sid in spell_ids if 27 not in rows.get(sid, ()))
 
 
+def spell_facts(connect, spell_ids):
+    """preventionType, interruptFlags, castingTimeIndex and dispel per spell id."""
+    if not spell_ids:
+        return {}
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT entry, preventionType, interruptFlags, castingTimeIndex, dispel "
+            "FROM spell_template WHERE entry IN (%s)"
+            % ",".join(["%s"] * len(spell_ids)),
+            tuple(sorted(spell_ids)),
+        )
+        rows = cur.fetchall()
+    finally:
+        conn.close()
+    return {
+        row[0]: {
+            "preventionType": row[1],
+            "interruptFlags": row[2],
+            "castingTimeIndex": row[3],
+            "dispel": row[4],
+        }
+        for row in rows
+    }
+
+
+def cone_spells_without_cone_target(connect, spell_ids):
+    """Spell ids flagged `cone` whose effects contain no TARGET_UNIT_CONE_ENEMY (24)."""
+    if not spell_ids:
+        return []
+    conn = connect()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT entry, effectImplicitTargetA1, effectImplicitTargetB1, "
+            "effectImplicitTargetA2, effectImplicitTargetB2, "
+            "effectImplicitTargetA3, effectImplicitTargetB3 "
+            "FROM spell_template WHERE entry IN (%s)"
+            % ",".join(["%s"] * len(spell_ids)),
+            tuple(sorted(spell_ids)),
+        )
+        rows = {row[0]: row[1:] for row in cur.fetchall()}
+    finally:
+        conn.close()
+    return sorted(sid for sid in spell_ids if 24 not in rows.get(sid, ()))
+
+
 def refresh_names(connect, rows, names):
     """Fill missing names (and spell cast ms) from the world DB."""
     spell_ids = {int(r["key"]) for r in rows if r["row"] == "ability"}
@@ -1071,10 +1129,18 @@ def validate(args):
         ground_ids = {
             int(r["key"]) for r in rows if r["row"] == "ability" and "ground" in r["d"].split(";")
         }
+        cone_ids = {
+            int(r["key"]) for r in rows if r["row"] == "ability" and "cone" in r["d"].split(";")
+        }
+        nokick_ids = spells_with_ok(rows, "interrupt", "nokick")
+        nodispel_ids = spells_with_ok(rows, "dispel", "nodispel")
+        nopurge_ids = spells_with_ok(rows, "purge", "nopurge")
         try:
             connect = lambda: db_connect(args)
             missing_spells, missing_creatures = missing_rows(connect, spell_ids, creature_ids)
             bad_ground = not_persistent_area(connect, ground_ids)
+            bad_cone = cone_spells_without_cone_target(connect, cone_ids)
+            facts = spell_facts(connect, nokick_ids | nodispel_ids | nopurge_ids)
         except Exception as exc:  # connection/driver errors are check failures
             errors.append(f"db check failed: {exc}")
         else:
@@ -1084,6 +1150,25 @@ def validate(args):
                 errors.append(f"creature {entry} is not in creature_template")
             for sid in bad_ground:
                 errors.append(f"spell {sid} is flagged ground but has no persistent-area effect (27)")
+            for sid in bad_cone:
+                errors.append(f"spell {sid} is flagged cone but has no cone target (24)")
+            for sid in sorted(nokick_ids):
+                info = facts.get(sid)
+                if (
+                    info
+                    and info["preventionType"] == 1
+                    and info["interruptFlags"] & 0x02
+                    and info["castingTimeIndex"] > 1
+                ):
+                    errors.append(f"spell {sid} is kickable, so ok.interrupt=nokick is wrong")
+            for sid in sorted(nodispel_ids):
+                info = facts.get(sid)
+                if info and info["dispel"]:
+                    errors.append(f"spell {sid} can be dispelled, so ok.dispel=nodispel is wrong")
+            for sid in sorted(nopurge_ids):
+                info = facts.get(sid)
+                if info and info["dispel"]:
+                    errors.append(f"spell {sid} can be purged, so ok.purge=nopurge is wrong")
     else:
         notes.append("db check skipped")
 

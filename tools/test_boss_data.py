@@ -187,16 +187,22 @@ class Fixture:
 
 
 class FakeCursor:
-    def __init__(self, spells, creatures, effects):
+    def __init__(self, spells, creatures, effects, facts, targets):
         self.spells = spells
         self.creatures = creatures
         self.effects = effects
+        self.facts = facts
+        self.targets = targets
 
     def execute(self, sql, params=()):
         self.sql = sql
         self.params = params
 
     def fetchall(self):
+        if "effectImplicitTargetA1" in self.sql:
+            return [(sid, *self.targets[sid]) for sid in self.params if sid in self.targets]
+        if "preventionType" in self.sql:
+            return [(sid, *self.facts[sid]) for sid in self.params if sid in self.facts]
         if "effect1" in self.sql:
             return [(sid, *self.effects[sid]) for sid in self.params if sid in self.effects]
         if "spell_template" in self.sql:
@@ -205,8 +211,10 @@ class FakeCursor:
 
 
 class FakeConn:
-    def __init__(self, spells, creatures, effects=None):
-        self.cursor_obj = FakeCursor(set(spells), set(creatures), effects or {})
+    def __init__(self, spells, creatures, effects=None, facts=None, targets=None):
+        self.cursor_obj = FakeCursor(
+            set(spells), set(creatures), effects or {}, facts or {}, targets or {}
+        )
 
     def cursor(self):
         return self.cursor_obj
@@ -497,6 +505,72 @@ class BossDataTest(unittest.TestCase):
         finally:
             boss_data.db_connect = original
         self.assertFalse(any("persistent-area" in e for e in errors), errors)
+
+    def test_db_nokick_on_kickable_spell_fails(self):
+        rows = [ability(d="t=victim;int;ok.interrupt=nokick"), add(),
+                phase("p1", "start", 1, source="boss.cpp:3")]
+        fx = self.make(rows)
+        fx.rebuild()
+        original = boss_data.db_connect
+        boss_data.db_connect = lambda args: FakeConn(
+            spells={24328}, creatures={14884}, facts={24328: (1, 0x02, 14, 0)}
+        )
+        try:
+            errors, _ = fx.validate(db=True)
+        finally:
+            boss_data.db_connect = original
+        self.assertTrue(any("spell 24328 is kickable" in e for e in errors), errors)
+
+        # preventionType 0 is the core's own "the kick cannot stop it".
+        boss_data.db_connect = lambda args: FakeConn(
+            spells={24328}, creatures={14884}, facts={24328: (0, 0x02, 14, 0)}
+        )
+        try:
+            errors, _ = fx.validate(db=True)
+        finally:
+            boss_data.db_connect = original
+        self.assertFalse(any("is kickable" in e for e in errors), errors)
+
+    def test_db_nodispel_on_dispellable_spell_fails(self):
+        rows = [ability(d="t=random;aura;ok.dispel=nodispel"), add(),
+                phase("p1", "start", 1, source="boss.cpp:3")]
+        fx = self.make(rows)
+        fx.rebuild()
+        original = boss_data.db_connect
+        boss_data.db_connect = lambda args: FakeConn(
+            spells={24328}, creatures={14884}, facts={24328: (0, 0, 0, 8)}
+        )
+        try:
+            errors, _ = fx.validate(db=True)
+        finally:
+            boss_data.db_connect = original
+        self.assertTrue(any("spell 24328 can be dispelled" in e for e in errors), errors)
+
+    def test_db_cone_without_target_24_fails(self):
+        rows = [ability(d="t=aoe;cone"), add(),
+                phase("p1", "start", 1, source="boss.cpp:3")]
+        fx = self.make(rows)
+        fx.rebuild()
+        original = boss_data.db_connect
+        boss_data.db_connect = lambda args: FakeConn(
+            spells={24328}, creatures={14884}, targets={24328: (1, 0, 0, 0, 0, 0)}
+        )
+        try:
+            errors, _ = fx.validate(db=True)
+        finally:
+            boss_data.db_connect = original
+        self.assertTrue(
+            any("flagged cone but has no cone target (24)" in e for e in errors), errors
+        )
+
+        boss_data.db_connect = lambda args: FakeConn(
+            spells={24328}, creatures={14884}, targets={24328: (24, 0, 0, 0, 0, 0)}
+        )
+        try:
+            errors, _ = fx.validate(db=True)
+        finally:
+            boss_data.db_connect = original
+        self.assertFalse(any("cone target" in e for e in errors), errors)
 
     def test_committed_data_builds_to_committed_json(self):
         rows = boss_data.read_rows(boss_data.DEFAULT_CSV)
