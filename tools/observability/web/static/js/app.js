@@ -998,7 +998,7 @@
     if (tab === 'commanders') fetchCommanders();
     if (tab === 'dungeons') fetchDungeons();
     if (tab === 'dungeon-runs') fetchDgRuns();
-    if (tab === 'coverage') covLoad();
+    if (tab === 'coverage' || tab === 'commanders') { if (typeof covLoad === 'function') covLoad(); }
     if (tab === 'agentmaps') fetchAgentMaps();
     cmdLiveSync(); // the stream serves the Commanders tab: it closes when it is left and reopens when it is shown
   }
@@ -9995,7 +9995,6 @@
   // The boss table is one static file (a missing one leaves every panel and map mark away, never an error).
   if (typeof BossPanel !== 'undefined' && BossPanel.load) BossPanel.load().then(() => {
     covCompute();
-    covLoad();
     if (state.activeTab === 'commanders') renderCommanders();
     else if (state.activeTab === 'coverage') renderCoverage();
   });
