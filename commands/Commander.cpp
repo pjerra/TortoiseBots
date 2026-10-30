@@ -9325,20 +9325,30 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                 }
             }
             // A stand-pull pull row's pack: the formations of its entries' DB spawns in the radius, found by guid on the
-            // map alive or dead, wherever their loop is (DungeonRun::ScopeStandPullFacts; the spawn lists are cached).
+            // map alive or dead, wherever their loop is; then a formation of the pack is alive when any creature of the
+            // entries spawned anywhere, found by guid, alive and of that formation is (DungeonRun::ScopeStandPullFacts,
+            // StandPullAwayWait; the spawn lists are cached). A row's creature may spawn as another entry: checked.
             if (standPull)
                 if (Map* const map = lead->GetMap())
+                {
+                    std::vector<std::pair<uint64, bool>> spawned; // formation, alive: every spawn of the entries on the map
                     for (uint32 entry : step->entries)
                         for (uint32 low : BossSpawnLowGuids(lead->GetMapId(), entry))
                             if (CreatureData const* data = sObjectMgr.GetCreatureData(low))
-                                if (ai::PlanDistance(data->position.x, data->position.y, data->position.z, step->x,
-                                        step->y, step->z) <= step->radius + kSpawnOwnTolYd)
-                                    if (Creature* owned = map->GetCreature(data->GetObjectGuid(low)))
-                                    {
-                                        f.standPullOwnRead.push_back(RunFormationOf(owned));
-                                        if (owned->IsAlive())
-                                            f.standPullOwnAlive.push_back(RunFormationOf(owned));
-                                    }
+                                if (Creature* member = map->GetCreature(data->GetObjectGuid(low)))
+                                {
+                                    if (member->GetEntry() != entry)
+                                        continue;
+                                    spawned.emplace_back(RunFormationOf(member), member->IsAlive());
+                                    if (ai::PlanDistance(data->position.x, data->position.y, data->position.z, step->x,
+                                            step->y, step->z) <= step->radius + kSpawnOwnTolYd)
+                                        f.standPullOwnRead.push_back(spawned.back().first);
+                                }
+                    for (auto const& [formation, alive] : spawned)
+                        if (alive && std::find(f.standPullOwnRead.begin(), f.standPullOwnRead.end(), formation) !=
+                                f.standPullOwnRead.end())
+                            f.standPullOwnAlive.push_back(formation);
+                }
             if (step->kind == ai::PlanStepKind::Pull)
                 ReadPullJoiners(lead, bots, *step, toPoint, f.joinerCeiling, slot.run.joinerHeld, f);
             break;
