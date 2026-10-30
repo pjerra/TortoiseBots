@@ -315,14 +315,14 @@
                 "b": 0,
                 "c": 0,
                 "phase": "",
-                "target": "",
+                "target": "aoe",
                 "aura": false,
                 "self": false,
                 "mark": false,
                 "ground": false,
                 "cone": false,
                 "tail": false,
-                "int": true,
+                "int": false,
                 "summon": 0,
                 "hp": 0,
                 "ok": "",
@@ -1635,7 +1635,23 @@
             "notes": []
           }
         },
-        "codeAnswers": []
+        "codeAnswers": [
+          {
+            "map": "*",
+            "boss": 0,
+            "key": "flag=aura",
+            "spell": 0,
+            "add": 0,
+            "flag": "aura",
+            "need": "dispel",
+            "level": "partly",
+            "name": "dispel magic on party",
+            "text": "test answer",
+            "source": [
+              "code/test.cpp"
+            ]
+          }
+        ]
       },
       "rows": {
         "tactics": [],
