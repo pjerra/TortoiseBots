@@ -1,0 +1,378 @@
+package bosstactics
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+
+	"github.com/go-sql-driver/mysql"
+)
+
+// fakeSource answers the three reads from memory and counts one call per
+// snapshot read (the first method every read calls).
+type fakeSource struct {
+	mu      sync.Mutex
+	tactics []Tactic
+	stands  []Stand
+	plans   []PlanKill
+	tErr    error
+	sErr    error
+	pErr    error
+	calls   int
+}
+
+func (f *fakeSource) Tactics(context.Context) ([]Tactic, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls++
+	if f.tErr != nil {
+		return nil, f.tErr
+	}
+	return f.tactics, nil
+}
+
+func (f *fakeSource) Stands(context.Context) ([]Stand, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.sErr != nil {
+		return nil, f.sErr
+	}
+	return f.stands, nil
+}
+
+func (f *fakeSource) PlanKillFirst(context.Context) ([]PlanKill, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.pErr != nil {
+		return nil, f.pErr
+	}
+	return f.plans, nil
+}
+
+func (f *fakeSource) callCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.calls
+}
+
+func (f *fakeSource) setErrs(tErr, sErr, pErr error) {
+	f.mu.Lock()
+	f.tErr, f.sErr, f.pErr = tErr, sErr, pErr
+	f.mu.Unlock()
+}
+
+func newFake() *fakeSource {
+	return &fakeSource{
+		tactics: []Tactic{
+			{Map: 309, Boss: 90001, Kind: "interrupt", Target: 0, Spell: 91001, Comment: "interrupt row"},
+			{Map: 249, Boss: 90002, Kind: "behind", Target: 0, Spell: 91002, Param: 10},
+		},
+		stands: []Stand{
+			{Map: 249, Boss: 90002, WindowSpell: 91003, Aura: 0, Role: "ranged", Signal: "cast", Seats: 7},
+		},
+		plans: []PlanKill{
+			{Plan: "some_plan", Map: 43, Entries: []uint32{3671, 61966}},
+		},
+	}
+}
+
+func TestServiceCache(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	src := newFake()
+	srv := NewService(src)
+	srv.SetClock(func() time.Time { return now })
+
+	first, err := srv.Get(context.Background())
+	if err != nil {
+		t.Fatalf("first get: %v", err)
+	}
+	if src.callCount() != 1 {
+		t.Fatalf("first get read the source %d times, want 1", src.callCount())
+	}
+
+	now = now.Add(CacheTTL - time.Second)
+	second, err := srv.Get(context.Background())
+	if err != nil {
+		t.Fatalf("cached get: %v", err)
+	}
+	if src.callCount() != 1 {
+		t.Fatalf("get inside the TTL read the source again (%d calls): the snapshot is not cached", src.callCount())
+	}
+	if second.LoadedAt != first.LoadedAt {
+		t.Fatalf("cached snapshot loadedAt = %q, want %q", second.LoadedAt, first.LoadedAt)
+	}
+
+	now = now.Add(2 * time.Second)
+	if _, err := srv.Get(context.Background()); err != nil {
+		t.Fatalf("get after the TTL: %v", err)
+	}
+	if src.callCount() != 2 {
+		t.Fatalf("get after the TTL read the source %d times, want 2 (the snapshot expired)", src.callCount())
+	}
+}
+
+func TestServiceErrorTTL(t *testing.T) {
+	now := time.Unix(1700000000, 0)
+	src := newFake()
+	src.setErrs(errors.New("world database is down"), nil, nil)
+	srv := NewService(src)
+	srv.SetClock(func() time.Time { return now })
+
+	if _, err := srv.Get(context.Background()); err == nil {
+		t.Fatal("first get: want the source's error")
+	}
+	if src.callCount() != 1 {
+		t.Fatalf("first get read the source %d times, want 1", src.callCount())
+	}
+
+	now = now.Add(ErrorTTL - time.Second)
+	if _, err := srv.Get(context.Background()); err == nil {
+		t.Fatal("get inside the error TTL: want the cached error")
+	}
+	if src.callCount() != 1 {
+		t.Fatalf("get inside the error TTL retried the source (%d calls): the error is not cached", src.callCount())
+	}
+
+	now = now.Add(2 * time.Second)
+	src.setErrs(nil, nil, nil)
+	snap, err := srv.Get(context.Background())
+	if err != nil {
+		t.Fatalf("get after the error TTL: %v", err)
+	}
+	if src.callCount() != 2 {
+		t.Fatalf("get after the error TTL read the source %d times, want 2 (the error expired)", src.callCount())
+	}
+	if len(snap.Tactics) != 2 {
+		t.Fatalf("tactics after the retry = %d rows, want 2", len(snap.Tactics))
+	}
+}
+
+// gatedSource blocks inside Tactics until gate closes, so a test can inspect
+// the service while the read is in flight.
+type gatedSource struct {
+	gate    chan struct{}
+	reached chan struct{}
+	once    sync.Once
+}
+
+func (g *gatedSource) Tactics(context.Context) ([]Tactic, error) {
+	g.once.Do(func() { close(g.reached) })
+	<-g.gate
+	return []Tactic{{Map: 1, Boss: 2, Kind: "interrupt", Spell: 3}}, nil
+}
+
+func (g *gatedSource) Stands(context.Context) ([]Stand, error)           { return nil, nil }
+func (g *gatedSource) PlanKillFirst(context.Context) ([]PlanKill, error) { return nil, nil }
+
+// TestServiceReadsOutsideTheLock: a slow world-database read must not hold the
+// service's lock, or the whole page waits behind it.
+func TestServiceReadsOutsideTheLock(t *testing.T) {
+	src := &gatedSource{gate: make(chan struct{}), reached: make(chan struct{})}
+	srv := NewService(src)
+	slow := make(chan error, 1)
+	go func() {
+		_, err := srv.Get(context.Background())
+		slow <- err
+	}()
+	<-src.reached
+
+	locked := make(chan struct{})
+	go func() {
+		srv.mu.Lock()
+		close(locked)
+		srv.mu.Unlock()
+	}()
+	select {
+	case <-locked:
+	case <-time.After(2 * time.Second):
+		t.Fatal("the service lock was held across the world-database read")
+	}
+	close(src.gate)
+	if err := <-slow; err != nil {
+		t.Fatalf("gated get: %v", err)
+	}
+}
+
+// TestMissingTableIsEmpty: a world database without ai_boss_stand answers
+// MySQL 1146. That table reads as empty; the other two are still served.
+func TestMissingTableIsEmpty(t *testing.T) {
+	src := newFake()
+	src.setErrs(nil, &mysql.MySQLError{Number: mysqlNoSuchTable, Message: "Table 'world.ai_boss_stand' doesn't exist"}, nil)
+	snap, err := NewService(src).Get(context.Background())
+	if err != nil {
+		t.Fatalf("get: %v (a missing table is not a failure)", err)
+	}
+	if len(snap.Tactics) != 2 {
+		t.Fatalf("tactics = %d rows, want 2", len(snap.Tactics))
+	}
+	if snap.Stands == nil || len(snap.Stands) != 0 {
+		t.Fatalf("stands = %#v, want an empty list", snap.Stands)
+	}
+	body, err := json.Marshal(snap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(body), `"stands":[]`) {
+		t.Fatalf("stands encode as %s, want []", body)
+	}
+}
+
+func TestOtherErrorFails(t *testing.T) {
+	src := newFake()
+	src.setErrs(nil, errors.New("connection reset"), nil)
+	if _, err := NewService(src).Get(context.Background()); err == nil {
+		t.Fatal("get: want the source's error, a broken database must not read as empty rows")
+	}
+}
+
+func TestPlanKillFirstParse(t *testing.T) {
+	if got, ok := ParseKillFirst("3671, 61966"); !ok || !reflect.DeepEqual(got, []uint32{3671, 61966}) {
+		t.Fatalf("ParseKillFirst(%q) = %v, %v; want [3671 61966], true", "3671, 61966", got, ok)
+	}
+	if got, ok := ParseKillFirst(""); !ok || len(got) != 0 {
+		t.Fatalf("ParseKillFirst(%q) = %v, %v; want an empty list, true (the caller drops it)", "", got, ok)
+	}
+	if _, ok := ParseKillFirst("12x"); ok {
+		t.Fatalf("ParseKillFirst(%q) accepted a token that is no creature entry", "12x")
+	}
+
+	rows := []planKillRow{
+		{Plan: "kept", Map: 43, KillFirst: "3671, 61966"},
+		{Plan: "empty", Map: 43, KillFirst: ""},
+		{Plan: "bad", Map: 43, KillFirst: "12x"},
+	}
+	got := buildPlanKills(rows)
+	if len(got) != 1 || got[0].Plan != "kept" || !reflect.DeepEqual(got[0].Entries, []uint32{3671, 61966}) {
+		t.Fatalf("buildPlanKills = %#v, want only the parsed plan", got)
+	}
+}
+
+func TestHandler(t *testing.T) {
+	// No world database handle: the route says so instead of answering with
+	// an empty row set that would read as "no tactics anywhere".
+	rec := httptest.NewRecorder()
+	Handler(nil)(rec, httptest.NewRequest(http.MethodGet, "/api/v1/boss/tactics", nil))
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("nil service status = %d, want 503", rec.Code)
+	}
+	if body := rec.Body.String(); !strings.Contains(body, "world database unavailable") {
+		t.Fatalf("nil service body = %q", body)
+	}
+
+	src := newFake()
+	srv := NewService(src)
+	h := Handler(srv)
+
+	rec = httptest.NewRecorder()
+	h(rec, httptest.NewRequest(http.MethodGet, "/api/v1/boss/tactics", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(rec.Body.Bytes(), &keys); err != nil {
+		t.Fatalf("body is not JSON: %v", err)
+	}
+	for _, key := range []string{"tactics", "stands", "planKillFirst", "source", "loadedAt"} {
+		if _, ok := keys[key]; !ok {
+			t.Errorf("body has no %q key: %s", key, rec.Body.String())
+		}
+	}
+	var full Snapshot
+	if err := json.Unmarshal(rec.Body.Bytes(), &full); err != nil {
+		t.Fatal(err)
+	}
+	if full.Source != SourceWorld {
+		t.Fatalf("source = %q, want %q", full.Source, SourceWorld)
+	}
+	if _, err := time.Parse(time.RFC3339, full.LoadedAt); err != nil {
+		t.Fatalf("loadedAt %q is not RFC 3339: %v", full.LoadedAt, err)
+	}
+
+	// The filter comes from the cached snapshot.
+	rec = httptest.NewRecorder()
+	h(rec, httptest.NewRequest(http.MethodGet, "/api/v1/boss/tactics?map=309", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("filtered status = %d, want 200", rec.Code)
+	}
+	var filtered Snapshot
+	if err := json.Unmarshal(rec.Body.Bytes(), &filtered); err != nil {
+		t.Fatal(err)
+	}
+	if len(filtered.Tactics) != 1 || filtered.Tactics[0].Map != 309 {
+		t.Fatalf("filtered tactics = %#v, want the one row of map 309", filtered.Tactics)
+	}
+	if len(filtered.Stands) != 0 || len(filtered.PlanKillFirst) != 0 {
+		t.Fatalf("filtered stands/plans = %d/%d, want 0/0", len(filtered.Stands), len(filtered.PlanKillFirst))
+	}
+	if src.callCount() != 1 {
+		t.Fatalf("the map filter read the source again (%d calls): it must filter the cached snapshot", src.callCount())
+	}
+
+	for _, bad := range []string{"x", "0", "-1", "309x"} {
+		rec = httptest.NewRecorder()
+		h(rec, httptest.NewRequest(http.MethodGet, "/api/v1/boss/tactics?map="+bad, nil))
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("map=%s status = %d, want 400", bad, rec.Code)
+		}
+		if body := rec.Body.String(); !strings.Contains(body, "bad map") {
+			t.Errorf("map=%s body = %q, want bad map", bad, body)
+		}
+	}
+}
+
+func TestTruncatedFlag(t *testing.T) {
+	below := newFake()
+	snap, err := NewService(below).Get(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.Truncated {
+		t.Fatal("snapshot below every LIMIT is marked truncated")
+	}
+
+	atLimit := &fakeSource{tactics: make([]Tactic, TacticsLimit)}
+	snap, err = NewService(atLimit).Get(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !snap.Truncated {
+		t.Fatalf("snapshot at the tactics LIMIT (%d rows) is not marked truncated", TacticsLimit)
+	}
+}
+
+func TestQueries(t *testing.T) {
+	for name, query := range map[string]string{
+		"tactics": QueryTactics,
+		"stands":  QueryStands,
+		"plans":   QueryPlanKillFirst,
+	} {
+		if !strings.Contains(query, "ORDER BY") {
+			t.Errorf("%s query has no ORDER BY: %s", name, query)
+		}
+		if !strings.Contains(query, "LIMIT ") {
+			t.Errorf("%s query has no LIMIT: %s", name, query)
+		}
+		if strings.Contains(query, "'") || strings.Contains(query, `"`) {
+			t.Errorf("%s query carries a quoted literal: %s", name, query)
+		}
+	}
+	if !strings.Contains(QueryStands, "GROUP BY") || !strings.Contains(QueryStands, "SUM(`slots`)") {
+		t.Errorf("stands query does not aggregate the seats: %s", QueryStands)
+	}
+	if !strings.HasSuffix(QueryTactics, "LIMIT 5000") || !strings.HasSuffix(QueryStands, "LIMIT 5000") {
+		t.Errorf("tactics/stands queries do not match their row caps (%d/%d): %s / %s", TacticsLimit, StandsLimit, QueryTactics, QueryStands)
+	}
+	if !strings.HasSuffix(QueryPlanKillFirst, "LIMIT 1000") {
+		t.Errorf("plan query does not match its row cap (%d): %s", PlansLimit, QueryPlanKillFirst)
+	}
+	if TacticsLimit != 5000 || StandsLimit != 5000 || PlansLimit != 1000 {
+		t.Errorf("row caps = %d/%d/%d, want the values the queries pin", TacticsLimit, StandsLimit, PlansLimit)
+	}
+}
