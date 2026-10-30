@@ -105,11 +105,15 @@ int main(int argc,char** argv){
  } else if(test=="build") {
    ai.tank=true;SunderAction a(&ai,&bot,&target);
    for(unsigned id=1;id<=3;++id){
-     ai.ready[id]=true;ai.rage=30;assert(a.isUseful());
-     ai.aura=&aura;aura.stacks=4;assert(a.isUseful());
-     aura.stacks=5;aura.duration=6000;assert(a.isUseful());
+     ai.ready[id]=true;ai.rage=30;assert(!a.isUseful());
+     ai.aura=&aura;aura.stacks=4;assert(!a.isUseful());
+     aura.stacks=5;aura.duration=6000;assert(!a.isUseful());
      ai.aura=nullptr;ai.ready[id]=false;
    }
+   ai.rage=30;assert(a.isUseful());
+   ai.aura=&aura;aura.stacks=4;assert(a.isUseful());
+   aura.stacks=5;aura.duration=6000;assert(a.isUseful());
+   ai.aura=nullptr;
    a.target=nullptr;assert(!a.isUseful());a.target=&target;
    ai.tank=false;ai.aura=&aura;aura.stacks=5;aura.duration=30000;assert(!a.isUseful());
    aura.stacks=1;assert(a.isUseful());

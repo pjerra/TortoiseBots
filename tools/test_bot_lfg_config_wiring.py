@@ -48,6 +48,20 @@ class BotLfgConfigWiringTest(unittest.TestCase):
     def test_header_comment_fixed(self):
         self.assertNotIn("(SystemRunPolicy.h; default on)", HEADER)
 
+    def test_bot_lfg_chat(self):
+        keys = body(CONFIG, "void PlayerbotAIConfig::LoadDungeonRunKeys()", "\n}\n")
+        anchor = keys.index("botLfgOnlyWithPlayersOnline =")
+        line = 'botLfgChat = config.GetBoolDefault("AiPlayerbot.BotLfgChat", true);'
+        self.assertIn(line, keys)
+        self.assertGreater(keys.index(line), anchor)
+        tanchor = TEMPLATE.index("AiPlayerbot.BotLfgOnlyWithPlayersOnline = 1")
+        tline = TEMPLATE.index("AiPlayerbot.BotLfgChat = 1")
+        self.assertGreater(tline, tanchor)
+        block = TEMPLATE[tanchor:tline]
+        for word in ("LookingForGroup", "EnableBroadcasts", "Only read while",
+                     "AiPlayerbot.BotLfgGroups = 1"):
+            self.assertIn(word, block)
+
 
 if __name__ == "__main__":
     unittest.main()

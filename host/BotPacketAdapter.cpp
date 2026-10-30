@@ -2,6 +2,7 @@
 #include "RaidBossDiagnostics.h"
 
 #include "../runtime/BotChatGate.h"
+#include "../runtime/BotLfgWhisperInbox.h"
 #include "../runtime/BotManager.h"
 #include "../runtime/PlayerbotAIStorage.h"
 #include "../runtime/WorldThreadQueue.h"
@@ -200,6 +201,9 @@ bool BotPacketAdapter::CanPacketSend(WorldSession* session, WorldPacket const& p
             return true;
         if (opcode == SMSG_GROUP_INVITE)
             TB_LOG_DEBUG("TortoiseBots: ServerScript CanPacketSend bot outgoing SMSG_GROUP_INVITE to bot guid %u", botGuid.GetCounter());
+        // A real player whispering an advertising bot LFG leader talks to BotLfgService, not to the AI.
+        if (opcode == SMSG_MESSAGECHAT && BotLfgWhisperInbox::Instance().Offer(botGuid.GetRawValue(), packet.contents(), packet.size(), CHAT_MSG_WHISPER, LANG_ADDON))
+            return true;
 
         if (opcode != SMSG_MESSAGECHAT && OnWorldThread())
         {
