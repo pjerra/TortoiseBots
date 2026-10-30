@@ -13,6 +13,7 @@ public:
         creators["sunder armor"] = &sunder_armor;
         creators["last stand"] = &last_stand;
         creators["taunt"] = &taunt;
+        creators["mocking blow"] = &mocking_blow;
         creators["berserker rage fear"] = &berserker_rage_fear;
     }
 
@@ -26,6 +27,7 @@ private:
     ACTION_NODE_A(taunt, "taunt", "battle shout taunt");
 
     ACTION_NODE_A(berserker_rage_fear, "berserker rage", "death wish");
+    ACTION_NODE_P(mocking_blow, "mocking blow", "battle stance for mocking blow");
 };
 
 ProtectionWarriorStrategy::ProtectionWarriorStrategy(PlayerbotAI* ai) : WarriorStrategy(ai)
@@ -115,6 +117,9 @@ void ProtectionWarriorStrategy::InitCombatTriggers(std::list<TriggerNode*>& trig
     triggers.push_back(new TriggerNode(
         "lose aggro",
         NextAction::array(0, new NextAction("taunt", ACTION_INTERRUPT + 1), NULL)));
+    triggers.push_back(new TriggerNode(
+        "mocking blow taunt",
+        NextAction::array(0, new NextAction("mocking blow", ACTION_INTERRUPT), NULL)));
 
     // A mob sitting on a non-tank member: "lose aggro" only sees the tank's
     // current target and the snare row skips an arrived mob. A missed taunt
@@ -327,8 +332,8 @@ void ProtectionWarriorAoeStrategy::InitCombatTriggers(std::list<TriggerNode*>& t
     WarriorAoeStrategy::InitCombatTriggers(triggers);
 
     triggers.push_back(new TriggerNode(
-        "melee medium aoe",
-        NextAction::array(0, new NextAction("challenging shout", ACTION_HIGH + 1), NULL)));
+        "loose adds near",
+        NextAction::array(0, new NextAction("challenging shout", ACTION_INTERRUPT + 2), NULL)));
 
     triggers.push_back(new TriggerNode(
         "melee medium aoe",
