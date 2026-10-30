@@ -474,7 +474,7 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertIn("DELETE FROM `ai_dungeon_boss` WHERE `map` IN (34);", text)
 
     def test_dragonmaw_retreat_is_the_plan_with_the_census_fixes(self):
-        # 20261030230000 (turtle-agent prep/dragonmaw_retreat, after the fix-9 live run on tortoise-test2, 2026-10-30): the lead shot
+        # 20261031010000 (turtle-agent prep/dragonmaw_retreat, after the fix-9 live run on tortoise-test2, 2026-10-30): the lead shot
         # the 62039/62040/62041 pack at -5996 -4275 from its stand -6011.4 -4295.1 (28+ yd off the patrol, as planned), but the
         # pack's casters held their ground, the tank closed on them and the party spread round it (the hunter 21.5 yd from the
         # tank, 16.5 yd from the patrol line), and Searistrasz, walking past 15 yd from that pack, joined with four enchanters
@@ -563,7 +563,7 @@ class DungeonPlanSql(unittest.TestCase):
         # 11 legs, 863 steps, the same 206 pulls as 20261025002000 (28+6+12+57+3+23+17+25+10+22+3: the alcove's 3 are leg 4,
         # searistrasz_alcove, and the legs after it move up by one), bosses in leg order, no door or event step.
         name, text = newest_plan_text("dragonmaw_retreat")
-        self.assertEqual(name, "20261030230000_world.sql")
+        self.assertEqual(name, "20261031010000_world.sql")
         self.assertIn("('dragonmaw_retreat', 816, '62077,62036,62047,62046', '62077', '62053,62039,62071,62070,8853', 'turtle-agent f2e92bf0 dungeons/dragonmaw_retreat.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         legs = leg_rows(text, "dragonmaw_retreat")
         self.assertEqual(sorted(legs), list(range(11)))
