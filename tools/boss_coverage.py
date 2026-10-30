@@ -9,10 +9,13 @@ prints the gaps, boss by boss; the dashboard runs the same rule in
 web/static/js/coverage.js, and data/boss/testdata/coverage_cases.json keeps the
 two implementations equal.
 
-Rows come from replaying data/sql/world/*.sql (`INSERT`/`REPLACE INTO` and the
-scoped `DELETE`s of ai_boss_tactic, ai_boss_stand and ai_dungeon_plan) or, with
---db, from the world DB through boss_data.db_connect. The table is built in
-memory from the CSV, so an uncommitted CSV edit shows up at once.
+Rows come from replaying data/sql/world/*.sql (`INSERT`/`REPLACE INTO`, the
+scoped `DELETE`s and the `UPDATE ... SET ... WHERE ...` statements of
+ai_boss_tactic, ai_boss_stand and ai_dungeon_plan) or, with --db, from the
+world DB through boss_data.db_connect. A row statement touching one of those
+tables that the replay cannot apply fails the run instead of being skipped. The
+table is built in memory from the CSV, so an uncommitted CSV edit shows up at
+once.
 
 No boss entry, spell id, raid key or boss name is written in this module: every
 boss fact is a row of the CSV, the migrations or the code-answer file.
@@ -86,6 +89,10 @@ INSERT_RE = re.compile(
     r"^\s*(?:INSERT|REPLACE)\s+INTO\s+`(\w+)`\s*\(([^)]*)\)\s*VALUES\s*(.+)$", re.I | re.S
 )
 DELETE_RE = re.compile(r"^\s*DELETE\s+FROM\s+`(\w+)`\s+WHERE\s+(.+)$", re.I | re.S)
+UPDATE_RE = re.compile(
+    r"^\s*UPDATE\s+`(\w+)`\s+SET\s+(.+?)\s+WHERE\s+(.+)$", re.I | re.S
+)
+SCHEMA_KEYWORDS = frozenset(("CREATE", "ALTER", "SET"))
 
 
 # --------------------------------------------------------------------------
@@ -302,6 +309,96 @@ def _parse_condition_value(raw, where):
     raise boss_data.DataError(f"{where}: unsupported value {raw!r} in a WHERE clause")
 
 
+def _mask_strings(text):
+    """Blank out quoted text, so a table name inside a literal is not a use."""
+    out = []
+    i = 0
+    length = len(text)
+    quote = False
+    while i < length:
+        char = text[i]
+        if quote:
+            out.append(" ")
+            if char == "'":
+                if i + 1 < length and text[i + 1] == "'":
+                    out.append(" ")
+                    i += 2
+                    continue
+                quote = False
+            elif char == "\\" and i + 1 < length:
+                out.append(" ")
+                i += 2
+                continue
+            i += 1
+        elif char == "'":
+            quote = True
+            out.append(" ")
+            i += 1
+        else:
+            out.append(char)
+            i += 1
+    return "".join(out)
+
+
+def _split_assignments(text):
+    """The `col = value, col = value` list, split on the commas outside quotes."""
+    parts = []
+    buf = []
+    i = 0
+    length = len(text)
+    quote = False
+    while i < length:
+        char = text[i]
+        if quote:
+            buf.append(char)
+            if char == "'":
+                if i + 1 < length and text[i + 1] == "'":
+                    buf.append("'")
+                    i += 2
+                    continue
+                quote = False
+            elif char == "\\" and i + 1 < length:
+                buf.append(text[i + 1])
+                i += 2
+                continue
+            i += 1
+        elif char == "'":
+            quote = True
+            buf.append(char)
+            i += 1
+        elif char == ",":
+            parts.append("".join(buf))
+            buf = []
+            i += 1
+        else:
+            buf.append(char)
+            i += 1
+    parts.append("".join(buf))
+    return [part.strip() for part in parts if part.strip()]
+
+
+def _set_values(text, fields, where):
+    """The UPDATE's tracked SET values as {row field: value}; other columns are ignored."""
+    changes = {}
+    for part in _split_assignments(text):
+        match = re.fullmatch(r"`(\w+)`\s*=\s*(.+)", part, re.S)
+        if not match:
+            raise boss_data.DataError(f"{where}: unsupported SET clause {part!r}")
+        column, raw = match.groups()
+        spec = fields.get(column)
+        if spec is None:
+            continue
+        name, kind = spec
+        changes[name] = _convert(_parse_condition_value(raw, where), kind, where)
+    return changes
+
+
+def _touches_tracked(statement):
+    """True when the statement names one of the replayed tables outside a string literal."""
+    masked = _mask_strings(statement)
+    return any(re.search(r"`%s`" % re.escape(table), masked) for table in SQL_TABLES)
+
+
 def _matches(row, wanted):
     for name, (values, kind) in wanted:
         value = row.get(name)
@@ -341,7 +438,11 @@ def _stmt_where(path, statement):
 
 
 def migration_rows(sql_dir):
-    """Replay the migrations: INSERT/REPLACE and the scoped DELETEs, in file order."""
+    """Replay the migrations in file order: INSERT/REPLACE, the scoped DELETEs and the row UPDATEs.
+
+    A row statement on one of the three tables that the replay cannot apply is
+    an error naming the file and the statement, never a silent skip.
+    """
     directory = Path(sql_dir)
     paths = sorted(directory.glob("*.sql"), key=lambda p: p.name)
     tactics = {}
@@ -395,7 +496,49 @@ def migration_rows(sql_dir):
                     for key in [k for k, row in plans.items() if _matches(row, wanted)]:
                         del plans[key]
                 continue
-            if re.match(r"^\s*(?:INSERT|REPLACE|DELETE)\b", statement, re.I):
+            match = UPDATE_RE.match(statement)
+            if match:
+                table, set_text, conditions_text = match.groups()
+                if table not in SQL_TABLES:
+                    continue
+                if table == "ai_boss_tactic":
+                    changes = _set_values(set_text, TACTIC_FIELDS, where)
+                    wanted = _conditions(conditions_text, TACTIC_FIELDS, where)
+                    updated = {}
+                    for row in tactics.values():
+                        if _matches(row, wanted):
+                            row = dict(row)
+                            row.update(changes)
+                        key = (row["map"], row["boss"], row["kind"], row["target"], row["spell"])
+                        updated[key] = row
+                    tactics = updated
+                elif table == "ai_boss_stand":
+                    changes = _set_values(set_text, STAND_FIELDS, where)
+                    wanted = _conditions(conditions_text, STAND_FIELDS, where)
+                    updated = []
+                    for row in stands:
+                        if _matches(row, wanted):
+                            row = dict(row)
+                            row.update(changes)
+                        updated.append(row)
+                    stands = updated
+                else:
+                    changes = _set_values(set_text, PLAN_FIELDS, where)
+                    wanted = _conditions(conditions_text, PLAN_FIELDS, where)
+                    updated = {}
+                    for row in plans.values():
+                        if _matches(row, wanted):
+                            row = dict(row)
+                            row.update(changes)
+                        updated[row["plan"]] = row
+                    plans = updated
+                continue
+            keyword = re.match(r"\s*(\w+)", statement)
+            if _touches_tracked(statement) and (
+                keyword is None or keyword.group(1).upper() not in SCHEMA_KEYWORDS
+            ):
+                raise boss_data.DataError(f"{where}: unsupported statement")
+            if re.match(r"^\s*(?:INSERT|REPLACE|DELETE|UPDATE|TRUNCATE)\b", statement, re.I):
                 raise boss_data.DataError(f"{where}: unsupported statement")
     return _bundle(tactics.values(), stands, plans.values(), "migrations", len(paths))
 

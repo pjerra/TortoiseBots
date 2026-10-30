@@ -192,7 +192,83 @@ class CoverageTest(unittest.TestCase):
             plans = boss_coverage.migration_rows(tmp)["planKillFirst"]
         self.assertEqual(plans, [{"plan": "testplan", "map": 900, "entries": [3]}])
 
-    def test_bad_kill_first_list_drops_the_plan(self):
+    def test_plan_kill_first_update_changes_the_replayed_coverage(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "001_world.sql").write_text(
+                "INSERT INTO `ai_dungeon_plan` (`plan`, `map`, `kill_first`) VALUES\n"
+                "('testplan', 900, '89001');\n",
+                encoding="utf-8",
+            )
+            before = boss_coverage.migration_rows(tmp)
+            Path(tmp, "002_world.sql").write_text(
+                "UPDATE `ai_dungeon_plan` SET `cc_priority` = 'ignored', `kill_first` = '77777'\n"
+                "WHERE `plan` = 'testplan' AND `map` = 900;\n",
+                encoding="utf-8",
+            )
+            after = boss_coverage.migration_rows(tmp)
+        doc = table([boss(90001, "Boss One", adds=[
+            {"entry": 89001, "name": "Add One", "role": "summon", "priority": 1},
+        ])])
+
+        def add_status(rows):
+            return boss_coverage.compute(doc, rows)["raids"][0]["bosses"][0]["lines"][0]["status"]
+
+        self.assertEqual(
+            before["planKillFirst"], [{"plan": "testplan", "map": 900, "entries": [89001]}]
+        )
+        self.assertEqual(
+            after["planKillFirst"], [{"plan": "testplan", "map": 900, "entries": [77777]}]
+        )
+        self.assertEqual(add_status(before), "partly")
+        self.assertEqual(add_status(after), "missing")
+
+    def test_update_applies_only_to_matching_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "001_world.sql").write_text(
+                "INSERT INTO `ai_boss_tactic` (`map`, `boss_entry`, `kind`, `target_entry`, "
+                "`spell_id`, `priority`, `param`, `comment`) VALUES\n"
+                "(900, 90001, 'interrupt', 0, 91001, 0, 0, 'old'),\n"
+                "(901, 90001, 'interrupt', 0, 91001, 0, 0, 'old');\n"
+                "UPDATE `ai_boss_tactic` SET `priority` = 4, `comment` = 'new'\n"
+                "WHERE `map` = 900 AND `spell_id` = 91001;\n",
+                encoding="utf-8",
+            )
+            tactics = boss_coverage.migration_rows(tmp)["tactics"]
+            Path(tmp, "002_world.sql").write_text(
+                "INSERT INTO `ai_boss_stand` (`map`, `boss_entry`, `role`, `window_spell`, `slots`) VALUES\n"
+                "(900, 90001, 'ranged', 91001, 3),\n"
+                "(900, 90001, 'healer', 91001, 2);\n"
+                "UPDATE `ai_boss_stand` SET `slots` = 1 WHERE `role` = 'ranged';\n",
+                encoding="utf-8",
+            )
+            stands = boss_coverage.migration_rows(tmp)["stands"]
+        by_map = {row["map"]: row for row in tactics}
+        self.assertEqual((by_map[900]["priority"], by_map[900]["comment"]), (4, "new"))
+        self.assertEqual((by_map[901]["priority"], by_map[901]["comment"]), (0, "old"))
+        self.assertEqual({row["role"]: row["seats"] for row in stands}, {"ranged": 1, "healer": 2})
+
+    def test_unsupported_statement_on_a_tracked_table_fails_closed(self):
+        for name, statement, want in (
+            ("002_world.sql",
+             "UPDATE `ai_boss_stand` SET `slots` = `slots` + 1 WHERE `map` = 900;\n",
+             "UPDATE `ai_boss_stand`"),
+            ("003_world.sql", "DROP TABLE `ai_boss_tactic`;\n", "DROP TABLE"),
+        ):
+            with self.subTest(statement=statement):
+                with tempfile.TemporaryDirectory() as tmp:
+                    Path(tmp, "001_world.sql").write_text(
+                        "INSERT INTO `ai_dungeon_plan` (`plan`, `map`, `kill_first`) VALUES\n"
+                        "('testplan', 900, '1');\n",
+                        encoding="utf-8",
+                    )
+                    Path(tmp, name).write_text(statement, encoding="utf-8")
+                    with self.assertRaises(boss_data.DataError) as caught:
+                        boss_coverage.migration_rows(tmp)
+                message = str(caught.exception)
+                self.assertIn(name, message)
+                self.assertIn(want, message)
+
+
         with tempfile.TemporaryDirectory() as tmp:
             Path(tmp, "001_world.sql").write_text(
                 "INSERT INTO `ai_dungeon_plan` (`plan`, `map`, `kill_first`) VALUES\n"
@@ -456,6 +532,18 @@ class CliTest(unittest.TestCase):
         got.pop("loadedAt", None)
         expected.pop("loadedAt", None)
         self.assertEqual(got, expected)
+
+    def test_cli_fails_on_an_unsupported_tracked_statement(self):
+        fixture = self.make()
+        (fixture.sql / "002_world.sql").write_text(
+            "UPDATE `ai_dungeon_plan` SET `kill_first` = '1';\n", encoding="utf-8"
+        )
+        err = io.StringIO()
+        with redirect_stderr(err):
+            code = boss_coverage.cmd_coverage(fixture.args())
+        self.assertEqual(code, 2)
+        self.assertIn("002_world.sql", err.getvalue())
+        self.assertIn("UPDATE `ai_dungeon_plan`", err.getvalue())
 
     def test_cli_runs_on_every_committed_raid(self):
         raids = boss_data.read_raids(ROOT / "data" / "boss" / "raids.csv")
