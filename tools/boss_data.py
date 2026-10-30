@@ -7,6 +7,8 @@ Usage:
                                      [--core-dir DIR] [--kb-dir DIR]
                                      [--db-host H] [--db-user U] [--db-pass P]
                                      [--db-name tw_world] [--db-defaults FILE]
+    python3 tools/boss_data.py coverage [<raid>] [--boss ENTRY] [--all] [--json]
+                                     [--sql-dir DIR] [--db] [--fail-on-missing]
 
 The CSV (data/boss/boss_abilities.csv) is the source; `build` writes
 tools/observability/web/data/boss_abilities.json, which the dashboard serves at
@@ -24,9 +26,13 @@ Rows (columns map,boss,row,key,a,b,c,d,source):
                               self         leaves an aura on the boss
                               mark         draws the marked icon (Gaze, Mark of Arlokk)
                               ground       persistent area spell (drawn on the ground)
+                              cone         frontal cone (the coverage rule needs `front`)
+                              tail         rear cone / tail sweep (needs `tail`)
                               int          cast time / channel, interruptible
                               summon=<creature entry>  must have an add row
                               hp<N>        one-shot below N percent health
+                              ok=<reason>  the whole ability needs no answer
+                              ok.<need>=<reason>  that one need needs no answer
     phase    key=name       a=rule: hp<N | aura=<spell id> | flag=<letter> | start
                             b=order (1 = checked first); a `start` rule always
                             matches and must be the last one (the pull phase)
@@ -38,15 +44,30 @@ paths are relative to the core checkout (--core-dir, default $TORTOISE_CORE_DIR
 or ~/tortoise-wow). A knowledge-base citation is `kb:<file>#<heading-slug>` under
 --kb-dir (default $TURTLE_KB_DIR or ~/TortoiseBots-audit/turtle-kb).
 
+`ok` reasons are a closed list (see data/boss/README.md): tank, heal, phase,
+script, and the DB-verified nokick/nodispel/nopurge, which are only valid on
+their own need. An ok.<need> must name a need the row's own flags derive.
+
+data/boss/raids.csv maps every map slug to its map id (the JSON `maps[]`), and
+data/boss/code_answers.csv lists the answers that live in C++ rather than in a
+world table (the JSON `codeAnswers[]`).
+
 Checks:
     1. Every ability row cites the line that defines its spell (id or constant)
        and every timer value; phase hp/aura/flag rules and add entries likewise.
        A value of N is also accepted as N//1000 on a line using IN_MILLISECONDS.
     2. Ability spell ids, summon= entries and add entries are unique per boss;
-       every summon= entry has an add row; every p= phase exists.
-    3. The committed JSON equals a fresh build.
-    4. --db: every spell id exists in spell_template and every add entry in
-       creature_template. Without --db it prints "db check skipped".
+       every summon= entry has an add row; every p= phase exists; every map slug
+       has a raids.csv row and every raids.csv row has a boss.
+    3. Every code answer cites a file of this repo that registers its name and
+       names its boss entry; its spell/add key is a row of that boss; a `*` row
+       is partly. No two rows make the same claim.
+    4. The committed JSON equals a fresh build.
+    5. --db: every spell id exists in spell_template and every add entry in
+       creature_template; a `ground` flag has effect 27; a `cone` flag has
+       implicit target 24; ok.interrupt=nokick is not kickable, ok.dispel=nodispel
+       has dispel 0, ok.purge=nopurge has dispel 0. Without --db it prints
+       "db check skipped".
 
 Citations need a core checkout; CI has none and prints "core source check
 skipped" instead. The same is true for the KB. Names come from the committed
@@ -1191,6 +1212,13 @@ def cmd_check(args):
     return 0
 
 
+def cmd_coverage_hook(args):
+    """Hand the report to boss_coverage.py, imported here so the other commands run alone."""
+    from boss_coverage import cmd_coverage
+
+    return cmd_coverage(args)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="command", required=True)
@@ -1204,6 +1232,24 @@ def main(argv=None):
     add_db(check)
     check.add_argument("--db", action="store_true", help="also check entries in the world DB")
     check.set_defaults(func=cmd_check)
+    coverage = sub.add_parser(
+        "coverage", help="show, boss by boss, which abilities the bots have no answer for"
+    )
+    coverage.add_argument("raid", nargs="?", default="", help="raid key or map id (default: all)")
+    coverage.add_argument("--boss", type=int, default=0, help="only this creature entry")
+    coverage.add_argument("--all", action="store_true", help="print every line, not only the gaps")
+    coverage.add_argument("--json", action="store_true", help="print the machine form")
+    coverage.add_argument("--csv", default=str(DEFAULT_CSV))
+    coverage.add_argument("--names", default=str(DEFAULT_NAMES))
+    coverage.add_argument("--raids", default=str(DEFAULT_RAIDS))
+    coverage.add_argument("--code-answers", default=str(DEFAULT_CODE_ANSWERS))
+    coverage.add_argument("--sql-dir", default=str(ROOT / "data" / "sql" / "world"))
+    coverage.add_argument("--repo-root", default=str(ROOT))
+    coverage.add_argument("--fail-on-missing", action="store_true",
+                          help="exit 1 when any line is missing")
+    add_db(coverage)
+    coverage.add_argument("--db", action="store_true", help="read the rows from the world DB")
+    coverage.set_defaults(func=cmd_coverage_hook)
     args = parser.parse_args(argv)
     return args.func(args)
 
