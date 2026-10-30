@@ -8811,7 +8811,9 @@ void ReadStandPatrols(Player* lead, TortoiseBots::DungeonRun::Facts& f)
 {
     using namespace TortoiseBots::DungeonRun;
     std::list<Unit*> found;
-    HostileCreaturesAround(lead, kStandPullClearMaxYd, found);
+    // Far enough for both rules: the clearance around the lead bot, and the 30 yd around the pull's way, whose far end
+    // (the pulled unit) is at most the tank's shot from the lead bot.
+    HostileCreaturesAround(lead, std::max(kStandPullClearMaxYd, f.leadShotYd + kStandPullPathClearYd), found);
     for (Unit* unit : found)
     {
         Creature* c = unit->ToCreature();

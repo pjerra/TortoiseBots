@@ -317,7 +317,7 @@ constexpr float kStandPullMarginYd = 1.0f;
 // A stand-pull PULL row (kPlanFlagStandPull on a pull; specs/rl-patrol-timed-pull.md, Zul'Gurub walks 6-7): the
 // pack is pulled from the stand once one of its units is in the tank's shot and no other patrol is near the lead bot.
 constexpr float kStandPullClearYd = 40.0f;    // ... no other patrol this close (the row's `param` in yd; 0: this)
-constexpr float kStandPullClearMaxYd = 60.0f; // ... the clearance's ceiling, and how far the glue lists patrols
+constexpr float kStandPullClearMaxYd = 60.0f; // ... the clearance's ceiling; the glue lists patrols this far, or the shot + kStandPullPathClearYd
 // ... and no other patrol this close (2D) to the pulled unit or to the line it runs along to the lead bot. Zul'Gurub walk
 // 9 step 22: the Headhunter formation was pulled with the bat formation F3 45-51 yd from the lead bot (past the 40 yd
 // clearance) but 19-24 yd from the pulled Witch Doctor; F3 came with it 3-5 s later (no bot had moved toward it), and F4

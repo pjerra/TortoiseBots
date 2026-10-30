@@ -666,7 +666,7 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn("if (standPull)\n                {\n                    unit.losLead = lead->IsWithinLOSInMap(creature);\n"
                       "                    unit.formation = RunFormationOf(creature);", add)
         patrols = body(COMMANDS, "void ReadStandPatrols(Player* lead, TortoiseBots::DungeonRun::Facts& f)", "\n}\n")
-        self.assertIn("HostileCreaturesAround(lead, kStandPullClearMaxYd, found);", patrols)
+        self.assertIn("HostileCreaturesAround(lead, std::max(kStandPullClearMaxYd, f.leadShotYd + kStandPullPathClearYd), found);", patrols)
         self.assertIn("if (!c || !c->IsAlive() || c->IsInCombat() || !RunWalksPatrol(c))", patrols)
         self.assertIn("f.standPatrols.push_back(u);", patrols)
         formation = body(COMMANDS, "uint64 RunFormationOf(Creature* creature)", "\n}\n")
