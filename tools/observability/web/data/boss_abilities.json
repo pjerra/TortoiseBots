@@ -8,6 +8,8 @@
   "maps": [
     {
       "key": "zulgurub",
+      "mapId": 309,
+      "name": "Zul'Gurub",
       "bosses": [
         14517,
         14507,
@@ -21,12 +23,16 @@
     },
     {
       "key": "onyxia",
+      "mapId": 249,
+      "name": "Onyxia's Lair",
       "bosses": [
         10184
       ]
     },
     {
       "key": "aq40",
+      "mapId": 531,
+      "name": "Temple of Ahn'Qiraj",
       "bosses": [
         15263,
         15516,

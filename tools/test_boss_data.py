@@ -7,6 +7,7 @@ are tiny fake C++ files so the citation checks run without a core checkout.
 """
 
 import argparse
+import csv
 import json
 import sys
 import tempfile
@@ -32,6 +33,7 @@ NAMES = {
 }
 
 HEADER = ["map", "boss", "row", "key", "a", "b", "c", "d", "source"]
+RAID_HEADER = ["key", "map_id", "name"]
 
 
 def ability(**kw):
@@ -89,22 +91,30 @@ BASE_ROWS = [
 
 
 class Fixture:
-    def __init__(self, rows=None, names=None):
+    def __init__(self, rows=None, names=None, raids=None):
         self.tmp = tempfile.TemporaryDirectory()
         self.dir = Path(self.tmp.name)
         self.csv = self.dir / "boss_abilities.csv"
         self.json = self.dir / "boss_abilities.json"
         self.names = self.dir / "names.json"
+        self.raids = self.dir / "raids.csv"
         (self.dir / "core").mkdir()
         (self.dir / "core" / "boss.cpp").write_text("\n".join(CORE) + "\n")
         self.write(rows if rows is not None else [dict(r) for r in BASE_ROWS],
                    names if names is not None else NAMES)
+        self.write_raids(raids if raids is not None else [["zulgurub", "309", "Zul'Gurub"]])
+
+    def write_raids(self, raids):
+        with open(self.raids, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f, lineterminator="\n")
+            writer.writerow(RAID_HEADER)
+            for row in raids:
+                writer.writerow(row)
+        self.raid_rows = raids
 
     def write(self, rows, names=None):
         with open(self.csv, "w", newline="", encoding="utf-8") as f:
-            import csv as _csv
-
-            writer = _csv.writer(f, lineterminator="\n")
+            writer = csv.writer(f, lineterminator="\n")
             writer.writerow(HEADER)
             for row in rows:
                 writer.writerow([row[c] for c in HEADER])
@@ -112,7 +122,11 @@ class Fixture:
         self.rows = rows
 
     def rebuild(self):
-        doc = boss_data.build_document(boss_data.read_rows(self.csv), boss_data.read_names(self.names))
+        doc = boss_data.build_document(
+            boss_data.read_rows(self.csv),
+            boss_data.read_names(self.names),
+            boss_data.read_raids(self.raids),
+        )
         self.json.write_text(boss_data.dump_json(doc))
 
     def args(self, db=False):
@@ -120,6 +134,8 @@ class Fixture:
             csv=str(self.csv),
             json=str(self.json),
             names=str(self.names),
+            raids=str(self.raids),
+            repo_root=str(self.dir),
             core_dir=str(self.dir / "core"),
             kb_dir=str(self.dir / "kb"),
             db=db,
@@ -164,8 +180,8 @@ class FakeConn:
 
 
 class BossDataTest(unittest.TestCase):
-    def make(self, rows=None, names=None):
-        fx = Fixture(rows, names)
+    def make(self, rows=None, names=None, raids=None):
+        fx = Fixture(rows, names, raids)
         self.addCleanup(fx.tmp.cleanup)
         return fx
 
@@ -217,6 +233,21 @@ class BossDataTest(unittest.TestCase):
         fx = self.make(rows)
         errors, _ = fx.validate()
         self.assertTrue(any("start rule must be the last" in e for e in errors), errors)
+
+    def test_raids_csv_covers_every_map(self):
+        # A map slug in the CSV without a raids.csv row cannot be shown as a raid.
+        rows = [dict(r) for r in BASE_ROWS]
+        for row in rows:
+            row["map"] = "onyxia"
+        fx = self.make(rows)
+        errors, _ = fx.validate()
+        self.assertTrue(any("has no row in raids.csv" in e for e in errors), errors)
+
+    def test_raid_without_boss_fails(self):
+        # A raids.csv row whose key has no boss in the CSV would render an empty raid.
+        fx = self.make(raids=[["zulgurub", "309", "Zul'Gurub"], ["naxx", "533", "Naxxramas"]])
+        errors, _ = fx.validate()
+        self.assertTrue(any("has no boss in the CSV" in e for e in errors), errors)
 
     def test_stale_json_fails(self):
         # Spec failing case 3: the CSV was edited and the JSON was not rebuilt.
