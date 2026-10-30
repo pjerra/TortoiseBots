@@ -64,9 +64,12 @@ void RestorationDruidStrategy::InitCombatTriggers(std::list<TriggerNode*>& trigg
                              new NextAction("regrowth on party", ACTION_CRITICAL_HEAL + 1),
                              new NextAction("healing touch on party", ACTION_CRITICAL_HEAL), NULL)));
 
+    // Regrowth is not recast while its own HoT runs; Healing Touch fills
+    // that gap. Below Barkskin in the medium band so the cooldown keeps its slot.
     triggers.push_back(new TriggerNode(
         "low health",
-        NextAction::array(0, new NextAction("regrowth", ACTION_MEDIUM_HEAL), NULL)));
+        NextAction::array(0, new NextAction("regrowth", ACTION_MEDIUM_HEAL),
+                             new NextAction("healing touch", ACTION_MEDIUM_HEAL - 1), NULL)));
 
     triggers.push_back(new TriggerNode(
         "medium health",
@@ -74,19 +77,18 @@ void RestorationDruidStrategy::InitCombatTriggers(std::list<TriggerNode*>& trigg
 
     triggers.push_back(new TriggerNode(
         "party member low health",
-        NextAction::array(0, new NextAction("regrowth on party", ACTION_MEDIUM_HEAL), NULL)));
-
-    triggers.push_back(new TriggerNode(
-        "medium aoe heal",
-        NextAction::array(0, new NextAction("tranquility", ACTION_MEDIUM_HEAL + 2), NULL)));
+        NextAction::array(0, new NextAction("regrowth on party", ACTION_MEDIUM_HEAL),
+                             new NextAction("healing touch on party", ACTION_MEDIUM_HEAL - 1), NULL)));
 
     triggers.push_back(new TriggerNode(
         "medium health",
-        NextAction::array(0, new NextAction("regrowth", ACTION_MEDIUM_HEAL + 1), NULL)));
+        NextAction::array(0, new NextAction("regrowth", ACTION_MEDIUM_HEAL + 1),
+                             new NextAction("healing touch", ACTION_MEDIUM_HEAL - 2), NULL)));
 
     triggers.push_back(new TriggerNode(
         "party member medium health",
-        NextAction::array(0, new NextAction("regrowth on party", ACTION_MEDIUM_HEAL), NULL)));
+        NextAction::array(0, new NextAction("regrowth on party", ACTION_MEDIUM_HEAL),
+                             new NextAction("healing touch on party", ACTION_MEDIUM_HEAL - 1), NULL)));
 
     triggers.push_back(new TriggerNode(
         "almost full health",
@@ -327,10 +329,6 @@ void RestorationDruidBuffRaidStrategy::InitNonCombatTriggers(std::list<TriggerNo
 void RestorationDruidBoostStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
 {
     DruidBoostStrategy::InitCombatTriggers(triggers);
-
-    triggers.push_back(new TriggerNode(
-        "nature's swiftness",
-        NextAction::array(0, new NextAction("nature's swiftness", ACTION_HIGH), NULL)));
 }
 
 void RestorationDruidBoostStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)

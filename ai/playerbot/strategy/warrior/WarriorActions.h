@@ -8,6 +8,21 @@ namespace ai
 {
     // stances
     BUFF_ACTION_U(CastBattleStanceAction, "battle stance", !ai->IsTank(bot) && CastBuffSpellAction::isUseful());
+    // Battle Stance only for the Mocking Blow second taunt: the plain battle
+    // stance row refuses tanks, so this prerequisite carries its own name and
+    // fires only while the mocking blow taunt trigger is active.
+    class CastBattleStanceForMockingBlowAction : public CastBuffSpellAction
+    {
+    public:
+        CastBattleStanceForMockingBlowAction(PlayerbotAI* ai) : CastBuffSpellAction(ai, "battle stance") {}
+        bool isUseful() override
+        {
+            return CastBuffSpellAction::isUseful() && AI_VALUE2(bool, "trigger active", "mocking blow taunt");
+        }
+
+    protected:
+        virtual std::string getName() override { return "battle stance for mocking blow"; }
+    };
     BUFF_ACTION(CastDefensiveStanceAction, "defensive stance");
     BUFF_ACTION_U(CastBerserkerStanceAction, "berserker stance", !ai->IsTank(bot) && CastBuffSpellAction::isUseful());
 
@@ -202,12 +217,6 @@ namespace ai
 
             if (isTank)
             {
-                // Establish and refresh the stack before spending rage on other attacks.
-                Aura* sunder = ai->GetAura("sunder armor", target);
-                if (!target->IsPlayer() && (!sunder || sunder->GetStackAmount() < 5 ||
-                    (sunder->GetAuraDuration() >= 0 && sunder->GetAuraDuration() <= 6000)))
-                    return true;
-
                 uint32 bloodThirst = AI_VALUE2(uint32, "spell id", "bloodthirst");
                 uint32 mortalStrike = AI_VALUE2(uint32, "spell id", "mortal strike");
                 uint32 shieldSlam = AI_VALUE2(uint32, "spell id", "shield slam");
@@ -220,12 +229,20 @@ namespace ai
                 // trigger; BT/MS rows are CanCast-gated (rage-aware already).
                 bool slamLive = shieldSlam && sServerFacade.IsSpellReady(bot, shieldSlam) &&
                     AI_VALUE2(bool, "trigger active", "light rage available");
+                // A live spender goes first, also while the stack is being built:
+                // Shield Slam (1.18.1: 20 % AP, high threat) is the opener, Sunder the filler.
                 if ((bloodThirst && sServerFacade.IsSpellReady(bot, bloodThirst)) ||
                     (mortalStrike && sServerFacade.IsSpellReady(bot, mortalStrike)) ||
                     slamLive)
                 {
                     return false;
                 }
+
+                // Establish and refresh the stack before spending rage on other attacks.
+                Aura* sunder = ai->GetAura("sunder armor", target);
+                if (!target->IsPlayer() && (!sunder || sunder->GetStackAmount() < 5 ||
+                    (sunder->GetAuraDuration() >= 0 && sunder->GetAuraDuration() <= 6000)))
+                    return true;
             }
 
             // DPS warriors sunder only when no tank warrior is in the group

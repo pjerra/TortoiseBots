@@ -436,6 +436,16 @@ namespace ai
         bool IsActive() override;
     };
 
+    // Bear rage dump (B2): Savage Bite (45736, Bear/Dire Bear only, 30
+    // rage, trained at 58) fires at 50+ rage or free under Clearcasting.
+    // Defined in DruidTriggers.cpp.
+    class SavageBiteTrigger : public SpellCanBeCastedTrigger
+    {
+    public:
+        SavageBiteTrigger(PlayerbotAI* ai) : SpellCanBeCastedTrigger(ai, "savage bite") {}
+        bool IsActive() override;
+    };
+
     BOOST_TRIGGER(BerserkTrigger, "berserk");
 
     class RebirthTrigger : public SpellTargetTrigger
