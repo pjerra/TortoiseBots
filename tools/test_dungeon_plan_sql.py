@@ -4859,57 +4859,56 @@ class DungeonPlanSql(unittest.TestCase):
                                  "step %s (%s %s %s) stands %.1f yd off the floor %.1f" % (r["seq"], r["x"], r["y"], r["z"], abs(float(r["z"]) - near[0]), near[0]))
 
     def test_zul_gurub_is_the_raid_prep(self):
-        # 20261030180000 (turtle-agent fix/zg-leg0-walk3 120b6e6, 2026-10-30, the walk-5 fix of leg 0): the 20-man ZG prep
-        # of RAID-PREP-zg.md, re-spaced five times after live walks (TortoiseBots-audit tests/raid-zg-walk1 to -walk5).
-        # 9 legs, 1106 steps (the move rows include the approach and via points), 168 merged pulls (cap 12, radius <= 35
-        # but leg 0's last row), the eight bosses in the guide's order. What changed from 20261030140000, and why:
-        #   - the bat pack (F1, one Bat Rider and four bats) is pulled from the plateau's east end (-12057 -1448), reached
-        #     by the slope at -12041 -1466 (steep polygons the server path takes), not from the stairs. Walk 5's stair
-        #     pull: the firing stand walk went up the stairs while the pack walked west to its 20 s wait 20 yd from the
-        #     stair top; they met there with no pull order, and the two west bat formations (F3, F4) came in from their
-        #     east turns 22-29 yd away: 12 bats and 4 riders, 19 dead.
-        #   - the static Bat Rider pack (S5) is pulled from -12188 -1489 by a row on its east bat 49138 alone (radius 5.5,
-        #     the rest its residue): walk 5's stand -12192 -1490 was 20.3 yd from that bat, the walk there pulled the pack,
-        #     and the row's 19.6 yd band re-pulled the west ring's bats into the fight.
-        #   - the walk to -12203 -1414 crossed the west ring of three formations (walk 5, step 30: 15 dead). The party
-        #     walks the plateau's south edge instead, waits for the F6 formation at -12250 -1497.5 (a row on its south
-        #     turn, radius 4), takes F5 from -12285 -1490 (a row on its bat 49186's spawn, radius 3.5, the band clear of
-        #     ledge bat 91553), the Witch Doctor formation from -12233 -1390 (radius 15) and the Headhunter formation
-        #     last by a 60 yd row over its whole loop from -12225 -1445.
+        # 20261030210000 (turtle-agent fix/zg-leg0-walk3 3c76ef7, 2026-10-30, fix 6: leg 0 after walks 6 and 7; it replaces
+        # 20261030200000, whose west rows a review found unsafe, before any server applied it): the 20-man
+        # ZG prep of RAID-PREP-zg.md, re-spaced six times after live walks (TortoiseBots-audit tests/raid-zg-walk1 to -walk7,
+        # specs/rl-patrol-timed-pull.md). 9 legs, 1107 steps (the move rows include the approach and via points), 169
+        # merged pulls (cap 12, radius <= 35 but leg 0's stand-pull rows), the eight bosses in the guide's order. What
+        # changed from 20261030180000, and why:
+        #   - walks 6 and 7 fired no bad pull: every near wipe began with formations walking into the party at a stand or
+        #     on the route, the stands 11-24 yd from other formations' lanes. Leg 0's formations are now pulled one at a
+        #     time by stand_pull rows (flag 8192: the party holds at the move row right before the row, pulls once a unit
+        #     of the row's own formations is in the tank's shot and no other patrol is within 40 yd), each from a stand
+        #     34+ yd from every other living formation's lane, in an order that kills each one's lane neighbour first:
+        #     F2 (Headhunters) from -12093 -1446, F3 from the stair top -12097.2 -1483.1 (down the east slope and up the
+        #     stairs), F4 from -12108 -1479, the static pack S5 as before, F7 (Witch Doctors) from -12201 -1494, F5 from
+        #     -12183 -1446 (walked to along x -12177) and F6 from -12186 -1458. A row's radius marks its formations by their
+        #     DB spawns (the run leader drops the rest).
         #   - every other leg is the walk-2 rows unchanged: 142, 28, 61, 121, 75, 114, 290 and 232 step rows.
         # The runts (2914, 13321, 4075, 1420, 14881) and the two event triggers
         # (14758, 15091) are in no pull; the first-add rows are the encounter units.
         name, text = newest_plan_text("zul_gurub")
-        self.assertEqual(name, "20261030180000_world.sql")
-        self.assertIn("('zul_gurub', 309, '', '', '14750', 'turtle-agent 120b6e6 dungeons/zul_gurub.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261030210000_world.sql")
+        self.assertIn("('zul_gurub', 309, '', '', '14750', 'turtle-agent 3c76ef7 dungeons/zul_gurub.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         self.assertEqual([v[0] for v in leg_rows(text, "zul_gurub").values()],
                          ["high_priestess_jeklik", "high_priest_venoxis", "high_priestess_marli",
                           "high_priest_thekal", "high_priestess_arlokk", "bloodlord_mandokir",
                           "jindo_the_hexxer", "hakkar_outer", "hakkar"])
         rows = [r for r in self.step_rows(text) if r["plan"] == "zul_gurub"]
-        self.assertEqual(len(rows), 1106)
+        self.assertEqual(len(rows), 1107)
         self.assertEqual([len(leg_steps(rows, leg)) for leg in range(9)],
-                         [43, 142, 28, 61, 121, 75, 114, 290, 232])
+                         [44, 142, 28, 61, 121, 75, 114, 290, 232])
         self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(9)],
-                         [9, 21, 6, 7, 25, 23, 20, 39, 18])
-        # Leg 0: the bat pack from the plateau's east end, then the stands of walk 5 along the south edge.
+                         [10, 21, 6, 7, 25, 23, 20, 39, 18])
+        # Legs 1-8 are the rows of 20261030180000, byte for byte.
+        with open(os.path.join(ROOT, "data/sql/world/20261030180000_world.sql"), encoding="utf-8") as handle:
+            before = handle.read()
+        later = lambda t: [line for line in t.splitlines() if re.match(r"\('zul_gurub', [1-8], \d", line)]
+        self.assertEqual(later(text), later(before))
         leg0 = leg_steps(rows, 0)
         moves = [(r["x"], r["y"]) for r in leg0 if r["kind"] == "move"]
         self.assertIn(("-12028", "-1510"), moves)
         self.assertLess(moves.index(("-12028", "-1510")), leg0.index([r for r in leg0 if r["kind"] == "pull"][0]))
         self.assertIn(("-11928.5", "-1364.5"), moves)
-        for stand in (("-12040.8", "-1466.1334"), ("-12054", "-1449.8667"), ("-12057", "-1448"), ("-12120", "-1494"),
-                      ("-12188", "-1489"), ("-12215.199", "-1495.7334"), ("-12240", "-1497.5"), ("-12250", "-1497.5"),
-                      ("-12264", "-1497.5"), ("-12285", "-1490"), ("-12233", "-1390"), ("-12225", "-1445"),
-                      ("-12241.56", "-1399.14")):
+        for stand in (("-12040.8", "-1466.1334"), ("-12054", "-1449.8667"), ("-12057", "-1448"), ("-12093", "-1446"),
+                      ("-12097.2", "-1483.1"), ("-12108", "-1479"), ("-12188", "-1489"), ("-12201", "-1494"),
+                      ("-12177", "-1479"), ("-12177", "-1461"), ("-12183", "-1446"), ("-12186", "-1458"),
+                      ("-12225", "-1445"), ("-12241.56", "-1399.14")):
             self.assertIn(stand, moves)
-        for gone in (("-12112", "-1486"), ("-12165", "-1478"), ("-12255", "-1438"), ("-12268", "-1448"),
-                     ("-12199.351", "-1467.1476"), ("-12219.585", "-1447.4061"), ("-12227.675", "-1431.8448"),
-                     ("-12084", "-1441"), ("-12066.938", "-1439.884"), ("-12114", "-1494"), ("-12239", "-1386"),
-                     ("-12268", "-1376"), ("-12307", "-1411"), ("-12287.838", "-1411.9567"), ("-12272.397", "-1390.805"),
-                     ("-12185", "-1495"), ("-12206.9375", "-1429.6781"), ("-12076", "-1475"), ("-12049.866", "-1474.6667"),
-                     ("-11989.333", "-1472"), ("-12192", "-1490"), ("-12203", "-1414"), ("-12254.933", "-1445.0667"),
-                     ("-12265.752", "-1493.8818"), ("-12266", "-1495")):
+        for gone in (("-12120", "-1494"), ("-12215.199", "-1495.7334"), ("-12240", "-1497.5"), ("-12250", "-1497.5"),
+                     ("-12264", "-1497.5"), ("-12285", "-1490"), ("-12233", "-1390"), ("-12102.933", "-1465.6001"),
+                     ("-12113.333", "-1482.6667"), ("-12112", "-1486"), ("-12165", "-1478"), ("-12192", "-1490"),
+                     ("-12203", "-1414"), ("-12189", "-1473")):
             self.assertNotIn(gone, moves)
         # The bat pack (the third pull) is pulled from the east end of the plateau: the move right before it, 9.9 yd
         # from its centre, is on the plateau, the climb before it is the east slope, and no move row before it stands
@@ -4930,34 +4929,49 @@ class DungeonPlanSql(unittest.TestCase):
             return math.hypot(d[0], d[1]) if flat else math.sqrt(d[0] ** 2 + d[1] ** 2 + d[2] ** 2)
         self.assertGreaterEqual(min(jek_yd(r) for r in leg0[:-1]), 49.85)
         self.assertLessEqual(jek_yd(leg0[-2], flat=False), 50.0)
-        self.assertNotIn(("-12215.9", "-1468.65"), [(r["x"], r["y"]) for r in leg0 if r["kind"] == "pull"])
         pulls0 = [r for r in leg0 if r["kind"] == "pull"]
-        self.assertEqual([p["radius"] for p in pulls0], ["6.3", "8.8", "11.9", "20.5", "5.5", "4", "3.5", "15", "60"])
-        self.assertEqual([(p["x"], p["y"], p["entries"]) for p in pulls0[4:]],
-                         [("-12208.9", "-1478.72", "11368,14750"), ("-12259", "-1487", "11368,14750"),
-                          ("-12265.8", "-1463.01", "11368,14750"), ("-12237.9", "-1414.45", "11351,11831"),
-                          ("-12180", "-1462", "11351,11831")])
+        self.assertEqual([p["radius"] for p in pulls0], ["6.3", "8.8", "11.9", "71", "2", "1", "5.5", "33", "10", "9"])
+        self.assertEqual([(p["x"], p["y"], p["entries"], p["flags"], p["param"]) for p in pulls0[3:]],
+                         [("-12150", "-1460", "11351,11831", "8192", "0"), ("-12152.1", "-1486.58", "11368,14750", "8192", "0"),
+                          ("-12153.9", "-1489.43", "11368,14750", "8192", "0"), ("-12208.9", "-1478.72", "11368,14750", "0", "0"),
+                          ("-12218", "-1440", "11351,11831", "8192", "0"), ("-12228", "-1478", "11368,14750", "8192", "0"),
+                          ("-12228", "-1440", "11368,14750", "8192", "0")])
+        self.assertEqual([p["flags"] for p in pulls0[:3]], ["0", "0", "0"])
         stand = lambda p: leg0[leg0.index(p) - 1]
-        self.assertEqual([(stand(p)["kind"], stand(p)["x"], stand(p)["y"]) for p in pulls0[4:]],
-                         [("move", "-12188", "-1489"), ("move", "-12250", "-1497.5"), ("move", "-12285", "-1490"),
-                          ("move", "-12233", "-1390"), ("move", "-12225", "-1445")])
+        self.assertEqual([(stand(p)["kind"], stand(p)["x"], stand(p)["y"]) for p in pulls0[3:]],
+                         [("move", "-12093", "-1446"), ("move", "-12097.2", "-1483.1"), ("move", "-12108", "-1479"),
+                          ("move", "-12188", "-1489"), ("move", "-12201", "-1494"), ("move", "-12183", "-1446"),
+                          ("move", "-12186", "-1458")])
+        xyz = lambda r: [float(r[k]) for k in ("x", "y", "z")]
+        # A stand-pull row is seen from its stand (the run leader's 60 yd), and its radius takes in the DB spawns of
+        # its own formations only (zg-census.txt, creature_groups): F2 49134-49136; F3 49155 (and its rider 49154, 2.0 yd)
+        # but not F4's bats 49151/49153 beside it; F4 49151; F7 49131-49133; F5 49140 and not F6's 49123; F6 49123 and
+        # not ledge bat 91551 (-12263.2 -1452.55 143.5).
+        for p in pulls0[3:6] + pulls0[7:]:
+            self.assertLessEqual(math.dist(xyz(stand(p)), xyz(p)), 60.0)
+        own = lambda p, spawn: math.dist(xyz(p), spawn) <= float(p["radius"]) + 1.0
+        self.assertTrue(all(own(pulls0[3], s) for s in ((-12215.5, -1465.09, 130.648), (-12219.2, -1464.7, 130.698), (-12218.4, -1467.39, 130.725))))
+        self.assertTrue(own(pulls0[4], (-12152.1, -1486.58, 130.85)) and own(pulls0[4], (-12152.5, -1484.64, 130.725)))
+        self.assertFalse(own(pulls0[4], (-12153.9, -1489.43, 130.725)) or own(pulls0[4], (-12153.8, -1482.52, 130.85)))
+        self.assertTrue(own(pulls0[5], (-12153.9, -1489.43, 130.725)) and not own(pulls0[5], (-12155.9, -1487.27, 130.85)))
+        self.assertTrue(all(own(pulls0[7], s) for s in ((-12236.9, -1414.1, 131.2), (-12238.7, -1413.23, 130.725), (-12238.1, -1416.02, 130.817))))
+        self.assertTrue(own(pulls0[8], (-12233.1, -1486.77, 132.874)) and not own(pulls0[8], (-12233.9, -1433.44, 130.711)))
+        self.assertTrue(own(pulls0[9], (-12233.9, -1433.44, 130.711)) and not own(pulls0[9], (-12233.1, -1486.77, 132.874)))
+        self.assertFalse(own(pulls0[9], (-12263.2, -1452.55, 143.499)) or own(pulls0[8], (-12263.2, -1452.55, 143.499)))
         # The static pack from its stand: its bat 49138 (the row's centre) in shot (within 24.5 yd 3D: 29.5 yd bow
         # range less the run leader's 5 yd margin) and out of its aggro (20 yd), the two riders out of theirs (21 yd).
-        s5 = [float(stand(pulls0[4])[k]) for k in ("x", "y", "z")]
+        s5 = xyz(stand(pulls0[6]))
         self.assertTrue(20.0 < math.dist(s5, (-12208.9, -1478.72, 131.26)) <= 24.5)
         for rider in ((-12214.8, -1484.34, 131.67), (-12221.5, -1477.08, 130.8)):
             self.assertGreater(math.dist(s5, rider), 21.0)
-        # The F5 row's residue band (radius + 10 yd) stays clear of ledge bat 91553 (-12284 -1456.87, 28 yd up,
-        # wander 5): the run leader cannot pull it, and walk 5 paused on it at step 37.
-        f5 = pulls0[6]
-        self.assertGreater(math.hypot(float(f5["x"]) + 12284.0, float(f5["y"]) + 1456.87) - 5.0, float(f5["radius"]) + 10.0)
         self.assertIn("('zul_gurub', 309, '', '', '14750', ", text)
         self.assertEqual([r["entry"] for r in rows if r["kind"] == "boss"],
                          ["14517", "14507", "14510", "14599", "14515", "11382", "11380", "14834"])
         self.assertEqual({r["kind"] for r in rows}, {"move", "pull", "boss"})
         pulls = [r for r in rows if r["kind"] == "pull"]
-        self.assertEqual(len(pulls), 168)
-        self.assertLessEqual(max(float(r["radius"]) for r in pulls if r is not pulls0[-1]), 35.0)
+        self.assertEqual(len(pulls), 169)
+        self.assertLessEqual(max(float(r["radius"]) for r in pulls if not int(r["flags"]) & 8192), 35.0)
+        self.assertEqual([r for r in pulls if int(r["flags"]) & 8192], [p for p in pulls0 if p["flags"] == "8192"])
         self.assertLessEqual(max(len(r["entries"].split(",")) for r in pulls), 12)
         for entry in ("2914", "13321", "4075", "1420", "14881", "14758", "15091"):
             self.assertFalse([r for r in pulls if entry in r["entries"].split(",")], entry)
