@@ -140,6 +140,12 @@
       needs.forEach((need) => { answers[need] = []; });
       const okAll = ability.ok || "";
       const okNeeds = ability.okNeeds || {};
+      const codeLevels = {};
+      function noteCode(code) {
+        if (LEVEL_ORDER[code.level] > LEVEL_ORDER[codeLevels[code.need] || "none"]) {
+          codeLevels[code.need] = code.level;
+        }
+      }
 
       function answer(need, level, text) {
         if (!(need in lv)) {
@@ -164,7 +170,7 @@
         }
       }
 
-      if (ability.summon) killAnswers(ability.summon, answer);
+      if (ability.summon) killAnswers(ability.summon, answer, noteCode);
       ownTactics.forEach((row) => {
         if (row.kind === "behind" && haveRows && ability.cone) answer("front", "full", "behind " + fmtNum(row.param) + " yd");
       });
@@ -172,6 +178,7 @@
       codes.forEach((code) => {
         if (!codeMatches(code, ability, sid, 0)) return;
         answer(code.need, code.level, codeText(code));
+        noteCode(code);
       });
 
       if (okAll) {
@@ -186,9 +193,12 @@
       }
       if (truncated) {
         // The snapshot stops at a query cap: a missing or present row proves
-        // nothing, so every need only the database can answer is unknown.
+        // nothing, so a need only the database can answer is unknown. A code
+        // answer is not a row and keeps the best level it gave.
         Object.keys(lv).forEach((need) => {
-          if (DB_NEEDS[need] && lv[need] !== "ok") lv[need] = "unknown";
+          if (!DB_NEEDS[need] || lv[need] === "ok") return;
+          const codeLevel = codeLevels[need];
+          lv[need] = codeLevel && codeLevel !== "none" ? codeLevel : "unknown";
         });
       } else if (!haveRows) {
         Object.keys(lv).forEach((need) => {
@@ -217,7 +227,7 @@
       };
     }
 
-    function killAnswers(id, answer) {
+    function killAnswers(id, answer, onCode) {
       if (haveRows) {
         kills.forEach((row) => {
           if (row.target !== id) return;
@@ -235,7 +245,9 @@
         });
       }
       codes.forEach((code) => {
-        if (codeMatches(code, null, 0, id)) answer("kill", code.level, codeText(code));
+        if (!codeMatches(code, null, 0, id)) return;
+        answer("kill", code.level, codeText(code));
+        if (onCode) onCode(code);
       });
     }
 
@@ -243,13 +255,20 @@
       const id = add.entry;
       const lv = { kill: "none" };
       const list = [];
+      let codeLevel = "none";
       function answer(need, level, text) {
         if (LEVEL_ORDER[level] > LEVEL_ORDER[lv[need]]) lv[need] = level;
         list.push({ need, level, text });
       }
-      killAnswers(id, answer);
-      if (truncated) lv.kill = "unknown";
-      else if (!haveRows && lv.kill !== "full") lv.kill = "unknown";
+      function noteCode(code) {
+        if (LEVEL_ORDER[code.level] > LEVEL_ORDER[codeLevel]) codeLevel = code.level;
+      }
+      killAnswers(id, answer, noteCode);
+      if (truncated) {
+        // A code answer is not a row and keeps its level; without one the kill
+        // need depends on rows the cut may have dropped.
+        lv.kill = codeLevel !== "none" ? codeLevel : "unknown";
+      } else if (!haveRows && lv.kill !== "full") lv.kill = "unknown";
       return {
         key: "add:" + id,
         kind: "add",

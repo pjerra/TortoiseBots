@@ -57,6 +57,47 @@ assert.ok(page.includes(C._esc("the server's tactic rows were cut off at 5000 ro
   "the page names the cap in the incomplete-coverage banner");
 assert.ok(!/<img/.test(page), "the cut banner and the row comments stay escaped");
 
+// A code answer is not a database row: the cut cannot take it away.
+function codeAnswer(opts) {
+  return Object.assign({
+    map: "*", boss: 0, key: "", spell: 0, add: 0, flag: "", need: "", level: "", name: "code answer", text: "", source: [],
+  }, opts || {});
+}
+
+function cutWith(codes, adds) {
+  const boss = Object.assign({}, TABLE.bosses["90001"], {
+    abilities: [ability(91001, "Spell A", { int: true })],
+    adds: adds || [],
+  });
+  return C.compute(
+    Object.assign({}, TABLE, { bosses: { "90001": boss }, codeAnswers: codes || [] }),
+    Object.assign({}, ROWS, { truncated: true, truncatedAt: 5000 }),
+  );
+}
+
+const fullCode = cutWith([codeAnswer({ spell: 91001, need: "interrupt", level: "full" })]);
+const fullCodeLine = fullCode.raids[0].bosses[0].lines.find((item) => item.key === "91001");
+assert.strictEqual(fullCodeLine.needs.interrupt, "full", "a full code answer survives the cut");
+assert.strictEqual(fullCodeLine.status, "answered", "a full code answer still answers the line: " + fullCodeLine.status);
+
+const partlyCode = cutWith([codeAnswer({ spell: 91001, need: "interrupt", level: "partly" })]);
+const partlyCodeLine = partlyCode.raids[0].bosses[0].lines.find((item) => item.key === "91001");
+assert.strictEqual(partlyCodeLine.needs.interrupt, "partly", "a partly code answer survives the cut");
+assert.strictEqual(partlyCodeLine.status, "partly", "a partly code answer still half-answers the line: " + partlyCodeLine.status);
+
+const addPartly = cutWith(
+  [codeAnswer({ add: 90002, need: "kill", level: "partly" })],
+  [{ entry: 90002, name: "Add One", priority: 1 }],
+);
+const addPartlyLine = addPartly.raids[0].bosses[0].lines.find((item) => item.key === "add:90002");
+assert.strictEqual(addPartlyLine.needs.kill, "partly", "a partly code answer survives the cut on an add line");
+assert.strictEqual(addPartlyLine.status, "partly", "a partly code answer half-answers the add line: " + addPartlyLine.status);
+
+const addBare = cutWith([], [{ entry: 90002, name: "Add One", priority: 1 }]);
+const addBareLine = addBare.raids[0].bosses[0].lines.find((item) => item.key === "add:90002");
+assert.strictEqual(addBareLine.needs.kill, "unknown", "an add line with no code answer is unknown when the rows were cut");
+assert.strictEqual(addBareLine.status, "unknown", "a DB-only add line is unknown, not missing: " + addBareLine.status);
+
 // ---- the banner names whichever table hit its cap ------------------------------------------------------
 const plans = C.compute(TABLE, Object.assign({}, ROWS, { truncated: true, truncatedAt: 1000 }));
 const plansPage = C.renderRaid(plans, { raid: "testraid", missing: false, boss: null }, {});
