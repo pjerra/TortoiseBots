@@ -565,10 +565,6 @@ def migration_rows(sql_dir):
                     stands = updated
                 elif table == "ai_dungeon_step":
                     changes = _set_values(set_text, STEP_FIELDS, where)
-                    if not any(name in changes for name in ("kind", "entry", "entries")):
-                        # Only the boss steps' kill lists are replayed; an UPDATE that touches none of kind, entry and
-                        # entries (a coordinate or flag fix with any WHERE) cannot change them.
-                        continue
                     wanted = _conditions(conditions_text, STEP_FIELDS, where)
                     updated = {}
                     for row in steps.values():

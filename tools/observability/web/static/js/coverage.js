@@ -77,7 +77,7 @@
 
   // ---- the boss worker: one boss's lines, warnings and extra rows (§1) --------------------------------------------------
 
-  function bossWorker(doc, mapId, bossLookup, tactics, stands, plans, codes, haveRows, truncated) {
+  function bossWorker(doc, mapId, bossLookup, tactics, stands, plans, steps, codes, haveRows, truncated) {
     const entry = doc.entry;
     const sids = {};
     (doc.abilities || []).forEach((ability) => { sids[String(ability.sid)] = true; });
@@ -86,6 +86,7 @@
     const ownStands = stands.filter((stand) => stand.map === mapId && stand.boss === entry);
     const kills = mapTactics.filter((row) => row.kind === "kill_first");
     const ownPlans = plans.filter((plan) => plan.map === mapId);
+    const ownSteps = steps.filter((step) => step.map === mapId);
     const warnings = [];
     const usedTactics = new Set();
     const usedStands = new Set();
@@ -240,6 +241,11 @@
             warn("kill_first on " + id + " is under boss " + otherBoss(row.boss) + ": check it is the right boss");
           }
         });
+        ownSteps.forEach((step) => {
+          if (step.entries.indexOf(id) < 0) return;
+          if (step.boss === entry) answer("kill", "full", "plan " + step.plan + " boss step kill list");
+          else answer("kill", "partly", "plan " + step.plan + " boss step of " + otherBoss(step.boss));
+        });
         ownPlans.forEach((plan) => {
           if (plan.entries.indexOf(id) >= 0) answer("kill", "partly", "plan " + plan.plan + " kill_first (run leader only)");
         });
@@ -374,11 +380,12 @@
     const tactics = (rows && rows.tactics) || [];
     const stands = (rows && rows.stands) || [];
     const plans = (rows && rows.planKillFirst) || [];
+    const steps = (rows && rows.bossKillFirst) || [];
     const out = [];
     maps.forEach((raid) => {
       const mapId = raid.mapId;
       const entries = (raid.bosses || []).filter((entry) => String(entry) in bosses);
-      const bossResults = entries.map((entry) => bossWorker(bosses[String(entry)], mapId, bosses, tactics, stands, plans, codes, haveRows, truncated).result());
+      const bossResults = entries.map((entry) => bossWorker(bosses[String(entry)], mapId, bosses, tactics, stands, plans, steps, codes, haveRows, truncated).result());
       const unknown = {};
       if (haveRows) {
         tactics.forEach((row) => {

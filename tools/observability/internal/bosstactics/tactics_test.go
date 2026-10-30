@@ -24,6 +24,9 @@ type fakeSource struct {
 	tactics []Tactic
 	stands  []Stand
 	plans   []PlanKill
+	steps   []BossKill
+	bErr    error
+	bCut    bool
 	tErr    error
 	sErr    error
 	pErr    error
@@ -59,6 +62,15 @@ func (f *fakeSource) PlanKillFirst(context.Context) ([]PlanKill, bool, error) {
 		return nil, false, f.pErr
 	}
 	return f.plans, f.pCut, nil
+}
+
+func (f *fakeSource) BossKillFirst(context.Context) ([]BossKill, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.bErr != nil {
+		return nil, false, f.bErr
+	}
+	return f.steps, f.bCut, nil
 }
 
 func (f *fakeSource) callCount() int {
@@ -175,6 +187,9 @@ func (g *gatedSource) Tactics(context.Context) ([]Tactic, bool, error) {
 
 func (g *gatedSource) Stands(context.Context) ([]Stand, bool, error) { return nil, false, nil }
 func (g *gatedSource) PlanKillFirst(context.Context) ([]PlanKill, bool, error) {
+	return nil, false, nil
+}
+func (g *gatedSource) BossKillFirst(context.Context) ([]BossKill, bool, error) {
 	return nil, false, nil
 }
 
@@ -373,6 +388,7 @@ func TestTruncatedFlag(t *testing.T) {
 		{"tactics", &fakeSource{tCut: true}, TacticsLimit},
 		{"stands", &fakeSource{sCut: true}, StandsLimit},
 		{"plans", &fakeSource{pCut: true}, PlansLimit},
+		{"boss steps", &fakeSource{bCut: true}, StepsLimit},
 	}
 	for _, one := range cases {
 		snap, err = NewService(one.src).Get(context.Background())
@@ -393,6 +409,7 @@ func TestQueries(t *testing.T) {
 		"tactics": QueryTactics,
 		"stands":  QueryStands,
 		"plans":   QueryPlanKillFirst,
+		"steps":   QueryBossSteps,
 	} {
 		if !strings.Contains(query, "ORDER BY") {
 			t.Errorf("%s query has no ORDER BY: %s", name, query)
@@ -413,6 +430,9 @@ func TestQueries(t *testing.T) {
 	if !strings.HasSuffix(QueryPlanKillFirst, "LIMIT 1001") {
 		t.Errorf("plan query does not ask one row over its cap (%d): %s", PlansLimit, QueryPlanKillFirst)
 	}
+	if !strings.HasSuffix(QueryBossSteps, "LIMIT 20001") {
+		t.Errorf("boss step query does not ask one row over its cap (%d): %s", StepsLimit, QueryBossSteps)
+	}
 	if TacticsLimit != 5000 || StandsLimit != 5000 || PlansLimit != 1000 {
 		t.Errorf("row caps = %d/%d/%d, want the values the queries pin", TacticsLimit, StandsLimit, PlansLimit)
 	}
@@ -424,6 +444,7 @@ func TestQueriesUseMapPlaceholders(t *testing.T) {
 		"tactics": QueryTactics,
 		"stands":  QueryStands,
 		"plans":   QueryPlanKillFirst,
+		"steps":   QueryBossSteps,
 	} {
 		query, args := queryWithMaps(base, maps)
 		if strings.Contains(query, mapFilterMarker) {
@@ -460,5 +481,66 @@ func TestRaidMapsMatchTheCommittedCSV(t *testing.T) {
 	}
 	if want := []uint32{249, 309, 531}; !reflect.DeepEqual(maps, want) {
 		t.Fatalf("RaidMaps() = %v, want %v", maps, want)
+	}
+}
+
+// TestBossKillFirst pins the boss-step read: only kind boss rows count, the empty list gives no row, an unparsable one is
+// dropped, the cap counts every raw row (not just the boss steps), and ForMap and the sort cover the new list.
+func TestBossKillFirst(t *testing.T) {
+	raw := []bossStepRow{
+		{Plan: "zul_gurub", Map: 309, Kind: "move", Entry: 0, Entries: ""},
+		{Plan: "zul_gurub", Map: 309, Kind: "boss", Entry: 14507, Entries: "14750, 14751"},
+		{Plan: "zul_gurub", Map: 309, Kind: "pull", Entry: 0, Entries: "14750"},
+		{Plan: "zul_gurub", Map: 309, Kind: "boss", Entry: 14510, Entries: ""},
+		{Plan: "zul_gurub", Map: 309, Kind: "boss", Entry: 14515, Entries: "14750,abc"},
+		{Plan: "aq20", Map: 509, Kind: "boss", Entry: 15348, Entries: "0,15350"},
+	}
+	got := buildBossKills(raw)
+	want := []BossKill{
+		{Plan: "zul_gurub", Map: 309, Boss: 14507, Entries: []uint32{14750, 14751}},
+		{Plan: "aq20", Map: 509, Boss: 15348, Entries: []uint32{15350}},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("boss kills = %+v, want %+v", got, want)
+	}
+
+	over := make([]bossStepRow, StepsLimit+1)
+	for i := range over {
+		over[i] = bossStepRow{Plan: "p", Map: 309, Kind: "move"}
+	}
+	over[0] = bossStepRow{Plan: "p", Map: 309, Kind: "boss", Entry: 1, Entries: "2"}
+	steps, truncated := bossKillsWithinCap(over)
+	if !truncated || len(steps) != 1 {
+		t.Fatalf("%d raw steps over the cap: truncated=%v steps=%d, want true/1 (the cap counts non-boss rows too)", len(over), truncated, len(steps))
+	}
+
+	src := newFake()
+	src.steps = []BossKill{
+		{Plan: "zul_gurub", Map: 309, Boss: 14507, Entries: []uint32{14750}},
+		{Plan: "aq20", Map: 509, Boss: 15348, Entries: []uint32{15350}},
+	}
+	snap, err := NewService(src).Get(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snap.BossKillFirst) != 2 || snap.BossKillFirst[0].Plan != "aq20" {
+		t.Fatalf("snapshot boss kills = %+v, want both, sorted by plan", snap.BossKillFirst)
+	}
+	if one := snap.ForMap(309); len(one.BossKillFirst) != 1 || one.BossKillFirst[0].Boss != 14507 {
+		t.Fatalf("ForMap(309) boss kills = %+v", one.BossKillFirst)
+	}
+	if none := snap.ForMap(1); none.BossKillFirst == nil || len(none.BossKillFirst) != 0 {
+		t.Fatalf("ForMap(1) boss kills = %#v, want an empty list (JSON [], not null)", none.BossKillFirst)
+	}
+
+	// A missing table reads as no steps; any other failure fails the snapshot (fail closed).
+	src.bErr = &mysql.MySQLError{Number: mysqlNoSuchTable, Message: "Table 'world.ai_dungeon_step' doesn't exist"}
+	missing, err := NewService(src).Get(context.Background())
+	if err != nil || len(missing.BossKillFirst) != 0 {
+		t.Fatalf("missing step table: %v %+v", err, missing)
+	}
+	src.bErr = errors.New("connection reset")
+	if _, err := NewService(src).Get(context.Background()); err == nil {
+		t.Fatal("a broken step read must fail the snapshot, not read as no steps")
 	}
 }

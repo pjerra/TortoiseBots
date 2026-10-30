@@ -34,6 +34,7 @@ const (
 	TacticsLimit = 5000
 	StandsLimit  = 5000
 	PlansLimit   = 1000
+	StepsLimit   = 20000
 
 	// SourceWorld says the rows came from the running world database.
 	SourceWorld = "world"
@@ -55,6 +56,10 @@ const (
 	QueryStands = "SELECT `map`, `boss_entry`, `window_spell`, `aura`, `role`, `window_signal`, SUM(`slots`) FROM `ai_boss_stand`/*maps*/ GROUP BY `map`, `boss_entry`, `window_spell`, `aura`, `role`, `window_signal` ORDER BY `map`, `boss_entry`, `window_spell`, `role` LIMIT 5001"
 
 	QueryPlanKillFirst = "SELECT `plan`, `map`, `kill_first` FROM `ai_dungeon_plan`/*maps*/ ORDER BY `plan` LIMIT 1001"
+
+	// QueryBossSteps reads every step of the raid maps' plans with the plan's map; the boss steps (kind boss: entry is the
+	// boss, entries the adds it kills first) are picked in Go, so the query keeps its no-literal rule.
+	QueryBossSteps = "SELECT s.`plan`, p.`map`, s.`kind`, s.`entry`, s.`entries` FROM `ai_dungeon_step` s JOIN `ai_dungeon_plan` p ON p.`plan` = s.`plan`/*maps*/ ORDER BY s.`plan`, s.`leg`, s.`seq` LIMIT 20001"
 )
 
 // Tactic is one ai_boss_tactic row as the page reads it.
@@ -88,12 +93,23 @@ type PlanKill struct {
 	Entries []uint32 `json:"entries"`
 }
 
+// BossKill is one boss step's kill list (the adds the run leader kills first at that boss), already parsed.
+type BossKill struct {
+	Plan    string   `json:"plan"`
+	Map     uint32   `json:"map"`
+	Boss    uint32   `json:"boss"`
+	Entries []uint32 `json:"entries"`
+}
+
 // Snapshot is the whole read: the JSON body of GET /api/v1/boss/tactics with
 // no map filter.
 type Snapshot struct {
 	Tactics       []Tactic   `json:"tactics"`
 	Stands        []Stand    `json:"stands"`
 	PlanKillFirst []PlanKill `json:"planKillFirst"`
+	// BossKillFirst is the kill list of each plan's boss steps: the raid plans give their kill-first adds per boss, the
+	// plan-level kill_first stays empty there.
+	BossKillFirst []BossKill `json:"bossKillFirst"`
 	Source        string     `json:"source"`
 	LoadedAt      string     `json:"loadedAt"`
 	Truncated     bool       `json:"truncated,omitempty"`
@@ -124,6 +140,12 @@ func (s *Snapshot) ForMap(mapID uint32) *Snapshot {
 			out.PlanKillFirst = append(out.PlanKillFirst, p)
 		}
 	}
+	out.BossKillFirst = make([]BossKill, 0, len(s.BossKillFirst))
+	for _, b := range s.BossKillFirst {
+		if b.Map == mapID {
+			out.BossKillFirst = append(out.BossKillFirst, b)
+		}
+	}
 	return &out
 }
 
@@ -134,6 +156,7 @@ type Source interface {
 	Tactics(ctx context.Context) ([]Tactic, bool, error)
 	Stands(ctx context.Context) ([]Stand, bool, error)
 	PlanKillFirst(ctx context.Context) ([]PlanKill, bool, error)
+	BossKillFirst(ctx context.Context) ([]BossKill, bool, error)
 }
 
 // NewSQLSource reads the world database, limited to the raid maps of
@@ -215,6 +238,65 @@ func (s *sqlSource) PlanKillFirst(ctx context.Context) ([]PlanKill, bool, error)
 	}
 	plans, truncated := planKillsWithinCap(raw)
 	return plans, truncated, nil
+}
+
+func (s *sqlSource) BossKillFirst(ctx context.Context) ([]BossKill, bool, error) {
+	query, args := queryWithMaps(QueryBossSteps, s.maps)
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, false, err
+	}
+	defer rows.Close()
+	var raw []bossStepRow
+	for rows.Next() {
+		var r bossStepRow
+		if err := rows.Scan(&r.Plan, &r.Map, &r.Kind, &r.Entry, &r.Entries); err != nil {
+			return nil, false, err
+		}
+		raw = append(raw, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, false, err
+	}
+	steps, truncated := bossKillsWithinCap(raw)
+	return steps, truncated, nil
+}
+
+// bossStepRow is one ai_dungeon_step row before the boss steps are picked.
+type bossStepRow struct {
+	Plan    string
+	Map     uint32
+	Kind    string
+	Entry   uint32
+	Entries string
+}
+
+// bossKillsWithinCap counts the raw step rows (every kind) before the boss steps are picked, as the plan read does: a cap
+// reached only after the filter could look complete.
+func bossKillsWithinCap(raw []bossStepRow) ([]BossKill, bool) {
+	raw, truncated := capRows(raw, StepsLimit)
+	return buildBossKills(raw), truncated
+}
+
+// buildBossKills keeps the boss steps with a usable kill list: an empty list gives no row, and a list that does not parse is
+// dropped and logged, as the loader drops it.
+func buildBossKills(rows []bossStepRow) []BossKill {
+	out := make([]BossKill, 0, 64)
+	for _, r := range rows {
+		if r.Kind != "boss" {
+			continue
+		}
+		entries, ok := ParseKillFirst(r.Entries)
+		if !ok {
+			log.Printf("[BossTactics] plan %q boss %d: entries %q is not a list of creature entries, dropped", r.Plan, r.Entry, r.Entries)
+			continue
+		}
+		if len(entries) == 0 {
+			continue
+		}
+		out = append(out, BossKill{Plan: r.Plan, Map: r.Map, Boss: r.Entry, Entries: entries})
+	}
+	return out
 }
 
 // planKillsWithinCap counts the raw plan rows before buildPlanKills drops the
@@ -406,6 +488,13 @@ func (s *Service) read(ctx context.Context, started time.Time) (*Snapshot, error
 		}
 		plans, plansCut = nil, false
 	}
+	bossKills, bossCut, err := s.src.BossKillFirst(ctx)
+	if err != nil {
+		if !missingTable(err) {
+			return nil, err
+		}
+		bossKills, bossCut = nil, false
+	}
 	truncatedAt := 0
 	switch {
 	case tacticsCut:
@@ -414,11 +503,14 @@ func (s *Service) read(ctx context.Context, started time.Time) (*Snapshot, error
 		truncatedAt = StandsLimit
 	case plansCut:
 		truncatedAt = PlansLimit
+	case bossCut:
+		truncatedAt = StepsLimit
 	}
 	return &Snapshot{
 		Tactics:       sortedTactics(emptyIfNil(tactics)),
 		Stands:        sortedStands(emptyIfNil(stands)),
 		PlanKillFirst: sortedPlanKills(emptyIfNil(plans)),
+		BossKillFirst: sortedBossKills(emptyIfNil(bossKills)),
 		Source:        SourceWorld,
 		LoadedAt:      started.UTC().Format(time.RFC3339),
 		Truncated:     truncatedAt != 0,
@@ -472,6 +564,16 @@ func sortedStands(rows []Stand) []Stand {
 
 func sortedPlanKills(rows []PlanKill) []PlanKill {
 	sort.SliceStable(rows, func(i, j int) bool { return rows[i].Plan < rows[j].Plan })
+	return rows
+}
+
+func sortedBossKills(rows []BossKill) []BossKill {
+	sort.SliceStable(rows, func(i, j int) bool {
+		if rows[i].Plan != rows[j].Plan {
+			return rows[i].Plan < rows[j].Plan
+		}
+		return rows[i].Boss < rows[j].Boss
+	})
 	return rows
 }
 
