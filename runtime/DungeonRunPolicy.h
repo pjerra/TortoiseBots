@@ -314,6 +314,10 @@ inline std::uint32_t BossAwayWaitMs(const PlanStep& s)
 }
 constexpr std::uint32_t kStandPullWaitMs = 600000;
 constexpr float kStandPullMarginYd = 1.0f;
+// A stand-pull PULL row (kPlanFlagStandPull on a pull; specs/rl-patrol-timed-pull.md, Zul'Gurub walks 6-7): the
+// pack is pulled from the stand once one of its units is in the tank's shot and no other patrol is near the lead bot.
+constexpr float kStandPullClearYd = 40.0f;    // ... no other patrol this close (the row's `param` in yd; 0: this)
+constexpr float kStandPullClearMaxYd = 60.0f; // ... the clearance's ceiling, and how far the glue lists patrols
 // A unit a party member has as its victim that stays at 1 hp (or at 1 % or less, unchanged) this long cannot die
 // now (HpHeldTick; Scarlet Cathedral r23 slot 5: Whitemane sat at 1 hp of 5284 under her script's invincibility,
 // and the fight ceiling paused four times on the same unkillable fight).
@@ -333,6 +337,10 @@ constexpr float kPatrolSeeYd = 30.0f;             // the glue reads patrollers o
 constexpr float kPackResidueZYd = 10.0f;          // the band's height around the step point: a unit on another floor is no residue
 constexpr float kSpawnOwnTolYd = 1.0f;            // a DB spawn this close to the radius still belongs to the step
 constexpr float kSpawnPatrolSeeYd = 60.0f;        // ... and a spawn-owned patroller is listed this far out (any movement type)
+// A stand-pull pull row lists its waypoint patrollers this far outside its radius (kPatrolSeeYd otherwise): a
+// formation's loop reaches farther than 30 yd from the turn its row sits on (Zul'Gurub walk 7 step 32: the F6 row
+// said "pack cleared" with its nearest bat 44.1 yd from a 4 yd radius, and F6 walked into the next stand).
+constexpr float kStandPullSeeYd = kSpawnPatrolSeeYd;
 constexpr float kPackClearMarginMaxYd = kPatrolSeeYd; // the margin's ceiling (the key clamps to it)
 // A big pack's firing stand walk (BigPackWalkGate; Uldaman r10-19z29 step 79):
 // the lead walked to the stand of a 9-joiner scorpid pack with the healer and
@@ -573,6 +581,9 @@ struct UnitFact
     std::uint32_t health = 0;
     std::uint32_t maxHealth = 0;
     bool partyHits = false;
+    // A stand-pull row's units, patrollers and Facts::standPatrols: the formation it walks in (its creature group's
+    // original leader guid; a unit in no group: its own guid). 0: not read.
+    std::uint64_t formation = 0;
 };
 
 // The mage's Polymorph (all ranks and forms): the aura the run waits for after
@@ -949,6 +960,10 @@ struct Facts
     // (OwnedByLaterStep), unless spawn-owned. distSpot: from the step's point;
     // x, y, z: where it is.
     std::vector<UnitFact> patrollers;
+    // A stand-pull pull row, out of combat: living hostile creatures out of combat within kStandPullClearMaxYd of the
+    // lead bot that walk a waypoint patrol or follow a living waypoint leader (any entry), with distLead, x, y, z and
+    // formation (PatrolStandPullGate: no other patrol near when the pull goes out).
+    std::vector<UnitFact> standPatrols;
     // The pack-cleared gate (AiPlayerbot.DungeonRunPackClearMarginYd; 0: off, every list below empty).
     std::vector<UnitFact> packResidue; // living units of a pull step's entries outside its radius, 2D within
                                        // radius + packClearMarginYd and |dz| <= kPackResidueZYd (ClassifyPullRead)
@@ -9942,17 +9957,21 @@ inline bool SpawnOwned(const PullReadIn& in, float radius)
 {
     return in.hasSpawn && in.spawnYd >= 0.0f && in.spawnYd <= radius + kSpawnOwnTolYd;
 }
-inline PullRead ClassifyPullRead(const PullReadIn& in, float radius, float marginYd)
+// `patrolSeeYd`: how far outside the radius a waypoint patroller is listed (kStandPullSeeYd on a stand-pull pull row).
+inline PullRead ClassifyPullRead(const PullReadIn& in, float radius, float marginYd, float patrolSeeYd = kPatrolSeeYd)
 {
     if (in.fromPoint <= radius)
         return PullRead::Unit;
     if (marginYd <= 0.0f) // the gate off: today's patroller rule exactly
-        return in.ownWaypoint && in.fromPoint <= radius + kPatrolSeeYd ? PullRead::Patroller : PullRead::Left;
+        return (in.ownWaypoint || (patrolSeeYd > kPatrolSeeYd && in.followsWaypointLeader)) &&
+                in.fromPoint <= radius + patrolSeeYd
+            ? PullRead::Patroller
+            : PullRead::Left;
     if (in.fromPoint2d <= radius + marginYd && std::fabs(in.dz) <= kPackResidueZYd)
         return PullRead::Residue;
     if (SpawnOwned(in, radius) && in.fromPoint <= radius + kSpawnPatrolSeeYd)
         return PullRead::Patroller;
-    if ((in.ownWaypoint || in.followsWaypointLeader) && in.fromPoint <= radius + kPatrolSeeYd)
+    if ((in.ownWaypoint || in.followsWaypointLeader) && in.fromPoint <= radius + patrolSeeYd)
         return PullRead::Patroller;
     return PullRead::Left;
 }
@@ -10180,6 +10199,121 @@ inline void StandPullGiveUp(Run& r, const PlanStep& s, const std::string& why)
     Pause(r, why + ": bring him to the party, then .bot run resume, or .bot run skip");
 }
 
+// The clearance of a stand-pull pull row: its `param` in yd, 0 the default, never past what the glue lists.
+inline float StandPullClearYd(const PlanStep& s)
+{
+    return s.param ? std::min(static_cast<float>(s.param), kStandPullClearMaxYd) : kStandPullClearYd;
+}
+
+// A stand-pull PULL row (kPlanFlagStandPull on a pull, specs/rl-patrol-timed-pull.md). Zul'Gurub walks 6-7: the
+// plateau's bat formations walk 35-100 s loops, two share a lane and three turn at one spot, and a pack pulled (or
+// met) while its neighbour walked by came with it (8-10 bats and 3-4 riders, 9-18 dead). The party holds at the
+// stand (the move row right before the row, same leg) and the pull goes out only when a unit of the pack, among
+// the row's units and the patrollers it waits for (PatrollerToWaitFor), is in the tank's shot and in sight, and no
+// other patrol (Facts::standPatrols: another formation, not passed) stands within the clearance
+// (StandPullClearYd) of the lead bot. The pick: one in shot first, then the plan's kill_first rank, then the nearest.
+// Out of combat only, with a ranged pull (otherwise the row pulls as before), and until the wait has run
+// kStandPullWaitMs (cumulative per step): then the run pauses once, and after a resume the row pulls as before.
+// Returns the unit the pull may go out on (standPullShotGuid set); null with `held` true when this tick waits,
+// walks back to the stand or paused; null with `held` false when the gate is off or has nothing to pull.
+inline const UnitFact* PatrolStandPullGate(Run& r, const Facts& f, const PlanStep& s, std::uint32_t dt,
+    std::string& order, bool& held)
+{
+    held = false;
+    if (s.kind != PlanStepKind::Pull || f.anyInCombat || f.leadShotYd <= kShotMarginYd ||
+        r.standPullMs >= kStandPullWaitMs)
+        return nullptr;
+    const PlanStep* const st = StandPullStand(r, s);
+    if (!st)
+        return nullptr;
+    float const inShot = f.leadShotYd - kStandPullMarginYd;
+    auto inShotOf = [&](const UnitFact& u) { return u.losLead && u.distLead <= inShot; };
+    const UnitFact* pick = nullptr;
+    auto consider = [&](const UnitFact& u)
+    {
+        if (!Pullable(r, u))
+            return;
+        if (!pick)
+        {
+            pick = &u;
+            return;
+        }
+        if (inShotOf(u) != inShotOf(*pick))
+        {
+            if (inShotOf(u))
+                pick = &u;
+            return;
+        }
+        int const rank = r.plan ? r.plan->KillFirstRank(u.entry) : -1;
+        int const pickRank = r.plan ? r.plan->KillFirstRank(pick->entry) : -1;
+        if (rank != pickRank)
+        {
+            if (rank >= 0 && (pickRank < 0 || rank < pickRank))
+                pick = &u;
+            return;
+        }
+        if (u.distLead < pick->distLead)
+            pick = &u;
+    };
+    for (const UnitFact& u : f.units)
+        consider(u);
+    for (const UnitFact& u : f.patrollers)
+        if (PatrollerToWaitFor(r, f, u))
+            consider(u);
+    if (!pick)
+        return nullptr;
+    held = true;
+    float const fromStand = ai::PlanDistance(f.leadX, f.leadY, f.leadZ, st->x, st->y, st->z);
+    if (fromStand > kHoldReturnYd)
+    {
+        r.standPullShotGuid = 0;
+        if (!WalkTo(r, f, st->x, st->y, st->z, false, dt, order) && r.state == State::Running)
+            r.note = "back to the stand for the patrol pull of " + std::to_string(pick->entry);
+        return nullptr;
+    }
+    float const clearYd = StandPullClearYd(s);
+    const UnitFact* other = nullptr;
+    for (const UnitFact& u : f.standPatrols)
+    {
+        if (!u.hostile || u.guid == pick->guid || r.passed.count(u.guid) || u.distLead > clearYd)
+            continue;
+        if (pick->formation && u.formation == pick->formation)
+            continue; // its own formation comes with it anyway
+        if (!other || u.distLead < other->distLead)
+            other = &u;
+    }
+    if (inShotOf(*pick) && !other)
+    {
+        held = false;
+        r.standPullShotGuid = pick->guid;
+        return pick;
+    }
+    r.standPullShotGuid = 0; // the pull never went out
+    r.standPullMs += dt;
+    std::string const what = std::to_string(pick->entry) + " " + GuidArg(pick->guid);
+    if (r.standPullMs >= kStandPullWaitMs)
+    {
+        Pause(r, "patrol pull: " + what + " did not come within " + Num(inShot) + " yd of the stand with no other "
+            "patrol within " + Num(clearYd) + " yd in " + std::to_string(kStandPullWaitMs / 1000) +
+            " s: pull it, then .bot run resume (the step then pulls as a plain pull), or .bot run skip");
+        return nullptr;
+    }
+    r.stepIdleMs = dt > r.stepIdleMs ? 0 : r.stepIdleMs - dt; // the wait is the step's work, not idling
+    if (!PartyGathered(f) && !r.gatherWaived && r.phase != Phase::Gather)
+    {
+        EnterPhase(r, Phase::Gather);
+        SendGather(r, f, order); // the party forms up at the stand while it waits
+    }
+    if (!inShotOf(*pick))
+        r.note = "patrol pull: waiting at the stand for " + what + " to come within " + Num(inShot) + " yd (now " +
+            Num(pick->distLead) + " yd" + (pick->losLead ? std::string() : ", out of sight") + ")";
+    else
+        r.note = "patrol pull: " + what + " is in shot (" + Num(pick->distLead) + " yd), waiting for " +
+            std::to_string(other->entry) + " " + GuidArg(other->guid) + " of another patrol, " + Num(other->distLead) +
+            " yd from the lead bot, to walk off (clear at " + Num(clearYd) + " yd)";
+    return nullptr;
+}
+
 inline FightEnd FightStepEnd(const Run& r, const Facts& f, const PlanStep& s)
 {
     if (!f.seen || OpenUnits(r, f.units) > 0)
@@ -10316,8 +10450,11 @@ inline void FightStep(Run& r, const Facts& f, const PlanStep& s, const std::vect
     if (s.kind == PlanStepKind::Boss)
         for (const UnitFact& u : f.units)
             r.bossSeenAlive = r.bossSeenAlive || u.entry == s.entry;
-    const UnitFact* pick = nullptr;
-    if (killOrder.empty())
+    bool patrolHeld = false;
+    const UnitFact* pick = PatrolStandPullGate(r, f, s, dt, order, patrolHeld);
+    if (patrolHeld)
+        return;
+    if (!pick && killOrder.empty())
         pick = PickPackPull(r, f);
     for (std::uint32_t entry : killOrder)
         if (!pick)
