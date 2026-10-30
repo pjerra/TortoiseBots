@@ -329,9 +329,11 @@ def parse_kill_first(text):
     return entries or None
 
 
-def tactic_rows(sql_dir):
-    """Effective ai_boss_tactic rows of a migration directory, sorted."""
-    return migration_rows(sql_dir)["tactics"]
+def tactic_rows(path):
+    """Effective ai_boss_tactic rows of a migration directory or a repo root, sorted."""
+    directory = Path(path)
+    default = directory / "data" / "sql" / "world"
+    return migration_rows(default if default.is_dir() else directory)["tactics"]
 
 
 def _stmt_where(path, statement):
@@ -453,11 +455,11 @@ def _db_query(connect, query):
         cursor = connection.cursor()
         try:
             cursor.execute(query)
+            return cursor.fetchall()
         except Exception as exc:
             if _missing_table(exc):
                 return None
             raise
-        return cursor.fetchall()
     finally:
         connection.close()
 
