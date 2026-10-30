@@ -1,7 +1,7 @@
 #pragma once
 
 // One LFT level-range table for the LFT fill and bot LFG groups; source
-// Soromeister/LFT v0.0.3.3 LFT.allDungeons; unknown and invalid ranges fail
+// the LFT built into the Turtle client; unknown and invalid ranges fail
 // closed; plain data and the standard library only.
 
 #include <cctype>
@@ -30,35 +30,37 @@ inline std::string NormalizeLftToken(std::string const& raw)
 
 inline std::unordered_map<std::string, LftLevelRange> const& LftDungeonRangeTable()
 {
-    // Source: Soromeister/LFT v0.0.3.3 LFT.allDungeons (authoritative queue availability).
-    // Exact codes/names/minLevel/maxLevel from the addon; unknown/corrupt ranges fail closed.
-    // Keys are NormalizeLftToken(raw) = alnum lowercased, so addon codes and normalized
-    // display names both resolve. No DBC fallback, no invented Tortoise-only ranges beyond this list.
+    // Source: the LFT built into the Turtle client, Interface/FrameXML/LFT/LFT_Data.lua LFT_Instances
+    // (client 1.18.1 (7272)); the core's TW_LFG queue receives these codes as the client sends them.
+    // Keys are NormalizeLftToken(raw): the client code, the English name, and
+    // the aliases deadmines / stockade / zulfarak / crescentgrove kept for ai_bot_lfg_plan rows.
     static std::unordered_map<std::string, LftLevelRange> const ranges = {
-        {"ragefirechasm", {13, 18}}, {"rfc", {13, 18}},
-        {"wailingcaverns", {17, 24}}, {"wc", {17, 24}},
-        {"thedeadmines", {17, 24}}, {"deadmines", {17, 24}}, {"dm", {17, 24}},
-        {"shadowfangkeep", {22, 30}}, {"sfk", {22, 30}},
-        {"thestockade", {22, 30}}, {"stockade", {22, 30}}, {"stocks", {22, 30}},
-        {"blackfathomdeeps", {23, 32}}, {"bfd", {23, 32}},
-        {"scarletmonasterygraveyard", {27, 36}}, {"smgy", {27, 36}},
-        {"scarletmonasterylibrary", {28, 39}}, {"smlib", {28, 39}},
-        {"gnomeregan", {29, 38}}, {"gnomer", {29, 38}},
-        {"razorfenkraul", {29, 38}}, {"rfk", {29, 38}},
-        {"thecrescentgrove", {32, 38}}, {"crescentgrove", {32, 38}}, {"tcg", {32, 38}},
-        {"scarletmonasteryarmory", {32, 41}}, {"smarmory", {32, 41}},
+        {"ragefirechasm", {13, 19}}, {"rfc", {13, 19}},
+        {"frostmanehollow", {13, 20}}, {"fmh", {13, 20}},
+        {"wailingcaverns", {16, 25}}, {"wc", {16, 25}},
+        {"thedeadmines", {16, 24}}, {"deadmines", {16, 24}}, {"dm", {16, 24}},
+        {"shadowfangkeep", {20, 28}}, {"sfk", {20, 28}},
+        {"thestockade", {23, 32}}, {"stockade", {23, 32}}, {"stocks", {23, 32}},
+        {"blackfathomdeeps", {22, 31}}, {"bfd", {22, 31}},
+        {"windhorncanyon", {25, 33}}, {"windhorn", {25, 33}},
+        {"scarletmonasterygraveyard", {30, 37}}, {"smgy", {30, 37}},
+        {"scarletmonasterylibrary", {32, 40}}, {"smlib", {32, 40}},
+        {"gnomeregan", {28, 37}}, {"gnomer", {28, 37}},
+        {"razorfenkraul", {29, 36}}, {"rfk", {29, 36}},
+        {"thecrescentgrove", {33, 39}}, {"crescentgrove", {33, 39}}, {"tcg", {33, 39}},
+        {"scarletmonasteryarmory", {34, 42}}, {"smarmory", {34, 42}},
         {"scarletmonasterycathedral", {35, 45}}, {"smcath", {35, 45}},
-        {"razorfendowns", {36, 46}}, {"rfd", {36, 46}},
-        {"uldaman", {40, 51}}, {"ulda", {40, 51}},
-        {"gilneascity", {42, 50}}, {"gilneas", {42, 50}},
-        {"zulfarrak", {44, 54}}, {"zulfarak", {44, 54}}, {"zf", {44, 54}},
-        {"maraudonorange", {47, 55}}, {"maraorange", {47, 55}},
-        {"maraudonpurple", {45, 55}}, {"marapurple", {45, 55}},
-        {"maraudonprincess", {47, 55}}, {"maraprincess", {47, 55}},
-        {"templeofatalhakkar", {50, 60}}, {"st", {50, 60}},
-        {"hateforgequarry", {50, 60}}, {"hfq", {50, 60}},
-        {"blackrockdepths", {52, 60}}, {"brd", {52, 60}},
-        {"blackrockdepthsarena", {52, 60}}, {"brdarena", {52, 60}},
+        {"razorfendowns", {35, 44}}, {"rfd", {35, 44}},
+        {"uldaman", {41, 50}}, {"ulda", {41, 50}},
+        {"gilneascity", {43, 52}}, {"gilneas", {43, 52}},
+        {"zulfarrak", {42, 51}}, {"zulfarak", {42, 51}}, {"zf", {42, 51}},
+        {"maraudonorange", {43, 51}}, {"maraorange", {43, 51}},
+        {"maraudonpurple", {45, 52}}, {"marapurple", {45, 52}},
+        {"maraudonprincess", {46, 54}}, {"maraprincess", {46, 54}},
+        {"templeofatalhakkar", {49, 58}}, {"st", {49, 58}},
+        {"hateforgequarry", {51, 60}}, {"hfq", {51, 60}},
+        {"blackrockdepths", {54, 60}}, {"brd", {54, 60}},
+        {"blackrockdepthsarena", {50, 60}}, {"brdarena", {50, 60}},
         {"blackrockdepthsemperor", {54, 60}}, {"brdemp", {54, 60}},
         {"lowerblackrockspire", {55, 60}}, {"lbrs", {55, 60}},
         {"diremauleast", {55, 60}}, {"dme", {55, 60}},
@@ -68,9 +70,12 @@ inline std::unordered_map<std::string, LftLevelRange> const& LftDungeonRangeTabl
         {"scholomance", {58, 60}}, {"scholo", {58, 60}},
         {"stratholmeundeaddistrict", {58, 60}}, {"stratud", {58, 60}},
         {"stratholmescarletbastion", {58, 60}}, {"stratlive", {58, 60}},
-        {"karazhancrypt", {58, 60}}, {"kc", {58, 60}},
+        {"karazhancrypt", {60, 60}}, {"kc", {60, 60}},
         {"cavernsoftimeblackmorass", {60, 60}}, {"cotbm", {60, 60}},
-        {"stormwindvault", {60, 60}}, {"swv", {60, 60}}
+        {"stormwindvault", {60, 60}}, {"swv", {60, 60}},
+        {"stormwroughtcastle", {32, 40}}, {"swc", {32, 40}},
+        {"stormwroughtdescent", {35, 44}}, {"swd", {35, 44}},
+        {"dragonmawretreat", {26, 35}}, {"dmr", {26, 35}}
     };
     return ranges;
 }
