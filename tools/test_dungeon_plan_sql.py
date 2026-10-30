@@ -474,7 +474,7 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertIn("DELETE FROM `ai_dungeon_boss` WHERE `map` IN (34);", text)
 
     def test_dragonmaw_retreat_is_the_plan_with_the_census_fixes(self):
-        # 20261030120000 (2026-10-30, after the fix-8 live run on tortoise-test2: the pocket passed, but Searistrasz aggroed on the
+        # 20261030200000 (2026-10-30, after the fix-8 live run on tortoise-test2: the pocket passed, but Searistrasz aggroed on the
         # walk at step 260 and took 24 min with all six Dragonmaw Enchanters alive): 20261025002000's rows with leg 3 walked round
         # the boss's patrol. Searistrasz (62072, guid 2584790) walks 42 waypoints up and down x -5980.2..-5981.7, y -4191.5..
         # -4358.9 (tortoise-wow 20260630194548_world.sql); the exporter's walk to the leg's `to` (-5978.8 -4137.4) ran along that
@@ -553,7 +553,7 @@ class DungeonPlanSql(unittest.TestCase):
         # 10 legs, 846 steps (20261025002000's 835: leg 3 128 -> 132 rows, leg 4 116 -> 123), the same 83 pulls of legs 3 and 4
         # (28+6+12+57+26+17+25+10+22+3: the alcove's 3 moved from leg 3 to leg 4), bosses in leg order, no door or event step.
         name, text = newest_plan_text("dragonmaw_retreat")
-        self.assertEqual(name, "20261030120000_world.sql")
+        self.assertEqual(name, "20261030200000_world.sql")
         self.assertIn("('dragonmaw_retreat', 816, '62077,62036,62047,62046', '62077', '62053,62039,62071,62070,8853', 'turtle-agent c19713b dungeons/dragonmaw_retreat.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         legs = leg_rows(text, "dragonmaw_retreat")
         self.assertEqual(sorted(legs), list(range(10)))
