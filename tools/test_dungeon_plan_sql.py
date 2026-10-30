@@ -4812,46 +4812,49 @@ class DungeonPlanSql(unittest.TestCase):
                                  "step %s (%s %s %s) stands %.1f yd off the floor %.1f" % (r["seq"], r["x"], r["y"], r["z"], abs(float(r["z"]) - near[0]), near[0]))
 
     def test_zul_gurub_is_the_raid_prep(self):
-        # 20261029230000 (turtle-agent prep/raid-zg aded04b9, 2026-10-29, the walk-1 fix of leg 0): the 20-man ZG prep of
-        # RAID-PREP-zg.md, re-spaced after the first live walk (TortoiseBots-audit tests/raid-zg-walk1). 9 legs,
-        # 1106 steps (the move rows include the approach and via points), 168 merged pulls (cap 12, radius <= 35), the
-        # eight bosses in the guide's order. What changed from 20261029200000, and why:
-        #   - leg 0 (`high_priestess_jeklik`) has 9 pulls, not 10, and 43 steps, not 42: the 125 yd split group (-12152
-        #     -1485 and -12276 -1451, radius 2.8, whose pull row could not reach its own units) is gone. The -12152
-        #     cluster (2-5 yd from the -12153 pack's units) joined that pack, radius 20.5, and the -12276 cluster (0.3-5.5
-        #     yd from the -12277 pack's) joined that one, radius 18.5; each of the two walks a rest stand and a pull stand
-        #     of its own now (+2 move rows, -1 pull row).
-        #   - the leg's first stand is -12028 -1510 (out of both first-terrace pairs' aggro), not -12014.133 -1500.2511,
-        #     which is the first pair's pull stand now; and a via point at -11928.5 -1364.5 keeps the walk back after a
-        #     wipe off the water at -11944 -1355.
-        #   - every other leg is the prep's rows unchanged: 142, 28, 61, 121, 75, 114, 290 and 232 step rows.
+        # 20261030010000 (turtle-agent prep/raid-zg c78e032, 2026-10-30, the walk-2 fix of leg 0): the 20-man ZG prep of
+        # RAID-PREP-zg.md, re-spaced twice after live walks (TortoiseBots-audit tests/raid-zg-walk1, -walk2). 9 legs,
+        # 1107 steps (the move rows include the approach and via points), 168 merged pulls (cap 12, radius <= 35), the
+        # eight bosses in the guide's order. What changed from 20261029230000, and why:
+        #   - leg 0 (`high_priestess_jeklik`) has 44 steps, not 43: the bat pack's stand gained a rest stand at
+        #     -12084 -1441 before the stair pull stand -12066.938 -1439.884, and the two-point approaches of cluster 1
+        #     (-12112 -1486, -12165 -1478) and cluster 2 (-12255 -1438, -12268 -1448) became one stand each
+        #     (-12114 -1494 and -12307 -1411): +1 move row.
+        #   - every plateau stand moved out of the three patrol lanes (headhunter 11351, witch doctor 11831, bat rider
+        #     14750) and out of the other packs' aggro: -12185 -1495 for the patrolling headhunter and the 8-unit pack,
+        #     -12239 -1386 for the north bat pack and -12268 -1376 for the -12236 -1415 pack. Walk 2's log: "the tank
+        #     engages 11351 on arrival (15.9 yd)" at the -12102 -1465 climb row.
+        #   - every other leg is the walk-1 rows unchanged: 142, 28, 61, 121, 75, 114, 290 and 232 step rows.
         # The runts (2914, 13321, 4075, 1420, 14881) and the two event triggers
         # (14758, 15091) are in no pull; the first-add rows are the encounter units.
         name, text = newest_plan_text("zul_gurub")
-        self.assertEqual(name, "20261029230000_world.sql")
-        self.assertIn("('zul_gurub', 309, '', '', '', 'turtle-agent aded04b9 dungeons/zul_gurub.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261030010000_world.sql")
+        self.assertIn("('zul_gurub', 309, '', '', '', 'turtle-agent c78e032 dungeons/zul_gurub.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         self.assertEqual([v[0] for v in leg_rows(text, "zul_gurub").values()],
                          ["high_priestess_jeklik", "high_priest_venoxis", "high_priestess_marli",
                           "high_priest_thekal", "high_priestess_arlokk", "bloodlord_mandokir",
                           "jindo_the_hexxer", "hakkar_outer", "hakkar"])
         rows = [r for r in self.step_rows(text) if r["plan"] == "zul_gurub"]
-        self.assertEqual(len(rows), 1106)
+        self.assertEqual(len(rows), 1107)
         self.assertEqual([len(leg_steps(rows, leg)) for leg in range(9)],
-                         [43, 142, 28, 61, 121, 75, 114, 290, 232])
+                         [44, 142, 28, 61, 121, 75, 114, 290, 232])
         self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(9)],
                          [9, 21, 6, 7, 25, 23, 20, 39, 18])
-        # Leg 0's re-spacing: its first pull is walked up to from the stand at -12028 -1510, the plateau's two merged
-        # packs each have a rest stand and a pull stand, and the last one's stands are the -12255 -1438 rest and the
-        # -12268 -1448 pull.
+        # Leg 0's walk-2 re-spacing: the bat pack's rest stand before its stair pull, and the stands that follow out of
+        # the patrol lanes and the other packs' aggro.
         leg0 = leg_steps(rows, 0)
         moves = [(r["x"], r["y"]) for r in leg0 if r["kind"] == "move"]
         self.assertIn(("-12028", "-1510"), moves)
         self.assertLess(moves.index(("-12028", "-1510")), leg0.index([r for r in leg0 if r["kind"] == "pull"][0]))
-        self.assertIn(("-12112", "-1486"), moves)
-        self.assertIn(("-12165", "-1478"), moves)
         self.assertIn(("-11928.5", "-1364.5"), moves)
-        self.assertIn(("-12255", "-1438"), moves)
-        self.assertIn(("-12268", "-1448"), moves)
+        for stand in (("-12084", "-1441"), ("-12066.938", "-1439.884"), ("-12114", "-1494"), ("-12185", "-1495"),
+                      ("-12239", "-1386"), ("-12268", "-1376"), ("-12307", "-1411")):
+            self.assertIn(stand, moves)
+        self.assertEqual(moves.index(("-12084", "-1441")) + 1, moves.index(("-12066.938", "-1439.884")),
+                         "the rest stand goes right before the stair pull stand")
+        for gone in (("-12112", "-1486"), ("-12165", "-1478"), ("-12255", "-1438"), ("-12268", "-1448"),
+                     ("-12199.351", "-1467.1476"), ("-12219.585", "-1447.4061"), ("-12227.675", "-1431.8448")):
+            self.assertNotIn(gone, moves)
         self.assertNotIn(("-12215.9", "-1468.65"), [(r["x"], r["y"]) for r in leg0 if r["kind"] == "pull"])
         pulls0 = [r for r in leg0 if r["kind"] == "pull"]
         self.assertEqual([p["radius"] for p in pulls0], ["6.3", "8.8", "11.9", "20.5", "1", "13.4", "5", "1.2", "18.5"])
@@ -4869,9 +4872,6 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertEqual(boss["14510"]["entries"], "11388")
         self.assertEqual(boss["14599"]["entries"], "11347,11348,11361")
         self.assertEqual(re.findall(r"(?m)^DELETE FROM `ai_dungeon_step` WHERE `plan` = '(\w+)';", text), ["zul_gurub"])
-        # The eight ai_dungeon_boss rows and the six ai_boss_tactic rows of map 309 are unchanged, so this re-export
-        # re-seeds none (a re-export never repeats them: test_boss_tactics_sql.test_primary_keys_are_unique); their pin
-        # stays on 20261029200000, which seeded them.
         self.assertNotIn("`ai_dungeon_boss`", text)
         self.assertNotIn("`ai_boss_tactic`", text)
         with open(os.path.join(ROOT, "data/sql/world/20261029200000_world.sql"), encoding="utf-8") as handle:
