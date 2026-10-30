@@ -40,6 +40,8 @@
 - Fixed: bots now pick up quest source items (like the Gnarlpine Necklace that starts Ferocitas the Dream Eater) instead of leaving them on the corpse.
 
 - Fixed: bots now walk to corpses that hold only their own quest item, which can miss the lootable flag the corpse shows you.
+- Fixed: bots no longer walk to a corpse whose quest item the game keeps for the member whose loot turn it is, so they stop opening an empty window and queuing that corpse again.
+- Debug loot now says why a corpse is not the bot's to loot.
 
 ### Dungeons & Maps
 - New `AiPlayerbot.RaidEntryByCommander` (default `1`): a commanded raid can enter a raid whose entrance asks for something only a player has (Onyxia's Lair and its Drakefire Amulet) when the commander is a real player of the same raid and meets the requirement himself; the entrance's other checks are unchanged, and a five-player dungeon's or a scripted entrance's condition is never waived.
