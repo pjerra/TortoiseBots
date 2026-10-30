@@ -10199,6 +10199,20 @@ inline void StandPullGiveUp(Run& r, const PlanStep& s, const std::string& why)
     Pause(r, why + ": bring him to the party, then .bot run resume, or .bot run skip");
 }
 
+// A stand-pull pull row's pack has a unit in the tank's shot and sight this tick (the glue reads
+// Facts::standPatrols only then: the clearance matters only when the pull could go out).
+inline bool StandPullPackInShot(const Facts& f)
+{
+    if (f.leadShotYd <= kShotMarginYd)
+        return false;
+    float const inShot = f.leadShotYd - kStandPullMarginYd;
+    for (const std::vector<UnitFact>* list : {&f.units, &f.patrollers})
+        for (const UnitFact& u : *list)
+            if (u.hostile && u.losLead && u.distLead <= inShot)
+                return true;
+    return false;
+}
+
 // The clearance of a stand-pull pull row: its `param` in yd, 0 the default, never past what the glue lists.
 inline float StandPullClearYd(const PlanStep& s)
 {

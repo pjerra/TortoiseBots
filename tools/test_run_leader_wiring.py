@@ -647,7 +647,9 @@ class RunLeaderWiringTest(unittest.TestCase):
         read = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot const& slot,", "\n}\n")
         self.assertIn("bool const standPull = pullStep && StandThisStep(slot) && step == &slot.run.plan->steps[slot.run.step];", read)
         self.assertIn("float const patrolSeeYd = standPull ? kStandPullSeeYd : kPatrolSeeYd;", read)
-        self.assertIn("if (standPull && !f.anyInCombat)\n                ReadStandPatrols(lead, f);", read)
+        self.assertIn("step->kind == ai::PlanStepKind::Pull && TortoiseBots::DungeonRun::StandPullPackInShot(f))\n"
+                      "        ReadStandPatrols(lead, f);", read)
+        self.assertLess(read.index("ReadPullStand(slot, lead, f);"), read.index("ReadStandPatrols(lead, f);"))
         add = read[read.index("auto addPatroller"):read.index("f.patrollers.push_back(unit);")]
         self.assertIn("if (standPull)\n                {\n                    unit.losLead = lead->IsWithinLOSInMap(creature);\n"
                       "                    unit.formation = RunFormationOf(creature);", add)

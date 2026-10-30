@@ -9165,13 +9165,11 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
             bool const pullStep = step->kind == ai::PlanStepKind::Pull;
             // A stand-pull pull row (the run's own step, not a walk back's replayed point): its patrollers are seen
             // out to kStandPullSeeYd, with sight and formation, and the other patrols near the lead bot are read
-            // (DungeonRun::PatrolStandPullGate).
+            // (DungeonRun::PatrolStandPullGate; ReadStandPatrols after ReadPullStand).
             bool const standPull = pullStep && StandThisStep(slot) && step == &slot.run.plan->steps[slot.run.step];
             float const patrolSeeYd = standPull ? kStandPullSeeYd : kPatrolSeeYd;
             float const packRange = std::min(toPoint + step->radius +
                 (f.packClearMarginYd > 0.0f || standPull ? kSpawnPatrolSeeYd : kPatrolSeeYd), 2.0f * kSeeYd);
-            if (standPull && !f.anyInCombat)
-                ReadStandPatrols(lead, f);
             float packNearestYd = -1.0f; // the nearest unit listed nowhere this tick (Facts::packNearestLeft)
             auto addPatroller = [&](Creature* creature, float fromPoint, PullReadIn const& read)
             {
@@ -9651,6 +9649,11 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
         f.goodSpotCut = GoodSpotCutOff(lead, slot.run);
     ReadTimeSinkWays(slot, lead, f);
     ReadPullStand(slot, lead, f);
+    // A stand-pull pull row: the other patrols near the lead bot, read only on a tick its pull could go out (a unit of
+    // the pack in the tank's shot), not on every tick of the wait.
+    if (!f.anyInCombat && StandThisStep(slot) && step == &slot.run.plan->steps[slot.run.step] &&
+        step->kind == ai::PlanStepKind::Pull && TortoiseBots::DungeonRun::StandPullPackInShot(f))
+        ReadStandPatrols(lead, f);
     ReadRunNeedFacts(slot, lead, f);
 }
 // Item-leg skip (spec C2/C2b/C2c, review round 2 Opus 1/2/3): the current leg's need facts, read every tick: the

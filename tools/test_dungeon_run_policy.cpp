@@ -20465,6 +20465,22 @@ static void TestPlainPullIgnoresOtherPatrols()
     CHECK(Tick(r, f) == "pullback 9");
 }
 
+// The glue reads the other patrols only on a tick the pull could go out: a unit or patroller of the pack in shot and
+// in sight (24.0 yd with a 25 yd shot); none with no ranged pull.
+static void TestStandPullPackInShotGatesThePatrolRead()
+{
+    Facts f = PatrolPullFacts(40.0f);
+    CHECK(!StandPullPackInShot(f));
+    f.patrollers = {PatrolUnit(11, 11368, 24.0f, 100)};
+    CHECK(StandPullPackInShot(f));
+    f.patrollers.front().losLead = false;
+    CHECK(!StandPullPackInShot(f));
+    Facts in = PatrolPullFacts(22.0f);
+    CHECK(StandPullPackInShot(in));
+    in.leadShotYd = 0.0f;
+    CHECK(!StandPullPackInShot(in));
+}
+
 // The stand-pull pull row's see range: a waypoint patroller (or a follower of one) 44 yd from a 4 yd radius is
 // Left at kPatrolSeeYd (walk 7 step 32's "pack cleared") and a Patroller at kStandPullSeeYd, gate on or off.
 static void TestClassifyPullReadStandPullSeesFarther()
@@ -25096,6 +25112,7 @@ int main()
     TestPatrolStandPullOffInCombat();
     TestPlainPullIgnoresOtherPatrols();
     TestClassifyPullReadStandPullSeesFarther();
+    TestStandPullPackInShotGatesThePatrolRead();
     TestSkippedBossNamedInDoneNoteAliveElsewhere();
     TestSkippedBossNamedInDoneNotePassedBySpot();
     TestDoneNoteUnchangedWithNoSkippedBoss();
