@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Configuration
+- New `AiPlayerbot.DungeonRunRaidBossRules` (default `0`): a raid's boss fight may run 20 minutes, a death does not stop it while the boss still loses health, and the off-tanks take the adds so the main tank stays on the boss.
+
 ### World PvP
 - Pool bots stay PvP flagged everywhere, so players can attack them outside contested zones too. About a quarter of free pool bots actively hunt flagged enemies nearby, join same-faction fights, and give up the chase after a minute. Turn it off with `AiPlayerbot.RandomBotForcePvp = 0` and `AiPlayerbot.WorldPvpSeek = 0`.
 - The dashboard shows who fights whom in the open world: a World PvP feed, a seeker and "fighting" badge on the bot list, recent PvP fights in each bot's profile, and counters for seekers, engagements, kills and deaths.
