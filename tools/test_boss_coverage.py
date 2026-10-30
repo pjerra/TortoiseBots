@@ -111,7 +111,7 @@ def rows(tactics=(), stands=(), plans=()):
 class CoverageTest(unittest.TestCase):
     def test_fixture_cases(self):
         cases = json.loads(FIXTURE.read_text(encoding="utf-8"))["cases"]
-        self.assertEqual(len(cases), 29)
+        self.assertEqual(len(cases), 33)
         for case in cases:
             with self.subTest(case=case["name"]):
                 result = boss_coverage.compute(case["table"], case["rows"])
@@ -222,6 +222,70 @@ class CoverageTest(unittest.TestCase):
         self.assertEqual(add_status(before), "partly")
         self.assertEqual(add_status(after), "missing")
 
+    def test_boss_step_kill_lists_replay(self):
+        step_columns = (
+            "INSERT INTO `ai_dungeon_step` (`plan`, `leg`, `seq`, `kind`, `x`, `y`, `z`, `entry`, `entries`) VALUES\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "001_world.sql").write_text(
+                "INSERT INTO `ai_dungeon_plan` (`plan`, `map`, `kill_first`) VALUES\n"
+                "('testplan', 900, ''), ('other', 901, '');\n"
+                + step_columns
+                + "('testplan', 0, 1, 'move', 1.5, 2.5, 3.5, 0, ''),\n"
+                "('testplan', 0, 2, 'boss', 1.5, 2.5, 3.5, 90001, '89001, 89002'),\n"
+                "('testplan', 0, 3, 'boss', 1.5, 2.5, 3.5, 90002, ''),\n"
+                "('other', 0, 1, 'boss', 1.5, 2.5, 3.5, 90003, '7');\n",
+                encoding="utf-8",
+            )
+            first = boss_coverage.migration_rows(tmp)["bossKillFirst"]
+            self.assertEqual(
+                first,
+                [
+                    {"plan": "other", "map": 901, "boss": 90003, "entries": [7]},
+                    {"plan": "testplan", "map": 900, "boss": 90001, "entries": [89001, 89002]},
+                ],
+            )
+            # A coordinate fix with an ABS filter does not touch the lists; a kind change with it does.
+            Path(tmp, "002_world.sql").write_text(
+                "UPDATE `ai_dungeon_step` SET `x` = 9.5 WHERE `plan` = 'testplan' AND ABS(`x` - 1.5) < 0.05;\n"
+                "UPDATE `ai_dungeon_step` SET `entries` = '89002' WHERE `plan` = 'testplan' AND `leg` = 0 AND `seq` = 2;\n",
+                encoding="utf-8",
+            )
+            second = boss_coverage.migration_rows(tmp)["bossKillFirst"]
+            self.assertEqual(second[1]["entries"], [89002])
+            Path(tmp, "003_world.sql").write_text(
+                "UPDATE `ai_dungeon_step` SET `kind` = 'move'\n"
+                "WHERE `plan` = 'testplan' AND `kind` = 'boss' AND ABS(`x` - 9.5) < 0.05;\n"
+                "DELETE FROM `ai_dungeon_step` WHERE `plan` = 'other';\n",
+                encoding="utf-8",
+            )
+            third = boss_coverage.migration_rows(tmp)["bossKillFirst"]
+        self.assertEqual(third, [])
+
+    def test_boss_step_statement_the_replay_cannot_apply_is_an_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            Path(tmp, "001_world.sql").write_text(
+                "UPDATE `ai_dungeon_step` SET `entries` = '1' WHERE `plan` LIKE 'test%';\n",
+                encoding="utf-8",
+            )
+            with self.assertRaises(boss_data.DataError):
+                boss_coverage.migration_rows(tmp)
+
+    def test_boss_step_kill_list_answers_a_summon(self):
+        doc = table([boss(90001, "Boss One", adds=[
+            {"entry": 89001, "name": "Add One", "role": "summon", "priority": 1},
+        ])])
+        rows = {"tactics": [], "stands": [], "planKillFirst": [], "source": "migrations",
+                "bossKillFirst": [{"plan": "testplan", "map": 900, "boss": 90001, "entries": [89001]}]}
+        line = boss_coverage.compute(doc, rows)["raids"][0]["bosses"][0]["lines"][0]
+        self.assertEqual(line["status"], "answered")
+        rows["bossKillFirst"][0]["boss"] = 90002
+        line = boss_coverage.compute(doc, rows)["raids"][0]["bosses"][0]["lines"][0]
+        self.assertEqual(line["status"], "partly")
+        rows["bossKillFirst"] = []
+        line = boss_coverage.compute(doc, rows)["raids"][0]["bosses"][0]["lines"][0]
+        self.assertEqual(line["status"], "missing")
+
     def test_update_applies_only_to_matching_rows(self):
         with tempfile.TemporaryDirectory() as tmp:
             Path(tmp, "001_world.sql").write_text(
@@ -299,6 +363,13 @@ class CoverageTest(unittest.TestCase):
                     return [(900, 90001, "interrupt", 0, 91001, 0, 0, "Boss One: Heal")]
                 if "ai_boss_stand" in self.sql:
                     return [(900, 90001, 91001, 0, "ranged", "cast", 5)]
+                if "ai_dungeon_step" in self.sql:
+                    return [
+                        ("testplan", 900, "move", 0, ""),
+                        ("testplan", 900, "boss", 90001, "3, 4"),
+                        ("testplan", 900, "boss", 90002, ""),
+                        ("testplan", 900, "boss", 90003, "5x"),
+                    ]
                 return [("testplan", 900, "1, 2"), ("empty", 900, ""), ("bad", 900, "12x")]
 
         class Connection:
@@ -312,6 +383,10 @@ class CoverageTest(unittest.TestCase):
         self.assertEqual(rows["tactics"][0]["spell"], 91001)
         self.assertEqual(rows["stands"][0]["seats"], 5)
         self.assertEqual(rows["planKillFirst"], [{"plan": "testplan", "map": 900, "entries": [1, 2]}])
+        self.assertEqual(
+            rows["bossKillFirst"],
+            [{"plan": "testplan", "map": 900, "boss": 90001, "entries": [3, 4]}],
+        )
         self.assertEqual(rows["source"], "world")
 
     def test_db_missing_table_is_empty(self):
@@ -342,7 +417,7 @@ class CoverageTest(unittest.TestCase):
 
     def test_no_boss_ids_in_code(self):
         text = (ROOT / "tools" / "boss_coverage.py").read_text(encoding="utf-8")
-        allowed = {"1146", "1000", "5000", "358", "390", "500"}
+        allowed = {"1146", "1000", "5000", "20000", "358", "390", "500"}
         found = [
             match.group(0)
             for match in re.finditer(r"\b\d{4,5}\b", text)

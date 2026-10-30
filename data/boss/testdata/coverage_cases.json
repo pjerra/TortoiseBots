@@ -2849,6 +2849,423 @@
           }
         }
       }
+    },
+    {
+      "name": "summon ability whose add is in its own boss step's kill list is answered",
+      "table": {
+        "version": 1,
+        "maps": [
+          {
+            "key": "testraid",
+            "mapId": 900,
+            "name": "Test Raid",
+            "bosses": [
+              90001
+            ]
+          }
+        ],
+        "bosses": {
+          "90001": {
+            "entry": 90001,
+            "name": "Boss One",
+            "map": "testraid",
+            "order": 1,
+            "abilities": [
+              {
+                "sid": 91001,
+                "name": "Spell A",
+                "castMs": 0,
+                "a": 0,
+                "b": 0,
+                "c": 0,
+                "phase": "",
+                "target": "",
+                "aura": false,
+                "self": false,
+                "mark": false,
+                "ground": false,
+                "cone": false,
+                "tail": false,
+                "int": false,
+                "summon": 89001,
+                "hp": 0,
+                "ok": "",
+                "okNeeds": {}
+              }
+            ],
+            "phases": [],
+            "adds": [
+              {
+                "entry": 89001,
+                "name": "Add One",
+                "role": "summon",
+                "priority": 1
+              }
+            ],
+            "notes": []
+          }
+        },
+        "codeAnswers": []
+      },
+      "rows": {
+        "tactics": [],
+        "stands": [],
+        "planKillFirst": [],
+        "source": "migrations",
+        "loadedAt": "2026-10-30T12:00:00Z",
+        "bossKillFirst": [
+          {
+            "plan": "testplan",
+            "map": 900,
+            "boss": 90001,
+            "entries": [
+              89001,
+              5
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "90001": {
+          "lines": {
+            "91001": {
+              "status": "answered",
+              "needs": {
+                "kill": "full"
+              }
+            },
+            "add:89001": {
+              "status": "answered",
+              "needs": {
+                "kill": "full"
+              }
+            }
+          },
+          "extra": [],
+          "warnings": 0,
+          "counts": {
+            "answered": 2,
+            "partly": 0,
+            "missing": 0,
+            "notneeded": 0,
+            "unknown": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "summon ability whose add is in another boss's step is partly",
+      "table": {
+        "version": 1,
+        "maps": [
+          {
+            "key": "testraid",
+            "mapId": 900,
+            "name": "Test Raid",
+            "bosses": [
+              90001
+            ]
+          }
+        ],
+        "bosses": {
+          "90001": {
+            "entry": 90001,
+            "name": "Boss One",
+            "map": "testraid",
+            "order": 1,
+            "abilities": [
+              {
+                "sid": 91001,
+                "name": "Spell A",
+                "castMs": 0,
+                "a": 0,
+                "b": 0,
+                "c": 0,
+                "phase": "",
+                "target": "",
+                "aura": false,
+                "self": false,
+                "mark": false,
+                "ground": false,
+                "cone": false,
+                "tail": false,
+                "int": false,
+                "summon": 89001,
+                "hp": 0,
+                "ok": "",
+                "okNeeds": {}
+              }
+            ],
+            "phases": [],
+            "adds": [
+              {
+                "entry": 89001,
+                "name": "Add One",
+                "role": "summon",
+                "priority": 1
+              }
+            ],
+            "notes": []
+          }
+        },
+        "codeAnswers": []
+      },
+      "rows": {
+        "tactics": [],
+        "stands": [],
+        "planKillFirst": [],
+        "source": "migrations",
+        "loadedAt": "2026-10-30T12:00:00Z",
+        "bossKillFirst": [
+          {
+            "plan": "testplan",
+            "map": 900,
+            "boss": 90002,
+            "entries": [
+              89001
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "90001": {
+          "lines": {
+            "91001": {
+              "status": "partly",
+              "needs": {
+                "kill": "partly"
+              }
+            },
+            "add:89001": {
+              "status": "partly",
+              "needs": {
+                "kill": "partly"
+              }
+            }
+          },
+          "extra": [],
+          "warnings": 0,
+          "counts": {
+            "answered": 0,
+            "partly": 2,
+            "missing": 0,
+            "notneeded": 0,
+            "unknown": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "a boss step of another map does not answer",
+      "table": {
+        "version": 1,
+        "maps": [
+          {
+            "key": "testraid",
+            "mapId": 900,
+            "name": "Test Raid",
+            "bosses": [
+              90001
+            ]
+          }
+        ],
+        "bosses": {
+          "90001": {
+            "entry": 90001,
+            "name": "Boss One",
+            "map": "testraid",
+            "order": 1,
+            "abilities": [
+              {
+                "sid": 91001,
+                "name": "Spell A",
+                "castMs": 0,
+                "a": 0,
+                "b": 0,
+                "c": 0,
+                "phase": "",
+                "target": "",
+                "aura": false,
+                "self": false,
+                "mark": false,
+                "ground": false,
+                "cone": false,
+                "tail": false,
+                "int": false,
+                "summon": 89001,
+                "hp": 0,
+                "ok": "",
+                "okNeeds": {}
+              }
+            ],
+            "phases": [],
+            "adds": [
+              {
+                "entry": 89001,
+                "name": "Add One",
+                "role": "summon",
+                "priority": 1
+              }
+            ],
+            "notes": []
+          }
+        },
+        "codeAnswers": []
+      },
+      "rows": {
+        "tactics": [],
+        "stands": [],
+        "planKillFirst": [],
+        "source": "migrations",
+        "loadedAt": "2026-10-30T12:00:00Z",
+        "bossKillFirst": [
+          {
+            "plan": "testplan",
+            "map": 901,
+            "boss": 90001,
+            "entries": [
+              89001
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "90001": {
+          "lines": {
+            "91001": {
+              "status": "missing",
+              "needs": {
+                "kill": "none"
+              }
+            },
+            "add:89001": {
+              "status": "missing",
+              "needs": {
+                "kill": "none"
+              }
+            }
+          },
+          "extra": [],
+          "warnings": 0,
+          "counts": {
+            "answered": 0,
+            "partly": 0,
+            "missing": 2,
+            "notneeded": 0,
+            "unknown": 0
+          }
+        }
+      }
+    },
+    {
+      "name": "own boss step beats the plan-level list",
+      "table": {
+        "version": 1,
+        "maps": [
+          {
+            "key": "testraid",
+            "mapId": 900,
+            "name": "Test Raid",
+            "bosses": [
+              90001
+            ]
+          }
+        ],
+        "bosses": {
+          "90001": {
+            "entry": 90001,
+            "name": "Boss One",
+            "map": "testraid",
+            "order": 1,
+            "abilities": [
+              {
+                "sid": 91001,
+                "name": "Spell A",
+                "castMs": 0,
+                "a": 0,
+                "b": 0,
+                "c": 0,
+                "phase": "",
+                "target": "",
+                "aura": false,
+                "self": false,
+                "mark": false,
+                "ground": false,
+                "cone": false,
+                "tail": false,
+                "int": false,
+                "summon": 89001,
+                "hp": 0,
+                "ok": "",
+                "okNeeds": {}
+              }
+            ],
+            "phases": [],
+            "adds": [
+              {
+                "entry": 89001,
+                "name": "Add One",
+                "role": "summon",
+                "priority": 1
+              }
+            ],
+            "notes": []
+          }
+        },
+        "codeAnswers": []
+      },
+      "rows": {
+        "tactics": [],
+        "stands": [],
+        "planKillFirst": [
+          {
+            "plan": "testplan",
+            "map": 900,
+            "entries": [
+              89001
+            ]
+          }
+        ],
+        "source": "migrations",
+        "loadedAt": "2026-10-30T12:00:00Z",
+        "bossKillFirst": [
+          {
+            "plan": "testplan",
+            "map": 900,
+            "boss": 90001,
+            "entries": [
+              89001
+            ]
+          }
+        ]
+      },
+      "expect": {
+        "90001": {
+          "lines": {
+            "91001": {
+              "status": "answered",
+              "needs": {
+                "kill": "full"
+              }
+            },
+            "add:89001": {
+              "status": "answered",
+              "needs": {
+                "kill": "full"
+              }
+            }
+          },
+          "extra": [],
+          "warnings": 0,
+          "counts": {
+            "answered": 2,
+            "partly": 0,
+            "missing": 0,
+            "notneeded": 0,
+            "unknown": 0
+          }
+        }
+      }
     }
   ]
 }
