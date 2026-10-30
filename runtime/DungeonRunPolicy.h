@@ -15600,14 +15600,14 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
             r.hpWatch.clear();
         else if (HpHeldTick(r, f, dt))
             return order;
-        if (r.fightMs > cap && r.wipeStopDue)
+        if (r.fightMs > stopCap && r.wipeStopDue)
         {
             // The stop is due and the fight goes on past its ceiling: pause with the stop's line rather than the old
             // mid-fight regroup pause (the resume regroups).
             r.wipeStopDue = false;
             r.fighting = false;
             RearmRescueAfterDeath(r);
-            Pause(r, NearWipeStopNote(r, f, partyDead) + "; the fight went past " + std::to_string(cap / 1000) + " s");
+            Pause(r, NearWipeStopNote(r, f, partyDead) + "; the fight went past " + std::to_string(stopCap / 1000) + " s");
             return order;
         }
         if (r.fightMs > stopCap && autoRegroup)
