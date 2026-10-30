@@ -77,6 +77,13 @@ bool BossTacticsFrontTrigger::IsActive()
     return !fight.rows.empty() && FindBossFrontDanger(ai, bot, fight) != nullptr;
 }
 
+bool BossTacticsAvoidCastTrigger::IsActive()
+{
+    if (!Ready(ai, bot))
+        return false;
+    return FindBossCastDanger(ai, bot, ScanBossTactics(ai, bot)).caster != nullptr;
+}
+
 bool BossTacticsStandTrigger::IsActive()
 {
     if (!Ready(ai, bot))

@@ -41,15 +41,15 @@ Why the commander binding counts: those runs are the ones that exist to clear a 
 | :--- | :--- |
 | `map` | Map id (Uldaman is 70). |
 | `boss_entry` | Creature entry whose presence among the bots' attackers activates the row. |
-| `kind` | `interrupt`, `kill_first`, `behind` or `air_target` (below). |
+| `kind` | `interrupt`, `kill_first`, `behind`, `air_target` or `avoid_cast` (below). |
 | `target_entry` | The creature the row is about; `0` means the boss itself. |
-| `spell_id` | `interrupt`: the spell to interrupt; `air_target`: the aura that marks the air phase. |
+| `spell_id` | `interrupt`: the spell to interrupt; `air_target`: the aura that marks the air phase; `avoid_cast`: the cast to walk out of. |
 | `priority` | `kill_first`: lower is killed first. |
-| `param` | `behind`: yards around the boss in which its front is kept clear. |
+| `param` | `behind`: yards around the boss in which its front is kept clear; `avoid_cast`: yards around the caster bots leave (the blast radius plus a margin). |
 | `comment` | Free text; where the row came from. |
 
-The primary key is `(map, boss_entry, kind, target_entry, spell_id)`. The loader skips a row it cannot use (unknown kind, an `interrupt` or `air_target` without a spell, a `behind` without a radius, a duplicate key) and logs how many it skipped; `tools/test_boss_tactics_sql.py` rejects the same rows at commit time.
-The primary key is `(map, boss_entry, kind, target_entry, spell_id)`. The loader skips a row it cannot use (unknown kind, an `interrupt` without a spell, a `behind` without a radius, a duplicate key) and logs how many it skipped; `tools/test_boss_tactics_sql.py` rejects the same rows at commit time. With `TORTOISE_CORE=~/tortoise-wow` set, the same test also checks every live `interrupt` row against the core's data: that the spell exists and the core's interrupt rule can stop it, that the boss and target templates exist, and that the boss spawns on its map; without the variable those checks are skipped.
+The primary key is `(map, boss_entry, kind, target_entry, spell_id)`. The loader skips a row it cannot use (unknown kind, an `interrupt` or `air_target` without a spell, a `behind` without a radius, an `avoid_cast` without a spell or a radius, a duplicate key) and logs how many it skipped; `tools/test_boss_tactics_sql.py` rejects the same rows at commit time.
+The primary key is `(map, boss_entry, kind, target_entry, spell_id)`. The loader skips a row it cannot use (unknown kind, an `interrupt` without a spell, a `behind` without a radius, an `avoid_cast` without a spell or a radius, a duplicate key) and logs how many it skipped; `tools/test_boss_tactics_sql.py` rejects the same rows at commit time. With `TORTOISE_CORE=~/tortoise-wow` set, the same test also checks every live `interrupt` row against the core's data: that the spell exists and the core's interrupt rule can stop it, that the boss and target templates exist, and that the boss spawns on its map; without the variable those checks are skipped.
 
 ### Kinds
 
@@ -59,8 +59,9 @@ The primary key is `(map, boss_entry, kind, target_entry, spell_id)`. The loader
 | `kill_first` | Takes the listed creature as its target before anything else; among several listed creatures the lowest `priority` goes first, the nearer one breaks a tie, nothing further than 40 yd is picked. While on that target the generic assist and AoE rows do not pull it back to the boss. | DPS only; never tanks or healers; an explicit `attack` order from a player wins |
 | `behind` | A bot that stands within `param` yd of the boss, in its front half, steps to a point 120 degrees off its facing at the same distance (the same geometry as the generic rear flank). | everyone except the bot the boss is attacking |
 | `air_target` | A boss that wears the `spell_id` aura (its air phase) stays a ranged bot's target (`PlayerbotAI::IsRanged`; melee bots and tanks keep the base target values and reach): `current target` keeps it out to the react distance (150 yd) instead of the 60-yd sight ceiling, and the core's "unable to reach" flag, which a boss chased in flight can carry, does not drop it. The caster then walks the floor under the target (at most 25 yd, 2D, from its footprint and inside the cast's 3D range) and casts from there; it never chases the flight height. Out of line of sight (a pillar or wall between them) it walks to the nearest of 17 floor points around the footprint (the footprint and two rings, all inside the cast's 3D range) that is on its own floor, sees the boss, has no hazard and has a navmesh path; each point is re-checked at its own ground z (same floor, within the cast's 3D range), and the flight height is measured from the bot's floor, not a platform under the boss; at most 3 path searches and 3 attempts per target, then it waits 10 s, and only 3 s of unbroken sight refills the attempts. If the flight height alone is beyond the cast, no floor point helps: the boss stays a target but the caster does not move, and another reachable target can be picked. Evade mode still drops the boss. | every ranged bot on the map while the aura is up |
+| `avoid_cast` | While a creature in the fight (`target_entry`, or the row's entry itself, trash included) casts `spell_id`, a bot whose centre is within `param` yd of it (3D) walks to a point 2 yd past that radius: straight out first, then 45, 90 and 135 degrees to either side, skipping a point another listed cast covers or the bot cannot see. A cast of its own is stopped. Until the cast ends or the caster dies, its reaches towards that caster are held, so a melee bot does not walk straight back in; then the normal reach takes it back. It outranks the generic step out of a ground effect. Pair it with an `interrupt` row when a kick can stop the spell. | everyone except tanks |
 
-Not in the table yet, and why: tank swap and re-grab (Ironaya's *Knock Away*), dispel priorities, spread and ground-effect avoidance. The generic raid hazard, spread and dispel code already covers part of it, and each of these needs a live fight to tune before it gets a kind. Adding one means a new `BossTacticKind`, a scan function and an action next to the existing four.
+Not in the table yet, and why: tank swap and re-grab (Ironaya's *Knock Away*), dispel priorities, spread and ground-effect avoidance. The generic raid hazard, spread and dispel code already covers part of it, and each of these needs a live fight to tune before it gets a kind. Adding one means a new `BossTacticKind`, a scan function and an action next to the existing five.
 
 ## Uldaman rows (map 70)
 
@@ -217,6 +218,16 @@ Row added 2026-10-29 (`data/sql/world/20261029150000_world.sql`), read from `tor
 The row keeps her a target for the ranged bots on the map while the aura is up, out to 150 yd, and the `reach spell` of a caster walks the floor under her (planned at the spell's range less 2 yd, so a 30-yd cast under a 20-yd hover stands ~20 yd out, clear of Fireball's 8-yd splash) instead of her flight height. Melee bots and tanks are not covered and keep the base target values; there is no melee whelp row yet (code item C4). The fight's own airborne rows are unchanged: `raid spread` for the whole raid, the wand only for kits without a ranged rotation, whelp duty and the Deep Breath dodge.
 
 What needs a live check: that the ranged keep her as `current target` through all 8 hover points and that the phase-2 damage drop is at least 1 % of her health per 10 s (`/api/v1/combat/fights`, the commander-bound fight record).
+
+## Zul'Gurub trash rows (map 309)
+
+Row added 2026-10-30 (`data/sql/world/20261030160000_world.sql`), read from `tortoise-wow` 5d79486; the boss rows of map 309 come from the run plan migrations.
+
+| Creature (entry) | Row | Data behind it |
+| :--- | :--- | :--- |
+| Gurubashi Bat Rider (14750) | `avoid_cast` Unstable Concoction 24024, 13 yd | `npc_guru_bat_riderAI` (`boss_jeklik.cpp`) casts it on itself once, below 40 % health, after turning fear-immune: a 3 s cast (castingTimeIndex 14), 4375-5625 fire damage to every enemy within 10 yd (radius index 13), then it kills itself. The core hits a player whose centre is within 10 yd in 3D, so the row keeps 10 + 3. No `interrupt` row: preventionType 0 and interruptFlags 9 (no damage bit), and the template is immune to stun, knockout and silence (mechanic_immune_mask 1019952979), so nothing a bot has stops the cast. Two live walks lost 6-11 of 19 tier-1 bots within 5 s of a rider dropping to 30-45 %. |
+
+What needs a live check: that the melee and healers leave the 13 yd before the 3 s cast ends, that the blast hits nobody but the tank, and that the melee come back to their target after it.
 
 ## Stand sets (`ai_boss_stand`)
 
