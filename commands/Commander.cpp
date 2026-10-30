@@ -8770,7 +8770,11 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
     f.directJoinRead = joinWanted;
     // Task A5: a raid binding with AiPlayerbot.DungeonRunRaid scales the run's gather, wipe level and rest floor.
     if (raid && sPlayerbotAIConfig.dungeonRunRaid)
+    {
         f.raid.on = true;
+        // AiPlayerbot.DungeonRunRaidBossRules: the raid's boss fight rules (DungeonRun::RaidBossRulesFight).
+        f.raid.bossRules = sPlayerbotAIConfig.dungeonRunRaidBossRules;
+    }
     std::vector<uint32> raidHealths, raidManas; // every living bot's health, non-healer mana (the raid's rest floor)
     for (Player* bot : bots)
     {
