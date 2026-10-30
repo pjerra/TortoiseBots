@@ -5,12 +5,15 @@
 #include "runtime/policy/lfg/BotLfgLifecyclePolicy.h"
 #include "runtime/policy/lfg/LftDungeonRangePolicy.h"
 #include "runtime/policy/hire/LftRoleKitPolicy.h"
+#include "runtime/policy/lfg/BotLfgAdvertPolicy.h"
+#include "BotLfgWhisperInbox.h"
 
 #include "BotManager.h"
 #include "PlayerbotAIStorage.h"
 #include "RemoteCommanderPolicy.h"
 #include "../ai/playerbot/PlayerbotAI.h"
 #include "../ai/playerbot/PlayerbotAIConfig.h"
+#include "../ai/playerbot/AiFactory.h"
 #include "../ai/playerbot/DungeonPlanMgr.h"
 #include "../commands/BotCommandHandlers.h"
 #include "../commands/CommandShared.h"
@@ -33,6 +36,9 @@
 // pi-lens-ignore: clang:pp_file_not_found
 #include "Database/DatabaseEnv.h"
 // pi-lens-ignore: clang:pp_file_not_found
+#include "Chat/ChannelMgr.h"
+// pi-lens-ignore: clang:pp_file_not_found
+#include "Chat/Chat.h"
 #include "Database/DBCStores.h"
 // pi-lens-ignore: clang:pp_file_not_found
 #include "Maps/Map.h"
@@ -43,6 +49,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -284,6 +291,7 @@ bool BotLfgService::ReadyForRole(Player* bot, BotLfg::Role role) const
 
 void BotLfgService::End(BotLfgGroup& group, BotLfgLifecycle::EndReason reason, bool release)
 {
+    StopAdvertising(group);
     release = release || RealPlayerInGroup(group);
     group.missingSinceMs.clear();
     for (BotLfgMember const& member : group.members)
@@ -297,6 +305,7 @@ void BotLfgService::End(BotLfgGroup& group, BotLfgLifecycle::EndReason reason, b
             LftBotFillService::Instance().ClearForcedRole(member.guid.GetCounter());
     }
     group.state = BotLfgLifecycle::State::Ended;
+    PublishLeaders();
     Log(group, std::string(release ? "released: " : "ended: ") + BotLfgLifecycle::EndText(reason) +
         " (" + BotLfgLifecycle::EndCode(reason) + ")");
 }
@@ -655,9 +664,11 @@ bool BotLfgService::EndNow(uint32 id, std::string& code, std::string& message)
 }
 void BotLfgService::Transition(BotLfgGroup& group, BotLfgLifecycle::State to)
 {
+    StopAdvertising(group);
     group.state = to;
     group.stateSinceMs = m_nowMs;
     Log(group, std::string("now ") + BotLfgLifecycle::StateName(to));
+    PublishLeaders();
 }
 
 bool BotLfgService::TrackOutOfWorld(BotLfgGroup& group, ObjectGuid guid, Player* bot)
@@ -782,6 +793,7 @@ void BotLfgService::TickGroup(BotLfgGroup& group, bool enabled)
             facts.fillCandidateFound = fillBot != nullptr;
         }
     }
+    facts.invitePending = InviteHeld(group);
     BotLfgLifecycle::Decision decision = BotLfgLifecycle::DecideStep(facts);
     switch (decision.step)
     {
@@ -850,6 +862,19 @@ void BotLfgService::TickGroup(BotLfgGroup& group, bool enabled)
         case BotLfgLifecycle::Step::None:
             break;
     }
+    if (!facts.invitePending && !group.invitee.IsEmpty() && !facts.realPlayerInGroup)
+    {
+        Player* waiting = ObjectAccessor::FindPlayer(group.invitee);
+        Group* pending = waiting ? waiting->GetGroupInvite() : nullptr;
+        if (pending && pending->GetId() == group.groupId)
+            pending->RemoveInvite(waiting);
+        if (waiting)
+            Log(group, std::string("invite to ") + waiting->GetName() + " lapsed");
+        else
+            Log(group, "invite lapsed");
+        group.invitee = ObjectGuid();
+        group.inviteAtMs = 0;
+    }
 }
 
 bool BotLfgService::RealPlayerInGroup(BotLfgGroup const& group) const
@@ -865,6 +890,189 @@ bool BotLfgService::RealPlayerInGroup(BotLfgGroup const& group) const
     return false;
 }
 
+bool BotLfgService::Advertising(BotLfgGroup const& group) const
+{
+    return group.state == BotLfgLifecycle::State::Waiting && sPlayerbotAIConfig.botLfgChat;
+}
+
+bool BotLfgService::RealPlayerOfTeamOnline(uint8 team) const
+{
+    for (RealPlayer const& player : RealPlayersOnline())
+        if (player.team == team)
+            return true;
+    return false;
+}
+
+void BotLfgService::AdvertiseGroups()
+{
+    if (!sPlayerbotAIConfig.botLfgChat)
+    {
+        PublishLeaders();
+        return;
+    }
+    for (BotLfgGroup& group : m_groups)
+    {
+        if (group.state != BotLfgLifecycle::State::Waiting)
+            continue;
+        Player* leader = ObjectAccessor::FindPlayer(group.leader);
+        if (!leader)
+            continue;
+        if (!RealPlayerOfTeamOnline(group.team))
+            continue;
+        if (!BotLfgAdvert::PostDue(m_nowMs, group.posts > 0, group.lastPostMs, m_channelPosted[group.team],
+            m_channelPostMs[group.team]))
+            continue;
+        PostInChannel(group, leader);
+    }
+    PublishLeaders();
+}
+
+void BotLfgService::PostInChannel(BotLfgGroup& group, Player* leader)
+{
+    std::string const text = BotLfgAdvert::PostText(group.posts, BotLfgAdvert::DungeonName(group.plan),
+        group.openRole, group.minLevel, group.maxLevel);
+    ChannelMgr* mgr = channelMgr(leader->GetTeam());
+    Channel* channel = mgr ? mgr->GetOrCreateChannel(BotLfgAdvert::kChannel) : nullptr;
+    if (!channel)
+        return;
+    channel->Join(leader->GetObjectGuid(), "", false);
+    channel->AsyncSay(leader->GetObjectGuid(), text.c_str(), LANG_UNIVERSAL);
+    ++group.posts;
+    group.lastPostMs = m_nowMs;
+    m_channelPostMs[group.team] = m_nowMs;
+    m_channelPosted[group.team] = true;
+    Log(group, "posted in LookingForGroup: " + text);
+}
+
+void BotLfgService::StopAdvertising(BotLfgGroup& group)
+{
+    BotLfgWhisperInbox::Instance().WithdrawLeader(group.leader.GetRawValue());
+    Player* invitee = group.invitee.IsEmpty() ? nullptr : ObjectAccessor::FindPlayer(group.invitee);
+    Group* invited = invitee ? invitee->GetGroupInvite() : nullptr;
+    if (invited && invited->GetId() == group.groupId)
+        invited->RemoveInvite(invitee);
+    group.invitee = ObjectGuid();
+    group.inviteAtMs = 0;
+    group.repliedAtMs.clear();
+    group.hintedAtMs.clear();
+}
+
+void BotLfgService::PublishLeaders() const
+{
+    std::vector<uint64_t> leaders;
+    for (BotLfgGroup const& group : m_groups)
+        if (Advertising(group))
+            leaders.push_back(group.leader.GetRawValue());
+    BotLfgWhisperInbox::Instance().PublishLeaders(leaders);
+}
+
+void BotLfgService::HandleWhispers()
+{
+    for (LfgWhisper const& whisper : BotLfgWhisperInbox::Instance().Drain())
+        HandleWhisper(whisper);
+    if (size_t dropped = BotLfgWhisperInbox::Instance().TakeDropped())
+        TB_LOG_DETAIL("TortoiseBots: bot LFG: %u whispers dropped (inbox full)", uint32(dropped));
+}
+
+BotLfgGroup* BotLfgService::FindByLeader(ObjectGuid leader)
+{
+    for (BotLfgGroup& group : m_groups)
+    {
+        if (group.state == BotLfgLifecycle::State::Ended)
+            continue;
+        if (group.leader == leader)
+            return &group;
+    }
+    return nullptr;
+}
+
+void BotLfgService::Reply(Player* leader, Player* to, std::string const& text) const
+{
+    if (text.empty())
+        return;
+    WorldPacket data;
+    ChatHandler::BuildChatPacket(data, CHAT_MSG_WHISPER, text.c_str(), LANG_UNIVERSAL, leader->GetChatTag(),
+        leader->GetObjectGuid(), leader->GetName());
+    to->GetSession()->SendPacket(&data);
+}
+
+bool BotLfgService::InviteHeld(BotLfgGroup const& group) const
+{
+    Player* invitee = group.invitee.IsEmpty() ? nullptr : ObjectAccessor::FindPlayer(group.invitee);
+    Group* invited = invitee ? invitee->GetGroupInvite() : nullptr;
+    return BotLfgAdvert::InvitePending(!group.invitee.IsEmpty(), invited && invited->GetId() == group.groupId,
+        m_nowMs, group.inviteAtMs);
+}
+
+void BotLfgService::HandleWhisper(LfgWhisper const& whisper)
+{
+    BotLfgGroup* group = FindByLeader(ObjectGuid(whisper.leader));
+    Player* leader = ObjectAccessor::FindPlayer(ObjectGuid(whisper.leader));
+    Player* sender = ObjectAccessor::FindPlayer(ObjectGuid(whisper.sender));
+    if (!group || !leader || !sender)
+        return;
+    if (!(sender->GetSession() && sender->GetSession()->HasNetworkTransport() &&
+            !BotManager::Instance().IsBot(sender->GetObjectGuid())))
+        return;
+    if (sender->GetGroup() && sender->GetGroup()->GetId() == group->groupId)
+        return;
+    BotLfgAdvert::WhisperFacts facts;
+    facts.sameTeam = (sender->GetTeam() == ALLIANCE ? BotLfg::kAlliance : BotLfg::kHorde) == group->team;
+    uint64 key = whisper.sender;
+    auto replied = group->repliedAtMs.find(key);
+    facts.repliedRecently =
+        replied != group->repliedAtMs.end() && m_nowMs - replied->second < BotLfgAdvert::kReplyGapMs;
+    auto hinted = group->hintedAtMs.find(key);
+    facts.hintedRecently =
+        hinted != group->hintedAtMs.end() && m_nowMs - hinted->second < BotLfgAdvert::kHintGapMs;
+    facts.inviteRequest = BotLfgAdvert::IsInviteRequest(whisper.text);
+    facts.waiting = Advertising(*group);
+    facts.invitePending = InviteHeld(*group);
+    facts.senderInvited = group->invitee == sender->GetObjectGuid() && facts.invitePending;
+    auto sent = group->invitesSent.find(key);
+    facts.senderRefusedResend = sent != group->invitesSent.end() &&
+        sent->second >= BotLfgAdvert::kMaxInvitesPerGroup && !facts.senderInvited;
+    facts.hardcore = sender->IsHardcore();
+    facts.grouped = sender->GetGroup() != nullptr;
+    facts.level = sender->GetLevel();
+    facts.minLevel = group->minLevel;
+    facts.maxLevel = group->maxLevel;
+    std::map<uint32, int32> tabs = AiFactory::GetPlayerSpecTabs(sender);
+    uint32 points = uint32(tabs[0] + tabs[1] + tabs[2]);
+    facts.fitsRole = BotLfgAdvert::PlayerFitsRole(sender->GetClass(),
+        LftBotFillService::Instance().GetBotRoleMask(sender), points, group->openRole);
+    BotLfgAdvert::Answer answer = BotLfgAdvert::DecideWhisper(facts);
+    if (answer == BotLfgAdvert::Answer::Ignore)
+        return;
+    if (answer == BotLfgAdvert::Answer::Invite)
+    {
+        WorldPacket invite;
+        invite << sender->GetName();
+        invite << uint32(0);
+        leader->GetSession()->HandleGroupInviteOpcode(invite);
+        Group* pending = sender->GetGroupInvite();
+        if (pending && pending->GetId() == group->groupId)
+        {
+            group->invitee = sender->GetObjectGuid();
+            group->inviteAtMs = m_nowMs;
+            auto counted = group->invitesSent.find(key);
+            if (counted == group->invitesSent.end() || counted->second < BotLfgAdvert::kMaxInvitesPerGroup)
+                ++group->invitesSent[key];
+            Log(*group, std::string("invited ") + sender->GetName() + " (whisper)");
+        }
+        else
+            answer = BotLfgAdvert::Answer::InviteFailed;
+    }
+    Reply(leader, sender,
+        BotLfgAdvert::ReplyText(answer, BotLfgAdvert::DungeonName(group->plan), group->openRole, group->minLevel,
+            group->maxLevel));
+    group->repliedAtMs[key] = m_nowMs;
+    if (answer == BotLfgAdvert::Answer::Hint)
+        group->hintedAtMs[key] = m_nowMs;
+    TB_LOG_DETAIL("TortoiseBots: bot LFG group %u: whisper from %s: %s", group->id, sender->GetName(),
+        BotLfgAdvert::AnswerCode(answer));
+}
+
 void BotLfgService::Log(BotLfgGroup const& group, std::string const& text) const
 {
     TB_LOG_BASIC("%s", BotLfgLifecycle::LogLine(group.id, group.plan, BotLfg::TeamName(group.team), text).c_str());
@@ -874,6 +1082,7 @@ void BotLfgService::Update(uint32 diff)
 {
     if (!m_initialized)
         return;
+    HandleWhispers();
     m_elapsedMs += diff;
     if (m_elapsedMs < BotLfgLifecycle::kTickMs)
         return;
@@ -887,6 +1096,10 @@ void BotLfgService::Update(uint32 diff)
     TickGroups(enabled);
     m_groups.erase(std::remove_if(m_groups.begin(), m_groups.end(),
         [](BotLfgGroup const& g) { return g.state == BotLfgLifecycle::State::Ended; }), m_groups.end());
+    if (enabled)
+        AdvertiseGroups();
+    else
+        PublishLeaders();
     if (!enabled)
         return;
     uint32 players = uint32(RealPlayersOnline().size());
@@ -913,6 +1126,7 @@ void BotLfgService::Shutdown()
         End(g, BotLfgLifecycle::EndReason::Shutdown, RealPlayerInGroup(g));
     }
     m_groups.clear();
+    BotLfgWhisperInbox::Instance().PublishLeaders({});
     m_initialized = false;
 }
 

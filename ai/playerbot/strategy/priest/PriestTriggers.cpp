@@ -8,14 +8,42 @@
 using namespace ai;
 
 // BuffTrigger proves the spell is trained and the aura missing; it cannot
-// see the capstone's cooldown.
+// see the capstone's cooldown, and the 5-min cooldown must not fire on the
+// first quiet combat tick. Someone must actually need healing.
 bool AscendanceTrigger::IsActive()
 {
     if (!BuffTrigger::IsActive())
         return false;
 
     uint32 spellId = AI_VALUE2(uint32, "spell id", spell);
-    return ai::BoostReady(spellId != 0, spellId && sServerFacade.IsSpellReady(bot, spellId));
+    return ai::HealBoostReady(spellId != 0, spellId && sServerFacade.IsSpellReady(bot, spellId),
+        AI_VALUE2(bool, "trigger active", "party member critical health") ||
+        AI_VALUE2(bool, "trigger active", "party member low health") ||
+        AI_VALUE2(bool, "trigger active", "critical health") ||
+        AI_VALUE2(bool, "trigger active", "low health"),
+        AI_VALUE2(bool, "trigger active", "medium group heal setting"));
+}
+
+bool PrayerOfHealingPartyTrigger::IsActive()
+{
+    Group* group = bot->GetGroup();
+    if (!group)
+        return false;
+
+    unsigned hurt = 0;
+    for (Player* member : LiveGroupMembers(group))
+    {
+        if (!member || !member->IsInWorld() || !group->SameSubGroup(bot, member))
+            continue;
+        if (!sServerFacade.IsAlive(member) || sServerFacade.GetDistance2d(bot, member) > 30.0f)
+            continue;
+        float percent = member->GetMaxHealth()
+            ? static_cast<float>(member->GetHealth()) / static_cast<float>(member->GetMaxHealth()) * 100.0f
+            : 100.0f;
+        if (percent <= sPlayerbotAIConfig.mediumHealth)
+            ++hurt;
+    }
+    return PrayerOfHealingWorth(hurt);
 }
 
 bool ai::PriestPackLoose(PlayerbotAI* ai)
