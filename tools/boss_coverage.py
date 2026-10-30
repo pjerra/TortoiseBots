@@ -59,7 +59,13 @@ QUERY_PLAN_KILL_FIRST = (
     "SELECT `plan`, `map`, `kill_first` FROM `ai_dungeon_plan` ORDER BY `plan` LIMIT 1000"
 )
 
-SQL_TABLES = ("ai_boss_tactic", "ai_boss_stand", "ai_dungeon_plan")
+QUERY_STEPS = (
+    "SELECT s.`plan`, p.`map`, s.`kind`, s.`entry`, s.`entries` "
+    "FROM `ai_dungeon_step` s JOIN `ai_dungeon_plan` p ON p.`plan` = s.`plan` "
+    "ORDER BY s.`plan`, s.`leg`, s.`seq` LIMIT 20000"
+)
+
+SQL_TABLES = ("ai_boss_tactic", "ai_boss_stand", "ai_dungeon_plan", "ai_dungeon_step")
 
 # SQL column -> row field, per table.
 TACTIC_FIELDS = {
@@ -84,6 +90,20 @@ STAND_FIELDS = {
 STAND_DEFAULTS = {"windowSpell": 0, "aura": 0, "signal": "cast", "slots": 5}
 PLAN_FIELDS = {"plan": ("plan", str), "map": ("map", int), "kill_first": ("killFirst", str)}
 PLAN_DEFAULTS = {"killFirst": ""}
+# ai_dungeon_step: only the columns the boss steps' kill lists need (kind boss: entry is the boss, entries its adds).
+STEP_FIELDS = {
+    "plan": ("plan", str),
+    "leg": ("leg", int),
+    "seq": ("seq", int),
+    "kind": ("kind", str),
+    "entry": ("entry", int),
+    "entries": ("entries", str),
+    "x": ("x", float),
+    "y": ("y", float),
+    "z": ("z", float),
+}
+STEP_DEFAULTS = {"kind": "", "entry": 0, "entries": "", "x": 0.0, "y": 0.0, "z": 0.0}
+ABS_RE = re.compile(r"ABS\(\s*`(\w+)`\s*-\s*(-?\d+(?:\.\d+)?)\s*\)\s*<\s*(\d+(?:\.\d+)?)", re.I)
 
 INSERT_RE = re.compile(
     r"^\s*(?:INSERT|REPLACE)\s+INTO\s+`(\w+)`\s*\(([^)]*)\)\s*VALUES\s*(.+)$", re.I | re.S
@@ -286,6 +306,13 @@ def _conditions(text, fields, where):
         if match:
             column, raw = match.groups()
             values = [_parse_condition_value(raw, where)]
+        elif ABS_RE.fullmatch(part.strip()):
+            column, center, tolerance = ABS_RE.fullmatch(part.strip()).groups()
+            spec = fields.get(column)
+            if spec is None or spec[1] is not float:
+                raise boss_data.DataError(f"{where}: unknown column {column!r}")
+            wanted.append((spec[0], [[float(center)], ("abs", float(tolerance))]))
+            continue
         else:
             match = re.fullmatch(r"`(\w+)`\s+IN\s*\((.+)\)", part.strip(), re.I | re.S)
             if not match:
@@ -306,6 +333,8 @@ def _parse_condition_value(raw, where):
         return raw[1:-1].replace("''", "'")
     if re.fullmatch(r"-?\d+", raw):
         return int(raw)
+    if re.fullmatch(r"-?\d+\.\d+", raw):
+        return float(raw)
     raise boss_data.DataError(f"{where}: unsupported value {raw!r} in a WHERE clause")
 
 
@@ -402,6 +431,10 @@ def _touches_tracked(statement):
 def _matches(row, wanted):
     for name, (values, kind) in wanted:
         value = row.get(name)
+        if isinstance(kind, tuple):
+            if not abs(float(value) - values[0]) < kind[1]:
+                return False
+            continue
         if not any(_convert(candidate, kind, "WHERE") == value for candidate in values):
             return False
     return True
@@ -448,6 +481,7 @@ def migration_rows(sql_dir):
     tactics = {}
     stands = []
     plans = {}
+    steps = {}
     for path in paths:
         text = path.read_text(encoding="utf-8", errors="replace")
         if not any(table in text for table in SQL_TABLES):
@@ -475,6 +509,9 @@ def migration_rows(sql_dir):
                             columns, tuple_values, STAND_FIELDS, STAND_DEFAULTS, where
                         )
                         stands.append(row)
+                    elif table == "ai_dungeon_step":
+                        row = _row_from(columns, tuple_values, STEP_FIELDS, STEP_DEFAULTS, where)
+                        steps[(row["plan"], row["leg"], row["seq"])] = row
                     else:
                         row = _row_from(columns, tuple_values, PLAN_FIELDS, PLAN_DEFAULTS, where)
                         plans[row["plan"]] = row
@@ -491,6 +528,10 @@ def migration_rows(sql_dir):
                 elif table == "ai_boss_stand":
                     wanted = _conditions(conditions_text, STAND_FIELDS, where)
                     stands = [row for row in stands if not _matches(row, wanted)]
+                elif table == "ai_dungeon_step":
+                    wanted = _conditions(conditions_text, STEP_FIELDS, where)
+                    for key in [k for k, row in steps.items() if _matches(row, wanted)]:
+                        del steps[key]
                 else:
                     wanted = _conditions(conditions_text, PLAN_FIELDS, where)
                     for key in [k for k, row in plans.items() if _matches(row, wanted)]:
@@ -522,6 +563,20 @@ def migration_rows(sql_dir):
                             row.update(changes)
                         updated.append(row)
                     stands = updated
+                elif table == "ai_dungeon_step":
+                    changes = _set_values(set_text, STEP_FIELDS, where)
+                    if not any(name in changes for name in ("kind", "entry", "entries")):
+                        # Only the boss steps' kill lists are replayed; an UPDATE that touches none of kind, entry and
+                        # entries (a coordinate or flag fix with any WHERE) cannot change them.
+                        continue
+                    wanted = _conditions(conditions_text, STEP_FIELDS, where)
+                    updated = {}
+                    for row in steps.values():
+                        if _matches(row, wanted):
+                            row = dict(row)
+                            row.update(changes)
+                        updated[(row["plan"], row["leg"], row["seq"])] = row
+                    steps = updated
                 else:
                     changes = _set_values(set_text, PLAN_FIELDS, where)
                     wanted = _conditions(conditions_text, PLAN_FIELDS, where)
@@ -540,7 +595,15 @@ def migration_rows(sql_dir):
                 raise boss_data.DataError(f"{where}: unsupported statement")
             if re.match(r"^\s*(?:INSERT|REPLACE|DELETE|UPDATE|TRUNCATE)\b", statement, re.I):
                 raise boss_data.DataError(f"{where}: unsupported statement")
-    return _bundle(tactics.values(), stands, plans.values(), "migrations", len(paths))
+    plan_maps = {name: row["map"] for name, row in plans.items()}
+    boss_steps = [
+        {"plan": row["plan"], "map": plan_maps[row["plan"]], "boss": row["entry"], "killFirst": row["entries"]}
+        for row in steps.values()
+        if row["kind"] == "boss" and row["plan"] in plan_maps
+    ]
+    return _bundle(
+        tactics.values(), stands, plans.values(), "migrations", len(paths), boss_steps
+    )
 
 
 def _aggregate_stands(rows):
@@ -568,7 +631,7 @@ def _aggregate_stands(rows):
     return list(grouped.values())
 
 
-def _bundle(tactics, stands, plans, source, files):
+def _bundle(tactics, stands, plans, source, files, boss_steps=()):
     tactic_list = sorted(
         tactics, key=lambda r: (r["map"], r["boss"], r["kind"], r["target"], r["spell"])
     )
@@ -582,10 +645,19 @@ def _bundle(tactics, stands, plans, source, files):
         if entries is None:
             continue
         plan_list.append({"plan": plan["plan"], "map": plan["map"], "entries": entries})
+    step_list = []
+    for step in sorted(boss_steps, key=lambda s: (s["plan"], s["boss"])):
+        entries = parse_kill_first(step["killFirst"])
+        if entries is None:
+            continue
+        step_list.append(
+            {"plan": step["plan"], "map": step["map"], "boss": step["boss"], "entries": entries}
+        )
     return {
         "tactics": tactic_list,
         "stands": stand_list,
         "planKillFirst": plan_list,
+        "bossKillFirst": step_list,
         "source": source,
         "loadedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "files": files,
@@ -639,7 +711,13 @@ def db_rows(connect):
     plans = []
     for row in _db_query(connect, QUERY_PLAN_KILL_FIRST) or ():
         plans.append({"plan": row[0], "map": int(row[1]), "killFirst": row[2] or ""})
-    return _bundle(tactics, stands, plans, "world", None)
+    boss_steps = []
+    for row in _db_query(connect, QUERY_STEPS) or ():
+        if row[2] == "boss":
+            boss_steps.append(
+                {"plan": row[0], "map": int(row[1]), "boss": int(row[3]), "killFirst": row[4] or ""}
+            )
+    return _bundle(tactics, stands, plans, "world", None, boss_steps)
 
 
 # --------------------------------------------------------------------------
@@ -704,7 +782,7 @@ def _classify_text():
 
 
 class _Boss:
-    def __init__(self, doc, map_id, boss_lookup, tactics, stands, plans, codes, have_rows):
+    def __init__(self, doc, map_id, boss_lookup, tactics, stands, plans, codes, have_rows, steps=()):
         self.doc = doc
         self.entry = doc["entry"]
         self.map_id = map_id
@@ -717,6 +795,7 @@ class _Boss:
         self.stands = [s for s in stands if s["map"] == map_id and s["boss"] == self.entry]
         self.kills = [t for t in tactics if t["map"] == map_id and t["kind"] == "kill_first"]
         self.plans = [p for p in plans if p["map"] == map_id]
+        self.steps = [s for s in steps if s["map"] == map_id]
         self.warnings = []
         self.used_tactics = set()
         self.used_stands = set()
@@ -863,6 +942,17 @@ class _Boss:
                         f"kill_first on {entry} is under boss {self._other_boss(row['boss'])}: "
                         "check it is the right boss"
                     )
+            for step in self.steps:
+                if entry not in step["entries"]:
+                    continue
+                if step["boss"] == self.entry:
+                    answer("kill", "full", f"plan {step['plan']} boss step kill list")
+                else:
+                    answer(
+                        "kill",
+                        "partly",
+                        f"plan {step['plan']} boss step of {self._other_boss(step['boss'])}",
+                    )
             for plan in self.plans:
                 if entry in plan["entries"]:
                     answer("kill", "partly", f"plan {plan['plan']} kill_first (run leader only)")
@@ -1004,6 +1094,7 @@ def compute(table, rows):
     tactics = list((rows or {}).get("tactics") or [])
     stands = list((rows or {}).get("stands") or [])
     plans = list((rows or {}).get("planKillFirst") or [])
+    steps = list((rows or {}).get("bossKillFirst") or [])
     raids = []
     for raid in maps:
         map_id = raid.get("mapId")
@@ -1011,7 +1102,7 @@ def compute(table, rows):
         boss_results = []
         for entry in entries:
             doc = bosses[str(entry)]
-            worker = _Boss(doc, map_id, bosses, tactics, stands, plans, codes, have_rows)
+            worker = _Boss(doc, map_id, bosses, tactics, stands, plans, codes, have_rows, steps)
             boss_results.append(worker.result())
         unknown = {}
         if have_rows:
