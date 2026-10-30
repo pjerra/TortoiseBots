@@ -655,7 +655,9 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn("ReadRunFacts(slot, lead, bots, facts, binding->raid);\n"
                       "    // A stand-pull pull row: only its own formations' units (DungeonRun::ScopeStandPullFacts).\n"
                       "    TortoiseBots::DungeonRun::ScopeStandPullFacts(slot.run, facts);", COMMANDS)
-        self.assertIn("f.standPullOwnDead.push_back(RunFormationOf(creature));", read)
+        self.assertIn("for (uint32 low : BossSpawnLowGuids(lead->GetMapId(), entry))", read)
+        self.assertIn("f.standPullOwnRead.push_back(RunFormationOf(owned));", read)
+        self.assertIn("if (owned->IsAlive())\n                                            f.standPullOwnAlive.push_back(RunFormationOf(owned));", read)
         self.assertIn("bool const spawnOwned = (f.packClearMarginYd > 0.0f || standPull) && SpawnOwned(read, step->radius);", read)
         self.assertIn("unit.spawnOwned = SpawnOwned(read, step->radius); // the pack's formations (ScopeStandPullFacts)", read)
         add = read[read.index("auto addPatroller"):read.index("f.patrollers.push_back(unit);")]

@@ -9215,13 +9215,6 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                     float const fromPoint = DistanceTo(creature, step->x, step->y, step->z);
                     if (!creature->IsAlive())
                     {
-                        // A stand-pull pull row: a dead member whose spawn lies in the radius keeps its formation the
-                        // pack's (DungeonRun::ScopeStandPullFacts).
-                        if (standPull)
-                            if (CreatureData const* data = creature->GetCreatureData())
-                                if (ai::PlanDistance(data->position.x, data->position.y, data->position.z, step->x, step->y,
-                                        step->z) <= step->radius + kSpawnOwnTolYd)
-                                    f.standPullOwnDead.push_back(RunFormationOf(creature));
                         // "Boss down" needs his corpse in sight, not just his absence (a patrol).
                         if (bossEntry && fromPoint <= step->radius + kSeeYd)
                             f.bossDeadNearSpot = true;
@@ -9331,6 +9324,21 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                     f.units.push_back(unit);
                 }
             }
+            // A stand-pull pull row's pack: the formations of its entries' DB spawns in the radius, found by guid on the
+            // map alive or dead, wherever their loop is (DungeonRun::ScopeStandPullFacts; the spawn lists are cached).
+            if (standPull)
+                if (Map* const map = lead->GetMap())
+                    for (uint32 entry : step->entries)
+                        for (uint32 low : BossSpawnLowGuids(lead->GetMapId(), entry))
+                            if (CreatureData const* data = sObjectMgr.GetCreatureData(low))
+                                if (ai::PlanDistance(data->position.x, data->position.y, data->position.z, step->x,
+                                        step->y, step->z) <= step->radius + kSpawnOwnTolYd)
+                                    if (Creature* owned = map->GetCreature(data->GetObjectGuid(low)))
+                                    {
+                                        f.standPullOwnRead.push_back(RunFormationOf(owned));
+                                        if (owned->IsAlive())
+                                            f.standPullOwnAlive.push_back(RunFormationOf(owned));
+                                    }
             if (step->kind == ai::PlanStepKind::Pull)
                 ReadPullJoiners(lead, bots, *step, toPoint, f.joinerCeiling, slot.run.joinerHeld, f);
             break;

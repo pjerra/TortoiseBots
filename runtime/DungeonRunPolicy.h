@@ -964,9 +964,12 @@ struct Facts
     // lead bot that walk a waypoint patrol or follow a living waypoint leader (any entry), with distLead, x, y, z and
     // formation (PatrolStandPullGate: no other patrol near when the pull goes out).
     std::vector<UnitFact> standPatrols;
-    // A stand-pull pull row: the formations of DEAD creatures of its entries whose DB spawn lies in its radius (the grid
-    // read's corpses), so a pack whose member in the radius died first stays the pack (ScopeStandPullFacts).
-    std::vector<std::uint64_t> standPullOwnDead;
+    // A stand-pull pull row: the formations of the creatures of its entries whose DB spawn lies in its radius, found by
+    // guid on the map wherever they are, alive or dead (ScopeStandPullFacts: the pack is known before any of it is in
+    // the read's range, and after the member in the radius died).
+    std::vector<std::uint64_t> standPullOwnRead;
+    std::vector<std::uint64_t> standPullOwnAlive; // ... those of them with that creature alive
+
     // The pack-cleared gate (AiPlayerbot.DungeonRunPackClearMarginYd; 0: off, every list below empty).
     std::vector<UnitFact> packResidue; // living units of a pull step's entries outside its radius, 2D within
                                        // radius + packClearMarginYd and |dz| <= kPackResidueZYd (ClassifyPullRead)
@@ -10234,9 +10237,9 @@ inline bool StandPullPullRow(const Run& r)
 // range would wait for (and pull) its neighbours too. The glue calls this on the facts of the run's tick, right
 // after reading them: units, residue and patrollers of any other formation (formation read and not one of the
 // pack's) are dropped; with none of the pack's left alive the row is cleared. Unread formations (0) stay. The pack's
-// formations are kept for the step (Run::standPullOwn) and also read off the corpses of its spawn-owned members
-// (Facts::standPullOwnDead): a formation whose member in the radius died first (an earlier fight, a wipe) keeps its
-// living followers in the pack.
+// formations are kept for the step (Run::standPullOwn) and read by the DB spawns in the radius, found by guid on
+// the map alive or dead (Facts::standPullOwnRead): a formation far out on its loop at the first tick, or whose member
+// in the radius died first (an earlier fight, a wipe), is still the pack.
 inline void ScopeStandPullFacts(Run& r, Facts& f)
 {
     if (!StandPullPullRow(r))
@@ -10251,7 +10254,7 @@ inline void ScopeStandPullFacts(Run& r, Facts& f)
         for (const UnitFact& u : *list)
             if (u.spawnOwned && u.formation)
                 own.insert(u.formation);
-    for (std::uint64_t formation : f.standPullOwnDead)
+    for (std::uint64_t formation : f.standPullOwnRead)
         if (formation)
             own.insert(formation);
     auto drop = [&](std::vector<UnitFact>& v)
@@ -10263,6 +10266,35 @@ inline void ScopeStandPullFacts(Run& r, Facts& f)
     drop(f.units);
     drop(f.packResidue);
     drop(f.patrollers);
+}
+
+// A stand-pull pull row whose pack has a formation alive on the map (Facts::standPullOwnAlive) that nothing in the read
+// lists (out on the far side of its loop, beyond the grid read): the row is not cleared, it waits at the stand for the
+// formation to come round, on the stand pull's own 600 s (then it pauses). True: this tick waits.
+inline bool StandPullAwayWait(Run& r, const Facts& f, std::uint32_t dt)
+{
+    if (!StandPullPullRow(r) || f.anyInCombat)
+        return false;
+    for (std::uint64_t formation : f.standPullOwnAlive)
+    {
+        bool listed = false;
+        for (const std::vector<UnitFact>* list : {&f.units, &f.packResidue, &f.patrollers})
+            for (const UnitFact& u : *list)
+                listed = listed || u.formation == formation;
+        if (listed || !formation)
+            continue;
+        r.standPullMs += dt;
+        if (r.standPullMs >= kStandPullWaitMs)
+        {
+            Pause(r, "patrol pull: the pack's formation " + GuidArg(formation) + " is alive but did not come within sight of the stand in " +
+                std::to_string(kStandPullWaitMs / 1000) + " s: pull it, then .bot run resume, or .bot run skip");
+            return true;
+        }
+        r.stepIdleMs = dt > r.stepIdleMs ? 0 : r.stepIdleMs - dt;
+        r.note = "patrol pull: the pack's formation " + GuidArg(formation) + " is alive out of sight: waiting at the stand for it to come round";
+        return true;
+    }
+    return false;
 }
 
 // The clearance of a stand-pull pull row: its `param` in yd, 0 the default, never past what the glue lists.
@@ -10666,6 +10698,8 @@ inline void FightStep(Run& r, const Facts& f, const PlanStep& s, const std::vect
     {
         // Cleared, or a patroller to wait for (NotYet): WaitForPatroller decides. Residue is pulled first.
         if (PackResidueTick(r, f, s, dt, order))
+            return;
+        if (StandPullAwayWait(r, f, dt))
             return;
         std::string timedOut;
         if (WaitForPatroller(r, f, s, dt, timedOut))

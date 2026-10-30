@@ -20507,7 +20507,7 @@ static void TestScopeStandPullFactsKeepsThePacksFormations()
     ScopeStandPullFacts(fresh, gone);
     CHECK(gone.units.empty());
     // The member that spawned in the radius died (an earlier fight): its formation stays the pack's, from the run's
-    // memory of the step (r saw it above) or from its corpse in the read (Facts::standPullOwnDead).
+    // memory of the step (r saw it above) or from the DB spawns read by guid (Facts::standPullOwnRead).
     Facts anchorDead = PatrolPullFacts(22.0f);
     anchorDead.units.clear();
     anchorDead.patrollers = {follower, neighbour};
@@ -20516,7 +20516,7 @@ static void TestScopeStandPullFactsKeepsThePacksFormations()
     Run corpse = Start(&plan, 1);
     Facts byCorpse = anchorDead;
     byCorpse.patrollers = {follower, neighbour};
-    byCorpse.standPullOwnDead = {100};
+    byCorpse.standPullOwnRead = {100};
     ScopeStandPullFacts(corpse, byCorpse);
     CHECK(byCorpse.patrollers.size() == 1 && byCorpse.patrollers.front().guid == 11);
     // Another stand-pull row (a new step) starts with no remembered formation.
@@ -20534,6 +20534,32 @@ static void TestScopeStandPullFactsKeepsThePacksFormations()
     keep.units.front().formation = 200;
     ScopeStandPullFacts(p, keep);
     CHECK(keep.units.size() == 1);
+}
+
+// The pack's formation is alive on the map but nothing of it is in the read (the far side of its loop, beyond the
+// grid read): the row is not cleared; it waits at the stand (the stand pull's 600 s, then a pause). With the
+// formation listed, or dead, the usual rules (here: cleared).
+static void TestStandPullWaitsForItsFormationOutOfSight()
+{
+    DungeonPlan plan = PatrolPullPlan();
+    Run r = Start(&plan, 1);
+    Facts f = PatrolPullFacts(22.0f);
+    f.units.clear();
+    f.standPatrols.clear();
+    f.standPullOwnRead = {100};
+    f.standPullOwnAlive = {100};
+    ScopeStandPullFacts(r, f);
+    CHECK(Tick(r, f).empty());
+    CHECK(r.state == State::Running && r.step == 1);
+    CHECK(r.note == "patrol pull: the pack's formation 0x0000000000000064 is alive out of sight: waiting at the stand for it to come round");
+    for (std::uint32_t i = 1; i < kStandPullWaitMs / kTickMs && r.state == State::Running; ++i)
+        Tick(r, f);
+    CHECK(r.state == State::Paused && r.step == 1);
+    Run dead = Start(&plan, 1);
+    Facts gone = f;
+    gone.standPullOwnAlive.clear();
+    Tick(dead, gone);
+    CHECK(dead.step == 2);
 }
 
 // The stand-pull pull row's see range: a waypoint patroller (or a follower of one) 44 yd from a 4 yd radius is
@@ -25176,6 +25202,7 @@ int main()
     TestClassifyPullReadStandPullSeesFarther();
     TestStandPullPackInShotGatesThePatrolRead();
     TestScopeStandPullFactsKeepsThePacksFormations();
+    TestStandPullWaitsForItsFormationOutOfSight();
     TestSkippedBossNamedInDoneNoteAliveElsewhere();
     TestSkippedBossNamedInDoneNotePassedBySpot();
     TestDoneNoteUnchangedWithNoSkippedBoss();
