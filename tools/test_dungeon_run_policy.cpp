@@ -20481,6 +20481,40 @@ static void TestStandPullPackInShotGatesThePatrolRead()
     CHECK(!StandPullPackInShot(in));
 }
 
+// A stand-pull pull row's pack is the formations with a unit spawned in its radius: units, residue and patrollers of
+// another formation (Zul'Gurub: five bat formations share the entries) are dropped from the facts; with none of the
+// pack's formations left, the row has nothing (it is cleared). Another kind of row is left as it was.
+static void TestScopeStandPullFactsKeepsThePacksFormations()
+{
+    DungeonPlan plan = PatrolPullPlan();
+    Run r = Start(&plan, 1);
+    Facts f = PatrolPullFacts(22.0f);
+    f.units.front().spawnOwned = true;                     // formation 100: spawned in the radius
+    f.units.push_back(PatrolUnit(10, 11368, 15.0f, 200));  // another formation walking through the radius
+    UnitFact follower = PatrolUnit(11, 11368, 40.0f, 100); // the pack's follower, spawned elsewhere
+    UnitFact neighbour = PatrolUnit(12, 14750, 45.0f, 300);
+    UnitFact unread = PatrolUnit(13, 11368, 50.0f, 0);
+    f.patrollers = {follower, neighbour, unread};
+    f.packResidue = {PatrolUnit(14, 11368, 30.0f, 200)};
+    ScopeStandPullFacts(r, f);
+    CHECK(f.units.size() == 1 && f.units.front().guid == 9);
+    CHECK(f.patrollers.size() == 2 && f.patrollers[0].guid == 11 && f.patrollers[1].guid == 13);
+    CHECK(f.packResidue.empty());
+    // The pack's own formation dead: everything of another formation goes.
+    Facts gone = PatrolPullFacts(22.0f);
+    gone.units.front().formation = 200;
+    ScopeStandPullFacts(r, gone);
+    CHECK(gone.units.empty());
+    // A plain pull row keeps everything.
+    DungeonPlan plainPlan = PatrolPullPlan();
+    plainPlan.steps[1].flags = 0;
+    Run p = Start(&plainPlan, 1);
+    Facts keep = PatrolPullFacts(22.0f);
+    keep.units.front().formation = 200;
+    ScopeStandPullFacts(p, keep);
+    CHECK(keep.units.size() == 1);
+}
+
 // The stand-pull pull row's see range: a waypoint patroller (or a follower of one) 44 yd from a 4 yd radius is
 // Left at kPatrolSeeYd (walk 7 step 32's "pack cleared") and a Patroller at kStandPullSeeYd, gate on or off.
 static void TestClassifyPullReadStandPullSeesFarther()
@@ -20500,6 +20534,13 @@ static void TestClassifyPullReadStandPullSeesFarther()
     CHECK(ClassifyPullRead(in, 4.0f, 0.0f, kStandPullSeeYd) == PullRead::Patroller);
     in.fromPoint = in.fromPoint2d = 64.5f;
     CHECK(ClassifyPullRead(in, 4.0f, 10.0f, kStandPullSeeYd) == PullRead::Left);
+    // Gate off, a stand-pull row: a unit spawned in the radius is its patroller too (any movement).
+    PullReadIn spawn;
+    spawn.fromPoint = spawn.fromPoint2d = 50.0f;
+    spawn.hasSpawn = true;
+    spawn.spawnYd = 3.0f;
+    CHECK(ClassifyPullRead(spawn, 4.0f, 0.0f) == PullRead::Left);
+    CHECK(ClassifyPullRead(spawn, 4.0f, 0.0f, kStandPullSeeYd) == PullRead::Patroller);
 }
 
 static void TestSkippedBossNamedInDoneNoteAliveElsewhere()
@@ -25113,6 +25154,7 @@ int main()
     TestPlainPullIgnoresOtherPatrols();
     TestClassifyPullReadStandPullSeesFarther();
     TestStandPullPackInShotGatesThePatrolRead();
+    TestScopeStandPullFactsKeepsThePacksFormations();
     TestSkippedBossNamedInDoneNoteAliveElsewhere();
     TestSkippedBossNamedInDoneNotePassedBySpot();
     TestDoneNoteUnchangedWithNoSkippedBoss();

@@ -9173,7 +9173,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
             float packNearestYd = -1.0f; // the nearest unit listed nowhere this tick (Facts::packNearestLeft)
             auto addPatroller = [&](Creature* creature, float fromPoint, PullReadIn const& read)
             {
-                bool const spawnOwned = f.packClearMarginYd > 0.0f && SpawnOwned(read, step->radius);
+                bool const spawnOwned = (f.packClearMarginYd > 0.0f || standPull) && SpawnOwned(read, step->radius);
                 if (!spawnOwned && ai::OwnedByLaterStep(*slot.run.plan, slot.run.step, creature->GetEntry(),
                         creature->GetPositionX(), creature->GetPositionY(), creature->GetPositionZ(), f.team))
                     return;
@@ -9307,7 +9307,10 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                     if (f.pullStand || StandThisStep(slot))
                         unit.losLead = lead->IsWithinLOSInMap(creature);
                     if (standPull)
+                    {
                         unit.formation = RunFormationOf(creature);
+                        unit.spawnOwned = SpawnOwned(read, step->radius); // the pack's formations (ScopeStandPullFacts)
+                    }
                     if (residue)
                     {
                         unit.x = creature->GetPositionX();
@@ -9648,6 +9651,8 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
     if (f.leadIsland && lead->IsAlive())
         f.goodSpotCut = GoodSpotCutOff(lead, slot.run);
     ReadTimeSinkWays(slot, lead, f);
+    // A stand-pull pull row: only its own formations' units (DungeonRun::ScopeStandPullFacts).
+    TortoiseBots::DungeonRun::ScopeStandPullFacts(slot.run, f);
     ReadPullStand(slot, lead, f);
     // A stand-pull pull row: the other patrols near the lead bot, read only on a tick its pull could go out (a unit of
     // the pack in the tank's shot), not on every tick of the wait.

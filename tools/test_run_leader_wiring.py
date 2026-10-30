@@ -650,6 +650,11 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn("step->kind == ai::PlanStepKind::Pull && TortoiseBots::DungeonRun::StandPullPackInShot(f))\n"
                       "        ReadStandPatrols(lead, f);", read)
         self.assertLess(read.index("ReadPullStand(slot, lead, f);"), read.index("ReadStandPatrols(lead, f);"))
+        # The pack is its own formations (DungeonRun::ScopeStandPullFacts), scoped before the stand read.
+        self.assertLess(read.index("TortoiseBots::DungeonRun::ScopeStandPullFacts(slot.run, f);"),
+                        read.index("ReadPullStand(slot, lead, f);"))
+        self.assertIn("bool const spawnOwned = (f.packClearMarginYd > 0.0f || standPull) && SpawnOwned(read, step->radius);", read)
+        self.assertIn("unit.spawnOwned = SpawnOwned(read, step->radius); // the pack's formations (ScopeStandPullFacts)", read)
         add = read[read.index("auto addPatroller"):read.index("f.patrollers.push_back(unit);")]
         self.assertIn("if (standPull)\n                {\n                    unit.losLead = lead->IsWithinLOSInMap(creature);\n"
                       "                    unit.formation = RunFormationOf(creature);", add)

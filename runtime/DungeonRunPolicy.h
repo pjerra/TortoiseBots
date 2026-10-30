@@ -9962,8 +9962,8 @@ inline PullRead ClassifyPullRead(const PullReadIn& in, float radius, float margi
 {
     if (in.fromPoint <= radius)
         return PullRead::Unit;
-    if (marginYd <= 0.0f) // the gate off: today's patroller rule exactly
-        return (in.ownWaypoint || (patrolSeeYd > kPatrolSeeYd && in.followsWaypointLeader)) &&
+    if (marginYd <= 0.0f) // the gate off: today's patroller rule exactly (a stand-pull row: its spawn and followers too)
+        return (in.ownWaypoint || (patrolSeeYd > kPatrolSeeYd && (in.followsWaypointLeader || SpawnOwned(in, radius)))) &&
                 in.fromPoint <= radius + patrolSeeYd
             ? PullRead::Patroller
             : PullRead::Left;
@@ -10211,6 +10211,40 @@ inline bool StandPullPackInShot(const Facts& f)
             if (u.hostile && u.losLead && u.distLead <= inShot)
                 return true;
     return false;
+}
+
+// Whether the current step is a stand-pull PULL row with its stand (PatrolStandPullGate's row).
+inline bool StandPullPullRow(const Run& r)
+{
+    const PlanStep* const s = Current(r);
+    return s && s->kind == PlanStepKind::Pull && (s->flags & ai::kPlanFlagStandPull) && r.step > 0 && r.plan &&
+        r.plan->steps[r.step - 1].kind == PlanStepKind::Move && r.plan->steps[r.step - 1].leg == s->leg;
+}
+
+// A stand-pull pull row's pack is its formations: those with a unit whose DB spawn lies in the row's radius
+// (UnitFact::spawnOwned), wherever their loop has taken them. Zul'Gurub's plateau: five bat formations share the
+// entries 11368/14750 and their loops cross, so a row listing every waypoint unit of its entries within its see
+// range would wait for (and pull) its neighbours too. The glue calls this on the facts it read (after the step
+// read, before the stand read): units, residue and patrollers of any other formation (formation read and not one
+// of the pack's) are dropped; with none of the pack's left alive the row is cleared. Unread formations (0) stay.
+inline void ScopeStandPullFacts(const Run& r, Facts& f)
+{
+    if (!StandPullPullRow(r))
+        return;
+    std::unordered_set<std::uint64_t> own;
+    for (const std::vector<UnitFact>* list : {&f.units, &f.packResidue, &f.patrollers})
+        for (const UnitFact& u : *list)
+            if (u.spawnOwned && u.formation)
+                own.insert(u.formation);
+    auto drop = [&](std::vector<UnitFact>& v)
+    {
+        v.erase(std::remove_if(v.begin(), v.end(),
+                    [&](const UnitFact& u) { return u.formation && !own.count(u.formation); }),
+            v.end());
+    };
+    drop(f.units);
+    drop(f.packResidue);
+    drop(f.patrollers);
 }
 
 // The clearance of a stand-pull pull row: its `param` in yd, 0 the default, never past what the glue lists.
