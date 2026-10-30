@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Configuration
+- `RandomBotShowHelmet` / `RandomBotShowCloak` (default `1`) now take effect: `0` makes pool bots show up without their helmet and/or cloak from their next login. Hired companions and a player's own bots keep the display flags the character already has.
+- Removed 32 configuration keys that were read but did nothing (an old `aiplayerbot.conf` that still sets one keeps loading without issue). The config file template now explains up front what a commented `#Key = value` line means, and the documentation no longer lists a "settings with no effect" table. Only helmet and cloak display remained, so nothing changes for existing setups.
+
 ### World PvP
 - Pool bots stay PvP flagged everywhere, so players can attack them outside contested zones too. About a quarter of free pool bots actively hunt flagged enemies nearby, join same-faction fights, and give up the chase after a minute. Turn it off with `AiPlayerbot.RandomBotForcePvp = 0` and `AiPlayerbot.WorldPvpSeek = 0`.
 - The dashboard shows who fights whom in the open world: a World PvP feed, a seeker and "fighting" badge on the bot list, recent PvP fights in each bot's profile, and counters for seekers, engagements, kills and deaths.
@@ -13,9 +17,24 @@
 - In a run leader's pull, the held DPS open once every mob near the tank is on it (join delay at the earliest, 10 s after the tank is back at the latest), or at once when a mob hits them or the tank drops under 60 %.
 - A fight the run leader did not pull holds the damage dealers for up to 4 s the same way: they open once every mob near the tank or near them is on the tank, or at once when one hits them.
 - Fixed: the fight-start DPS hold now opens in hired dungeon runs (it was gated on the hirer).
+- Protection warriors open with Shield Slam when it is ready and treat Sunder Armor as the filler while the stack builds, so snap threat lands on every pull.
+- Protection warriors fall back to Mocking Blow (ducking into Battle Stance and back) when Taunt is on cooldown and the mob left the tank, recovering taunt-resist wipes on bosses.
+- Protection warriors save Challenging Shout for real emergencies (3 or more loose mobs on non-tanks) instead of firing it on every pack they already hold.
+- Feral bears keep Maul queued every swing from 15 rage instead of waiting for 40 (the dead Mangle row is gone), so threat no longer stalls on auto-attacks.
+- Feral bears spend excess rage (or a free Clearcasting proc) on Savage Bite from level 58, so high-level threat keeps scaling.
+- Feral bears save Challenging Roar for real emergencies (3 or more loose mobs on non-tanks) instead of firing it on every pack they already hold.
+- Fixed: priests no longer cast Power Word: Shield on a warrior or bear tank fighting above 20 % health, since absorbed hits give no rage and starve the tank's threat; the shield still lands as the save at or below 20 %.
+- Prayer of Healing now fires when 3 or more members of the priest's own party within 30 yards are hurt, instead of counting the whole raid for a spell that only heals the priest's party.
+- Ascendance now fires only when someone actually needs healing (a party member low or the group hurt), instead of on the first quiet combat tick of its 5-minute cooldown.
+- Fixed: restoration druids no longer channel Tranquility for two scratches — it waits for group damage, so the 30-minute channel is there when the group needs it.
+- Fixed: restoration druids heal between 20 % and 70 % health with *Healing Touch* while *Regrowth* is still running on the target (its heal-over-time is not recast), instead of idling until someone drops to critical. Druids below level 12, who have no Regrowth yet, heal with it too.
+- Fixed: restoration druids hold Nature's Swiftness for critical health instead of popping it on the first quiet tick, so the instant Healing Touch lands when a life is on the line.
+- Fixed: resto shaman now hold Spirit Link until the tank drops to half health instead of linking on the pull.
+- Changed: resto shaman now hold Ancestral Swiftness for a dying target instead of popping it on the first quiet tick.
 
 ### Commands
 - New `.autogear` command gears a real player the way a spawned bot gets geared: items picked for the level and spec from the same gear pool the bots use, upgrades only, replaced items to the bags or the mailbox. GameMasters can gear any player; `AiPlayerbot.PlayerAutogearForAll` (default `0`) lets every player gear themselves.
+- Fixed: `.bot sell` and the "Sell junk" button sold nothing. Bots now sell their grey junk to a vendor in reach, and a sell order that sells nothing says why. Autonomous alts still never sell soulbound or equipped items, whatever ordered the sale.
 
 ### Items & Loot
 - New `AiPlayerbot.HireLoot` (default `1`): set it to `0` and hired companions stop looting and pass on every roll, so the party keeps all the loot. Hired companions no longer take part in any quest, including orders from a player.
@@ -33,10 +52,20 @@
 - Fixed the run leader dropping a focus skull with no retry and keeping a stale skull across pauses.
 - Fixed bots in deep water standing still on a swim the server allows: their move now goes to the server's own swim, or up and out onto a shore within 30 yd.
 - Fixed: a long winding walk refused too-far no longer pauses after six legs (up to 16; a leg back at an earlier leg's end still pauses).
+- Fixed: the LFT bot fill knows every dungeon in the Turtle LFT list (Frostmane Hollow, Windhorn Canyon, Dragonmaw Retreat, Stormwrought Castle/Descent) and uses its level ranges (#1286).
 - New: the server can run a dungeon with a bot-only party of world bots by itself (behind `AiPlayerbot.BotLfgGroups`, off by default); GameMasters test it with `.bot run system`.
 - New: with `AiPlayerbot.BotLfgGroups = 1`, world bots form dungeon groups of four that wait for a player, then take a fifth bot; GameMasters watch them with `.bot run lfg list`.
+- New: bot LFG groups post in LookingForGroup and invite a player who whispers "inv" (`AiPlayerbot.BotLfgChat`).
 - Fixed the run leader sending the tank at a mob its own crowd control was about to take, and bots keeping that sheep as their target after it landed: the guard and the engage on arrival leave an ordered-but-unlanded CC mark to its CC bot, and every bot's order on a landed one is dropped.
 - New: bots interrupt the Wailing Caverns lords, Mutanus, Grimlok and Captain Greenskin.
+- Fixed: a hired mercenary in your party now accepts the LFT dungeon offer, so the group forms (#1284).
+- Fixed: Karazhan Crypt's run leader plan clears Corpsemuncher (leg 6, a swim up the shaft).
+- New: Wailing Caverns' plan fights Kresh; a boss row's timeout_s sets the wait for a boss away from his spot.
+- Fixed `cmd move` lifting a point in open water onto a ledge above the surface that no path reaches: the point stays in the water (a pier the bots can walk onto still wins), so the run leader's swim up Karazhan Crypt's shaft no longer pauses.
+- Fixed the test speed's party hold pausing a run when `cmd move` refused the hold on the lead bot's own spot (a swim under a ledge): the walk goes on.
+
+### Behind the scenes
+- Fixed: a startup error about listing prefix-matching accounts no longer appears on a server whose login database holds no accounts yet; an empty account list is now treated as normal, and a real database failure is still reported.
 
 ## v1.8.0 (2026-10-22)
 

@@ -27,7 +27,8 @@ Shamans provide unmatched group utility through versatile totem sets, elemental 
 
 ### Restoration (Healer)
 - Casts *Chain Heal* when several nearby allies are injured.
-- Casts *Healing Wave* and *Lesser Healing Wave*, downranking direct heals to match incoming wounds per [shared downranking rules](overview.md#spell-downranking).
+- Holds *Spirit Link* until the tank drops to half health, then links at once as the save. Rotation reference: stevemcqueenz/turtle-knowledge-base- (Turtle WoW class guides).
+- Holds *Ancestral Swiftness* for a dying target instead of popping it early, then spends it on an instant *Healing Wave*. Rotation reference: stevemcqueenz/turtle-knowledge-base- (Turtle WoW class guides).
 - Employs *Ancestral Swiftness* to instantly land emergency *Healing Wave* casts on dying targets.
 - Deals off-spec damage (*Flame Shock*, *Lightning Bolt*, *Chain Lightning* into packs) per [healer off-DPS rules](overview.md#healer-off-dps-offdps).
 
