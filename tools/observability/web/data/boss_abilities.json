@@ -65,7 +65,7 @@
           "self": false,
           "mark": false,
           "ground": false,
-          "cone": false,
+          "cone": true,
           "tail": false,
           "int": false,
           "summon": 0,
@@ -134,7 +134,9 @@
           "summon": 0,
           "hp": 0,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "dispel": "nodispel"
+          }
         },
         {
           "sid": 23966,
@@ -154,7 +156,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "phase",
           "okNeeds": {}
         },
         {
@@ -197,7 +199,9 @@
           "summon": 0,
           "hp": 0,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "interrupt": "nokick"
+          }
         },
         {
           "sid": 23954,
@@ -218,7 +222,9 @@
           "summon": 0,
           "hp": 0,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "purge": "nopurge"
+          }
         },
         {
           "sid": 16098,
@@ -372,7 +378,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "tank",
           "okNeeds": {}
         },
         {
@@ -414,7 +420,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "tank",
           "okNeeds": {}
         },
         {
@@ -435,7 +441,7 @@
           "int": false,
           "summon": 0,
           "hp": 50,
-          "ok": "",
+          "ok": "phase",
           "okNeeds": {}
         },
         {
@@ -477,7 +483,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "tank",
           "okNeeds": {}
         },
         {
@@ -541,7 +547,9 @@
           "summon": 0,
           "hp": 20,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "purge": "nopurge"
+          }
         }
       ],
       "phases": [
@@ -631,7 +639,9 @@
           "summon": 0,
           "hp": 0,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "interrupt": "nokick"
+          }
         },
         {
           "sid": 24109,
@@ -672,7 +682,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "phase",
           "okNeeds": {}
         },
         {
@@ -756,7 +766,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "script",
           "okNeeds": {}
         },
         {
@@ -777,7 +787,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "tank",
           "okNeeds": {}
         }
       ],
@@ -874,7 +884,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "phase",
           "okNeeds": {}
         },
         {
@@ -959,7 +969,9 @@
           "summon": 0,
           "hp": 11,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "purge": "nopurge"
+          }
         }
       ],
       "phases": [
@@ -1056,7 +1068,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "tank",
           "okNeeds": {}
         },
         {
@@ -1078,7 +1090,9 @@
           "summon": 0,
           "hp": 0,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "dispel": "nodispel"
+          }
         },
         {
           "sid": 24190,
@@ -1098,7 +1112,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "phase",
           "okNeeds": {}
         },
         {
@@ -1119,7 +1133,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "tank",
           "okNeeds": {}
         },
         {
@@ -1140,7 +1154,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "tank",
           "okNeeds": {}
         },
         {
@@ -1161,7 +1175,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "tank",
           "okNeeds": {}
         },
         {
@@ -1182,7 +1196,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "heal",
           "okNeeds": {}
         }
       ],
@@ -1240,7 +1254,9 @@
           "summon": 0,
           "hp": 0,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "dispel": "nodispel"
+          }
         },
         {
           "sid": 24408,
@@ -1282,7 +1298,9 @@
           "summon": 0,
           "hp": 0,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "dispel": "nodispel"
+          }
         },
         {
           "sid": 13736,
@@ -1302,7 +1320,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "heal",
           "okNeeds": {}
         },
         {
@@ -1323,7 +1341,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "tank",
           "okNeeds": {}
         },
         {
@@ -1345,7 +1363,9 @@
           "summon": 0,
           "hp": 0,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "purge": "nopurge"
+          }
         },
         {
           "sid": 24315,
@@ -1387,7 +1407,9 @@
           "summon": 0,
           "hp": 0,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "purge": "nopurge"
+          }
         }
       ],
       "phases": [],
@@ -1619,7 +1641,9 @@
           "summon": 0,
           "hp": 0,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "dispel": "nodispel"
+          }
         },
         {
           "sid": 24327,
@@ -1640,7 +1664,9 @@
           "summon": 0,
           "hp": 0,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "dispel": "nodispel"
+          }
         },
         {
           "sid": 27680,
@@ -1661,7 +1687,9 @@
           "summon": 0,
           "hp": 0,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "purge": "nopurge"
+          }
         },
         {
           "sid": 24687,
@@ -1724,7 +1752,9 @@
           "summon": 0,
           "hp": 0,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "dispel": "nodispel"
+          }
         },
         {
           "sid": 24689,
@@ -1794,7 +1824,7 @@
           "self": false,
           "mark": false,
           "ground": false,
-          "cone": false,
+          "cone": true,
           "tail": false,
           "int": false,
           "summon": 0,
@@ -1836,7 +1866,7 @@
           "self": false,
           "mark": false,
           "ground": false,
-          "cone": false,
+          "cone": true,
           "tail": false,
           "int": false,
           "summon": 0,
@@ -1879,7 +1909,7 @@
           "mark": false,
           "ground": false,
           "cone": false,
-          "tail": false,
+          "tail": true,
           "int": false,
           "summon": 0,
           "hp": 0,
@@ -1997,7 +2027,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "heal",
           "okNeeds": {}
         },
         {
@@ -2018,7 +2048,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "tank",
           "okNeeds": {}
         },
         {
@@ -2040,7 +2070,9 @@
           "summon": 0,
           "hp": 0,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "dispel": "nodispel"
+          }
         },
         {
           "sid": 4801,
@@ -2060,7 +2092,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "script",
           "okNeeds": {}
         },
         {
@@ -2081,7 +2113,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "script",
           "okNeeds": {}
         },
         {
@@ -2102,7 +2134,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "script",
           "okNeeds": {}
         },
         {
@@ -2123,7 +2155,7 @@
           "int": false,
           "summon": 0,
           "hp": 75,
-          "ok": "",
+          "ok": "phase",
           "okNeeds": {}
         }
       ],
@@ -2159,7 +2191,9 @@
           "summon": 0,
           "hp": 0,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "purge": "nopurge"
+          }
         },
         {
           "sid": 25174,
@@ -2200,7 +2234,7 @@
           "int": false,
           "summon": 0,
           "hp": 20,
-          "ok": "",
+          "ok": "phase",
           "okNeeds": {}
         },
         {
@@ -2221,7 +2255,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "phase",
           "okNeeds": {}
         }
       ],
@@ -2287,7 +2321,9 @@
           "summon": 0,
           "hp": 0,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "dispel": "nodispel"
+          }
         },
         {
           "sid": 720,
@@ -2440,7 +2476,9 @@
           "summon": 0,
           "hp": 0,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "dispel": "nodispel"
+          }
         },
         {
           "sid": 26053,
@@ -2461,7 +2499,9 @@
           "summon": 0,
           "hp": 0,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "dispel": "nodispel"
+          }
         },
         {
           "sid": 26068,
@@ -2481,7 +2521,7 @@
           "int": false,
           "summon": 0,
           "hp": 30,
-          "ok": "",
+          "ok": "phase",
           "okNeeds": {}
         }
       ],
@@ -2529,7 +2569,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "tank",
           "okNeeds": {}
         },
         {
@@ -2613,7 +2653,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "script",
           "okNeeds": {}
         },
         {
@@ -2656,7 +2696,9 @@
           "summon": 0,
           "hp": 0,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "purge": "nopurge"
+          }
         }
       ],
       "phases": [],
@@ -2724,7 +2766,9 @@
           "summon": 0,
           "hp": 0,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "purge": "nopurge"
+          }
         },
         {
           "sid": 26662,
@@ -2745,7 +2789,9 @@
           "summon": 0,
           "hp": 0,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "purge": "nopurge"
+          }
         }
       ],
       "phases": [],
@@ -2789,7 +2835,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "heal",
           "okNeeds": {}
         },
         {
@@ -2810,7 +2856,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "script",
           "okNeeds": {}
         },
         {
@@ -2826,7 +2872,7 @@
           "self": false,
           "mark": false,
           "ground": false,
-          "cone": false,
+          "cone": true,
           "tail": false,
           "int": false,
           "summon": 0,
@@ -2852,7 +2898,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "phase",
           "okNeeds": {}
         }
       ],
@@ -2916,7 +2962,9 @@
           "summon": 0,
           "hp": 0,
           "ok": "",
-          "okNeeds": {}
+          "okNeeds": {
+            "purge": "nopurge"
+          }
         },
         {
           "sid": 26235,
@@ -2936,7 +2984,7 @@
           "int": false,
           "summon": 0,
           "hp": 0,
-          "ok": "",
+          "ok": "phase",
           "okNeeds": {}
         },
         {
@@ -3045,6 +3093,22 @@
     {
       "map": "onyxia",
       "boss": 10184,
+      "key": "18500",
+      "spell": 18500,
+      "add": 0,
+      "flag": "",
+      "need": "front",
+      "level": "full",
+      "name": "dragon flank",
+      "text": "everyone but the tank leaves her front and tail cones and works the flanks",
+      "source": [
+        "ai/playerbot/strategy/generic/ReactionStrategy.cpp",
+        "ai/playerbot/strategy/triggers/DungeonTriggers.cpp"
+      ]
+    },
+    {
+      "map": "onyxia",
+      "boss": 10184,
       "key": "18435",
       "spell": 18435,
       "add": 0,
@@ -3072,6 +3136,22 @@
       "source": [
         "ai/playerbot/strategy/generic/OnyxiasLairDungeonStrategies.cpp",
         "ai/playerbot/strategy/triggers/OnyxiasLairDungeonTriggers.cpp"
+      ]
+    },
+    {
+      "map": "onyxia",
+      "boss": 10184,
+      "key": "18392",
+      "spell": 18392,
+      "add": 0,
+      "flag": "",
+      "need": "resist",
+      "level": "partly",
+      "name": "boss protection potion",
+      "text": "Greater Fire Protection Potion while she is an attacker",
+      "source": [
+        "ai/playerbot/strategy/generic/OnyxiasLairDungeonStrategies.cpp",
+        "ai/playerbot/ProtectionPotionPolicy.h"
       ]
     },
     {
