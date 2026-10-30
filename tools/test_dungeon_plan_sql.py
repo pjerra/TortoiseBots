@@ -4812,49 +4812,64 @@ class DungeonPlanSql(unittest.TestCase):
                                  "step %s (%s %s %s) stands %.1f yd off the floor %.1f" % (r["seq"], r["x"], r["y"], r["z"], abs(float(r["z"]) - near[0]), near[0]))
 
     def test_zul_gurub_is_the_raid_prep(self):
-        # 20261030010000 (turtle-agent prep/raid-zg c78e032, 2026-10-30, the walk-2 fix of leg 0): the 20-man ZG prep of
-        # RAID-PREP-zg.md, re-spaced twice after live walks (TortoiseBots-audit tests/raid-zg-walk1, -walk2). 9 legs,
-        # 1107 steps (the move rows include the approach and via points), 168 merged pulls (cap 12, radius <= 35), the
-        # eight bosses in the guide's order. What changed from 20261029230000, and why:
-        #   - leg 0 (`high_priestess_jeklik`) has 44 steps, not 43: the bat pack's stand gained a rest stand at
-        #     -12084 -1441 before the stair pull stand -12066.938 -1439.884, and the two-point approaches of cluster 1
-        #     (-12112 -1486, -12165 -1478) and cluster 2 (-12255 -1438, -12268 -1448) became one stand each
-        #     (-12114 -1494 and -12307 -1411): +1 move row.
-        #   - every plateau stand moved out of the three patrol lanes (headhunter 11351, witch doctor 11831, bat rider
-        #     14750) and out of the other packs' aggro: -12185 -1495 for the patrolling headhunter and the 8-unit pack,
-        #     -12239 -1386 for the north bat pack and -12268 -1376 for the -12236 -1415 pack. Walk 2's log: "the tank
-        #     engages 11351 on arrival (15.9 yd)" at the -12102 -1465 climb row.
-        #   - every other leg is the walk-1 rows unchanged: 142, 28, 61, 121, 75, 114, 290 and 232 step rows.
+        # 20261030120000 (turtle-agent fix/zg-leg0-walk3 6680b87, 2026-10-30, the walk-3 fix of leg 0): the 20-man ZG prep
+        # of RAID-PREP-zg.md, re-spaced three times after live walks (TortoiseBots-audit tests/raid-zg-walk1, -walk2,
+        # -walk3). 9 legs, 1104 steps (the move rows include the approach and via points), 168 merged pulls (cap 12,
+        # radius <= 35), the eight bosses in the guide's order. What changed from 20261030010000, and why:
+        #   - leg 0 (`high_priestess_jeklik`) has 41 steps, not 44. The bat pack (a moving formation: its Bat Rider 49147
+        #     waits 20 s at -12098.7 -1451.7, 44 yd from its pull row) is pulled from one stand on the stairs, -12076
+        #     -1475 111.03, so no move row before its pull stands on the plateau: walk 3's rest stand -12084 -1441 was
+        #     within the run leader's 15 yd hop pull of that formation and pulled a bat from the climb row -12103 -1466.
+        #     The rest stand, the stair stand -12066.938 -1439.884 and the three climb rows before the pull are gone
+        #     (-5 move rows, +1 stand).
+        #   - every leg-0 row before the boss stays 49.85 yd or more from Jeklik (walk 3 woke her from -12268 -1376 and
+        #     -12307 -1411): the north bat pack from -12203 -1414, the -12236 -1415 pack from -12233 -1390, cluster 2
+        #     from the south (-12266 -1495, the -12287.838 -1411.9567 path row is gone) and a two-row boss approach
+        #     (-12225 -1445, -12241.56 -1399.14: +1 move row); cluster 1 from -12120 -1494.
+        #   - every other leg is the walk-2 rows unchanged: 142, 28, 61, 121, 75, 114, 290 and 232 step rows.
         # The runts (2914, 13321, 4075, 1420, 14881) and the two event triggers
         # (14758, 15091) are in no pull; the first-add rows are the encounter units.
         name, text = newest_plan_text("zul_gurub")
-        self.assertEqual(name, "20261030010000_world.sql")
-        self.assertIn("('zul_gurub', 309, '', '', '', 'turtle-agent c78e032 dungeons/zul_gurub.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261030120000_world.sql")
+        self.assertIn("('zul_gurub', 309, '', '', '', 'turtle-agent 6680b87 dungeons/zul_gurub.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         self.assertEqual([v[0] for v in leg_rows(text, "zul_gurub").values()],
                          ["high_priestess_jeklik", "high_priest_venoxis", "high_priestess_marli",
                           "high_priest_thekal", "high_priestess_arlokk", "bloodlord_mandokir",
                           "jindo_the_hexxer", "hakkar_outer", "hakkar"])
         rows = [r for r in self.step_rows(text) if r["plan"] == "zul_gurub"]
-        self.assertEqual(len(rows), 1107)
+        self.assertEqual(len(rows), 1104)
         self.assertEqual([len(leg_steps(rows, leg)) for leg in range(9)],
-                         [44, 142, 28, 61, 121, 75, 114, 290, 232])
+                         [41, 142, 28, 61, 121, 75, 114, 290, 232])
         self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(9)],
                          [9, 21, 6, 7, 25, 23, 20, 39, 18])
-        # Leg 0's walk-2 re-spacing: the bat pack's rest stand before its stair pull, and the stands that follow out of
-        # the patrol lanes and the other packs' aggro.
+        # Leg 0's walk-3 re-spacing: the bat pack pulled from the stairs, the stands after it out of Jeklik's reach.
         leg0 = leg_steps(rows, 0)
         moves = [(r["x"], r["y"]) for r in leg0 if r["kind"] == "move"]
         self.assertIn(("-12028", "-1510"), moves)
         self.assertLess(moves.index(("-12028", "-1510")), leg0.index([r for r in leg0 if r["kind"] == "pull"][0]))
         self.assertIn(("-11928.5", "-1364.5"), moves)
-        for stand in (("-12084", "-1441"), ("-12066.938", "-1439.884"), ("-12114", "-1494"), ("-12185", "-1495"),
-                      ("-12239", "-1386"), ("-12268", "-1376"), ("-12307", "-1411")):
+        for stand in (("-12076", "-1475"), ("-12120", "-1494"), ("-12185", "-1495"), ("-12203", "-1414"),
+                      ("-12233", "-1390"), ("-12266", "-1495"), ("-12225", "-1445"), ("-12241.56", "-1399.14")):
             self.assertIn(stand, moves)
-        self.assertEqual(moves.index(("-12084", "-1441")) + 1, moves.index(("-12066.938", "-1439.884")),
-                         "the rest stand goes right before the stair pull stand")
         for gone in (("-12112", "-1486"), ("-12165", "-1478"), ("-12255", "-1438"), ("-12268", "-1448"),
-                     ("-12199.351", "-1467.1476"), ("-12219.585", "-1447.4061"), ("-12227.675", "-1431.8448")):
+                     ("-12199.351", "-1467.1476"), ("-12219.585", "-1447.4061"), ("-12227.675", "-1431.8448"),
+                     ("-12084", "-1441"), ("-12066.938", "-1439.884"), ("-12114", "-1494"), ("-12239", "-1386"),
+                     ("-12268", "-1376"), ("-12307", "-1411"), ("-12287.838", "-1411.9567"), ("-12272.397", "-1390.805")):
             self.assertNotIn(gone, moves)
+        # No move row before the bat pack's pull (the third) is on the z 130 plateau: its stand is on the stairs.
+        third = leg0.index([r for r in leg0 if r["kind"] == "pull"][2])
+        self.assertEqual((leg0[third]["x"], leg0[third]["y"]), ("-12054.76", "-1438.19"))
+        self.assertEqual((leg0[third - 1]["x"], leg0[third - 1]["y"]), ("-12076", "-1475"))
+        self.assertFalse([r for r in leg0[:third] if r["kind"] == "move" and float(r["z"]) > 120.0])
+        # Jeklik's keep-out: every leg-0 row before her own is 49.85 yd or more from her row (2D); the last approach row
+        # stays within 50 yd (3D), or the exporter would cut approach rows between it and her.
+        jek = leg0[-1]
+        self.assertEqual((jek["kind"], jek["entry"]), ("boss", "14517"))
+        def jek_yd(r, flat=True):
+            d = [float(r[k]) - float(jek[k]) for k in ("x", "y", "z")]
+            return math.hypot(d[0], d[1]) if flat else math.sqrt(d[0] ** 2 + d[1] ** 2 + d[2] ** 2)
+        self.assertGreaterEqual(min(jek_yd(r) for r in leg0[:-1]), 49.85)
+        self.assertLessEqual(jek_yd(leg0[-2], flat=False), 50.0)
         self.assertNotIn(("-12215.9", "-1468.65"), [(r["x"], r["y"]) for r in leg0 if r["kind"] == "pull"])
         pulls0 = [r for r in leg0 if r["kind"] == "pull"]
         self.assertEqual([p["radius"] for p in pulls0], ["6.3", "8.8", "11.9", "20.5", "1", "13.4", "5", "1.2", "18.5"])
