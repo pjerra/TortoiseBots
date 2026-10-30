@@ -20598,6 +20598,24 @@ static void TestPatrolStandPullWaitsForAPatrolNearThePullsWay()
     CHECK(Tick(r, f) == "pullback 9");
 }
 
+// Walk 10 step 31: the pack's unit in the residue band (just outside the radius), out of shot: the gate holds at the
+// stand. (Before: PackResidueTick pulled it as a plain pull and the party walked off to a firing stand.) In shot and
+// clear, the pull goes out on it.
+static void TestPatrolStandPullHoldsForAResidueUnit()
+{
+    DungeonPlan plan = PatrolPullPlan();
+    Run r = Start(&plan, 1);
+    Facts f = PatrolPullFacts(80.0f);
+    f.packClearMarginYd = 10.0f;
+    f.packResidue = f.units;
+    f.units.clear();
+    CHECK(Tick(r, f).empty());
+    CHECK(r.note == "patrol pull: waiting at the stand for 14750 0x0000000000000009 to come within 24.0 yd (now 80.0 yd)");
+    CHECK(r.shotStandFor == 0);
+    f.packResidue.front().distLead = 22.0f;
+    CHECK(Tick(r, f) == "pullback 9");
+}
+
 // No unit in the radius: a patroller of the row (the formation walking its loop) in shot is pulled from the stand.
 // (On 4e87c71eb: "waiting for the patroller 14750 9 (outside the 4.0 yd radius; up to 60 s)", no order.)
 static void TestPatrolStandPullShootsAPatrollerInShot()
@@ -25963,6 +25981,7 @@ int main()
     TestStandPullAuthJoinerRestThenOtherUnitHolds();
     TestPatrolStandPullWaitsForTheOtherPatrol();
     TestPatrolStandPullWaitsForAPatrolNearThePullsWay();
+    TestPatrolStandPullHoldsForAResidueUnit();
     TestPatrolStandPullShootsAPatrollerInShot();
     TestPatrolStandPullSameFormationDoesNotBlock();
     TestPatrolStandPullWaitsOutOfShot();
