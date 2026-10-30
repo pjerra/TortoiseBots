@@ -659,13 +659,14 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn("if (member->GetEntry() != entry)\n                                        continue;", read)
         self.assertIn("f.standPullOwnRead.push_back(spawned.back().first);", read)
         self.assertIn("f.standPullOwnAlive.push_back(formation);", read)
+        self.assertIn("unit.x = creature->GetPositionX(); // the pull's way (DungeonRun::PatrolStandPullGate)", read)
         self.assertIn("bool const spawnOwned = (f.packClearMarginYd > 0.0f || standPull) && SpawnOwned(read, step->radius);", read)
         self.assertIn("unit.spawnOwned = SpawnOwned(read, step->radius); // the pack's formations (ScopeStandPullFacts)", read)
         add = read[read.index("auto addPatroller"):read.index("f.patrollers.push_back(unit);")]
         self.assertIn("if (standPull)\n                {\n                    unit.losLead = lead->IsWithinLOSInMap(creature);\n"
                       "                    unit.formation = RunFormationOf(creature);", add)
         patrols = body(COMMANDS, "void ReadStandPatrols(Player* lead, TortoiseBots::DungeonRun::Facts& f)", "\n}\n")
-        self.assertIn("HostileCreaturesAround(lead, kStandPullClearMaxYd, found);", patrols)
+        self.assertIn("HostileCreaturesAround(lead, std::max(kStandPullClearMaxYd, f.leadShotYd + kStandPullPathClearYd), found);", patrols)
         self.assertIn("if (!c || !c->IsAlive() || c->IsInCombat() || !RunWalksPatrol(c))", patrols)
         self.assertIn("f.standPatrols.push_back(u);", patrols)
         formation = body(COMMANDS, "uint64 RunFormationOf(Creature* creature)", "\n}\n")
