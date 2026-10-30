@@ -268,7 +268,7 @@ class CoverageTest(unittest.TestCase):
                 self.assertIn(name, message)
                 self.assertIn(want, message)
 
-
+    def test_bad_kill_first_list_drops_the_plan(self):
         with tempfile.TemporaryDirectory() as tmp:
             Path(tmp, "001_world.sql").write_text(
                 "INSERT INTO `ai_dungeon_plan` (`plan`, `map`, `kill_first`) VALUES\n"
