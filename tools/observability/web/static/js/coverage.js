@@ -77,7 +77,7 @@
 
   // ---- the boss worker: one boss's lines, warnings and extra rows (§1) --------------------------------------------------
 
-  function bossWorker(doc, mapId, bossLookup, tactics, stands, plans, codes, haveRows) {
+  function bossWorker(doc, mapId, bossLookup, tactics, stands, plans, codes, haveRows, truncated) {
     const entry = doc.entry;
     const sids = {};
     (doc.abilities || []).forEach((ability) => { sids[String(ability.sid)] = true; });
@@ -113,7 +113,7 @@
       const derived = deriveNeeds(ability);
       const needs = derived.slice();
       const interruptRows = [];
-      mapTactics.forEach((row) => {
+      if (haveRows) mapTactics.forEach((row) => {
         if (row.kind !== "interrupt" || row.spell !== sid) return;
         const belongs = row.boss === entry;
         const matches = (belongs && (row.target === 0 || row.target === entry)) || row.target === entry;
@@ -127,7 +127,7 @@
             + "check that the core can interrupt it");
         }
       }
-      const standsHere = ownStands.filter((stand) => stand.windowSpell === sid);
+      const standsHere = haveRows ? ownStands.filter((stand) => stand.windowSpell === sid) : [];
       if (standsHere.length) {
         standsHere.forEach((stand) => usedStands.add(stand));
         if (!derived.some((need) => need === "front" || need === "tail" || need === "avoid" || need === "mark")) {
@@ -184,7 +184,13 @@
         answers.classify = [];
         needs.push("classify");
       }
-      if (!haveRows) {
+      if (truncated) {
+        // The snapshot stops at a query cap: a missing or present row proves
+        // nothing, so every need only the database can answer is unknown.
+        Object.keys(lv).forEach((need) => {
+          if (DB_NEEDS[need] && lv[need] !== "ok") lv[need] = "unknown";
+        });
+      } else if (!haveRows) {
         Object.keys(lv).forEach((need) => {
           if (DB_NEEDS[need] && lv[need] !== "ok" && lv[need] !== "full") lv[need] = "unknown";
         });
@@ -242,7 +248,8 @@
         list.push({ need, level, text });
       }
       killAnswers(id, answer);
-      if (!haveRows && lv.kill !== "full") lv.kill = "unknown";
+      if (truncated) lv.kill = "unknown";
+      else if (!haveRows && lv.kill !== "full") lv.kill = "unknown";
       return {
         key: "add:" + id,
         kind: "add",
@@ -259,8 +266,9 @@
     }
 
     function extras() {
-      const hasCone = (doc.abilities || []).some((ability) => ability.cone);
       const out = [];
+      if (!haveRows) return out;
+      const hasCone = (doc.abilities || []).some((ability) => ability.cone);
       ownTactics.forEach((row) => {
         if (usedTactics.has(row)) return;
         let why = "";
@@ -339,7 +347,11 @@
     const maps = doc.maps || [];
     const bosses = doc.bosses || {};
     const codes = doc.codeAnswers || [];
-    const haveRows = rows !== null && rows !== undefined;
+    const rowsRead = rows !== null && rows !== undefined;
+    const truncated = rowsRead && !!rows.truncated;
+    // A truncated snapshot only holds the rows before the query cap: they
+    // cannot answer a need or show an extra row, so they count as unread.
+    const haveRows = rowsRead && !truncated;
     const tactics = (rows && rows.tactics) || [];
     const stands = (rows && rows.stands) || [];
     const plans = (rows && rows.planKillFirst) || [];
@@ -347,7 +359,7 @@
     maps.forEach((raid) => {
       const mapId = raid.mapId;
       const entries = (raid.bosses || []).filter((entry) => String(entry) in bosses);
-      const bossResults = entries.map((entry) => bossWorker(bosses[String(entry)], mapId, bosses, tactics, stands, plans, codes, haveRows).result());
+      const bossResults = entries.map((entry) => bossWorker(bosses[String(entry)], mapId, bosses, tactics, stands, plans, codes, haveRows, truncated).result());
       const unknown = {};
       if (haveRows) {
         tactics.forEach((row) => {
@@ -380,9 +392,11 @@
     });
     return {
       raids: out,
-      source: haveRows ? (rows.source == null ? null : rows.source) : null,
-      loadedAt: haveRows ? (rows.loadedAt == null ? null : rows.loadedAt) : null,
-      files: haveRows && rows.files != null ? rows.files : null,
+      source: rowsRead ? (rows.source == null ? null : rows.source) : null,
+      loadedAt: rowsRead ? (rows.loadedAt == null ? null : rows.loadedAt) : null,
+      files: rowsRead && rows.files != null ? rows.files : null,
+      truncated,
+      truncatedAt: truncated && rows.truncatedAt != null && isFinite(Number(rows.truncatedAt)) ? Number(rows.truncatedAt) : null,
     };
   }
 
@@ -590,6 +604,11 @@
     const banner = result.source == null
       ? '<p class="cov-ban">World database not reachable: answers from tactic and stand rows are unknown; code answers are shown.</p>'
       : "";
+    const cutBanner = result.truncated
+      ? '<p class="cov-ban">' + e("the server's tactic rows were cut off at "
+        + (result.truncatedAt == null ? "its row cap" : fmtNum(result.truncatedAt))
+        + " rows: coverage from the database is incomplete") + "</p>"
+      : "";
     const summary = '<div class="cov-summary"><span class="cov-cname">' + e(raid.name) + '</span>'
       + countsBar(raid.counts)
       + '<span class="cov-counts">' + e(countsText(raid.counts)) + "</span>"
@@ -607,7 +626,7 @@
           + "</div>").join("")
         + "</div>"
       : "";
-    return chips + banner + summary + cards + unknown;
+    return chips + cutBanner + banner + summary + cards + unknown;
   }
 
   const api = {

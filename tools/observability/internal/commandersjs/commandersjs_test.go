@@ -388,9 +388,14 @@ func TestCoverageUIJS(t *testing.T) {
 	runCheck(t, "coverage_ui_check.js", "../../web/static/js/coverage.js")
 }
 
+// TestCoverageTruncatedJS runs coverage_truncated_check.js: a snapshot the daemon cut at a query cap marks every
+// database-answered need unknown, keeps the rows out of the proof and shows the incomplete-coverage banner.
+func TestCoverageTruncatedJS(t *testing.T) {
+	runCheck(t, "coverage_truncated_check.js", "../../web/static/js/coverage.js")
+}
+
 // TestCoverageCSS runs coverage_css_check.js: the Raid coverage block in app.css (a rule for every class it emits, theme
 // colours only, the one-column phone line, no fixed width above 358 px) and the boss panel's chip colours.
 func TestCoverageCSS(t *testing.T) {
 	runCheck(t, "coverage_css_check.js", "../../web/static/css/app.css", "../../web/static/js/coverage.js")
 }
-

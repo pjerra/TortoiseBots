@@ -6,6 +6,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -345,6 +347,18 @@ func TestTruncatedFlag(t *testing.T) {
 	if !snap.Truncated {
 		t.Fatalf("snapshot at the tactics LIMIT (%d rows) is not marked truncated", TacticsLimit)
 	}
+	if snap.TruncatedAt != TacticsLimit {
+		t.Fatalf("truncatedAt = %d, want the tactics cap %d", snap.TruncatedAt, TacticsLimit)
+	}
+
+	plansAtLimit := &fakeSource{plans: make([]PlanKill, PlansLimit)}
+	snap, err = NewService(plansAtLimit).Get(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !snap.Truncated || snap.TruncatedAt != PlansLimit {
+		t.Fatalf("snapshot at the plan LIMIT: truncated=%v truncatedAt=%d, want true/%d", snap.Truncated, snap.TruncatedAt, PlansLimit)
+	}
 }
 
 func TestQueries(t *testing.T) {
@@ -374,5 +388,50 @@ func TestQueries(t *testing.T) {
 	}
 	if TacticsLimit != 5000 || StandsLimit != 5000 || PlansLimit != 1000 {
 		t.Errorf("row caps = %d/%d/%d, want the values the queries pin", TacticsLimit, StandsLimit, PlansLimit)
+	}
+}
+
+func TestQueriesUseMapPlaceholders(t *testing.T) {
+	maps := []uint32{249, 309, 531}
+	for name, base := range map[string]string{
+		"tactics": QueryTactics,
+		"stands":  QueryStands,
+		"plans":   QueryPlanKillFirst,
+	} {
+		query, args := queryWithMaps(base, maps)
+		if strings.Contains(query, mapFilterMarker) {
+			t.Errorf("%s query keeps the filter marker: %s", name, query)
+		}
+		if !strings.Contains(query, "`map` IN (?, ?, ?)") {
+			t.Errorf("%s query does not filter the map list through placeholders: %s", name, query)
+		}
+		if strings.Contains(query, "309") {
+			t.Errorf("%s query carries a map id as SQL text: %s", name, query)
+		}
+		if !reflect.DeepEqual(args, []any{uint32(249), uint32(309), uint32(531)}) {
+			t.Errorf("%s query args = %v, want the map list", name, args)
+		}
+	}
+
+	query, args := queryWithMaps(QueryTactics, nil)
+	if strings.Contains(query, mapFilterMarker) || len(args) != 0 {
+		t.Errorf("an empty map list leaves a filter behind: %s %v", query, args)
+	}
+}
+
+func TestRaidMapsMatchTheCommittedCSV(t *testing.T) {
+	committed, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "data", "boss", "raids.csv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(committed) != raidsCSV {
+		t.Fatal("the embedded raids.csv copy drifted from data/boss/raids.csv")
+	}
+	maps, err := RaidMaps()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []uint32{249, 309, 531}; !reflect.DeepEqual(maps, want) {
+		t.Fatalf("RaidMaps() = %v, want %v", maps, want)
 	}
 }

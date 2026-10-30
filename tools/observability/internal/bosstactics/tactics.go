@@ -45,14 +45,15 @@ const (
 )
 
 // The queries order and aggregate, so the snapshot needs no per-row work.
-// They carry no quoted literal: every filter the page offers is applied to
-// the cached snapshot, never in SQL.
+// They carry no quoted literal and no map id: the raid map filter goes in at
+// mapFilterMarker through placeholders (queryWithMaps), and every other
+// filter the page offers is applied to the cached snapshot, never in SQL.
 const (
-	QueryTactics = "SELECT `map`, `boss_entry`, `kind`, `target_entry`, `spell_id`, `priority`, `param`, `comment` FROM `ai_boss_tactic` ORDER BY `map`, `boss_entry`, `kind`, `target_entry`, `spell_id` LIMIT 5000"
+	QueryTactics = "SELECT `map`, `boss_entry`, `kind`, `target_entry`, `spell_id`, `priority`, `param`, `comment` FROM `ai_boss_tactic`/*maps*/ ORDER BY `map`, `boss_entry`, `kind`, `target_entry`, `spell_id` LIMIT 5000"
 
-	QueryStands = "SELECT `map`, `boss_entry`, `window_spell`, `aura`, `role`, `window_signal`, SUM(`slots`) FROM `ai_boss_stand` GROUP BY `map`, `boss_entry`, `window_spell`, `aura`, `role`, `window_signal` ORDER BY `map`, `boss_entry`, `window_spell`, `role` LIMIT 5000"
+	QueryStands = "SELECT `map`, `boss_entry`, `window_spell`, `aura`, `role`, `window_signal`, SUM(`slots`) FROM `ai_boss_stand`/*maps*/ GROUP BY `map`, `boss_entry`, `window_spell`, `aura`, `role`, `window_signal` ORDER BY `map`, `boss_entry`, `window_spell`, `role` LIMIT 5000"
 
-	QueryPlanKillFirst = "SELECT `plan`, `map`, `kill_first` FROM `ai_dungeon_plan` ORDER BY `plan` LIMIT 1000"
+	QueryPlanKillFirst = "SELECT `plan`, `map`, `kill_first` FROM `ai_dungeon_plan`/*maps*/ ORDER BY `plan` LIMIT 1000"
 )
 
 // Tactic is one ai_boss_tactic row as the page reads it.
@@ -95,6 +96,9 @@ type Snapshot struct {
 	Source        string     `json:"source"`
 	LoadedAt      string     `json:"loadedAt"`
 	Truncated     bool       `json:"truncated,omitempty"`
+	// TruncatedAt is the row cap that was hit; the page names it in the
+	// incomplete-coverage banner.
+	TruncatedAt int `json:"truncatedAt,omitempty"`
 }
 
 // ForMap answers the snapshot filtered to one raid map. The counts and the
@@ -129,13 +133,24 @@ type Source interface {
 	PlanKillFirst(ctx context.Context) ([]PlanKill, error)
 }
 
-// NewSQLSource reads the world database.
-func NewSQLSource(db *sql.DB) Source { return &sqlSource{db: db} }
+// NewSQLSource reads the world database, limited to the raid maps of
+// data/boss/raids.csv so the row caps are a guard and not the normal cut.
+func NewSQLSource(db *sql.DB) Source {
+	maps, err := RaidMaps()
+	if err != nil {
+		log.Printf("[BossTactics] embedded raids.csv: %v (reading every map)", err)
+	}
+	return &sqlSource{db: db, maps: maps}
+}
 
-type sqlSource struct{ db *sql.DB }
+type sqlSource struct {
+	db   *sql.DB
+	maps []uint32
+}
 
 func (s *sqlSource) Tactics(ctx context.Context) ([]Tactic, error) {
-	rows, err := s.db.QueryContext(ctx, QueryTactics)
+	query, args := queryWithMaps(QueryTactics, s.maps)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +167,8 @@ func (s *sqlSource) Tactics(ctx context.Context) ([]Tactic, error) {
 }
 
 func (s *sqlSource) Stands(ctx context.Context) ([]Stand, error) {
-	rows, err := s.db.QueryContext(ctx, QueryStands)
+	query, args := queryWithMaps(QueryStands, s.maps)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +185,8 @@ func (s *sqlSource) Stands(ctx context.Context) ([]Stand, error) {
 }
 
 func (s *sqlSource) PlanKillFirst(ctx context.Context) ([]PlanKill, error) {
-	rows, err := s.db.QueryContext(ctx, QueryPlanKillFirst)
+	query, args := queryWithMaps(QueryPlanKillFirst, s.maps)
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -360,14 +377,23 @@ func (s *Service) read(ctx context.Context, started time.Time) (*Snapshot, error
 		}
 		plans = nil
 	}
-	truncated := len(tactics) >= TacticsLimit || len(stands) >= StandsLimit || len(plans) >= PlansLimit
+	truncatedAt := 0
+	switch {
+	case len(tactics) >= TacticsLimit:
+		truncatedAt = TacticsLimit
+	case len(stands) >= StandsLimit:
+		truncatedAt = StandsLimit
+	case len(plans) >= PlansLimit:
+		truncatedAt = PlansLimit
+	}
 	return &Snapshot{
 		Tactics:       sortedTactics(emptyIfNil(tactics)),
 		Stands:        sortedStands(emptyIfNil(stands)),
 		PlanKillFirst: sortedPlanKills(emptyIfNil(plans)),
 		Source:        SourceWorld,
 		LoadedAt:      started.UTC().Format(time.RFC3339),
-		Truncated:     truncated,
+		Truncated:     truncatedAt != 0,
+		TruncatedAt:   truncatedAt,
 	}, nil
 }
 
