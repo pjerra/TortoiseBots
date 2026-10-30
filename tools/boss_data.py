@@ -77,6 +77,9 @@ RAID_COLUMNS = ["key", "map_id", "name"]
 ROW_KINDS = {"ability", "phase", "add", "note"}
 TARGETS = {"victim", "random", "self", "aoe", "ally"}
 ADD_ROLES = {"summon", "linked", "ward", "totem", "trigger"}
+OK_REASONS = ("tank", "heal", "phase", "script", "nokick", "nodispel", "nopurge")
+# The DB-verified reasons are only valid on their own need.
+OK_REASON_NEED = {"nokick": "interrupt", "nodispel": "dispel", "nopurge": "purge"}
 FLAG_LETTERS = {
     "n": "UNIT_FLAG_NOT_SELECTABLE",
     "i": "UNIT_FLAG_IMMUNE_TO_PLAYER",
@@ -191,9 +194,13 @@ def parse_flags(text):
         "self": False,
         "mark": False,
         "ground": False,
+        "cone": False,
+        "tail": False,
         "int": False,
         "summon": 0,
         "hp": 0,
+        "ok": "",
+        "okNeeds": {},
     }
     seen = set()
     if not text:
@@ -215,13 +222,22 @@ def parse_flags(text):
             if target not in TARGETS:
                 raise DataError(f"bad target {target!r} in {text!r}")
             flags["target"] = target
-        elif token in ("aura", "self", "mark", "ground", "int"):
+        elif token in ("aura", "self", "mark", "ground", "cone", "tail", "int"):
             flags[token] = True
         elif token.startswith("summon="):
             value = token[7:]
             if not re.fullmatch(r"\d+", value):
                 raise DataError(f"bad summon entry {value!r} in {text!r}")
             flags["summon"] = int(value)
+        elif token.startswith("ok="):
+            flags["ok"] = token[3:]
+        elif token.startswith("ok."):
+            need, sep, reason = token[3:].partition("=")
+            if not sep:
+                raise DataError(f"ok.{need} needs =<reason> in {text!r}")
+            if need in flags["okNeeds"]:
+                raise DataError(f"duplicate ok.{need} in {text!r}")
+            flags["okNeeds"][need] = reason
         elif token.startswith("hp"):
             value = token[2:]
             if not re.fullmatch(r"\d+", value) or not 1 <= int(value) <= 99:
@@ -229,7 +245,60 @@ def parse_flags(text):
             flags["hp"] = int(value)
         else:
             raise DataError(f"unknown flag {token!r} in {text!r}")
+    _check_ok(flags, text)
     return flags
+
+
+def derived_needs(flags):
+    """The needs a row's own flags derive, in the coverage rule's order."""
+    needs = []
+    if flags["int"]:
+        needs.append("interrupt")
+    if flags["summon"]:
+        needs.append("kill")
+    if flags["cone"]:
+        needs.append("front")
+    if flags["tail"]:
+        needs.append("tail")
+    if flags["ground"]:
+        needs.append("avoid")
+    if flags["mark"]:
+        needs.append("mark")
+    if flags["aura"]:
+        needs.append("dispel")
+    if flags["self"]:
+        needs.append("purge")
+    return needs
+
+
+def _check_ok(flags, text):
+    """The `ok=`/`ok.<need>=` rules that need only this row's flags."""
+    ok = flags["ok"]
+    ok_needs = flags["okNeeds"]
+    if ok and ok_needs:
+        raise DataError(f"ok={ok} cannot be combined with ok.<need> in {text!r}")
+    if ok:
+        if ok not in OK_REASONS:
+            raise DataError(
+                f"unknown ok reason {ok!r} in {text!r}; expected one of {', '.join(OK_REASONS)}"
+            )
+        if ok in OK_REASON_NEED:
+            raise DataError(f"ok={ok} is only valid as ok.{OK_REASON_NEED[ok]}={ok} in {text!r}")
+    for need, reason in ok_needs.items():
+        if reason not in OK_REASONS:
+            raise DataError(
+                f"unknown ok reason {reason!r} in {text!r}; expected one of {', '.join(OK_REASONS)}"
+            )
+        if need not in derived_needs(flags):
+            raise DataError(f"ok.{need} on a row whose flags do not derive {need} in {text!r}")
+        owner = OK_REASON_NEED.get(reason)
+        if owner and owner != need:
+            raise DataError(
+                f"ok.{need}={reason} is only valid as ok.{owner}={reason} in {text!r}"
+            )
+    reasons = [ok, *ok_needs.values()]
+    if "tank" in reasons and flags["target"] != "victim":
+        raise DataError(f"ok reason tank needs a t=victim row in {text!r}")
 
 
 def parse_phase_rule(text):
@@ -573,6 +642,20 @@ def make_bosses(rows, names, raids=None):
                         f"boss {entry}: summon {ability['summon']} used by two ability rows"
                     )
                 seen_summons.add(ability["summon"])
+        phase_auras = {
+            phase["rule"]["aura"] for phase in phases if phase["rule"]["kind"] == "aura"
+        }
+        for ability in boss["abilities"]:
+            reasons = [ability["ok"], *ability["okNeeds"].values()]
+            if (
+                "phase" in reasons
+                and not ability["hp"]
+                and ability["sid"] not in phase_auras
+            ):
+                raise DataError(
+                    f"boss {entry}: ability {ability['sid']} says ok reason phase but it is "
+                    "no aura= rule of the boss and carries no hp<N"
+                )
         boss["phases"] = phases
 
     by_key = {raid["key"]: raid for raid in raids}

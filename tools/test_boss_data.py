@@ -234,6 +234,75 @@ class BossDataTest(unittest.TestCase):
         errors, _ = fx.validate()
         self.assertTrue(any("start rule must be the last" in e for e in errors), errors)
 
+    def test_cone_and_tail_flags_parse(self):
+        flags = boss_data.parse_flags("t=aoe;cone;tail")
+        self.assertTrue(flags["cone"])
+        self.assertTrue(flags["tail"])
+        self.assertEqual(sorted(boss_data.derived_needs(flags)), ["front", "tail"])
+        plain = boss_data.parse_flags("t=aoe")
+        self.assertFalse(plain["cone"])
+        self.assertFalse(plain["tail"])
+        self.assertEqual(boss_data.derived_needs(plain), [])
+
+    def test_unknown_ok_reason_fails(self):
+        rows = [ability(d="t=random;ok=banana"), add(),
+                phase("p1", "start", 1, source="boss.cpp:3")]
+        fx = self.make(rows)
+        errors, _ = fx.validate()
+        self.assertTrue(any("unknown ok reason 'banana'" in e for e in errors), errors)
+
+    def test_ok_need_not_derived_fails(self):
+        # ok.<need> on a row whose flags derive no such need is a typo, not a statement.
+        rows = [ability(d="t=random;ok.avoid=heal"), add(),
+                phase("p1", "start", 1, source="boss.cpp:3")]
+        fx = self.make(rows)
+        errors, _ = fx.validate()
+        self.assertTrue(any("do not derive avoid" in e for e in errors), errors)
+
+    def test_ok_and_ok_need_together_fail(self):
+        rows = [ability(d="t=victim;int;ok=tank;ok.interrupt=heal"), add(),
+                phase("p1", "start", 1, source="boss.cpp:3")]
+        fx = self.make(rows)
+        errors, _ = fx.validate()
+        self.assertTrue(any("cannot be combined" in e for e in errors), errors)
+
+    def test_nokick_outside_interrupt_fails(self):
+        rows = [ability(d="t=random;aura;ok.dispel=nokick"), add(),
+                phase("p1", "start", 1, source="boss.cpp:3")]
+        fx = self.make(rows)
+        errors, _ = fx.validate()
+        self.assertTrue(any("only valid as ok.interrupt" in e for e in errors), errors)
+
+    def test_tank_needs_victim_target(self):
+        rows = [ability(d="t=random;ok=tank"), add(),
+                phase("p1", "start", 1, source="boss.cpp:3")]
+        fx = self.make(rows)
+        errors, _ = fx.validate()
+        self.assertTrue(any("needs a t=victim row" in e for e in errors), errors)
+
+    def test_phase_reason_needs_phase_aura_or_hp(self):
+        rows = [ability(d="t=random;ok=phase"), add(),
+                phase("p1", "start", 1, source="boss.cpp:3")]
+        fx = self.make(rows)
+        errors, _ = fx.validate()
+        self.assertTrue(any("ok reason phase" in e for e in errors), errors)
+
+        # hp<N on the row itself is enough.
+        rows = [ability(d="t=random;ok=phase;hp30"), add(),
+                phase("p1", "start", 1, source="boss.cpp:3")]
+        fx = self.make(rows)
+        fx.rebuild()
+        errors, _ = fx.validate()
+        self.assertFalse(any("ok reason phase" in e for e in errors), errors)
+
+        # The spell being the boss's own aura= phase rule is the other way in.
+        rows = [ability(d="t=random;ok=phase"), add(),
+                phase("swarm", "aura=24328", 1), phase("p1", "start", 2, source="boss.cpp:3")]
+        fx = self.make(rows)
+        fx.rebuild()
+        errors, _ = fx.validate()
+        self.assertFalse(any("ok reason phase" in e for e in errors), errors)
+
     def test_raids_csv_covers_every_map(self):
         # A map slug in the CSV without a raids.csv row cannot be shown as a raid.
         rows = [dict(r) for r in BASE_ROWS]
