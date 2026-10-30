@@ -326,7 +326,7 @@ func main() {
 	var tacticSvc *bosstactics.Service
 	worldDB, worldErr := plans.OpenWorld(*dbHost, *dbPort, *dbUser, *dbPass, *dbWorld)
 	if worldErr != nil {
-		log.Printf("[Plans] world database: %v (the plan layer is off)", worldErr)
+		log.Printf("[Plans] world database: %v (the plan layer and the boss coverage rows are off)", worldErr)
 	} else {
 		planSvc = plans.NewService(plans.NewSQLSource(worldDB))
 		tacticSvc = bosstactics.NewService(bosstactics.NewSQLSource(worldDB))
