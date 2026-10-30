@@ -9215,6 +9215,13 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                     float const fromPoint = DistanceTo(creature, step->x, step->y, step->z);
                     if (!creature->IsAlive())
                     {
+                        // A stand-pull pull row: a dead member whose spawn lies in the radius keeps its formation the
+                        // pack's (DungeonRun::ScopeStandPullFacts).
+                        if (standPull)
+                            if (CreatureData const* data = creature->GetCreatureData())
+                                if (ai::PlanDistance(data->position.x, data->position.y, data->position.z, step->x, step->y,
+                                        step->z) <= step->radius + kSpawnOwnTolYd)
+                                    f.standPullOwnDead.push_back(RunFormationOf(creature));
                         // "Boss down" needs his corpse in sight, not just his absence (a patrol).
                         if (bossEntry && fromPoint <= step->radius + kSeeYd)
                             f.bossDeadNearSpot = true;
@@ -9651,8 +9658,6 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
     if (f.leadIsland && lead->IsAlive())
         f.goodSpotCut = GoodSpotCutOff(lead, slot.run);
     ReadTimeSinkWays(slot, lead, f);
-    // A stand-pull pull row: only its own formations' units (DungeonRun::ScopeStandPullFacts).
-    TortoiseBots::DungeonRun::ScopeStandPullFacts(slot.run, f);
     ReadPullStand(slot, lead, f);
     // A stand-pull pull row: the other patrols near the lead bot, read only on a tick its pull could go out (a unit of
     // the pack in the tank's shot), not on every tick of the wait.
@@ -10429,6 +10434,7 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
             TortoiseBots::DungeonRun::Facts holdFacts;
             std::vector<Player*> const holdBots = CommandedBots(holdLead->GetGroup(), holdLead);
             ReadRunFacts(slot, holdLead, holdBots, holdFacts, binding->raid);
+            TortoiseBots::DungeonRun::ScopeStandPullFacts(slot.run, holdFacts);
             ReadRunPlayers(slot, commanderRaw, holdLead, holdLead->GetGroup(), holdBots, holdFacts);
             TortoiseBots::DungeonRun::ApplyPlayerFacts(holdFacts);
             if (TortoiseBots::DungeonRun::PlayerHoldBackWhilePaused(slot.run, holdFacts, dt))
@@ -10498,6 +10504,8 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
     RetireLostCarrier(slot, lead, bots);
     TortoiseBots::DungeonRun::Facts facts;
     ReadRunFacts(slot, lead, bots, facts, binding->raid);
+    // A stand-pull pull row: only its own formations' units (DungeonRun::ScopeStandPullFacts).
+    TortoiseBots::DungeonRun::ScopeStandPullFacts(slot.run, facts);
     // The tactic rows the server reads now (a reload may have swapped them under this run's old plan): the deferral
     // gate reads them beside the plan's own (DungeonRun::PullMayBeDeferred), in the tick and in the stand's answer below.
     slot.run.liveTactics = &ai::GetBossTactics();

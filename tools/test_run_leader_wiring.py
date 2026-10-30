@@ -650,9 +650,12 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn("step->kind == ai::PlanStepKind::Pull && TortoiseBots::DungeonRun::StandPullPackInShot(f))\n"
                       "        ReadStandPatrols(lead, f);", read)
         self.assertLess(read.index("ReadPullStand(slot, lead, f);"), read.index("ReadStandPatrols(lead, f);"))
-        # The pack is its own formations (DungeonRun::ScopeStandPullFacts), scoped before the stand read.
-        self.assertLess(read.index("TortoiseBots::DungeonRun::ScopeStandPullFacts(slot.run, f);"),
-                        read.index("ReadPullStand(slot, lead, f);"))
+        # The pack is its own formations (DungeonRun::ScopeStandPullFacts), scoped on the tick's facts right after the read,
+        # with the corpses of its spawn-owned members.
+        self.assertIn("ReadRunFacts(slot, lead, bots, facts, binding->raid);\n"
+                      "    // A stand-pull pull row: only its own formations' units (DungeonRun::ScopeStandPullFacts).\n"
+                      "    TortoiseBots::DungeonRun::ScopeStandPullFacts(slot.run, facts);", COMMANDS)
+        self.assertIn("f.standPullOwnDead.push_back(RunFormationOf(creature));", read)
         self.assertIn("bool const spawnOwned = (f.packClearMarginYd > 0.0f || standPull) && SpawnOwned(read, step->radius);", read)
         self.assertIn("unit.spawnOwned = SpawnOwned(read, step->radius); // the pack's formations (ScopeStandPullFacts)", read)
         add = read[read.index("auto addPatroller"):read.index("f.patrollers.push_back(unit);")]

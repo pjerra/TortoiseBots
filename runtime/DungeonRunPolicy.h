@@ -964,6 +964,9 @@ struct Facts
     // lead bot that walk a waypoint patrol or follow a living waypoint leader (any entry), with distLead, x, y, z and
     // formation (PatrolStandPullGate: no other patrol near when the pull goes out).
     std::vector<UnitFact> standPatrols;
+    // A stand-pull pull row: the formations of DEAD creatures of its entries whose DB spawn lies in its radius (the grid
+    // read's corpses), so a pack whose member in the radius died first stays the pack (ScopeStandPullFacts).
+    std::vector<std::uint64_t> standPullOwnDead;
     // The pack-cleared gate (AiPlayerbot.DungeonRunPackClearMarginYd; 0: off, every list below empty).
     std::vector<UnitFact> packResidue; // living units of a pull step's entries outside its radius, 2D within
                                        // radius + packClearMarginYd and |dz| <= kPackResidueZYd (ClassifyPullRead)
@@ -1327,6 +1330,10 @@ struct Run
     std::size_t standPullStep = static_cast<std::size_t>(-1);
     std::uint32_t standPullMs = 0;
     std::uint64_t standPullShotGuid = 0;
+    // A stand-pull pull row's own formations (ScopeStandPullFacts), kept for the step once seen: a formation whose
+    // member spawned in the radius stays the pack's after that member died (standPullOwnStep: the step they are for).
+    std::unordered_set<std::uint64_t> standPullOwn;
+    std::size_t standPullOwnStep = static_cast<std::size_t>(-1);
     std::uint32_t patrolWaitMs = 0; // a pull step: time spent waiting for a patroller outside the radius (WaitForPatroller)
     std::uint32_t packRepulls = 0;  // ... and residue pulls this step (PackResidueTick)
     std::unordered_set<std::uint64_t> patrolSeen; // ... the patrollers this step saw (a pass of one is remembered run-wide)
@@ -10224,18 +10231,29 @@ inline bool StandPullPullRow(const Run& r)
 // A stand-pull pull row's pack is its formations: those with a unit whose DB spawn lies in the row's radius
 // (UnitFact::spawnOwned), wherever their loop has taken them. Zul'Gurub's plateau: five bat formations share the
 // entries 11368/14750 and their loops cross, so a row listing every waypoint unit of its entries within its see
-// range would wait for (and pull) its neighbours too. The glue calls this on the facts it read (after the step
-// read, before the stand read): units, residue and patrollers of any other formation (formation read and not one
-// of the pack's) are dropped; with none of the pack's left alive the row is cleared. Unread formations (0) stay.
-inline void ScopeStandPullFacts(const Run& r, Facts& f)
+// range would wait for (and pull) its neighbours too. The glue calls this on the facts of the run's tick, right
+// after reading them: units, residue and patrollers of any other formation (formation read and not one of the
+// pack's) are dropped; with none of the pack's left alive the row is cleared. Unread formations (0) stay. The pack's
+// formations are kept for the step (Run::standPullOwn) and also read off the corpses of its spawn-owned members
+// (Facts::standPullOwnDead): a formation whose member in the radius died first (an earlier fight, a wipe) keeps its
+// living followers in the pack.
+inline void ScopeStandPullFacts(Run& r, Facts& f)
 {
     if (!StandPullPullRow(r))
         return;
-    std::unordered_set<std::uint64_t> own;
+    if (r.standPullOwnStep != r.step)
+    {
+        r.standPullOwn.clear();
+        r.standPullOwnStep = r.step;
+    }
+    std::unordered_set<std::uint64_t>& own = r.standPullOwn;
     for (const std::vector<UnitFact>* list : {&f.units, &f.packResidue, &f.patrollers})
         for (const UnitFact& u : *list)
             if (u.spawnOwned && u.formation)
                 own.insert(u.formation);
+    for (std::uint64_t formation : f.standPullOwnDead)
+        if (formation)
+            own.insert(formation);
     auto drop = [&](std::vector<UnitFact>& v)
     {
         v.erase(std::remove_if(v.begin(), v.end(),

@@ -20501,10 +20501,31 @@ static void TestScopeStandPullFactsKeepsThePacksFormations()
     CHECK(f.patrollers.size() == 2 && f.patrollers[0].guid == 11 && f.patrollers[1].guid == 13);
     CHECK(f.packResidue.empty());
     // The pack's own formation dead: everything of another formation goes.
+    Run fresh = Start(&plan, 1);
     Facts gone = PatrolPullFacts(22.0f);
     gone.units.front().formation = 200;
-    ScopeStandPullFacts(r, gone);
+    ScopeStandPullFacts(fresh, gone);
     CHECK(gone.units.empty());
+    // The member that spawned in the radius died (an earlier fight): its formation stays the pack's, from the run's
+    // memory of the step (r saw it above) or from its corpse in the read (Facts::standPullOwnDead).
+    Facts anchorDead = PatrolPullFacts(22.0f);
+    anchorDead.units.clear();
+    anchorDead.patrollers = {follower, neighbour};
+    ScopeStandPullFacts(r, anchorDead);
+    CHECK(anchorDead.patrollers.size() == 1 && anchorDead.patrollers.front().guid == 11);
+    Run corpse = Start(&plan, 1);
+    Facts byCorpse = anchorDead;
+    byCorpse.patrollers = {follower, neighbour};
+    byCorpse.standPullOwnDead = {100};
+    ScopeStandPullFacts(corpse, byCorpse);
+    CHECK(byCorpse.patrollers.size() == 1 && byCorpse.patrollers.front().guid == 11);
+    // Another stand-pull row (a new step) starts with no remembered formation.
+    Run moved = r;
+    moved.standPullOwnStep = 0;
+    Facts later = anchorDead;
+    later.patrollers = {follower};
+    ScopeStandPullFacts(moved, later);
+    CHECK(later.patrollers.empty() && moved.standPullOwnStep == 1 && moved.standPullOwn.empty());
     // A plain pull row keeps everything.
     DungeonPlan plainPlan = PatrolPullPlan();
     plainPlan.steps[1].flags = 0;
