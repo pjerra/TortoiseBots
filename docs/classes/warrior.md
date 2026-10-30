@@ -31,10 +31,13 @@ Warriors serve as primary dungeon tanks or powerful melee DPS, managing dynamic 
   - Stacks *Sunder Armor* to 5 stacks, refreshing before expiry.
   - Casts *Shield Slam* on cooldown (or procced by Improved Shield Slam).
   - Uses *Thunder Clap* (usable in Defensive Stance on Turtle) against 2 or more melee attackers.
+  - Opens with *Shield Slam* when it is ready and treats *Sunder Armor* as the filler while the stack builds (rotation reference: stevemcqueenz/turtle-knowledge-base-, Turtle WoW class guides).
 - **Mitigation & Taunts:**
   - Activates *Shield Wall* early at low health (20-50%) and holds *Last Stand* for critical health emergencies (<20%).
   - Taunts with *Taunt* immediately if any attacker peels onto non-tank party members.
   - Intervenes to intercept physical attacks aimed at focused group members.
+  - Falls back to *Mocking Blow* (from Battle Stance, back to Defensive after) when *Taunt* is on cooldown and the mob left the tank (rotation reference: stevemcqueenz/turtle-knowledge-base-, Turtle WoW class guides).
+  - Saves *Challenging Shout* (10-min cooldown) for real emergencies: 3 or more loose mobs on non-tanks, not for a pack it already holds (rotation reference: stevemcqueenz/turtle-knowledge-base-, Turtle WoW class guides).
 
 ### Arms & Fury (Melee DPS)
 - **Arms:**

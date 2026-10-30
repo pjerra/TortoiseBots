@@ -6,6 +6,7 @@
 #include "playerbot/policy/class/ShamanRecallPolicy.h"
 #include "ShamanTotemGroupPolicy.h"
 #include "playerbot/policy/class/ShamanTankPolicy.h"
+#include "playerbot/policy/class/ShamanSpiritLinkPolicy.h"
 #include "ShamanTotemCommandPolicy.h"
 #include "playerbot/ReadyRebuffPolicy.h"
 #include "playerbot/ForceRebuffPolicy.h"
@@ -584,15 +585,20 @@ namespace ai
         bool IsActive() override
         {
             // 10min redistribution link: keep one copy group-wide (mirror the
-            // earth-shield dupe guard) and only link a live tank in combat.
+            // earth-shield dupe guard) and hold it until the tank is low.
+            bool linkUp = false;
             Group* group = bot->GetGroup();
             if (group)
             {
                 for (Player* member : LiveGroupMembers(group))
                     if (ai->HasAura("spirit link", member, false, true))
-                        return false;
+                        linkUp = true;
             }
-            return BuffOnTankTrigger::IsActive() && ai->IsStateActive(BotState::BOT_STATE_COMBAT);
+            Unit* target = GetTarget();
+            float health = target ? target->GetHealthPercent() : 100.0f;
+            return ShouldSpiritLink(linkUp, BuffOnTankTrigger::IsActive(),
+                ai->IsStateActive(BotState::BOT_STATE_COMBAT),
+                health > 100.0f ? 100 : (unsigned)health, sPlayerbotAIConfig.lowHealth);
         }
     };
 
