@@ -209,23 +209,22 @@ void HolyPriestAoeStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers
 {
     PriestAoeStrategy::InitCombatTriggers(triggers);
 
-    // Vanilla/Tortoise Prayer of Healing is the available group-heal
-    // fallback; later Circle of Healing/Prayer of Mending abilities are not
-    // part of this target spell surface.
+    // Prayer of Healing targets the caster's party, so it queues on the
+    // subgroup count (3+ hurt within 30 yd), not the raid-wide aoe value.
     triggers.push_back(new TriggerNode(
-        "medium aoe heal",
-        NextAction::array(0, new NextAction("prayer of healing", ACTION_MEDIUM_HEAL), NULL)));
+        "prayer of healing party",
+        NextAction::array(0, new NextAction("prayer of healing", ACTION_MEDIUM_HEAL + 5), NULL)));
 
     // Group-size-scaled gates (mod-playerbots parity, HEAL-1): shields on
-    // the almost-full band, Prayer of Healing on the medium band.
+    // the almost-full band, and on the medium band via the subgroup trigger
+    // (the shield refuses a rage tank above the critical band, P1).
     triggers.push_back(new TriggerNode(
         "group heal setting",
         NextAction::array(0, new NextAction("power word: shield on party", ACTION_MEDIUM_HEAL + 7), NULL)));
 
     triggers.push_back(new TriggerNode(
         "medium group heal setting",
-        NextAction::array(0, new NextAction("power word: shield on party", ACTION_CRITICAL_HEAL + 5),
-                             new NextAction("prayer of healing", ACTION_CRITICAL_HEAL + 4), NULL)));
+        NextAction::array(0, new NextAction("power word: shield on party", ACTION_CRITICAL_HEAL + 5), NULL)));
 }
 
 void HolyPriestAoeStrategy::InitNonCombatTriggers(std::list<TriggerNode*>& triggers)

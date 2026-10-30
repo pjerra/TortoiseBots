@@ -2,6 +2,8 @@
 
 #include "playerbot/strategy/triggers/GenericTriggers.h"
 #include "playerbot/strategy/triggers/HealthTriggers.h"
+#include "playerbot/GroupMembers.h"
+#include "playerbot/policy/heal/PrayerOfHealingPolicy.h"
 #include "playerbot/policy/heal/HealPacePolicy.h"
 
 namespace ai
@@ -102,6 +104,17 @@ namespace ai
                 float(sPlayerbotAIConfig.criticalHealth)};
             return PickPacedHeal(state) == HealPaceChoice::Flash;
         }
+    };
+
+    // Prayer of Healing targets 37 (the caster's party) while the shared
+    // "medium aoe heal" value counts the whole raid. Count the priest's own
+    // subgroup (SameSubGroup, the ImbueAction pattern), alive and in world,
+    // within 30 yd 2D at or below medium health, through the pure policy.
+    class PrayerOfHealingPartyTrigger : public Trigger
+    {
+    public:
+        PrayerOfHealingPartyTrigger(PlayerbotAI* ai) : Trigger(ai, "prayer of healing party") {}
+        bool IsActive() override;
     };
 
     // The capstone's cooldown runs all but a sliver of the fight while the

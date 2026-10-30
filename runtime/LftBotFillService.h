@@ -17,7 +17,7 @@ namespace TortoiseBots
 // new offer - core queue order, party blocks atomic, committed in-offer
 // members excluded - to find the missing 1 tank / 1 healer / 3 dps slots,
 // then filters in-memory Headless random candidates by the authoritative
-// Soromeister/LFT v0.0.3.3 LFT.allDungeons minLevel/maxLevel range, team,
+// Turtle client LFT LFT_Data.lua minLevel/maxLevel range, team,
 // hardcore, group, state, and AiFactory spec role before QueuePlayer.
 // Native core owns offers, acceptance, cancellation, and group formation; the
 // service auto-accepts its own Headless participants and, independently of the
