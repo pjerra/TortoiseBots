@@ -27,35 +27,38 @@ type fakeSource struct {
 	tErr    error
 	sErr    error
 	pErr    error
+	tCut    bool
+	sCut    bool
+	pCut    bool
 	calls   int
 }
 
-func (f *fakeSource) Tactics(context.Context) ([]Tactic, error) {
+func (f *fakeSource) Tactics(context.Context) ([]Tactic, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls++
 	if f.tErr != nil {
-		return nil, f.tErr
+		return nil, false, f.tErr
 	}
-	return f.tactics, nil
+	return f.tactics, f.tCut, nil
 }
 
-func (f *fakeSource) Stands(context.Context) ([]Stand, error) {
+func (f *fakeSource) Stands(context.Context) ([]Stand, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.sErr != nil {
-		return nil, f.sErr
+		return nil, false, f.sErr
 	}
-	return f.stands, nil
+	return f.stands, f.sCut, nil
 }
 
-func (f *fakeSource) PlanKillFirst(context.Context) ([]PlanKill, error) {
+func (f *fakeSource) PlanKillFirst(context.Context) ([]PlanKill, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.pErr != nil {
-		return nil, f.pErr
+		return nil, false, f.pErr
 	}
-	return f.plans, nil
+	return f.plans, f.pCut, nil
 }
 
 func (f *fakeSource) callCount() int {
@@ -164,14 +167,16 @@ type gatedSource struct {
 	once    sync.Once
 }
 
-func (g *gatedSource) Tactics(context.Context) ([]Tactic, error) {
+func (g *gatedSource) Tactics(context.Context) ([]Tactic, bool, error) {
 	g.once.Do(func() { close(g.reached) })
 	<-g.gate
-	return []Tactic{{Map: 1, Boss: 2, Kind: "interrupt", Spell: 3}}, nil
+	return []Tactic{{Map: 1, Boss: 2, Kind: "interrupt", Spell: 3}}, false, nil
 }
 
-func (g *gatedSource) Stands(context.Context) ([]Stand, error)           { return nil, nil }
-func (g *gatedSource) PlanKillFirst(context.Context) ([]PlanKill, error) { return nil, nil }
+func (g *gatedSource) Stands(context.Context) ([]Stand, bool, error) { return nil, false, nil }
+func (g *gatedSource) PlanKillFirst(context.Context) ([]PlanKill, bool, error) {
+	return nil, false, nil
+}
 
 // TestServiceReadsOutsideTheLock: a slow world-database read must not hold the
 // service's lock, or the whole page waits behind it.
@@ -329,6 +334,27 @@ func TestHandler(t *testing.T) {
 	}
 }
 
+// TestPlanRowsCountedBeforeFiltering: the cap is a limit on the rows the query
+// returned, not on the plans left after the invalid kill_first lists are
+// dropped. A probe row over the cap marks the snapshot even when most of the
+// rows above it are unusable.
+func TestPlanRowsCountedBeforeFiltering(t *testing.T) {
+	raw := make([]planKillRow, PlansLimit+1)
+	for i := range raw {
+		raw[i] = planKillRow{Plan: "plan", Map: 43, KillFirst: "3671"}
+	}
+	raw[0] = planKillRow{Plan: "empty", Map: 43, KillFirst: ""}
+	raw[1] = planKillRow{Plan: "bad", Map: 43, KillFirst: "12x"}
+
+	plans, truncated := planKillsWithinCap(raw)
+	if !truncated {
+		t.Fatalf("%d raw plan rows (cap %d, two dropped) are not marked truncated", len(raw), PlansLimit)
+	}
+	if len(plans) != PlansLimit-2 {
+		t.Fatalf("plans = %d, want %d: the rows over the cap are trimmed, the unusable ones dropped", len(plans), PlansLimit-2)
+	}
+}
+
 func TestTruncatedFlag(t *testing.T) {
 	below := newFake()
 	snap, err := NewService(below).Get(context.Background())
@@ -339,25 +365,26 @@ func TestTruncatedFlag(t *testing.T) {
 		t.Fatal("snapshot below every LIMIT is marked truncated")
 	}
 
-	atLimit := &fakeSource{tactics: make([]Tactic, TacticsLimit)}
-	snap, err = NewService(atLimit).Get(context.Background())
-	if err != nil {
-		t.Fatal(err)
+	cases := []struct {
+		name string
+		src  *fakeSource
+		cap  int
+	}{
+		{"tactics", &fakeSource{tCut: true}, TacticsLimit},
+		{"stands", &fakeSource{sCut: true}, StandsLimit},
+		{"plans", &fakeSource{pCut: true}, PlansLimit},
 	}
-	if !snap.Truncated {
-		t.Fatalf("snapshot at the tactics LIMIT (%d rows) is not marked truncated", TacticsLimit)
-	}
-	if snap.TruncatedAt != TacticsLimit {
-		t.Fatalf("truncatedAt = %d, want the tactics cap %d", snap.TruncatedAt, TacticsLimit)
-	}
-
-	plansAtLimit := &fakeSource{plans: make([]PlanKill, PlansLimit)}
-	snap, err = NewService(plansAtLimit).Get(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !snap.Truncated || snap.TruncatedAt != PlansLimit {
-		t.Fatalf("snapshot at the plan LIMIT: truncated=%v truncatedAt=%d, want true/%d", snap.Truncated, snap.TruncatedAt, PlansLimit)
+	for _, one := range cases {
+		snap, err = NewService(one.src).Get(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !snap.Truncated {
+			t.Fatalf("%s: the source's cut is not marked truncated", one.name)
+		}
+		if snap.TruncatedAt != one.cap {
+			t.Fatalf("%s: truncatedAt = %d, want the cap %d", one.name, snap.TruncatedAt, one.cap)
+		}
 	}
 }
 
@@ -380,11 +407,11 @@ func TestQueries(t *testing.T) {
 	if !strings.Contains(QueryStands, "GROUP BY") || !strings.Contains(QueryStands, "SUM(`slots`)") {
 		t.Errorf("stands query does not aggregate the seats: %s", QueryStands)
 	}
-	if !strings.HasSuffix(QueryTactics, "LIMIT 5000") || !strings.HasSuffix(QueryStands, "LIMIT 5000") {
-		t.Errorf("tactics/stands queries do not match their row caps (%d/%d): %s / %s", TacticsLimit, StandsLimit, QueryTactics, QueryStands)
+	if !strings.HasSuffix(QueryTactics, "LIMIT 5001") || !strings.HasSuffix(QueryStands, "LIMIT 5001") {
+		t.Errorf("tactics/stands queries do not ask one row over their caps (%d/%d): %s / %s", TacticsLimit, StandsLimit, QueryTactics, QueryStands)
 	}
-	if !strings.HasSuffix(QueryPlanKillFirst, "LIMIT 1000") {
-		t.Errorf("plan query does not match its row cap (%d): %s", PlansLimit, QueryPlanKillFirst)
+	if !strings.HasSuffix(QueryPlanKillFirst, "LIMIT 1001") {
+		t.Errorf("plan query does not ask one row over its cap (%d): %s", PlansLimit, QueryPlanKillFirst)
 	}
 	if TacticsLimit != 5000 || StandsLimit != 5000 || PlansLimit != 1000 {
 		t.Errorf("row caps = %d/%d/%d, want the values the queries pin", TacticsLimit, StandsLimit, PlansLimit)

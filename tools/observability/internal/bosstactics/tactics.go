@@ -28,8 +28,9 @@ const (
 	// ErrorTTL is how long a failed read is kept before it is retried.
 	ErrorTTL = 10 * time.Second
 
-	// Row caps of the three queries. A list that reaches its cap marks the
-	// snapshot truncated.
+	// Row caps of the three queries. Each query asks for one row over its cap:
+	// a returned probe row means the table holds more rows than the cap, and
+	// marks the snapshot truncated.
 	TacticsLimit = 5000
 	StandsLimit  = 5000
 	PlansLimit   = 1000
@@ -49,11 +50,11 @@ const (
 // mapFilterMarker through placeholders (queryWithMaps), and every other
 // filter the page offers is applied to the cached snapshot, never in SQL.
 const (
-	QueryTactics = "SELECT `map`, `boss_entry`, `kind`, `target_entry`, `spell_id`, `priority`, `param`, `comment` FROM `ai_boss_tactic`/*maps*/ ORDER BY `map`, `boss_entry`, `kind`, `target_entry`, `spell_id` LIMIT 5000"
+	QueryTactics = "SELECT `map`, `boss_entry`, `kind`, `target_entry`, `spell_id`, `priority`, `param`, `comment` FROM `ai_boss_tactic`/*maps*/ ORDER BY `map`, `boss_entry`, `kind`, `target_entry`, `spell_id` LIMIT 5001"
 
-	QueryStands = "SELECT `map`, `boss_entry`, `window_spell`, `aura`, `role`, `window_signal`, SUM(`slots`) FROM `ai_boss_stand`/*maps*/ GROUP BY `map`, `boss_entry`, `window_spell`, `aura`, `role`, `window_signal` ORDER BY `map`, `boss_entry`, `window_spell`, `role` LIMIT 5000"
+	QueryStands = "SELECT `map`, `boss_entry`, `window_spell`, `aura`, `role`, `window_signal`, SUM(`slots`) FROM `ai_boss_stand`/*maps*/ GROUP BY `map`, `boss_entry`, `window_spell`, `aura`, `role`, `window_signal` ORDER BY `map`, `boss_entry`, `window_spell`, `role` LIMIT 5001"
 
-	QueryPlanKillFirst = "SELECT `plan`, `map`, `kill_first` FROM `ai_dungeon_plan`/*maps*/ ORDER BY `plan` LIMIT 1000"
+	QueryPlanKillFirst = "SELECT `plan`, `map`, `kill_first` FROM `ai_dungeon_plan`/*maps*/ ORDER BY `plan` LIMIT 1001"
 )
 
 // Tactic is one ai_boss_tactic row as the page reads it.
@@ -126,11 +127,13 @@ func (s *Snapshot) ForMap(mapID uint32) *Snapshot {
 	return &out
 }
 
-// Source is the read side of the three world tables.
+// Source is the read side of the three world tables. The bool on each read is
+// true when the table held more rows than its cap; the rows over the cap are
+// trimmed before they reach the service.
 type Source interface {
-	Tactics(ctx context.Context) ([]Tactic, error)
-	Stands(ctx context.Context) ([]Stand, error)
-	PlanKillFirst(ctx context.Context) ([]PlanKill, error)
+	Tactics(ctx context.Context) ([]Tactic, bool, error)
+	Stands(ctx context.Context) ([]Stand, bool, error)
+	PlanKillFirst(ctx context.Context) ([]PlanKill, bool, error)
 }
 
 // NewSQLSource reads the world database, limited to the raid maps of
@@ -148,61 +151,87 @@ type sqlSource struct {
 	maps []uint32
 }
 
-func (s *sqlSource) Tactics(ctx context.Context) ([]Tactic, error) {
+func (s *sqlSource) Tactics(ctx context.Context) ([]Tactic, bool, error) {
 	query, args := queryWithMaps(QueryTactics, s.maps)
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer rows.Close()
 	var out []Tactic
 	for rows.Next() {
 		var r Tactic
 		if err := rows.Scan(&r.Map, &r.Boss, &r.Kind, &r.Target, &r.Spell, &r.Priority, &r.Param, &r.Comment); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		out = append(out, r)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, false, err
+	}
+	out, truncated := capRows(out, TacticsLimit)
+	return out, truncated, nil
 }
 
-func (s *sqlSource) Stands(ctx context.Context) ([]Stand, error) {
+func (s *sqlSource) Stands(ctx context.Context) ([]Stand, bool, error) {
 	query, args := queryWithMaps(QueryStands, s.maps)
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer rows.Close()
 	var out []Stand
 	for rows.Next() {
 		var r Stand
 		if err := rows.Scan(&r.Map, &r.Boss, &r.WindowSpell, &r.Aura, &r.Role, &r.Signal, &r.Seats); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		out = append(out, r)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, false, err
+	}
+	out, truncated := capRows(out, StandsLimit)
+	return out, truncated, nil
 }
 
-func (s *sqlSource) PlanKillFirst(ctx context.Context) ([]PlanKill, error) {
+func (s *sqlSource) PlanKillFirst(ctx context.Context) ([]PlanKill, bool, error) {
 	query, args := queryWithMaps(QueryPlanKillFirst, s.maps)
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	defer rows.Close()
 	var raw []planKillRow
 	for rows.Next() {
 		var r planKillRow
 		if err := rows.Scan(&r.Plan, &r.Map, &r.KillFirst); err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		raw = append(raw, r)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return buildPlanKills(raw), nil
+	plans, truncated := planKillsWithinCap(raw)
+	return plans, truncated, nil
+}
+
+// planKillsWithinCap counts the raw plan rows before buildPlanKills drops the
+// empty and unparsable lists: a cap reached only after the drop can look
+// complete when the rows above it were the unusable ones.
+func planKillsWithinCap(raw []planKillRow) ([]PlanKill, bool) {
+	raw, truncated := capRows(raw, PlansLimit)
+	return buildPlanKills(raw), truncated
+}
+
+// capRows trims a read to its cap and reports whether the probe row over the
+// cap came back.
+func capRows[T any](rows []T, limit int) ([]T, bool) {
+	if len(rows) <= limit {
+		return rows, false
+	}
+	return rows[:limit], true
 }
 
 // planKillRow is one ai_dungeon_plan row before its kill_first list is parsed.
@@ -356,34 +385,34 @@ func canceled(err error) bool {
 // cannot tell a missing table from a broken database would report every
 // ability as unknown.
 func (s *Service) read(ctx context.Context, started time.Time) (*Snapshot, error) {
-	tactics, err := s.src.Tactics(ctx)
+	tactics, tacticsCut, err := s.src.Tactics(ctx)
 	if err != nil {
 		if !missingTable(err) {
 			return nil, err
 		}
-		tactics = nil
+		tactics, tacticsCut = nil, false
 	}
-	stands, err := s.src.Stands(ctx)
+	stands, standsCut, err := s.src.Stands(ctx)
 	if err != nil {
 		if !missingTable(err) {
 			return nil, err
 		}
-		stands = nil
+		stands, standsCut = nil, false
 	}
-	plans, err := s.src.PlanKillFirst(ctx)
+	plans, plansCut, err := s.src.PlanKillFirst(ctx)
 	if err != nil {
 		if !missingTable(err) {
 			return nil, err
 		}
-		plans = nil
+		plans, plansCut = nil, false
 	}
 	truncatedAt := 0
 	switch {
-	case len(tactics) >= TacticsLimit:
+	case tacticsCut:
 		truncatedAt = TacticsLimit
-	case len(stands) >= StandsLimit:
+	case standsCut:
 		truncatedAt = StandsLimit
-	case len(plans) >= PlansLimit:
+	case plansCut:
 		truncatedAt = PlansLimit
 	}
 	return &Snapshot{
