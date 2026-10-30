@@ -10228,6 +10228,8 @@ inline float StandPullClearYd(const PlanStep& s)
 // (StandPullClearYd) of the lead bot. The pick: one in shot first, then the plan's kill_first rank, then the nearest.
 // Out of combat only, with a ranged pull (otherwise the row pulls as before), and until the wait has run
 // kStandPullWaitMs (cumulative per step): then the run pauses once, and after a resume the row pulls as before.
+// It times the run leader's own pull only: a patrol that walks into the stand while the party waits fights as before,
+// so the plan must put the stand out of every other lane's aggro reach for the gate to matter.
 // Returns the unit the pull may go out on (standPullShotGuid set); null with `held` true when this tick waits,
 // walks back to the stand or paused; null with `held` false when the gate is off or has nothing to pull.
 inline const UnitFact* PatrolStandPullGate(Run& r, const Facts& f, const PlanStep& s, std::uint32_t dt,
