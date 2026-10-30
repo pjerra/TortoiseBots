@@ -9308,6 +9308,8 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                         unit.losLead = lead->IsWithinLOSInMap(creature);
                     if (standPull)
                     {
+                        unit.x = creature->GetPositionX(); // the pull's way (DungeonRun::PatrolStandPullGate)
+                        unit.y = creature->GetPositionY();
                         unit.formation = RunFormationOf(creature);
                         unit.spawnOwned = SpawnOwned(read, step->radius); // the pack's formations (ScopeStandPullFacts)
                     }

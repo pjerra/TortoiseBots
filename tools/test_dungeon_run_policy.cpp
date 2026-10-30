@@ -20319,9 +20319,30 @@ static void TestPatrolStandPullWaitsForTheOtherPatrol()
     CHECK(Tick(r, f).empty());
     CHECK(r.state == State::Running && r.step == 1);
     CHECK(r.note == "patrol pull: 14750 0x0000000000000009 is in shot (22.0 yd), waiting for 11368 0x0000000000000014 of another patrol, 30.0 yd from "
-        "the lead bot, to walk off (clear at 40.0 yd)");
+        "the lead bot, to walk off (clear at 40.0 yd, 30.0 yd from the way)");
     CHECK(r.standPullMs == kTickMs);
     f.standPatrols.back().distLead = 45.0f;
+    CHECK(Tick(r, f) == "pullback 9");
+}
+
+// specs/rl-patrol-timed-pull.md, walk 9 step 22: another formation 41.9 yd from the lead bot (past the 40 yd clearance)
+// but 21.9 yd from the pulled unit holds the pull: it would come with it. 46 yd from the pull's way, the pull goes out.
+static void TestPatrolStandPullWaitsForAPatrolNearThePullsWay()
+{
+    DungeonPlan plan = PatrolPullPlan();
+    Run r = Start(&plan, 1);
+    Facts f = PatrolPullFacts(22.0f);
+    f.units.front().x = -12228.0f; // 22 yd east of the lead bot (-12250 -1497.5)
+    f.units.front().y = -1497.5f;
+    UnitFact nearWay = PatrolUnit(20, 11368, 41.9f, 200);
+    nearWay.x = -12210.0f;
+    nearWay.y = -1510.0f;
+    f.standPatrols.push_back(nearWay);
+    CHECK(Tick(r, f).empty());
+    CHECK(r.note == "patrol pull: 14750 0x0000000000000009 is in shot (22.0 yd), waiting for 11368 0x0000000000000014 of another patrol, 41.9 yd from "
+        "the lead bot and 21.9 yd from the pull's way, to walk off (clear at 40.0 yd, 30.0 yd from the way)");
+    f.standPatrols.back().y = -1540.0f;
+    f.standPatrols.back().distLead = 58.0f;
     CHECK(Tick(r, f) == "pullback 9");
 }
 
@@ -25188,6 +25209,7 @@ int main()
     TestStandPullAuthAnchorReadThenOtherUnitHolds();
     TestStandPullAuthJoinerRestThenOtherUnitHolds();
     TestPatrolStandPullWaitsForTheOtherPatrol();
+    TestPatrolStandPullWaitsForAPatrolNearThePullsWay();
     TestPatrolStandPullShootsAPatrollerInShot();
     TestPatrolStandPullSameFormationDoesNotBlock();
     TestPatrolStandPullWaitsOutOfShot();

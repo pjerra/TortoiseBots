@@ -318,6 +318,11 @@ constexpr float kStandPullMarginYd = 1.0f;
 // pack is pulled from the stand once one of its units is in the tank's shot and no other patrol is near the lead bot.
 constexpr float kStandPullClearYd = 40.0f;    // ... no other patrol this close (the row's `param` in yd; 0: this)
 constexpr float kStandPullClearMaxYd = 60.0f; // ... the clearance's ceiling, and how far the glue lists patrols
+// ... and no other patrol this close (2D) to the pulled unit or to the line it runs along to the lead bot. Zul'Gurub walk
+// 9 step 22: the Headhunter formation was pulled with the bat formation F3 45-51 yd from the lead bot (past the 40 yd
+// clearance) but 19-24 yd from the pulled Witch Doctor; F3 came with it 3-5 s later (no bot had moved toward it), and F4
+// after: 8 bats, 3 riders, 6 dead. Walk 8's same row took F3 the same way.
+constexpr float kStandPullPathClearYd = 30.0f;
 // A unit a party member has as its victim that stays at 1 hp (or at 1 % or less, unchanged) this long cannot die
 // now (HpHeldTick; Scarlet Cathedral r23 slot 5: Whitemane sat at 1 hp of 5284 under her script's invincibility,
 // and the fight ceiling paused four times on the same unkillable fight).
@@ -10372,15 +10377,36 @@ inline const UnitFact* PatrolStandPullGate(Run& r, const Facts& f, const PlanSte
         return nullptr;
     }
     float const clearYd = StandPullClearYd(s);
+    // How far (2D) a unit stands from the pick and the line the pick runs along to the lead bot (-1: the pick's
+    // position not read).
+    bool const pickRead = pick->x != 0.0f || pick->y != 0.0f;
+    auto pathYd = [&](const UnitFact& u)
+    {
+        if (!pickRead)
+            return -1.0f;
+        float const ax = pick->x, ay = pick->y, bx = f.leadX, by = f.leadY;
+        float const dx = bx - ax, dy = by - ay, len2 = dx * dx + dy * dy;
+        float t = len2 > 0.0f ? ((u.x - ax) * dx + (u.y - ay) * dy) / len2 : 0.0f;
+        t = std::max(0.0f, std::min(1.0f, t));
+        return std::hypot(u.x - (ax + t * dx), u.y - (ay + t * dy));
+    };
     const UnitFact* other = nullptr;
+    float otherPathYd = -1.0f;
     for (const UnitFact& u : f.standPatrols)
     {
-        if (!u.hostile || u.guid == pick->guid || r.passed.count(u.guid) || u.distLead > clearYd)
+        if (!u.hostile || u.guid == pick->guid || r.passed.count(u.guid))
             continue;
         if (pick->formation && u.formation == pick->formation)
             continue; // its own formation comes with it anyway
+        float const py = pathYd(u);
+        bool const nearPath = py >= 0.0f && py <= kStandPullPathClearYd;
+        if (u.distLead > clearYd && !nearPath)
+            continue;
         if (!other || u.distLead < other->distLead)
+        {
             other = &u;
+            otherPathYd = py;
+        }
     }
     if (inShotOf(*pick) && !other)
     {
@@ -10410,7 +10436,9 @@ inline const UnitFact* PatrolStandPullGate(Run& r, const Facts& f, const PlanSte
     else
         r.note = "patrol pull: " + what + " is in shot (" + Num(pick->distLead) + " yd), waiting for " +
             std::to_string(other->entry) + " " + GuidArg(other->guid) + " of another patrol, " + Num(other->distLead) +
-            " yd from the lead bot, to walk off (clear at " + Num(clearYd) + " yd)";
+            " yd from the lead bot" +
+            (otherPathYd >= 0.0f ? " and " + Num(otherPathYd) + " yd from the pull's way" : std::string()) +
+            ", to walk off (clear at " + Num(clearYd) + " yd, " + Num(kStandPullPathClearYd) + " yd from the way)";
     return nullptr;
 }
 
