@@ -3008,5 +3008,134 @@
         "Phase 2: the first stomach grab comes 18 s minus the 3.25 s grab after he emerges, then every 10 s; killing both Flesh Tentacles in the stomach weakens him for 45 s."
       ]
     }
-  }
+  },
+  "codeAnswers": [
+    {
+      "map": "onyxia",
+      "boss": 10184,
+      "key": "18435",
+      "spell": 18435,
+      "add": 0,
+      "flag": "",
+      "need": "front",
+      "level": "full",
+      "name": "dragon flank",
+      "text": "everyone but the tank leaves her front and tail cones and works the flanks",
+      "source": [
+        "ai/playerbot/strategy/generic/ReactionStrategy.cpp",
+        "ai/playerbot/strategy/triggers/DungeonTriggers.cpp"
+      ]
+    },
+    {
+      "map": "onyxia",
+      "boss": 10184,
+      "key": "15847",
+      "spell": 15847,
+      "add": 0,
+      "flag": "",
+      "need": "tail",
+      "level": "full",
+      "name": "dragon flank",
+      "text": "everyone but the tank leaves her front and tail cones and works the flanks",
+      "source": [
+        "ai/playerbot/strategy/generic/ReactionStrategy.cpp",
+        "ai/playerbot/strategy/triggers/DungeonTriggers.cpp"
+      ]
+    },
+    {
+      "map": "onyxia",
+      "boss": 10184,
+      "key": "18435",
+      "spell": 18435,
+      "add": 0,
+      "flag": "",
+      "need": "resist",
+      "level": "partly",
+      "name": "boss protection potion",
+      "text": "Greater Fire Protection Potion while she is an attacker",
+      "source": [
+        "ai/playerbot/strategy/generic/OnyxiasLairDungeonStrategies.cpp",
+        "ai/playerbot/ProtectionPotionPolicy.h"
+      ]
+    },
+    {
+      "map": "onyxia",
+      "boss": 10184,
+      "key": "18392",
+      "spell": 18392,
+      "add": 0,
+      "flag": "",
+      "need": "avoid",
+      "level": "partly",
+      "name": "onyxia airborne",
+      "text": "the raid spreads while she flies, so Fireball's splash hits one bot",
+      "source": [
+        "ai/playerbot/strategy/generic/OnyxiasLairDungeonStrategies.cpp",
+        "ai/playerbot/strategy/triggers/OnyxiasLairDungeonTriggers.cpp"
+      ]
+    },
+    {
+      "map": "aq40",
+      "boss": 15509,
+      "key": "flag=aura",
+      "spell": 0,
+      "add": 0,
+      "flag": "aura",
+      "need": "resist",
+      "level": "partly",
+      "name": "boss protection potion",
+      "text": "Greater Nature Protection Potion while she is an attacker",
+      "source": [
+        "ai/playerbot/strategy/generic/ClassicRaidDungeonStrategies.cpp",
+        "ai/playerbot/ProtectionPotionPolicy.h"
+      ]
+    },
+    {
+      "map": "*",
+      "boss": 0,
+      "key": "flag=ground",
+      "spell": 0,
+      "add": 0,
+      "flag": "ground",
+      "need": "avoid",
+      "level": "partly",
+      "name": "avoid aoe",
+      "text": "generic: steps out of a persistent area of 15 yd or less",
+      "source": [
+        "ai/playerbot/strategy/generic/CombatStrategy.cpp",
+        "ai/playerbot/AvoidAoePolicy.h"
+      ]
+    },
+    {
+      "map": "*",
+      "boss": 0,
+      "key": "flag=aura",
+      "spell": 0,
+      "add": 0,
+      "flag": "aura",
+      "need": "dispel",
+      "level": "partly",
+      "name": "dispel magic on party",
+      "text": "generic: class dispels, if the aura's dispel type matches a healer's",
+      "source": [
+        "ai/playerbot/strategy/priest/GenericPriestStrategy.cpp"
+      ]
+    },
+    {
+      "map": "*",
+      "boss": 0,
+      "key": "flag=self",
+      "spell": 0,
+      "add": 0,
+      "flag": "self",
+      "need": "purge",
+      "level": "partly",
+      "name": "tranquilizing shot",
+      "text": "generic: hunters tranquilize an enrage, shamans purge a magic buff",
+      "source": [
+        "ai/playerbot/strategy/hunter/GenericHunterStrategy.cpp",
+        "ai/playerbot/strategy/shaman/ShamanStrategy.cpp"
+      ]
+    }
+  ]
 }

@@ -67,6 +67,7 @@ DEFAULT_CSV = ROOT / "data" / "boss" / "boss_abilities.csv"
 DEFAULT_JSON = ROOT / "tools" / "observability" / "web" / "data" / "boss_abilities.json"
 DEFAULT_NAMES = ROOT / "data" / "boss" / "names.json"
 DEFAULT_RAIDS = ROOT / "data" / "boss" / "raids.csv"
+DEFAULT_CODE_ANSWERS = ROOT / "data" / "boss" / "code_answers.csv"
 DEFAULT_CORE = Path(os.environ.get("TORTOISE_CORE_DIR", Path.home() / "tortoise-wow"))
 DEFAULT_KB = Path(
     os.environ.get("TURTLE_KB_DIR", Path.home() / "TortoiseBots-audit" / "turtle-kb")
@@ -74,12 +75,27 @@ DEFAULT_KB = Path(
 
 CSV_COLUMNS = ["map", "boss", "row", "key", "a", "b", "c", "d", "source"]
 RAID_COLUMNS = ["key", "map_id", "name"]
+CODE_COLUMNS = ["map", "boss", "key", "need", "level", "name", "text", "source"]
 ROW_KINDS = {"ability", "phase", "add", "note"}
 TARGETS = {"victim", "random", "self", "aoe", "ally"}
 ADD_ROLES = {"summon", "linked", "ward", "totem", "trigger"}
+NEEDS = (
+    "interrupt",
+    "kill",
+    "front",
+    "tail",
+    "avoid",
+    "mark",
+    "dispel",
+    "purge",
+    "resist",
+    "classify",
+)
 OK_REASONS = ("tank", "heal", "phase", "script", "nokick", "nodispel", "nopurge")
 # The DB-verified reasons are only valid on their own need.
 OK_REASON_NEED = {"nokick": "interrupt", "nodispel": "dispel", "nopurge": "purge"}
+# The flags a `flag=` code answer may scope to (§2.3).
+ANSWER_FLAGS = ("ground", "aura", "self", "cone", "tail", "mark", "int")
 FLAG_LETTERS = {
     "n": "UNIT_FLAG_NOT_SELECTABLE",
     "i": "UNIT_FLAG_IMMUNE_TO_PLAYER",
@@ -174,6 +190,158 @@ def read_raids(path):
             seen_ids.add(int(map_id))
             raids.append({"key": key, "mapId": int(map_id), "name": name})
     return raids
+
+
+def read_code_answers(path):
+    """Return the code-answer rows; every structural problem raises DataError."""
+    try:
+        handle = open(path, newline="", encoding="utf-8")
+    except OSError:
+        raise DataError(f"code answers file not found: {path}")
+    with handle:
+        reader = csv.reader(handle)
+        try:
+            header = next(reader)
+        except StopIteration:
+            raise DataError(f"{path}: empty file")
+        if header != CODE_COLUMNS:
+            raise DataError(
+                f"{path}: header must be {','.join(CODE_COLUMNS)}, got {','.join(header)}"
+            )
+        answers = []
+        seen = set()
+        for lineno, fields in enumerate(reader, start=2):
+            if not fields or all(not f.strip() for f in fields):
+                continue
+            if len(fields) != len(CODE_COLUMNS):
+                raise DataError(
+                    f"{path}:{lineno}: {len(fields)} fields, expected {len(CODE_COLUMNS)}"
+                )
+            where = f"{path}:{lineno}"
+            answer = _code_answer({k: v.strip() for k, v in zip(CODE_COLUMNS, fields)}, where)
+            duplicate = (
+                answer["map"],
+                answer["boss"],
+                answer["key"],
+                answer["need"],
+                answer["name"],
+            )
+            if duplicate in seen:
+                raise DataError(
+                    f"{where}: duplicate code answer {answer['key']} {answer['need']} "
+                    f"for {answer['map']} {answer['name']}"
+                )
+            seen.add(duplicate)
+            answers.append(answer)
+    return answers
+
+
+def _code_answer(row, where):
+    """One code-answer row, parsed; the fields follow §2.3 of the coverage spec."""
+    if row["map"] != "*" and not MAP_RE.match(row["map"]):
+        raise DataError(f"{where}: bad map {row['map']!r}; expected a raid key or *")
+    if row["boss"] == "*":
+        boss = 0
+    elif re.fullmatch(r"\d+", row["boss"]):
+        boss = int(row["boss"])
+    else:
+        raise DataError(f"{where}: boss must be a creature entry or *, got {row['boss']!r}")
+    key = row["key"]
+    spell = add = 0
+    flag = ""
+    if re.fullmatch(r"\d+", key):
+        spell = int(key)
+    elif key.startswith("add=") and re.fullmatch(r"\d+", key[4:]):
+        add = int(key[4:])
+    elif key.startswith("flag=") and key[5:]:
+        flag = key[5:]
+    else:
+        raise DataError(
+            f"{where}: key must be a spell id, add=<entry> or flag=<flag>, got {key!r}"
+        )
+    need = row["need"]
+    if need not in NEEDS or need == "classify":
+        raise DataError(
+            f"{where}: need must be one of {', '.join(n for n in NEEDS if n != 'classify')}, "
+            f"got {need!r}"
+        )
+    if row["level"] not in ("full", "partly"):
+        raise DataError(f"{where}: level must be full or partly, got {row['level']!r}")
+    for column in ("name", "text", "source"):
+        if not row[column]:
+            raise DataError(f"{where}: {column} is empty")
+    source = [part.strip() for part in row["source"].split(";")]
+    if not all(source):
+        raise DataError(f"{where}: empty citation in {row['source']!r}")
+    return {
+        "map": row["map"],
+        "boss": boss,
+        "key": key,
+        "spell": spell,
+        "add": add,
+        "flag": flag,
+        "need": need,
+        "level": row["level"],
+        "name": row["name"],
+        "text": row["text"],
+        "source": source,
+    }
+
+
+def check_code_answers(answers, map_doc, bosses, root):
+    """Yield the errors of §2.3 for the parsed code-answer rows."""
+    table_maps = {raid["key"] for raid in map_doc}
+    cache = {}
+    for answer in answers:
+        where = "code answer %s %s %s %s" % (
+            answer["map"],
+            answer["boss"] or "*",
+            answer["key"],
+            answer["need"],
+        )
+        if answer["map"] == "*" and answer["level"] != "partly":
+            yield f"{where}: a * row must be partly, generic code is never a full answer"
+        if answer["map"] != "*" and answer["map"] not in table_maps:
+            yield f"{where}: map {answer['map']!r} is no raid of the boss table"
+        if answer["map"] == "*" and answer["boss"]:
+            yield f"{where}: a * map takes no boss entry"
+        if answer["map"] != "*" and not answer["boss"] and not answer["flag"]:
+            yield f"{where}: a * boss needs map * or a flag= key"
+        if answer["flag"] and answer["flag"] not in ANSWER_FLAGS:
+            yield f"{where}: unknown flag {answer['flag']!r}; expected one of {', '.join(ANSWER_FLAGS)}"
+
+        boss = bosses.get(answer["boss"]) if answer["boss"] else None
+        if answer["boss"] and boss is None:
+            yield f"{where}: boss {answer['boss']} is not in the boss table"
+        if answer["spell"]:
+            if boss is None:
+                yield f"{where}: a spell key needs a boss entry of the boss table"
+            elif answer["spell"] not in {ability["sid"] for ability in boss["abilities"]}:
+                yield f"{where}: spell {answer['spell']} is no ability of boss {answer['boss']}"
+        if answer["add"]:
+            if boss is None:
+                yield f"{where}: an add key needs a boss entry of the boss table"
+            elif not any(add["entry"] == answer["add"] for add in boss["adds"]):
+                yield f"{where}: entry {answer['add']} is no add row of boss {answer['boss']}"
+
+        lines = []
+        missing = False
+        for path in answer["source"]:
+            resolved = Path(root) / path
+            if not resolved.is_file():
+                yield f"{where}: cited source {path} does not exist"
+                missing = True
+                continue
+            lines.extend(read_lines(resolved, cache) or [])
+        if missing:
+            continue
+        text = "\n".join(lines)
+        if f'"{answer["name"]}"' not in text:
+            yield f'{where}: the cited files do not register "{answer["name"]}"'
+        if answer["boss"]:
+            consts = constant_values(lines)
+            if not _has_id(list(enumerate(lines, start=1)), answer["boss"], consts):
+                yield f"{where}: the cited files do not name creature {answer['boss']}"
 
 
 def _int_field(row, name, *, minimum=0):
@@ -677,8 +845,13 @@ def make_bosses(rows, names, raids=None):
     return map_doc, bosses
 
 
-def build_document(rows, names, raids=None):
+def build_document(rows, names, raids=None, code_answers=None, root=None):
     map_doc, bosses = make_bosses(rows, names, raids)
+    if code_answers is None:
+        code_answers = read_code_answers(DEFAULT_CODE_ANSWERS)
+    errors = list(check_code_answers(code_answers, map_doc, bosses, root or ROOT))
+    if errors:
+        raise DataError("\n".join(errors))
     doc = {
         "version": 1,
         "note": "Generated by tools/boss_data.py build from data/boss/boss_abilities.csv; do not edit.",
@@ -688,6 +861,7 @@ def build_document(rows, names, raids=None):
         },
         "maps": map_doc,
         "bosses": {str(e): bosses[e] for e in sorted(bosses, key=lambda e: bosses[e]["order"])},
+        "codeAnswers": code_answers,
     }
     return doc
 
@@ -803,6 +977,7 @@ def add_common(parser):
     parser.add_argument("--json", default=str(DEFAULT_JSON))
     parser.add_argument("--names", default=str(DEFAULT_NAMES))
     parser.add_argument("--raids", default=str(DEFAULT_RAIDS))
+    parser.add_argument("--code-answers", default=str(DEFAULT_CODE_ANSWERS))
     parser.add_argument("--repo-root", default=str(ROOT))
     parser.add_argument("--core-dir", default=str(DEFAULT_CORE))
     parser.add_argument("--kb-dir", default=str(DEFAULT_KB))
@@ -823,7 +998,13 @@ def cmd_build(args):
         names = refresh_names(db_connect(args), rows, names)
         with open(args.names, "w", encoding="utf-8") as f:
             f.write(json.dumps(names, indent=2, sort_keys=True) + "\n")
-    doc = build_document(rows, names, read_raids(Path(args.raids)))
+    doc = build_document(
+        rows,
+        names,
+        read_raids(Path(args.raids)),
+        read_code_answers(Path(args.code_answers)),
+        args.repo_root,
+    )
     with open(args.json, "w", encoding="utf-8") as f:
         f.write(dump_json(doc))
     print(f"wrote {args.json}: {len(doc['bosses'])} bosses")
@@ -846,10 +1027,11 @@ def validate(args):
         return [str(exc)], notes
     try:
         raids = read_raids(Path(args.raids))
+        code_answers = read_code_answers(Path(args.code_answers))
     except DataError as exc:
         return [str(exc)], notes
     try:
-        doc = build_document(rows, names, raids)
+        doc = build_document(rows, names, raids, code_answers, args.repo_root)
     except DataError as exc:
         return [str(exc)], notes
 

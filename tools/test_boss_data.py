@@ -34,6 +34,7 @@ NAMES = {
 
 HEADER = ["map", "boss", "row", "key", "a", "b", "c", "d", "source"]
 RAID_HEADER = ["key", "map_id", "name"]
+CODE_HEADER = ["map", "boss", "key", "need", "level", "name", "text", "source"]
 
 
 def ability(**kw):
@@ -90,19 +91,51 @@ BASE_ROWS = [
 ]
 
 
+def answer(**kw):
+    row = {
+        "map": "zulgurub",
+        "boss": "14517",
+        "key": "24328",
+        "need": "dispel",
+        "level": "full",
+        "name": "dragon flank",
+        "text": "test answer",
+        "source": "code/flank.cpp",
+    }
+    row.update(kw)
+    return [row[c] for c in CODE_HEADER]
+
+
 class Fixture:
-    def __init__(self, rows=None, names=None, raids=None):
+    def __init__(self, rows=None, names=None, raids=None, answers=None):
         self.tmp = tempfile.TemporaryDirectory()
         self.dir = Path(self.tmp.name)
         self.csv = self.dir / "boss_abilities.csv"
         self.json = self.dir / "boss_abilities.json"
         self.names = self.dir / "names.json"
         self.raids = self.dir / "raids.csv"
+        self.answers = self.dir / "code_answers.csv"
         (self.dir / "core").mkdir()
         (self.dir / "core" / "boss.cpp").write_text("\n".join(CORE) + "\n")
         self.write(rows if rows is not None else [dict(r) for r in BASE_ROWS],
                    names if names is not None else NAMES)
         self.write_raids(raids if raids is not None else [["zulgurub", "309", "Zul'Gurub"]])
+        self.write_answers(answers if answers is not None else [])
+
+    def repo_file(self, path, text):
+        """A file the code answers can cite, under the fixture's repo root."""
+        target = self.dir / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text + "\n")
+        return path
+
+    def write_answers(self, answers):
+        with open(self.answers, "w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f, lineterminator="\n")
+            writer.writerow(CODE_HEADER)
+            for row in answers:
+                writer.writerow(row)
+        self.answer_rows = answers
 
     def write_raids(self, raids):
         with open(self.raids, "w", newline="", encoding="utf-8") as f:
@@ -126,6 +159,8 @@ class Fixture:
             boss_data.read_rows(self.csv),
             boss_data.read_names(self.names),
             boss_data.read_raids(self.raids),
+            boss_data.read_code_answers(self.answers),
+            self.dir,
         )
         self.json.write_text(boss_data.dump_json(doc))
 
@@ -135,6 +170,7 @@ class Fixture:
             json=str(self.json),
             names=str(self.names),
             raids=str(self.raids),
+            code_answers=str(self.answers),
             repo_root=str(self.dir),
             core_dir=str(self.dir / "core"),
             kb_dir=str(self.dir / "kb"),
@@ -180,8 +216,8 @@ class FakeConn:
 
 
 class BossDataTest(unittest.TestCase):
-    def make(self, rows=None, names=None, raids=None):
-        fx = Fixture(rows, names, raids)
+    def make(self, rows=None, names=None, raids=None, answers=None):
+        fx = Fixture(rows, names, raids, answers)
         self.addCleanup(fx.tmp.cleanup)
         return fx
 
@@ -317,6 +353,82 @@ class BossDataTest(unittest.TestCase):
         fx = self.make(raids=[["zulgurub", "309", "Zul'Gurub"], ["naxx", "533", "Naxxramas"]])
         errors, _ = fx.validate()
         self.assertTrue(any("has no boss in the CSV" in e for e in errors), errors)
+
+    def code_fixture(self, answers, rows=None):
+        fx = self.make(rows)
+        fx.repo_file("code/flank.cpp", '#define NPC_TEST 14517\nNextAction("dragon flank", 40);')
+        fx.write_answers(answers)
+        return fx
+
+    def test_code_answer_path_must_exist(self):
+        fx = self.code_fixture([answer(source="code/gone.cpp")])
+        errors, _ = fx.validate()
+        self.assertTrue(any("code/gone.cpp does not exist" in e for e in errors), errors)
+
+    def test_code_answer_name_must_be_in_cited_files(self):
+        fx = self.code_fixture([answer()])
+        fx.repo_file("code/flank.cpp", "#define NPC_TEST 14517\n// no action registered")
+        errors, _ = fx.validate()
+        self.assertTrue(any('do not register "dragon flank"' in e for e in errors), errors)
+
+    def test_code_answer_entry_must_be_in_cited_files(self):
+        fx = self.code_fixture([answer()])
+        fx.repo_file("code/flank.cpp", 'NextAction("dragon flank", 40);')
+        errors, _ = fx.validate()
+        self.assertTrue(any("do not name creature 14517" in e for e in errors), errors)
+
+        # A constant that holds the entry counts, like the citation checks.
+        fx.repo_file("code/flank.cpp", '#define NPC_TEST 14517\nNextAction("dragon flank", 40);')
+        fx.rebuild()
+        errors, _ = fx.validate()
+        self.assertFalse(any("do not name creature" in e for e in errors), errors)
+
+    def test_code_answer_spell_must_be_an_ability_of_the_boss(self):
+        fx = self.code_fixture([answer(key="99999")])
+        errors, _ = fx.validate()
+        self.assertTrue(any("spell 99999 is no ability" in e for e in errors), errors)
+
+        fx = self.code_fixture([answer(key="24328")])
+        fx.rebuild()
+        errors, _ = fx.validate()
+        self.assertFalse(any("is no ability" in e for e in errors), errors)
+
+    def test_code_answer_add_must_be_an_add_row(self):
+        fx = self.code_fixture([answer(key="add=14884", need="kill")])
+        fx.rebuild()
+        errors, _ = fx.validate()
+        self.assertFalse(any("is no add row" in e for e in errors), errors)
+
+        fx = self.code_fixture([answer(key="add=12345", need="kill")])
+        errors, _ = fx.validate()
+        self.assertTrue(any("12345 is no add row" in e for e in errors), errors)
+
+    def test_star_code_answer_must_be_partly(self):
+        star = dict(map="*", boss="*", key="flag=ground", need="avoid")
+        fx = self.code_fixture([answer(level="full", **star)])
+        errors, _ = fx.validate()
+        self.assertTrue(any("a * row must be partly" in e for e in errors), errors)
+
+        fx = self.code_fixture([answer(level="partly", **star)])
+        fx.rebuild()
+        errors, _ = fx.validate()
+        self.assertEqual(errors, [])
+
+    def test_duplicate_code_answer_fails(self):
+        fx = self.code_fixture([answer(), answer()])
+        errors, _ = fx.validate()
+        self.assertTrue(any("duplicate code answer" in e for e in errors), errors)
+
+    def test_committed_code_answers_pass_check(self):
+        rows = boss_data.read_rows(boss_data.DEFAULT_CSV)
+        names = boss_data.read_names(boss_data.DEFAULT_NAMES)
+        answers = boss_data.read_code_answers(boss_data.DEFAULT_CODE_ANSWERS)
+        map_doc, bosses = boss_data.make_bosses(
+            rows, names, boss_data.read_raids(boss_data.DEFAULT_RAIDS)
+        )
+        errors = list(boss_data.check_code_answers(answers, map_doc, bosses, boss_data.ROOT))
+        self.assertEqual(errors, [])
+        self.assertTrue(answers)
 
     def test_stale_json_fails(self):
         # Spec failing case 3: the CSV was edited and the JSON was not rebuilt.
