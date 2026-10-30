@@ -10362,6 +10362,11 @@ inline const UnitFact* PatrolStandPullGate(Run& r, const Facts& f, const PlanSte
     };
     for (const UnitFact& u : f.units)
         consider(u);
+    // The residue band too (units of the pack just outside the radius): otherwise PackResidueTick pulls them as a
+    // plain pull (Zul'Gurub walk 10 step 31: the party walked off the stand to a firing stand into the formations' ring).
+    for (const UnitFact& u : f.packResidue)
+        if (PackResidueOpenUnit(r, f, u))
+            consider(u);
     for (const UnitFact& u : f.patrollers)
         if (PatrollerToWaitFor(r, f, u))
             consider(u);
