@@ -20608,12 +20608,21 @@ static void TestPatrolStandPullHoldsForAResidueUnit()
     Facts f = PatrolPullFacts(80.0f);
     f.packClearMarginYd = 10.0f;
     f.packResidue = f.units;
+    f.packResidue.front().patrols = true;
     f.units.clear();
     CHECK(Tick(r, f).empty());
     CHECK(r.note == "patrol pull: waiting at the stand for 14750 0x0000000000000009 to come within 24.0 yd (now 80.0 yd)");
     CHECK(r.shotStandFor == 0);
     f.packResidue.front().distLead = 22.0f;
     CHECK(Tick(r, f) == "pullback 9");
+    // A static residue unit out of shot never comes to the stand: the residue pull handles it as before (no hold).
+    Run still = Start(&plan, 1);
+    Facts s = PatrolPullFacts(80.0f);
+    s.packClearMarginYd = 10.0f;
+    s.packResidue = s.units;
+    s.units.clear();
+    Tick(still, s);
+    CHECK(still.note.find("patrol pull") == std::string::npos);
 }
 
 // No unit in the radius: a patroller of the row (the formation walking its loop) in shot is pulled from the stand.

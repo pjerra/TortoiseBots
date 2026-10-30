@@ -606,6 +606,8 @@ struct UnitFact
     // A stand-pull row's units, patrollers and Facts::standPatrols: the formation it walks in (its creature group's
     // original leader guid; a unit in no group: its own guid). 0: not read.
     std::uint64_t formation = 0;
+    // ... and it walks a patrol (its own waypoints, or a formation follower of a living waypoint leader). Not read: false.
+    bool patrols = false;
 };
 
 // The mage's Polymorph (all ranks and forms): the aura the run waits for after
@@ -10477,10 +10479,12 @@ inline const UnitFact* PatrolStandPullGate(Run& r, const Facts& f, const PlanSte
     };
     for (const UnitFact& u : f.units)
         consider(u);
-    // The residue band too (units of the pack just outside the radius): otherwise PackResidueTick pulls them as a
-    // plain pull (Zul'Gurub walk 10 step 31: the party walked off the stand to a firing stand into the formations' ring).
+    // The residue band too (units of the pack just outside the radius) when they patrol, or stand in shot: otherwise
+    // PackResidueTick pulls a patrolling one as a plain pull (Zul'Gurub walk 10 step 31: the party walked off the stand
+    // to a firing stand into the formations' ring). Static residue out of shot is left to PackResidueTick as before
+    // (it never comes to the stand).
     for (const UnitFact& u : f.packResidue)
-        if (PackResidueOpenUnit(r, f, u))
+        if (PackResidueOpenUnit(r, f, u) && (u.patrols || inShotOf(u)))
             consider(u);
     for (const UnitFact& u : f.patrollers)
         if (PatrollerToWaitFor(r, f, u))

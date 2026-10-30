@@ -9250,6 +9250,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                 {
                     unit.losLead = lead->IsWithinLOSInMap(creature);
                     unit.formation = RunFormationOf(creature);
+                    unit.patrols = RunWalksPatrol(creature);
                     unit.attackable = GroupCanAttack(judge, creature);
                     unit.stealthed = IsStealthed(creature);
                 }
@@ -9376,6 +9377,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                         unit.x = creature->GetPositionX(); // the pull's way (DungeonRun::PatrolStandPullGate)
                         unit.y = creature->GetPositionY();
                         unit.formation = RunFormationOf(creature);
+                        unit.patrols = RunWalksPatrol(creature);
                         unit.spawnOwned = SpawnOwned(read, step->radius); // the pack's formations (ScopeStandPullFacts)
                     }
                     if (residue)

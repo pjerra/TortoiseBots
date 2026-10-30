@@ -10,7 +10,7 @@ DELETE FROM `ai_dungeon_step` WHERE `plan` = 'zul_gurub';
 DELETE FROM `ai_dungeon_leg` WHERE `plan` = 'zul_gurub';
 DELETE FROM `ai_dungeon_plan` WHERE `plan` = 'zul_gurub';
 INSERT INTO `ai_dungeon_plan` (`plan`, `map`, `cc_priority`, `cc_always`, `kill_first`, `source`, `comment`) VALUES
-('zul_gurub', 309, '', '', '14750', 'turtle-agent a9d50b2 dungeons/zul_gurub.json', 'plan v1, draft (not mapped, not live-checked)');
+('zul_gurub', 309, '', '', '14750', 'turtle-agent 1248913 dungeons/zul_gurub.json', 'plan v1, draft (not mapped, not live-checked)');
 INSERT INTO `ai_dungeon_leg` (`plan`, `leg`, `name`, `comment`) VALUES
 ('zul_gurub', 0, 'high_priestess_jeklik', ''),
 ('zul_gurub', 1, 'high_priest_venoxis', ''),
@@ -48,8 +48,8 @@ INSERT INTO `ai_dungeon_step` (`plan`, `leg`, `seq`, `kind`, `entry`, `x`, `y`, 
 ('zul_gurub', 0, 23, 'pull', 0, -12148, -1485, 130.8, 4.6, 0, 0, 8192, 0, '11368,14750', 'pull group 4; stand pull'),
 ('zul_gurub', 0, 24, 'move', 0, -12108, -1479, 130.9, 0, 0, 0, 0, 0, '', 'pull group 5 approach'),
 ('zul_gurub', 0, 25, 'pull', 0, -12153.9, -1489.43, 130.73, 1, 0, 0, 8192, 0, '11368,14750', 'pull group 5; stand pull'),
-('zul_gurub', 0, 26, 'move', 0, -12157.841, -1482.9872, 130.61325, 0, 0, 0, 0, 0, '', 'path'),
-('zul_gurub', 0, 27, 'move', 0, -12183, -1485, 131.2, 0, 0, 0, 0, 0, '', 'pull group 6 approach'),
+('zul_gurub', 0, 26, 'move', 0, -12157.644, -1484.9572, 130.62526, 0, 0, 0, 0, 0, '', 'path'),
+('zul_gurub', 0, 27, 'move', 0, -12183, -1488, 131.2, 0, 0, 0, 0, 0, '', 'pull group 6 approach'),
 ('zul_gurub', 0, 28, 'pull', 0, -12208.9, -1478.72, 131.26, 5.5, 0, 0, 8192, 0, '11368,14750', 'pull group 6; stand pull'),
 ('zul_gurub', 0, 29, 'move', 0, -12204, -1494, 133.3, 0, 0, 0, 0, 0, '', 'pull group 7 approach'),
 ('zul_gurub', 0, 30, 'pull', 0, -12218, -1440, 131.2, 33, 0, 0, 8192, 0, '11351,11831', 'pull group 7; stand pull'),

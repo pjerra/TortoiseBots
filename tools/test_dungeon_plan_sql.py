@@ -4927,7 +4927,7 @@ class DungeonPlanSql(unittest.TestCase):
                                  "step %s (%s %s %s) stands %.1f yd off the floor %.1f" % (r["seq"], r["x"], r["y"], r["z"], abs(float(r["z"]) - near[0]), near[0]))
 
     def test_zul_gurub_is_the_raid_prep(self):
-        # 20261031020000 (turtle-agent fix/zg-leg0-walk3 a9d50b2, fix 8: leg 0 after walks 10 and 11, on fix 7's
+        # 20261031020000 (turtle-agent fix/zg-leg0-walk3 1248913, fix 8: leg 0 after walks 10 and 11, on fix 7's
         # 20261030230000 (walks 8 and 9) and fix 6's 20261030210000 (walks 6 and 7)): the 20-man
         # ZG prep of RAID-PREP-zg.md, re-spaced six times after live walks (TortoiseBots-audit tests/raid-zg-walk1 to -walk7,
         # specs/rl-patrol-timed-pull.md). 9 legs, 1103 steps (the move rows include the approach and via points), 169
@@ -4950,13 +4950,13 @@ class DungeonPlanSql(unittest.TestCase):
         #   - fix 8 (walks 10 and 11): the troll formations' followers walk in line with their leader, so from 32.6 yd
         #     the Headhunter formation never came within the tank's 28.5 yd shot (four walks, 600 s pauses): F2 is back at
         #     -12093 -1446 (lane 30.1) and F7 moves in to -12204 -1494 (29.2). The static pack woke at its 23.3 yd stand
-        #     once its row held the shot: its stand is -12183 -1485, 26.7 yd from its nearest unit.
+        #     once its row held the shot: its stand is -12183 -1488, 27.5 yd from its nearest unit.
         #   - every other leg is the walk-2 rows unchanged: 142, 28, 61, 121, 75, 114, 290 and 232 step rows.
         # The runts (2914, 13321, 4075, 1420, 14881) and the two event triggers
         # (14758, 15091) are in no pull; the first-add rows are the encounter units.
         name, text = newest_plan_text("zul_gurub")
         self.assertEqual(name, "20261031020000_world.sql")
-        self.assertIn("('zul_gurub', 309, '', '', '14750', 'turtle-agent a9d50b2 dungeons/zul_gurub.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertIn("('zul_gurub', 309, '', '', '14750', 'turtle-agent 1248913 dungeons/zul_gurub.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         self.assertEqual([v[0] for v in leg_rows(text, "zul_gurub").values()],
                          ["high_priestess_jeklik", "high_priest_venoxis", "high_priestess_marli",
                           "high_priest_thekal", "high_priestess_arlokk", "bloodlord_mandokir",
@@ -4978,7 +4978,7 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertLess(moves.index(("-12028", "-1510")), leg0.index([r for r in leg0 if r["kind"] == "pull"][0]))
         self.assertIn(("-11928.5", "-1364.5"), moves)
         for stand in (("-12040.8", "-1466.1334"), ("-12054", "-1449.8667"), ("-12057", "-1448"), ("-12093", "-1446"),
-                      ("-12093", "-1464"), ("-12108", "-1479"), ("-12183", "-1485"), ("-12204", "-1494"),
+                      ("-12093", "-1464"), ("-12108", "-1479"), ("-12183", "-1488"), ("-12204", "-1494"),
                       ("-12177", "-1479"), ("-12177", "-1461"), ("-12180", "-1452"), ("-12186", "-1458"),
                       ("-12225", "-1445"), ("-12241.56", "-1399.14")):
             self.assertIn(stand, moves)
@@ -5018,7 +5018,7 @@ class DungeonPlanSql(unittest.TestCase):
         stand = lambda p: leg0[leg0.index(p) - 1]
         self.assertEqual([(stand(p)["kind"], stand(p)["x"], stand(p)["y"]) for p in pulls0[3:]],
                          [("move", "-12093", "-1446"), ("move", "-12093", "-1464"), ("move", "-12108", "-1479"),
-                          ("move", "-12183", "-1485"), ("move", "-12204", "-1494"), ("move", "-12180", "-1452"),
+                          ("move", "-12183", "-1488"), ("move", "-12204", "-1494"), ("move", "-12180", "-1452"),
                           ("move", "-12186", "-1458")])
         xyz = lambda r: [float(r[k]) for k in ("x", "y", "z")]
         # A stand-pull row is seen from its stand (the run leader's 60 yd), and its radius takes in the DB spawns of
@@ -5039,13 +5039,13 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertTrue(own(pulls0[9], (-12233.9, -1433.44, 130.711)) and not own(pulls0[9], (-12233.1, -1486.77, 132.874)))
         self.assertFalse(own(pulls0[9], (-12263.2, -1452.55, 143.499)) or own(pulls0[8], (-12263.2, -1452.55, 143.499)))
         # The static pack from its stand: its bat 49138 (the row's centre) in the tank's 28.5 yd shot (29.5 yd gun range
-        # less the run leader's 1 yd stand-pull margin), and every unit of it 26.5 yd or more off (out of its aggro with
+        # less the run leader's 1 yd stand-pull margin), and every unit of it 27.3 yd or more off (out of its aggro with
         # the party 5-7 yd round the lead bot: walk 10 woke it from 23.3 yd while the row held the shot).
         s5 = xyz(stand(pulls0[6]))
         self.assertLessEqual(math.dist(s5, (-12208.9, -1478.72, 131.35)), 28.5)
         for unit in ((-12217.9, -1480.52, 130.975), (-12208.9, -1478.72, 131.35), (-12222.8, -1485.23, 131.253),
                      (-12221.5, -1477.08, 130.85), (-12214.8, -1484.34, 131.35)):
-            self.assertGreater(math.dist(s5, unit), 26.5)
+            self.assertGreater(math.dist(s5, unit), 27.3)
         self.assertIn("('zul_gurub', 309, '', '', '14750', ", text)
         self.assertEqual([r["entry"] for r in rows if r["kind"] == "boss"],
                          ["14517", "14507", "14510", "14599", "14515", "11382", "11380", "14834"])
