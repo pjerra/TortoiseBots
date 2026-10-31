@@ -19,11 +19,69 @@
 // No core includes.
 
 #include <cmath>
+#include <vector>
 
 namespace ai
 {
     // Donor radius cap: hazards bigger than this are not dodged by stepping.
     constexpr float kMaxAoeAvoidRadiusYd = 15.0f;
+
+    // Trap hazard radius. A trap GO's data2 radius (10 yd on Zul'Gurub's Inferno
+    // 177764) is the activation radius, not the reach of its spell: Flames 19628
+    // is school damage at the source with SpellRadius index 8 = 5 yd. A step out
+    // and a walk back in use the spell's own circle plus this margin, so the
+    // no-go zone is where the spell hits, not the whole trap trigger.
+    constexpr float kTrapHazardMarginYd = 2.0f;
+
+    inline float TrapHazardRadius(float spellRadiusYd, float trapRadius)
+    {
+        return spellRadiusYd > 0.0f ? spellRadiusYd + kTrapHazardMarginYd : trapRadius;
+    }
+
+    // A damaging ground effect as plain numbers (a trap GO's spell circle, a
+    // damaging dynamic object). Centre to centre in 3D, the core's measure.
+    struct AoeHazardCircle
+    {
+        float x = 0.0f;
+        float y = 0.0f;
+        float z = 0.0f;
+        float radius = 0.0f;
+    };
+
+    // Implicit target pair of an effect that hits enemies around its source
+    // (Flames 19628: CASTER_SRC + ENEMY_AOE_AT_SRC_LOC).
+    constexpr int kAoeAtSourceTargetA = 22;
+    constexpr int kAoeAtSourceTargetB = 15;
+
+    inline bool InsideAoeHazard(const AoeHazardCircle& hazard, float x, float y, float z)
+    {
+        float const dx = hazard.x - x;
+        float const dy = hazard.y - y;
+        float const dz = hazard.z - z;
+        return hazard.radius > 0.0f && std::sqrt(dx * dx + dy * dy + dz * dz) < hazard.radius;
+    }
+
+    // A step-out's landing must clear every damaging circle, not only the one it
+    // leaves: the next fire is usually beside the one under the bot.
+    inline bool LandingInsideHazard(const std::vector<AoeHazardCircle>& hazards, float x, float y, float z)
+    {
+        for (const AoeHazardCircle& hazard : hazards)
+            if (InsideAoeHazard(hazard, x, y, z))
+                return true;
+        return false;
+    }
+
+    // The trap hold (the avoid_cast CastHoldsMove shape): a move whose destination
+    // lies in a damaging circle is held, so a bot does not walk back into fire it
+    // stepped out of. Not the step-out itself and not a move whose target is the
+    // bot.
+    inline bool HazardsHoldMove(bool isWalkOut, bool targetIsSelf, bool hasDestination, float x, float y, float z,
+                                const std::vector<AoeHazardCircle>& hazards)
+    {
+        if (isWalkOut || targetIsSelf || !hasDestination)
+            return false;
+        return LandingInsideHazard(hazards, x, y, z);
+    }
 
     // Radius gate shared by all three sensor cases.
     inline bool IsAvoidableAoeRadius(float radius)
@@ -46,7 +104,7 @@ namespace ai
     {
         if (effect == 2) // SPELL_EFFECT_SCHOOL_DAMAGE
             return !selectable;
-        if (targetA != 22 || targetB != 15) // CASTER_SRC + ENEMY_AOE_AT_SRC_LOC
+        if (targetA != kAoeAtSourceTargetA || targetB != kAoeAtSourceTargetB)
             return false;
         return effect == 17 || // SPELL_EFFECT_WEAPON_DAMAGE_NOSCHOOL (Herod 15578)
             effect == 58 ||    // SPELL_EFFECT_WEAPON_DAMAGE

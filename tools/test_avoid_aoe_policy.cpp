@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <vector>
 
 #define CHECK(x) do { \
     if (!(x)) { \
@@ -11,12 +12,19 @@
 } while (0)
 
 using ai::AoeEscapeStep;
+using ai::AoeHazardCircle;
+using ai::HazardsHoldMove;
 using ai::IsAvoidableAoeRadius;
+using ai::kAoeAtSourceTargetA;
+using ai::kAoeAtSourceTargetB;
 using ai::kMaxAoeAvoidRadiusYd;
+using ai::kTrapHazardMarginYd;
+using ai::LandingInsideHazard;
 using ai::MeleeAoeCandidates;
 using ai::MeleeAoeLandingInRange;
 using ai::RangedAoeCandidates;
 using ai::RangedAoeLandingInRange;
+using ai::TrapHazardRadius;
 using ai::TriggerSpellMarksSpinHazard;
 
 int main()
@@ -89,6 +97,43 @@ int main()
     CHECK(AoeEscapeStep(5.0f, 15.0f) == 6.0f);
     CHECK(AoeEscapeStep(20.0f, 15.0f) == 15.0f);
     std::cout << "  [PASS] escape step caps at flee distance\n";
+
+    // Trap hazard radius: the spell's own circle (Flames 19628 is SpellRadius
+    // index 8 = 5 yd) plus the margin, not the GO's 10 yd activation radius;
+    // the activation radius is the fallback when the spell has none.
+    CHECK(TrapHazardRadius(5.0f, 10.0f) == 5.0f + kTrapHazardMarginYd);
+    CHECK(TrapHazardRadius(5.0f, 10.0f) < 10.0f);
+    CHECK(TrapHazardRadius(0.0f, 10.0f) == 10.0f);
+    CHECK(TrapHazardRadius(-1.0f, 10.0f) == 10.0f);
+    CHECK(kAoeAtSourceTargetA == 22); // CASTER_SRC
+    CHECK(kAoeAtSourceTargetB == 15); // ENEMY_AOE_AT_SRC_LOC
+    std::cout << "  [PASS] trap hazard radius is the spell's circle\n";
+
+    // A landing inside any damaging circle is rejected; at its edge and
+    // outside all of them it is accepted (the core measures centre to centre
+    // in 3D, so a ledge above a fire is out).
+    {
+        std::vector<AoeHazardCircle> hazards;
+        hazards.push_back(AoeHazardCircle{0.0f, 0.0f, 0.0f, 7.0f});
+        hazards.push_back(AoeHazardCircle{20.0f, 0.0f, 0.0f, 7.0f});
+        CHECK(LandingInsideHazard(hazards, 0.0f, 0.0f, 0.0f));
+        CHECK(LandingInsideHazard(hazards, 6.9f, 0.0f, 0.0f));
+        CHECK(!LandingInsideHazard(hazards, 7.0f, 0.0f, 0.0f));
+        CHECK(LandingInsideHazard(hazards, 20.0f, 6.0f, 0.0f));
+        CHECK(!LandingInsideHazard(hazards, 10.0f, 0.0f, 0.0f));
+        CHECK(!LandingInsideHazard(hazards, 0.0f, 0.0f, 7.0f));
+        std::vector<AoeHazardCircle> none;
+        CHECK(!LandingInsideHazard(none, 0.0f, 0.0f, 0.0f));
+
+        // The hold, the CastHoldsMove shape: never the step-out, never a move
+        // whose target is the bot, never without a destination.
+        CHECK(HazardsHoldMove(false, false, true, 0.0f, 0.0f, 0.0f, hazards));
+        CHECK(!HazardsHoldMove(false, false, true, 10.0f, 0.0f, 0.0f, hazards));
+        CHECK(!HazardsHoldMove(true, false, true, 0.0f, 0.0f, 0.0f, hazards));
+        CHECK(!HazardsHoldMove(false, true, true, 0.0f, 0.0f, 0.0f, hazards));
+        CHECK(!HazardsHoldMove(false, false, false, 0.0f, 0.0f, 0.0f, hazards));
+    }
+    std::cout << "  [PASS] landing and hold on every damaging circle\n";
 
     std::cout << "All avoid-aoe policy tests passed.\n";
     return 0;
