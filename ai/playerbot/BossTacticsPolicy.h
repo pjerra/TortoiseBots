@@ -447,6 +447,17 @@ namespace ai
         return radius;
     }
 
+    // The radius to keep while a creature of `casterEntry` casts out of either of its two cast slots: the wider of the
+    // rows that list the generic cast and the rows that list the channel. A caster can run both at once (a channel and
+    // a bolt), and the channel is the one a row for a channelled blast names (CURRENT_CHANNELED_SPELL, never the
+    // generic slot). An empty slot (id 0) lists nothing, so it gives 0.
+    inline float ListedCastRadius(const ActiveBossRows& active, std::uint32_t casterEntry, std::uint32_t genericSpellId,
+                                  std::uint32_t channeledSpellId)
+    {
+        return std::max(AvoidCastRadius(active, casterEntry, genericSpellId),
+                        AvoidCastRadius(active, casterEntry, channeledSpellId));
+    }
+
     // Whether a bot holds a caster, so stays in its blast: only a tank the caster is on (its current victim). It holds
     // the caster and whatever else is on it, and walking it out drags them along. A caster on nobody, or on a bot that
     // is no tank, keeps nobody in: an off-tank and a healer the caster turned to leave like anyone else.
