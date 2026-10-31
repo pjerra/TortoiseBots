@@ -72,6 +72,10 @@
       "name": "Enrage",
       "castMs": 0
     },
+    "10101": {
+      "name": "Knock Away",
+      "castMs": 0
+    },
     "12097": {
       "name": "Pierce Armor",
       "castMs": 0
@@ -84,8 +88,20 @@
       "name": "Whirlwind",
       "castMs": 0
     },
+    "14100": {
+      "name": "Terrifying Roar",
+      "castMs": 0
+    },
+    "14144": {
+      "name": "Remorseless Attacks",
+      "castMs": 0
+    },
     "15284": {
       "name": "Cleave",
+      "castMs": 0
+    },
+    "15506": {
+      "name": "Immolate",
       "castMs": 0
     },
     "15550": {
@@ -96,8 +112,20 @@
       "name": "Backstab",
       "castMs": 0
     },
+    "15588": {
+      "name": "Thunderclap",
+      "castMs": 0
+    },
     "15589": {
       "name": "Whirlwind",
+      "castMs": 0
+    },
+    "15708": {
+      "name": "Mortal Strike",
+      "castMs": 0
+    },
+    "15754": {
+      "name": "Cleave",
       "castMs": 0
     },
     "15847": {
@@ -110,6 +138,42 @@
     },
     "16245": {
       "name": "Freeze Anim",
+      "castMs": 0
+    },
+    "16350": {
+      "name": "Freeze",
+      "castMs": 0
+    },
+    "16359": {
+      "name": "Corrosive Acid Breath",
+      "castMs": 0
+    },
+    "16390": {
+      "name": "Flame Breath",
+      "castMs": 0
+    },
+    "16419": {
+      "name": "Flamestrike",
+      "castMs": 0
+    },
+    "16636": {
+      "name": "Berserker Charge",
+      "castMs": 0
+    },
+    "16785": {
+      "name": "Flamebreak",
+      "castMs": 0
+    },
+    "16788": {
+      "name": "Fireball",
+      "castMs": 0
+    },
+    "16789": {
+      "name": "Rage",
+      "castMs": 0
+    },
+    "16805": {
+      "name": "Conflagration",
       "castMs": 0
     },
     "16856": {
@@ -1032,6 +1096,18 @@
       "name": "Berserk",
       "castMs": 0
     },
+    "27249": {
+      "name": "Summon Spectral Assassin",
+      "castMs": 0
+    },
+    "27286": {
+      "name": "Shadow Wrath",
+      "castMs": 0
+    },
+    "27382": {
+      "name": "Shadow Bolt Volley",
+      "castMs": 0
+    },
     "27680": {
       "name": "Berserk",
       "castMs": 0
@@ -1486,11 +1562,29 @@
     }
   },
   "creatures": {
+    "9816": {
+      "name": "Pyroguard Emberseer"
+    },
     "10162": {
       "name": "Lord Victor Nefarius"
     },
     "10184": {
       "name": "Onyxia"
+    },
+    "10316": {
+      "name": "Blackhand Incarcerator"
+    },
+    "10339": {
+      "name": "Gyth"
+    },
+    "10363": {
+      "name": "General Drakkisath"
+    },
+    "10429": {
+      "name": "Warchief Rend Blackhand"
+    },
+    "10430": {
+      "name": "The Beast"
     },
     "11262": {
       "name": "Onyxian Whelp"
@@ -1876,6 +1970,9 @@
     "16028": {
       "name": "Patchwerk"
     },
+    "16042": {
+      "name": "Lord Valthalak"
+    },
     "16060": {
       "name": "Gothik the Harvester"
     },
@@ -1893,6 +1990,12 @@
     },
     "16065": {
       "name": "Lady Blaumeux"
+    },
+    "16066": {
+      "name": "Spectral Assassin"
+    },
+    "16073": {
+      "name": "Spirit of Lord Valthalak"
     },
     "16124": {
       "name": "Unrelenting Trainee"
