@@ -10,7 +10,7 @@ bool CastCasterFormAction::Execute(Event& event)
     return true;
 }
 
-Unit* FindRejuvenationSpreadTarget(PlayerbotAI* ai, Player* bot)
+Unit* ai::FindRejuvenationSpreadTarget(PlayerbotAI* ai, Player* bot)
 {
     if (!ai || !bot)
         return nullptr;
