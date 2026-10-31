@@ -17,13 +17,14 @@ int main()
 {
     std::cout << "Starting TortoiseBots raid snare policy tests...\n";
 
-    // Outside a raid group nothing changes: victim on a tank is still snared.
+    // Outside a raid group nothing changes: any victim is still snared.
     CHECK(SnareAllowedInRaid(false, true, false));
     CHECK(SnareAllowedInRaid(false, false, false));
     // Fleeing/assist mobs are never a positioning problem: always allowed.
     CHECK(SnareAllowedInRaid(true, true, true));
     CHECK(SnareAllowedInRaid(true, false, true));
-    // Raid group: only snare a mob attacking someone who is not a tank.
+    // Raid group: only snare a mob attacking someone who is not a tank,
+    // however the tank was identified (IsTank read or raid Main Tank flag).
     CHECK(SnareAllowedInRaid(true, false, false));
     CHECK(!SnareAllowedInRaid(true, true, false));
     std::cout << "  [PASS] raid snares only non-tank victims\n";

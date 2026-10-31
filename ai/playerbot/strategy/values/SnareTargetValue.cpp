@@ -27,7 +27,12 @@ Unit* SnareTargetValue::Calculate()
     CcGuard ccGuard(ai);
     // Only the tank's Taunt may touch a held mark (below); hoisted out of
     // the loop (IsTank walks strategies/roles, the qualifier never changes).
+    // The raid gate is hoisted for the same reason: Group::isRaidGroup and
+    // the Main Tank flag never change inside the loop.
     bool const tankTaunt = spell == "taunt" && ai->IsTank(bot);
+    Group* group = bot->GetGroup();
+    bool const inRaidGroup = group && group->isRaidGroup();
+    ObjectGuid const mainTankGuid = group ? group->GetMainTankGuid() : ObjectGuid();
     for (std::list<ObjectGuid>::iterator i = attackers.begin(); i != attackers.end(); ++i)
     {
         Unit* unit = ai->GetUnit(*i);
@@ -74,7 +79,15 @@ Unit* SnareTargetValue::Calculate()
                 if (unit->HasAuraType(SPELL_AURA_MOD_ROOT) || unit->HasAuraType(SPELL_AURA_MOD_STUN))
                     shouldSnare = false;
 
-                if (victim && shouldSnare)
+                // A mob on the tank is already controlled: in a raid group
+                // it is never worth the snare GCD (RaidSnarePolicy.h). The
+                // victim read covers any tank the module identifies
+                // (PlayerbotAI::IsTank) plus the raid's flagged Main Tank.
+                Player* victimPlayer = victim ? victim->ToPlayer() : nullptr;
+                bool victimOnTank = victimPlayer &&
+                    (ai->IsTank(victimPlayer) || (!mainTankGuid.IsEmpty() && victimPlayer->getObjectGuid() == mainTankGuid));
+                if (victim && shouldSnare &&
+                    SnareAllowedInRaid(inRaidGroup, victimOnTank, false))
                     return unit;
             }
         }
@@ -84,9 +97,16 @@ Unit* SnareTargetValue::Calculate()
         {
         case FLEEING_MOTION_TYPE:
         case TIMED_FLEEING_MOTION_TYPE:
+            return unit;
         case ASSISTANCE_MOTION_TYPE:
+            // A called add runs at the group, not away from it: in a raid it
+            // is picked up, not snared, while it runs to a tank. Outside a
+            // raid group the old unconditional pick stands.
+            if (inRaidGroup)
+                continue;
             return unit;
         case CHASE_MOTION_TYPE:
+        {
             chaseTarget = sServerFacade.GetChaseTarget(unit);
             if (!chaseTarget) continue;
             Player* chaseTargetPlayer = sObjectMgr.GetPlayer(chaseTarget->getObjectGuid());
@@ -104,14 +124,14 @@ Unit* SnareTargetValue::Calculate()
             if (unit->HasAuraType(SPELL_AURA_MOD_ROOT) || unit->HasAuraType(SPELL_AURA_MOD_STUN))
                 shouldSnare = false;
 
-            // Raid trash on the tank is already controlled: only a mob on a
-            // non-tank is worth the snare GCD (RaidSnarePolicy.h). Outside a
-            // raid group the old tank-victim veto stands.
-            bool victimOnTank = chaseTargetPlayer && ai->IsTank(chaseTargetPlayer);
-            Group* group = bot->GetGroup();
-            if (chaseTargetPlayer && shouldSnare && !victimOnTank &&
-                SnareAllowedInRaid(group && group->isRaidGroup(), victimOnTank, false))
+            // Same raid veto as the idle branch: a mob chasing a tank is
+            // already controlled.
+            bool victimOnTank = chaseTargetPlayer &&
+                (ai->IsTank(chaseTargetPlayer) || (!mainTankGuid.IsEmpty() && chaseTarget->getObjectGuid() == mainTankGuid));
+            if (chaseTargetPlayer && shouldSnare &&
+                SnareAllowedInRaid(inRaidGroup, victimOnTank, false))
                 return unit;
+        }
         }
     }
 

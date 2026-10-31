@@ -15,28 +15,35 @@ namespace ai
     // Bloodrage only tops up below this rage.
     constexpr uint32_t WARRIOR_BLOODRAGE_RAGE_FLOOR = 20;
 
-    // Tactical Mastery (Arms talent 128, 3 ranks: 12295 / 12676 / 12677 in
-    // Talent.dbc; 12678 is the separate Stance Mastery talent and 12679
-    // does not exist) keeps 5 rage per rank across a stance swap. The
-    // premade prot build takes it only from level 50, so below that the
-    // tank keeps 0 rage through the Mocking Blow dance.
+    // Tactical Mastery (Arms talent 128, 5 ranks: 12295 / 12676 / 12677 /
+    // 12678 / 12679) keeps 5 rage per rank across a stance swap: 5 / 10 /
+    // 15 / 20 / 25. The core truncates to 50 / 100 / 150 / 200 / 250 rage
+    // units on entering Battle, Defensive or Berserker Stance (SpellAuras
+    // aura scripts 831-835; rage is stored in tenths), and the premade
+    // builds take it 5/5, so a dancing warrior keeps up to 25. Without it
+    // nothing survives the swap.
     constexpr uint32_t WARRIOR_TACTICAL_MASTERY_RANK_1 = 12295;
     constexpr uint32_t WARRIOR_TACTICAL_MASTERY_RANK_2 = 12676;
     constexpr uint32_t WARRIOR_TACTICAL_MASTERY_RANK_3 = 12677;
+    constexpr uint32_t WARRIOR_TACTICAL_MASTERY_RANK_4 = 12678;
+    constexpr uint32_t WARRIOR_TACTICAL_MASTERY_RANK_5 = 12679;
     constexpr uint32_t WARRIOR_TACTICAL_MASTERY_KEPT_PER_RANK = 5;
 
     // Highest learned Tactical Mastery rank; highest-wins covers both
     // spellbook shapes (lower ranks kept or replaced on train).
-    inline unsigned TacticalMasteryRank(bool hasRank1, bool hasRank2, bool hasRank3)
+    inline unsigned TacticalMasteryRank(bool hasRank1, bool hasRank2, bool hasRank3,
+                                        bool hasRank4 = false, bool hasRank5 = false)
     {
-        return hasRank3 ? 3 : hasRank2 ? 2 : hasRank1 ? 1 : 0;
+        return hasRank5 ? 5 : hasRank4 ? 4 : hasRank3 ? 3 : hasRank2 ? 2 : hasRank1 ? 1 : 0;
     }
 
-    // Rage the bot holds in Battle Stance after the swap: already there it
-    // keeps everything, otherwise only what Tactical Mastery lets through.
-    inline uint32_t RageAfterStanceSwap(bool inBattleStance, uint32_t rage, unsigned tmRank)
+    // Rage the bot holds after the swap: already in the destination stance
+    // it keeps everything, otherwise only what Tactical Mastery lets
+    // through. Holds for Battle, Defensive and Berserker alike: the core
+    // truncates on entering any of them.
+    inline uint32_t RageAfterStanceSwap(bool inTargetStance, uint32_t rage, unsigned tmRank)
     {
-        return inBattleStance ? rage : std::min(rage, WARRIOR_TACTICAL_MASTERY_KEPT_PER_RANK * tmRank);
+        return inTargetStance ? rage : std::min(rage, WARRIOR_TACTICAL_MASTERY_KEPT_PER_RANK * tmRank);
     }
 
     // Disarm is only worth casting on a target that carries a weapon;

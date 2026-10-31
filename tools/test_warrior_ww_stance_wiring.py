@@ -3,7 +3,9 @@
 The engine runs the ACTION_NODE_P prerequisite BEFORE isPossible, so a plain
 "berserker stance" prereq stance-swaps even when Whirlwind/Pummel is on
 cooldown or unaffordable (rage truncated, cast fails, pin swaps back). The
-dedicated prereq actions only dance when the main spell can actually fire.
+dedicated prereq actions only dance when the main spell can actually fire,
+gated on the rage the warrior holds AFTER the swap (Tactical Mastery
+retention via RageAfterStanceSwap).
 
 Run: python3 -m unittest tools/test_warrior_ww_stance_wiring.py
 """
@@ -27,6 +29,7 @@ class WwStanceWiringTest(unittest.TestCase):
         policy = POLICY.read_text()
         self.assertIn("ShouldWhirlwindStanceDance", policy)
         self.assertIn("ShouldPummelStanceDance", policy)
+        self.assertIn("RageAfterStanceSwap", policy)
 
     def test_whirlwind_prereq_is_gated_action(self):
         # The whirlwind node no longer points at the always-useful plain stance.
@@ -34,16 +37,20 @@ class WwStanceWiringTest(unittest.TestCase):
         self.assertIn('ACTION_NODE_P(whirlwind, "whirlwind", "berserker stance for whirlwind");', text)
         self.assertNotIn('ACTION_NODE_P(whirlwind, "whirlwind", "berserker stance");', text)
 
-    def test_gated_stance_actions_exist(self):
+    def test_gated_stance_actions_gate_on_post_swap_rage(self):
         actions = (WARRIOR / "WarriorActions.h").read_text()
         for name in ("CastBerserkerStanceForWhirlwindAction", "CastBerserkerStanceForPummelAction"):
             self.assertIn(name, actions)
         ww = body(WARRIOR / "WarriorActions.h", "class CastBerserkerStanceForWhirlwindAction")
         self.assertIn("ShouldWhirlwindStanceDance", ww)
         self.assertIn('"whirlwind"', ww)
+        self.assertIn("TacticalMasteryRank", ww)
+        self.assertIn('HasAura("berserker stance"', ww)
         pummel = body(WARRIOR / "WarriorActions.h", "class CastBerserkerStanceForPummelAction")
         self.assertIn("ShouldPummelStanceDance", pummel)
         self.assertIn('"pummel"', pummel)
+        self.assertIn("TacticalMasteryRank", pummel)
+        self.assertIn('HasAura("berserker stance"', pummel)
 
     def test_gated_stance_creators_registered(self):
         ctx = (WARRIOR / "WarriorAiObjectContext.cpp").read_text()

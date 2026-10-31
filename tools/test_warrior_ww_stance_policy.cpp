@@ -18,23 +18,52 @@ int main()
 {
     std::cout << "Starting TortoiseBots warrior whirlwind-stance policy tests...\n";
 
-    // Whirlwind prereq: off cooldown and 25+ rage.
-    CHECK(ShouldWhirlwindStanceDance(true, 25));
-    CHECK(ShouldWhirlwindStanceDance(true, 100));
-    CHECK(!ShouldWhirlwindStanceDance(false, 100)); // on cooldown: no dance
-    CHECK(!ShouldWhirlwindStanceDance(true, 24));   // below the rage cost
-    CHECK(!ShouldWhirlwindStanceDance(true, 0));
-    CHECK(!ShouldWhirlwindStanceDance(false, 0));
-    std::cout << "  [PASS] whirlwind stance dance gates on cooldown and rage\n";
+    // Already in Berserker Stance the bar is untouched: current rage gates.
+    CHECK(ShouldWhirlwindStanceDance(true, true, 25, 0));
+    CHECK(ShouldWhirlwindStanceDance(true, true, 100, 0));
+    CHECK(!ShouldWhirlwindStanceDance(true, true, 24, 0));
+    CHECK(!ShouldWhirlwindStanceDance(false, true, 100, 5)); // on cooldown: no dance
+    std::cout << "  [PASS] whirlwind in-stance gates on current rage and cooldown\n";
 
-    // Pummel prereq: off cooldown, 10+ rage, target casting.
-    CHECK(ShouldPummelStanceDance(true, 10, true));
-    CHECK(ShouldPummelStanceDance(true, 100, true));
-    CHECK(!ShouldPummelStanceDance(false, 100, true)); // on cooldown: no dance
-    CHECK(!ShouldPummelStanceDance(true, 9, true));     // below the rage cost
-    CHECK(!ShouldPummelStanceDance(true, 10, false));   // nothing to interrupt
-    CHECK(!ShouldPummelStanceDance(true, 0, false));
-    std::cout << "  [PASS] pummel stance dance gates on cooldown, rage and cast\n";
+    // Outside Berserker Stance only the Tactical Mastery retention survives
+    // the swap (5 per rank: 0/5/10/15/20/25). Whirlwind costs 25, so below
+    // rank 5 no pre-swap bar can pay for it after the swap: even 100 rage
+    // must not arm the dance (the round-1 hole: it gated on current rage).
+    for (unsigned rank = 0; rank <= 4; ++rank)
+        CHECK(!ShouldWhirlwindStanceDance(true, false, 100, rank));
+    std::cout << "  [PASS] whirlwind outside-stance never dances below rank 5, however full the bar\n";
+
+    // Rank 5 keeps 25: rage just above/below the cost decides.
+    CHECK(ShouldWhirlwindStanceDance(true, false, 25, 5));
+    CHECK(ShouldWhirlwindStanceDance(true, false, 100, 5));
+    CHECK(!ShouldWhirlwindStanceDance(true, false, 24, 5));
+    CHECK(!ShouldWhirlwindStanceDance(false, false, 100, 5)); // on cooldown: no dance
+    std::cout << "  [PASS] whirlwind outside-stance gates on post-swap rage at rank 5\n";
+
+    // Pummel in stance: current rage against the 10 cost, plus a live cast.
+    CHECK(ShouldPummelStanceDance(true, true, 10, 0, true));
+    CHECK(!ShouldPummelStanceDance(true, true, 9, 0, true));
+    CHECK(!ShouldPummelStanceDance(true, true, 100, 0, false)); // nothing to interrupt
+    CHECK(!ShouldPummelStanceDance(false, true, 100, 3, true)); // on cooldown: no dance
+    std::cout << "  [PASS] pummel in-stance gates on current rage, cooldown and cast\n";
+
+    // Pummel outside stance at each retention rank: the swap keeps at most
+    // 5/10/15/20/25, so rank 0-1 can never pay 10 however full the bar.
+    CHECK(!ShouldPummelStanceDance(true, false, 100, 0, true));
+    CHECK(!ShouldPummelStanceDance(true, false, 100, 1, true));
+    // Rank 2 keeps exactly 10: just above/below the cost decides.
+    CHECK(ShouldPummelStanceDance(true, false, 10, 2, true));
+    CHECK(ShouldPummelStanceDance(true, false, 100, 2, true));
+    CHECK(!ShouldPummelStanceDance(true, false, 9, 2, true));
+    // Ranks 3-5 keep 15+: the 10 cost survives whenever the bar holds it.
+    for (unsigned rank = 3; rank <= 5; ++rank)
+    {
+        CHECK(ShouldPummelStanceDance(true, false, 10, rank, true));
+        CHECK(!ShouldPummelStanceDance(true, false, 9, rank, true));
+    }
+    CHECK(!ShouldPummelStanceDance(true, false, 100, 5, false)); // nothing to interrupt
+    CHECK(!ShouldPummelStanceDance(false, false, 100, 5, true)); // on cooldown: no dance
+    std::cout << "  [PASS] pummel outside-stance gates on post-swap rage at each rank\n";
 
     CHECK(WARRIOR_WHIRLWIND_RAGE_COST == 25);
     CHECK(WARRIOR_PUMMEL_RAGE_COST == 10);

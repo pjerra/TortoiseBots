@@ -78,7 +78,8 @@ namespace ai
             // bot has AFTER the swap, not the pre-swap bar.
             uint32_t rage = AI_VALUE2(uint8, "rage", "self target");
             unsigned tmRank = TacticalMasteryRank(bot->HasSpell(WARRIOR_TACTICAL_MASTERY_RANK_1),
-                bot->HasSpell(WARRIOR_TACTICAL_MASTERY_RANK_2), bot->HasSpell(WARRIOR_TACTICAL_MASTERY_RANK_3));
+                bot->HasSpell(WARRIOR_TACTICAL_MASTERY_RANK_2), bot->HasSpell(WARRIOR_TACTICAL_MASTERY_RANK_3),
+                bot->HasSpell(WARRIOR_TACTICAL_MASTERY_RANK_4), bot->HasSpell(WARRIOR_TACTICAL_MASTERY_RANK_5));
             return ShouldMockingBlow(ai->HasSpell("mocking blow"), LoseAggroTrigger::IsActive(),
                 taunt && sServerFacade.IsSpellReady(bot, taunt), mocking && sServerFacade.IsSpellReady(bot, mocking),
                 target && bot->CanReachWithMeleeAutoAttack(target),
