@@ -32,7 +32,7 @@ Unit* FindRejuvenationSpreadTarget(PlayerbotAI* ai, Player* bot)
             continue;
         if (ai->HasMyAura("rejuvenation", member))
             continue;
-        if (sServerFacade.getDistance2d(bot, member) > maxRange)
+        if (bot->GetDistance(member) > maxRange) // 3D, combat reach removed: the cast's own range test
             continue;
         if (!bot->IsWithinLOSInMap(member))
             continue;
