@@ -40,6 +40,7 @@
 - Fixed: warriors no longer Piercing Howl a mob out of its 10 yd reach — they use Hamstring (Arms: Mocking Blow) on it instead.
 - Fixed: arms warriors cast Mortal Strike on cooldown and pool rage for it.
 - Fixed: warriors in raids no longer dance to Berserker Stance for a single-target Whirlwind.
+- Holy paladins heal a party member between 50 and 70 % health with Holy Light instead of Flash of Light, so their healing in raids matches a priest's instead of half of it.
 
 ### Commands
 - New `.autogear` command gears a real player the way a spawned bot gets geared: items picked for the level and spec from the same gear pool the bots use, upgrades only, replaced items to the bags or the mailbox. GameMasters can gear any player; `AiPlayerbot.PlayerAutogearForAll` (default `0`) lets every player gear themselves.
