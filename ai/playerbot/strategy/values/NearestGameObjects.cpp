@@ -235,6 +235,9 @@ void ai::CollectDamagingTrapHazards(PlayerbotAI* ai, Player* bot, std::vector<Ao
     }
 }
 
+// The largest hazard reach a destination check allows for past the cached list's edge.
+static constexpr float kTrapDestMarginYd = 15.0f;
+
 void ai::CollectDamagingTrapHazardsAt(PlayerbotAI* ai, Player* bot, float x, float y, float z,
     std::vector<AoeHazardCircle>& out)
 {
@@ -244,9 +247,11 @@ void ai::CollectDamagingTrapHazardsAt(PlayerbotAI* ai, Player* bot, float x, flo
     float const dx = bot->GetPositionX() - x;
     float const dy = bot->GetPositionY() - y;
     float const dz = bot->GetPositionZ() - z;
-    // The cached list already spans every fire that can reach a point in the
-    // bot's neighbourhood.
-    if (dx * dx + dy * dy + dz * dz <= kTrapScanRangeYd * kTrapScanRangeYd)
+    // The cached list spans every fire that can reach a point only while the
+    // point is a hazard's reach inside the list's edge (a 7 yd fire 31 yd from
+    // the bot can cover a point 25 yd away); farther points get their own query.
+    float const cachedYd = kTrapScanRangeYd - kTrapDestMarginYd;
+    if (dx * dx + dy * dy + dz * dz <= cachedYd * cachedYd)
     {
         CollectDamagingTrapHazards(ai, bot, out);
         return;
