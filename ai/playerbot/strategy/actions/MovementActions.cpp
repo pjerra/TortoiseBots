@@ -20,6 +20,7 @@
 #include "playerbot/TravelRepickPolicy.h"
 #include "playerbot/TravelRouteCachePolicy.h"
 #include "playerbot/AvoidAoePolicy.h"
+#include "playerbot/strategy/values/NearestGameObjects.h"
 #include "playerbot/strategy/values/PossibleTargetsValue.h"
 #include "playerbot/PoolFleePolicy.h"
 #include "playerbot/CastKeepsRunningPolicy.h"
@@ -3358,9 +3359,9 @@ bool AvoidAoeAction::AvoidDamagingTrap(float& outRadius, WorldPosition& outCente
         GameObjectInfo const* goInfo = go->GetGOInfo();
         if (!goInfo || goInfo->type != GAMEOBJECT_TYPE_TRAP)
             continue;
-        // 1.12 trap GOs carry an activation radius (no diameter field);
-        // same shape as the environmental-trap react radius nearby.
-        float radius = (float)goInfo->trap.radius + go->GetCombatReach();
+        // The trap spell's own circle when it is an AoE at the source, the
+        // GO's activation radius (1.12 traps carry no diameter) otherwise.
+        float radius = DamagingTrapHazardRadius(go);
         if (!IsAvoidableAoeRadius(radius))
             continue;
         if (bot->GetDistance(go) > radius)
@@ -3502,6 +3503,27 @@ bool AvoidAoeAction::StrafeToSafety(const WorldPosition& hazardCenter, float rad
             otherKeepouts.push_back({ WorldPosition(unit), row });
         }
     }
+    // Damaging circles: every trap the value lists (the one being left
+    // included, so a strafe never stays inside it) and every damaging dynamic
+    // object. A landing in any of them is the next fire.
+    std::vector<AoeHazardCircle> damagingHazards;
+    CollectDamagingTrapHazards(ai, bot, damagingHazards);
+    for (ObjectGuid const& guid : AI_VALUE(std::list<ObjectGuid>, "nearest dynamic objects no los"))
+    {
+        DynamicObject* dyn = bot->GetMap()->GetDynamicObject(guid);
+        if (!dyn || !dyn->IsInWorld())
+            continue;
+        SpellEntry const* spellProto = sServerFacade.LookupSpellInfo(dyn->GetSpellId());
+        if (!spellProto || spellProto->IsPositiveEffect(dyn->GetEffIndex()))
+            continue;
+        AoeHazardCircle hazard;
+        hazard.x = dyn->GetPositionX();
+        hazard.y = dyn->GetPositionY();
+        hazard.z = dyn->GetPositionZ();
+        hazard.radius = dyn->GetRadius();
+        if (hazard.radius > 0.0f)
+            damagingHazards.push_back(hazard);
+    }
     for (int pass = 0; pass < 2; ++pass)
     {
         bool const vetoSecondPass = (pass == 1);
@@ -3555,6 +3577,10 @@ bool AvoidAoeAction::StrafeToSafety(const WorldPosition& hazardCenter, float rad
                 }
             }
             if (inOtherKeepout)
+                continue;
+            // Trap/dynobj circle: a landing inside one is no safer than the
+            // hazard being left (Jeklik's bats drop one fire after another).
+            if (LandingInsideHazard(damagingHazards, cand.getX(), cand.getY(), cand.getZ()))
                 continue;
             WorldPosition out = cand;
             if (!bot->IsWithinLOS(out.getX(), out.getY(), out.getZ() + bot->GetCollisionHeight()))

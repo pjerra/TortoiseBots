@@ -65,6 +65,15 @@ namespace ai
         virtual std::list<ObjectGuid> Calculate() override;
 	};
 
+    // The circle a listed trap actually hits: its spell's radius when the spell
+    // is an AoE at the source (SpellRadius lookup, + the policy margin), the GO's
+    // data2 trap radius when it is not (or has no radius).
+    float DamagingTrapHazardRadius(GameObject* go);
+
+    // Every listed damaging trap around the bot as a hazard circle (the
+    // "nearest damaging traps" value), for a step-out landing and the trap hold.
+    void CollectDamagingTrapHazards(PlayerbotAI* ai, Player* bot, std::vector<AoeHazardCircle>& out);
+
     class NearestDynamicObjects : public ObjectGuidListCalculatedValue
     {
     public:

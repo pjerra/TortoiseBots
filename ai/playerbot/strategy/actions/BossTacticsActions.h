@@ -110,6 +110,17 @@ namespace ai
         float GetValue(Action* action) override;
     };
 
+    // A damaging trap's circle over a move's destination (its target's position,
+    // a stay spot, a follow spot) holds that move the way a listed cast does: a
+    // bot does not walk back into fire it just stepped out of. The step-out
+    // itself (avoid aoe) is never held, or it could not leave.
+    class TrapHoldMultiplier : public Multiplier
+    {
+    public:
+        TrapHoldMultiplier(PlayerbotAI* ai) : Multiplier(ai, "trap hold") {}
+        float GetValue(Action* action) override;
+    };
+
     class BossTacticsAvoidCastAction : public MovementAction
     {
     public:

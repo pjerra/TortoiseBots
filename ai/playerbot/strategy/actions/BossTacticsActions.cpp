@@ -15,6 +15,7 @@
 #include "ChooseTargetActions.h"
 #include "PositionAction.h"
 #include "FollowActions.h"
+#include "playerbot/strategy/values/NearestGameObjects.h"
 #include "playerbot/strategy/values/PossibleAttackTargetsValue.h"
 
 using namespace ai;
@@ -284,6 +285,51 @@ float BossTacticsCastHoldMultiplier::GetValue(Action* action)
         return 1.0f;
     return CastHoldsMove(false, target == bot, true, target->GetPositionX(), target->GetPositionY(),
                          target->GetPositionZ(), zones)
+               ? 0.0f
+               : 1.0f;
+}
+
+float TrapHoldMultiplier::GetValue(Action* action)
+{
+    if (!action || !dynamic_cast<MovementAction*>(action))
+        return 1.0f;
+    // Both walk-outs must run: the step out of the ground effect, and the listed
+    // cast's own way out (its destination may lie in a fire beside the blast).
+    if (dynamic_cast<AvoidAoeAction*>(action) || dynamic_cast<BossTacticsAvoidCastAction*>(action))
+        return 1.0f;
+    std::vector<AoeHazardCircle> hazards;
+    CollectDamagingTrapHazards(ai, bot, hazards);
+    if (hazards.empty())
+        return 1.0f;
+    // A stay walks the bot back to its spot: held while that spot lies in a fire.
+    if (dynamic_cast<ReturnToStayPositionAction*>(action))
+    {
+        AiObjectContext* context = ai->GetAiObjectContext();
+        PositionMap& positions = AI_VALUE(PositionMap&, "position");
+        auto stay = positions.find("stay");
+        bool const has = stay != positions.end() && stay->second.isSet() && stay->second.mapId == bot->GetMapId();
+        return has && HazardsHoldMove(false, false, true, stay->second.x, stay->second.y, stay->second.z, hazards)
+                   ? 0.0f
+                   : 1.0f;
+    }
+    // Any other move towards a unit (a reach, a chase, a heal walk, a follow):
+    // held while that unit stands in a fire; a follow also for its spot.
+    Unit* target = nullptr;
+    if (dynamic_cast<FollowAction*>(action))
+    {
+        AiObjectContext* context = ai->GetAiObjectContext();
+        target = AI_VALUE(Unit*, "follow target");
+        WorldPosition const spot = AI_VALUE(WorldPosition, "formation position");
+        if (spot.GetMapId() == bot->GetMapId() &&
+            HazardsHoldMove(false, false, true, spot.getX(), spot.getY(), spot.getZ(), hazards))
+            return 0.0f;
+    }
+    else
+        target = action->GetTarget();
+    if (!target || !target->IsInWorld() || target->GetMapId() != bot->GetMapId())
+        return 1.0f;
+    return HazardsHoldMove(false, target == bot, true, target->GetPositionX(), target->GetPositionY(),
+                           target->GetPositionZ(), hazards)
                ? 0.0f
                : 1.0f;
 }

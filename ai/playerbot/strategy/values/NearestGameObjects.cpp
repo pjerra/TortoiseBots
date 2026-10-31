@@ -6,6 +6,7 @@
 #include "Maps/GridNotifiers.h"
 #include "Maps/GridNotifiersImpl.h"
 #include "Maps/CellImpl.h"
+#include "Database/DBCStores.h"
 
 using namespace ai;
 using namespace MaNGOS;
@@ -123,6 +124,56 @@ std::list<ObjectGuid> NearestDynamicObjects::Calculate()
     }
 
     return result;
+}
+
+float ai::DamagingTrapHazardRadius(GameObject* go)
+{
+    if (!go)
+        return 0.0f;
+    GameObjectInfo const* goInfo = go->GetGOInfo();
+    if (!goInfo || goInfo->type != GAMEOBJECT_TYPE_TRAP)
+        return 0.0f;
+    float const trapRadius = (float)goInfo->trap.radius + go->GetCombatReach();
+    SpellEntry const* spellProto = sServerFacade.LookupSpellInfo(goInfo->trap.spellId);
+    if (!spellProto)
+        return trapRadius;
+    for (int i = 0; i < MAX_EFFECT_INDEX; ++i)
+    {
+        bool const damaging = spellProto->Effect[i] == SPELL_EFFECT_SCHOOL_DAMAGE ||
+            (spellProto->Effect[i] == SPELL_EFFECT_APPLY_AURA &&
+                spellProto->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_DAMAGE);
+        if (!damaging || spellProto->EffectImplicitTargetA[i] != kAoeAtSourceTargetA ||
+            spellProto->EffectImplicitTargetB[i] != kAoeAtSourceTargetB)
+            continue;
+        SpellRadiusEntry const* radiusEntry = sSpellRadiusStore.LookupEntry(spellProto->EffectRadiusIndex[i]);
+        float const spellRadius = radiusEntry ? radiusEntry->Radius : 0.0f;
+        if (spellRadius > 0.0f)
+            return TrapHazardRadius(spellRadius, trapRadius);
+    }
+    return trapRadius;
+}
+
+void ai::CollectDamagingTrapHazards(PlayerbotAI* ai, Player* bot, std::vector<AoeHazardCircle>& out)
+{
+    out.clear();
+    if (!ai || !bot)
+        return;
+    AiObjectContext* context = ai->GetAiObjectContext();
+    for (ObjectGuid const& guid : AI_VALUE(std::list<ObjectGuid>, "nearest damaging traps"))
+    {
+        GameObject* go = ai->GetGameObject(guid);
+        if (!go || !go->IsInWorld())
+            continue;
+        float const radius = DamagingTrapHazardRadius(go);
+        if (radius <= 0.0f)
+            continue;
+        AoeHazardCircle hazard;
+        hazard.x = go->GetPositionX();
+        hazard.y = go->GetPositionY();
+        hazard.z = go->GetPositionZ();
+        hazard.radius = radius;
+        out.push_back(hazard);
+    }
 }
 
 std::list<ObjectGuid> NearestDamagingTrapsValue::Calculate()
