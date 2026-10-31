@@ -1502,28 +1502,15 @@ Unit* SeenHostile(Player* bot, ObjectGuid guid)
     return unit;
 }
 
-// A unit's boss/elite/rare letter as the wire carries it (CommanderTelemetry::RankKind); 0 for a player or an ordinary unit.
-static char ViewRankOf(Unit* unit)
-{
-    Creature* creature = unit ? unit->ToCreature() : nullptr;
-    if (!creature)
-        return 0;
-    return CommanderTelemetry::RankKind(creature->GetCreatureInfo()->rank,
-        creature->HasExtraFlag(CREATURE_FLAG_EXTRA_INSTANCE_BIND),
-        ai::GetDungeonPlans().IsBossEntry(creature->GetMapId(), creature->GetEntry()));
-}
-
 // hostileOnly: leave out a unit the bot does not react to as hostile (the
 // first pass over the sight lists, so neutrals never take a slot from an enemy).
 void AddViewHostile(RemoteCommander::View::Snapshot& snapshot, RemoteCommander::View::HostileSet& taken,
-    Player* bot, ObjectGuid guid, bool hostileOnly = false, bool bossOnly = false)
+    Player* bot, ObjectGuid guid, bool hostileOnly = false)
 {
     if (taken.Full() || guid.IsEmpty() || taken.Contains(guid.GetRawValue()))
         return;
     Unit* unit = SeenHostile(bot, guid);
     if (!unit)
-        return;
-    if (bossOnly && ViewRankOf(unit) != 'b')
         return;
     // How the seeing bot reacts to it: a field read on the unit's faction.
     ReputationRank const reaction = bot->GetReactionTo(unit);
@@ -1552,7 +1539,9 @@ void AddViewHostile(RemoteCommander::View::Snapshot& snapshot, RemoteCommander::
         unit->HasUnitState(UNIT_STAT_CONFUSED), unit->HasUnitState(UNIT_STAT_FLEEING), unit->HasUnitState(UNIT_STAT_ROOT));
     hostile->level = unit->GetLevel();
     if (creature)
-        hostile->rank = ViewRankOf(unit);
+        hostile->rank = CommanderTelemetry::RankKind(creature->GetCreatureInfo()->rank,
+            creature->HasExtraFlag(CREATURE_FLAG_EXTRA_INSTANCE_BIND),
+            ai::GetDungeonPlans().IsBossEntry(creature->GetMapId(), creature->GetEntry()));
     // What kind of unit it is: fields the unit and its template already hold
     // (no lookup, no scan).
     hostile->reaction = reaction <= REP_HOSTILE ? 'h' : (reaction >= REP_FRIENDLY ? 'f' : 'n');
@@ -1630,23 +1619,6 @@ void CollectViewSnapshot(RemoteCommander::Binding const& binding, RemoteCommande
     }
 
     taken.Clear();
-    // Bosses first: a boss any bot fights, or that fights a bot, keeps its row however many adds are near (24 rows at most).
-    for (Player* bot : bots)
-    {
-        if (taken.Full())
-            break;
-        if (!bot->IsInWorld() || !bot->IsAlive())
-            continue;
-        if (Unit* victim = bot->GetVictim())
-            AddViewHostile(snapshot, taken, bot, victim->GetObjectGuid(), false, true);
-        AddViewHostile(snapshot, taken, bot, bot->GetTargetGuid(), false, true);
-        for (Unit* attacker : bot->GetAttackers())
-            if (attacker)
-                AddViewHostile(snapshot, taken, bot, attacker->GetObjectGuid(), false, true);
-        ReadCachedGuidList(PlayerbotAIStorage::Instance().GetAI(bot), "attackers", cached);
-        for (ObjectGuid const& guid : cached)
-            AddViewHostile(snapshot, taken, bot, guid, false, true);
-    }
     for (Player* bot : bots)
     {
         if (taken.Full())
@@ -13284,7 +13256,9 @@ static void FillDungeonMob(Player* seer, Unit* unit, CommanderTelemetry::MobInfo
         : unattackable ? 'u' : 0;
     mob.level = unit->GetLevel();
     if (creature)
-        mob.rank = ViewRankOf(unit);
+        mob.rank = CommanderTelemetry::RankKind(creature->GetCreatureInfo()->rank,
+            creature->HasExtraFlag(CREATURE_FLAG_EXTRA_INSTANCE_BIND),
+            ai::GetDungeonPlans().IsBossEntry(creature->GetMapId(), creature->GetEntry()));
     mob.cc = CommanderTelemetry::CcKind(unit->HasUnitState(UNIT_STAT_STUNNED), unit->HasUnitState(UNIT_STAT_CONFUSED),
         unit->HasUnitState(UNIT_STAT_FLEEING), unit->HasUnitState(UNIT_STAT_ROOT));
     if (uint32 const spellId = CurrentSpellId(unit))
