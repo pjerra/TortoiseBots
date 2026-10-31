@@ -52,9 +52,9 @@ namespace ai
 	};
 
     // Proactive AoE sensor (donor NearestTrapWithDamageValue shape):
-    // ownerless GAMEOBJECT_TYPE_TRAP GOs within 15yd whose trap spell is
-    // non-positive and deals periodic or school damage. LoS ignored — the
-    // trap sits inside the zone it marks.
+    // ownerless GAMEOBJECT_TYPE_TRAP GOs within kTrapScanRangeYd (30 yd) whose
+    // trap spell is non-positive and deals periodic or school damage. LoS
+    // ignored — the trap sits inside the zone it marks.
     class NearestDamagingTrapsValue : public ObjectGuidListCalculatedValue
 	{
 	public:
@@ -73,6 +73,12 @@ namespace ai
     // Every listed damaging trap around the bot as a hazard circle (the
     // "nearest damaging traps" value), for a step-out landing and the trap hold.
     void CollectDamagingTrapHazards(PlayerbotAI* ai, Player* bot, std::vector<AoeHazardCircle>& out);
+
+    // The damaging traps that can reach a destination point: the cached list
+    // for a point in the bot's neighbourhood, one bounded query around the
+    // point itself for a destination beyond it (a held walk can end there).
+    void CollectDamagingTrapHazardsAt(PlayerbotAI* ai, Player* bot, float x, float y, float z,
+        std::vector<AoeHazardCircle>& out);
 
     class NearestDynamicObjects : public ObjectGuidListCalculatedValue
     {

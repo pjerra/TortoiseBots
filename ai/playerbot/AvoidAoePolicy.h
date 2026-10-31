@@ -19,12 +19,22 @@
 // No core includes.
 
 #include <cmath>
+#include <limits>
 #include <vector>
 
 namespace ai
 {
     // Donor radius cap: hazards bigger than this are not dodged by stepping.
     constexpr float kMaxAoeAvoidRadiusYd = 15.0f;
+
+    // Trap discovery range: wide enough that a held destination can be checked
+    // against the fire around it, not only the fire under the bot (max(30 yd,
+    // the largest supported hazard + 15 yd)).
+    constexpr float kTrapScanRangeYd = 30.0f;
+
+    // A retry step for a fire wider than the escape step (which is capped at
+    // the flee distance).
+    constexpr float kAoeFallbackStepYd = 12.0f;
 
     // Trap hazard radius. A trap GO's data2 radius (10 yd on Zul'Gurub's Inferno
     // 177764) is the activation radius, not the reach of its spell: Flames 19628
@@ -59,6 +69,80 @@ namespace ai
         float const dy = hazard.y - y;
         float const dz = hazard.z - z;
         return hazard.radius > 0.0f && std::sqrt(dx * dx + dy * dy + dz * dz) < hazard.radius;
+    }
+
+    // Where a move towards a unit stops: the unit's centre moved toward the
+    // bot by the action's stop range (melee reach, spell/heal range). Judging
+    // the centre holds a reach whose target stands in fire although the bot
+    // stops at its edge; the clamp keeps the point from passing the bot.
+    struct AoePoint
+    {
+        float x = 0.0f;
+        float y = 0.0f;
+        float z = 0.0f;
+    };
+
+    inline AoePoint ReachEndpoint(float targetX, float targetY, float targetZ, float botX, float botY, float botZ,
+        float stopRange)
+    {
+        float const dx = botX - targetX;
+        float const dy = botY - targetY;
+        float const dz = botZ - targetZ;
+        float const distance = std::sqrt(dx * dx + dy * dy + dz * dz);
+        if (stopRange <= 0.0f || distance <= 0.0f)
+            return AoePoint{targetX, targetY, targetZ};
+        if (stopRange >= distance)
+            return AoePoint{botX, botY, botZ};
+        float const scale = stopRange / distance;
+        return AoePoint{targetX + dx * scale, targetY + dy * scale, targetZ + dz * scale};
+    }
+
+    // A step-out landing as plain numbers.
+    struct AoeLanding
+    {
+        float x = 0.0f;
+        float y = 0.0f;
+        float z = 0.0f;
+    };
+
+    // The least-bad landing when no candidate clears every circle: one that
+    // leaves the hazard being stepped out of (when any candidate does), then
+    // the one inside the fewest hazards, then the one farthest from the
+    // nearest hazard centre. Standing in the fire is never the answer.
+    inline int ChooseAoeFallback(const std::vector<AoeHazardCircle>& hazards, const AoeLanding* landings, int count,
+        const AoeHazardCircle& current)
+    {
+        int best = -1;
+        bool bestLeaves = false;
+        int bestInside = 0;
+        float bestNearest = 0.0f;
+        for (int i = 0; i < count; ++i)
+        {
+            bool const leaves = !InsideAoeHazard(current, landings[i].x, landings[i].y, landings[i].z);
+            int inside = 0;
+            float nearest = std::numeric_limits<float>::max();
+            for (const AoeHazardCircle& hazard : hazards)
+            {
+                float const dx = hazard.x - landings[i].x;
+                float const dy = hazard.y - landings[i].y;
+                float const dz = hazard.z - landings[i].z;
+                float const distance = std::sqrt(dx * dx + dy * dy + dz * dz);
+                if (distance < nearest)
+                    nearest = distance;
+                if (InsideAoeHazard(hazard, landings[i].x, landings[i].y, landings[i].z))
+                    ++inside;
+            }
+            bool const better = best < 0 || (leaves != bestLeaves ? leaves : (inside != bestInside
+                ? inside < bestInside
+                : nearest > bestNearest));
+            if (!better)
+                continue;
+            best = i;
+            bestLeaves = leaves;
+            bestInside = inside;
+            bestNearest = nearest;
+        }
+        return best;
     }
 
     // A step-out's landing must clear every damaging circle, not only the one it

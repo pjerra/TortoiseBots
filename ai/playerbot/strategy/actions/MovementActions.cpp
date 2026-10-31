@@ -3339,7 +3339,8 @@ bool AvoidAoeAction::AvoidAuraWithDynamicObj(float& outRadius, WorldPosition& ou
         float radius = dyn->GetRadius();
         if (!IsAvoidableAoeRadius(radius))
             continue;
-        if (bot->GetDistance(dyn) > radius)
+        AoeHazardCircle const circle{dyn->GetPositionX(), dyn->GetPositionY(), dyn->GetPositionZ(), radius};
+        if (!InsideAoeHazard(circle, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ()))
             continue;
         outRadius = radius;
         outCenter = WorldPosition(dyn->GetMapId(), dyn->GetPositionX(), dyn->GetPositionY(), dyn->GetPositionZ());
@@ -3364,7 +3365,8 @@ bool AvoidAoeAction::AvoidDamagingTrap(float& outRadius, WorldPosition& outCente
         float radius = DamagingTrapHazardRadius(go);
         if (!IsAvoidableAoeRadius(radius))
             continue;
-        if (bot->GetDistance(go) > radius)
+        AoeHazardCircle const circle{go->GetPositionX(), go->GetPositionY(), go->GetPositionZ(), radius};
+        if (!InsideAoeHazard(circle, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ()))
             continue;
         outRadius = radius;
         outCenter = WorldPosition(go->GetMapId(), go->GetPositionX(), go->GetPositionY(), go->GetPositionZ());
@@ -3433,7 +3435,8 @@ bool AvoidAoeAction::AvoidTriggerNpc(float& outRadius, WorldPosition& outCenter)
                 float radius = radiusEntry ? radiusEntry->Radius : 0.0f;
                 if (!IsAvoidableAoeRadius(radius))
                     continue;
-                if (bot->GetDistance(unit) > radius)
+                AoeHazardCircle const circle{unit->GetPositionX(), unit->GetPositionY(), unit->GetPositionZ(), radius};
+                if (!InsideAoeHazard(circle, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ()))
                     continue;
                 outRadius = radius;
                 outCenter = WorldPosition(unit->GetMapId(), unit->GetPositionX(), unit->GetPositionY(), unit->GetPositionZ());
@@ -3524,9 +3527,22 @@ bool AvoidAoeAction::StrafeToSafety(const WorldPosition& hazardCenter, float rad
         if (hazard.radius > 0.0f)
             damagingHazards.push_back(hazard);
     }
-    for (int pass = 0; pass < 2; ++pass)
+    // Candidate point for a heading: `stepYd` from the bot, on the ground.
+    auto candidateAt = [&](int i, float stepYd)
     {
-        bool const vetoSecondPass = (pass == 1);
+        bool const hazardAnchored = (i == count - 1) && count > 3;
+        float const heading = hazardAnchored ? angleFromHazard : angleToTarget + offsets[i];
+        WorldPosition cand = botPos + WorldPosition(0, stepYd * cos(heading), stepYd * sin(heading), 1.0f);
+        cand.setZ(cand.GetHeight());
+        return cand;
+    };
+    for (int pass = 0; pass < 3; ++pass)
+    {
+        // First pass keeps the failed-heading veto; the retries drop it. The
+        // third pass steps past a fire wider than the flee-distance escape
+        // step, which is what the veto and the circles refused before.
+        bool const relaxed = (pass != 0);
+        float const stepYd = pass == 2 ? kAoeFallbackStepYd : step;
         for (int i = 0; i < count; ++i)
         {
             // Last slot anchors away-from-hazard; the rest anchor the target.
@@ -3534,12 +3550,9 @@ bool AvoidAoeAction::StrafeToSafety(const WorldPosition& hazardCenter, float rad
             // 2, ranged toward/away/hazard slots): strafes and tank-fallback
             // escapes never band-reject, so a tank can always leave a zone
             // wider than the cast band.
-            bool const hazardAnchored = (i == count - 1) && count > 3;
-            float heading = hazardAnchored ? angleFromHazard : angleToTarget + offsets[i];
             bool strict = melee ? (i == 2)
-                : (offsets[i] == 0.0f || offsets[i] > 3.14f || hazardAnchored);
-            WorldPosition cand = botPos + WorldPosition(0, step * cos(heading), step * sin(heading), 1.0f);
-            cand.setZ(cand.GetHeight());
+                : (offsets[i] == 0.0f || offsets[i] > 3.14f || (i == count - 1 && count > 3));
+            WorldPosition cand = candidateAt(i, stepYd);
             if (target && strict)
             {
                 // Reach-relative (donor shape: raw target reach, not the
@@ -3557,20 +3570,22 @@ bool AvoidAoeAction::StrafeToSafety(const WorldPosition& hazardCenter, float rad
                 else if (!RangedAoeLandingInRange(distFromReach, sPlayerbotAIConfig.tooCloseDistance, sPlayerbotAIConfig.spellDistance))
                     continue;
             }
-            if (!vetoSecondPass)
+            if (!relaxed)
             {
                 float checkHeading = botPos.GetAngleTo(cand);
                 if (!lastMove.fleeFailures.IsHeadingFree(checkHeading, nowMs))
                     continue;
             }
-            // Keep-out step-out: the landing must clear the keep-out circle
-            // (centre measure), or the next tick steps out again.
-            if (!keepoutSource.IsEmpty() && cand.distance(hazardCenter) <= radius)
+            // The landing must leave the circle being stepped out of (the
+            // same centre-to-centre test the sensor used), or the next tick
+            // steps out again. Traps and dynobjs are also in
+            // damagingHazards below; a spin hazard only lives here.
+            if (cand.distance(hazardCenter) <= radius)
                 continue;
             bool inOtherKeepout = false;
             for (OtherKeepout const& other : otherKeepouts)
             {
-                if (cand.distance(other.centre) <= CreatureAuraLandingClearance(*other.row, vetoSecondPass))
+                if (cand.distance(other.centre) <= CreatureAuraLandingClearance(*other.row, relaxed))
                 {
                     inOtherKeepout = true;
                     break;
@@ -3634,6 +3649,40 @@ bool AvoidAoeAction::StrafeToSafety(const WorldPosition& hazardCenter, float rad
             botPos.canPathTo(away, bot) &&
             MoveTo(bot->GetMapId(), away.getX(), away.getY(), away.getZ(), false, IsReaction(), false, true))
             return true;
+    }
+    // Every landing still stands in fire: take the least bad one rather than
+    // stand here. Only sight and a path are required of it; the choice keeps
+    // it outside the fire being left when any point is, then the fewest fires
+    // around it, then the farthest from one.
+    {
+        std::vector<AoeLanding> landings;
+        float const steps[2] = { step, kAoeFallbackStepYd };
+        for (float stepYd : steps)
+        {
+            for (int i = 0; i < count; ++i)
+            {
+                WorldPosition cand = candidateAt(i, stepYd);
+                if (!bot->IsWithinLOS(cand.getX(), cand.getY(), cand.getZ() + bot->GetCollisionHeight()))
+                    continue;
+                if (!botPos.canPathTo(cand, bot))
+                    continue;
+                landings.push_back(AoeLanding{ cand.getX(), cand.getY(), cand.getZ() });
+            }
+        }
+        AoeHazardCircle const current{ hazardCenter.getX(), hazardCenter.getY(), hazardCenter.getZ(), radius };
+        int const pick = landings.empty() ? -1
+            : ChooseAoeFallback(damagingHazards, landings.data(), (int)landings.size(), current);
+        if (pick >= 0)
+        {
+            AoeLanding const& out = landings[pick];
+            if (MoveTo(bot->GetMapId(), out.x, out.y, out.z, false, IsReaction(), false, true))
+            {
+                lastMove.fleeFailures.BeginAttempt(target ? target->GetObjectGuid().GetRawValue() : 0,
+                    bot->GetMapId(), botPos.GetAngleTo(WorldPosition(bot->GetMapId(), out.x, out.y, out.z)),
+                    target ? sServerFacade.getDistance2d(bot, target) : 0.0f, nowMs, bot->movespline->GetId());
+                return true;
+            }
+        }
     }
     return false;
 }

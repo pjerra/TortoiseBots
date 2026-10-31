@@ -3,19 +3,25 @@
 A trap GO's data2 radius is its activation radius, not the reach of its spell:
 Zul'Gurub's Inferno casts Flames 19628, school damage at the source with
 SpellRadius index 8 = 5 yd. The rules live in ai/playerbot/AvoidAoePolicy.h
-(TrapHazardRadius, LandingInsideHazard, HazardsHoldMove; their behaviour is
-tested in tools/test_avoid_aoe_policy.cpp). These pins only prove the live code
-calls them:
+(TrapHazardRadius, InsideAoeHazard, ReachEndpoint, ChooseAoeFallback,
+HazardsHoldMove; their behaviour is tested in tools/test_avoid_aoe_policy.cpp).
+These pins only prove the live code calls them:
 
  - the hazard radius comes from the trap spell's effect radius through
    sSpellRadiusStore (the GO's data2 radius is the fallback when the spell has
    no radius), and only for an effect that is damage at the source;
- - the step-out sensor (AvoidAoeAction) uses that radius, so a bot already in
-   the fire steps out of the circle that hurts, not the whole trigger;
+ - the step-out sensor (AvoidAoeAction) uses that radius and the same
+   centre-to-centre test as the landing and the hold, so a bot cannot walk back
+   and bounce out every tick;
+ - the trap scan is wide enough for a held destination (30 yd), and a
+   destination beyond it gets its own query around the point;
  - a step-out landing is rejected inside any damaging trap (and any damaging
-   dynamic object), not only inside creature keep-outs;
+   dynamic object), not only inside creature keep-outs, and when nothing
+   clears a 12 yd retry and then the least-bad landing are taken rather than
+   standing in the fire;
  - a move whose destination lies in a fire is held (trap hold), the same shape
-   as the avoid_cast hold, on the combat and non-combat engines, and the
+   as the avoid_cast hold, in combat only; attacks are never held and a reach
+   is judged at the point where it stops, not at the target's centre; the
    step-out itself is never held.
 
 Run: python3 -m unittest tools/test_trap_avoid_wiring.py
@@ -62,8 +68,12 @@ class TrapHazardRadiusWiring(unittest.TestCase):
         self.assertIn("kTrapHazardMarginYd = 2.0f", POLICY)
         self.assertIn("kAoeAtSourceTargetA = 22", POLICY)
         self.assertIn("kAoeAtSourceTargetB = 15", POLICY)
-        self.assertIn("inline bool LandingInsideHazard(", POLICY)
+        self.assertIn("inline bool InsideAoeHazard(", POLICY)
         self.assertIn("inline bool HazardsHoldMove(", POLICY)
+        self.assertIn("inline AoePoint ReachEndpoint(", POLICY)
+        self.assertIn("inline int ChooseAoeFallback(", POLICY)
+        self.assertIn("kAoeFallbackStepYd = 12.0f", POLICY)
+        self.assertIn("kTrapScanRangeYd = 30.0f", POLICY)
 
     def test_the_listed_traps_become_hazard_circles(self):
         fn = body(VALUES, "void ai::CollectDamagingTrapHazards(")
@@ -75,6 +85,27 @@ class TrapHazardRadiusWiring(unittest.TestCase):
         self.assertNotIn("VisitAllObjects", fn)
         self.assertIn("void CollectDamagingTrapHazards(", VALUES_H)
 
+    def test_the_scan_covers_the_step_out_and_the_hold(self):
+        fn = body(VALUES, "std::list<ObjectGuid> NearestDamagingTrapsValue::Calculate(")
+        # 15 yd held only the fire under the bot; a held destination can stand
+        # in the next one.
+        self.assertIn("kTrapScanRangeYd", fn)
+        self.assertNotIn("kMaxAoeAvoidRadiusYd", fn)
+        for call in ("u_check(bot, kTrapScanRangeYd)", "searcher, kTrapScanRangeYd)"):
+            self.assertIn(call, fn)
+
+    def test_a_held_destination_gets_hazards_around_its_own_point(self):
+        self.assertIn("void ai::CollectDamagingTrapHazardsAt(", VALUES)
+        self.assertIn("void CollectDamagingTrapHazardsAt(", VALUES_H)
+        fn = body(VALUES, "void ai::CollectDamagingTrapHazardsAt(")
+        # Near the bot the cached list covers it; a destination beyond the
+        # list gets one bounded query around the point, never per-tick grid
+        # loading.
+        self.assertIn("kTrapScanRangeYd", fn)
+        self.assertIn("CollectDamagingTrapHazards(ai, bot, out)", fn)
+        self.assertIn("Cell::VisitAllObjects(", fn)
+        self.assertIn(", true)", fn)
+
 
 class TrapSensorWiring(unittest.TestCase):
     def test_the_step_out_uses_the_spell_circle(self):
@@ -82,7 +113,22 @@ class TrapSensorWiring(unittest.TestCase):
         self.assertIn("DamagingTrapHazardRadius(go)", fn)
         self.assertNotIn("goInfo->trap.radius", fn)
         self.assertIn("IsAvoidableAoeRadius(radius)", fn)
-        self.assertIn("bot->GetDistance(go) > radius", fn)
+        self.assertIn("InsideAoeHazard(circle, bot->GetPositionX()", fn)
+        self.assertNotIn("bot->GetDistance(go)", fn)
+
+    def test_every_sensor_uses_the_same_centre_metric(self):
+        for sensor in ("bool AvoidAoeAction::AvoidAuraWithDynamicObj(",
+                       "bool AvoidAoeAction::AvoidDamagingTrap(",
+                       "bool AvoidAoeAction::AvoidTriggerNpc("):
+            fn = body(MOVEMENT, sensor)
+            self.assertIn("InsideAoeHazard(", fn)
+        self.assertIn("InsideAoeHazard(circle, bot->GetPositionX()",
+                      body(MOVEMENT, "bool AvoidAoeAction::AvoidAuraWithDynamicObj("))
+        self.assertNotIn("bot->GetDistance(dyn)",
+                         body(MOVEMENT, "bool AvoidAoeAction::AvoidAuraWithDynamicObj("))
+        trigger = body(MOVEMENT, "bool AvoidAoeAction::AvoidTriggerNpc(")
+        self.assertIn("InsideAoeHazard(", trigger)
+        self.assertNotIn("bot->GetDistance(unit) > radius", trigger)
 
 
 class LandingWiring(unittest.TestCase):
@@ -97,40 +143,65 @@ class LandingWiring(unittest.TestCase):
         self.assertLess(fn.index("CollectDamagingTrapHazards("), fn.index(check))
         self.assertLess(fn.index(check), fn.index("WorldPosition out = cand;"))
 
+    def test_no_clearing_landing_takes_a_longer_step_then_the_least_bad_point(self):
+        fn = body(MOVEMENT, "bool AvoidAoeAction::StrafeToSafety(")
+        # A third pass steps 12 yd (a fire wider than the flee step).
+        self.assertIn("kAoeFallbackStepYd", fn)
+        # Still none: the least-bad point, never standing in the fire.
+        self.assertIn("AoeLanding", fn)
+        self.assertIn("ChooseAoeFallback(damagingHazards", fn)
+        self.assertLess(fn.index("kAoeFallbackStepYd"), fn.index("ChooseAoeFallback(damagingHazards"))
+
 
 class TrapHoldWiring(unittest.TestCase):
-    def test_the_multiplier_is_registered_next_to_the_cast_hold(self):
+    def test_the_multiplier_is_registered_on_the_combat_engine_only(self):
         self.assertIn("class TrapHoldMultiplier : public Multiplier", ACTIONS_H)
         self.assertIn('Multiplier(ai, "trap hold")', ACTIONS_H)
-        for init in ("void BossTacticsStrategy::InitCombatMultipliers(",
-                     "void BossTacticsStrategy::InitNonCombatMultipliers("):
-            fn = body(TACTICS_STRATEGY, init)
-            self.assertIn("multipliers.push_back(new TrapHoldMultiplier(ai));", fn)
-            self.assertIn("multipliers.push_back(new BossTacticsCastHoldMultiplier(ai));", fn)
+        combat = body(TACTICS_STRATEGY, "void BossTacticsStrategy::InitCombatMultipliers(")
+        self.assertIn("multipliers.push_back(new TrapHoldMultiplier(ai));", combat)
+        self.assertIn("multipliers.push_back(new BossTacticsCastHoldMultiplier(ai));", combat)
+        non_combat = body(TACTICS_STRATEGY, "void BossTacticsStrategy::InitNonCombatMultipliers(")
+        self.assertNotIn("TrapHoldMultiplier", non_combat)
+        self.assertIn("multipliers.push_back(new BossTacticsCastHoldMultiplier(ai));", non_combat)
 
-    def test_a_move_into_a_fire_is_held(self):
+    def test_attacks_are_never_held(self):
         fn = body(ACTIONS, "float TrapHoldMultiplier::GetValue(")
-        self.assertIn("dynamic_cast<MovementAction*>(action)", fn)
-        self.assertIn("CollectDamagingTrapHazards(ai, bot, hazards)", fn)
-        self.assertIn("if (hazards.empty())", fn)
-        # The stay, the follow (unit and formation spot) and any other move's
-        # target, exactly like the cast hold.
+        self.assertIn("dynamic_cast<AttackAction*>(action)", fn)
+        # Before any hazard read: target pick-up and engage are not walks into fire.
+        self.assertLess(fn.index("dynamic_cast<AttackAction*>(action)"),
+                        fn.index("CollectDamagingTrapHazards"))
+
+    def test_the_hold_is_combat_only(self):
+        fn = body(ACTIONS, "float TrapHoldMultiplier::GetValue(")
+        self.assertIn("!bot->IsInCombat()", fn)
+        self.assertLess(fn.index("!bot->IsInCombat()"), fn.index("CollectDamagingTrapHazards"))
         self.assertIn("dynamic_cast<ReturnToStayPositionAction*>(action)", fn)
-        self.assertIn("HazardsHoldMove(false, false, true, stay->second.x, stay->second.y, stay->second.z, hazards)", fn)
         self.assertIn("dynamic_cast<FollowAction*>(action)", fn)
-        self.assertIn('AI_VALUE(Unit*, "follow target")', fn)
-        self.assertIn('AI_VALUE(WorldPosition, "formation position")', fn)
-        self.assertIn("HazardsHoldMove(false, false, true, spot.getX(), spot.getY(), spot.getZ(), hazards)", fn)
-        self.assertIn("HazardsHoldMove(false, target == bot, true, target->GetPositionX(), target->GetPositionY(),",
+
+    def test_a_reach_is_judged_at_its_endpoint(self):
+        fn = body(ACTIONS, "float TrapHoldMultiplier::GetValue(")
+        self.assertIn("dynamic_cast<ReachTargetAction*>(action)", fn)
+        self.assertIn("GetStopRange()", fn)
+        self.assertIn("ReachEndpoint(", fn)
+        self.assertIn("CollectDamagingTrapHazardsAt(", fn)
+        self.assertIn("HazardsHoldMove(false, false, true, endpoint", fn)
+        self.assertNotIn("HazardsHoldMove(false, target == bot, true, target->GetPositionX()", fn)
+
+    def test_the_stay_and_follow_spots_are_destinations(self):
+        fn = body(ACTIONS, "float TrapHoldMultiplier::GetValue(")
+        self.assertIn('AI_VALUE(PositionMap&, "position")', fn)
+        self.assertIn("HazardsHoldMove(false, false, true, stay->second.x, stay->second.y, stay->second.z",
                       fn)
-        # The reads precede the hold; an empty map costs one cached value.
-        self.assertLess(fn.index("CollectDamagingTrapHazards("), fn.index("HazardsHoldMove("))
+        self.assertIn('AI_VALUE(WorldPosition, "formation position")', fn)
+        self.assertIn("HazardsHoldMove(false, false, true, spot.getX(), spot.getY(), spot.getZ()", fn)
+        # Each is checked against the hazards around its own point.
+        self.assertGreaterEqual(fn.count("CollectDamagingTrapHazardsAt("), 3)
 
     def test_the_step_out_itself_is_never_held(self):
         fn = body(ACTIONS, "float TrapHoldMultiplier::GetValue(")
         self.assertIn("dynamic_cast<AvoidAoeAction*>(action)", fn)
         self.assertIn("dynamic_cast<BossTacticsAvoidCastAction*>(action)", fn)
-        self.assertLess(fn.index("dynamic_cast<AvoidAoeAction*>(action)"), fn.index("CollectDamagingTrapHazards("))
+        self.assertLess(fn.index("dynamic_cast<AvoidAoeAction*>(action)"), fn.index("CollectDamagingTrapHazards"))
         self.assertIn("class AvoidAoeAction : public MovementAction", (STRATEGY / "actions/MovementActions.h").read_text())
 
 
