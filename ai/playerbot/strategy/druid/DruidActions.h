@@ -47,10 +47,17 @@ namespace ai
         CastRegrowthOnPartyAction(PlayerbotAI* ai) : HealHotPartyMemberAction(ai, "regrowth", 35, HealManaEfficiency::HIGH) {}
     };
 
-    // Idle HoT blanket: the lowest-health hurt member lacking THIS druid's
-    // Rejuvenation, so two resto druids spread instead of stacking one
-    // target. Scans the live group directly: the "party member without my
-    // aura" value returns the first match in role order, not the lowest.
+    // Shared scan for the spread filler: the lowest-health live group member
+    // under almost-full health lacking THIS druid's Rejuvenation, in
+    // Rejuvenation range and line of sight. Used by the trigger and the
+    // action so both agree on the target; null when grouped with nobody
+    // castable or every hurt member already wears it.
+    Unit* FindRejuvenationSpreadTarget(PlayerbotAI* ai, Player* bot);
+
+    // Idle HoT blanket: the lowest-health reachable hurt member lacking THIS
+    // druid's Rejuvenation, so two resto druids spread instead of stacking
+    // one target. Scans the live group directly: the "party member without
+    // my aura" value returns the first match in role order, not the lowest.
     class CastRejuvenationSpreadAction : public CastHealingSpellAction
     {
     public:

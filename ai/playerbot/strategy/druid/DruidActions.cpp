@@ -10,12 +10,15 @@ bool CastCasterFormAction::Execute(Event& event)
     return true;
 }
 
-namespace
-{
 Unit* FindRejuvenationSpreadTarget(PlayerbotAI* ai, Player* bot)
 {
-    Group* group = bot ? bot->GetGroup() : nullptr;
+    if (!ai || !bot)
+        return nullptr;
+    Group* group = bot->GetGroup();
     if (!group)
+        return nullptr;
+    float maxRange = 0.0f;
+    if (!ai->GetSpellRange("rejuvenation", &maxRange))
         return nullptr;
     Unit* best = nullptr;
     float bestHealth = (float)sPlayerbotAIConfig.almostFullHealth;
@@ -29,6 +32,10 @@ Unit* FindRejuvenationSpreadTarget(PlayerbotAI* ai, Player* bot)
             continue;
         if (ai->HasMyAura("rejuvenation", member))
             continue;
+        if (sServerFacade.getDistance2d(bot, member) > maxRange)
+            continue;
+        if (!bot->IsWithinLOSInMap(member))
+            continue;
         if (!best || member->GetHealthPercent() < bestHealth)
         {
             best = member;
@@ -36,7 +43,6 @@ Unit* FindRejuvenationSpreadTarget(PlayerbotAI* ai, Player* bot)
         }
     }
     return best;
-}
 }
 
 Unit* CastRejuvenationSpreadAction::GetTarget()

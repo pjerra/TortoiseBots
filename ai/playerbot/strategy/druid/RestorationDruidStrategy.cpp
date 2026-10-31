@@ -93,12 +93,13 @@ void RestorationDruidStrategy::InitCombatTriggers(std::list<TriggerNode*>& trigg
                              new NextAction("rejuvenation on party", ACTION_LIGHT_HEAL), NULL)));
 
     // HoT spread filler: while the heal bands above find no cast (target
-    // wears Regrowth, Healing Touch vetoed), blanket the lowest hurt member
-    // lacking this druid's Rejuvenation instead of idling into grenades and
-    // Faerie Fire. Below every heal row, above the filler.
+    // wears Regrowth, Healing Touch vetoed), blanket the lowest reachable
+    // hurt member lacking this druid's Rejuvenation instead of idling into
+    // grenades and Faerie Fire. Below every heal row and every dispel row
+    // (Remove Curse/Abolish Poison outbid it), above the filler.
     triggers.push_back(new TriggerNode(
         "rejuvenation spread",
-        NextAction::array(0, new NextAction("rejuvenation spread", ACTION_LIGHT_HEAL - 1), NULL)));
+        NextAction::array(0, new NextAction("rejuvenation spread", ACTION_DISPEL - 1), NULL)));
 
     triggers.push_back(new TriggerNode(
         "almost full health",
