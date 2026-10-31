@@ -40,8 +40,12 @@ namespace ai
             if (!CastBuffSpellAction::isUseful())
                 return false;
             uint32 whirlwind = AI_VALUE2(uint32, "spell id", "whirlwind");
+            unsigned tmRank = TacticalMasteryRank(bot->HasSpell(WARRIOR_TACTICAL_MASTERY_RANK_1),
+                bot->HasSpell(WARRIOR_TACTICAL_MASTERY_RANK_2), bot->HasSpell(WARRIOR_TACTICAL_MASTERY_RANK_3),
+                bot->HasSpell(WARRIOR_TACTICAL_MASTERY_RANK_4), bot->HasSpell(WARRIOR_TACTICAL_MASTERY_RANK_5));
             return ShouldWhirlwindStanceDance(whirlwind && sServerFacade.IsSpellReady(bot, whirlwind),
-                AI_VALUE2(uint8, "rage", "self target"));
+                ai->HasAura("berserker stance", bot),
+                AI_VALUE2(uint8, "rage", "self target"), tmRank);
         }
 
     protected:
@@ -59,8 +63,12 @@ namespace ai
                 return false;
             uint32 pummel = AI_VALUE2(uint32, "spell id", "pummel");
             Unit* target = AI_VALUE(Unit*, "interrupt target::pummel");
+            unsigned tmRank = TacticalMasteryRank(bot->HasSpell(WARRIOR_TACTICAL_MASTERY_RANK_1),
+                bot->HasSpell(WARRIOR_TACTICAL_MASTERY_RANK_2), bot->HasSpell(WARRIOR_TACTICAL_MASTERY_RANK_3),
+                bot->HasSpell(WARRIOR_TACTICAL_MASTERY_RANK_4), bot->HasSpell(WARRIOR_TACTICAL_MASTERY_RANK_5));
             return ShouldPummelStanceDance(pummel && sServerFacade.IsSpellReady(bot, pummel),
-                AI_VALUE2(uint8, "rage", "self target"),
+                ai->HasAura("berserker stance", bot),
+                AI_VALUE2(uint8, "rage", "self target"), tmRank,
                 target && ai->IsInterruptableSpellCasting(target, "pummel", true));
         }
 

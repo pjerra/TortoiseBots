@@ -1,12 +1,21 @@
 #pragma once
 
-#include <cstdint>
+#include <algorithm>
+
+// Same-directory include: resolves for the module (ai/ on the path) and
+// for tools/test_warrior_ww_stance_policy.cpp (compiled from the root).
+#include "WarriorRageGatePolicy.h"
 
 // Stance-dance gates for Whirlwind and Pummel. The engine runs the stance
 // prerequisite before isPossible, so a plain "berserker stance" prerequisite
 // swaps even when the main spell is on cooldown or unaffordable: the swap
 // truncates rage and the cast fails. The dedicated prerequisite actions only
 // dance when the main spell can fire this tick.
+//
+// The rage compared is the rage the warrior will hold AFTER entering
+// Berserker Stance: already there the bar is untouched, otherwise only the
+// Tactical Mastery retention survives (RageAfterStanceSwap). Without the
+// talent a swap empties the bar, so even 100 rage cannot pay for Whirlwind.
 
 namespace ai
 {
@@ -16,16 +25,20 @@ namespace ai
     constexpr uint32_t WARRIOR_PUMMEL_RAGE_COST = 10;
 
     // True when the stance swap is worth it: the spell is off cooldown and
-    // the bot holds its rage cost.
-    inline bool ShouldWhirlwindStanceDance(bool spellReady, uint32_t rage)
+    // the post-swap bar holds its rage cost.
+    inline bool ShouldWhirlwindStanceDance(bool spellReady, bool inBerserkerStance,
+                                           uint32_t rage, unsigned tmRank)
     {
-        return spellReady && rage >= WARRIOR_WHIRLWIND_RAGE_COST;
+        return spellReady &&
+            RageAfterStanceSwap(inBerserkerStance, rage, tmRank) >= WARRIOR_WHIRLWIND_RAGE_COST;
     }
 
     // True when the stance swap is worth it: the spell is off cooldown, the
-    // bot holds its rage cost, and the interrupt target is casting.
-    inline bool ShouldPummelStanceDance(bool spellReady, uint32_t rage, bool targetCasting)
+    // post-swap bar holds its rage cost, and the interrupt target is casting.
+    inline bool ShouldPummelStanceDance(bool spellReady, bool inBerserkerStance,
+                                        uint32_t rage, unsigned tmRank, bool targetCasting)
     {
-        return spellReady && rage >= WARRIOR_PUMMEL_RAGE_COST && targetCasting;
+        return spellReady && targetCasting &&
+            RageAfterStanceSwap(inBerserkerStance, rage, tmRank) >= WARRIOR_PUMMEL_RAGE_COST;
     }
 } // namespace ai
