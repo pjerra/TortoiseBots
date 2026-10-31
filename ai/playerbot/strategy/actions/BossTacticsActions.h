@@ -110,10 +110,13 @@ namespace ai
         float GetValue(Action* action) override;
     };
 
-    // A damaging trap's circle over a move's destination (its target's position,
-    // a stay spot, a follow spot) holds that move the way a listed cast does: a
-    // bot does not walk back into fire it just stepped out of. The step-out
-    // itself (avoid aoe) is never held, or it could not leave.
+    // A damaging trap's circle over a move's destination holds that move the way
+    // a listed cast does: a bot does not walk back into fire it just stepped out
+    // of. The stay and follow spots are judged as the destinations they are; a
+    // reach is judged at the point where it stops (the target moved toward the
+    // bot by its stop range), not at the target's centre. Attacks are never
+    // held (target pick-up and engagement must run) and the hold is combat-only.
+    // The step-out itself (avoid aoe) is never held, or it could not leave.
     class TrapHoldMultiplier : public Multiplier
     {
     public:

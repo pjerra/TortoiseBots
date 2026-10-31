@@ -13,13 +13,19 @@
 
 using ai::AoeEscapeStep;
 using ai::AoeHazardCircle;
+using ai::AoeLanding;
+using ai::AoePoint;
+using ai::ChooseAoeFallback;
 using ai::HazardsHoldMove;
 using ai::IsAvoidableAoeRadius;
 using ai::kAoeAtSourceTargetA;
 using ai::kAoeAtSourceTargetB;
+using ai::kAoeFallbackStepYd;
 using ai::kMaxAoeAvoidRadiusYd;
 using ai::kTrapHazardMarginYd;
+using ai::kTrapScanRangeYd;
 using ai::LandingInsideHazard;
+using ai::ReachEndpoint;
 using ai::MeleeAoeCandidates;
 using ai::MeleeAoeLandingInRange;
 using ai::RangedAoeCandidates;
@@ -134,6 +140,67 @@ int main()
         CHECK(!HazardsHoldMove(false, false, false, 0.0f, 0.0f, 0.0f, hazards));
     }
     std::cout << "  [PASS] landing and hold on every damaging circle\n";
+
+    // One centre-to-centre metric for the step-out trigger and the hold: the
+    // circle a trap is stepped out of is the same circle a landing is refused
+    // inside, so the trigger cannot fire at the radius the landing accepts.
+    {
+        AoeHazardCircle const fire{0.0f, 0.0f, 0.0f, TrapHazardRadius(5.0f, 10.0f)};
+        CHECK(InsideAoeHazard(fire, 6.9f, 0.0f, 0.0f));
+        CHECK(!InsideAoeHazard(fire, 7.0f, 0.0f, 0.0f));
+    }
+    std::cout << "  [PASS] one centre-to-centre metric for trigger and landing\n";
+
+    // A reach is judged where it stops, not at the target's centre: the
+    // target centre moved toward the bot by the action's stop range.
+    {
+        AoePoint p = ReachEndpoint(0.0f, 0.0f, 0.0f, 20.0f, 0.0f, 0.0f, 5.0f);
+        CHECK(std::fabs(p.x - 5.0f) < 0.001f);
+        CHECK(std::fabs(p.y) < 0.001f);
+        CHECK(std::fabs(p.z) < 0.001f);
+        // No stop range (a point move): the target's own centre.
+        p = ReachEndpoint(0.0f, 0.0f, 0.0f, 20.0f, 0.0f, 0.0f, 0.0f);
+        CHECK(p.x == 0.0f && p.y == 0.0f);
+        // A stop range longer than the gap clamps at the bot, never past it.
+        p = ReachEndpoint(0.0f, 0.0f, 0.0f, 3.0f, 0.0f, 0.0f, 10.0f);
+        CHECK(std::fabs(p.x - 3.0f) < 0.001f);
+        // The same in 3D.
+        p = ReachEndpoint(0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 10.0f, 2.0f);
+        CHECK(std::fabs(p.z - 2.0f) < 0.001f);
+    }
+    std::cout << "  [PASS] reach endpoint is the target moved toward the bot\n";
+
+    // Least-bad landing when no step clears every circle: outside the hazard
+    // being left wins whenever any candidate leaves it, then the fewest
+    // hazards around the point, then the farthest from a hazard centre.
+    {
+        AoeHazardCircle const current{0.0f, 0.0f, 0.0f, 5.0f};
+        std::vector<AoeHazardCircle> onlyCurrent;
+        onlyCurrent.push_back(current);
+        AoeLanding inside[2] = {{0.0f, 0.0f, 0.0f}, {2.0f, 0.0f, 0.0f}};
+        CHECK(ChooseAoeFallback(onlyCurrent, inside, 2, current) == 1); // farthest from the centre
+        AoeLanding mixed[2] = {{0.0f, 0.0f, 0.0f}, {10.0f, 0.0f, 0.0f}};
+        CHECK(ChooseAoeFallback(onlyCurrent, mixed, 2, current) == 1); // leaves the fire at all
+
+        // Fewest hazards first, even when the other point is farther from a centre.
+        std::vector<AoeHazardCircle> two;
+        two.push_back(current);
+        two.push_back(AoeHazardCircle{30.0f, 0.0f, 0.0f, 5.0f});
+        AoeLanding fewer[3] = {{10.0f, 0.0f, 0.0f}, {29.0f, 0.0f, 0.0f}, {45.0f, 0.0f, 0.0f}};
+        // 0 and 2 are clear; 2 stands farther from the nearest centre. 1 is
+        // inside the second fire: never picked over a clear point.
+        CHECK(ChooseAoeFallback(two, fewer, 3, current) == 2);
+        AoeLanding inSecond[2] = {{29.0f, 0.0f, 0.0f}, {45.0f, 0.0f, 0.0f}};
+        CHECK(ChooseAoeFallback(two, inSecond, 2, current) == 1);
+
+        // Empty hazard list, no candidates: safe answers.
+        std::vector<AoeHazardCircle> none;
+        CHECK(ChooseAoeFallback(none, inside, 2, current) == 0);
+        CHECK(ChooseAoeFallback(none, inside, 0, current) == -1);
+    }
+    CHECK(kAoeFallbackStepYd == 12.0f);
+    CHECK(kTrapScanRangeYd == 30.0f);
+    std::cout << "  [PASS] least-bad fallback landing\n";
 
     std::cout << "All avoid-aoe policy tests passed.\n";
     return 0;

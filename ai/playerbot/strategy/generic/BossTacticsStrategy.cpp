@@ -68,10 +68,10 @@ void BossTacticsStrategy::InitCombatMultipliers(std::list<Multiplier*>& multipli
     multipliers.push_back(new TrapHoldMultiplier(ai));
 }
 
-// The holds on the non-combat engine too: a held bot out of combat itself would walk back to its stay spot in the
-// blast or the fire it just left.
+// The hold on the non-combat engine too: a held bot out of combat itself would walk back to its stay spot in the
+// blast it just left. (The trap hold is combat-only: outside a fight the follow and the return to the stay are the
+// engine's travel, not a walk back into fire.)
 void BossTacticsStrategy::InitNonCombatMultipliers(std::list<Multiplier*>& multipliers)
 {
     multipliers.push_back(new BossTacticsCastHoldMultiplier(ai));
-    multipliers.push_back(new TrapHoldMultiplier(ai));
 }

@@ -68,7 +68,7 @@ void AvoidAoeStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
     // which the old "has area debuff" row could see), so the bot steps out
     // BEFORE the debuff lands. The strafe self-gates via isUseful (bot
     // actually inside the hazard radius). Flee is deliberately NOT listed
-    // here: the sensors scan 15yd while radii are often 5-8yd, so mere
+    // here: the sensors scan 15-30yd while radii are often 5-8yd, so mere
     // proximity would full-flee, and a useful-but-unlandable strafe would
     // win the reaction pick every tick and starve the fallback.
     triggers.push_back(new TriggerNode(
