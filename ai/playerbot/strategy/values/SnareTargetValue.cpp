@@ -128,8 +128,10 @@ Unit* SnareTargetValue::Calculate()
             // already controlled.
             bool victimOnTank = chaseTargetPlayer &&
                 (ai->IsTank(chaseTargetPlayer) || (!mainTankGuid.IsEmpty() && chaseTarget->getObjectGuid() == mainTankGuid));
+            // Outside a raid the old veto stands: never snare a mob chasing a tank.
             if (chaseTargetPlayer && shouldSnare &&
-                SnareAllowedInRaid(inRaidGroup, victimOnTank, false))
+                SnareAllowedInRaid(inRaidGroup, victimOnTank, false) &&
+                (inRaidGroup || !ai->IsTank(chaseTargetPlayer)))
                 return unit;
         }
         }

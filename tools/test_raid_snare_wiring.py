@@ -29,5 +29,13 @@ class RaidSnareWiringTest(unittest.TestCase):
         self.assertIn("GetMainTankGuid", code)
 
 
+class DungeonChaseVetoTest(unittest.TestCase):
+    """Review round 3: outside a raid the chase branch keeps the old veto (no snare on a mob chasing a tank)."""
+
+    def test_chase_branch_keeps_the_dungeon_tank_veto(self):
+        src = (ROOT / "ai/playerbot/strategy/values/SnareTargetValue.cpp").read_text()
+        self.assertIn("(inRaidGroup || !ai->IsTank(chaseTargetPlayer))", src)
+
+
 if __name__ == "__main__":
     unittest.main()
