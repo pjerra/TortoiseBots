@@ -34,7 +34,7 @@ private:
 
     ACTION_NODE_A(berserker_rage_fear, "berserker rage", "death wish");
 
-    ACTION_NODE_P(whirlwind, "whirlwind", "berserker stance");
+    ACTION_NODE_P(whirlwind, "whirlwind", "berserker stance for whirlwind");
 
     ACTION_NODE_P(sweeping_strikes, "sweeping strikes", "battle stance");
 };
