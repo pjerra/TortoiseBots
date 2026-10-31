@@ -150,5 +150,22 @@ class RestoDruidCooldownWiringTest(unittest.TestCase):
         self.assertIn(">= 80", impl)
 
 
+
+class DruidActionClassesDeclaredTest(unittest.TestCase):
+    """The party heal actions the restoration rows name keep their class declarations.
+
+    The first cut of D5 replaced the CastRegrowthOnPartyAction declaration with the spread action;
+    no wiring test failed, only the module build would have. Pin the declarations by name.
+    """
+
+    def test_party_heal_action_classes_are_declared(self):
+        decl = (ROOT / "ai/playerbot/strategy/druid/DruidActions.h").read_text()
+        ctx = (ROOT / "ai/playerbot/strategy/druid/DruidAiObjectContext.cpp").read_text()
+        for cls in ("CastRegrowthOnPartyAction", "CastRejuvenationOnPartyAction",
+                    "CastHealingTouchOnPartyAction", "CastRejuvenationSpreadAction"):
+            self.assertRegex(decl, r"class\s+%s\b" % cls)
+            self.assertIn("new %s(ai)" % cls, ctx)
+
+
 if __name__ == "__main__":
     unittest.main()
