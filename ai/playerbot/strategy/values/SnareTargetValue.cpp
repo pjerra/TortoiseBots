@@ -4,6 +4,7 @@
 #include "TargetValue.h"
 #include "CcMarkHoldPolicy.h"
 #include "playerbot/PlayerbotAIConfig.h"
+#include "playerbot/policy/combat/RaidSnarePolicy.h"
 #include "playerbot/ServerFacade.h"
 #include "Movement/TargetedMovementGenerator.h"
 
@@ -103,7 +104,13 @@ Unit* SnareTargetValue::Calculate()
             if (unit->HasAuraType(SPELL_AURA_MOD_ROOT) || unit->HasAuraType(SPELL_AURA_MOD_STUN))
                 shouldSnare = false;
 
-            if (chaseTargetPlayer && shouldSnare && !ai->IsTank(chaseTargetPlayer))
+            // Raid trash on the tank is already controlled: only a mob on a
+            // non-tank is worth the snare GCD (RaidSnarePolicy.h). Outside a
+            // raid group the old tank-victim veto stands.
+            bool victimOnTank = chaseTargetPlayer && ai->IsTank(chaseTargetPlayer);
+            Group* group = bot->GetGroup();
+            if (chaseTargetPlayer && shouldSnare && !victimOnTank &&
+                SnareAllowedInRaid(group && group->isRaidGroup(), victimOnTank, false))
                 return unit;
         }
     }

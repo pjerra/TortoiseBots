@@ -197,6 +197,8 @@ namespace ai
                 creators["bloodrage"] = [](PlayerbotAI* ai) { return new CastBloodrageAction(ai); };
                 creators["battle stance"] = [](PlayerbotAI* ai) { return new CastBattleStanceAction(ai); };
                 creators["battle stance for mocking blow"] = [](PlayerbotAI* ai) { return new CastBattleStanceForMockingBlowAction(ai); };
+                creators["berserker stance for whirlwind"] = [](PlayerbotAI* ai) { return new CastBerserkerStanceForWhirlwindAction(ai); };
+                creators["berserker stance for pummel"] = [](PlayerbotAI* ai) { return new CastBerserkerStanceForPummelAction(ai); };
                 creators["heroic strike"] = [](PlayerbotAI* ai) { return new CastHeroicStrikeAction(ai); };
                 creators["intimidating shout"] = [](PlayerbotAI* ai) { return new CastIntimidatingShoutAction(ai); };
                 creators["demoralizing shout"] = [](PlayerbotAI* ai) { return new CastDemoralizingShoutAction(ai); };

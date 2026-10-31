@@ -33,6 +33,9 @@
 - Fixed: restoration druids heal between 20 % and 70 % health with *Healing Touch* while *Regrowth* is still running on the target (its heal-over-time is not recast), instead of idling until someone drops to critical. Druids below level 12, who have no Regrowth yet, heal with it too.
 - Fixed: restoration druids hold Nature's Swiftness for critical health instead of popping it on the first quiet tick, so the instant Healing Touch lands when a life is on the line.
 - Fixed: resto shaman now hold Spirit Link until the tank drops to half health instead of linking on the pull.
+- Fixed: arms and fury warriors no longer burn rage dancing in and out of Berserker Stance for a Whirlwind or Pummel they cannot fire yet — the swap now waits until the spell is off cooldown and affordable, and the interrupt still has a live cast.
+- Fixed: in a raid, warriors no longer spend the snare on mobs the tank already holds — Piercing Howl and Hamstring go only on mobs attacking someone who is not a tank.
+- Fixed: in a raid, hunters no longer drop combat with Feign Death at medium threat on a mob the tank holds — the feign waits until a mob is on the hunter or threat is near-max. Dungeon behaviour is unchanged.
 - Changed: resto shaman now hold Ancestral Swiftness for a dying target instead of popping it on the first quiet tick.
 
 ### Commands

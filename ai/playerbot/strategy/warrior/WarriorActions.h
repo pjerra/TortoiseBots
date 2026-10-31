@@ -3,6 +3,7 @@
 #include "playerbot/AoeFearPolicy.h"
 #include "playerbot/RetaliationPolicy.h"
 #include "playerbot/strategy/values/PossibleTargetsValue.h"
+#include "playerbot/WarriorWwStancePolicy.h"
 
 namespace ai
 {
@@ -25,6 +26,47 @@ namespace ai
     };
     BUFF_ACTION(CastDefensiveStanceAction, "defensive stance");
     BUFF_ACTION_U(CastBerserkerStanceAction, "berserker stance", !ai->IsTank(bot) && CastBuffSpellAction::isUseful());
+    // Berserker Stance only for a Whirlwind that can actually fire: the
+    // engine runs the prerequisite before isPossible, so a plain stance
+    // node swaps (truncating rage) even when Whirlwind is on cooldown or
+    // unaffordable. This prerequisite carries its own name and only dances
+    // when the spell is off cooldown and the bar holds its cost.
+    class CastBerserkerStanceForWhirlwindAction : public CastBuffSpellAction
+    {
+    public:
+        CastBerserkerStanceForWhirlwindAction(PlayerbotAI* ai) : CastBuffSpellAction(ai, "berserker stance") {}
+        bool isUseful() override
+        {
+            if (!CastBuffSpellAction::isUseful())
+                return false;
+            uint32 whirlwind = AI_VALUE2(uint32, "spell id", "whirlwind");
+            return ShouldWhirlwindStanceDance(whirlwind && sServerFacade.IsSpellReady(bot, whirlwind),
+                AI_VALUE2(uint8, "rage", "self target"));
+        }
+
+    protected:
+        virtual std::string getName() override { return "berserker stance for whirlwind"; }
+    };
+    // Berserker Stance only for a Pummel that can actually fire: same dance
+    // trap as Whirlwind, plus the interrupt needs a live cast to land on.
+    class CastBerserkerStanceForPummelAction : public CastBuffSpellAction
+    {
+    public:
+        CastBerserkerStanceForPummelAction(PlayerbotAI* ai) : CastBuffSpellAction(ai, "berserker stance") {}
+        bool isUseful() override
+        {
+            if (!CastBuffSpellAction::isUseful())
+                return false;
+            uint32 pummel = AI_VALUE2(uint32, "spell id", "pummel");
+            Unit* target = AI_VALUE(Unit*, "interrupt target::pummel");
+            return ShouldPummelStanceDance(pummel && sServerFacade.IsSpellReady(bot, pummel),
+                AI_VALUE2(uint8, "rage", "self target"),
+                target && ai->IsInterruptableSpellCasting(target, "pummel", true));
+        }
+
+    protected:
+        virtual std::string getName() override { return "berserker stance for pummel"; }
+    };
 
     // shouts
     MELEE_ACTION_U(CastBattleShoutTauntAction, "battle shout", CastSpellAction::isUseful()); // useful to rebuff

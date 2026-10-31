@@ -84,7 +84,7 @@ private:
 
     */
 
-    ACTION_NODE_P(pummel, "pummel", "berserker stance");
+    ACTION_NODE_P(pummel, "pummel", "berserker stance for pummel");
 
     ACTION_NODE_P(intercept, "intercept", "berserker stance");
 
