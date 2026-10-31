@@ -53,7 +53,7 @@ class RaidConfigWiringTest(unittest.TestCase):
         # guard read goes on past a dead (or non-tank) lead bot, around a living anchor (DungeonRun::GuardReadMode).
         code = strip_comments(COMMANDER)
         read = body(code, "void ReadGuardFacts(Player* lead,", "\n}\n")
-        self.assertIn("ai::PlanStep const* hold, bool raidBoss)", read)
+        self.assertIn("ai::PlanStep const* hold, bool raidBoss, bool raidWalk = false)", read)  # raidWalk came with #1368
         mode = read.index("GuardRead const mode = GuardReadMode(lead->IsAlive(), f.leadIsTank, raidBoss);")
         fill = read.index("f.partyAttackers.push_back(fact);")
         self.assertLess(mode, fill)
@@ -64,11 +64,14 @@ class RaidConfigWiringTest(unittest.TestCase):
         self.assertIn("if (mode == GuardRead::None)\n        return;", read)
         # The attackers are read around the anchor, within the raid boss range when it is one.
         self.assertIn("float const range = raidBoss ? kRaidBossGuardYd : kGuardYd;", read)
-        self.assertIn("bot->GetDistance(anchor) > range", read)
-        self.assertIn("fact.distLead = anchor->GetDistance(attacker);", read)
+        # The bot loop measures from the anchor: partyAttackers within `range`, the walk read up to max(range, kRaidWalkJoinYd).
+        self.assertIn("bot->GetDistance(anchor)", read)
+        self.assertIn("bool const toParty = botYd <= range;", read)
+        self.assertIn("float const mobYd = anchor->GetDistance(attacker);", read)
+        self.assertIn("fact.distLead = mobYd;", read)
         self.assertIn("fact.victimName = victim->GetName();", read)
         self.assertIn("f.leadHeldEntries.push_back(attacker->GetEntry());", read)
-        self.assertIn("if (bot != lead || mode == GuardRead::RaidAnchor)", read)
+        self.assertIn("else if (mode == GuardRead::RaidAnchor)", read)  # the lead bot's own mobs: RaidAnchor only
         # Both call sites say whether it is a raid's boss fight.
         self.assertEqual(code.count("TortoiseBots::DungeonRun::RaidBossRulesFight(slot.run, f)"), 2)
         self.assertIn("Player* const anchor = RaidGuardAnchor(lead, bots, f);", read)
