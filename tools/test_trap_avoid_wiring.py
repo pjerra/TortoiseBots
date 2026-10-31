@@ -205,5 +205,21 @@ class TrapHoldWiring(unittest.TestCase):
         self.assertIn("class AvoidAoeAction : public MovementAction", (STRATEGY / "actions/MovementActions.h").read_text())
 
 
+class TrapHoldEndpointReviewTest(unittest.TestCase):
+    """Round 3: the hold projects Execute's real chase distance, and the destination check leaves the cached list
+    one hazard reach inside its edge."""
+
+    def test_stop_range_is_the_chase_distance(self):
+        reach = (ROOT / "ai/playerbot/strategy/actions/ReachTargetActions.h").read_text()
+        i = reach.index("float GetStopRange() const")
+        body = reach[i:i + 300]
+        self.assertIn("range * 0.75f - sPlayerbotAIConfig.contactDistance", body)
+
+    def test_destination_check_uses_a_margin_inside_the_list(self):
+        cpp = (ROOT / "ai/playerbot/strategy/values/NearestGameObjects.cpp").read_text()
+        self.assertIn("kTrapDestMarginYd = 15.0f", cpp)
+        self.assertIn("kTrapScanRangeYd - kTrapDestMarginYd", cpp)
+
+
 if __name__ == "__main__":
     unittest.main()
