@@ -15,6 +15,7 @@
 - Fixed: bots no longer stand and die in ground fire — they step out of the circle the fire actually burns, never land in a second fire right beside it, and stop walking back into one they just left.
 - Fixed: a stealthed rogue no longer stays held after the pull while the rest of the party fights.
 - Fixed: restoration druids keep healing the raid between 20% and 70% health: a hurt ally already wearing *Regrowth* still gets *Healing Touch* and then *Rejuvenation* instead of the druid idling into grenades and *Faerie Fire*, idle druids blanket *Rejuvenation* on hurt allies missing it, and raid *Faerie Fire* only lands on bosses while the druid holds 80% mana.
+- Fixed: restoration druids fall through to *Rejuvenation* on a hurt ally *Healing Touch* would waste mana on, blanket idle *Rejuvenation* on hurt allies missing it instead of throwing grenades, and save raid *Faerie Fire* for bosses while holding 80% mana.
 - In a run leader's pull, the held DPS open once every mob near the tank is on it (join delay at the earliest, 10 s after the tank is back at the latest), or at once when a mob hits them or the tank drops under 60 %.
 - A fight the run leader did not pull holds the damage dealers for up to 4 s the same way: they open once every mob near the tank or near them is on the tank, or at once when one hits them.
 - Fixed: the fight-start DPS hold now opens in hired dungeon runs (it was gated on the hirer).

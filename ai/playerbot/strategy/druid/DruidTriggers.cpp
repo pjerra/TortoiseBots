@@ -38,40 +38,6 @@ bool InFeralFormTrigger::IsActive()
     return ai->HasAura("bear form", bot) || ai->HasAura("dire bear form", bot) || ai->HasAura("cat form", bot);
 }
 
-namespace
-{
-// Lowest-health live group member under almost-full health lacking this
-// druid's Rejuvenation. Shared by the spread trigger and action so both
-// agree on the target without a second scan; null when grouped with nobody
-// hurt or every hurt member already wears it.
-Unit* FindRejuvenationSpreadTarget(PlayerbotAI* ai)
-{
-    Player* bot = ai->GetBot();
-    Group* group = bot ? bot->GetGroup() : nullptr;
-    if (!group)
-        return nullptr;
-    Unit* best = nullptr;
-    float bestHealth = (float)sPlayerbotAIConfig.almostFullHealth;
-    for (Player* member : LiveGroupMembers(group))
-    {
-        if (!member || member == bot || !sServerFacade.IsAlive(member))
-            continue;
-        if (member->GetMapId() != bot->GetMapId() || member->GetVisibility() == VISIBILITY_OFF)
-            continue;
-        if (member->GetHealthPercent() >= sPlayerbotAIConfig.almostFullHealth)
-            continue;
-        if (ai->HasMyAura("rejuvenation", member))
-            continue;
-        if (!best || member->GetHealthPercent() < bestHealth)
-        {
-            best = member;
-            bestHealth = (float)member->GetHealthPercent();
-        }
-    }
-    return best;
-}
-}
-
 bool FaerieFireRaidTrigger::IsActive()
 {
     if (!FaerieFireTrigger::IsActive())
@@ -87,7 +53,7 @@ bool RejuvenationSpreadTrigger::IsActive()
 {
     if (!ai->HasSpell("rejuvenation"))
         return false;
-    return FindRejuvenationSpreadTarget(ai) != nullptr;
+    return FindRejuvenationSpreadTarget(ai, bot) != nullptr;
 }
 Value<Unit*>* ThornsOnMainTankTrigger::GetTargetValue()
 {

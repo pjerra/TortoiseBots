@@ -16,9 +16,9 @@ waste-vetoed: the party low/medium rows rank "rejuvenation on party" below
 "healing touch on party" as the second fallthrough.
 
 D5: Rejuvenation spread when idle: a "rejuvenation spread" row on its own
-trigger sits above the grenade/Faerie Fire filler (ACTION_LIGHT_HEAL - 1),
-targeting a hurt member without this druid's Rejuvenation. The action is
-registered in the druid action factory.
+trigger sits below the dispels (ACTION_DISPEL - 1) but above the
+grenade/Faerie Fire filler, targeting a hurt member without this druid's
+Rejuvenation. The action is registered in the druid action factory.
 
 D6: Raid Faerie Fire is boss duty only with mana to spare: the raid row keys
 off a boss-gated trigger (world boss + mana >= 80), never the bare
@@ -127,7 +127,7 @@ class RestoDruidCooldownWiringTest(unittest.TestCase):
         ranked = ranked_actions(method_body("RestorationDruidStrategy", "InitCombatTriggers"))
         relevance = {action: value for t, action, value in ranked if t == "rejuvenation spread"}
         self.assertIn("rejuvenation spread", relevance, "spread row missing")
-        self.assertEqual(relevance["rejuvenation spread"], ACTION_VALUE["ACTION_LIGHT_HEAL"] - 1)
+        self.assertEqual(relevance["rejuvenation spread"], ACTION_VALUE["ACTION_DISPEL"] - 1)
         self.assertGreater(relevance["rejuvenation spread"], ACTION_VALUE["ACTION_HIGH"])
         self.assertGreater(relevance["rejuvenation spread"], ACTION_VALUE["ACTION_NORMAL"])
         ctx = DRUID_CTX.read_text()
