@@ -44,6 +44,7 @@
 - Healers no longer throw grenades, sapper charges or Oil of Immolation in a fight; damage dealers and tanks still use them.
 - Bots in a dungeon or raid run no longer sit down to eat or drink while any member of the run is still fighting, wherever they stand, and a seated bot stands up when the run's fight starts.
 - Fixed: dps warriors in raids no longer Mocking Blow the tank's mob or walk off to Hamstring a mob on a healer when Piercing Howl is held back, and Fury warriors stay in Berserker Stance between fights.
+- Holy paladins healing from range no longer recast Seal of Wisdom between Judgements, which saves about 30 global cooldowns and their mana each raid.
 
 ### Commands
 - New `.autogear` command gears a real player the way a spawned bot gets geared: items picked for the level and spec from the same gear pool the bots use, upgrades only, replaced items to the bags or the mailbox. GameMasters can gear any player; `AiPlayerbot.PlayerAutogearForAll` (default `0`) lets every player gear themselves.
