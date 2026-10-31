@@ -41,6 +41,12 @@ namespace ai
         CastRejuvenationOnPartyAction(PlayerbotAI* ai) : HealHotPartyMemberAction(ai, "rejuvenation", 15, HealManaEfficiency::VERY_HIGH) {}
     };
 
+    class CastRegrowthOnPartyAction : public HealHotPartyMemberAction
+    {
+    public:
+        CastRegrowthOnPartyAction(PlayerbotAI* ai) : HealHotPartyMemberAction(ai, "regrowth", 35, HealManaEfficiency::HIGH) {}
+    };
+
     // Idle HoT blanket: the lowest-health hurt member lacking THIS druid's
     // Rejuvenation, so two resto druids spread instead of stacking one
     // target. Scans the live group directly: the "party member without my
