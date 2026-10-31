@@ -1341,6 +1341,9 @@ EXPECTED_SOURCE_PROBLEMS = {
     ("shape-instant", 24839): "Acid Breath, an instant target-24 cone",
     ("shape-instant", 25814): "AQ40 Wide Slash, an instant target-24 cone",
     ("shape-instant", 26029): "AQ40 Dark Glare, an instant 15 degree cone",
+    # BWL shape rows (data/boss-blackwing-lair), merged after the shape-instant check landed with the AQ40 PR.
+    ("shape-instant", 23023): "BWL Razorgore Conflagration, an instant 120 degree cone",
+    ("shape-instant", 23364): "BWL Nefarian Tail Lash, an instant back cone",
     # Zul'Gurub rows marked nokick although the core's channel branch can stop
     # them: both are channels (attributesEx 0x4004) with CHANNEL_FLAG_INTERRUPT
     # (0x04) set (0x7c2c, 0x100c), so a kick ends the channel. The row, not the
