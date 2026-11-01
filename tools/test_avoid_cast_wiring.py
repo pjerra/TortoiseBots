@@ -486,7 +486,7 @@ class OneAtATimeWiring(unittest.TestCase):
     """
 
     def test_the_kind_the_loader_rule_and_the_shared_pick(self):
-        self.assertIn("OneAtATime = 7,", POLICY)
+        self.assertIn("OneAtATime = 8,", POLICY)
         self.assertIn('if (text == "one_at_a_time")', POLICY)
         self.assertIn("return BossTacticKind::OneAtATime;", POLICY)
         # The row is about its own boss_entry (like a tank_hold row): a target_entry is refused.
