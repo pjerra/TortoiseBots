@@ -23,6 +23,7 @@ import (
 	"tortoise-observability/internal/agentmaps"
 	"tortoise-observability/internal/armory"
 	"tortoise-observability/internal/auth"
+	"tortoise-observability/internal/decisions"
 	"tortoise-observability/internal/dungeons"
 	zoneproject "tortoise-observability/internal/map"
 	"tortoise-observability/internal/mapdir"
@@ -84,6 +85,10 @@ func main() {
 	// Optional folder of turtle-agent run maps (`turtle-agent map`: one SVG per run, plus the single-file HTML replay with --html).
 	// Read-only and off by default: unset, the Agent maps tab is hidden and its routes 404.
 	agentMapsDirRaw := flag.String("agent-maps-dir", getEnv("TBDASH_AGENT_MAPS_DIR", ""), "Optional folder of turtle-agent run maps (`turtle-agent map` .svg and .html replays) listed in the Agent maps tab (env TBDASH_AGENT_MAPS_DIR)")
+	// Optional folder of tb-decision-capture captures (one <captureId> folder per capture with index.json and
+	// seg-NNNN.jsonl) for the walk pull tool. Read-only and off by default: unset, the Decisions URLs 404 and a
+	// client learns the feature is off from the JSON probe.
+	decisionsDirRaw := flag.String("decisions-dir", getEnv("TBDASH_DECISIONS_DIR", ""), "Optional folder of tb-decision-capture captures (decision capture index.json + seg-NNNN.jsonl) listed by the walk pull tool (env TBDASH_DECISIONS_DIR)")
 	devNoAuth := flag.Bool("dev-no-auth", false, "Disable Game Master authentication check for local dev testing")
 	// The activity rollup is in-memory, so without this a dashboard restart
 	// resets every counter. The file sits in the mounted icon-cache directory
@@ -267,6 +272,14 @@ func main() {
 		agentMaps = nil
 	} else if agentMaps != nil {
 		log.Printf("[AgentMaps] run maps served from %s (at most %d files, %d MiB each)", agentMaps.Root(), agentmaps.MaxFiles, agentmaps.MaxFileSize>>20)
+	}
+
+	decisionStore, err := decisions.New(*decisionsDirRaw)
+	if err != nil {
+		log.Printf("[Decisions] ignoring the decision capture folder %q: %v", *decisionsDirRaw, err)
+		decisionStore = nil
+	} else if decisionStore != nil {
+		log.Printf("[Decisions] decision captures served from %s", decisionStore.Root())
 	}
 
 	// 5. WebSocket hub and UDP ingestion
@@ -574,6 +587,11 @@ func main() {
 		mux.HandleFunc(agentmaps.ListPrefix, requireAuth(agentMaps.HandleList))
 		mux.HandleFunc(agentmaps.FilePrefix, requireAuth(agentMaps.HandleFile))
 	}
+	// Decision captures: the list and the read-only files of --decisions-dir, behind the same login. The routes stay
+	// registered when the folder is off, so the handlers answer the disabled JSON (which is also how a client learns
+	// the feature is off) instead of a bare 404.
+	mux.HandleFunc(decisions.ListPath, requireAuth(decisionStore.HandleList))
+	mux.HandleFunc(decisions.FilePrefix, requireAuth(decisionStore.HandleFile))
 
 	mux.HandleFunc("/api/v1/server-info", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		if info := store.ServerInfo(); info != nil {
