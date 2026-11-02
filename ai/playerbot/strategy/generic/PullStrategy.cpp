@@ -448,11 +448,13 @@ void PullStrategy::OnPullEnded()
     hadPullBack = false;
     pullBackIntent = false;
     commandJoinDelay = 0;
+    commandAnchor.reset();
     returnStartTime = 0;
     SetTarget(nullptr);
 }
 
-void PullStrategy::BeginCommand(bool pullback, bool hadPullBackStrategy, uint32 joinDelaySeconds, bool rangedOrder)
+void PullStrategy::BeginCommand(bool pullback, bool hadPullBackStrategy, uint32 joinDelaySeconds, bool rangedOrder,
+    std::optional<WorldPosition> const& anchor)
 {
     commandActive = true;
     commandPullback = pullback;
@@ -465,6 +467,7 @@ void PullStrategy::BeginCommand(bool pullback, bool hadPullBackStrategy, uint32 
     pathReachable = true;
     hadPullBack = hadPullBackStrategy;
     commandJoinDelay = joinDelaySeconds;
+    commandAnchor = anchor;
     returnStartTime = 0;
 }
 

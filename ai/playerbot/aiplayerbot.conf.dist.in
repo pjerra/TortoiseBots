@@ -1145,6 +1145,19 @@ AiPlayerbot.DungeonRunStandClearance = 0
 # Only read while AiPlayerbot.DungeonSelfClear = 1.
 AiPlayerbot.DungeonRunStandPullPreCc = 0
 
+# The camp pull. A plan's pull group may name a camp: a point back along the cleared route, with 1-4 tag walk points
+# after it and the pull row marked as the camp pull (an export made with turtle-agent's `plan-export --camp-pull`).
+# With this key the run leader gathers the raid at the camp, holds it there (the tank's `camp x y z` order parks every
+# other bot on its own spot, healers heal only and pets go passive), sends the pull's crowd control marks at the camp
+# (never a Sap: it needs a walk to the pack), walks the tank out alone to the last tag point, tags one unit with a
+# ranged shot, drags the pack back to the camp and releases the hold when the pack arrives or a held bot is hit. When
+# the shot does not go out, the walk out stalls, the pack never comes or the tank draws the fight early, the camp pull
+# is given up ("camp pull given up: <why>") and the step pulls as a plain pull from the camp. A pull row with an item
+# (the plan's max_bodies) is not rested for by the aggro estimate on a camp pull: the estimate notes only.
+# 0 - off, the camp rows walk as plain moves and the row pulls as a plain pull (Default)
+# 1 - on; only read while AiPlayerbot.DungeonSelfClear = 1
+AiPlayerbot.DungeonRunCampPull = 0
+
 # The run leader's loot step when the corpse's item is another member's under the group's loot
 # rules (round robin / group loot: the loot step is refused with "nothing this bot may loot",
 # e.g. Uldaman, Revelosh's Shaft of Tsol). With 1 the lead bot (it leads the bound group) sets

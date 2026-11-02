@@ -67,6 +67,7 @@
 #include "../runtime/BossWindowSignal.h"
 #include "../runtime/ReadyCheckPolicy.h"
 #include "../runtime/DungeonRunPolicy.h"
+#include "../runtime/StayArrivalPolicy.h"
 #include "../host/CreatureForm.h" // ScriptChangedFrom: the entry a script changed a creature away from
 #include "../runtime/SystemRunPolicy.h"
 #include "../runtime/CombatMonitorService.h"
@@ -360,6 +361,44 @@ std::unordered_map<uint64, uint64>& RunHealOnlyBots()
 {
     static std::unordered_map<uint64, uint64> bots;
     return bots;
+}
+
+// The run leader's camp hold (camp-pull B): the commander -> the camp point, the plan step it was set at, and each
+// held bot's health when the hold went out (the hit read: an attacker on it, or health below that by over 1 %).
+struct RunCampAnchor
+{
+    uint32 map = 0;
+    float x = 0.0f, y = 0.0f, z = 0.0f;
+    std::size_t stepAtSet = static_cast<std::size_t>(-1);
+    struct Held
+    {
+        uint64 raw = 0;
+        uint32 health = 0;
+        uint32 maxHealth = 0;
+    };
+    std::vector<Held> held;
+};
+
+std::unordered_map<uint64, RunCampAnchor>& RunCampAnchors()
+{
+    static std::unordered_map<uint64, RunCampAnchor> anchors;
+    return anchors;
+}
+
+// Ends the camp hold a run leader's `camp x y z` set: the anchor goes and the pull windows it started end on their
+// own bots (their release restores the pet stance and clears only the stay the hold set). Called wherever the run's
+// hold is released (a pause, a stop, the end, a wipe, a step change past the camp's row) and by `camp release`.
+void ReleaseRunCampHold(uint64 commanderRaw)
+{
+    auto const it = RunCampAnchors().find(commanderRaw);
+    if (it == RunCampAnchors().end())
+        return;
+    std::vector<RunCampAnchor::Held> const held = it->second.held;
+    RunCampAnchors().erase(it);
+    for (RunCampAnchor::Held const& entry : held)
+        if (Player* bot = FindCharacter(entry.raw))
+            if (PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot))
+                ai->EndPullWindow("camp release");
 }
 // Bots the run leader gave the test speed (`.bot run start ... speed=`, DungeonRun::SpeedRateNow): bot -> its run's
 // commander, the rate, and the MOVE_RUN / MOVE_WALK rates read back right after the apply (an aura, a mount or an
@@ -778,6 +817,7 @@ void TakeRunItems(DungeonRunSlot& slot, uint64_t guid /*0 = all*/)
 // bound-group sampler, and only the binding's release forgets it.
 void EraseRunSlot(uint64_t commanderRaw)
 {
+    ReleaseRunCampHold(commanderRaw);
     auto it = DungeonRuns().find(commanderRaw);
     if (it == DungeonRuns().end())
         return;
@@ -789,6 +829,8 @@ void EraseAllRunSlots()
 {
     for (auto& entry : DungeonRuns())
         TakeRunItems(entry.second, 0);
+    while (!RunCampAnchors().empty())
+        ReleaseRunCampHold(RunCampAnchors().begin()->first);
     DungeonRuns().clear();
 }
 // The policy header's Member from the plain mirror (same fields, same order).
@@ -2849,6 +2891,12 @@ BotCommandContext CommanderContext(CommanderOrder const& order, Unit* target)
         {
             return HealerPullStand(lead, target, healer, x, y, z);
         };
+        // The camp hold (camp-pull B): a pull of the run while it holds at a camp returns to the camp, not to the
+        // lead bot's (or the player's) spot: the tank drags the pack back there.
+        auto const camp = RunCampAnchors().find(commanderRaw);
+        if (camp != RunCampAnchors().end() && order.lead && camp->second.map == order.lead->GetMapId())
+            context.anchorOverride = ai::WorldPosition(camp->second.map, camp->second.x, camp->second.y,
+                camp->second.z);
     }
     return context;
 }
@@ -2967,6 +3015,90 @@ bool RunBotAttackOrder(PlayerbotAI* ai, Player* bot, Player* selectionOwner, Obj
 // Same per-bot steps as `.bot action attack`, with the lead bot's selection
 // carrying the GUID-named target: AttackMyTargetAction reads its event
 // owner's selection. The commander's own selection is never touched.
+// The camp hold (camp-pull B): `camp <x> <y> <z>` parks the bound party but its lead bot on its own spot at the
+// camp, with the pull's "wait for attack" window (healers heal only there, pets passive), and records the camp as the
+// point a pull returns to (CommanderContext); `camp release` lets them go. Only the run leader's own run takes it.
+static bool CommanderCampHold(ChatHandler* handler, CommanderOrder const& order,
+    std::vector<std::string> const& parts, std::string const& intent)
+{
+    uint64 const commanderRaw = order.commander->GetObjectGuid().GetRawValue();
+    if (!DungeonRuns().count(commanderRaw))
+    {
+        SendActionError(handler, intent, "denied", "The camp hold belongs to a running run; start one with .bot run start.");
+        return true;
+    }
+    if (parts.empty() || parts.size() > 3)
+    {
+        SendActionError(handler, intent, "invalid", "Usage: .bot cmd camp <x> <y> <z> / .bot cmd camp release");
+        return true;
+    }
+    if (parts[0] == "release")
+    {
+        if (parts.size() != 1)
+        {
+            SendActionError(handler, intent, "invalid", "Usage: .bot cmd camp release");
+            return true;
+        }
+        bool const live = RunCampAnchors().count(commanderRaw) != 0;
+        ReleaseRunCampHold(commanderRaw);
+        SendActionAck(handler, intent, "party", live ? 1u : 0u, live ? "camp released" : "no camp hold");
+        return true;
+    }
+    float const x = static_cast<float>(std::atof(parts[0].c_str()));
+    float const y = static_cast<float>(std::atof(parts[1].c_str()));
+    float const z = static_cast<float>(std::atof(parts[2].c_str()));
+    if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z) || !order.lead ||
+        !MaNGOS::IsValidMapCoord(x, y, z))
+    {
+        SendActionError(handler, intent, "invalid", "The camp is not a point on the map: camp <x> <y> <z>.");
+        return true;
+    }
+    RunCampAnchor anchor;
+    anchor.map = order.lead->GetMapId();
+    anchor.x = x;
+    anchor.y = y;
+    anchor.z = z;
+    if (DungeonRunSlot const* slot = DungeonRuns().count(commanderRaw) ? &DungeonRuns()[commanderRaw] : nullptr)
+        anchor.stepAtSet = slot->run.step;
+    std::size_t held = 0;
+    for (Player* bot : order.bots)
+    {
+        // The tank walks out alone: every other bot of the party holds where it stands.
+        if (!bot || bot == order.lead || !bot->IsAlive() || !bot->IsInWorld() || bot->GetMapId() != anchor.map)
+            continue;
+        PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot);
+        if (!ai || !ai->GetAiObjectContext())
+            continue;
+        if (PlayerbotAI::IsHeal(bot, true))
+        {
+            // Heals only, on its own spot: the held raid must not lose its healer to a wand or a follow.
+            ai->SetRunHealOnly(true);
+            RunHealOnlyBots()[bot->GetObjectGuid().GetRawValue()] = commanderRaw;
+        }
+        ai::WorldPosition const stand(bot);
+        ai->SetMovementStrategy("stay");
+        ai::PositionMap& posMap = ai->GetAiObjectContext()->GetValue<ai::PositionMap&>("position")->Get();
+        ai::PositionEntry stayPos = posMap["stay"];
+        stayPos.Set(stand.getX(), stand.getY(), stand.getZ(), stand.GetMapId());
+        posMap["stay"] = stayPos;
+        ai::PositionEntry holdPos = posMap["pull hold"];
+        holdPos.Set(stand.getX(), stand.getY(), stand.getZ(), stand.GetMapId());
+        posMap["pull hold"] = holdPos;
+        TortoiseBots::StayWalkOrdered(
+            ai->GetAiObjectContext()->GetValue<ai::LastMovement&>("last movement")->Get().stayWalk);
+        ai->StartPullWindow(static_cast<uint8>(TortoiseBots::DungeonRun::kCampHoldWindowS), true, 0);
+        ai->GetAiObjectContext()->GetValue<time_t>("combat start time")->Set(time(0));
+        // The same park PausePartyDpsForPull's member pets take: restored by this bot's own EndPullWindow.
+        ai->ParkPetForPullHold();
+        anchor.held.push_back(RunCampAnchor::Held{bot->GetObjectGuid().GetRawValue(), bot->GetHealth(),
+            bot->GetMaxHealth()});
+        ++held;
+    }
+    RunCampAnchors()[commanderRaw] = anchor;
+    SendActionAck(handler, intent, "party", static_cast<uint32>(held), order.lead->GetName());
+    return true;
+}
+
 static bool CommanderAttack(ChatHandler* handler, CommanderOrder const& order, Unit* target,
     std::string const& intent, Player* onlyBot = nullptr)
 {
@@ -6102,7 +6234,7 @@ bool HandleCommanderOrder(ChatHandler* handler, char const* args)
     if (!RemoteCommander::IsKnownOrder(verb))
     {
         SendActionError(handler, intent, "invalid",
-            "Usage: .bot cmd attack <guid> [bot] / pull|pullback <guid> [seconds] / cc <mark> <guid> [bot] / cc clear <bot> [<mark> <guid>] / focus <guid> / move <x> <y> <z> / stay / follow / rest / lootmethod <ffa|group|rr|master|nbg> [threshold] / revive <bot> / summon <bot> / loot <guid|entry:id[@x,y,z]> <bot> [itemId] / open <guid|entry:id[@x,y,z]> <bot> / use <itemId> <bot> [guid|entry:id[@x,y,z]] / ritual <guid|entry:id[@x,y,z]> <bot1> <bot2> [<bot3>...] / gossip <npc entry> <bot> <option number|\"option text\"> / state <guid|entry:id[@x,y,z]> / enter <area trigger id|near> [bot]");
+            "Usage: .bot cmd attack <guid> [bot] / pull|pullback <guid> [seconds] / cc <mark> <guid> [bot] / cc clear <bot> [<mark> <guid>] / focus <guid> / move <x> <y> <z> / camp <x> <y> <z>|release / stay / follow / rest / lootmethod <ffa|group|rr|master|nbg> [threshold] / revive <bot> / summon <bot> / loot <guid|entry:id[@x,y,z]> <bot> [itemId] / open <guid|entry:id[@x,y,z]> <bot> / use <itemId> <bot> [guid|entry:id[@x,y,z]] / ritual <guid|entry:id[@x,y,z]> <bot1> <bot2> [<bot3>...] / gossip <npc entry> <bot> <option number|\"option text\"> / state <guid|entry:id[@x,y,z]> / enter <area trigger id|near> [bot]");
         return true;
     }
 
@@ -6317,6 +6449,8 @@ bool HandleCommanderOrder(ChatHandler* handler, char const* args)
     }
     if (verb == "move")
         return CommanderMove(handler, order, rest, intent);
+    if (verb == "camp")
+        return CommanderCampHold(handler, order, parts, intent);
     if (verb == "lootmethod")
         return CommanderLootMethod(handler, order, parts, intent);
     if (verb == "stay" || verb == "follow" || verb == "rest")
@@ -8748,10 +8882,15 @@ static std::vector<ai::AggroPoint> SampleWalkTo(Player* lead, float x, float y, 
 void ReadPullJoiners(Player* lead, std::vector<Player*> const& bots, ai::PlanStep const& step, std::size_t stepIndex,
     std::uint32_t stepPass,
     float toPoint, uint32 ceiling, std::unordered_set<std::uint64_t> const& held, TortoiseBots::DungeonRun::Facts& f,
-    TortoiseBots::DungeonRun::PullEstimateCache& estimates)
+    TortoiseBots::DungeonRun::PullEstimateCache& estimates, TortoiseBots::DungeonRun::Run const& run)
 {
     if (!ceiling || f.units.empty())
         return;
+    // A camp pull (camp-pull B): the fight is at the camp, the tank walks the tag rows out alone and drags the pack
+    // back along them. With the key off (or no chain) the camp is no part of the estimate.
+    std::size_t campRow = 0, firstTag = 0, lastTag = 0;
+    bool const campPull = f.campPull &&
+        TortoiseBots::DungeonRun::CampChainOf(run, stepIndex, campRow, firstTag, lastTag);
     // The ring estimate (AiPlayerbot.DungeonRunAggroWalkRing, needs the estimate on): the walk, the
     // stand and the fight point wake a pack, and every member calls within ringYd for kAggroRingHops
     // hops, so the read reaches that much further.
@@ -8862,13 +9001,40 @@ void ReadPullJoiners(Player* lead, std::vector<Player*> const& bots, ai::PlanSte
             // The ring estimate: the party's walk to the engage point, the stand and the fight point
             // (the stand, for a plain pull), each widened by its spread; the raid spreads 10 yd.
             ai::AggroGeometry geometry;
-            geometry.walk = SampleWalkTo(lead, params.engageX, params.engageY, params.engageZ);
-            geometry.walkSpreadYd = 3.0f;
-            geometry.stand = ai::AggroPoint{params.engageX, params.engageY, params.engageZ};
-            geometry.standSpreadYd = f.raid.on ? ai::kSpreadSettledDistance : 3.0f;
-            geometry.hasFight = true;
-            geometry.fight = geometry.stand;
-            // A camp pull (B) fills the tank walk and the drag here; with the camp pull out they stay empty.
+            if (campPull)
+            {
+                // The party fights at the camp; the tank walks the tag rows out from it and drags the pack back
+                // along them (the pull centre -> the tag spot -> the tag rows reversed -> the camp).
+                ai::PlanStep const& camp = run.plan->steps[campRow];
+                ai::AggroPoint const campPoint{camp.x, camp.y, camp.z};
+                geometry.walk = SampleWalkTo(lead, camp.x, camp.y, camp.z);
+                geometry.walkSpreadYd = 3.0f;
+                geometry.stand = campPoint;
+                geometry.standSpreadYd = f.raid.on ? ai::kSpreadSettledDistance : 3.0f;
+                geometry.hasFight = true;
+                geometry.fight = campPoint;
+                std::vector<ai::AggroPoint> tankWalk = {campPoint};
+                std::vector<ai::AggroPoint> drag = {ai::AggroPoint{step.x, step.y, step.z}};
+                for (std::size_t i = firstTag; i <= lastTag && i < run.plan->steps.size(); ++i)
+                {
+                    ai::PlanStep const& tag = run.plan->steps[i];
+                    tankWalk.push_back(ai::AggroPoint{tag.x, tag.y, tag.z});
+                    drag.push_back(ai::AggroPoint{tag.x, tag.y, tag.z});
+                }
+                drag.push_back(campPoint);
+                geometry.tankWalk = ai::SampleAggroWalk(tankWalk);
+                geometry.tankSpreadYd = TortoiseBots::DungeonRun::kCampTankWalkSpreadYd;
+                geometry.drag = ai::SampleAggroWalk(drag, ai::kAggroWalkSamples, 4.0f);
+            }
+            else
+            {
+                geometry.walk = SampleWalkTo(lead, params.engageX, params.engageY, params.engageZ);
+                geometry.walkSpreadYd = 3.0f;
+                geometry.stand = ai::AggroPoint{params.engageX, params.engageY, params.engageZ};
+                geometry.standSpreadYd = f.raid.on ? ai::kSpreadSettledDistance : 3.0f;
+                geometry.hasFight = true;
+                geometry.fight = geometry.stand;
+            }
             ai::AggroEstimateParams ring = params;
             ring.ringYd = ringYd;
             ring.ringHops = ai::kAggroRingHops;
@@ -9814,11 +9980,48 @@ static void ReadPullAhead(DungeonRunSlot const& slot, Player* lead, std::vector<
                     lead->GetPositionZ(), ai::AggroPoint{mobs[target].x, mobs[target].y, mobs[target].z},
                     lead->GetDistance(creatures[target]));
                 ai::AggroGeometry geometry;
-                geometry.walk = SampleWalkTo(lead, engage.x, engage.y, engage.z);
-                geometry.stand = engage;
-                geometry.standSpreadYd = f.raid.on ? ai::kSpreadSettledDistance : 3.0f;
-                geometry.hasFight = true;
-                geometry.fight = geometry.stand;
+                std::size_t campRow = 0, firstTag = 0, lastTag = 0;
+                bool const campPull = f.campPull &&
+                    TortoiseBots::DungeonRun::CampChainOf(slot.run, at, campRow, firstTag, lastTag);
+                if (campPull)
+                {
+                    // Camp-pull B: the party walks to the camp and fights there; the tank walks the tag rows out
+                    // alone and drags the pack back along them.
+                    ai::PlanStep const& camp = slot.run.plan->steps[campRow];
+                    ai::AggroPoint const campPoint{camp.x, camp.y, camp.z};
+                    std::vector<ai::AggroPoint> walk = {
+                        ai::AggroPoint{lead->GetPositionX(), lead->GetPositionY(), lead->GetPositionZ()}};
+                    for (std::size_t i = slot.run.step; i < at && i < slot.run.plan->steps.size(); ++i)
+                    {
+                        ai::PlanStep const& move = slot.run.plan->steps[i];
+                        walk.push_back(ai::AggroPoint{move.x, move.y, move.z});
+                    }
+                    geometry.walk = ai::SampleAggroWalk(walk);
+                    geometry.stand = campPoint;
+                    geometry.standSpreadYd = f.raid.on ? ai::kSpreadSettledDistance : 3.0f;
+                    geometry.hasFight = true;
+                    geometry.fight = campPoint;
+                    std::vector<ai::AggroPoint> tankWalk = {campPoint};
+                    std::vector<ai::AggroPoint> drag = {ai::AggroPoint{pull->x, pull->y, pull->z}};
+                    for (std::size_t i = firstTag; i <= lastTag && i < slot.run.plan->steps.size(); ++i)
+                    {
+                        ai::PlanStep const& tag = slot.run.plan->steps[i];
+                        tankWalk.push_back(ai::AggroPoint{tag.x, tag.y, tag.z});
+                        drag.push_back(ai::AggroPoint{tag.x, tag.y, tag.z});
+                    }
+                    drag.push_back(campPoint);
+                    geometry.tankWalk = ai::SampleAggroWalk(tankWalk);
+                    geometry.tankSpreadYd = TortoiseBots::DungeonRun::kCampTankWalkSpreadYd;
+                    geometry.drag = ai::SampleAggroWalk(drag, ai::kAggroWalkSamples, 4.0f);
+                }
+                else
+                {
+                    geometry.walk = SampleWalkTo(lead, engage.x, engage.y, engage.z);
+                    geometry.stand = engage;
+                    geometry.standSpreadYd = f.raid.on ? ai::kSpreadSettledDistance : 3.0f;
+                    geometry.hasFight = true;
+                    geometry.fight = geometry.stand;
+                }
                 params.mobSees = [&](std::size_t mob, ai::AggroPoint const& point)
                 {
                     return creatures[mob]->IsWithinLOS(point.x, point.y, point.z + 1.0f, true, 0.0f);
@@ -9939,7 +10142,7 @@ void ReadPullPacks(Map* map, std::vector<TortoiseBots::DungeonRun::UnitFact>& un
 }
 
 void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*> const& bots,
-    TortoiseBots::DungeonRun::Facts& f, bool raid)
+    TortoiseBots::DungeonRun::Facts& f, bool raid, uint64 commanderRaw = 0)
 {
     using namespace TortoiseBots::DungeonRun;
     f = Facts();
@@ -9956,6 +10159,26 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
     f.standClearance = sPlayerbotAIConfig.dungeonRunStandClearance;
     // The CC before the walk in (DungeonRun::NextStandPull): the approach row holds outside the pack's wake reach.
     f.standPullPreCc = sPlayerbotAIConfig.dungeonRunStandPullPreCc;
+    // The camp pull (DungeonRun::CampPullTick; camp-pull B): the key, the glue's hold for this commander, the held
+    // bots hit since the hold went out, and the return leg's cap. Off: nothing below is read.
+    f.campPull = sPlayerbotAIConfig.dungeonRunCampPull;
+    f.campReturnCapMs = static_cast<uint32>(std::max<uint32>(1, sPlayerbotAIConfig.pullBackMaxReturnTime + 5) * 1000);
+    if (f.campPull && commanderRaw)
+        if (auto const camp = RunCampAnchors().find(commanderRaw); camp != RunCampAnchors().end())
+        {
+            f.campHoldLive = true;
+            for (RunCampAnchor::Held const& held : camp->second.held)
+            {
+                Player* bot = FindCharacter(held.raw);
+                if (!bot || !bot->IsInWorld() || !bot->IsAlive())
+                    continue;
+                // An attacker on it, or health below the hold's reading by more than 1 % of its maximum.
+                bool const lost = held.health > bot->GetHealth() &&
+                    static_cast<uint64>(held.health - bot->GetHealth()) * 100ull > held.maxHealth;
+                if (!bot->getAttackers().empty() || lost)
+                    f.campHitBots.push_back(bot->GetName());
+            }
+        }
     // The guard's walk back after a won fight (DungeonRun::GuardWalkBackWanted): read every tick, so a config
     // reload switches it mid-run.
     f.walkBackAfterWonFight = sPlayerbotAIConfig.dungeonRunWalkBackAfterWonFight;
@@ -10356,6 +10579,10 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
             // out to kStandPullSeeYd, with sight and formation, and the other patrols near the lead bot are read
             // (DungeonRun::PatrolStandPullGate; ReadStandPatrols after ReadPullStand).
             bool const standPull = pullStep && StandThisStep(slot) && step == &slot.run.plan->steps[slot.run.step];
+            // A camp pull row (camp-pull B): its units carry their positions (the tag's return and the pack's
+            // arrival are measured from the camp) and whether the tank sees them (the tag's shot).
+            bool const campPullHere = pullStep && f.campPull && (step->flags & ai::kPlanFlagCampPull) &&
+                step == &slot.run.plan->steps[slot.run.step];
             float const patrolSeeYd = standPull ? kStandPullSeeYd : kPatrolSeeYd;
             float const packRange = std::min(toPoint + step->radius +
                 (f.packClearMarginYd > 0.0f || standPull ? kSpawnPatrolSeeYd : kPatrolSeeYd), 2.0f * kSeeYd);
@@ -10512,8 +10739,14 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                     unit.attackable = GroupCanAttack(judge, creature); // never pulled when it cannot be attacked
                     // The pull stand: can the tank shoot it from where it stands (one ray, key on only, or any
                     // stand-pull boss or pull step whatever the key says).
-                    if (f.pullStand || StandThisStep(slot))
+                    if (f.pullStand || StandThisStep(slot) || campPullHere)
                         unit.losLead = lead->IsWithinLOSInMap(creature);
+                    if (campPullHere)
+                    {
+                        unit.x = creature->GetPositionX();
+                        unit.y = creature->GetPositionY();
+                        unit.z = creature->GetPositionZ();
+                    }
                     if (standPull)
                     {
                         unit.x = creature->GetPositionX(); // the pull's way (DungeonRun::PatrolStandPullGate)
@@ -10564,7 +10797,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                 }
             if (step->kind == ai::PlanStepKind::Pull)
                 ReadPullJoiners(lead, bots, *step, slot.run.step, slot.run.stepPass, toPoint, f.joinerCeiling, slot.run.joinerHeld, f,
-                    slot.pullEstCache);
+                    slot.pullEstCache, slot.run);
             break;
         }
         case ai::PlanStepKind::Move:
@@ -11066,6 +11299,8 @@ void DropPendingRunCcIcons()
 
 void ReleaseRunHold(Player* commander, uint64 leadRaw, DungeonRunSlot& slot)
 {
+    // A camp hold belongs to the run's tick: a pause, a stop, the end or a wiped-out regroup lets it go.
+    ReleaseRunCampHold(commander ? commander->GetObjectGuid().GetRawValue() : 0);
     RestoreRunLootMethod(leadRaw, slot.run); // a loot step's free-for-all detour ends with the run's tick
     if (slot.heldRaw.empty() && slot.placedRaw.empty())
         return;
@@ -11689,7 +11924,7 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
         {
             TortoiseBots::DungeonRun::Facts holdFacts;
             std::vector<Player*> const holdBots = CommandedBots(holdLead->GetGroup(), holdLead);
-            ReadRunFacts(slot, holdLead, holdBots, holdFacts, binding->raid);
+            ReadRunFacts(slot, holdLead, holdBots, holdFacts, binding->raid, commanderRaw);
             TortoiseBots::DungeonRun::ScopeStandPullFacts(slot.run, holdFacts);
             ReadRunPlayers(slot, commanderRaw, holdLead, holdLead->GetGroup(), holdBots, holdFacts);
             TortoiseBots::DungeonRun::ApplyPlayerFacts(holdFacts);
@@ -11759,7 +11994,7 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
     }
     RetireLostCarrier(slot, lead, bots);
     TortoiseBots::DungeonRun::Facts facts;
-    ReadRunFacts(slot, lead, bots, facts, binding->raid);
+    ReadRunFacts(slot, lead, bots, facts, binding->raid, commanderRaw);
     // A stand-pull pull row: only its own formations' units (DungeonRun::ScopeStandPullFacts).
     TortoiseBots::DungeonRun::ScopeStandPullFacts(slot.run, facts);
     // The tactic rows the server reads now (a reload may have swapped them under this run's old plan): the deferral
@@ -11794,6 +12029,12 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
     std::string const order = slot.playerLed.on
         ? TortoiseBots::PlayerLed::Tick(slot.run, slot.playerLed, facts, anchor, dt)
         : TortoiseBots::DungeonRun::Tick(slot.run, facts, dt);
+    // The camp hold (camp-pull B) belongs to its pull row: past that row (a step change) or into a regroup (a wipe)
+    // it goes, so the party fights and follows again.
+    if (auto const camp = RunCampAnchors().find(commanderRaw); camp != RunCampAnchors().end() &&
+        ((camp->second.stepAtSet != static_cast<std::size_t>(-1) && slot.run.step > camp->second.stepAtSet) ||
+            slot.run.regroup))
+        ReleaseRunCampHold(commanderRaw);
     // The lead bot says what the run needs on /s (a door's key, a skipped leg's item), once per event.
     if (std::string const say = TortoiseBots::DungeonRun::TakeSay(slot.run); !say.empty())
         if (Player* sayLead = FindCharacter(binding->leadGuid))

@@ -3,10 +3,12 @@
 #include "../runtime/BotManager.h"
 
 #include "../ai/playerbot/PullExecutorPolicy.h"
+#include "../ai/playerbot/WorldPosition.h"
 
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -42,6 +44,9 @@ struct BotCommandContext
     // Called for each healer a run-leader pull sets heal-only, so the run
     // leader lists it (its sync lets it go again when it is not wanted).
     std::function<void(Player*)> noteHealOnly;
+    // The point a pull returns to, when the run leader's camp hold names one (the camp pull's `camp x y z`): the
+    // tank drags the pack back there, not to the requester's spot.
+    std::optional<ai::WorldPosition> anchorOverride;
 };
 
 // Every command path uses these checks. A BotRecord alone is not sufficient:
@@ -88,7 +93,8 @@ void PausePartyDpsForPull(BotCommandContext const& context, Player* executor, ui
 // Records the per-command return mode (plus join delay) on the PullStrategy;
 // PullEndAction restores the tank's default when the pull ends. rangedOrder is
 // the `ranged` word of the order: open from range on any pull.
-bool ConfigurePullMode(PlayerbotAI* ai, bool pullback, uint32 joinDelaySeconds = 0, bool rangedOrder = false);
+bool ConfigurePullMode(PlayerbotAI* ai, bool pullback, uint32 joinDelaySeconds = 0, bool rangedOrder = false,
+    std::optional<ai::WorldPosition> const& anchor = std::nullopt);
 // Resolve one live executor with a currently usable interrupt action. The
 // action name comes from the mature class/pet action graph, not a duplicated
 // class-to-spell table. Explicitly targeted bots never fall back to another

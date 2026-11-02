@@ -95,7 +95,7 @@ class StayArrivalWiringTest(unittest.TestCase):
         self.assertIn(ORDERED + 'ai->GetAiObjectContext()->GetValue<ai::LastMovement&>("last movement")->Get().stayWalk);', hold)
         callers = sorted(p.name for p in list((ROOT / "ai").rglob("*.cpp")) + list((ROOT / "commands").rglob("*.cpp"))
                          if ORDERED in p.read_text(errors="replace"))
-        self.assertEqual(callers, ["BotCommandContext.cpp", "ChatShortcutActions.cpp", "GoAction.cpp", "Party.cpp"])
+        self.assertEqual(callers, ["BotCommandContext.cpp", "ChatShortcutActions.cpp", "Commander.cpp", "GoAction.cpp", "Party.cpp"])
 
     def test_other_qualifiers_keep_their_rule(self):
         fn = body(POSITION, "bool MoveToPositionAction::isUseful()")

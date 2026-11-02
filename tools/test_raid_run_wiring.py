@@ -40,8 +40,8 @@ class RaidRunWiringTest(unittest.TestCase):
         self.assertIn("RaidLayout::RestFloor(", glue)
         self.assertIn("member.core = isTank || isHeal;", glue)
         tick = strip_comments(COMMANDS)
-        self.assertIn("ReadRunFacts(slot, lead, bots, facts, binding->raid);", tick)
-        self.assertIn("ReadRunFacts(slot, holdLead, holdBots, holdFacts, binding->raid);", tick)
+        self.assertIn("ReadRunFacts(slot, lead, bots, facts, binding->raid, commanderRaw);", tick)
+        self.assertIn("ReadRunFacts(slot, holdLead, holdBots, holdFacts, binding->raid, commanderRaw);", tick)
 
     def test_party_rules_use_the_raid_helpers(self):
         for old in ("f.dead < kWipeDead", "f.dead >= kWipeDead", "partyDead >= kWipeDead",

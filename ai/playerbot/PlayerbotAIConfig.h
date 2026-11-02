@@ -614,6 +614,9 @@ public:
     // The approach row before a stand-pull step holds outside the pulled pack's wake reach and the pull's crowd
     // control goes out there, before the walk in wakes the pack (DungeonRunPolicy.h NextStandPull; default off).
     bool dungeonRunStandPullPreCc;
+    // A camp pull (the plan's camp point, tag rows and camp pull row): the raid holds at the camp, the tank walks
+    // out alone, tags one unit and drags the pack back (DungeonRunPolicy.h CampPullTick; default off).
+    bool dungeonRunCampPull;
     // 1: the run leader walks the tank back to the guard's stand point after every guarded fight, as before
     // 2026-10-22; 0 (default): not once the step's pack is cleared (DungeonRunPolicy.h GuardWalkBackWanted).
     bool dungeonRunWalkBackAfterWonFight;

@@ -1116,7 +1116,7 @@ inline OrderTier TierForOrder(std::string const& verb)
     // to its leader would; the per-bot loot/open/use orders move items and open
     // things for one bot, so they stay with its owner (or a GM).
     if (verb == "attack" || verb == "pull" || verb == "pullback" || verb == "cc" ||
-        verb == "focus" || verb == "move" || verb == "stay" || verb == "follow" ||
+        verb == "focus" || verb == "move" || verb == "camp" || verb == "stay" || verb == "follow" ||
         verb == "rest" || verb == "lootmethod" || verb == "state")
         return OrderTier::Tactical;
     // revive, summon, loot, open, use, ritual, enter, gossip and anything unknown: fail closed.

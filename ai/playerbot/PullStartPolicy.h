@@ -29,6 +29,25 @@ namespace ai
             facts.distance <= facts.range;
     }
 
+    // The point the pull returns to after its shot ("pull" in the position map, PullRequestAction): the command's
+    // own anchor when one is set (the run leader's camp pull: the tank drags the pack back to the camp), else the
+    // requester's spot when he is in the tank's world, else the tank's own.
+    struct PullReturnPoint
+    {
+        float x = 0.0f;
+        float y = 0.0f;
+        float z = 0.0f;
+        unsigned map = 0;
+    };
+
+    inline PullReturnPoint PullReturnPointOf(bool hasAnchor, PullReturnPoint const& anchor, bool hasRequester,
+        PullReturnPoint const& requester, PullReturnPoint const& tank)
+    {
+        if (hasAnchor)
+            return anchor;
+        return hasRequester ? requester : tank;
+    }
+
     // What the order clears on the tank before its decisions. A pull often
     // comes a second after the last fight ends (the run leader pulls that
     // soon), while the tank sits eating: in an Uldaman run (build 19z11) the

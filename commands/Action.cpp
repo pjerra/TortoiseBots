@@ -774,7 +774,7 @@ bool RunPullOrder(ChatHandler* handler, BotCommandContext const& context, Player
     // PullStrategy (never sticky). The tank's default is restored when the pull
     // ends.
     PullModeSnapshot pullModeBefore = SavePullMode(ai);
-    if (!ConfigurePullMode(ai, pullback, joinDelay, pullWords.ranged))
+    if (!ConfigurePullMode(ai, pullback, joinDelay, pullWords.ranged, context.anchorOverride))
     {
         char const* message = pullback
             ? "The mature pullback strategy is unavailable."

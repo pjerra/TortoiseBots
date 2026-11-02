@@ -2,6 +2,7 @@
 #include "playerbot/playerbot.h"
 #include "playerbot/GroupMembers.h"
 #include "playerbot/strategy/generic/PullStrategy.h"
+#include "playerbot/PullStartPolicy.h"
 #include "playerbot/strategy/values/AttackersValue.h"
 #include "PullActions.h"
 #include "playerbot/strategy/values/PositionValue.h"
@@ -228,14 +229,20 @@ bool PullRequestAction::Execute(Event& event)
     PositionMap& posMap = AI_VALUE(PositionMap&, "position");
     PositionEntry pullPosition = posMap["pull"];
 
-    if (requester && requester->IsInWorld() && requester->GetMapId() == bot->GetMapId())
-    {
-        pullPosition.Set(requester->getPositionX(), requester->getPositionY(), requester->getPositionZ(), requester->GetMapId());
-    }
-    else
-    {
-        pullPosition.Set(bot->getPositionX(), bot->getPositionY(), bot->getPositionZ(), bot->GetMapId());
-    }
+    // The command's own anchor first (the run leader's camp pull: back to the camp), else the requester's spot,
+    // else the tank's own.
+    PullReturnPoint const tank = { bot->getPositionX(), bot->getPositionY(), bot->getPositionZ(), bot->GetMapId() };
+    bool const hasRequester = requester && requester->IsInWorld() && requester->GetMapId() == bot->GetMapId();
+    PullReturnPoint const requesterPoint = hasRequester
+        ? PullReturnPoint{ requester->getPositionX(), requester->getPositionY(), requester->getPositionZ(), requester->GetMapId() }
+        : tank;
+    PullReturnPoint const commandAnchor = strategy->HasCommandAnchor()
+        ? PullReturnPoint{ strategy->GetCommandAnchor().getX(), strategy->GetCommandAnchor().getY(),
+            strategy->GetCommandAnchor().getZ(), strategy->GetCommandAnchor().GetMapId() }
+        : tank;
+    PullReturnPoint const point = PullReturnPointOf(strategy->HasCommandAnchor(), commandAnchor, hasRequester,
+        requesterPoint, tank);
+    pullPosition.Set(point.x, point.y, point.z, point.map);
     posMap["pull"] = pullPosition;
 
     strategy->RequestPull(target);

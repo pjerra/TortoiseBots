@@ -2,6 +2,9 @@
 #include "playerbot/strategy/Strategy.h"
 #include "playerbot/strategy/Multiplier.h"
 #include "playerbot/PullOpeningPolicy.h"
+#include "playerbot/WorldPosition.h"
+
+#include <optional>
 
 namespace ai
 {
@@ -53,8 +56,13 @@ namespace ai
         // Per-command mode: true while a pull/pullback command owns this pull.
         // The return leg follows the intent snapshotted by RequestPull, not the
         // strategy set at evaluation time.
-        void BeginCommand(bool pullback, bool hadPullBackStrategy, uint32 joinDelaySeconds = 0, bool rangedOrder = false);
+        void BeginCommand(bool pullback, bool hadPullBackStrategy, uint32 joinDelaySeconds = 0, bool rangedOrder = false,
+            std::optional<WorldPosition> const& anchor = std::nullopt);
         bool IsCommandActive() const { return commandActive; }
+        // The point the pull returns to, when the order names one (the run leader's camp pull: the tank drags the
+        // pack back to the camp). Empty: the requester's spot, as before.
+        bool HasCommandAnchor() const { return commandAnchor.has_value(); }
+        WorldPosition const& GetCommandAnchor() const { return *commandAnchor; }
         bool IsCommandPullback() const { return commandPullback; }
         bool IsCommandRangedOrder() const { return commandRangedOrder; }
         // How the commanded pull opens (decided on the first RequestPull):
@@ -142,6 +150,7 @@ namespace ai
         // mode, or the tank's own "pull back" for an automatic pull.
         bool pullBackIntent;
         uint32 commandJoinDelay;
+        std::optional<WorldPosition> commandAnchor;
         time_t returnStartTime;
     };
 

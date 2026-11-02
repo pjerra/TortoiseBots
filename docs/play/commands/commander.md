@@ -39,6 +39,7 @@ The Remote Commander interface allows a player or GameMaster to lead a group of 
 | [`.bot cmd cc`](#bot-cmd-cc) | Bound Commander | Assigns crowd control on a target GUID. |
 | [`.bot cmd focus`](#bot-cmd-focus) | Bound Commander | Marks Skull and commands all bots to focus GUID. |
 | [`.bot cmd move`](#bot-cmd-move) | Bound Commander | Navigates the lead bot and party to 3D coordinates. |
+| [`.bot cmd camp`](#bot-cmd-camp) | Bound Commander | Holds the party at the camp of a camp pull, or lets it go. |
 | [`.bot cmd stay`](#bot-cmd-stay) | Bound Commander | Halts all bots in the commanded party in place. |
 | [`.bot cmd follow`](#bot-cmd-follow) | Bound Commander | Resumes follower movement behind the lead bot. |
 | [`.bot cmd rest`](#bot-cmd-rest) | Bound Commander | Orders all bots in the commanded group to rest. |
@@ -161,6 +162,17 @@ Places the specified raid target icon on the target GUID and assigns the crowd c
 ```
 
 Takes a bot off its crowd control mark: its `rti cc` goes to `none`, so none of its crowd control rows fires on the mark. With a mark and a GUID, that raid icon is also cleared, but only while it is still on that unit. The run leader sends it for a Sap that did not land and for a Banish that never landed ([Dungeon Run Leader](../dungeon-run-leader.md)).
+
+### `.bot cmd camp`
+
+The run leader's own hold for a camp pull (`AiPlayerbot.DungeonRunCampPull`): parks every bound bot but the lead bot on its own spot at the camp (healers heal only there, pets stay passive) and records the camp as the point a pull of the run returns to; `camp release` lets the party go.
+
+```text
+.bot cmd camp <x> <y> <z>
+.bot cmd camp release
+```
+
+The run leader sends both itself for a pull row marked as a camp pull; a player can use them too, but they are refused while no run is running of that commander (a player's own order pauses the run, as `.bot cmd move` does). Every hold lasts at most 90 seconds, and it also ends when the run pauses, stops or ends, and after the camp pull's row.
 
 ### `.bot cmd focus`
 

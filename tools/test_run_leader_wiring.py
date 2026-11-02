@@ -363,7 +363,7 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn("slot.taskReply = 0;", retire)
         tick = body(COMMANDS, "void TickDungeonRun(uint64 commanderRaw, uint32 dt)", "\n}\n")
         self.assertIn("RetireLostCarrier(slot, lead, bots);\n    TortoiseBots::DungeonRun::Facts facts;\n"
-                      "    ReadRunFacts(slot, lead, bots, facts, binding->raid);", tick)
+                      "    ReadRunFacts(slot, lead, bots, facts, binding->raid, commanderRaw);", tick)
         policy = (ROOT / "runtime/DungeonRunPolicy.h").read_text()
         retire_order = body(policy, "inline void RetireOrder(Run& r)", "\n}\n")
         self.assertIn("r.orderSent = false;", retire_order)
@@ -689,7 +689,7 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn("bool RunWalksPatrol(Creature* creature)\n{\n    return PatrolWalker(creature) != nullptr;\n}", COMMANDS)
         # The pack is its own formations (DungeonRun::ScopeStandPullFacts), scoped on the tick's facts right after the read,
         # with the corpses of its spawn-owned members.
-        self.assertIn("ReadRunFacts(slot, lead, bots, facts, binding->raid);\n"
+        self.assertIn("ReadRunFacts(slot, lead, bots, facts, binding->raid, commanderRaw);\n"
                       "    // A stand-pull pull row: only its own formations' units (DungeonRun::ScopeStandPullFacts).\n"
                       "    TortoiseBots::DungeonRun::ScopeStandPullFacts(slot.run, facts);", COMMANDS)
         self.assertIn("for (uint32 low : BossSpawnLowGuids(lead->GetMapId(), entry))", read)
@@ -746,7 +746,7 @@ class RunLeaderWiringTest(unittest.TestCase):
                       "sPlayerbotAIConfig.dungeonRunAggroCeiling : 0;", read)
         self.assertIn("if (step->kind == ai::PlanStepKind::Pull)\n"
                       "                ReadPullJoiners(lead, bots, *step, slot.run.step, slot.run.stepPass, toPoint, f.joinerCeiling, "
-                      "slot.run.joinerHeld, f,\n                    slot.pullEstCache);", read)
+                      "slot.run.joinerHeld, f,\n                    slot.pullEstCache, slot.run);", read)
         joiners = body(COMMANDS, "void ReadPullJoiners(", "\n}\n")
         self.assertIn("if (!ceiling || f.units.empty())\n        return;", joiners)
         self.assertIn("ai::EstimateAggro(mobs, it->second, params)", joiners)
@@ -821,7 +821,7 @@ class RunLeaderWiringTest(unittest.TestCase):
         # The clearance key owns an authored stand-pull step's stand rule (PullStandRuleOn).
         self.assertIn("f.standClearance = sPlayerbotAIConfig.dungeonRunStandClearance;", read)
         # The step units (pull/boss) and the residue units carry losLead, from the lead bot's own sight test.
-        self.assertIn("if (f.pullStand || StandThisStep(slot))\n                        unit.losLead = lead->IsWithinLOSInMap(creature);", read)
+        self.assertIn("if (f.pullStand || StandThisStep(slot) || campPullHere)\n                        unit.losLead = lead->IsWithinLOSInMap(creature);", read)
         self.assertIn("if (residue)\n                    {\n                        unit.x = creature->GetPositionX();\n"
                       "                        unit.y = creature->GetPositionY();\n"
                       "                        unit.distSpot = read.fromPoint2d;", read)
@@ -1906,3 +1906,50 @@ class DeadGossipOkWiringTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_camp_pull_glue(self):
+        # Camp-pull B: the glue reads the key, the hold and its hit bots; the camp anchor is the pull's return point;
+        # the `camp` verb parks the party; the hold is let go wherever the run's own hold is.
+        facts = body(COMMANDS, "void ReadRunFacts(", "\n}\n")
+        self.assertIn("f.campPull = sPlayerbotAIConfig.dungeonRunCampPull;", facts)
+        self.assertIn("f.campHoldLive = true;", facts)
+        self.assertIn("f.campHitBots.push_back(bot->GetName());", facts)
+        self.assertIn("f.campReturnCapMs =", facts)
+        # The tag's shot needs the tank's sight, as a stand-pull row's does.
+        self.assertIn("|| campPullHere)", facts)
+        self.assertIn("bool const campPullHere = pullStep && f.campPull && (step->flags & ai::kPlanFlagCampPull) &&", facts)
+        self.assertLess(facts.index("ReadStandPullHold("), facts.index("ReadPullAhead("))
+        self.assertEqual(COMMANDS.count("ReadPullAhead(slot, lead, bots, f);"), 1)
+
+        ctx = body(COMMANDS, "BotCommandContext CommanderContext(", "\n}\n")
+        self.assertIn("RunCampAnchors().find(commanderRaw)", ctx)
+        self.assertIn("context.anchorOverride = ai::WorldPosition(camp->second.map, camp->second.x, camp->second.y,", ctx)
+
+        hold = body(COMMANDS, "static bool CommanderCampHold(", "\n}\n")
+        self.assertIn("if (!DungeonRuns().count(commanderRaw))", hold)
+        self.assertIn('SendActionError(handler, intent, "denied"', hold)
+        self.assertIn("ai->StartPullWindow(static_cast<uint8>(TortoiseBots::DungeonRun::kCampHoldWindowS), true, 0);", hold)
+        self.assertIn("ai->ParkPetForPullHold();", hold)
+        self.assertIn("ai->SetRunHealOnly(true);", hold)
+        self.assertIn('posMap["pull hold"] = holdPos;', hold)
+        self.assertIn("ReleaseRunCampHold(commanderRaw);", hold)
+        self.assertIn('if (verb == "camp")\n        return CommanderCampHold(handler, order, parts, intent);', COMMANDS)
+
+        for site in ("void EraseRunSlot(", "void ReleaseRunHold("):
+            self.assertIn("ReleaseRunCampHold(", body(COMMANDS, site, "\n}\n"), site)
+        self.assertIn("ReleaseRunCampHold(commanderRaw);", body(COMMANDS, "void EraseAllRunSlots(", "\n}\n"))
+        tick = body(COMMANDS, "void TickDungeonRun(", "\n}\n")
+        self.assertIn("slot.run.regroup))", tick)
+        self.assertIn("slot.run.step > camp->second.stepAtSet", tick)
+
+        join = body(COMMANDS, "void ReadPullJoiners(", "\n}\n")
+        self.assertIn("bool const campPull = f.campPull &&", join)
+        self.assertIn("geometry.drag = ai::SampleAggroWalk(drag, ai::kAggroWalkSamples, 4.0f);", join)
+        self.assertIn("geometry.fight = campPoint;", join)
+
+        conf = (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text()
+        self.assertIn("AiPlayerbot.DungeonRunCampPull = 0", conf)
+        self.assertIn('GetBoolDefault("AiPlayerbot.DungeonRunCampPull", false)',
+                      (ROOT / "ai/playerbot/PlayerbotAIConfig.cpp").read_text())
+        self.assertIn("IsKnownOrder", (ROOT / "runtime/RemoteCommanderPolicy.h").read_text())
+        self.assertIn('verb == "camp"', (ROOT / "runtime/RemoteCommanderPolicy.h").read_text())

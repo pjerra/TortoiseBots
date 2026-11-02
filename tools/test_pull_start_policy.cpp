@@ -16,6 +16,8 @@ using ai::PullReadyFacts;
 using ai::PullReadySteps;
 using ai::ReadyTankForPull;
 using ai::RetryPullWalk;
+using ai::PullReturnPoint;
+using ai::PullReturnPointOf;
 
 int main()
 {
@@ -72,6 +74,18 @@ int main()
     CHECK(!RetryPullWalk(facts, true));
     facts.motionLaunched = true;
     CHECK(!RetryPullWalk(facts, false));
+
+    // The pull's return point (camp-pull B): the command's anchor when one is set (the run leader's camp), else
+    // the requester's spot, else the tank's own.
+    PullReturnPoint const tank = { 1.0f, 2.0f, 3.0f, 1 };
+    PullReturnPoint const requester = { 10.0f, 20.0f, 30.0f, 1 };
+    PullReturnPoint const camp = { -5.0f, -6.0f, -7.0f, 1 };
+    PullReturnPoint point = PullReturnPointOf(false, camp, true, requester, tank);
+    CHECK(point.x == requester.x && point.y == requester.y && point.z == requester.z);
+    point = PullReturnPointOf(false, camp, false, requester, tank);
+    CHECK(point.x == tank.x && point.y == tank.y && point.z == tank.z);
+    point = PullReturnPointOf(true, camp, true, requester, tank);
+    CHECK(point.x == camp.x && point.y == camp.y && point.z == camp.z);
 
     std::cout << "pull start policy: ok\n";
     return 0;

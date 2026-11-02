@@ -116,6 +116,7 @@ The table below lists all primary commands and links to their authoritative docu
 | [`.bot cmd cc`](commander.md#bot-cmd-cc) | Remote Commander | Assigns crowd control on target GUID. |
 | [`.bot cmd focus`](commander.md#bot-cmd-focus) | Remote Commander | Marks Skull and focuses party damage on GUID. |
 | [`.bot cmd move`](commander.md#bot-cmd-move) | Remote Commander | Walks lead bot and party to 3D world coordinates. |
+| [`.bot cmd camp`](commander.md#bot-cmd-camp) | Remote Commander | Holds the party at a camp pull's camp, or releases it. |
 | [`.bot cmd stay`](commander.md#bot-cmd-stay) | Remote Commander | Commands all bots in the bound party to hold ground. |
 | [`.bot cmd follow`](commander.md#bot-cmd-follow) | Remote Commander | Restores party follow formation on the lead bot. |
 | [`.bot cmd rest`](commander.md#bot-cmd-rest) | Remote Commander | Commands bound party bots to consume food/water. |
