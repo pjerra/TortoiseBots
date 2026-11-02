@@ -5284,6 +5284,19 @@ class DungeonPlanSql(unittest.TestCase):
                 self.assertLessEqual(float(r["radius"]), 35)
         self.assertIn("'turtle-agent b0152b5 dungeons/timbermaw_hold.json'", text)
     def test_zul_gurub_is_the_raid_prep(self):
+        # 20261102100000 (turtle-agent 5271fa9 fix/zg-leg4-arlokk-terrace, 2026-11-02): leg 4 after walk 25, issue
+        # turtle-agent#362 (TortoiseBots-audit tests/raid-zg-walk25/summary-autofix.md "Arlokk", spec W25-1). Step 313
+        # was the move from group 11's approach to group 12's approach (-11512.9 -1623.5 z 49.6): it crossed group 15's
+        # spawn ring on the top level 13.3 yd from 51354 (pulled only at step 320), so groups 12, 14, 15 and 16 woke with
+        # no pull line and 3 of 4 attempts wiped (11-20 elites). The terrace pulls 11, 15, 14, 17 (z 71.3), 13, 16
+        # (z 60.4), 12 (z 49.5) now; 15 is pulled from group 11's approach -11525.374 -1649.8916 71.32541 (21.9 yd from
+        # 51354, inside the 23.5 yd shot; 22.7 yd 3D from 51366), and the moved stands are 14 -11515 -1608 71.33, 17
+        # -11516 -1596 71.33, 13 -11507 -1612 60.43 and 16 -11540 -1625 60.43, each on its pack's level and 22 yd or
+        # more from every pack pulled later; 12 keeps -11512.871 -1623.5192 49.625404. Group 13's radius 12 -> 16 so its
+        # row owns its linked Blood Drinkers 51594/51595 (leader 49343; 15.3 and 14.4 yd from the row centre, the old 12
+        # owned the four Panthers only); 14 keeps 51597/51598 and is pulled before 13. Leg 4 121 -> 144 rows (the walk
+        # from the terrace's last approach to group 18's approach is 71.9 yd, cut into 23 path rows; the terrace itself
+        # has no cut row), the plan 1097 -> 1120 steps; legs 0, 3, 5, 6 and 8 are their old rows still.
         # 20261101093000 (turtle-agent f3a7c87 fix/zg-leg2-marli-stands, 2026-11-01): leg 1 after walk 21 and leg 2
         # after walk 25. Walk 25 (TortoiseBots-audit research/zg-w25/MARLI-PULL.md): the Mar'li leg's `to` stood on the
         # spawn of the patrolling Razzashi Skitterer 49202, leader of pack 0 (creature_groups flags 14), so the step-202
@@ -5311,8 +5324,8 @@ class DungeonPlanSql(unittest.TestCase):
         # raids of walk 21 woke D within 2-5 s of step 100 with no pulling line: the old D stand -11898 -1838 is
         # 25.4 yd from D's 49053 (wander 5, aggro 21 yd) with the party spread 8-11 yd, so leg 1's D+A row loses its
         # last approach point and stands on the approach point before it, -11919.2 -1843.6 (43.6 yd from 49053).
-        # 9 legs, 1097 steps, 168 pulls, the eight bosses in the guide's order. Legs 0 and 3-6 and 8 are
-        # 20261031030000's rows byte for byte (653 lines).
+        # 9 legs, 1120 steps, 168 pulls, the eight bosses in the guide's order. Legs 0, 3, 5, 6 and 8 are
+        # 20261031030000.s rows byte for byte (532 lines).
         # Walk-18 review round 2 (2026-11-01): E's row is radius 3 (was 1: margin on the patroller's read, and it
         # reaches only its own spawn 49056), and leg 7's tiger pack (now group 37) walks the old dry route again:
         # with D gone the exporter's re-cut of the hop from group 36's pull row walked the lake 9.4-15.7 yd (flat)
@@ -5324,16 +5337,16 @@ class DungeonPlanSql(unittest.TestCase):
         # the run leader's 60 yd see range, so plan-check refuses it; leg 0 is unchanged and the plan note records
         # it as OPEN.
         name, text = newest_plan_text("zul_gurub")
-        self.assertEqual(name, "20261101093000_world.sql")
-        self.assertIn("('zul_gurub', 309, '14532', '', '14750,15146', 'turtle-agent f3a7c87 dungeons/zul_gurub.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261102100000_world.sql")
+        self.assertIn("('zul_gurub', 309, '14532', '', '14750,15146', 'turtle-agent 5271fa9 dungeons/zul_gurub.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         self.assertEqual([v[0] for v in leg_rows(text, "zul_gurub").values()],
                          ["high_priestess_jeklik", "high_priest_venoxis", "high_priestess_marli",
                           "high_priest_thekal", "high_priestess_arlokk", "bloodlord_mandokir",
                           "jindo_the_hexxer", "hakkar_outer", "hakkar"])
         rows = [r for r in self.step_rows(text) if r["plan"] == "zul_gurub"]
-        self.assertEqual(len(rows), 1097)
+        self.assertEqual(len(rows), 1120)
         self.assertEqual([len(leg_steps(rows, leg)) for leg in range(9)],
-                         [41, 144, 30, 61, 121, 75, 114, 279, 232])
+                         [41, 144, 30, 61, 144, 75, 114, 279, 232])
         self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(9)],
                          [10, 21, 6, 7, 25, 23, 20, 38, 18])
         # Leg 1 (high_priest_venoxis), walk 20: the Mad Servant packs (15111) are pulled from stands out of the
@@ -5576,13 +5589,13 @@ class DungeonPlanSql(unittest.TestCase):
         for unit in ((-12217.9, -1480.52, 130.975), (-12208.9, -1478.72, 131.35), (-12222.8, -1485.23, 131.253),
                      (-12221.5, -1477.08, 130.85), (-12214.8, -1484.34, 131.35)):
             self.assertGreater(math.dist(s5, unit), 27.3)
-        # Legs 0 and 3-6 and 8 are the rows of 20261031030000, byte for byte; leg 7 carries the walk-18 change, leg 1
-        # the walks 18-21 ones and leg 2 the walk-25 one.
+        # Legs 0, 3, 5, 6 and 8 are the rows of 20261031030000, byte for byte; leg 7 carries the walk-18 change, leg 1
+        # the walks 18-21 ones, leg 2 the walk-25 one and leg 4 the walk-25 Arlokk one.
         with open(os.path.join(ROOT, "data/sql/world/20261031030000_world.sql"), encoding="utf-8") as handle:
             before = handle.read()
         keep = lambda t: [line for line in t.splitlines()
-                          if re.match(r"\('zul_gurub', [0-8], '", line) or re.match(r"\('zul_gurub', [034568], \d", line)]
-        self.assertEqual(len(keep(before)), 653)
+                          if re.match(r"\('zul_gurub', [0-8], '", line) or re.match(r"\('zul_gurub', [03568], \d", line)]
+        self.assertEqual(len(keep(before)), 532)
         self.assertEqual(keep(text), keep(before))
         self.assertEqual([r["entry"] for r in rows if r["kind"] == "boss"],
                          ["14517", "14507", "14510", "14599", "14515", "11382", "11380", "14834"])
