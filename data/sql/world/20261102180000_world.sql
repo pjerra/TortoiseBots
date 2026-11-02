@@ -10,7 +10,7 @@ DELETE FROM `ai_dungeon_step` WHERE `plan` = 'zul_gurub';
 DELETE FROM `ai_dungeon_leg` WHERE `plan` = 'zul_gurub';
 DELETE FROM `ai_dungeon_plan` WHERE `plan` = 'zul_gurub';
 INSERT INTO `ai_dungeon_plan` (`plan`, `map`, `cc_priority`, `cc_always`, `kill_first`, `source`, `comment`) VALUES
-('zul_gurub', 309, '14532', '', '14750,15146', 'turtle-agent b52931373b14db4189aa25743626f8d81af0e0f9 dungeons/z', 'plan v1, draft (not mapped, not live-checked)');
+('zul_gurub', 309, '14532', '', '14750,15146', 'turtle-agent b529313 dungeons/zul_gurub.json', 'plan v1, draft (not mapped, not live-checked)');
 INSERT INTO `ai_dungeon_leg` (`plan`, `leg`, `name`, `comment`) VALUES
 ('zul_gurub', 0, 'high_priestess_jeklik', ''),
 ('zul_gurub', 1, 'high_priest_venoxis', ''),

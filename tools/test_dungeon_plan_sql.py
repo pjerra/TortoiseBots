@@ -5324,8 +5324,8 @@ class DungeonPlanSql(unittest.TestCase):
         # the run leader's 60 yd see range, so plan-check refuses it; leg 0 is unchanged and the plan note records
         # it as OPEN.
         name, text = newest_plan_text("zul_gurub")
-        self.assertEqual(name, "20261102120000_world.sql")
-        self.assertIn("('zul_gurub', 309, '14532', '', '14750,15146', 'turtle-agent 2436536 dungeons/zul_gurub.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261102180000_world.sql")
+        self.assertIn("('zul_gurub', 309, '14532', '', '14750,15146', 'turtle-agent b529313 dungeons/zul_gurub.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         self.assertEqual([v[0] for v in leg_rows(text, "zul_gurub").values()],
                          ["high_priestess_jeklik", "high_priest_venoxis", "high_priestess_marli",
                           "high_priest_thekal", "high_priestess_arlokk", "bloodlord_mandokir",
@@ -5575,13 +5575,13 @@ class DungeonPlanSql(unittest.TestCase):
         for unit in ((-12217.9, -1480.52, 130.975), (-12208.9, -1478.72, 131.35), (-12222.8, -1485.23, 131.253),
                      (-12221.5, -1477.08, 130.85), (-12214.8, -1484.34, 131.35)):
             self.assertGreater(math.dist(s5, unit), 27.3)
-        # Legs 0 and 3-6 and 8 are the rows of 20261031030000, byte for byte; leg 7 carries the walk-18 change, leg 1
-        # the walks 18-21 ones and leg 2 the walk-25 one.
+        # Legs 0, 3, 5, 6 and 8 are the rows of 20261031030000, byte for byte; leg 7 carries the walk-18 change, leg 1
+        # the walks 18-21 ones, leg 2 the walk-25 and walk-26b ones and leg 4 the walk-25/26 terrace order.
         with open(os.path.join(ROOT, "data/sql/world/20261031030000_world.sql"), encoding="utf-8") as handle:
             before = handle.read()
         keep = lambda t: [line for line in t.splitlines()
-                          if re.match(r"\('zul_gurub', [0-8], '", line) or re.match(r"\('zul_gurub', [034568], \d", line)]
-        self.assertEqual(len(keep(before)), 653)
+                          if re.match(r"\('zul_gurub', [0-8], '", line) or re.match(r"\('zul_gurub', [03568], \d", line)]
+        self.assertEqual(len(keep(before)), 532)
         self.assertEqual(keep(text), keep(before))
         self.assertEqual([r["entry"] for r in rows if r["kind"] == "boss"],
                          ["14517", "14507", "14510", "14599", "14515", "11382", "11380", "14834"])
