@@ -675,16 +675,18 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn("step->kind == ai::PlanStepKind::Pull &&\n"
                       "        (TortoiseBots::DungeonRun::StandPullPackInShot(f) || !slot.run.standPullStatic.empty()))\n"
                       "        ReadStandPatrols(lead, f);", read)
-        self.assertLess(read.index("ReadPullStand(slot, lead, f);"), read.index("ReadStandPatrols(lead, f);"))
+        self.assertLess(read.index("ReadPullStand(slot, lead, bots, f);"), read.index("ReadStandPatrols(lead, f);"))
         # A formation's walk is judged by its ORIGINAL leader: the promoted temporary leader of a waypoint formation
         # walks the same path with its own default movement left IDLE (the core's OnMemberDied).
-        walk = body(COMMANDS, "bool RunWalksPatrol(Creature* creature)", "\n}\n")
-        self.assertIn("if (creature->GetDefaultMovementType() == WAYPOINT_MOTION_TYPE)", walk)
+        walk = body(COMMANDS, "Creature* PatrolWalker(Creature* creature)", "\n}\n")
+        self.assertIn("if (creature->GetDefaultMovementType() == WAYPOINT_MOTION_TYPE)\n        return creature;", walk)
         self.assertIn("if (!group || !group->IsFormation())", walk)
         self.assertIn("Creature* const leader = creature->GetMap()->GetCreature(group->GetLeaderGuid());", walk)
         self.assertIn("if (!leader || !leader->IsAlive())", walk)
         self.assertIn("Creature* const original = creature->GetMap()->GetCreature(group->GetOriginalLeaderGuid());", walk)
-        self.assertIn("return original && original->GetDefaultMovementType() == WAYPOINT_MOTION_TYPE;", walk)
+        self.assertIn("return original && original->GetDefaultMovementType() == WAYPOINT_MOTION_TYPE ? original : nullptr;",
+                      walk)
+        self.assertIn("bool RunWalksPatrol(Creature* creature)\n{\n    return PatrolWalker(creature) != nullptr;\n}", COMMANDS)
         # The pack is its own formations (DungeonRun::ScopeStandPullFacts), scoped on the tick's facts right after the read,
         # with the corpses of its spawn-owned members.
         self.assertIn("ReadRunFacts(slot, lead, bots, facts, binding->raid);\n"
@@ -698,6 +700,13 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertEqual(read.count("unit.patrols = RunWalksPatrol(creature);"), 2)
         self.assertIn("bool const spawnOwned = (f.packClearMarginYd > 0.0f || standPull) && SpawnOwned(read, step->radius);", read)
         self.assertIn("unit.spawnOwned = SpawnOwned(read, step->radius); // the pack's formations (ScopeStandPullFacts)", read)
+        # The unit's formation is the stand-pull row's own read, inside its block: a walk back's replayed point
+        # carries none, so ScopeStandPullFacts (which drops another formation's units) keeps its units.
+        unit_block = read[read.index("if (standPull)\n                    {\n                        unit.x ="):
+                          read.index("unit.spawnOwned = SpawnOwned(read, step->radius); // the pack's formations")]
+        self.assertIn("unit.formation = RunFormationOf(creature);", unit_block)
+        # ... the patroller's block and this one: no third read of a unit's formation.
+        self.assertEqual(read.count("unit.formation = RunFormationOf(creature);"), 2)
         add = read[read.index("auto addPatroller"):read.index("f.patrollers.push_back(unit);")]
         self.assertIn("if (standPull)\n                {\n                    unit.losLead = lead->IsWithinLOSInMap(creature);\n"
                       "                    unit.formation = RunFormationOf(creature);", add)
@@ -705,7 +714,7 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn("HostileCreaturesAround(lead, std::max(kStandPullClearMaxYd, f.leadShotYd + kStandPullPathClearYd), found);", patrols)
         self.assertIn("if (!c || !c->IsAlive() || c->IsInCombat() || !RunWalksPatrol(c))", patrols)
         self.assertIn("f.standPatrols.push_back(u);", patrols)
-        formation = body(COMMANDS, "uint64 RunFormationOf(Creature* creature)", "\n}\n")
+        formation = body(COMMANDS, "uint64 RunFormationOf(Creature* creature)\n{", "\n}\n")
         self.assertIn("return group->GetOriginalLeaderGuid().GetRawValue();", formation)
 
     def test_pull_step_patrollers_reach_the_policy(self):
@@ -784,23 +793,29 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn("map->GetCreature(ObjectGuid(guid))", stand)
         self.assertIn("map->isInLineOfSight(point.x, point.y, point.z + leadHeight, goal.x, goal.y, goal.z + unitHeight, true)",
                       stand)
-        self.assertIn("ShotStandOnPath(points, goal, f.leadShotYd - kShotMarginYd, sees);", stand)
+        self.assertIn("ShotStandOnPathCleared(points, goal, f.leadShotYd - kShotMarginYd, sees,", stand)
+        self.assertIn("blocked, clearance ? kStandClearCandidates : 1, clearance ? &best : nullptr);", stand)
         self.assertIn("f.shotStandGuid = guid;", stand)
         # The policy: PullUnit's pullback passes through the gate first; HoldForShot is off without the key or a range.
         policy = (ROOT / "runtime/DungeonRunPolicy.h").read_text()
         pull = body(policy, "inline void PullUnit(", "\n}\n")
         gate = pull.index("HoldForShot(r, f, u, dt, order))\n            return;")
-        self.assertLess(pull.index("if (f.pullStand && r.standPullShotGuid != u.guid)\n"), gate)
+        self.assertLess(pull.index("if ((f.pullStand || AuthoredStandStep(r)) && r.standPullShotGuid != u.guid)\n"), gate)
         self.assertLess(gate, pull.index('order = "pullback " + std::to_string(u.guid);'))
         self.assertLess(gate, pull.index("++tries;"))
         on = body(policy, "inline bool PullStandOn(", "\n}\n")
         self.assertIn("return f.pullStand && f.leadShotYd > kShotMarginYd && !InEvent(r);", on)
+        rule = body(policy, "inline bool PullStandRuleOn(", "\n}\n")
+        self.assertIn("return (f.pullStand || AuthoredStandStep(r)) && f.leadShotYd > kShotMarginYd && !InEvent(r);", rule)
+        authored = body(policy, "inline bool AuthoredStandStep(", "\n}\n")
+        self.assertIn("s->kind == PlanStepKind::Boss || s->kind == PlanStepKind::Pull", authored)
+        self.assertIn("StandPullStand(r, *s) != nullptr", authored)
         # The hold ends with any tick the gate did not run on (no stale stand request for the glue).
         tick = body(policy, "inline std::string Tick(", "\n}\n")
         self.assertIn("r.shotGateRan = false;", tick)
         self.assertIn("if (!r.shotGateRan)\n        EndShotHold(r);", tick)
         hold = body(policy, "inline bool HoldForShot(", "\n}\n")
-        self.assertIn("if (!PullStandOn(r, f))", hold)
+        self.assertIn("if (!PullStandRuleOn(r, f))", hold)
         self.assertIn("r.shotStandFor = u.guid;", hold)
         # Every pull caller hands its tick length to the stand walk.
         self.assertIn("CcPick const ccPick = PickCcOrder(r, f, pick->guid);\n        PullUnit(r, f, *pick, order, ccPick.unit, false, dt);", policy)
@@ -835,6 +850,88 @@ class RunLeaderWiringTest(unittest.TestCase):
         for doc in ("docs/server/settings/dungeons-raids.md", "docs/play/dungeon-run-leader.md"):
             self.assertIn("AiPlayerbot.DungeonRunPullStand", (ROOT / doc).read_text())
 
+
+    def test_stand_clearance_is_wired_behind_its_key(self):
+        # AiPlayerbot.DungeonRunStandClearance (default 0): with the key off the stand read is the old one, one
+        # candidate and no other pack read; with it on the glue reads the other packs and takes the first clear stand.
+        read = body(COMMANDS, "void ReadPullStand(DungeonRunSlot const& slot,", "\n}\n")
+        self.assertIn("bool const clearance = sPlayerbotAIConfig.dungeonRunStandClearance;", read)
+        # The pack's formations are looked up by guid with the key on: a walk back's replayed point carries none.
+        self.assertIn("pack.formations.insert(RunFormationOf(member));", read)
+        self.assertIn("std::find(members.begin(), members.end(), unit)", read)
+        self.assertIn("ReadStandClearance(lead, bots, pack, members, f);", read)
+        self.assertIn("return !clearance || (StandClearAt(candidate.x, candidate.y, candidate.z, f.standOthers) &&", read)
+        self.assertIn("StandAbovePackReach(candidate.x, candidate.y, candidate.z, f.standPackReach));", read)
+        self.assertIn("blocked, clearance ? kStandClearCandidates : 1, clearance ? &best : nullptr);", read)
+        self.assertIn("f.shotStandBlocked = clearance && blocked;", read)
+        # The reach's own stand and the pack that refuses it: the hold names it.
+        self.assertIn("float const packReach = StandPackReachYd(f.standPackReach);", read)
+        self.assertIn("f.shotStandBlockPatrols = named && patrols;", read)
+        self.assertIn("f.shotStandBlockNowClear = named && nowClear;", read)
+        self.assertIn("f.shotStandBlockEntry = member.entry;", read)
+        self.assertIn("ai::PlanDistance(best.x, best.y, best.z, other.x, other.y, other.z) >= other.clearYd", read)
+        clearance = body(COMMANDS, "void ReadStandClearance(Player* lead, std::vector<Player*> const& bots,\n"
+                                   "    TortoiseBots::DungeonRun::PullPack const& pack, std::vector<Creature*> const& members,\n"
+                                   "    TortoiseBots::DungeonRun::Facts& f)\n{", "\n}\n")
+        self.assertIn("HostileCreaturesAround(lead, kStandClearScanYd, found);", clearance)
+        self.assertIn("inPack.push_back(InPullPack(pack, c->GetObjectGuid().GetRawValue(), RunFormationOf(c)));",
+                      clearance)
+        self.assertIn("GrowPullPackByAssistance(inPack, spots, seeds, canAssistPack);", clearance)
+        self.assertIn("if (member && member->IsAlive() && std::find(callers.begin(), callers.end(), member) == "
+                      "callers.end())", clearance)
+        self.assertIn("RunAssistsCreature(c, caller)", clearance)
+        self.assertIn("canAssistPack.push_back(called);", clearance)
+        self.assertIn("helper->HasExtraFlag(CREATURE_FLAG_EXTRA_NO_ASSIST)", COMMANDS)
+        self.assertIn("helper->HasInvisibilityAura() || helper->IsInEvadeMode()", COMMANDS)
+        self.assertIn("if (helper->GetFactionTemplateId() != caller->GetFactionTemplateId() && "
+                      "!helper->IsFriendlyTo(caller))", COMMANDS)
+        self.assertIn("return caller->IsWithinLOSInMap(helper);", COMMANDS)
+        self.assertIn("f.standPackReach.push_back(unit);", clearance)
+        self.assertIn("unit.reachYd = ai::AggroRadius(mob, lowest, rate);", clearance)
+        self.assertIn("other.patrols = true;", clearance)
+        self.assertNotIn("RunFormationOf(target)", clearance)
+        self.assertIn("other.clearYd = ai::AggroRadius(mob, lowest, rate) + kStandClearSpreadYd;", clearance)
+        self.assertIn("sWaypointMgr.GetDefaultPath(walker->GetEntry(), walker->GetGUIDLow())", clearance)
+        self.assertIn("other.marginYd = kStandClearUnreadPathYd;", clearance)
+        # The pack's formation is read for every unit of a stand-pull row's own read (Facts::units).
+        facts_read = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot const& slot,", "\n}\n")
+        self.assertIn("unit.formation = RunFormationOf(creature);", facts_read)
+        # The policy: the first clear candidate is taken; no clear stand waits for a patrol, else pauses with the pack
+        # that blocks it, never the plain pull from the refused point.
+        policy = (ROOT / "runtime/DungeonRunPolicy.h").read_text()
+        hold = body(policy, "inline bool HoldForShot(", "\n}\n")
+        self.assertIn("if (!f.shotStandBlocked)", hold)
+        self.assertIn('"stand_pull: no clear stand for " + std::to_string(u.entry) + " (blocked by "', hold)
+        self.assertIn('" yd): waiting for the patrol to walk clear ("', hold)
+        self.assertIn("r.shotClearMs + dt <= kStandClearWaitMs", hold)
+        self.assertIn("Pause(r, ", hold)
+        self.assertIn("inline bool StandClearAt(float x, float y, float z, const std::vector<StandOther>& others)", policy)
+        self.assertIn("inline const StandOther* StandBlocker(float x, float y, float z, const std::vector<StandOther>& others)",
+                      policy)
+        self.assertIn("inline void GrowPullPackByAssistance(std::vector<bool>& pack, "
+                      "const std::vector<ai::ApproachPoint>& found,", policy)
+        self.assertIn("const std::vector<ai::ApproachPoint>& seeds, const std::vector<bool>& canAssistPack)", policy)
+        self.assertIn("inline float StandPackReachYd(const std::vector<StandPackReach>& pack)", policy)
+        self.assertIn("inline const StandPackReach* StandPackBlocker(float x, float y, float z, "
+                      "const std::vector<StandPackReach>& pack)", policy)
+        self.assertIn("inline bool StandAbovePackReach(float x, float y, float z, "
+                      "const std::vector<StandPackReach>& pack)", policy)
+        self.assertIn("constexpr float kStandClearAssistYd = 10.0f;", policy)
+        self.assertIn("constexpr std::uint32_t kStandClearWaitMs = 60000;", policy)
+        self.assertIn("inline PullPack PullPackOf(const std::vector<UnitFact>& units, std::uint64_t target, "
+                      "std::uint64_t targetFormation)", policy)
+        self.assertIn("inline bool InPullPack(const PullPack& pack, std::uint64_t guid, "
+                      "std::uint64_t formation)", policy)
+        # The key: code fallback, header member, template and both docs.
+        config = (ROOT / "ai/playerbot/PlayerbotAIConfig.cpp").read_text()
+        header = (ROOT / "ai/playerbot/PlayerbotAIConfig.h").read_text()
+        template = (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text()
+        self.assertIn('dungeonRunStandClearance = config.GetBoolDefault("AiPlayerbot.DungeonRunStandClearance", false);',
+                      config)
+        self.assertIn("bool dungeonRunStandClearance;", header)
+        self.assertIn("AiPlayerbot.DungeonRunStandClearance = 0", template)
+        for doc in ("docs/server/settings/dungeons-raids.md", "docs/play/dungeon-run-leader.md"):
+            self.assertIn("AiPlayerbot.DungeonRunStandClearance", (ROOT / doc).read_text())
 
     def test_hold_follows_the_tank_and_dead_gossip_npc_is_named(self):
         policy = (ROOT / "runtime/DungeonRunPolicy.h").read_text()

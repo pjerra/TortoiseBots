@@ -124,6 +124,7 @@
 // pi-lens-ignore: clang:pp_file_not_found
 #include "Maps/PathFinder.h"
 #include "Movement/spline/MoveSplineInit.h"
+#include "Movement/WaypointManager.h"
 #include "Maps/Cell.h"
 #include "Maps/Map.h"
 #include "Database/DBCStores.h"
@@ -8850,8 +8851,14 @@ void ReadRezRoster(Player* lead, std::vector<Player*> const& bots, TortoiseBots:
 // one request is read once) the firing stand on its navmesh path to that unit (DungeonRun::ShotStandOnPath:
 // the path walked back from the unit end to the first point within range less kShotMarginYd that sees it).
 // One path and a few sight rays, for that one unit, on that one tick.
+// With AiPlayerbot.DungeonRunStandClearance on, the stands the path offers are tried in the reach's own order and the
+// first one clear of every other live pack, and the widest aggro reach of the pull's own pack from every unit of it,
+// is taken (ReadStandClearance, DungeonRun::StandClearAt, StandAbovePackReach). None clear: no stand is reported, the
+// pack that refuses the reach's own stand is named, and DungeonRun::HoldForShot waits for a patrol among them (60 s),
+// else pauses the run.
 // For a stand-pull boss or pull step (kPlanFlagStandPull, specs/sw-eldermaw.md Spec B) the key is off: the glue reads
-// leadShotYd and losLead whatever the key says (the key governs ordinary pulls only).
+// leadShotYd and losLead whatever the key says (the key governs ordinary pulls only), and a stand it reads for such a
+// step is clearance-checked like any other.
 // StandThisStep: the current step is such a boss or pull with its stand (the move row right before it in the same leg).
 inline bool StandThisStep(DungeonRunSlot const& slot)
 {
@@ -8867,7 +8874,14 @@ inline bool StandThisStep(DungeonRunSlot const& slot)
     return prev.kind == ai::PlanStepKind::Move && prev.leg == s.leg;
 }
 
-void ReadPullStand(DungeonRunSlot const& slot, Player* lead, TortoiseBots::DungeonRun::Facts& f)
+// The other packs a firing stand must keep clear of (defined with the patrol readers below).
+static void ReadStandClearance(Player* lead, std::vector<Player*> const& bots,
+    TortoiseBots::DungeonRun::PullPack const& pack, TortoiseBots::DungeonRun::Facts& f);
+// The formation a creature walks in (defined with the patrol readers below): the pull's pack reads it.
+uint64 RunFormationOf(Creature* creature);
+
+void ReadPullStand(DungeonRunSlot const& slot, Player* lead, std::vector<Player*> const& bots,
+    TortoiseBots::DungeonRun::Facts& f)
 {
     using namespace TortoiseBots::DungeonRun;
     bool const standStep = StandThisStep(slot);
@@ -8920,9 +8934,84 @@ void ReadPullStand(DungeonRunSlot const& slot, Player* lead, TortoiseBots::Dunge
     };
     static_assert(kStandLedgeDropYd == ai::kRunnerLedgeDropYd,
         "the run leader's firing stand keeps to the bots' own ledge rule (owner decision 2026-10-23)");
-    ShotStand const stand = ShotStandOnPath(points, goal, f.leadShotYd - kShotMarginYd, sees);
+    bool const clearance = sPlayerbotAIConfig.dungeonRunStandClearance;
+    if (clearance)
+    {
+        // The step's own pack is what this pull takes: its units (Facts::units), the formation each walks in, and the
+        // reach its presence puts under a stand. A walk back's replayed point carries no formation (the pull row reads
+        // it only for its own stand pull), so each unit is looked up by guid here, with the key on only.
+        std::vector<Creature*> members;
+        PullPack pack;
+        if (map)
+            for (UnitFact const& u : f.units)
+                if (Creature* const member = map->GetCreature(ObjectGuid(u.guid)))
+                {
+                    members.push_back(member);
+                    pack.guids.insert(u.guid);
+                    pack.formations.insert(RunFormationOf(member));
+                }
+        pack.guids.insert(unit->GetObjectGuid().GetRawValue());
+        pack.formations.insert(RunFormationOf(unit));
+        if (std::find(members.begin(), members.end(), unit) == members.end())
+            members.push_back(unit);
+        ReadStandClearance(lead, bots, pack, members, f);
+    }
+    // The clearance key off: one stand, today's pick, and nothing else read (byte for byte the old rule).
+    bool blocked = false;
+    ShotStand best;
+    ShotStand const stand = ShotStandOnPathCleared(points, goal, f.leadShotYd - kShotMarginYd, sees,
+        [&f, clearance](ShotStand const& candidate)
+        {
+            return !clearance || (StandClearAt(candidate.x, candidate.y, candidate.z, f.standOthers) &&
+                StandAbovePackReach(candidate.x, candidate.y, candidate.z, f.standPackReach));
+        },
+        blocked, clearance ? kStandClearCandidates : 1, clearance ? &best : nullptr);
     if (!stand.known)
+    {
+        f.shotStandBlocked = clearance && blocked;
+        if (f.shotStandBlocked)
+        {
+            // The reach's own stand, the first candidate the clearance refused: the pack that refuses it names the
+            // hold (a patrol to wait for) and the pause (DungeonRun::HoldForShot).
+            f.shotStandBestX = best.x;
+            f.shotStandBestY = best.y;
+            f.shotStandBestZ = best.z;
+            f.shotStandBestYd = ai::PlanDistance(best.x, best.y, best.z, goal.x, goal.y, goal.z);
+            float const packReach = StandPackReachYd(f.standPackReach);
+            bool patrols = true;
+            bool nowClear = true;
+            bool named = false;
+            for (StandOther const& other : f.standOthers)
+                if (StandClearanceYd(best.x, best.y, best.z, other) < other.clearYd)
+                {
+                    if (!named)
+                    {
+                        f.shotStandBlockEntry = other.entry;
+                        f.shotStandBlockYd = StandClearanceYd(best.x, best.y, best.z, other);
+                        named = true;
+                    }
+                    patrols = patrols && other.patrols;
+                    nowClear = nowClear &&
+                        ai::PlanDistance(best.x, best.y, best.z, other.x, other.y, other.z) >= other.clearYd;
+                }
+            for (StandPackReach const& member : f.standPackReach)
+                if (ai::PlanDistance(best.x, best.y, best.z, member.x, member.y, member.z) < packReach)
+                {
+                    if (!named)
+                    {
+                        f.shotStandBlockEntry = member.entry;
+                        f.shotStandBlockYd = ai::PlanDistance(best.x, best.y, best.z, member.x, member.y, member.z);
+                        named = true;
+                    }
+                    patrols = patrols && member.patrols;
+                    nowClear = nowClear &&
+                        ai::PlanDistance(best.x, best.y, best.z, member.x, member.y, member.z) >= packReach;
+                }
+            f.shotStandBlockPatrols = named && patrols;
+            f.shotStandBlockNowClear = named && nowClear;
+        }
         return;
+    }
     f.shotStandKnown = true;
     f.shotStandX = stand.x;
     f.shotStandY = stand.y;
@@ -8974,19 +9063,180 @@ uint64 RunFormationOf(Creature* creature)
 // leader's own default movement IDLE, so judging by the current leader would call a live patrol static after its
 // waypoint leader died (the temp leader and its followers read IDLE). Dead creatures stay in the map until they
 // respawn, so the original leader is still found. The current leader (the creature itself or a promoted one) must be
-// alive: its death stops the walk.
-bool RunWalksPatrol(Creature* creature)
+// alive: its death stops the walk. PatrolWalker is the creature whose waypoint loop drives that walk: the unit
+// itself, else its formation's original leader; 0 for a unit that does not patrol.
+Creature* PatrolWalker(Creature* creature)
 {
     if (creature->GetDefaultMovementType() == WAYPOINT_MOTION_TYPE)
-        return true;
+        return creature;
     CreatureGroup* const group = creature->GetCreatureGroup();
     if (!group || !group->IsFormation())
-        return false;
+        return nullptr;
     Creature* const leader = creature->GetMap()->GetCreature(group->GetLeaderGuid());
     if (!leader || !leader->IsAlive())
-        return false;
+        return nullptr;
     Creature* const original = creature->GetMap()->GetCreature(group->GetOriginalLeaderGuid());
-    return original && original->GetDefaultMovementType() == WAYPOINT_MOTION_TYPE;
+    return original && original->GetDefaultMovementType() == WAYPOINT_MOTION_TYPE ? original : nullptr;
+}
+
+bool RunWalksPatrol(Creature* creature)
+{
+    return PatrolWalker(creature) != nullptr;
+}
+
+// Whether a creature answers another creature's call for help (Creature::CanAssistTo, and the call's own sight test):
+// it stands free, alive, out of a fight and uncontrolled (not no-assist or no-aggro, not spawning, unselectable or
+// immune to other creatures, not invisible, not evading), it shares the caller's faction template or is friendly to
+// it, and it sees the caller. Anything the glue cannot read (a creature it cannot judge) stays out of the pack.
+bool RunAssistsCreature(Creature* helper, Creature* caller)
+{
+    if (!helper || !caller || helper == caller || !helper->IsAlive() || helper->IsInCombat())
+        return false;
+    if (helper->HasExtraFlag(CREATURE_FLAG_EXTRA_NO_ASSIST) || helper->HasExtraFlag(CREATURE_FLAG_EXTRA_NO_AGGRO))
+        return false;
+    if (helper->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_SPAWNING | UNIT_FLAG_NOT_SELECTABLE | UNIT_FLAG_IMMUNE_TO_NPC))
+        return false;
+    if (helper->GetCharmerOrOwnerGuid() || helper->HasInvisibilityAura() || helper->IsInEvadeMode())
+        return false;
+    if (helper->GetFactionTemplateId() != caller->GetFactionTemplateId() && !helper->IsFriendlyTo(caller))
+        return false;
+    return caller->IsWithinLOSInMap(helper);
+}
+
+// The other packs a firing stand must keep clear of (AiPlayerbot.DungeonRunStandClearance, DungeonRun::StandClearAt),
+// and the floor the pull's own pack puts under it (DungeonRun::StandAbovePackReach): living, hostile, out-of-combat
+// creatures within kStandClearScanYd of the lead bot. One of the pack the pull takes (PullPackOf: the step's units and
+// their formations) is no other pack, and neither is one the pack's call for help takes (the core's family assistance
+// radius, one ring: GrowPullPackByAssistance, only a creature that can answer the call of a pack unit). Each other
+// carries its identity for the hold's note and its aggro reach (the aggro estimate's own rule: detection range minus
+// the party's level advantage over its level, the widest over the party) plus the party's spread. A waypoint patroller
+// carries the whole loop it walks: sWaypointMgr's path for its walker, the one WaypointMovementGenerator loads, closed,
+// so a stand beside a leg the patrol will walk is refused as well. A loop the host cannot read (a special escorts path)
+// stands in by the unit's spot plus kStandClearUnreadPathYd. The pack's own units carry their reach too
+// (Facts::standPackReach): a stand inside the widest of them is walked into, the pack awake before the shot. One grid
+// search and a map lookup per patroller, on the tick a stand is read.
+static void ReadStandClearance(Player* lead, std::vector<Player*> const& bots,
+    TortoiseBots::DungeonRun::PullPack const& pack, std::vector<Creature*> const& members,
+    TortoiseBots::DungeonRun::Facts& f)
+{
+    using namespace TortoiseBots::DungeonRun;
+    std::list<Unit*> found;
+    HostileCreaturesAround(lead, kStandClearScanYd, found);
+    uint32 lowest = lead->GetLevel();
+    for (Player* bot : bots)
+        if (bot && bot->IsAlive() && bot->GetMapId() == lead->GetMapId() && bot->GetLevel() < lowest)
+            lowest = bot->GetLevel();
+    float const rate = sWorld.getConfig(CONFIG_FLOAT_RATE_CREATURE_AGGRO);
+    std::vector<Creature*> scanned;
+    std::vector<bool> inPack;
+    std::vector<ai::ApproachPoint> spots;
+    for (Unit* unit : found)
+    {
+        Creature* c = unit->ToCreature();
+        if (!c || !c->IsAlive() || c->IsInCombat())
+            continue;
+        if (c->HasExtraFlag(CREATURE_FLAG_EXTRA_NO_AGGRO))
+            continue; // never wakes by proximity
+        scanned.push_back(c);
+        inPack.push_back(InPullPack(pack, c->GetObjectGuid().GetRawValue(), RunFormationOf(c)));
+        ai::ApproachPoint spot;
+        spot.x = c->GetPositionX();
+        spot.y = c->GetPositionY();
+        spot.z = c->GetPositionZ();
+        spots.push_back(spot);
+    }
+    // The pull's own units, wherever they stand (a walk back's replay lists them without a formation), are the call's
+    // sources: the scanned creatures the pack takes and the step's members.
+    std::vector<Creature*> callers;
+    for (std::size_t i = 0; i < scanned.size(); ++i)
+        if (inPack[i])
+            callers.push_back(scanned[i]);
+    for (Creature* member : members)
+        if (member && member->IsAlive() && std::find(callers.begin(), callers.end(), member) == callers.end())
+            callers.push_back(member);
+    std::vector<ai::ApproachPoint> seeds;
+    for (Creature* caller : callers)
+    {
+        ai::ApproachPoint seed;
+        seed.x = caller->GetPositionX();
+        seed.y = caller->GetPositionY();
+        seed.z = caller->GetPositionZ();
+        seeds.push_back(seed);
+    }
+    // Whether the call would take each scanned creature (GrowPullPackByAssistance): within the family assistance
+    // radius of a unit of the pull, able to answer that unit's call (the core's CanAssistTo conditions, the faction
+    // relation and the line of sight). One that fails any of it stays another pack, and nothing is asked about what it
+    // could call in turn: the pack grows one ring.
+    std::vector<bool> canAssistPack;
+    canAssistPack.reserve(scanned.size());
+    for (Creature* c : scanned)
+    {
+        bool called = false;
+        for (Creature* caller : callers)
+            if (ai::PlanDistance(c->GetPositionX(), c->GetPositionY(), c->GetPositionZ(), caller->GetPositionX(),
+                    caller->GetPositionY(), caller->GetPositionZ()) <= kStandClearAssistYd &&
+                RunAssistsCreature(c, caller))
+            {
+                called = true;
+                break;
+            }
+        canAssistPack.push_back(called);
+    }
+    GrowPullPackByAssistance(inPack, spots, seeds, canAssistPack);
+    // Every unit of the pack, its aggro reach the floor under a stand (StandAbovePackReach).
+    std::unordered_set<uint64> reached;
+    auto addReach = [&](Creature* c)
+    {
+        if (!c || !c->IsAlive() || !reached.insert(c->GetObjectGuid().GetRawValue()).second)
+            return;
+        ai::AggroMob mob;
+        mob.level = c->GetLevel();
+        mob.detectionYd = c->GetDetectionRange();
+        StandPackReach unit;
+        unit.entry = c->GetEntry();
+        unit.patrols = RunWalksPatrol(c);
+        unit.x = c->GetPositionX();
+        unit.y = c->GetPositionY();
+        unit.z = c->GetPositionZ();
+        unit.reachYd = ai::AggroRadius(mob, lowest, rate);
+        f.standPackReach.push_back(unit);
+    };
+    for (std::size_t i = 0; i < scanned.size(); ++i)
+        if (inPack[i])
+            addReach(scanned[i]);
+    for (Creature* member : members)
+        addReach(member);
+    for (std::size_t i = 0; i < scanned.size(); ++i)
+    {
+        if (inPack[i])
+            continue;
+        Creature* const c = scanned[i];
+        ai::AggroMob mob;
+        mob.level = c->GetLevel();
+        mob.detectionYd = c->GetDetectionRange();
+        StandOther other;
+        other.entry = c->GetEntry();
+        other.x = c->GetPositionX();
+        other.y = c->GetPositionY();
+        other.z = c->GetPositionZ();
+        other.clearYd = ai::AggroRadius(mob, lowest, rate) + kStandClearSpreadYd;
+        if (Creature* const walker = PatrolWalker(c))
+        {
+            other.patrols = true;
+            if (WaypointPath const* const loop = sWaypointMgr.GetDefaultPath(walker->GetEntry(), walker->GetGUIDLow()))
+                for (auto const& node : *loop)
+                {
+                    ai::ApproachPoint point;
+                    point.x = node.second.x;
+                    point.y = node.second.y;
+                    point.z = node.second.z;
+                    other.path.push_back(point);
+                }
+            else
+                other.marginYd = kStandClearUnreadPathYd;
+        }
+        f.standOthers.push_back(other);
+    }
 }
 
 // A stand-pull pull row's other patrols (DungeonRun::Facts::standPatrols, PatrolStandPullGate): living hostile
@@ -9588,7 +9838,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                     {
                         unit.x = creature->GetPositionX(); // the pull's way (DungeonRun::PatrolStandPullGate)
                         unit.y = creature->GetPositionY();
-                        unit.formation = RunFormationOf(creature);
+                        unit.formation = RunFormationOf(creature); // its pack, only a stand-pull row's own read
                         unit.patrols = RunWalksPatrol(creature);
                         unit.spawnOwned = SpawnOwned(read, step->radius); // the pack's formations (ScopeStandPullFacts)
                     }
@@ -9959,7 +10209,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
     if (f.leadIsland && lead->IsAlive())
         f.goodSpotCut = GoodSpotCutOff(lead, slot.run);
     ReadTimeSinkWays(slot, lead, f);
-    ReadPullStand(slot, lead, f);
+    ReadPullStand(slot, lead, bots, f);
     // A stand-pull pull row: the other patrols near the lead bot, read only on a tick its pull could go out (a unit of
     // the pack in the tank's shot), not on every tick of the wait. A row that left a unit of the pack to the plain pull
     // (Run::standPullStatic) reads them too: its plain pull still needs the clearance.
