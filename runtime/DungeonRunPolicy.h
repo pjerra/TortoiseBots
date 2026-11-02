@@ -8600,7 +8600,7 @@ inline std::unordered_set<std::uint64_t> PullPackOf(const Run& r, const UnitFact
 inline bool CampPullTick(Run& r, const Facts& f, const PlanStep& s, std::uint32_t dt, std::string& order)
 {
     std::size_t campRow = 0, firstTag = 0, lastTag = 0;
-    if (s.kind != PlanStepKind::Pull || !(s.flags & ai::kPlanFlagCampPull) || !f.campPull || !r.plan ||
+    if (r.walkBack || s.kind != PlanStepKind::Pull || !(s.flags & ai::kPlanFlagCampPull) || !f.campPull || !r.plan ||
         !CampChainOf(r, r.step, campRow, firstTag, lastTag))
         return false;
     const PlanStep& camp = r.plan->steps[campRow];
@@ -12743,7 +12743,7 @@ inline void MoveStep(Run& r, const Facts& f, const PlanStep& s, std::uint32_t dt
     // A camp pull's tag row (camp-pull B): the tank walks it in the pull's own walk out, so the party consumes it
     // here with no order. The key off, no ranged pull on the lead tank, or a given-up camp pull walks it as a plain
     // move (the degrade path).
-    if (f.campPull && CampTagRow(r) && CampPullArmed(r, f))
+    if (f.campPull && !r.walkBack && CampTagRow(r) && CampPullArmed(r, f))
     {
         NextStep(r, "camp pull: tag walk row, walked by the tank in the pull");
         return;
