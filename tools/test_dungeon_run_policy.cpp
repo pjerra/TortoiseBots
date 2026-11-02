@@ -15570,21 +15570,21 @@ static void TestCampPullHoldsTheRaidAndWalksTheTankOut()
 
 static void TestCampPullMarksBeforeTheWalkOutAndNoSap()
 {
-    DungeonPlan plan = CampPullPlan({4852, 100, 101}, {100, 101});
+    DungeonPlan plan = CampPullPlan({4852, 100, 101, 102}, {100, 101, 102});
     Run r = Start(&plan);
     Facts f = CampFacts();
     f.members = {Mem("Tanky", 0), CcMem("Magey", CcFamily::Polymorph), CcMem("Magey2", CcFamily::Polymorph),
         CcMem("Roguey", CcFamily::Sap)};
+    // A third marked unit the two mages cannot take: with a Sap allowed the rogue would hold it, and it stays free.
     f.units = {CampUnit(1, 4852, 30, 0, 0, 20), CampUnit(2, 100, 35, 0, 0, 25),
-        CampUnit(3, 101, 40, 0, 0, 30)};
+        CampUnit(3, 101, 40, 0, 0, 30), CampUnit(4, 102, 42, 0, 0, 32)};
     CampToHold(r, f);
     CHECK(Tick(r, f) == "cc moon 2 Magey");
     CHECK(Tick(r, f) == "cc square 3 Magey2");
     // No Sap at the camp: the rogue never gets an order, and the walk out follows the marks.
     CHECK(Tick(r, f).empty());
     CHECK(Tick(r, f) == "move 30.0 0.0 0.0");
-    for (std::size_t i = 0; i < r.ccWatch.size(); ++i)
-        CHECK(r.ccWatch[i].guid != 1);
+    CHECK(r.ccSent.count(4) == 0);
     CHECK(r.ccSent.count(1) == 0);
 }
 
