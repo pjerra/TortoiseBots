@@ -150,8 +150,8 @@ namespace ai
     // otherwise deferred when nothing later in the plan needs it gone (runtime/DungeonRunPolicy.h PullMayBeDeferred,
     // DeferUnreachablePack); with this flag it pauses the run as before. Any other kind with this flag is refused (BadParam).
     constexpr std::uint32_t kPlanFlagNoDefer = 1024;
-    // open_proof only: the proof entry is a creature (alive). The next free bit: 65536 (8192 is kPlanFlagStandPull, a boss or a
-    // pull; 16384 is kPlanFlagResetToGossip and 32768 kPlanFlagDeadGossipOk, both a units hold).
+    // open_proof only: the proof entry is a creature (alive). (8192 is kPlanFlagStandPull, a boss or a
+    // pull; 16384 is kPlanFlagResetToGossip and 32768 kPlanFlagDeadGossipOk, both a units hold.)
     constexpr std::uint32_t kPlanFlagProofCreature = 2048;
     // boss only: the boss may stand out of the party's reach by design (Stormwrought Ruins' Eldermaw 62661 swims a
     // pool whose bed is the only navmesh, cut off from the shore; specs/sw-eldermaw.md). Where the step would pause on
@@ -178,6 +178,15 @@ namespace ai
     // Run::startNpcDeadStep); a run resumed at the hold itself waits for a hostile unit as before. Any other kind, a hold with
     // a done flag, and a hold with kPlanFlagResetToGossip are refused (BadParam).
     constexpr std::uint32_t kPlanFlagDeadGossipOk = 32768;
+    // move only: the CAMP of a camp pull (spec camp-pull-and-aggro-count B): a point back along the cleared
+    // route where the raid holds while the tank walks out alone and tags the pack. The 1-4 plain move rows after
+    // it are the tank's walk out (the tag rows), and the row after them is the chain's pull row. A broken chain
+    // loses both flags at the seal (CheckCampChains): its rows walk and pull as plain rows.
+    constexpr std::uint32_t kPlanFlagCampPoint = 65536;
+    // pull only: the chain's pull, shot from the last tag row and dragged back to the camp; the raid fights there
+    // (runtime/DungeonRunPolicy.h CampPullTick). CampPull with kPlanFlagStandPull or kPlanFlagAmbush is refused
+    // (BadParam). The next free bit: 262144.
+    constexpr std::uint32_t kPlanFlagCampPull = 131072;
     constexpr std::uint32_t kPlanEncounterNotStarted = 0;
     constexpr std::uint32_t kPlanEncounterFail = 2;
     constexpr std::uint32_t kPlanEncounterMax = 4;
@@ -430,6 +439,8 @@ namespace ai
                           // outside 1-15 or with any flag; use_on with any flag or param;
                           // a stand_pull pull with param above kPlanMaxStandPullClear;
                           // a pull row whose item (the bodies ceiling) is above kPlanMaxPullBodies;
+                          // the camp point flag on a row that is not a move, the camp pull flag on a row
+                          // that is not a pull, or a camp pull that is also a stand pull or an ambush;
                           // an open_proof whose proof equals its entry (no 2048), with param, a flag but 2048,
                           // or 2048 on any row that is not open_proof
         BadPoint,         // not a finite point; a use_on or an open_proof without a point (0,0,0)
@@ -484,6 +495,14 @@ namespace ai
             return PlanStepRefusal::BadParam;
         // A pull row's `item` is the estimate's bodies ceiling (max_bodies), not a use_item item.
         if (step.kind == PlanStepKind::Pull && step.item > kPlanMaxPullBodies)
+            return PlanStepRefusal::BadParam;
+        // The camp chain's two flags (camp-pull B): each only on its own kind, and a camp pull is never a
+        // stand pull or an ambush (the tag walk is authored; the marks go out at the camp).
+        if ((step.flags & kPlanFlagCampPoint) && step.kind != PlanStepKind::Move)
+            return PlanStepRefusal::BadParam;
+        if ((step.flags & kPlanFlagCampPull) && step.kind != PlanStepKind::Pull)
+            return PlanStepRefusal::BadParam;
+        if ((step.flags & kPlanFlagCampPull) && (step.flags & (kPlanFlagStandPull | kPlanFlagAmbush)))
             return PlanStepRefusal::BadParam;
         if ((step.flags & kPlanFlagResetToGossip) && step.kind != PlanStepKind::Hold)
             return PlanStepRefusal::BadParam;
@@ -595,6 +614,106 @@ namespace ai
             step.timeoutS = kPlanDefaultTimeoutS;
         step.label = PlanStepLabel(step.label);
         return PlanStepRefusal::None;
+    }
+
+    // A camp chain (camp-pull B): the camp point move, the 1-4 plain move rows after it (the tank's walk
+    // out; its last point is the tag spot) and the camp pull after them, all in one leg.
+    struct CampChain
+    {
+        bool ok = false;
+        std::size_t camp = static_cast<std::size_t>(-1);
+        std::size_t firstTag = static_cast<std::size_t>(-1);
+        std::size_t lastTag = static_cast<std::size_t>(-1);
+    };
+
+    // A plain move row of a camp chain: a move with no flags (the tag rows).
+    inline bool CampTagRowOf(const PlanStep& step)
+    {
+        return step.kind == PlanStepKind::Move && step.flags == 0;
+    }
+
+    // The chain whose pull is row `pullStep`, or an ok false chain: the row is not a camp pull, or the rows
+    // before it are not a camp point and 1-4 plain move rows of the same leg.
+    inline CampChain CampChainAt(const DungeonPlan& plan, std::size_t pullStep)
+    {
+        CampChain chain;
+        if (pullStep >= plan.steps.size())
+            return chain;
+        const PlanStep& pull = plan.steps[pullStep];
+        if (pull.kind != PlanStepKind::Pull || !(pull.flags & kPlanFlagCampPull) || pullStep == 0)
+            return chain;
+        std::size_t tags = 0;
+        for (std::size_t i = pullStep; i-- > 0;)
+        {
+            const PlanStep& row = plan.steps[i];
+            if (row.leg != pull.leg)
+                return chain;
+            if (CampTagRowOf(row))
+            {
+                if (++tags > 4)
+                    return chain;
+                continue;
+            }
+            // The first row that is no tag row ends the walk out: it must be the camp point, after 1-4 tags.
+            if (tags == 0 || row.kind != PlanStepKind::Move || !(row.flags & kPlanFlagCampPoint))
+                return chain;
+            chain.ok = true;
+            chain.camp = i;
+            chain.firstTag = i + 1;
+            chain.lastTag = pullStep - 1;
+            return chain;
+        }
+        return chain;
+    }
+
+    // The pull row a camp point move leads to (1-4 plain move rows later, same leg): the chain's pull, or null.
+    inline const PlanStep* CampPullAfter(const DungeonPlan& plan, std::size_t campStep)
+    {
+        if (campStep >= plan.steps.size())
+            return nullptr;
+        const PlanStep& camp = plan.steps[campStep];
+        if (camp.kind != PlanStepKind::Move || !(camp.flags & kPlanFlagCampPoint))
+            return nullptr;
+        std::size_t tags = 0;
+        for (std::size_t i = campStep + 1; i < plan.steps.size(); ++i)
+        {
+            const PlanStep& row = plan.steps[i];
+            if (row.leg != camp.leg)
+                return nullptr;
+            if (CampTagRowOf(row))
+            {
+                if (++tags > 4)
+                    return nullptr;
+                continue;
+            }
+            if (tags == 0 || row.kind != PlanStepKind::Pull || !(row.flags & kPlanFlagCampPull))
+                return nullptr;
+            return &row;
+        }
+        return nullptr;
+    }
+
+    // Seal time: both flags of a broken camp chain are cleared (the rows then walk and pull as plain rows) and
+    // the rows are counted. A plan exported with a camp chain and run by an older module never gets here (it
+    // ignores the bits), and a chain the exporter got wrong must not leave a pull waiting for an anchor nobody
+    // sent: the plan still loads.
+    inline std::uint32_t CheckCampChains(DungeonPlan& plan)
+    {
+        std::vector<std::size_t> badPulls;
+        std::vector<std::size_t> badCamps;
+        for (std::size_t i = 0; i < plan.steps.size(); ++i)
+        {
+            const PlanStep& row = plan.steps[i];
+            if ((row.flags & kPlanFlagCampPull) && row.kind == PlanStepKind::Pull && !CampChainAt(plan, i).ok)
+                badPulls.push_back(i);
+            if ((row.flags & kPlanFlagCampPoint) && row.kind == PlanStepKind::Move && !CampPullAfter(plan, i))
+                badCamps.push_back(i);
+        }
+        for (std::size_t i : badPulls)
+            plan.steps[i].flags &= ~kPlanFlagCampPull;
+        for (std::size_t i : badCamps)
+            plan.steps[i].flags &= ~kPlanFlagCampPoint;
+        return static_cast<std::uint32_t>(badPulls.size() + badCamps.size());
     }
 
     class DungeonPlanTable
@@ -763,11 +882,15 @@ namespace ai
                 for (const PlanStep& step : steps)
                     if (step.kind == PlanStepKind::Boss && step.entry)
                         bossEntries_.insert(BossKey(entry.second.map, step.entry));
+                // A camp chain the exporter got wrong loses its flags before readers see it (DungeonPlanMgr logs the count).
+                campChainsDropped_ += CheckCampChains(entry.second);
             }
             sealed_.store(true, std::memory_order_release);
         }
 
         bool Sealed() const { return sealed_.load(std::memory_order_acquire); }
+        // The rows of broken camp chains the seal cleared (CheckCampChains).
+        std::size_t CampChainsDropped() const { return campChainsDropped_; }
         std::size_t PlanCount() const { return plans_.size(); }
         std::size_t StepCount() const { return steps_; }
 
@@ -854,6 +977,7 @@ namespace ai
         std::unordered_map<std::string, DungeonPlan> plans_;
         std::unordered_map<std::string, std::unordered_set<std::uint32_t>> stepKeys_;
         std::size_t steps_ = 0;
+        std::size_t campChainsDropped_ = 0;
         std::atomic<bool> sealed_{false};
     };
 

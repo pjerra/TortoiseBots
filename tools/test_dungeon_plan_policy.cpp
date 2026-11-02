@@ -698,6 +698,117 @@ static void TestStandPullFlagOnBossAndPull()
     CHECK(NormalizePlanStep(move) == PlanStepRefusal::BadParam);
 }
 
+// The camp chain's two flags (camp-pull B): each only on its own kind, and a camp pull is never a stand pull or an
+// ambush.
+static void TestCampFlagsOnlyOnTheirKinds()
+{
+    CHECK(kPlanFlagCampPoint == 65536);
+    CHECK(kPlanFlagCampPull == 131072);
+    PlanStep move = Step(0, 40, PlanStepKind::Move, 1.0f, 2.0f, 3.0f);
+    move.flags = kPlanFlagCampPoint;
+    CHECK(NormalizePlanStep(move) == PlanStepRefusal::None && (move.flags & kPlanFlagCampPoint));
+    PlanStep pull = Step(0, 41, PlanStepKind::Pull);
+    pull.entries = {4852};
+    pull.flags = kPlanFlagCampPull;
+    CHECK(NormalizePlanStep(pull) == PlanStepRefusal::None && (pull.flags & kPlanFlagCampPull));
+    // Each flag on the other kind: refused, not ignored.
+    PlanStep flagOnMove = Step(0, 42, PlanStepKind::Move, 1.0f, 2.0f, 3.0f);
+    flagOnMove.flags = kPlanFlagCampPull;
+    CHECK(NormalizePlanStep(flagOnMove) == PlanStepRefusal::BadParam);
+    PlanStep flagOnPull = Step(0, 43, PlanStepKind::Pull);
+    flagOnPull.entries = {4852};
+    flagOnPull.flags = kPlanFlagCampPoint;
+    CHECK(NormalizePlanStep(flagOnPull) == PlanStepRefusal::BadParam);
+    // A camp pull is no stand pull and no ambush.
+    PlanStep standPull = pull;
+    standPull.flags = kPlanFlagCampPull | kPlanFlagStandPull;
+    CHECK(NormalizePlanStep(standPull) == PlanStepRefusal::BadParam);
+    PlanStep ambush = pull;
+    ambush.flags = kPlanFlagCampPull | kPlanFlagAmbush;
+    CHECK(NormalizePlanStep(ambush) == PlanStepRefusal::BadParam);
+    // The team bits ride along, as on any pull row.
+    PlanStep team = pull;
+    team.flags = kPlanFlagCampPull | kPlanFlagAlliance;
+    CHECK(NormalizePlanStep(team) == PlanStepRefusal::None);
+}
+
+static PlanStep CampRow(std::uint8_t leg, std::uint16_t seq, PlanStepKind kind, float x, std::uint32_t flags = 0)
+{
+    PlanStep step = Step(leg, seq, kind, x, 0.0f, 0.0f);
+    if (kind != PlanStepKind::Pull)
+        step.flags = flags;
+    else
+    {
+        step.entries = {4852};
+        step.flags = flags;
+        NormalizePlanStep(step);
+    }
+    return step;
+}
+
+// The seal's chain check: a camp pull needs its camp point 1-4 plain move rows earlier in the same leg, and every
+// camp point needs that pull after it. A broken chain loses both flags and the plan still loads.
+static void TestCampChainChecks()
+{
+    // A good chain: kept.
+    {
+        DungeonPlan plan;
+        plan.steps = {CampRow(0, 1, PlanStepKind::Move, 0.0f, kPlanFlagCampPoint),
+            CampRow(0, 2, PlanStepKind::Move, 5.0f), CampRow(0, 3, PlanStepKind::Move, 10.0f),
+            CampRow(0, 4, PlanStepKind::Pull, 30.0f, kPlanFlagCampPull)};
+        CHECK(CheckCampChains(plan) == 0);
+        CHECK(plan.steps[0].flags == kPlanFlagCampPoint);
+        CHECK(plan.steps[3].flags == kPlanFlagCampPull);
+        CHECK(CampChainAt(plan, 3).ok && CampChainAt(plan, 3).camp == 0);
+        CHECK(CampPullAfter(plan, 0) == &plan.steps[3]);
+    }
+    // No tag rows: both flags cleared.
+    {
+        DungeonPlan plan;
+        plan.steps = {CampRow(0, 1, PlanStepKind::Move, 0.0f, kPlanFlagCampPoint),
+            CampRow(0, 2, PlanStepKind::Pull, 30.0f, kPlanFlagCampPull)};
+        CHECK(CheckCampChains(plan) == 2);
+        CHECK(plan.steps[0].flags == 0 && plan.steps[1].flags == 0);
+        CHECK(!CampChainAt(plan, 1).ok && !CampPullAfter(plan, 0));
+    }
+    // Five tag rows: cleared.
+    {
+        DungeonPlan plan;
+        plan.steps = {CampRow(0, 1, PlanStepKind::Move, 0.0f, kPlanFlagCampPoint)};
+        for (std::uint16_t i = 0; i < 5; ++i)
+            plan.steps.push_back(CampRow(0, static_cast<std::uint16_t>(2 + i), PlanStepKind::Move, 5.0f * i));
+        plan.steps.push_back(CampRow(0, 8, PlanStepKind::Pull, 40.0f, kPlanFlagCampPull));
+        CHECK(CheckCampChains(plan) == 2);
+        CHECK(plan.steps.front().flags == 0 && plan.steps.back().flags == 0);
+    }
+    // Another row (a boss) between: cleared.
+    {
+        DungeonPlan plan;
+        PlanStep boss = Step(0, 2, PlanStepKind::Boss, 5.0f, 0.0f, 0.0f);
+        boss.entry = 1234;
+        plan.steps = {CampRow(0, 1, PlanStepKind::Move, 0.0f, kPlanFlagCampPoint), boss,
+            CampRow(0, 3, PlanStepKind::Pull, 30.0f, kPlanFlagCampPull)};
+        CHECK(CheckCampChains(plan) == 2);
+        CHECK(plan.steps[0].flags == 0 && plan.steps[2].flags == 0);
+    }
+    // A camp point with no camp pull after it: its flag goes.
+    {
+        DungeonPlan plan;
+        plan.steps = {CampRow(0, 1, PlanStepKind::Move, 0.0f, kPlanFlagCampPoint),
+            CampRow(0, 2, PlanStepKind::Pull, 30.0f, 0)};
+        CHECK(CheckCampChains(plan) == 1);
+        CHECK(plan.steps[0].flags == 0);
+    }
+    // The pull and its camp point in another leg: no chain.
+    {
+        DungeonPlan plan;
+        plan.steps = {CampRow(0, 1, PlanStepKind::Move, 0.0f, kPlanFlagCampPoint),
+            CampRow(1, 2, PlanStepKind::Move, 5.0f), CampRow(1, 3, PlanStepKind::Pull, 30.0f, kPlanFlagCampPull)};
+        CHECK(CheckCampChains(plan) == 2);
+        CHECK(plan.steps[0].flags == 0 && plan.steps[2].flags == 0);
+    }
+}
+
 static void TestResetToGossipFlagOnlyOnUnitsHold()
 {
     CHECK(kPlanFlagResetToGossip == 16384);
@@ -886,6 +997,8 @@ int main()
     TestProofCreatureFlagOnlyOnOpenProof();
     TestPlainOpenUnchanged();
     TestStandPullFlagOnBossAndPull();
+    TestCampFlagsOnlyOnTheirKinds();
+    TestCampChainChecks();
     TestResetToGossipFlagOnlyOnUnitsHold();
     TestDeadGossipFlagOnlyOnUnitsHold();
     TestBossStepsJoinTheirTacticSubjects();

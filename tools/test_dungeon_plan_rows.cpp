@@ -25,8 +25,68 @@ static std::vector<std::string> Split(const std::string& line)
     return out;
 }
 
+// A camp chain (camp-pull B) round-trips through the loader: the camp point, a tag row and the camp pull row keep
+// their flags past the seal, and a broken chain loses them. Nothing is printed; a failure exits.
+static bool CampChainRowsLoad()
+{
+    DungeonPlanTable table;
+    if (!table.AddPlan("camp_rows", 309))
+        return false;
+    PlanStep camp;
+    camp.leg = 0;
+    camp.seq = 1;
+    camp.kind = PlanStepKind::Move;
+    camp.x = 1.0f;
+    camp.y = 2.0f;
+    camp.z = 3.0f;
+    camp.flags = kPlanFlagCampPoint;
+    PlanStep tag = camp;
+    tag.seq = 2;
+    tag.flags = 0;
+    PlanStep pull;
+    pull.leg = 0;
+    pull.seq = 3;
+    pull.kind = PlanStepKind::Pull;
+    pull.x = 5.0f;
+    pull.y = 6.0f;
+    pull.z = 7.0f;
+    pull.entries = {4852};
+    pull.flags = kPlanFlagCampPull;
+    if (table.AddStep("camp_rows", camp) != PlanStepRefusal::None ||
+        table.AddStep("camp_rows", tag) != PlanStepRefusal::None ||
+        table.AddStep("camp_rows", pull) != PlanStepRefusal::None)
+        return false;
+    table.Seal();
+    const DungeonPlan* plan = table.Find("camp_rows");
+    if (!plan || plan->steps.size() != 3 || table.CampChainsDropped() != 0)
+        return false;
+    if (!(plan->steps[0].flags & kPlanFlagCampPoint) || !(plan->steps[2].flags & kPlanFlagCampPull))
+        return false;
+
+    // A chain broken by a second plain move row? Still 1-4 tags is fine; five tags is not.
+    DungeonPlan broken;
+    broken.steps.push_back(camp);
+    for (std::uint16_t i = 0; i < 5; ++i)
+    {
+        PlanStep extra = tag;
+        extra.seq = static_cast<std::uint16_t>(2 + i);
+        broken.steps.push_back(extra);
+    }
+    pull.seq = 8;
+    broken.steps.push_back(pull);
+    if (CheckCampChains(broken) == 0 || (broken.steps[0].flags & kPlanFlagCampPoint) ||
+        (broken.steps.back().flags & kPlanFlagCampPull))
+        return false;
+    return true;
+}
+
 int main()
 {
+    if (!CampChainRowsLoad())
+    {
+        std::cerr << "camp chain rows do not load\n";
+        return 2;
+    }
     DungeonPlanTable table;
     unsigned accepted = 0, refused = 0;
     std::string line;

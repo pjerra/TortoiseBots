@@ -172,6 +172,9 @@ static void ReadDungeonPlanRows(DungeonPlanTable& table, PlanLoadCounts& counts,
             sLog.outError("ai_dungeon_step: plan '%s' has %u moves more than %.0f yd from the move before them",
                 plan->name.c_str(), uint32(longHops), kLongHopYd);
     }
+    if (table.CampChainsDropped())
+        sLog.outError("ai_dungeon_step: %u rows of broken camp pull chains lost their flags (the rows walk and "
+            "pull as plain rows)", uint32(table.CampChainsDropped()));
 }
 
 void ai::LoadDungeonPlans()
