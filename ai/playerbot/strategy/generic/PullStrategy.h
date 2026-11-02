@@ -93,11 +93,12 @@ namespace ai
             bool wantsRanged;
             PullOpeningReason reason;
             bool pathReachable;
+            std::optional<WorldPosition> anchor;
         };
         CommandState SaveCommand() const
         {
             return { commandActive, commandPullback, hadPullBack, commandJoinDelay, returnStartTime,
-                commandRangedOrder, commandWantsRanged, openingReason, pathReachable };
+                commandRangedOrder, commandWantsRanged, openingReason, pathReachable, commandAnchor };
         }
         void RestoreCommand(CommandState const& state)
         {
@@ -110,6 +111,7 @@ namespace ai
             commandWantsRanged = state.wantsRanged;
             openingReason = state.reason;
             pathReachable = state.pathReachable;
+            commandAnchor = state.anchor;
         }
 
     private:

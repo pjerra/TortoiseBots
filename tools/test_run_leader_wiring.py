@@ -1953,3 +1953,6 @@ if __name__ == "__main__":
                       (ROOT / "ai/playerbot/PlayerbotAIConfig.cpp").read_text())
         self.assertIn("IsKnownOrder", (ROOT / "runtime/RemoteCommanderPolicy.h").read_text())
         self.assertIn('verb == "camp"', (ROOT / "runtime/RemoteCommanderPolicy.h").read_text())
+        # The commanded pull takes the camp as its return point too (ConfigurePullMode -> PullStrategy::BeginCommand).
+        self.assertIn("context.anchorOverride))", (ROOT / "commands/Action.cpp").read_text())
+        self.assertIn("bool HasCommandAnchor() const", (ROOT / "ai/playerbot/strategy/generic/PullStrategy.h").read_text())
