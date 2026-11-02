@@ -425,6 +425,9 @@ void PausePartyDpsForPull(BotCommandContext const& context, Player* executor, ui
         if (ai->GetForcedRole() == static_cast<uint8>(BOT_ROLE_TANK) ||
             PlayerbotAI::IsTank(bot, true))
             continue;
+        // A camp hold already parks it where it stood (its own spot); the pull does not restack it at the anchor.
+        if (context.alreadyHeld && context.alreadyHeld(bot))
+            continue;
         WorldPosition stand = anchor;
         if (healer)
         {

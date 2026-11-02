@@ -47,6 +47,9 @@ struct BotCommandContext
     // The point a pull returns to, when the run leader's camp hold names one (the camp pull's `camp x y z`): the
     // tank drags the pack back there, not to the requester's spot.
     std::optional<ai::WorldPosition> anchorOverride;
+    // Bots the run leader's camp hold already parks on their own spots (the camp pull): a pull must not move them
+    // onto the one camp point.
+    std::function<bool(Player*)> alreadyHeld;
 };
 
 // Every command path uses these checks. A BotRecord alone is not sufficient:

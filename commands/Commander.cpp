@@ -2895,8 +2895,21 @@ BotCommandContext CommanderContext(CommanderOrder const& order, Unit* target)
         // lead bot's (or the player's) spot: the tank drags the pack back there.
         auto const camp = RunCampAnchors().find(commanderRaw);
         if (camp != RunCampAnchors().end() && order.lead && camp->second.map == order.lead->GetMapId())
+        {
             context.anchorOverride = ai::WorldPosition(camp->second.map, camp->second.x, camp->second.y,
                 camp->second.z);
+            std::vector<RunCampAnchor::Held> const held = camp->second.held;
+            context.alreadyHeld = [held](Player* bot)
+            {
+                if (!bot)
+                    return false;
+                uint64 const raw = bot->GetObjectGuid().GetRawValue();
+                for (RunCampAnchor::Held const& entry : held)
+                    if (entry.raw == raw)
+                        return true;
+                return false;
+            };
+        }
     }
     return context;
 }
