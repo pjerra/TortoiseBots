@@ -8,6 +8,9 @@
 #
 # Optional: TBDASH_AGENT_MAPS_DIR=DIR (the folder `turtle-agent map` writes its run maps into) enables the
 # read-only Agent maps tab; unset, the tab stays hidden. It is passed to the daemon as is.
+# Optional: TBDASH_DECISIONS_DIR=DIR (the folder the server writes decision captures into, one <captureId> folder
+# per capture with index.json and seg-NNNN.jsonl) enables the read-only decision capture list and file routes;
+# unset, they answer {"error":"decision capture folder not configured"}. It is passed to the daemon as is.
 # Optional: HTTP_HOST=0.0.0.0 serves the dashboard on all interfaces (LAN); the default 127.0.0.1 keeps it local only.
 # Optional: SESSION_SECRET keeps dashboard sessions across a restart; unset, the daemon generates a random key at startup.
 #
@@ -163,8 +166,8 @@ main() {
   export UDP_HOST="127.0.0.1"
   export HTTP_HOST
   [[ -n "$DBC_DIR" ]] && export DBC_DIR
+  [[ -n "${TBDASH_DECISIONS_DIR:-}" ]] && export TBDASH_DECISIONS_DIR
   export ICON_CACHE_DIR="${ICON_CACHE_DIR:-$HERE/.icon-cache}"
-  mkdir -p "$ICON_CACHE_DIR"
 
   if ! compgen -G "$HERE/maps/*.webp" >/dev/null; then
     echo "note: no zone maps in $HERE/maps; generate them from your client: python3 $HERE/scripts/gen_zone_maps.py --data \"<WoW>/Data\""
