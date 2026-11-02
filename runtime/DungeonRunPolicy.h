@@ -257,6 +257,18 @@ constexpr float kStandClearAssistYd = 10.0f;
 // reach's stand; then the default stand goes out (advisory: the clearance never holds a pull past it, HoldForShot).
 constexpr std::uint32_t kStandClearWaitMs = 20000;
 
+// The camp pull (camp-pull B, runtime/DungeonRunPolicy.h CampPullTick): a pull row with kPlanFlagCampPull whose
+// chain is a camp point and 1-4 tag rows (DungeonPlanPolicy.h CampChainAt). The raid holds at the camp, the tank
+// walks out alone, tags one unit and drags the pack back; the raid fights at the camp.
+constexpr float kCampArriveYd = 6.0f;              // the lead bot counts as at the camp this close
+constexpr float kCampFightYd = 15.0f;              // a pack unit this close to the camp: the fight is on there
+constexpr std::uint32_t kCampWalkOutCapMs = 30000; // the tank's walk out takes longer: the camp pull is given up
+constexpr std::uint32_t kCampTagWaitMs = 6000;     // no shootable unit at the tag spot this long: given up
+constexpr std::uint32_t kCampStayedMs = 8000;      // the tank back, the fight on, no pack unit near the camp this long: the raid goes in
+constexpr std::uint32_t kCampHoldConfirmTicks = 3; // the glue's hold is not live this many ticks: given up
+constexpr std::uint32_t kCampHoldWindowS = 90;     // the glue's hold window: walk out 30 + tag 6 + return 20 + joining
+constexpr float kCampTankWalkSpreadYd = 1.5f;      // the aggro estimate's tank-only walk (camp-pull B, ReadPullJoiners)
+
 // One live hostile that is not in the pulled group (the glue's read, Facts::standOthers).
 struct StandOther
 {
@@ -779,6 +791,10 @@ struct RestLines
 
 enum class State : std::uint8_t { Running, Paused, Done };
 enum class Phase : std::uint8_t { Begin, Gather, Walk, AwaitPull, AwaitTask, Rest, Wait, Hold };
+// The camp pull's states (camp-pull B, CampPullTick): the raid gathers at the camp, holds there (the tank's
+// `camp x y z` order and the CC marks), the tank walks the tag rows out and tags a unit, drags the pack back, and
+// the raid fights at the camp. Off: no camp pull. GaveUp: this step's camp pull fell back to a plain pull.
+enum class CampState : std::uint8_t { Off, Gather, Hold, WalkOut, Tag, Return, Fight, GaveUp };
 
 // A loot step's free-for-all detour (AiPlayerbot.DungeonRunLootFfa, TaskStep): Idle; Ordered: `lootmethod ffa`
 // went out; Looting: the loot order is out under free-for-all; Restoring: the saved method was ordered back.
@@ -1631,6 +1647,16 @@ struct Facts
     bool holdAheadRead = false; // ... the glue looked for the point (holdAheadKnown false: the walk has no clear point)
     bool holdAheadKnown = false;
     float holdAheadX = 0.0f, holdAheadY = 0.0f, holdAheadZ = 0.0f;
+    // AiPlayerbot.DungeonRunCampPull (camp-pull B): the key is on, and the glue's camp hold for this run (the
+    // `camp x y z` order's anchor) is live. Off: no camp pull state runs and every tag row walks as a plain move.
+    bool campPull = false;
+    bool campHoldLive = false;
+    // The held bots hit at the camp since the hold went out (an attacker on them, or health below the hold's
+    // reading by more than 1 % of max): their names, the note names them.
+    std::vector<std::string> campHitBots;
+    // The glue's return cap: (AiPlayerbot.PullBackMaxReturnTime + 5) * 1000, the tank not back at the camp then
+    // releases the hold and the raid goes to it.
+    std::uint32_t campReturnCapMs = 20000;
 };
 
 // Task A5: declared here (used from the first gate), defined next to PartyDead.
@@ -2161,6 +2187,22 @@ struct Run
     bool restForJoiners = false;              // the rest phase is the joiner rest: its time is not step idle time
     std::uint32_t joinerRests = 0;            // joiner rests used this step (kMaxJoinerRests)
     std::string joinerNote;                   // "N joiners expected ..." or the ring estimate's note
+    // The camp pull (Facts::campPull, CampPullTick): its state, the pull row it belongs to, its time in the state
+    // (campMs), the tags sent at this step, the tag row the tank walks to, the unit tagging now, and the hold's
+    // order and the reason a given-up camp pull gives. campOffNotedStep: the row whose "camp pull off" note went
+    // out once; campStayMs: how long the tank has stood back at the camp with the fight on; campReleaseSent: the
+    // `camp release` of this state went out.
+    CampState campState = CampState::Off;
+    std::size_t campStep = static_cast<std::size_t>(-1);
+    std::uint32_t campMs = 0;
+    std::uint32_t campTries = 0;
+    std::size_t campTagRow = 0;
+    std::uint64_t campTagGuid = 0;
+    bool campHoldSent = false;
+    std::string campGaveUpWhy;
+    std::size_t campOffNotedStep = static_cast<std::size_t>(-1);
+    std::uint32_t campStayMs = 0;
+    bool campReleaseSent = false;
     // The move row whose walk note already carries the look-ahead estimate (Facts::aheadStep), so the
     // prefix goes out once a row (npos: none).
     std::size_t aheadNotedStep = static_cast<std::size_t>(-1);
@@ -3116,6 +3158,17 @@ inline void ResetStep(Run& r)
     r.restForJoiners = false;
     r.joinerRests = 0;
     r.joinerNote.clear();
+    r.campState = CampState::Off;
+    r.campStep = static_cast<std::size_t>(-1);
+    r.campMs = 0;
+    r.campTries = 0;
+    r.campTagRow = 0;
+    r.campTagGuid = 0;
+    r.campHoldSent = false;
+    r.campGaveUpWhy.clear();
+    r.campOffNotedStep = static_cast<std::size_t>(-1);
+    r.campStayMs = 0;
+    r.campReleaseSent = false;
     ResetShotStand(r);
     DropFocus(r);
     r.focusRefused.clear();
@@ -8235,7 +8288,9 @@ struct CcPick
 // unit is never given a second one. Its mark is the first of kCcMarks whose
 // raid icon is empty, or set by the run and on no living held unit; another
 // icon (a player's) is never moved, and with none free no cc goes out.
-inline CcPick PickCcOrder(const Run& r, const Facts& f, std::uint64_t pullGuid)
+// `allowSap` false (a camp pull's marks, sent at the camp: Sap needs a walk to
+// the pack) skips the Sap family.
+inline CcPick PickCcOrder(const Run& r, const Facts& f, std::uint64_t pullGuid, bool allowSap = true)
 {
     CcPick pick;
     if (!r.plan)
@@ -8281,7 +8336,7 @@ inline CcPick PickCcOrder(const Run& r, const Facts& f, std::uint64_t pullGuid)
             const RunCcSpell& c = kRunCc[spellIdx];
             if (!CcFits(c.family, u.creatureType) || (u.ccImmune & CcBit(c.family)))
                 continue;
-            if (c.prePull && (f.anyInCombat || r.ccSapFailed))
+            if (c.prePull && (!allowSap || f.anyInCombat || r.ccSapFailed))
                 continue;
             if (c.family == CcFamily::Banish && u.distLead > kBanishYd)
                 continue;
@@ -8458,6 +8513,422 @@ inline bool KillFirstBounded(const Run& r)
     const PlanStep* s = Current(r);
     return s && !InEvent(r) &&
         (s->kind == PlanStepKind::Pull || s->kind == PlanStepKind::Move || s->kind == PlanStepKind::MoveDirect);
+}
+
+// The camp pull's chain (camp-pull B): the camp point and the 1-4 tag rows before the current pull row.
+inline bool CampChainOf(const Run& r, std::size_t pullStep, std::size_t& campRow, std::size_t& firstTag,
+    std::size_t& lastTag)
+{
+    if (!r.plan)
+        return false;
+    ai::CampChain const chain = ai::CampChainAt(*r.plan, pullStep);
+    if (!chain.ok)
+        return false;
+    campRow = chain.camp;
+    firstTag = chain.firstTag;
+    lastTag = chain.lastTag;
+    return true;
+}
+
+// The camp pull is on for this step: the key, a ranged shot on the lead tank, no scripted event, and the step's
+// camp pull not given up. Off, the camp rows walk and pull as plain rows (the degrade path).
+inline bool CampPullArmed(const Run& r, const Facts& f)
+{
+    return f.campPull && f.leadIsTank && f.leadShotYd > kShotMarginYd && !InEvent(r) &&
+        r.campState != CampState::GaveUp;
+}
+
+// The current row is a tag row of a camp chain (a plain move row with the chain's camp pull 1-4 rows ahead).
+inline bool CampTagRow(const Run& r)
+{
+    if (!r.plan || !r.plan->steps.size())
+        return false;
+    const PlanStep* s = Current(r);
+    if (!s || s->kind != PlanStepKind::Move || s->flags != 0)
+        return false;
+    std::size_t tags = 0;
+    for (std::size_t i = r.step + 1; i < r.plan->steps.size(); ++i)
+    {
+        const PlanStep& row = r.plan->steps[i];
+        if (row.leg != s->leg)
+            return false;
+        if (ai::CampTagRowOf(row))
+        {
+            if (++tags > 4)
+                return false;
+            continue;
+        }
+        if (row.kind != PlanStepKind::Pull || !(row.flags & ai::kPlanFlagCampPull))
+            return false;
+        std::size_t campRow = 0, firstTag = 0, lastTag = 0;
+        return CampChainOf(r, i, campRow, firstTag, lastTag) && r.step >= firstTag && r.step <= lastTag;
+    }
+    return false;
+}
+
+// The unit the tank tags from the tag spot: among the step's pullable units not marked and not the unit the
+// crowd control is for, the nearest one the tank sees; kill_first rank is not used (any unit of an aggro-together
+// pack brings the pack; kill_first is the fight's focus). Every unit marked: the nearest marked one.
+inline const UnitFact* PickCampTag(const Run& r, const Facts& f)
+{
+    const UnitFact* cc = PickCc(r, f, 0);
+    const UnitFact* best = nullptr;
+    const UnitFact* held = nullptr;
+    for (const UnitFact& u : f.units)
+    {
+        if (!Pullable(r, u))
+            continue;
+        if ((cc && u.guid == cc->guid) || r.ccSent.count(u.guid))
+        {
+            if (!held || u.distLead < held->distLead)
+                held = &u;
+            continue;
+        }
+        if (!u.losLead)
+            continue;
+        if (!best || u.distLead < best->distLead)
+            best = &u;
+    }
+    return best ? best : held;
+}
+
+// The camp pull's tick (camp-pull B): the raid gathers at the camp, holds there while the tank's `camp x y z`
+// order parks it and the CC marks go out, the tank walks the tag rows out alone and tags one unit, drags the pack
+// back to the camp, and the raid fights there. Returns true when it owned the tick; false sends the step down
+// today's plain pull path (the key off, a camp pull given up, and the fight after the release).
+inline std::unordered_set<std::uint64_t> PullPackOf(const Run& r, const UnitFact& u, const UnitFact* cc);
+inline bool CampPullTick(Run& r, const Facts& f, const PlanStep& s, std::uint32_t dt, std::string& order)
+{
+    std::size_t campRow = 0, firstTag = 0, lastTag = 0;
+    if (s.kind != PlanStepKind::Pull || !(s.flags & ai::kPlanFlagCampPull) || !f.campPull || !r.plan ||
+        !CampChainOf(r, r.step, campRow, firstTag, lastTag))
+        return false;
+    const PlanStep& camp = r.plan->steps[campRow];
+    float const toCamp = ai::PlanDistance(f.leadX, f.leadY, f.leadZ, camp.x, camp.y, camp.z);
+    // Given up (an earlier tick of this step): the raid is let go, the tank walks back to the camp, and the step
+    // pulls as a plain pull from there (the tank is the anchor the pull returns to).
+    if (r.campState == CampState::GaveUp)
+    {
+        if (f.campHoldLive && !r.campReleaseSent)
+        {
+            order = "camp release";
+            r.campReleaseSent = true;
+            return true;
+        }
+        if (toCamp > kCampArriveYd)
+        {
+            if (WalkTo(r, f, camp.x, camp.y, camp.z, false, dt, order))
+                r.note = "camp pull given up: " + r.campGaveUpWhy + "; back at the camp";
+            else
+                r.note = "camp pull given up: " + r.campGaveUpWhy + "; the tank walks back to the camp";
+            return true;
+        }
+        // The party stands at the camp: the plain pull gathers and returns there.
+        r.anchorKnown = true;
+        r.anchorX = camp.x;
+        r.anchorY = camp.y;
+        r.anchorZ = camp.z;
+        r.note = "camp pull given up: " + r.campGaveUpWhy;
+        return false;
+    }
+    // Not a camp pull this step (no ranged pull on the lead tank, a scripted event): the tag rows walked as plain
+    // moves and the row pulls as it does without the flag. The reason goes out once.
+    if (!CampPullArmed(r, f))
+    {
+        if (r.campOffNotedStep != r.step)
+        {
+            r.campOffNotedStep = r.step;
+            r.note = "camp pull off: no ranged pull on the lead tank";
+        }
+        return false;
+    }
+    if (r.campState == CampState::Fight)
+        return false;
+    if (r.campState == CampState::Off || r.campStep != r.step)
+    {
+        r.campStep = r.step;
+        r.campState = CampState::Gather;
+        r.campMs = 0;
+        r.campTries = 0;
+        r.campTagRow = firstTag;
+        r.campTagGuid = 0;
+        r.campHoldSent = false;
+        r.campGaveUpWhy.clear();
+        r.campOffNotedStep = static_cast<std::size_t>(-1);
+        r.campStayMs = 0;
+        r.campReleaseSent = false;
+    }
+    auto toFight = [&](const std::string& note)
+    {
+        // The hold goes: the raid fights where it stands (or goes to the tank).
+        r.campState = CampState::Fight;
+        r.campMs = 0;
+        r.campStayMs = 0;
+        r.pullGuid = 0;
+        r.walkStillMs = 0;
+        r.walkTries = 0;
+        if (!r.campReleaseSent)
+        {
+            order = "camp release";
+            r.campReleaseSent = true;
+        }
+        EnterPhase(r, Phase::Begin);
+        r.note = note;
+    };
+    auto giveUp = [&](const std::string& why)
+    {
+        r.campGaveUpWhy = why;
+        r.campState = CampState::GaveUp;
+        r.campMs = 0;
+        r.campStayMs = 0;
+        r.pullGuid = 0;
+        r.walkStillMs = 0;
+        r.walkTries = 0;
+        r.note = "camp pull given up: " + why;
+        if (f.campHoldLive && !r.campReleaseSent)
+        {
+            order = "camp release";
+            r.campReleaseSent = true;
+        }
+    };
+    // The hold is released the moment a held member is hit, before the pack arrives: the raid is not a punching
+    // bag while the tank walks back.
+    if ((r.campState == CampState::Hold || r.campState == CampState::WalkOut || r.campState == CampState::Tag ||
+            r.campState == CampState::Return) && !f.campHitBots.empty())
+    {
+        toFight("camp pull: " + f.campHitBots.front() +
+            " hit at the camp before the pack arrived: hold released");
+        return true;
+    }
+    switch (r.campState)
+    {
+        case CampState::Gather:
+        {
+            r.campMs += dt;
+            if (toCamp > kCampArriveYd || !PartyGathered(f))
+            {
+                if (r.campMs >= kGatherCapMs)
+                    GatherCeiling(r, f, order, "the party did not gather at the camp within " +
+                        std::to_string(kGatherCapMs / 1000) + " s (a bot is " + Num(f.maxMemberYd) +
+                        " yd from the lead bot)");
+                else if (toCamp > kCampArriveYd && WalkTo(r, f, camp.x, camp.y, camp.z, false, dt, order))
+                    r.note = "camp pull: gathered at the camp";
+                else
+                    r.note = "camp pull: gathering at the camp";
+                return true;
+            }
+            r.campState = CampState::Hold;
+            r.campMs = 0;
+            r.note = "camp pull: the party is at the camp";
+            return true;
+        }
+        case CampState::Hold:
+        {
+            if (!r.campHoldSent)
+            {
+                r.campHoldSent = true;
+                order = "camp " + Num(camp.x) + " " + Num(camp.y) + " " + Num(camp.z);
+                r.note = "camp pull: holding the raid at the camp";
+                return true;
+            }
+            // The marks go out at the camp, one per tick, Sap never (it needs a walk to the pack; a Polymorph,
+            // Shackle or Banish is a combat cast the class fires when the pack arrives), no wait for them to land.
+            CcPick const cc = PickCcOrder(r, f, 0, false);
+            if (cc.unit && !r.ccSent.count(cc.unit->guid))
+            {
+                r.ccSent.insert(cc.unit->guid);
+                r.ccHolds[cc.unit->guid] = Run::CcHold{cc.bot, cc.mark, cc.family};
+                r.ccIcons[CcMarkIcon(cc.mark)] = cc.unit->guid;
+                Run::CcWatch watch;
+                watch.guid = cc.unit->guid;
+                r.ccWatch.push_back(watch);
+                SyncCcWatch(r);
+                order = "cc " + cc.mark + " " + std::to_string(cc.unit->guid) + " " + cc.bot;
+                r.note = "camp pull: crowd control on " + std::to_string(cc.unit->entry) + " (" + cc.bot + ": " +
+                    RunCcOf(cc.family)->spell + ") at the camp";
+                return true;
+            }
+            if (!f.campHoldLive)
+            {
+                r.campMs += dt;
+                if (r.campMs >= kCampHoldConfirmTicks * kTickMs)
+                {
+                    giveUp("camp hold not confirmed");
+                    return true;
+                }
+                r.note = "camp pull: waiting for the hold at the camp";
+                return true;
+            }
+            // The estimate (A) is read with the camp as the fight point (the glue's geometry): over the ceiling
+            // it is a note only, never a rest: the pull is authored.
+            if (f.aggroWalkRing)
+            {
+                std::uint32_t const ceiling = RowCeilingBodies(s, f);
+                const UnitFact* pick = PickCampTag(r, f);
+                if (ceiling && pick && pick->estBodies > ceiling)
+                {
+                    r.note = EstimateNote(pick->estBodies, ceiling, s.item != 0, pick->estGuids,
+                        pick->estLosBudget);
+                    return true;
+                }
+            }
+            r.campState = CampState::WalkOut;
+            r.campMs = 0;
+            r.campTagRow = firstTag;
+            r.walkStillMs = 0;
+            r.walkTries = 0;
+            EnterPhase(r, Phase::Begin); // a fresh walk, even to the point the last one ended on
+            r.note = "camp pull: the tank walks out to the tag spot";
+            return true;
+        }
+        case CampState::WalkOut:
+        {
+            r.campMs += dt;
+            if (f.leadInCombat)
+            {
+                toFight("camp pull: the tank drew a fight on the walk out");
+                return true;
+            }
+            if (r.campMs >= kCampWalkOutCapMs || (r.phase == Phase::Walk && r.walkStillMs + dt >= kWalkRetryMs))
+            {
+                giveUp("walk out stalled");
+                return true;
+            }
+            if (r.campTagRow < firstTag || r.campTagRow > lastTag)
+                r.campTagRow = firstTag;
+            const PlanStep& tag = r.plan->steps[r.campTagRow];
+            if (WalkTo(r, f, tag.x, tag.y, tag.z, false, dt, order))
+            {
+                if (r.campTagRow < lastTag)
+                {
+                    ++r.campTagRow;
+                    r.note = "camp pull: on to the next tag row";
+                }
+                else
+                {
+                    r.campState = CampState::Tag;
+                    r.campMs = 0;
+                    r.note = "camp pull: at the tag spot";
+                }
+            }
+            else
+                r.note = "camp pull: the tank walks out to the tag spot";
+            return true;
+        }
+        case CampState::Tag:
+        {
+            const UnitFact* pick = PickCampTag(r, f);
+            if (pick && ShootableFromLead(f, *pick))
+            {
+                ++r.campTries;
+                r.campTagGuid = pick->guid;
+                ++r.pulls;
+                ++r.pullTries[pick->guid];
+                r.pullGuid = pick->guid;
+                r.joinerPack = PullPackOf(r, *pick, nullptr);
+                r.joinerAdds.clear();
+                r.joinerMs = 0;
+                r.joinerWindow = true;
+                r.joinerTracked = true;
+                r.pullHop = false;
+                r.residuePullGuid = 0;
+                order = "pullback " + std::to_string(pick->guid);
+                r.campState = CampState::Return;
+                r.campMs = 0;
+                r.campStayMs = 0;
+                r.note = "camp pull: tagging " + std::to_string(pick->entry) + " " + GuidArg(pick->guid);
+                return true;
+            }
+            r.campMs += dt;
+            if (r.campMs >= kCampTagWaitMs)
+            {
+                giveUp("no shot from the tag spot");
+                return true;
+            }
+            r.note = "camp pull: waiting for a shot from the tag spot";
+            return true;
+        }
+        case CampState::Return:
+        {
+            r.campMs += dt;
+            const UnitFact* nearest = nullptr;
+            float nearestYd = 0.0f;
+            for (const UnitFact& u : f.units)
+            {
+                if (!u.hostile)
+                    continue;
+                float const yd = ai::PlanDistance(u.x, u.y, u.z, camp.x, camp.y, camp.z);
+                if (!nearest || yd < nearestYd)
+                {
+                    nearest = &u;
+                    nearestYd = yd;
+                }
+            }
+            bool const leadBack = toCamp <= kCampArriveYd;
+            bool const came = nearest && nearestYd <= kCampFightYd;
+            if (leadBack && came)
+            {
+                toFight("camp pull: the pack came to the camp");
+                return true;
+            }
+            // The shot missed, the unit evaded at once, or the pack went home: one more tag, then the plain pull.
+            bool evading = false, awake = false;
+            for (const UnitFact& u : f.units)
+                if (u.hostile)
+                {
+                    evading = evading || u.evading;
+                    awake = awake || !u.evading;
+                }
+            bool const evadedAll = r.pullGuid != 0 && evading && !awake && !f.anyInCombat;
+            if (leadBack && !f.anyInCombat && (r.campMs >= kPullNoFightMs || evadedAll))
+            {
+                if (r.campTries < kPullTriesPerUnit)
+                {
+                    r.campState = CampState::WalkOut;
+                    r.campMs = 0;
+                    r.campTagRow = lastTag;
+                    r.walkStillMs = 0;
+                    r.walkTries = 0;
+                    r.pullGuid = 0;
+                    EnterPhase(r, Phase::Begin); // a fresh walk, even to the point the last one ended on
+                    r.note = "camp pull: the pack did not come, one more tag";
+                }
+                else
+                    giveUp("the pack never came");
+                return true;
+            }
+            if (!leadBack && r.campMs >= f.campReturnCapMs)
+            {
+                toFight("camp pull: the tank did not come back in time");
+                return true;
+            }
+            if (leadBack && f.anyInCombat)
+            {
+                r.campStayMs += dt;
+                if (r.campStayMs >= kCampStayedMs)
+                {
+                    toFight("camp pull: the pack held its ground (" + Num(nearestYd) +
+                        " yd from the camp): the raid goes in");
+                    return true;
+                }
+            }
+            r.note = leadBack ? "camp pull: the fight at the camp" : "camp pull: the tank comes back with the pack";
+            return true;
+        }
+        case CampState::Fight:
+        case CampState::GaveUp:
+        case CampState::Off:
+            break;
+    }
+    return false;
+}
+
+// Whether the current pull row is a camp pull the key runs (a camp pull never rests for joiners: the estimate is
+// read at the hold against the camp, advice only).
+inline bool CampPullRowOn(const Run& r, const Facts& f)
+{
+    const PlanStep* s = Current(r);
+    return s && s->kind == PlanStepKind::Pull && (s->flags & ai::kPlanFlagCampPull) && f.campPull;
 }
 
 // The focused unit is gone: no longer among this fight's kill_first units (it
@@ -11896,6 +12367,12 @@ inline void FightStep(Run& r, const Facts& f, const PlanStep& s, const std::vect
         }
     }
 
+    // The camp pull (camp-pull B): its own states own the step's ticks (the gather at the camp, the hold, the tank's
+    // walk out, the tag, the return and the fight at the camp); a given-up camp pull falls through to today's plain
+    // pull path below. Off (the key or the row's flags): nothing changes.
+    if (CampPullTick(r, f, s, dt, order))
+        return;
+
     // A pullback refused for the tank's firing position asked the approach stand with the pack in sight
     // (PullbackRefusedUnreachable): its search (answered by the glue after this tick) and its walk run here, not a
     // new pull of the same unit from the same spot.
@@ -11997,7 +12474,9 @@ inline void FightStep(Run& r, const Facts& f, const PlanStep& s, const std::vect
         // kMaxJoinerRests such waits a step (counted when a rest really starts);
         // after that the pull goes out.
         std::string budgetNote;
-        if (f.aggroWalkRing)
+        // A camp pull never rests for joiners: its estimate is read at the hold against the camp and is advice only
+        // (camp-pull B).
+        if (f.aggroWalkRing && !CampPullRowOn(r, f))
         {
             // The ring estimate: bodies against the row's own ceiling (a pull
             // row's `item` first, deliberately sized pulls never rest).
@@ -12019,7 +12498,8 @@ inline void FightStep(Run& r, const Facts& f, const PlanStep& s, const std::vect
                 }
             }
         }
-        else if (f.joinerCeiling > 0 && pick->joiners > f.joinerCeiling && !r.joinerHeld.count(pick->guid))
+        else if (!f.aggroWalkRing && f.joinerCeiling > 0 && pick->joiners > f.joinerCeiling &&
+            !r.joinerHeld.count(pick->guid))
         {
             if (r.joinerRests >= kMaxJoinerRests)
                 budgetNote = std::to_string(pick->joiners) + " joiners expected, rest budget used";
@@ -12259,6 +12739,14 @@ inline void MoveStep(Run& r, const Facts& f, const PlanStep& s, std::uint32_t dt
         AwaitPull(r);
         if (r.phase == Phase::AwaitPull)
             return;
+    }
+    // A camp pull's tag row (camp-pull B): the tank walks it in the pull's own walk out, so the party consumes it
+    // here with no order. The key off, no ranged pull on the lead tank, or a given-up camp pull walks it as a plain
+    // move (the degrade path).
+    if (f.campPull && CampTagRow(r) && CampPullArmed(r, f))
+    {
+        NextStep(r, "camp pull: tag walk row, walked by the tank in the pull");
+        return;
     }
     if (const UnitFact* hopUnit = PickPull(r, f.hopUnits, 0, true))
     {
@@ -17690,6 +18178,11 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
     // Fights are the bots' own; the run only bounds them.
     if (f.anyInCombat && !objectDone)
     {
+        // The camp pull's own fight (camp-pull B): from the hold until the release, its states own the tick (the
+        // tag's return, the pack's arrival at the camp, a held member hit); once it releases, Fight hands the
+        // fight to the generic logic below.
+        if (CampPullTick(r, f, *s, dt, order))
+            return order;
         // The ritual answered and its event is fighting already (the first
         // Stone Keeper wakes with the cast): the fight is the hold's.
         // An interrupted answer counts too while the event reads in progress:

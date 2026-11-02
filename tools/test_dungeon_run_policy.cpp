@@ -15474,6 +15474,330 @@ static void TestWalkRingKeyOffKeepsJoinerNotes()
     CHECK(r.note == "7 joiners expected" && r.joinerRest);
 }
 
+// A camp pull (camp-pull B): a start move, the camp point, two tag rows and the camp pull. The party walks the
+// rows as today up to the pull row, which then gathers, holds, walks the tank out, tags and drags.
+static DungeonPlan CampPullPlan(std::vector<std::uint32_t> entries = {4852}, std::vector<std::uint32_t> ccPriority = {})
+{
+    DungeonPlan plan;
+    plan.name = "camp";
+    PlanStep start = Step(PlanStepKind::Move, 0, 0, 0);
+    PlanStep camp = Step(PlanStepKind::Move, 20, 0, 0);
+    camp.flags = ai::kPlanFlagCampPoint;
+    PlanStep tag1 = Step(PlanStepKind::Move, 30, 0, 0);
+    PlanStep tag2 = Step(PlanStepKind::Move, 40, 0, 0);
+    PlanStep pull = PullStep(60, entries, ai::kPlanFlagCampPull);
+    plan.steps = {start, camp, tag1, tag2, pull};
+    plan.ccPriority = ccPriority;
+    return plan;
+}
+
+static Facts CampFacts(float leadX = 0.0f)
+{
+    Facts f = Party(leadX);
+    f.campPull = true;
+    f.leadIsTank = true;
+    f.leadShotYd = 25.0f;
+    return f;
+}
+
+// The camp pull's unit, standing at x,y,z with its distance from the lead bot.
+static UnitFact CampUnit(std::uint64_t guid, std::uint32_t entry, float x, float y, float z, float distLead,
+    bool los = true)
+{
+    UnitFact u = Typed(guid, entry, distLead, kCreatureHumanoid);
+    u.x = x;
+    u.y = y;
+    u.z = z;
+    u.losLead = los;
+    return u;
+}
+
+// Walks the party to the camp and the pull row's hold: the start move, the camp row, the two tag rows (consumed
+// with no order), the gather at the camp and the `camp x y z` order; then the hold is live.
+static void CampToHold(Run& r, Facts& f)
+{
+    CHECK(Tick(r, f).empty());  // the start move: the lead bot stands on it
+    CHECK(Tick(r, f) == "move 20.0 0.0 0.0"); // the camp row
+    f.leadX = 20.0f;
+    CHECK(Tick(r, f).empty());  // the camp row arrives
+    CHECK(Tick(r, f).empty());  // tag row 1, walked by the tank in the pull
+    CHECK(Tick(r, f).empty());  // tag row 2, walked by the tank in the pull
+    CHECK(Tick(r, f).empty());  // the pull row: the party is at the camp
+    CHECK(Tick(r, f) == "camp 20.0 0.0 0.0");
+    f.campHoldLive = true;
+}
+
+// The orders of a camp plan's rows as today, for the degrade path: the party walks the camp and the tag rows as
+// plain moves and pulls at the row's point.
+static std::vector<std::string> CampPlainOrders(DungeonPlan& plan, Facts& f)
+{
+    std::vector<std::string> orders;
+    Run r = Start(&plan);
+    for (int i = 0; i < 40 && r.state == State::Running; ++i)
+    {
+        std::string const order = Tick(r, f);
+        if (!order.empty())
+            orders.push_back(order);
+        if (order.compare(0, 9, "pullback ") == 0)
+            break;
+        // Walk the lead bot on to every move point the run sends (arrivals are not orders).
+        if (!order.empty() && order.compare(0, 5, "move ") == 0)
+            std::sscanf(order.c_str(), "move %f %f %f", &f.leadX, &f.leadY, &f.leadZ);
+    }
+    return orders;
+}
+
+static void TestCampPullHoldsTheRaidAndWalksTheTankOut()
+{
+    DungeonPlan plan = CampPullPlan();
+    Run r = Start(&plan);
+    Facts f = CampFacts();
+    f.units = {CampUnit(7, 4852, 30, 0, 0, 20)};
+    CampToHold(r, f);
+    CHECK(Tick(r, f).empty());                 // the hold is live: the tank walks out
+    CHECK(Tick(r, f) == "move 30.0 0.0 0.0");  // tag row 1
+    f.leadX = 30.0f;
+    CHECK(Tick(r, f).empty());
+    CHECK(Tick(r, f) == "move 40.0 0.0 0.0");  // tag row 2
+    f.leadX = 40.0f;
+    CHECK(Tick(r, f).empty());                 // at the tag spot
+    CHECK(Tick(r, f) == "pullback 7");
+    f.leadX = 20.0f;                           // the tank back at the camp, the pack with it
+    CHECK(Tick(r, f) == "camp release");
+    CHECK(r.note == "camp pull: the pack came to the camp");
+    CHECK(r.campState == CampState::Fight);
+}
+
+static void TestCampPullMarksBeforeTheWalkOutAndNoSap()
+{
+    DungeonPlan plan = CampPullPlan({4852, 100, 101}, {100, 101});
+    Run r = Start(&plan);
+    Facts f = CampFacts();
+    f.members = {Mem("Tanky", 0), CcMem("Magey", CcFamily::Polymorph), CcMem("Magey2", CcFamily::Polymorph),
+        CcMem("Roguey", CcFamily::Sap)};
+    f.units = {CampUnit(1, 4852, 30, 0, 0, 20), CampUnit(2, 100, 35, 0, 0, 25),
+        CampUnit(3, 101, 40, 0, 0, 30)};
+    CampToHold(r, f);
+    CHECK(Tick(r, f) == "cc moon 2 Magey");
+    CHECK(Tick(r, f) == "cc square 3 Magey2");
+    // No Sap at the camp: the rogue never gets an order, and the walk out follows the marks.
+    CHECK(Tick(r, f).empty());
+    CHECK(Tick(r, f) == "move 30.0 0.0 0.0");
+    for (std::size_t i = 0; i < r.ccWatch.size(); ++i)
+        CHECK(r.ccWatch[i].guid != 1);
+    CHECK(r.ccSent.count(1) == 0);
+}
+
+static void TestCampPullTagSkipsKillFirstAndMarkedUnits()
+{
+    DungeonPlan plan = CampPullPlan({4853, 4852}, {100});
+    plan.killFirst = {4853};
+    Run r = Start(&plan);
+    Facts f = CampFacts();
+    // The kill_first unit farther, a nearer plain one: the tag is the nearer one.
+    f.units = {CampUnit(8, 4853, 55, 0, 0, 22), CampUnit(7, 4852, 35, 0, 0, 12)};
+    f.members = {Mem("Tanky", 0), CcMem("Magey", CcFamily::Polymorph)};
+    CampToHold(r, f);
+    CHECK(Tick(r, f).empty());                 // no mark (neither entry is cc_priority)
+    CHECK(Tick(r, f) == "move 30.0 0.0 0.0");
+    f.leadX = 30.0f;
+    CHECK(Tick(r, f).empty());
+    CHECK(Tick(r, f) == "move 40.0 0.0 0.0");
+    f.leadX = 40.0f;
+    CHECK(Tick(r, f).empty());
+    CHECK(Tick(r, f) == "pullback 7");
+}
+
+static void TestCampPullHeldMemberHitReleases()
+{
+    DungeonPlan plan = CampPullPlan();
+    Run r = Start(&plan);
+    Facts f = CampFacts();
+    f.units = {CampUnit(7, 4852, 30, 0, 0, 20)};
+    CampToHold(r, f);
+    CHECK(Tick(r, f).empty());                 // WalkOut
+    f.campHitBots = {"Fionaa"};
+    CHECK(Tick(r, f) == "camp release");
+    CHECK(r.note == "camp pull: Fionaa hit at the camp before the pack arrived: hold released");
+    CHECK(r.campState == CampState::Fight);
+}
+
+static void TestCampPullTankDrawsAFightOnTheWayOut()
+{
+    DungeonPlan plan = CampPullPlan();
+    Run r = Start(&plan);
+    Facts f = CampFacts();
+    f.units = {CampUnit(7, 4852, 30, 0, 0, 20)};
+    CampToHold(r, f);
+    CHECK(Tick(r, f).empty());                 // WalkOut
+    f.leadInCombat = true;
+    CHECK(Tick(r, f) == "camp release");
+    CHECK(r.note == "camp pull: the tank drew a fight on the walk out");
+    CHECK(r.campState == CampState::Fight);
+}
+
+static void TestCampPullNoShotGivesUpToAPlainPull()
+{
+    DungeonPlan plan = CampPullPlan();
+    Run r = Start(&plan);
+    Facts f = CampFacts();
+    // At the tag spot the unit is not in sight: no shot in kCampTagWaitMs.
+    f.units = {CampUnit(7, 4852, 30, 0, 0, 20, false)};
+    CampToHold(r, f);
+    CHECK(Tick(r, f).empty());
+    CHECK(Tick(r, f) == "move 30.0 0.0 0.0");
+    f.leadX = 30.0f;
+    CHECK(Tick(r, f).empty());
+    CHECK(Tick(r, f) == "move 40.0 0.0 0.0");
+    f.leadX = 40.0f;
+    CHECK(Tick(r, f).empty());
+    std::string order;
+    for (std::uint32_t i = 0; i < kCampTagWaitMs / kTickMs && order.empty(); ++i)
+        order = Tick(r, f);
+    CHECK(order == "camp release");
+    CHECK(r.note == "camp pull given up: no shot from the tag spot");
+    CHECK(r.campState == CampState::GaveUp);
+    // The tank walks back to the camp, then today's pull from the camp.
+    CHECK(Tick(r, f) == "move 20.0 0.0 0.0");
+    f.leadX = 20.0f;
+    CHECK(Tick(r, f) == "pullback 7");
+}
+
+static void TestCampPullPackNeverCameRetriesThenGivesUp()
+{
+    DungeonPlan plan = CampPullPlan();
+    Run r = Start(&plan);
+    Facts f = CampFacts();
+    // The unit is 40 yd from the camp: it never reaches the camp's fight distance.
+    f.units = {CampUnit(7, 4852, 60, 0, 0, 20)};
+    CampToHold(r, f);
+    CHECK(Tick(r, f).empty());
+    CHECK(Tick(r, f) == "move 30.0 0.0 0.0");
+    f.leadX = 30.0f;
+    Tick(r, f);
+    CHECK(Tick(r, f) == "move 40.0 0.0 0.0");
+    f.leadX = 40.0f;
+    Tick(r, f);
+    CHECK(Tick(r, f) == "pullback 7");
+    // The tank is back, no fight starts: one more tag after kPullNoFightMs.
+    f.leadX = 20.0f;
+    std::string order;
+    for (std::uint32_t i = 0; i < kPullNoFightMs / kTickMs + 1 && order.empty(); ++i)
+        order = Tick(r, f);
+    CHECK(order == "move 40.0 0.0 0.0");
+    f.leadX = 40.0f;
+    Tick(r, f);
+    CHECK(Tick(r, f) == "pullback 7");
+    // The second tag did not bring it either: given up.
+    f.leadX = 20.0f;
+    std::uint32_t releases = 0;
+    for (int i = 0; i < 200 && r.campState != CampState::GaveUp; ++i)
+    {
+        std::string const ticked = Tick(r, f);
+        if (ticked == "camp release")
+            ++releases;
+    }
+    CHECK(releases == 1);
+    CHECK(r.note == "camp pull given up: the pack never came");
+}
+
+static void TestCampPullPackHeldItsGround()
+{
+    DungeonPlan plan = CampPullPlan();
+    Run r = Start(&plan);
+    Facts f = CampFacts();
+    f.units = {CampUnit(7, 4852, 30, 0, 0, 20)};
+    CampToHold(r, f);
+    CHECK(Tick(r, f).empty());
+    CHECK(Tick(r, f) == "move 30.0 0.0 0.0");
+    f.leadX = 30.0f;
+    Tick(r, f);
+    CHECK(Tick(r, f) == "move 40.0 0.0 0.0");
+    f.leadX = 40.0f;
+    Tick(r, f);
+    CHECK(Tick(r, f) == "pullback 7");
+    // The tank is back, the fight is on, and the pack holds its ground 30 yd from the camp.
+    f.leadX = 20.0f;
+    f.anyInCombat = true;
+    f.units = {CampUnit(7, 4852, 50, 0, 0, 30)};
+    std::string order;
+    for (std::uint32_t i = 0; i < kCampStayedMs / kTickMs && order.empty(); ++i)
+        order = Tick(r, f);
+    CHECK(order == "camp release");
+    CHECK(r.note == "camp pull: the pack held its ground (30.0 yd from the camp): the raid goes in");
+}
+
+static void TestCampPullWalkOutStalls()
+{
+    DungeonPlan plan = CampPullPlan();
+    Run r = Start(&plan);
+    Facts f = CampFacts();
+    f.units = {CampUnit(7, 4852, 30, 0, 0, 20)};
+    CampToHold(r, f);
+    CHECK(Tick(r, f).empty());
+    CHECK(Tick(r, f) == "move 30.0 0.0 0.0");
+    // No headway: the walk out is given up after kWalkRetryMs, before its own 30 s cap.
+    std::string order;
+    for (std::uint32_t i = 0; i < kCampWalkOutCapMs / kTickMs && order.empty(); ++i)
+        order = Tick(r, f);
+    CHECK(order == "camp release");
+    CHECK(r.campState == CampState::GaveUp);
+    CHECK(r.note == "camp pull given up: walk out stalled");
+}
+
+static void TestCampPullKeyOffWalksTheRowsAsToday()
+{
+    // Key off: the camp row, the tag rows and the pull walk exactly as the same plan without the flags.
+    DungeonPlan plain;
+    plain.steps = {Step(PlanStepKind::Move, 0, 0, 0), Step(PlanStepKind::Move, 20, 0, 0),
+        Step(PlanStepKind::Move, 30, 0, 0), Step(PlanStepKind::Move, 40, 0, 0), PullStep(60, {4852}, 0)};
+    Facts plainFacts = Party(0);
+    plainFacts.units = {CampUnit(7, 4852, 30, 0, 0, 20)};
+    std::vector<std::string> const expected = CampPlainOrders(plain, plainFacts);
+    CHECK(expected.size() == 4);
+    CHECK(expected[0] == "move 20.0 0.0 0.0" && expected[3] == "pullback 7");
+
+    DungeonPlan plan = CampPullPlan();
+    Facts f = CampFacts();
+    f.campPull = false;
+    f.units = {CampUnit(7, 4852, 30, 0, 0, 20)};
+    std::vector<std::string> const orders = CampPlainOrders(plan, f);
+    CHECK(orders == expected);
+}
+
+static void TestCampPullNeedsARangedTankLead()
+{
+    DungeonPlan plan = CampPullPlan();
+    Run r = Start(&plan);
+    Facts f = CampFacts();
+    f.leadIsTank = false;
+    f.units = {CampUnit(7, 4852, 30, 0, 0, 20)};
+    std::vector<std::string> orders;
+    for (int i = 0; i < 12 && r.state == State::Running; ++i)
+    {
+        std::string const order = Tick(r, f);
+        if (!order.empty())
+            orders.push_back(order);
+        if (!order.empty() && order.compare(0, 5, "move ") == 0)
+            std::sscanf(order.c_str(), "move %f %f %f", &f.leadX, &f.leadY, &f.leadZ);
+    }
+    // Same rows as the key off, and the reason noted once.
+    CHECK(orders.size() == 4 && orders[0] == "move 20.0 0.0 0.0" && orders[3] == "pullback 7");
+    CHECK(r.campOffNotedStep == 4);
+    CHECK(r.campState == CampState::Off);
+}
+
+static void TestCampPullResumeAtATagRowGathersAtTheCamp()
+{
+    DungeonPlan plan = CampPullPlan();
+    Run r = Start(&plan, 3); // resumed at tag row 2
+    Facts f = CampFacts(-20.0f); // 40 yd from the camp
+    f.units = {CampUnit(7, 4852, 30, 0, 0, 50)};
+    CHECK(Tick(r, f).empty()); // the tag row is consumed
+    CHECK(r.step == 4);
+    CHECK(Tick(r, f) == "move 20.0 0.0 0.0"); // the pull row gathers the party at the camp first
+}
+
 // Both keys on (AiPlayerbot.DungeonRunAggroEstimate and DungeonRunRezHold): a loud pull, a death in its
 // fight, then the regroup, then the next loud pick. The joiner rest is a pull-step thing (cleared by
 // ResetStep, kept by BeginRegroup, which a single death reaches without a ResetStep); the rez hold's clocks
@@ -29765,6 +30089,18 @@ int main()
     TestPullEstimateCacheRereadsOnNewStepPass();
     TestRingPullNoteSaysBodiesExpected();
     TestWalkRingKeyOffKeepsJoinerNotes();
+    TestCampPullHoldsTheRaidAndWalksTheTankOut();
+    TestCampPullMarksBeforeTheWalkOutAndNoSap();
+    TestCampPullTagSkipsKillFirstAndMarkedUnits();
+    TestCampPullHeldMemberHitReleases();
+    TestCampPullTankDrawsAFightOnTheWayOut();
+    TestCampPullNoShotGivesUpToAPlainPull();
+    TestCampPullPackNeverCameRetriesThenGivesUp();
+    TestCampPullPackHeldItsGround();
+    TestCampPullWalkOutStalls();
+    TestCampPullKeyOffWalksTheRowsAsToday();
+    TestCampPullNeedsARangedTankLead();
+    TestCampPullResumeAtATagRowGathersAtTheCamp();
     TestRezHoldOffIsUnchanged();
     TestRezHoldOn();
     TestRezHoldClocks();
