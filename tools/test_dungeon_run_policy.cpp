@@ -19396,8 +19396,9 @@ static void TestStragglerPullPausesWhenTheWayPassesAnotherPack()
     CHECK(Tick(r, f).empty());
     CHECK(r.state == State::Paused);
     CHECK(r.note == "pack not cleared: 11365 0x000000000000d001 of this pack (spawned 12.7 yd from the centre) is 12.7 yd "
-        "out and did not come within 60 s; the walk to it passes 11368 at 12.0 yd (its 20.0 yd reach plus 5.0 yd): "
-        "pull it, then .bot run resume (the step no longer waits for it), or .bot run skip");
+        "out and did not come within 60 s; the walk to it passes 11368 at 12.0 yd (its 20.0 yd reach plus 5.0 yd); "
+        "no living tank is left to pull it: pull it, then .bot run resume (the step no longer waits for it), or "
+        ".bot run skip");
     CHECK(r.spawnPatrolGaveUp.count(0xd001) == 1);
 }
 
@@ -19436,6 +19437,119 @@ static void TestStragglerPullFallsBackToTheOffTank()
     CHECK(r.note == "pack not cleared: 11365 0x000000000000d001 of this pack (spawned 12.7 yd from the centre) is 12.7 yd "
         "out and did not come within 60 s; Offy did not pull it within 45 s: pull it, then .bot run resume (the step "
         "no longer waits for it), or .bot run skip");
+}
+
+// A refused lead bot's order is a failed try like the 45 s run out: the off-tank's one try goes out, not a pause.
+static void TestStragglerPullRefusedLeadOrderFallsBackToTheOffTank()
+{
+    DungeonPlan plan = StragglerPlan();
+    Run r = Start(&plan);
+    Facts f = StragglerFacts();
+    MemberFact off = Mem("Offy", 5.0f);
+    off.tank = true;
+    f.members = {off};
+    f.patrollers = {StragglerUnit()};
+    for (int i = 0; i < 60; ++i)
+        CHECK(Tick(r, f).empty());
+    CHECK(Tick(r, f).empty()); // the way is read
+    StragglerWayClear(f, 0xd001, "Tanky");
+    CHECK(Tick(r, f) == "attack 53249 Tanky");
+    OrderRefused(r, "attack 53249 Tanky", "invalid-target: The group cannot attack that target.");
+    CHECK(Tick(r, f).empty()); // the refused try moves to the off-tank
+    CHECK(r.state == State::Running && r.stragglerTry == 2 && r.stragglerTank == "Offy");
+    CHECK(r.note == "pack not cleared: Offy (the off-tank) walks to 11365 0x000000000000d001 (12.7 0.0 0.0) and "
+        "pulls it (try 2)");
+    StragglerWayClear(f, 0xd001, "Offy");
+    CHECK(Tick(r, f) == "attack 53249 Offy");
+}
+
+// A lead-only path failure (no path to the point) is the same failed try: the off-tank gets its read and its attack.
+static void TestStragglerPullLeadPathFailureFallsBackToTheOffTank()
+{
+    DungeonPlan plan = StragglerPlan();
+    Run r = Start(&plan);
+    Facts f = StragglerFacts();
+    MemberFact off = Mem("Offy", 5.0f);
+    off.tank = true;
+    f.members = {off};
+    f.patrollers = {StragglerUnit()};
+    for (int i = 0; i < 60; ++i)
+        CHECK(Tick(r, f).empty());
+    CHECK(Tick(r, f).empty()); // the way is read
+    CHECK(r.stragglerPathWanted == 0xd001);
+    f.stragglerPathRead = true;
+    f.stragglerPathFor = 0xd001;
+    f.stragglerPathTank = "Tanky";
+    f.stragglerPathOk = false;
+    CHECK(Tick(r, f).empty()); // the lead bot's way has no path: the off-tank's try starts
+    CHECK(r.state == State::Running && r.stragglerTry == 2 && r.stragglerTank == "Offy");
+    CHECK(r.stragglerPathWanted == 0xd001); // the off-tank's way is read next
+    CHECK(r.note == "pack not cleared: Offy (the off-tank) walks to 11365 0x000000000000d001 (12.7 0.0 0.0) and "
+        "pulls it (try 2)");
+    StragglerWayClear(f, 0xd001, "Offy");
+    CHECK(Tick(r, f) == "attack 53249 Offy");
+}
+
+// Both tanks fail their way: no try is left, so the run pauses with the reason.
+static void TestStragglerPullBothTanksFailPauses()
+{
+    DungeonPlan plan = StragglerPlan();
+    Run r = Start(&plan);
+    Facts f = StragglerFacts();
+    MemberFact off = Mem("Offy", 5.0f);
+    off.tank = true;
+    f.members = {off};
+    f.patrollers = {StragglerUnit()};
+    for (int i = 0; i < 60; ++i)
+        CHECK(Tick(r, f).empty());
+    CHECK(Tick(r, f).empty()); // the way is read
+    f.stragglerPathRead = true;
+    f.stragglerPathFor = 0xd001;
+    f.stragglerPathTank = "Tanky";
+    f.stragglerPathOk = false;
+    CHECK(Tick(r, f).empty()); // the lead bot's way has no path: the off-tank's try starts
+    CHECK(r.state == State::Running && r.stragglerTry == 2 && r.stragglerTank == "Offy");
+    f.stragglerPathRead = true;
+    f.stragglerPathFor = 0xd001;
+    f.stragglerPathTank = "Offy";
+    f.stragglerPathOk = false;
+    CHECK(Tick(r, f).empty()); // the off-tank's way has no path either: the pause
+    CHECK(r.state == State::Paused && r.stragglerTry == 2);
+    CHECK(r.note.find("the walk to it has no path that ends at the point") != std::string::npos);
+    CHECK(r.spawnPatrolGaveUp.count(0xd001) == 1);
+}
+
+// A pack that comes into the tank's remaining way after the first read aborts that try at the 2 s recheck and sends
+// the off-tank, with the run's note naming it.
+static void TestStragglerPullRecheckAbortsOnANewBlocker()
+{
+    DungeonPlan plan = StragglerPlan();
+    Run r = Start(&plan);
+    Facts f = StragglerFacts();
+    MemberFact off = Mem("Offy", 5.0f);
+    off.tank = true;
+    f.members = {off};
+    f.patrollers = {StragglerUnit()};
+    for (int i = 0; i < 60; ++i)
+        CHECK(Tick(r, f).empty());
+    CHECK(Tick(r, f).empty()); // the way is read
+    StragglerWayClear(f, 0xd001, "Tanky");
+    CHECK(Tick(r, f) == "attack 53249 Tanky");
+    CHECK(Tick(r, f).empty()); // 1 s of the attack's wait
+    CHECK(Tick(r, f).empty()); // 2 s: the way is read again
+    CHECK(r.stragglerPathWanted == 0xd001);
+    // The glue's fresh read finds a not-yet-pulled pack on the remaining way.
+    f.stragglerPathRead = true;
+    f.stragglerPathFor = 0xd001;
+    f.stragglerPathTank = "Tanky";
+    f.stragglerPathOk = true;
+    f.stragglerPathBlockEntry = 11368;
+    f.stragglerPathBlockYd = 9.0f;
+    f.stragglerPathBlockReachYd = 20.0f;
+    CHECK(Tick(r, f).empty());
+    CHECK(r.state == State::Running && r.stragglerTry == 2 && r.stragglerTank == "Offy");
+    CHECK(r.note == "pack not cleared: Offy (the off-tank) walks to 11365 0x000000000000d001 (12.7 0.0 0.0) and "
+        "pulls it (try 2)");
 }
 
 static void TestSpawnOwnedPatrollerGateOffUsesTheOldRule()
@@ -23408,6 +23522,7 @@ static void TestStragglerPullWaitsOnePatrolCycleThenPullsAtItsLoopPoint()
     f.leadX = -12240.0f;
     f.leadY = -1490.0f;
     f.leadZ = kPatrolPullFloorZ;
+    CHECK(Tick(r, f).empty()); // at the loop point: the way is read once more before the attack
     CHECK(Tick(r, f) == "attack 9 Tanky");
     CHECK(r.state == State::Running && r.step == 1);
     // It comes into the fight: the gate is done for the step, the fight handles it.
@@ -32637,6 +32752,10 @@ int main()
     TestStragglerPullLeavesTheInShotWaitAlone();
     TestStragglerPullPausesWhenTheWayPassesAnotherPack();
     TestStragglerPullFallsBackToTheOffTank();
+    TestStragglerPullRefusedLeadOrderFallsBackToTheOffTank();
+    TestStragglerPullLeadPathFailureFallsBackToTheOffTank();
+    TestStragglerPullBothTanksFailPauses();
+    TestStragglerPullRecheckAbortsOnANewBlocker();
     TestStragglerPullNeverTakesABossKillFirstOrLinkedDeathUnit();
     TestStragglerPullWaitsOnePatrolCycleThenPullsAtItsLoopPoint();
     TestSpawnOwnedPatrollerGateOffUsesTheOldRule();

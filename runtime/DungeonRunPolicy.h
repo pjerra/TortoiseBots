@@ -606,6 +606,9 @@ constexpr float kPatrolSeeYd = 30.0f;             // the glue reads patrollers o
 // keeps off another not-yet-pulled pack's aggro reach (the pack's own reach plus this).
 constexpr std::uint32_t kStragglerPullMs = 45000;
 constexpr float kStragglerPullAggroMarginYd = 5.0f;
+// The way is re-read right before a movement order and every this often while the tank walks or waits (a pack that
+// comes into the way after the first read aborts that tank's try, as a blocked way does).
+constexpr std::uint32_t kStragglerRecheckMs = 2000;
 // A stand-pull pull row's patrol is waited for one full loop at most when the glue could not read the loop's time.
 constexpr std::uint32_t kPatrolPullCycleMs = 90000;
 // The pack-cleared gate (AiPlayerbot.DungeonRunPackClearMarginYd): a pull step
@@ -1632,8 +1635,9 @@ struct Facts
     // (StragglerPullTick) instead of the pause.
     bool stragglerPull = false;
     // ... the walk of the tank to the unit or to the patrol's loop point (Run::stragglerPathWanted), read by the glue
-    // on the tick after the policy asked: a path that ends at the point, and the first living hostile of another pack
-    // it passes within its aggro reach plus kStragglerPullAggroMarginYd of (its entry, how far and that reach; 0: none).
+    // on the tick after the policy asked (again right before movement and every kStragglerRecheckMs during the pull): a
+    // path that ends at the point, and the first living hostile of another pack it passes within its aggro reach plus
+    // kStragglerPullAggroMarginYd of (its entry, how far and that reach; 0: none).
     bool stragglerPathRead = false;
     std::uint64_t stragglerPathFor = 0;
     std::string stragglerPathTank; // ... and the tank whose walk it is
@@ -2144,13 +2148,16 @@ struct Run
     std::unordered_map<std::uint64_t, std::string> residueOutOfReach;
     std::unordered_set<std::uint64_t> patrolSeen; // ... the patrollers this step saw (a pass of one is remembered run-wide)
     // The straggler pull (AiPlayerbot.DungeonRunStragglerPull, StragglerPullTick): the unit the acting tank goes for,
-    // the tank, the try in progress (1 the acting tank, 2 the off-tank's), the try's clock, the point it walks to
-    // first (a patrol's loop point; the unit itself otherwise), whether that walk went out and whether the attack did,
-    // the glue's pending read of the walk, and the refusal that ended a try.
+    // the tank, the try in progress (1 the acting tank, 2 the off-tank's), the tanks already tried, the try's clock,
+    // the point it walks to first (a patrol's loop point; the unit itself otherwise), whether that walk went out and
+    // whether the attack did, the glue's pending read of the walk and the clock of the last clearance read, and the
+    // refusal that ended a try.
     std::uint64_t stragglerGuid = 0;
     std::string stragglerTank;
     std::uint8_t stragglerTry = 0;
+    std::unordered_set<std::string> stragglerTried;
     std::uint32_t stragglerMs = 0;
+    std::uint32_t stragglerRecheckMs = 0;
     float stragglerX = 0.0f, stragglerY = 0.0f, stragglerZ = 0.0f;
     bool stragglerWalkSent = false;
     bool stragglerAttackSent = false;
@@ -2160,7 +2167,7 @@ struct Run
     // The caller's pause line, set when its try begins: its base (the reason goes in) and the advice after it.
     std::string stragglerPause;
     std::string stragglerAdvice;
-    bool stragglerLost = false; // an order of it was refused: the pull fails out at once, never another try
+    bool stragglerLost = false; // an order of it was refused: the try moves to the next tank (or pauses)
     // A big pack's stand walk (BigPackWalkGate): the walk's unit, stand and
     // joiner count; the hold for the party, its time, and whether its ceiling
     // was spent (the walk then goes on without the gate).
@@ -7350,8 +7357,8 @@ inline bool OffMapReturnTick(Run& r, const Facts& f, std::string& order);
 
 inline void OrderRefused(Run& r, const std::string& order, const std::string& answer)
 {
-    // A refused straggler pull order (the tank's walk to the point, or its attack): the try is over with that reason,
-    // never a pause here (the straggler's own pause line names it).
+    // A refused straggler pull order (the tank's walk to the point, or its attack): that tank's try is over with that
+    // reason; the next tick moves to the next tank (or pauses there, the straggler's own line naming it).
     if (!r.stragglerOrder.empty() && order == r.stragglerOrder)
     {
         r.stragglerFail = "its " + order + " was refused (" + answer + ")";
@@ -13146,11 +13153,13 @@ inline bool PackResidueTick(Run& r, const Facts& f, const PlanStep& s, std::uint
 // The straggler pull (AiPlayerbot.DungeonRunStragglerPull): a unit the step waits for (a spawn-owned patroller of a
 // pull step, or a stand-pull row's patrol) that did not come is pulled by the acting tank instead of the pause. The
 // acting tank is the lead bot while it lives and is a tank, else the off-tank that holds the main tank role; a failed
-// try goes to the off-tank once. The tank walks to the unit (a patrol: to the nearest point of its loop on the party's
-// side) and pulls it with an `attack`, while the rest of the party stays where it stands (it follows the lead bot, or
-// stands with it at the stand). The way must not pass another not-yet-pulled pack within its aggro reach plus
-// kStragglerPullAggroMarginYd: the glue reads it (Run::stragglerPathWanted), and a blocked way pauses as before with
-// the reason. Never a boss, a kill_first unit or a linked_death one.
+// try - a refused order, no path, a blocked way or the 45 s run out - goes to one next untried off-tank, and only
+// then the run pauses. The tank walks to the unit (a patrol: to the nearest point of its loop on the party's side)
+// and pulls it with an `attack`, while the rest of the party stays where it stands (it follows the lead bot, or stands
+// with it at the stand). The way must not pass another not-yet-pulled pack within its aggro reach plus
+// kStragglerPullAggroMarginYd: the glue reads it (Run::stragglerPathWanted) right before each movement order and every
+// kStragglerRecheckMs while the tank walks or waits, and a blocked way aborts that tank's try. Never a boss, a
+// kill_first unit or a linked_death one.
 enum class StragglerVerdict : std::uint8_t { Held, NotThis, Failed };
 
 // Why a straggler pull never applies to `u` ("" when it may): the key off, no unit, or a unit the fight's own rules
@@ -13171,22 +13180,31 @@ inline std::string StragglerNever(const Run& r, const Facts& f, const UnitFact& 
 }
 
 // The bot a straggler pull goes to: the lead bot while it lives and is a tank, else the off-tank that holds the main
-// tank role (the first living tank member of the layout). `spent` is the bot already tried: no bot is sent twice, and
-// the off-tank's try never takes the lead bot. "" when there is none to send.
-inline std::string StragglerTankName(const Facts& f, const std::string& spent)
+// tank role (the first living tank member of the layout). `tried` lists the tanks this pull already sent (no bot is
+// sent twice). "" when there is none to send.
+inline std::string StragglerTankName(const Facts& f, const std::unordered_set<std::string>& tried)
 {
     auto const usable = [&](const MemberFact& m)
     {
         // Never a bot off the plan's map or in another copy of the instance: it cannot walk to the unit, and the
         // read of its way then paused the run though another tank stood right there.
-        return !m.name.empty() && m.name != spent && !m.frozen && !m.inCombat && !m.offPlanMap && !m.otherCopy;
+        return !m.name.empty() && !tried.count(m.name) && !m.frozen && !m.inCombat && !m.offPlanMap && !m.otherCopy;
     };
-    if (spent.empty() && f.leadAlive && f.leadIsTank && !f.carrier.empty())
+    if (tried.empty() && f.leadAlive && f.leadIsTank && !f.carrier.empty())
         return f.carrier;
     for (const MemberFact& m : f.members)
         if (m.tank && !m.healer && usable(m))
             return m.name;
     return std::string();
+}
+
+// ... with just the last tank spent (the lead bot's first try): the same answer as above with `spent` in `tried`.
+inline std::string StragglerTankName(const Facts& f, const std::string& spent)
+{
+    std::unordered_set<std::string> tried;
+    if (!spent.empty())
+        tried.insert(spent);
+    return StragglerTankName(f, tried);
 }
 
 // The nearest point of a patrol's loop to the party (the lead bot's spot): the point on its path on the party's side.
@@ -13235,7 +13253,9 @@ inline void ResetStragglerPull(Run& r)
     r.stragglerGuid = 0;
     r.stragglerTank.clear();
     r.stragglerTry = 0;
+    r.stragglerTried.clear();
     r.stragglerMs = 0;
+    r.stragglerRecheckMs = 0;
     r.stragglerX = r.stragglerY = r.stragglerZ = 0.0f;
     r.stragglerWalkSent = false;
     r.stragglerAttackSent = false;
@@ -13254,12 +13274,12 @@ inline std::string StragglerWalkOrder(const std::string& tank, const std::string
                         : "walk " + tank + " " + Num(x) + " " + Num(y) + " " + Num(z);
 }
 
-// Starts a straggler pull's try on `u`: the tank, the point (a patrol's loop point on the party's side, else the unit
-// itself), the glue's read of the way. False with `r.stragglerFail` when no tank is left to send or the loop was not
-// read. `loopPoint`: the unit walks a patrol.
+// Starts a straggler pull's try on `u`: the next untried tank, the point (a patrol's loop point on the party's side,
+// else the unit itself), the glue's read of the way. False with `r.stragglerFail` when no tank is left to send or the
+// loop was not read. `loopPoint`: the unit walks a patrol.
 inline bool StartStragglerTry(Run& r, const Facts& f, const UnitFact& u, bool loopPoint)
 {
-    std::string const tank = StragglerTankName(f, r.stragglerTank);
+    std::string const tank = StragglerTankName(f, r.stragglerTried);
     if (tank.empty())
     {
         r.stragglerFail = "no living tank is left to pull it";
@@ -13282,6 +13302,7 @@ inline bool StartStragglerTry(Run& r, const Facts& f, const UnitFact& u, bool lo
     r.stragglerTank = tank;
     ++r.stragglerTry;
     r.stragglerMs = 0;
+    r.stragglerRecheckMs = 0;
     r.stragglerWalkSent = false;
     r.stragglerAttackSent = false;
     r.stragglerPathWanted = u.guid;
@@ -13292,6 +13313,24 @@ inline bool StartStragglerTry(Run& r, const Facts& f, const UnitFact& u, bool lo
         Num(r.stragglerX) + " " + Num(r.stragglerY) + " " + Num(r.stragglerZ) + ") and pulls it (try " +
         std::to_string(r.stragglerTry) + ")";
     return true;
+}
+
+// The transition every failure of a try takes (a refused order, a walk with no path or a blocked way, the 45 s run
+// out): `r.stragglerTank` is spent, and the pull's one next untried tank gets its try. False with `r.stragglerFail`
+// saying why (the failure and, when there is no tank left, that too) when the pull must pause. At most two tries go
+// out (the acting tank's and one off-tank's).
+inline bool StragglerNextTank(Run& r, const Facts& f, const UnitFact& u, bool loopPoint, const std::string& why)
+{
+    if (!r.stragglerTank.empty())
+        r.stragglerTried.insert(r.stragglerTank);
+    r.stragglerLost = false;
+    r.stragglerFail = why;
+    if (r.stragglerTry >= 2)
+        return false;
+    if (StartStragglerTry(r, f, u, loopPoint))
+        return true;
+    r.stragglerFail = why + "; " + r.stragglerFail;
+    return false;
 }
 
 // One tick of a straggler pull on `u` (the caller's pause line is used when it fails). `loopPoint`: the unit walks a
@@ -13313,33 +13352,63 @@ inline StragglerVerdict StragglerPullTick(Run& r, const Facts& f, const UnitFact
         ResetStragglerPull(r);
         r.stragglerGuid = u.guid;
     }
+    // One transition for every failure of a try: the refusal the glue reported, a way with no path or a blocked one,
+    // and the run out. It sends the one next untried tank, else the caller pauses with the reason.
     if (r.stragglerLost)
-        return StragglerVerdict::Failed; // an order of this pull was refused: never another try
+    {
+        std::string const why = r.stragglerFail.empty() ? "its order was refused" : r.stragglerFail;
+        return StragglerNextTank(r, f, u, loopPoint, why) ? StragglerVerdict::Held : StragglerVerdict::Failed;
+    }
     if (r.stragglerTry == 0)
         return StartStragglerTry(r, f, u, loopPoint) ? StragglerVerdict::Held : StragglerVerdict::Failed;
-    // The way is read before the walk goes out (a try's first tick asks for it).
+    auto const timedOut = [&]() -> StragglerVerdict
+    {
+        std::string const why = r.stragglerTank + " did not pull it within " +
+            std::to_string(kStragglerPullMs / 1000) + " s";
+        return StragglerNextTank(r, f, u, loopPoint, why) ? StragglerVerdict::Held : StragglerVerdict::Failed;
+    };
+    // The way is read before the walk goes out and re-read right before movement, then every kStragglerRecheckMs while
+    // the tank walks or waits: a pack that comes into the remaining way aborts that tank's try like a blocked way did.
+    bool readNow = false;
     if (r.stragglerPathWanted)
     {
         if (!f.stragglerPathRead || f.stragglerPathFor != u.guid || f.stragglerPathTank != r.stragglerTank)
-            return StragglerVerdict::Held; // the glue reads it next tick (for this tank)
-        r.stragglerPathWanted = 0;
-        if (!f.stragglerPathOk)
         {
-            r.stragglerFail = "the walk to it has no path that ends at the point";
-            return StragglerVerdict::Failed;
+            // The glue reads it next tick (for this tank); the try's clock keeps running meanwhile.
+            if (r.stragglerWalkSent || r.stragglerAttackSent)
+            {
+                r.stragglerMs += dt;
+                if (r.stragglerMs >= kStragglerPullMs)
+                    return timedOut();
+            }
+            return StragglerVerdict::Held;
         }
+        r.stragglerPathWanted = 0;
+        r.stragglerRecheckMs = 0;
+        readNow = true;
+        if (!f.stragglerPathOk)
+            return StragglerNextTank(r, f, u, loopPoint, "the walk to it has no path that ends at the point")
+                ? StragglerVerdict::Held : StragglerVerdict::Failed;
         if (f.stragglerPathBlockEntry)
         {
-            r.stragglerFail = "the walk to it passes " + std::to_string(f.stragglerPathBlockEntry) + " at " +
+            std::string const why = "the walk to it passes " + std::to_string(f.stragglerPathBlockEntry) + " at " +
                 Num(f.stragglerPathBlockYd) + " yd (its " + Num(f.stragglerPathBlockReachYd) + " yd reach plus " +
                 Num(kStragglerPullAggroMarginYd) + " yd)";
-            return StragglerVerdict::Failed;
+            return StragglerNextTank(r, f, u, loopPoint, why) ? StragglerVerdict::Held : StragglerVerdict::Failed;
         }
     }
+    else
+        r.stragglerRecheckMs += dt;
     // A patrol is walked to its loop point first (the fight is pulled from there); a pack unit is pulled where it
     // stands: the attack walks the tank at it.
     if (loopPoint && !r.stragglerWalkSent)
     {
+        if (!readNow)
+        {
+            r.stragglerPathWanted = u.guid; // a fresh look right before the walk goes out
+            r.stragglerRecheckMs = 0;
+            return StragglerVerdict::Held;
+        }
         order = StragglerWalkOrder(r.stragglerTank, f.carrier, r.stragglerX, r.stragglerY, r.stragglerZ);
         r.stragglerOrder = order;
         r.stragglerWalkSent = true;
@@ -13350,34 +13419,36 @@ inline StragglerVerdict StragglerPullTick(Run& r, const Facts& f, const UnitFact
         if (loopPoint && !StragglerTankAt(f, r.stragglerTank, r.stragglerX, r.stragglerY, r.stragglerZ))
         {
             r.stragglerMs += dt;
-            if (r.stragglerMs < kStragglerPullMs)
-                return StragglerVerdict::Held;
+            if (r.stragglerMs >= kStragglerPullMs)
+                return timedOut();
+            if (r.stragglerRecheckMs >= kStragglerRecheckMs)
+            {
+                r.stragglerPathWanted = u.guid;
+                r.stragglerRecheckMs = 0;
+            }
+            return StragglerVerdict::Held;
         }
-        else
+        if (!readNow)
         {
-            order = "attack " + std::to_string(u.guid) + " " + r.stragglerTank;
-            r.stragglerOrder = order;
-            r.stragglerAttackSent = true;
-            r.stragglerMs = 0;
+            r.stragglerPathWanted = u.guid; // a fresh look right before the attack goes out
+            r.stragglerRecheckMs = 0;
             return StragglerVerdict::Held;
         }
-    }
-    else
-    {
-        r.stragglerMs += dt;
-        if (r.stragglerMs < kStragglerPullMs)
-            return StragglerVerdict::Held;
-    }
-    // The try is over: the off-tank's one try after the lead bot's, then the pause.
-    bool const leadTried = r.stragglerTank == f.carrier;
-    std::string const tried = r.stragglerTank;
-    if (leadTried && StartStragglerTry(r, f, u, loopPoint))
+        order = "attack " + std::to_string(u.guid) + " " + r.stragglerTank;
+        r.stragglerOrder = order;
+        r.stragglerAttackSent = true;
+        r.stragglerMs = 0;
         return StragglerVerdict::Held;
-    r.stragglerFail = tried + " did not pull it within " + std::to_string(kStragglerPullMs / 1000) + " s" +
-        (leadTried && r.stragglerFail.find("no living tank") != std::string::npos
-             ? std::string(" and no living off-tank is left to try")
-             : std::string());
-    return StragglerVerdict::Failed;
+    }
+    r.stragglerMs += dt;
+    if (r.stragglerMs >= kStragglerPullMs)
+        return timedOut();
+    if (r.stragglerRecheckMs >= kStragglerRecheckMs)
+    {
+        r.stragglerPathWanted = u.guid;
+        r.stragglerRecheckMs = 0;
+    }
+    return StragglerVerdict::Held;
 }
 
 // A pull step whose units are all gone may still have one of its entries
