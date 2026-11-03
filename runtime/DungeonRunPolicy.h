@@ -4259,6 +4259,7 @@ inline bool WedgedSummon(Run& r, const Facts& f, std::uint32_t dt, std::string& 
         MarkSummoned(r, pick->name);
         HoldForReturn(r, pick->name);
     }
+    r.wedgedSummoned.insert(pick->name);
     ++r.wedgedSummons;
     r.wedgedLastMs = r.runMs;
     r.note = pick->name + " is wedged " + Num(std::fabs(pick->dz)) + " yd " +
