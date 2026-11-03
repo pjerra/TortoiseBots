@@ -8928,7 +8928,10 @@ inline bool CampPullTick(Run& r, const Facts& f, const PlanStep& s, std::uint32_
 inline bool CampPullRowOn(const Run& r, const Facts& f)
 {
     const PlanStep* s = Current(r);
-    return s && s->kind == PlanStepKind::Pull && (s->flags & ai::kPlanFlagCampPull) && f.campPull;
+    // The fight after the release is the camp pull's too; a given-up row or one the key cannot run (no ranged pull
+    // on the lead tank) pulls as it does without the flag, today's joiner rest included.
+    return s && s->kind == PlanStepKind::Pull && (s->flags & ai::kPlanFlagCampPull) && f.campPull &&
+        (r.campState == CampState::Fight || CampPullArmed(r, f));
 }
 
 // The focused unit is gone: no longer among this fight's kill_first units (it
