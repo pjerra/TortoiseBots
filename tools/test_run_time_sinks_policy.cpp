@@ -684,6 +684,103 @@ static void TestReplayRescueAfterEveryStraightFailure()
     CHECK(q.note.find("walk back: no walkable path toward the point of step 6: the replay of the plan's points would walk") == 0);
 }
 
+// Shadowfang Keep r36 slot A (wipes 2 and 3 at step 43): the straight way to step 42 passed an uncleared pack, the first
+// backoff went to step 16, the second to step 1 (every point between lies within reach of a later leg's pack on the
+// floors above), where the lead bot was revived. The straight walk "worked" at once and the walk back walked the points
+// 1-42 (307 yd, 98-132 s) without asking ReplayRescue, which only a failed straight walk asks. A backoff whose plan points
+// from its new target walk kReplayRescueYd or more before the safe point on the way it came is rescued instead
+// (BackoffRescue); a shorter one backs off as before, and the rescue's bounds hold.
+static void TestBackoffToTheEntranceIsRescued()
+{
+    DungeonPlan plan;
+    // 0-6 the route (0 the revive spot; 1-2 and 4-5 within reach of a later step's pack), 7 the wiped pull, 8-9 the later
+    // packs (their steps not reached yet: live), 10 a point after.
+    plan.steps = {Move(0, 0), Move(0, 20), Move(0, 40), Move(0, 100), Move(100, 100), Move(200, 100), Move(200, 40),
+        Pull(200, -10, 9), Pull(10, 30, 21), Pull(150, 110, 22, 50.0f), Move(300, -10)};
+    std::size_t const step = 7;
+    auto run = [&](Facts f, Run& r, int ticks)
+    {
+        r = Start(&plan, step);
+        f.seen = false;
+        StartWalkBack(r, f);
+        CHECK(r.walkBack && r.walkBackDirect && r.walkBackStart == 6);
+        f.approachKnown = true;
+        f.approachRead = true;
+        f.approachX = 2.0f;
+        f.approachY = 40.0f;
+        f.directPathCrossesPack = true;
+        for (int i = 0; i < ticks && !r.strandDue; ++i)
+            Tick(r, f);
+    };
+    // The first backoff (to step 4): its points walk 260 yd: backed off as before.
+    Run a;
+    run(Party(2.0f), a, 1);
+    CHECK(!a.strandDue && a.walkBackDirect && a.walkBackStart == 3 && a.straightBackoffs == 1);
+    CHECK(a.note == "walk back: the straight way to the point of step 7 passes an uncleared pack: straight to step 4 "
+        "instead (1 of 2)");
+    // The second (to step 1, where the lead bot stands): its points walk 360 yd: the rescue instead.
+    Run b;
+    run(Party(2.0f), b, 2);
+    CHECK(b.strandDue && b.strandIdx == 6 && b.walkBackIdx == 6 && b.straightBackoffs == 1);
+    CHECK(b.strandBotOnly && b.strandReplay);
+    CHECK(b.note == "walk back: the straight way to the point of step 4 passes an uncleared pack: the plan's points from "
+        "step 1 would walk 360.0 yd: the lead bot is teleported to a safe point on the way it came (step 7) out of combat");
+    // A real player in the party: the backoff as before (he walks back with the party).
+    Facts withPlayer = Party(2.0f);
+    PlayerFact p;
+    p.name = "Hypeer";
+    p.commander = true;
+    withPlayer.players.push_back(p);
+    Run c;
+    run(withPlayer, c, 2);
+    CHECK(!c.strandDue && c.walkBackDirect && c.walkBackStart == 0 && c.straightBackoffs == 2);
+    // The rescue off.
+    Facts off = Party(2.0f);
+    off.walkBackRescue = false;
+    Run d;
+    run(off, d, 2);
+    CHECK(!d.strandDue && d.walkBackStart == 0 && d.straightBackoffs == 2);
+    // Used on this step already (a resume keeps the latch): the backoff.
+    Run e;
+    {
+        e = Start(&plan, step);
+        e.strandStep = step;
+        Facts g = Party(2.0f);
+        g.seen = false;
+        StartWalkBack(e, g);
+        g.approachKnown = true;
+        g.approachRead = true;
+        g.approachX = 2.0f;
+        g.approachY = 40.0f;
+        g.directPathCrossesPack = true;
+        for (int i = 0; i < 2; ++i)
+            Tick(e, g);
+    }
+    CHECK(!e.strandDue && e.walkBackStart == 0 && e.straightBackoffs == 2);
+    // In a fight: no rescue (RescueAllowed); the fight gate holds the walk back, nothing backs off either.
+    Facts fight = Party(2.0f);
+    fight.anyInCombat = true;
+    Run g2 = Start(&plan, step);
+    g2.walkBack = true;
+    g2.walkBackDirect = true;
+    g2.walkBackIdx = g2.walkBackStart = 3;
+    g2.straightBackoffs = 1;
+    CHECK(!BackoffRescue(g2, fight, "the straight way to the point of step 4 passes an uncleared pack", 0));
+    CHECK(!g2.strandDue);
+    // The measure: the plan's points from the backoff target to the safe point, point to point (no lead-bot leg).
+    CHECK(std::fabs(PointsYards(b, 0, 6) - 360.0f) < 0.01f && std::fabs(PointsYards(b, 3, 6) - 260.0f) < 0.01f);
+    CHECK(PointsYards(b, 6, 6) == 0.0f && PointsYards(b, 6, 3) == 0.0f);
+    CHECK(std::fabs(PointsYards(b, 0, 10) - 471.8f) < 0.1f); // the pulls 7-9 between are no points
+    // Never onto the lead bot's own spot: on the safe point already, no rescue (the latch stays unused).
+    Run h = Start(&plan, step);
+    h.walkBack = true;
+    h.walkBackDirect = true;
+    h.walkBackIdx = h.walkBackStart = 3;
+    CHECK(!BackoffRescue(h, Party(200.0f, 40.0f), "the straight way to the point of step 4 passes an uncleared pack", 0));
+    CHECK(!h.strandDue);
+    CHECK(BackoffRescue(h, Party(2.0f), "the straight way to the point of step 4 passes an uncleared pack", 0)); // control
+}
+
 // The retreat at two dead (AiPlayerbot.DungeonRunRetreatAt2Dead): two dead, the lead bot alive, no engaged unit lost
 // hp for kRetreatQuietMs: one `move` to the last stand, once a fight, bounded; off by default; never for an event boss.
 static Facts LosingFight(std::uint32_t hp)
@@ -1699,6 +1796,7 @@ int main()
     TestJoinedPlayerCancelsTheReplayRescue();
     TestReplayRescueNeedsDistanceToTheTarget();
     TestReplayRescueAfterEveryStraightFailure();
+    TestBackoffToTheEntranceIsRescued();
     TestRetreatAtTwoDead();
     TestRestLinesFollowTheNextFight();
     TestMealWaitUnderTheLightLines();

@@ -7115,7 +7115,8 @@ inline std::size_t LastClearedFight(const Run& r, std::uint32_t team, std::size_
 //     Only plain move points; never past a direct step, an exact point or its launch, or a pack left uncleared.
 //   - A failed straight walk back whose replay would walk kReplayRescueYd or more before the safe point on the way it
 //     came is rescued instead (ReplayRescue: a bot-only party, the rescue's bounds; Stratholme r29 slot 4, Maraudon
-//     r28b slot B).
+//     r28b slot B), and so is a backoff whose plan points from its new target walk that far (BackoffRescue: Shadowfang
+//     Keep r36 slot A, the second backoff landed on step 1).
 constexpr std::uint32_t kStraightBackoffs = 2;
 constexpr float kStraightBackoffYd = 40.0f;
 constexpr float kReplayRescueYd = 300.0f;
@@ -7383,6 +7384,62 @@ inline bool ReplayRescue(Run& r, const Facts& f, const std::string& why)
     r.strandReplay = true; // refused kStrandTries times: the walk back replays the plan's points (StrandFailed)
     r.note = "walk back: " + why + ": the replay of the plan's points would walk " + Num(yd) + " yd: the lead bot " +
         "is teleported to a safe point on the way it came (step " + std::to_string(target + 1) + ") out of combat";
+    return true;
+}
+
+// The yards of the plan's move points from point `from` to point `target`, point to point (every move point between, as
+// ReplayYardsTo counts them, without the lead bot's leg to `from`); 0 when `from` is not before `target`.
+inline float PointsYards(const Run& r, std::size_t from, std::size_t target)
+{
+    if (!r.plan || from >= target || target >= r.plan->steps.size())
+        return 0.0f;
+    const PlanStep& a = r.plan->steps[from];
+    float yd = 0.0f;
+    float x = a.x, y = a.y, z = a.z;
+    for (std::size_t i = from + 1; i <= target; ++i)
+    {
+        const PlanStep& p = r.plan->steps[i];
+        if (!IsMovePoint(p))
+            continue;
+        yd += ai::PlanDistance(x, y, z, p.x, p.y, p.z);
+        x = p.x;
+        y = p.y;
+        z = p.z;
+    }
+    return yd;
+}
+
+// A straight walk back's backoff (its way passes an uncleared pack: the target moves back to `back`, ClearPointBefore)
+// makes the walk back a replay of the plan's points from `back`: when those points walk kReplayRescueYd or more before
+// the safe point on the way it came, the rescue teleport to that point instead of the backoff, by ReplayRescue's rule and
+// bounds (a bot-only party, RescueAllowed, a safe point, never onto the lead bot's own spot; the same kind: armed
+// bot-only, refused kStrandTries times it replays). The straight walk to `back` itself is not counted: the straight walk
+// is the first resort at any length. Shadowfang Keep r36 slot A (wipes 2 and 3 at step 43): 'straight to step 16 instead
+// (1 of 2)', then 'straight to step 1 instead (2 of 2)', every point 7-15 within reach of a later leg's pack on the floors
+// above; the lead bot was revived on step 1, so the straight walk "worked" at once and the walk back walked the points
+// 1-42 (307 yd, 98-132 s) without ReplayRescue, which only a failed straight walk asks. True when the rescue is due.
+inline bool BackoffRescue(Run& r, const Facts& f, const std::string& why, std::size_t back)
+{
+    if (!f.players.empty() || !r.walkBack || !RescueAllowed(r, f) || r.walkBackIdx >= r.step)
+        return false;
+    std::size_t const last = LastReachedBefore(r, r.step);
+    if (last == static_cast<std::size_t>(-1) || last >= r.plan->steps.size())
+        return false;
+    std::size_t const target = SafePointAtOrBefore(r, f.team, last);
+    if (target == static_cast<std::size_t>(-1))
+        return false; // never a teleport beside a live pack: the backoff as before
+    const PlanStep& p = r.plan->steps[target];
+    if (ai::PlanDistance(f.leadX, f.leadY, f.leadZ, p.x, p.y, p.z) <= kArriveYd)
+        return false;
+    float const yd = PointsYards(r, back, target);
+    if (yd < kReplayRescueYd)
+        return false;
+    RescueDue(r, f, target);
+    r.strandBotOnly = true; // armed bot-only: StrandedTeleportTick rechecks for a joined player before the send
+    r.strandReplay = true; // refused kStrandTries times: the walk back replays the plan's points (StrandFailed)
+    r.note = "walk back: " + why + ": the plan's points from step " + std::to_string(back + 1) + " would walk " + Num(yd) +
+        " yd: the lead bot is teleported to a safe point on the way it came (step " + std::to_string(target + 1) +
+        ") out of combat";
     return true;
 }
 
@@ -7831,6 +7888,9 @@ inline bool WalkBack(Run& r, const Facts& f, std::uint32_t dt, std::string& orde
             if (r.straightBackoffs < kStraightBackoffs && r.walkBackIdx == r.walkBackStart)
             {
                 std::size_t const back = ClearPointBefore(r, f.team, r.walkBackIdx, kStraightBackoffYd);
+                if (back != static_cast<std::size_t>(-1) &&
+                    BackoffRescue(r, f, "the straight way to " + what + " passes an uncleared pack", back))
+                    return true;
                 if (back != static_cast<std::size_t>(-1))
                 {
                     ++r.straightBackoffs;
@@ -8214,6 +8274,14 @@ inline FightEnd FightStepEnd(const Run& r, const Facts& f, const PlanStep& s)
     return f.bossDeadNearSpot || (r.bossSeenAlive && f.bossDeadNearLead) ? FightEnd::BossDown : FightEnd::NotYet;
 }
 
+// Where a place lies from the lead bot, for a boss step's pause: "N yd from the lead bot (M yd above it)" (or below),
+// `dz` the place's height over the lead bot. Shadowfang Keep r36 slot A: Fenrus 0.0 yd from his spot, the party 33 yd
+// below him, which the pause did not say.
+inline std::string FromLeadBot(float yd, float dz)
+{
+    return Num(yd) + " yd from the lead bot (" + Num(std::fabs(dz)) + " yd " + (dz < 0.0f ? "below" : "above") + " it)";
+}
+
 // The note of a boss step done because every spawn of the boss belongs to a game event that is not active
 // (Facts::bossSearchEventOff). An event without a description is named by its number only.
 inline std::string BossEventOffNote(std::uint32_t eventId, const std::string& eventName)
@@ -8433,6 +8501,20 @@ inline void FightStep(Run& r, const Facts& f, const PlanStep& s, const std::vect
     }
     else
     {
+        // Alive in sight by his spot, but passed: the pulls drew no fight with him (AwaitPull, kPullTriesPerUnit).
+        // He is not away, so neither the wait for him nor the instance search: a pause at once that says where his
+        // spot lies from the lead bot. Shadowfang Keep r36 slot A step 304: Fenrus behind the Sorcerer's Gate on
+        // z 128.8, the party on z 95; 'not at his spot: waiting for him' and 60 s to the same pause, twice.
+        for (const UnitFact& u : f.units)
+            if (u.entry == s.entry && u.hostile && r.passed.count(u.guid))
+            {
+                auto const tries = r.pullTries.find(u.guid);
+                Pause(r, "boss " + std::to_string(s.entry) + " is alive by his spot, " +
+                    FromLeadBot(u.distLead, s.z - f.leadZ) + ", and " +
+                    std::to_string(tries == r.pullTries.end() ? 0u : tries->second) + " pulls drew no fight with him: " +
+                    "bring the party where it can reach him, then .bot run resume, or .bot run skip");
+                return;
+            }
         // Not seen alive and not seen dead: he is away (a patrol, Theka in
         // Zul'Farrak), not killed. The plan rows carry no patrol path: the
         // party waits at his spot for him to come by, then pauses.
@@ -8465,8 +8547,10 @@ inline void FightStep(Run& r, const Facts& f, const PlanStep& s, const std::vect
             // instance); the pause says where he stands.
             Pause(r, "boss " + std::to_string(s.entry) + " is alive at " + Num(f.bossAliveX) + " " + Num(f.bossAliveY) +
                 " " + Num(f.bossAliveZ) + ", " + Num(ai::PlanDistance(f.bossAliveX, f.bossAliveY, f.bossAliveZ, s.x, s.y, s.z)) +
-                " yd from his spot (an instance search after " + std::to_string(kBossSearchMs / 1000) +
-                " s): bring the party to him or wait for him, then .bot run resume, or .bot run skip");
+                " yd from his spot (an instance search after " + std::to_string(kBossSearchMs / 1000) + " s), " +
+                FromLeadBot(ai::PlanDistance(f.leadX, f.leadY, f.leadZ, f.bossAliveX, f.bossAliveY, f.bossAliveZ),
+                    f.bossAliveZ - f.leadZ) +
+                ": bring the party to him or wait for him, then .bot run resume, or .bot run skip");
             return;
         }
         if (f.bossSearchRead && f.bossSearchDead)

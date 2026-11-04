@@ -170,6 +170,29 @@ class TimeSinksWiringTest(unittest.TestCase):
             self.assertIn(part, rescue)
         self.assertIn("ReplayStartPoint(r, f)", body(POLICY, "inline float ReplayYardsTo(", "\n}\n"))
 
+    def test_backoff_asks_the_rescue_first(self):
+        walk = body(POLICY, "inline bool WalkBack(Run& r, const Facts& f, std::uint32_t dt, std::string& order)", "\n}\n")
+        # The backoff asks the rescue with its new target before it backs off (Shadowfang Keep r36 slot A).
+        ask = walk.index('BackoffRescue(r, f, "the straight way to " + what + " passes an uncleared pack", back))')
+        self.assertLess(walk.index("std::size_t const back = ClearPointBefore(r, f.team, r.walkBackIdx, kStraightBackoffYd);"),
+                        ask)
+        self.assertLess(ask, walk.index("++r.straightBackoffs;"))
+        self.assertEqual(walk.count("BackoffRescue("), 1)
+        rescue = body(POLICY, "inline bool BackoffRescue(Run& r, const Facts& f, const std::string& why, std::size_t back)",
+                      "\n}\n")
+        for part in ("!f.players.empty()", "RescueAllowed(r, f)", "SafePointAtOrBefore(r, f.team, last)",
+                     "PointsYards(r, back, target)", "kReplayRescueYd", "RescueDue(r, f, target);",
+                     "r.strandBotOnly = true;", "r.strandReplay = true;"):
+            self.assertIn(part, rescue)
+
+    def test_passed_boss_pauses_before_the_wait(self):
+        fight = body(POLICY, "inline void FightStep(Run& r, const Facts& f, const PlanStep& s,", "\n}\n")
+        passed = fight.index("if (u.entry == s.entry && u.hostile && r.passed.count(u.guid))")
+        self.assertLess(fight.index("else if (end == FightEnd::BossDown)"), passed)
+        self.assertLess(passed, fight.index("r.bossWaitMs += dt;"))
+        self.assertIn("FromLeadBot(ai::PlanDistance(f.leadX, f.leadY, f.leadZ, f.bossAliveX, f.bossAliveY, f.bossAliveZ),",
+                      fight)
+
 
 if __name__ == "__main__":
     unittest.main()

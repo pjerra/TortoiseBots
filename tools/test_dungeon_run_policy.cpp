@@ -16090,6 +16090,67 @@ static void TestSpawnEventsOffReadsEveryAssociation()
     CHECK(g.off && g.eventId == 81);
 }
 
+// Shadowfang Keep r36 slot A step 304: Fenrus 4274 stood at his spot behind the Sorcerer's Gate (z 128.8), the party 33 yd
+// below him on z 95. Two pulls drew no fight (AwaitPull passed him after kPullTriesPerUnit), and the step said 'boss
+// 4274 not at his spot: waiting for him', waited kBossSearchMs and, after the instance search, paused 'is alive at
+// -135.6 2168.7 128.8, 0.0 yd from his spot': twice, 60 s each. A boss alive in sight by his spot whom the pulls passed
+// is not away: the step pauses at once and says where his spot lies from the lead bot. An add the pulls passed, with
+// the boss himself not in sight, keeps the wait.
+static void TestPassedBossAtHisSpotPausesAtOnce()
+{
+    DungeonPlan plan;
+    PlanStep boss = Step(PlanStepKind::Boss, 0, 0, 33);
+    boss.entry = 4274;
+    boss.entries = {7076};
+    plan.steps = {boss, Step(PlanStepKind::Move, 60)};
+    Run r = Start(&plan);
+    Facts f = Party(0);
+    f.units = {Unit(5, 4274, 33.1f)};
+    int pulls = 0;
+    for (std::uint32_t i = 0; i < 2 * kPullNoFightMs / kTickMs + 10 && r.state == State::Running; ++i)
+        pulls += Tick(r, f) == "pullback 5" ? 1 : 0;
+    CHECK(pulls == 2 && r.passed.count(5));
+    CHECK(r.state == State::Paused && r.step == 0 && r.bossWaitMs == 0 && !r.bossSearchWanted);
+    CHECK(r.note == "boss 4274 is alive by his spot, 33.1 yd from the lead bot (33.0 yd above it), and 2 pulls drew no "
+        "fight with him: bring the party where it can reach him, then .bot run resume, or .bot run skip");
+    // An add passed, the boss not in sight: he is away, the wait as before.
+    Run a = Start(&plan);
+    Facts g = Party(0);
+    g.units = {Unit(6, 7076, 20.0f)};
+    a.passed.insert(6);
+    Tick(a, g);
+    CHECK(a.state == State::Running && a.note == "boss 4274 not at his spot: waiting for him");
+    // The boss in sight and NOT passed is pulled, never paused (the control).
+    Run c = Start(&plan);
+    CHECK(Tick(c, f) == "pullback 5" && c.state == State::Running);
+}
+
+// The instance search's alive pause names where he stands from the lead bot too (r36 slot A: 0.0 yd from his spot,
+// and the party 33 yd below him, which the note did not say).
+static void TestAliveSearchPauseSaysWhereTheLeadBotIs()
+{
+    DungeonPlan plan;
+    PlanStep boss = Step(PlanStepKind::Boss, 30);
+    boss.entry = 3976;
+    ai::NormalizePlanStep(boss);
+    plan.steps = {boss, Step(PlanStepKind::Move, 60)};
+    Run a = Start(&plan);
+    Facts f = Party(0);
+    f.leadZ = 10.0f;
+    for (std::uint32_t i = 0; i < kBossSearchMs / kTickMs + 2 && !a.bossSearchWanted && a.state == State::Running; ++i)
+        Tick(a, f);
+    CHECK(a.bossSearchWanted);
+    Facts alive = f;
+    alive.bossSearchRead = true;
+    alive.bossSearchAlive = true;
+    alive.bossAliveX = 30.0f;
+    alive.bossAliveZ = 43.0f;
+    Tick(a, alive);
+    CHECK(a.state == State::Paused);
+    CHECK(a.note == "boss 3976 is alive at 30.0 0.0 43.0, 43.0 yd from his spot (an instance search after 60 s), 44.6 yd "
+        "from the lead bot (33.0 yd above it): bring the party to him or wait for him, then .bot run resume, or .bot run skip");
+}
+
 // Scarlet Cathedral r23 slot 5, step 97 (fix 6): the party killed Mograine at the door, 290 yd from his spot, and the
 // boss step paused "not found" three times until the corpse decay moved him home 600 s later. After kBossSearchMs at
 // his spot the step asks the glue for one instance-wide search (next tick): dead anywhere is boss down with a note
@@ -18356,6 +18417,8 @@ int main()
     TestPetHeldByUnattackableKeepsTheBotInTheFight();
     TestUnattackableGraceNeverLetsAPlanBossOrHoldUnitGo();
     TestBossNotAtHisSpotIsSearchedForInTheInstance();
+    TestPassedBossAtHisSpotPausesAtOnce();
+    TestAliveSearchPauseSaysWhereTheLeadBotIs();
     TestSpawnEventsOffReadsEveryAssociation();
     TestUnitThatCannotDieNowPauses();
     TestSlowSteadyBossFightNeverPausesBeforeTheHardCap();
