@@ -9,6 +9,7 @@
 #include "../runtime/CommanderTelemetry.h"
 #include "../runtime/CombatMonitorPolicy.h" // CombatMonitor::MemberInfo
 #include "../runtime/DungeonMobTelemetry.h"
+#include "../runtime/LuaApiPolicy.h" // LuaApi::RunView
 #include "../runtime/RaidTelemetry.h"
 
 class ChatHandler;
@@ -93,6 +94,10 @@ uint64_t BoundForeignCommander(Player* player);
 // conveniences (the summon out of a dungeon when the master leaves it) leave
 // such a bot with its lead bot.
 bool IsCommandedBy(Player* commander, Player* bot);
+// The Lua API's run read (TB.GetRun): the `.bot run` run the commander (a player's raw guid) owns, as plain fields:
+// plan, state, leg, step, pass, elapsed time. `active` stays false when the commander owns no run, or its run is
+// done. A read of the run slot only, no tick and no reach into the run's own state. World thread.
+void ReadRunForLua(uint64_t commanderRaw, LuaApi::RunView& out);
 
 } // namespace BotCommands
 } // namespace TortoiseBots

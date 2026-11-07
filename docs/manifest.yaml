@@ -238,6 +238,10 @@ nodes:
     path: developers/architecture.md
     category: developers
     summary: Non-negotiable architectural rules governing TortoiseBots modularity, headless sessions, and zero-core-coupling.
+  - id: developers-lua-api
+    path: developers/lua-api.md
+    category: developers
+    summary: The TB.* Lua API for Eluna builds - read calls, the queued TB.Command, world state only.
   - id: developers-guild-supply
     path: developers/guild-supply.md
     category: developers

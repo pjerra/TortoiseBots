@@ -7,5 +7,6 @@ read_globals = {
     "GetCurrTime", "GetUnitGUID", "GetObjectGUID", "GetPlayerGUID", "GetPlayerByGUID", "GetPlayerByName",
     "GetMapById", "CreateLuaEvent", "RemoveEventById", "RegisterPlayerEvent",
     "RegisterServerEvent", "CharDBQuery", "WorldDBQuery",
+    "TB", -- the module Lua API, world state only (docs/developers/lua-api.md)
 }
 files["lua_scripts/tt/tt_lib.ext"] = {}

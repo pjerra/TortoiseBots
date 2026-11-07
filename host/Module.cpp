@@ -36,11 +36,14 @@
 // pi-lens-ignore: clang:pp_file_not_found
 #include "CombatMonitorAdapter.h"
 #include "RangedShotAdapter.h"
+#include "LuaBindings.h"
 
 namespace TortoiseBots {
 
 void RegisterScripts()
 {
+    // The Lua API (Eluna builds only): the registrar is already added by a static initializer, this keeps its file linked.
+    LuaBindings::Register();
     new BotHostAdapter();
     new LftFillAdapter();
     new BotLfgAdapter();

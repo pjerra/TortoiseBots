@@ -14,10 +14,10 @@ done
 if command -v luacheck >/dev/null 2>&1; then
     luacheck --config .luacheckrc lua_scripts/tt/* || rc=1
 fi
-# mock tests (plain Lua, no server): quiet/clearto dz window, skip filter, friendly rule; q los
+# mock tests (plain Lua, no server): quiet/clearto dz window, skip filter, friendly rule; q los; the TB API smoke
 for c in lua5.4 lua5.1 lua; do
     if command -v "$c" >/dev/null 2>&1; then
-        for t in tests/mock_window_test.lua tests/mock_los_test.lua; do
+        for t in tests/mock_window_test.lua tests/mock_los_test.lua tests/mock_tbapi_test.lua; do
             "$c" "$t" >/dev/null || { echo "FAIL mock test ($c $t)"; rc=1; }
         done
         break

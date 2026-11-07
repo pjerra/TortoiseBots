@@ -29,11 +29,13 @@ namespace TortoiseBots {
 // exercises it standalone.
 
 // Where the drained command's replies go: the player's chat frame (`.bot` typed
-// in chat) or the TBM addon channel (the addon transport).
+// in chat), the TBM addon channel (the addon transport) or a Lua script
+// (`TB.Command`: the reply lines go to the script's callback, else the log).
 enum class BotCommandReply : uint8_t
 {
     Chat,
     Addon,
+    Lua,
 };
 
 struct PendingBotCommand
@@ -48,6 +50,8 @@ struct PendingBotCommand
     // text and the drain dispatches it through TryHandleBotCommand instead of
     // the `.bot` subcommand table.
     bool topLevel = false;
+    // BotCommandReply::Lua only: the id `TB.Command` returned, echoed to the callback.
+    uint64_t luaId = 0;
 };
 
 // Per-requester commands dropped because the requester already had the
@@ -75,7 +79,8 @@ public:
 
     // Any thread. False when the requester already has the maximum pending;
     // the command is then dropped and counted for one reply at the next drain.
-    bool Enqueue(uint64_t requesterGuid, BotCommandReply reply, std::string args, bool topLevel = false)
+    bool Enqueue(uint64_t requesterGuid, BotCommandReply reply, std::string args, bool topLevel = false,
+        uint64_t luaId = 0)
     {
         std::lock_guard<std::mutex> lock(m_mutex);
         size_t& pending = m_pendingPerRequester[requesterGuid];
@@ -88,7 +93,7 @@ public:
             return false;
         }
         ++pending;
-        m_pending.push_back(PendingBotCommand{ NextWorldQueueSequence(), requesterGuid, reply, std::move(args), topLevel });
+        m_pending.push_back(PendingBotCommand{ NextWorldQueueSequence(), requesterGuid, reply, std::move(args), topLevel, luaId });
         return true;
     }
 

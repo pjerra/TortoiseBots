@@ -3,6 +3,7 @@
 #include "BotAddonAdapter.h"
 #include "BotPacketAdapter.h"
 #include "BotPacketBacklog.h"
+#include "LuaBindings.h"
 #include "../commands/BotCommandQueue.h"
 #include "../commands/BotCommands.h"
 #include "Chat.h"
@@ -85,6 +86,11 @@ uint64_t BotChatAdapter::DrainQueuedCommands()
                 BotAddonAdapter::ExecuteCommand(requester, command.args);
                 return;
             }
+            if (command.reply == BotCommandReply::Lua)
+            {
+                LuaBindings::ExecuteCommand(requester, command);
+                return;
+            }
             ChatHandler handler(requester->GetSession());
             if (command.topLevel)
                 BotCommands::TryHandleBotCommand(&handler, command.args.c_str());
@@ -98,6 +104,11 @@ uint64_t BotChatAdapter::DrainQueuedCommands()
             if (dropped.reply == BotCommandReply::Addon)
             {
                 BotAddonAdapter::SendReply(requester, text);
+                return;
+            }
+            if (dropped.reply == BotCommandReply::Lua)
+            {
+                LuaBindings::ReportDropped(requester, dropped);
                 return;
             }
             ChatHandler(requester->GetSession()).SendSysMessage(text.c_str());

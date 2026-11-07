@@ -16927,6 +16927,26 @@ bool IsCommandedBy(Player* commander, Player* bot)
     return group && group->GetId() == binding->groupId && group->IsMember(bot->GetObjectGuid());
 }
 
+void ReadRunForLua(uint64_t commanderRaw, LuaApi::RunView& out)
+{
+    out = LuaApi::RunView();
+    auto const slot = DungeonRuns().find(commanderRaw);
+    if (slot == DungeonRuns().end() || !TortoiseBots::DungeonRun::HoldsItsDead(slot->second.run))
+        return;
+    TortoiseBots::DungeonRun::StatusFields const fields = TortoiseBots::DungeonRun::StatusParts(slot->second.run);
+    out.active = true;
+    out.plan = fields.plan;
+    out.state = fields.state;
+    out.leg = fields.leg;
+    out.kind = fields.kind;
+    out.phase = fields.phase;
+    out.note = fields.note;
+    out.step = static_cast<uint32_t>(fields.step);
+    out.steps = static_cast<uint32_t>(fields.steps);
+    out.pass = slot->second.run.stepPass;
+    out.elapsedMs = slot->second.elapsedMs;
+}
+
 void NoteCommanderThreat(Player* bot)
 {
     if (bot)

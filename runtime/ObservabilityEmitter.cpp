@@ -1453,6 +1453,52 @@ void ObservabilityEmitter::WriteArmoryStats(Player* bot)
         bot->GetTotalAuraModifierByMiscValue(SPELL_AURA_MOD_POWER_REGEN, POWER_MANA));
 }
 
+// One in-world bot's row: the dashboard's fields, read-only (the roster loop clears a revived bot's remembered killer
+// itself). Shared by the snapshot cycle and the Lua API (TB.GetBot).
+void ObservabilityEmitter::BuildBotSnapshot(Player* bot, BotTelemetrySnapshot& snap) const
+{
+    PlayerbotAI* ai = GET_PLAYERBOT_AI(bot);
+    auto trackIt = m_botTracking.find(bot->GetGUIDLow());
+    uint8 state = trackIt != m_botTracking.end() ? trackIt->second.stateIndex : BaseMacroState(bot, ai);
+
+    FillLiveUnitSnapshot(bot, snap);
+    snap.isAlt = AltBotService::Instance().IsAutonomous(bot->GetObjectGuid());
+    snap.kind = BotKindName(ResolveBotKind(bot));
+    snap.role = GetBotRole(bot, ai);
+    snap.strategy = FormatStrategies(ai);
+    snap.worldPvpSeeker = ai && (ai->HasStrategy("world pvp", BotState::BOT_STATE_NON_COMBAT) ||
+        ai->HasStrategy("world pvp", BotState::BOT_STATE_COMBAT));
+    if (!bot->IsAlive())
+    {
+        auto killerIt = m_deathKillers.find(bot->GetGUIDLow());
+        if (killerIt != m_deathKillers.end())
+        {
+            snap.killer = killerIt->second.name;
+            snap.killerLevel = killerIt->second.level;
+        }
+    }
+    snap.state = MacroStateName(state);
+    FillTravelInfo(ai, snap.travelPurpose, snap.travelTo, snap.travelStatus, snap.travelDist);
+    BotManager::Instance().GetAiVisitInfo(bot->GetGUIDLow(), snap.aiVisits, snap.aiAgeMs);
+
+    if (ai)
+    {
+        // getName() is a non-const accessor on the action; the pointer is
+        // only read for its name here.
+        if (Action const* last = ai->GetLastExecutedAction(ai->GetState()))
+            snap.lastAction = const_cast<Action*>(last)->getName();
+        snap.lastTrigger = ai->GetLastExecutedTrigger(ai->GetState());
+    }
+}
+
+bool ObservabilityEmitter::SnapshotBot(Player* bot, BotTelemetrySnapshot& out) const
+{
+    if (!bot || !bot->IsInWorld())
+        return false;
+    BuildBotSnapshot(bot, out);
+    return true;
+}
+
 void ObservabilityEmitter::EmitSnapshotCycle(std::vector<Player*> const& activeBots, std::vector<Player*> const& onlinePlayers,
                                              uint32 diff)
 {
@@ -1464,41 +1510,10 @@ void ObservabilityEmitter::EmitSnapshotCycle(std::vector<Player*> const& activeB
         if (!bot || !bot->IsInWorld())
             continue;
 
-        PlayerbotAI* ai = GET_PLAYERBOT_AI(bot);
-        auto trackIt = m_botTracking.find(bot->GetGUIDLow());
-        uint8 state = trackIt != m_botTracking.end() ? trackIt->second.stateIndex : BaseMacroState(bot, ai);
-
         BotTelemetrySnapshot snap;
-        FillLiveUnitSnapshot(bot, snap);
-        snap.isAlt = AltBotService::Instance().IsAutonomous(bot->GetObjectGuid());
-        snap.kind = BotKindName(ResolveBotKind(bot));
-        snap.role = GetBotRole(bot, ai);
-        snap.strategy = FormatStrategies(ai);
-        snap.worldPvpSeeker = ai && (ai->HasStrategy("world pvp", BotState::BOT_STATE_NON_COMBAT) ||
-            ai->HasStrategy("world pvp", BotState::BOT_STATE_COMBAT));
-        if (!bot->IsAlive())
-        {
-            auto killerIt = m_deathKillers.find(bot->GetGUIDLow());
-            if (killerIt != m_deathKillers.end())
-            {
-                snap.killer = killerIt->second.name;
-                snap.killerLevel = killerIt->second.level;
-            }
-        }
-        else
+        BuildBotSnapshot(bot, snap);
+        if (bot->IsAlive())
             m_deathKillers.erase(bot->GetGUIDLow());
-        snap.state = MacroStateName(state);
-        FillTravelInfo(ai, snap.travelPurpose, snap.travelTo, snap.travelStatus, snap.travelDist);
-        BotManager::Instance().GetAiVisitInfo(bot->GetGUIDLow(), snap.aiVisits, snap.aiAgeMs);
-
-        if (ai)
-        {
-            // getName() is a non-const accessor on the action; the pointer is
-            // only read for its name here.
-            if (Action const* last = ai->GetLastExecutedAction(ai->GetState()))
-                snap.lastAction = const_cast<Action*>(last)->getName();
-            snap.lastTrigger = ai->GetLastExecutedTrigger(ai->GetState());
-        }
         botSnapshots.push_back(snap);
     }
 

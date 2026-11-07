@@ -18,6 +18,7 @@ listed with its source file in `~/TortoiseBots-audit/ELUNA-TOOLKIT-2026-10-22.md
 | `lua_scripts/tt/tt_commands.lua` | world state | the `.tt` GM commands |
 | `lua_scripts/tt/tt_telemetry.lua` | dungeon map states | `TTEV` lines: kills, deaths, combat, casts, creature poll |
 | `lua_scripts/tt/tt_proto.lua` | map 822 / 43 states | encounter watcher prototypes (Hailar's Ritual, Kresh) |
+| `tt_tbapi.lua` | world state | `.tbapi` smoke test of the module's `TB.*` Lua API ([docs/developers/lua-api.md](../../../docs/developers/lua-api.md)); needs a module built with it |
 | `check.sh`, `.luacheckrc` | | syntax check (`luac -p`, luacheck); nothing is executed |
 
 ## Install on a test box
@@ -61,7 +62,8 @@ command and the reply carries `"id":"<id>"`. Guids are hex strings
 
 `sh check.sh` runs `luac -p`, luacheck and the mock tests in `tests/` (plain Lua with fake
 players and creatures: `mock_window_test.lua` for the dz window, skip filter, the friendly rule and
-its refusals; `mock_los_test.lua` for `q los`'s shape, limits and eye height). They do not
+its refusals; `mock_los_test.lua` for `q los`'s shape, limits and eye height; `mock_tbapi_test.lua` for
+the `.tbapi` smoke script). They do not
 need a server; a live check is still the final proof.
 
 ### Limits worth knowing

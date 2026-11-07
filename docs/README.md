@@ -121,6 +121,7 @@ Welcome to the TortoiseBots documentation catalog for Tortoise WoW 1.18.1. This 
 | :--- | :--- |
 | [Developer index](developers/README.md) | Contributor workflows, coding standards, tools, and testing commands. |
 | [Architecture invariants](developers/architecture.md) | Decoupled C++ modularity, headless session lifecycle, and zero core coupling. |
+| [Lua API](developers/lua-api.md) | The `TB.*` Lua calls for test scenarios (Eluna builds only): reads, the queued `TB.Command`, world state only. |
 | [Guild supply chain](developers/guild-supply.md) | Supply ladder, guild bank withdrawals, and waiting for missing materials. |
 | [Strategy engine](developers/strategy-engine.md) | AI update loop, action baskets, triggers, multipliers, and failure backoffs. |
 | [Bot mechanics and quirks](developers/bot-mechanics.md) | Targeting and interrupt logic, movement physics, gear evaluation, and technical quirks. |

@@ -20,6 +20,7 @@ Technical documentation, architecture invariants, strategy engine details, host 
 | [Bot Mechanics & Internals](bot-mechanics.md) | Deep bot mechanics, targeting rules, threat handling, and internal technical edge cases. |
 | [Donor Hierarchy & Lineage](donor-hierarchy.md) | Codebase lineage, porting priorities, and behavior harvesting principles. |
 | [Host API & Integration Boundary](host-api.md) | Host seam contracts, headless sessions, lifecycle hooks, and packet bridge. |
+| [Lua API](lua-api.md) | `TB.*` Lua calls (Eluna builds only): reads, the queued `TB.Command`, world state only. |
 | [Licensing Audit & Provenance](licensing-audit.md) | Donor licensing verification, GPL compatibility, and release gates. |
 | [Guild Supply Chain](guild-supply.md) | How guild orders use the guild bank as the crafting store. |
 

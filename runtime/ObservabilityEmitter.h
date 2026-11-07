@@ -104,6 +104,9 @@ public:
     // Called once per world tick with the world update diff.
     void Update(uint32 diff);
 
+    // World thread. One in-world bot's roster row, read-only, for the Lua API (TB.GetBot); false when it is not in the world.
+    bool SnapshotBot(Player* bot, BotTelemetrySnapshot& out) const;
+
     struct BotTrackState
     {
         float lastX = 0.0f;
@@ -228,6 +231,7 @@ private:
     void PruneState(uint32 nowMs);
     bool AnomalyAllowed(uint32 guid, uint8 typeId, uint32 nowMs);
     void AddStateTime(size_t stateIndex, uint32 diff);
+    void BuildBotSnapshot(Player* bot, BotTelemetrySnapshot& snap) const;
     void EmitSnapshotCycle(std::vector<Player*> const& activeBots, std::vector<Player*> const& onlinePlayers, uint32 diff);
     // DUNGEON_MOBS datagrams (issue #1101): inside the snapshot cycle, before the roster batches, one entry per instance copy
     // (dungeon or raid, not a battleground) holding at least one bot; one "runs":[] datagram when the last run ended. Nothing

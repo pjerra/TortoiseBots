@@ -65,6 +65,9 @@ struct DecisionCaptureService {
 namespace GuildOrders { inline void Update(uint32 diff) { assert(diff == 50); calls.push_back(15); } }
 // Issue #884: the remote commander's binding sweep.
 namespace BotCommands { inline void UpdateRemoteCommanders(uint32 diff) { assert(diff == 50); calls.push_back(12); } inline void UpdateObservedRaids(uint32 diff) { assert(diff == 50); calls.push_back(16); } inline void CleanupRunGivenItemsTick() { calls.push_back(14); } }
+// The Lua API's reply flush: once every tick, enabled or not, right after the command drain (not in `calls`).
+unsigned luaFlushes = 0;
+namespace LuaBindings { inline void Flush() { ++luaFlushes; } }
 struct BotHostAdapter { uint32 m_ticks = 0; void OnUpdate(uint32 diff); };
 '''
         fixture += hook + r'''
@@ -80,6 +83,7 @@ int main() {
     // can outlive the AI.
     for (unsigned i = 0; i < 2500; ++i) adapter.OnUpdate(50);
     assert(calls.size() == 10000);
+    assert(luaFlushes == 2500);
     for (size_t i = 0; i < calls.size(); i += 4)
         assert(calls[i] == 10 && calls[i + 1] == 13 && calls[i + 2] == 17 && calls[i + 3] == 18);
     assert(adapter.m_ticks == 0);
@@ -96,6 +100,7 @@ int main() {
     adapter.OnUpdate(50);
     assert((calls == std::vector<unsigned>{1,10,11,2,12,16,3,4,5,6,15,7,8,9,14,13,18,17,10,13,17,18}));
     assert(adapter.m_ticks == 1);
+    assert(luaFlushes == 2502);
     // A config reload: the run leader's keys are read again once, on the next tick, enabled or not.
     assert(sPlayerbotAIConfig.reloads == 0);
     s_dungeonRunKeysDue.store(true);

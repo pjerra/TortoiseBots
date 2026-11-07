@@ -21,6 +21,7 @@
 #include "BotChatAdapter.h"
 #include "BotPacketAdapter.h"
 #include "HireRecruiterScript.h"
+#include "LuaBindings.h"
 #include "../commands/BotCommandQueue.h"
 #include "../commands/BotCommands.h"
 #include "../commands/BotCommandHandlers.h"
@@ -231,6 +232,8 @@ void BotHostAdapter::OnUpdate(uint32 diff)
     // command ever executes off the world thread. Issue #846: before each
     // command it runs the bot chat and packets queued ahead of it.
     uint64_t const deferredLimit = BotChatAdapter::DrainQueuedCommands();
+    // The replies of `TB.Command` (Lua API) to their callbacks, outside every command and every bot tick.
+    LuaBindings::Flush();
 
     // Read again: a command may have reloaded the configuration.
     if (!sPlayerbotAIConfig.enabled)
