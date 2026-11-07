@@ -118,6 +118,15 @@ inline CommandRequest ParseCommand(std::string const& text)
     return request;
 }
 
+// Who may be the requester of a script's command: an online player in the world, never a bot (a bot's rights are the
+// bot's own and a script must not act as one) and never a player between worlds. Null when allowed.
+inline char const* RequesterRefusal(bool isBot, bool inWorld)
+{
+    if (isBot || !inWorld)
+        return "no_such_player";
+    return nullptr;
+}
+
 // ---------------------------------------------------------------------------------------------------------
 // Reply buffer: what a command answered, as lines, bounded.
 
@@ -182,6 +191,7 @@ public:
     bool Take(uint64_t id) { return m_pending.erase(id) != 0; }
     bool Has(uint64_t id) const { return m_pending.count(id) != 0; }
     size_t Size() const { return m_pending.size(); }
+    void Clear() { m_pending.clear(); }
     // Ids waiting longer than kCallbackExpiryMs, removed and appended to `expired`.
     void Expire(uint32_t nowMs, std::vector<uint64_t>& expired)
     {

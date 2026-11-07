@@ -88,6 +88,19 @@ class LuaApiWiringTest(unittest.TestCase):
         # the reply sink is the single virtual the command layer answers through
         self.assertIn("void SendSysMessage(char const* str) override { m_buffer.Append(str); }", BINDINGS)
 
+    def test_requester_is_never_a_bot_and_must_be_in_the_world(self):
+        cmd = body(BINDINGS, "int Command(Eluna* E)")
+        self.assertIn("LuaApi::RequesterRefusal(BotManager::Instance().IsBot(player->GetObjectGuid()), player->IsInWorld())", cmd)
+        run = body(BINDINGS, "void ExecuteCommand(Player* requester, PendingBotCommand const& command)")
+        self.assertIn("LuaApi::RequesterRefusal(BotManager::Instance().IsBot(requester->GetObjectGuid())", run)
+        # the refusal comes before the handler runs
+        self.assertLess(run.index("RequesterRefusal"), run.index("HandleChatCommand"))
+
+    def test_world_state_creation_clears_the_callback_ledger(self):
+        reg = body(BINDINGS, "void RegisterState(Eluna* E)")
+        self.assertIn("E->GetBoundMapId() == -1", reg)
+        self.assertIn("g_ledger.Clear();", reg)
+
     def test_drain_routes_lua_replies_and_the_tick_flushes_them(self):
         self.assertIn("    Lua,\n", body(QUEUE, "enum class BotCommandReply", "};"))
         self.assertIn("uint64_t luaId = 0;", QUEUE)

@@ -48,10 +48,18 @@ end)
 ```
 
 - `text` is what a player would type: `.bot hire x`, `bot hire x`, a bare `hire x`, or `.autogear ...`. Up to 255 characters, no control characters or newlines (`empty`, `too_long`, `bad_char`).
-- The requester must be an online player (`no_such_player`). The command runs **as that player**, on the world thread, at the next drain at the start of a world tick (at most one tick later), through TB's own handlers: ownership, master and GM checks are the ones a typed command gets. A script cannot command bots a player could not.
+- The requester must be an online player in the world; a bot or a player between worlds answers `no_such_player` (checked again when the command runs). The command runs **as that player**, on the world thread, at the next drain, which sits in the module's world hook at the END of `World::Update` (after the maps and `UpdateEluna`); a command sent from a world timer or hook therefore runs in the same tick, and one sent from a map thread or later in the tick runs on the next, through TB's own handlers: ownership, master and GM checks are the ones a typed command gets. A script cannot command bots a player could not.
 - It is never run inline, even from a callback or a hook, so a command can never run inside the tick that emitted an event.
-- The reply lines (at most 40, each cut at 400 characters; `truncated` says so) go to `callback(id, requesterGuid, lines, truncated)` on the world thread, outside every command. Without a callback they go to the server log at detail level. At most 64 callbacks wait at once (`too_many_callbacks`); one that gets no reply within 60 s (the requester logged out) is dropped. A `.reload eluna` drops the callbacks with the state; the reply is then logged.
+- The reply lines (at most 40, each cut at 400 characters; `truncated` says so) go to `callback(id, requesterGuid, lines, truncated)` on the world thread, outside every command. Without a callback they go to the server log at detail level. At most 64 callbacks wait at once (`too_many_callbacks`); one that gets no reply within 60 s (the requester logged out) is dropped. A `.reload eluna` drops the callbacks with the state and clears the ledger; the reply is then logged.
 - The queue's per-requester cap (128 pending) answers `queue_full`.
+
+## Trust model
+
+Lua scripts are the server operator's trusted code, like the rest of `lua_scripts` (Eluna's `RunCommand` already runs console commands). The API does not defend against a hostile script; it makes the safe use easy.
+
+- Always pass the **calling player's own guid** as the requester (the player in the event or command that triggered the script). Never take the requester guid from text a player typed: that would let one player command as another.
+- `TB.Command` gives no rights beyond what that player could type: the same handlers, ownership and GM checks run, and a bot can never be the requester.
+- Reads are open to every script; they show no more than the dashboard does.
 
 ## Where it lives
 
@@ -66,7 +74,7 @@ end)
 | Wiring test | `tools/test_lua_api_wiring.py` |
 | Smoke script | `tools/eluna/test-toolkit/lua_scripts/tt/tt_tbapi.lua` (`.tbapi smoke`) |
 
-The core calls every registrar added to `ElunaCustomRegistry` when it builds a Lua state. TB adds its registrar from a **static initializer** in `LuaBindings.cpp`, not from `RegisterScripts`: the world state is created before `ScriptMgr::Initialize` runs the module's `RegisterScripts`, so a registrar added there would miss the world state.
+The core calls every registrar added to `ElunaCustomRegistry` when it builds a Lua state. TB adds its registrar from a **static initializer** in `LuaBindings.cpp`, not from `RegisterScripts`: the world state is created before `ScriptMgr::Initialize` runs the module's `RegisterScripts`, so a registrar added there would miss the world state on cores before the registry applied late registrars. The core now also applies a registrar added after the world state exists to it at once; the static initializer stays and is idempotent.
 
 ## Thread rules
 

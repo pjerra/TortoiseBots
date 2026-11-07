@@ -90,6 +90,14 @@ void CommandRefusals()
     assert(ParseCommand(std::string(kMaxCommandLength, 'a')).ok);
 }
 
+void Requester()
+{
+    assert(RequesterRefusal(false, true) == nullptr);
+    assert(std::strcmp(RequesterRefusal(true, true), "no_such_player") == 0);   // a bot
+    assert(std::strcmp(RequesterRefusal(false, false), "no_such_player") == 0); // not in the world
+    assert(std::strcmp(RequesterRefusal(true, false), "no_such_player") == 0);
+}
+
 void Replies()
 {
     ReplyBuffer buffer;
@@ -125,6 +133,10 @@ void Ledger()
     assert(expired.empty());
     ledger.Expire(5000 + kCallbackExpiryMs + 1, expired);
     assert(expired.size() == kMaxPendingCallbacks && ledger.Size() == 0);
+
+    ledger.Add(1, 0);
+    ledger.Clear();
+    assert(ledger.Size() == 0 && !ledger.Has(1));
 
     // the millisecond clock wraps: 4294967000 -> 10 is 306 ms, not 49 days
     CallbackLedger wrap;
@@ -187,6 +199,7 @@ int main()
     GuidCounter();
     CommandForms();
     CommandRefusals();
+    Requester();
     Replies();
     Ledger();
     BotTable();

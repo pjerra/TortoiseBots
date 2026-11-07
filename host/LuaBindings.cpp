@@ -251,6 +251,8 @@ int Command(Eluna* E)
     Player* player = ObjectAccessor::FindPlayerNotInWorld(PlayerGuid(requester));
     if (!player || !player->GetSession())
         return Fail(E, "no_such_player");
+    if (char const* refusal = LuaApi::RequesterRefusal(BotManager::Instance().IsBot(player->GetObjectGuid()), player->IsInWorld()))
+        return Fail(E, refusal);
 
     uint64_t const id = ++g_nextId;
     if (wantsCallback)
@@ -311,6 +313,12 @@ void RegisterTable(Eluna* E)
 // Runs for every Lua state at its creation, after Eluna's own methods (ElunaCustomRegistry).
 void RegisterState(Eluna* E)
 {
+    // The world state is (re)made: its callbacks are gone with the old one, so their ledger slots go too.
+    if (E->GetBoundMapId() == -1)
+    {
+        std::lock_guard<std::mutex> lock(g_mutex);
+        g_ledger.Clear();
+    }
     ElunaTemplate<>::SetMethods(E, Methods);
     RegisterTable(E);
 }
@@ -351,6 +359,19 @@ void Register()
 void ExecuteCommand(Player* requester, PendingBotCommand const& command)
 {
     LuaApi::ReplyBuffer buffer;
+    // Checked again here: the requester may have become a bot or left the world since TB.Command queued this.
+    if (char const* refusal = LuaApi::RequesterRefusal(BotManager::Instance().IsBot(requester->GetObjectGuid()),
+            requester->IsInWorld()))
+    {
+        buffer.Append((std::string("refused: ") + refusal).c_str());
+        Completed refused;
+        refused.id = command.luaId;
+        refused.requester = requester->GetGUIDLow();
+        refused.lines = buffer.Lines();
+        std::lock_guard<std::mutex> lock(g_mutex);
+        g_completed.push_back(std::move(refused));
+        return;
+    }
     LuaReplyHandler handler(requester, buffer);
     if (command.topLevel)
         BotCommands::TryHandleBotCommand(&handler, command.args.c_str());
