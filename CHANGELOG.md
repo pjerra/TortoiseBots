@@ -1,5 +1,7 @@
 # Changelog
 
+- Fixed: behind AiPlayerbot.SpellFacingPrecheck (default 0), a bot no longer tries Gouge from behind or Backstab from the front over and over, which spammed spell failures to everyone nearby (found by Tortoise Trials, #1556).
+- New: behind AiPlayerbot.InterruptIgnoresThreat (default 0), Kick, Pummel, Shield Bash, Bash, Counterspell and Silence skip the threat back-off while the bot is under the tank's threat on the caster, so a damage dealer at the high-threat line still interrupts a cast (found by Tortoise Trials, #1556).
 - Fixed: behind AiPlayerbot.DungeonRunFactJudgeCharmedLead (default 0), a run whose lead bot is charmed (Jin'do's Brain Wash, any charm) judges its kill-first read, engaged units, crowd-control holds, raid guard anchor and order targets by an uncharmed bot, so the Brain Wash Totem focus and the guard no longer go silent while the main tank is Brain-Washed.
 - Fixed: with AiPlayerbot.DungeonRunShadeHealerCover on, the off-tank keeps the Shade it pulled even with a nearer Shade beside it, and only leaves Jin'do while it holds at least half the top tank's threat.
 - Fixed: with AiPlayerbot.DungeonRunShadeHealerCover on, the off-tank stays on a Shade it pulled off a healer, its own low health still keeps it home, and it is never sent at a Shade in the troll pit; the BossTacticsShadeCover row gains the guard word and writes dead once.

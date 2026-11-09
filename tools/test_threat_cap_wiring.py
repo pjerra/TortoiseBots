@@ -6,9 +6,14 @@ them: the high-threat trigger reads the named 80 % line on every target, the 65 
 stays gone (the white-damage stop of AiPlayerbot.DungeonRunThreatSuccessorStrict replaces it behind its key),
 ThreatValue::Calculate still saturates, the hold read feeds the hold clock, and the docs state the
 shipped timings.
+
+InterruptIgnoresThreat (merged from fix/interrupt-threat): behind AiPlayerbot.InterruptIgnoresThreat (default 0) a pure
+interrupt joins the heals and the cure exemption in the multiplier's check before its high-threat veto.
+
 Run: python3 -m unittest tools/test_threat_cap_wiring.py
 """
 import pathlib
+import re
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -24,6 +29,11 @@ CONFIG_CPP = (ROOT / "ai/playerbot/PlayerbotAIConfig.cpp").read_text()
 CONF = (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text()
 SETTINGS = (ROOT / "docs/server/settings/dungeons-raids.md").read_text()
 CHANGELOG = (ROOT / "CHANGELOG.md").read_text()
+SPELL_ACTIONS = (ROOT / "ai/playerbot/strategy/actions/GenericSpellActions.h").read_text()
+SHAMAN_ACTIONS = (ROOT / "ai/playerbot/strategy/shaman/ShamanActions.h").read_text()
+WARLOCK_ACTIONS = (ROOT / "ai/playerbot/strategy/warlock/WarlockActions.h").read_text()
+COMBAT_SETTINGS = (ROOT / "docs/server/settings/combat.md").read_text()
+ROGUE_DOC = (ROOT / "docs/classes/rogue.md").read_text()
 
 
 def ai_tree_text():
@@ -44,6 +54,21 @@ def body(text, signature):
     start = text.index(signature)
     end = text.index("\n}\n", start)
     return text[start:end]
+
+
+def brace_body(text, signature):
+    """The brace-matched body that follows `signature` in `text`."""
+    start = text.index(signature)
+    open_brace = text.index("{", start)
+    depth = 0
+    for i in range(open_brace, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[open_brace:i + 1]
+    raise AssertionError("unbalanced braces after %s" % signature)
 
 
 class HighLine(unittest.TestCase):
@@ -237,9 +262,10 @@ class CureIgnoresThreat(unittest.TestCase):
 
     def test_the_multiplier_exempts_party_cures_behind_the_key(self):
         multiplier = body(STRATEGY, "float ThreatMultiplier::GetValue(Action* action)")
-        self.assertIn("ThreatCapExempt(dynamic_cast<CastHealingSpellAction*>(action) != nullptr,", multiplier)
-        self.assertIn("dynamic_cast<CurePartyMemberAction*>(action) != nullptr,", multiplier)
-        self.assertIn("sPlayerbotAIConfig.dungeonRunCureIgnoresThreat))", multiplier)
+        # Merged with fix/interrupt-threat: the heal and partyCure reads are named once, then fed to ThreatCapExempt.
+        self.assertIn("bool const heal = dynamic_cast<CastHealingSpellAction*>(action) != nullptr;", multiplier)
+        self.assertIn("bool const partyCure = dynamic_cast<CurePartyMemberAction*>(action) != nullptr;", multiplier)
+        self.assertIn("ThreatCapExempt(heal, partyCure, sPlayerbotAIConfig.dungeonRunCureIgnoresThreat)", multiplier)
         # The exemption runs before the high-threat veto it skips.
         self.assertLess(multiplier.index("ThreatCapExempt("), multiplier.index('"trigger active", "high threat"))\n    {'))
         self.assertIn("return heal || (partyCure && cureIgnoresThreat);", THREAT_POLICY)
@@ -285,6 +311,90 @@ class ThreatSuccessorKeepsAway(unittest.TestCase):
         self.assertIn("### `AiPlayerbot.DungeonRunThreatSuccessorKeepsAway`", SETTINGS)
         self.assertIn("DungeonRunThreatSuccessorKeepsAway", DOC)
         self.assertIn("DungeonRunThreatSuccessorKeepsAway", CHANGELOG)
+
+
+class InterruptIgnoresThreat(unittest.TestCase):
+    """AiPlayerbot.InterruptIgnoresThreat: pure interrupts join the heals in the threat back-off's exemption."""
+
+    def test_the_key_ships_off(self):
+        self.assertIn("bool interruptIgnoresThreat = false;", CONFIG_H)
+        self.assertIn('config.GetBoolDefault("AiPlayerbot.InterruptIgnoresThreat", false)', CONFIG_CPP)
+        self.assertIn("\nAiPlayerbot.InterruptIgnoresThreat = 0\n", CONF)
+        # Reloadable with the other run keys, so a BEFORE/AFTER trial needs no restart.
+        self.assertIn('config.GetBoolDefault("AiPlayerbot.InterruptIgnoresThreat", false)',
+                      brace_body(CONFIG_CPP, "void PlayerbotAIConfig::LoadDungeonRunKeys()"))
+
+    def test_the_policy_needs_the_key_and_the_ceiling(self):
+        self.assertIn(
+            "inline bool ThreatCapInterruptExempt(bool interrupt, bool interruptIgnoresThreat, float botThreatPct)",
+            THREAT_POLICY)
+        self.assertIn(
+            "return interrupt && interruptIgnoresThreat && botThreatPct < kThreatCapInterruptCeilingPct;",
+            THREAT_POLICY)
+        self.assertIn("constexpr float kThreatCapInterruptCeilingPct = 100.0f;", THREAT_POLICY)
+        # ThreatCapInterruptExempt is its own function, separate from the cure branch's 3-bool
+        # ThreatCapExempt(heal, partyCure, cureIgnoresThreat) (integ has both on purpose): neither calls the other.
+        self.assertIn("inline bool ThreatCapExempt(bool heal, bool partyCure, bool cureIgnoresThreat)", THREAT_POLICY)
+        self.assertNotIn("ThreatCapInterruptExempt(", brace_body(
+            THREAT_POLICY, "inline bool ThreatCapExempt(bool heal, bool partyCure, bool cureIgnoresThreat)"))
+        self.assertNotIn("ThreatCapExempt(", brace_body(
+            THREAT_POLICY,
+            "inline bool ThreatCapInterruptExempt(bool interrupt, bool interruptIgnoresThreat, float botThreatPct)"))
+
+    def test_the_multiplier_exempts_interrupts_behind_the_key(self):
+        multiplier = brace_body(STRATEGY, "float ThreatMultiplier::GetValue(Action* action)")
+        self.assertIn("bool const heal = dynamic_cast<CastHealingSpellAction*>(action) != nullptr;", multiplier)
+        self.assertIn("dynamic_cast<CastInterruptSpellAction*>(action)", multiplier)
+        self.assertIn("bool const interrupt = interruptAction != nullptr && interruptAction->IgnoresThreatCap();",
+                      multiplier)
+        self.assertIn(
+            "if (ThreatCapExempt(heal, partyCure, sPlayerbotAIConfig.dungeonRunCureIgnoresThreat) ||\n"
+            "        ThreatCapInterruptExempt(interrupt, sPlayerbotAIConfig.interruptIgnoresThreat, "
+            "interruptThreatPct))\n        return 1.0f;", multiplier)
+        self.assertIn('#include "playerbot/ThreatCapPolicy.h"', STRATEGY)
+        # The exemption runs before the high-threat veto it skips (and before the AoE veto, which an interrupt never
+        # reaches: it is a SINGLE-threat action).
+        exempt = multiplier.index("ThreatCapInterruptExempt(")
+        self.assertLess(exempt, multiplier.index('if (AI_VALUE2(bool, "trigger active", "high threat"))\n    {'))
+        self.assertLess(exempt, multiplier.index("ActionThreatType::ACTION_THREAT_AOE)\n"))
+        # The old heal-only exit is gone, so heals pass through the same call (and the cure exemption with them).
+        self.assertNotIn("if (dynamic_cast<CastHealingSpellAction*>(action))\n", multiplier)
+
+    def test_the_ratio_is_read_on_the_interrupt_target(self):
+        multiplier = brace_body(STRATEGY, "float ThreatMultiplier::GetValue(Action* action)")
+        ratio = multiplier[multiplier.index("float interruptThreatPct = 0.0f;"):
+                           multiplier.index("if (ThreatCapExempt(heal, partyCure,")]
+        self.assertIn("if (interrupt && sPlayerbotAIConfig.interruptIgnoresThreat)", ratio)
+        self.assertIn("Unit* const interruptTarget = action->GetTarget();", ratio)
+        self.assertIn("ThreatCapPercentOf(ThreatValue::GetThreat(bot, interruptTarget),", ratio)
+        self.assertIn("ThreatValue::GetTankThreat(ai, interruptTarget));", ratio)
+        # Not the current target's ratio: that one belongs to the high-threat trigger.
+        self.assertNotIn("current target", ratio)
+        self.assertNotIn('"threat"', ratio)
+
+    def test_pure_interrupts_opt_in_and_nukes_stay_gated(self):
+        interrupt = brace_body(SPELL_ACTIONS, "class CastInterruptSpellAction : public CastSpellAction")
+        self.assertIn("virtual bool IgnoresThreatCap() const { return true; }", interrupt)
+        earth_shock = brace_body(SHAMAN_ACTIONS, "class CastEarthShockInterruptAction : public CastInterruptSpellAction")
+        self.assertIn("bool IgnoresThreatCap() const override { return false; }", earth_shock)
+        death_coil = brace_body(WARLOCK_ACTIONS, "class CastDeathCoilAction : public CastInterruptSpellAction")
+        self.assertIn("bool IgnoresThreatCap() const override { return false; }", death_coil)
+
+    def test_no_other_interrupt_overrides_the_exemption(self):
+        # Kick, Pummel, Shield Bash, Bash, Counterspell and Silence keep the base answer: only the two nukes override.
+        overrides = []
+        for path in (ROOT / "ai/playerbot/strategy").rglob("*.h"):
+            text = path.read_text(errors="replace")
+            overrides += [path.name for _ in re.finditer(r"IgnoresThreatCap\(\) const override", text)]
+        self.assertEqual(sorted(overrides), ["ShamanActions.h", "WarlockActions.h"])
+
+    def test_docs_and_changelog(self):
+        self.assertIn("### `AiPlayerbot.InterruptIgnoresThreat`", COMBAT_SETTINGS)
+        self.assertIn("(#aiplayerbotinterruptignoresthreat)", COMBAT_SETTINGS)
+        self.assertIn("InterruptIgnoresThreat", ROGUE_DOC)
+        self.assertIn("InterruptIgnoresThreat", CHANGELOG)
+        self.assertIn("100 %", COMBAT_SETTINGS[COMBAT_SETTINGS.index("### `AiPlayerbot.InterruptIgnoresThreat`"):])
+        self.assertIn("on enemy healer", COMBAT_SETTINGS[COMBAT_SETTINGS.index("### `AiPlayerbot.InterruptIgnoresThreat`"):])
 
 
 if __name__ == "__main__":

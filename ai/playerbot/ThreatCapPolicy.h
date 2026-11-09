@@ -301,6 +301,35 @@ namespace ai
         return pick;
     }
 
+    // The bot's threat on a target as a percentage of the reference tank's (ThreatValue::GetThreat over
+    // ThreatValue::GetTankThreat), unsaturated. A negative tank threat is GetTankThreat's "no tank on the target":
+    // there is no reference, and the high-threat line reads 0 there as well. A zero tank threat reads 100, as
+    // ThreatValue does for a mob in combat that no tank has touched: the bot is the one it would turn to.
+    inline float ThreatCapPercentOf(float botThreat, float tankThreat)
+    {
+        if (tankThreat < 0.0f)
+            return 0.0f;
+        if (tankThreat == 0.0f)
+            return 100.0f;
+        return botThreat * 100.0f / tankThreat;
+    }
+
+    // At or above this share of the tank's threat on the interrupt target an exempt interrupt is vetoed again: the
+    // interrupt's own threat (Counterspell 300 flat, Shield Bash 180 plus damage) would pull the mob.
+    constexpr float kThreatCapInterruptCeilingPct = 100.0f;
+
+    // Whether an interrupt skips the damage threat back-off (ThreatMultiplier). Kick, Pummel, Shield Bash, Bash,
+    // Counterspell and Silence (CastInterruptSpellAction whose IgnoresThreatCap() is true) are SINGLE-threat spell
+    // actions and were vetoed at the 80 % high line like a nuke, so a rogue over the line stood idle at full energy
+    // while the caster finished its cast (Tortoise Trials DPS-ROG-KICK: 21 of 50 windows). With
+    // AiPlayerbot.InterruptIgnoresThreat on, such an interrupt runs while the bot's threat on the INTERRUPT TARGET (the
+    // action's own target, not the current target) is under 100 % of the tank's; at 100 % or more the veto stands.
+    // Earth Shock and Death Coil interrupt rows stay gated: they are real nukes. Heals are exempt at the call site.
+    inline bool ThreatCapInterruptExempt(bool interrupt, bool interruptIgnoresThreat, float botThreatPct)
+    {
+        return interrupt && interruptIgnoresThreat && botThreatPct < kThreatCapInterruptCeilingPct;
+    }
+
     // The Hex snapshot row (BossTacticsHex, ThreatValues.cpp LogHexSnapshot): Jin'do's Hex (17172) lands on the boss's
     // current victim and wipes its threat. The row names who wore it (the main tank, an off-tank or a damage dealer) and
     // the threat of both tanks and the top damage dealer right after, so a walk can see who the boss turned to and why.

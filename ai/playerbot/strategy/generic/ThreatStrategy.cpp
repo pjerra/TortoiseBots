@@ -71,9 +71,24 @@ float ThreatMultiplier::GetValue(Action* action)
     // A party cure or dispel joins the heals behind AiPlayerbot.DungeonRunCureIgnoresThreat: it is a SINGLE-threat
     // CastSpellAction, so a healer whose own threat on its target sat at the high line had every cure vetoed and
     // Jin'do's Hex stayed on the tank for its full 5 s (ThreatCapPolicy.h ThreatCapExempt).
-    if (ThreatCapExempt(dynamic_cast<CastHealingSpellAction*>(action) != nullptr,
-                        dynamic_cast<CurePartyMemberAction*>(action) != nullptr,
-                        sPlayerbotAIConfig.dungeonRunCureIgnoresThreat))
+    // An interrupt joins the heals behind AiPlayerbot.InterruptIgnoresThreat: Kick and the other pure interrupts are
+    // SINGLE-threat spell actions, so a rogue at the high line had every Kick vetoed and stood idle at full energy
+    // while the caster finished. The ratio is read on the interrupt's own target (the "interrupt target" pick, which
+    // can be another mob than the current target), and at 100 % of the tank's threat there the veto stands
+    // (ThreatCapPolicy.h ThreatCapInterruptExempt). Earth Shock and Death Coil rows stay gated.
+    bool const heal = dynamic_cast<CastHealingSpellAction*>(action) != nullptr;
+    bool const partyCure = dynamic_cast<CurePartyMemberAction*>(action) != nullptr;
+    CastInterruptSpellAction const* interruptAction = dynamic_cast<CastInterruptSpellAction*>(action);
+    bool const interrupt = interruptAction != nullptr && interruptAction->IgnoresThreatCap();
+    float interruptThreatPct = 0.0f;
+    if (interrupt && sPlayerbotAIConfig.interruptIgnoresThreat)
+    {
+        Unit* const interruptTarget = action->GetTarget();
+        interruptThreatPct = ThreatCapPercentOf(ThreatValue::GetThreat(bot, interruptTarget),
+                                                ThreatValue::GetTankThreat(ai, interruptTarget));
+    }
+    if (ThreatCapExempt(heal, partyCure, sPlayerbotAIConfig.dungeonRunCureIgnoresThreat) ||
+        ThreatCapInterruptExempt(interrupt, sPlayerbotAIConfig.interruptIgnoresThreat, interruptThreatPct))
         return 1.0f;
 
     if (!AI_VALUE(bool, "group"))
