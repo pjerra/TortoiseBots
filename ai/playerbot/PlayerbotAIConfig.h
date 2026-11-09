@@ -614,6 +614,11 @@ public:
     // A raid boss fight's healer guard: an add on a healer goes to the nearest ranged dps, up to two, and the off-tanks
     // take such an add only when none is free (only with dungeonRunRaidBossRules; default off, the off-tanks take it).
     bool dungeonRunRaidHealerGuard = false;
+    // The threat back-off counts a single-target damage cast's own expected threat (average direct damage, threat
+    // modifiers applied): the cast is held while the bot's threat plus it would reach the tank's threat on the target,
+    // so a slow nuke started under the 80 % high-threat line no longer lands past the core's pull line. Read with the
+    // run keys, so `.reload config` applies it. Off = as before (only the threat at cast start is checked).
+    bool threatCapCountsCastThreat = false;
     // Mortal Wound stacks at which an opt-in "fankriss tank" swaps (1-9).
     uint32 fankrissSwapStacks = 5;
     // Seconds the DPS hold Patchwerk once an opt-in "patchwerk main" engages him (0 = off, else 3-5).

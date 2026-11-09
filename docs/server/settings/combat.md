@@ -32,6 +32,7 @@ These settings configure health and mana trigger percentages, engagement ranges,
 | [`AiPlayerbot.AoeRadius`](#aiplayerbotaoeradius) | `5.0` | Default yard radius for area-of-effect spells and cluster targeting. |
 | [`AiPlayerbot.ShareTargets`](#aiplayerbotsharetargets) | `1` (built in) | Reuses nearby friendly bots' attacker lists for coordinated defense. |
 | [`AiPlayerbot.GlobalCooldown`](#aiplayerbotglobalcooldown) | `1500` | Pacing delay in milliseconds enforced between rapid spell casts. |
+| [`AiPlayerbot.ThreatCapCountsCastThreat`](#aiplayerbotthreatcapcountscastthreat) | `0` | The threat back-off counts a damage cast's own expected threat, so a slow nuke is held before it would land past the tank. Recommended on. |
 | [`AiPlayerbot.RangedPull`](#aiplayerbotrangedpull) | `1` | Enables automatic ranged openings for commanded tank pulls. |
 | [`AiPlayerbot.RangedPullMeleeApproach`](#aiplayerbotrangedpullmeleeapproach) | `20` | Walk-in approach threshold in yards before tank pulls open from range. |
 | [`AiPlayerbot.PullDpsJoinDelay`](#aiplayerbotpulldpsjoindelay) | `10` | Seconds party DPS wait after a tank pull before joining combat. |
@@ -236,6 +237,17 @@ Pacing delay in milliseconds enforced between rapid spell casts.
 Controls the delay between consecutive spell casts. Several item, potion and aura actions pace themselves on it.
 
 Prevents bot AI from queuing multiple instant abilities in the same engine tick. (The template comment calls it the delay between two short-time spell casts.)
+
+</details>
+
+### `AiPlayerbot.ThreatCapCountsCastThreat`
+Whether the threat back-off counts a single-target damage cast's own expected threat. Recommended on.
+**Default:** `0` · **Values:** `0` off (only the bot's threat at cast start is checked against the 80 % high-threat line), `1` on (a damage cast is also held while the bot's threat plus the cast's expected threat reaches the tank's) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+<details>
+<summary>How it works in detail</summary>
+
+A bot with the `threat` strategy in a group backs off single-target spell actions while its threat on the target reads at or above 80 % of the tank's (`ThreatMultiplier`, the `high threat` trigger). That check reads the threat the bot has when the cast starts. A slow nuke is one big step: a Fireball started at 79 % lands about 3 s later as one 400-690 threat hit, and on a fresh mob where the tank holds only two or three such hits that carries the caster past the core's 130 % ranged pull line, so the mob turns on it (Tortoise Trials, mages without fire talents: 48 of 87 aggro onsets came within 5 s of a Fireball hit). With the key on, a `CastSpellAction` of the single-target threat type, cast by a bot that is not a tank at a mob whose victim is a tank, is held while the bot's threat on that mob plus the cast's expected threat reaches 100 % of the top tank's threat on it (`ThreatCapCastOvershoots`). The line is the tank's threat itself, not the 110 / 130 % pull line, because the estimate is an average: for each direct school-damage effect of the bot's rank of the spell it takes the middle of the core's damage roll with level growth (`ThreatCapAverageEffectPoints`, the arithmetic of `CalculateSpellDamage` without the roll) and the caster's spell mods, adds spell power and damage modifiers (`SpellDamageBonusDone`), then applies the spell's threat mods and the caster's threat modifiers (`ApplyTotalThreatModifier`), as the core does when the hit lands. Crits, the target's damage-taken modifiers, damage over time and the spell threat table are not counted. Heals, interrupts and every action without direct damage are untouched, and with no tank threat on the mob the old veto stays as it is. Each held cast writes a row at most once every 2 s per bot: `ThreatCap cast spell= pct= cast= bot= tank=` (tag `THREAT` in the per-bot action log with `AiPlayerbot.EnableActionLog = 1`, and `ThreatCapCast` in `bot_events.csv`).
 
 </details>
 
