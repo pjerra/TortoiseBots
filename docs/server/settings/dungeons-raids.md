@@ -908,6 +908,101 @@ Whether the boss tactics keep their `swap_on_aura` rows: the tanks of the row's 
 
 </details>
 
+### `AiPlayerbot.DungeonRunTankPost`
+Whether the boss tactics keep their `tank_post` rows: a tank named by a row waits at a spot for a second unit that is not in the fight yet, then takes it the moment it lands. It is recommended on for a fight with a second boss that becomes selectable later.
+**Default:** `0` · **Values:** `0` off (the rows are ignored, as before the kind existed), `1` on (needs `AiPlayerbot.DungeonTactics`, or a commander-bound group) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+<details>
+<summary>How it works in detail</summary>
+
+**The row:** `boss_entry` is the unit whose health band (`hp_min`/`hp_max`) arms the post, `target_entry` the awaited unit, `priority` the raid tank slot (1-7, the `GetRaidTankRoles` order), `spot_x/y/z` the wait point, `param` the arrival radius (5-40 yd) and `window_s` the longest hold (10-120 s). No spell and no mode word. The kind is fight-scan read, so its health band is allowed; the post is armed only while the boss entry stands in the band among the bot's attackers.
+
+**The wait:** while the row is live and a unit of `target_entry` within 200 yd (a grid search, like the hold-kill blocker count) is alive and has not arrived, the named tank walks to the spot and stays within 3 yd of it. It drops its current target only when that target is the row's `boss_entry` (an airborne boss it cannot reach) or nothing; another hostile that attacks a group member is kept and the post waits. A unit has arrived when it stands within `param` of the spot alive, selectable (no `UNIT_FLAG_NOT_SELECTABLE`) and in combat; an unselectable unit circling overhead is not arrived however close it is. On arrival the tank attacks it, and a `taunt_after_cast` row then works as it does today.
+
+**The end:** the post ends on the awaited unit's death or evade, `window_s` after it started, the tank's death or a creature charm, or the band closing. The record is one per bot, so a successor in the same slot starts its own post after its predecessor dies.
+
+**Diagnostics:** one `BossTacticsTankPost` row per post and event (`event=start|arrive|end`), with `reason=band|window|dead|evade|gone|tank|slot` on the end row.
+
+</details>
+
+### `AiPlayerbot.DungeonRunShadeHealerCover`
+Whether the Delusions carriers at Jin'do cover the healers a Shade attacks: a cursed off-tank that does not hold the boss takes a Shade on a healer, and a cursed DPS carrier ranks a Shade on a healer ahead of the other Shades. Recommended on.
+**Default:** `0` · **Values:** `0` off (today's carrier pick and strike), `1` on (the off-tank half needs `AiPlayerbot.DungeonRunCarrierStrike`) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+<details>
+<summary>How it works in detail</summary>
+
+A Shade of Jin'do copies the boss's threat list, where heal threat is top, so it walks to a healer; in walk 56 Shades were the first death in 5 of 11 wipes, 50 of 59 healers a Shade killed were not cursed (they cannot hurt it), and in 56 % of the frames with a live Shade no cursed bot attacked it. With the key on the carrier pick (`PickCarrierOverride`, used by a DPS under the run's own order, the carrier strike and the run's focus skip) ranks a Shade whose victim is a healer of the group, that stands within 30 yd of the carrier and on its floor (no more than 6 yd above or below, so nobody is sent into the troll pit), ahead of any other Shade, the nearer one first; past 30 yd or on another floor the nearest Shade wins as before. A free DPS already ranks a Shade on a healer first (`PickKillFirst`). On a fight with a `threat_successor` row the carrier strike keeps every off-tank on the boss; with the key on a cursed off-tank that does not hold the boss is let through when its pick is a Shade on a healer within 30 yd of it and on its floor and its own threat on the boss is above 0 and at least half the highest tank's (below that line, after a Hex wiped it, it stays on the boss as the successor reference), and keeps that Shade as its pick while the Shade's victim is the off-tank itself (for up to 15 s after the Shade was last on a healer, or until it dies or the curse ends). The lowest-member line (`AiPlayerbot.LowHealth`) leaves out only the healer the Shade is eating: the off-tank's own health and everyone else's still hold it back, and so does the main-tank line (60 %). Pair it with `AiPlayerbot.DungeonRunThreatSuccessorKeepsAway`, which keeps a cursed tank on the successor list by the same half-share line, so an off-tank on its Shade stays the successor; without it the off-tank is no successor while it is on the Shade. An off-tank the boss is hitting stays, the main tank never leaves, a cursed healer keeps all of its own guards, and an uncursed bot never picks a Shade. The `BossTacticsShadeCover` row ([Boss Tactics](../../play/boss-tactics.md#shade-cover-row)) names who still leaves such a Shade alone.
+
+</details>
+
+### `AiPlayerbot.DungeonRunCarrierHold`
+Whether a Delusions carrier standing on its Shade of Jin'do keeps it: the "not dps target active" trigger stays quiet for it, so "dps assist" no longer pulls it to the boss, and the kill-first trigger checks every second.
+**Default:** `0` · **Values:** `0` off (today's rules), `1` on (needs `AiPlayerbot.DungeonRunAuraTactics` for the needs_aura rows) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+### `AiPlayerbot.DungeonRunThreatSuccessorNotHolder`
+Whether, on a boss with a `threat_successor` row (Hakkar, Jin'do), the damage dealers are capped against a tank the boss is **not** hitting. Recommended on.
+**Default:** `0` · **Values:** `0` off (the reference is the highest off-tank that hits the boss, even when the boss is hitting it), `1` on (the reference is the real threat of the highest main tank or off-tank that is hitting the boss and is not the one it is hitting; with no such tank, the old pick stands exactly) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+<details>
+<summary>How it works in detail</summary>
+
+With the off-tank holding Jin'do the old reference was the holder's own threat, so the damage dealers were allowed up to 80 % of it while the main tank (whose threat a Hex wiped) sat below them; after a Hex on the holder a damage dealer inherited Jin'do 39 times out of 40 in walk 55. With the key on the cap stands at the other tank's threat, so the boss falls to a tank. Only a tank that is hitting the boss counts: a Hakkar off-tank on a Son, a Jin'do tank held on its Shade or down in the pit is no successor, while a tank wearing Jin'do's Hex counts as on the boss (it cannot hit while polymorphed), and when none qualifies (or only the holder is on the boss) the old rules run unchanged, including the half-share rule for away off-tanks. The key changes only bosses with a `threat_successor` row, and only while a non-holding tank is on the boss.
+
+The price: after a Hex on **either** tank the wiped tank has about 0 threat and becomes the reference, and the damage dealers' single-target attacks are held (the 80 % line) until that tank has rebuilt past them. That takes as long as the fight's threat needs, tens of seconds is possible, and a second Hex on the new holder before then still hands the boss to a damage dealer; the damage dealers keep working on adds (Shades, pit trolls, totems) meanwhile. Rogue Vanish and priest Fade on threat read a 0 reference as "the tank holds nothing" and stay quiet, and hunter pets cower (`ShouldPetCower`) against it too, so pets are held during the stall as well. Each `BossTacticsThreatCap` row carries `holder=<main|off|none>` (the tank the boss is hitting) so the next walk can measure the stall.
+
+</details>
+
+### `AiPlayerbot.DungeonRunCureIgnoresThreat`
+Whether party cures and dispels skip the damage threat back-off, the way heals already do. Recommended on.
+**Default:** `0` · **Values:** `0` off (a cure is vetoed at the 80 % high-threat line like any single-target spell), `1` on (every cure on a party member runs whatever the healer's threat) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+<details>
+<summary>How it works in detail</summary>
+
+A cure on a party member (`dispel magic`, `cure poison`, `cure disease`, `abolish poison`, `abolish disease`, `remove curse`, `remove lesser curse`, `cleanse` and `purify` on a party member: every `CurePartyMemberAction`) is a single-target spell action, and the threat back-off (`ThreatMultiplier`) vetoed it whenever the healer's own threat on its current target read at or above the 80 % line, or 100 % on a mob no tank has touched. Heals were exempt already; cures were not. At Jin'do that left the Hex (17172) on the tank for its full 5 s in 50 of 91 tank Hexes in walk 56, while a dispeller had been picked within a second: the failing frames read `dispel magic on party` with result `I` (vetoed) in 10 of 12. With the key on the cure is exempt like a heal: a cure pulls no mob off the tank. It covers every boss and every party cure; self cures and offensive dispels on an enemy keep the back-off. A cure can still fail for range or line of sight (that also reads `I`). Walk-57 measures: tank Hexes cured within 1.5 s from 29 of 91 (32 %) to at least 70 %; Jin'do-on-DPS seconds after tank Hexes from 252 s over 30 fights to at most 120 s; the `I` share of `dispel magic on party` after a Hex from 10 of 12 to at most 20 %.
+
+</details>
+
+### `AiPlayerbot.DungeonRunThreatSuccessorStrict`
+Whether the 80 % line on a boss whose `threat_successor` row carries the mode word `strict` holds: no projection escape, and white damage stops near the line. The shipped data sets `strict` on Jin'do's row only; Hakkar's row stays plain. Recommended on, together with `AiPlayerbot.DungeonRunThreatSuccessorNotHolder`.
+**Default:** `0` · **Values:** `0` off (today's escape, white damage never stopped), `1` on (on a boss whose `threat_successor` row carries `strict` only: no projection escape; the melee swing and the auto-repeat stop at 92 % of the reference) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+<details>
+<summary>How it works in detail</summary>
+
+The high-threat back-off vetoes a damage dealer's single-target attacks at 80 % of the reference tank's threat, but `HighThreatTrigger` lets it through while its threat, rising at the last 5 s rate, projects under the tank's in 5 s. On a successor boss the reference is the tank the boss is not hitting, which builds threat slowly, so the damage dealers rode just under it: in walk 56 every Hex on a tank that went to a tank found the top damage dealer at 0.89-0.99 of the successor, and every one that went to a damage dealer at 1.00 or more. With the key on there is no escape on such a boss (`HighThreatProjectionEscapes`).
+
+Second, white damage. A running melee swing and a running auto-repeat (a wand's Shoot, a hunter's Auto Shot) keep going without passing the veto again, and the melee and wand actions carry no threat type at all, so the veto never bound them. With the key on, the `successor white cap` trigger stops the swing and interrupts the auto-repeat itself at 92 % of the reference, in the trigger pass at the start of the decision cycle (`SuccessorWhiteStopNow`): a queued stop action could lose that cycle to any higher action, a heal or a move, while the swing went on. Only white damage on the successor itself is stopped: a swing or shot that an action moved onto a Shade, an add or a totem is left alone (`SuccessorWhiteOnTarget`), and each mode is judged on its own target (`SuccessorWhiteStopsOf`): the swing stops only when its victim is the successor, the auto-repeat only when its target is. The trigger is checked on minimal (throttled) ticks too: its node carries a never-queued no-op handler at relevance 100, the engine's line for minimal ticks. While the per-bot latch (`SuccessorWhiteLatch`) holds, the trigger stops them again on every pass and the threat multiplier keeps the white-damage actions from starting. Melee and wand start again under 85 %. A hunter's Auto Shot is a single-target action that the 80 % veto still gates, so it resumes under 80 %. Tanks are never stopped, and a target without a `strict` successor row clears the latch. While the reference is 0 (a tank Hex just wiped the successor, which reads 100 % for every damage dealer) the white damage is never stopped and the latch clears; the specials stay held by the 0-reference veto as before. DoT ticks already on the boss cannot be stopped; only their re-cast is vetoed at 80 %. Known limit: another attack action (a reach, a target switch, a strategy's own attack) can start the swing again during a hold; the trigger stops it again on its next pass, so a few swings can land in between. Each `BossTacticsThreatCap` row (one per damage dealer per 10 s) gains `white=held|free ref0=0|1`, so a walk can split the Hex-window hold from the 92 % stop.
+
+The row opt-in (`tactic_mode = 'strict'` on a `threat_successor` row) ships in `data/sql/world/20261108220000_world.sql`, on Jin'do's row only. **Rollback:** a binary from before the `strict` word refuses that row entirely and so loses Jin'do's whole successor cap, not only the strict line. Before starting such a binary on a migrated database, run `tools/sql/rollback/20261108220000_world.rollback.sql` by hand (it lives outside `data/sql`, so the updater never applies it): it sets the row's `tactic_mode` back to empty and restores its comment. Moving forward again, re-run the migration's UPDATE by hand, since the updater has already recorded it.
+
+A 65 % white stop was removed in 405801e86 because it cost a fifth of the raid's damage; this one aims at damage dealers between 80 % and 92 % of the successor instead of 89-100 % and above. Walk-57 measures: top damage dealer / successor at a tank Hex, median, from about 1.05 to 0.90 or less; Hexes on a tank holder that go to a damage dealer from 66 of 91 to 35 % or less (off-tank holder: 76 % to 35 % or less); pure-overtake time with Jin'do on a damage dealer from 227 s to 80 s or less; the guard: raid damage per second on Jin'do at 92 % of walk 56 or more.
+
+</details>
+
+### `AiPlayerbot.DungeonRunThreatSuccessorKeepsAway`
+Whether the successor pick on a boss with a `threat_successor` row keeps a tank cursed by Delusions of Jin'do, which stands on its Shade by design. Recommended on, together with `AiPlayerbot.DungeonRunThreatSuccessorNotHolder`.
+**Default:** `0` · **Values:** `0` off (a cursed tank that is not hitting the boss drops out of the pick), `1` on (a tank wearing Delusions 24306 counts as on the boss while its threat is above 0 and at least half the highest tank's) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+<details>
+<summary>How it works in detail</summary>
+
+With `AiPlayerbot.DungeonRunThreatSuccessorNotHolder` the reference is the highest tank that hits the boss and is not the one it is hitting. In walk 56 that pick lost the main tank in 12 of the 39 off-tank Hexes that went to a damage dealer (against 1 of 10 that went to a tank), so the reference fell back to the holder's own threat and the damage dealers climbed to 80 % of it. One cause was a main tank cursed by Delusions (24306) on its Shade: it stands there by design while its Jin'do threat stays. With the key on it counts as on the boss, as a Hexed tank already does (`ThreatCapCursedOnBoss`), but only while its threat is above 0 and at least half the highest tank's: Delusions is never cured and a cursed tank's Jin'do threat does not climb on its Shade, so a cursed tank with little or no threat would otherwise be a near-0 reference that holds every damage dealer for the whole curse. A charmed tank (Brain Wash, Cause Insanity) is still skipped: its old threat would lift the cap above anything the boss can turn to while it is off the threat list (walk 41 on Hakkar). The key acts through the not-holder pick; with that key off it changes practically nothing, since a cursed off-tank at half the highest tank or more already passes the old away floor. A main tank that stays idle after a charm (the `select new target` and `reach spell` loops of walk 56) is a tank-targeting question this key does not touch. Known limit: a cursed tank at half the holder's threat or more stays the reference while its Jin'do threat stands still on its Shade, so the damage dealers are held at 80 % of it (and, with `AiPlayerbot.DungeonRunThreatSuccessorStrict`, their white damage at 92 %) until the holder has doubled it and the cursed tank drops below half; that can take tens of seconds. It is the not-holder design working (the cursed tank really is the next victim after a Hex on the holder). Walk 57 splits those rows out of the damage guard: `BossTacticsThreatCap` rows with `ref=offtank holder=main offtank_target=Shade of Jin'do white=held`. Walk-57 measures: pre-Hex `ref=offtank holder=off` rows in off-holder windows from 132 of 661 (20 %) toward 5 %; off-holder Hexes with `mt_threat` 0 from 10 of 47 toward 3 (the charmed and idle main tanks are not covered, so these targets may not be met by this key alone).
+
+</details>
+
+### `AiPlayerbot.DungeonRunFactJudgeCharmedLead`
+Whether the run leader judges its fight by an uncharmed bot while the lead bot is charmed, so a Brain Wash Totem stays a kill-first fact, the fight stays read and the guard keeps its eyes while the main tank is Brain-Washed. Recommended on.
+**Default:** `0` · **Values:** `0` off (the charmed lead judges as before), `1` on (while the lead is charmed, the first living, uncharmed commanded bot on its map judges) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+<details>
+<summary>How it works in detail</summary>
+
+The run reads its fight against the lead bot. A charmed lead (Jin'do's Brain Wash, any Mind Control or Dominate Mind) is friendly to its charmer's side, so the kill-first read dropped the Brain Wash Totem's owner Jin'do as not engaged, the engaged units came back empty (the fight read as stale and its clock stopped), the raid guard measured and filtered its attackers from the charmed lead, and the run's own focus order was refused as "friendly"; the totem focus (`AiPlayerbot.DungeonRunTotemFocus`) went silent while the main tank stayed charmed (ZG walk 57: 16 of 19 main-tank charm windows of 10 s or more had no focus row; median charm 86 s, meleeing the raid). With the key on, while the lead is charmed and a fit judge exists (`RunJudge`: the first living, uncharmed commanded bot on the lead's map, the judge `GroupCanAttack` already used; real players are never the judge), it replaces the lead (`RunFactJudgeReplacesLead`) in the kill-first friendliness test and the owner's engagement, the engaged units read, the crowd-control hold read, the raid guard's anchor (`RaidGuardAnchor`: the off-tank or first living bot the dead-lead path already picks, skipping charmed bots), and the order's target check (`CommanderOrder::judge`, which also serves `cmd attack`, `cmd cc` and `cmd state`). With the key on a dead lead's order judge and guard anchor also skip charmed bots. With the whole party charmed, or the lead not charmed, nothing changes. Generic: any charm on the lead, every raid and dungeon, no boss id. The per-member engaged read (`ReadMemberEngaged`, the combat drop) and the party's attacker list for a party run still judge against the lead.
+
+</details>
+
 ### `AiPlayerbot.DungeonRunUseObject`
 Whether the boss tactics keep their `use_object` rows: one claimed bot clicks the boss's game object at the right moment, and mode `tank_anchor` also walks the boss over to it.
 **Default:** `0` · **Values:** `0` off (the rows are ignored, as before the kind existed), `1` on (needs `AiPlayerbot.DungeonTactics`, or a commander-bound group) · **Restart:** not needed (`.reload config` applies it on the next world tick)
