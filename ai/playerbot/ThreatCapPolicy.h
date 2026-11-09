@@ -433,4 +433,83 @@ namespace ai
         const ThreatCapPick after = ThreatCapPickReference(tanks, true, notHolder);
         return !after.offTank || after.threat < now.threat * kThreatCapCollapseShare;
     }
+
+    // The core's pull lines (ThreatManager::getHostileTarget): a mob turns on an attacker whose threat passes 110 % of
+    // its current victim's while it can reach that attacker with a melee swing, 130 % otherwise.
+    constexpr float kThreatCapCastMeleePullLine = 1.1f;
+    constexpr float kThreatCapCastRangedPullLine = 1.3f;
+
+    inline float ThreatCapCastPullLine(bool meleeReach)
+    {
+        return meleeReach ? kThreatCapCastMeleePullLine : kThreatCapCastRangedPullLine;
+    }
+
+    // AiPlayerbot.ThreatCapCountsCastThreat: whether a single-target damage cast is held because its own expected
+    // threat would carry the bot past the mob's victim. The high-threat veto (HighThreatTrigger, 80 %) reads only the
+    // threat the bot has at cast start, so a Fireball started at 79 % landed about 3 s later as one 400-690 threat hit
+    // and jumped the mage past the core's 130 % ranged pull line (non-fire mages: 48 of 87 aggro onsets came within 5 s
+    // of a Fireball hit). Held when EITHER
+    //  (a) the normal hit reaches the reference: botThreat + castThreat >= tankThreat (100 %, the margin for what the
+    //      estimate leaves out), or
+    //  (b) the bot can crit with the spell and a crit reaches the core's real pull line: botThreat + castThreat *
+    //      critMult >= pullLine * tankThreat (critMult 1.5 for spells, 2 for melee/ranged attack spells, plus crit
+    //      talents; pullLine 1.1 in the mob's melee reach, else 1.3).
+    // False without the key, without tank threat on the target (the old veto keeps that case) and without an estimate.
+    inline bool ThreatCapCastOvershoots(bool key, float botThreat, float castThreat, float tankThreat, float critMult,
+                                        float pullLine, bool canCrit)
+    {
+        if (!key || tankThreat <= 0.0f || castThreat <= 0.0f)
+            return false;
+        if (botThreat + castThreat >= tankThreat)
+            return true;
+        return canCrit && botThreat + castThreat * critMult >= pullLine * tankThreat;
+    }
+
+    // The average of one spell effect's points, the same arithmetic as the core's WorldObject::CalculateSpellDamage
+    // without its dice roll: the base plus the per-level growth, plus the middle of the roll range (irand between the
+    // base dice and the die sides, both grown per level). levelDelta is the caster's level clamped to the spell's
+    // base/max level, minus the spell level, as the core computes it. Spell mods and the level-damage attribute are
+    // the caller's.
+    inline float ThreatCapAverageEffectPoints(int basePoints, int baseDice, int dieSides, float pointsPerLevel,
+                                              float dicePerLevel, int levelDelta)
+    {
+        int points = basePoints + int(levelDelta * pointsPerLevel);
+        int const randomPoints = int(dieSides + levelDelta * dicePerLevel);
+        if (randomPoints == 0 || randomPoints == 1)
+            return float(points + baseDice);
+        return float(points) + (float(baseDice) + float(randomPoints)) / 2.0f;
+    }
+
+    // The threat a cast adds when it lands, the core's arithmetic on plain numbers: the damage times the spell threat
+    // table's multiplier (Unit::DealDamage: damage * GetSpellThreatMultiplier; Mind Blast, Searing Pain, Earth Shock
+    // and Holy Shock are x2 in tw_world_spell_threat), plus the table's flat threat and AP bonus (Spell::
+    // HandleThreatSpells: threat + ap_bonus * attack power), each through the caster's SPELLMOD_THREAT percent and
+    // total threat modifier (ThreatCalcHelper::CalcThreat). Never below 0.
+    inline float ThreatCapCastThreat(float avgDamage, float threatMultiplier, float flatThreat, float apBonus,
+                                     float attackPower, float threatModPct, float totalThreatMod)
+    {
+        float threat = avgDamage > 0.0f ? avgDamage * threatMultiplier : 0.0f;
+        threat += flatThreat + apBonus * attackPower;
+        threat *= (1.0f + threatModPct / 100.0f) * totalThreatMod;
+        return threat > 0.0f ? threat : 0.0f;
+    }
+
+    // A channel's whole damage: one tick's damage times its ticks (duration / amplitude, as the aura ticks). A spell that
+    // is not channeled gives 0: a DoT's threat comes a tick at a time, and every later cast is checked again.
+    inline float ThreatCapChannelDamage(bool channeled, float perTick, int durationMs, int amplitudeMs)
+    {
+        if (!channeled || perTick <= 0.0f || durationMs <= 0 || amplitudeMs <= 0)
+            return 0.0f;
+        return perTick * float(durationMs / amplitudeMs);
+    }
+
+    // The threat the cast is measured against: the mob's victim's threat, capped by the top tank's (ThreatValue::
+    // GetTankThreat). The core turns the mob on whoever passes its current victim, so an off-tank above the victim is
+    // no cover. A victim without threat on the list leaves the top tank's.
+    inline float ThreatCapCastReference(float victimThreat, float tankThreat)
+    {
+        if (tankThreat <= 0.0f || victimThreat <= 0.0f)
+            return tankThreat;
+        return victimThreat < tankThreat ? victimThreat : tankThreat;
+    }
 }

@@ -34,6 +34,7 @@ These settings configure health and mana trigger percentages, engagement ranges,
 | [`AiPlayerbot.GlobalCooldown`](#aiplayerbotglobalcooldown) | `1500` | Pacing delay in milliseconds enforced between rapid spell casts. |
 | [`AiPlayerbot.InterruptIgnoresThreat`](#aiplayerbotinterruptignoresthreat) | `0` | Pure interrupts (Kick, Pummel, Counterspell...) skip the threat back-off like heals. Recommended on. |
 | [`AiPlayerbot.SpellFacingPrecheck`](#aiplayerbotspellfacingprecheck) | `0` | Bots skip casts the target's facing makes impossible (Gouge from behind, Backstab from the front) without probing them. Recommended on. |
+| [`AiPlayerbot.ThreatCapCountsCastThreat`](#aiplayerbotthreatcapcountscastthreat) | `0` | The threat back-off counts a damage cast's own expected threat, so a slow nuke is held before it would land past the tank. Recommended on. |
 | [`AiPlayerbot.RangedPull`](#aiplayerbotrangedpull) | `1` | Enables automatic ranged openings for commanded tank pulls. |
 | [`AiPlayerbot.RangedPullMeleeApproach`](#aiplayerbotrangedpullmeleeapproach) | `20` | Walk-in approach threshold in yards before tank pulls open from range. |
 | [`AiPlayerbot.PullDpsJoinDelay`](#aiplayerbotpulldpsjoindelay) | `10` | Seconds party DPS wait after a tank pull before joining combat. |
@@ -260,6 +261,35 @@ Whether bots refuse a cast the target's facing makes impossible before they ask 
 <summary>How it works in detail</summary>
 
 The core refuses two casts because of where the target faces: a from-behind-only spell while the target has the caster in its front arc (`SPELL_FAILED_NOT_BEHIND`), and Gouge (spell attributes exactly `0x150010`) while it does not (`SPELL_FAILED_NOT_INFRONT`). No turn of the caster fixes either. The bot's cast check (`PlayerbotAI::CanCastSpell`) used to find out by probing the core's cast check, which sends a spell failure to every client nearby on each probe, and it read the Gouge answer as castable, so a rogue on the `behind` strategy tried Gouge about 20 times a second and none landed (Tortoise Trials Kick test: 0 Gouges in 4 reps, 338 failures in one). With the key on the bot runs the same two tests itself first (`TargetFacingRefuses`) and refuses the cast without the probe, so the engine moves on to its next action in the same tick. The precheck runs before the core's other cast checks (cooldown, range, power and so on), so the answer for such a cast becomes `NOT_INFRONT` or `NOT_BEHIND` where the core would sometimes have named another reason first. It can only refuse a cast that the core always refuses on facing; every other cast goes to the core's check as before.
+
+</details>
+
+### `AiPlayerbot.ThreatCapCountsCastThreat`
+Whether the threat back-off counts a single-target damage cast's own expected threat. Recommended on.
+**Default:** `0` · **Values:** `0` off (only the bot's threat at cast start is checked against the 80 % high-threat line), `1` on (a damage cast is also held while the bot's threat plus the cast's expected threat reaches the tank's) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+<details>
+<summary>How it works in detail</summary>
+
+A bot with the `threat` strategy in a group backs off single-target spell actions while its threat on the target reads at or above 80 % of the tank's (`ThreatMultiplier`, the `high threat` trigger). That check reads the threat the bot has when the cast starts. A slow nuke is one big step: a Fireball started at 79 % lands about 3 s later as one 400-690 threat hit, and on a fresh mob where the tank holds only two or three such hits that carries the caster past the core's 130 % ranged pull line, so the mob turns on it (Tortoise Trials, mages without fire talents: 48 of 87 aggro onsets came within 5 s of a Fireball hit).
+
+With the key on, a `CastSpellAction` of the single-target threat type, cast by a bot that is not a tank at a mob whose victim is a tank, is held while the bot's threat on that mob plus the cast's expected threat reaches the victim's threat on it, capped by the top tank's (`ThreatCapCastReference`, `ThreatCapCastOvershoots`; an off-tank above the victim is no cover, since the core turns the mob on whoever passes its current victim). Two rules, either one holds the cast (`ThreatCapCastOvershoots`): (a) the normal hit reaches 100 % of that line, the margin for what the estimate leaves out; (b) when the bot can crit with the spell (its crit chance for the school, or its weapon crit chance for a melee or ranged attack spell, is above 0), a crit reaches the core's real pull line: the bot's threat plus the cast's threat times the crit multiplier (x1.5 for spells, x2 for melee and ranged attack spells, plus crit-damage talents, from the core's `SpellCriticalDamageBonus`) at or over 110 % of the line while the mob can reach the bot in melee, 130 % otherwise. Interrupt actions (Kick, Pummel, Shield Bash, Bash, Counterspell, Silence, Earth Shock) and heals are untouched, and with no tank threat on the mob the old veto stays as it is.
+
+The expected threat (`ExpectedCastThreat`) follows the core:
+
+- **Damage:** for each direct school-damage effect of the bot's rank of the spell, the middle of the core's damage roll with level growth (`ThreatCapAverageEffectPoints`, the arithmetic of `CalculateSpellDamage` without the roll) and the caster's spell mods, plus spell power and damage modifiers (`SpellDamageBonusDone`).
+- **Channels** count the whole channel: a periodic damage or leech effect (Mind Flay, Drain Life) as one tick through `SpellDamageBonusDone` for damage over time, times the ticks (duration / amplitude); a periodic trigger (Arcane Missiles) as the triggered missile's direct damage times the ticks, with the missile's own threat multiplier.
+- **Threat** (`ThreatCapCastThreat`): the damage times the spell threat table's multiplier (Mind Blast, Searing Pain, Earth Shock and Holy Shock are x2), plus the table's flat threat and attack-power bonus, all through the caster's threat spell mods and threat modifiers (`ApplyTotalThreatModifier`), as the core adds threat when the hit lands. A spell the core gives no harmful threat counts 0. The flat threat counts for a spell without damage too, as in the core: a Sunder Armor or Faerie Fire from a non-tank adds its table threat and can be held.
+
+Limits (the estimate stays an average, on the low side):
+
+- a DoT that is not channeled counts only its direct part: its threat comes a tick at a time, and every later cast is checked again;
+- crits count only against the pull line (rule b), not against the 100 % line; a crit's own threat bonus (`SPELL_AURA_MOD_CRITICAL_THREAT`) is not counted;
+- the target's damage-taken modifiers (Fire Vulnerability, Shadow Weaving, Curse of the Elements and the like) are not counted;
+- combo-point finishers count no combo-point damage (the points are added only at cast time);
+- melee and ranged attack spells (Heroic Strike, Sinister Strike, Aimed Shot) go through the spell-damage bonus, not the weapon damage path, so their estimate is only their spell points.
+
+Each held cast writes a row at most once every 2 s per bot: `ThreatCap cast spell= pct= cast= bot= tank=`, where `tank=` is the line the cast was measured against (tag `THREAT` in the per-bot action log with `AiPlayerbot.EnableActionLog = 1`, and `ThreatCapCast` in `bot_events.csv`).
 
 </details>
 
