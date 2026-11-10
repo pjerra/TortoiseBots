@@ -1,5 +1,6 @@
 # Changelog
 
+- New: Onyxia's Lair walk 2b rows: 601 Deep Breath stand seats, one anchor per hover point opening on that point's breath while she hovers and holding 12 s, every seat more than 33 yd from its lane's ticks, so seated bots keep their seat instead of the generic breath dodge.
 - Fixed: the Onyxia breath dodge skips the boss stand lookup while AiPlayerbot.BossStandOutranksBreathDodge is off, so bots pay nothing extra.
 - New: behind AiPlayerbot.BossStandOutranksBreathDodge (default 0, recommended on), a bot holding a boss stand seat keeps it through Onyxia's Deep Breath instead of walking to the generic safe spots.
 - Fixed: a `hold_spot` `tank_post` keeps its latched arrival only for the unit that arrived; a second unit of the same entry starts unarrived, and a plain post still logs its arrival only when it engages.
