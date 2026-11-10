@@ -1,5 +1,6 @@
 # Changelog
 
+- Fixed: the "lose aggro" trigger stays quiet while a fresh mob has no victim yet (no flag).
 - Fixed: the AoE taunts also stand down at cast time. Challenging Shout and Challenging Roar re-check the "loose adds near" count before they fire, so a shout queued for loose adds no longer fires after the pack settles (no flag, no per-mob tank check).
 - Fixed: a tank bot no longer taunts a mob off a tank player. A taunt queued while a fresh mob had no victim yet outlived its reach walk and fired after the mob turned onto the tank player, so each generic taunt now stands down at cast time while its mob stands on another tank (no flag).
 - New: Onyxia's Lair walk 2a rows: slot 1 posts at the NE spot for Cindarion from 65-41 %, damage holds off Onyxia at 42 % while he fights, and the raid stays within 60 yd of the room centre so the respawned room-mouth Warder is never chased into.
