@@ -684,7 +684,7 @@ namespace ai
     };
 
     // The area taunt: never at a subject the taunt gate refuses (another tank's live post owns it, a Shade of Jin'do,
-    // a taunt-immune boss). Read on the current target; the area the roar itself hits is unchanged.
+    // a taunt-immune boss), and never while any hostile in the roar's own radius is another post's subject.
     class CastChallengingRoarAction : public CastMeleeSpellAction
     {
     public:
@@ -693,7 +693,8 @@ namespace ai
         virtual bool isUseful() override
         {
             return CastMeleeSpellAction::isUseful() &&
-                !(GetTarget() && TauntRefusedByGate(ai, bot, GetTarget(), "challenging roar"));
+                !(GetTarget() && TauntRefusedByGate(ai, bot, GetTarget(), "challenging roar")) &&
+                !AreaTauntRefusedByPost(ai, bot, "challenging roar");
         }
     };
 

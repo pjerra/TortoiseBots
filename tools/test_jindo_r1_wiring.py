@@ -177,8 +177,8 @@ class JindoR1Wiring(unittest.TestCase):
         self.assertIn("const bool gateRefused = canTaunt && TauntRefusedByGate(ai, bot, task.source, taunt);", ACTIONS)
         self.assertIn("if (!canTaunt || gateRefused)", ACTIONS)
         self.assertIn("if (!taunt || TauntRefusedByGate(ai, bot, task.subject, taunt))", ACTIONS)
-        # The area taunts read the same gate on their current target: a live tank_post's subject and a refused
-        # single target keep them quiet, their area is unchanged.
+        # The area taunts read the same gate on their current target, and their own radius scan covers the rest: a
+        # live tank_post's subject anywhere in it, and a refused single target, keep them quiet.
         for text, cls, spell in (
                 (WARRIOR, "class CastChallengingShoutAction", '"challenging shout"'),
                 (DRUID, "class CastChallengingRoarAction", '"challenging roar"')):
