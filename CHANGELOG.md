@@ -1,5 +1,6 @@
 # Changelog
 
+- New: behind AiPlayerbot.BossStandOutranksBreathDodge (default 0, recommended on), a bot holding a boss stand seat keeps it through Onyxia's Deep Breath instead of walking to the generic safe spots.
 - Fixed: a `hold_spot` `tank_post` keeps its latched arrival only for the unit that arrived; a second unit of the same entry starts unarrived, and a plain post still logs its arrival only when it engages.
 - Fixed: a `hold_spot` `tank_post` latches its arrival on the tick the unit really arrives even when that tick drags it back to the spot or yields to a stand seat, so the post no longer treats a real arrival as never arrived and no longer ends on its window.
 - New: behind AiPlayerbot.DungeonRunTankPostHoldSpot (default 0, recommended on), a `tank_post` row in mode `hold_spot` starts while the tank still holds another hostile, latches its arrival while the unit is alive and selectable, makes the arrived unit outrank any other hostile, drags it back to the spot once it is more than 8 yd away with the unit on the tank (target kept), no longer ends on its window after arrival, and yields to a boss stand seat (record kept) so the breath seat moves the tank and the unit follows.
