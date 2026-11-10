@@ -1,5 +1,6 @@
 # Changelog
 
+- Changed: Onyxia's Lair walk 2b post: slot 1's tank post for Cindarion is now mode hold_spot, so it starts even off a whelp, drags him back to the NE spot after each breath seat and yields to a seat, behind AiPlayerbot.DungeonRunTankPostHoldSpot.
 - New: Onyxia's Lair walk 2b rows: 601 Deep Breath stand seats, one anchor per hover point opening on that point's breath while she hovers and holding 12 s, every seat more than 33 yd from its lane's ticks, so seated bots keep their seat instead of the generic breath dodge.
 - Fixed: the Onyxia breath dodge skips the boss stand lookup while AiPlayerbot.BossStandOutranksBreathDodge is off, so bots pay nothing extra.
 - New: behind AiPlayerbot.BossStandOutranksBreathDodge (default 0, recommended on), a bot holding a boss stand seat keeps it through Onyxia's Deep Breath instead of walking to the generic safe spots.
