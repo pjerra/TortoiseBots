@@ -40,7 +40,7 @@ class GateHoldWiring(unittest.TestCase):
         self.assertIn("(recommended on)", SETTINGS.split("DungeonRunGateHold", 1)[1].splitlines()[0])
 
     def test_the_kind_and_its_rule_live_in_the_policy(self):
-        self.assertIn("GateHold = 26", POLICY)
+        self.assertIn("GateHold = 25", POLICY)
         self.assertIn('if (text == "gate_hold")', POLICY)
         self.assertIn("inline bool GateHeld(const ActiveBossRows& rows, std::uint32_t entry, int hpPct,", POLICY)
         self.assertIn("inline bool CountsAsFightingBlocker(bool inCombat, bool evading, bool notSelectable)", POLICY)
@@ -116,7 +116,7 @@ class GateHoldWiring(unittest.TestCase):
         self.assertIn("`gate_hold` needs `AiPlayerbot.DungeonRunGateHold = 1`", DOC)
         self.assertIn("gate_hold", DOC[DOC.index("| `kind` |"):DOC.index("| `spell_id` |")])
         sql = (ROOT / "tools/test_boss_tactics_sql.py").read_text()
-        self.assertIn('"seek_pull", "gate_hold"', sql)
+        self.assertIn('"tank_ignore", "gate_hold"', sql)
         self.assertIn('if kind == "gate_hold":', sql)
 
 
