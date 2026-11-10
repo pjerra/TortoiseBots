@@ -1,5 +1,6 @@
 # Changelog
 
+- Fixed: a tank bot no longer taunts a mob off a tank player. A taunt queued while a fresh mob had no victim yet outlived its reach walk and fired after the mob turned onto the tank player, so each generic taunt now stands down at cast time while its mob stands on another tank (no flag).
 - New: Onyxia's Lair walk 2a rows: slot 1 posts at the NE spot for Cindarion from 65-41 %, damage holds off Onyxia at 42 % while he fights, and the raid stays within 60 yd of the room centre so the respawned room-mouth Warder is never chased into.
 - New: behind AiPlayerbot.DungeonRunSeekPullerKeepsFight (default 0, recommended on, needs AiPlayerbot.DungeonRunSeekWalkoutFocus), a Hakkar walk-out puller more than its sight distance from the raid keeps the boss in its own fight scan, so its walk-out keeps running instead of standing frozen until the 15 s no-sight cut, with one `seek pull: walk-out kept boss` row a walk-out.
 - Fixed: with AiPlayerbot.DungeonRunShadeHealerCover on, the off-tank keeps the Shade it pulled even with a nearer Shade beside it, and only leaves Jin'do while it holds at least half the top tank's threat.
