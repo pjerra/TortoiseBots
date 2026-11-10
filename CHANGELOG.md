@@ -1,5 +1,6 @@
 # Changelog
 
+- Changed: Hakkar's opening damage hold is 12 s (was 5 s) so the off-tanks are ahead of the damage dealers when the first Cause Insanity lands at 17 s (data: data/sql/world/20261111120000_world.sql, rollback tools/sql/rollback/20261111120000_world.rollback.sql).
 - Changed: Onyxia's Lair walk 2b post: slot 1's tank post for Cindarion is now mode hold_spot, so it starts even off a whelp, drags him back to the NE spot after each breath seat and yields to a seat, behind AiPlayerbot.DungeonRunTankPostHoldSpot.
 - New: Onyxia's Lair walk 2b rows: 601 Deep Breath stand seats, one anchor per hover point opening on that point's breath while she hovers and holding 12 s, every seat more than 33 yd from its lane's ticks, so seated bots keep their seat instead of the generic breath dodge.
 - New: Onyxia's Lair walk 2a rows: slot 1 posts at the NE spot for Cindarion from 65-41 %, damage holds off Onyxia at 42 % while he fights, and the raid stays within 60 yd of the room centre so the respawned room-mouth Warder is never chased into.
