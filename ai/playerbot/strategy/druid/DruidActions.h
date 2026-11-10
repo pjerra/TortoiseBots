@@ -683,10 +683,18 @@ namespace ai
         CastFrenziedRegenerationAction(PlayerbotAI* ai) : CastBuffSpellAction(ai, "frenzied regeneration") {}
     };
 
+    // The area taunt: never at a subject the taunt gate refuses (another tank's live post owns it, a Shade of Jin'do,
+    // a taunt-immune boss). Read on the current target; the area the roar itself hits is unchanged.
     class CastChallengingRoarAction : public CastMeleeSpellAction
     {
     public:
         CastChallengingRoarAction(PlayerbotAI* ai) : CastMeleeSpellAction(ai, "challenging roar") {}
+
+        virtual bool isUseful() override
+        {
+            return CastMeleeSpellAction::isUseful() &&
+                !(GetTarget() && TauntRefusedByGate(ai, bot, GetTarget(), "challenging roar"));
+        }
     };
 
     class CastEnrageAction : public CastBuffSpellAction

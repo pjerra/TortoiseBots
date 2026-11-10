@@ -89,7 +89,19 @@ namespace ai
     // shouts
     MELEE_ACTION_U(CastBattleShoutTauntAction, "battle shout", CastSpellAction::isUseful()); // useful to rebuff
     MELEE_DEBUFF_ACTION_R(CastDemoralizingShoutAction, "demoralizing shout", 8.0f); // low range debuff
-    MELEE_ACTION(CastChallengingShoutAction, "challenging shout");
+    // The area taunt: never at a subject the taunt gate refuses (another tank's live post owns it, a Shade of Jin'do,
+    // a taunt-immune boss). Read on the current target; the area the shout itself hits is unchanged.
+    class CastChallengingShoutAction : public CastMeleeSpellAction
+    {
+    public:
+        CastChallengingShoutAction(PlayerbotAI* ai) : CastMeleeSpellAction(ai, "challenging shout") {}
+
+        virtual bool isUseful() override
+        {
+            return CastMeleeSpellAction::isUseful() &&
+                !(GetTarget() && TauntRefusedByGate(ai, bot, GetTarget(), "challenging shout"));
+        }
+    };
     class CastIntimidatingShoutAction : public CastMeleeDebuffSpellAction
     {
     public:
