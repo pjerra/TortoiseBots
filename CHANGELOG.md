@@ -1,5 +1,6 @@
 # Changelog
 
+- Changed: Onyxia's Lair walk 2c rows: slot 1's tank post arrival radius is now 40, so Cindarion's 21-26 yd touchdown latches on the first tick, and a 10 yd ranged_only row sends melee and tanks to Cindarion and the whelps while she hovers, behind AiPlayerbot.DungeonRunRangedOnly.
 - Changed: Onyxia's Lair walk 2b post: slot 1's tank post for Cindarion is now mode hold_spot, so it starts even off a whelp, drags him back to the NE spot after each breath seat and yields to a seat, behind AiPlayerbot.DungeonRunTankPostHoldSpot.
 - New: Onyxia's Lair walk 2b rows: 601 Deep Breath stand seats, one anchor per hover point opening on that point's breath while she hovers and holding 12 s, every seat more than 33 yd from its lane's ticks, so seated bots keep their seat instead of the generic breath dodge.
 - Fixed: the Onyxia breath dodge skips the boss stand lookup while AiPlayerbot.BossStandOutranksBreathDodge is off, so bots pay nothing extra.
