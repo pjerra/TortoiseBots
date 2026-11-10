@@ -336,6 +336,8 @@ static void GateHold_RowShape()
         BossTacticTable table;
         CHECK(!table.Add(bad));
     }
+}
+
 static TankPostIn TankPostWaiting()
 {
     TankPostIn in;
@@ -551,6 +553,8 @@ static void TestAssignedTankSlot_EnabledKindUsesItsOwnSlot()
     CHECK(postOnly.AssignedTankSlotOf(249, 50143).SlotFor(true, true) == 2);
     CHECK(postOnly.AssignedTankSlotOf(249, 50143).SlotFor(true, false) == 0);
     CHECK(postOnly.AssignedTankSlotOf(249, 50143).SlotFor(false, false) == 0);
+}
+
 // The case that fails without the drag: the arrived unit walks off with the tank following it, and only a walk back
 // keeping the target brings it to the spot; without the mode the arrived post engages wherever the unit stands.
 static void TestTankPost_HoldSpotDragsSubjectBackToSpot()
