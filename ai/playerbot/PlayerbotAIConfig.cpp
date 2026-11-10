@@ -149,6 +149,7 @@ void PlayerbotAIConfig::LoadDungeonRunKeys()
     dungeonRunTankPost = config.GetBoolDefault("AiPlayerbot.DungeonRunTankPost", false);
     dungeonRunGuardLeavesAssignedTank =
         config.GetBoolDefault("AiPlayerbot.DungeonRunGuardLeavesAssignedTank", false);
+    dungeonRunTankPostHoldSpot = config.GetBoolDefault("AiPlayerbot.DungeonRunTankPostHoldSpot", false);
     dungeonRunSeekAura = config.GetBoolDefault("AiPlayerbot.DungeonRunSeekAura", false);
     dungeonRunPullGate = config.GetBoolDefault("AiPlayerbot.DungeonRunPullGate", false);
     dungeonRunBossSpread = config.GetBoolDefault("AiPlayerbot.DungeonRunBossSpread", false);
