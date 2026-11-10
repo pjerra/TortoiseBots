@@ -1,5 +1,6 @@
 # Changelog
 
+- New: Onyxia's Lair walk 2a rows: slot 1 posts at the NE spot for Cindarion from 65-41 %, damage holds off Onyxia at 42 % while he fights, and the raid stays within 60 yd of the room centre so the respawned room-mouth Warder is never chased into.
 - New: behind AiPlayerbot.DungeonRunTankPost (default 0, recommended on), a `tank_post` row has a named raid tank wait at a spot for a second unit that is not in the fight yet (an unselectable boss in the air) and attack it the moment it lands, dropping only the boss it cannot reach and keeping any other hostile; the post ends on the unit's death or evade, its window, the tank's death or charm, or the health band closing, with one `BossTacticsTankPost` row per start, arrival and end.
 - Fixed: a priest no longer shields a rage tank above critical health, in or out of combat; a warrior in Defensive Stance or a druid in Bear Form counts as a tank even without Protection or Feral talents, and an assigned non-tank role wins over the stance (#1553).
 - Fixed: removed Hakkar's taunt cover in Zul'Gurub, which could never take him back because he is immune to taunts; the off-tank still inherits him through the threat cap.
