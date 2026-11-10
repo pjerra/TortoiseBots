@@ -603,7 +603,7 @@ namespace ai
     };
 
     // Never at a subject the taunt gate refuses (a Shade of Jin'do, a taunt-immune boss); the on-attacker action below
-    // inherits this isUseful, and GetTarget() there is the value's pick.
+    // inherits this isUseful, and GetTarget() there is the value's pick. Stands down at cast time when the mob is already on another tank (TauntHeldTargetPolicy.h).
     class CastGrowlAction : public CastSpellAction
     {
     public:
@@ -611,7 +611,8 @@ namespace ai
 
         virtual bool isUseful() override
         {
-            return CastSpellAction::isUseful() && !TauntRefusedByGate(ai, bot, GetTarget(), "growl");
+            return CastSpellAction::isUseful() && !TauntRefusedByGate(ai, bot, GetTarget(), "growl") &&
+                !TauntTargetHeldByOtherTank(bot, GetTarget());
         }
     };
 
@@ -683,10 +684,17 @@ namespace ai
         CastFrenziedRegenerationAction(PlayerbotAI* ai) : CastBuffSpellAction(ai, "frenzied regeneration") {}
     };
 
+    // The AoE taunt: re-runs the "loose adds near" trigger's count at cast time, because a roar queued while loose
+    // adds were on a non-tank outlives its reach prerequisite and would otherwise fire after the pack settled.
     class CastChallengingRoarAction : public CastMeleeSpellAction
     {
     public:
         CastChallengingRoarAction(PlayerbotAI* ai) : CastMeleeSpellAction(ai, "challenging roar") {}
+
+        virtual bool isUseful() override
+        {
+            return CastMeleeSpellAction::isUseful() && AI_VALUE2(bool, "trigger active", "loose adds near");
+        }
     };
 
     class CastEnrageAction : public CastBuffSpellAction
