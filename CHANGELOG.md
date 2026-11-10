@@ -1,5 +1,6 @@
 # Changelog
 
+- Fixed: the Onyxia breath dodge skips the boss stand lookup while AiPlayerbot.BossStandOutranksBreathDodge is off, so bots pay nothing extra.
 - New: behind AiPlayerbot.BossStandOutranksBreathDodge (default 0, recommended on), a bot holding a boss stand seat keeps it through Onyxia's Deep Breath instead of walking to the generic safe spots.
 - Fixed: a `hold_spot` `tank_post` keeps its latched arrival only for the unit that arrived; a second unit of the same entry starts unarrived, and a plain post still logs its arrival only when it engages.
 - Fixed: a `hold_spot` `tank_post` latches its arrival on the tick the unit really arrives even when that tick drags it back to the spot or yields to a stand seat, so the post no longer treats a real arrival as never arrived and no longer ends on its window.
