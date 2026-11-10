@@ -41,7 +41,7 @@ Two extra opt-ins:
 - An `avoid_cast` row in mode `all` needs `AiPlayerbot.DungeonRunAvoidCastAll = 1` (default `0`): with it off the row holds a tank the caster is on like a default row.
 - `gate_hold` needs `AiPlayerbot.DungeonRunGateHold = 1` (default `0`, recommended on). Rows exist but are unread while it is off.
 - `tank_post` rows need `AiPlayerbot.DungeonRunTankPost = 1` (default `0`, recommended on): a named tank waits at a spot for a unit that is not in the fight yet, then attacks it on arrival.
-- The raid guard leaves an assigned unit to its tank with `AiPlayerbot.DungeonRunGuardLeavesAssignedTank = 1` (default `0`, recommended on): its off-tank pick-ups never send another tank at a unit an `until_tank` row with a tank slot or a `tank_post` row assigns.
+- The raid guard leaves an assigned unit to its tank with `AiPlayerbot.DungeonRunGuardLeavesAssignedTank = 1` (default `0`, recommended on): its off-tank pick-ups never send another tank at a unit an `until_tank` row with a tank slot or a `tank_post` row assigns, while the assigning kind's own key is on (`AiPlayerbot.DungeonRunAuraTactics` for `until_tank`, `AiPlayerbot.DungeonRunTankPost` for `tank_post`; with the key off the row does nothing and the unit is taken like any other add).
 - `.reload config` re-reads these keys without a restart.
 
 ## The table
