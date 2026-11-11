@@ -205,11 +205,35 @@ class SeekParkWiring(unittest.TestCase):
         self.assertIn("SeekParkFailedTakeDue(state.parkPhase, state.parkControlled, true)", target)
         self.assertIn("state.parkControlled);", target)
 
+    def test_a_failed_park_with_no_receiver_latches_its_breaker(self):
+        # A failed park whose Son is still controlled and whose receiver pick came up empty hands the break to the
+        # first ordinary off-tank that takes it: that taker is allowed as the sheeped Son's target through the walk
+        # and the attack, kept while it qualifies, and dropped on the control's loss, death, charm or the boss's pick.
+        fn = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
+        self.assertIn("SeekParkBreakerDue(state.parkPhase, state.parkControlled, state.parkReceiver != 0,", fn)
+        self.assertIn("NoteBossSeekParkBreaker(bot, state.parkSon)", fn)
+        self.assertLess(fn.index("FindBossSeekTankUnparked(ai, bot, excludeParkSon ? state.parkSon : 0)"),
+                        fn.index("SeekParkBreakerDue("))
+        latch = body(ACTIONS, "void NoteBossSeekParkBreaker(Player* bot, std::uint64_t sonGuid)")
+        self.assertIn("it->second.state.breaker != 0", latch)
+        self.assertIn("it->second.state.phase != SeekParkPhase::Failed", latch)
+        read = body(ACTIONS, "void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)")
+        self.assertIn("SeekParkBreakerKeeps(readPhase, controlled, sServerFacade.IsAlive(member),", read)
+        self.assertIn("record.state.breaker = breaker;", read)
+        self.assertIn("out.parkBreaker = step.breaker;", read)
+        target = body(ACTIONS, "bool ai::BossSeekParkReleaseTargetAllowed(PlayerbotAI* ai, Player* bot, Unit* target)")
+        self.assertIn("state.parkBreaker == bot->GetObjectGuid().GetRawValue()", target)
+        self.assertIn("inline bool SeekParkBreakerDue(SeekParkPhase phase, bool controlled, bool hasReceiver, "
+                      "bool takesSource)", POLICY)
+        self.assertIn("inline bool SeekParkBreakerKeeps(SeekParkPhase phase, bool controlled, bool alive, "
+                      "bool charmed, bool bossVictim)", POLICY)
+        self.assertIn("return phase == SeekParkPhase::Failed && controlled && (isReceiver || isBreaker);", POLICY)
+
     def test_the_receiver_window_needs_a_controlled_son(self):
         # Fix 3: the receiver-only exclusion and the 8 s window are for a controlled Son; awake, today's takes apply
         # at once and the window is today's 4 s.
         self.assertIn("!SeekParkReleaseLive(state.parkPhase) &&", ACTIONS)
-        self.assertIn("(phase == SeekParkPhase::Failed && controlled)", POLICY)
+        self.assertIn("phase == SeekParkPhase::Failed && controlled && (isReceiver || isBreaker)", POLICY)
 
     def test_the_receiver_pre_walk_yields_to_a_take(self):
         # Fix 4: the body read with the parked Son excluded outranks the approach walk when it owes this bot a take.

@@ -76,6 +76,8 @@ namespace ai
         bool spent = false;
         // The release's receiver this read (the caller's pick, not the machine's).
         std::uint64_t receiver = 0;
+        // The failed park's breaker this read: with no receiver, the ordinary off-tank whose take reaches the Son.
+        std::uint64_t breaker = 0;
         // The first Held read at or under the release lead (0: not waiting).
         std::uint32_t leadSinceMs = 0;
         // The park bot swaps this Apply survived (one restarts its budget clock).
@@ -135,6 +137,20 @@ namespace ai
     inline bool SeekParkFailedTakeDue(SeekParkPhase phase, bool controlled, bool isReceiver)
     {
         return phase == SeekParkPhase::Failed && controlled && isReceiver;
+    }
+
+    // Whether a failed park whose source is still controlled and whose receiver pick came up empty hands the break to
+    // the ordinary off-tank that just took the source: only that take can break the control now.
+    inline bool SeekParkBreakerDue(SeekParkPhase phase, bool controlled, bool hasReceiver, bool takesSource)
+    {
+        return phase == SeekParkPhase::Failed && controlled && !hasReceiver && takesSource;
+    }
+
+    // Whether the recorded breaker keeps the job: the control is still there and it can still take the source. A
+    // breaker that died, was charmed or became the boss's victim no longer qualifies; the next ordinary taker latches.
+    inline bool SeekParkBreakerKeeps(SeekParkPhase phase, bool controlled, bool alive, bool charmed, bool bossVictim)
+    {
+        return phase == SeekParkPhase::Failed && controlled && alive && !charmed && !bossVictim;
     }
 
     // Whether the release is live: the window is open (Release) or a tank completed it (Released). The release's
@@ -514,13 +530,17 @@ namespace ai
     }
 
     // Whether this bot's attack on `target` may outrank the invalid-target rule: the release's receiver, its released
-    // source, while the release is live, and the receiver of a failed park whose source is still controlled (its take
-    // is what breaks the control). A polymorphed Son is otherwise no valid current target, so the receiver's Attack()
-    // would be undone by "select new target" every tick.
-    inline bool SeekParkReleaseTargetAllowed(SeekParkPhase phase, bool isReceiver, bool isParkSon, bool controlled)
+    // source, while the release is live, and the receiver or the failed park's breaker while the source is still
+    // controlled (their takedowns are what breaks the control). A polymorphed Son is otherwise no valid current
+    // target, so that bot's Attack() would be undone by "select new target" every tick.
+    inline bool SeekParkReleaseTargetAllowed(SeekParkPhase phase, bool isReceiver, bool isBreaker, bool isParkSon,
+                                             bool controlled)
     {
-        return (SeekParkReleaseLive(phase) || (phase == SeekParkPhase::Failed && controlled)) && isReceiver &&
-            isParkSon;
+        if (!isParkSon)
+            return false;
+        if (SeekParkReleaseLive(phase))
+            return isReceiver;
+        return phase == SeekParkPhase::Failed && controlled && (isReceiver || isBreaker);
     }
 
     // The late-engage lead the fight read burns with: a parked or released source is not burned on arrival (its
