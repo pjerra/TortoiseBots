@@ -706,11 +706,11 @@ int main()
             CHECK(latch.held);
         }
 
-        // F3 (no credible successor): a tank back from a rez or away on an add is far under the top tank, and a
+        // F3 (no credible successor): a tank back from a rez is on the boss but far under the top tank, and a
         // reference under the absolute floor is no reference at all. Nobody is held either time.
         CASE("reset_standing_f3_no_credible_successor");
         {
-            const std::vector<ThreatCapTank> rezzed = {{20000.0f, false, true, true}, {1186.0f, true, false, false}};
+            const std::vector<ThreatCapTank> rezzed = {{20000.0f, false, true, true}, {1186.0f, true, true, false}};
             const ThreatResetStandingRead read = ThreatResetStandingReadOf(rezzed);
             CHECK(read.ref == 1186.0f);
             CHECK(read.highest == 20000.0f);
@@ -756,6 +756,23 @@ int main()
         CHECK(ThreatResetHoldIndex(false, true, 2, true, true) == 0);
         CHECK(ThreatResetHoldIndex(true, true, 2, true, false) == kThreatResetStandingIndex);
         CHECK(ThreatResetHoldIndex(true, true, 2, true, true) == 0);
+
+        // F7 (the fix round's failing case): the only non-holding tank is away on a Son, above half the top tank's
+        // threat (17149 is 57 % of 30000). Its threat does not grow, so it is no reference and the standing hold is shut
+        // for that read: the damage dealers keep their damage on Hakkar instead of stopping it for the whole gap.
+        CASE("reset_standing_f7_away_successor_is_no_reference");
+        {
+            const std::vector<ThreatCapTank> tanks = {{30000.0f, false, true, true}, {17149.0f, true, false, false}};
+            const ThreatResetStandingRead read = ThreatResetStandingReadOf(tanks);
+            CHECK(read.ref == -1.0f);
+            CHECK(read.highest == 30000.0f);
+            CHECK(!ThreatResetStandingCredible(read.ref, read.highest));
+            ThreatResetLatch latch;
+            CHECK(!ThreatResetStandingUpdate(latch, true, 17000.0f, read, 95));
+            CHECK(!latch.held);
+            CHECK(!ThreatResetStandingUpdate(latch, true, 20000.0f, read, 95));
+            CHECK(!latch.held);
+        }
 
         // F6: never a tank or a healer (dps false), and an empty tank list reads no reference and holds nobody.
         CASE("reset_standing_f6_never_a_tank_or_healer");

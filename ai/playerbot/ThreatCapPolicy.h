@@ -512,6 +512,19 @@ namespace ai
         return best;
     }
 
+    // The standing hold's reference: the highest threat among the listed tanks that do not hold the boss AND hit it (the
+    // plain cap's `onBoss` test). A tank away on a Son keeps its boss threat but does not grow while it is away, so
+    // damage dealers held against it keep their damage stopped for the whole gap between charms. -1: no such tank, and
+    // the standing hold is shut for that read.
+    inline float ThreatResetStandingReference(const std::vector<ThreatCapTank>& tanks)
+    {
+        float best = -1.0f;
+        for (const ThreatCapTank& t : tanks)
+            if (!t.holdsBoss && t.onBoss && t.threat > best)
+                best = t.threat;
+        return best;
+    }
+
     // One bot's hold around the reset window, kept across ticks like SuccessorWhiteLatch: held at or above stopPct of
     // the reference, released under stopPct - kThreatResetResumeGapPct, so a read that wobbles at the line does not
     // start and stop the damage every tick. Tanks, healers and a reference under the absolute floor are never held.
@@ -551,14 +564,14 @@ namespace ai
 
     struct ThreatResetStandingRead
     {
-        float ref = -1.0f;     // ThreatResetReference
+        float ref = -1.0f;     // ThreatResetStandingReference
         float highest = 0.0f;  // the highest listed tank's threat, the holder included
     };
 
     inline ThreatResetStandingRead ThreatResetStandingReadOf(const std::vector<ThreatCapTank>& tanks)
     {
         ThreatResetStandingRead read;
-        read.ref = ThreatResetReference(tanks);
+        read.ref = ThreatResetStandingReference(tanks);
         for (const ThreatCapTank& t : tanks)
             read.highest = std::max(read.highest, t.threat);
         return read;
