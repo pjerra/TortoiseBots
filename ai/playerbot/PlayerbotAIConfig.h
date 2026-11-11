@@ -797,6 +797,11 @@ public:
     // The fixed ranged slots of a live spread row (each ranged bot and healer owns a ring point and stands on it
     // whenever the seek does not need it): off, today's step-away (default off, recommended on).
     bool dungeonRunBossSpreadSlots = false;
+    // The healer top-up reserve (the `heal_reserve` boss-tactic row): outside the row's release window a healer tops
+    // up members above the medium-health line only while its mana is at or above the row's percent; tanks and the
+    // boss's current victim are exempt, and every lower heal tier is unchanged. Off keeps the MediumMana rule
+    // (default off).
+    bool dungeonRunHealReserve = false;
     // The avoid_cast blast mode `all` (a listed blast also clears the tanks while its spell is cast): on, an `all`
     // row holds no caster for any bot, so every tank walks out of that blast too (its own key on top of the tactics
     // gate; default off).
