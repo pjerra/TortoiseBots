@@ -183,6 +183,15 @@ namespace ai
         bool IsActive() override;
     };
 
+    // The park bot's control on the parked source is due (DungeonRunSeekPark, SeekParkCastDue): the cast goes out, or
+    // the bot walks into the cast reach first.
+    class BossTacticsParkTrigger : public Trigger
+    {
+    public:
+        BossTacticsParkTrigger(PlayerbotAI* ai) : Trigger(ai, "boss tactics park", 1) {}
+        bool IsActive() override;
+    };
+
     // A ranged bot owns a fixed slot between the doses and has to hold it or walk back to it
     // (DungeonRunBossSpreadSlots).
     class BossTacticsSpreadSlotTrigger : public Trigger

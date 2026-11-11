@@ -31,7 +31,7 @@ class SeekNearestTakeWiring(unittest.TestCase):
         self.assertIn("### `AiPlayerbot.DungeonRunSeekNearestTake`", SETTINGS)
 
     def test_find_boss_seek_tank_calls_the_helper_under_the_flag(self):
-        find = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(")
+        find = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(")
         healer = find[find.index("    if (healerTaker)\n    {"):]
         gate = healer.index("if (sPlayerbotAIConfig.dungeonRunSeekNearestTake)")
         call = healer.index("FindSeekNearestTake(ai, bot, roles, state, viaReach)")
@@ -97,7 +97,7 @@ class SeekNearestTakeWiring(unittest.TestCase):
     def test_the_healer_clock_reads_the_cap_guard_only_with_the_reach_key(self):
         # Review H1: key off, the `||` short-circuits before any read (today's take); key on, the guard decides and a
         # passed take is latched for its Son.
-        find = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(")
+        find = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(")
         self.assertIn("if (state.healerSon && (!sPlayerbotAIConfig.dungeonRunSeekNearestTakeReach ||\n"
                       "                                SeekHealerClockCapOk(ai, bot, roles, state, state.healerSon)))", find)
         ok = body(ACTIONS, "bool SeekHealerClockCapOk(")
@@ -138,7 +138,7 @@ class SeekNearestTakeWiring(unittest.TestCase):
         self.assertIn("TankTauntGuards(tank, inControl, silenced);", taunt_after)
 
     def test_the_receiver_leaves_only_a_son_on_the_first_off_tank(self):
-        find = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(")
+        find = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(")
         self.assertIn("if (candidateVictim && roles.tanks[i] == candidateVictim)\n"
                       "                    victimTankIdx = static_cast<int>(i);", find)
         self.assertIn("if (!SeekReceiverSkipsFighting(sPlayerbotAIConfig.dungeonRunSeekNearestTake, thirdTank, victimTankIdx))\n"

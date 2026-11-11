@@ -2599,6 +2599,32 @@ int main()
             edge.windowSec = 0.0f;
             BossTacticTable table;
             CHECK(table.Add(edge));
+    // seek_park (r11-1): the seek source, the release lead (15-70 s), the apply budget (3-15 s) and the most
+    // re-applies after a break (0-5). Read straight from the table, so no gate; no spell, spot or cycle columns.
+        BossTacticRow park = Row(309, 14834, BossTacticKind::SeekPark, 11357, 0, 2, 40.0f);
+        park.windowSec = 6.0f;
+            CHECK(table.Add(park));
+            CHECK(table.SeekParkRow(309, 14834, 11357) == nullptr); // not sealed
+            const BossTacticRow* found = table.SeekParkRow(309, 14834, 11357);
+            CHECK(found->priority == 2);
+            CHECK(Near(found->param, 40.0f));
+            CHECK(Near(found->windowSec, 6.0f));
+            CHECK(table.SeekParkRow(309, 14834, 11358) == nullptr);
+            CHECK(table.SeekParkRow(531, 14834, 11357) == nullptr);
+            BossTacticRow bad = park;
+            bad.spellId = 12826;
+            bad.param = 14.0f;
+            bad.param = 71.0f;
+            bad.param = 15.0f;
+            bad.param = 70.0f;
+            BossTacticTable high;
+            CHECK(high.Add(bad));
+            bad.windowSec = 2.0f;
+            bad.windowSec = 16.0f;
+            bad.windowSec = 3.0f;
+            bad.mode = TacticMode::Engage;
+            BossTacticRow bad = Gated(park, 0, 50);
+            BossTacticRow bad = Gated(park, 50, 100);
         }
     }
 
@@ -2642,6 +2668,8 @@ int main()
     CHECK(static_cast<int>(BossTacticKind::Spread) == 18);
     CHECK(static_cast<int>(BossTacticKind::GateHold) == 26);
     CHECK(static_cast<int>(BossTacticKind::TankPost) == 27);
+    CHECK(ParseBossTacticKind("seek_park") == BossTacticKind::SeekPark);
+    CHECK(static_cast<int>(BossTacticKind::SeekPark) == 30);
 
     // Mode words belong to their kind only; an empty word is the kind's own behaviour, a foreign word is Invalid.
     CHECK(ParseTacticMode(BossTacticKind::DispelPriority, "") == TacticMode::Default);

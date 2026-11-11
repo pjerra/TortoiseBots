@@ -72,6 +72,7 @@ namespace ai
         TankPost = 27,        // a named tank waits at a spot for a unit that is not in the fight yet, then attacks it
         AddCrew = 28,         // once `target_entry` is dead, the boss's add duty goes to a named crew
         HealReserve = 29,     // healers keep the row's mana % back from top-ups outside the row's release window
+        SeekPark = 30,        // the walked source is held under a control, nobody touches it, a tank takes it at the lead
     };
 
     // The per-kind mode word of a row (`tactic_mode`), or Invalid when the word does not belong to the row's kind. An
@@ -213,6 +214,8 @@ namespace ai
             return BossTacticKind::HealReserve;
         if (text == "add_crew")
             return BossTacticKind::AddCrew;
+        if (text == "seek_park")
+            return BossTacticKind::SeekPark;
         return BossTacticKind::None;
     }
 
@@ -614,6 +617,15 @@ namespace ai
                     row.param < 10.0f || row.param > 85.0f || row.windowSec < 10.0f || row.windowSec > 85.0f ||
                     row.mode != TacticMode::Default))
                 return false;
+            // seek_park: the seek source (`target_entry`), the release lead in seconds (`param`, 15-70), the apply
+            // budget (`window_s`, 3-15) and the most re-applies after a break (`priority`, 0-5). Read straight from the
+            // table (SeekParkRow), so it carries no gate, and it names no spell, spot or cycle columns.
+            if (row.kind == BossTacticKind::SeekPark &&
+                (row.targetEntry == 0 || row.spellId != 0 || row.priority > 5 ||
+                    !(row.param >= 15.0f) || row.param > 70.0f ||
+                    !(row.windowSec >= 3.0f) || row.windowSec > 15.0f ||
+                    row.mode != TacticMode::Default))
+                return false;
             // gate_hold: the spared entry (boss_entry), its blocker (target_entry), the health gate (`param`, 1-99 %)
             // and the blockers that may still fight (`priority`). `window_s` is the blocker search radius (0: 200 yd,
             // else 50-250). The blocker must be a different unit: the spared boss would count as its own blocker and
@@ -678,7 +690,7 @@ namespace ai
             if (RowGateSet(row) && (row.kind == BossTacticKind::SeekAura || row.kind == BossTacticKind::PullGate ||
                     row.kind == BossTacticKind::Spread || row.kind == BossTacticKind::BurnMana ||
                     row.kind == BossTacticKind::RangedOnly || row.kind == BossTacticKind::Anchor ||
-                    row.kind == BossTacticKind::SeekPull))
+                    row.kind == BossTacticKind::SeekPull || row.kind == BossTacticKind::SeekPark))
                 return false;
             std::vector<BossTacticRow>& rows = rows_[Key(row.map, row.bossEntry)];
             for (const BossTacticRow& have : rows)
@@ -1013,6 +1025,19 @@ namespace ai
                 if (row.kind == kind)
                     return true;
             return false;
+        }
+
+        // The seek_park row of one boss and source (null: none): the park's release lead, apply budget and re-apply
+        // cap. Read straight from the table by the fight read, never from the fight scan. Null before the seal.
+        const BossTacticRow* SeekParkRow(std::uint32_t map, std::uint32_t bossEntry, std::uint32_t targetEntry) const
+        {
+            const std::vector<BossTacticRow>* rows = Rows(map, bossEntry);
+            if (!rows)
+                return nullptr;
+            for (const BossTacticRow& row : *rows)
+                if (row.kind == BossTacticKind::SeekPark && row.targetEntry == targetEntry)
+                    return &row;
+            return nullptr;
         }
 
         // The seek_pull row of one boss and source (null: none): the seek walk-out's per-cycle rules. Read straight
