@@ -20,6 +20,7 @@
 #include "playerbot/PullJoinWindowPolicy.h"
 #include "playerbot/SurvivePolicy.h"
 #include "playerbot/ThreatCapPolicy.h"
+#include "playerbot/RefuseNotePolicy.h"
 #include "playerbot/BotAreaTriggerPolicy.h"
 #include "playerbot/FollowTrailPolicy.h"
 #include "../../runtime/PublicNotePolicy.h"
@@ -1073,8 +1074,10 @@ public:
     // The newest failed cast check made by CanCastSpell(uint32, Unit*, ...) when the caller asked for no result;
     // the engine clears it before judging an action and reads it for the remote commander's failure reason.
     SpellCastResult GetLastCastCheckFail() const { return lastCastCheckFail; }
-    void ClearLastCastCheckFail() { lastCastCheckFail = SPELL_CAST_OK; }
+    void ClearLastCastCheckFail() { lastCastCheckFail = SPELL_CAST_OK; lastRefuseNote = ai::RefuseNote::None; }
     void NoteCastCheckFail(SpellCastResult result) { lastCastCheckFail = result; }
+    ai::RefuseNote GetLastRefuseNote() const { return lastRefuseNote; }
+    void NoteRefusal(ai::RefuseNote note) { lastRefuseNote = note; }
     ai::Event& GetLastEvent() { return lastEvent; }
 
 #ifdef BUILD_ELUNA
@@ -1192,6 +1195,7 @@ protected:
     std::vector<std::string> m_recordedMessages;
     ai::Event lastEvent;
     SpellCastResult lastCastCheckFail = SPELL_CAST_OK;
+    ai::RefuseNote lastRefuseNote = ai::RefuseNote::None;
     LastKillerInfo lastKiller_;
     LastKillerInfo lastDamager_; // last non-self damager (UNITHOOK_ON_DAMAGE); SoR fallback for SetLastKiller
     bool deathHandled_ = false; // this death was logged and counted; cleared when the bot is seen alive again

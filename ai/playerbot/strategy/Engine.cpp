@@ -9,6 +9,7 @@
 #include "playerbot/PlayerbotAIConfig.h"
 // #include "playerbot/PerformanceMonitor.h" // E2E green
 #include "playerbot/BotActionLog.h"
+#include "playerbot/RefuseNotePolicy.h"
 #include "playerbot/ForceRebuffPolicy.h"
 #include "../../../runtime/ObservabilityEmitter.h"
 #include "../../../runtime/WhyTrace.h"
@@ -190,7 +191,7 @@ void Engine::NoteOutcome(Action* action, char result)
     lastOutcomeName[sizeof(lastOutcomeName) - 1] = '\0';
     lastOutcomeResult = result;
     // Only a verdict that says the action did not run carries a cast-check reason.
-    lastOutcomeCastFail = (result == 'F' || result == 'I') ? static_cast<uint32>(ai->GetLastCastCheckFail()) : 0;
+    lastOutcomeCastFail = (result == 'F' || result == 'I') ? OutcomeFailCode(static_cast<uint32>(ai->GetLastCastCheckFail()), ai->GetLastRefuseNote()) : 0;
 }
 
 void Engine::ClearActionFailures(Action* action, Event& event)
@@ -336,6 +337,7 @@ bool Engine::DoNextAction(Unit* unit, int depth, bool minimal, bool isStunned)
     // past every multiplier: a vetoed "reach melee" still ran as the prerequisite of
     // "melee", "shield bash" and "thunder clap". A veto holds for the whole tick.
     std::vector<Action*> vetoedActions;
+    std::vector<std::string> vetoedBy;
 
     int iterations = 0;
     int iterationsPerTick = queue.Size() * (minimal ? (uint32)(sPlayerbotAIConfig.iterationsPerTick / 2) : sPlayerbotAIConfig.iterationsPerTick);
@@ -445,6 +447,7 @@ bool Engine::DoNextAction(Unit* unit, int depth, bool minimal, bool isStunned)
                             {
                                 LogAction("Multiplier %s made action %s useless", multiplier->getName().c_str(), action->getName().c_str());
                                 vetoedActions.push_back(action);
+                                vetoedBy.push_back(multiplier->getName());
                                 break;
                             }
                         }
@@ -549,6 +552,12 @@ bool Engine::DoNextAction(Unit* unit, int depth, bool minimal, bool isStunned)
                             }
                         }
                         LogAction("A:%s - IMPOSSIBLE src=%s base=%.3f eff=%.3f", action->getName().c_str(), event.getSource().c_str(), oldRelevance, relevance);
+                        if (!relevance)
+                        {
+                            std::vector<Action*>::iterator vetoed = std::find(vetoedActions.begin(), vetoedActions.end(), action);
+                            if (vetoed != vetoedActions.end())
+                                ai->NoteRefusal(VetoNoteFor(vetoedBy[static_cast<size_t>(vetoed - vetoedActions.begin())]));
+                        }
                         NoteOutcome(action, 'I');
                         // A possible action that got here had its relevance zeroed by a multiplier.
                         actionExecutionListeners.Outcome(action, isPossible ? ActionOutcome::Vetoed : ActionOutcome::Impossible, event, oldRelevance, relevance);
