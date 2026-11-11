@@ -249,6 +249,27 @@ class BossStandWiring(unittest.TestCase):
         walk = fn.index("return ReachTargetAction::MoveIntoRange(target, distance);")
         self.assertLess(stand, walk)
         self.assertIn("if (FindBossStand(ai, bot).valid)\n                return false;", fn)
+    def test_the_seat_holds_the_melee_reach(self):
+        # AiPlayerbot.BossStandHoldsMeleeReach (S): a seated melee bot or tank keeps its seat instead of running
+        # "reach melee" back toward its target once the stand trigger is quiet. The key is tested first, so
+        # FindBossStand is not called with the key off.
+        fn = body(REACH, "class ReachMeleeAction", end="\n    };\n")
+        useful = fn[fn.index("bool isUseful() override"):]
+        gate = useful.index("sPlayerbotAIConfig.bossStandHoldsMeleeReach")
+        policy = useful.index("StandHoldsMeleeReach(true, FindBossStand(ai, bot).valid)")
+        reach = useful.index("CanReachWithMeleeAutoAttack")
+        self.assertLess(gate, policy)
+        self.assertLess(policy, reach)
+        self.assertIn("if (sPlayerbotAIConfig.bossStandHoldsMeleeReach &&\n"
+                      "                StandHoldsMeleeReach(true, FindBossStand(ai, bot).valid))\n"
+                      "                return false;", useful)
+        self.assertIn("AiPlayerbot.BossStandHoldsMeleeReach", POLICY)
+        self.assertIn('bossStandHoldsMeleeReach = config.GetBoolDefault("AiPlayerbot.BossStandHoldsMeleeReach", false);',
+                      CONFIG)
+        self.assertIn("bool bossStandHoldsMeleeReach = false;", (AI / "PlayerbotAIConfig.h").read_text())
+        # Not-useful records no failure: ReachMeleeAction adds no MoveIntoRange override.
+        self.assertNotIn("MoveIntoRange", fn)
+
 
     def test_a_picked_movement_reaction_stops_the_bot(self):
         # The mechanism the isUseful gates answer: if this stops being true the gates may be moved back to Execute.

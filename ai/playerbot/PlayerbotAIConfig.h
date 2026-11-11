@@ -829,6 +829,9 @@ public:
     // 0, not the victim), a bot already clear of its lane stays where it stands instead of walking to its seat, and a
     // seated bot does not flee (default off).
     bool bossStandWholeRaid = false;
+    // A melee bot or a tank with a valid boss stand seat keeps it instead of running "reach melee" back toward its
+    // target (default off).
+    bool bossStandHoldsMeleeReach = false;
     // A boss the raid is fighting stays in every raid bot's fight for 10 s after the last bot saw it in its attacker
     // list (a melee bot that cannot reach an airborne boss gives up on it): within 150 yd and while the bot itself is
     // in combat, so its boss-tactic rows and stand seats stay active (default off).

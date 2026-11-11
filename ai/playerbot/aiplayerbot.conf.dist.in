@@ -1582,6 +1582,12 @@ AiPlayerbot.BossStandEvents = 0
 # 0 - off: a stand seats only bots on the boss's threat list or its victim, every seat is walked to (Default)
 # 1 - on
 AiPlayerbot.BossStandWholeRaid = 0
+# A melee bot or a tank with a valid boss stand seat keeps it instead of running "reach melee" back toward its target:
+# on, "reach melee" is not useful while the bot holds a stand seat (a stay counts as a seat). Needs the boss stand rows
+# and the boss tactics.
+# 0 - off: a seated bot walks back toward its target with "reach melee" once the stand trigger is quiet (Default)
+# 1 - on
+AiPlayerbot.BossStandHoldsMeleeReach = 0
 # A boss the raid is fighting stays in every raid bot's fight for 10 s after the last bot saw it in its attacker list
 # (a melee bot that cannot reach an airborne Onyxia gives up on her, so she vanishes from that bot's attacker list and
 # every row and seat for her goes dark for it). The bots that see the boss note it in one registry; a bot that lost it
