@@ -352,6 +352,282 @@ static void TestTauntGateLogThrottlePerWord()
     CHECK(TauntGateLogDueFor(other, TauntGate::TauntImmune, 7003, gap));       // another bot has its own array
 }
 
+// The new gate word: a refusal that comes from a live tank_post, not from the aura/immunity rules.
+static void TestTauntGateWord_PostSubject()
+{
+    CHECK(std::strcmp(TauntGateWord(TauntGate::PostSubject), "post_subject") == 0);
+    CHECK(kTauntGateWords == 5);
+    TauntGateLogTimes last{};  // the fifth word has its own slot in the per-word throttle
+    constexpr std::uint32_t gap = 5000;
+    CHECK(TauntGateLogDueFor(last, TauntGate::PostSubject, 1000, gap));
+    CHECK(!TauntGateLogDueFor(last, TauntGate::PostSubject, 6000 - 1, gap));
+    CHECK(TauntGateLogDueFor(last, TauntGate::PostSubject, 6000, gap));
+    CHECK(TauntGateLogDueFor(last, TauntGate::HoldingBoss, 6001, gap));
+}
+
+// Walk 2c a-1: Cindarion landed on a healer and slots 3, 0 and 2 taunted him before slot 1 (the post's tank) arrived,
+// because he was on non-tanks and the post's row stays quiet while any tank holds him. A live post reserves its unit.
+static void TestTankPostSubjectReserved_OtherLivePost()
+{
+    // TankPostSubjectReserved(keyOn, otherPostLive, otherTankCanAct, botOwnsPost)
+    CHECK(TankPostSubjectReserved(true, true, true, false));  // another tank's live post: this tank does not taunt
+}
+
+static void TestTankPostSubjectReserved_OwnerTaunts()
+{
+    CHECK(!TankPostSubjectReserved(true, true, true, true));  // the post's own tank takes the unit
+}
+
+static void TestTankPostSubjectReserved_DeadPostTank()
+{
+    CHECK(!TankPostSubjectReserved(true, true, false, false)); // the post's tank is dead or charmed: no reservation
+}
+
+static void TestTankPostSubjectReserved_KeyOff()
+{
+    CHECK(!TankPostSubjectReserved(false, true, true, false)); // key off: today's taunts
+    CHECK(!TankPostSubjectReserved(true, false, true, false)); // no live post on the unit
+}
+
+// Walk 2c: the unit landed 48-55 yd from its post tank and the tank reached melee at about +13 s, so the reservation
+// keeps it at 60 yd and through a 15 s loose spell. Past either limit the post's tank does not reserve the unit, so
+// another tank's rescue taunt goes out.
+static void TestTankPostOwns_ReserveLimits()
+{
+    // TankPostReserves(keyOn, otherPostLive, otherTankCanAct, botOwnsPost, ownerWithinRange, subjectOnOwner, looseMs)
+    CHECK(kTankPostReserveRangeYd == 60.0f);
+    CHECK(TankPostReserves(true, true, true, false, 60.0f <= kTankPostReserveRangeYd, true, 0));    // at 60 yd
+    CHECK(!TankPostReserves(true, true, true, false, 60.01f <= kTankPostReserveRangeYd, true, 0));  // past 60 yd
+    CHECK(kTankPostReserveGraceMs == 15000);
+    CHECK(TankPostReserves(true, true, true, false, true, false, 0));                           // loose at 0
+    CHECK(TankPostReserves(true, true, true, false, true, false, kTankPostReserveGraceMs - 1)); // 14999 ms
+    CHECK(!TankPostReserves(true, true, true, false, true, false, kTankPostReserveGraceMs));    // 15000 ms: released
+}
+
+static void TestTankPostOwns_SubjectOnOwnerStaysReserved()
+{
+    CHECK(TankPostReserves(true, true, true, false, true, true, kTankPostReserveGraceMs * 10));
+}
+
+// One post record's loose clock across a run of ticks (`unhittableSinceMs` is the record's other field). Returns the
+// loose age in ms, 0 while the clock is not running: exactly what TankPostReserves reads.
+struct LooseClockRun
+{
+    std::uint32_t looseSinceMs = 0;
+    std::uint32_t unhittableSinceMs = 0;
+    std::uint32_t Tick(bool onOwner, bool selectable, bool attackable, std::uint32_t nowMs)
+    {
+        const TankPostLooseClockState next =
+            TankPostLooseClock(looseSinceMs, unhittableSinceMs, onOwner, selectable, attackable, nowMs);
+        looseSinceMs = next.looseSinceMs;
+        unhittableSinceMs = next.unhittableSinceMs;
+        return looseSinceMs == 0 ? 0 : nowMs - looseSinceMs;
+    }
+};
+
+// Walk 2d T round 2: an unselectable subject (a boss still in the air) never starts the loose clock, so the grace runs
+// from the first selectable tick off the post tank, not from the tick the post started waiting. A subject that waited
+// longer than the grace in the air is therefore still reserved on its landing tick, and lapses 15 s after it if it
+// stays loose.
+static void TestTankPostOwns_LooseClockStartsOnTheLandingTick()
+{
+    const std::uint32_t airborneMs = 5000;
+    const std::uint32_t landMs = airborneMs + 16000; // 16 s in the air, past the 15 s grace
+    // Every read while it is airborne: off the post tank, unselectable, not attackable.
+    LooseClockRun air;
+    for (std::uint32_t tick = airborneMs; tick < landMs; tick += 500)
+        CHECK(air.Tick(false, false, false, tick) == 0);
+    // It lands on another unit (selectable, attackable), still off the post tank: the grace starts here, so the unit is
+    // reserved at this tick. A clock started in the air would already read 16000 ms loose and release it.
+    CHECK(air.Tick(false, true, true, landMs) == 0);
+    CHECK(air.looseSinceMs == landMs);
+    CHECK(TankPostReserves(true, true, true, false, true, false, landMs - air.looseSinceMs));
+    // Still loose: reserved through 14999 ms from the landing tick, released at 15000 ms.
+    CHECK(TankPostReserves(true, true, true, false, true, false,
+        landMs + kTankPostReserveGraceMs - 1 - air.looseSinceMs));
+    CHECK(!TankPostReserves(true, true, true, false, true, false,
+        landMs + kTankPostReserveGraceMs - air.looseSinceMs));
+    // A selectable subject that is still not attackable does not start it either.
+    LooseClockRun shielded;
+    CHECK(shielded.Tick(false, true, false, 9000) == 0);
+    CHECK(shielded.looseSinceMs == 0);
+}
+
+// Walk 2d T round 3: a loose subject that blips unhittable keeps its ORIGINAL loose start; only a lift-off of the
+// grace length or more restarts the grace, so short blips cannot roll the 15 s forward and hold the reservation forever.
+static void TestTankPostOwns_ShortUnhittableBlipKeepsTheOriginalGrace()
+{
+    const std::uint32_t startMs = 10000;
+    LooseClockRun run;
+    CHECK(run.Tick(false, true, true, startMs) == 0);             // the clock starts on the first hittable loose tick
+    CHECK(run.looseSinceMs == startMs);
+    CHECK(run.Tick(false, false, false, startMs + 1000) == 1000); // 1 s into a 2 s unhittable blip
+    CHECK(run.Tick(false, false, false, startMs + 3000) == 3000); // 2 s blip: still the original start
+    CHECK(run.Tick(false, true, true, startMs + 3000) == 3000);   // hittable again: no new grace
+    CHECK(run.looseSinceMs == startMs);
+    CHECK(run.unhittableSinceMs == 0);
+    // Expiry stays measured from the original start.
+    CHECK(TankPostReserves(true, true, true, false, true, false,
+        startMs + kTankPostReserveGraceMs - 1 - run.looseSinceMs));
+    CHECK(!TankPostReserves(true, true, true, false, true, false,
+        startMs + kTankPostReserveGraceMs - run.looseSinceMs));
+}
+
+// Repeated 2 s blips cannot extend the reservation either: the start never moves, so the unit is still released 15 s
+// after the original start.
+static void TestTankPostOwns_RepeatedBlipsDoNotExtendTheGrace()
+{
+    const std::uint32_t startMs = 10000;
+    LooseClockRun run;
+    run.Tick(false, true, true, startMs);
+    for (std::uint32_t blipMs = startMs; blipMs < startMs + 16000; blipMs += 4000)
+    {
+        run.Tick(false, false, false, blipMs + 1000);
+        run.Tick(false, false, false, blipMs + 3000);
+        run.Tick(false, true, true, blipMs + 3000);
+        CHECK(run.looseSinceMs == startMs);
+    }
+    CHECK(!TankPostReserves(true, true, true, false, true, false, startMs + 16000 - run.looseSinceMs));
+}
+
+// A real lift-off of 16 s clears the clock; the next hittable tick starts a new grace from the landing tick.
+static void TestTankPostOwns_LiftOffRestartsTheGrace()
+{
+    const std::uint32_t startMs = 10000;
+    const std::uint32_t landMs = startMs + 16000;
+    LooseClockRun run;
+    run.Tick(false, true, true, startMs);
+    for (std::uint32_t tick = startMs; tick <= landMs; tick += 1000)
+        run.Tick(false, false, false, tick);
+    CHECK(run.looseSinceMs == 0);
+    CHECK(run.Tick(false, true, true, landMs) == 0);
+    CHECK(run.looseSinceMs == landMs);
+    CHECK(TankPostReserves(true, true, true, false, true, false,
+        landMs + kTankPostReserveGraceMs - 1 - run.looseSinceMs));
+    CHECK(!TankPostReserves(true, true, true, false, true, false,
+        landMs + kTankPostReserveGraceMs - run.looseSinceMs));
+}
+
+// Back on the post tank the clock and the unhittable spell clear, so a later loose tick starts a fresh grace.
+static void TestTankPostOwns_LooseClockClearsOnTheOwner()
+{
+    LooseClockRun run;
+    run.Tick(false, true, true, 10000);
+    run.Tick(false, false, false, 11000); // a spell in progress
+    CHECK(run.Tick(true, true, true, 12000) == 0);
+    CHECK(run.looseSinceMs == 0 && run.unhittableSinceMs == 0);
+    CHECK(run.Tick(false, true, true, 13000) == 0 && run.looseSinceMs == 13000);
+    // On the owner while unhittable clears the spell too, so the next loose tick is not already a lift-off.
+    run.Tick(false, false, false, 14000);
+    run.Tick(true, false, false, 15000);
+    CHECK(run.unhittableSinceMs == 0);
+}
+
+// Round 4: a reservation read that sees the subject back on its owner clears the persisted clock even before the
+// post's own update runs, so the next loss starts a FRESH grace instead of inheriting the old start (an old clock
+// would read the new loss as already past the grace and let another tank taunt at once).
+static void TestTankPostOwns_ReadOnOwnerResetsBeforeTheNextLoss()
+{
+    const std::uint32_t oldStartMs = 10000;
+    LooseClockRun run;
+    run.Tick(false, true, true, oldStartMs);
+    CHECK(run.looseSinceMs == oldStartMs);
+    // The subject is back on the post tank at +7 s: the reader's tick sees the owner and clears both fields.
+    CHECK(run.Tick(true, true, true, oldStartMs + 7000) == 0);
+    CHECK(run.looseSinceMs == 0 && run.unhittableSinceMs == 0);
+    // It is lost again at +9 s, before the owner's own post update: the new loose tick starts a fresh grace.
+    const std::uint32_t lossMs = oldStartMs + 9000;
+    CHECK(run.Tick(false, true, true, lossMs) == 0);
+    CHECK(run.looseSinceMs == lossMs);
+    CHECK(TankPostReserves(true, true, true, false, true, false,
+        lossMs + kTankPostReserveGraceMs - 1 - run.looseSinceMs));
+    CHECK(!TankPostReserves(true, true, true, false, true, false,
+        lossMs + kTankPostReserveGraceMs - run.looseSinceMs));
+}
+
+// The lapse row: which limit lapsed, and one row per lapse event (the first read writes, the rest stay quiet until the
+// reservation holds again). With the key off nothing lapses, so nothing is written.
+static void TestTankPostOwns_OneLapseRowPerLapse()
+{
+    CHECK(TankPostLapseOf(true, true, true, 99999) == TankPostLapse::None);   // on the owner: no lapse
+    CHECK(TankPostLapseOf(true, false, true, 0) == TankPostLapse::Range);     // out of range, whatever the clock
+    CHECK(TankPostLapseOf(true, true, false, kTankPostReserveGraceMs - 1) == TankPostLapse::None);
+    CHECK(TankPostLapseOf(true, true, false, kTankPostReserveGraceMs) == TankPostLapse::Grace);
+    CHECK(TankPostLapseOf(false, false, false, 99999) == TankPostLapse::None); // key off: nothing is written
+    bool lapseLogged = false;
+    CHECK(TankPostLapseDue(TankPostLapse::Range, lapseLogged));  // the first read of the lapse writes the row
+    CHECK(!TankPostLapseDue(TankPostLapse::Range, lapseLogged)); // the reads after it do not
+    CHECK(!TankPostLapseDue(TankPostLapse::Grace, lapseLogged)); // the other limit is the same event
+    CHECK(!TankPostLapseDue(TankPostLapse::None, lapseLogged));  // the reservation holds again: re-armed
+    CHECK(TankPostLapseDue(TankPostLapse::Range, lapseLogged));  // the next lapse writes again
+}
+
+// A recovery that only the post owner's own record update sees re-arms the row too: lapse logged, the subject back on
+// its tank with no other tank reading the reservation, then a second distinct lapse writes its own row. While the same
+// lapse is still active the owner's update keeps the flag, so the reader stays quiet.
+static void TestTankPostOwns_OwnerUpdateRearmsLapse()
+{
+    bool lapseLogged = false;
+    CHECK(TankPostLapseDue(TankPostLapse::Range, lapseLogged));            // first lapse: one row
+    CHECK(TankPostLapseOwnerUpdate(true, true, false, kTankPostReserveGraceMs, lapseLogged)); // still out of grace
+    CHECK(lapseLogged);
+    CHECK(!TankPostLapseDue(TankPostLapse::Grace, lapseLogged));           // the other limit of the same lapse: quiet
+    CHECK(!TankPostLapseOwnerUpdate(true, true, true, 0, lapseLogged));    // recovery seen only by the owner: re-armed
+    CHECK(!lapseLogged);
+    CHECK(TankPostLapseDue(TankPostLapse::Range, lapseLogged));            // the second distinct lapse writes again
+    CHECK(TankPostLapseOwnerUpdate(true, false, true, 0, lapseLogged));    // out of range again: the flag stays
+    CHECK(lapseLogged);
+    CHECK(!TankPostLapseOwnerUpdate(false, true, true, 0, lapseLogged));   // key off: nothing is written, flag cleared
+    CHECK(!lapseLogged);
+}
+
+// The area taunts scan every hostile in the spell's radius, not only the selected target: a second unit 6 yd away that
+// another post reserves refuses the cast; the same unit past 10 yd does not.
+static void TestTankPostOwns_AreaTauntRefusedWhenReservedInRadius()
+{
+    std::vector<AreaTauntUnit> inRadius = { { 0.0f, false }, { 6.0f, true } };
+    CHECK(AreaTauntHitsReservedSubject(inRadius, kAreaTauntRadiusYd));
+    std::vector<AreaTauntUnit> pastRadius = { { 0.0f, false }, { 12.0f, true } };
+    CHECK(!AreaTauntHitsReservedSubject(pastRadius, kAreaTauntRadiusYd));
+}
+
+// The end word: a post whose row moved to another slot index (a tank died and GetRaidTankRoles renumbered) says
+// "slot", not "band". A live post keeps the step's own order; slotMoved is never a step end.
+static void TestTankPostEndWord_SlotMoved()
+{
+    CHECK(std::strcmp(TankPostEndWord(false, true, true, false, true, true, false), "slot") == 0);
+    CHECK(std::strcmp(TankPostEndWord(false, false, true, false, true, true, false), "band") == 0);
+    CHECK(std::strcmp(TankPostEndWord(true, false, false, true, true, true, false), "tank") == 0);
+    CHECK(std::strcmp(TankPostEndWord(true, false, true, true, true, true, false), "window") == 0);
+    CHECK(std::strcmp(TankPostEndWord(true, false, true, false, false, true, false), "gone") == 0);
+    CHECK(std::strcmp(TankPostEndWord(true, false, true, false, true, false, false), "dead") == 0);
+    CHECK(std::strcmp(TankPostEndWord(true, false, true, false, true, true, true), "evade") == 0);
+    CHECK(std::strcmp(TankPostEndWord(true, false, true, false, true, true, false), "band") == 0);
+    // The step ignores slotMoved: a live post with a renumbered row has no end of its own.
+    TankPostIn in;
+    in.live = true;
+    in.started = true;
+    in.tankCanAct = true;
+    in.subjectFound = true;
+    in.subjectAlive = true;
+    in.subjectSelectable = true;
+    in.subjectToSpotYd = 2.0f;
+    in.arrivalRadiusYd = 15.0f;
+    in.botToSpotYd = 1.0f;
+    in.slotMoved = true;
+    CHECK(TankPostStep(in) == TankPostDecision::Engage);
+}
+
+// Round 4: the renumbering `slot` word belongs to the owns-subject key. With it off a renumbered end keeps the
+// pre-feature `band` word; a row still held says `slot` as it did before the feature, key or not.
+static void TestTankPostOwns_KeyOffWritesNoSlotWord()
+{
+    CHECK(TankPostEndsAsSlot(true, false, true));   // the row is still held: slot
+    CHECK(TankPostEndsAsSlot(true, true, false));   // ... even with the key off
+    CHECK(TankPostEndsAsSlot(false, true, true));   // a renumbered row with the key on: slot
+    CHECK(!TankPostEndsAsSlot(false, true, false)); // the same renumbering with the key off: band
+}
+
 // 2b: a carrier on its Shade keeps it (the "not dps target active" trigger stays quiet); 2c: the kill-first check
 // interval is 1 s under the hold.
 static void TestCarrierHold()
@@ -1135,7 +1411,25 @@ int main()
     TestCarrierScanWord();
     TestCarrierScanTakesPrecedence();
     TestTauntGate();
+    TestTauntGateWord_PostSubject();
     TestTauntGateLogThrottlePerWord();
+    TestTankPostSubjectReserved_OtherLivePost();
+    TestTankPostSubjectReserved_OwnerTaunts();
+    TestTankPostSubjectReserved_DeadPostTank();
+    TestTankPostSubjectReserved_KeyOff();
+    TestTankPostOwns_ReserveLimits();
+    TestTankPostOwns_SubjectOnOwnerStaysReserved();
+    TestTankPostOwns_LooseClockStartsOnTheLandingTick();
+    TestTankPostOwns_ShortUnhittableBlipKeepsTheOriginalGrace();
+    TestTankPostOwns_RepeatedBlipsDoNotExtendTheGrace();
+    TestTankPostOwns_LiftOffRestartsTheGrace();
+    TestTankPostOwns_LooseClockClearsOnTheOwner();
+    TestTankPostOwns_ReadOnOwnerResetsBeforeTheNextLoss();
+    TestTankPostOwns_OneLapseRowPerLapse();
+    TestTankPostOwns_OwnerUpdateRearmsLapse();
+    TestTankPostOwns_AreaTauntRefusedWhenReservedInRadius();
+    TestTankPostEndWord_SlotMoved();
+    TestTankPostOwns_KeyOffWritesNoSlotWord();
     TestCarrierHold();
     TestNotDpsTargetFires();
     TestKillFirstCheckDueFlips();

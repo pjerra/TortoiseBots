@@ -6843,21 +6843,36 @@ void ai::LogShadeCover(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fig
 
 // The taunt gate (AiPlayerbot.DungeonRunTauntGate): a tank never taunts a needs_aura subject (the Shade of Jin'do,
 // which only a carrier can damage and which the core answers with a copy of the boss's threat list) or a creature the
-// core marks immune to taunts (Jin'do himself, where the taunt would hand the boss to a damage dealer). The gate sits
-// in the taunt actions, not in "attacker of non-tank target": that value also picks the warrior gap closer's Charge,
-// which is no taunt.
-//   info1 = "reason=<needs_aura|taunt_immune|holding_boss>"
+// core marks immune to taunts (Jin'do himself, where the taunt would hand the boss to a damage dealer). A live
+// tank_post on the subject refuses every other tank first, whatever the gate key says (AiPlayerbot.
+// DungeonRunTankPostOwnsSubject). The gate sits in the taunt actions, not in "attacker of non-tank target": that value
+// also picks the warrior gap closer's Charge, which is no taunt.
+//   info1 = "reason=<needs_aura|taunt_immune|holding_boss|post_subject>"
 //   info2 = "target=<entry>:<guid low>,spell=<spell>"
 constexpr uint32 kTauntGateLogGapMs = 5000;
 std::mutex g_tauntGateLogMutex;
 std::unordered_map<uint64, TauntGateLogTimes> g_tauntGateLog;
 
-// One row per (bot, gate word) per kTauntGateLogGapMs (TauntGateLogDueFor): a taunt_immune row must not hide a needs_aura one.
+// One refusal row per (bot, gate word) per kTauntGateLogGapMs (TauntGateLogDueFor): a taunt_immune row must not hide a needs_aura one.
 static bool TauntGateLogDue(Player* bot, TauntGate gate)
 {
     const uint32 nowMs = WorldTimer::getMSTime();
     std::lock_guard<std::mutex> lock(g_tauntGateLogMutex);
     return TauntGateLogDueFor(g_tauntGateLog[bot->GetObjectGuid().GetRawValue()], gate, nowMs, kTauntGateLogGapMs);
+}
+
+//   info1 = "reason=<gate word>"
+//   info2 = "target=<entry>:<guid low>,spell=<spell>"
+static void LogTauntGateRefusal(PlayerbotAI* ai, Player* bot, Unit* target, TauntGate gate, const char* spell)
+{
+    if (!sPlayerbotAIConfig.hasLog("bot_events.csv") || !TauntGateLogDue(bot, gate))
+        return;
+    char info1[32];
+    snprintf(info1, sizeof(info1), "reason=%s", TauntGateWord(gate));
+    char info2[64];
+    snprintf(info2, sizeof(info2), "target=%u:%u,spell=%s", target->GetEntry(), target->GetGUIDLow(),
+             spell ? spell : "none");
+    sPlayerbotAIConfig.logEvent(ai, "BossTacticsTauntGate", info1, info2);
 }
 
 // The bot is the current victim of a boss of the fight: a creature with tactic rows (or a world boss) that is not the
@@ -6879,6 +6894,12 @@ static bool BotHoldsBoss(PlayerbotAI* ai, Player* bot, Unit* exclude)
 
 bool ai::TauntRefusedByGate(PlayerbotAI* ai, Player* bot, Unit* target, const char* spell)
 {
+    // A live post on the subject keeps every other tank off it, whatever the taunt gate key says.
+    if (TankPostReservesSubject(ai, bot, target))
+    {
+        LogTauntGateRefusal(ai, bot, target, TauntGate::PostSubject, spell);
+        return true;
+    }
     if (!sPlayerbotAIConfig.dungeonRunTauntGate)
         return false;
     if (!ai || !bot || !target)
@@ -6891,15 +6912,7 @@ bool ai::TauntRefusedByGate(PlayerbotAI* ai, Player* bot, Unit* target, const ch
         TargetTauntImmune(target), holdsBoss);
     if (gate == TauntGate::Allow)
         return false;
-    if (sPlayerbotAIConfig.hasLog("bot_events.csv") && TauntGateLogDue(bot, gate))
-    {
-        char info1[32];
-        snprintf(info1, sizeof(info1), "reason=%s", TauntGateWord(gate));
-        char info2[64];
-        snprintf(info2, sizeof(info2), "target=%u:%u,spell=%s", target->GetEntry(), target->GetGUIDLow(),
-                 spell ? spell : "none");
-        sPlayerbotAIConfig.logEvent(ai, "BossTacticsTauntGate", info1, info2);
-    }
+    LogTauntGateRefusal(ai, bot, target, gate, spell);
     return true;
 }
 
@@ -11611,6 +11624,10 @@ struct TankPostRecord
     std::uint32_t lastReadMs = 0;
     bool arrivedLogged = false;
     std::uint64_t arrivedSubjectGuid = 0;
+    std::uint32_t looseSinceMs = 0;
+    std::uint32_t unhittableSinceMs = 0;
+    bool lapseLogged = false;
+    std::uint8_t priority = 0;
     std::uint8_t lastStep = 0;
 };
 
@@ -11704,24 +11721,134 @@ void LogTankPostStep(PlayerbotAI* ai, const BossTacticRow& row, TankPostDecision
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsTankPost", info1, info2);
 }
 
+// One BossTacticsTankPost row when a post's reservation lapses (AiPlayerbot.DungeonRunTankPostOwnsSubject): its tank
+// left kTankPostReserveRangeYd, or the unit stayed loose off it past kTankPostReserveGraceMs. Written by the first
+// reservation read that sees the lapse, never again while it lasts.
+void LogTankPostLapse(PlayerbotAI* ai, std::uint32_t bossEntry, std::uint32_t targetEntry, std::uint8_t priority,
+                      float ownerYd, std::uint32_t looseMs, TankPostLapse lapse)
+{
+    if (!sPlayerbotAIConfig.hasLog("bot_events.csv"))
+        return;
+    char info1[64];
+    snprintf(info1, sizeof(info1), "boss=%u,subject=%u,tank=%d", bossEntry, targetEntry,
+             static_cast<int>(priority));
+    char info2[128];
+    snprintf(info2, sizeof(info2), "event=lapse,reason=post_lapsed,owner_yd=%.1f,loose_ms=%u,limit=%s", ownerYd,
+             looseMs, lapse == TankPostLapse::Range ? "range" : "grace");
+    sPlayerbotAIConfig.logEvent(ai, "BossTacticsTankPost", info1, info2);
+}
+
 // The end word of a post that the step closed: the first closed input in the step's own order.
 const char* TankPostEndReason(const TankPostIn& in)
 {
-    if (!in.live)
-        return "band";
-    if (!in.tankCanAct)
-        return "tank";
-    if (in.windowExpired)
-        return "window";
-    if (!in.subjectFound)
-        return "gone";
-    if (!in.subjectAlive)
-        return "dead";
-    if (in.subjectEvading)
-        return "evade";
-    return "band";
+    return TankPostEndWord(in.live, in.slotMoved, in.tankCanAct, in.windowExpired, in.subjectFound,
+        in.subjectAlive, in.subjectEvading);
 }
 }  // namespace
+
+// AiPlayerbot.DungeonRunTankPostOwnsSubject. A post is live while its tank's record was read within kTankPostLiveMs;
+// a post that ended, went stale or whose tank died reserves nothing, so the other tanks taunt the subject again. The
+// reservation also ends while its tank is farther than kTankPostReserveRangeYd from the subject, or once the subject
+// has been loose off it for kTankPostReserveGraceMs from the first selectable tick it was off it, so a stranded tank
+// cannot hold the unit off the other tanks and a subject still in the air does not spend its grace before it lands; a
+// short unhittable blip keeps the original start, a lift-off of the grace length starts a new one at the next landing.
+bool ai::TankPostReservesSubject(PlayerbotAI* ai, Player* bot, Unit* target)
+{
+    if (!sPlayerbotAIConfig.dungeonRunTankPostOwnsSubject)
+        return false;
+    if (!ai || !bot || !target || !target->IsCreature() || !PlayerbotAI::IsTank(bot))
+        return false;
+    std::uint64_t const self = bot->GetObjectGuid().GetRawValue();
+    std::vector<std::uint64_t> others;
+    {
+        // Only the keys leave the lock: resolving a player does not happen under it.
+        std::lock_guard<std::mutex> lock(g_tankPostMutex);
+        std::uint32_t const nowMs = WorldTimer::getMSTime();
+        for (std::pair<std::uint64_t const, TankPostRecord>& entry : g_tankPost)
+        {
+            if (entry.first == self || entry.second.map != bot->GetMapId() ||
+                entry.second.targetEntry != target->GetEntry() ||
+                nowMs - entry.second.lastReadMs >= kTankPostLiveMs)
+                continue;
+            others.push_back(entry.first);
+        }
+    }
+    for (std::uint64_t const key : others)
+    {
+        Player* const tank = sObjectMgr.GetPlayer(ObjectGuid(key));
+        if (!tank || tank->GetInstanceId() != bot->GetInstanceId() || !TankPostTankCanAct(tank))
+            continue;
+        float const ownerYd = TankPostDistanceYd(tank->GetPositionX(), tank->GetPositionY(), tank->GetPositionZ(),
+            target->GetPositionX(), target->GetPositionY(), target->GetPositionZ());
+        bool const onOwner = target->GetVictim() == tank;
+        bool const rangeOk = ownerYd <= kTankPostReserveRangeYd;
+        // The clock is advanced and persisted on every read, owner or not: a subject that came back to its tank clears
+        // it here even before the post's own update runs, so losing it again starts a fresh grace. The values that
+        // leave the lock are the clock age, the lapse and the row's identity.
+        std::uint32_t looseMs = 0;
+        TankPostLapse lapse = TankPostLapse::None;
+        bool logLapse = false;
+        std::uint32_t bossEntry = 0, targetEntry = 0;
+        std::uint8_t priority = 0;
+        {
+            std::lock_guard<std::mutex> lock(g_tankPostMutex);
+            auto const it = g_tankPost.find(key);
+            if (it == g_tankPost.end())
+                continue;
+            std::uint32_t const nowMs = WorldTimer::getMSTime();
+            TankPostLooseClockState const loose = TankPostLooseClock(it->second.looseSinceMs,
+                it->second.unhittableSinceMs, onOwner,
+                !target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE), tank->IsValidAttackTarget(target),
+                nowMs);
+            it->second.looseSinceMs = loose.looseSinceMs;
+            it->second.unhittableSinceMs = loose.unhittableSinceMs;
+            looseMs = loose.looseSinceMs == 0 ? 0 : nowMs - loose.looseSinceMs;
+            lapse = TankPostLapseOf(sPlayerbotAIConfig.dungeonRunTankPostOwnsSubject, rangeOk, onOwner, looseMs);
+            logLapse = TankPostLapseDue(lapse, it->second.lapseLogged);
+            bossEntry = it->second.bossEntry;
+            targetEntry = it->second.targetEntry;
+            priority = it->second.priority;
+        }
+        if (logLapse)
+            LogTankPostLapse(ai, bossEntry, targetEntry, priority, ownerYd, looseMs, lapse);
+        if (TankPostReserves(sPlayerbotAIConfig.dungeonRunTankPostOwnsSubject, true, true, false, rangeOk, onOwner,
+                looseMs))
+            return true;
+    }
+    return false;
+}
+
+// AiPlayerbot.DungeonRunTankPostOwnsSubject for the two area taunts: challenging shout/roar taunts every hostile within
+// kAreaTauntRadiusYd of the caster, so a unit of that radius another live post reserves refuses the cast, whatever
+// the selected target is. The refusal row names that unit.
+bool ai::AreaTauntRefusedByPost(PlayerbotAI* ai, Player* bot, const char* spell)
+{
+    if (!sPlayerbotAIConfig.dungeonRunTankPostOwnsSubject || !ai || !bot || !PlayerbotAI::IsTank(bot))
+        return false;
+    std::list<Unit*> nearby;
+    MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck check(bot, bot, kAreaTauntRadiusYd);
+    MaNGOS::UnitListSearcher<MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck> searcher(nearby, check);
+    Cell::VisitAllObjects(bot, searcher, kAreaTauntRadiusYd);
+    std::vector<AreaTauntUnit> units;
+    Unit* reserved = nullptr;
+    for (Unit* unit : nearby)
+    {
+        if (!unit || !bot->IsHostileTo(unit))
+            continue;
+        AreaTauntUnit fact;
+        fact.yd = TankPostDistanceYd(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(),
+            unit->GetPositionX(), unit->GetPositionY(), unit->GetPositionZ());
+        fact.reservedByOther = TankPostReservesSubject(ai, bot, unit);
+        if (fact.reservedByOther && !reserved)
+            reserved = unit;
+        units.push_back(fact);
+    }
+    if (!AreaTauntHitsReservedSubject(units, kAreaTauntRadiusYd))
+        return false;
+    if (reserved)
+        LogTauntGateRefusal(ai, bot, reserved, TauntGate::PostSubject, spell);
+    return true;
+}
 
 BossTankPost ai::FindBossTankPost(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fight)
 {
@@ -11817,8 +11944,25 @@ BossTankPost ai::FindBossTankPost(PlayerbotAI* ai, Player* bot, const BossTactic
             endedRow.spotX = dead.second.spotX;
             endedRow.spotY = dead.second.spotY;
             endedRow.spotZ = dead.second.spotZ;
+            endedRow.priority = dead.second.priority;
             if (tankAi)
                 LogTankPost(tankAi, endedRow, "end", "tank");
+        }
+    }
+
+    // A renumbering keeps the record's row in the fight for another tank index: a tank died, the raid tank order moved
+    // this bot to another slot, and its post ended by the renumbering, not because the band closed.
+    bool slotMoved = false;
+    if (haveRecord && !row)
+    {
+        for (const BossTacticRow* candidate : fight.rows)
+        {
+            if (candidate->kind == BossTacticKind::TankPost && candidate->bossEntry == record.bossEntry &&
+                candidate->targetEntry == record.targetEntry && candidate->priority != roles.botIndex)
+            {
+                slotMoved = true;
+                break;
+            }
         }
     }
 
@@ -11841,7 +11985,10 @@ BossTankPost ai::FindBossTankPost(PlayerbotAI* ai, Player* bot, const BossTactic
         closed.spotX = record.spotX;
         closed.spotY = record.spotY;
         closed.spotZ = record.spotZ;
-        LogTankPost(ai, closed, "end", row ? "slot" : "band");
+        closed.priority = record.priority;
+        LogTankPost(ai, closed, "end",
+            TankPostEndsAsSlot(row != nullptr, slotMoved, sPlayerbotAIConfig.dungeonRunTankPostOwnsSubject)
+                ? "slot" : "band");
         return out;
     }
     if (!row || !boss)
@@ -11867,6 +12014,9 @@ BossTankPost ai::FindBossTankPost(PlayerbotAI* ai, Player* bot, const BossTactic
     if (subjectUnit)
         in.subjectToSpotYd = TankPostDistanceYd(subjectUnit->x, subjectUnit->y, subjectUnit->z,
             row->spotX, row->spotY, row->spotZ);
+    bool const ownerWithinRange = sPlayerbotAIConfig.dungeonRunTankPostOwnsSubject && subject &&
+        TankPostDistanceYd(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), subject->GetPositionX(),
+            subject->GetPositionY(), subject->GetPositionZ()) <= kTankPostReserveRangeYd;
     in.botToSpotYd = TankPostDistanceYd(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(),
         row->spotX, row->spotY, row->spotZ);
     Unit* const currentTarget = AI_VALUE(Unit*, "current target");
@@ -11879,6 +12029,7 @@ BossTankPost ai::FindBossTankPost(PlayerbotAI* ai, Player* bot, const BossTactic
     const BossStandTarget stand = holdSpot ? FindBossStand(ai, bot) : BossStandTarget();
     in.seated = TankPostSeated(stand.valid, stand.stay);
     in.leash = holdSpot && sPlayerbotAIConfig.dungeonRunTankPostLeash;
+    in.slotMoved = slotMoved;
     // The arrived subject is not "another hostile": it outranks everything else the tank holds.
     if (holdSpot && currentTarget == subject)
         in.holdingOtherHostile = false;
@@ -11896,6 +12047,7 @@ BossTankPost ai::FindBossTankPost(PlayerbotAI* ai, Player* bot, const BossTactic
         record.map = row->map;
         record.bossEntry = row->bossEntry;
         record.targetEntry = row->targetEntry;
+        record.priority = row->priority;
         record.hpMin = row->hpMin;
         record.hpMax = row->hpMax;
         record.param = row->param;
@@ -11930,8 +12082,20 @@ BossTankPost ai::FindBossTankPost(PlayerbotAI* ai, Player* bot, const BossTactic
     {
         std::lock_guard<std::mutex> lock(g_tankPostMutex);
         TankPostRecord& stored = g_tankPost[self];
+        std::uint32_t const priorLoose = stored.looseSinceMs;
+        std::uint32_t const priorUnhittable = stored.unhittableSinceMs;
+        bool lapseLogged = stored.lapseLogged;
         stored = record;
         stored.lastReadMs = nowMs;
+        TankPostLooseClockState const loose = TankPostLooseClock(priorLoose, priorUnhittable, in.subjectOnTank,
+            in.subjectSelectable, subject != nullptr && bot->IsValidAttackTarget(subject), nowMs);
+        stored.looseSinceMs = loose.looseSinceMs;
+        stored.unhittableSinceMs = loose.unhittableSinceMs;
+        // This is the only update a post gets while no other tank reads its reservation: a subject that came back
+        // must re-arm the row here, or the next lapse writes nothing.
+        TankPostLapseOwnerUpdate(sPlayerbotAIConfig.dungeonRunTankPostOwnsSubject, ownerWithinRange, in.subjectOnTank,
+            loose.looseSinceMs == 0 ? 0 : nowMs - loose.looseSinceMs, lapseLogged);
+        stored.lapseLogged = lapseLogged;
         stepEntered = TankPostStepEntered(stored.lastStep, step);
         stored.lastStep = static_cast<std::uint8_t>(step);
         if (TankPostLatchesArrival(in, step))

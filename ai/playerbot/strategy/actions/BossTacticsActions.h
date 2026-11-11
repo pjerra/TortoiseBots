@@ -177,6 +177,21 @@ namespace ai
     // BossTacticsTauntGate row per bot per 5 s while it refuses. `spell` is the taunt being tried, for the row.
     bool TauntRefusedByGate(PlayerbotAI* ai, Player* bot, Unit* target, const char* spell);
 
+    // AiPlayerbot.DungeonRunTankPostOwnsSubject: whether another tank's live `tank_post` on `target` reserves it, so
+    // this tank does not taunt it (the post's own slot takes it). False unless the key is on, the bot is a tank and the
+    // target a creature; the other tank must be in the bot's instance, able to act, within kTankPostReserveRangeYd of
+    // the target, and its record read within kTankPostLiveMs. The reservation lapses once the target has been loose off
+    // that tank for kTankPostReserveGraceMs from the first selectable tick it was off it (a lift-off of the grace
+    // length or more starts a new grace at the next landing; shorter blips keep the original start), and the read
+    // that sees the lapse writes one `reason=post_lapsed` row. The two area taunts read it directly; every
+    // single-target taunt reads it through the gate above.
+    bool TankPostReservesSubject(PlayerbotAI* ai, Player* bot, Unit* target);
+
+    // The area taunts' own scan: whether any hostile within kAreaTauntRadiusYd of the bot is another live post's
+    // reserved subject, so Challenging Shout or Challenging Roar must not cast (the selected target alone is the gate's
+    // read). Logs the refusal row for the first such unit.
+    bool AreaTauntRefusedByPost(PlayerbotAI* ai, Player* bot, const char* spell);
+
     // The carrier strike verdict row: one BossTacticsCarrierStrike row whenever the verdict changes, and at most one
     // every 5 s while it stays the same. `spell` is the strike the action would use ("<id>", "melee" or "none").
     // A no-op without bot_events.csv.

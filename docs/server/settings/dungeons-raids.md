@@ -1412,7 +1412,7 @@ Whether the boss tactics keep their `tank_post` rows: a tank named by a row wait
 
 **The end:** the post ends on the awaited unit's death or evade, `window_s` after it started, the tank's death or a creature charm, or the band closing. The record is one per bot, so a successor in the same slot starts its own post after its predecessor dies.
 
-**Diagnostics:** one `BossTacticsTankPost` row per post and event (`event=start|arrive|end`), with `reason=band|window|dead|evade|gone|tank|slot` on the end row.
+**Diagnostics:** one `BossTacticsTankPost` row per post and event (`event=start|arrive|end`), with `reason=band|window|dead|evade|gone|tank|slot` on the end row; `AiPlayerbot.DungeonRunTankPostOwnsSubject` adds one `event=lapse,reason=post_lapsed` row per reservation lapse.
 
 </details>
 
@@ -1459,6 +1459,25 @@ Whether a `hold_spot` `tank_post` row leashes its tank before the awaited unit a
 **The guard:** the raid guard's orders are unchanged; a guard order is undone by the next leash tick, because the `tank_post` action outranks it.
 
 **Step rows:** a post writes one `BossTacticsTankPost` row each time it enters the drag, the yield or the leash (`event=drag|yield|leash`, with `tank_yd`, `subject_yd` and `on_tank`), never while it stays in one. They are written whatever this key is set to, for every `hold_spot` post.
+
+</details>
+
+### `AiPlayerbot.DungeonRunTankPostOwnsSubject`
+Whether a live `tank_post` owns the unit it waits for: while another tank's post is live on it, no tank taunts it, so the post's own slot takes it. It is recommended on for a fight whose second boss lands later.
+**Default:** `0` · **Values:** `0` off (every tank may taunt the subject as before), `1` on (needs `AiPlayerbot.DungeonRunTankPost`; does not need `AiPlayerbot.DungeonRunTauntGate`) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+<details>
+<summary>How it works in detail</summary>
+
+**The reservation:** a post record read within the last 3 s, in the bot's instance, on the target's creature entry, by a tank that is alive and not creature-charmed, reserves that unit to the post's tank while that tank stands within 60 yd of the unit (3D) and the unit is on it or has been loose off it for less than 15 s from the first selectable tick it was off it (the post's own grace; a subject still in the air cannot be hit and does not start the clock; a lift-off of 15 s or more starts a new grace at the next landing, while shorter blips keep the original start). The 60 yd and the 15 s come from walk 2c, where the unit landed 48-55 yd from its post tank and the tank reached melee at about +13 s. Any other tank's taunt is refused: every single-target taunt through the taunt gate (`BossTacticsTauntGate` with `reason=post_subject`), and the two area taunts, the warrior's Challenging Shout and the druid's Challenging Roar, which scan every hostile within their 10 yd radius and refuse the cast while any of them is reserved. The refusal is throttled like the gate's other words, once per bot per 5 s. The post's own tank is never refused.
+
+**Why:** walk 2c a-1 lost the second boss to the healers: Cindarion landed on a healer, slot 3's Challenging Shout at +1 s, slot 0's Taunt at +13 s and slot 2's Taunt at +58 s took him first, and slot 1's `taunt_after_cast` row stays quiet while he stands on any tank, so the post tank only got him at +21 s, after the mages passed every tank.
+
+**Diagnostics:** the first read that sees a lapse writes one `BossTacticsTankPost` row with `event=lapse`, `reason=post_lapsed`, `owner_yd`, `loose_ms` and `limit=range|grace`; the reads after it stay quiet until the reservation holds again, and the post tank's own record update re-arms it, so a recovery no other tank read does not swallow the next lapse's row.
+
+**The end:** the reservation ends by itself when the post ends (the unit dies, evades or leaves the band), when its tank dies or is charmed, when the record goes stale (no read for 3 s), when the post tank is farther than 60 yd from the unit, or when the unit has been loose off that tank for 15 s from the first selectable tick it was off it (a short unhittable blip inside those 15 s does not restart it). A post tank that stands still on its spot keeps the subject reserved for the post's whole window, so the `taunt_after_cast` row of its slot is what takes the unit; a tank stranded across the room no longer keeps every other tank from rescuing it.
+
+**The end word:** a post that ends because the raid tank order renumbered after a tank death (its row is still in the fight, for another slot index) logs `reason=slot` with `AiPlayerbot.DungeonRunTankPostOwnsSubject` on; with the key off, and for a band that really closes, it stays `reason=band`.
 
 </details>
 

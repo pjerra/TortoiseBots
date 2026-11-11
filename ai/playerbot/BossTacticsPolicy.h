@@ -33,6 +33,7 @@
 #include <vector>
 
 #include "BossAnchorPolicy.h"
+#include "GuardGracePolicy.h"
 #include "policy/combat/RearFlankPolicy.h"
 #include "policy/heal/DispelTargetPolicy.h"
 
@@ -3563,7 +3564,7 @@ namespace ai
     // pull off it, walk 54: 19 of 114 Shade taunts, Jin'do on a damage dealer 5 s later in 3 of them). A cursed
     // off-tank that does not hold the boss may still taunt the Shade (the same rule as AttackerOfNonTankSkipsUnit,
     // which keeps the Shade in the scan for a carrier). Key off, every taunt passes as before.
-    enum class TauntGate : std::uint8_t { Allow, NeedsAura, TauntImmune, HoldingBoss };
+    enum class TauntGate : std::uint8_t { Allow, NeedsAura, TauntImmune, HoldingBoss, PostSubject };
 
     inline TauntGate TauntGateFor(bool keyOn, std::uint32_t requiredAura, bool botHasAura, bool tauntImmune,
                                   bool holdsBoss)
@@ -3587,14 +3588,133 @@ namespace ai
             case TauntGate::NeedsAura:   return "needs_aura";
             case TauntGate::TauntImmune: return "taunt_immune";
             case TauntGate::HoldingBoss: return "holding_boss";
+            case TauntGate::PostSubject: return "post_subject";
         }
         return "allow";
+    }
+
+    // AiPlayerbot.DungeonRunTankPostOwnsSubject: while another tank's post is live (its record read within
+    // kTankPostLiveMs) on this subject entry, in this instance, by a tank that can act, this tank does not taunt the
+    // subject: the post's own slot takes it (walk 2c a-1: slots 3, 0 and 2 taunted Cindarion before slot 1 arrived).
+    constexpr std::uint32_t kTankPostLiveMs = 3000;
+    inline bool TankPostSubjectReserved(bool keyOn, bool otherPostLive, bool otherTankCanAct, bool botOwnsPost)
+    {
+        return keyOn && otherPostLive && otherTankCanAct && !botOwnsPost;
+    }
+
+    // The post's reservation also needs its tank able to take the unit back: the tank within kTankPostReserveRangeYd
+    // of the subject (3D), and the subject still on it or loose (not its victim) for less than
+    // kTankPostReserveGraceMs. A tank stranded across the room, or one that lost the unit past the grace, reserves
+    // nothing, so the other tanks may taunt it.
+    //
+    // Walk 2c: the awaited unit landed 48-55 yd away from its post tank and the tank reached melee at about +13 s, so
+    // the reservation keeps the unit at 60 yd and through a 15 s loose spell. Both limits are the post's own; the
+    // guard's assignment clock keeps its kGuardAssignedGraceMs.
+    constexpr float kTankPostReserveRangeYd = 60.0f;
+    constexpr std::uint32_t kTankPostReserveGraceMs = 15000;
+    inline bool TankPostReserves(bool keyOn, bool otherPostLive, bool otherTankCanAct, bool botOwnsPost,
+                                 bool ownerWithinRange, bool subjectOnOwner, std::uint32_t looseMs)
+    {
+        return TankPostSubjectReserved(keyOn, otherPostLive, otherTankCanAct, botOwnsPost) && ownerWithinRange &&
+            (subjectOnOwner || looseMs < kTankPostReserveGraceMs);
+    }
+
+    // Which limit lapsed a post's reservation this read: the range first, then the loose grace (the order the
+    // reservation reads them). `none` while the reservation holds, and with the key off (nothing is written then).
+    enum class TankPostLapse : std::uint8_t
+    {
+        None = 0,
+        Range = 1,
+        Grace = 2,
+    };
+    inline TankPostLapse TankPostLapseOf(bool keyOn, bool ownerWithinRange, bool subjectOnOwner,
+                                         std::uint32_t looseMs)
+    {
+        if (!keyOn)
+            return TankPostLapse::None;
+        if (!ownerWithinRange)
+            return TankPostLapse::Range;
+        if (!subjectOnOwner && looseMs >= kTankPostReserveGraceMs)
+            return TankPostLapse::Grace;
+        return TankPostLapse::None;
+    }
+
+    // One lapse row per lapse event: `lapseLogged` is the record's flag. A read that still sees the lapse writes
+    // nothing; a read where the reservation holds again re-arms it for the next lapse.
+    inline bool TankPostLapseDue(TankPostLapse lapse, bool& lapseLogged)
+    {
+        if (lapse == TankPostLapse::None)
+        {
+            lapseLogged = false;
+            return false;
+        }
+        if (lapseLogged)
+            return false;
+        lapseLogged = true;
+        return true;
+    }
+
+    // The post owner's own record update re-arms the same flag: its tank back within kTankPostReserveRangeYd of the
+    // subject with the subject on it, or loose off it for less than the grace, is the reservation holding again, so a
+    // later lapse writes its own row even when no other tank reads the reservation in between. While a lapse is still
+    // active the flag stays, and a reader's later read of that lapse stays quiet.
+    inline bool TankPostLapseOwnerUpdate(bool keyOn, bool ownerWithinRange, bool subjectOnOwner,
+                                         std::uint32_t looseMs, bool& lapseLogged)
+    {
+        lapseLogged = lapseLogged && TankPostLapseOf(keyOn, ownerWithinRange, subjectOnOwner, looseMs) !=
+            TankPostLapse::None;
+        return lapseLogged;
+    }
+
+    // The loose clock of a post record (AiPlayerbot.DungeonRunTankPostOwnsSubject). It is 0 while the subject is on its
+    // post tank, and while the subject cannot be hit before the clock has started (unselectable or not attackable: a
+    // boss still in the air, out of reach of every tank), so the grace is not spent before it lands. It starts on the
+    // first hittable tick with the subject off the tank. A running clock keeps its start through unhittable spells
+    // shorter than the grace (a shrug, a blink, a brief immunity). A spell of the grace length or more is a real
+    // lift-off: the clock clears, so the next hittable tick starts a new grace. `prior` is the record's clock (0: not
+    // started); `unhittableSince` is the start of the current unhittable spell (0: none).
+    struct TankPostLooseClockState
+    {
+        std::uint32_t looseSinceMs = 0;
+        std::uint32_t unhittableSinceMs = 0;
+    };
+    inline TankPostLooseClockState TankPostLooseClock(std::uint32_t prior, std::uint32_t unhittableSince,
+                                                      bool subjectOnOwner, bool subjectSelectable,
+                                                      bool subjectAttackable, std::uint32_t nowMs)
+    {
+        TankPostLooseClockState out;
+        if (subjectOnOwner)
+            return out;
+        if (subjectSelectable && subjectAttackable)
+        {
+            out.looseSinceMs = prior != 0 ? prior : nowMs;
+            return out;
+        }
+        out.unhittableSinceMs = unhittableSince != 0 ? unhittableSince : nowMs;
+        out.looseSinceMs = nowMs - out.unhittableSinceMs >= kTankPostReserveGraceMs ? 0 : prior;
+        return out;
+    }
+
+    // The area taunts (challenging shout, challenging roar) taunt every hostile within their radius of the caster, not
+    // only the selected target: one unit of the scan that another live post reserves refuses the cast.
+    constexpr float kAreaTauntRadiusYd = 10.0f;
+    struct AreaTauntUnit
+    {
+        float yd = 0.0f;
+        bool reservedByOther = false;
+    };
+    inline bool AreaTauntHitsReservedSubject(const std::vector<AreaTauntUnit>& units, float radius)
+    {
+        for (const AreaTauntUnit& unit : units)
+            if (unit.reservedByOther && unit.yd <= radius)
+                return true;
+        return false;
     }
 
     // The gate's refusal row is throttled per (bot, gate word), not per bot: the 495 taunt_immune rows at Jin'do (walk
     // 54) could hide a needs_aura row that fell in the same 5 s. `lastMs` is one bot's last-row time per word (indexed
     // by the TauntGate value; 0 = never). Returns whether a row for `gate` is due, and stamps `nowMs` when it is.
-    constexpr std::size_t kTauntGateWords = 4;
+    constexpr std::size_t kTauntGateWords = 5;
     using TauntGateLogTimes = std::array<std::uint32_t, kTauntGateWords>;
 
     inline bool TauntGateLogDueFor(TauntGateLogTimes& lastMs, TauntGate gate, std::uint32_t nowMs, std::uint32_t gapMs)
@@ -3774,6 +3894,7 @@ namespace ai
         bool subjectOnTank = false;       // the subject's victim is this tank
         bool seated = false;              // the tank holds a boss stand seat (read only with holdSpot)
         bool leash = false;               // hold_spot and its leash key: walk back before the arrival
+        bool slotMoved = false;           // the post's row is still in the fight, for another slot index (read by the end word only)
         std::uint64_t subjectGuid = 0;    // the awaited unit this read saw (0: none)
     };
 
@@ -3878,6 +3999,34 @@ namespace ai
         if (in.holdingOtherHostile)
             return TankPostDecision::Hold;
         return in.botToSpotYd > kTankPostSpotYd ? TankPostDecision::Walk : TankPostDecision::Hold;
+    }
+
+    // The end word of a post (the step's own order). `slotMoved`: the post's row is still in the fight, but for another
+    // slot index than this bot now holds (a tank died and GetRaidTankRoles renumbered): "slot", not "band".
+    inline const char* TankPostEndWord(bool live, bool slotMoved, bool tankCanAct, bool windowExpired,
+                                       bool subjectFound, bool subjectAlive, bool subjectEvading)
+    {
+        if (!live)
+            return slotMoved ? "slot" : "band";
+        if (!tankCanAct)
+            return "tank";
+        if (windowExpired)
+            return "window";
+        if (!subjectFound)
+            return "gone";
+        if (!subjectAlive)
+            return "dead";
+        if (subjectEvading)
+            return "evade";
+        return "band";
+    }
+
+    // The `slot` end word of a post whose row left this bot's slot: the row is still held (another row of the same
+    // slot) or the renumbering moved it while the owns-subject key is on. With the key off a renumbered end says
+    // `band`, the pre-feature word.
+    inline bool TankPostEndsAsSlot(bool rowStillHeld, bool slotMoved, bool ownsSubjectKeyOn)
+    {
+        return rowStillHeld || (slotMoved && ownsSubjectKeyOn);
     }
 
     // A step row is written when the post enters Drag, Yield or Leash (not while it stays in it).
