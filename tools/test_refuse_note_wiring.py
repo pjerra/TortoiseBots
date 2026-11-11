@@ -19,6 +19,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 ENGINE = (ROOT / "ai/playerbot/strategy/Engine.cpp").read_text()
+ENGINE_H = (ROOT / "ai/playerbot/strategy/Engine.h").read_text()
 MAGE = (ROOT / "ai/playerbot/strategy/mage/MageActions.h").read_text()
 COMMANDER = (ROOT / "commands/Commander.cpp").read_text()
 THREAT = (ROOT / "ai/playerbot/strategy/generic/ThreatStrategy.cpp").read_text()
@@ -39,7 +40,10 @@ class RefuseNoteWiring(unittest.TestCase):
 
     def test_note_outcome_carries_refuse_note(self):
         self.assertIn("NoteOutcome", ENGINE)
-        self.assertIn("OutcomeFailCode(", ENGINE)
+        self.assertIn("OutcomeCodeFor(", ENGINE)
+
+    def test_initial_outcome_has_no_reason(self):
+        self.assertIn("uint32 lastOutcomeCastFail = 0xFF;", ENGINE_H)
 
     def test_clear_resets_note(self):
         i = AI_H.index("ClearLastCastCheckFail()")

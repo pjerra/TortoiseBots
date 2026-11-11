@@ -1,6 +1,6 @@
 # Changelog
 
-- Fixed: every one of the threat multiplier's five vetoes writes its own `ThreatVeto` row with `site=` naming the veto, throttled per bot and target per 10 s, instead of only the high-threat veto logging per bot.
+- Fixed: a successful, useless, prerequisite or vetoed action verdict carries no party-record `reason` (the engine's no-check code 0xFF), so only a failed or impossible verdict whose cast check truly returned code 0 reads `combat`.
 - Fixed: the party record's `reason` leaves the core's no-check code 0xFF blank and names code 0 `combat` instead of reading every reasonless refusal `other`.
 - Fixed: the party record's `reason` names why an action did not run: a vetoed action `threat` (the threat multiplier) or `veto` (any other multiplier), a refused Icicles `attacked`, an unlearned spell `not-known`, an immune target `immune`, a loss of control `no-control`, and any other unmapped refusal `other`.
 - New: a high-threat veto writes one `ThreatVeto` row per bot per 10 s with the target, action, threat numbers, taunt immunity and victim role, so a walk can tell a threat hold from any other refusal.

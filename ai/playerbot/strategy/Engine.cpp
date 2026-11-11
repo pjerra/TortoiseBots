@@ -10,6 +10,7 @@
 // #include "playerbot/PerformanceMonitor.h" // E2E green
 #include "playerbot/BotActionLog.h"
 #include "playerbot/RefuseNotePolicy.h"
+#include "playerbot/OutcomeReasonPolicy.h"
 #include "playerbot/ForceRebuffPolicy.h"
 #include "../../../runtime/ObservabilityEmitter.h"
 #include "../../../runtime/WhyTrace.h"
@@ -191,7 +192,7 @@ void Engine::NoteOutcome(Action* action, char result)
     lastOutcomeName[sizeof(lastOutcomeName) - 1] = '\0';
     lastOutcomeResult = result;
     // Only a verdict that says the action did not run carries a cast-check reason.
-    lastOutcomeCastFail = (result == 'F' || result == 'I') ? OutcomeFailCode(static_cast<uint32>(ai->GetLastCastCheckFail()), ai->GetLastRefuseNote()) : 0;
+    lastOutcomeCastFail = OutcomeCodeFor(result, static_cast<uint32>(ai->GetLastCastCheckFail()), ai->GetLastRefuseNote());
 }
 
 void Engine::ClearActionFailures(Action* action, Event& event)

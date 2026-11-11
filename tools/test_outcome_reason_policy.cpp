@@ -33,6 +33,22 @@ int main()
     CASE("UnknownCodeMeansOther");
     CHECK(std::strcmp(OutcomeTailWord(77), "other") == 0);
 
+    CASE("SuccessHasNoReason");
+    for (char result : {'O', 'U', 'P', 'V'})
+        CHECK(OutcomeCodeFor(result, 0, RefuseNote::None) == kOutcomeNoCheck);
+
+    CASE("InitialHasNoReason");
+    CHECK(OutcomeCodeFor('-', 0, RefuseNote::None) == kOutcomeNoCheck);
+
+    CASE("RealZeroReadsCombat");
+    CHECK(OutcomeCodeFor('F', 0, RefuseNote::None) == 0);
+    CHECK(OutcomeTailWord(OutcomeCodeFor('I', 0, RefuseNote::None)) != nullptr);
+    CHECK(std::strcmp(OutcomeTailWord(OutcomeCodeFor('I', 0, RefuseNote::None)), "combat") == 0);
+
+    CASE("FailedKeepsNoteAndCheck");
+    CHECK(OutcomeCodeFor('F', 5, RefuseNote::None) == 5);
+    CHECK(OutcomeCodeFor('F', 5, RefuseNote::Threat) == kRefuseNoteBase + 1);
+
     std::cout << "outcome reason policy: all tests passed\n";
     return 0;
 }
