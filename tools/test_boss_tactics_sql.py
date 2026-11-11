@@ -996,6 +996,34 @@ class BossTacticsSql(unittest.TestCase):
                     and other["hp_max"] == row["hp_max"]]
             self.assertEqual(1, len(same), "the loader drops the duplicate in %s" % (row["file"],))
 
+    def test_onyxia_walk2f_hold_kill(self):
+        # 20261111170200_world.sql: walk 2e a-1 P3 spent ranged frames 69 on a Hatcher, 58 on Onyxia and 24 on a
+        # whelp and killed nobody. The hold_kill row is read straight from the table (no fight-scan gate) and needs
+        # only the "boss tactics" strategy, so the damage dealers leave her while a living Hatcher fights within the
+        # kind's 50 yd.
+        name = "20261111170200_world.sql"
+        path = os.path.join(ROOT, "data/sql/world", name)
+        self.assertTrue(os.path.isfile(path), "the Onyxia walk 2f hold_kill migration is missing")
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("DELETE FROM `ai_boss_tactic` WHERE `map` = 249 AND `boss_entry` = 10184 "
+                      "AND `kind` = 'hold_kill';", text)
+        self.assertEqual(1, text.count("INSERT INTO `ai_boss_tactic`"))
+        self.assertEqual(1, text.count("(249, 10184, 'hold_kill'"))
+        holds = [row for row in effective_rows()
+                 if row[1] == 249 and row[2] == 10184 and row[3] == "hold_kill"]
+        self.assertEqual(1, len(holds), "the Onyxia hold_kill rows are not exactly one")
+        hold = _payload_dict(holds[0])
+        self.assertEqual(name, hold["file"], "the walk 2f migration owns the hold_kill row")
+        self.assertEqual((50144, 0, 0, 0.0, "", 0, 100, 0, 0),
+                         (hold["target_entry"], hold["spell_id"], hold["priority"], hold["param"],
+                          hold["tactic_mode"], hold["hp_min"], hold["hp_max"], hold["bot_aura"],
+                          hold["window_s"]),
+                         "the Onyxia hold_kill row drifted")
+        # The kind answers no gate: the loader refuses one, so the band stays open and no aura is set.
+        self.assertFalse(hold["hp_min"] or hold["hp_max"] != 100 or hold["bot_aura"])
+        self.assertIsNone(new_kind_problem(hold), "the loader rules refuse the Onyxia hold_kill row")
+
     def test_onyxia_walk2b_stand_seats_are_live(self):
         # 20261110120300_world.sql: the 601 Deep Breath seats for Onyxia 10184's eight hover
         # points, one stand anchor per point opening on that point's breath spell while she
