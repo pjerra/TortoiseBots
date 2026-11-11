@@ -476,7 +476,7 @@ class InterruptIgnoresThreat(unittest.TestCase):
         veto = brace_body(multiplier, 'if (AI_VALUE2(bool, "trigger active", "high threat"))\n    {')
         self.assertIn("if (interruptKey)\n            LogInterruptVeto(ai, bot, interruptAction, interruptBotThreat, "
                       "interruptTankThreat, interruptFlatThreat,\n                             interruptRanged);", veto)
-        self.assertIn("LogThreatVeto(ai, bot, action, target, victim);\n        return 0.0f;", veto)
+        self.assertIn("LogThreatVeto(ai, bot, action, target, victim,", veto)
         log = brace_body(STRATEGY, "void LogInterruptVeto(")
         self.assertIn('"ThreatCap interrupt spell=%s pct=%.0f flat=%.0f line=%.2f bot=%.0f tank=%.0f"', log)
         self.assertIn("ai::botdiag::BotActionLog::Write(ai, \"THREAT\", \"%s\", info);", log)

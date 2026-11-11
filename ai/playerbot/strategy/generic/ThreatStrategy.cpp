@@ -323,7 +323,8 @@ constexpr uint32 kThreatVetoLogGapMs = 10000;
 std::mutex g_threatVetoLogMutex;
 std::unordered_map<uint64, uint32> g_threatVetoLog;
 
-void LogThreatVeto(PlayerbotAI* ai, Player* bot, Action* action, Unit* target, Unit* victim)
+void LogThreatVeto(PlayerbotAI* ai, Player* bot, Action* action, Unit* target, Unit* victim, uint8 pct, float botThreat,
+                   float tankThreat)
 {
     if (!sPlayerbotAIConfig.hasLog("bot_events.csv"))
         return;
@@ -345,9 +346,8 @@ void LogThreatVeto(PlayerbotAI* ai, Player* bot, Action* action, Unit* target, U
     char info1[128];
     snprintf(info1, sizeof(info1), "target=%u,action=%s", target ? target->GetEntry() : 0, action ? action->getName().c_str() : "?");
     char info2[128];
-    snprintf(info2, sizeof(info2), "pct=%u,bot=%.0f,tank=%.0f,immune=%d,victim=%s",
-             AI_VALUE2(uint8, "threat", "current target"), AI_VALUE2(float, "my threat", "current target"),
-             AI_VALUE2(float, "tank threat", "current target"), target ? (TargetTauntImmune(target) ? 1 : 0) : 0, victimWord);
+    snprintf(info2, sizeof(info2), "pct=%u,bot=%.0f,tank=%.0f,immune=%d,victim=%s", static_cast<unsigned>(pct),
+             botThreat, tankThreat, target ? (TargetTauntImmune(target) ? 1 : 0) : 0, victimWord);
     sPlayerbotAIConfig.logEvent(ai, "ThreatVeto", info1, info2);
 }
 
@@ -534,7 +534,8 @@ float ThreatMultiplier::GetValue(Action* action)
         if (interruptKey)
             LogInterruptVeto(ai, bot, interruptAction, interruptBotThreat, interruptTankThreat, interruptFlatThreat,
                              interruptRanged);
-        LogThreatVeto(ai, bot, action, target, victim);
+        LogThreatVeto(ai, bot, action, target, victim, AI_VALUE2(uint8, "threat", "current target"),
+                      AI_VALUE2(float, "my threat", "current target"), AI_VALUE2(float, "tank threat", "current target"));
         return 0.0f;
     }
 
