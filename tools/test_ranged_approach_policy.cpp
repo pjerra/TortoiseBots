@@ -336,7 +336,6 @@ int main()
 
     // The row's verdict words, one per step of the walk.
     {
-        CHECK(std::string(ai::HoverReachWord(ai::HoverReachResult::NotHover)) == "not_hover");
         CHECK(std::string(ai::HoverReachWord(ai::HoverReachResult::NoGround)) == "no_ground");
         CHECK(std::string(ai::HoverReachWord(ai::HoverReachResult::NoPath)) == "no_path");
         CHECK(std::string(ai::HoverReachWord(ai::HoverReachResult::NoPoint)) == "no_point");

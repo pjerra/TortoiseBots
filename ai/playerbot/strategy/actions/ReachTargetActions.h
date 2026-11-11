@@ -598,7 +598,10 @@ namespace ai
             if (!ai->CanMove())
                 return false;
 
-            if (sPlayerbotAIConfig.hoverReachAimsAtAnchor && MoveTowardAnchorUnderHover(target, distance, groundZ))
+            // A refused anchor aim writes no row: the target hovers, so the row could only mislabel the step,
+            // and it would take the 5 s slot from the walk below. That walk's row carries the refusal instead.
+            const char* anchorReject = nullptr;
+            if (sPlayerbotAIConfig.hoverReachAimsAtAnchor && MoveTowardAnchorUnderHover(target, distance, groundZ, anchorReject))
                 return true;
 
             // The floor under the body, not the body: a path to (x, y, z) in the air has no
@@ -607,7 +610,7 @@ namespace ai
             std::vector<WorldPosition> const path = ground.getPathStepFrom(WorldPosition(bot), bot);
             if (path.size() < 2)
             {
-                HoverReachRow(HoverReachResult::NoPath, target, distance, groundZ, path.size());
+                HoverReachRow(HoverReachResult::NoPath, target, distance, groundZ, path.size(), false, 0.0f, nullptr, anchorReject);
                 return false;
             }
 
@@ -654,21 +657,21 @@ namespace ai
             }
             if (!choice.valid)
             {
-                HoverReachRow(HoverReachResult::NoPoint, target, distance, groundZ, path.size());
+                HoverReachRow(HoverReachResult::NoPoint, target, distance, groundZ, path.size(), false, 0.0f, nullptr, anchorReject);
                 return false;
             }
 
             WorldPosition const destination(bot->GetMapId(), choice.point.x, choice.point.y, choice.point.z);
             if (IsHazardNearPosition(destination))
             {
-                HoverReachRow(HoverReachResult::Hazard, target, distance, groundZ, path.size());
+                HoverReachRow(HoverReachResult::Hazard, target, distance, groundZ, path.size(), false, 0.0f, nullptr, anchorReject);
                 return false;
             }
 
             bool const moved = MoveTo(destination.getMapId(), destination.getX(), destination.getY(), destination.getZ());
             HoverReachRow(moved ? (noLos ? HoverReachResult::MovedNoLos : HoverReachResult::Moved)
                                 : HoverReachResult::MoveFailed,
-                target, distance, groundZ, path.size());
+                target, distance, groundZ, path.size(), false, 0.0f, nullptr, anchorReject);
             return moved;
         }
 
@@ -677,20 +680,20 @@ namespace ai
         // `anchor` row, walk the navmesh path to the in-range point nearest the anchor's centre
         // (HoverAnchorAimPoint) and stop as soon as the target is in reach; the goal of the range test stays the
         // target, so the bot never walks deeper into the room than it needs to. False leaves today's walk under
-        // her body.
-        bool MoveTowardAnchorUnderHover(Unit* target, float distance, float groundZ)
+        // her body; a refusal before any step names itself in `anchorReject` for that walk's row.
+        bool MoveTowardAnchorUnderHover(Unit* target, float distance, float groundZ, const char*& anchorReject)
         {
             // The anchor row is the boss's own: a live anchor of another boss in the same fight names another
             // room's centre, and aiming there would walk the caster off this one.
             const BossTacticRow* const anchorRow = LiveBossAnchorRow(ai, bot);
             if (!anchorRow)
             {
-                HoverReachRow(HoverReachResult::NotHover, target, distance, groundZ, 0, false, 0.0f, "no_anchor");
+                anchorReject = "no_anchor";
                 return false;
             }
             if (anchorRow->bossEntry != target->GetEntry())
             {
-                HoverReachRow(HoverReachResult::NotHover, target, distance, groundZ, 0, false, 0.0f, "boss_mismatch");
+                anchorReject = "boss_mismatch";
                 return false;
             }
 
@@ -778,7 +781,7 @@ namespace ai
 
         // One row per bot per kHoverLogMs; only with the key on and a bot_events.csv log.
         void HoverReachRow(HoverReachResult result, Unit* target, float distance, float groundZ, std::size_t pathPoints,
-            bool anchorAim = false, float stopDist = 0.0f, const char* reason = nullptr)
+            bool anchorAim = false, float stopDist = 0.0f, const char* reason = nullptr, const char* anchorReject = nullptr)
         {
             if (!sPlayerbotAIConfig.rangedReachHoverTarget || !sPlayerbotAIConfig.hasLog("bot_events.csv"))
                 return;
@@ -790,17 +793,19 @@ namespace ai
 
             char info1[64];
             snprintf(info1, sizeof(info1), "target=%u,result=%s", target->GetEntry(), HoverReachWord(result));
-            char info2[112];
+            char info2[160];
             float const dist = anchorAim ? stopDist
                 : HoverReachDistance(distance, target->GetCombatReach(), bot->GetCombatReach());
-            int const written = snprintf(info2, sizeof(info2), "yd2d=%.1f,height=%.1f,dist=%.1f,path=%u,aim=%s",
+            int written = snprintf(info2, sizeof(info2), "yd2d=%.1f,height=%.1f,dist=%.1f,path=%u,aim=%s",
                 sServerFacade.getDistance2d(bot, target->GetPositionX(), target->GetPositionY()),
                 target->GetPositionZ() - groundZ,
                 dist,
                 static_cast<uint32>(pathPoints),
                 anchorAim ? "anchor" : "target");
             if (reason && written > 0 && written < static_cast<int>(sizeof(info2)))
-                snprintf(info2 + written, sizeof(info2) - written, ",reason=%s", reason);
+                written += snprintf(info2 + written, sizeof(info2) - written, ",reason=%s", reason);
+            if (anchorReject && written > 0 && written < static_cast<int>(sizeof(info2)))
+                snprintf(info2 + written, sizeof(info2) - written, ",anchor_reject=%s", anchorReject);
             sPlayerbotAIConfig.logEvent(ai, "BossReachHover", info1, info2);
         }
 

@@ -273,12 +273,11 @@ namespace ai
         return true;
     }
 
-    enum class HoverReachResult : std::uint8_t { NotHover, NoGround, NoPath, NoPoint, Hazard, MoveFailed, Moved, MovedNoLos };
+    enum class HoverReachResult : std::uint8_t { NoGround, NoPath, NoPoint, Hazard, MoveFailed, Moved, MovedNoLos };
     inline const char* HoverReachWord(HoverReachResult r)
     {
         switch (r)
         {
-            case HoverReachResult::NotHover:   return "not_hover";
             case HoverReachResult::NoGround:   return "no_ground";
             case HoverReachResult::NoPath:     return "no_path";
             case HoverReachResult::NoPoint:    return "no_point";
@@ -287,6 +286,6 @@ namespace ai
             case HoverReachResult::Moved:      return "moved";
             case HoverReachResult::MovedNoLos: return "moved_nolos";
         }
-        return "not_hover";
+        return "unknown";
     }
 }
