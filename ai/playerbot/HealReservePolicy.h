@@ -6,8 +6,10 @@
 // Pure decisions for the healer top-up reserve (the `heal_reserve` boss-tactic row): outside the row's release window
 // a healer tops up members in the almost-full tier only while its own mana is at or above the row's reserve percent.
 // Two things release it: the window itself (the gather before the fight's cycle spell) and distress (the row's count
-// of living non-tanks under the medium-health line). Tanks and the boss's current victim keep today's `MediumMana`
-// rule at all times.
+// of living non-tanks under the medium-health line, counted on the same predicted health the heal pick triages on).
+// The distress release is latched per healer: once it fires it holds until the raid has been calm for
+// `kHealReserveDistressHoldMs`, so a count hovering on the line cannot flap it. Tanks and the boss's current victim
+// keep today's `MediumMana` rule at all times.
 //
 // No core includes: callers in strategy/ translate game state into these plain inputs, so the rules stay testable in
 // tools/test_heal_reserve_policy.cpp without the server.
@@ -64,6 +66,112 @@ namespace ai
     inline bool HealReserveDistress(std::uint32_t hurtCount, std::uint32_t distressCount)
     {
         return distressCount > 0 && hurtCount >= distressCount;
+    }
+
+    // The latch's recovery margin in health points: the release stays while members sit under the medium line plus
+    // this, so a member hovering on the line cannot flap the release.
+    inline constexpr float kHealReserveRecoveryMarginPct = 10.0f;
+    // How long the raid must stay calm before the latch lets go.
+    inline constexpr std::uint32_t kHealReserveDistressHoldMs = 3000;
+
+    // The distress counts of one raid read: `hurt` sits under the medium line and fires the release; `calm` sits
+    // under the line plus the recovery margin and keeps it from clearing.
+    struct HealReserveCounts
+    {
+        std::uint32_t hurt = 0;
+        std::uint32_t calm = 0;
+    };
+
+    // One group member as the distress count reads it. `effectiveHealthPct` is the same predicted health the heal
+    // pick triages on (EffectiveHealHealthPct), never raw health.
+    struct HealReserveMember
+    {
+        bool alive = false;
+        bool sameMap = false;
+        bool tank = false;
+        float effectiveHealthPct = 100.0f;
+    };
+
+    // The healer's own read of one member: alive non-tanks on its map count, the healer itself included, no distance
+    // test.
+    inline void HealReserveCountMember(HealReserveCounts& counts, const HealReserveMember& member,
+                                       float mediumHealthPct)
+    {
+        if (!member.alive || !member.sameMap || member.tank)
+            return;
+        if (member.effectiveHealthPct < mediumHealthPct)
+            ++counts.hurt;
+        if (member.effectiveHealthPct < mediumHealthPct + kHealReserveRecoveryMarginPct)
+            ++counts.calm;
+    }
+
+    // The per-healer distress latch: `released` holds the release, and `calm` times the run of calm frames.
+    struct HealReserveLatch
+    {
+        bool released = false;
+        bool calm = false;
+        std::uint32_t calmSinceMs = 0;
+    };
+
+    inline void HealReserveLatchReset(HealReserveLatch& latch)
+    {
+        latch.released = false;
+        latch.calm = false;
+        latch.calmSinceMs = 0;
+    }
+
+    // The latched distress release. Members under the medium line fire it; it then holds while at least the row's
+    // count sit under the line plus the recovery margin, and lets go only after the hold time of fewer. A count of 0
+    // is no distress release and drops any latch (the reserve is window-only).
+    inline bool HealReserveDistressLatched(HealReserveLatch& latch, std::uint32_t hurtCount, std::uint32_t calmCount,
+                                           std::uint32_t distressCount, std::uint32_t nowMs)
+    {
+        if (distressCount == 0)
+        {
+            HealReserveLatchReset(latch);
+            return false;
+        }
+        if (HealReserveDistress(hurtCount, distressCount))
+        {
+            latch.released = true;
+            latch.calm = false;
+            latch.calmSinceMs = 0;
+            return true;
+        }
+        if (!latch.released)
+            return false;
+        if (calmCount >= distressCount)
+        {
+            latch.calm = false;
+            latch.calmSinceMs = 0;
+            return true;
+        }
+        if (!latch.calm)
+        {
+            latch.calm = true;
+            latch.calmSinceMs = nowMs;
+        }
+        if (nowMs - latch.calmSinceMs >= kHealReserveDistressHoldMs)
+        {
+            HealReserveLatchReset(latch);
+            return false;
+        }
+        return true;
+    }
+
+    // Apply the latch to a pick: the distress release is the latch's, and `released` is the window or it. A read with
+    // no live row is a fight's end, so the latch goes with it.
+    inline void HealReserveApplyDistressLatch(HealReserveRead& read, HealReserveLatch& latch, std::uint32_t calmCount,
+                                              std::uint32_t nowMs)
+    {
+        if (!read.live)
+        {
+            HealReserveLatchReset(latch);
+            return;
+        }
+        read.distressReleased =
+            HealReserveDistressLatched(latch, read.hurtCount, calmCount, read.distressCount, nowMs);
+        read.released = read.windowReleased || read.distressReleased;
     }
 
     // Several live rows keep the highest `param`; its `window_s`, distress count and boss go with it. A tie keeps the

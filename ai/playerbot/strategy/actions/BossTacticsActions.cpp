@@ -902,7 +902,7 @@ struct HealReserveHurtCache
     PlayerbotAI* ai = nullptr;
     Player* bot = nullptr;
     std::uint32_t tick = 0;
-    std::uint32_t count = 0;
+    HealReserveCounts counts;
 };
 thread_local HealReserveHurtCache t_healReserveHurt;
 
@@ -912,7 +912,7 @@ void ResetHealReserveHurtCache()
     t_healReserveHurt.ai = nullptr;
     t_healReserveHurt.bot = nullptr;
     t_healReserveHurt.tick = 0;
-    t_healReserveHurt.count = 0;
+    t_healReserveHurt.counts = HealReserveCounts();
 }
 
 // The slot read's answer for one bot and one AI update. The slot trigger, the old spread trigger and the action all
@@ -1211,6 +1211,8 @@ struct HealReserveLogWindow
     std::string lastName;
     int lastHp = 0;
     const char* lastGate = "";
+    // The healer's distress latch, reset when the fight's row set is gone.
+    HealReserveLatch latch;
 };
 std::unordered_map<std::uint64_t, HealReserveLogWindow> g_healReserveLog;
 // The pull rows' own throttle, so a pull that keeps walking does not swallow the seek rows' 5 s window.
@@ -9094,34 +9096,44 @@ static void CountHealReserveRefusal(PlayerbotAI* ai, Player* bot, Unit* target, 
     }
 }
 
-// How many living group members under the medium-health line the reserve's distress release counts: the healer's map
-// only, tanks never, the healer itself counted, and no distance test. Raw health, not effective: this is a raid state,
-// not a pick. One read per AI update, as the pick and the gate ask in the same one.
-static std::uint32_t HealReserveHurtCount(PlayerbotAI* ai, Player* bot)
+// The raid's distress counts for the reserve's latch: living group members on the healer's map, tanks never, the
+// healer itself counted, and no distance test. Each member is classified on the effective health the heal pick
+// triages on (incoming heals credited, predicted damage applied), never raw health. One read per AI update, as the
+// pick and the gate ask in the same one.
+static HealReserveCounts HealReserveRaidCounts(PlayerbotAI* ai, Player* bot)
 {
+    HealReserveCounts counts;
     if (!ai || !bot)
-        return 0;
+        return counts;
     const std::uint32_t tick = ai->UpdateTick();
     if (t_healReserveHurt.live && t_healReserveHurt.ai == ai && t_healReserveHurt.bot == bot &&
         t_healReserveHurt.tick == tick)
-        return t_healReserveHurt.count;
+        return t_healReserveHurt.counts;
     const float mediumHealthPct = float(sPlayerbotAIConfig.mediumHealth);
-    std::uint32_t count = 0;
     Group* group = bot->GetGroup();
     if (!group)
     {
-        if (sServerFacade.IsAlive(bot) && !PlayerbotAI::IsTank(bot) && bot->GetHealthPercent() < mediumHealthPct)
-            ++count;
+        HealReserveMember member;
+        member.alive = sServerFacade.IsAlive(bot);
+        member.sameMap = true;
+        member.tank = PlayerbotAI::IsTank(bot);
+        if (member.alive && !member.tank)
+            member.effectiveHealthPct = EffectiveHealHealthPct(ai, bot);
+        HealReserveCountMember(counts, member, mediumHealthPct);
     }
     else
     {
         for (Player* member : LiveGroupMembers(group))
         {
-            if (!member || !sServerFacade.IsAlive(member) || member->GetMapId() != bot->GetMapId() ||
-                PlayerbotAI::IsTank(member))
+            if (!member)
                 continue;
-            if (member->GetHealthPercent() < mediumHealthPct)
-                ++count;
+            HealReserveMember read;
+            read.alive = sServerFacade.IsAlive(member);
+            read.sameMap = member->GetMapId() == bot->GetMapId();
+            read.tank = PlayerbotAI::IsTank(member);
+            if (read.alive && read.sameMap && !read.tank)
+                read.effectiveHealthPct = EffectiveHealHealthPct(ai, member);
+            HealReserveCountMember(counts, read, mediumHealthPct);
         }
     }
     if (t_healReserveHurt.live)
@@ -9129,15 +9141,30 @@ static std::uint32_t HealReserveHurtCount(PlayerbotAI* ai, Player* bot)
         t_healReserveHurt.ai = ai;
         t_healReserveHurt.bot = bot;
         t_healReserveHurt.tick = tick;
-        t_healReserveHurt.count = count;
+        t_healReserveHurt.counts = counts;
     }
-    return count;
+    return counts;
+}
+
+// The healer's distress latch, in the reserve's own per-bot state: one entry per bot, shared by the pick and the gate
+// of an update, and reset when the fight's row set is gone.
+static void ApplyHealReserveLatch(Player* bot, HealReserveRead& read, std::uint32_t calmCount, std::uint32_t nowMs)
+{
+    std::lock_guard<std::mutex> lock(g_healReserveLogMutex);
+    HealReserveLatch& latch = g_healReserveLog[bot->GetObjectGuid().GetRawValue()].latch;
+    HealReserveApplyDistressLatch(read, latch, calmCount, nowMs);
+}
+
+static void ResetHealReserveLatch(Player* bot)
+{
+    std::lock_guard<std::mutex> lock(g_healReserveLogMutex);
+    HealReserveLatchReset(g_healReserveLog[bot->GetObjectGuid().GetRawValue()].latch);
 }
 
 // The boss's live `heal_reserve` rows of this bot's fight (HealReservePolicy.h): the highest reserve wins, with its
-// own releases (the window and the row's distress count), distress count and boss. The clock is the seek_aura cycle's,
-// so a fight without one is released only by distress; the boss itself comes from the row, never from that read. The
-// key is the caller's: this read answers only what the rows and the fight say.
+// own releases (the window and the latched distress), distress count and boss. The clock is the seek_aura cycle's, so
+// a fight without one is released only by distress; the boss itself comes from the row, never from that read. The key
+// is the caller's: this read answers only what the rows and the fight say.
 HealReserveRead ai::BossHealReserve(PlayerbotAI* ai, Player* bot, Unit*& boss)
 {
     HealReserveRead out;
@@ -9154,15 +9181,20 @@ HealReserveRead ai::BossHealReserve(PlayerbotAI* ai, Player* bot, Unit*& boss)
             rows.push_back(HealReserveRow{row->param, row->windowSec, row->bossEntry, row->priority});
             anyDistress = anyDistress || row->priority > 0;
         }
+    // No row of this fight is left: the fight is over, so nothing stays latched into the next one.
     if (rows.empty())
+    {
+        ResetHealReserveLatch(bot);
         return out;
+    }
     // The raid read only when a row can use it: a distress count of 0 is exactly the window-only reserve.
-    const std::uint32_t hurtCount = anyDistress ? HealReserveHurtCount(ai, bot) : 0;
+    const HealReserveCounts counts = anyDistress ? HealReserveRaidCounts(ai, bot) : HealReserveCounts();
     SeekFight state;
     const bool clockKnown = ReadSeekFightCached(ai, bot, state) && state.dueMs != 0;
-    out = HealReservePick(rows, clockKnown, clockKnown ? state.dueInMs : 0, hurtCount);
+    out = HealReservePick(rows, clockKnown, clockKnown ? state.dueInMs : 0, counts.hurt);
     if (out.live)
     {
+        ApplyHealReserveLatch(bot, out, counts.calm, WorldTimer::getMSTime());
         for (Unit* unit : fight.units)
         {
             if (unit && unit->GetEntry() == out.bossEntry && sServerFacade.IsAlive(unit))

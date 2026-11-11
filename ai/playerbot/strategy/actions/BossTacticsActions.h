@@ -692,8 +692,10 @@ namespace ai
     // own releases, distress count and boss. `boss` is that row's boss unit (null when no row is live), so the
     // current-victim exemption never depends on the seek_aura row or its key. The clock is the seek_aura cycle's:
     // without that key only the distress release applies. The distress count is the raid's living non-tanks under
-    // MediumHealth, read only when a row carries one. Not live unless the bot is in the world, runs the "boss tactics"
-    // combat strategy, and its map has a row. Does not read the key: the caller decides what to do with it.
+    // MediumHealth on the effective health the heal pick uses, and its release is latched per healer for 3 s of calm
+    // (`MediumHealth + 10`); the latch resets when no row of the fight is left. Not live unless the bot is in the
+    // world, runs the "boss tactics" combat strategy, and its map has a row. Does not read the key: the caller decides
+    // what to do with it.
     HealReserveRead BossHealReserve(PlayerbotAI* ai, Player* bot, Unit*& boss);
     // The reserve's target exemption: a tank, or the boss's current victim. Either keeps today's rule at all times.
     bool HealReserveTargetExempt(Unit* target, Unit* boss);
