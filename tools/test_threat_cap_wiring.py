@@ -394,14 +394,17 @@ class ThreatResetWindow(unittest.TestCase):
                         hold.index("ThreatValue::GetResetSuccessorThreat("))
 
     def test_the_hold_log_is_once_per_gap_window(self):
-        # Round-1 L7: the key carries the window index, so the k = 2 and k = 3 gaps after one reset log too.
-        log = body(STRATEGY, "void LogThreatResetHold(PlayerbotAI* ai, Player* bot, std::uint8_t pct, float ref,")
-        self.assertIn("std::uint32_t windowIndex)", log)
-        self.assertIn("const std::uint64_t windowKey = (static_cast<std::uint64_t>(lastResetMs) << 8) | windowIndex;",
-                      log)
-        self.assertIn("if (it != g_threatResetLog.end() && it->second == windowKey)", log)
-        self.assertIn("LogThreatResetHold(ai, bot, ThreatPctSaturated(botThreat, ref), ref, sinceMs, "
-                      "view.lastResetMs, holdIndex);", STRATEGY)
+        # The row is written when the bot's hold ends, so held_ms= is the hold's length, and one row is written per
+        # bot per reset key (a re-hold in the same gap adds nothing).
+        log = body(STRATEGY, "void LogThreatResetHold(PlayerbotAI* ai, Player* bot, bool held, std::uint8_t pct,")
+        self.assertIn("const std::uint64_t key = (static_cast<std::uint64_t>(lastResetMs) << 8) | holdIndex;", log)
+        self.assertIn("bool emit = false;", log)
+        self.assertIn("row.logged = true;", log)
+        self.assertIn("LogThreatResetHold(ai, bot, held, ThreatPctSaturated(botThreat, ref), ref, sinceMs, "
+                      "view.lastResetMs, holdIndex,\n                       nowMs);", STRATEGY)
+        # A shut hold closes its row too: the charm (and the window boundary) is where the hold ends.
+        self.assertIn("LogThreatResetHold(ai, bot, false, 0, -1.0f, 0, view.lastResetMs, holdIndex, nowMs);",
+                      STRATEGY)
 
     def test_docs_and_changelog(self):
         self.assertIn("### `AiPlayerbot.DungeonRunThreatResetWindow`", SETTINGS)
@@ -478,8 +481,10 @@ class ThreatResetStanding(unittest.TestCase):
         self.assertIn("Needs AiPlayerbot.DungeonRunSeekAura", CONF)
 
     def test_the_row_names_the_hold(self):
-        log = body(STRATEGY, "void LogThreatResetHold(PlayerbotAI* ai, Player* bot, std::uint8_t pct, float ref,")
-        self.assertIn('"reset hold: pct=%u ref=%.0f since_ms=%u win=%u"', log)
+        log = body(STRATEGY, "void LogThreatResetHold(PlayerbotAI* ai, Player* bot, bool held, std::uint8_t pct,")
+        self.assertIn('"reset hold: pct=%u ref=%.0f since_ms=%u win=%u held_ms=%u"', log)
+        self.assertIn("heldMs = nowMs - row.sinceMs;", log)
+        self.assertIn("heldMs = row.lastMs - row.sinceMs;", log)
 
     def test_no_boss_constant_in_the_generic_threat_code(self):
         for text in (STRATEGY, self.VALUES, THREAT_POLICY):

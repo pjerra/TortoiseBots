@@ -1396,7 +1396,7 @@ Whether the damage dealers hold their damage on Hakkar around each expected Caus
 
 **Stop rule for the A/B walk:** tank-turn share up less than 8 points, or Hakkar %/s per alive member down 3 % or more.
 
-**Rows:** one `BossTacticsThreatReset` row per bot per window (the k = 1, 2 and 3 gaps after one reset each log their own), `reset hold: pct=<pct> ref=<threat> since_ms=<ms>`, when the hold first holds; the `BossTacticsCharm` row gains `win=<0|1>,since_prev_ms=<ms>`.
+**Rows:** one `BossTacticsThreatReset` row per bot per window (the k = 1, 2 and 3 gaps after one reset each log their own), `reset hold: pct=<pct> ref=<threat> since_ms=<ms> held_ms=<ms>`, written when the bot's hold ends so `held_ms` is its length; the `BossTacticsCharm` row gains `win=<0|1>,since_prev_ms=<ms>`.
 
 </details>
 
@@ -1419,7 +1419,7 @@ Whether the damage dealers hold their damage on Hakkar between each pair of Caus
 
 **Stop rule for the A/B walk:** any first-fight check (no `win=4` row before the first Cause Insanity, a `win=4` row in the 10 s after a charm, a Jin'do fight logging one, or 8 or more damage dealers held inside one cycle after 120 s), or Hakkar %/s per 20 alive under 0.247 after 10 fights (walk 74: 0.274).
 
-**Rows:** one `BossTacticsThreatReset` row per bot per reset, `reset hold: pct=<pct> ref=<threat> since_ms=<ms> win=4`; `win=1..3` are the gap windows. `DungeonRunThreatResetWindow` and this key together: the standing hold wins and the gap window is not read (the config load logs one line).
+**Rows:** one `BossTacticsThreatReset` row per bot per reset, `reset hold: pct=<pct> ref=<threat> since_ms=<ms> win=4 held_ms=<ms>`; `win=1..3` are the gap windows. The row is written when the bot's hold ends, so `held_ms` is the time it was held in that gap, and the row's time minus `held_ms` is when the hold started. `DungeonRunThreatResetWindow` and this key together: the standing hold wins and the gap window is not read (the config load logs one line).
 
 </details>
 
