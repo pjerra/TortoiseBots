@@ -1322,7 +1322,7 @@ enum PlanStepKind: None=0,Move=1,MoveDirect=2,Pull=3,Boss=4,Loot=5,Open=6,UseIte
 enum TacticMode: Default=0,Now=1,Clear=2,Never=3,Away=4,ToTank=5,Engage=6,Blink=7,UntilTank=8,Invalid=9,TankAnchor=10,Assigned=11,All=12,Strict=13,HoldSpot=14
 )TBSCHEMA";
 
-inline constexpr char kDecisionSchemaHash[] = "f255faf480f169d6";
+inline constexpr char kDecisionSchemaHash[] = "45b464b6b811e97d";
 
 struct DecisionSampleField
 {
