@@ -505,6 +505,14 @@ bool RaidSpreadNeededTrigger::IsActive()
             LogBossSpread(ai, bot, "seek", -1, -1.0f, -1);
         return false;
     }
+    // The park bot holds its source under a control: a step away would cut the cast that keeps it down. The slot
+    // read's `walkout` and `cast` verdicts only own this with the slots key on, so the trigger reads the park itself.
+    if (BossSeekParkHoldsBot(ai, bot))
+    {
+        if (logSpread)
+            LogBossSpread(ai, bot, "park", -1, -1.0f, -1);
+        return false;
+    }
     // Generic combat spread (donor "combat formation move" without the opt-in
     // disperse knob): only while fighting, so idle/questing stacking is free.
     Unit* target = GetTarget();

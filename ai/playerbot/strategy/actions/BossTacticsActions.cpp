@@ -2185,8 +2185,7 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
     snprintf(info1, sizeof(info1), "seek park: son=%u phase=%s by=%s spell=%s due_in=%d n=%u held_ms=%u why=%s",
              ObjectGuid(step.son).GetCounter(), SeekParkPhaseWord(step.phase), parkBot ? parkBot->GetName() : "-",
              spell.empty() ? "-" : spell.c_str(), in.dueKnown ? static_cast<int>(in.dueInMs / 1000) : -1,
-             static_cast<unsigned>(step.reapplies), SeekParkHeldMs(step, nowMs),
-             step.why && *step.why ? step.why : "-");
+             static_cast<unsigned>(step.reapplies), SeekParkHeldMs(step, nowMs), step.why ? step.why : "");
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsSeekPull", info1, "");
 }
 
@@ -5264,6 +5263,17 @@ bool ai::IsSoughtCloudFor(PlayerbotAI* ai, Player* bot, DynamicObject* dyn)
 bool ai::BossSeeking(PlayerbotAI* ai, Player* bot)
 {
     return FindBossSeek(ai, bot).valid;
+}
+
+bool ai::BossSeekParkHoldsBot(PlayerbotAI* ai, Player* bot)
+{
+    if (!ai || !bot || !sPlayerbotAIConfig.dungeonRunSeekPark)
+        return false;
+    SeekFight state;
+    if (!ReadSeekFightCached(ai, bot, state))
+        return false;
+    return SeekParkHolds(state.parkPhase) && state.parkBot != 0 &&
+        state.parkBot == bot->GetObjectGuid().GetRawValue();
 }
 
 bool ai::BossSeekPetMustLeave(PlayerbotAI* ai, Player* bot)
@@ -10476,7 +10486,10 @@ SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)
         if (receiver && receiver == bot)
         {
             Creature* const son = bot->GetMap()->GetCreature(ObjectGuid(state.parkSon));
-            if (son && son->GetEntry() == state.row->targetEntry && sServerFacade.IsAlive(son))
+            // Once the source is on this tank the take is over: the unparked body's own-source branch drags it to the
+            // row's spot (the release's second half), which the wrapper lets through below.
+            if (son && son->GetEntry() == state.row->targetEntry && sServerFacade.IsAlive(son) &&
+                son->GetVictim() != bot)
             {
                 SeekTankTask task;
                 task.valid = true;
@@ -10551,7 +10564,8 @@ SeekParkTask ai::FindBossSeekPark(PlayerbotAI* ai, Player* bot)
     task.valid = true;
     task.source = son;
     task.spell = spell;
-    task.cutCast = park.lastCastMs == 0;
+    // No cast of the park's has gone out in this Apply yet: the first one cuts whatever the bot was channelling.
+    task.cutCast = park.lastCastMs < park.applySinceMs;
     return task;
 }
 

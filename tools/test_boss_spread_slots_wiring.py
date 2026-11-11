@@ -78,9 +78,10 @@ class SpreadSlotsWiring(unittest.TestCase):
         trigger = body(DUNGEON_TRIGGERS, "bool RaidSpreadNeededTrigger::IsActive()")
         self.assertIn(
             "SpreadLogOwned(sPlayerbotAIConfig.dungeonRunBossSpreadSlots, SpreadLogCaller::Legacy)", trigger)
-        self.assertEqual(trigger.count("LogBossSpread("), 4)
-        # Each of the trigger's gate rows sits behind the key-off owner, never the raw key.
-        self.assertEqual(trigger.count("if (logSpread)"), 4)
+        self.assertEqual(trigger.count("LogBossSpread("), 5)
+        # Each of the trigger's gate rows sits behind the key-off owner, never the raw key (the seek, the park's hold,
+        # no target, the explicit order, and the clear row).
+        self.assertEqual(trigger.count("if (logSpread)"), 5)
         self.assertNotIn("!sPlayerbotAIConfig.dungeonRunBossSpreadSlots", trigger)
         action = body(DUNGEON_ACTIONS, "bool RaidSpreadAction::Execute(Event& event)")
         self.assertIn(

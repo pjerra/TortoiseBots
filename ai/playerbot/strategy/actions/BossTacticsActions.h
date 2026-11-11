@@ -589,6 +589,9 @@ namespace ai
     SeekTask FindBossSeek(PlayerbotAI* ai, Player* bot);
     // Whether the bot is in a seek phase right now: the move hold and the raid spread stand-down read it.
     bool BossSeeking(PlayerbotAI* ai, Player* bot);
+    // Whether the seek park owns this bot's movement right now: it is the park bot and its source is applied or held
+    // (D12). The legacy spread's step-away stands down on it; the slot read has its own Apply exemption.
+    bool BossSeekParkHoldsBot(PlayerbotAI* ai, Player* bot);
 
     // Whether this hunter's or warlock's pet has to be out of the siphon now: a hunter's from 5 s before the due time
     // until 2 s after it (and while the siphon's dummy aura is on the bot), a warlock's for the whole fight (one

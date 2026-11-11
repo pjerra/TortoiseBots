@@ -18,6 +18,7 @@ TRIGGERS = (ROOT / "ai/playerbot/strategy/triggers/BossTacticsTriggers.cpp").rea
 STRATEGY = (ROOT / "ai/playerbot/strategy/generic/BossTacticsStrategy.cpp").read_text()
 TRIGGER_CONTEXT = (ROOT / "ai/playerbot/strategy/triggers/TriggerContext.h").read_text()
 ACTION_CONTEXT = (ROOT / "ai/playerbot/strategy/actions/ActionContext.h").read_text()
+DUNGEON_TRIGGERS = (ROOT / "ai/playerbot/strategy/triggers/DungeonTriggers.cpp").read_text()
 TAKE_SRC = (ROOT / "tools/test_seek_take_src_wiring.py").read_text()
 
 
@@ -90,6 +91,25 @@ class SeekParkWiring(unittest.TestCase):
     def test_the_park_bot_is_freed_of_its_slot_while_it_applies(self):
         fn = body(ACTIONS, "BossSpreadSlotTask ReadBossSpreadSlot(PlayerbotAI* ai, Player* bot)")
         self.assertIn("SeekParkExemptsBot(", fn)
+
+    def test_the_legacy_spread_stands_down_while_the_park_holds(self):
+        # Fact 5 of the probe: a step-away while the park bot walks to its source or channels the control would cut
+        # the cast. The slot read's own Apply exemption is the other half (the test above).
+        fn = body(ACTIONS, "bool ai::BossSeekParkHoldsBot(PlayerbotAI* ai, Player* bot)")
+        self.assertIn("dungeonRunSeekPark", fn)
+        self.assertIn("SeekParkHolds(", fn)
+        self.assertIn("state.parkBot == bot->GetObjectGuid().GetRawValue()", fn)
+        trigger = body(DUNGEON_TRIGGERS, "bool RaidSpreadNeededTrigger::IsActive()")
+        self.assertIn("BossSeekParkHoldsBot(", trigger)
+        self.assertLess(trigger.index("BossSeekParkHoldsBot("), trigger.index("ShouldRaidSurvivalSpread("))
+        self.assertLess(trigger.index("BossSeekParkHoldsBot("), trigger.index("FindBossSpreadSlot("))
+
+    def test_the_release_take_ends_once_the_source_is_on_the_tank(self):
+        # The take is the swing that breaks the control with the source already on the tank; after that the unparked
+        # body's own-source branch is the release's drag to the row's spot, not a second take.
+        fn = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
+        self.assertIn("son->GetVictim() != bot", fn)
+        self.assertIn("receiverDrag", fn)
 
     def test_the_gather_waits_at_the_spot_before_the_released_source_arrives(self):
         fn = body(ACTIONS, "SeekTask ai::FindBossSeek(PlayerbotAI* ai, Player* bot)")
