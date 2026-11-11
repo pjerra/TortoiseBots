@@ -350,6 +350,7 @@ void LogThreatVeto(PlayerbotAI* ai, Player* bot, Action* action, Unit* target, U
              botThreat, tankThreat, target ? (TargetTauntImmune(target) ? 1 : 0) : 0, victimWord);
     sPlayerbotAIConfig.logEvent(ai, "ThreatVeto", info1, info2);
 }
+}
 
 float ThreatMultiplier::GetValue(Action* action)
 {
