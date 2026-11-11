@@ -354,13 +354,13 @@ def new_kind_problem(row):
             return "cycle or spot columns on another kind"
         return None
     if kind == "heal_reserve":
-        # The boss itself (target_entry 0, no spell, priority 0); `param` the reserve percent 10-100 and `window_s`
-        # the release lead 0-120 s. A fight-scan kind, so a health band may arm it; no mode word, spot or cycle
-        # columns.
+        # The boss itself (target_entry 0, no spell); `param` the reserve percent 10-100, `window_s` the release lead
+        # 0-120 s and `priority` the distress count 0-10 (the living non-tanks under the medium line that release it).
+        # A fight-scan kind, so a health band may arm it; no mode word, spot or cycle columns.
         if row["target_entry"] or row["spell_id"]:
             return "heal_reserve with a target or a spell"
-        if row["priority"]:
-            return "heal_reserve with a priority"
+        if not 0 <= row["priority"] <= 10:
+            return "heal_reserve distress count outside [0, 10]"
         if not 10.0 <= row["param"] <= 100.0:
             return "heal_reserve reserve outside [10, 100]"
         if not 0.0 <= row["window_s"] <= 120.0:
@@ -777,17 +777,18 @@ class BossTacticsSql(unittest.TestCase):
         self.assertEqual(1, len(re.findall(r"(?m)^\(309, 14834, '", text)))
 
     def test_hakkar_heal_reserve_row(self):
-        # 20261111140000_world.sql: r11-3, the healer top-up reserve. 85 % of mana, released 60 s before each Blood
-        # Siphon (the gather); tanks and the boss's victim are exempt in the code, not in the row.
-        name = "20261111140000_world.sql"
+        # 20261111220000_world.sql: r11-3 after walk 75, the healer top-up reserve. 85 % of mana, released 60 s before
+        # each Blood Siphon (the gather), and released outside that window while 2 or more non-tanks sit under the
+        # medium-health line (the row's `priority`); tanks and the boss's victim are exempt in the code, not in the row.
+        name = "20261111220000_world.sql"
         path = os.path.join(ROOT, "data/sql/world", name)
         self.assertTrue(os.path.isfile(path), "the heal_reserve migration is missing")
-        self.assertGreater(name, "20261110120300_world.sql")
+        self.assertGreater(name, "20261111140000_world.sql")
         live = {(row[1], row[2], row[3], row[4], row[5]): _payload_dict(row) for row in effective_rows()}
         row = live.get((309, 14834, "heal_reserve", 0, 0))
         self.assertIsNotNone(row, "the Hakkar heal_reserve row is missing")
         self.assertEqual(name, row["file"], "the heal_reserve migration owns the row")
-        self.assertEqual((0, 85.0, 60.0, 0, "", 0, 0.0, 0, 100),
+        self.assertEqual((2, 85.0, 60.0, 0, "", 0, 0.0, 0, 100),
                          (row["priority"], row["param"], row["window_s"], row["bot_aura"], row["tactic_mode"],
                           row["cycle_spell"], row["cycle_s"], row["hp_min"], row["hp_max"]),
                          "the Hakkar heal_reserve row drifted")
@@ -798,6 +799,13 @@ class BossTacticsSql(unittest.TestCase):
                       "AND `kind` = 'heal_reserve' AND `target_entry` = 0 AND `spell_id` = 0 "
                       "AND `hp_min` = 0 AND `hp_max` = 100;", text)
         self.assertEqual(1, len(re.findall(r"(?m)^\(309, 14834, '", text)))
+
+    def test_the_first_heal_reserve_migration_is_untouched(self):
+        # 20261111140000_world.sql is the applied r11-3 row (0 distress count); the walk-75 change is its own migration.
+        path = os.path.join(ROOT, "data/sql/world", "20261111140000_world.sql")
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("0, 0, 0, 85, '', 60", text)
 
     def test_hakkar_seek_pull_burns_on_arrival(self):
         # 20261108100000_world.sql: the 75 s kill lead forces the burn as soon as the pulled Son is engaged
