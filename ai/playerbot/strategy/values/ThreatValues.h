@@ -40,7 +40,9 @@ namespace ai
         // does not grow and cannot be waited for), and the highest listed tank's threat, the holder included, so the
         // caller can tell a successor far under the top tank from a credible one. Guards as GetResetSuccessorThreat;
         // every early return reads ref -1 (no reference), highest 0.
-        static ThreatResetStandingRead GetResetStandingRead(PlayerbotAI* ai, Unit* target);
+        // fightMs is the fight's engage clock (SeekCycleView::engageMs): the growth sample starts again with a new
+        // fight, so one fight's frozen successor does not carry into the next.
+        static ThreatResetStandingRead GetResetStandingRead(PlayerbotAI* ai, Unit* target, std::uint32_t fightMs);
 
     protected:
 	uint8 Calculate(Unit* target);

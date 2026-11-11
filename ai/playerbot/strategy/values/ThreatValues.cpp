@@ -349,7 +349,18 @@ float ThreatValue::GetResetSuccessorThreat(PlayerbotAI* ai, Unit* target)
     return ai::ThreatResetReference(tanks);
 }
 
-ThreatResetStandingRead ThreatValue::GetResetStandingRead(PlayerbotAI* ai, Unit* target)
+namespace
+{
+// The standing hold's growth sample (ThreatResetStandingGrows), keyed by (instance id, boss guid) like the Hex scan:
+// every bot of a fight reads the same reference, so a frozen successor releases the hold for all of them. The sample
+// itself starts again when the fight's engage clock changes.
+constexpr std::size_t kStandingSampleMaxEntries = 64;
+std::mutex g_standingSampleMutex;
+std::map<std::pair<std::uint32_t, std::uint64_t>, ThreatResetStandingSample> g_standingSamples;
+}
+
+// fightMs: the fight's engage clock (SeekCycleView::engageMs), the sample's per-fight identity.
+ThreatResetStandingRead ThreatValue::GetResetStandingRead(PlayerbotAI* ai, Unit* target, std::uint32_t fightMs)
 {
     if (!target || !ai)
         return ThreatResetStandingRead();
@@ -361,7 +372,17 @@ ThreatResetStandingRead ThreatValue::GetResetStandingRead(PlayerbotAI* ai, Unit*
         return ThreatResetStandingRead();
     const RaidTankRoles roles = GetRaidTankRoles(ai);
     const std::vector<ThreatCapTank> tanks = ai::ThreatCapTanksOf(ai, target, roles, ai->GetBot(), nullptr);
-    return ai::ThreatResetStandingReadOf(tanks);
+    ThreatResetStandingRead read = ai::ThreatResetStandingReadOf(tanks);
+    if (read.ref < 0.0f)
+        return read;
+    const std::uint32_t nowMs = WorldTimer::getMSTime();
+    std::lock_guard<std::mutex> lock(g_standingSampleMutex);
+    ThreatResetStandingSample& sample = g_standingSamples[std::make_pair(
+        static_cast<std::uint32_t>(target->GetInstanceId()), target->GetObjectGuid().GetRawValue())];
+    read.frozen = !ai::ThreatResetStandingGrows(sample, fightMs, read.ref, nowMs);
+    if (g_standingSamples.size() > kStandingSampleMaxEntries)
+        g_standingSamples.clear();
+    return read;
 }
 
 bool ai::TargetTauntImmune(Unit* target)
