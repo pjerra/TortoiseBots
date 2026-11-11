@@ -155,6 +155,19 @@ int main()
     CHECK(ThreatPctOf(5000.0f, 40.0f, true, true) == 0);    // fleeing target: unchanged
     CHECK(ThreatPctOf(500.0f, 1000.0f, true, false) == 50);
     CHECK(ThreatPctOf(500.0f, 1000.0f, true, false) == ThreatPctSaturated(500.0f, 1000.0f));
+    // ThreatFreeApplies (kind `threat_free`, AiPlayerbot.DungeonRunThreatFree): a subject standing the row's gap above
+    // the bot cannot be reached by any tank, so a non-tank reads no cap on it; a tank keeps its own reading and the
+    // lift needs the key and a row.
+    CASE("ThreatFreeApplies_AirborneNonTank");
+    // Onyxia hovering at z -65 over a bot on the floor at -86 with her row's 10 yd gap.
+    CHECK(ThreatFreeApplies(true, false, -65.0f, -86.0f, 10.0f));
+    // Exactly the gap is lifted too.
+    CHECK(ThreatFreeApplies(true, false, -76.0f, -86.0f, 10.0f));
+    // Each of the rest alone keeps the cap: a tank, the key off, no row (gap 0), and 6 yd up on her ground phase.
+    CHECK(!ThreatFreeApplies(true, true, -65.0f, -86.0f, 10.0f));   // a tank keeps its own reading
+    CHECK(!ThreatFreeApplies(false, false, -65.0f, -86.0f, 10.0f)); // key off
+    CHECK(!ThreatFreeApplies(true, false, -65.0f, -86.0f, 0.0f));   // no row
+    CHECK(!ThreatFreeApplies(true, false, -80.0f, -86.0f, 10.0f));  // 6 yd up: on the ground
     // hakkar_away_key_on_equals_today (fails with the first version of the key: it gave 2000): the main tank holds with
     // 40000 and the off-tanks are on Sons (not on the boss) with 2000 left over: with the key on the pick is today's.
     {
