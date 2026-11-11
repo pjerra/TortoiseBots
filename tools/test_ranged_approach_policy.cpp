@@ -332,15 +332,21 @@ int main()
         std::cout << "  [PASS] hover cast stack only: yields inside 4.5 yd, never wider than the caller's radius\n";
     }
 
-    // HoverCastStepAllowed_Rules: one step per 8 s, and of two bots that would both step only the higher guid steps.
+    // HoverCastStepVerdict_Rules: one step per 8 s, of two bots that would both step only the higher guid steps, and a
+    // pair where the higher-guid bot never steps does not deadlock: the lower-guid bot steps after one rest period.
     {
-        CHECK(ai::HoverCastStepAllowed(false, true, false, 0));
-        CHECK(!ai::HoverCastStepAllowed(true, false, true, 7999));
-        CHECK(ai::HoverCastStepAllowed(true, false, true, 8000));
-        CHECK(!ai::HoverCastStepAllowed(true, true, false, UINT32_MAX));
-        CHECK(ai::HoverCastStepAllowed(true, true, true, UINT32_MAX));
-        CHECK(ai::HoverCastStepAllowed(true, false, false, UINT32_MAX));
-        std::cout << "  [PASS] hover cast step: restep clock and guid tie-break\n";
+        CHECK(ai::HoverCastStepVerdict(false, true, false, 0, false, 0) == ai::HoverStackStep::Step);
+        CHECK(ai::HoverCastStepVerdict(true, false, true, 7999, false, 0) == ai::HoverStackStep::Rest);
+        CHECK(ai::HoverCastStepVerdict(true, false, true, 8000, false, 0) == ai::HoverStackStep::Step);
+        CHECK(ai::HoverCastStepVerdict(true, true, true, UINT32_MAX, false, 0) == ai::HoverStackStep::Step);
+        CHECK(ai::HoverCastStepVerdict(true, false, false, UINT32_MAX, false, 0) == ai::HoverStackStep::Step);
+        // The lower guid waits one rest period (8 s) for the higher one, then steps itself.
+        CHECK(ai::HoverCastStepVerdict(true, true, false, UINT32_MAX, false, 0) == ai::HoverStackStep::WaitForAlly);
+        CHECK(ai::HoverCastStepVerdict(true, true, false, UINT32_MAX, true, 7999) == ai::HoverStackStep::WaitForAlly);
+        CHECK(ai::HoverCastStepVerdict(true, true, false, UINT32_MAX, true, 8000) == ai::HoverStackStep::StepAfterWait);
+        // A bot that is still resting does not burn its wait clock on the partner.
+        CHECK(ai::HoverCastStepVerdict(true, true, false, 2000, true, 8000) == ai::HoverStackStep::Rest);
+        std::cout << "  [PASS] hover cast step: restep clock, guid tie-break, wait cap\n";
     }
 
     // HoverCastStackLanding_Range: a stack step must land inside the trigger's own range. H2 keeps a bot as close as

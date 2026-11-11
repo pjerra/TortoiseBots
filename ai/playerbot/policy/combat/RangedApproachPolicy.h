@@ -201,16 +201,26 @@ namespace ai
     {
         return keyOn && spreadRadius > kHoverCastStackYd ? kHoverCastStackYd : spreadRadius;
     }
-    // Whether a bot inside the yield radius of its nearest member takes the step. `sinceLastStepMs` is UINT32_MAX for a
-    // bot that never stepped. `allyAlsoSteps`: the member is a bot and a ranged damage dealer, so the same rule moves
-    // it; then only the higher guid of the two steps.
-    inline bool HoverCastStepAllowed(bool keyOn, bool allyAlsoSteps, bool botGuidHigher, std::uint32_t sinceLastStepMs)
+    // What a bot inside the yield radius of its nearest member does this tick: Step, or Rest while its own
+    // kHoverCastRestepMs has not run out, or WaitForAlly while the higher guid of a pair takes the step, or
+    // StepAfterWait once that wait has run a whole rest period (the other bot never stepped, so the pair would
+    // otherwise stand inside 4.5 yd for the rest of the fight).
+    enum class HoverStackStep : std::uint8_t { Step, Rest, WaitForAlly, StepAfterWait };
+
+    // `sinceLastStepMs` is UINT32_MAX for a bot that never took one. `allyAlsoSteps`: the member is a bot and a ranged
+    // damage dealer, so the same rule moves it; then only the higher guid of the two steps, and the lower one for one
+    // rest period only (`waitStarted` false when its wait clock is unset, `waitedMs` its length).
+    inline HoverStackStep HoverCastStepVerdict(bool keyOn, bool allyAlsoSteps, bool botGuidHigher,
+        std::uint32_t sinceLastStepMs, bool waitStarted, std::uint32_t waitedMs)
     {
         if (!keyOn)
-            return true;
+            return HoverStackStep::Step;
         if (sinceLastStepMs < kHoverCastRestepMs)
-            return false;
-        return !allyAlsoSteps || botGuidHigher;
+            return HoverStackStep::Rest;
+        if (!allyAlsoSteps || botGuidHigher)
+            return HoverStackStep::Step;
+        return waitStarted && waitedMs >= kHoverCastRestepMs ? HoverStackStep::StepAfterWait
+                                                             : HoverStackStep::WaitForAlly;
     }
 
     // A stack step must leave the bot inside the trigger's own range: the hover reach (AiPlayerbot.HoverReachAimsAtAnchor)

@@ -12,7 +12,7 @@ the call sites in ai/:
 - the verdict keeps the hold only with no ally inside RaidSpreadAction's own
   spread radius, and under hoverCastStackOnly only inside the 4.5 yd stack radius
   (HoverCastYieldRadius), with the step rested 8 s and tied to the higher guid
-  (HoverCastStepAllowed) and a held-back bot reported as hover_cast_wait;
+  (HoverCastStepVerdict) and a held-back bot reported as hover_cast_wait;
 - Execute overrides the step radius with HoverCastYieldRadius only under both keys
   and skips a stack step whose landing leaves spell range (HoverCastLandingInRange,
   hover_cast_stack_norange);
@@ -89,13 +89,15 @@ class AirborneNukesWiringTest(unittest.TestCase):
     def test_spread_verdict_stack_only_yield_radius(self):
         fn = body(DUNGEON_CPP, "RaidSpreadAction::HoverCastHold RaidSpreadAction::HoverCastVerdict()", "\n}\n")
         self.assertIn("HoverCastYieldRadius(sPlayerbotAIConfig.hoverCastStackOnly", fn)
-        self.assertIn("HoverCastStepAllowed(", fn)
+        self.assertIn("HoverCastStepVerdict(", fn)
         self.assertIn("HoverReachTakerIsRangedDps(PlayerbotAI::IsTank(member), PlayerbotAI::IsHeal(member)", fn)
         # The restep clock and the guid tie-break read the same last step the spread step writes.
         self.assertIn('AI_VALUE(LastMovement&, "last movement")', fn)
         self.assertIn("lastMove.lastSpreadStepMs", fn)
+        self.assertIn("lastMove.hoverStackWaitMs = nowMs;", fn)
+        self.assertIn("lastMove.hoverStackWaitMs = 0;", fn)
         self.assertLess(fn.index("HoverCastHoldsSpread(true,"),
-                        fn.index("HoverCastStepAllowed("))
+                        fn.index("HoverCastStepVerdict("))
 
     def test_stack_step_skips_a_landing_out_of_range(self):
         fn = body(DUNGEON_CPP, "bool RaidSpreadAction::Execute(Event& event)", "\n}\n")

@@ -83,6 +83,7 @@ namespace ai
             fleeFailures = other.fleeFailures;
             spreadFailures = other.spreadFailures;
             lastSpreadStepMs = other.lastSpreadStepMs;
+            hoverStackWaitMs = other.hoverStackWaitMs;
             fleeNoSpotMs = other.fleeNoSpotMs;
             moveFailReason = other.moveFailReason;
             movePathType = other.movePathType;
@@ -110,6 +111,7 @@ namespace ai
             fleeFailures.Clear();
             spreadFailures.Clear();
             lastSpreadStepMs = 0;
+            hoverStackWaitMs = 0;
             fleeNoSpotMs = 0;
             lastMoveShort = WorldPosition();
             nextTeleport = 0;
@@ -147,6 +149,9 @@ namespace ai
         // RaidSpreadAction to one step per kSpreadStepCooldownMs so stacked
         // ranged bots settle instead of ping-ponging every tick. 0 = none yet.
         uint32 lastSpreadStepMs = 0;
+        // When the lower-guid bot of a stacked pair started waiting for the higher one, so a partner that never steps
+        // cannot stall the pair for good. 0 = not waiting.
+        uint32 hoverStackWaitMs = 0;
         // WorldTimer ms of the last pool-bot flee search that found no spot
         // (PoolFleePolicy.h backoff). 0 = none.
         uint32 fleeNoSpotMs = 0;

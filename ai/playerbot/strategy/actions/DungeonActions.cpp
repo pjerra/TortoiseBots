@@ -592,10 +592,21 @@ RaidSpreadAction::HoverCastHold RaidSpreadAction::HoverCastVerdict()
         HoverReachTakerIsRangedDps(PlayerbotAI::IsTank(member), PlayerbotAI::IsHeal(member), memberAi->IsRanged(member));
     bool const botGuidHigher = member && bot->GetObjectGuid().GetRawValue() > member->GetObjectGuid().GetRawValue();
     LastMovement& lastMove = AI_VALUE(LastMovement&, "last movement");
+    std::uint32_t const nowMs = WorldTimer::getMSTime();
     std::uint32_t const sinceLastStepMs = lastMove.lastSpreadStepMs == 0
-        ? UINT32_MAX : WorldTimer::getMSTime() - lastMove.lastSpreadStepMs;
-    return HoverCastStepAllowed(true, allyAlsoSteps, botGuidHigher, sinceLastStepMs)
-        ? HoverCastHold::Spread : HoverCastHold::Waiting;
+        ? UINT32_MAX : nowMs - lastMove.lastSpreadStepMs;
+    bool const waitStarted = lastMove.hoverStackWaitMs != 0;
+    std::uint32_t const waitedMs = waitStarted ? nowMs - lastMove.hoverStackWaitMs : 0;
+    HoverStackStep const step =
+        HoverCastStepVerdict(true, allyAlsoSteps, botGuidHigher, sinceLastStepMs, waitStarted, waitedMs);
+    if (step == HoverStackStep::WaitForAlly)
+    {
+        if (!waitStarted)
+            lastMove.hoverStackWaitMs = nowMs;
+        return HoverCastHold::Waiting;
+    }
+    lastMove.hoverStackWaitMs = 0;
+    return step == HoverStackStep::Rest ? HoverCastHold::Waiting : HoverCastHold::Spread;
 }
 
 float RaidSpreadAction::SpreadRadiusYd()
