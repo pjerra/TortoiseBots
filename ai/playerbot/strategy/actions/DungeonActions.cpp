@@ -644,8 +644,9 @@ bool RaidSpreadAction::Execute(Event& event)
         spreadLive && SpreadLogOwned(sPlayerbotAIConfig.dungeonRunBossSpreadSlots, SpreadLogCaller::Legacy);
     float radius = SpreadRadiusYd();
     // The stack-only hold steps just past its own yield radius instead of the spread distance it no longer measures.
-    if (sPlayerbotAIConfig.hoverCastHoldsSpread && sPlayerbotAIConfig.hoverCastStackOnly &&
-        HoverCastVerdict() == HoverCastHold::Spread)
+    bool const stackStep = sPlayerbotAIConfig.hoverCastHoldsSpread && sPlayerbotAIConfig.hoverCastStackOnly &&
+        HoverCastVerdict() == HoverCastHold::Spread;
+    if (stackStep)
         radius = HoverCastYieldRadius(true, radius);
     if (optIn)
     {
@@ -713,9 +714,14 @@ bool RaidSpreadAction::Execute(Event& event)
     // fixed 12yd leap from a 2yd melee trigger would overshoot out of melee
     // and ping-pong back via reach-melee.
     const float spread = std::min(radius + 1.0f, sPlayerbotAIConfig.hazardEvasionDistance);
+    // A stack step must land inside the trigger's own range, or the hover reach walks the bot back beside the partner
+    // it stepped away from (the trigger's measure, as the hold's own verdict reads it).
+    Unit* const stackTarget = stackStep ? AI_VALUE(Unit*, "current target") : nullptr;
+    float const stackRangeLimit = ai->GetRange("spell") - sPlayerbotAIConfig.contactDistance;
     const float angles[] = { 0.0f, 0.6f, -0.6f, 1.2f, -1.2f, (float)M_PI };
     WorldPosition out(botPos);
     bool anchorRejected = false;
+    bool rangeRejected = false;
     for (int pass = 0; pass < 2; ++pass)
     {
         bool const vetoSecondPass = (pass == 1);
@@ -737,6 +743,20 @@ bool RaidSpreadAction::Execute(Event& event)
                 anchorRejected = true;
                 continue;
             }
+            if (stackTarget)
+            {
+                float const dx = stepX - stackTarget->GetPositionX();
+                float const dy = stepY - stackTarget->GetPositionY();
+                float const dz = stepZ - stackTarget->GetPositionZ();
+                float const landingDistance = std::max(0.0f, std::sqrt(dx * dx + dy * dy + dz * dz) -
+                    bot->GetCombatReach() - stackTarget->GetCombatReach());
+                bool const inSight = stackTarget->IsWithinLOS(stepX, stepY, stepZ + bot->GetCollisionHeight(), true);
+                if (!HoverCastLandingInRange(landingDistance, stackRangeLimit, inSight))
+                {
+                    rangeRejected = true;
+                    continue;
+                }
+            }
             if (MoveTo(bot->GetMapId(), stepX, stepY, stepZ, false, IsReaction(), false, true))
             {
                 if (logSpread)
@@ -755,11 +775,14 @@ bool RaidSpreadAction::Execute(Event& event)
             }
         }
     }
-    // The anchor left no heading this tick: rest the spread for its cooldown instead of probing every heading again
-    // on the next tick.
-    if (anchorRejected)
+    // No heading this tick: rest the spread for its own 3 s cooldown instead of probing every heading again on the
+    // next one. This is not a stack step, so the stack rest is not armed.
+    if (anchorRejected || rangeRejected)
         lastMove.lastSpreadStepMs = WorldTimer::getMSTime();
-    if (logSpread)
+    // Every landing left spell range: the bot keeps its cast instead of walking out of range and being walked back.
+    if (rangeRejected && SpreadLogOwned(sPlayerbotAIConfig.dungeonRunBossSpreadSlots, SpreadLogCaller::Legacy))
+        LogBossSpread(ai, bot, "hover_cast_stack_norange", -1, -1.0f, -1);
+    if (logSpread && !rangeRejected)
         LogBossSpread(ai, bot, anchorRejected ? "anchor" : "no_step", -1, -1.0f, -1);
     return false;
 }

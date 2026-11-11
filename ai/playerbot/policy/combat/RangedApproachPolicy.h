@@ -213,6 +213,30 @@ namespace ai
         return !allyAlsoSteps || botGuidHigher;
     }
 
+    // A stack step must leave the bot inside the trigger's own range: the hover reach (AiPlayerbot.HoverReachAimsAtAnchor)
+    // keeps a bot as close as 3 yd inside that line, a 5.5 yd step away crosses it, and the reach then walks the bot back
+    // beside its partner every rest. `distanceYd` is the landing point to the target with both combat reaches counted,
+    // `rangeLimitYd` is ai->GetRange("spell") - contactDistance, as the verdict measures the bot's own spot.
+    struct HoverStackLanding
+    {
+        float distance = 0.0f;
+        bool inSight = false;
+    };
+
+    inline bool HoverCastLandingInRange(float distanceYd, float rangeLimitYd, bool inSight)
+    {
+        return inSight && distanceYd <= rangeLimitYd;
+    }
+
+    // The first landing that keeps the bot in range, or -1 when no heading does (then the bot does not step).
+    inline int SelectHoverStackLanding(std::vector<HoverStackLanding> const& landings, float rangeLimitYd)
+    {
+        for (std::size_t i = 0; i < landings.size(); ++i)
+            if (HoverCastLandingInRange(landings[i].distance, rangeLimitYd, landings[i].inSight))
+                return static_cast<int>(i);
+        return -1;
+    }
+
     // The trigger ("enemy out of spell range") measures edge to edge with both combat reaches; the path walk measures
     // centre to centre. A hovering boss's reach (Onyxia 22 yd in the air) makes the centre distance the trigger allows
     // that much longer.

@@ -13,7 +13,9 @@ the call sites in ai/:
   spread radius, and under hoverCastStackOnly only inside the 4.5 yd stack radius
   (HoverCastYieldRadius), with the step rested 8 s and tied to the higher guid
   (HoverCastStepAllowed) and a held-back bot reported as hover_cast_wait;
-- Execute overrides the step radius with HoverCastYieldRadius only under both keys;
+- Execute overrides the step radius with HoverCastYieldRadius only under both keys
+  and skips a stack step whose landing leaves spell range (HoverCastLandingInRange,
+  hover_cast_stack_norange);
 - CastSpellAction::isPossible notes all three refusals (no target, out of
   reach, CanCastSpell result);
 - both keys are read in PlayerbotAIConfig.cpp with a false default.
@@ -94,6 +96,15 @@ class AirborneNukesWiringTest(unittest.TestCase):
         self.assertIn("lastMove.lastSpreadStepMs", fn)
         self.assertLess(fn.index("HoverCastHoldsSpread(true,"),
                         fn.index("HoverCastStepAllowed("))
+
+    def test_stack_step_skips_a_landing_out_of_range(self):
+        fn = body(DUNGEON_CPP, "bool RaidSpreadAction::Execute(Event& event)", "\n}\n")
+        self.assertIn("HoverCastLandingInRange(landingDistance, stackRangeLimit, inSight)", fn)
+        self.assertIn('stackRangeLimit = ai->GetRange("spell") - sPlayerbotAIConfig.contactDistance', fn)
+        self.assertIn("rangeRejected = true;", fn)
+        # A rejected landing is skipped before the move, and every rejected heading means no step.
+        self.assertLess(fn.index("HoverCastLandingInRange("), fn.index("MoveTo(bot->GetMapId(), stepX"))
+        self.assertIn('"hover_cast_stack_norange"', fn)
 
     def test_spread_useful_waits_under_stack_only(self):
         fn = body(DUNGEON_CPP, "bool RaidSpreadAction::isUseful()", "\n}\n")

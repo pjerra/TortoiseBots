@@ -343,6 +343,35 @@ int main()
         std::cout << "  [PASS] hover cast step: restep clock and guid tie-break\n";
     }
 
+    // HoverCastStackLanding_Range: a stack step must land inside the trigger's own range. H2 keeps a bot as close as
+    // 3 yd inside that line and a 5.5 yd step away crosses it, so the reach would walk the bot back beside its partner
+    // every 8 s. With the bot 3 yd inside the line every outward heading of the step loop lands out of range and the
+    // bot does not step; a lateral heading lands inside and is taken; an out-of-sight landing is skipped.
+    {
+        float const limit = 19.0f;                 // ai->GetRange("spell") - contactDistance
+        float const step = 5.5f;                   // the stack step
+        float const inside = limit - 3.0f;         // the bot's distance to the target, combat reach counted
+        std::vector<ai::HoverStackLanding> outward;
+        for (float const d : { 0.0f, 0.6f, -0.6f })
+        {
+            float const landing = std::sqrt(inside * inside + step * step + 2.0f * inside * step * std::cos(d));
+            outward.push_back({ landing, true });
+        }
+        CHECK(!ai::HoverCastLandingInRange(outward[0].distance, limit, outward[0].inSight));
+        CHECK(!ai::HoverCastLandingInRange(outward[1].distance, limit, outward[1].inSight));
+        CHECK(!ai::HoverCastLandingInRange(outward[2].distance, limit, outward[2].inSight));
+        CHECK(ai::SelectHoverStackLanding(outward, limit) == -1);
+        std::vector<ai::HoverStackLanding> withLateral = outward;
+        float const lateral = std::sqrt(inside * inside + step * step + 2.0f * inside * step * std::cos(1.2f));
+        withLateral.push_back({ lateral, true });
+        CHECK(ai::HoverCastLandingInRange(lateral, limit, true));
+        CHECK(ai::SelectHoverStackLanding(withLateral, limit) == 3);
+        // The same landing out of sight is skipped, so an in-range but blind heading is never taken.
+        withLateral[3].inSight = false;
+        CHECK(ai::SelectHoverStackLanding(withLateral, limit) == -1);
+        std::cout << "  [PASS] hover cast stack step: out-of-range and blind landings are skipped\n";
+    }
+
     std::cout << "Ranged approach policy tests: OK\n";
     return 0;
 }
