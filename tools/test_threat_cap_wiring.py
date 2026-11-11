@@ -476,12 +476,21 @@ class InterruptIgnoresThreat(unittest.TestCase):
         veto = brace_body(multiplier, 'if (AI_VALUE2(bool, "trigger active", "high threat"))\n    {')
         self.assertIn("if (interruptKey)\n            LogInterruptVeto(ai, bot, interruptAction, interruptBotThreat, "
                       "interruptTankThreat, interruptFlatThreat,\n                             interruptRanged);", veto)
-        self.assertIn("LogThreatVeto(ai, bot, action, target, victim,", veto)
+        self.assertIn("if (ThreatVetoLogDue(ai, bot, target))\n            LogThreatVeto(ai, bot, action, target, victim, "
+                      '"high",', veto)
+        self.assertIn("AI_VALUE2(uint8, \"threat\", \"current target\"),", veto)
+        self.assertIn("AI_VALUE2(float, \"my threat\", \"current target\"),", veto)
+        self.assertIn("AI_VALUE2(float, \"tank threat\", \"current target\")", veto)
         log = brace_body(STRATEGY, "void LogInterruptVeto(")
         self.assertIn('"ThreatCap interrupt spell=%s pct=%.0f flat=%.0f line=%.2f bot=%.0f tank=%.0f"', log)
         self.assertIn("ai::botdiag::BotActionLog::Write(ai, \"THREAT\", \"%s\", info);", log)
         self.assertIn('sPlayerbotAIConfig.logEvent(ai, "ThreatCapInterrupt", info, "");', log)
         self.assertIn("constexpr uint32 kInterruptVetoLogGapMs = 1000;", STRATEGY)
+        due = brace_body(STRATEGY, "bool ThreatVetoLogDue(")
+        self.assertIn("target ? target->GetObjectGuid().GetRawValue() : 0", due)
+        self.assertIn("kThreatVetoLogGapMs", due)
+        self.assertIn("site=%s", STRATEGY)
+        self.assertIn("return 0.0f;", veto)
 
     def test_pure_interrupts_opt_in_and_nukes_stay_gated(self):
         interrupt = brace_body(SPELL_ACTIONS, "class CastInterruptSpellAction : public CastSpellAction")

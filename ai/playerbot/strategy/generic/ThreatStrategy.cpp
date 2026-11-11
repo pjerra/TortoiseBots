@@ -320,20 +320,40 @@ void LogCastVeto(PlayerbotAI* ai, Player* bot, CastSpellAction const* action, fl
 
 constexpr uint32 kThreatVetoLogGapMs = 10000;
 
-std::mutex g_threatVetoLogMutex;
-std::unordered_map<uint64, uint32> g_threatVetoLog;
+// One ThreatVeto row per bot and target per gap: the same veto on another
+// target is its own row, a repeat on the same one is not.
+struct ThreatVetoKey
+{
+    uint64 bot;
+    uint64 target;
+    bool operator==(ThreatVetoKey const& other) const { return bot == other.bot && target == other.target; }
+};
 
-void LogThreatVeto(PlayerbotAI* ai, Player* bot, Action* action, Unit* target, Unit* victim, uint8 pct, float botThreat,
-                   float tankThreat)
+struct ThreatVetoKeyHash
+{
+    size_t operator()(ThreatVetoKey const& key) const noexcept
+    {
+        return std::hash<uint64>{}(key.bot * 0x9e3779b97f4a7c15ull ^ key.target);
+    }
+};
+
+std::mutex g_threatVetoLogMutex;
+std::unordered_map<ThreatVetoKey, uint32, ThreatVetoKeyHash> g_threatVetoLog;
+
+// Whether a veto on this target logs its ThreatVeto row now: only with
+// bot_events.csv, at most one row per bot and target per gap. The threat
+// numbers the row carries are read only after this answers true.
+bool ThreatVetoLogDue(PlayerbotAI* ai, Player* bot, Unit* target)
 {
     if (!sPlayerbotAIConfig.hasLog("bot_events.csv"))
-        return;
+        return false;
     uint32 const nowMs = WorldTimer::getMSTime();
+    ThreatVetoKey const key{bot->GetObjectGuid().GetRawValue(), target ? target->GetObjectGuid().GetRawValue() : 0};
     {
         std::lock_guard<std::mutex> lock(g_threatVetoLogMutex);
-        uint32& last = g_threatVetoLog[bot->GetObjectGuid().GetRawValue()];
+        uint32& last = g_threatVetoLog[key];
         if (last != 0 && nowMs - last < kThreatVetoLogGapMs)
-            return;
+            return false;
         last = nowMs;
         if (g_threatVetoLog.size() > 4096)
         {
@@ -341,10 +361,17 @@ void LogThreatVeto(PlayerbotAI* ai, Player* bot, Action* action, Unit* target, U
                 it = nowMs - it->second > kThreatVetoLogGapMs * 600 ? g_threatVetoLog.erase(it) : std::next(it);
         }
     }
+    return true;
+}
+
+void LogThreatVeto(PlayerbotAI* ai, Player* bot, Action* action, Unit* target, Unit* victim, char const* site, uint8 pct,
+                   float botThreat, float tankThreat)
+{
     Player* victimPlayer = victim ? victim->ToPlayer() : nullptr;
     char const* victimWord = !victimPlayer ? "none" : (PlayerbotAI::IsTank(victimPlayer) ? "tank" : (PlayerbotAI::IsHeal(victimPlayer) ? "healer" : "dps"));
-    char info1[128];
-    snprintf(info1, sizeof(info1), "target=%u,action=%s", target ? target->GetEntry() : 0, action ? action->getName().c_str() : "?");
+    char info1[160];
+    snprintf(info1, sizeof(info1), "target=%u,action=%s,site=%s", target ? target->GetEntry() : 0,
+             action ? action->getName().c_str() : "?", site ? site : "?");
     char info2[128];
     snprintf(info2, sizeof(info2), "pct=%u,bot=%.0f,tank=%.0f,immune=%d,victim=%s", static_cast<unsigned>(pct),
              botThreat, tankThreat, target ? (TargetTauntImmune(target) ? 1 : 0) : 0, victimWord);
@@ -376,7 +403,14 @@ float ThreatMultiplier::GetValue(Action* action)
             (AutoAttackAction(action) || action->GetThreatType() != ActionThreatType::ACTION_THREAT_NONE) &&
             (!action->GetTarget() || action->GetTarget() == resetTarget) &&
             ThreatResetHolds(ai, bot, resetTarget))
+        {
+            if (ThreatVetoLogDue(ai, bot, resetTarget))
+                LogThreatVeto(ai, bot, action, resetTarget, resetTarget ? resetTarget->GetVictim() : nullptr, "reset",
+                              AI_VALUE2(uint8, "threat", "current target"),
+                              AI_VALUE2(float, "my threat", "current target"),
+                              AI_VALUE2(float, "tank threat", "current target"));
             return 0.0f;
+        }
     }
 
     // AiPlayerbot.DungeonRunThreatSuccessorStrict: on a boss whose `threat_successor` row carries `strict` (a plain
@@ -392,7 +426,14 @@ float ThreatMultiplier::GetValue(Action* action)
         else if (ai->SuccessorWhiteCap().Update(true, PlayerbotAI::IsTank(bot),
                      AI_VALUE2(uint8, "threat", "current target"),
                      AI_VALUE2(float, "tank threat", "current target") == 0.0f))
+        {
+            if (ThreatVetoLogDue(ai, bot, target))
+                LogThreatVeto(ai, bot, action, target, target ? target->GetVictim() : nullptr, "white",
+                              AI_VALUE2(uint8, "threat", "current target"),
+                              AI_VALUE2(float, "my threat", "current target"),
+                              AI_VALUE2(float, "tank threat", "current target"));
             return 0.0f;
+        }
     }
 
     if (action->GetThreatType() == ActionThreatType::ACTION_THREAT_NONE)
@@ -488,6 +529,9 @@ float ThreatMultiplier::GetValue(Action* action)
                                             castLine, castCritMult, castPullLine, castCanCrit))
                 {
                     LogCastVeto(ai, bot, castAction, castBotThreat, castThreat, castLine);
+                    if (ThreatVetoLogDue(ai, bot, castTarget))
+                        LogThreatVeto(ai, bot, action, castTarget, castVictim, "cast",
+                                      ThreatPctSaturated(castBotThreat, castLine), castBotThreat, castLine);
                     return 0.0f;
                 }
             }
@@ -498,7 +542,13 @@ float ThreatMultiplier::GetValue(Action* action)
     {
         uint8 threat = AI_VALUE2(uint8, "threat", "aoe");
         if (threat >= 50)
+        {
+            Unit* const aoeTarget = action->GetTarget();
+            if (ThreatVetoLogDue(ai, bot, aoeTarget))
+                LogThreatVeto(ai, bot, action, aoeTarget, aoeTarget ? aoeTarget->GetVictim() : nullptr, "aoe", threat,
+                              ThreatValue::GetThreat(bot, aoeTarget), ThreatValue::GetTankThreat(ai, aoeTarget));
             return 0.0f;
+        }
     }
 
 
@@ -535,8 +585,10 @@ float ThreatMultiplier::GetValue(Action* action)
         if (interruptKey)
             LogInterruptVeto(ai, bot, interruptAction, interruptBotThreat, interruptTankThreat, interruptFlatThreat,
                              interruptRanged);
-        LogThreatVeto(ai, bot, action, target, victim, AI_VALUE2(uint8, "threat", "current target"),
-                      AI_VALUE2(float, "my threat", "current target"), AI_VALUE2(float, "tank threat", "current target"));
+        if (ThreatVetoLogDue(ai, bot, target))
+            LogThreatVeto(ai, bot, action, target, victim, "high", AI_VALUE2(uint8, "threat", "current target"),
+                          AI_VALUE2(float, "my threat", "current target"),
+                          AI_VALUE2(float, "tank threat", "current target"));
         return 0.0f;
     }
 

@@ -65,11 +65,21 @@ class RefuseNoteWiring(unittest.TestCase):
             self.assertLessEqual(len(word), 10)
 
     def test_threat_multiplier_logs_veto(self):
-        i = THREAT.index("LogThreatVeto(PlayerbotAI* ai")
-        self.assertIn("ThreatVeto", THREAT[i:i + 2500])
-        j = THREAT.index('if (AI_VALUE2(bool, "trigger active", "high threat"))')
-        k = THREAT.index("return 0.0f;", j)
-        self.assertIn("LogThreatVeto(", THREAT[j:k])
+        i = THREAT.index("bool ThreatVetoLogDue(")
+        self.assertIn("g_threatVetoLog", THREAT[i:i + 2500])
+        for site in ("reset", "white", "cast", "aoe", "high"):
+            self.assertIn('"%s"' % site, THREAT)
+        for anchor, name in (
+            ("ThreatResetHolds(ai, bot, resetTarget))", "reset"),
+            ("ai->SuccessorWhiteCap().Update(true", "white"),
+            ("ThreatCapCastOvershoots(", "cast"),
+            ('ActionThreatType::ACTION_THREAT_AOE)', "aoe"),
+            ('if (AI_VALUE2(bool, "trigger active", "high threat"))', "high"),
+        ):
+            veto = THREAT[THREAT.index(anchor):THREAT.index("return 0.0f;", THREAT.index(anchor))]
+            self.assertIn("ThreatVetoLogDue(", veto)
+            self.assertIn('LogThreatVeto(', veto)
+            self.assertIn('"%s"' % name, veto)
 
     def test_reason_words_fit_feed(self):
         words = ["threat", "veto", "attacked", "not-known", "immune", "no-control", "combat", "other"]
