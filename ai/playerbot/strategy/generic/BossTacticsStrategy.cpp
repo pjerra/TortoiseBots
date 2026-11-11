@@ -121,6 +121,12 @@ void BossTacticsStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
         "boss tactics seek",
         NextAction::array(0, new NextAction("boss tactics seek", ACTION_EMERGENCY + 5), NULL)));
 
+    // The park bot's control on a parked source (DungeonRunSeekPark): the cast (or the walk into its reach) goes out
+    // just below the seek walk, above the tank pick and every damage action, since a parked source takes no damage.
+    triggers.push_back(new TriggerNode(
+        "boss tactics park",
+        NextAction::array(0, new NextAction("boss tactics park", ACTION_EMERGENCY + 4), NULL)));
+
     // The second off-tank's source: take it back, pull one, drag it to the spot. Above the tank's reach and face rows.
     triggers.push_back(new TriggerNode(
         "boss tactics seek tank",

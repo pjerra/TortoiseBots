@@ -40,7 +40,7 @@ def update():
 
 
 def tank_pick():
-    return body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
+    return body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot, std::uint64_t")
 
 
 def execute():
@@ -169,7 +169,10 @@ class SeekSonMeetWiring(unittest.TestCase):
     def test_holds_son_scans_the_fight_sons(self):
         fn = update()
         self.assertIn("candidate.holdsSon = PlayerHoldsFightSon(fightSons, row.targetEntry, member, 0);", fn)
-        helper = body(ACTIONS, "bool PlayerHoldsFightSon(")
+        # The definition, not the park's forward declaration (r11-1): the body follows the signature's `{`.
+        helper = body(ACTIONS, "bool PlayerHoldsFightSon(const std::vector<Unit*>& fightSons, "
+                               "std::uint32_t sonEntry, Player* member,\n"
+                               "                         std::uint64_t exceptSon)\n{")
         self.assertIn("son->GetVictim() == member", helper)
         self.assertIn("sServerFacade.IsAlive(son)", helper)
         # The fight Sons (with the sole-candidate grid search) are built before the walk-out reads them.

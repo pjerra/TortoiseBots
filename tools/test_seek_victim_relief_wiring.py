@@ -22,7 +22,7 @@ def body(text, signature):
 
 class SeekVictimReliefWiring(unittest.TestCase):
     def test_the_call_stands_after_the_boss_victim_return_and_the_own_son(self):
-        fn = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
+        fn = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot, std::uint64_t")
         self.assertIn("Unit* FindSeekVictimRelief(PlayerbotAI* ai, Player* bot,", ACTIONS)
         boss_victim = fn.index("if ((thirdTank || pickupTank || healerTaker) &&")
         relief_call = fn.index("if (roles.botIndex >= 0 && SeekReliefTaskFor(ai, bot, roles, state, task))")
@@ -36,7 +36,7 @@ class SeekVictimReliefWiring(unittest.TestCase):
         self.assertLess(relief_call, third_pickup)
 
     def test_the_call_is_for_every_raid_tank(self):
-        fn = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
+        fn = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot, std::uint64_t")
         self.assertIn("if (roles.botIndex >= 0 && SeekReliefTaskFor(ai, bot, roles, state, task))", fn)
         self.assertNotIn("if (thirdTank || healerTaker)", fn)
         # One fill for both call sites: the fields and the source word are written once, in the helper.
@@ -50,7 +50,7 @@ class SeekVictimReliefWiring(unittest.TestCase):
         self.assertEqual(1, ACTIONS.count("task.takeSrc = \"victim_relief\";"))
 
     def test_VictimRelief_MainAndFourthTankReachRelief(self):
-        fn = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
+        fn = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot, std::uint64_t")
         gate_start = fn.index("if (!thirdTank && !pickupTank && !healerTaker)\n    {")
         gate = fn[gate_start:fn.index("SeekFight state;", gate_start)]
         # The bots the gate drops (no pull job, and no hunter/ranged fallback: the main tank, a fourth tank, a
@@ -69,7 +69,7 @@ class SeekVictimReliefWiring(unittest.TestCase):
             self.assertNotIn(field, early)
 
     def test_VictimRelief_KeyOffTheEarlyBlockReadsNothing(self):
-        fn = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
+        fn = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot, std::uint64_t")
         gate_start = fn.index("if (!thirdTank && !pickupTank && !healerTaker)\n    {")
         gate = fn[gate_start:fn.index("SeekFight state;", gate_start)]
         flag = gate.index("if (roles.botIndex >= 0 && sPlayerbotAIConfig.dungeonRunSeekVictimRelief)")

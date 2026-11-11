@@ -714,6 +714,12 @@ public:
     // off it by the other off-tank (within 20 yd, its taunt ready, holding no source, not the boss's victim), at most
     // twice per source and 8 s apart; off, today's takes hold (default off, recommended on).
     bool dungeonRunSeekVictimRelief = false;
+    // The seek park (any seek_aura source): on, with a seek_park row for the fight, the source the seek walked down is
+    // held under a Polymorph or Hibernate by a damage dealer, nobody damages it (the park bot included), and at the
+    // row's release lead a tank takes it, the raid gathers at the seek spot and the burn is forced. A control that does
+    // not land within the row's budget, or breaks more often than the row allows, falls back to today's take and
+    // burn. Needs dungeonRunSeekAura and dungeonRunSeekPullCycle; off keeps today's walk-out (default off).
+    bool dungeonRunSeekPark = false;
     // The walk-out's face-and-cast (Hakkar's seek pull): on, the puller at its stand stops, turns to the Son with the
     // instant forced turn and casts in the same tick, UpdateFaceTarget leaves the live unshot puller's facing alone, and
     // the 6 s no-shot clock counts only the time spent in shot position; off, the turn-then-cast-next-tick of the walk-out

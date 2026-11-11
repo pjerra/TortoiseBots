@@ -591,6 +591,12 @@ namespace ai
     SeekTask FindBossSeek(PlayerbotAI* ai, Player* bot);
     // Whether the bot is in a seek phase right now: the move hold and the raid spread stand-down read it.
     bool BossSeeking(PlayerbotAI* ai, Player* bot);
+    // Whether the seek park owns this bot's movement right now: it is the park bot and its source is applied or held
+    // (D12). The legacy spread's step-away stands down on it; the slot read exempts it in both phases too.
+    bool BossSeekParkHoldsBot(PlayerbotAI* ai, Player* bot);
+    // Whether this bot may target `target` while it carries a breakable control: the release's receiver, its released
+    // source, and only while Release is live. Without it "select new target" drops the receiver's Attack every tick.
+    bool BossSeekParkReleaseTargetAllowed(PlayerbotAI* ai, Player* bot, Unit* target);
 
     // Whether this hunter's or warlock's pet has to be out of the siphon now: a hunter's from 5 s before the due time
     // until 2 s after it (and while the siphon's dummy aura is on the bot), a warlock's for the whole fight (one
@@ -776,6 +782,36 @@ namespace ai
         float x = 0.0f, y = 0.0f, z = 0.0f;
     };
     SeekTankTask FindBossSeekTank(PlayerbotAI* ai, Player* bot);
+
+    // The park cast (DungeonRunSeekPark): this bot is the parked source's park bot, the phase holds (Apply or Held) and
+    // its control is due (SeekParkCastDue). `source` and `spell` are what the cast goes to; `cutCast` cuts a running
+    // cast of its own once, for the first cast of an Apply.
+    struct SeekParkTask
+    {
+        bool valid = false;
+        Unit* source = nullptr;
+        std::string spell;
+        bool cutCast = false;
+    };
+    SeekParkTask FindBossSeekPark(PlayerbotAI* ai, Player* bot);
+    // The action alone notes a cast, so the trigger never consumes what its action needs.
+    void NoteBossSeekParkCast(Player* bot, std::uint32_t nowMs);
+
+    // The park bot's own control: cast Polymorph or Hibernate on the parked source from the cast reach, or walk into
+    // that reach first (inside the boss anchor's clamp).
+    class BossTacticsParkAction : public MovementAction
+    {
+    public:
+        BossTacticsParkAction(PlayerbotAI* ai) : MovementAction(ai, "boss tactics park") {}
+        bool isUseful() override;
+        bool isPossible() override;
+        bool Execute(Event& event) override;
+
+    private:
+        float lastX = 0.0f;
+        float lastY = 0.0f;
+        bool hasLast = false;
+    };
 
     // The seek walk: into the cloud, or to the gather around the dying source, and then stand.
     class BossTacticsSeekAction : public MovementAction

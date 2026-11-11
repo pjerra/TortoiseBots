@@ -28,7 +28,8 @@ class SeekTakeSrcWiring(unittest.TestCase):
         self.assertIn('const char* takeSrc = "other";', ACTIONS_H)
 
     def test_every_take_path_names_itself(self):
-        fn = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
+        # The take paths live in today's body, which the park's wrapper (FindBossSeekTank) calls unchanged.
+        fn = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot, std::uint64_t")
         # One word per `task.take = true;`; the victim relief's fill is the shared helper both its call sites use.
         self.assertEqual(fn.count("task.take = true;"), fn.count("task.takeSrc = "))
         relief = body(ACTIONS, "bool SeekReliefTaskFor(PlayerbotAI* ai, Player* bot,")
@@ -39,6 +40,9 @@ class SeekTakeSrcWiring(unittest.TestCase):
         # The nearest take names the reach when only the reach took it (walk 57 F4: `src=nearest_reach`).
         self.assertIn('task.takeSrc = viaReach ? "nearest_reach" : "nearest";', fn)
         self.assertIn('task.takeSrc = thirdTank ? "receiver" : "pickup";', fn)
+        # The park's release take names itself in the wrapper that returns it (r11-1).
+        wrapper = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
+        self.assertIn('task.takeSrc = "park_release";', wrapper)
         # The meet's word sits with the meet's take, the nearest's with the nearest's.
         meet = fn[fn.index("task.meet = true;"):]
         self.assertTrue(meet.startswith('task.meet = true;\n                    task.takeSrc = "meet";'))
@@ -55,7 +59,7 @@ class SeekTakeSrcWiring(unittest.TestCase):
 
     def test_the_field_is_documented(self):
         self.assertIn("meet=<0\\|1> src=<word>", ROWS)
-        for word in ("`nearest`", "`nearest_reach`", "`healer_clock`", "`receiver`", "`meet`", "`pickup`", "`pull_join`", "`victim_relief`", "`+edge`"):
+        for word in ("`nearest`", "`nearest_reach`", "`healer_clock`", "`receiver`", "`meet`", "`pickup`", "`pull_join`", "`victim_relief`", "`park_release`", "`+edge`"):
             self.assertIn(word, ROWS)
 
 

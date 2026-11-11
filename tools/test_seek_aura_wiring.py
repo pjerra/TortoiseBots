@@ -272,7 +272,7 @@ class SeekRolesWiring(unittest.TestCase):
         tank = body(ACTIONS, "bool BossTacticsSeekTankAction::Execute(")
         self.assertIn("FindBossSeekTank(ai, bot)", tank)
         self.assertIn("MoveTo(", tank)
-        find = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(")
+        find = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(")
         # The third off-tank owns the job, and with fewer than three tanks alive the off-tank takes the Son over while
         # the raid's nearest hunter (else a ranged dealer) pulls it.
         self.assertIn("GetRaidTankRoles(ai)", find)
@@ -343,7 +343,7 @@ class SeekRolesWiring(unittest.TestCase):
         # The Son is resolved from the map, not from this bot's attackers list.
         self.assertIn("GetCreature(ObjectGuid(healerTakeGuid))", read)
         self.assertIn("out.healerSon = son;", read)
-        find = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(")
+        find = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(")
         self.assertIn("roles.tanks.size() >= 3 && roles.tanks[1] == bot", find)
         self.assertIn("if (state.healerSon && (!sPlayerbotAIConfig.dungeonRunSeekNearestTakeReach ||", find)
         self.assertIn("SeekTakeFightingSonOnHealer(", POLICY)
@@ -539,7 +539,7 @@ class DeclarationsMatchDefinitions(unittest.TestCase):
             (ACTIONS_H, "Unit* FindBossSeekKill(PlayerbotAI* ai, Player* bot);",
              ACTIONS, "Unit* ai::FindBossSeekKill(PlayerbotAI* ai, Player* bot)"),
             (ACTIONS_H, "SeekTankTask FindBossSeekTank(PlayerbotAI* ai, Player* bot);",
-             ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)"),
+             ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot, std::uint64_t"),
             (ACTIONS_H, "class BossTacticsSeekAction : public MovementAction",
              ACTIONS, "bool BossTacticsSeekAction::Execute(Event& event)"),
             (ACTIONS_H, "class BossTacticsSeekTankAction : public AttackAction",

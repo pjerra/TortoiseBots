@@ -1341,6 +1341,97 @@ int main()
         }
     }
 
+    // seek_park (r11-1): the seek source, the release lead (15-70 s), the apply budget (3-15 s) and the most
+    // re-applies after a break (0-5). Read straight from the table, so no gate; no spell, spot or cycle columns.
+    {
+        BossTacticRow park = Row(309, 14834, BossTacticKind::SeekPark, 11357, 0, 2, 40.0f);
+        park.windowSec = 6.0f;
+        {
+            BossTacticTable table;
+            CHECK(table.Add(park));
+            CHECK(table.SeekParkRow(309, 14834, 11357) == nullptr); // not sealed
+            table.Seal();
+            const BossTacticRow* found = table.SeekParkRow(309, 14834, 11357);
+            CHECK(found != nullptr);
+            CHECK(found->priority == 2);
+            CHECK(Near(found->param, 40.0f));
+            CHECK(Near(found->windowSec, 6.0f));
+            CHECK(table.SeekParkRow(309, 14834, 11358) == nullptr);
+            CHECK(table.SeekParkRow(531, 14834, 11357) == nullptr);
+        }
+        {
+            BossTacticRow bad = park;
+            bad.targetEntry = 0;
+            BossTacticTable table;
+            CHECK(!table.Add(bad));
+        }
+        {
+            BossTacticRow bad = park;
+            bad.spellId = 12826;
+            BossTacticTable table;
+            CHECK(!table.Add(bad));
+        }
+        {
+            BossTacticRow bad = park;
+            bad.priority = 6;
+            BossTacticTable table;
+            CHECK(!table.Add(bad));
+            bad.priority = 0;
+            CHECK(table.Add(bad));
+        }
+        {
+            BossTacticRow bad = park;
+            bad.param = 14.0f;
+            BossTacticTable table;
+            CHECK(!table.Add(bad));
+            bad.param = 71.0f;
+            CHECK(!table.Add(bad));
+            bad.param = 15.0f;
+            CHECK(table.Add(bad));
+            bad.param = 70.0f;
+            BossTacticTable high;
+            CHECK(high.Add(bad));
+        }
+        {
+            BossTacticRow bad = park;
+            bad.windowSec = 2.0f;
+            BossTacticTable table;
+            CHECK(!table.Add(bad));
+            bad.windowSec = 16.0f;
+            CHECK(!table.Add(bad));
+            bad.windowSec = 3.0f;
+            CHECK(table.Add(bad));
+        }
+        {
+            BossTacticRow bad = park;
+            bad.mode = TacticMode::Engage;
+            BossTacticTable table;
+            CHECK(!table.Add(bad));
+        }
+        {
+            BossTacticRow bad = park;
+            bad.spotZ = 54.0f;
+            BossTacticTable table;
+            CHECK(!table.Add(bad));
+        }
+        {
+            BossTacticRow bad = park;
+            bad.cycleSec = 90.0f;
+            BossTacticTable table;
+            CHECK(!table.Add(bad));
+        }
+        {
+            BossTacticRow bad = Gated(park, 0, 50);
+            BossTacticTable table;
+            CHECK(!table.Add(bad));
+        }
+        {
+            BossTacticRow bad = Gated(park, 50, 100);
+            BossTacticTable table;
+            CHECK(!table.Add(bad));
+        }
+    }
+
     // Kind text: exactly the lowercase spellings the table holds.
     CHECK(ParseBossTacticKind("interrupt") == BossTacticKind::Interrupt);
     CHECK(ParseBossTacticKind("kill_first") == BossTacticKind::KillFirst);
@@ -1381,6 +1472,8 @@ int main()
     CHECK(static_cast<int>(BossTacticKind::Spread) == 18);
     CHECK(static_cast<int>(BossTacticKind::GateHold) == 26);
     CHECK(static_cast<int>(BossTacticKind::TankPost) == 27);
+    CHECK(ParseBossTacticKind("seek_park") == BossTacticKind::SeekPark);
+    CHECK(static_cast<int>(BossTacticKind::SeekPark) == 28);
 
     // Mode words belong to their kind only; an empty word is the kind's own behaviour, a foreign word is Invalid.
     CHECK(ParseTacticMode(BossTacticKind::DispelPriority, "") == TacticMode::Default);
