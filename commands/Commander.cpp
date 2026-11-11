@@ -46,7 +46,7 @@
 #include "../ai/playerbot/strategy/values/PositionValue.h"
 #include "../ai/playerbot/strategy/values/LastMovementValue.h"
 #include "../ai/playerbot/strategy/values/PartyMemberToHeal.h"
-#include "../ai/playerbot/MoveFailNotePolicy.h"
+#include "../ai/playerbot/OutcomeReasonPolicy.h"
 #include "../ai/playerbot/strategy/values/ItemUsageValue.h"
 #include "../ai/playerbot/strategy/actions/EquipAction.h"
 #include "../ai/playerbot/strategy/actions/UnequipAction.h"
@@ -1502,7 +1502,9 @@ char const* ViewFailReason(uint32 castFail)
 }
 
 // The party record's reason word for the engine's outcome code: the refuse
-// note first, then the cast-check word, then the unmapped cast results.
+// note first, then the cast-check word, then the unmapped cast results. The
+// core's SPELL_CAST_OK (0xFF) means no cast check failed, so it reads as no
+// reason, never "other".
 char const* ViewOutcomeReason(uint32 code)
 {
     if (char const* note = ai::RefuseNoteWord(code))
@@ -1521,7 +1523,7 @@ char const* ViewOutcomeReason(uint32 code)
         case SPELL_FAILED_FLEEING: return "no-control";
         default: break;
     }
-    return code != 0 ? "other" : nullptr;
+    return ai::OutcomeTailWord(code);
 }
 
 // One of the bot's guid-list values, only when it already holds a calculated

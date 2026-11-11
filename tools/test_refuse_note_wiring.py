@@ -24,6 +24,7 @@ COMMANDER = (ROOT / "commands/Commander.cpp").read_text()
 THREAT = (ROOT / "ai/playerbot/strategy/generic/ThreatStrategy.cpp").read_text()
 AI_H = (ROOT / "ai/playerbot/PlayerbotAI.h").read_text()
 POLICY_TEXT = (ROOT / "ai/playerbot/RefuseNotePolicy.h").read_text()
+TAIL_TEXT = (ROOT / "ai/playerbot/OutcomeReasonPolicy.h").read_text()
 
 
 class RefuseNoteWiring(unittest.TestCase):
@@ -52,6 +53,16 @@ class RefuseNoteWiring(unittest.TestCase):
         self.assertIn("char const* ViewOutcomeReason(uint32 code)", COMMANDER)
         self.assertIn("ViewOutcomeReason(engine->GetLastOutcomeCastFail())", COMMANDER)
         self.assertEqual(len(re.findall(r"ViewFailReason\(castFail\)", COMMANDER)), 2)
+        self.assertIn("return ai::OutcomeTailWord(code);", COMMANDER)
+        self.assertIn('#include "../ai/playerbot/OutcomeReasonPolicy.h"', COMMANDER)
+
+    def test_outcome_tail_names_no_check_and_combat(self):
+        tail = (ROOT / "ai/playerbot/OutcomeReasonPolicy.h").read_text()
+        self.assertIn("constexpr std::uint32_t kOutcomeNoCheck = 0xFF;", tail)
+        self.assertIn('return "combat";', tail)
+        words = ["combat"]
+        for word in words:
+            self.assertLessEqual(len(word), 10)
 
     def test_threat_multiplier_logs_veto(self):
         i = THREAT.index("LogThreatVeto(PlayerbotAI* ai")
@@ -61,9 +72,10 @@ class RefuseNoteWiring(unittest.TestCase):
         self.assertIn("LogThreatVeto(", THREAT[j:k])
 
     def test_reason_words_fit_feed(self):
-        words = ["threat", "veto", "attacked", "not-known", "immune", "no-control", "other"]
+        words = ["threat", "veto", "attacked", "not-known", "immune", "no-control", "combat", "other"]
         for word in words:
-            self.assertTrue('"%s"' % word in COMMANDER or '"%s"' % word in POLICY_TEXT)
+            self.assertTrue('"%s"' % word in COMMANDER or '"%s"' % word in POLICY_TEXT or
+                            '"%s"' % word in TAIL_TEXT)
             self.assertLessEqual(len(word), 10)
 
 
