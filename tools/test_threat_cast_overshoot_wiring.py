@@ -158,8 +158,11 @@ class CastThreatCap(unittest.TestCase):
 
     def test_a_veto_logs_its_numbers(self):
         block = body(multiplier(), CAST_CAP_IF)
-        self.assertIn("LogCastVeto(ai, bot, castAction, castBotThreat, castThreat, castLine);\n"
-                      "                    return 0.0f;", block)
+        self.assertIn("LogCastVeto(ai, bot, castAction, castBotThreat, castThreat, castLine);", block)
+        due = block[block.index("LogCastVeto(ai, bot, castAction, castBotThreat, castThreat, castLine);"):]
+        self.assertIn('if (ThreatVetoLogDue(ai, bot, castTarget))', due)
+        self.assertIn('LogThreatVeto(ai, bot, action, castTarget, castVictim, "cast",', due)
+        self.assertIn("return 0.0f;", due)
         log = body(STRATEGY, "void LogCastVeto(")
         self.assertIn('"ThreatCap cast spell=%s pct=%.0f cast=%.0f bot=%.0f tank=%.0f"', log)
         self.assertIn('ai::botdiag::BotActionLog::Write(ai, "THREAT", "%s", info);', log)
