@@ -211,6 +211,14 @@ class SeekParkWiring(unittest.TestCase):
         self.assertIn("!SeekParkReleaseLive(state.parkPhase) &&", ACTIONS)
         self.assertIn("(phase == SeekParkPhase::Failed && controlled)", POLICY)
 
+    def test_the_receiver_pre_walk_yields_to_a_take(self):
+        # Fix 4: the body read with the parked Son excluded outranks the approach walk when it owes this bot a take.
+        fn = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
+        pre = fn[fn.index("state.parkPreWalk"):]
+        pre = pre[:pre.index("SeekParkFailedTakeDue(")]
+        self.assertIn("FindBossSeekTankUnparked(ai, bot, state.parkSon)", pre)
+        self.assertIn("other.valid && other.take", pre)
+
     def test_the_trigger_only_asks(self):
         fn = body(TRIGGERS, "bool BossTacticsParkTrigger::IsActive()")
         self.assertIn("FindBossSeekPark(", fn)

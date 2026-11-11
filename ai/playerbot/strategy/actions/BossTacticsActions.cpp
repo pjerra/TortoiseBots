@@ -10649,9 +10649,13 @@ SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)
         return task;
     }
     // The receiver walks to the source before the release and waits there: a sheeped Son never walks to the tank, and
-    // a taunt from 15 yd is nothing (R7).
+    // a taunt from 15 yd is nothing (R7). A take the body owes this bot on another source outranks the walk: the park
+    // is not the tank's only task.
     if (sonLive && state.parkPreWalk && isReceiver)
     {
+        const SeekTankTask other = FindBossSeekTankUnparked(ai, bot, state.parkSon);
+        if (other.valid && other.take)
+            return other;
         SeekTankTask task;
         task.valid = true;
         task.row = state.row;
