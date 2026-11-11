@@ -39,13 +39,14 @@ class HoverAnchorWiringTest(unittest.TestCase):
         self.assertLess(fn.index(call), fn.index("WorldPosition const ground(bot->GetMapId(), targetX, targetY, groundZ);"))
         self.assertLess(fn.index(call), fn.index("ground.getPathStepFrom(WorldPosition(bot), bot)"))
 
-    def test_anchor_walk_paths_to_the_anchor_centre(self):
+    def test_anchor_walk_aims_at_the_in_range_point(self):
         fn = body(ACTIONS, "bool MoveTowardAnchorUnderHover(Unit* target, float distance, float groundZ)", "\n        }")
         self.assertIn("BossAnchorCircle circle;", fn)
         self.assertIn("if (!LiveBossAnchor(ai, bot, circle))", fn)
-        self.assertIn("WorldPosition const centre(bot->GetMapId(), circle.x, circle.y, circle.z);", fn)
-        self.assertIn("centre.getPathStepFrom(WorldPosition(bot), bot)", fn)
-        self.assertNotIn("ground.getPathStepFrom", fn)
+        self.assertIn("HoverAnchorAimPoint(centre, goal, HoverAnchorReachLimit(reachDist, triggerDist), aim)", fn)
+        self.assertIn("WorldPosition const aimPoint(bot->GetMapId(), aim.x, aim.y, aim.z);", fn)
+        self.assertIn("aimPoint.getPathStepFrom(WorldPosition(bot), bot)", fn)
+        self.assertNotIn("centre.getPathStepFrom", fn)
         self.assertIn("if (path.size() < 2)", fn)
         self.assertIn("HoverAnchorStopDistance(reachDist, triggerDist,", fn)
         self.assertIn("ai->GetRange(\"spell\") - sPlayerbotAIConfig.contactDistance", fn)

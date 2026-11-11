@@ -672,17 +672,39 @@ namespace ai
 
         // AiPlayerbot.HoverReachAimsAtAnchor: a bot parked at the edge of range on the boss's side of the room is
         // out of range again after her next hop (walk 2e: one reach per caster per 27 s, her hop rate). With a live
-        // `anchor` row, walk the navmesh path to the anchor's centre and stop as soon as the target is in reach
-        // (HoverAnchorStopDistance); the goal of the range test stays the target, so the bot never walks deeper
-        // into the room than it needs to. False leaves today's walk under her body.
+        // `anchor` row, walk the navmesh path to the in-range point nearest the anchor's centre
+        // (HoverAnchorAimPoint) and stop as soon as the target is in reach; the goal of the range test stays the
+        // target, so the bot never walks deeper into the room than it needs to. False leaves today's walk under
+        // her body.
         bool MoveTowardAnchorUnderHover(Unit* target, float distance, float groundZ)
         {
             BossAnchorCircle circle;
             if (!LiveBossAnchor(ai, bot, circle))
                 return false;
 
-            WorldPosition const centre(bot->GetMapId(), circle.x, circle.y, circle.z);
-            std::vector<WorldPosition> const path = centre.getPathStepFrom(WorldPosition(bot), bot);
+            ApproachPoint goal;
+            goal.x = target->GetPositionX();
+            goal.y = target->GetPositionY();
+            goal.z = target->GetPositionZ();
+
+            float const reachDist = HoverReachDistance(distance, target->GetCombatReach(), bot->GetCombatReach());
+            float const triggerDist = ai->GetRange("spell") - sPlayerbotAIConfig.contactDistance +
+                target->GetCombatReach() + bot->GetCombatReach();
+            float const dx = circle.x - goal.x;
+            float const dy = circle.y - goal.y;
+            float const dz = circle.z - goal.z;
+            float const stop = HoverAnchorStopDistance(reachDist, triggerDist, std::sqrt(dx * dx + dy * dy + dz * dz));
+
+            ApproachPoint centre;
+            centre.x = circle.x;
+            centre.y = circle.y;
+            centre.z = circle.z;
+            ApproachPoint aim;
+            if (!HoverAnchorAimPoint(centre, goal, HoverAnchorReachLimit(reachDist, triggerDist), aim))
+                return false;
+
+            WorldPosition const aimPoint(bot->GetMapId(), aim.x, aim.y, aim.z);
+            std::vector<WorldPosition> const path = aimPoint.getPathStepFrom(WorldPosition(bot), bot);
             if (path.size() < 2)
                 return false;
 
@@ -702,11 +724,6 @@ namespace ai
                 points.push_back(point);
             }
 
-            ApproachPoint goal;
-            goal.x = target->GetPositionX();
-            goal.y = target->GetPositionY();
-            goal.z = target->GetPositionZ();
-
             Map* map = bot->GetMap();
             float const botHeight = bot->GetCollisionHeight();
             float const targetHeight = target->GetCollisionHeight();
@@ -715,14 +732,6 @@ namespace ai
                 return map->isInLineOfSight(point.x, point.y, point.z + botHeight,
                     goal.x, goal.y, goal.z + targetHeight, true);
             };
-
-            float const reachDist = HoverReachDistance(distance, target->GetCombatReach(), bot->GetCombatReach());
-            float const triggerDist = ai->GetRange("spell") - sPlayerbotAIConfig.contactDistance +
-                target->GetCombatReach() + bot->GetCombatReach();
-            float const dx = circle.x - goal.x;
-            float const dy = circle.y - goal.y;
-            float const dz = circle.z - goal.z;
-            float const stop = HoverAnchorStopDistance(reachDist, triggerDist, std::sqrt(dx * dx + dy * dy + dz * dz));
 
             RangedApproachChoice const choice = SelectRangedApproachPoint(points, goal, stop, seesTarget);
             if (!choice.valid)
