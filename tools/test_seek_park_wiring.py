@@ -219,6 +219,20 @@ class SeekParkWiring(unittest.TestCase):
         self.assertIn("FindBossSeekTankUnparked(ai, bot, state.parkSon)", pre)
         self.assertIn("other.valid && other.take", pre)
 
+    def test_the_park_walk_rows_have_their_own_throttle(self):
+        # Fix 5: the stand-down and approach rows must not spend the park_release take's `seek take` window.
+        fn = body(ACTIONS, "bool BossTacticsSeekTankAction::Execute(Event& event)")
+        self.assertIn('LogSeekParkWalk(ai, bot, task.source, "stand_down", "park_hold")', fn)
+        self.assertIn('LogSeekParkWalk(ai, bot, task.source, "approach", "park_approach")', fn)
+        self.assertIn('LogSeekParkWalk(ai, bot, task.source, "approach", "park_release")', fn)
+        walk = body(ACTIONS, "void LogSeekParkWalk(PlayerbotAI* ai, Player* bot, Unit* son, const char* reason, "
+                             "const char* src)")
+        self.assertIn("g_seekParkWalkLog[", walk)
+        self.assertNotIn("g_seekPullLog[", walk)
+        self.assertIn("seek take: %s -> %u victim=%s reason=%s meet=%d src=%s reach_yd=%.1f beyond_yd=%.1f", walk)
+        # The wait is clamped to the row's lead, so a lead under the wait still releases.
+        self.assertIn("releaseLeadMs < kSeekParkReceiverWaitMs ? releaseLeadMs : kSeekParkReceiverWaitMs", POLICY)
+
     def test_the_trigger_only_asks(self):
         fn = body(TRIGGERS, "bool BossTacticsParkTrigger::IsActive()")
         self.assertIn("FindBossSeekPark(", fn)

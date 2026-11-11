@@ -169,10 +169,13 @@ namespace ai
         return phase == SeekParkPhase::Held && dueKnown && dueInMs <= releaseLeadMs + kSeekParkPreWalkMs;
     }
 
-    // Held at or under the lead: release now when the receiver is in reach or the wait is used up.
+    // Held at or under the lead: release now when the receiver is in reach or the wait is used up. The wait never runs
+    // past the lead itself, so a row whose lead is shorter than the wait still releases.
     inline bool SeekParkReleaseNow(bool receiverInReach, std::uint32_t dueInMs, std::uint32_t releaseLeadMs)
     {
-        return receiverInReach || dueInMs + kSeekParkReceiverWaitMs <= releaseLeadMs;
+        const std::uint32_t waitMs =
+            releaseLeadMs < kSeekParkReceiverWaitMs ? releaseLeadMs : kSeekParkReceiverWaitMs;
+        return receiverInReach || dueInMs + waitMs <= releaseLeadMs;
     }
 
     // Whether this tank must stand down: Apply or Held, a tank, and the parked source is its victim or its target.

@@ -1201,6 +1201,9 @@ std::mutex g_seekPullLogMutex;
 std::unordered_map<std::uint64_t, std::uint32_t> g_seekPullLog;
 // The park cast rows' own throttle (the same mutex): a cast attempt per park bot and 2 s.
 std::unordered_map<std::uint64_t, std::uint32_t> g_seekParkCastLog;
+// The park walk rows' own throttle (the same mutex): the stand-down and the approach repeat every tick while a tank
+// stands or walks, and must not spend the park_release take row's `seek take` window on the same bot.
+std::map<std::pair<std::uint64_t, std::string>, std::uint32_t> g_seekParkWalkLog;
 // The meet receiver's wait row has its own throttle (the take row on the same tank must not lose its window to it).
 std::unordered_map<std::uint64_t, std::uint32_t> g_seekMeetWaitLog;
 // The walk-out task, one per map instance (Hakkar's fight), shared by every bot's read; the active count lets the
@@ -1354,6 +1357,11 @@ void SweepSeekRecords(std::uint32_t instanceId)
         {
             const std::int32_t idleMs = static_cast<std::int32_t>(nowMs - it->second);
             it = idleMs > static_cast<std::int32_t>(kSeekRecordIdleMs) ? g_seekParkCastLog.erase(it) : std::next(it);
+        }
+        for (auto it = g_seekParkWalkLog.begin(); it != g_seekParkWalkLog.end();)
+        {
+            const std::int32_t idleMs = static_cast<std::int32_t>(nowMs - it->second);
+            it = idleMs > static_cast<std::int32_t>(kSeekRecordIdleMs) ? g_seekParkWalkLog.erase(it) : std::next(it);
         }
     }
 }
@@ -1703,6 +1711,29 @@ void LogSeekParkCast(PlayerbotAI* ai, Player* bot, Unit* son, const char* step, 
     snprintf(info1, sizeof(info1), "seek park cast: by=%s son=%u step=%s yd=%.0f los=%d check=%u", bot->GetName(),
              son->GetGUIDLow(), step, bot->GetDistance(son), bot->IsWithinLOSInMap(son, true) ? 1 : 0,
              static_cast<std::uint32_t>(check));
+    sPlayerbotAIConfig.logEvent(ai, "BossTacticsSeekPull", info1, "");
+}
+
+// The park's walk rows (the tank stand-down and the receiver's approach): the `seek take` text on a throttle of their
+// own, so the park_release take row on the same bot keeps its own window beside them.
+void LogSeekParkWalk(PlayerbotAI* ai, Player* bot, Unit* son, const char* reason, const char* src)
+{
+    if (!ai || !bot || !son || !sPlayerbotAIConfig.hasLog("bot_events.csv"))
+        return;
+    const std::uint32_t nowMs = WorldTimer::getMSTime();
+    {
+        std::lock_guard<std::mutex> lock(g_seekPullLogMutex);
+        std::uint32_t& last = g_seekParkWalkLog[std::make_pair(bot->GetObjectGuid().GetRawValue(),
+                                                               std::string(reason ? reason : ""))];
+        if (last != 0 && nowMs - last < kSeekLogGapMs)
+            return;
+        last = nowMs == 0 ? 1 : nowMs;
+    }
+    Unit* const victim = son->GetVictim();
+    char info1[224];
+    snprintf(info1, sizeof(info1),
+             "seek take: %s -> %u victim=%s reason=%s meet=%d src=%s reach_yd=%.1f beyond_yd=%.1f", bot->GetName(),
+             son->GetGUIDLow(), victim ? victim->GetName() : "none", reason, 0, src, bot->GetDistance(son), -99.0f);
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsSeekPull", info1, "");
 }
 
@@ -11045,7 +11076,7 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
         // The parked source is this tank's victim or target: its own running auto-attack would break the control, so
         // the attack stops and the target goes with it (R5).
         hasLast = false;
-        LogSeekTake(ai, bot, task.source, "stand_down", false, "park_hold", -99.0f);
+        LogSeekParkWalk(ai, bot, task.source, "stand_down", "park_hold");
         bot->AttackStop();
         if (AI_VALUE(Unit*, "current target") == task.source)
             SET_AI_VALUE(Unit*, "current target", nullptr);
@@ -11061,7 +11092,7 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
                 ai->StopMoving();
             return true;
         }
-        LogSeekTake(ai, bot, task.source, "approach", false, "park_approach", -99.0f);
+        LogSeekParkWalk(ai, bot, task.source, "approach", "park_approach");
         return walkToParkSon(task.source);
     }
     if (task.walkout)
@@ -11323,7 +11354,7 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
         const bool parkRelease = task.takeSrc && std::strcmp(task.takeSrc, "park_release") == 0;
         if (parkRelease && !SeekParkStrikeInReach(bot->GetDistance(task.source)))
         {
-            LogSeekTake(ai, bot, task.source, "approach", false, "park_release", -99.0f);
+            LogSeekParkWalk(ai, bot, task.source, "approach", "park_release");
             return walkToParkSon(task.source);
         }
         // Class-correct taunt (the Gluth swap's list: 1.12 has no paladin taunt). Attack() sticks even when the taunt

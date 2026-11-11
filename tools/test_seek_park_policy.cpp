@@ -931,6 +931,10 @@ static void TestParkStrikeReach()
     CHECK(SeekParkReleaseNow(false, 32000, 40000));
     CHECK(!SeekParkReleaseNow(false, 32001, 40000));
     CHECK(SeekParkReleaseNow(true, 40000, 40000));
+    // A lead shorter than the wait still fires: the wait is clamped to the lead.
+    CHECK(SeekParkReleaseNow(false, 0, 6000));
+    CHECK(!SeekParkReleaseNow(false, 1, 6000));
+    CHECK(!SeekParkReleaseNow(false, 32000, 6000));
 }
 
 // TestParkReleasedHolderKeepsTheSon: the named failing case (round 3). Tank A completes the release, then becomes
