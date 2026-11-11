@@ -63,7 +63,7 @@ RaidTankRoles GetRaidTankRoles(PlayerbotAI* ai)
     return roles;
 }
 bool gThreatSuccessor = false;
-namespace ai { struct ThreatResetWindow; }
+namespace ai { struct ThreatResetWindow; struct ThreatResetStandingRead; }
 struct BossTacticsStub {
     bool HasThreatSuccessor(unsigned, unsigned) const { return gThreatSuccessor; }
     bool HasStrictThreatSuccessor(unsigned, unsigned) const { return false; }
@@ -81,6 +81,7 @@ struct ThreatValue {
     static float GetThreat(Player*, Unit*);
     static float GetTankThreat(PlayerbotAI*, Unit*);
     static float GetResetSuccessorThreat(PlayerbotAI*, Unit*);
+    static ai::ThreatResetStandingRead GetResetStandingRead(PlayerbotAI*, Unit*);
 };
 #include "ThreatCapPolicy.h"
 // The bot_events row of the successor cap is not part of these stubs: the extracted method only has to compile it.
