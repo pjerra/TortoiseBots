@@ -1193,7 +1193,7 @@ Whether a walked seek source is parked under crowd control and killed late. Not 
 
 **The failures:** a source first seen with less than the release lead plus 8 s left (`why=late`), no park bot (`no_bot`), a control that misses the apply budget (`budget`), a control broken more than `priority` times (`breaks`) or a release no tank takes in 4 s (`no_receiver`, even when a receiver exists) turn the park off for that cycle: the walk-out's take and burn run as today. The park ends with the source's death or the next cycle.
 
-Diagnostics (always on with the key): one `BossTacticsSeekPull` row per phase change, `seek park: son=<guid> phase=<none|apply|held|release|failed> by=<bot|-> spell=<Polymorph|Hibernate|-> due_in=<s> n=<re-applies> held_ms=<ms> why=<word|->`; see [Boss tactics refusal rows](../../play/refusal-rows.md).
+Diagnostics (always on with the key): one `BossTacticsSeekPull` row per phase change, `seek park: son=<guid> phase=<none|apply|held|release|released|failed> by=<bot|-> spell=<Polymorph|Hibernate|-> due_in=<s> n=<re-applies> held_ms=<ms> why=<word|->`; see [Boss tactics refusal rows](../../play/refusal-rows.md).
 
 Cost: one record per instance (state only), swept when untouched for 120 s; one group walk and one aura scan per bot per fight read while the key is on.
 

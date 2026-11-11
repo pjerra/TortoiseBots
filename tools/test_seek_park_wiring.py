@@ -92,16 +92,18 @@ class SeekParkWiring(unittest.TestCase):
 
     def test_the_release_needs_a_tank_victim(self):
         # Decision 2: the release fails after its hold time unless the source's victim is a tank, whatever receiver
-        # the scan found (TestParkReleaseNeedsReceiver).
-        self.assertIn("!in.sonOnTank", POLICY)
+        # the scan found; a tank inside the window latches success instead (TestParkReleaseNeedsReceiver,
+        # TestParkReleaseLatches).
+        self.assertIn("nowMs - state.releaseMs >= kSeekParkReleaseHoldMs", POLICY)
         self.assertIn("kSeekParkReleaseHoldMs", POLICY)
         check = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
         self.assertIn("SeekSonVictimIsTank(son)", check)
 
     def test_the_release_target_exemption_is_narrow(self):
-        # Decision 3: the receiver's released source is no invalid target while Release is live; nothing else.
+        # Decision 3: the receiver's released source is no invalid target while the release is live (open or latched);
+        # nothing else.
         fn = body(ACTIONS, "bool ai::BossSeekParkReleaseTargetAllowed(PlayerbotAI* ai, Player* bot, Unit* target)")
-        self.assertIn("state.parkPhase != SeekParkPhase::Release", fn)
+        self.assertIn("!SeekParkReleaseLive(state.parkPhase)", fn)
         self.assertIn("SeekParkReceiver(", fn)
         self.assertIn("SeekParkReleaseTargetAllowed(", fn)
         fn = body(POSSIBLE_TARGETS, "bool PossibleAttackTargetsValue::IsPossibleTarget(")
@@ -167,6 +169,17 @@ class SeekParkWiring(unittest.TestCase):
     def test_the_policy_header_names_the_kind_number(self):
         self.assertIn("enum class SeekParkPhase", POLICY)
         self.assertIn("kSeekParkReleaseHoldMs", POLICY)
+
+    def test_the_release_latches_its_success(self):
+        # Round 2: the first tick a tank has the source inside the 4 s window moves the park to its terminal released
+        # state; a later non-tank tick cannot fail it (TestParkReleaseLatches).
+        self.assertIn("case SeekParkPhase::Released:", POLICY)
+        self.assertIn("state.phase = SeekParkPhase::Released;", POLICY)
+        self.assertIn('return "released";', POLICY)
+        self.assertIn("SeekParkReleaseLive(state.phase)", POLICY)
+        # The tank pick reads the receiver in the latched release too, so the drag to the spot is still the release's.
+        fn = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
+        self.assertIn("SeekParkReleaseLive(state.parkPhase)", fn)
 
     def test_the_combat_strategy_queues_the_action_once(self):
         combat = STRATEGY[:STRATEGY.index("void BossTacticsStrategy::InitNonCombatTriggers")]

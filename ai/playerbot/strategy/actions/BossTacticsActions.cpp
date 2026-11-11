@@ -2185,7 +2185,7 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
         step = record.state;
     }
     // The invariant the burn, kill and gather rely on: a held or released park is always the seek's pick.
-    assert((step.phase != SeekParkPhase::Held && step.phase != SeekParkPhase::Release) || step.son == pickedGuid);
+    assert((step.phase != SeekParkPhase::Held && !SeekParkReleaseLive(step.phase)) || step.son == pickedGuid);
     out.parkPhase = step.phase;
     out.parkSon = step.son;
     out.parkBot = step.parkBot;
@@ -5302,7 +5302,7 @@ bool ai::BossSeekParkReleaseTargetAllowed(PlayerbotAI* ai, Player* bot, Unit* ta
     if (!ai || !bot || !target || !sPlayerbotAIConfig.dungeonRunSeekPark)
         return false;
     SeekFight state;
-    if (!ReadSeekFightCached(ai, bot, state) || state.parkPhase != SeekParkPhase::Release || state.parkSon == 0 ||
+    if (!ReadSeekFightCached(ai, bot, state) || !SeekParkReleaseLive(state.parkPhase) || state.parkSon == 0 ||
         !state.row)
         return false;
     if (target->GetObjectGuid().GetRawValue() != state.parkSon)
@@ -10535,7 +10535,7 @@ SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)
         return FindBossSeekTankUnparked(ai, bot, 0);
     Creature* const son = bot->GetMap() ? bot->GetMap()->GetCreature(ObjectGuid(state.parkSon)) : nullptr;
     const bool sonOnTank = SeekSonVictimIsTank(son);
-    const Player* const receiver = state.parkPhase == SeekParkPhase::Release
+    const Player* const receiver = SeekParkReleaseLive(state.parkPhase)
         ? SeekParkReceiver(ai, bot, state.boss, state.sons, state.row->targetEntry, state.parkSon) : nullptr;
     const bool isReceiver = receiver && receiver == bot;
     if (isReceiver)
@@ -10561,7 +10561,7 @@ SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)
     {
         // The receiver's drag of the taken source is the release's own task (D9: "the existing own-source branch drags
         // it to the row's spot"); every take and pull on the parked source is the phase's to refuse.
-        const bool receiverDrag = state.parkPhase == SeekParkPhase::Release && !task.take && !task.pull &&
+        const bool receiverDrag = SeekParkReleaseLive(state.parkPhase) && !task.take && !task.pull &&
             task.source->GetVictim() == bot;
         if (!receiverDrag && SeekParkVetoesTankTask(state.parkPhase, task.takeSrc, sonOnTank))
             return SeekTankTask();

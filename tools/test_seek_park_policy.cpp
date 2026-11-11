@@ -73,6 +73,7 @@ static void TestParkHeldUntilReleaseLead()
     CHECK(SeekParkLateLeadMs(SeekParkPhase::Failed, true, true, 75000, 40000) == 75000);
     CHECK(SeekParkLateLeadMs(SeekParkPhase::None, true, true, 75000, 40000) == 75000);
     CHECK(SeekParkLateLeadMs(SeekParkPhase::Release, true, true, 75000, 40000) == 40000);
+    CHECK(SeekParkLateLeadMs(SeekParkPhase::Released, true, true, 75000, 40000) == 40000);
     CHECK(SeekParkLateLeadMs(SeekParkPhase::Apply, true, true, 75000, 40000) == 40000);
     // Only the parked Son gets the release lead: another read's pick keeps the seek_pull lead.
     CHECK(SeekParkLateLeadMs(SeekParkPhase::Held, true, false, 75000, 40000) == 75000);
@@ -225,6 +226,10 @@ static void TestParkVetoesTankTasks()
         CHECK(!SeekParkVetoesTankTask(SeekParkPhase::Release, src, false));
         CHECK(src && std::strcmp(src, "park_release") == 0 ? !SeekParkVetoesTankTask(SeekParkPhase::Release, src, true)
                                                            : SeekParkVetoesTankTask(SeekParkPhase::Release, src, true));
+        // A latched release reads the same as the open one.
+        CHECK(!SeekParkVetoesTankTask(SeekParkPhase::Released, src, false));
+        CHECK(src && std::strcmp(src, "park_release") == 0 ? !SeekParkVetoesTankTask(SeekParkPhase::Released, src, true)
+                                                           : SeekParkVetoesTankTask(SeekParkPhase::Released, src, true));
     }
     CHECK(!SeekParkVetoesTankTask(SeekParkPhase::Release, "park_release", true));
 }
@@ -241,12 +246,18 @@ static void TestParkExcludesAndTarget()
     CHECK(!SeekParkExcludesSource(SeekParkPhase::Release, true, true));
     // Release on a non-tank: nobody skips it, the ordinary takes apply.
     CHECK(!SeekParkExcludesSource(SeekParkPhase::Release, false, false));
+    // A latched release reads the same as the open one.
+    CHECK(SeekParkExcludesSource(SeekParkPhase::Released, true, false));
+    CHECK(!SeekParkExcludesSource(SeekParkPhase::Released, true, true));
+    CHECK(!SeekParkExcludesSource(SeekParkPhase::Released, false, false));
     CHECK(!SeekParkExcludesSource(SeekParkPhase::None, true, false));
     CHECK(!SeekParkExcludesSource(SeekParkPhase::Failed, true, false));
-    // The invalid-target exemption: the receiver, its released source, only in Release.
+    // The invalid-target exemption: the receiver, its released source, only in the release.
     CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Release, true, true));
     CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Release, false, true));
     CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Release, true, false));
+    CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Released, true, true));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Released, false, true));
     CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Held, true, true));
     CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Apply, true, true));
 }
@@ -281,6 +292,10 @@ static void TestParkDpsHeldAfterRelease()
     CHECK(SeekParkDpsHeld(SeekParkPhase::Release, false, 10000, 13999));
     CHECK(!SeekParkDpsHeld(SeekParkPhase::Release, false, 10000, 14000));
     CHECK(!SeekParkDpsHeld(SeekParkPhase::Release, true, 10000, 10001));
+    // A latched release reads the same as the open one.
+    CHECK(SeekParkDpsHeld(SeekParkPhase::Released, false, 10000, 13999));
+    CHECK(!SeekParkDpsHeld(SeekParkPhase::Released, false, 10000, 14000));
+    CHECK(!SeekParkDpsHeld(SeekParkPhase::Released, true, 10000, 10001));
     CHECK(!SeekParkDpsHeld(SeekParkPhase::Held, false, 10000, 10001));
     CHECK(!SeekParkDpsHeld(SeekParkPhase::Apply, false, 10000, 10001));
     CHECK(!SeekParkDpsHeld(SeekParkPhase::Release, false, 0, 1000));
@@ -291,6 +306,8 @@ static void TestParkGatherAtSpot()
 {
     CHECK(SeekParkGatherAtSpot(SeekParkPhase::Release, 8.1f));
     CHECK(!SeekParkGatherAtSpot(SeekParkPhase::Release, 8.0f));
+    CHECK(SeekParkGatherAtSpot(SeekParkPhase::Released, 8.1f));
+    CHECK(!SeekParkGatherAtSpot(SeekParkPhase::Released, 8.0f));
     CHECK(!SeekParkGatherAtSpot(SeekParkPhase::Held, 12.0f));
     CHECK(!SeekParkGatherAtSpot(SeekParkPhase::Apply, 12.0f));
 }
@@ -367,7 +384,7 @@ static void TestParkNewCycleResets()
 }
 
 // TestParkReleaseNeedsReceiver: the release fails after kSeekParkReleaseHoldMs unless the source's victim is a tank,
-// whatever receiver the scan found (decision 2). A taken source keeps the release for the rest of the cycle.
+// whatever receiver the scan found (decision 2). A tank that takes it latches the release instead.
 static void TestParkReleaseNeedsReceiver()
 {
     const SeekParkRules rules = ParkRules();
@@ -400,7 +417,8 @@ static void TestParkReleaseNeedsReceiver()
         CHECK(std::strcmp(state.why, "no_receiver") == 0);
     }
     {
-        // The source on a tank keeps the release for the rest of the cycle, receiver or not.
+        // The source on a tank at the release tick enters the release at once, receiver or not; the latch itself is
+        // TestParkReleaseLatches.
         SeekParkState state;
         SeekParkInput in = ParkInput(48001);
         CHECK(SeekParkStep(state, rules, in, 10000));
@@ -408,8 +426,92 @@ static void TestParkReleaseNeedsReceiver()
         in.sonOnTank = true;
         CHECK(SeekParkStep(state, rules, in, 10000));
         CHECK(state.phase == SeekParkPhase::Release);
-        CHECK(!SeekParkStep(state, rules, in, 60000));
+    }
+}
+
+// TestParkReleaseLatches: the named failing case. A tank that has the source inside the release's 4 s window
+// completes the release for good: the source leaving the tank afterwards (threat, death, retarget) is still a
+// successful release, never the after-the-fact failure the review found.
+static void TestParkReleaseLatches()
+{
+    const SeekParkRules rules = ParkRules();
+    {
+        SeekParkState state;
+        SeekParkInput in = ParkInput(48001);
+        CHECK(SeekParkStep(state, rules, in, 10000));
+        CHECK(state.phase == SeekParkPhase::Apply);
+        in.dueInMs = 40000;
+        CHECK(SeekParkStep(state, rules, in, 10000));
         CHECK(state.phase == SeekParkPhase::Release);
+        CHECK(state.releaseMs == 10000);
+        // The tank takes it inside the window: the release is complete and terminal.
+        in.sonOnTank = true;
+        CHECK(SeekParkStep(state, rules, in, 11000));
+        CHECK(state.phase == SeekParkPhase::Released);
+        CHECK(std::strcmp(state.why, "") == 0);
+        // The Son is back on a non-tank after the window: still a released park.
+        in.sonOnTank = false;
+        CHECK(!SeekParkStep(state, rules, in, 14000));
+        CHECK(state.phase == SeekParkPhase::Released);
+        CHECK(!SeekParkStep(state, rules, in, 60000));
+        CHECK(state.phase == SeekParkPhase::Released);
+        CHECK(std::strcmp(state.why, "") == 0);
+        // The release's other answers stay live (the tank is still dragging the source to the spot).
+        CHECK(SeekParkReleaseLive(state.phase));
+        CHECK(!SeekParkHolds(state.phase));
+        CHECK(SeekParkGatherAtSpot(state.phase, 12.0f));
+        CHECK(SeekParkLateLeadMs(state.phase, true, true, 75000, 40000) == 40000);
+    }
+    {
+        // A tank on the tick the window closes still latches: it had the source within the 4 s.
+        SeekParkState state;
+        SeekParkInput in = ParkInput(48001);
+        CHECK(SeekParkStep(state, rules, in, 10000));
+        in.dueInMs = 40000;
+        CHECK(SeekParkStep(state, rules, in, 10000));
+        in.sonOnTank = true;
+        CHECK(SeekParkStep(state, rules, in, 14000));
+        CHECK(state.phase == SeekParkPhase::Released);
+    }
+    {
+        // Nothing takes it in the 4 s: still the failure (TestParkReleaseNeedsReceiver).
+        SeekParkState state;
+        SeekParkInput in = ParkInput(48001);
+        CHECK(SeekParkStep(state, rules, in, 10000));
+        in.dueInMs = 40000;
+        CHECK(SeekParkStep(state, rules, in, 10000));
+        CHECK(SeekParkStep(state, rules, in, 14000));
+        CHECK(state.phase == SeekParkPhase::Failed);
+        CHECK(std::strcmp(state.why, "no_receiver") == 0);
+    }
+    {
+        // A pick that moves away ends the latched release like any other record.
+        SeekParkState state;
+        SeekParkInput in = ParkInput(48001);
+        CHECK(SeekParkStep(state, rules, in, 1000));
+        in.dueInMs = 40000;
+        in.sonOnTank = true;
+        CHECK(SeekParkStep(state, rules, in, 2000));
+        CHECK(state.phase == SeekParkPhase::Release);
+        CHECK(SeekParkStep(state, rules, in, 3000));
+        CHECK(state.phase == SeekParkPhase::Released);
+        in.pickedSon = 78;
+        CHECK(SeekParkStep(state, rules, in, 4000));
+        CHECK(state.phase == SeekParkPhase::None);
+    }
+    {
+        // The next cycle starts a fresh park from the latched release too.
+        SeekParkState state;
+        SeekParkInput in = ParkInput(48001);
+        CHECK(SeekParkStep(state, rules, in, 1000));
+        in.dueInMs = 40000;
+        in.sonOnTank = true;
+        CHECK(SeekParkStep(state, rules, in, 2000));
+        CHECK(SeekParkStep(state, rules, in, 3000));
+        CHECK(state.phase == SeekParkPhase::Released);
+        in.cycleNo = 4;
+        CHECK(SeekParkStep(state, rules, in, 4000));
+        CHECK(state.phase == SeekParkPhase::None);
     }
 }
 
@@ -475,6 +577,7 @@ static void TestParkPhaseWords()
     CHECK(std::strcmp(SeekParkPhaseWord(SeekParkPhase::Apply), "apply") == 0);
     CHECK(std::strcmp(SeekParkPhaseWord(SeekParkPhase::Held), "held") == 0);
     CHECK(std::strcmp(SeekParkPhaseWord(SeekParkPhase::Release), "release") == 0);
+    CHECK(std::strcmp(SeekParkPhaseWord(SeekParkPhase::Released), "released") == 0);
     CHECK(std::strcmp(SeekParkPhaseWord(SeekParkPhase::Failed), "failed") == 0);
 }
 
@@ -493,6 +596,7 @@ int main()
     TestPickParkBot();
     TestParkNewCycleResets();
     TestParkReleaseNeedsReceiver();
+    TestParkReleaseLatches();
     TestParkOnlyThePick();
     TestParkFightStartResets();
     TestParkExemptsBot();
