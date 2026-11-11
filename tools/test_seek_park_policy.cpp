@@ -267,14 +267,15 @@ static void TestParkExcludesAndTarget()
     CHECK(!SeekParkExcludesSource(SeekParkPhase::Released, false, false));
     CHECK(!SeekParkExcludesSource(SeekParkPhase::None, true, false));
     CHECK(!SeekParkExcludesSource(SeekParkPhase::Failed, true, false));
-    // The invalid-target exemption: the receiver, its released source, only in the release.
-    CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Release, true, true));
-    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Release, false, true));
-    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Release, true, false));
-    CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Released, true, true));
-    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Released, false, true));
-    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Held, true, true));
-    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Apply, true, true));
+    // The invalid-target exemption: the receiver, its released source, while the release is live.
+    CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Release, true, true, true));
+    CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Release, true, true, false));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Release, false, true, true));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Release, true, false, true));
+    CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Released, true, true, false));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Released, false, true, true));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Held, true, true, true));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Apply, true, true, true));
 }
 
 // TestParkOnlyTheReceiverInRelease: F6, a second tank never takes the released Son inside its window (R11's table).
@@ -294,6 +295,25 @@ static void TestParkOnlyTheReceiverInRelease()
     CHECK(!SeekParkVetoesTankTask(SeekParkPhase::Released, "nearest", false));
     CHECK(SeekParkVetoesTankTask(SeekParkPhase::Released, "nearest", true));
     CHECK(!SeekParkVetoesTankTask(SeekParkPhase::Released, "park_release", true));
+}
+
+// TestParkFailedTakeDue (Fix 2): a park that failed while its source is still controlled still gets it broken by the
+// release's receiver; with no receiver the ordinary takes answer, and an awake source uses today's takes.
+static void TestParkFailedTakeDue()
+{
+    CHECK(SeekParkFailedTakeDue(SeekParkPhase::Failed, true, true));
+    CHECK(!SeekParkFailedTakeDue(SeekParkPhase::Failed, true, false));
+    CHECK(!SeekParkFailedTakeDue(SeekParkPhase::Failed, false, true));
+    CHECK(!SeekParkFailedTakeDue(SeekParkPhase::Release, true, true));
+    CHECK(!SeekParkFailedTakeDue(SeekParkPhase::Released, true, true));
+    CHECK(!SeekParkFailedTakeDue(SeekParkPhase::Held, true, true));
+    // The receiver's target exemption covers that take, and nothing else.
+    CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Failed, true, true, true));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Failed, true, true, false));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Failed, false, true, true));
+    // A failed park vetoes and excludes nothing: the ordinary off-tank takes reach the source.
+    CHECK(!SeekParkVetoesTankTask(SeekParkPhase::Failed, "nearest", true));
+    CHECK(!SeekParkExcludesSource(SeekParkPhase::Failed, true, false));
 }
 
 
@@ -1037,6 +1057,7 @@ int main()
     TestParkBotSwapRestartsBudgetOnce();
     TestParkStrikeReach();
     TestParkOnlyTheReceiverInRelease();
+    TestParkFailedTakeDue();
     TestParkReleasedHolderKeepsTheSon();
     TestParkRecordKeepsItsSon();
     TestParkFightStartResets();

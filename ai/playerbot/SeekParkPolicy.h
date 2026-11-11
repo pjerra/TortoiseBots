@@ -128,6 +128,13 @@ namespace ai
         return receiverOk ? kSeekParkReleaseMaxMs : kSeekParkReleaseHoldMs;
     }
 
+    // Whether the release's receiver still owes its take to a failed park whose source is under a breakable control:
+    // the take's swing or taunt is what breaks it, and with no receiver the ordinary off-tank takes apply.
+    inline bool SeekParkFailedTakeDue(SeekParkPhase phase, bool controlled, bool isReceiver)
+    {
+        return phase == SeekParkPhase::Failed && controlled && isReceiver;
+    }
+
     // Whether the release is live: the window is open (Release) or a tank completed it (Released). The release's
     // damage hold, gather, takes and lead read the same in both, so latching success changes nothing but the failure.
     inline bool SeekParkReleaseLive(SeekParkPhase phase)
@@ -500,11 +507,13 @@ namespace ai
     }
 
     // Whether this bot's attack on `target` may outrank the invalid-target rule: the release's receiver, its released
-    // source, and only while the release is live. A polymorphed Son is otherwise no valid current target, so the
-    // receiver's Attack() would be undone by "select new target" every tick.
-    inline bool SeekParkReleaseTargetAllowed(SeekParkPhase phase, bool isReceiver, bool isParkSon)
+    // source, while the release is live, and the receiver of a failed park whose source is still controlled (its take
+    // is what breaks the control). A polymorphed Son is otherwise no valid current target, so the receiver's Attack()
+    // would be undone by "select new target" every tick.
+    inline bool SeekParkReleaseTargetAllowed(SeekParkPhase phase, bool isReceiver, bool isParkSon, bool controlled)
     {
-        return SeekParkReleaseLive(phase) && isReceiver && isParkSon;
+        return (SeekParkReleaseLive(phase) || (phase == SeekParkPhase::Failed && controlled)) && isReceiver &&
+            isParkSon;
     }
 
     // The late-engage lead the fight read burns with: a parked or released source is not burned on arrival (its

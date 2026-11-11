@@ -126,7 +126,8 @@ class SeekParkWiring(unittest.TestCase):
         # The order the read runs in: the stand-down, then the receiver's walk, then the release's take, then today's
         # body (R5, R7, R9).
         self.assertLess(fn.index("SeekParkTankStandsDown("), fn.index("state.parkPreWalk"))
-        self.assertLess(fn.index("state.parkPreWalk"), fn.index("SeekParkReleaseTakeDue("))
+        self.assertLess(fn.index("state.parkPreWalk"), fn.index("SeekParkFailedTakeDue("))
+        self.assertLess(fn.index("SeekParkFailedTakeDue("), fn.index("SeekParkReleaseTakeDue("))
         self.assertLess(fn.index("SeekParkReleaseTakeDue("), fn.rindex("FindBossSeekTankUnparked("))
 
     def test_the_stand_down_stops_the_tank_attack(self):
@@ -188,6 +189,21 @@ class SeekParkWiring(unittest.TestCase):
         self.assertIn("if (excluded(candidate))", fn)
         self.assertIn("if (!excluded(reliefSon))", fn)
         self.assertIn("if (!excluded(nearestSon))", fn)
+
+    def test_a_failed_controlled_park_keeps_its_take(self):
+        # Fix 2: a park that failed while the Son is still sheeped still breaks it: the release's receiver keeps its
+        # take, and with none the body's ordinary takes apply (a failed park vetoes nothing).
+        fn = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
+        self.assertIn("SeekParkFailedTakeDue(state.parkPhase, state.parkControlled, isReceiver)", fn)
+        self.assertIn("inline bool SeekParkFailedTakeDue(SeekParkPhase phase, bool controlled, bool isReceiver)",
+                      POLICY)
+        self.assertIn("return phase == SeekParkPhase::Failed && controlled && isReceiver;", POLICY)
+        read = body(ACTIONS, "void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)")
+        self.assertIn("readPhase != SeekParkPhase::Failed || controlled", read)
+        self.assertIn("out.parkControlled = in.controlled;", read)
+        target = body(ACTIONS, "bool ai::BossSeekParkReleaseTargetAllowed(PlayerbotAI* ai, Player* bot, Unit* target)")
+        self.assertIn("SeekParkFailedTakeDue(state.parkPhase, state.parkControlled, true)", target)
+        self.assertIn("state.parkControlled);", target)
 
     def test_the_trigger_only_asks(self):
         fn = body(TRIGGERS, "bool BossTacticsParkTrigger::IsActive()")
