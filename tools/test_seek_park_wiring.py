@@ -28,6 +28,18 @@ def body(text, signature):
 
 
 class SeekParkWiring(unittest.TestCase):
+    def test_the_key_off_is_todays_walk_out(self):
+        # The key is read before the row, so with it off no seek_park row is even looked up, the fight read resets the
+        # record and never steps the machine, and the burn lead is the seek_pull row's own.
+        rules = body(ACTIONS, "SeekParkRules SeekParkRulesOf(std::uint32_t mapId, const BossTacticRow* seekRow)")
+        self.assertLess(rules.index("dungeonRunSeekPark"), rules.index("SeekParkRow("))
+        self.assertIn("return rules;", rules)
+        read = body(ACTIONS, "void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)")
+        self.assertLess(read.index("if (!rules.on)"), read.index("SeekParkStep("))
+        # The pure rules keep today's lead with the key off, whatever the phase says (TestParkNeedsRoom,
+        # TestParkHeldUntilReleaseLead in tools/test_seek_park_policy.cpp).
+        self.assertIn("if (!rulesOn)", POLICY)
+
     def test_the_tank_pick_reads_the_key_before_todays_body(self):
         fn = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
         self.assertLess(fn.index("dungeonRunSeekPark"), fn.index("FindBossSeekTankUnparked("))
