@@ -1,5 +1,6 @@
 # Changelog
 
+- Fixed: a failed park whose Son is still controlled and which found no receiver now lets the first ordinary off-tank that takes the Son keep it as its target, so its take breaks the control instead of the raid sleeping until the siphon; a breaker that dies, is charmed or becomes Hakkar's victim is replaced by the next taker.
 - Fixed: a parked Son that is awake only because its Polymorph ran out no longer completes the release off whichever tank it last hit: its `released` now needs that tank's own current target to be the Son, so a stale victim no longer leaves the raid waiting on a sleeping Son.
 - Fixed: a park that failed while its Son is still controlled keeps breaking the sheep: the chosen off-tank keeps its take until the control goes, and with no receiver the ordinary off-tank takes apply, instead of the Son sleeping to the siphon.
 - Fixed: the release's receiver-only window and its longer wait apply only while the Son is still controlled, so an awake Son on a healer gets the raid's ordinary takes at once.

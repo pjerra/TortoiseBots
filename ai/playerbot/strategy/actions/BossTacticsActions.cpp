@@ -877,6 +877,8 @@ struct SeekFight
     // breakable control still holds the source.
     bool parkSonOnTank = false;
     std::uint64_t parkReceiver = 0;
+    // The failed park's breaker: the ordinary off-tank whose take breaks the controlled Son when there is no receiver.
+    std::uint64_t parkBreaker = 0;
     bool parkReceiverOk = false;
     bool parkPreWalk = false;
     bool parkControlled = false;
@@ -2025,6 +2027,21 @@ SeekParkPhase SeekParkPhaseOf(std::uint32_t instanceId)
 bool PlayerHoldsFightSon(const std::vector<Unit*>& fightSons, std::uint32_t sonEntry, Player* member,
                          std::uint64_t exceptSon);
 
+// The failed park's breaker: with the receiver pick empty, the ordinary off-tank whose take reaches the Son is the only
+// thing that can break its control. Stored on the record like the receiver; the read drops it once it no longer
+// qualifies, and the next ordinary taker latches.
+void NoteBossSeekParkBreaker(Player* bot, std::uint64_t sonGuid)
+{
+    if (!bot || sonGuid == 0)
+        return;
+    std::lock_guard<std::mutex> lock(g_seekParkMutex);
+    auto const it = g_seekParks.find(bot->GetInstanceId());
+    if (it == g_seekParks.end() || it->second.state.breaker != 0 || it->second.state.son != sonGuid ||
+        it->second.state.phase != SeekParkPhase::Failed)
+        return;
+    it->second.state.breaker = bot->GetObjectGuid().GetRawValue();
+}
+
 // The park's rules for this fight (D2): the key, the seek_pull cycle key and the boss's seek_park row.
 SeekParkRules SeekParkRulesOf(std::uint32_t mapId, const BossTacticRow* seekRow)
 {
@@ -2258,6 +2275,16 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
         (readPhase != SeekParkPhase::Failed || controlled))
         receiver = PickSeekParkReceiverOf(ai, bot, out.boss, liveSon, out.sons, out.row->targetEntry,
                                           live ? recorded.receiver : 0);
+    // The failed park's breaker is kept while it still qualifies; killed, charmed or Hakkar's victim, the next
+    // ordinary taker latches.
+    std::uint64_t breaker = 0;
+    if (live && recorded.breaker != 0)
+    {
+        Player* const member = map->GetPlayer(ObjectGuid(recorded.breaker));
+        if (member && SeekParkBreakerKeeps(readPhase, controlled, sServerFacade.IsAlive(member),
+                                           !member->GetCharmerGuid().IsEmpty(), out.boss->GetVictim() == member))
+            breaker = recorded.breaker;
+    }
     Player* const sonVictim = liveSon ? dynamic_cast<Player*>(liveSon->GetVictim()) : nullptr;
     // The stale-victim test: a tank the Son still lists is only "on the Son" when its own current target is the Son.
     const bool victimIsTank = sonVictim && PlayerbotAI::IsTank(sonVictim);
@@ -2299,6 +2326,7 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
         record.touchedMs = nowMs;
         changed = SeekParkStep(record.state, rules, in, nowMs);
         record.state.receiver = receiver ? receiver->GetObjectGuid().GetRawValue() : 0;
+        record.state.breaker = breaker;
         step = record.state;
     }
     out.parkPhase = step.phase;
@@ -2307,6 +2335,7 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
     out.parkReleaseMs = step.releaseMs;
     out.parkSonOnTank = in.sonOnTank;
     out.parkReceiver = step.receiver;
+    out.parkBreaker = step.breaker;
     out.parkReceiverOk = in.receiverOk;
     out.parkPreWalk = SeekParkPreWalk(step.phase, in.dueKnown, in.dueInMs, rules.releaseLeadMs);
     out.parkControlled = in.controlled;
@@ -5433,7 +5462,8 @@ bool ai::BossSeekParkReleaseTargetAllowed(PlayerbotAI* ai, Player* bot, Unit* ta
     if (target->GetObjectGuid().GetRawValue() != state.parkSon)
         return false;
     return SeekParkReleaseTargetAllowed(state.parkPhase,
-                                        state.parkReceiver == bot->GetObjectGuid().GetRawValue(), true,
+                                        state.parkReceiver == bot->GetObjectGuid().GetRawValue(),
+                                        state.parkBreaker == bot->GetObjectGuid().GetRawValue(), true,
                                         state.parkControlled);
 }
 
@@ -10742,6 +10772,13 @@ SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)
             SeekParkVetoesTankTask(state.parkPhase, task.takeSrc, onTank, state.parkControlled))
             return SeekTankTask();
     }
+    // A failed park with its Son still controlled and no receiver hands the break to the ordinary off-tank's take:
+    // latch that taker so the invalid-target rule stops undoing its target. The record keeps it until the control goes
+    // or it dies, is charmed or becomes the boss's victim.
+    if (task.valid && task.take && task.source &&
+        SeekParkBreakerDue(state.parkPhase, state.parkControlled, state.parkReceiver != 0,
+                           task.source->GetObjectGuid().GetRawValue() == state.parkSon))
+        NoteBossSeekParkBreaker(bot, state.parkSon);
     return task;
 }
 

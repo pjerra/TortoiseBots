@@ -273,14 +273,15 @@ static void TestParkExcludesAndTarget()
     CHECK(!SeekParkExcludesSource(SeekParkPhase::None, true, false, false));
     CHECK(!SeekParkExcludesSource(SeekParkPhase::Failed, true, false, true));
     // The invalid-target exemption: the receiver, its released source, while the release is live.
-    CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Release, true, true, true));
-    CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Release, true, true, false));
-    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Release, false, true, true));
-    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Release, true, false, true));
-    CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Released, true, true, false));
-    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Released, false, true, true));
-    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Held, true, true, true));
-    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Apply, true, true, true));
+    CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Release, true, false, true, true));
+    CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Release, true, false, true, false));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Release, false, false, true, true));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Release, true, false, false, true));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Release, false, true, true, true));
+    CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Released, true, false, true, false));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Released, false, false, true, true));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Held, true, false, true, true));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Apply, true, false, true, true));
 }
 
 // TestParkOnlyTheReceiverInRelease: F6, a second tank never takes the released Son inside its window (R11's table).
@@ -338,13 +339,41 @@ static void TestParkFailedTakeDue()
     CHECK(!SeekParkFailedTakeDue(SeekParkPhase::Release, true, true));
     CHECK(!SeekParkFailedTakeDue(SeekParkPhase::Released, true, true));
     CHECK(!SeekParkFailedTakeDue(SeekParkPhase::Held, true, true));
-    // The receiver's target exemption covers that take, and nothing else.
-    CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Failed, true, true, true));
-    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Failed, true, true, false));
-    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Failed, false, true, true));
+    // The receiver's target exemption covers that take.
+    CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Failed, true, false, true, true));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Failed, true, false, true, false));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Failed, true, false, false, true));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Failed, false, false, true, true));
     // A failed park vetoes and excludes nothing: the ordinary off-tank takes reach the source.
     CHECK(!SeekParkVetoesTankTask(SeekParkPhase::Failed, "nearest", true, true));
     CHECK(!SeekParkExcludesSource(SeekParkPhase::Failed, true, false, true));
+}
+
+// TestParkFailedParkBreaker: the named failing case. A park that failed while its Son is still controlled and found no
+// receiver hands the break to the first ordinary off-tank that takes it: that taker's target is exempt from the
+// invalid-target rule through the walk and the attack, and only until the control goes. A breaker that died, was
+// charmed or became Hakkar's victim is dropped, and the next ordinary taker latches.
+static void TestParkFailedParkBreaker()
+{
+    // The latch: a failed, controlled park with no receiver, on a tank whose ordinary take reaches the Son.
+    CHECK(SeekParkBreakerDue(SeekParkPhase::Failed, true, false, true));
+    CHECK(!SeekParkBreakerDue(SeekParkPhase::Failed, true, true, true));   // a receiver exists
+    CHECK(!SeekParkBreakerDue(SeekParkPhase::Failed, false, false, true)); // the control broke
+    CHECK(!SeekParkBreakerDue(SeekParkPhase::Failed, true, false, false)); // the take is on another Son
+    CHECK(!SeekParkBreakerDue(SeekParkPhase::Release, true, false, true));
+    CHECK(!SeekParkBreakerDue(SeekParkPhase::Held, true, false, true));
+    // The breaker's own take targets the sheeped Son, through approach and attack, until the control is gone.
+    CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Failed, false, true, true, true));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Failed, false, true, true, false));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Failed, false, false, true, true));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Release, false, true, true, true));
+    // Kept while it qualifies; the control's loss, death, a charm and Hakkar's victim each drop it.
+    CHECK(SeekParkBreakerKeeps(SeekParkPhase::Failed, true, true, false, false));
+    CHECK(!SeekParkBreakerKeeps(SeekParkPhase::Failed, false, true, false, false));
+    CHECK(!SeekParkBreakerKeeps(SeekParkPhase::Failed, true, false, false, false));
+    CHECK(!SeekParkBreakerKeeps(SeekParkPhase::Failed, true, true, true, false));
+    CHECK(!SeekParkBreakerKeeps(SeekParkPhase::Failed, true, true, false, true));
+    CHECK(!SeekParkBreakerKeeps(SeekParkPhase::Release, true, true, false, false));
 }
 
 
@@ -1099,6 +1128,7 @@ int main()
     TestParkOnlyTheReceiverInRelease();
     TestParkBrokenControlReleasesToday();
     TestParkFailedTakeDue();
+    TestParkFailedParkBreaker();
     TestParkReleasedHolderKeepsTheSon();
     TestParkRecordKeepsItsSon();
     TestParkFightStartResets();
