@@ -138,12 +138,12 @@ void LogThreatFree(PlayerbotAI* ai, Player* bot, Unit* subject, float gapYd)
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsThreatFree", info1, "");
 }
 
-// The subject z history the lift reads, one small ring per subject guid. It is dropped while the subject is out of
+// The subject z history the lift reads, one small ring per (instance, guid). It is dropped while the subject is out of
 // combat (the fight reset), so a new pull starts its own history instead of inheriting the last one's height.
 constexpr std::size_t kThreatFreeZMaxSubjects = 64;
 
 std::mutex g_threatFreeZMutex;
-std::unordered_map<std::uint64_t, ai::ThreatFreeZHistory> g_threatFreeZ;
+ai::ThreatFreeZHistories g_threatFreeZ;
 
 // BossTacticsHex: one row per Jin'do Hex (17172) on a member of the fight, so a walk can see who the boss turned to after
 // it. Hex lands on the boss's current victim and wipes that member's threat; the row is the state right after:
@@ -276,14 +276,15 @@ bool ai::ThreatFreeLifted(PlayerbotAI* ai, Player* bot, Unit* subject)
     const std::uint32_t nowMs = WorldTimer::getMSTime();
     {
         std::lock_guard<std::mutex> lock(g_threatFreeZMutex);
-        const std::uint64_t key = subject->GetObjectGuid().GetRawValue();
+        const ai::ThreatFreeZKey key{static_cast<std::uint32_t>(subject->GetInstanceId()),
+                                     subject->GetObjectGuid().GetRawValue()};
         if (!subject->IsInCombat())
-            g_threatFreeZ.erase(key);
+            g_threatFreeZ.Reset(key);
         else
         {
-            descending = g_threatFreeZ[key].Descending(subject->GetPositionZ(), nowMs);
+            descending = g_threatFreeZ.Descending(key, subject->GetPositionZ(), nowMs);
             if (g_threatFreeZ.size() > kThreatFreeZMaxSubjects)
-                g_threatFreeZ.clear();
+                g_threatFreeZ.Clear();
         }
     }
     return ThreatFreeApplies(true, isTank, subject->GetPositionZ(), bot->GetPositionZ(), gap, descending);

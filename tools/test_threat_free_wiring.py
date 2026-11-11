@@ -53,11 +53,19 @@ class ThreatFreeWiring(unittest.TestCase):
                        'ai->HasStrategy("boss tactics", BotState::BOT_STATE_COMBAT)',
                        "PlayerbotAI::IsTank(bot)",
                        "GetBossTactics().ThreatFreeGap(subject->GetMapId(), subject->GetEntry())",
-                       "subject->IsInCombat()", "g_threatFreeZ.erase(key)",
+                       "subject->IsInCombat()", "g_threatFreeZ.Reset(key)",
                        "ThreatFreeApplies(true, isTank, subject->GetPositionZ(), bot->GetPositionZ(), gap, descending)"):
             self.assertIn(needle, helper)
         self.assertIn("g_threatFreeZMutex", VALUES_CPP)
-        self.assertIn("std::unordered_map<std::uint64_t, ai::ThreatFreeZHistory> g_threatFreeZ;", VALUES_CPP)
+        self.assertIn("ai::ThreatFreeZHistories g_threatFreeZ;", VALUES_CPP)
+        # The fight history is keyed by (instance id, raw guid): instanced copies of one creature share the raw guid,
+        # and two raids run the lair at once, so a guid-only key would share one ring between them.
+        self.assertIn("const ai::ThreatFreeZKey key{static_cast<std::uint32_t>(subject->GetInstanceId()),", helper)
+        self.assertIn("subject->GetObjectGuid().GetRawValue()};", helper)
+        self.assertIn("return instanceId != other.instanceId ? instanceId < other.instanceId : guid < other.guid;",
+                      CAP_POLICY)
+        self.assertIn("class ThreatFreeZHistories", CAP_POLICY)
+        self.assertIn("histories_.erase(key);", CAP_POLICY)
 
     def test_log_is_throttled_and_named(self):
         log = body(VALUES_CPP, "void LogThreatFree(PlayerbotAI* ai, Player* bot, Unit* subject, float gapYd)")

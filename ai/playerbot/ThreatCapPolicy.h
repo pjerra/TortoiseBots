@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <vector>
 #include <utility>
 
@@ -166,7 +167,7 @@ namespace ai
     constexpr std::size_t kThreatFreeZSamples = 8;
 
     // One subject's recent height, sampled at most every kThreatFreeZSampleGapMs so the small ring spans more than a
-    // second whatever the read rate. The caller keeps one per subject guid and drops it with the fight.
+    // second whatever the read rate. The caller keeps one per (instance, guid) and drops it with the fight.
     struct ThreatFreeZHistory
     {
         struct Sample
@@ -196,6 +197,49 @@ namespace ai
             }
             return descending;
         }
+    };
+
+    // The history's key: the instance id with the raw guid. An instanced copy of the same creature can hand out the
+    // same raw guid, and two raids can run one lair at once, so a guid-only key shares one ring between them: one
+    // raid's descent ends the other's lift and its fight reset forgets the other's history.
+    struct ThreatFreeZKey
+    {
+        std::uint32_t instanceId = 0;
+        std::uint64_t guid = 0;
+
+        bool operator<(ThreatFreeZKey const& other) const
+        {
+            return instanceId != other.instanceId ? instanceId < other.instanceId : guid < other.guid;
+        }
+    };
+
+    // One ring per (instance, guid). Reset drops only the key it is given, so a fight ending in one instance leaves
+    // every other instance's history standing. The caller holds the lock around the calls.
+    class ThreatFreeZHistories
+    {
+    public:
+        bool Descending(ThreatFreeZKey const& key, float subjectZ, std::uint32_t nowMs)
+        {
+            return histories_[key].Descending(subjectZ, nowMs);
+        }
+
+        void Reset(ThreatFreeZKey const& key)
+        {
+            histories_.erase(key);
+        }
+
+        std::size_t size() const
+        {
+            return histories_.size();
+        }
+
+        void Clear()
+        {
+            histories_.clear();
+        }
+
+    private:
+        std::map<ThreatFreeZKey, ThreatFreeZHistory> histories_;
     };
 
     // AiPlayerbot.DungeonRunThreatFree (ai_boss_tactic kind `threat_free`): a subject that stands `gapYd` yd or more

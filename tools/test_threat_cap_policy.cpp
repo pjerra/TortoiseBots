@@ -190,6 +190,32 @@ int main()
         CHECK(ThreatFreeApplies(true, false, -69.6f, -86.0f, 10.0f, hover.Descending(-69.6f, 6000)));
     }
 
+    // ThreatFreeZHistories_TwoInstancesSameGuid is the failing case of the per-instance key: an instanced copy of the
+    // same creature shares its raw guid, and two raids can run the lair at once, so a guid-only history is one ring for
+    // both raids: instance 7's sample makes instance 9 read a descent it never made, and instance 7's fight reset
+    // forgets instance 9's hover.
+    CASE("ThreatFreeZHistories_TwoInstancesSameGuid");
+    {
+        ThreatFreeZHistories histories;
+        const ThreatFreeZKey raidA{7, 0xA1};
+        const ThreatFreeZKey raidB{9, 0xA1};
+        // Both instances hover 6 yd apart, and each sample is its own instance's height, never the other's reference:
+        // a guid-only key would read instance 9's -60 as a 6 yd descent for instance 7 at -66.
+        CHECK(!histories.Descending(raidB, -60.0f, 1000));
+        CHECK(!histories.Descending(raidA, -66.0f, 1000));
+        // Instance 7 lands and drops out of combat: the fight reset clears instance 7's ring only.
+        histories.Reset(raidA);
+        // Instance 9 has come down 6 yd against its own -60 sample, still inside the window: a descent there.
+        // A guid-only key had lost that sample to the reset above, so this read 0.
+        CHECK(histories.Descending(raidB, -66.0f, 1900));
+        // Instance 7's re-pull starts a fresh hover: no descent against the ring its reset dropped.
+        CHECK(!histories.Descending(raidA, -66.0f, 2000));
+        // Both instances are tracked side by side.
+        CHECK(histories.size() == 2);
+        histories.Reset(raidB);
+        CHECK(histories.size() == 1);
+    }
+
     // hakkar_away_key_on_equals_today (fails with the first version of the key: it gave 2000): the main tank holds with
     // 40000 and the off-tanks are on Sons (not on the boss) with 2000 left over: with the key on the pick is today's.
     {

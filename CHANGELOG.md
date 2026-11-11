@@ -1,5 +1,6 @@
 # Changelog
 
+- Fixed: the `threat_free` descent history is kept per instance as well as per guid, so two raids running the same lair at once no longer share one height history: one raid's landing no longer ends the other's lift, and one fight's reset leaves the other's history standing.
 - Fixed: the cast-threat veto (`ThreatCapCountsCastThreat`) asks the same `threat_free` lift, so it no longer holds a single-target nuke the threat value already uncapped on an airborne Onyxia.
 - Fixed: the `threat_free` lift ends while the subject is descending (its z fell by more than 1 yd within 2 s), not only when the gap closes: Onyxia's threat list is wiped at the start of her landing flight while she is still about 20 yd up, so the height-only lift let the casters nuke a tankless boss that was already coming down on them.
 - New: behind AiPlayerbot.DungeonRunThreatFree (default 0), the boss-tactic kind `threat_free`: a non-tank reads no threat cap on a subject that stands the row's gap above it, so the casters' nukes on airborne Onyxia go out instead of being vetoed as "the tank has no threat" (her tanks hold no threat while no tank can reach her, and her landing wipes her threat list); Onyxia's Lair ships the row at 10 yd, and each lift writes one `BossTacticsThreatFree` row per bot per 10 s.
