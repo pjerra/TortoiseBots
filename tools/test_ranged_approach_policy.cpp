@@ -320,6 +320,28 @@ int main()
         std::cout << "  [PASS] hover cast: a stacked ally outranks the hold\n";
     }
 
+    // HoverCastYieldRadius_StackOnly (the failing case): with the key on the hold yields only to a real stack. A member
+    // at the 2e median 4.8 yd (inside the 10 yd spread distance, outside 4.5) no longer breaks the hold; at 4.4 yd it
+    // does. The key off keeps the caller's radius, and the radius never widens past the caller's own.
+    {
+        CHECK(std::fabs(ai::HoverCastYieldRadius(true, 10.0f) - 4.5f) < 0.001f);
+        CHECK(ai::HoverCastHoldsSpread(true, true, true, true, false, 4.8f, ai::HoverCastYieldRadius(true, 10.0f)));
+        CHECK(!ai::HoverCastHoldsSpread(true, true, true, true, false, 4.8f, ai::HoverCastYieldRadius(false, 10.0f)));
+        CHECK(!ai::HoverCastHoldsSpread(true, true, true, true, false, 4.4f, ai::HoverCastYieldRadius(true, 10.0f)));
+        CHECK(std::fabs(ai::HoverCastYieldRadius(true, 3.0f) - 3.0f) < 0.001f);
+        std::cout << "  [PASS] hover cast stack only: yields inside 4.5 yd, never wider than the caller's radius\n";
+    }
+
+    // HoverCastStepAllowed_Rules: one step per 8 s, and of two bots that would both step only the higher guid steps.
+    {
+        CHECK(ai::HoverCastStepAllowed(false, true, false, 0));
+        CHECK(!ai::HoverCastStepAllowed(true, false, true, 7999));
+        CHECK(ai::HoverCastStepAllowed(true, false, true, 8000));
+        CHECK(!ai::HoverCastStepAllowed(true, true, false, UINT32_MAX));
+        CHECK(ai::HoverCastStepAllowed(true, true, true, UINT32_MAX));
+        CHECK(ai::HoverCastStepAllowed(true, false, false, UINT32_MAX));
+        std::cout << "  [PASS] hover cast step: restep clock and guid tie-break\n";
+    }
 
     std::cout << "Ranged approach policy tests: OK\n";
     return 0;

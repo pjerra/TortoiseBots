@@ -191,6 +191,28 @@ namespace ai
         return keyOn && rangedDps && targetHovering && inSpellRange && !spreadRowLive && nearestAllyYd >= spreadRadius;
     }
 
+    // AiPlayerbot.HoverCastStackOnly: the hover hold yielded to any group member inside the spread radius (10 yd), so
+    // casters parked on the same hover reach point never stood still (walk 2e: 279 of 402 verdicts yielded, median
+    // nearest member 4.8 yd, each step 11 yd, a new one every 3 s). With the key on the hold yields only to a real
+    // stack, steps just past it, rests kHoverCastRestepMs, and of two bots that would both step only one does.
+    constexpr float kHoverCastStackYd = 4.5f;
+    constexpr std::uint32_t kHoverCastRestepMs = 8000;
+    inline float HoverCastYieldRadius(bool keyOn, float spreadRadius)
+    {
+        return keyOn && spreadRadius > kHoverCastStackYd ? kHoverCastStackYd : spreadRadius;
+    }
+    // Whether a bot inside the yield radius of its nearest member takes the step. `sinceLastStepMs` is UINT32_MAX for a
+    // bot that never stepped. `allyAlsoSteps`: the member is a bot and a ranged damage dealer, so the same rule moves
+    // it; then only the higher guid of the two steps.
+    inline bool HoverCastStepAllowed(bool keyOn, bool allyAlsoSteps, bool botGuidHigher, std::uint32_t sinceLastStepMs)
+    {
+        if (!keyOn)
+            return true;
+        if (sinceLastStepMs < kHoverCastRestepMs)
+            return false;
+        return !allyAlsoSteps || botGuidHigher;
+    }
+
     // The trigger ("enemy out of spell range") measures edge to edge with both combat reaches; the path walk measures
     // centre to centre. A hovering boss's reach (Onyxia 22 yd in the air) makes the centre distance the trigger allows
     // that much longer.
