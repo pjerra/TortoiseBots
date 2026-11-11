@@ -696,7 +696,8 @@ namespace ai
             goal.z = target->GetPositionZ();
 
             float const reachDist = HoverReachDistance(distance, target->GetCombatReach(), bot->GetCombatReach());
-            float const triggerDist = ai->GetRange("spell") - sPlayerbotAIConfig.contactDistance +
+            // The action's own range: a short-range spell's trigger line is shorter than the generic spell range.
+            float const triggerDist = range - sPlayerbotAIConfig.contactDistance +
                 target->GetCombatReach() + bot->GetCombatReach();
             float const dx = circle.x - goal.x;
             float const dy = circle.y - goal.y;
