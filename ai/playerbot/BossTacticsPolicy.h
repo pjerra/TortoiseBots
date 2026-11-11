@@ -614,11 +614,12 @@ namespace ai
                     row.mode != TacticMode::Default))
                 return false;
             // tank_post: the awaited unit (`target_entry`), the tank slot (priority 1-7), the wait spot, the arrival
-            // radius and the longest hold. A fight-scan kind, so its health band arms the post. No spell, no cycle
-            // columns; the only mode word is `hold_spot`.
+            // radius, 5-100 yd: a subject that lands and runs after a healer across the room, and the longest hold. A
+            // fight-scan kind, so its health band arms the post. No spell, no cycle columns; the only mode word is
+            // `hold_spot`.
             if (row.kind == BossTacticKind::TankPost &&
                 (row.targetEntry == 0 || row.priority < 1 || row.priority > 7 || !row.HasSpot() ||
-                    row.param < 5.0f || row.param > 40.0f || row.windowSec < 10.0f || row.windowSec > 120.0f ||
+                    row.param < 5.0f || row.param > 100.0f || row.windowSec < 10.0f || row.windowSec > 120.0f ||
                     row.spellId != 0 || (row.mode != TacticMode::Default && row.mode != TacticMode::HoldSpot)))
                 return false;
             // The cycle columns are the seek_aura kind's and the reset window's (threat_successor with a cycle_spell),
@@ -4035,5 +4036,57 @@ namespace ai
         return (step == TankPostDecision::Drag || step == TankPostDecision::Yield ||
                    step == TankPostDecision::Leash) &&
                lastStep != static_cast<std::uint8_t>(step);
+    }
+
+    // AiPlayerbot.DungeonRunTankPostTaunts: the Engage step takes the subject back whenever it is not on the post's tank,
+    // off a healer or a damage dealer, and off another tank only with AiPlayerbot.DungeonRunTankPostOwnsSubject (without
+    // the reservation that tank's own class taunt is not refused, so the subject flips between the two tanks; walk 2d: 3
+    // of 3 reservations lapsed on grace while slot 1 hit him without a taunt; slot 1's first taunt +108..+121 s). The
+    // gate still decides (needs_aura, taunt_immune); a warrior out of Defensive Stance takes it first; the area taunt
+    // only when the single taunt cannot go out, the subject is within kAreaTauntRadiusYd and on a non-tank, and no other
+    // post's subject is in its radius.
+    enum class TankPostTaunt : std::uint8_t { None, Taunt, Stance, AreaTaunt, Gate, NotReady };
+    struct TankPostTauntIn
+    {
+        bool keyOn = false; bool engage = false; bool subjectOnTank = false; bool subjectSelectable = false;
+        bool gateRefuses = false; bool tauntCastable = false; bool needsStance = false; bool stanceCastable = false;
+        bool areaCastable = false; bool areaInRange = false; bool areaGateRefuses = false; bool victimIsTank = false;
+        bool ownsSubjectOn = false;
+    };
+    // Whether any taunt path is open at all: the key on, the subject off this tank and selectable, and off another tank
+    // only with the reservation (its taunt passes, but the other tank's own class taunt would not be refused, so the
+    // subject would flip between the two). Read before the gate inputs, which write rows and advance the post clocks.
+    inline bool TankPostTauntAttemptable(const TankPostTauntIn& in)
+    {
+        if (!in.keyOn || !in.engage || in.subjectOnTank || !in.subjectSelectable) return false;
+        return !in.victimIsTank || in.ownsSubjectOn;
+    }
+    inline TankPostTaunt TankPostTauntStep(const TankPostTauntIn& in)
+    {
+        if (!TankPostTauntAttemptable(in)) return TankPostTaunt::None;
+        if (in.gateRefuses) return TankPostTaunt::Gate;
+        if (in.tauntCastable) return TankPostTaunt::Taunt;
+        if (in.needsStance && in.stanceCastable) return TankPostTaunt::Stance;
+        if (in.areaCastable && in.areaInRange && !in.areaGateRefuses && !in.victimIsTank) return TankPostTaunt::AreaTaunt;
+        return TankPostTaunt::NotReady;
+    }
+    inline const char* TankPostTauntWord(TankPostTaunt t)  // none, taunt, stance, area, gate, not_ready
+    {
+        switch (t)
+        {
+            case TankPostTaunt::Taunt:
+                return "taunt";
+            case TankPostTaunt::Stance:
+                return "stance";
+            case TankPostTaunt::AreaTaunt:
+                return "area";
+            case TankPostTaunt::Gate:
+                return "gate";
+            case TankPostTaunt::NotReady:
+                return "not_ready";
+            case TankPostTaunt::None:
+            default:
+                return "none";
+        }
     }
 }

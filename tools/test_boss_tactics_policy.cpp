@@ -1386,6 +1386,152 @@ static void TestTankPost_HoldSpotModeLoadsOnlyOnTankPost()
     CHECK(table.Size() == 2);
 }
 
+// The mutation case: with the owns-subject half dropped from TankPostTauntAttemptable, a post whose subject is on
+// another tank taunts it with AiPlayerbot.DungeonRunTankPostOwnsSubject off, and that tank's own class taunt is not
+// refused (TankPostReservesSubject returns false with the key off), so the subject flips between the two tanks every
+// taunt cooldown.
+static void TestTankPostTauntStep_OffAnotherTank()
+{
+    TankPostTauntIn in;
+    in.keyOn = true;
+    in.engage = true;
+    in.subjectOnTank = false;
+    in.subjectSelectable = true;
+    in.tauntCastable = true;
+    in.victimIsTank = true;
+    in.ownsSubjectOn = false;
+    CHECK(TankPostTauntStep(in) == TankPostTaunt::None);
+    TankPostTauntIn reserved = in; reserved.ownsSubjectOn = true;
+    CHECK(TankPostTauntStep(reserved) == TankPostTaunt::Taunt);
+    // Off a healer or a damage dealer the taunt needs no reservation.
+    TankPostTauntIn nonTank = in; nonTank.victimIsTank = false;
+    CHECK(TankPostTauntStep(nonTank) == TankPostTaunt::Taunt);
+}
+
+// The mutation case: with the early return dropped, a post whose subject is already on it still reads the taunt and
+// area gates every Engage tick, and BossTacticsTauntGate rows name taunts that were never attempted.
+static void TestTankPostTauntAttemptable_UntakenSubject()
+{
+    TankPostTauntIn in;
+    in.keyOn = true;
+    in.engage = true;
+    in.subjectSelectable = true;
+    CHECK(TankPostTauntAttemptable(in));
+    TankPostTauntIn onTank = in; onTank.subjectOnTank = true;
+    CHECK(!TankPostTauntAttemptable(onTank));
+    // The gate flags cannot bring an untaken subject back: they are read only after this verdict.
+    TankPostTauntIn gated = onTank; gated.gateRefuses = true; gated.areaCastable = true; gated.areaInRange = true;
+    CHECK(!TankPostTauntAttemptable(gated));
+    TankPostTauntIn off = in; off.keyOn = false;
+    CHECK(!TankPostTauntAttemptable(off));
+    TankPostTauntIn airborne = in; airborne.subjectSelectable = false;
+    CHECK(!TankPostTauntAttemptable(airborne));
+    TankPostTauntIn tankVictim = in; tankVictim.victimIsTank = true;
+    CHECK(!TankPostTauntAttemptable(tankVictim));
+    TankPostTauntIn reserved = tankVictim; reserved.ownsSubjectOn = true;
+    CHECK(TankPostTauntAttemptable(reserved));
+}
+
+// Every step that is not a taunt: off the post, off the key, on its own tank, or still in the air.
+static void TestTankPostTauntStep_Gates()
+{
+    TankPostTauntIn in;
+    in.keyOn = true;
+    in.engage = true;
+    in.subjectSelectable = true;
+    in.tauntCastable = true;
+    CHECK(TankPostTauntStep(in) == TankPostTaunt::Taunt);
+    TankPostTauntIn off = in; off.keyOn = false;
+    CHECK(TankPostTauntStep(off) == TankPostTaunt::None);
+    TankPostTauntIn holding = in; holding.engage = false;
+    CHECK(TankPostTauntStep(holding) == TankPostTaunt::None);
+    TankPostTauntIn onTank = in; onTank.subjectOnTank = true;
+    CHECK(TankPostTauntStep(onTank) == TankPostTaunt::None);
+    TankPostTauntIn airborne = in; airborne.subjectSelectable = false;
+    CHECK(TankPostTauntStep(airborne) == TankPostTaunt::None);
+    // The gate is read before any cast question: a refused taunt does not fall through to the area taunt.
+    TankPostTauntIn gated = in; gated.gateRefuses = true; gated.areaCastable = true; gated.areaInRange = true;
+    CHECK(TankPostTauntStep(gated) == TankPostTaunt::Gate);
+    // No taunt known at all, no area taunt either: the step still says what blocked it.
+    TankPostTauntIn bare = in; bare.tauntCastable = false;
+    CHECK(TankPostTauntStep(bare) == TankPostTaunt::NotReady);
+}
+
+// A warrior's Taunt needs Defensive Stance: the stance goes first, and only when it can be cast.
+static void TestTankPostTauntStep_Stance()
+{
+    TankPostTauntIn in;
+    in.keyOn = true;
+    in.engage = true;
+    in.subjectSelectable = true;
+    in.needsStance = true;
+    in.stanceCastable = true;
+    CHECK(TankPostTauntStep(in) == TankPostTaunt::Stance);
+    TankPostTauntIn stuck = in; stuck.stanceCastable = false;
+    CHECK(TankPostTauntStep(stuck) == TankPostTaunt::NotReady);
+    // The taunt castable wins: no stance step when Taunt can already go out.
+    TankPostTauntIn ready = in; ready.tauntCastable = true;
+    CHECK(TankPostTauntStep(ready) == TankPostTaunt::Taunt);
+}
+
+// The area taunt is the fallback: only off a non-tank, only inside kAreaTauntRadiusYd, and only with both gates clear.
+static void TestTankPostTauntStep_AreaOnlyOffNonTank()
+{
+    TankPostTauntIn in;
+    in.keyOn = true;
+    in.engage = true;
+    in.subjectSelectable = true;
+    in.areaCastable = true;
+    in.areaInRange = true;
+    CHECK(TankPostTauntStep(in) == TankPostTaunt::AreaTaunt);
+    TankPostTauntIn tankVictim = in; tankVictim.victimIsTank = true;
+    CHECK(TankPostTauntStep(tankVictim) == TankPostTaunt::None);  // no taunt without the reservation
+    tankVictim.ownsSubjectOn = true;
+    CHECK(TankPostTauntStep(tankVictim) == TankPostTaunt::NotReady);  // nor the area taunt off a tank
+    TankPostTauntIn far = in; far.areaInRange = false;
+    CHECK(TankPostTauntStep(far) == TankPostTaunt::NotReady);
+    TankPostTauntIn reserved = in; reserved.areaGateRefuses = true;
+    CHECK(TankPostTauntStep(reserved) == TankPostTaunt::NotReady);
+    TankPostTauntIn uncastable = in; uncastable.areaCastable = false;
+    CHECK(TankPostTauntStep(uncastable) == TankPostTaunt::NotReady);
+    // The single taunt outranks it whenever it can go out.
+    TankPostTauntIn single = in; single.tauntCastable = true;
+    CHECK(TankPostTauntStep(single) == TankPostTaunt::Taunt);
+    CHECK(kAreaTauntRadiusYd == 10.0f);
+}
+
+static void TestTankPostTauntWord_All()
+{
+    CHECK(std::strcmp(TankPostTauntWord(TankPostTaunt::None), "none") == 0);
+    CHECK(std::strcmp(TankPostTauntWord(TankPostTaunt::Taunt), "taunt") == 0);
+    CHECK(std::strcmp(TankPostTauntWord(TankPostTaunt::Stance), "stance") == 0);
+    CHECK(std::strcmp(TankPostTauntWord(TankPostTaunt::AreaTaunt), "area") == 0);
+    CHECK(std::strcmp(TankPostTauntWord(TankPostTaunt::Gate), "gate") == 0);
+    CHECK(std::strcmp(TankPostTauntWord(TankPostTaunt::NotReady), "not_ready") == 0);
+}
+
+// The mutation case: with the cap back at 40 the Onyxia row's param 90 is refused and with it the whole post.
+static void TestTankPostRow_RadiusCap()
+{
+    auto const loads = [](float param)
+    {
+        BossTacticTable table;
+        BossTacticRow row = Row(249, 10184, BossTacticKind::TankPost, 50143, 0, 1, param);
+        row.windowSec = 120.0f;
+        row.spotX = 8.0f;
+        row.spotY = -200.0f;
+        row.spotZ = -85.8f;
+        row.mode = TacticMode::HoldSpot;
+        return table.Add(row);
+    };
+    CHECK(loads(90.0f));   // walk 2e's row: the anchor's whole floor
+    CHECK(loads(100.0f));  // the cap itself
+    CHECK(!loads(100.5f)); // past the cap
+    CHECK(!loads(4.9f));   // under 5 yd
+    CHECK(loads(5.0f));
+    CHECK(loads(40.0f));
+}
+
 static CastDangerZone Zone(float x, float y, float z, float radius)
 {
     CastDangerZone zone;
@@ -1458,6 +1604,13 @@ int main()
     TestTankPost_NoLeashAfterArrival();
     TestTankPost_StepEnteredOncePerEpisode();
     TestTankPost_HoldSpotModeLoadsOnlyOnTankPost();
+    TestTankPostTauntStep_OffAnotherTank();
+    TestTankPostTauntAttemptable_UntakenSubject();
+    TestTankPostTauntStep_Gates();
+    TestTankPostTauntStep_Stance();
+    TestTankPostTauntStep_AreaOnlyOffNonTank();
+    TestTankPostTauntWord_All();
+    TestTankPostRow_RadiusCap();
 
     // A boss that vanishes (Arlokk: invisible + not selectable, so it leaves the attackers list while it stays alive and
     // in combat) keeps its rows active while its adds fight on; the rows end with the fight or the grace window.
@@ -1977,7 +2130,7 @@ int main()
         CHECK(!table.Add(never));
     }
 
-    // Loader: a tank_post row names the awaited unit, a tank slot 1-7, a spot, an arrival radius of 5-40 yd and a
+    // Loader: a tank_post row names the awaited unit, a tank slot 1-7, a spot, an arrival radius of 5-100 yd and a
     // window of 10-120 s. No spell; `hold_spot` is the only mode word (TestTankPost_HoldSpotModeLoadsOnlyOnTankPost
     // proves a foreign word is refused), no cycle columns; its health band is the kind's own arming gate.
     {
@@ -2001,7 +2154,7 @@ int main()
         CHECK(!table.Add(tankPost(50143, 0, 8, 15.0f, 60.0f, true)));   // no such slot
         CHECK(!table.Add(tankPost(50143, 0, 1, 15.0f, 60.0f, false)));  // no spot
         CHECK(!table.Add(tankPost(50143, 0, 1, 4.0f, 60.0f, true)));    // radius below 5
-        CHECK(!table.Add(tankPost(50143, 0, 1, 41.0f, 60.0f, true)));   // radius above 40
+        CHECK(!table.Add(tankPost(50143, 0, 1, 100.5f, 60.0f, true)));  // radius above 100
         CHECK(!table.Add(tankPost(50143, 0, 1, 15.0f, 9.0f, true)));    // window below 10
         CHECK(!table.Add(tankPost(50143, 0, 1, 15.0f, 121.0f, true)));  // window above 120
         BossTacticRow modeWord = tankPost(50143, 0, 1, 15.0f, 60.0f, true);
