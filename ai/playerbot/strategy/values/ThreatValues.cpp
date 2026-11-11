@@ -259,6 +259,36 @@ void LogHexSnapshot(PlayerbotAI* ai, Unit* boss, const RaidTankRoles& roles, Gro
 }
 }
 
+bool ai::ThreatFreeLifted(PlayerbotAI* ai, Player* bot, Unit* subject)
+{
+    if (!ai || !bot || !subject || !sPlayerbotAIConfig.dungeonRunThreatFree)
+        return false;
+    if (!ai->HasStrategy("boss tactics", BotState::BOT_STATE_COMBAT))
+        return false;
+    const bool isTank = PlayerbotAI::IsTank(bot);
+    if (isTank)
+        return false;
+    const float gap = GetBossTactics().ThreatFreeGap(subject->GetMapId(), subject->GetEntry());
+    if (gap <= 0.0f)
+        return false;
+
+    bool descending = false;
+    const std::uint32_t nowMs = WorldTimer::getMSTime();
+    {
+        std::lock_guard<std::mutex> lock(g_threatFreeZMutex);
+        const std::uint64_t key = subject->GetObjectGuid().GetRawValue();
+        if (!subject->IsInCombat())
+            g_threatFreeZ.erase(key);
+        else
+        {
+            descending = g_threatFreeZ[key].Descending(subject->GetPositionZ(), nowMs);
+            if (g_threatFreeZ.size() > kThreatFreeZMaxSubjects)
+                g_threatFreeZ.clear();
+        }
+    }
+    return ThreatFreeApplies(true, isTank, subject->GetPositionZ(), bot->GetPositionZ(), gap, descending);
+}
+
 float ThreatValue::GetThreat(Player* player, Unit* target)
 {
     if (!target || target->GetMapId() != player->GetMapId())
@@ -400,36 +430,6 @@ bool ai::StrictThreatSuccessorRow(Unit* target)
     if (!target || target->getObjectGuid().IsPlayer())
         return false;
     return GetBossTactics().HasStrictThreatSuccessor(target->GetMapId(), target->GetEntry());
-}
-
-bool ai::ThreatFreeLifted(PlayerbotAI* ai, Player* bot, Unit* subject)
-{
-    if (!ai || !bot || !subject || !sPlayerbotAIConfig.dungeonRunThreatFree)
-        return false;
-    if (!ai->HasStrategy("boss tactics", BotState::BOT_STATE_COMBAT))
-        return false;
-    const bool isTank = PlayerbotAI::IsTank(bot);
-    if (isTank)
-        return false;
-    const float gap = GetBossTactics().ThreatFreeGap(subject->GetMapId(), subject->GetEntry());
-    if (gap <= 0.0f)
-        return false;
-
-    bool descending = false;
-    const std::uint32_t nowMs = WorldTimer::getMSTime();
-    {
-        std::lock_guard<std::mutex> lock(g_threatFreeZMutex);
-        const std::uint64_t key = subject->GetObjectGuid().GetRawValue();
-        if (!subject->IsInCombat())
-            g_threatFreeZ.erase(key);
-        else
-        {
-            descending = g_threatFreeZ[key].Descending(subject->GetPositionZ(), nowMs);
-            if (g_threatFreeZ.size() > kThreatFreeZMaxSubjects)
-                g_threatFreeZ.clear();
-        }
-    }
-    return ThreatFreeApplies(true, isTank, subject->GetPositionZ(), bot->GetPositionZ(), gap, descending);
 }
 
 uint8 ThreatValue::Calculate(Unit* target)
