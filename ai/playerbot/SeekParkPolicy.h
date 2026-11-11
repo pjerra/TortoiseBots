@@ -108,11 +108,12 @@ namespace ai
         bool receiverInReach = false;   // the release's receiver stands in strike reach
     };
 
-    // Whether the source counts as taken by a tank: its victim is a player tank and the source carries no breakable
-    // control. A creature under Polymorph keeps its old victim, so the control alone says the tank is not fighting it.
-    inline bool SeekParkSonOnTank(bool victimIsTank, bool controlled)
+    // Whether the source counts as taken by a tank: its victim is a player tank, that tank's own current target is the
+    // source, and the source carries no breakable control. A creature under Polymorph keeps its old victim, and that
+    // stale victim still targets anything; only a tank that has actually engaged the woken source counts.
+    inline bool SeekParkSonOnTank(bool victimIsTank, bool tankEngaged, bool controlled)
     {
-        return victimIsTank && !controlled;
+        return victimIsTank && tankEngaged && !controlled;
     }
 
     // Whether the release's receiver stands close enough to strike the source this tick (edge to edge).

@@ -99,11 +99,15 @@ class SeekParkWiring(unittest.TestCase):
         self.assertNotIn("state.son != in.son", POLICY)
 
     def test_the_on_tank_read_ignores_a_stale_victim_under_the_control(self):
-        # F1/R1: the machine's one on-tank source.
+        # F1/R1 (round 5): the machine's one on-tank source needs the tank's own current target, not just the victim
+        # the control froze. Both a bot's AI target and a player's selection are read.
         fn = body(ACTIONS, "void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)")
-        self.assertIn("SeekParkSonOnTank(sonVictim && PlayerbotAI::IsTank(sonVictim), in.controlled)", fn)
-        self.assertIn("inline bool SeekParkSonOnTank(bool victimIsTank, bool controlled)", POLICY)
-        self.assertIn("return victimIsTank && !controlled;", POLICY)
+        self.assertIn("SeekParkSonOnTank(victimIsTank, tankEngaged, in.controlled)", fn)
+        self.assertIn('GetValue<Unit*>("current target")->Get() == liveSon', fn)
+        self.assertIn("GetSelectionGuid() == liveSon->GetObjectGuid()", fn)
+        self.assertLess(fn.index("tankEngaged ="), fn.index("SeekParkStep("))
+        self.assertIn("inline bool SeekParkSonOnTank(bool victimIsTank, bool tankEngaged, bool controlled)", POLICY)
+        self.assertIn("return victimIsTank && tankEngaged && !controlled;", POLICY)
 
     def test_the_hold_reads_the_park_on_tank_verdict(self):
         # The damage hold and the release row use the park's own read, not a fresh victim scan.
