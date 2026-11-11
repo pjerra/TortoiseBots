@@ -83,6 +83,7 @@ namespace ai
             fleeFailures = other.fleeFailures;
             spreadFailures = other.spreadFailures;
             lastSpreadStepMs = other.lastSpreadStepMs;
+            lastStackStepMs = other.lastStackStepMs;
             hoverStackWaitMs = other.hoverStackWaitMs;
             fleeNoSpotMs = other.fleeNoSpotMs;
             moveFailReason = other.moveFailReason;
@@ -111,6 +112,7 @@ namespace ai
             fleeFailures.Clear();
             spreadFailures.Clear();
             lastSpreadStepMs = 0;
+            lastStackStepMs = 0;
             hoverStackWaitMs = 0;
             fleeNoSpotMs = 0;
             lastMoveShort = WorldPosition();
@@ -149,6 +151,9 @@ namespace ai
         // RaidSpreadAction to one step per kSpreadStepCooldownMs so stacked
         // ranged bots settle instead of ping-ponging every tick. 0 = none yet.
         uint32 lastSpreadStepMs = 0;
+        // WorldTimer ms of the last hover stack step (RangedApproachPolicy.h kHoverCastRestepMs), which is the only
+        // step that rests that long: the anchor-rejected probe keeps lastSpreadStepMs and its 3 s. 0 = none yet.
+        uint32 lastStackStepMs = 0;
         // When the lower-guid bot of a stacked pair started waiting for the higher one, so a partner that never steps
         // cannot stall the pair for good. 0 = not waiting.
         uint32 hoverStackWaitMs = 0;

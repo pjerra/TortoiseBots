@@ -593,12 +593,12 @@ RaidSpreadAction::HoverCastHold RaidSpreadAction::HoverCastVerdict()
     bool const botGuidHigher = member && bot->GetObjectGuid().GetRawValue() > member->GetObjectGuid().GetRawValue();
     LastMovement& lastMove = AI_VALUE(LastMovement&, "last movement");
     std::uint32_t const nowMs = WorldTimer::getMSTime();
-    std::uint32_t const sinceLastStepMs = lastMove.lastSpreadStepMs == 0
-        ? UINT32_MAX : nowMs - lastMove.lastSpreadStepMs;
+    std::uint32_t const sinceLastStackStepMs = lastMove.lastStackStepMs == 0
+        ? UINT32_MAX : nowMs - lastMove.lastStackStepMs;
     bool const waitStarted = lastMove.hoverStackWaitMs != 0;
     std::uint32_t const waitedMs = waitStarted ? nowMs - lastMove.hoverStackWaitMs : 0;
     HoverStackStep const step =
-        HoverCastStepVerdict(true, allyAlsoSteps, botGuidHigher, sinceLastStepMs, waitStarted, waitedMs);
+        HoverCastStepVerdict(true, allyAlsoSteps, botGuidHigher, sinceLastStackStepMs, waitStarted, waitedMs);
     if (step == HoverStackStep::WaitForAlly)
     {
         if (!waitStarted)
@@ -775,6 +775,9 @@ bool RaidSpreadAction::Execute(Event& event)
                 lastMove.spreadFailures.BeginAttempt(nearest->GetObjectGuid().GetRawValue(),
                     bot->GetMapId(), botPos.GetAngleTo(out), nearestDist, nowMs, bot->movespline->GetId());
                 lastMove.lastSpreadStepMs = WorldTimer::getMSTime();
+                // Only a stack step rests kHoverCastRestepMs; the anchor-rejected probe below keeps the 3 s cooldown.
+                if (stackStep)
+                    lastMove.lastStackStepMs = lastMove.lastSpreadStepMs;
                 // The landing becomes the stay spot: the return-to-stay keeps the spacing the row asked for instead of
                 // walking the bot back into the pile.
                 if (spreadLive && ai->HasStrategy("stay", BotState::BOT_STATE_COMBAT))

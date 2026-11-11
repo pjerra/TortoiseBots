@@ -207,15 +207,16 @@ namespace ai
     // otherwise stand inside 4.5 yd for the rest of the fight).
     enum class HoverStackStep : std::uint8_t { Step, Rest, WaitForAlly, StepAfterWait };
 
-    // `sinceLastStepMs` is UINT32_MAX for a bot that never took one. `allyAlsoSteps`: the member is a bot and a ranged
-    // damage dealer, so the same rule moves it; then only the higher guid of the two steps, and the lower one for one
-    // rest period only (`waitStarted` false when its wait clock is unset, `waitedMs` its length).
+    // `sinceLastStackStepMs` is UINT32_MAX for a bot that never took one, and comes from the stack step's own clock, so
+    // an anchor-rejected probe (the spread step's 3 s) never widens this rest. `allyAlsoSteps`: the member is a bot and
+    // a ranged damage dealer, so the same rule moves it; then only the higher guid of the two steps, and the lower one
+    // for one rest period only (`waitStarted` false when its wait clock is unset, `waitedMs` its length).
     inline HoverStackStep HoverCastStepVerdict(bool keyOn, bool allyAlsoSteps, bool botGuidHigher,
-        std::uint32_t sinceLastStepMs, bool waitStarted, std::uint32_t waitedMs)
+        std::uint32_t sinceLastStackStepMs, bool waitStarted, std::uint32_t waitedMs)
     {
         if (!keyOn)
             return HoverStackStep::Step;
-        if (sinceLastStepMs < kHoverCastRestepMs)
+        if (sinceLastStackStepMs < kHoverCastRestepMs)
             return HoverStackStep::Rest;
         if (!allyAlsoSteps || botGuidHigher)
             return HoverStackStep::Step;

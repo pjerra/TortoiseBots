@@ -11,11 +11,12 @@ the call sites in ai/:
   "hover_cast_spread" when it yields to an ally in the spread radius;
 - the verdict keeps the hold only with no ally inside RaidSpreadAction's own
   spread radius, and under hoverCastStackOnly only inside the 4.5 yd stack radius
-  (HoverCastYieldRadius), with the step rested 8 s and tied to the higher guid
-  (HoverCastStepVerdict) and a held-back bot reported as hover_cast_wait;
-- Execute overrides the step radius with HoverCastYieldRadius only under both keys
-  and skips a stack step whose landing leaves spell range (HoverCastLandingInRange,
-  hover_cast_stack_norange);
+  (HoverCastYieldRadius), with the step rested 8 s from its own clock and tied to
+  the higher guid for one rest period only (HoverCastStepVerdict), and a held-back
+  bot reported as hover_cast_wait;
+- Execute overrides the step radius with HoverCastYieldRadius only under both keys,
+  skips a stack step whose landing leaves spell range (HoverCastLandingInRange,
+  hover_cast_stack_norange) and arms the 8 s stack rest only on a real stack step;
 - CastSpellAction::isPossible notes all three refusals (no target, out of
   reach, CanCastSpell result);
 - both keys are read in PlayerbotAIConfig.cpp with a false default.
@@ -91,9 +92,10 @@ class AirborneNukesWiringTest(unittest.TestCase):
         self.assertIn("HoverCastYieldRadius(sPlayerbotAIConfig.hoverCastStackOnly", fn)
         self.assertIn("HoverCastStepVerdict(", fn)
         self.assertIn("HoverReachTakerIsRangedDps(PlayerbotAI::IsTank(member), PlayerbotAI::IsHeal(member)", fn)
-        # The restep clock and the guid tie-break read the same last step the spread step writes.
+        # The restep clock and the guid tie-break read the stack step's own clock, and the wait for the higher guid is
+        # recorded per bot so a partner that never steps cannot stall the pair.
         self.assertIn('AI_VALUE(LastMovement&, "last movement")', fn)
-        self.assertIn("lastMove.lastSpreadStepMs", fn)
+        self.assertIn("lastMove.lastStackStepMs", fn)
         self.assertIn("lastMove.hoverStackWaitMs = nowMs;", fn)
         self.assertIn("lastMove.hoverStackWaitMs = 0;", fn)
         self.assertLess(fn.index("HoverCastHoldsSpread(true,"),
@@ -107,6 +109,11 @@ class AirborneNukesWiringTest(unittest.TestCase):
         # A rejected landing is skipped before the move, and every rejected heading means no step.
         self.assertLess(fn.index("HoverCastLandingInRange("), fn.index("MoveTo(bot->GetMapId(), stepX"))
         self.assertIn('"hover_cast_stack_norange"', fn)
+        # Only a real stack step arms the 8 s rest; the anchor/no-heading probe keeps the 3 s spread cooldown.
+        self.assertIn("if (stackStep)\n                    lastMove.lastStackStepMs = lastMove.lastSpreadStepMs;", fn)
+        self.assertIn("if (anchorRejected || rangeRejected)\n        lastMove.lastSpreadStepMs = WorldTimer::getMSTime();",
+                      fn)
+        self.assertNotIn("lastStackStepMs", fn[fn.index("if (anchorRejected || rangeRejected)"):])
 
     def test_spread_useful_waits_under_stack_only(self):
         fn = body(DUNGEON_CPP, "bool RaidSpreadAction::isUseful()", "\n}\n")

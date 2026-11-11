@@ -378,6 +378,19 @@ int main()
         std::cout << "  [PASS] hover cast stack step: out-of-range and blind landings are skipped\n";
     }
 
+    // HoverCastRest_Rules: only a real stack step rests 8 s. An anchor-rejected probe keeps the spread step's 3 s
+    // cooldown and writes no stack clock, so it neither blocks the next stack step nor widens the stand-off.
+    {
+        std::uint32_t const now = 100000;
+        CHECK(ai::IsSpreadOnCooldown(now, now - 2999));
+        CHECK(!ai::IsSpreadOnCooldown(now, now - 3000));
+        CHECK(ai::HoverCastStepVerdict(true, false, false, UINT32_MAX, false, 0) == ai::HoverStackStep::Step);
+        CHECK(ai::HoverCastStepVerdict(true, false, false, 2999, false, 0) == ai::HoverStackStep::Rest);
+        CHECK(ai::HoverCastStepVerdict(true, false, false, 3000, false, 0) == ai::HoverStackStep::Rest);
+        CHECK(ai::HoverCastStepVerdict(true, false, false, 8000, false, 0) == ai::HoverStackStep::Step);
+        std::cout << "  [PASS] hover cast rest: 3 s probe cooldown, 8 s stack rest\n";
+    }
+
     std::cout << "Ranged approach policy tests: OK\n";
     return 0;
 }
