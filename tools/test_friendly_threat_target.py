@@ -15,17 +15,23 @@ class FriendlyThreatTargetTest(unittest.TestCase):
         methods = source[start:source.index("uint8 ThreatValue::Calculate(Unit*", start)]
         harness = r"""
 #include <cassert>
+#include <cstdint>
+#include <map>
+#include <mutex>
+#include <utility>
 #include <vector>
-struct Guid { bool player = false; bool empty = true; bool IsPlayer() const { return player; } bool IsEmpty() const { return empty; } };
+struct Guid { bool player = false; bool empty = true; bool IsPlayer() const { return player; } bool IsEmpty() const { return empty; } std::uint64_t GetRawValue() const { return 0; } };
 using ObjectGuid = Guid;
 struct Unit {
     virtual ~Unit() = default;
     unsigned map = 1; unsigned entry = 1; bool friendly = false; Unit* victim = nullptr; Guid guid;
     unsigned GetMapId() const { return map; }
     unsigned GetEntry() const { return entry; }
+    int GetInstanceId() const { return 1; }
     Unit* GetVictim() const { return victim; }
     bool IsInWorld() const { return true; }
     Guid getObjectGuid() const { return guid; }
+    Guid GetObjectGuid() const { return guid; }
 };
 struct Creature : Unit {
     bool immune = false;
@@ -49,6 +55,7 @@ struct PlayerbotAI {
     bool HasAura(unsigned, Player*) const { return false; }
 };
 struct ThreatManager { float getThreat(Player* p) const { return p->threat; } };
+struct WorldTimer { static std::uint32_t getMSTime() { return 1000; } };
 struct RaidTankRoles { std::vector<Player*> tanks; };
 RaidTankRoles GetRaidTankRoles(PlayerbotAI* ai)
 {
@@ -81,7 +88,7 @@ struct ThreatValue {
     static float GetThreat(Player*, Unit*);
     static float GetTankThreat(PlayerbotAI*, Unit*);
     static float GetResetSuccessorThreat(PlayerbotAI*, Unit*);
-    static ai::ThreatResetStandingRead GetResetStandingRead(PlayerbotAI*, Unit*);
+    static ai::ThreatResetStandingRead GetResetStandingRead(PlayerbotAI*, Unit*, std::uint32_t);
 };
 #include "ThreatCapPolicy.h"
 // The bot_events row of the successor cap is not part of these stubs: the extracted method only has to compile it.

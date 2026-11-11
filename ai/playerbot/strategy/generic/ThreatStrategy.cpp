@@ -133,7 +133,7 @@ bool ai::ThreatResetHolds(PlayerbotAI* ai, Player* bot, Unit* target)
     bool held = false;
     if (holdIndex == kThreatResetStandingIndex)
     {
-        const ThreatResetStandingRead read = ThreatValue::GetResetStandingRead(ai, target);
+        const ThreatResetStandingRead read = ThreatValue::GetResetStandingRead(ai, target, view.engageMs);
         ref = read.ref;
         held = ThreatResetStandingUpdate(ai->ThreatResetCap(), true, botThreat, read, win->stopPct);
     }

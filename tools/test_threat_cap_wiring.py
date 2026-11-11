@@ -441,12 +441,31 @@ class ThreatResetStanding(unittest.TestCase):
 
     def test_the_standing_read_reads_the_shared_tank_list(self):
         fn = body(self.VALUES, "ThreatResetStandingRead ThreatValue::GetResetStandingRead(PlayerbotAI* ai, "
-                               "Unit* target)")
+                               "Unit* target, std::uint32_t fightMs)")
         self.assertIn("ai::ThreatCapTanksOf(ai, target, roles, ai->GetBot(), nullptr);", fn)
         self.assertIn("ai::ThreatResetStandingReadOf(tanks)", fn)
         self.assertLess(fn.index("ThreatCapTanksOf("), fn.index("ThreatResetStandingReadOf("))
-        self.assertIn("ThreatResetStandingRead GetResetStandingRead(PlayerbotAI* ai, Unit* target);",
+        self.assertIn("ThreatResetStandingRead GetResetStandingRead(PlayerbotAI* ai, Unit* target, "
+                      "std::uint32_t fightMs);",
                       (ROOT / "ai/playerbot/strategy/values/ThreatValues.h").read_text())
+
+    def test_a_frozen_reference_releases_the_hold(self):
+        # The fix round: a successor whose threat sits still cannot be waited for. The sample is per instance and boss
+        # (like the Hex scan), fed the fight's engage clock, and a frozen read drops the latch.
+        self.assertIn("constexpr std::uint32_t kThreatResetStandingSampleMs = 6000;", THREAT_POLICY)
+        self.assertIn("constexpr float kThreatResetStandingGrowthPct = 2.0f;", THREAT_POLICY)
+        self.assertIn("if (!dps || read.frozen || !ThreatResetStandingCredible(read.ref, read.highest) ||",
+                      THREAT_POLICY)
+        self.assertIn("std::map<std::pair<std::uint32_t, std::uint64_t>, ThreatResetStandingSample> g_standingSamples;",
+                      self.VALUES)
+        self.assertIn("std::mutex g_standingSampleMutex;", self.VALUES)
+        fn = body(self.VALUES, "ThreatResetStandingRead ThreatValue::GetResetStandingRead(PlayerbotAI* ai, "
+                               "Unit* target, std::uint32_t fightMs)")
+        self.assertIn("std::make_pair(\n        static_cast<std::uint32_t>(target->GetInstanceId()), "
+                      "target->GetObjectGuid().GetRawValue())", fn)
+        self.assertIn("read.frozen = !ai::ThreatResetStandingGrows(sample, fightMs, read.ref, nowMs);", fn)
+        hold = body(STRATEGY, "bool ai::ThreatResetHolds(PlayerbotAI* ai, Player* bot, Unit* target)")
+        self.assertIn("ThreatValue::GetResetStandingRead(ai, target, view.engageMs)", hold)
 
     def test_the_load_states_both_dependencies(self):
         keys = body(CONFIG_CPP, "void PlayerbotAIConfig::LoadDungeonRunKeys()")

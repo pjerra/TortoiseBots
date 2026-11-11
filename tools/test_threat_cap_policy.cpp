@@ -774,6 +774,61 @@ int main()
             CHECK(!latch.held);
         }
 
+        // F8: an on-boss successor whose threat sits still is released. The sample starts at 17149 (t=1000); a read at
+        // 4000 is still under the 6 s window, and 7000 is 6 s with 0.06 % growth: frozen, and the latch that held the
+        // bot drops it. A read 2 % above the sample re-arms it.
+        CASE("reset_standing_f8_frozen_reference_releases_the_hold");
+        {
+            const std::vector<ThreatCapTank> tanks = {{30000.0f, false, true, true}, {17149.0f, true, true, false}};
+            ThreatResetStandingRead read = ThreatResetStandingReadOf(tanks);
+            CHECK(read.ref == 17149.0f);
+            ThreatResetStandingSample sample;
+            CHECK(ThreatResetStandingGrows(sample, 500000, 17149.0f, 1000));
+            CHECK(ThreatResetStandingGrows(sample, 500000, 17150.0f, 4000));
+            CHECK(!ThreatResetStandingGrows(sample, 500000, 17160.0f, 7000));
+            ThreatResetLatch latch;
+            read.frozen = false;
+            CHECK(ThreatResetStandingUpdate(latch, true, 17000.0f, read, 95));
+            CHECK(latch.held);
+            read.frozen = true;
+            CHECK(!ThreatResetStandingUpdate(latch, true, 17000.0f, read, 95));
+            CHECK(!latch.held);
+            CHECK(ThreatResetStandingGrows(sample, 500000, 17492.0f, 9000));
+            read.frozen = false;
+            CHECK(ThreatResetStandingUpdate(latch, true, 17000.0f, read, 95));
+            CHECK(latch.held);
+        }
+
+        // F9: an on-boss successor that grows keeps the hold: 2.6 % over exactly 6 s re-anchors the sample, and the
+        // hold stays up across it.
+        CASE("reset_standing_f9_growing_reference_keeps_the_hold");
+        {
+            const std::vector<ThreatCapTank> tanks = {{30000.0f, false, true, true}, {17149.0f, true, true, false}};
+            ThreatResetStandingRead read = ThreatResetStandingReadOf(tanks);
+            ThreatResetStandingSample sample;
+            CHECK(ThreatResetStandingGrows(sample, 600000, 17149.0f, 1000));
+            CHECK(ThreatResetStandingGrows(sample, 600000, 17600.0f, 7000));
+            read.frozen = false;
+            ThreatResetLatch latch;
+            CHECK(ThreatResetStandingUpdate(latch, true, 17600.0f, read, 95));
+            CHECK(latch.held);
+            CHECK(ThreatResetStandingGrows(sample, 600000, 18000.0f, 12000));
+            CHECK(ThreatResetStandingUpdate(latch, true, 18000.0f, read, 95));
+            CHECK(latch.held);
+        }
+
+        // F10: the sample belongs to one fight. A frozen sample does not carry into the next fight (a new engage
+        // clock starts it again), and the next fight freezes on its own 6 s.
+        CASE("reset_standing_f10_the_sample_resets_per_fight");
+        {
+            ThreatResetStandingSample sample;
+            CHECK(ThreatResetStandingGrows(sample, 700000, 17149.0f, 1000));
+            CHECK(!ThreatResetStandingGrows(sample, 700000, 17150.0f, 7000));
+            CHECK(ThreatResetStandingGrows(sample, 900000, 17150.0f, 7100));
+            CHECK(ThreatResetStandingGrows(sample, 900000, 17160.0f, 10000));
+            CHECK(!ThreatResetStandingGrows(sample, 900000, 17170.0f, 13100));
+        }
+
         // F6: never a tank or a healer (dps false), and an empty tank list reads no reference and holds nobody.
         CASE("reset_standing_f6_never_a_tank_or_healer");
         {

@@ -566,6 +566,9 @@ namespace ai
     {
         float ref = -1.0f;     // ThreatResetStandingReference
         float highest = 0.0f;  // the highest listed tank's threat, the holder included
+        // ThreatResetStandingGrows: the reference has not grown by kThreatResetStandingGrowthPct over
+        // kThreatResetStandingSampleMs, so it cannot be waited for and the standing hold is released.
+        bool frozen = false;
     };
 
     inline ThreatResetStandingRead ThreatResetStandingReadOf(const std::vector<ThreatCapTank>& tanks)
@@ -583,12 +586,47 @@ namespace ai
         return ref >= kThreatCapOffTankMinThreat && ref >= highest * kThreatResetStandingMinShare;
     }
 
-    // One bot's standing hold: the window latch, shut for a successor that is not credible and for a bot too far
-    // above it to be brought under in one cycle.
+    // A successor whose threat sits still cannot be waited for: a tank that only holds aggro, or one whose damage is
+    // stopped by a stun or a Shade, does not grow between charms. The sample is per fight: one entry per instance and
+    // boss, started again when the fight's engage clock changes. The caller keys it (see GetResetStandingRead).
+    constexpr std::uint32_t kThreatResetStandingSampleMs = 6000;
+    constexpr float kThreatResetStandingGrowthPct = 2.0f;
+
+    struct ThreatResetStandingSample
+    {
+        std::uint32_t fightMs = 0;  // the fight the sample belongs to (its engage clock)
+        std::uint32_t sinceMs = 0;  // when the reference last grew by kThreatResetStandingGrowthPct
+        float threat = -1.0f;       // the reference's threat at that read
+    };
+
+    // Feeds one read of the reference into its fight's sample and says whether the reference is growing. A new fight
+    // starts a fresh sample; a read kThreatResetStandingGrowthPct above the sample's threat re-anchors it; a sample
+    // older than kThreatResetStandingSampleMs with less growth is frozen and reads false until it grows again.
+    inline bool ThreatResetStandingGrows(ThreatResetStandingSample& sample, std::uint32_t fightMs, float ref,
+                                         std::uint32_t nowMs)
+    {
+        if (sample.threat < 0.0f || sample.fightMs != fightMs)
+        {
+            sample.fightMs = fightMs;
+            sample.threat = ref;
+            sample.sinceMs = nowMs;
+            return true;
+        }
+        if (ref >= sample.threat * (1.0f + kThreatResetStandingGrowthPct / 100.0f))
+        {
+            sample.threat = ref;
+            sample.sinceMs = nowMs;
+            return true;
+        }
+        return nowMs - sample.sinceMs < kThreatResetStandingSampleMs;
+    }
+
+    // One bot's standing hold: the window latch, shut for a successor that is not credible, for one whose threat has
+    // stopped growing and for a bot too far above it to be brought under in one cycle.
     inline bool ThreatResetStandingUpdate(ThreatResetLatch& latch, bool dps, float botThreat,
                                           const ThreatResetStandingRead& read, std::uint8_t stopPct)
     {
-        if (!dps || !ThreatResetStandingCredible(read.ref, read.highest) ||
+        if (!dps || read.frozen || !ThreatResetStandingCredible(read.ref, read.highest) ||
             botThreat > read.ref * kThreatResetStandingMaxRatio)
         {
             latch.held = false;
