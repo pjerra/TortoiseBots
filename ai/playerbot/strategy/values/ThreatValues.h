@@ -35,6 +35,11 @@ namespace ai
         // reset). The cap's own successor pick requires `onBoss` and would drop that away tank. -1 when the target has
         // no `threat_successor` row, no group or no such tank.
         static float GetResetSuccessorThreat(PlayerbotAI* ai, Unit* target);
+        // The standing reset hold's reference pair (DungeonRunThreatResetStanding): the tank the boss turns to on a
+        // reset (GetResetSuccessorThreat's pick) and the highest listed tank's threat, the holder included, so the
+        // caller can tell a successor far under the top tank from a credible one. Guards as GetResetSuccessorThreat;
+        // every early return reads ref -1 (no reference), highest 0.
+        static ThreatResetStandingRead GetResetStandingRead(PlayerbotAI* ai, Unit* target);
 
     protected:
 	uint8 Calculate(Unit* target);

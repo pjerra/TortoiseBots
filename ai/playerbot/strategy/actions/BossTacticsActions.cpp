@@ -10008,6 +10008,7 @@ bool ai::SeekCycleSnapshot(std::uint32_t instanceId, std::uint64_t bossGuid, See
         out.windowOpen = SeekWindowOpen(nowMs, out.dueMs, record.leadMs);
         out.cycleNo = record.cycleNo;
         out.lastResetMs = record.lastResetMs;
+        out.charmLive = record.charmGuid != 0;
         out.engageMs = record.engageMs;
         out.gathering = record.gatherSourceGuid != 0;
         out.gatherReady = record.ready;

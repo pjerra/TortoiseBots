@@ -55,8 +55,8 @@ void LogThreatResetHold(PlayerbotAI* ai, Player* bot, std::uint8_t pct, float re
             g_threatResetLog.clear();
     }
     char info1[96];
-    snprintf(info1, sizeof(info1), "reset hold: pct=%u ref=%.0f since_ms=%u", static_cast<unsigned>(pct), ref,
-             sinceMs);
+    snprintf(info1, sizeof(info1), "reset hold: pct=%u ref=%.0f since_ms=%u win=%u", static_cast<unsigned>(pct), ref,
+             sinceMs, windowIndex);
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsThreatReset", info1, "");
 }
 
@@ -96,7 +96,9 @@ void LogInterruptVeto(PlayerbotAI* ai, Player* bot, CastInterruptSpellAction con
 
 bool ai::ThreatResetHolds(PlayerbotAI* ai, Player* bot, Unit* target)
 {
-    if (!sPlayerbotAIConfig.dungeonRunThreatResetWindow)
+    const bool windowKey = sPlayerbotAIConfig.dungeonRunThreatResetWindow;
+    const bool standingKey = sPlayerbotAIConfig.dungeonRunThreatResetStanding;
+    if (!windowKey && !standingKey)
         return false;
     if (!target || target->IsPlayer() || !bot->GetGroup())
         return false;
@@ -119,16 +121,29 @@ bool ai::ThreatResetHolds(PlayerbotAI* ai, Player* bot, Unit* target)
     const std::uint32_t sinceMs = ThreatResetSince(nowMs, view.lastResetMs, view.engageMs);
     const std::uint32_t windowIndex = ThreatResetWindowIndex(sinceMs, win->minGapMs, win->maxGapMs);
     // A shut window holds nothing: drop the latch before the tank list is built, so the common read costs no scan.
-    if (windowIndex == 0)
+    const std::uint32_t holdIndex = ThreatResetHoldIndex(windowKey, standingKey, windowIndex,
+                                                        view.lastResetMs != 0, view.charmLive);
+    if (holdIndex == 0)
     {
         ai->ThreatResetCap().Update(false, false, 0.0f, 0.0f, 0);
         return false;
     }
     const float botThreat = sServerFacade.GetThreatManager(target).getThreat(bot);
-    const float ref = ThreatValue::GetResetSuccessorThreat(ai, target);
-    const bool held = ai->ThreatResetCap().Update(true, true, botThreat, ref, win->stopPct);
+    float ref = -1.0f;
+    bool held = false;
+    if (holdIndex == kThreatResetStandingIndex)
+    {
+        const ThreatResetStandingRead read = ThreatValue::GetResetStandingRead(ai, target);
+        ref = read.ref;
+        held = ThreatResetStandingUpdate(ai->ThreatResetCap(), true, botThreat, read, win->stopPct);
+    }
+    else
+    {
+        ref = ThreatValue::GetResetSuccessorThreat(ai, target);
+        held = ai->ThreatResetCap().Update(true, true, botThreat, ref, win->stopPct);
+    }
     if (held)
-        LogThreatResetHold(ai, bot, ThreatPctSaturated(botThreat, ref), ref, sinceMs, view.lastResetMs, windowIndex);
+        LogThreatResetHold(ai, bot, ThreatPctSaturated(botThreat, ref), ref, sinceMs, view.lastResetMs, holdIndex);
     return held;
 }
 
@@ -330,11 +345,11 @@ float ThreatMultiplier::GetValue(Action* action)
     if (action == NULL)
         return 1.0f;
 
-    // AiPlayerbot.DungeonRunThreatResetWindow: around each expected Cause Insanity, a damage dealer at or above the
-    // row's stop percent of the best tank that does not hold Hakkar stops every damage action on him, white damage
-    // included, so the reset hands him to a tank. Heals and cures are never held, and an action aimed at another
-    // target keeps its damage.
-    if (sPlayerbotAIConfig.dungeonRunThreatResetWindow)
+    // AiPlayerbot.DungeonRunThreatResetWindow / DungeonRunThreatResetStanding: around each expected Cause Insanity, or
+    // from the end of each charm to the next reset, a damage dealer at or above the row's stop percent of the best
+    // tank that does not hold Hakkar stops every damage action on him, white damage included, so the reset hands him
+    // to a tank. Heals and cures are never held, and an action aimed at another target keeps its damage.
+    if (sPlayerbotAIConfig.dungeonRunThreatResetWindow || sPlayerbotAIConfig.dungeonRunThreatResetStanding)
     {
         Unit* const resetTarget = AI_VALUE(Unit*, "current target");
         if (!ThreatCapExempt(dynamic_cast<CastHealingSpellAction*>(action) != nullptr,

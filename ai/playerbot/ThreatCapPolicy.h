@@ -533,6 +533,57 @@ namespace ai
         }
     };
 
+    // AiPlayerbot.DungeonRunThreatResetStanding (walk 72/74): the reset hold stays open from the end of each charm to
+    // the next reset. Shut before the first reset (the opening hold covers it) and while a charm is live (the
+    // successor is tanking: its threat is no reference).
+    constexpr std::uint32_t kThreatResetStandingIndex = 4;
+    constexpr float kThreatResetStandingMinShare = 0.5f;
+    constexpr float kThreatResetStandingMaxRatio = 1.3f;
+
+    // 0: no hold. 1..3: the gap window (window key). kThreatResetStandingIndex: the standing hold, which wins.
+    inline std::uint32_t ThreatResetHoldIndex(bool windowKey, bool standingKey, std::uint32_t windowIndex,
+                                              bool resetSeen, bool charmLive)
+    {
+        if (standingKey)
+            return resetSeen && !charmLive ? kThreatResetStandingIndex : 0;
+        return windowKey ? windowIndex : 0;
+    }
+
+    struct ThreatResetStandingRead
+    {
+        float ref = -1.0f;     // ThreatResetReference
+        float highest = 0.0f;  // the highest listed tank's threat, the holder included
+    };
+
+    inline ThreatResetStandingRead ThreatResetStandingReadOf(const std::vector<ThreatCapTank>& tanks)
+    {
+        ThreatResetStandingRead read;
+        read.ref = ThreatResetReference(tanks);
+        for (const ThreatCapTank& t : tanks)
+            read.highest = std::max(read.highest, t.threat);
+        return read;
+    }
+
+    // A successor far under the top tank (back from a rez, away on an add) cannot be waited for.
+    inline bool ThreatResetStandingCredible(float ref, float highest)
+    {
+        return ref >= kThreatCapOffTankMinThreat && ref >= highest * kThreatResetStandingMinShare;
+    }
+
+    // One bot's standing hold: the window latch, shut for a successor that is not credible and for a bot too far
+    // above it to be brought under in one cycle.
+    inline bool ThreatResetStandingUpdate(ThreatResetLatch& latch, bool dps, float botThreat,
+                                          const ThreatResetStandingRead& read, std::uint8_t stopPct)
+    {
+        if (!dps || !ThreatResetStandingCredible(read.ref, read.highest) ||
+            botThreat > read.ref * kThreatResetStandingMaxRatio)
+        {
+            latch.held = false;
+            return false;
+        }
+        return latch.Update(true, true, botThreat, read.ref, stopPct);
+    }
+
     // The core's pull lines (ThreatManager::getHostileTarget): a mob turns on an attacker whose threat passes 110 % of
     // its current victim's while it can reach that attacker with a melee swing, 130 % otherwise.
     constexpr float kThreatCapCastMeleePullLine = 1.1f;

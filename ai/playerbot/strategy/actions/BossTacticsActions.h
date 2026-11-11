@@ -543,6 +543,7 @@ namespace ai
         // The Cause Insanity reset clock (DungeonRunThreatResetWindow): when the fight's last new charm was seen, and
         // the fight's combat start (the first reset is counted from it plus an offset).
         std::uint32_t lastResetMs = 0, engageMs = 0;
+        bool charmLive = false; // a member wears the reset spell now (SeekCycleRecord::charmGuid)
         bool gathering = false;     // a source stands at the spot and the gather is under way
         bool gatherReady = false;
         int missing = 0;            // seekers still outside the gather radius
