@@ -1549,6 +1549,14 @@ AiPlayerbot.AirborneWandYieldsToNukes = 0
 # 1 - on
 AiPlayerbot.HoverCastHoldsSpread = 0
 
+# The hover hold yields only to a real stack (4.5 yd), not to any group member inside the spread distance (Onyxia P2:
+# the hold yielded in 279 of 402 verdicts, median nearest member 4.8 yd, and each step was 11 yd every 3 s). With the
+# key on the step is 5.5 yd, a bot takes one step per 8 s, and of two ranged bots that would both step only the one
+# with the higher guid does. Does nothing unless AiPlayerbot.HoverCastHoldsSpread is 1. `.reload config` reads it again.
+# 0 - off: the hold yields to any member inside the spread distance (Default)
+# 1 - on
+AiPlayerbot.HoverCastStackOnly = 0
+
 # The gate_hold boss tactic of the boss tactics rows (recommended on; ai_boss_tactic, docs/play/boss-tactics.md):
 # damage dealers leave the row's boss alone once its health is at or below the row's gate percent (param, 1-99) while
 # more than `priority` units of the row's blocker (target_entry) within the row's radius (window_s, 0 = 200 yd, else

@@ -344,7 +344,7 @@ class BossStandWiring(unittest.TestCase):
                       body(DUNGEON_ACTIONS, "bool DragonFlankAction::isUseful()"))
         spread = body(DUNGEON_ACTIONS, "bool RaidSpreadAction::isUseful()")
         self.assertIn("if (FindBossStand(ai, bot).valid)", spread)
-        self.assertIn("if (hold == HoverCastHold::Held)\n            return false;", spread)
+        self.assertIn("if (hold == HoverCastHold::Held || hold == HoverCastHold::Waiting)\n            return false;", spread)
         self.assertIn("\n            return false;\n    }\n    return true;", spread)
 
     def test_stand_episode_rows_are_gated_by_their_key(self):
