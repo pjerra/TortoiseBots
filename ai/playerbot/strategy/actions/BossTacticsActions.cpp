@@ -873,11 +873,13 @@ struct SeekFight
     std::uint64_t parkBot = 0;
     std::uint32_t parkReleaseMs = 0;
     // The park's read: the source on a tank (a tank victim engaged on it and no breakable control), the release's
-    // receiver, whether it stands in strike reach, and whether it should already be walking to the source.
+    // receiver, whether it stands in strike reach, whether it should already be walking to the source, and whether a
+    // breakable control still holds the source.
     bool parkSonOnTank = false;
     std::uint64_t parkReceiver = 0;
     bool parkReceiverOk = false;
     bool parkPreWalk = false;
+    bool parkControlled = false;
 };
 
 // The seek's reach of a Son (SeekReachYd): from B, or the nearer of B and the anchor's centre.
@@ -2191,8 +2193,9 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
         sonGuid = son ? son->GetObjectGuid().GetRawValue() : 0;
     }
     // The source's facts: alive (a record's dead or gone source ends the park), fighting, in the raid circle, the
-    // seek's pick.
+    // seek's pick, and whether a breakable control still holds it.
     Unit* const liveSon = son && sServerFacade.IsAlive(son) ? son : nullptr;
+    const bool controlled = liveSon && PossibleAttackTargetsValue::HasBreakableCC(liveSon, bot);
     bool sonInCircle = liveSon != nullptr;
     if (liveSon)
     {
@@ -2218,8 +2221,10 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
             CcCastInReach(parkBot->GetDistance(liveSon), range, parkBot->IsWithinLOSInMap(liveSon, true));
     }
     const SeekParkPhase readPhase = recorded.phase;
+    // A failed park whose source is still controlled keeps its receiver: that tank's take is what breaks the control.
     Player* receiver = nullptr;
-    if (liveSon && readPhase != SeekParkPhase::None && readPhase != SeekParkPhase::Failed)
+    if (liveSon && readPhase != SeekParkPhase::None &&
+        (readPhase != SeekParkPhase::Failed || controlled))
         receiver = PickSeekParkReceiverOf(ai, bot, out.boss, liveSon, out.sons, out.row->targetEntry,
                                           live ? recorded.receiver : 0);
     Player* const sonVictim = liveSon ? dynamic_cast<Player*>(liveSon->GetVictim()) : nullptr;
@@ -2242,7 +2247,7 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
     in.sonInCombat = liveSon && liveSon->IsInCombat();
     in.sonIsPick = liveSon && sonGuid == pickedGuid;
     in.sonInCircle = sonInCircle;
-    in.controlled = liveSon && PossibleAttackTargetsValue::HasBreakableCC(liveSon, bot);
+    in.controlled = controlled;
     in.controlLeftMs = liveSon ? SeekParkControlLeftMs(ai, liveSon, recorded.parkBot) : 0;
     in.parkBotOk = parkBot != nullptr;
     in.parkBot = parkBot ? parkBot->GetObjectGuid().GetRawValue() : 0;
@@ -2273,6 +2278,7 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
     out.parkReceiver = step.receiver;
     out.parkReceiverOk = in.receiverOk;
     out.parkPreWalk = SeekParkPreWalk(step.phase, in.dueKnown, in.dueInMs, rules.releaseLeadMs);
+    out.parkControlled = in.controlled;
     if (!changed)
         return;
     // D13: one row per phase change, outside the lock (logEvent writes the log file). The first eight fields keep the
@@ -5388,13 +5394,16 @@ bool ai::BossSeekParkReleaseTargetAllowed(PlayerbotAI* ai, Player* bot, Unit* ta
     if (!ai || !bot || !target || !sPlayerbotAIConfig.dungeonRunSeekPark)
         return false;
     SeekFight state;
-    if (!ReadSeekFightCached(ai, bot, state) || !SeekParkReleaseLive(state.parkPhase) || state.parkSon == 0 ||
-        !state.row)
+    if (!ReadSeekFightCached(ai, bot, state) ||
+        (!SeekParkReleaseLive(state.parkPhase) &&
+         !SeekParkFailedTakeDue(state.parkPhase, state.parkControlled, true)) ||
+        state.parkSon == 0 || !state.row)
         return false;
     if (target->GetObjectGuid().GetRawValue() != state.parkSon)
         return false;
     return SeekParkReleaseTargetAllowed(state.parkPhase,
-                                        state.parkReceiver == bot->GetObjectGuid().GetRawValue(), true);
+                                        state.parkReceiver == bot->GetObjectGuid().GetRawValue(), true,
+                                        state.parkControlled);
 }
 
 bool ai::BossSeekPetMustLeave(PlayerbotAI* ai, Player* bot)
@@ -10649,6 +10658,20 @@ SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)
         task.source = son;
         task.parkApproach = true;
         task.takeSrc = "park_approach";
+        task.boss = state.boss;
+        return task;
+    }
+    // A park that failed with the source still controlled still needs it broken: the release's receiver keeps its take
+    // until the swing lands. With no receiver the body's ordinary off-tank takes apply below (a failed park vetoes
+    // nothing).
+    if (sonLive && SeekParkFailedTakeDue(state.parkPhase, state.parkControlled, isReceiver))
+    {
+        SeekTankTask task;
+        task.valid = true;
+        task.row = state.row;
+        task.source = son;
+        task.take = true;
+        task.takeSrc = "park_release";
         task.boss = state.boss;
         return task;
     }
