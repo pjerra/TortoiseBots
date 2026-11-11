@@ -46,6 +46,7 @@
 #include "../ai/playerbot/strategy/values/PositionValue.h"
 #include "../ai/playerbot/strategy/values/LastMovementValue.h"
 #include "../ai/playerbot/strategy/values/PartyMemberToHeal.h"
+#include "../ai/playerbot/MoveFailNotePolicy.h"
 #include "../ai/playerbot/OutcomeReasonPolicy.h"
 #include "../ai/playerbot/strategy/values/ItemUsageValue.h"
 #include "../ai/playerbot/strategy/actions/EquipAction.h"
