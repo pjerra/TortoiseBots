@@ -123,11 +123,15 @@ class HealReserveWiring(unittest.TestCase):
         fn = body(ACTIONS, "HealReserveRead ai::BossHealReserve(PlayerbotAI* ai, Player* bot, Unit*& boss)")
         # A row's `priority` is its distress count; the raid read runs only when a row can use it.
         self.assertIn("row->priority", fn)
-        self.assertLess(fn.index("HealReserveHurtCount("), fn.index("HealReservePick("))
-        self.assertIn("HealReservePick(rows, clockKnown, clockKnown ? state.dueInMs : 0, hurtCount)", fn)
+        self.assertLess(fn.index("HealReserveRaidCounts("), fn.index("HealReservePick("))
+        self.assertIn("HealReservePick(rows, clockKnown, clockKnown ? state.dueInMs : 0, counts.hurt)", fn)
+        # The raid counts carry the effective health; the latch is applied after the pick and reset with no row left.
+        self.assertIn("ApplyHealReserveLatch(bot, out, counts.calm,", fn)
+        self.assertLess(fn.index("HealReservePick("), fn.index("ApplyHealReserveLatch("))
+        self.assertLess(fn.index("ResetHealReserveLatch(bot)"), fn.index("HealReserveRaidCounts("))
 
     def test_the_hurt_count_reads_the_raid_not_the_pick(self):
-        fn = body(ACTIONS, "static std::uint32_t HealReserveHurtCount(PlayerbotAI* ai, Player* bot)")
+        fn = body(ACTIONS, "static HealReserveCounts HealReserveRaidCounts(PlayerbotAI* ai, Player* bot)")
         self.assertIn("LiveGroupMembers(", fn)
         # Tanks never count, grouped or alone.
         self.assertIn("IsTank(member)", fn)
@@ -136,6 +140,22 @@ class HealReserveWiring(unittest.TestCase):
         self.assertNotIn("almostFullHealth", fn)
         self.assertNotIn("GetDistance", fn)
         self.assertIn("UpdateTick()", fn)
+        # The count is the heal path's effective health, never raw health.
+        self.assertIn("EffectiveHealHealthPct(ai, member)", fn)
+        self.assertIn("EffectiveHealHealthPct(ai, bot)", fn)
+        self.assertNotIn("GetHealthPercent", fn)
+        self.assertIn("HealReserveCountMember(counts, read, mediumHealthPct)", fn)
+
+    def test_the_latch_lives_in_the_per_bot_reserve_state(self):
+        apply = body(ACTIONS, "static void ApplyHealReserveLatch(Player* bot, HealReserveRead& read, "
+                              "std::uint32_t calmCount, std::uint32_t nowMs)")
+        self.assertIn("g_healReserveLog[bot->GetObjectGuid().GetRawValue()].latch", apply)
+        self.assertIn("HealReserveApplyDistressLatch(read, latch, calmCount, nowMs)", apply)
+        reset = body(ACTIONS, "static void ResetHealReserveLatch(Player* bot)")
+        self.assertIn("g_healReserveLog[bot->GetObjectGuid().GetRawValue()].latch", reset)
+        self.assertIn("HealReserveLatchReset(", reset)
+        state = ACTIONS[ACTIONS.index("struct HealReserveLogWindow"):]
+        self.assertIn("HealReserveLatch latch;", state[:state.index("};")])
 
     def test_the_row_says_why_and_who_was_refused(self):
         self.assertIn("hurt=%d,why=%s", ACTIONS)
@@ -164,9 +184,11 @@ class HealReserveWiring(unittest.TestCase):
         self.assertIn("window.lastGate", count)
 
     def test_the_policy_holds_the_pure_rules(self):
-        for name in ("HealReserveReleased(", "HealReserveDistress(", "HealReservePick(", "HealReserveWhy(",
-                     "HealReserveRefuses(", "HealReserveSkipsTopUp(", "HealTopUpAllowedAtHealth(",
-                     "HealReserveTopUpTier("):
+        for name in ("HealReserveReleased(", "HealReserveDistress(", "HealReserveDistressLatched(",
+                     "HealReserveApplyDistressLatch(", "HealReserveCountMember(", "HealReserveLatchReset(",
+                     "HealReservePick(", "HealReserveWhy(", "HealReserveRefuses(", "HealReserveSkipsTopUp(",
+                     "HealTopUpAllowedAtHealth(", "HealReserveTopUpTier(", "kHealReserveRecoveryMarginPct",
+                     "kHealReserveDistressHoldMs"):
             self.assertIn(name, POLICY)
         self.assertIn("reservePct", POLICY)
         self.assertIn("released", POLICY)

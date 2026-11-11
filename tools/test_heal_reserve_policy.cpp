@@ -21,7 +21,11 @@ using namespace ai;
 static HealReserveRead Live(float reservePct, float windowSec, std::uint32_t dueInMs,
                             std::uint32_t distress = 0, std::uint32_t hurt = 0)
 {
-    return HealReservePick(std::vector<HealReserveRow>{{reservePct, windowSec, 14834, distress}}, true, dueInMs, hurt);
+    HealReserveLatch latch;
+    HealReserveRead read = HealReservePick(std::vector<HealReserveRow>{{reservePct, windowSec, 14834, distress}},
+                                           true, dueInMs, hurt);
+    HealReserveApplyDistressLatch(read, latch, hurt, 0);
+    return read;
 }
 
 // The named failing case: outside the release window the top-up needs the row's reserve (85 %), so 84 % of mana is
@@ -120,6 +124,111 @@ static void TestDistressZeroIsWalk75()
     CHECK(!read.released);
     CHECK(read.hurtCount == 20);
     CHECK(HealReserveWhy(read) == std::string("none"));
+}
+
+// The named failing case of this round: the distress count read raw health, so two non-tanks at 60 % raw that the
+// incoming damage takes below the line never released the reserve, although the heal path already calls them hurt.
+// Counted on the same effective health the heal pick triages on, they are two hurt members and the release fires.
+static void TestDistressCountReadsEffectiveHealth()
+{
+    const float medium = 60.0f;
+    HealReserveCounts counts;
+    HealReserveCountMember(counts, HealReserveMember{true, true, false, 55.0f}, medium); // raw 60 %, predicted 55 %
+    HealReserveCountMember(counts, HealReserveMember{true, true, false, 58.0f}, medium); // raw 60 %, predicted 58 %
+    CHECK(counts.hurt == 2);
+    CHECK(counts.calm == 2);
+
+    HealReserveLatch latch;
+    HealReserveRead read = HealReservePick({{85.0f, 60.0f, 14834, 2}}, true, 70000, counts.hurt);
+    HealReserveApplyDistressLatch(read, latch, counts.calm, 1000);
+    CHECK(read.released);
+    CHECK(read.distressReleased);
+    CHECK(!read.windowReleased);
+    CHECK(HealReserveWhy(read) == std::string("distress"));
+    CHECK(HealTopUpAllowedAtHealth(true, read, 41, 40, 75.0f, 70.0f, 90.0f, false));
+    CHECK(!HealTopUpAllowedAtHealth(true, read, 39, 40, 75.0f, 70.0f, 90.0f, false));
+
+    // Only living non-tanks on the healer's map count, and a member above the line but under the margin counts calm.
+    HealReserveCounts filtered;
+    HealReserveCountMember(filtered, HealReserveMember{false, true, false, 10.0f}, medium);
+    HealReserveCountMember(filtered, HealReserveMember{true, false, false, 10.0f}, medium);
+    HealReserveCountMember(filtered, HealReserveMember{true, true, true, 10.0f}, medium);
+    CHECK(filtered.hurt == 0 && filtered.calm == 0);
+    HealReserveCountMember(filtered, HealReserveMember{true, true, false, 65.0f}, medium);
+    CHECK(filtered.hurt == 0);
+    CHECK(filtered.calm == 1);
+}
+
+// Released, then one non-tank recovers above the line plus the margin: the release holds until 3 s of calm have
+// passed, so a hurt count hovering on the line cannot flap the reserve.
+static void TestReleasedHoldsForThreeSeconds()
+{
+    const std::vector<HealReserveRow> rows{{85.0f, 60.0f, 14834, 2}};
+    HealReserveLatch latch;
+    HealReserveRead read = HealReservePick(rows, true, 70000, 2);
+    HealReserveApplyDistressLatch(read, latch, 2, 1000);
+    CHECK(read.released);
+
+    // At 3 s only one member is under the line: the calm run starts.
+    read = HealReservePick(rows, true, 70000, 1);
+    HealReserveApplyDistressLatch(read, latch, 1, 3000);
+    CHECK(read.released);
+    CHECK(latch.calm);
+    // Under 3 s of calm the release still holds.
+    read = HealReservePick(rows, true, 70000, 1);
+    HealReserveApplyDistressLatch(read, latch, 1, 5999);
+    CHECK(read.released);
+    CHECK(read.distressReleased);
+    CHECK(HealReserveWhy(read) == std::string("distress"));
+    // 3 s of calm: the reserve applies again.
+    read = HealReservePick(rows, true, 70000, 1);
+    HealReserveApplyDistressLatch(read, latch, 1, 6000);
+    CHECK(!read.released);
+    CHECK(!read.distressReleased);
+    CHECK(HealReserveWhy(read) == std::string("none"));
+    CHECK(!HealTopUpAllowedAtHealth(true, read, 84, 40, 75.0f, 70.0f, 90.0f, false));
+    CHECK(HealTopUpAllowedAtHealth(true, read, 85, 40, 75.0f, 70.0f, 90.0f, false));
+
+    // A member above the line but still under the margin keeps the release without starting the calm clock.
+    read = HealReservePick(rows, true, 70000, 2);
+    HealReserveApplyDistressLatch(read, latch, 2, 7000);
+    CHECK(read.released);
+    read = HealReservePick(rows, true, 70000, 0);
+    HealReserveApplyDistressLatch(read, latch, 2, 20000);
+    CHECK(read.released);
+    CHECK(!latch.calm);
+    read = HealReservePick(rows, true, 70000, 0);
+    HealReserveApplyDistressLatch(read, latch, 2, 40000);
+    CHECK(read.released);
+}
+
+// The latch is per fight: a read with no live row is the fight's end, so the next fight starts unlatched.
+static void TestLatchResetsOnANewFight()
+{
+    const std::vector<HealReserveRow> rows{{85.0f, 60.0f, 14834, 2}};
+    HealReserveLatch latch;
+    HealReserveRead read = HealReservePick(rows, true, 70000, 2);
+    HealReserveApplyDistressLatch(read, latch, 2, 1000);
+    CHECK(latch.released);
+
+    // The fight ends: no live row.
+    HealReserveRead none;
+    HealReserveApplyDistressLatch(none, latch, 1, 2000);
+    CHECK(!latch.released);
+    CHECK(!latch.calm);
+
+    // The next fight's first hurt member does not inherit the release.
+    read = HealReservePick(rows, true, 70000, 1);
+    HealReserveApplyDistressLatch(read, latch, 1, 3000);
+    CHECK(!read.released);
+    CHECK(HealReserveWhy(read) == std::string("none"));
+
+    // Its own distress fires the release again.
+    read = HealReservePick(rows, true, 70000, 2);
+    HealReserveApplyDistressLatch(read, latch, 2, 4000);
+    CHECK(read.released);
+    HealReserveLatchReset(latch);
+    CHECK(!latch.released);
 }
 
 // The window wins the label when both releases hold.
@@ -269,6 +378,9 @@ int main()
     TestOpeningHoldIsKept();
     TestDistressNeedsNoClock();
     TestDistressZeroIsWalk75();
+    TestDistressCountReadsEffectiveHealth();
+    TestReleasedHoldsForThreeSeconds();
+    TestLatchResetsOnANewFight();
     TestWhyWindowWins();
     TestReserveNeverBelowMedium();
     TestTopUpTier();
