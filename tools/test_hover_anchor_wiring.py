@@ -58,11 +58,18 @@ class HoverAnchorWiringTest(unittest.TestCase):
 
     def test_anchor_walk_needs_the_anchors_own_boss(self):
         fn = body(ACTIONS, "bool MoveTowardAnchorUnderHover(Unit* target, float distance, float groundZ)", "\n        }")
-        # An anchor row of another boss in the same fight names another room's centre.
+        # An anchor row of another boss in the same fight names another room's centre; both rejections say why.
         self.assertIn("const BossTacticRow* const anchorRow = LiveBossAnchorRow(ai, bot);", fn)
-        self.assertIn("if (!anchorRow || anchorRow->bossEntry != target->GetEntry())", fn)
-        self.assertLess(fn.index("anchorRow->bossEntry != target->GetEntry()"),
-                        fn.index("LiveBossAnchor(ai, bot, circle)"))
+        self.assertIn("if (!anchorRow)", fn)
+        self.assertIn("if (anchorRow->bossEntry != target->GetEntry())", fn)
+        self.assertLess(fn.index("if (!anchorRow)"), fn.index("LiveBossAnchor(ai, bot, circle)"))
+
+    def test_anchor_walk_rejects_with_a_reason(self):
+        fn = body(ACTIONS, "bool MoveTowardAnchorUnderHover(Unit* target, float distance, float groundZ)", "\n        }")
+        # A rejection is aim=target (anchorAim false) and names itself: no live anchor row, or another boss's.
+        self.assertIn('HoverReachRow(HoverReachResult::NotHover, target, distance, groundZ, 0, false, 0.0f, "no_anchor")', fn)
+        self.assertIn('HoverReachRow(HoverReachResult::NotHover, target, distance, groundZ, 0, false, 0.0f, "boss_mismatch")', fn)
+        self.assertLess(fn.index('"no_anchor"'), fn.index('"boss_mismatch"'))
 
     def test_anchor_exits_name_their_fallback(self):
         fn = body(ACTIONS, "bool MoveTowardAnchorUnderHover(Unit* target, float distance, float groundZ)", "\n        }")

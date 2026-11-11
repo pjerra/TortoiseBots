@@ -683,8 +683,16 @@ namespace ai
             // The anchor row is the boss's own: a live anchor of another boss in the same fight names another
             // room's centre, and aiming there would walk the caster off this one.
             const BossTacticRow* const anchorRow = LiveBossAnchorRow(ai, bot);
-            if (!anchorRow || anchorRow->bossEntry != target->GetEntry())
+            if (!anchorRow)
+            {
+                HoverReachRow(HoverReachResult::NotHover, target, distance, groundZ, 0, false, 0.0f, "no_anchor");
                 return false;
+            }
+            if (anchorRow->bossEntry != target->GetEntry())
+            {
+                HoverReachRow(HoverReachResult::NotHover, target, distance, groundZ, 0, false, 0.0f, "boss_mismatch");
+                return false;
+            }
 
             BossAnchorCircle circle;
             if (!LiveBossAnchor(ai, bot, circle))
