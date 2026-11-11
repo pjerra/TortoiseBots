@@ -689,25 +689,28 @@ namespace ai
     bool BossSpreadLive(PlayerbotAI* ai, Player* bot);
 
     // The boss's live `heal_reserve` rows of this bot's fight (HealReservePolicy.h): the highest reserve wins, with its
-    // own release window and its boss. `boss` is that row's boss unit (null when no row is live), so the current-victim
-    // exemption never depends on the seek_aura row or its key. The clock is the seek_aura cycle's: without that key
-    // there is no clock and the reserve is never released. Not live unless the bot is in the world, runs the "boss
-    // tactics" combat strategy, and its map has a row. Does not read the key: the caller decides what to do with it.
+    // own releases, distress count and boss. `boss` is that row's boss unit (null when no row is live), so the
+    // current-victim exemption never depends on the seek_aura row or its key. The clock is the seek_aura cycle's:
+    // without that key only the distress release applies. The distress count is the raid's living non-tanks under
+    // MediumHealth, read only when a row carries one. Not live unless the bot is in the world, runs the "boss tactics"
+    // combat strategy, and its map has a row. Does not read the key: the caller decides what to do with it.
     HealReserveRead BossHealReserve(PlayerbotAI* ai, Player* bot, Unit*& boss);
     // The reserve's target exemption: a tank, or the boss's current victim. Either keeps today's rule at all times.
     bool HealReserveTargetExempt(Unit* target, Unit* boss);
     // Whether the reserve refuses `target`'s top-up right now (the healer top-up pick reads it to skip a refused
     // candidate), classified on `effectiveHealthPct` — the same effective health triage used (the pick passes
     // PredictedHealHealth(candidate), the gate EffectiveHealHealthPct), never raw health. False with the key off, no
-    // live row, the window released, an exempt target, mana at the row's line, or effective health outside the
-    // almost-full top-up tier. Counts the refusal for the `BossTacticsHealReserve` row once per healer per tick.
+    // live row, either release (window or distress), an exempt target, mana at the row's line, or effective health
+    // outside the almost-full top-up tier. Counts the refusal for the `BossTacticsHealReserve` row once per healer per
+    // tick, tagged `pick`.
     bool HealReserveRefusesTopUp(PlayerbotAI* ai, Player* bot, Unit* target, float effectiveHealthPct);
     // Whether a healer may top up `target` above the medium-health line right now (the almost-full tier and the
     // rejuvenation spread read it): with AiPlayerbot.DungeonRunHealReserve off or no live row, today's
-    // `mana >= MediumMana` rule; else the row's reserve, outside its release window, with tanks and the boss's
-    // current victim always on today's rule. Writes the `BossTacticsHealReserve` row once per 5 s while it runs, for
-    // healers only.
-    bool HealTopUpAllowedFor(PlayerbotAI* ai, Player* bot, Unit* target);
+    // `mana >= MediumMana` rule; else the row's reserve outside both releases (the window and distress), with tanks and
+    // the boss's current victim always on today's rule. `gate` names the caller (`trigger` by default, `spread` from
+    // the druid) in the row's `last=`. Writes the `BossTacticsHealReserve` row once per 5 s while it runs, for healers
+    // only.
+    bool HealTopUpAllowedFor(PlayerbotAI* ai, Player* bot, Unit* target, const char* gate = "trigger");
 
     // A ranged bot's fixed point between the doses (DungeonRunBossSpreadSlots): the slot it owns in the ring order
     // around the boss anchor, the verdict that decides what it does with it, and the point itself. `slotBot` is false

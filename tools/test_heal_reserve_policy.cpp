@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <iostream>
+#include <string>
 #include <vector>
 
 #define CHECK(x) do { \
@@ -17,9 +18,10 @@
 
 using namespace ai;
 
-static HealReserveRead Live(float reservePct, float windowSec, std::uint32_t dueInMs)
+static HealReserveRead Live(float reservePct, float windowSec, std::uint32_t dueInMs,
+                            std::uint32_t distress = 0, std::uint32_t hurt = 0)
 {
-    return HealReservePick(std::vector<HealReserveRow>{{reservePct, windowSec, 14834}}, true, dueInMs);
+    return HealReservePick(std::vector<HealReserveRow>{{reservePct, windowSec, 14834, distress}}, true, dueInMs, hurt);
 }
 
 // The named failing case: outside the release window the top-up needs the row's reserve (85 %), so 84 % of mana is
@@ -59,13 +61,84 @@ static void TestTopUpFlagOffIsToday()
     CHECK(!HealTopUpAllowedAtHealth(true, none, 39, 40, 75.0f, 70.0f, 90.0f, false));
 }
 
+// The named failing case (walk 75, D2): outside the release window the reserve lets go while the row's distress count
+// of living non-tanks sit under the medium line. Two hurt members release it before the medium tier's own rule, so 41 %
+// of mana is allowed and 39 % refused; one hurt member is routine and the 85 % reserve stands.
+static void TestDistressReleasesOutsideWindow()
+{
+    const HealReserveRead hurt = Live(85.0f, 60.0f, 70000, 2, 2);
+    CHECK(hurt.live);
+    CHECK(hurt.released);
+    CHECK(hurt.distressReleased);
+    CHECK(!hurt.windowReleased);
+    CHECK(HealReserveWhy(hurt) == std::string("distress"));
+    CHECK(HealTopUpAllowedAtHealth(true, hurt, 41, 40, 75.0f, 70.0f, 90.0f, false));
+    CHECK(!HealTopUpAllowedAtHealth(true, hurt, 39, 40, 75.0f, 70.0f, 90.0f, false));
+
+    const HealReserveRead one = Live(85.0f, 60.0f, 70000, 2, 1);
+    CHECK(!one.released);
+    CHECK(!one.distressReleased);
+    CHECK(!HealTopUpAllowedAtHealth(true, one, 84, 40, 75.0f, 70.0f, 90.0f, false));
+    CHECK(HealTopUpAllowedAtHealth(true, one, 85, 40, 75.0f, 70.0f, 90.0f, false));
+}
+
+// The opening is held: no exemption was added for the first seconds of the fight, so the pull (due in 89 s) refuses
+// the 84 % top-up with nobody hurt.
+static void TestOpeningHoldIsKept()
+{
+    const HealReserveRead opening = Live(85.0f, 60.0f, 89000, 2, 0);
+    CHECK(opening.live);
+    CHECK(!opening.released);
+    CHECK(HealReserveWhy(opening) == std::string("none"));
+    CHECK(!HealTopUpAllowedAtHealth(true, opening, 84, 40, 75.0f, 70.0f, 90.0f, false));
+}
+
+// The distress release needs no clock: it works with the seek key off and before the first sighting.
+static void TestDistressNeedsNoClock()
+{
+    const std::vector<HealReserveRow> rows{{85.0f, 60.0f, 14834, 2}};
+    const HealReserveRead hurt = HealReservePick(rows, false, 0, 2);
+    CHECK(hurt.live);
+    CHECK(!hurt.clockKnown);
+    CHECK(hurt.distressReleased);
+    CHECK(hurt.released);
+    CHECK(HealReserveWhy(hurt) == std::string("distress"));
+    const HealReserveRead one = HealReservePick(rows, false, 0, 1);
+    CHECK(!one.distressReleased);
+    CHECK(!one.released);
+    const HealReserveRead noLead = HealReservePick(std::vector<HealReserveRow>{{85.0f, 0.0f, 14834, 2}}, true, 0, 2);
+    CHECK(!noLead.windowReleased);
+    CHECK(noLead.released);
+}
+
+// A distress count of 0 is walk 75: the reserve never releases on hurt members.
+static void TestDistressZeroIsWalk75()
+{
+    const HealReserveRead read = Live(85.0f, 60.0f, 70000, 0, 20);
+    CHECK(read.live);
+    CHECK(!read.distressReleased);
+    CHECK(!read.released);
+    CHECK(read.hurtCount == 20);
+    CHECK(HealReserveWhy(read) == std::string("none"));
+}
+
+// The window wins the label when both releases hold.
+static void TestWhyWindowWins()
+{
+    const HealReserveRead read = Live(85.0f, 60.0f, 60000, 2, 5);
+    CHECK(read.windowReleased);
+    CHECK(read.distressReleased);
+    CHECK(read.released);
+    CHECK(HealReserveWhy(read) == std::string("window"));
+}
+
 // No clock, or a lead of 0, never releases the reserve.
 static void TestReserveNoClock()
 {
     CHECK(!HealReserveReleased(false, 0, 60.0f));
     CHECK(!HealReserveReleased(false, 60000, 60.0f));
     CHECK(!HealReserveReleased(true, 0, 0.0f));
-    const HealReserveRead none = HealReservePick(std::vector<HealReserveRow>{{85.0f, 60.0f, 14834}}, false, 0);
+    const HealReserveRead none = HealReservePick(std::vector<HealReserveRow>{{85.0f, 60.0f, 14834, 0}}, false, 0, 0);
     CHECK(none.live);
     CHECK(!none.released);
     CHECK(!none.clockKnown);
@@ -75,23 +148,26 @@ static void TestReserveNoClock()
     CHECK(!leadZero.released);
 }
 
-// Several rows keep the highest reserve, and its own window and boss go with it.
+// Several rows keep the highest reserve, and its own window, boss and distress count go with it.
 static void TestReservePickHighest()
 {
-    const std::vector<HealReserveRow> rows{{70.0f, 30.0f, 111}, {85.0f, 60.0f, 222}};
-    const HealReserveRead pick = HealReservePick(rows, true, 45000);
+    const std::vector<HealReserveRow> rows{{70.0f, 30.0f, 111, 1}, {85.0f, 60.0f, 222, 3}};
+    const HealReserveRead pick = HealReservePick(rows, true, 45000, 2);
     CHECK(pick.live);
     CHECK(pick.reservePct == 85.0f);
     CHECK(pick.bossEntry == 222);
     CHECK(pick.clockKnown);
     CHECK(pick.dueInMs == 45000);
     CHECK(pick.released);               // the 85 % row's 60 s window, not the losing row's 30 s
-    CHECK(!HealReservePick(rows, true, 70000).released);
-    CHECK(HealReservePick(rows, true, 60000).released);
-    CHECK(!HealReservePick(rows, true, 60001).released);
-    CHECK(!HealReservePick(std::vector<HealReserveRow>{}, true, 0).live);
+    CHECK(pick.distressCount == 3);     // the winning row's count, not the losing row's 1
+    CHECK(!HealReservePick(rows, true, 70000, 2).released);
+    CHECK(!HealReservePick(rows, true, 60000, 2).distressReleased); // 3 hurt members are needed
+    CHECK(HealReservePick(rows, true, 60000, 2).released);          // ... the window still releases it
+    CHECK(HealReservePick(rows, true, 70000, 3).released);          // ... and the distress count does
+    CHECK(!HealReservePick(rows, true, 60001, 2).released);
+    CHECK(!HealReservePick(std::vector<HealReserveRow>{}, true, 0, 0).live);
     // A tie keeps the first row, and its boss with it.
-    CHECK(HealReservePick({{85.0f, 60.0f, 111}, {85.0f, 30.0f, 222}}, true, 70000).bossEntry == 111);
+    CHECK(HealReservePick({{85.0f, 60.0f, 111, 0}, {85.0f, 30.0f, 222, 0}}, true, 70000, 0).bossEntry == 111);
 }
 
 // The reserve governs only the almost-full top-up tier; a 60 % member is another tier's decision.
@@ -189,6 +265,11 @@ int main()
     TestTopUpFlagOffIsToday();
     TestReserveNoClock();
     TestReservePickHighest();
+    TestDistressReleasesOutsideWindow();
+    TestOpeningHoldIsKept();
+    TestDistressNeedsNoClock();
+    TestDistressZeroIsWalk75();
+    TestWhyWindowWins();
     TestReserveNeverBelowMedium();
     TestTopUpTier();
     TestPickFallsToTheExemptTank();
