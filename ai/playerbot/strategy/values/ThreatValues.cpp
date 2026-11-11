@@ -349,6 +349,21 @@ float ThreatValue::GetResetSuccessorThreat(PlayerbotAI* ai, Unit* target)
     return ai::ThreatResetReference(tanks);
 }
 
+ThreatResetStandingRead ThreatValue::GetResetStandingRead(PlayerbotAI* ai, Unit* target)
+{
+    if (!target || !ai)
+        return ThreatResetStandingRead();
+    if (sServerFacade.IsFriendlyTo(target, ai->GetBot()))
+        target = target->GetVictim();
+    if (!target || target->getObjectGuid().IsPlayer() || !ai->GetBot()->GetGroup())
+        return ThreatResetStandingRead();
+    if (!ai::ThreatSuccessorTarget(target))
+        return ThreatResetStandingRead();
+    const RaidTankRoles roles = GetRaidTankRoles(ai);
+    const std::vector<ThreatCapTank> tanks = ai::ThreatCapTanksOf(ai, target, roles, ai->GetBot(), nullptr);
+    return ai::ThreatResetStandingReadOf(tanks);
+}
+
 bool ai::TargetTauntImmune(Unit* target)
 {
     Creature* const creature = target ? dynamic_cast<Creature*>(target) : nullptr;

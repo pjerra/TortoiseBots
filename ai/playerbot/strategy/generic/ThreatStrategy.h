@@ -4,8 +4,9 @@
 
 namespace ai
 {
-    // Whether AiPlayerbot.DungeonRunThreatResetWindow holds this damage dealer's damage on the target now: the boss's
-    // row carries a reset window, the window is open and the bot's threat is at its stop line (advances the bot's
+    // Whether AiPlayerbot.DungeonRunThreatResetWindow or DungeonRunThreatResetStanding holds this damage dealer's
+    // damage on the target now: the boss's row carries a reset, the hold is open (the gap window, or the standing hold
+    // from the end of one charm to the next) and the bot's threat is at its stop line (advances the bot's
     // ThreatResetLatch). Read by ThreatMultiplier and the `threat reset white stop` trigger.
     bool ThreatResetHolds(PlayerbotAI* ai, Player* bot, Unit* target);
 
