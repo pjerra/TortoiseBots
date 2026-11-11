@@ -22,7 +22,8 @@ DOC = os.path.join(ROOT, "docs/play/boss-tactics.md")
 KINDS = {"interrupt", "kill_first", "behind", "avoid_cast", "tank_hold", "hold_kill", "one_at_a_time",
          "linked_death", "dps_hold_after", "dispel_priority", "flee_on_aura", "freeze_on_aura",
          "taunt_after_cast", "swap_on_aura", "use_object", "seek_aura", "pull_gate", "spread", "needs_aura",
-         "burn_mana", "ranged_only", "threat_successor", "anchor", "tank_ignore", "seek_pull", "gate_hold", "tank_post"}
+         "burn_mana", "ranged_only", "threat_successor", "anchor", "tank_ignore", "seek_pull", "gate_hold", "tank_post",
+         "seek_park"}
 # Kinds read straight from the table (the dps and tank pickers, the linked_death scan), never from a fight scan: a row
 # of one of them cannot answer a gate, so the loader refuses one.
 TABLE_READ_KINDS = {"hold_kill", "tank_hold", "one_at_a_time", "linked_death", "threat_successor", "tank_ignore"}
@@ -261,7 +262,7 @@ def new_kind_problem(row):
     if row["tactic_mode"] not in MODE_WORDS.get(kind, set()) | {""}:
         return "a mode word the kind does not take"
     if kind in ("seek_aura", "pull_gate", "spread", "burn_mana", "ranged_only", "threat_successor", "anchor",
-                "tank_ignore", "seek_pull", "gate_hold") and (
+                "tank_ignore", "seek_pull", "gate_hold", "seek_park") and (
             row["hp_min"] or row["hp_max"] != 100 or row["bot_aura"]):
         return "a health band or bot aura on a kind no fight scan asks"
     if kind == "gate_hold":
@@ -349,6 +350,24 @@ def new_kind_problem(row):
             return "seek_pull last-start window outside [10, 85]"
         if row["tactic_mode"]:
             return "a mode word on seek_pull"
+        if row["cycle_spell"] or row["cycle_s"] or has_spot:
+            return "cycle or spot columns on another kind"
+        return None
+    if kind == "seek_park":
+        # The seek source (target_entry), the release lead in seconds (`param`, 15-70), the apply budget (`window_s`,
+        # 3-15) and the most re-applies after a break (`priority`, 0-5). No spell, spot, cycle columns, gate or mode.
+        if not row["target_entry"]:
+            return "seek_park without its source"
+        if row["spell_id"]:
+            return "seek_park with a spell"
+        if not 0 <= row["priority"] <= 5:
+            return "seek_park re-applies outside [0, 5]"
+        if not 15.0 <= row["param"] <= 70.0:
+            return "seek_park release lead outside [15, 70]"
+        if not 3.0 <= row["window_s"] <= 15.0:
+            return "seek_park apply budget outside [3, 15]"
+        if row["tactic_mode"]:
+            return "a mode word on seek_park"
         if row["cycle_spell"] or row["cycle_s"] or has_spot:
             return "cycle or spot columns on another kind"
         return None
@@ -755,6 +774,29 @@ class BossTacticsSql(unittest.TestCase):
             text = handle.read()
         self.assertIn("DELETE FROM `ai_boss_tactic` WHERE `map` = 309 AND `boss_entry` = 14834 "
                       "AND `kind` = 'seek_pull' AND `target_entry` = 11357 AND `spell_id` = 0 "
+                      "AND `hp_min` = 0 AND `hp_max` = 100;", text)
+        self.assertEqual(1, len(re.findall(r"(?m)^\(309, 14834, '", text)))
+
+    def test_hakkar_seek_park_row(self):
+        # r11-1 (20261111150000_world.sql): the walked Son of Hakkar is parked under a Polymorph or Hibernate, nobody
+        # damages it, and a tank takes it 40 s before the Blood Siphon (6 s to land the control, up to 2 re-applies).
+        # Behind AiPlayerbot.DungeonRunSeekPark (default 0): off, the walk-out behaves as today.
+        name = "20261111150000_world.sql"
+        path = os.path.join(ROOT, "data/sql/world", name)
+        self.assertTrue(os.path.isfile(path), "the seek_park migration is missing")
+        live = {(row[1], row[2], row[3], row[4], row[5]): _payload_dict(row) for row in effective_rows()}
+        park = live.get((309, 14834, "seek_park", 11357, 0))
+        self.assertIsNotNone(park, "the Hakkar seek_park row is missing")
+        self.assertEqual(name, park["file"], "the seek_park migration owns the row")
+        self.assertEqual((2, 40.0, 6.0, "", 0, 0.0, 0, 100),
+                         (park["priority"], park["param"], park["window_s"], park["tactic_mode"],
+                          park["cycle_spell"], park["cycle_s"], park["hp_min"], park["hp_max"]),
+                         "the Hakkar seek_park row drifted")
+        self.assertIsNone(new_kind_problem(park))
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("DELETE FROM `ai_boss_tactic` WHERE `map` = 309 AND `boss_entry` = 14834 "
+                      "AND `kind` = 'seek_park' AND `target_entry` = 11357 AND `spell_id` = 0 "
                       "AND `hp_min` = 0 AND `hp_max` = 100;", text)
         self.assertEqual(1, len(re.findall(r"(?m)^\(309, 14834, '", text)))
 

@@ -94,6 +94,7 @@ These settings configure boss encounter mechanics, environmental hazard evasion,
 | [`AiPlayerbot.DungeonRunSeekNearestTake`](#aiplayerbotdungeonrunseeknearesttake) | `0` | `1` (recommended): the first off-tank takes a Son of Hakkar on a non-tank at once when the receiving tank is too far or its taunt is on cooldown and the first off-tank's taunt reaches. |
 | [`AiPlayerbot.DungeonRunSeekNearestTakeReach`](#aiplayerbotdungeonrunseeknearesttakereach) | `0` | `1` (recommended): the first off-tank also takes a walked Son of Hakkar on a non-tank from up to 20 yd when the receiving tank is more than 15 yd from it or its meet was just lost (needs `DungeonRunSeekNearestTake`). |
 | [`AiPlayerbot.DungeonRunSeekVictimRelief`](#aiplayerbotdungeonrunseekvictimrelief) | `0` | `1` (recommended): the other Hakkar off-tank takes a Son off the boss's victim tank (within 20 yd, taunt ready) after it sat there 1 s, at most twice per Son and 8 s apart (needs `DungeonRunSeekAura`). |
+| [`AiPlayerbot.DungeonRunSeekPark`](#aiplayerbotdungeonrunseekpark) | `0` | `1`: the boss tactics park the walked seek source under a Polymorph or Hibernate, hold every bot's damage off it (the park bot's own included), and at the row's release lead a tank takes it, the raid gathers at the seek spot and the burn is forced (needs `DungeonRunSeekAura`, `DungeonRunSeekPullCycle` and a `seek_park` row). |
 | [`AiPlayerbot.DungeonRunSeekMeetPrePlace`](#aiplayerbotdungeonrunseekmeetpreplace) | `0` | `1` (recommended): when a Hakkar walk-out starts, the receiving third tank walks to the tanks' circle edge on the puller's way back and waits there for the pulled Son (needs `DungeonRunSeekSonMeet`). |
 | [`AiPlayerbot.DungeonRunSeekMeetPrePlaceLate`](#aiplayerbotdungeonrunseekmeetpreplacelate) | `0` | `1` (recommended, still being tested): the pre-placed third tank stays on Hakkar until the puller is within 10 yd of its stand or in position, then walks (needs `DungeonRunSeekMeetPrePlace`). |
 | [`AiPlayerbot.DungeonRunSeekShotWaitsReceiver`](#aiplayerbotdungeonrunseekshotwaitsreceiver) | `0` | `1` (recommended): the Hakkar walk-out shot waits until the pre-placed receiver is within 5 yd of its point, at most 6 s, and not when the next Blood Siphon is 15 s or less away (needs `DungeonRunSeekMeetPrePlace`). |
@@ -1174,6 +1175,27 @@ Whether the other off-tank takes a Son of Hakkar off the boss's victim tank. Rec
 Diagnostics (always on with the key): one `BossTacticsSeekPull` row `seek relief son=<guid> from=<tank> by=<tank> dwell_ms=<ms> n=<1|2> cap=<0|1> reach_yd=<yd>` per relief start (`from` the relieved tank, `by` the taking one, `n` this Son's relief count, `cap` the cap guard's read).
 
 Cost: one latch per Son of the fight; each instance sweeps its own latches at most once a second (entries untouched for more than 120 s drop).
+
+</details>
+
+### `AiPlayerbot.DungeonRunSeekPark`
+Whether a walked seek source is parked under crowd control and killed late. Not recommended on until its walk passes.
+**Default:** `0` · **Values:** `0` off (today's walk-out take and burn), `1` on (needs `DungeonRunSeekAura`, `DungeonRunSeekPullCycle` and a `seek_park` row) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+<details>
+<summary>How it works in detail</summary>
+
+**The park:** the Sons are the fight's largest killer (2359 of 5266 deaths, 45 %, and 123 of 220 healer and ranged deaths under the seek), and a Son in the raid lives a median 37 s exactly where the raid stands stacked. Walk 72's practice probe: Polymorph landed 3 of 3 on engaged Sons and held 41-43 s, and the Son kept its full health while polymorphed. With the key on and a `seek_park` row for the fight, one source a cycle (the first the fight sees in combat) is controlled by a group member that is alive, on the map, not a tank, not a healer, not charmed, not the boss's victim, not the walk-out's puller, and knows a control that fits its creature type through the run's crowd-control table (Polymorph before Hibernate, then the nearer to the source, then the lower raw guid); the pick is kept while it still qualifies. The control is cast from its own cast reach (walking into it first, inside the boss anchor's clamp) every 2.5 s until it lands, for `window_s` seconds at most.
+
+**Nobody damages it:** while the source is applied or held the seek's hold answers true for it before the meet and before the 20 s cap, so the damage hold, the DoT veto and the area veto cover every bot, the park bot's own rotation included — the probe saw the controlling mage's Scorch break its own Polymorph. Every tank task on the source is refused (the meet, the receiver, the pickup, the pull join, the nearest take, the healer clock, the victim relief, the drag and the pull), and no new walk-out starts. The park bot is freed of its fixed spread slot while it applies; held, it stands its slot and casts from there.
+
+**The release:** at `param` seconds before the due time the control stops and the release's receiver (tanks[2] then tanks[1] with three tanks, tanks[1] with two: alive, not the boss's victim, not charmed, holding no other source) taunts and attacks the source (`take` row `src=park_release`), the burn is forced, and the damage dealers stay off it until its victim is a tank or 4 s pass. The raid gathers at the seek spot while the tank drags the source there, so the cloud lands on the raid rather than where the source was parked. A release no receiver takes in 4 s fails the park.
+
+**The failures:** a source first seen with less than the release lead plus 8 s left (`why=late`), no park bot (`no_bot`), a control that misses the apply budget (`budget`), a control broken more than `priority` times (`breaks`) or a release no tank takes (`no_receiver`) turn the park off for that cycle: the walk-out's take and burn run as today. The park ends with the source's death or the next cycle.
+
+Diagnostics (always on with the key): one `BossTacticsSeekPull` row per phase change, `seek park: son=<guid> phase=<none|apply|held|release|failed> by=<bot|-> spell=<Polymorph|Hibernate|-> due_in=<s> n=<re-applies> held_ms=<ms> why=<word|->`; see [Boss tactics refusal rows](../../play/refusal-rows.md).
+
+Cost: one record per instance (state only), swept when untouched for 120 s; one group walk and one aura scan per bot per fight read while the key is on.
 
 </details>
 

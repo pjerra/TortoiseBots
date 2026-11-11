@@ -500,6 +500,15 @@ bool BossTacticsSeekTrigger::IsActive()
     return FindBossSeek(ai, bot).valid;
 }
 
+bool BossTacticsParkTrigger::IsActive()
+{
+    if (!Ready(ai, bot))
+        return false;
+    // The finder alone decides: the trigger never notes the cast or steps the machine, so its action sees the same
+    // read (R10B-WHY: a trigger that consumed what its action needs).
+    return FindBossSeekPark(ai, bot).valid;
+}
+
 bool BossTacticsSpreadSlotTrigger::IsActive()
 {
     if (!Ready(ai, bot))

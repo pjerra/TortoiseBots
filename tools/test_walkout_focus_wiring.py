@@ -75,7 +75,7 @@ class WalkoutFocusWiring(unittest.TestCase):
         self.assertIn("if (rules.shotStall && WalkoutNoShotAbortDue(stallDue, state.pullCastMs, nowMs))",
                       update)
         self.assertIn("out.walkoutPullCastMs = state.pullCastMs;", update)
-        find = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(")
+        find = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(")
         self.assertIn("task.walkoutPullCastMs = state.walkoutPullCastMs;", find)
 
     def test_the_hunter_pull_shot_is_the_focus_pick(self):
@@ -365,7 +365,7 @@ class WalkoutStartGenGuards(unittest.TestCase):
         start = update[update.index("WalkoutStart(record.state, self, sonGuid, nowMs, cycleNo, dueInMs);"):]
         gen = start.index("out.walkoutGen = record.state.startGen;")
         self.assertLess(gen, start.index("\n    }\n"))  # before the lock's scope closes
-        find = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(")
+        find = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(")
         self.assertIn("task.walkoutGen = state.walkoutGen;", find)
         policy = (ROOT / "ai/playerbot/SeekWalkoutPolicy.h").read_text()
         start = policy[policy.index("inline void WalkoutStart(SeekWalkoutState& s"):]

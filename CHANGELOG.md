@@ -1,5 +1,7 @@
 # Changelog
 
+- New: behind AiPlayerbot.DungeonRunSeekPark (default 0, needs AiPlayerbot.DungeonRunSeekAura, AiPlayerbot.DungeonRunSeekPullCycle and a `seek_park` row), the seek source a run walked down is parked under a Polymorph or Hibernate by a damage dealer (`seek_park` row 28: 2 re-applies, a 6 s apply budget, a 40 s release lead), nobody damages it (the park bot's own rotation and every tank task included), and at the release lead a tank takes it (`src=park_release`), the raid gathers at the seek spot and the burn is forced; one `seek park` row per phase change, and a failed park burns at once as today.
+
 - Changed: Onyxia's Lair walk 2b post: slot 1's tank post for Cindarion is now mode hold_spot, so it starts even off a whelp, drags him back to the NE spot after each breath seat and yields to a seat, behind AiPlayerbot.DungeonRunTankPostHoldSpot.
 - New: Onyxia's Lair walk 2b rows: 601 Deep Breath stand seats, one anchor per hover point opening on that point's breath while she hovers and holding 12 s, every seat more than 33 yd from its lane's ticks, so seated bots keep their seat instead of the generic breath dodge.
 - New: Onyxia's Lair walk 2a rows: slot 1 posts at the NE spot for Cindarion from 65-41 %, damage holds off Onyxia at 42 % while he fights, and the raid stays within 60 yd of the room centre so the respawned room-mouth Warder is never chased into.

@@ -22,7 +22,7 @@ def body(text, signature):
 
 class SeekVictimReliefWiring(unittest.TestCase):
     def test_the_call_stands_after_the_boss_victim_return_and_the_own_son(self):
-        fn = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
+        fn = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot)")
         self.assertIn("Unit* FindSeekVictimRelief(PlayerbotAI* ai, Player* bot,", ACTIONS)
         boss_victim = fn.index("if ((thirdTank || pickupTank || healerTaker) &&")
         relief_call = fn.index("if (thirdTank || healerTaker)")
@@ -39,7 +39,7 @@ class SeekVictimReliefWiring(unittest.TestCase):
                          third_healer.count("task.takeSrc = "))
 
     def test_the_call_is_for_the_two_off_tanks(self):
-        fn = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
+        fn = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot)")
         self.assertIn("if (thirdTank || healerTaker)\n    {\n        if (Unit* const reliefSon =", fn)
 
     def test_the_function_reads_the_flag_and_names_the_take(self):

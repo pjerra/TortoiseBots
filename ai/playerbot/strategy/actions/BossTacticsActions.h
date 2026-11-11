@@ -746,6 +746,36 @@ namespace ai
     };
     SeekTankTask FindBossSeekTank(PlayerbotAI* ai, Player* bot);
 
+    // The park cast (DungeonRunSeekPark): this bot is the parked source's park bot, the phase holds (Apply or Held) and
+    // its control is due (SeekParkCastDue). `source` and `spell` are what the cast goes to; `cutCast` cuts a running
+    // cast of its own once, for the first cast of an Apply.
+    struct SeekParkTask
+    {
+        bool valid = false;
+        Unit* source = nullptr;
+        std::string spell;
+        bool cutCast = false;
+    };
+    SeekParkTask FindBossSeekPark(PlayerbotAI* ai, Player* bot);
+    // The action alone notes a cast, so the trigger never consumes what its action needs.
+    void NoteBossSeekParkCast(Player* bot, std::uint32_t nowMs);
+
+    // The park bot's own control: cast Polymorph or Hibernate on the parked source from the cast reach, or walk into
+    // that reach first (inside the boss anchor's clamp).
+    class BossTacticsParkAction : public MovementAction
+    {
+    public:
+        BossTacticsParkAction(PlayerbotAI* ai) : MovementAction(ai, "boss tactics park") {}
+        bool isUseful() override;
+        bool isPossible() override;
+        bool Execute(Event& event) override;
+
+    private:
+        float lastX = 0.0f;
+        float lastY = 0.0f;
+        bool hasLast = false;
+    };
+
     // The seek walk: into the cloud, or to the gather around the dying source, and then stand.
     class BossTacticsSeekAction : public MovementAction
     {
