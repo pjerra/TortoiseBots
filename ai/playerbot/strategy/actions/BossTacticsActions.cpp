@@ -2180,7 +2180,7 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
     char info1[224];
     snprintf(info1, sizeof(info1), "seek park: son=%u phase=%s by=%s spell=%s due_in=%d n=%u held_ms=%u why=%s",
              ObjectGuid(step.son).GetCounter(), SeekParkPhaseWord(step.phase), parkBot ? parkBot->GetName() : "-",
-             spell.empty() ? "-" : spell.c_str(), static_cast<int>(in.dueKnown ? in.dueInMs / 1000 : -1),
+             spell.empty() ? "-" : spell.c_str(), in.dueKnown ? static_cast<int>(in.dueInMs / 1000) : -1,
              static_cast<unsigned>(step.reapplies), SeekParkHeldMs(step, nowMs),
              step.why && *step.why ? step.why : "-");
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsSeekPull", info1, "");
