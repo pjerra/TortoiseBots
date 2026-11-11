@@ -161,6 +161,18 @@ class SeekParkWiring(unittest.TestCase):
         self.assertIn("son->GetVictim() != bot", fn)
         self.assertIn("receiverDrag", fn)
 
+    def test_the_release_never_hands_the_son_to_another_tank(self):
+        # Round 3 (walk 73): a tank that has the Son keeps it. The take is due only while the source has no tank
+        # victim, and the release's own tank is the holder on a tank, so every other tank's park path skips the Son
+        # (TestParkReleasedHolderKeepsTheSon).
+        fn = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
+        self.assertIn("SeekParkReleaseTakeDue(SeekParkReleaseLive(state.parkPhase), sonOnTank, isReceiver)", fn)
+        self.assertIn("const bool sonHolder = sonOnTank && son->GetVictim() == bot;", fn)
+        self.assertIn("SeekParkReleaseTank(SeekParkReleaseLive(state.parkPhase), sonOnTank, sonHolder, isReceiver)", fn)
+        self.assertIn("SeekParkExcludesSource(state.parkPhase, sonOnTank, releaseTank)", fn)
+        self.assertIn("SeekParkReleaseTakeDue(bool releaseLive, bool sonOnTank, bool isReceiver)", POLICY)
+        self.assertIn("return releaseLive && !sonOnTank && isReceiver;", POLICY)
+
     def test_the_gather_waits_at_the_spot_before_the_released_source_arrives(self):
         fn = body(ACTIONS, "SeekTask ai::FindBossSeek(PlayerbotAI* ai, Player* bot)")
         self.assertIn("SeekParkHolds(", fn)

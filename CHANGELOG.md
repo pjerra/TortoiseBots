@@ -1,5 +1,6 @@
 # Changelog
 
+- Fixed: the seek park never hands a released Son from the tank that has it to another tank: its `park_release` take is ordered only while the Son has no tank victim, so a tank that becomes Hakkar's victim no longer makes the next tank taunt the Son away (walk 73 measured that handoff as harmful).
 - Fixed: the seek park's release latches the first tick a tank has its source (a terminal `released` phase), so a Son that leaves the tank after the 4 s window (threat, death, retarget) no longer turns a successful release into `failed`.
 - New: behind AiPlayerbot.DungeonRunSeekPark (default 0, needs AiPlayerbot.DungeonRunSeekAura, AiPlayerbot.DungeonRunSeekPullCycle and a `seek_park` row), the seek's picked source, once it stands inside the raid circle, is parked under a Polymorph or Hibernate by a damage dealer (`seek_park` row 28: 2 re-applies, a 6 s apply budget, a 40 s release lead), nobody damages it (the park bot's own rotation and every tank task included), and at the release lead a tank must take it within 4 s (`src=park_release`) or the park fails, the raid gathers at the seek spot and the burn is forced; one `seek park` row per phase change, and a failed park burns at once as today.
 

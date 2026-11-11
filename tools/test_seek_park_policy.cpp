@@ -515,6 +515,44 @@ static void TestParkReleaseLatches()
     }
 }
 
+// TestParkReleasedHolderKeepsTheSon: the named failing case (round 3). Tank A completes the release, then becomes
+// Hakkar's victim; the scan's receiver is now tank B, but the Son still on A is A's: B gets no take, and only once
+// the Son moves to a non-tank is the receiver's take due. Every other tank's park path skips the Son while a tank
+// holds it.
+static void TestParkReleasedHolderKeepsTheSon()
+{
+    const SeekParkRules rules = ParkRules();
+    SeekParkState state;
+    SeekParkInput in = ParkInput(48001);
+    CHECK(SeekParkStep(state, rules, in, 10000));
+    in.dueInMs = 40000;
+    in.sonOnTank = true;
+    CHECK(SeekParkStep(state, rules, in, 10000));
+    CHECK(state.phase == SeekParkPhase::Release);
+    CHECK(SeekParkStep(state, rules, in, 11000));
+    CHECK(state.phase == SeekParkPhase::Released);
+    const bool releaseLive = SeekParkReleaseLive(state.phase);
+    // Tank A is Hakkar's victim, so the scan no longer offers it and tank B is the receiver; A still holds the Son.
+    const bool aHolds = true;
+    const bool bIsReceiver = true;
+    // The holder keeps it: A is the release's tank, its own-source drag is let through, and B's take is not due.
+    CHECK(SeekParkReleaseTank(releaseLive, true, aHolds, false));
+    CHECK(!SeekParkReleaseTakeDue(releaseLive, true, aHolds));
+    CHECK(!SeekParkReleaseTank(releaseLive, true, false, bIsReceiver));
+    CHECK(!SeekParkReleaseTakeDue(releaseLive, true, bIsReceiver));
+    CHECK(SeekParkExcludesSource(state.phase, true, false));
+    // The Son moves to a non-tank: the receiver's take is due and its park path sees the Son again.
+    CHECK(SeekParkReleaseTank(releaseLive, false, false, bIsReceiver));
+    CHECK(SeekParkReleaseTakeDue(releaseLive, false, bIsReceiver));
+    CHECK(!SeekParkExcludesSource(state.phase, false, bIsReceiver));
+    // A non-tank victim is no holder and no receiver's Son: only the ordinary takes apply.
+    CHECK(!SeekParkReleaseTakeDue(releaseLive, false, false));
+    CHECK(!SeekParkReleaseTank(releaseLive, false, false, false));
+    // With the release not live, nothing is the release's.
+    CHECK(!SeekParkReleaseTakeDue(false, false, true));
+    CHECK(!SeekParkReleaseTank(false, true, true, true));
+}
+
 // TestParkOnlyThePick: the park is the seek's own pick; a pick that moves away while Held or Release ends the record.
 static void TestParkOnlyThePick()
 {
@@ -597,6 +635,7 @@ int main()
     TestParkNewCycleResets();
     TestParkReleaseNeedsReceiver();
     TestParkReleaseLatches();
+    TestParkReleasedHolderKeepsTheSon();
     TestParkOnlyThePick();
     TestParkFightStartResets();
     TestParkExemptsBot();

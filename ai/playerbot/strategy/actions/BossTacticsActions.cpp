@@ -10538,24 +10538,28 @@ SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)
     const Player* const receiver = SeekParkReleaseLive(state.parkPhase)
         ? SeekParkReceiver(ai, bot, state.boss, state.sons, state.row->targetEntry, state.parkSon) : nullptr;
     const bool isReceiver = receiver && receiver == bot;
-    if (isReceiver)
+    // The release's take goes in only while the source has no tank victim: once any tank has it, that holder keeps it
+    // and no other tank is ordered onto it (walk 73 measured the tank-to-tank handoff as harmful). The take's swing
+    // breaks the control with the source already on the tank; from then on the body's own-source branch drags it to
+    // the row's spot (the release's second half), which the wrapper lets through below.
+    if (SeekParkReleaseTakeDue(SeekParkReleaseLive(state.parkPhase), sonOnTank, isReceiver) && son &&
+        son->GetEntry() == state.row->targetEntry && sServerFacade.IsAlive(son) && son->GetVictim() != bot)
     {
-        // Once the source is on this tank the take is over: the body's own-source branch drags it to the row's spot
-        // (the release's second half), which the wrapper lets through below.
-        if (son && son->GetEntry() == state.row->targetEntry && sServerFacade.IsAlive(son) && son->GetVictim() != bot)
-        {
-            SeekTankTask task;
-            task.valid = true;
-            task.row = state.row;
-            task.source = son;
-            task.take = true;
-            task.takeSrc = "park_release";
-            task.boss = state.boss;
-            return task;
-        }
+        SeekTankTask task;
+        task.valid = true;
+        task.row = state.row;
+        task.source = son;
+        task.take = true;
+        task.takeSrc = "park_release";
+        task.boss = state.boss;
+        return task;
     }
-    // The body skips the parked source where the park owns it, so its next task (another Son) comes back.
-    const bool excludeParkSon = SeekParkExcludesSource(state.parkPhase, sonOnTank, isReceiver);
+    // The release's own tank (the holder on a tank, the receiver while it has none) keeps the source; every other
+    // tank's park path skips it, so its next task (another Son) comes back.
+    const bool sonHolder = sonOnTank && son->GetVictim() == bot;
+    const bool releaseTank =
+        SeekParkReleaseTank(SeekParkReleaseLive(state.parkPhase), sonOnTank, sonHolder, isReceiver);
+    const bool excludeParkSon = SeekParkExcludesSource(state.parkPhase, sonOnTank, releaseTank);
     SeekTankTask task = FindBossSeekTankUnparked(ai, bot, excludeParkSon ? state.parkSon : 0);
     if (task.valid && task.source && task.source->GetObjectGuid().GetRawValue() == state.parkSon)
     {
