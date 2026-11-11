@@ -569,15 +569,16 @@ static void TestParkReleaseLatches()
     }
 }
 
-// TestParkReleaseIgnoresStaleTankVictim: the named failing case (F1). A creature under Polymorph keeps its victim, so
-// "on a tank" means a tank victim and no breakable control: a taunt on the sleeping Son completes nothing, the swing
-// that wakes it does.
+// TestParkReleaseIgnoresStaleTankVictim: the named failing case (F1, round 5). A creature under Polymorph keeps its
+// victim, and that stale victim still targets anything. "On a tank" means a tank victim that targets the Son, with no
+// breakable control: a taunt on the sleeping Son completes nothing, and neither does a tank that moved on.
 static void TestParkReleaseIgnoresStaleTankVictim()
 {
-    CHECK(!SeekParkSonOnTank(true, true));
-    CHECK(SeekParkSonOnTank(true, false));
-    CHECK(!SeekParkSonOnTank(false, false));
-    CHECK(!SeekParkSonOnTank(false, true));
+    CHECK(!SeekParkSonOnTank(true, true, true));
+    CHECK(!SeekParkSonOnTank(true, false, false));
+    CHECK(SeekParkSonOnTank(true, true, false));
+    CHECK(!SeekParkSonOnTank(false, true, false));
+    CHECK(!SeekParkSonOnTank(false, true, true));
     const SeekParkRules rules = ParkRules();
     SeekParkState state;
     SeekParkInput in = ParkInput(60000);
@@ -590,20 +591,25 @@ static void TestParkReleaseIgnoresStaleTankVictim()
     // The release tick: the control holds and the Son's stale victim is a tank.
     in.receiverInReach = true;
     in.dueInMs = 40000;
-    in.sonOnTank = SeekParkSonOnTank(true, true);
+    in.sonOnTank = SeekParkSonOnTank(true, true, true);
     CHECK(!in.sonOnTank);
     CHECK(SeekParkStep(state, rules, in, 3000));
     CHECK(state.phase == SeekParkPhase::Release);
     // It does not latch while the control holds the Son.
     CHECK(!SeekParkStep(state, rules, in, 4000));
     CHECK(state.phase == SeekParkPhase::Release);
-    CHECK(SeekParkReleaseTakeDue(true, SeekParkSonOnTank(true, true), true));
-    // The swing that wakes it: no control, a tank victim, and the release completes.
+    CHECK(SeekParkReleaseTakeDue(true, SeekParkSonOnTank(true, true, true), true));
+    // The control is gone, but that stale tank now targets something else: still no release.
     in.controlled = false;
     in.controlLeftMs = 0;
-    in.sonOnTank = SeekParkSonOnTank(true, in.controlled);
+    in.sonOnTank = SeekParkSonOnTank(true, false, in.controlled);
+    CHECK(!in.sonOnTank);
+    CHECK(!SeekParkStep(state, rules, in, 5000));
+    CHECK(state.phase == SeekParkPhase::Release);
+    // The tank engages the Son: the release completes.
+    in.sonOnTank = SeekParkSonOnTank(true, true, in.controlled);
     CHECK(in.sonOnTank);
-    CHECK(SeekParkStep(state, rules, in, 5000));
+    CHECK(SeekParkStep(state, rules, in, 6000));
     CHECK(state.phase == SeekParkPhase::Released);
 }
 

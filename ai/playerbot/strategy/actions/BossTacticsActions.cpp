@@ -872,8 +872,8 @@ struct SeekFight
     std::uint64_t parkSon = 0;
     std::uint64_t parkBot = 0;
     std::uint32_t parkReleaseMs = 0;
-    // The park's read: the source on a tank (a tank victim and no breakable control), the release's receiver, whether
-    // it stands in strike reach, and whether it should already be walking to the source.
+    // The park's read: the source on a tank (a tank victim engaged on it and no breakable control), the release's
+    // receiver, whether it stands in strike reach, and whether it should already be walking to the source.
     bool parkSonOnTank = false;
     std::uint64_t parkReceiver = 0;
     bool parkReceiverOk = false;
@@ -2223,6 +2223,16 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
         receiver = PickSeekParkReceiverOf(ai, bot, out.boss, liveSon, out.sons, out.row->targetEntry,
                                           live ? recorded.receiver : 0);
     Player* const sonVictim = liveSon ? dynamic_cast<Player*>(liveSon->GetVictim()) : nullptr;
+    // The stale-victim test: a tank the Son still lists is only "on the Son" when its own current target is the Son.
+    const bool victimIsTank = sonVictim && PlayerbotAI::IsTank(sonVictim);
+    bool tankEngaged = false;
+    if (victimIsTank)
+    {
+        if (PlayerbotAI* const victimAi = PlayerbotAIStorage::Instance().GetAI(sonVictim))
+            tankEngaged = victimAi->GetAiObjectContext()->GetValue<Unit*>("current target")->Get() == liveSon;
+        else
+            tankEngaged = sonVictim->GetSelectionGuid() == liveSon->GetObjectGuid();
+    }
     SeekParkInput in;
     in.son = sonGuid;
     in.pickedSon = pickedGuid;
@@ -2239,8 +2249,9 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
     in.controllerInReach = controllerInReach;
     in.dueKnown = out.dueMs != 0;
     in.dueInMs = out.dueInMs;
-    // A stale tank victim under the control is not a tank's source: only the swing that wakes it makes it one.
-    in.sonOnTank = SeekParkSonOnTank(sonVictim && PlayerbotAI::IsTank(sonVictim), in.controlled);
+    // A stale tank victim under the control is not a tank's source, and neither is one that has stopped targeting the
+    // Son: only a tank engaged on the woken Son is.
+    in.sonOnTank = SeekParkSonOnTank(victimIsTank, tankEngaged, in.controlled);
     in.receiverOk = receiver != nullptr;
     in.receiverInReach = receiver && SeekParkStrikeInReach(receiver->GetDistance(liveSon));
     bool changed = false;

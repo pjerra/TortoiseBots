@@ -1,5 +1,6 @@
 # Changelog
 
+- Fixed: a parked Son that is awake only because its Polymorph ran out no longer completes the release off whichever tank it last hit: its `released` now needs that tank's own current target to be the Son, so a stale victim no longer leaves the raid waiting on a sleeping Son.
 - Fixed: a parked Son that is asleep under the control no longer counts as taken by whichever tank it last hit: the release only completes when a tank really fights it, so the raid no longer stands at the gather for a whole siphon with a sleeping Son.
 - Changed: the park's release now walks the chosen off-tank to the Son before it starts and keeps it there, the take walks in before it strikes, tanks stop swinging at a parked Son, only the chosen off-tank touches it during the release, each siphon cycle parks at most one Son, and an apply that never reaches the Son ends instead of holding the park all cycle.
 - New: the park rows name the release's receiver, its distance, whether the Son is really on a tank and how long the release waited, and a `seek park cast:` row logs each control attempt (cast, refused with its reason, walk, anchor refusal).
