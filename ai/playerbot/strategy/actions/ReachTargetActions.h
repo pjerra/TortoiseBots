@@ -710,12 +710,18 @@ namespace ai
             centre.z = circle.z;
             ApproachPoint aim;
             if (!HoverAnchorAimPoint(centre, goal, HoverAnchorReachLimit(reachDist, triggerDist), aim))
+            {
+                HoverReachRow(HoverReachResult::NoPoint, target, distance, groundZ, 0, false, 0.0f, "no_point");
                 return false;
+            }
 
             WorldPosition const aimPoint(bot->GetMapId(), aim.x, aim.y, aim.z);
             std::vector<WorldPosition> const path = aimPoint.getPathStepFrom(WorldPosition(bot), bot);
             if (path.size() < 2)
+            {
+                HoverReachRow(HoverReachResult::NoPath, target, distance, groundZ, path.size(), false, 0.0f, "no_path");
                 return false;
+            }
 
             std::vector<ApproachPoint> points;
             points.reserve(path.size() + 1);
@@ -744,11 +750,17 @@ namespace ai
 
             RangedApproachChoice const choice = SelectRangedApproachPoint(points, goal, stop, seesTarget);
             if (!choice.valid)
+            {
+                HoverReachRow(HoverReachResult::NoPoint, target, distance, groundZ, path.size(), false, 0.0f, "no_point");
                 return false;
+            }
 
             WorldPosition const destination(bot->GetMapId(), choice.point.x, choice.point.y, choice.point.z);
             if (IsHazardNearPosition(destination))
+            {
+                HoverReachRow(HoverReachResult::Hazard, target, distance, groundZ, path.size(), false, 0.0f, "hazard");
                 return false;
+            }
 
             bool const moved = MoveTo(destination.getMapId(), destination.getX(), destination.getY(), destination.getZ());
             HoverReachRow(moved ? HoverReachResult::Moved : HoverReachResult::MoveFailed,
@@ -758,7 +770,7 @@ namespace ai
 
         // One row per bot per kHoverLogMs; only with the key on and a bot_events.csv log.
         void HoverReachRow(HoverReachResult result, Unit* target, float distance, float groundZ, std::size_t pathPoints,
-            bool anchorAim = false, float stopDist = 0.0f)
+            bool anchorAim = false, float stopDist = 0.0f, const char* reason = nullptr)
         {
             if (!sPlayerbotAIConfig.rangedReachHoverTarget || !sPlayerbotAIConfig.hasLog("bot_events.csv"))
                 return;
@@ -770,15 +782,17 @@ namespace ai
 
             char info1[64];
             snprintf(info1, sizeof(info1), "target=%u,result=%s", target->GetEntry(), HoverReachWord(result));
-            char info2[96];
+            char info2[112];
             float const dist = anchorAim ? stopDist
                 : HoverReachDistance(distance, target->GetCombatReach(), bot->GetCombatReach());
-            snprintf(info2, sizeof(info2), "yd2d=%.1f,height=%.1f,dist=%.1f,path=%u,aim=%s",
+            int const written = snprintf(info2, sizeof(info2), "yd2d=%.1f,height=%.1f,dist=%.1f,path=%u,aim=%s",
                 sServerFacade.getDistance2d(bot, target->GetPositionX(), target->GetPositionY()),
                 target->GetPositionZ() - groundZ,
                 dist,
                 static_cast<uint32>(pathPoints),
                 anchorAim ? "anchor" : "target");
+            if (reason && written > 0 && written < static_cast<int>(sizeof(info2)))
+                snprintf(info2 + written, sizeof(info2) - written, ",reason=%s", reason);
             sPlayerbotAIConfig.logEvent(ai, "BossReachHover", info1, info2);
         }
 

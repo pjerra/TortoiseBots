@@ -64,6 +64,17 @@ class HoverAnchorWiringTest(unittest.TestCase):
         self.assertLess(fn.index("anchorRow->bossEntry != target->GetEntry()"),
                         fn.index("LiveBossAnchor(ai, bot, circle)"))
 
+    def test_anchor_exits_name_their_fallback(self):
+        fn = body(ACTIONS, "bool MoveTowardAnchorUnderHover(Unit* target, float distance, float groundZ)", "\n        }")
+        # A fallback says why it gave the aim up, and stays aim=target (anchorAim false).
+        self.assertIn('HoverReachResult::NoPath, target, distance, groundZ, path.size(), false, 0.0f, "no_path"', fn)
+        self.assertIn('HoverReachResult::NoPoint, target, distance, groundZ, path.size(), false, 0.0f, "no_point"', fn)
+        self.assertIn('HoverReachResult::NoPoint, target, distance, groundZ, 0, false, 0.0f, "no_point"', fn)
+        self.assertIn('HoverReachResult::Hazard, target, distance, groundZ, path.size(), false, 0.0f, "hazard"', fn)
+        row = body(ACTIONS, "void HoverReachRow(HoverReachResult result", "\n        }")
+        self.assertIn('",reason=%s"', row)
+        self.assertIn("snprintf(info2 + written", row)
+
     def test_row_names_the_aim(self):
         fn = body(ACTIONS, "void HoverReachRow(HoverReachResult result", "\n        }")
         self.assertIn("aim=%s", fn)
