@@ -89,7 +89,19 @@ namespace ai
     // shouts
     MELEE_ACTION_U(CastBattleShoutTauntAction, "battle shout", CastSpellAction::isUseful()); // useful to rebuff
     MELEE_DEBUFF_ACTION_R(CastDemoralizingShoutAction, "demoralizing shout", 8.0f); // low range debuff
-    MELEE_ACTION(CastChallengingShoutAction, "challenging shout");
+    // The AoE taunt: re-walks the loose-add count at cast time, uncached, because a shout queued while loose adds
+    // were on a non-tank outlives its reach prerequisite and would otherwise fire after the pack settled, inside
+    // the "trigger active" value's one-second cache.
+    class CastChallengingShoutAction : public CastMeleeSpellAction
+    {
+    public:
+        CastChallengingShoutAction(PlayerbotAI* ai) : CastMeleeSpellAction(ai, "challenging shout") {}
+
+        virtual bool isUseful() override
+        {
+            return CastMeleeSpellAction::isUseful() && AoeTauntStillNeeded(ai, bot);
+        }
+    };
     class CastIntimidatingShoutAction : public CastMeleeDebuffSpellAction
     {
     public:
@@ -172,7 +184,7 @@ namespace ai
     };
     SNARE_ACTION(CastHamstringAction, "hamstring");
     MELEE_ACTION(CastOverpowerAction, "overpower");
-    // The second taunt: never at a subject the taunt gate refuses (a Shade of Jin'do, a taunt-immune boss).
+    // The second taunt: never at a subject the taunt gate refuses (a Shade of Jin'do, a taunt-immune boss). Stands down at cast time when the mob is already on another tank (TauntHeldTargetPolicy.h).
     class CastMockingBlowAction : public CastMeleeSpellAction
     {
     public:
@@ -180,7 +192,8 @@ namespace ai
 
         virtual bool isUseful() override
         {
-            return CastMeleeSpellAction::isUseful() && !TauntRefusedByGate(ai, bot, GetTarget(), "mocking blow");
+            return CastMeleeSpellAction::isUseful() && !TauntRefusedByGate(ai, bot, GetTarget(), "mocking blow") &&
+                !TauntTargetHeldByOtherTank(bot, GetTarget());
         }
     };
     class CastRetaliationAction : public CastBuffSpellAction
@@ -439,7 +452,7 @@ namespace ai
     };
 
     // protection
-    // The taunt row itself: no subject the taunt gate refuses (a Shade of Jin'do, a taunt-immune boss).
+    // The taunt row itself: no subject the taunt gate refuses (a Shade of Jin'do, a taunt-immune boss). Stands down at cast time when the mob is already on another tank (TauntHeldTargetPolicy.h).
     class CastTauntAction : public CastMeleeSpellAction
     {
     public:
@@ -448,10 +461,10 @@ namespace ai
         virtual bool isUseful() override
         {
             return GetTarget() && GetTarget()->GetVictim() && GetTarget()->GetVictim() != bot &&
-                !TauntRefusedByGate(ai, bot, GetTarget(), "taunt");
+                !TauntRefusedByGate(ai, bot, GetTarget(), "taunt") && !TauntTargetHeldByOtherTank(bot, GetTarget());
         }
     };
-    // The snare-target taunt: the same gate as the taunt row.
+    // The snare-target taunt: the same gate as the taunt row. Stands down at cast time when the mob is already on another tank (TauntHeldTargetPolicy.h).
     class CastTauntOnSnareTargetAction : public CastSnareSpellAction
     {
     public:
@@ -459,13 +472,14 @@ namespace ai
 
         virtual bool isUseful() override
         {
-            return CastSnareSpellAction::isUseful() && !TauntRefusedByGate(ai, bot, GetTarget(), "taunt");
+            return CastSnareSpellAction::isUseful() && !TauntRefusedByGate(ai, bot, GetTarget(), "taunt") &&
+                !TauntTargetHeldByOtherTank(bot, GetTarget());
         }
     };
 
     // Taunt the mob picked by "attacker of non-tank target"; the cast reads
     // its real range from the spell and the reach prerequisite walks the
-    // tank in.
+    // tank in. Stands down at cast time when the mob is already on another tank (TauntHeldTargetPolicy.h).
     class CastTauntOnAttackerAction : public CastSnareSpellAction
     {
     public:
@@ -474,7 +488,8 @@ namespace ai
         // The pick is the value's; the gate is the backstop, so a refused subject never gets here by any route.
         virtual bool isUseful() override
         {
-            return CastSnareSpellAction::isUseful() && !TauntRefusedByGate(ai, bot, GetTarget(), "taunt");
+            return CastSnareSpellAction::isUseful() && !TauntRefusedByGate(ai, bot, GetTarget(), "taunt") &&
+                !TauntTargetHeldByOtherTank(bot, GetTarget());
         }
 
     protected:
