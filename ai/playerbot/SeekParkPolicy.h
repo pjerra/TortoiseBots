@@ -25,11 +25,12 @@ namespace ai
 
     enum class SeekParkPhase : std::uint8_t
     {
-        None = 0,   // new cycle, new source, or the source died
-        Apply = 1,  // the park bot casts the control; nobody touches the source
-        Held = 2,   // the source carries the control; the park bot refreshes it near its end
+        None = 0,    // new cycle, new source, or the source died
+        Apply = 1,   // the park bot casts the control; nobody touches the source
+        Held = 2,    // the source carries the control; the park bot refreshes it near its end
         Release = 3, // the receiver tank takes the source, the burn is forced, the raid gathers at the spot
-        Failed = 4, // today's take and burn at once
+        Failed = 4,  // today's take and burn at once
+        Released = 5, // a tank had the source inside the release's window: the park is done, and it cannot fail
     };
 
     // The seek_park row as the read passes it: the key and row on, the release lead (`param`), the apply budget
@@ -84,6 +85,13 @@ namespace ai
         bool receiverOk = false;
     };
 
+    // Whether the release is live: the window is open (Release) or a tank completed it (Released). The release's
+    // damage hold, gather, takes and lead read the same in both, so latching success changes nothing but the failure.
+    inline bool SeekParkReleaseLive(SeekParkPhase phase)
+    {
+        return phase == SeekParkPhase::Release || phase == SeekParkPhase::Released;
+    }
+
     // The row's word for a phase (the `phase=` field of the `seek park` row).
     inline const char* SeekParkPhaseWord(SeekParkPhase phase)
     {
@@ -95,6 +103,8 @@ namespace ai
                 return "held";
             case SeekParkPhase::Release:
                 return "release";
+            case SeekParkPhase::Released:
+                return "released";
             case SeekParkPhase::Failed:
                 return "failed";
             case SeekParkPhase::None:
@@ -142,7 +152,7 @@ namespace ai
         }
         // The park is only ever the seek's own pick: its burn, kill and gather key on that Son. A pick that moved away
         // while this record held or released ends the record at None (a new source starts a fresh park).
-        if ((state.phase == SeekParkPhase::Held || state.phase == SeekParkPhase::Release) &&
+        if ((state.phase == SeekParkPhase::Held || SeekParkReleaseLive(state.phase)) &&
             in.pickedSon != state.son)
         {
             state = SeekParkState();
@@ -254,15 +264,25 @@ namespace ai
             case SeekParkPhase::Release:
             {
                 // The release's own window: the source must be on a tank within kSeekParkReleaseHoldMs, whether a
-                // receiver exists or not. An eligible tank that cannot reach, taunt or attack is no release, and the
-                // park fails to today's take.
-                if (state.releaseMs != 0 && nowMs - state.releaseMs >= kSeekParkReleaseHoldMs && !in.sonOnTank)
+                // receiver exists or not. The first tick a tank has it completes the release for good: a later threat
+                // change, control effect, death or retarget cannot turn a release that happened into a failure.
+                if (in.sonOnTank)
+                {
+                    state.phase = SeekParkPhase::Released;
+                    state.why = "";
+                    break;
+                }
+                // An eligible tank that cannot reach, taunt or attack is no release, and the park fails to today's
+                // take.
+                if (state.releaseMs != 0 && nowMs - state.releaseMs >= kSeekParkReleaseHoldMs)
                 {
                     state.phase = SeekParkPhase::Failed;
                     state.why = "no_receiver";
                 }
                 break;
             }
+            case SeekParkPhase::Released:
+                break;
             case SeekParkPhase::Failed:
                 break;
         }
@@ -278,36 +298,37 @@ namespace ai
 
     // Whether a tank task on the parked source is vetoed in this phase: every task in Apply and Held (the meet, the
     // receiver, the pickup, the pull join, the nearest take, the healer clock, the victim relief, the drag and the
-    // pull), and every task but the release's own take in Release while the source is on a tank. In Release with the
-    // source on a non-tank (the control broke onto someone) the normal takes apply: the park's task is the release's
-    // own, and the ordinary nearest, healer-clock and relief picks may take the source back.
+    // pull), and every task but the release's own take in the release while the source is on a tank. In the release
+    // with the source on a non-tank (the control broke onto someone, or a latched release lost its tank afterwards)
+    // the normal takes apply: the park's task is the release's own, and the ordinary nearest, healer-clock and relief
+    // picks may take the source back.
     inline bool SeekParkVetoesTankTask(SeekParkPhase phase, const char* takeSrc, bool sonOnTank)
     {
         if (phase == SeekParkPhase::Apply || phase == SeekParkPhase::Held)
             return true;
-        if (phase != SeekParkPhase::Release || !sonOnTank)
+        if (!SeekParkReleaseLive(phase) || !sonOnTank)
             return false;
         return !(takeSrc && std::strcmp(takeSrc, "park_release") == 0);
     }
 
     // Whether the wrapped tank body is told to skip this source outright: Apply and Held (every tank task is the
-    // park's), and Release on a tank for every bot but the receiver (its own-source drag is the release's second
+    // park's), and the release on a tank for every bot but the receiver (its own-source drag is the release's second
     // half). The body then returns its next task (another Son on a healer) instead of an empty one.
     inline bool SeekParkExcludesSource(SeekParkPhase phase, bool sonOnTank, bool isReceiver)
     {
         if (phase == SeekParkPhase::Apply || phase == SeekParkPhase::Held)
             return true;
-        if (phase != SeekParkPhase::Release || !sonOnTank)
+        if (!SeekParkReleaseLive(phase) || !sonOnTank)
             return false;
         return !isReceiver;
     }
 
     // Whether this bot's attack on `target` may outrank the invalid-target rule: the release's receiver, its released
-    // source, and only while Release is live. A polymorphed Son is otherwise no valid current target, so the
+    // source, and only while the release is live. A polymorphed Son is otherwise no valid current target, so the
     // receiver's Attack() would be undone by "select new target" every tick.
     inline bool SeekParkReleaseTargetAllowed(SeekParkPhase phase, bool isReceiver, bool isParkSon)
     {
-        return phase == SeekParkPhase::Release && isReceiver && isParkSon;
+        return SeekParkReleaseLive(phase) && isReceiver && isParkSon;
     }
 
     // The late-engage lead the fight read burns with: a parked or released source is not burned on arrival (its
@@ -318,7 +339,7 @@ namespace ai
     {
         if (!rulesOn || !parkedIsPick)
             return pullLeadMs;
-        if (phase == SeekParkPhase::Apply || phase == SeekParkPhase::Held || phase == SeekParkPhase::Release)
+        if (phase == SeekParkPhase::Apply || phase == SeekParkPhase::Held || SeekParkReleaseLive(phase))
             return releaseLeadMs;
         return pullLeadMs;
     }
@@ -339,16 +360,16 @@ namespace ai
     // the release, whichever is first.
     inline bool SeekParkDpsHeld(SeekParkPhase phase, bool sonOnTank, std::uint32_t releaseMs, std::uint32_t nowMs)
     {
-        if (phase != SeekParkPhase::Release || sonOnTank || releaseMs == 0)
+        if (!SeekParkReleaseLive(phase) || sonOnTank || releaseMs == 0)
             return false;
         return nowMs - releaseMs < kSeekParkReleaseHoldMs;
     }
 
-    // In Release the gather point is the seek spot while the source still stands more than kSeekSpotYd (8 yd) from
-    // it: the tank drags the source there and the cloud lands on the raid, not wherever the source was parked.
+    // In the release the gather point is the seek spot while the source still stands more than kSeekSpotYd (8 yd)
+    // from it: the tank drags the source there and the cloud lands on the raid, not wherever the source was parked.
     inline bool SeekParkGatherAtSpot(SeekParkPhase phase, float sonToSpotYd)
     {
-        return phase == SeekParkPhase::Release && sonToSpotYd > 8.0f;
+        return SeekParkReleaseLive(phase) && sonToSpotYd > 8.0f;
     }
 
     // A fixed spread slot gives way while the park bot walks to its source or holds it: a slot walk would cut the
