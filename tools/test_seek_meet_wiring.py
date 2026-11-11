@@ -40,7 +40,7 @@ def update():
 
 
 def tank_pick():
-    return body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot)")
+    return body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot, std::uint64_t")
 
 
 def execute():

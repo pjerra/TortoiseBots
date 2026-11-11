@@ -48,31 +48,39 @@ namespace ai
     {
         std::uint64_t son = 0;
         std::uint32_t cycleNo = 0;
+        std::uint32_t fightStartMs = 0; // the fight's engage clock, keyed with the cycle (no re-pull carry-over)
         SeekParkPhase phase = SeekParkPhase::None;
-        std::uint32_t applySinceMs = 0; // when the current Apply began
-        std::uint32_t lastCastMs = 0;   // the park bot's last cast (the action notes it)
-        std::uint32_t heldSinceMs = 0;  // when the current Held episode began
-        std::uint32_t heldMs = 0;       // the completed Held episodes' total
-        std::uint32_t releaseMs = 0;    // when Release began
+        std::uint32_t applySinceMs = 0;   // when the current Apply began
+        std::uint32_t budgetSinceMs = 0;  // when the park bot first stood in cast reach this Apply
+        std::uint32_t lastCastMs = 0;     // the park bot's last cast (the action notes it)
+        std::uint32_t heldSinceMs = 0;    // when the current Held episode began
+        std::uint32_t heldMs = 0;         // the completed Held episodes' total
+        std::uint32_t releaseMs = 0;      // when Release began
         std::uint8_t reapplies = 0;
         std::uint64_t parkBot = 0;
         const char* why = "";
     };
 
-    // What the step asks of the world this read: whether the source is alive and fighting, whether it carries a
-    // breakable control and for how long, whether a park bot is left, the due time, and whether a receiver tank
-    // qualifies.
+    // What the step asks of the world this read: the source and the seek's own pick, whether it is alive, fighting,
+    // inside the raid circle and the pick, whether it carries a breakable control and for how long, whether a park
+    // bot is left and in cast reach, the due time, whether the source is on a tank, and whether a receiver qualifies.
     struct SeekParkInput
     {
         std::uint64_t son = 0;
+        std::uint64_t pickedSon = 0; // the seek's picked source (the burn, kill and gather key on it)
         std::uint32_t cycleNo = 0;
+        std::uint32_t fightStartMs = 0;
         bool sonAlive = false;
         bool sonInCombat = false;
+        bool sonIsPick = false;
+        bool sonInCircle = false;
         bool controlled = false;
         std::uint32_t controlLeftMs = 0;
         bool parkBotOk = false;
+        bool controllerInReach = false;
         bool dueKnown = false;
         std::uint32_t dueInMs = 0;
+        bool sonOnTank = false;
         bool receiverOk = false;
     };
 
@@ -119,23 +127,37 @@ namespace ai
         if (nowMs == 0)
             nowMs = 1;
         const SeekParkPhase before = state.phase;
-        if (state.son != in.son || state.cycleNo != in.cycleNo || !rules.on || !in.sonAlive)
+        if (state.son != in.son || state.cycleNo != in.cycleNo || state.fightStartMs != in.fightStartMs ||
+            !rules.on || !in.sonAlive)
         {
             state = SeekParkState();
             state.son = in.son;
             state.cycleNo = in.cycleNo;
+            state.fightStartMs = in.fightStartMs;
             // A record that was in a phase starts its new one at None; a fresh record goes on into the None case.
             if (before != SeekParkPhase::None)
                 return true;
             if (!rules.on || !in.sonAlive)
                 return false;
         }
+        // The park is only ever the seek's own pick: its burn, kill and gather key on that Son. A pick that moved away
+        // while this record held or released ends the record at None (a new source starts a fresh park).
+        if ((state.phase == SeekParkPhase::Held || state.phase == SeekParkPhase::Release) &&
+            in.pickedSon != state.son)
+        {
+            state = SeekParkState();
+            state.son = in.son;
+            state.cycleNo = in.cycleNo;
+            state.fightStartMs = in.fightStartMs;
+            return true;
+        }
         switch (state.phase)
         {
             case SeekParkPhase::None:
             {
-                // A source that is not fighting is no park: it can be neither controlled nor released.
-                if (!in.sonInCombat)
+                // A source that is not fighting, is not the seek's pick, or stands outside the raid circle is no park:
+                // the take would refuse its chase and the burn, kill and gather key on another Son.
+                if (!in.sonInCombat || !in.sonIsPick || !in.sonInCircle)
                     return false;
                 // A source that joined too late for a clean release, or one nobody can control, follows today's take
                 // and burn at once.
@@ -155,6 +177,7 @@ namespace ai
                     return false;
                 state.phase = SeekParkPhase::Apply;
                 state.applySinceMs = nowMs;
+                state.budgetSinceMs = in.controllerInReach ? nowMs : 0;
                 state.why = "";
                 break;
             }
@@ -179,7 +202,11 @@ namespace ai
                     state.why = "no_bot";
                     break;
                 }
-                if (state.applySinceMs != 0 && nowMs - state.applySinceMs > rules.applyBudgetMs)
+                // The budget counts from the first tick the controller stands in cast reach: the walk to the source
+                // is not the control's time.
+                if (in.controllerInReach && state.budgetSinceMs == 0)
+                    state.budgetSinceMs = nowMs;
+                if (state.budgetSinceMs != 0 && nowMs - state.budgetSinceMs > rules.applyBudgetMs)
                 {
                     state.phase = SeekParkPhase::Failed;
                     state.why = "budget";
@@ -218,6 +245,7 @@ namespace ai
                     {
                         state.phase = SeekParkPhase::Apply;
                         state.applySinceMs = nowMs;
+                        state.budgetSinceMs = in.controllerInReach ? nowMs : 0;
                         state.why = "";
                     }
                 }
@@ -225,9 +253,10 @@ namespace ai
             }
             case SeekParkPhase::Release:
             {
-                // The release's own window: a tank that does not come for the source in kSeekParkReleaseHoldMs is no
-                // release, and the park fails to today's take.
-                if (!in.receiverOk && state.releaseMs != 0 && nowMs - state.releaseMs >= kSeekParkReleaseHoldMs)
+                // The release's own window: the source must be on a tank within kSeekParkReleaseHoldMs, whether a
+                // receiver exists or not. An eligible tank that cannot reach, taunt or attack is no release, and the
+                // park fails to today's take.
+                if (state.releaseMs != 0 && nowMs - state.releaseMs >= kSeekParkReleaseHoldMs && !in.sonOnTank)
                 {
                     state.phase = SeekParkPhase::Failed;
                     state.why = "no_receiver";
@@ -249,23 +278,45 @@ namespace ai
 
     // Whether a tank task on the parked source is vetoed in this phase: every task in Apply and Held (the meet, the
     // receiver, the pickup, the pull join, the nearest take, the healer clock, the victim relief, the drag and the
-    // pull), and every task but the release's own take in Release.
-    inline bool SeekParkVetoesTankTask(SeekParkPhase phase, const char* takeSrc)
+    // pull), and every task but the release's own take in Release while the source is on a tank. In Release with the
+    // source on a non-tank (the control broke onto someone) the normal takes apply: the park's task is the release's
+    // own, and the ordinary nearest, healer-clock and relief picks may take the source back.
+    inline bool SeekParkVetoesTankTask(SeekParkPhase phase, const char* takeSrc, bool sonOnTank)
     {
         if (phase == SeekParkPhase::Apply || phase == SeekParkPhase::Held)
             return true;
-        if (phase != SeekParkPhase::Release)
+        if (phase != SeekParkPhase::Release || !sonOnTank)
             return false;
         return !(takeSrc && std::strcmp(takeSrc, "park_release") == 0);
     }
 
+    // Whether the wrapped tank body is told to skip this source outright: Apply and Held (every tank task is the
+    // park's), and Release on a tank for every bot but the receiver (its own-source drag is the release's second
+    // half). The body then returns its next task (another Son on a healer) instead of an empty one.
+    inline bool SeekParkExcludesSource(SeekParkPhase phase, bool sonOnTank, bool isReceiver)
+    {
+        if (phase == SeekParkPhase::Apply || phase == SeekParkPhase::Held)
+            return true;
+        if (phase != SeekParkPhase::Release || !sonOnTank)
+            return false;
+        return !isReceiver;
+    }
+
+    // Whether this bot's attack on `target` may outrank the invalid-target rule: the release's receiver, its released
+    // source, and only while Release is live. A polymorphed Son is otherwise no valid current target, so the
+    // receiver's Attack() would be undone by "select new target" every tick.
+    inline bool SeekParkReleaseTargetAllowed(SeekParkPhase phase, bool isReceiver, bool isParkSon)
+    {
+        return phase == SeekParkPhase::Release && isReceiver && isParkSon;
+    }
+
     // The late-engage lead the fight read burns with: a parked or released source is not burned on arrival (its
     // whole point is to die late), so the row's release lead replaces the seek_pull lead while the park holds or
-    // releases. Every other phase burns at the seek_pull row's lead, as today.
-    inline std::uint32_t SeekParkLateLeadMs(SeekParkPhase phase, bool rulesOn, std::uint32_t pullLeadMs,
-                                            std::uint32_t releaseLeadMs)
+    // releases. Every other phase, and every read whose pick is not the parked Son, burns at the seek_pull lead.
+    inline std::uint32_t SeekParkLateLeadMs(SeekParkPhase phase, bool rulesOn, bool parkedIsPick,
+                                            std::uint32_t pullLeadMs, std::uint32_t releaseLeadMs)
     {
-        if (!rulesOn)
+        if (!rulesOn || !parkedIsPick)
             return pullLeadMs;
         if (phase == SeekParkPhase::Apply || phase == SeekParkPhase::Held || phase == SeekParkPhase::Release)
             return releaseLeadMs;
@@ -300,11 +351,11 @@ namespace ai
         return phase == SeekParkPhase::Release && sonToSpotYd > 8.0f;
     }
 
-    // A fixed spread slot gives way while the park bot walks to its source for the first cast (Apply); held, it
-    // stands on its slot and casts from there when the source is in reach.
+    // A fixed spread slot gives way while the park bot walks to its source or holds it: a slot walk would cut the
+    // control's cast (Apply) and interrupt the refresh (Held).
     inline bool SeekParkExemptsBot(SeekParkPhase phase, std::uint64_t parkBot, std::uint64_t botGuid)
     {
-        return phase == SeekParkPhase::Apply && parkBot != 0 && parkBot == botGuid;
+        return (phase == SeekParkPhase::Apply || phase == SeekParkPhase::Held) && parkBot != 0 && parkBot == botGuid;
     }
 
     // One park candidate: eligible, the control's rank (0 Polymorph, 1 Hibernate), its 2D distance to the source and

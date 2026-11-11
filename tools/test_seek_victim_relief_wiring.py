@@ -22,7 +22,7 @@ def body(text, signature):
 
 class SeekVictimReliefWiring(unittest.TestCase):
     def test_the_call_stands_after_the_boss_victim_return_and_the_own_son(self):
-        fn = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot)")
+        fn = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot, std::uint64_t")
         self.assertIn("Unit* FindSeekVictimRelief(PlayerbotAI* ai, Player* bot,", ACTIONS)
         boss_victim = fn.index("if ((thirdTank || pickupTank || healerTaker) &&")
         relief_call = fn.index("if (roles.botIndex >= 0 && SeekReliefTaskFor(ai, bot, roles, state, task))")
