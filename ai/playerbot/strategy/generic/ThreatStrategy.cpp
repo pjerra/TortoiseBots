@@ -435,6 +435,10 @@ float ThreatMultiplier::GetValue(Action* action)
             if (castTarget && !sServerFacade.IsFriendlyTo(castTarget, bot) && castVictimPlayer &&
                 castVictimPlayer != bot && PlayerbotAI::IsTank(castVictimPlayer))
             {
+                // The threat-free lift is the same no-cap answer as at the value (a subject no tank can reach): this
+                // veto reads the raw tank and my threat, so without the lift it holds a cast the value just uncapped.
+                if (ThreatFreeLifted(ai, bot, castTarget))
+                    return 1.0f;
                 // The current target's numbers are the cached values the high-threat trigger reads too.
                 bool const onCurrent = castTarget == AI_VALUE(Unit*, "current target");
                 float const castTankThreat = onCurrent ? AI_VALUE2(float, "tank threat", "current target")

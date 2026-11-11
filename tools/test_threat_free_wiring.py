@@ -68,13 +68,24 @@ class ThreatFreeWiring(unittest.TestCase):
         self.assertIn('sPlayerbotAIConfig.logEvent(ai, "BossTacticsThreatFree", info1, "");', log)
 
     def test_cut_is_at_the_value_only(self):
-        # Every reader of the value agrees, so neither the multiplier nor a trigger may branch on the kind.
-        for text in (THREAT_STRATEGY, GENERIC_TRIGGERS):
+        # Every reader of the value agrees, so no trigger branches on the kind; the cast-threat veto asks the lift
+        # question instead of reading the raw threat on a subject the value just uncapped.
+        self.assertNotIn("threat_free", THREAT_STRATEGY)
+        for text in (GENERIC_TRIGGERS,):
             self.assertNotIn("ThreatFree", text)
             self.assertNotIn("threat_free", text)
         self.assertIn("inline bool ThreatFreeApplies(bool keyOn, bool isTank, float subjectZ, float botZ, float gapYd, "
                       "bool descending)", CAP_POLICY)
         self.assertIn("return keyOn && !isTank && !descending && gapYd > 0.0f && subjectZ - botZ >= gapYd;", CAP_POLICY)
+
+    def test_cast_threat_veto_asks_the_same_lift(self):
+        # ThreatCapCountsCastThreat reads `tank threat` and `my threat` directly and would veto a single-target nuke the
+        # threat value already uncapped on the airborne subject.
+        start = THREAT_STRATEGY.index("if (sPlayerbotAIConfig.threatCapCountsCastThreat &&")
+        end = THREAT_STRATEGY.index('if (action->GetThreatType() == ActionThreatType::ACTION_THREAT_AOE)', start)
+        cast_block = THREAT_STRATEGY[start:end]
+        self.assertIn("if (ThreatFreeLifted(ai, bot, castTarget))", cast_block)
+        self.assertIn("return 1.0f;", cast_block)
 
     def test_kind_is_parsed_and_validated(self):
         self.assertIn('if (text == "threat_free")\n            return BossTacticKind::ThreatFree;', POLICY)
