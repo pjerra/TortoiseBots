@@ -33,21 +33,31 @@ def body(text, start, end="\n}\n"):
 class ThreatFreeWiring(unittest.TestCase):
     def test_value_lifts_the_cap_after_the_group_check(self):
         calculate = body(VALUES_CPP, "uint8 ThreatValue::Calculate(Unit* target)")
-        lift = "if (sPlayerbotAIConfig.dungeonRunThreatFree && " \
-               'ai->HasStrategy("boss tactics", BotState::BOT_STATE_COMBAT))'
+        lift = "if (ThreatFreeLifted(ai, bot, target))"
         self.assertIn(lift, calculate)
         # Only a bot in a group is measured at all, so the lift sits after that check and before either threat value is
         # read (the `aoe` branch reads the raw manager, the other the `my threat` / `tank threat` values).
         self.assertLess(calculate.index("Group* group = bot->GetGroup();"), calculate.index(lift))
         self.assertLess(calculate.index(lift), calculate.index('AI_VALUE2(float, "my threat"'))
         self.assertLess(calculate.index(lift), calculate.index("ThreatPctOf("))
-        self.assertIn('GetBossTactics().ThreatFreeGap(target->GetMapId(), target->GetEntry())', calculate)
-        self.assertIn("ThreatFreeApplies(true, PlayerbotAI::IsTank(bot), target->GetPositionZ(), "
-                      "bot->GetPositionZ(), gap)", calculate)
         # A non-tank reads 0 there: the multiplier, the high/medium threat triggers and the wand rows all read this
         # value, so the lift and the log are the only glue.
         self.assertIn("return 0;", calculate)
         self.assertIn("LogThreatFree(ai, bot, target, target->GetPositionZ() - bot->GetPositionZ());", calculate)
+
+    def test_lift_helper_is_the_single_rule(self):
+        # ThreatValue::Calculate and the cast-threat veto (ThreatMultiplier) ask one question, so the veto cannot hold a
+        # cast the value uncapped. The descent check ends the lift on the landing flight, before the gap closes.
+        helper = body(VALUES_CPP, "bool ai::ThreatFreeLifted(PlayerbotAI* ai, Player* bot, Unit* subject)")
+        for needle in ("sPlayerbotAIConfig.dungeonRunThreatFree",
+                       'ai->HasStrategy("boss tactics", BotState::BOT_STATE_COMBAT)',
+                       "PlayerbotAI::IsTank(bot)",
+                       "GetBossTactics().ThreatFreeGap(subject->GetMapId(), subject->GetEntry())",
+                       "subject->IsInCombat()", "g_threatFreeZ.erase(key)",
+                       "ThreatFreeApplies(true, isTank, subject->GetPositionZ(), bot->GetPositionZ(), gap, descending)"):
+            self.assertIn(needle, helper)
+        self.assertIn("g_threatFreeZMutex", VALUES_CPP)
+        self.assertIn("std::unordered_map<std::uint64_t, ai::ThreatFreeZHistory> g_threatFreeZ;", VALUES_CPP)
 
     def test_log_is_throttled_and_named(self):
         log = body(VALUES_CPP, "void LogThreatFree(PlayerbotAI* ai, Player* bot, Unit* subject, float gapYd)")
@@ -62,9 +72,9 @@ class ThreatFreeWiring(unittest.TestCase):
         for text in (THREAT_STRATEGY, GENERIC_TRIGGERS):
             self.assertNotIn("ThreatFree", text)
             self.assertNotIn("threat_free", text)
-        self.assertIn("inline bool ThreatFreeApplies(bool keyOn, bool isTank, float subjectZ, float botZ, float gapYd)",
-                      CAP_POLICY)
-        self.assertIn("return keyOn && !isTank && gapYd > 0.0f && subjectZ - botZ >= gapYd;", CAP_POLICY)
+        self.assertIn("inline bool ThreatFreeApplies(bool keyOn, bool isTank, float subjectZ, float botZ, float gapYd, "
+                      "bool descending)", CAP_POLICY)
+        self.assertIn("return keyOn && !isTank && !descending && gapYd > 0.0f && subjectZ - botZ >= gapYd;", CAP_POLICY)
 
     def test_kind_is_parsed_and_validated(self):
         self.assertIn('if (text == "threat_free")\n            return BossTacticKind::ThreatFree;', POLICY)

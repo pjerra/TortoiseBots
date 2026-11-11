@@ -138,6 +138,13 @@ void LogThreatFree(PlayerbotAI* ai, Player* bot, Unit* subject, float gapYd)
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsThreatFree", info1, "");
 }
 
+// The subject z history the lift reads, one small ring per subject guid. It is dropped while the subject is out of
+// combat (the fight reset), so a new pull starts its own history instead of inheriting the last one's height.
+constexpr std::size_t kThreatFreeZMaxSubjects = 64;
+
+std::mutex g_threatFreeZMutex;
+std::unordered_map<std::uint64_t, ai::ThreatFreeZHistory> g_threatFreeZ;
+
 // BossTacticsHex: one row per Jin'do Hex (17172) on a member of the fight, so a walk can see who the boss turned to after
 // it. Hex lands on the boss's current victim and wipes that member's threat; the row is the state right after:
 //   info1 = "holder=<main|off|dps> ot_threat=<n> mt_threat=<n> top_dps=<name>:<threat>"
@@ -395,6 +402,36 @@ bool ai::StrictThreatSuccessorRow(Unit* target)
     return GetBossTactics().HasStrictThreatSuccessor(target->GetMapId(), target->GetEntry());
 }
 
+bool ai::ThreatFreeLifted(PlayerbotAI* ai, Player* bot, Unit* subject)
+{
+    if (!ai || !bot || !subject || !sPlayerbotAIConfig.dungeonRunThreatFree)
+        return false;
+    if (!ai->HasStrategy("boss tactics", BotState::BOT_STATE_COMBAT))
+        return false;
+    const bool isTank = PlayerbotAI::IsTank(bot);
+    if (isTank)
+        return false;
+    const float gap = GetBossTactics().ThreatFreeGap(subject->GetMapId(), subject->GetEntry());
+    if (gap <= 0.0f)
+        return false;
+
+    bool descending = false;
+    const std::uint32_t nowMs = WorldTimer::getMSTime();
+    {
+        std::lock_guard<std::mutex> lock(g_threatFreeZMutex);
+        const std::uint64_t key = subject->GetObjectGuid().GetRawValue();
+        if (!subject->IsInCombat())
+            g_threatFreeZ.erase(key);
+        else
+        {
+            descending = g_threatFreeZ[key].Descending(subject->GetPositionZ(), nowMs);
+            if (g_threatFreeZ.size() > kThreatFreeZMaxSubjects)
+                g_threatFreeZ.clear();
+        }
+    }
+    return ThreatFreeApplies(true, isTank, subject->GetPositionZ(), bot->GetPositionZ(), gap, descending);
+}
+
 uint8 ThreatValue::Calculate(Unit* target)
 {
     if (!target)
@@ -413,14 +450,10 @@ uint8 ThreatValue::Calculate(Unit* target)
     if (!group)
         return 0;
 
-    if (sPlayerbotAIConfig.dungeonRunThreatFree && ai->HasStrategy("boss tactics", BotState::BOT_STATE_COMBAT))
+    if (ThreatFreeLifted(ai, bot, target))
     {
-        float const gap = GetBossTactics().ThreatFreeGap(target->GetMapId(), target->GetEntry());
-        if (ThreatFreeApplies(true, PlayerbotAI::IsTank(bot), target->GetPositionZ(), bot->GetPositionZ(), gap))
-        {
-            LogThreatFree(ai, bot, target, target->GetPositionZ() - bot->GetPositionZ());
-            return 0;
-        }
+        LogThreatFree(ai, bot, target, target->GetPositionZ() - bot->GetPositionZ());
+        return 0;
     }
 
     float botThreat, maxThreat;
