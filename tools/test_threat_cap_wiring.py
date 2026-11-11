@@ -427,8 +427,8 @@ class ThreatResetStanding(unittest.TestCase):
         self.assertIn("if (!windowKey && !standingKey)\n        return false;", hold)
         self.assertLess(hold.index("if (!windowKey && !standingKey)"), hold.index("ThreatResetWindowOf("))
         # The index decides before either reference is built: the standing read costs a tank scan.
-        self.assertIn("ThreatResetHoldIndex(windowKey, standingKey, windowIndex, view.lastResetMs != 0,\n"
-                      "                                                       view.charmLive);", hold)
+        self.assertIn("ThreatResetHoldIndex(windowKey, standingKey, windowIndex,", hold)
+        self.assertIn("view.lastResetMs != 0, view.charmLive);", hold)
         self.assertLess(hold.index("ThreatResetHoldIndex("), hold.index("ThreatValue::GetResetStandingRead("))
         self.assertLess(hold.index("ThreatResetHoldIndex("), hold.index("ThreatValue::GetResetSuccessorThreat("))
         self.assertIn("if (holdIndex == kThreatResetStandingIndex)", hold)

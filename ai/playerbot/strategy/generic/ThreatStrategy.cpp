@@ -120,7 +120,7 @@ bool ai::ThreatResetHolds(PlayerbotAI* ai, Player* bot, Unit* target)
     const std::uint32_t nowMs = WorldTimer::getMSTime();
     const std::uint32_t sinceMs = ThreatResetSince(nowMs, view.lastResetMs, view.engageMs);
     const std::uint32_t windowIndex = ThreatResetWindowIndex(sinceMs, win->minGapMs, win->maxGapMs);
-    // A shut window holds nothing: drop the latch before the tank list is built, so the common read costs no scan.
+    // A shut hold holds nothing: drop the latch before the tank list is built, so the common read costs no scan.
     const std::uint32_t holdIndex = ThreatResetHoldIndex(windowKey, standingKey, windowIndex,
                                                         view.lastResetMs != 0, view.charmLive);
     if (holdIndex == 0)
