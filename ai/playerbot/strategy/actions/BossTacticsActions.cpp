@@ -1949,6 +1949,10 @@ SeekParkPhase SeekParkPhaseOf(std::uint32_t instanceId)
     return it == g_seekParks.end() ? SeekParkPhase::None : it->second.state.phase;
 }
 
+// Defined below with the walk-out helpers; the park's receiver read asks whether a tank holds another source.
+bool PlayerHoldsFightSon(const std::vector<Unit*>& fightSons, std::uint32_t sonEntry, Player* member,
+                         std::uint64_t exceptSon);
+
 // The park's rules for this fight (D2): the key, the seek_pull cycle key and the boss's seek_park row.
 SeekParkRules SeekParkRulesOf(std::uint32_t mapId, const BossTacticRow* seekRow)
 {
