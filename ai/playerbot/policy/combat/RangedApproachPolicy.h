@@ -180,6 +180,16 @@ namespace ai
         return keyOn && inDungeon && hostile && distance > meleeReach && groundValid &&
                targetZ - groundZ >= kHoverTargetMinHeightYd;
     }
+    // AiPlayerbot.HoverCastHoldsSpread: a ranged damage dealer whose target hovers (HoverReachApplies) and stands in its
+    // spell range by the trigger's measure takes no spacing step: a cast-time nuke is refused while the bot moves
+    // (CastStartBlockedByMove), and walk 2d's casters on airborne Onyxia moved > 2 yd in 2 s in 48 % of their refused
+    // frames. A live `spread` row (the boss's data asks for spacing) still steps. A member inside the spread radius
+    // outranks the hold: a caster that stacked after a Deep Breath dodge steps out of the Fireball splash first.
+    inline bool HoverCastHoldsSpread(bool keyOn, bool rangedDps, bool targetHovering, bool inSpellRange,
+                                     bool spreadRowLive, float nearestAllyYd, float spreadRadius)
+    {
+        return keyOn && rangedDps && targetHovering && inSpellRange && !spreadRowLive && nearestAllyYd >= spreadRadius;
+    }
 
     // The trigger ("enemy out of spell range") measures edge to edge with both combat reaches; the path walk measures
     // centre to centre. A hovering boss's reach (Onyxia 22 yd in the air) makes the centre distance the trigger allows
