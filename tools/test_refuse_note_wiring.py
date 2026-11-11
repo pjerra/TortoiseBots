@@ -69,12 +69,13 @@ class RefuseNoteWiring(unittest.TestCase):
         self.assertIn("g_threatVetoLog", THREAT[i:i + 2500])
         for site in ("reset", "white", "cast", "aoe", "high"):
             self.assertIn('"%s"' % site, THREAT)
+        veto_block = THREAT[THREAT.index("if (ThreatVetoLogDue(ai, bot, target))"):]
+        self.assertIn('LogThreatVeto(ai, bot, action, target, victim, "high",', veto_block)
         for anchor, name in (
             ("ThreatResetHolds(ai, bot, resetTarget))", "reset"),
             ("ai->SuccessorWhiteCap().Update(true", "white"),
             ("ThreatCapCastOvershoots(", "cast"),
             ('ActionThreatType::ACTION_THREAT_AOE)', "aoe"),
-            ('if (AI_VALUE2(bool, "trigger active", "high threat"))', "high"),
         ):
             veto = THREAT[THREAT.index(anchor):THREAT.index("return 0.0f;", THREAT.index(anchor))]
             self.assertIn("ThreatVetoLogDue(", veto)
