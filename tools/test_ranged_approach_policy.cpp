@@ -283,6 +283,39 @@ int main()
         std::cout << "  [PASS] hover second pass ignores sight\n";
     }
 
+    // HoverReachAimsAtAnchor: with a live anchor the walk follows the path to the anchor centre and stops as
+    // soon as the target is in reach. HoverAnchorStopDistance_CentreInsideTrigger (the failing case): the
+    // centre stands 48 yd from the target, inside the 54.2 yd trigger line, so the stop is the centre plus
+    // the 3 yd slack.
+    {
+        CHECK(std::fabs(ai::HoverAnchorStopDistance(42.5f, 54.2f, 48.0f) - 51.0f) <= 0.01f);
+        std::cout << "  [PASS] hover anchor: the centre plus the slack\n";
+    }
+
+    // HoverAnchorStopDistance_Bounds: never nearer than today's stop (centre 30), never outside the trigger
+    // line less the slack (centre 60), and a trigger line inside today's stop keeps today's stop.
+    {
+        CHECK(std::fabs(ai::HoverAnchorStopDistance(42.5f, 54.2f, 30.0f) - 42.5f) <= 0.01f);
+        CHECK(std::fabs(ai::HoverAnchorStopDistance(42.5f, 54.2f, 60.0f) - 51.2f) <= 0.01f);
+        CHECK(std::fabs(ai::HoverAnchorStopDistance(42.5f, 44.0f, 48.0f) - 42.5f) <= 0.01f);
+        std::cout << "  [PASS] hover anchor: bounded by today's stop and the trigger line\n";
+    }
+
+    // HoverAnchorWalk_StopsOnThePath: the walk stops on the path to the centre, not at the centre. Stop 51.2
+    // crosses the (20,0,0) -> (0,0,0) leg, so the choice is in range, on the path (x between 0 and 40) and
+    // short of the centre.
+    {
+        std::vector<ApproachPoint> path = { P(40, 0, 0), P(20, 0, 0), P(0, 0, 0) };
+        ApproachPoint const target = P(-45, 0, 20);
+        float const stop = 51.2f;
+        RangedApproachChoice const choice = SelectRangedApproachPoint(path, target, stop, seesAll);
+        CHECK(choice.valid);
+        CHECK(choice.point.x > 0.0f && choice.point.x < 40.0f);
+        CHECK(std::fabs(choice.point.y) < 0.01f && std::fabs(choice.point.z) < 0.01f);
+        CHECK(std::fabs(Dist(choice.point, target) - stop) <= 0.1f);
+        std::cout << "  [PASS] hover anchor: the walk stops on the path to the centre\n";
+    }
+
     // The row's verdict words, one per step of the walk.
     {
         CHECK(std::string(ai::HoverReachWord(ai::HoverReachResult::NotHover)) == "not_hover");

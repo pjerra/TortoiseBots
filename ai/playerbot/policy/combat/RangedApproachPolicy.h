@@ -211,6 +211,22 @@ namespace ai
         return SelectRangedApproachPoint(pathToGround, target, distance, [](ApproachPoint const&) { return true; });
     }
 
+    // AiPlayerbot.HoverReachAimsAtAnchor: the walk under a hovering boss parks the bot at the edge of range on the
+    // boss's side of the room, and her next hop puts it out of range again (walk 2e: 153 reaches in 510 s, one per
+    // caster per 27 s, her hop rate). With a live `anchor` row the walk follows the path to the anchor's centre
+    // instead and stops as soon as the target is in range: `reachDist` is today's stop (HoverReachDistance),
+    // `triggerDist` the centre distance at which "enemy out of spell range" stops firing, `centreToTarget` the
+    // centre's own distance to the target. The stop is never nearer than today's and never outside the trigger line.
+    constexpr float kHoverAnchorSlackYd = 3.0f;
+    inline float HoverAnchorStopDistance(float reachDist, float triggerDist, float centreToTarget)
+    {
+        float hi = triggerDist - kHoverAnchorSlackYd;
+        if (hi < reachDist)
+            hi = reachDist;
+        float const want = centreToTarget + kHoverAnchorSlackYd;
+        return want < reachDist ? reachDist : (want > hi ? hi : want);
+    }
+
     enum class HoverReachResult : std::uint8_t { NotHover, NoGround, NoPath, NoPoint, Hazard, MoveFailed, Moved, MovedNoLos };
     inline const char* HoverReachWord(HoverReachResult r)
     {
