@@ -1466,6 +1466,14 @@ int main()
         CHECK(!FleeYieldsToStand(true, false));
         CHECK(!FleeYieldsToStand(false, false));
     }
+    // A seated melee bot or tank keeps its seat: reach melee is not useful on a valid seat, and only with the key.
+    {
+        CHECK(StandHoldsMeleeReach(true, true));
+        CHECK(!StandHoldsMeleeReach(false, true));
+        CHECK(!StandHoldsMeleeReach(true, false));
+        CHECK(!StandHoldsMeleeReach(false, false));
+    }
+
 
     std::cout << "All boss stand policy tests passed.\n";
     return 0;

@@ -63,6 +63,15 @@ namespace ai
             return StandRole::Healer;
         return ranged ? StandRole::Ranged : StandRole::Melee;
     }
+    // AiPlayerbot.BossStandHoldsMeleeReach: a melee bot or a tank with a valid seat does not walk back to its target.
+    // The caster and heal reaches already yield to a seat; the melee reach did not, and the stand trigger is quiet
+    // once the bot has arrived (walk 2e b-2: a rogue on her Deep Breath seat ran "reach melee" 2 s after arriving,
+    // stood 17 yd nearer the lane 2 s later and died; 4 rogues and the slot-1 tank died in that breath).
+    inline bool StandHoldsMeleeReach(bool keyOn, bool seatValid)
+    {
+        return keyOn && seatValid;
+    }
+
 
     // How a row's window opens. `Cast`: the boss is casting the window spell (its current generic spell). A boss whose
     // spell is cast triggered never shows it as a current spell, so `StoppedNoTarget` opens the
