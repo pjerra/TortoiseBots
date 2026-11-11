@@ -2120,13 +2120,16 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
             recorded = it->second.state;
     }
     Unit* son = nullptr;
+    // D4: the cycle's recorded source is the cycle's only one, even once it is dead (then the read only ends the
+    // park); a fresh cycle takes the first living source of the fight seen in combat. A second source in the same
+    // cycle is never parked.
     if (recorded.cycleNo == out.cycleNo && recorded.son != 0)
     {
         Creature* const kept = map->GetCreature(ObjectGuid(recorded.son));
         if (kept && kept->GetEntry() == out.row->targetEntry && sServerFacade.IsAlive(kept))
             son = kept;
     }
-    if (!son)
+    else
     {
         for (Unit* const candidate : out.sons)
         {
