@@ -159,9 +159,9 @@ class SeekParkWiring(unittest.TestCase):
         # Decision 2 with R1's one read: the release fails after its window unless the source is on a tank with no
         # breakable control; a tank inside the window latches success instead (TestParkReleaseIgnoresStaleTankVictim,
         # TestParkReleaseLatches, TestParkReleaseWindow).
-        self.assertIn("nowMs - state.releaseMs >= SeekParkReleaseWindowMs(in.receiverOk)", POLICY)
-        self.assertIn("inline std::uint32_t SeekParkReleaseWindowMs(bool receiverOk)", POLICY)
-        self.assertIn("return receiverOk ? kSeekParkReleaseMaxMs : kSeekParkReleaseHoldMs;", POLICY)
+        self.assertIn("nowMs - state.releaseMs >= SeekParkReleaseWindowMs(in.receiverOk, in.controlled)", POLICY)
+        self.assertIn("inline std::uint32_t SeekParkReleaseWindowMs(bool receiverOk, bool controlled)", POLICY)
+        self.assertIn("return receiverOk && controlled ? kSeekParkReleaseMaxMs : kSeekParkReleaseHoldMs;", POLICY)
         check = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
         self.assertIn("state.parkSonOnTank", check)
 
@@ -204,6 +204,12 @@ class SeekParkWiring(unittest.TestCase):
         target = body(ACTIONS, "bool ai::BossSeekParkReleaseTargetAllowed(PlayerbotAI* ai, Player* bot, Unit* target)")
         self.assertIn("SeekParkFailedTakeDue(state.parkPhase, state.parkControlled, true)", target)
         self.assertIn("state.parkControlled);", target)
+
+    def test_the_receiver_window_needs_a_controlled_son(self):
+        # Fix 3: the receiver-only exclusion and the 8 s window are for a controlled Son; awake, today's takes apply
+        # at once and the window is today's 4 s.
+        self.assertIn("!SeekParkReleaseLive(state.parkPhase) &&", ACTIONS)
+        self.assertIn("(phase == SeekParkPhase::Failed && controlled)", POLICY)
 
     def test_the_trigger_only_asks(self):
         fn = body(TRIGGERS, "bool BossTacticsParkTrigger::IsActive()")
@@ -250,11 +256,13 @@ class SeekParkWiring(unittest.TestCase):
         fn = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
         self.assertIn("const bool sonHolder = onTank && son && son->GetVictim() == bot;", fn)
         self.assertIn("SeekParkReleaseTank(SeekParkReleaseLive(state.parkPhase), onTank, sonHolder, isReceiver)", fn)
-        self.assertIn("SeekParkExcludesSource(state.parkPhase, onTank, releaseTank)", fn)
+        self.assertIn("SeekParkExcludesSource(state.parkPhase, onTank, releaseTank, state.parkControlled)", fn)
+        self.assertIn("SeekParkVetoesTankTask(state.parkPhase, task.takeSrc, onTank, state.parkControlled)", fn)
         self.assertIn("SeekParkReleaseTakeDue(bool releaseLive, bool sonOnTank, bool isReceiver)", POLICY)
         self.assertIn("return releaseLive && !sonOnTank && isReceiver;", POLICY)
         self.assertIn("if (phase == SeekParkPhase::Release)", POLICY)
-        self.assertIn("return !isReleaseTank;", POLICY)
+        self.assertIn("return controlled ? !isReleaseTank : (sonOnTank && !isReleaseTank);", POLICY)
+        self.assertIn("return controlled ? !ownTake : (sonOnTank && !ownTake);", POLICY)
 
     def test_the_park_holds_only_its_own_reader(self):
         # R4: a reader whose pick is another Son keeps seeking; the park's "nobody gathers" and gather-at-spot are

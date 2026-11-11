@@ -122,10 +122,12 @@ namespace ai
         return reachYd <= kSeekParkStrikeYd;
     }
 
-    // How long the release may run: with a receiver the extra wait's window, without one today's.
-    inline std::uint32_t SeekParkReleaseWindowMs(bool receiverOk)
+    // How long the release may run: with a receiver while the source is still controlled the extra wait's window;
+    // otherwise today's. An awake source's receiver-only window would hold the other tanks and the damage off a Son
+    // that already left its control.
+    inline std::uint32_t SeekParkReleaseWindowMs(bool receiverOk, bool controlled)
     {
-        return receiverOk ? kSeekParkReleaseMaxMs : kSeekParkReleaseHoldMs;
+        return receiverOk && controlled ? kSeekParkReleaseMaxMs : kSeekParkReleaseHoldMs;
     }
 
     // Whether the release's receiver still owes its take to a failed park whose source is under a breakable control:
@@ -448,8 +450,10 @@ namespace ai
                     break;
                 }
                 // An eligible tank that cannot reach, taunt or attack is no release, and the park fails to today's
-                // take.
-                if (state.releaseMs != 0 && nowMs - state.releaseMs >= SeekParkReleaseWindowMs(in.receiverOk))
+                // take. The receiver's longer window is for a source that is still controlled; an awake one gets
+                // today's 4 s and the ordinary takes at once.
+                if (state.releaseMs != 0 &&
+                    nowMs - state.releaseMs >= SeekParkReleaseWindowMs(in.receiverOk, in.controlled))
                 {
                     state.phase = SeekParkPhase::Failed;
                     state.why = "no_receiver";
@@ -475,32 +479,32 @@ namespace ai
 
     // Whether a tank task on the parked source is vetoed in this phase: every task in Apply and Held (the meet, the
     // receiver, the pickup, the pull join, the nearest take, the healer clock, the victim relief, the drag and the
-    // pull), and every task but the release's own in the release, whoever holds the source. Only the release's
-    // receiver touches the source in that window; once it is latched on a tank, only that holder does, and a latched
-    // release that broke onto a non-tank has its take veto lifted, so the ordinary nearest, healer-clock and relief
-    // takes apply.
-    inline bool SeekParkVetoesTankTask(SeekParkPhase phase, const char* takeSrc, bool sonOnTank)
+    // pull), and every task but the release's own in the release while the source is still controlled. Only the
+    // release's receiver touches the source in that window; once it is latched on a tank, only that holder does, and a
+    // latched release, or an open one whose control already broke, lifts the veto so the ordinary nearest, healer-clock
+    // and relief takes apply.
+    inline bool SeekParkVetoesTankTask(SeekParkPhase phase, const char* takeSrc, bool sonOnTank, bool controlled)
     {
         const bool ownTake = takeSrc && std::strcmp(takeSrc, "park_release") == 0;
         if (phase == SeekParkPhase::Apply || phase == SeekParkPhase::Held)
             return true;
         if (phase == SeekParkPhase::Release)
-            return !ownTake;
+            return controlled ? !ownTake : (sonOnTank && !ownTake);
         if (phase == SeekParkPhase::Released)
             return sonOnTank && !ownTake;
         return false;
     }
 
     // Whether the wrapped tank body is told to skip this source outright: Apply and Held (every tank task is the
-    // park's), the release for every tank but the release's own (its own-source drag is the release's second half),
-    // and a latched release on a tank for every tank but the holder. The body then returns its next task (another Son
-    // on a healer) instead of an empty one.
-    inline bool SeekParkExcludesSource(SeekParkPhase phase, bool sonOnTank, bool isReleaseTank)
+    // park's), the release for every tank but the release's own while the source is controlled (its own-source drag is
+    // the release's second half), and a latched release, or one whose control broke, on a tank for every tank but the
+    // holder. The body then returns its next task (another Son on a healer) instead of an empty one.
+    inline bool SeekParkExcludesSource(SeekParkPhase phase, bool sonOnTank, bool isReleaseTank, bool controlled)
     {
         if (phase == SeekParkPhase::Apply || phase == SeekParkPhase::Held)
             return true;
         if (phase == SeekParkPhase::Release)
-            return !isReleaseTank;
+            return controlled ? !isReleaseTank : (sonOnTank && !isReleaseTank);
         if (phase == SeekParkPhase::Released)
             return sonOnTank && !isReleaseTank;
         return false;
@@ -544,11 +548,11 @@ namespace ai
     // The damage dealers stay off the released source until its victim is a tank, or the release's window after
     // the release, whichever is first.
     inline bool SeekParkDpsHeld(SeekParkPhase phase, bool sonOnTank, std::uint32_t releaseMs, std::uint32_t nowMs,
-                                bool receiverOk)
+                                bool receiverOk, bool controlled)
     {
         if (!SeekParkReleaseLive(phase) || sonOnTank || releaseMs == 0)
             return false;
-        return nowMs - releaseMs < SeekParkReleaseWindowMs(receiverOk);
+        return nowMs - releaseMs < SeekParkReleaseWindowMs(receiverOk, controlled);
     }
 
     // In the release the gather point is the seek spot while the source still stands more than kSeekSpotYd (8 yd)
