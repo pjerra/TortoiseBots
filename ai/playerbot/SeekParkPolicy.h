@@ -92,6 +92,23 @@ namespace ai
         return phase == SeekParkPhase::Release || phase == SeekParkPhase::Released;
     }
 
+    // Whether the release may order its own take in this read: only while the source has no tank victim. A Son already
+    // on a tank is that tank's (the take's swing is what hands it over); ordering another tank onto it is the
+    // tank-to-tank handoff walk 73 measured as harmful.
+    inline bool SeekParkReleaseTakeDue(bool releaseLive, bool sonOnTank, bool isReceiver)
+    {
+        return releaseLive && !sonOnTank && isReceiver;
+    }
+
+    // Whether this bot is the release's tank: the tank holding the source while it is on one (that holder keeps it),
+    // else the scan's receiver while the source has no tank victim. Every other tank's park path skips the source.
+    inline bool SeekParkReleaseTank(bool releaseLive, bool sonOnTank, bool isHolder, bool isReceiver)
+    {
+        if (!releaseLive)
+            return false;
+        return sonOnTank ? isHolder : isReceiver;
+    }
+
     // The row's word for a phase (the `phase=` field of the `seek park` row).
     inline const char* SeekParkPhaseWord(SeekParkPhase phase)
     {
@@ -312,15 +329,15 @@ namespace ai
     }
 
     // Whether the wrapped tank body is told to skip this source outright: Apply and Held (every tank task is the
-    // park's), and the release on a tank for every bot but the receiver (its own-source drag is the release's second
-    // half). The body then returns its next task (another Son on a healer) instead of an empty one.
-    inline bool SeekParkExcludesSource(SeekParkPhase phase, bool sonOnTank, bool isReceiver)
+    // park's), and the release on a tank for every tank but the release's own (its own-source drag is the release's
+    // second half). The body then returns its next task (another Son on a healer) instead of an empty one.
+    inline bool SeekParkExcludesSource(SeekParkPhase phase, bool sonOnTank, bool isReleaseTank)
     {
         if (phase == SeekParkPhase::Apply || phase == SeekParkPhase::Held)
             return true;
         if (!SeekParkReleaseLive(phase) || !sonOnTank)
             return false;
-        return !isReceiver;
+        return !isReleaseTank;
     }
 
     // Whether this bot's attack on `target` may outrank the invalid-target rule: the release's receiver, its released
