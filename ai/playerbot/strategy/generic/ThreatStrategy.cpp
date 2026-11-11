@@ -317,6 +317,38 @@ void LogCastVeto(PlayerbotAI* ai, Player* bot, CastSpellAction const* action, fl
     if (sPlayerbotAIConfig.hasLog("bot_events.csv"))
         sPlayerbotAIConfig.logEvent(ai, "ThreatCapCast", info, "");
 }
+
+constexpr uint32 kThreatVetoLogGapMs = 10000;
+
+std::mutex g_threatVetoLogMutex;
+std::unordered_map<uint64, uint32> g_threatVetoLog;
+
+void LogThreatVeto(PlayerbotAI* ai, Player* bot, Action* action, Unit* target, Unit* victim)
+{
+    if (!sPlayerbotAIConfig.hasLog("bot_events.csv"))
+        return;
+    uint32 const nowMs = WorldTimer::getMSTime();
+    {
+        std::lock_guard<std::mutex> lock(g_threatVetoLogMutex);
+        uint32& last = g_threatVetoLog[bot->GetObjectGuid().GetRawValue()];
+        if (last != 0 && nowMs - last < kThreatVetoLogGapMs)
+            return;
+        last = nowMs;
+        if (g_threatVetoLog.size() > 4096)
+        {
+            for (auto it = g_threatVetoLog.begin(); it != g_threatVetoLog.end();)
+                it = nowMs - it->second > kThreatVetoLogGapMs * 600 ? g_threatVetoLog.erase(it) : std::next(it);
+        }
+    }
+    Player* victimPlayer = victim ? victim->ToPlayer() : nullptr;
+    char const* victimWord = !victimPlayer ? "none" : (PlayerbotAI::IsTank(victimPlayer) ? "tank" : (PlayerbotAI::IsHeal(victimPlayer) ? "healer" : "dps"));
+    char info1[128];
+    snprintf(info1, sizeof(info1), "target=%u,action=%s", target ? target->GetEntry() : 0, action ? action->getName().c_str() : "?");
+    char info2[128];
+    snprintf(info2, sizeof(info2), "pct=%u,bot=%.0f,tank=%.0f,immune=%d,victim=%s",
+             AI_VALUE2(uint8, "threat", "current target"), AI_VALUE2(float, "my threat", "current target"),
+             AI_VALUE2(float, "tank threat", "current target"), target ? (TargetTauntImmune(target) ? 1 : 0) : 0, victimWord);
+    sPlayerbotAIConfig.logEvent(ai, "ThreatVeto", info1, info2);
 }
 
 float ThreatMultiplier::GetValue(Action* action)
@@ -502,6 +534,7 @@ float ThreatMultiplier::GetValue(Action* action)
         if (interruptKey)
             LogInterruptVeto(ai, bot, interruptAction, interruptBotThreat, interruptTankThreat, interruptFlatThreat,
                              interruptRanged);
+        LogThreatVeto(ai, bot, action, target, victim);
         return 0.0f;
     }
 

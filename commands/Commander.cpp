@@ -1501,6 +1501,29 @@ char const* ViewFailReason(uint32 castFail)
     }
 }
 
+// The party record's reason word for the engine's outcome code: the refuse
+// note first, then the cast-check word, then the unmapped cast results.
+char const* ViewOutcomeReason(uint32 code)
+{
+    if (char const* note = ai::RefuseNoteWord(code))
+        return note;
+    if (char const* fail = ViewFailReason(code))
+        return fail;
+    switch (static_cast<SpellCastResult>(code))
+    {
+        case SPELL_FAILED_NOT_KNOWN: return "not-known";
+        case SPELL_FAILED_IMMUNE: return "immune";
+        case SPELL_FAILED_NOT_IN_CONTROL:
+        case SPELL_FAILED_STUNNED:
+        case SPELL_FAILED_SILENCED:
+        case SPELL_FAILED_PACIFIED:
+        case SPELL_FAILED_CONFUSED:
+        case SPELL_FAILED_FLEEING: return "no-control";
+        default: break;
+    }
+    return code != 0 ? "other" : nullptr;
+}
+
 // One of the bot's guid-list values, only when it already holds a calculated
 // list; otherwise nothing (the bot calculates it on its own schedule).
 void ReadCachedGuidList(PlayerbotAI* ai, char const* name, std::list<ObjectGuid>& out)
@@ -1672,7 +1695,7 @@ void CollectViewSnapshot(RemoteCommander::Binding const& binding, RemoteCommande
                 // The newest verdict as parts (name, result letter, reason code).
                 member.action = engine->GetLastOutcomeName();
                 member.result = engine->GetLastOutcomeResult();
-                if (char const* reason = ViewFailReason(engine->GetLastOutcomeCastFail()))
+                if (char const* reason = ViewOutcomeReason(engine->GetLastOutcomeCastFail()))
                     member.reason = reason;
             }
     }

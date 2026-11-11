@@ -30,6 +30,8 @@ char const* const kPrefix = "TBWHY|";
 
 WhyTrace::CastCheck CastCheckOf(uint32 result)
 {
+    if (result >= ai::kRefuseNoteBase)
+        return WhyTrace::CastCheck::None;
     switch (result)
     {
         case SPELL_FAILED_NOT_READY: return WhyTrace::CastCheck::NotReady;

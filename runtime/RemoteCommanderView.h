@@ -56,8 +56,8 @@
 // for none), `result` one letter (O ok, F failed, I impossible, U useless,
 // P prerequisites queued first, V dropped before running by a veto or the
 // failure backoff, `-` none yet), `reason` a short code when the engine
-// knows it (no-item, oom, range, los, cd, moving, casting, no-target; at
-// most 10 bytes, `-` for none). Until this change field 18 held the head of
+// knows it (no-item, oom, range, los, cd, moving, casting, no-target, threat, veto, attacked, not-known, immune,
+// no-control, other; at most 10 bytes, `-` for none). Until this change field 18 held the head of
 // the AI's rolling action log cut to 24 bytes; `result` and `reason` are new
 // trailing fields, so a v1 reader that stops at 18 fields keeps working
 // (parsers accept longer records) and now gets a clean action name.
