@@ -56,7 +56,7 @@ class SeekTakeSrcWiring(unittest.TestCase):
 
     def test_the_field_is_documented(self):
         self.assertIn("meet=<0\\|1> src=<word>", ROWS)
-        for word in ("`nearest`", "`nearest_reach`", "`healer_clock`", "`receiver`", "`meet`", "`pickup`", "`pull_join`", "`victim_relief`", "`park_release`", "`+edge`"):
+        for word in ("`nearest`", "`nearest_reach`", "`healer_clock`", "`receiver`", "`meet`", "`pickup`", "`pull_join`", "`victim_relief`", "`park_release`", "`park_hold`", "`park_approach`", "`stand_down`", "`approach`", "`+edge`"):
             self.assertIn(word, ROWS)
 
 
