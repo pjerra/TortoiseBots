@@ -25,7 +25,7 @@ class SeekVictimReliefWiring(unittest.TestCase):
         fn = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot, std::uint64_t")
         self.assertIn("Unit* FindSeekVictimRelief(PlayerbotAI* ai, Player* bot,", ACTIONS)
         boss_victim = fn.index("if ((thirdTank || pickupTank || healerTaker) &&")
-        relief_call = fn.index("if (roles.botIndex >= 0 && SeekReliefTaskFor(ai, bot, roles, state, task))")
+        relief_call = fn.index("SeekReliefTaskFor(ai, bot, roles, state, task, reliefSon)")
         third_pickup = fn.index("if (thirdTank || pickupTank)")
         on_son = fn.index("if (onTank)")
         self.assertLess(boss_victim, relief_call)
@@ -37,7 +37,9 @@ class SeekVictimReliefWiring(unittest.TestCase):
 
     def test_the_call_is_for_every_raid_tank(self):
         fn = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot, std::uint64_t")
-        self.assertIn("if (roles.botIndex >= 0 && SeekReliefTaskFor(ai, bot, roles, state, task))", fn)
+        self.assertIn("if (roles.botIndex >= 0)", fn)
+        self.assertIn("SeekReliefTaskFor(ai, bot, roles, state, task, reliefSon)", fn)
+        self.assertIn("if (!excluded(reliefSon))", fn)
         self.assertNotIn("if (thirdTank || healerTaker)", fn)
         # One fill for both call sites: the fields and the source word are written once, in the helper.
         helper = body(ACTIONS, "bool SeekReliefTaskFor(PlayerbotAI* ai, Player* bot,")

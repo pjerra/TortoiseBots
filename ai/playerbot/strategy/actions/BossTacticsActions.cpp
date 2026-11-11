@@ -10291,11 +10291,13 @@ Unit* FindSeekVictimRelief(PlayerbotAI* ai, Player* bot, const RaidTankRoles& ro
 }
 
 // The victim relief task for one tank: a Son on the boss's victim handed to `task`. False (task untouched) when the
-// tank takes nothing this read. One fill for both call sites, the off-tanks' late one and the raid tanks' early one.
+// tank takes nothing this read. One fill for both call sites, the off-tanks' late one and the raid tanks' early one;
+// `reliefSon` is the caller's own pick when it has one (the park wrapper's body skips the parked source there).
 bool SeekReliefTaskFor(PlayerbotAI* ai, Player* bot, const RaidTankRoles& roles, const SeekFight& state,
-                       SeekTankTask& task)
+                       SeekTankTask& task, Unit* reliefSon = nullptr)
 {
-    Unit* const reliefSon = FindSeekVictimRelief(ai, bot, roles, state);
+    if (!reliefSon)
+        reliefSon = FindSeekVictimRelief(ai, bot, roles, state);
     if (!reliefSon)
         return false;
     task.valid = true;
@@ -10661,8 +10663,15 @@ SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot, std::uint64_
             return task;
         }
     }
-    if (roles.botIndex >= 0 && SeekReliefTaskFor(ai, bot, roles, state, task))
-        return task;
+    if (roles.botIndex >= 0)
+    {
+        Unit* const reliefSon = FindSeekVictimRelief(ai, bot, roles, state);
+        if (!excluded(reliefSon))
+        {
+            if (SeekReliefTaskFor(ai, bot, roles, state, task, reliefSon))
+                return task;
+        }
+    }
     if (thirdTank || pickupTank)
     {
         // A Son camped on a healer is tanks[1]'s take here too when the third off-tank is dead (two tanks left) and
