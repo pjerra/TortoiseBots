@@ -669,6 +669,112 @@ int main()
         CHECK(ThreatResetSince(100000, 0, 0) == 0);
     }
 
+    // DungeonRunThreatResetStanding (walk 72/74): the reset hold stays open between the charms, measured against the
+    // tank the boss turns to, instead of opening around each expected one.
+    {
+        // F1 (walk 74 fight 2-7 cast 4): the holder at 30000, the successor at 17149 on the boss. The successor is
+        // credible (17149 >= half of 30000) and every damage dealer at or above 95 % of it is held, 15000 is not.
+        CASE("reset_standing_f1_walk74_fight_2_7_cast_4");
+        {
+            const std::vector<ThreatCapTank> tanks = {{30000.0f, false, true, true}, {17149.0f, true, true, false}};
+            const ThreatResetStandingRead read = ThreatResetStandingReadOf(tanks);
+            CHECK(read.ref == 17149.0f);
+            CHECK(read.highest == 30000.0f);
+            CHECK(ThreatResetStandingCredible(read.ref, read.highest));
+            ThreatResetLatch latch;
+            CHECK(ThreatResetStandingUpdate(latch, true, 17787.0f, read, 95));
+            CHECK(latch.held);
+            CHECK(ThreatResetStandingUpdate(latch, true, 17032.0f, read, 95));
+            CHECK(latch.held);
+            CHECK(ThreatResetStandingUpdate(latch, true, 16672.0f, read, 95));
+            CHECK(latch.held);
+            CHECK(!ThreatResetStandingUpdate(latch, true, 15000.0f, read, 95));
+            CHECK(!latch.held);
+        }
+
+        // F2 (walk 74 fight 66-7 cast 11): the sticky melee at 140 % of the successor cannot be brought under in one
+        // cycle and is left to the plain cap; 128 % is held.
+        CASE("reset_standing_f2_above_the_bound_is_left_alone");
+        {
+            const std::vector<ThreatCapTank> tanks = {{40000.0f, false, true, true}, {23483.0f, true, true, false}};
+            const ThreatResetStandingRead read = ThreatResetStandingReadOf(tanks);
+            CHECK(read.ref == 23483.0f);
+            ThreatResetLatch latch;
+            CHECK(!ThreatResetStandingUpdate(latch, true, 32962.0f, read, 95));
+            CHECK(!latch.held);
+            CHECK(ThreatResetStandingUpdate(latch, true, 30000.0f, read, 95));
+            CHECK(latch.held);
+        }
+
+        // F3 (no credible successor): a tank back from a rez or away on an add is far under the top tank, and a
+        // reference under the absolute floor is no reference at all. Nobody is held either time.
+        CASE("reset_standing_f3_no_credible_successor");
+        {
+            const std::vector<ThreatCapTank> rezzed = {{20000.0f, false, true, true}, {1186.0f, true, false, false}};
+            const ThreatResetStandingRead read = ThreatResetStandingReadOf(rezzed);
+            CHECK(read.ref == 1186.0f);
+            CHECK(read.highest == 20000.0f);
+            CHECK(!ThreatResetStandingCredible(read.ref, read.highest));
+            ThreatResetLatch latch;
+            CHECK(!ThreatResetStandingUpdate(latch, true, 1100.0f, read, 95));
+            CHECK(!ThreatResetStandingUpdate(latch, true, 1500.0f, read, 95));
+            CHECK(!latch.held);
+            const ThreatResetStandingRead low = ThreatResetStandingReadOf({{150.0f, true, true, true}});
+            CHECK(low.ref == -1.0f);
+            CHECK(low.highest == 150.0f);
+            CHECK(!ThreatResetStandingCredible(low.ref, low.highest));
+            CHECK(!ThreatResetStandingUpdate(latch, true, 140.0f, low, 95));
+            CHECK(!latch.held);
+        }
+
+        // F4 (latch): 95 % holds, 90 % keeps holding, 89.99 % releases, and 94 % does not hold again.
+        CASE("reset_standing_f4_latch");
+        {
+            const std::vector<ThreatCapTank> tanks = {{12000.0f, false, true, true}, {10000.0f, true, true, false}};
+            const ThreatResetStandingRead read = ThreatResetStandingReadOf(tanks);
+            CHECK(read.ref == 10000.0f);
+            ThreatResetLatch latch;
+            CHECK(!ThreatResetStandingUpdate(latch, true, 9400.0f, read, 95));
+            CHECK(ThreatResetStandingUpdate(latch, true, 9500.0f, read, 95));
+            CHECK(latch.held);
+            CHECK(ThreatResetStandingUpdate(latch, true, 9100.0f, read, 95));
+            CHECK(latch.held);
+            CHECK(!ThreatResetStandingUpdate(latch, true, 8999.0f, read, 95));
+            CHECK(!latch.held);
+            CHECK(!ThreatResetStandingUpdate(latch, true, 9400.0f, read, 95));
+            CHECK(!latch.held);
+        }
+
+        // F5 (which hold runs): the standing key wins over the window key and stays shut before the first reset and
+        // while a charm is live.
+        CASE("reset_standing_f5_hold_index");
+        CHECK(ThreatResetHoldIndex(false, false, 2, true, false) == 0);
+        CHECK(ThreatResetHoldIndex(true, false, 2, true, false) == 2);
+        CHECK(ThreatResetHoldIndex(true, false, 0, true, false) == 0);
+        CHECK(ThreatResetHoldIndex(false, true, 0, true, false) == kThreatResetStandingIndex);
+        CHECK(ThreatResetHoldIndex(false, true, 2, false, false) == 0);
+        CHECK(ThreatResetHoldIndex(false, true, 2, true, true) == 0);
+        CHECK(ThreatResetHoldIndex(true, true, 2, true, false) == kThreatResetStandingIndex);
+        CHECK(ThreatResetHoldIndex(true, true, 2, true, true) == 0);
+
+        // F6: never a tank or a healer (dps false), and an empty tank list reads no reference and holds nobody.
+        CASE("reset_standing_f6_never_a_tank_or_healer");
+        {
+            const std::vector<ThreatCapTank> tanks = {{12000.0f, false, true, true}, {10000.0f, true, true, false}};
+            const ThreatResetStandingRead read = ThreatResetStandingReadOf(tanks);
+            ThreatResetLatch latch;
+            CHECK(ThreatResetStandingUpdate(latch, true, 9500.0f, read, 95));
+            CHECK(latch.held);
+            CHECK(!ThreatResetStandingUpdate(latch, false, 9500.0f, read, 95));
+            CHECK(!latch.held);
+            const ThreatResetStandingRead empty = ThreatResetStandingReadOf({});
+            CHECK(empty.ref == -1.0f);
+            CHECK(empty.highest == 0.0f);
+            CHECK(!ThreatResetStandingUpdate(latch, true, 5000.0f, empty, 95));
+            CHECK(!latch.held);
+        }
+    }
+
     // ThreatCapInterruptExempt(interrupt, key, botThreat, tankThreat, flatThreat, ranged) is the call
     // ThreatMultiplier::GetValue makes before its high-threat veto (heals are exempt beside it). Tank 1000 throughout.
 
