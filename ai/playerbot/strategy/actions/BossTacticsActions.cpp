@@ -4709,7 +4709,7 @@ SeekHoldWhy SeekHoldWhyOfUnit(const SeekFight& state, Unit* unit)
     if (state.parkSon != 0 && unit->GetObjectGuid().GetRawValue() == state.parkSon &&
         (SeekParkHolds(state.parkPhase) ||
          SeekParkDpsHeld(state.parkPhase, state.parkSonOnTank, state.parkReleaseMs, state.nowMs,
-                         state.parkReceiverOk)))
+                         state.parkReceiverOk, state.parkControlled)))
         return SeekHoldWhy::Held;
     if (SeekMeetHoldsUnit(state, unit))
         return SeekHoldWhy::Held;
@@ -4733,7 +4733,7 @@ bool SeekHoldsUnit(const SeekFight& state, Unit* unit)
     if (state.parkSon != 0 && unit->GetObjectGuid().GetRawValue() == state.parkSon &&
         (SeekParkHolds(state.parkPhase) ||
          SeekParkDpsHeld(state.parkPhase, state.parkSonOnTank, state.parkReleaseMs, state.nowMs,
-                         state.parkReceiverOk)))
+                         state.parkReceiverOk, state.parkControlled)))
         return true;
     if (SeekMeetHoldsUnit(state, unit))
         return true;
@@ -10694,7 +10694,8 @@ SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)
     const bool sonHolder = onTank && son && son->GetVictim() == bot;
     const bool releaseTank =
         SeekParkReleaseTank(SeekParkReleaseLive(state.parkPhase), onTank, sonHolder, isReceiver);
-    const bool excludeParkSon = SeekParkExcludesSource(state.parkPhase, onTank, releaseTank);
+    const bool excludeParkSon =
+        SeekParkExcludesSource(state.parkPhase, onTank, releaseTank, state.parkControlled);
     SeekTankTask task = FindBossSeekTankUnparked(ai, bot, excludeParkSon ? state.parkSon : 0);
     if (task.valid && task.source && task.source->GetObjectGuid().GetRawValue() == state.parkSon)
     {
@@ -10702,7 +10703,8 @@ SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)
         // it to the row's spot"); every take and pull on the parked source is the phase's to refuse.
         const bool receiverDrag = SeekParkReleaseLive(state.parkPhase) && !task.take && !task.pull &&
             task.source->GetVictim() == bot;
-        if (!receiverDrag && SeekParkVetoesTankTask(state.parkPhase, task.takeSrc, onTank))
+        if (!receiverDrag &&
+            SeekParkVetoesTankTask(state.parkPhase, task.takeSrc, onTank, state.parkControlled))
             return SeekTankTask();
     }
     return task;
