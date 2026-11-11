@@ -55,6 +55,14 @@ class HoverAnchorWiringTest(unittest.TestCase):
         self.assertIn("HoverReachResult::Moved", fn)
         self.assertIn("HoverReachResult::MoveFailed", fn)
 
+    def test_anchor_walk_needs_the_anchors_own_boss(self):
+        fn = body(ACTIONS, "bool MoveTowardAnchorUnderHover(Unit* target, float distance, float groundZ)", "\n        }")
+        # An anchor row of another boss in the same fight names another room's centre.
+        self.assertIn("const BossTacticRow* const anchorRow = LiveBossAnchorRow(ai, bot);", fn)
+        self.assertIn("if (!anchorRow || anchorRow->bossEntry != target->GetEntry())", fn)
+        self.assertLess(fn.index("anchorRow->bossEntry != target->GetEntry()"),
+                        fn.index("LiveBossAnchor(ai, bot, circle)"))
+
     def test_row_names_the_aim(self):
         fn = body(ACTIONS, "void HoverReachRow(HoverReachResult result", "\n        }")
         self.assertIn("aim=%s", fn)

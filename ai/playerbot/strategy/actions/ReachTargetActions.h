@@ -16,6 +16,7 @@
 #include "playerbot/policy/pull/PullFiringPolicy.h"
 #include "playerbot/policy/combat/RangedApproachPolicy.h"
 #include "playerbot/BossAnchorPolicy.h"
+#include "playerbot/BossTacticsPolicy.h"
 #include "playerbot/HunterSwitchPolicy.h"
 #include "playerbot/policy/combat/EvadeChasePolicy.h"
 #include "playerbot/strategy/values/PossibleTargetsValue.h"
@@ -27,9 +28,10 @@
 namespace ai
 {
     bool PatchwerkDpsOpeningHold(PlayerbotAI* ai);
-    // BossTacticsActions.h would include this header back through GenericActions.h, so the one live-anchor reader is
+    // BossTacticsActions.h would include this header back through GenericActions.h, so the anchor readers are
     // declared here (defined in BossTacticsActions.cpp).
     bool LiveBossAnchor(PlayerbotAI* ai, Player* bot, BossAnchorCircle& out);
+    const BossTacticRow* LiveBossAnchorRow(PlayerbotAI* ai, Player* bot);
 
     class ReachTargetAction : public MovementAction, public Qualified
     {
@@ -678,6 +680,12 @@ namespace ai
         // her body.
         bool MoveTowardAnchorUnderHover(Unit* target, float distance, float groundZ)
         {
+            // The anchor row is the boss's own: a live anchor of another boss in the same fight names another
+            // room's centre, and aiming there would walk the caster off this one.
+            const BossTacticRow* const anchorRow = LiveBossAnchorRow(ai, bot);
+            if (!anchorRow || anchorRow->bossEntry != target->GetEntry())
+                return false;
+
             BossAnchorCircle circle;
             if (!LiveBossAnchor(ai, bot, circle))
                 return false;
