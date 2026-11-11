@@ -64,7 +64,7 @@ class SeekSonHoldWiring(unittest.TestCase):
 
 class SeekSonHoldReview(unittest.TestCase):
     def test_the_boss_victim_takes_no_son(self):
-        tank = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot)")
+        tank = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot, std::uint64_t")
         gate = tank.index("SeekTankTakeAllowed(state.boss && state.boss->GetVictim() == bot)")
         self.assertLess(tank.index("ReadSeekFightCached(ai, bot, state)"), gate)
         self.assertLess(gate, tank.index("if (onTank)"))
@@ -82,7 +82,7 @@ class SeekSonHoldLastRound(unittest.TestCase):
         self.assertIn("thirdTankIsBossVictim = roles.tanks.size() >= 3 && boss->GetVictim() == roles.tanks[2]", read)
         self.assertIn("FindSeekFallbackPuller(ai, bot, roles, boss, *row, actors.fallback)", read)
         self.assertIn("out.fallbackOpen = actors.fallback;", read)
-        tank = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot)")
+        tank = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot, std::uint64_t")
         self.assertIn("FindSeekFallbackPuller(ai, bot, roles, state.boss, *state.row, state.fallbackOpen)", tank)
         self.assertIn("(roles.tanks.size() >= 3 && !state.fallbackOpen)", tank)
 

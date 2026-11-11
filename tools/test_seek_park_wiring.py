@@ -19,6 +19,7 @@ STRATEGY = (ROOT / "ai/playerbot/strategy/generic/BossTacticsStrategy.cpp").read
 TRIGGER_CONTEXT = (ROOT / "ai/playerbot/strategy/triggers/TriggerContext.h").read_text()
 ACTION_CONTEXT = (ROOT / "ai/playerbot/strategy/actions/ActionContext.h").read_text()
 DUNGEON_TRIGGERS = (ROOT / "ai/playerbot/strategy/triggers/DungeonTriggers.cpp").read_text()
+POSSIBLE_TARGETS = (ROOT / "ai/playerbot/strategy/values/PossibleAttackTargetsValue.cpp").read_text()
 TAKE_SRC = (ROOT / "tools/test_seek_take_src_wiring.py").read_text()
 
 
@@ -39,7 +40,7 @@ class SeekParkWiring(unittest.TestCase):
         self.assertLess(read.index("if (!rules.on)"), read.index("SeekParkStep("))
         # The pure rules keep today's lead with the key off, whatever the phase says (TestParkNeedsRoom,
         # TestParkHeldUntilReleaseLead in tools/test_seek_park_policy.cpp).
-        self.assertIn("if (!rulesOn)", POLICY)
+        self.assertIn("if (!rulesOn || !parkedIsPick)", POLICY)
 
     def test_the_tank_pick_reads_the_key_before_todays_body(self):
         fn = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
@@ -47,7 +48,7 @@ class SeekParkWiring(unittest.TestCase):
         self.assertIn("SeekParkVetoesTankTask(", fn)
 
     def test_todays_tank_body_does_not_read_the_key(self):
-        fn = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot)")
+        fn = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot, std::uint64_t")
         self.assertNotIn("dungeonRunSeekPark", fn)
 
     def test_the_hold_answers_for_the_parked_source_first(self):
@@ -73,6 +74,52 @@ class SeekParkWiring(unittest.TestCase):
         fn = body(ACTIONS, "bool ReadSeekFight(PlayerbotAI* ai, Player* bot, SeekFight& out)")
         self.assertLess(fn.index("UpdateSeekPark("), fn.index("SeekLateEngagedBurnWithin("))
         self.assertIn("SeekParkLateLeadMs(", fn)
+        # The park record is keyed by the fight's engage clock as well as the cycle (no re-pull carry-over).
+        self.assertIn("out.engageMs = engageMs;", fn)
+
+    def test_the_park_is_the_seek_pick_inside_the_circle(self):
+        fn = body(ACTIONS, "void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)")
+        self.assertIn("Unit* const picked = out.source;", fn)
+        self.assertIn("LiveBossAnchorRow(", fn)
+        self.assertIn("InsideAnchor(", fn)
+        self.assertIn("in.pickedSon = pickedGuid;", fn)
+        self.assertIn("in.fightStartMs = out.engageMs;", fn)
+        self.assertIn("in.controllerInReach = controllerInReach;", fn)
+        self.assertIn("in.sonOnTank =", fn)
+        # The invariant the burn, kill and gather rely on.
+        self.assertIn("assert(", fn)
+        self.assertIn("step.son == pickedGuid", fn)
+
+    def test_the_release_needs_a_tank_victim(self):
+        # Decision 2: the release fails after its hold time unless the source's victim is a tank, whatever receiver
+        # the scan found (TestParkReleaseNeedsReceiver).
+        self.assertIn("!in.sonOnTank", POLICY)
+        self.assertIn("kSeekParkReleaseHoldMs", POLICY)
+        check = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
+        self.assertIn("SeekSonVictimIsTank(son)", check)
+
+    def test_the_release_target_exemption_is_narrow(self):
+        # Decision 3: the receiver's released source is no invalid target while Release is live; nothing else.
+        fn = body(ACTIONS, "bool ai::BossSeekParkReleaseTargetAllowed(PlayerbotAI* ai, Player* bot, Unit* target)")
+        self.assertIn("state.parkPhase != SeekParkPhase::Release", fn)
+        self.assertIn("SeekParkReceiver(", fn)
+        self.assertIn("SeekParkReleaseTargetAllowed(", fn)
+        fn = body(POSSIBLE_TARGETS, "bool PossibleAttackTargetsValue::IsPossibleTarget(")
+        self.assertIn("BossSeekParkReleaseTargetAllowed(", fn)
+        self.assertIn("HasBreakableCC(", fn)
+
+    def test_the_body_skips_the_parked_source_for_the_next_task(self):
+        # Decision 5: the wrapper passes the parked guid the body must skip, so a second Son on a healer still gets a
+        # tank instead of an empty task.
+        fn = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
+        self.assertIn("SeekParkExcludesSource(", fn)
+        self.assertIn("FindBossSeekTankUnparked(ai, bot, excludeParkSon ? state.parkSon : 0)", fn)
+        fn = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot, std::uint64_t")
+        self.assertIn("excludedSon", fn)
+        self.assertIn("if (excluded(state.healerSon))", fn)
+        self.assertIn("if (excluded(candidate))", fn)
+        self.assertIn("if (!excluded(reliefSon))", fn)
+        self.assertIn("if (!excluded(nearestSon))", fn)
 
     def test_the_trigger_only_asks(self):
         fn = body(TRIGGERS, "bool BossTacticsParkTrigger::IsActive()")
@@ -88,9 +135,10 @@ class SeekParkWiring(unittest.TestCase):
         fn = body(ACTIONS, "void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, Unit* boss,")
         self.assertIn("SeekParkPhaseOf(", fn)
 
-    def test_the_park_bot_is_freed_of_its_slot_while_it_applies(self):
+    def test_the_park_bot_is_freed_of_its_slot_while_it_applies_or_holds(self):
         fn = body(ACTIONS, "BossSpreadSlotTask ReadBossSpreadSlot(PlayerbotAI* ai, Player* bot)")
         self.assertIn("SeekParkExemptsBot(", fn)
+        self.assertIn("(phase == SeekParkPhase::Apply || phase == SeekParkPhase::Held)", POLICY)
 
     def test_the_legacy_spread_stands_down_while_the_park_holds(self):
         # Fact 5 of the probe: a step-away while the park bot walks to its source or channels the control would cut

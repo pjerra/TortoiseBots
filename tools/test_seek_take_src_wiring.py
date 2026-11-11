@@ -29,7 +29,7 @@ class SeekTakeSrcWiring(unittest.TestCase):
 
     def test_every_take_path_names_itself(self):
         # The take paths live in today's body, which the park's wrapper (FindBossSeekTank) calls unchanged.
-        fn = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot)")
+        fn = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot, std::uint64_t")
         # One word per `task.take = true;`.
         self.assertEqual(fn.count("task.take = true;"), fn.count("task.takeSrc = "))
         for word in ('"meet"', '"healer_clock"', '"pull_join"', '"victim_relief"'):

@@ -539,7 +539,7 @@ class DeclarationsMatchDefinitions(unittest.TestCase):
             (ACTIONS_H, "Unit* FindBossSeekKill(PlayerbotAI* ai, Player* bot);",
              ACTIONS, "Unit* ai::FindBossSeekKill(PlayerbotAI* ai, Player* bot)"),
             (ACTIONS_H, "SeekTankTask FindBossSeekTank(PlayerbotAI* ai, Player* bot);",
-             ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot)"),
+             ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot, std::uint64_t"),
             (ACTIONS_H, "class BossTacticsSeekAction : public MovementAction",
              ACTIONS, "bool BossTacticsSeekAction::Execute(Event& event)"),
             (ACTIONS_H, "class BossTacticsSeekTankAction : public AttackAction",

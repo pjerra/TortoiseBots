@@ -395,8 +395,11 @@ bool PossibleAttackTargetsValue::IsPossibleTarget(Unit* target, Player* player, 
             return false;
         }
 
-        // If the target is CC'ed
-        if(!ignoreCC && !HasIgnoreCCRti(target, player) && (HasBreakableCC(target, player) || HasUnBreakableCC(target, player)))
+        // If the target is CC'ed. The seek park's release is the one way a breakable control is still a valid target:
+        // the receiver's own take swings at the source to break it, and "select new target" would otherwise undo that.
+        if(!ignoreCC && !HasIgnoreCCRti(target, player) &&
+           (HasBreakableCC(target, player) || HasUnBreakableCC(target, player)) &&
+           !BossSeekParkReleaseTargetAllowed(PlayerbotAIStorage::Instance().GetAI(player), player, target))
         {
             return false;
         }

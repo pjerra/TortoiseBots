@@ -87,7 +87,7 @@ class SeekWalkoutWiring(unittest.TestCase):
 
     def test_the_task_shoots_once_and_walks_back(self):
         self.assertIn("bool walkout = false;", ACTIONS_H)
-        tank = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot)")
+        tank = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot, std::uint64_t")
         self.assertIn("state.walkout", tank)
         fn = body(ACTIONS, "bool BossTacticsSeekTankAction::Execute(Event& event)")
         walk = fn[fn.index("if (task.walkout)"):fn.index("if (task.take)")]
