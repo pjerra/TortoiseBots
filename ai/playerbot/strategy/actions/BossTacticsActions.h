@@ -748,6 +748,8 @@ namespace ai
         bool prePlaceHold = false; // the pre-placed tank stands at its point (x, y): stop a walk, leave the rotation free
         bool walkToSpot = false;
         bool holdSwing = false;
+        bool standDown = false;   // a tank with the parked source: stop its attack and clear the target (R5)
+        bool parkApproach = false; // the release's receiver: walk to the parked source and wait (R7)
         float x = 0.0f, y = 0.0f, z = 0.0f;
     };
     SeekTankTask FindBossSeekTank(PlayerbotAI* ai, Player* bot);

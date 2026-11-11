@@ -86,25 +86,87 @@ class SeekParkWiring(unittest.TestCase):
         self.assertIn("in.fightStartMs = out.engageMs;", fn)
         self.assertIn("in.controllerInReach = controllerInReach;", fn)
         self.assertIn("in.sonOnTank =", fn)
-        # The invariant the burn, kill and gather rely on.
-        self.assertIn("assert(", fn)
-        self.assertIn("step.son == pickedGuid", fn)
+        self.assertNotIn("assert(", fn)
+
+    def test_the_record_owns_its_son(self):
+        # R2: a live record is read by its own guid, never by the reader's own pick, and only its own facts step it.
+        fn = body(ACTIONS, "void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)")
+        self.assertIn("const bool live = recorded.phase != SeekParkPhase::None", fn)
+        self.assertIn("live ? recorded.parkBot : 0", fn)
+        self.assertIn("live ? recorded.receiver : 0", fn)
+        self.assertIn("out.parkPreWalk = SeekParkPreWalk(", fn)
+        self.assertLess(fn.index("GetCreature(ObjectGuid(recorded.son))"), fn.index("SeekParkStep("))
+        self.assertNotIn("state.son != in.son", POLICY)
+
+    def test_the_on_tank_read_ignores_a_stale_victim_under_the_control(self):
+        # F1/R1: the machine's one on-tank source.
+        fn = body(ACTIONS, "void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)")
+        self.assertIn("SeekParkSonOnTank(sonVictim && PlayerbotAI::IsTank(sonVictim), in.controlled)", fn)
+        self.assertIn("inline bool SeekParkSonOnTank(bool victimIsTank, bool controlled)", POLICY)
+        self.assertIn("return victimIsTank && !controlled;", POLICY)
+
+    def test_the_hold_reads_the_park_on_tank_verdict(self):
+        # The damage hold and the release row use the park's own read, not a fresh victim scan.
+        fn = body(ACTIONS, "bool SeekHoldsUnit(const SeekFight& state, Unit* unit)")
+        self.assertIn("SeekParkDpsHeld(state.parkPhase, state.parkSonOnTank,", fn)
+        why = body(ACTIONS, "SeekHoldWhy SeekHoldWhyOfUnit(const SeekFight& state, Unit* unit)")
+        self.assertIn("SeekParkDpsHeld(state.parkPhase, state.parkSonOnTank,", why)
+        self.assertNotIn("SeekSonVictimIsTank(", ACTIONS)
+
+    def test_the_tank_pick_reads_the_park_read_out(self):
+        fn = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
+        self.assertIn("state.parkSonOnTank", fn)
+        self.assertIn("state.parkReceiver", fn)
+        self.assertNotIn("SeekSonVictimIsTank(", fn)
+        self.assertNotIn("SeekParkReceiver(", fn)
+        # The order the read runs in: the stand-down, then the receiver's walk, then the release's take, then today's
+        # body (R5, R7, R9).
+        self.assertLess(fn.index("SeekParkTankStandsDown("), fn.index("state.parkPreWalk"))
+        self.assertLess(fn.index("state.parkPreWalk"), fn.index("SeekParkReleaseTakeDue("))
+        self.assertLess(fn.index("SeekParkReleaseTakeDue("), fn.rindex("FindBossSeekTankUnparked("))
+
+    def test_the_stand_down_stops_the_tank_attack(self):
+        fn = body(ACTIONS, "bool BossTacticsSeekTankAction::Execute(Event& event)")
+        stand = fn[fn.index("if (task.standDown)"):]
+        stand = stand[:stand.index("if (task.parkApproach)")]
+        self.assertIn("AttackStop()", stand)
+        self.assertIn('SET_AI_VALUE(Unit*, "current target", nullptr);', stand)
+        self.assertIn("park_hold", stand)
+        approach = fn[fn.index("if (task.parkApproach)"):]
+        approach = approach[:approach.index("if (task.walkout)")]
+        self.assertIn("SeekParkStrikeInReach(", approach)
+        self.assertIn("walkToParkSon(task.source)", approach)
+        # The walk is clamped to the anchor and the same-walk check keeps it from re-sending every tick.
+        self.assertIn("ClampMoveToBossAnchor(ai, bot, x, y, z)", fn)
+        self.assertLess(fn.index("SeekParkStrikeInReach("), fn.index("BossAnchorRefusesChase("))
+        self.assertIn("park_release", fn)
+
+    def test_the_park_cast_row(self):
+        fn = body(ACTIONS, "bool BossTacticsParkAction::Execute(Event& event)")
+        self.assertIn("LogSeekParkCast(", fn)
+        self.assertIn('"refused"', fn)
+        self.assertIn('"walk"', fn)
+        self.assertIn('"clamp"', fn)
+        log = body(ACTIONS, "void LogSeekParkCast(PlayerbotAI* ai, Player* bot, Unit* son, const char* step,")
+        self.assertIn("seek park cast: by=%s son=%u step=%s yd=%.0f los=%d check=%u", log)
 
     def test_the_release_needs_a_tank_victim(self):
-        # Decision 2: the release fails after its hold time unless the source's victim is a tank, whatever receiver
-        # the scan found; a tank inside the window latches success instead (TestParkReleaseNeedsReceiver,
-        # TestParkReleaseLatches).
-        self.assertIn("nowMs - state.releaseMs >= kSeekParkReleaseHoldMs", POLICY)
-        self.assertIn("kSeekParkReleaseHoldMs", POLICY)
+        # Decision 2 with R1's one read: the release fails after its window unless the source is on a tank with no
+        # breakable control; a tank inside the window latches success instead (TestParkReleaseIgnoresStaleTankVictim,
+        # TestParkReleaseLatches, TestParkReleaseWindow).
+        self.assertIn("nowMs - state.releaseMs >= SeekParkReleaseWindowMs(in.receiverOk)", POLICY)
+        self.assertIn("inline std::uint32_t SeekParkReleaseWindowMs(bool receiverOk)", POLICY)
+        self.assertIn("return receiverOk ? kSeekParkReleaseMaxMs : kSeekParkReleaseHoldMs;", POLICY)
         check = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
-        self.assertIn("SeekSonVictimIsTank(son)", check)
+        self.assertIn("state.parkSonOnTank", check)
 
     def test_the_release_target_exemption_is_narrow(self):
         # Decision 3: the receiver's released source is no invalid target while the release is live (open or latched);
-        # nothing else.
+        # nothing else. The receiver is the record's, so no second scan here.
         fn = body(ACTIONS, "bool ai::BossSeekParkReleaseTargetAllowed(PlayerbotAI* ai, Player* bot, Unit* target)")
         self.assertIn("!SeekParkReleaseLive(state.parkPhase)", fn)
-        self.assertIn("SeekParkReceiver(", fn)
+        self.assertIn("state.parkReceiver == bot->GetObjectGuid().GetRawValue()", fn)
+        self.assertNotIn("SeekParkReceiver(", fn)
         self.assertIn("SeekParkReleaseTargetAllowed(", fn)
         fn = body(POSSIBLE_TARGETS, "bool PossibleAttackTargetsValue::IsPossibleTarget(")
         self.assertIn("BossSeekParkReleaseTargetAllowed(", fn)
@@ -154,24 +216,33 @@ class SeekParkWiring(unittest.TestCase):
         self.assertLess(trigger.index("BossSeekParkHoldsBot("), trigger.index("ShouldRaidSurvivalSpread("))
         self.assertLess(trigger.index("BossSeekParkHoldsBot("), trigger.index("FindBossSpreadSlot("))
 
-    def test_the_release_take_ends_once_the_source_is_on_the_tank(self):
-        # The take is the swing that breaks the control with the source already on the tank; after that the unparked
-        # body's own-source branch is the release's drag to the row's spot, not a second take.
+    def test_the_release_take_walks_then_strikes(self):
+        # R9: out of strike reach the receiver walks to the source; in reach the take attacks and taunts as today.
         fn = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
-        self.assertIn("son->GetVictim() != bot", fn)
+        self.assertIn("SeekParkReleaseTakeDue(SeekParkReleaseLive(state.parkPhase), onTank, isReceiver)", fn)
+        self.assertIn("task.takeSrc = \"park_release\";", fn)
         self.assertIn("receiverDrag", fn)
 
     def test_the_release_never_hands_the_son_to_another_tank(self):
-        # Round 3 (walk 73): a tank that has the Son keeps it. The take is due only while the source has no tank
-        # victim, and the release's own tank is the holder on a tank, so every other tank's park path skips the Son
-        # (TestParkReleasedHolderKeepsTheSon).
+        # Round 3 (walk 73) with R11: a tank that has the Son keeps it; in the open release only its own take touches
+        # the Son, whoever holds it, and every other tank's park path skips it
+        # (TestParkReleasedHolderKeepsTheSon, TestParkOnlyTheReceiverInRelease).
         fn = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
-        self.assertIn("SeekParkReleaseTakeDue(SeekParkReleaseLive(state.parkPhase), sonOnTank, isReceiver)", fn)
-        self.assertIn("const bool sonHolder = sonOnTank && son->GetVictim() == bot;", fn)
-        self.assertIn("SeekParkReleaseTank(SeekParkReleaseLive(state.parkPhase), sonOnTank, sonHolder, isReceiver)", fn)
-        self.assertIn("SeekParkExcludesSource(state.parkPhase, sonOnTank, releaseTank)", fn)
+        self.assertIn("const bool sonHolder = onTank && son && son->GetVictim() == bot;", fn)
+        self.assertIn("SeekParkReleaseTank(SeekParkReleaseLive(state.parkPhase), onTank, sonHolder, isReceiver)", fn)
+        self.assertIn("SeekParkExcludesSource(state.parkPhase, onTank, releaseTank)", fn)
         self.assertIn("SeekParkReleaseTakeDue(bool releaseLive, bool sonOnTank, bool isReceiver)", POLICY)
         self.assertIn("return releaseLive && !sonOnTank && isReceiver;", POLICY)
+        self.assertIn("if (phase == SeekParkPhase::Release)", POLICY)
+        self.assertIn("return !isReleaseTank;", POLICY)
+
+    def test_the_park_holds_only_its_own_reader(self):
+        # R4: a reader whose pick is another Son keeps seeking; the park's "nobody gathers" and gather-at-spot are
+        # its own pick's (or a reader with no pick).
+        fn = body(ACTIONS, "SeekTask ai::FindBossSeek(PlayerbotAI* ai, Player* bot)")
+        self.assertIn("const bool parkIsMine = !state.source ||", fn)
+        self.assertIn("if (SeekParkHolds(state.parkPhase) && parkIsMine)", fn)
+        self.assertIn("parkIsMine && SeekParkGatherAtSpot(", fn)
 
     def test_the_gather_waits_at_the_spot_before_the_released_source_arrives(self):
         fn = body(ACTIONS, "SeekTask ai::FindBossSeek(PlayerbotAI* ai, Player* bot)")
@@ -188,7 +259,7 @@ class SeekParkWiring(unittest.TestCase):
         self.assertIn("case SeekParkPhase::Released:", POLICY)
         self.assertIn("state.phase = SeekParkPhase::Released;", POLICY)
         self.assertIn('return "released";', POLICY)
-        self.assertIn("SeekParkReleaseLive(state.phase)", POLICY)
+        self.assertIn("SeekParkReleaseLive(phase)", POLICY)
         # The tank pick reads the receiver in the latched release too, so the drag to the spot is still the release's.
         fn = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
         self.assertIn("SeekParkReleaseLive(state.parkPhase)", fn)
