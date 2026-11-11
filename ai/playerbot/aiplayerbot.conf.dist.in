@@ -1534,6 +1534,17 @@ AiPlayerbot.DungeonRunRangedOnly = 0
 # 1 - on
 AiPlayerbot.RangedReachHoverTarget = 0
 
+# A ranged reach under a hovering boss (AiPlayerbot.RangedReachHoverTarget = 1) walks the path to the live `anchor`
+# row's centre instead of the floor under the boss, and stops as soon as the target is in reach: the anchor's centre
+# plus 3 yd, never nearer than the plain hover stop and never outside the `enemy out of spell range` trigger's line.
+# A bot parked at the edge of range on the boss's side loses her after her next hop; from the room centre most hover
+# points stay in reach. Every step writes a BossReachHover row with `aim=anchor` (or `aim=target` for the plain walk
+# under her) and the stop distance it used. With the key off, or without a live anchor row, the reach behaves exactly
+# as before. Needs AiPlayerbot.RangedReachHoverTarget. `.reload config` reads it again.
+# 0 - off: the walk under the boss's body (Default)
+# 1 - on
+AiPlayerbot.HoverReachAimsAtAnchor = 0
+
 # The airborne-boss wand row (Onyxia P2 "onyxia airborne" -> shoot): with the key on the row is not useful for a
 # damage-dealing wand caster (mage, warlock, non-healer priest), so their class nuke rows cast instead; their class
 # rows already wand only when the nuke cannot go out ("no mana", "unaffordable", "wand blocks nuke"). Hunters, melee,

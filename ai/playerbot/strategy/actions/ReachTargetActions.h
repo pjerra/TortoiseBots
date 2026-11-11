@@ -15,6 +15,7 @@
 #include "playerbot/PlayerbotFactory.h"
 #include "playerbot/policy/pull/PullFiringPolicy.h"
 #include "playerbot/policy/combat/RangedApproachPolicy.h"
+#include "playerbot/BossAnchorPolicy.h"
 #include "playerbot/HunterSwitchPolicy.h"
 #include "playerbot/policy/combat/EvadeChasePolicy.h"
 #include "playerbot/strategy/values/PossibleTargetsValue.h"
@@ -26,6 +27,9 @@
 namespace ai
 {
     bool PatchwerkDpsOpeningHold(PlayerbotAI* ai);
+    // BossTacticsActions.h would include this header back through GenericActions.h, so the one live-anchor reader is
+    // declared here (defined in BossTacticsActions.cpp).
+    bool LiveBossAnchor(PlayerbotAI* ai, Player* bot, BossAnchorCircle& out);
 
     class ReachTargetAction : public MovementAction, public Qualified
     {
@@ -592,6 +596,9 @@ namespace ai
             if (!ai->CanMove())
                 return false;
 
+            if (sPlayerbotAIConfig.hoverReachAimsAtAnchor && MoveTowardAnchorUnderHover(target, distance, groundZ))
+                return true;
+
             // The floor under the body, not the body: a path to (x, y, z) in the air has no
             // navmesh end, and the point selection needs the walk the bot can really make.
             WorldPosition const ground(bot->GetMapId(), targetX, targetY, groundZ);
@@ -663,8 +670,77 @@ namespace ai
             return moved;
         }
 
+        // AiPlayerbot.HoverReachAimsAtAnchor: a bot parked at the edge of range on the boss's side of the room is
+        // out of range again after her next hop (walk 2e: one reach per caster per 27 s, her hop rate). With a live
+        // `anchor` row, walk the navmesh path to the anchor's centre and stop as soon as the target is in reach
+        // (HoverAnchorStopDistance); the goal of the range test stays the target, so the bot never walks deeper
+        // into the room than it needs to. False leaves today's walk under her body.
+        bool MoveTowardAnchorUnderHover(Unit* target, float distance, float groundZ)
+        {
+            BossAnchorCircle circle;
+            if (!LiveBossAnchor(ai, bot, circle))
+                return false;
+
+            WorldPosition const centre(bot->GetMapId(), circle.x, circle.y, circle.z);
+            std::vector<WorldPosition> const path = centre.getPathStepFrom(WorldPosition(bot), bot);
+            if (path.size() < 2)
+                return false;
+
+            std::vector<ApproachPoint> points;
+            points.reserve(path.size() + 1);
+            ApproachPoint front;
+            front.x = bot->GetPositionX();
+            front.y = bot->GetPositionY();
+            front.z = bot->GetPositionZ();
+            points.push_back(front);
+            for (WorldPosition const& step : path)
+            {
+                ApproachPoint point;
+                point.x = step.getX();
+                point.y = step.getY();
+                point.z = step.getZ();
+                points.push_back(point);
+            }
+
+            ApproachPoint goal;
+            goal.x = target->GetPositionX();
+            goal.y = target->GetPositionY();
+            goal.z = target->GetPositionZ();
+
+            Map* map = bot->GetMap();
+            float const botHeight = bot->GetCollisionHeight();
+            float const targetHeight = target->GetCollisionHeight();
+            auto const seesTarget = [map, &goal, botHeight, targetHeight](ApproachPoint const& point)
+            {
+                return map->isInLineOfSight(point.x, point.y, point.z + botHeight,
+                    goal.x, goal.y, goal.z + targetHeight, true);
+            };
+
+            float const reachDist = HoverReachDistance(distance, target->GetCombatReach(), bot->GetCombatReach());
+            float const triggerDist = ai->GetRange("spell") - sPlayerbotAIConfig.contactDistance +
+                target->GetCombatReach() + bot->GetCombatReach();
+            float const dx = circle.x - goal.x;
+            float const dy = circle.y - goal.y;
+            float const dz = circle.z - goal.z;
+            float const stop = HoverAnchorStopDistance(reachDist, triggerDist, std::sqrt(dx * dx + dy * dy + dz * dz));
+
+            RangedApproachChoice const choice = SelectRangedApproachPoint(points, goal, stop, seesTarget);
+            if (!choice.valid)
+                return false;
+
+            WorldPosition const destination(bot->GetMapId(), choice.point.x, choice.point.y, choice.point.z);
+            if (IsHazardNearPosition(destination))
+                return false;
+
+            bool const moved = MoveTo(destination.getMapId(), destination.getX(), destination.getY(), destination.getZ());
+            HoverReachRow(moved ? HoverReachResult::Moved : HoverReachResult::MoveFailed,
+                target, distance, groundZ, path.size(), true, stop);
+            return moved;
+        }
+
         // One row per bot per kHoverLogMs; only with the key on and a bot_events.csv log.
-        void HoverReachRow(HoverReachResult result, Unit* target, float distance, float groundZ, std::size_t pathPoints)
+        void HoverReachRow(HoverReachResult result, Unit* target, float distance, float groundZ, std::size_t pathPoints,
+            bool anchorAim = false, float stopDist = 0.0f)
         {
             if (!sPlayerbotAIConfig.rangedReachHoverTarget || !sPlayerbotAIConfig.hasLog("bot_events.csv"))
                 return;
@@ -677,11 +753,14 @@ namespace ai
             char info1[64];
             snprintf(info1, sizeof(info1), "target=%u,result=%s", target->GetEntry(), HoverReachWord(result));
             char info2[96];
-            snprintf(info2, sizeof(info2), "yd2d=%.1f,height=%.1f,dist=%.1f,path=%u",
+            float const dist = anchorAim ? stopDist
+                : HoverReachDistance(distance, target->GetCombatReach(), bot->GetCombatReach());
+            snprintf(info2, sizeof(info2), "yd2d=%.1f,height=%.1f,dist=%.1f,path=%u,aim=%s",
                 sServerFacade.getDistance2d(bot, target->GetPositionX(), target->GetPositionY()),
                 target->GetPositionZ() - groundZ,
-                HoverReachDistance(distance, target->GetCombatReach(), bot->GetCombatReach()),
-                static_cast<uint32>(pathPoints));
+                dist,
+                static_cast<uint32>(pathPoints),
+                anchorAim ? "anchor" : "target");
             sPlayerbotAIConfig.logEvent(ai, "BossReachHover", info1, info2);
         }
 
