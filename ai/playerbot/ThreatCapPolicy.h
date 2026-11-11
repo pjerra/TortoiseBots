@@ -157,6 +157,16 @@ namespace ai
         return ThreatPctSaturated(botThreat, maxThreat);
     }
 
+    // AiPlayerbot.DungeonRunThreatFree (ai_boss_tactic kind `threat_free`): a subject that stands `gapYd` yd or more
+    // above the bot cannot be reached by any tank, so its tanks hold no threat and every damage dealer read 100 %
+    // ("the tank has no threat: hold", ThreatPctOf). Walk 2e: on airborne Onyxia the threat multiplier vetoed the
+    // casters' nukes (248 reasonless refusals, nukes 19 % of caster frames, 2.5 %/min). A non-tank reads 0 there: no
+    // cap. A tank keeps its own reading. The comparison is the raw z difference, as for ranged_only.
+    inline bool ThreatFreeApplies(bool keyOn, bool isTank, float subjectZ, float botZ, float gapYd)
+    {
+        return keyOn && !isTank && gapYd > 0.0f && subjectZ - botZ >= gapYd;
+    }
+
     // One tank on the target as the caller resolved it from the raid's tank order (GetRaidTankRoles): index 0 is the
     // main tank, every later one an assigned off-tank.
     struct ThreatCapTank
