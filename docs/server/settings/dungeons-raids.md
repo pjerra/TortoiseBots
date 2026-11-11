@@ -43,6 +43,7 @@ These settings configure boss encounter mechanics, environmental hazard evasion,
 | [`AiPlayerbot.DungeonRunBossSpreadSlots`](#aiplayerbotdungeonrunbossspreadslots) | `0` | `1`: each ranged bot and healer of a live `spread` row owns a fixed ring slot and stands on it between the doses; off keeps the step-away (recommended on, needs `DungeonRunBossSpread`). |
 | [`AiPlayerbot.BossStandEvents`](#aiplayerbotbossstandevents) | `0` | `1`: one `BossStand` row per bot and window (assigned, arrived, unseated, released) into `bot_events.csv`. |
 | [`AiPlayerbot.BossStandWholeRaid`](#aiplayerbotbossstandwholeraid) | `0` | `1`: every bot in combat with the boss counts toward its stand seats (a threat wipe keeps its seat), a bot already clear of the lane stays put, and a seated bot does not flee (recommended on). |
+| [`AiPlayerbot.BossStandHoldsMeleeReach`](#aiplayerbotbossstandholdsmeleereach) | `0` | `1`: a melee bot or a tank with a valid boss stand seat keeps it instead of running `reach melee` back toward its target (needs the boss tactics and the rows). |
 | [`AiPlayerbot.BossTacticsKeepsEngagedBoss`](#aiplayerbotbosstacticskeepsengagedboss) | `0` | `1`: a boss the raid fights stays in a bot's fight for 10 s after the last bot saw it, within 150 yd and while the bot is in combat (recommended on for Onyxia's Lair; not yet tested in other raids). |
 | [`AiPlayerbot.DungeonRunCharmYield`](#aiplayerbotdungeonruncharmyield) | `0` | `1`: a bot a creature charms yields its AI, no action (area or targeted) lands on a charmed group member, and pets stand down while one is up (needs no rows or tactics). |
 | [`AiPlayerbot.DungeonRunImmuneBossVictimEscape`](#aiplayerbotdungeonrunimmunebossvictimescape) | `0` | `1` (recommended on): a boss that cannot be taunted and turns on a damage dealer or healer makes that member escape with its own ability, or a nearby paladin protect it (needs no rows or tactics). |
@@ -832,6 +833,16 @@ Whether every bot in the fight with the boss takes a stand seat, and whether a b
 <summary>How it works in detail</summary>
 
 **Whole raid:** without the key a bot takes part in an anchor's seats only with threat on the boss or while it is the boss's victim, so a boss that wipes threat (Onyxia's Fireball, -100 %) drops its target out of the seat plan until it gains threat again. With the key on, a member that is in combat while the boss is in combat counts too; nothing else about the plan changes. **Stay:** a bot already on its seat's side of the lane and at least as far from the lane line as the seats next to it along the lane (within 3 yd of its own along-lane spot, every role) stays where it stands; with no such seat it walks. The seat becomes the bot's own position, so the reach, the reactive dodge, the flee gate and the stand action treat it as seated and arrived, while the tank post does not yield to a stay (a stay is not a planned seat). **Flee:** a seated bot's `flee` is not useful (the seat is the escape); the step-out from a ground cloud keeps its own rule and still runs. The `BossStand` row of a stay says `stay=1`.
+
+</details>
+### `AiPlayerbot.BossStandHoldsMeleeReach`
+Whether a melee bot or a tank with a valid boss stand seat keeps it instead of running `reach melee` back toward its target.
+**Default:** `0` · **Values:** `0` off (a seated bot walks back toward its target with `reach melee` once the stand trigger is quiet), `1` on (needs the boss tactics and the boss stand rows) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+<details>
+<summary>How it works in detail</summary>
+
+**Seated melee:** the caster and heal reaches already yield to a seat; the melee reach did not, and the stand trigger is quiet once the bot has arrived, so nothing held a melee bot on its seat. With the key on, `reach melee` is not useful while the bot holds a valid seat (a stay counts as one): a not-useful action records no failure, so no failure backoff outlives the seat.
 
 </details>
 ### `AiPlayerbot.BossTacticsKeepsEngagedBoss`
