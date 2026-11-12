@@ -992,6 +992,74 @@ class BossTacticsSql(unittest.TestCase):
                           free["bot_aura"], free["tactic_mode"]),
                          "the Onyxia threat_free row drifted")
         self.assertIsNone(new_kind_problem(free))
+    def test_onyxia_walk2f_hatcher_second_tank(self):
+        # 20261111170100_world.sql: walk 2e a-1 had one Hatcher taunt in the whole P3 and 14 of 24 deaths went to
+        # the two 50144s, still at 88 % and 97 % at the wipe; one off-tank cannot hold both. The second window sits
+        # under boss 10184 with target 50144 so the loader's duplicate rule (kind, target, spell and band within one
+        # boss) keeps both rows and each has its own window key.
+        name = "20261111170100_world.sql"
+        path = os.path.join(ROOT, "data/sql/world", name)
+        self.assertTrue(os.path.isfile(path), "the Onyxia walk 2f Hatcher tank migration is missing")
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("DELETE FROM `ai_boss_tactic` WHERE `map` = 249 AND `boss_entry` = 10184 "
+                      "AND `kind` = 'taunt_after_cast' AND `target_entry` = 50144 AND `spell_id` = 0;", text)
+        self.assertEqual(1, text.count("INSERT INTO `ai_boss_tactic`"))
+        self.assertEqual(1, text.count("(249, 10184, 'taunt_after_cast'"))
+        live = {(row[1], row[2], row[3], row[4], row[5]): _payload_dict(row) for row in effective_rows()}
+        first = live.get((249, 50144, "taunt_after_cast", 0, 0))
+        self.assertIsNotNone(first, "the 50144 off-tank 2 window is gone")
+        second = live.get((249, 10184, "taunt_after_cast", 50144, 0))
+        self.assertIsNotNone(second, "the Onyxia second Hatcher window is missing")
+        self.assertEqual((2, 4.0, "until_tank"),
+                         (first["priority"], first["param"], first["tactic_mode"]),
+                         "the 50144 off-tank 2 window drifted")
+        self.assertEqual(name, second["file"], "the walk 2f migration owns the second Hatcher window")
+        self.assertEqual((3, 4.0, "until_tank", 0, 100, 0, 0),
+                         (second["priority"], second["param"], second["tactic_mode"], second["hp_min"],
+                          second["hp_max"], second["bot_aura"], second["spell_id"]),
+                         "the Onyxia second Hatcher window drifted")
+        # Both pass the loader's own taunt rule, and neither is dropped as a duplicate within its boss.
+        groups = {}
+        for row in live.values():
+            groups.setdefault((row["map"], row["boss_entry"]), []).append(row)
+        for row in (first, second):
+            self.assertIsNone(new_kind_problem(row))
+            self.assertGreater(row["param"], 0.0)
+            self.assertTrue(row["spell_id"] > 0 or row["tactic_mode"] in ("blink", "until_tank"))
+            same = [other for other in groups[(row["map"], row["boss_entry"])]
+                    if other["kind"] == row["kind"] and other["target_entry"] == row["target_entry"]
+                    and other["spell_id"] == row["spell_id"] and other["hp_min"] == row["hp_min"]
+                    and other["hp_max"] == row["hp_max"]]
+            self.assertEqual(1, len(same), "the loader drops the duplicate in %s" % (row["file"],))
+
+    def test_onyxia_walk2f_hold_kill(self):
+        # 20261111170200_world.sql: walk 2e a-1 P3 spent ranged frames 69 on a Hatcher, 58 on Onyxia and 24 on a
+        # whelp and killed nobody. The hold_kill row is read straight from the table (no fight-scan gate) and needs
+        # only the "boss tactics" strategy, so the damage dealers leave her while a living Hatcher fights within the
+        # kind's 50 yd.
+        name = "20261111170200_world.sql"
+        path = os.path.join(ROOT, "data/sql/world", name)
+        self.assertTrue(os.path.isfile(path), "the Onyxia walk 2f hold_kill migration is missing")
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("DELETE FROM `ai_boss_tactic` WHERE `map` = 249 AND `boss_entry` = 10184 "
+                      "AND `kind` = 'hold_kill';", text)
+        self.assertEqual(1, text.count("INSERT INTO `ai_boss_tactic`"))
+        self.assertEqual(1, text.count("(249, 10184, 'hold_kill'"))
+        holds = [row for row in effective_rows()
+                 if row[1] == 249 and row[2] == 10184 and row[3] == "hold_kill"]
+        self.assertEqual(1, len(holds), "the Onyxia hold_kill rows are not exactly one")
+        hold = _payload_dict(holds[0])
+        self.assertEqual(name, hold["file"], "the walk 2f migration owns the hold_kill row")
+        self.assertEqual((50144, 0, 0, 0.0, "", 0, 100, 0, 0),
+                         (hold["target_entry"], hold["spell_id"], hold["priority"], hold["param"],
+                          hold["tactic_mode"], hold["hp_min"], hold["hp_max"], hold["bot_aura"],
+                          hold["window_s"]),
+                         "the Onyxia hold_kill row drifted")
+        # The kind answers no gate: the loader refuses one, so the band stays open and no aura is set.
+        self.assertFalse(hold["hp_min"] or hold["hp_max"] != 100 or hold["bot_aura"])
+        self.assertIsNone(new_kind_problem(hold), "the loader rules refuse the Onyxia hold_kill row")
 
     def test_onyxia_walk2b_stand_seats_are_live(self):
         # 20261110120300_world.sql: the 601 Deep Breath seats for Onyxia 10184's eight hover
