@@ -941,6 +941,10 @@ struct UnitFact
     // The boss whose tank_ignore row names its entry (BossTacticsPolicy.h, 0: none): while that boss fights, no tank is
     // sent at it (TankIgnoredFact); the damage dealers keep it.
     std::uint32_t tankIgnoreBoss = 0;
+    // The boss whose tank_first row names its entry (0: none, or the key off): while that boss fights, the run's healer
+    // guard sends no ranged damage dealer at it, because the damage on it is held until a tank has taken it
+    // (TankFirstFact).
+    std::uint32_t tankFirstBoss = 0;
     bool victimLead = false;   // a hold's units: its victim is the lead bot (the tank holds it)
     // Facts::partyAttackers only: its victim is a living tank other than the lead bot (an off-tank holds it).
     bool victimTank = false;
@@ -18049,6 +18053,24 @@ inline bool TankSkipsUnit(const DungeonPlan* plan, const Facts& f, const UnitFac
     return GuardSkipsUnit(plan, f, u) || TankIgnoredFact(f, u);
 }
 
+// tank_first (D14): the unit's row boss fights now, as the run's facts see it (an engaged unit, a mob on the party or the
+// lead bot's attacker of that entry). Its damage is held until a tank has taken it, so the healer guard sends no ranged
+// damage dealer at it; a tank going for it is what the rule wants, so the off-tank orders are unchanged.
+inline bool TankFirstFact(const Facts& f, const UnitFact& u)
+{
+    if (u.tankFirstBoss == 0)
+        return false;
+    auto const in = [&u](const std::vector<UnitFact>& units)
+    {
+        for (const UnitFact& other : units)
+            if (other.entry == u.tankFirstBoss)
+                return true;
+        return false;
+    };
+    return in(f.engagedUnits) || in(f.units) || in(f.partyAttackers) ||
+        (f.leadHasAttacker && f.leadAttacker.entry == u.tankFirstBoss);
+}
+
 // An OFF-tank's pick-up of an add on a healer (t1105h review): a tank_ignore unit on a healer is the ranged dps' first
 // (RaidHealerGuard), and the off-tank's when none is free; the main tank never takes one (CheckGuard's last resort, the
 // party guard). On anyone else it stays the dps' alone (TankSkipsUnit).
@@ -18125,7 +18147,7 @@ inline bool RaidHealerGuard(Run& r, const Facts& f, std::uint32_t dt, std::strin
     for (const UnitFact& u : f.partyAttackers)
     {
         if (!u.victimHealer || !u.hostile || !u.attackable || !u.hitting || u.evading || u.polymorphed ||
-            GuardSkipsUnit(r.plan, f, u) ||
+            GuardSkipsUnit(r.plan, f, u) || TankFirstFact(f, u) ||
             u.distLead > kRaidBossGuardYd || PlanBossEntry(r, u.entry) || LinkedDeathMemberEntry(r, f, u.entry) ||
             GuardLeavesCampAlone(u) ||
             CcOrderOut(r, u.guid) || GuardHeldByRun(r, u.guid) || RaidGuardUnitCapped(r, u))

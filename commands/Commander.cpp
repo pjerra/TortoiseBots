@@ -3288,6 +3288,16 @@ static uint32 TankIgnoreBossOf(uint32 map, uint32 entry)
     return bosses.empty() ? 0 : bosses.front();
 }
 
+// The first boss whose tank_first row names the entry on the map, 0 for none (DungeonRun::UnitFact::tankFirstBoss). With
+// AiPlayerbot.DungeonRunAddTankFirst off the rows hold nothing, so the run's healer guard keeps today's orders.
+static uint32 TankFirstBossOf(uint32 map, uint32 entry)
+{
+    if (!sPlayerbotAIConfig.dungeonRunAddTankFirst)
+        return 0;
+    const std::vector<std::uint32_t>& bosses = ai::GetBossTactics().TankFirstBosses(map, entry);
+    return bosses.empty() ? 0 : bosses.front();
+}
+
 // Whether the focus target is a creature a tank_hold row names (ai_boss_tactic): a caster whose avoid_cast blast a
 // tank may hold, and whose own loose adds only a tank can take off a non-tank. On such a target the focus order arms
 // the DPS and the healers and leaves the tanks to their own pick; every other target, and every map without such a
@@ -9697,6 +9707,7 @@ void ReadGuardFacts(Player* lead, std::vector<Player*> const& bots, TortoiseBots
             fact.hitting = true;
             fact.attackable = GroupCanAttack(lead, nearestHit); // never engaged when it cannot be attacked
             fact.tankIgnoreBoss = TankIgnoreBossOf(lead->GetMapId(), fact.entry); // DungeonRun::TankIgnoredFact
+            fact.tankFirstBoss = TankFirstBossOf(lead->GetMapId(), fact.entry); // DungeonRun::TankFirstFact
             f.leadHasAttacker = true;
         }
         // Every mob on the lead bot, each once (the automatic cc counts them with the party's attackers; the nearest
@@ -9790,6 +9801,8 @@ void ReadGuardFacts(Player* lead, std::vector<Player*> const& bots, TortoiseBots
                 fact.auraGated = ai::GetBossTactics().RequiredAura(anchor->GetMapId(), fact.entry) != 0;
             // A tank_ignore entry: no tank is sent at it while its boss fights (DungeonRun::TankIgnoredFact).
             fact.tankIgnoreBoss = TankIgnoreBossOf(anchor->GetMapId(), fact.entry);
+            // A tank_first entry: the healer guard sends no ranged damage dealer at it either (DungeonRun::TankFirstFact).
+            fact.tankFirstBoss = TankFirstBossOf(anchor->GetMapId(), fact.entry);
             if ((raidBoss || raidTrashOffTanks) && !petVictim)
                 fact.victimName = victim->GetName(); // RaidGuardTick: never the off-tank holding the boss; the trash
                                                      // round robin keeps an off-tank on its own add (RaidTrashOffTankHolds)
@@ -13257,6 +13270,8 @@ void AddPlayerAttackers(Player* lead, std::vector<Player*> const& bots, std::vec
                 fact.auraGated = ai::GetBossTactics().RequiredAura(anchor->GetMapId(), fact.entry) != 0;
             // A tank_ignore entry: no tank is sent at it while its boss fights (DungeonRun::TankIgnoredFact).
             fact.tankIgnoreBoss = TankIgnoreBossOf(anchor->GetMapId(), fact.entry);
+            // A tank_first entry: the healer guard sends no ranged damage dealer at it either (DungeonRun::TankFirstFact).
+            fact.tankFirstBoss = TankFirstBossOf(anchor->GetMapId(), fact.entry);
             fact.caster = attacker->GetMaxPower(POWER_MANA) > 0;
             fact.level = attacker->GetLevel();
             fact.partyHits = partyVictims.count(fact.guid) != 0;
