@@ -7,10 +7,14 @@
 -- the reserve was holding 3.5 hurt members while paying only about 3 mana points a window.
 --
 -- priority 2: the reserve is released while 2 or more living non-tanks of the group (the healer counted, tanks never)
--- are under AiPlayerbot.MediumHealth. One hurt member is routine and the medium tier heals it; two at once is raid-wide
--- damage. That reaches 34 % of the later windows' refusals and none of the opening's, costs about 1 mana point at
--- 120 s, and with no clock (the seek key off) it is the only release the reserve has. The 85 % reserve, the 60 s lead
--- and the exemption of tanks and Hakkar's current victim stay. Behind AiPlayerbot.DungeonRunHealReserve (default 0).
+-- are under AiPlayerbot.MediumHealth, counted on the same predicted health the heal pick uses — incoming heals credited
+-- and the predicted incoming damage applied, never raw health. One hurt member is routine and the medium tier heals it;
+-- two at once is raid-wide damage. That reaches 34 % of the later windows' refusals and none of the opening's, costs
+-- about 1 mana point at 120 s, and with no clock (the seek key off) it is the only release the reserve has. The release
+-- latches per healer: once fired it holds until fewer than 2 members are under MediumHealth + 10 for 3 s in a row, so a
+-- count sitting on the line cannot flap the reserve, and the latch resets with the fight (its row's live boss and the
+-- fight's combat start). The 85 % reserve, the 60 s lead and the exemption of tanks and Hakkar's current victim stay.
+-- Behind AiPlayerbot.DungeonRunHealReserve (default 0).
 --
 -- Idempotent: the DELETE names one exact (map, boss, kind, target, spell, health band) key, and this file's own row is
 -- the only one it writes. Never edit this file once applied; add a newer migration.
