@@ -259,16 +259,9 @@ bool OnyxiaAttackBossAction::Execute(Event& event)
     (void)event;
     if (!sPlayerbotAIConfig.dungeonRunAddCrew || bot->GetMapId() != kOnyxiaMapId)
         return false;
-    Unit* boss = nullptr;
-    for (const ObjectGuid& attackerGuid : AI_VALUE(std::list<ObjectGuid>, "attackers"))
-    {
-        Unit* attacker = ai->GetUnit(attackerGuid);
-        if (attacker && attacker->GetEntry() == kOnyxiaEntry && sServerFacade.IsAlive(attacker))
-        {
-            boss = attacker;
-            break;
-        }
-    }
+    // The trigger's own lookup: "focus rti targets" collapses the attacker list to the marked whelp, and this return
+    // must still reach her.
+    Unit* const boss = ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"));
     if (!boss || !PossibleAttackTargetsValue::IsValid(boss, bot))
         return false;
     return Attack(bot, boss);

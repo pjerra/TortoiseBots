@@ -5,8 +5,9 @@ OnyxiaWaitingGroundDuty, OnyxiaGroundDuty) and tested in tools/test_onyxia_whelp
 live code feeds it: the scan reads the engaged boss from the raid roster ("onyxia boss", never the attacker list that
 "focus rti targets" collapses to the marked unit) and sets the whelp phase from its health and the two keys it needs;
 the whelp hunt, the kill action, the whelp hold and the return to the boss all read the phase instead of the raw
-airborne flag; the hunt, the kill and the hold ask OnyxiaGroundDuty (so a grounded tank keeps its post); a waiting
-add_crew row keeps only the crew on the ground whelps; and the key is read in LoadDungeonRunKeys, templated,
+airborne flag, and the return's trigger and action take her from that same value, never the attacker list; the hunt,
+the kill and the hold ask OnyxiaGroundDuty (so a grounded tank keeps its post); a waiting add_crew row keeps only the
+crew on the ground whelps; and the key is read in LoadDungeonRunKeys, templated,
 documented without "recommended on", and shipped with its changelog line.
 
 Run: python3 -m unittest tools/test_onyxia_whelp_wiring.py
@@ -105,6 +106,16 @@ class OnyxiaWhelpWiring(unittest.TestCase):
         trigger = body(TRIGGERS, "bool OnyxiaBossDutyTrigger::IsActive()")
         self.assertIn("scan.whelpPhase, onWhelp, explicitOrder,", trigger)
         self.assertNotIn("scan.bossAirborne, onWhelp", trigger)
+
+    def test_other_ranged_return_finds_her_beside_the_marked_whelp(self):
+        # Under "focus rti targets" the attacker list holds only the raid mark, and a whelp mark used to hide her from
+        # the return: the trigger and the action it fires read the engagement value the scan reads, never that list.
+        trigger = body(TRIGGERS, "bool OnyxiaBossDutyTrigger::IsActive()")
+        self.assertIn('Unit* const boss = ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"));', trigger)
+        self.assertNotIn('"attackers"', trigger)
+        action = body(ACTIONS, "bool OnyxiaAttackBossAction::Execute(Event& event)")
+        self.assertIn('Unit* const boss = ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"));', action)
+        self.assertNotIn('"attackers"', action)
 
     def test_no_site_passes_the_raw_airborne_flag_as_the_phase(self):
         for text in (TRIGGERS, ACTIONS):

@@ -173,6 +173,9 @@ int main()
     bool const bossFromTheMarkedWhelp = IsOnyxiaBossUnit(kOnyxianWhelpEntry, true, true, true);
     CHECK(OnyxiaWhelpPhase(false, true, bossFromRoster, 39.0f));
     CHECK(!OnyxiaWhelpPhase(false, true, bossFromTheMarkedWhelp, 39.0f));
+    // The duty return reads the same engagement: the marked whelp in the attacker list cannot stand in for her.
+    CHECK(ShouldReturnToOnyxia(true, 2, true, true, true, false, bossFromRoster));
+    CHECK(!ShouldReturnToOnyxia(true, 2, true, true, true, false, bossFromTheMarkedWhelp));
 
     // OnyxiaWaitingGroundDuty_CrewOnly: Cindarion still lives at 40 % (crew state 0), so only the crew's own AoE
     // ranged keep the whelps; another AoE ranged damage dealer of the raid does not, and with no row to apply today's

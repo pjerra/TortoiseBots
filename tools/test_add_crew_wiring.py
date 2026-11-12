@@ -132,11 +132,14 @@ class AddCrewWiring(unittest.TestCase):
                       "ai->IsRanged(bot))", trigger)
         self.assertIn('ShouldReturnToOnyxia(true, AI_VALUE2(uint8, "add crew", '
                       "static_cast<int32>(kOnyxiaEntry)),", trigger)
+        # Both the trigger and the action it fires take her from the engagement value, never the attacker list that
+        # "focus rti targets" collapses to a marked whelp.
+        self.assertIn('Unit* const boss = ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"));', trigger)
         self.assertIn("PossibleAttackTargetsValue::IsValid(boss, bot)", trigger)
-        # The action takes the live boss among the attackers and only a valid target.
         action = body(ACTIONS, "bool OnyxiaAttackBossAction::Execute(Event& event)")
         self.assertIn("if (!sPlayerbotAIConfig.dungeonRunAddCrew || bot->GetMapId() != kOnyxiaMapId)", action)
-        self.assertIn("attacker->GetEntry() == kOnyxiaEntry && sServerFacade.IsAlive(attacker)", action)
+        self.assertIn('Unit* const boss = ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"));', action)
+        self.assertNotIn('"attackers"', action)
         self.assertIn("PossibleAttackTargetsValue::IsValid(boss, bot)", action)
         self.assertIn("return Attack(bot, boss);", action)
         self.assertIn('AttackAction(ai, "onyxia attack boss")', ACTIONS_H)

@@ -63,16 +63,9 @@ bool OnyxiaBossDutyTrigger::IsActive()
     if (!ai->HasStrategy("onyxia", BotState::BOT_STATE_COMBAT))
         return false;
     AiObjectContext* context = ai->GetAiObjectContext();
-    Unit* boss = nullptr;
-    for (const ObjectGuid& attackerGuid : AI_VALUE(std::list<ObjectGuid>, "attackers"))
-    {
-        Unit* attacker = ai->GetUnit(attackerGuid);
-        if (attacker && attacker->GetEntry() == kOnyxiaEntry && sServerFacade.IsAlive(attacker))
-        {
-            boss = attacker;
-            break;
-        }
-    }
+    // Her engagement, never the attacker list: "focus rti targets" collapses that list to the marked unit, so a
+    // whelp mark used to hide her from the return. The same independent lookup the scan and the whelp duty read.
+    Unit* const boss = ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"));
     const bool explicitOrder = !AI_VALUE(ObjectGuid, "explicit attack target").IsEmpty();
     Unit* current = AI_VALUE(Unit*, "current target");
     const bool onWhelp = current && sServerFacade.IsAlive(current) && current->GetEntry() == kOnyxianWhelpEntry;
