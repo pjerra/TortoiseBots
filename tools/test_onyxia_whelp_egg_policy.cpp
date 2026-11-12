@@ -140,6 +140,28 @@ int main()
     CHECK(!ShouldReturnToOnyxia(true, 2, true, true, true, true, true));    // an explicit order wins
     CHECK(!ShouldReturnToOnyxia(true, 2, true, true, true, false, false));  // no live, valid boss
 
+    // OnyxiaWhelpPhase_GroundBelow40: the ground crew's phase is her last 40 % with the key on and the boss found; the
+    // airborne phase and everything above 40 % (P1, the air phase) are unchanged, and the edge is inclusive.
+    CHECK(OnyxiaWhelpPhase(true, false, false, 100.0f));              // airborne, key off
+    CHECK(OnyxiaWhelpPhase(true, true, true, 100.0f));                // airborne, key on
+    CHECK(OnyxiaWhelpPhase(false, true, true, 39.0f));                // grounded, 39 %, key on
+    CHECK(OnyxiaWhelpPhase(false, true, true, kOnyxiaGroundCrewPct)); // the edge counts as below
+    CHECK(!OnyxiaWhelpPhase(false, false, true, 39.0f));              // key off: airborne-only
+    CHECK(!OnyxiaWhelpPhase(false, true, true, 41.0f));               // above 40 %: P1 stays out
+    CHECK(!OnyxiaWhelpPhase(false, true, true, 100.0f));              // grounded P1
+    CHECK(!OnyxiaWhelpPhase(false, true, false, 10.0f));              // no boss found: no phase
+    CHECK(!OnyxiaWhelpPhase(false, false, false, 10.0f));
+
+    // OnyxiaGroundDuty_TanksLeaveOnGround: on the ground the melee keep the duty and the tanks drop it; in the air
+    // every crew member hunts.
+    CHECK(OnyxiaGroundDuty(true, false, true));   // crew melee airborne
+    CHECK(OnyxiaGroundDuty(true, false, false));  // crew melee on the ground: keeps the whelps
+    CHECK(OnyxiaGroundDuty(true, true, true));    // a tank in the air still hunts
+    CHECK(!OnyxiaGroundDuty(true, true, false));  // a tank on the ground keeps its post or the generic pick
+    CHECK(!OnyxiaGroundDuty(false, false, false)); // not on duty
+    CHECK(!OnyxiaGroundDuty(false, true, true));
+    CHECK(OnyxiaGroundDuty(IsOnyxiaWhelpHunter(kWhelpClassMage, false, false, true), false, false));
+
     std::cout << "onyxia whelp/egg policy: OK\n";
     return 0;
 }

@@ -103,14 +103,15 @@ class AddCrewWiring(unittest.TestCase):
 
     def test_other_ranged_return_to_the_boss(self):
         self.assertIn("inline bool ShouldReturnToOnyxia(bool keyOn, std::uint8_t crewState, bool rangedDps, "
-                      "bool bossAirborne,", WHELP_POLICY)
-        self.assertIn("return keyOn && crewState == 2 && rangedDps && bossAirborne && onWhelp && !explicitOrder && "
+                      "bool whelpPhase,", WHELP_POLICY)
+        self.assertIn("return keyOn && crewState == 2 && rangedDps && whelpPhase && onWhelp && !explicitOrder && "
                       "bossValid;", WHELP_POLICY)
         trigger = body(TRIGGERS, "bool OnyxiaBossDutyTrigger::IsActive()")
         self.assertIn("if (!sPlayerbotAIConfig.dungeonRunAddCrew || bot->GetMapId() != kOnyxiaMapId)", trigger)
         self.assertIn('ai->HasStrategy("onyxia", BotState::BOT_STATE_COMBAT)', trigger)
         self.assertIn("ScanOnyxiaWhelps(ai, bot)", trigger)
-        self.assertIn("scan.bossAirborne", trigger)
+        self.assertIn("scan.whelpPhase", trigger)
+        self.assertNotIn("scan.bossAirborne", trigger)
         self.assertIn("current->GetEntry() == kOnyxianWhelpEntry", trigger)
         self.assertIn('AI_VALUE(ObjectGuid, "explicit attack target")', trigger)
         self.assertIn("HoverReachTakerIsRangedDps(PlayerbotAI::IsTank(bot), PlayerbotAI::IsHeal(bot), "
