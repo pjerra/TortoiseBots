@@ -6619,26 +6619,27 @@ void WriteRegroupProbeBot(uint64 botRaw, unsigned tick)
             selection, bot->IsInCombat(), holders, holderNames));
 }
 
-// The `revive|party` release armed the probe: the release's own row (tick=0), then the run's ticks.
-// The call site checks AiPlayerbot.RaidBossDiagnostics; a new release for the same run replaces its
-// window.
+// The `revive|party` release writes the probe's own rows (tick=0); only a live run keeps the window
+// for the ticks after them. The call site checks AiPlayerbot.RaidBossDiagnostics; a new release for
+// the same run replaces its window.
 void BeginRegroupReleaseProbe(Player* commander, Player* lead, std::vector<uint64> const& revivedRaw)
 {
     if (!commander)
         return;
     uint64 const commanderRaw = commander->GetObjectGuid().GetRawValue();
     std::vector<std::uint64_t> const bots(revivedRaw.begin(), revivedRaw.end());
-    TortoiseBots::RegroupProbe::RunState& state = RegroupProbeBook().Arm(commanderRaw, bots);
     ai::DungeonPlan const* plan = nullptr;
     if (auto it = DungeonRuns().find(commanderRaw); it != DungeonRuns().end())
         plan = it->second.run.plan;
-    // A hand-issued release outside a run has no plan: no boss rows, and the bot rows follow.
+    // A hand-issued release outside a run has no plan and no ticks to come: its rows are the
+    // release's alone, and it leaves no state behind for the commander's next run.
+    RegroupProbeBook().Release(commanderRaw, bots, plan != nullptr);
     if (plan)
     {
         Map* map = lead && lead->IsInWorld() ? lead->FindMap() : nullptr;
         WriteRegroupProbeBosses(map, *plan, 0);
     }
-    for (std::uint64_t botRaw : state.bots)
+    for (std::uint64_t botRaw : bots)
         WriteRegroupProbeBot(botRaw, 0);
 }
 
@@ -15523,6 +15524,9 @@ static bool RunVerbAs(ChatHandler* handler, Player* commander, std::string const
         slot.playerLed.on = playerLedStart.playerLed;
         if (slot.playerLed.on)
             slot.playerLed.tank = lead->GetName();
+        // A start (or a run replaced by it) begins with no probe window: one an earlier release
+        // left is dropped here, before the run's own ticks could read it.
+        EndRegroupReleaseProbe(commanderRaw);
         DungeonRunSlot& stored = DungeonRuns()[commanderRaw] = slot;
         RebuildRunGroups(); // one index rebuild per start (BotAreaTriggerWiringTest pins this adjacency)
         // Decision capture (off unless enabled): the capture exists before the
