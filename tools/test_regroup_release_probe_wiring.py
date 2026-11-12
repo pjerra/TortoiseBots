@@ -109,8 +109,8 @@ class RegroupReleaseProbeWiring(unittest.TestCase):
         for name in ("BeginRegroupReleaseProbe", "RegroupReleaseProbeTick"):
             body = function_body(name)
             self.assertIn(checked, body)
-            self.assertIn("if (!map)", function_body("WriteRegroupProbeBosses"))
             self.assertNotIn("->GetMap()", body)
+        self.assertIn("if (!map)", function_body("WriteRegroupProbeBosses"))
 
     def test_the_bot_row_reads_what_the_brief_names(self):
         body = function_body("WriteRegroupProbeBot")
