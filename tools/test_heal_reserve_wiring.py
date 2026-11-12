@@ -125,9 +125,13 @@ class HealReserveWiring(unittest.TestCase):
         self.assertIn("row->priority", fn)
         self.assertLess(fn.index("HealReserveRaidCounts("), fn.index("HealReservePick("))
         self.assertIn("HealReservePick(rows, clockKnown, clockKnown ? state.dueInMs : 0, counts.hurt)", fn)
-        # The raid counts carry the effective health; the latch is applied after the pick and reset with no row left.
+        # The raid counts carry the effective health; the boss is resolved before the latch is applied, and the latch
+        # is bound to the fight (the boss guid plus its fight start) so nothing crosses pulls.
         self.assertIn("ApplyHealReserveLatch(bot, out, counts.calm,", fn)
         self.assertLess(fn.index("HealReservePick("), fn.index("ApplyHealReserveLatch("))
+        self.assertLess(fn.index("bossGuid = unit->GetObjectGuid().GetRawValue()"),
+                        fn.index("ApplyHealReserveLatch("))
+        self.assertIn("HealReserveFightOf(ai, bossGuid, state, seekRead)", fn)
         self.assertLess(fn.index("ResetHealReserveLatch(bot)"), fn.index("HealReserveRaidCounts("))
 
     def test_the_hurt_count_reads_the_raid_not_the_pick(self):
@@ -148,14 +152,21 @@ class HealReserveWiring(unittest.TestCase):
 
     def test_the_latch_lives_in_the_per_bot_reserve_state(self):
         apply = body(ACTIONS, "static void ApplyHealReserveLatch(Player* bot, HealReserveRead& read, "
-                              "std::uint32_t calmCount, std::uint32_t nowMs)")
+                              "std::uint32_t calmCount, std::uint32_t nowMs,")
         self.assertIn("g_healReserveLog[bot->GetObjectGuid().GetRawValue()].latch", apply)
-        self.assertIn("HealReserveApplyDistressLatch(read, latch, calmCount, nowMs)", apply)
+        self.assertIn("HealReserveApplyDistressLatch(read, latch, calmCount, nowMs, fight)", apply)
         reset = body(ACTIONS, "static void ResetHealReserveLatch(Player* bot)")
         self.assertIn("g_healReserveLog[bot->GetObjectGuid().GetRawValue()].latch", reset)
         self.assertIn("HealReserveLatchReset(", reset)
         state = ACTIONS[ACTIONS.index("struct HealReserveLogWindow"):]
         self.assertIn("HealReserveLatch latch;", state[:state.index("};")])
+
+    def test_the_latch_is_bound_to_the_fight_identity(self):
+        fight = body(ACTIONS, "static HealReserveFightId HealReserveFightOf(PlayerbotAI* ai, std::uint64_t bossGuid,")
+        # The fight start is the seek record's engage (the file's per-fight clock), else the bot's combat start.
+        self.assertIn("state.nowMs - state.fightMs", fight)
+        self.assertIn("ai->GetCombatStartTime()", fight)
+        self.assertIn("fight.startMs", fight)
 
     def test_the_row_says_why_and_who_was_refused(self):
         self.assertIn("hurt=%d,why=%s", ACTIONS)
@@ -186,9 +197,9 @@ class HealReserveWiring(unittest.TestCase):
     def test_the_policy_holds_the_pure_rules(self):
         for name in ("HealReserveReleased(", "HealReserveDistress(", "HealReserveDistressLatched(",
                      "HealReserveApplyDistressLatch(", "HealReserveCountMember(", "HealReserveLatchReset(",
-                     "HealReservePick(", "HealReserveWhy(", "HealReserveRefuses(", "HealReserveSkipsTopUp(",
-                     "HealTopUpAllowedAtHealth(", "HealReserveTopUpTier(", "kHealReserveRecoveryMarginPct",
-                     "kHealReserveDistressHoldMs"):
+                     "HealReserveLatchBind(", "HealReserveFightId", "HealReservePick(", "HealReserveWhy(",
+                     "HealReserveRefuses(", "HealReserveSkipsTopUp(", "HealTopUpAllowedAtHealth(",
+                     "HealReserveTopUpTier(", "kHealReserveRecoveryMarginPct", "kHealReserveDistressHoldMs"):
             self.assertIn(name, POLICY)
         self.assertIn("reservePct", POLICY)
         self.assertIn("released", POLICY)

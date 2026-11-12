@@ -9146,19 +9146,35 @@ static HealReserveCounts HealReserveRaidCounts(PlayerbotAI* ai, Player* bot)
     return counts;
 }
 
-// The healer's distress latch, in the reserve's own per-bot state: one entry per bot, shared by the pick and the gate
-// of an update, and reset when the fight's row set is gone.
-static void ApplyHealReserveLatch(Player* bot, HealReserveRead& read, std::uint32_t calmCount, std::uint32_t nowMs)
+// The healer's distress latch, in the reserve's own per-bot state: one entry per bot, bound to the fight the read
+// belongs to, shared by the pick and the gate of an update.
+static void ApplyHealReserveLatch(Player* bot, HealReserveRead& read, std::uint32_t calmCount, std::uint32_t nowMs,
+                                  const HealReserveFightId& fight)
 {
     std::lock_guard<std::mutex> lock(g_healReserveLogMutex);
     HealReserveLatch& latch = g_healReserveLog[bot->GetObjectGuid().GetRawValue()].latch;
-    HealReserveApplyDistressLatch(read, latch, calmCount, nowMs);
+    HealReserveApplyDistressLatch(read, latch, calmCount, nowMs, fight);
 }
 
 static void ResetHealReserveLatch(Player* bot)
 {
     std::lock_guard<std::mutex> lock(g_healReserveLogMutex);
     HealReserveLatchReset(g_healReserveLog[bot->GetObjectGuid().GetRawValue()].latch);
+}
+
+// The fight the reserve's rows describe: the live boss and the fight's combat start. The start is the seek record's
+// engage (the clock this file keys its per-fight state on) and, without a live seek read, the bot's own combat start,
+// so a re-pull always changes the identity even when no early return let the latch reset on its own.
+static HealReserveFightId HealReserveFightOf(PlayerbotAI* ai, std::uint64_t bossGuid, const SeekFight& state,
+                                             bool seekRead)
+{
+    HealReserveFightId fight;
+    fight.bossGuid = bossGuid;
+    if (seekRead && state.fightMs != 0 && state.nowMs >= state.fightMs)
+        fight.startMs = state.nowMs - state.fightMs;
+    else
+        fight.startMs = static_cast<std::uint32_t>(ai->GetCombatStartTime());
+    return fight;
 }
 
 // The boss's live `heal_reserve` rows of this bot's fight (HealReservePolicy.h): the highest reserve wins, with its
@@ -9190,19 +9206,23 @@ HealReserveRead ai::BossHealReserve(PlayerbotAI* ai, Player* bot, Unit*& boss)
     // The raid read only when a row can use it: a distress count of 0 is exactly the window-only reserve.
     const HealReserveCounts counts = anyDistress ? HealReserveRaidCounts(ai, bot) : HealReserveCounts();
     SeekFight state;
-    const bool clockKnown = ReadSeekFightCached(ai, bot, state) && state.dueMs != 0;
+    const bool seekRead = ReadSeekFightCached(ai, bot, state);
+    const bool clockKnown = seekRead && state.dueMs != 0;
     out = HealReservePick(rows, clockKnown, clockKnown ? state.dueInMs : 0, counts.hurt);
     if (out.live)
     {
-        ApplyHealReserveLatch(bot, out, counts.calm, WorldTimer::getMSTime());
+        std::uint64_t bossGuid = 0;
         for (Unit* unit : fight.units)
         {
             if (unit && unit->GetEntry() == out.bossEntry && sServerFacade.IsAlive(unit))
             {
                 boss = unit;
+                bossGuid = unit->GetObjectGuid().GetRawValue();
                 break;
             }
         }
+        ApplyHealReserveLatch(bot, out, counts.calm, WorldTimer::getMSTime(),
+            HealReserveFightOf(ai, bossGuid, state, seekRead));
     }
     return out;
 }
