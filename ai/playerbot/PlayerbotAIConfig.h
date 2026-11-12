@@ -899,6 +899,9 @@ public:
     bool dungeonRunNearWipeStopParty;
     // The run leader's regroup holds for a living resurrector to raise the fallen (RezHoldPolicy.h; default off).
     bool dungeonRunRezHold;
+    // The run leader's regroup does not release the dead (`revive party`) while a living party member still fights the
+    // plan's boss or stands in its range (DungeonRunPolicy.h RegroupReleaseWaitsForLast; default off).
+    bool dungeonRunRegroupWaitsForLast;
     // The run leader orders `pullback` only when the tank can shoot from where it stands, else it walks the
     // party to a firing stand first (DungeonRunPolicy.h HoldForShot; default off).
     bool dungeonRunPullStand;

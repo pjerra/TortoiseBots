@@ -1841,6 +1841,19 @@ AiPlayerbot.DungeonRunNearWipeStopParty = 0
 # Only read while AiPlayerbot.DungeonSelfClear = 1.
 AiPlayerbot.DungeonRunRezHold = 0
 
+# The run leader's regroup does not release the dead while the last living member
+# still fights the plan's boss. `cmd revive party` (a release and a corpse run)
+# waits while a living party member is in combat with a plan boss or stands in a
+# plan boss step's own radius; once the last member dies or the boss leaves the
+# fight, the release goes out as before. Without it, 19 dead while the last one
+# fought Hakkar were released to the instance entrance 430 yd away, and their run
+# back pulled Sons and the entrance packs (ZG walks 77, 85 and 86). A wait past
+# the 240 s the dead get pauses the run.
+# 0 - off, the regroup releases the dead as it always did (Default)
+# 1 - on
+# Only read while AiPlayerbot.DungeonSelfClear = 1.
+AiPlayerbot.DungeonRunRegroupWaitsForLast = 0
+
 # The run leader's pull stand. A `pullback` goes out only when the tank can shoot
 # from where it stands: the target in its sight, within its ranged pull's range
 # less 5 yd, and the tank standing still (it is waited for up to 3 s). Otherwise

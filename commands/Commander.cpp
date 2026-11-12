@@ -11684,6 +11684,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
     f.totemFocus = sPlayerbotAIConfig.dungeonRunTotemFocus;
     f.auraGatedTargets = sPlayerbotAIConfig.dungeonRunAuraGatedTargets;
     f.respawnNest = sPlayerbotAIConfig.dungeonRunRespawnNest; // AiPlayerbot.DungeonRunRespawnNest
+    f.regroupWaitsForLast = sPlayerbotAIConfig.dungeonRunRegroupWaitsForLast; // AiPlayerbot.DungeonRunRegroupWaitsForLast
     // The guard's walk back after a won fight (DungeonRun::GuardWalkBackWanted): read every tick, so a config
     // reload switches it mid-run.
     f.walkBackAfterWonFight = sPlayerbotAIConfig.dungeonRunWalkBackAfterWonFight;

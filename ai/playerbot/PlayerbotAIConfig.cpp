@@ -215,6 +215,7 @@ void PlayerbotAIConfig::LoadDungeonRunKeys()
         config.GetIntDefault("AiPlayerbot.DungeonRunNearWipeStopMinutes", 10))));
     dungeonRunNearWipeStopParty = config.GetBoolDefault("AiPlayerbot.DungeonRunNearWipeStopParty", false);
     dungeonRunRezHold = config.GetBoolDefault("AiPlayerbot.DungeonRunRezHold", false);
+    dungeonRunRegroupWaitsForLast = config.GetBoolDefault("AiPlayerbot.DungeonRunRegroupWaitsForLast", false);
     dungeonRunPullStand = config.GetBoolDefault("AiPlayerbot.DungeonRunPullStand", false);
     dungeonRunStandClearance = config.GetBoolDefault("AiPlayerbot.DungeonRunStandClearance", false);
     dungeonRunStandPullPreCc = config.GetBoolDefault("AiPlayerbot.DungeonRunStandPullPreCc", false);

@@ -176,6 +176,7 @@ The run protects itself with these rules:
 - It waits for every fallen member until that bot is back alive within 20 yd of the lead bot.
 - It recovers a lead bot that is back at the entrance alone by regrouping on it and walking back over the plan's own points.
 - It waits 15 s for a resurrection in the party before releasing the dead, while `AiPlayerbot.DungeonRunRezHold = 1` (default `0`) holds for the resurrection instead.
+- With `AiPlayerbot.DungeonRunRegroupWaitsForLast = 1` (default `0`, recommended on) it does not release the dead while the last living member still fights the plan's boss: engaged with it, or (for the first 30 s of the regroup) standing in the radius of a boss step the run has not cleared, which covers a combat read that went quiet for a tick in the middle of the fight. Once that member dies or the boss leaves the fight, the release goes out as before. Without it, at "19 dead: regrouping by itself" the party was released to the entrance in the middle of the boss fight and its run back pulled the entrance packs (ZG walks 77, 85 and 86).
 - It summons a revived bot that is over 40 yd away or over 8 yd of height, while out of combat, once per revive.
 - It regroups on resume by reviving, gathering over 60-180 s, and walking back.
 - It gathers back on the run's anchor when a fight left the lead bot off it.

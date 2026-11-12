@@ -1615,6 +1615,9 @@ struct Facts
     bool nestUnitsRead = false;
     // AiPlayerbot.DungeonRunRespawnNest (default on): the nest rules (NestLeavable, GatherAnchorInNest) are live.
     bool respawnNest = true;
+    // AiPlayerbot.DungeonRunRegroupWaitsForLast (default off): the regroup does not release the dead while a living
+    // party member still fights the plan's boss (RegroupReleaseWaitsForLast).
+    bool regroupWaitsForLast = false;
     // ... the party's own bots under an enemy's charm (Dominate Mind, Mind Control) that fight the party: never
     // engaged units, but named in the note when nothing else is engaged (EngagedUnitsNote).
     std::vector<std::string> charmedFighting;
@@ -20850,6 +20853,44 @@ inline bool EngagedPlanBoss(const Run& r, const Facts& f)
     return false;
 }
 
+// AiPlayerbot.DungeonRunRegroupWaitsForLast (default off): the regroup's release (`revive party`, a release and a corpse
+// run) waits while a living party member still fights the run's boss. ZG walks 77, 85 and 86: the 19th death started
+// the regroup while the last member fought Hakkar, and the release revived the 19 at the entrance 430 yd away; Sons
+// followed, and their run back pulled the entrance packs. The boss is still the party's fight when an engaged unit is a
+// plan boss (EngagedPlanBoss), or (for the first moments of the regroup, kRegroupReleasePlaceMs) a living member stands
+// in the radius of a boss step the run has not cleared yet. The glue's combat read can go quiet for a tick in the middle
+// of a boss fight: that tick started the regroup and sent the release with the last member still on the boss, so the
+// member's own place backs the engagement up. No living member (the last one died): no wait, the release goes out. A real
+// player is a party member, but his own fight is already the party's (ApplyPlayerFacts: anyInCombat), and the facts carry
+// no position for him.
+constexpr std::uint32_t kRegroupReleasePlaceMs = 30000; // a member's place in a boss's radius held this long into a regroup
+inline bool RegroupReleaseWaitsForLast(const Run& r, const Facts& f)
+{
+    if (!f.regroupWaitsForLast || !r.plan)
+        return false;
+    bool living = f.alive > 0;
+    for (const PlayerFact& p : f.players)
+        if (p.alive)
+            living = true;
+    if (!living)
+        return false;
+    if (EngagedPlanBoss(r, f))
+        return true;
+    // A member who merely stands in a cleared, or not yet pulled, boss's room must not hold the dead beyond that window
+    // (Hakkar's evade leaves him at full health in his own radius while the party stands where it wiped).
+    if (r.regroupMs > kRegroupReleasePlaceMs)
+        return false;
+    for (const MemberFact& m : f.members)
+        for (std::size_t i = r.step; i < r.plan->steps.size(); ++i)
+        {
+            const PlanStep& s = r.plan->steps[i];
+            if (s.kind == PlanStepKind::Boss && s.radius > 0.0f &&
+                ai::PlanDistance(m.x, m.y, m.z, s.x, s.y, s.z) <= s.radius)
+                return true;
+        }
+    return false;
+}
+
 // The facts without the held bots: gathers, the gather and regroup ceilings
 // and their summons look at the bots walking back only. A held bot a direct
 // step summoned (Run::summonWait) is shown, so the summon's wait sees it
@@ -21720,6 +21761,13 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
             {
                 r.note = "regroup: the lead bot revived in another part of the instance: waiting for " +
                     OtherPartDeadNames(f) + " (dead) before the rescue teleport";
+                // AiPlayerbot.DungeonRunRegroupWaitsForLast: no release while the last one fights the boss (a
+                // revive at the entrance 430 yd away pulls the entrance packs on its run back).
+                if (RegroupReleaseWaitsForLast(r, f))
+                {
+                    r.note += ", the last one still fights the boss (no release yet)";
+                    return order;
+                }
                 if (!r.reviveSent || r.regroupMs % 60000 < dt)
                 {
                     r.reviveSent = true;
@@ -21824,6 +21872,18 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
             {
                 r.note = "regroup: " + WaitNote(r, f) + ", a resurrection in the party first";
                 SummonRevived(r, f, order);
+                return order;
+            }
+            // AiPlayerbot.DungeonRunRegroupWaitsForLast: the release waits while the last living member still fights
+            // the plan's boss (the combat flag can read quiet for a tick in the middle of that fight). A boss the party
+            // still has engaged through the dead's own 240 s pauses the run rather than waiting for ever.
+            if (RegroupReleaseWaitsForLast(r, f))
+            {
+                r.note = "regroup: " + WaitNote(r, f) + ", the last one still fights the boss (no release yet)";
+                if (r.regroupMs > kRegroupReviveMs + r.reviveBaseMs)
+                    Pause(r, "regroup: " + std::to_string(f.dead) + " still dead after " +
+                        std::to_string(kRegroupReviveMs / 1000) +
+                        " s, the last one still fighting the boss (cmd revive <bot>, then .bot run resume)");
                 return order;
             }
             r.note = "regroup: " + WaitNote(r, f) + ", reviving";

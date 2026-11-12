@@ -80,6 +80,7 @@ These settings configure boss encounter mechanics, environmental hazard evasion,
 | [`AiPlayerbot.DungeonRunAutoCcAbove`](#aiplayerbotdungeonrunautoccabove) | `6` | How many bodies a pull may bring before the automatic crowd control starts (crowd control from the body after it). |
 | [`AiPlayerbot.DungeonRunAutoCcRisky`](#aiplayerbotdungeonrunautoccrisky) | `0` | `1`: the automatic crowd control may use Fear and Scare Beast, only with 35 yd of room and when no other family has a free bot. |
 | [`AiPlayerbot.DungeonRunRezHold`](#aiplayerbotdungeonrunrezhold) | `0` | The run leader's regroup waits for a living resurrector to raise the fallen (and for its mana) before it revives the party at the spirit healer. |
+| [`AiPlayerbot.DungeonRunRegroupWaitsForLast`](#aiplayerbotdungeonrunregroupwaitsforlast) | `0` | The run leader's regroup does not release the dead while the last living member still fights the plan's boss (recommended on). |
 | [`AiPlayerbot.DungeonRunRetreatAt2Dead`](#aiplayerbotdungeonrunretreatat2dead) | `0` | `1`: with two dead in a fight the party is losing, the living pull back to the run's last stand once before a third death makes it a wipe. |
 | [`AiPlayerbot.DungeonRunTankSwap`](#aiplayerbotdungeonruntankswap) | `0` | `1`: the boss tactics keep their `swap_on_aura` rows — the tanks of the row's rotation trade the boss at a stack count, and the tank that was swapped off stops attacking it for a while (needs the aura tactics and the boss tactics). |
 | [`AiPlayerbot.DungeonRunUseObject`](#aiplayerbotdungeonrunuseobject) | `0` | `1`: the boss tactics keep their `use_object` rows — one claimed bot clicks the boss's game object, and mode `tank_anchor` walks the boss over to it (needs the boss tactics and the rows). |
@@ -897,6 +898,22 @@ Whether the run leader pulls the living back to the last stand when two party me
 - whether mobs follow the party back is the game's own rule (the module adds no leash)
 
 </details>
+### `AiPlayerbot.DungeonRunRegroupWaitsForLast`
+Makes the run leader's regroup wait with the release while the last living member still fights the boss.
+**Default:** `0` (recommended on) · **Values:** `0` the regroup releases the dead as before, `1` the release waits · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+<details>
+<summary>How it works in detail</summary>
+
+**Waits for the last:** only read while `AiPlayerbot.DungeonSelfClear = 1`:
+- with `1`, the regroup does not send `cmd revive party` (a release and a corpse run) while a living party member is engaged with a plan boss
+- the member's own place backs the engagement up: for the first 30 s of the regroup, a living member standing in the radius of a boss step the run has not cleared yet holds the release too, because the combat read can go quiet for a tick in the middle of a boss fight (that read started the regroup and the release with the last member still fighting). After that window, a bot left in a cleared boss's room does not hold it, and neither does a boss step the run has already passed
+- once the last member dies or the boss leaves the fight, the release goes out as before; the wait keeps the 240 s the dead get, then the run pauses naming the last one
+- ZG walks 77, 85 and 86: at "19 dead: regrouping by itself" the 19 revived at the instance entrance 430 yd away, Sons followed them, and their run back pulled the entrance packs
+- with `0` the regroup releases at once, as before
+
+</details>
+
 ### `AiPlayerbot.DungeonRunPullGate`
 Whether the run leader honours the boss tactics' `pull_gate` rows: it never pulls a gated boss that wears its aura, and ends the run after the row's seconds.
 **Default:** `0` · **Values:** `0` off (the run pulls as before), `1` on (needs the rows) · **Restart:** not needed (`.reload config` applies it on the next world tick)

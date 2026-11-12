@@ -3760,6 +3760,105 @@ static void TestRegroupWaitsForPartyRez()
     CHECK(Tick(n, f) == "revive party");
 }
 
+// AiPlayerbot.DungeonRunRegroupWaitsForLast (RegroupReleaseWaitsForLast): 19 dead and the last living member still on
+// the boss, no release; the last one dead or the boss fight over, the release goes out as before; the key off, the old
+// release goes out at once. ZG walks 77, 85 and 86: the 19 revived at the entrance 430 yd away and their run back
+// pulled Sons and the entrance packs.
+static void TestRegroupWaitsForLastOnTheBoss()
+{
+    DungeonPlan plan;
+    PlanStep boss = Step(PlanStepKind::Boss, 0, 0, 0);
+    boss.entry = 14834; // Hakkar
+    boss.radius = 40.0f;
+    plan.steps = {boss, PullStep(60, {7011})};
+
+    // The boss is still the party's fight: the glue's engaged read holds it (the survivor stands out of the radius).
+    Facts f = Party(0);
+    f.dead = 19;
+    f.alive = 1;
+    f.regroupWaitsForLast = true;
+    f.engagedRead = true;
+    f.engagedUnits = {Unit(21, 14834, 10)};
+    f.members = {Mem("Survivor", 100)};
+    Run r = Start(&plan);
+    BeginRegroup(r);
+    for (int i = 0; i < 3; ++i)
+    {
+        CHECK(Tick(r, f).empty());
+        CHECK(r.note.find("the last one still fights the boss") != std::string::npos);
+    }
+    // The boss leaves the fight while the survivor lives: the release goes out on that tick.
+    f.engagedUnits.clear();
+    CHECK(Tick(r, f) == "revive party");
+
+    // The combat flag read quiet for a tick: the survivor's own place in the boss step's radius holds the release.
+    Facts inRange = Party(0);
+    inRange.dead = 19;
+    inRange.alive = 1;
+    inRange.regroupWaitsForLast = true;
+    inRange.members = {Mem("Survivor", boss.radius - 5.0f)};
+    Run q = Start(&plan);
+    BeginRegroup(q);
+    CHECK(Tick(q, inRange).empty());
+    CHECK(q.note.find("the last one still fights the boss") != std::string::npos);
+    // Out of the boss's range, nothing holds it.
+    inRange.members = {Mem("Survivor", boss.radius + 5.0f)};
+    CHECK(Tick(q, inRange) == "revive party");
+
+    // The place covers the fight's read flap, not an idle member in the boss's room for ever: past the window the
+    // release goes out (Hakkar's evade leaves him at full health in his own radius).
+    Facts placed = inRange;
+    placed.members = {Mem("Survivor", boss.radius - 5.0f)};
+    Run late = Start(&plan);
+    BeginRegroup(late);
+    std::string got;
+    for (std::uint32_t ms = 0; ms <= kRegroupReleasePlaceMs + 2 * kTickMs && got.empty(); ms += kTickMs)
+        got = Tick(late, placed);
+    CHECK(got == "revive party" && late.regroupMs > kRegroupReleasePlaceMs);
+
+    // A boss step the run has cleared holds nothing: a member left standing in the killed boss's room.
+    Run cleared = Start(&plan);
+    BeginRegroup(cleared);
+    cleared.step = 1;
+    CHECK(Tick(cleared, placed) == "revive party");
+
+    // The last one dies: no living member waits, the release goes out.
+    Facts lastDead = Party(0);
+    lastDead.dead = 20;
+    lastDead.alive = 0;
+    lastDead.leadAlive = false;
+    lastDead.regroupWaitsForLast = true;
+    lastDead.engagedRead = true;
+    lastDead.engagedUnits = {Unit(21, 14834, 10)};
+    Run d = Start(&plan);
+    BeginRegroup(d);
+    CHECK(Tick(d, lastDead) == "revive party");
+
+    // Off (the default): today's behaviour, the release goes out with the survivor still on the boss.
+    Facts off = f;
+    off.dead = 19;
+    off.alive = 1;
+    off.regroupWaitsForLast = false;
+    off.engagedUnits = {Unit(21, 14834, 10)};
+    Run o = Start(&plan);
+    BeginRegroup(o);
+    CHECK(Tick(o, off) == "revive party");
+
+    // The wait is bounded by the dead's own 240 s: then the run pauses naming the last one.
+    Run w = Start(&plan);
+    BeginRegroup(w);
+    Facts waiting = Party(0);
+    waiting.dead = 19;
+    waiting.alive = 1;
+    waiting.regroupWaitsForLast = true;
+    waiting.engagedRead = true;
+    waiting.engagedUnits = {Unit(21, 14834, 10)};
+    waiting.members = {Mem("Survivor", 100)};
+    for (std::uint32_t ms = 0; ms <= kRegroupReviveMs + kTickMs && w.state == State::Running; ms += kTickMs)
+        CHECK(Tick(w, waiting).empty());
+    CHECK(w.state == State::Paused && w.note.find("the last one still fighting the boss") != std::string::npos);
+}
+
 // The rez hold (AiPlayerbot.DungeonRunRezHold, RezHoldPolicy.h). The roster: a tank, a priest
 // healer and three more; the mage (index 2) is dead when `dead` is set.
 static std::vector<TortoiseBots::RezHold::Member> RezRoster(bool mageDead, std::uint32_t priestMana, float corpseYd = -1.0f)
@@ -37334,6 +37433,7 @@ int main()
     TestNestRuleOffKeepsFight();
     TestRegroupAnchorAvoidsRespawnNest();
     TestRegroupWaitsForPartyRez();
+    TestRegroupWaitsForLastOnTheBoss();
     TestRegroupRevivePauses();
     TestMealWaitBeforePull();
     TestWalkAfterRestIsSentAgain();
