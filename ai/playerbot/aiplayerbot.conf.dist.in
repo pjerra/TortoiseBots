@@ -1568,6 +1568,16 @@ AiPlayerbot.DungeonRunRangedOnly = 0
 # 1 - on
 AiPlayerbot.DungeonRunThreatFree = 0
 
+# The AoE threat veto (ActionThreatType::ACTION_THREAT_AOE) reads the `aoe` threat value, the worst of every possible
+# attack target; on airborne Onyxia that worst target is a whelp on the floor with no tank on it, so the veto held every
+# AoE whose own target is the lifted boss (walk 2f a-1: `site=aoe` on 134 of 134 ThreatVeto rows). With this key on,
+# the AoE veto asks the threat-free lift for the action's own target and lets the AoE go out when that subject is
+# lifted: a tank, a target without a live `threat_free` row and the landing descent keep the veto, and the veto row is
+# not written when the lift applies. Needs AiPlayerbot.DungeonRunThreatFree. `.reload config` reads it again.
+# 0 - off: every AoE on a subject over 50 % aoe threat is vetoed (Default)
+# 1 - on: an AoE on a lifted subject goes out
+AiPlayerbot.DungeonRunThreatFreeAoe = 0
+
 # A ranged reach at a hostile that hovers at least 8 yd above the floor under it inside a dungeon (Onyxia's P2 hover
 # points stand 19-23 yd up): the bot walks the navmesh path to the floor under the target and stops where the
 # `enemy out of spell range` trigger's own measure (the centre distance plus both combat reaches) is met, instead of

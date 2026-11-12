@@ -861,6 +861,11 @@ public:
     // no tank can reach airborne Onyxia, so her tanks hold no threat and the casters' nukes were vetoed): off, the rows
     // are ignored (default off).
     bool dungeonRunThreatFree = false;
+    // The AoE veto (ActionThreatType::ACTION_THREAT_AOE) reads the worst threat of every possible attack target, so an
+    // airborne subject the `threat_free` lift already uncapped still met the veto through a whelp on the floor with no
+    // tank on it (walk 2f: every `site=aoe` row). On, the AoE veto asks the lift for its own target and lets the AoE
+    // go out when that subject is lifted (needs AiPlayerbot.DungeonRunThreatFree; default off).
+    bool dungeonRunThreatFreeAoe = false;
     // A ranged reach at a hostile that hovers 8 yd or more above the floor under it inside a dungeon (Onyxia in P2)
     // walks to the floor under it and stops at the trigger's own combat-reach distance instead of giving up under the
     // body (default off, recommended on).

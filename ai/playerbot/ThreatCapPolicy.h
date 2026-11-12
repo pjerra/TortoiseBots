@@ -254,6 +254,18 @@ namespace ai
         return keyOn && !isTank && !descending && gapYd > 0.0f && subjectZ - botZ >= gapYd;
     }
 
+    // AiPlayerbot.DungeonRunThreatFreeAoe: the AoE veto (ActionThreatType::ACTION_THREAT_AOE) reads the `aoe` threat
+    // value, the worst of every possible attack target. On airborne Onyxia that worst target is a whelp on the floor
+    // with no tank on it (100 %, "the tank has no threat"), so the veto held every AoE whose own target the
+    // threat-free lift had already uncapped (walk 2f: `site=aoe` on 134 of 134 rows of a-1). The lift answers the same
+    // question for the action's own target: when that subject is lifted, the AoE goes out. `targetLifted` is
+    // ThreatFreeLifted, so the key off, a tank, a subject without a live `threat_free` row and the landing descent all
+    // keep today's veto.
+    inline bool ThreatFreeLiftsAoe(bool keyOn, bool targetLifted)
+    {
+        return keyOn && targetLifted;
+    }
+
     // One tank on the target as the caller resolved it from the raid's tank order (GetRaidTankRoles): index 0 is the
     // main tank, every later one an assigned off-tank.
     struct ThreatCapTank

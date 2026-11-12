@@ -896,6 +896,14 @@ int main()
     CHECK(!ThreatCapCastOvershoots(true, 0.0f, 900.0f, 0.0f, 1.5f, 1.3f, true));
     CHECK(!ThreatCapCastOvershoots(true, 1400.0f, 0.0f, 1000.0f, 1.5f, 1.3f, true));
 
+    // ThreatFreeLiftsAoe_NeedsKey is the failing case of AiPlayerbot.DungeonRunThreatFreeAoe: the AoE veto reads the
+    // worst threat of every possible attack target, so on airborne Onyxia a whelp on the floor kept the veto even
+    // though her own value was lifted. The lift asks the same question for the action's target and needs its key.
+    CASE("ThreatFreeLiftsAoe_NeedsKey");
+    CHECK(ThreatFreeLiftsAoe(true, true));
+    CHECK(!ThreatFreeLiftsAoe(false, true));  // key off: today's veto
+    CHECK(!ThreatFreeLiftsAoe(true, false));  // target not lifted: a tank, no row, or the landing descent
+
     std::cout << "threat cap policy: all tests passed\n";
     return 0;
 }
