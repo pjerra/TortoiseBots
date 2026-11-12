@@ -1,5 +1,10 @@
 # Changelog
 
+- New: a `seek park break:` row on every control break (`held` -> `apply`) names the parked Son's victim, its attackers and its periodic-damage auras with their casters and time left, so the parks that held 0-2.5 s are told apart from the ones that were never cast.
+- Fixed: the release's receiver may hit the parked Son again: its own damage is exempt from the seek hold (beside the puller's latch), and so is the failed park's receiver or breaker while the Son is still controlled, so its swing is no longer vetoed and the control actually breaks.
+- Fixed: a release receiver that cannot close is replaced by another eligible tank already in strike reach instead of being kept at any distance, and the approach row carries its own walk's result (`walk=sent|same|clamp|refused`).
+- Fixed: the park's `park_release` take is ordered in `release` only and the receiver is frozen at the tank the latch named, so after `released` a victim that flickers off the tank no longer re-issues a take.
+
 - Fixed: a failed park whose Son is still controlled and which found no receiver now lets the first ordinary off-tank that takes the Son keep it as its target, so its take breaks the control instead of the raid sleeping until the siphon; a breaker that dies, is charmed or becomes Hakkar's victim is replaced by the next taker.
 - Fixed: a parked Son that is awake only because its Polymorph ran out no longer completes the release off whichever tank it last hit: its `released` now needs that tank's own current target to be the Son, so a stale victim no longer leaves the raid waiting on a sleeping Son.
 - Fixed: a park that failed while its Son is still controlled keeps breaking the sheep: the chosen off-tank keeps its take until the control goes, and with no receiver the ordinary off-tank takes apply, instead of the Son sleeping to the siphon.

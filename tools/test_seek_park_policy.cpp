@@ -401,6 +401,26 @@ static void TestParkCastDue()
     CHECK(!SeekParkCastDue(state, in, 12000));
 }
 
+// TestParkSourceHitAllowed (round 7, the named failing case): in Release, with the Son still controlled, the
+// receiver's own hit is the park's (its swing is what breaks the control), so the seek hold must not answer for it.
+// The failed park's receiver and breaker are the same break; every other bot's damage on a parked source is held.
+static void TestParkSourceHitAllowed()
+{
+    CHECK(SeekParkSourceHitAllowed(SeekParkPhase::Release, true, true, false));
+    CHECK(SeekParkSourceHitAllowed(SeekParkPhase::Release, true, true, true));
+    CHECK(!SeekParkSourceHitAllowed(SeekParkPhase::Release, true, false, false));
+    CHECK(!SeekParkSourceHitAllowed(SeekParkPhase::Release, true, false, true));
+    CHECK(SeekParkSourceHitAllowed(SeekParkPhase::Released, true, true, false));
+    CHECK(!SeekParkSourceHitAllowed(SeekParkPhase::Released, true, false, true));
+    CHECK(SeekParkSourceHitAllowed(SeekParkPhase::Failed, true, true, false));
+    CHECK(SeekParkSourceHitAllowed(SeekParkPhase::Failed, true, false, true));
+    CHECK(!SeekParkSourceHitAllowed(SeekParkPhase::Failed, true, false, false));
+    CHECK(!SeekParkSourceHitAllowed(SeekParkPhase::Failed, false, true, true));
+    CHECK(!SeekParkSourceHitAllowed(SeekParkPhase::Apply, true, true, true));
+    CHECK(!SeekParkSourceHitAllowed(SeekParkPhase::Held, true, true, true));
+    CHECK(!SeekParkSourceHitAllowed(SeekParkPhase::None, true, true, true));
+}
+
 // TestParkDpsHeldAfterRelease: the damage dealers wait for a tank, at most the release's window.
 static void TestParkDpsHeldAfterRelease()
 {
@@ -682,7 +702,7 @@ static void TestParkReleaseIgnoresStaleTankVictim()
     // It does not latch while the control holds the Son.
     CHECK(!SeekParkStep(state, rules, in, 4000));
     CHECK(state.phase == SeekParkPhase::Release);
-    CHECK(SeekParkReleaseTakeDue(true, SeekParkSonOnTank(true, true, true), true));
+    CHECK(SeekParkReleaseTakeDue(state.phase, SeekParkSonOnTank(true, true, true), true));
     // The control is gone, but that stale tank now targets something else: still no release.
     in.controlled = false;
     in.controlLeftMs = 0;
@@ -852,11 +872,24 @@ static void TestPickParkReceiver()
     CHECK(PickSeekParkReceiver(cands, 0) == -1);
     cands.push_back(SeekParkReceiverCand{false, true, 1.0f, 5});
     CHECK(PickSeekParkReceiver(cands, 0) == -1);
-    // The kept guid wins while eligible, even farther away.
+    // The kept guid wins while eligible, even farther away, while no other eligible tank is in reach.
     cands.clear();
-    cands.push_back(SeekParkReceiverCand{true, true, 2.0f, 5});
+    cands.push_back(SeekParkReceiverCand{true, false, 9.0f, 5});
     cands.push_back(SeekParkReceiverCand{true, false, 20.0f, 6});
     CHECK(PickSeekParkReceiver(cands, 6) == 1);
+    // Round 7, the named failing case: a kept receiver that cannot close (21 yd) gives way to another eligible tank
+    // already in strike reach.
+    cands.clear();
+    cands.push_back(SeekParkReceiverCand{true, false, 21.0f, 5});
+    cands.push_back(SeekParkReceiverCand{true, true, 4.0f, 6});
+    CHECK(PickSeekParkReceiver(cands, 5) == 1);
+    // With no other eligible tank in reach the kept one still wins, whatever its distance.
+    cands.clear();
+    cands.push_back(SeekParkReceiverCand{true, false, 21.0f, 5});
+    cands.push_back(SeekParkReceiverCand{true, false, 9.0f, 6});
+    CHECK(PickSeekParkReceiver(cands, 5) == 0);
+    cands.push_back(SeekParkReceiverCand{false, true, 1.0f, 7});
+    CHECK(PickSeekParkReceiver(cands, 5) == 0);
     // A kept guid that is no longer eligible is dropped.
     cands.clear();
     cands.push_back(SeekParkReceiverCand{false, true, 2.0f, 5});
@@ -967,9 +1000,9 @@ static void TestParkStrikeReach()
 }
 
 // TestParkReleasedHolderKeepsTheSon: the named failing case (round 3). Tank A completes the release, then becomes
-// Hakkar's victim; the scan's receiver is now tank B, but the Son still on A is A's: B gets no take, and only once
-// the Son moves to a non-tank is the receiver's take due. Every other tank's park path skips the Son while a tank
-// holds it.
+// Hakkar's victim; the scan's receiver is now tank B, but the Son still on A is A's: B gets no take. Every other
+// tank's park path skips the Son while a tank holds it. Round 7: the latch ends the park's take for good, so a Son
+// that leaves the tank after the latch orders none for the receiver either (the named failing case of that round).
 static void TestParkReleasedHolderKeepsTheSon()
 {
     const SeekParkRules rules = ParkRules();
@@ -988,19 +1021,26 @@ static void TestParkReleasedHolderKeepsTheSon()
     const bool bIsReceiver = true;
     // The holder keeps it: A is the release's tank, its own-source drag is let through, and B's take is not due.
     CHECK(SeekParkReleaseTank(releaseLive, true, aHolds, false));
-    CHECK(!SeekParkReleaseTakeDue(releaseLive, true, aHolds));
+    CHECK(!SeekParkReleaseTakeDue(state.phase, true, aHolds));
     CHECK(!SeekParkReleaseTank(releaseLive, true, false, bIsReceiver));
-    CHECK(!SeekParkReleaseTakeDue(releaseLive, true, bIsReceiver));
+    CHECK(!SeekParkReleaseTakeDue(state.phase, true, bIsReceiver));
     CHECK(SeekParkExcludesSource(state.phase, true, false, false));
-    // The Son moves to a non-tank: the receiver's take is due and its park path sees the Son again.
+    // Round 7: the Son moves to a non-tank after the latch, and the receiver's take is still not due.
     CHECK(SeekParkReleaseTank(releaseLive, false, false, bIsReceiver));
-    CHECK(SeekParkReleaseTakeDue(releaseLive, false, bIsReceiver));
+    CHECK(!SeekParkReleaseTakeDue(state.phase, false, bIsReceiver));
     CHECK(!SeekParkExcludesSource(state.phase, false, bIsReceiver, false));
+    // The open release still orders it, only while no tank has the Son.
+    CHECK(SeekParkReleaseTakeDue(SeekParkPhase::Release, false, bIsReceiver));
+    CHECK(!SeekParkReleaseTakeDue(SeekParkPhase::Release, false, false));
+    CHECK(!SeekParkReleaseTakeDue(SeekParkPhase::Release, true, bIsReceiver));
+    // No other phase orders the park's take.
+    CHECK(!SeekParkReleaseTakeDue(SeekParkPhase::Held, false, true));
+    CHECK(!SeekParkReleaseTakeDue(SeekParkPhase::Apply, false, true));
+    CHECK(!SeekParkReleaseTakeDue(SeekParkPhase::Failed, false, true));
+    CHECK(!SeekParkReleaseTakeDue(SeekParkPhase::None, false, true));
     // A non-tank victim is no holder and no receiver's Son: only the ordinary takes apply.
-    CHECK(!SeekParkReleaseTakeDue(releaseLive, false, false));
     CHECK(!SeekParkReleaseTank(releaseLive, false, false, false));
     // With the release not live, nothing is the release's.
-    CHECK(!SeekParkReleaseTakeDue(false, false, true));
     CHECK(!SeekParkReleaseTank(false, true, true, true));
 }
 
@@ -1109,6 +1149,7 @@ int main()
     TestParkVetoesTankTasks();
     TestParkExcludesAndTarget();
     TestParkCastDue();
+    TestParkSourceHitAllowed();
     TestParkDpsHeldAfterRelease();
     TestParkGatherAtSpot();
     TestPickParkBot();

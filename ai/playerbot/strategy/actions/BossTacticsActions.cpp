@@ -1716,9 +1716,64 @@ void LogSeekParkCast(PlayerbotAI* ai, Player* bot, Unit* son, const char* step, 
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsSeekPull", info1, "");
 }
 
+// One `seek park break:` row per break (Held -> Apply), data only (round 7): the Son's victim, the units attacking it
+// and its periodic-damage auras with their casters and time left. The `budget` parks held 0-2.5 s and no row named the
+// breaker; this one does.
+constexpr std::size_t kSeekParkBreakMaxAttackers = 8;
+void LogSeekParkBreak(PlayerbotAI* ai, Player* bot, Unit* son)
+{
+    if (!ai || !bot || !son || !sPlayerbotAIConfig.hasLog("bot_events.csv"))
+        return;
+    Unit* const victim = son->GetVictim();
+    std::string attackers;
+    std::size_t shown = 0;
+    for (Unit* const attacker : son->GetAttackers())
+    {
+        if (!attacker)
+            continue;
+        if (shown == kSeekParkBreakMaxAttackers)
+        {
+            attackers += "+more";
+            break;
+        }
+        if (!attackers.empty())
+            attackers += "+";
+        attackers += attacker->GetName();
+        ++shown;
+    }
+    std::string auras;
+    for (Aura* const aura : ai->GetAuras(son, true, false))
+    {
+        const SpellEntry* const proto = aura ? aura->GetSpellProto() : nullptr;
+        if (!proto)
+            continue;
+        bool damage = false;
+        for (int i = 0; i < MAX_EFFECT_INDEX && !damage; ++i)
+            damage = IsPeriodicDamageAura(static_cast<std::uint32_t>(proto->EffectApplyAuraName[i]));
+        if (!damage)
+            continue;
+        Unit* const caster = ai->GetUnit(aura->GetCasterGuid());
+        if (!auras.empty())
+            auras += "+";
+        const std::int32_t left = aura->GetAuraDuration();
+        char one[96];
+        snprintf(one, sizeof(one), "%s@%s:%d", proto->SpellName[0], caster ? caster->GetName() : "?",
+                 left > 0 ? static_cast<int>(left) : -1);
+        auras += one;
+    }
+    char info1[512];
+    snprintf(info1, sizeof(info1), "seek park break: son=%u by=%s victim=%s attackers=%s auras=%s",
+             son->GetGUIDLow(), bot->GetName(), victim ? victim->GetName() : "none",
+             attackers.empty() ? "-" : attackers.c_str(),
+             auras.empty() ? "-" : auras.c_str());
+    sPlayerbotAIConfig.logEvent(ai, "BossTacticsSeekPull", info1, "");
+}
+
 // The park's walk rows (the tank stand-down and the receiver's approach): the `seek take` text on a throttle of their
-// own, so the park_release take row on the same bot keeps its own window beside them.
-void LogSeekParkWalk(PlayerbotAI* ai, Player* bot, Unit* son, const char* reason, const char* src)
+// own, so the park_release take row on the same bot keeps its own window beside them. `walk` is the walk's result
+// (round 7: whether the receiver's own walk went out, so a stalled approach is readable in the row).
+void LogSeekParkWalk(PlayerbotAI* ai, Player* bot, Unit* son, const char* reason, const char* src,
+                     const char* walk)
 {
     if (!ai || !bot || !son || !sPlayerbotAIConfig.hasLog("bot_events.csv"))
         return;
@@ -1732,10 +1787,11 @@ void LogSeekParkWalk(PlayerbotAI* ai, Player* bot, Unit* son, const char* reason
         last = nowMs == 0 ? 1 : nowMs;
     }
     Unit* const victim = son->GetVictim();
-    char info1[224];
+    char info1[256];
     snprintf(info1, sizeof(info1),
-             "seek take: %s -> %u victim=%s reason=%s meet=%d src=%s reach_yd=%.1f beyond_yd=%.1f", bot->GetName(),
-             son->GetGUIDLow(), victim ? victim->GetName() : "none", reason, 0, src, bot->GetDistance(son), -99.0f);
+             "seek take: %s -> %u victim=%s reason=%s meet=%d src=%s reach_yd=%.1f beyond_yd=%.1f walk=%s",
+             bot->GetName(), son->GetGUIDLow(), victim ? victim->GetName() : "none", reason, 0, src,
+             bot->GetDistance(son), -99.0f, walk ? walk : "-");
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsSeekPull", info1, "");
 }
 
@@ -2270,11 +2326,17 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
     }
     const SeekParkPhase readPhase = recorded.phase;
     // A failed park whose source is still controlled keeps its receiver: that tank's take is what breaks the control.
+    // A latched release keeps the receiver it latched with (round 7: re-picking every read let another tank be walked
+    // at a Son the latch already handed over).
     Player* receiver = nullptr;
-    if (liveSon && readPhase != SeekParkPhase::None &&
-        (readPhase != SeekParkPhase::Failed || controlled))
-        receiver = PickSeekParkReceiverOf(ai, bot, out.boss, liveSon, out.sons, out.row->targetEntry,
-                                          live ? recorded.receiver : 0);
+    if (liveSon && readPhase != SeekParkPhase::None)
+    {
+        if (readPhase == SeekParkPhase::Released && live)
+            receiver = map->GetPlayer(ObjectGuid(recorded.receiver));
+        else if (readPhase != SeekParkPhase::Failed || controlled)
+            receiver = PickSeekParkReceiverOf(ai, bot, out.boss, liveSon, out.sons, out.row->targetEntry,
+                                              live ? recorded.receiver : 0);
+    }
     // The failed park's breaker is kept while it still qualifies; killed, charmed or Hakkar's victim, the next
     // ordinary taker latches.
     std::uint64_t breaker = 0;
@@ -2325,7 +2387,9 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
         SeekParkRecord& record = g_seekParks[instanceId];
         record.touchedMs = nowMs;
         changed = SeekParkStep(record.state, rules, in, nowMs);
-        record.state.receiver = receiver ? receiver->GetObjectGuid().GetRawValue() : 0;
+        // The latched release's receiver is frozen: the record keeps the guid the latch named.
+        if (readPhase != SeekParkPhase::Released)
+            record.state.receiver = receiver ? receiver->GetObjectGuid().GetRawValue() : 0;
         record.state.breaker = breaker;
         step = record.state;
     }
@@ -2341,6 +2405,10 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
     out.parkControlled = in.controlled;
     if (!changed)
         return;
+    // Round 7, data only: a break (Held -> Apply) writes the Son's victim, attackers and damage auras, so the
+    // `budget` parks' breaker is named instead of inferred.
+    if (step.phase == SeekParkPhase::Apply && recorded.phase == SeekParkPhase::Held && liveSon)
+        LogSeekParkBreak(ai, bot, liveSon);
     // D13: one row per phase change, outside the lock (logEvent writes the log file). The first eight fields keep the
     // order and text older parsers match; the rest are the round-4 read (R13).
     const Unit* const victim = liveSon ? liveSon->GetVictim() : nullptr;
@@ -7954,7 +8022,14 @@ float BossTacticsHoldMultiplier::GetValue(Action* action)
             }
             const bool pullHit = IsSeekSource(state, struck) &&
                 SeekPullHitExemptOnLatch(state.puller, struck == state.pullTarget);
-            if (!pullHit)
+            // Round 7: the park's own strike is not the hold's. The release's receiver may hit its source (a taunt on
+            // one already on it does nothing, and the swing is what breaks the control), and so may the failed park's
+            // receiver or breaker; every other bot's damage on a parked source stays stood down.
+            const bool parkHit = IsSeekSource(state, struck) &&
+                SeekParkSourceHitAllowed(state.parkPhase, state.parkControlled,
+                                         state.parkReceiver == bot->GetObjectGuid().GetRawValue(),
+                                         state.parkBreaker == bot->GetObjectGuid().GetRawValue());
+            if (!pullHit && !parkHit)
             {
                 Unit* picked = dpsAssist ? AI_VALUE(Unit*, "dps target")
                     : aoe ? AI_VALUE(Unit*, "dps aoe target")
@@ -10743,7 +10818,7 @@ SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)
     // The release's take: every read the source is not on a tank (a stale tank victim under the control included), the
     // receiver's, so its swing breaks the control with the source already on the tank. From then on the body's
     // own-source branch drags it to the row's spot (the release's second half), which the wrapper lets through below.
-    if (sonLive && SeekParkReleaseTakeDue(SeekParkReleaseLive(state.parkPhase), onTank, isReceiver))
+    if (sonLive && SeekParkReleaseTakeDue(state.parkPhase, onTank, isReceiver))
     {
         SeekTankTask task;
         task.valid = true;
@@ -11075,9 +11150,12 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
         return false;
     }
     // The walk to the parked source: kSeekParkStandYd from its centre on the line from it to this bot, inside the boss
-    // anchor's clamp. A sheeped Son never walks to the tank, so both park walks are explicit.
-    auto walkToParkSon = [&](Unit* son) -> bool
+    // anchor's clamp. A sheeped Son never walks to the tank, so both park walks are explicit. `result` names what the
+    // walk did this tick (`sent`, `same` for a walk already running to that point, `clamp`, `refused`), the approach
+    // row's round-7 read.
+    auto walkToParkSon = [&](Unit* son, const char*& result) -> bool
     {
+        result = "clamp";
         const float dx = bot->GetPositionX() - son->GetPositionX();
         const float dy = bot->GetPositionY() - son->GetPositionY();
         const float len = std::sqrt(dx * dx + dy * dy);
@@ -11097,15 +11175,20 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
         }
         if (hasLast && !bot->IsStopped() && !bot->movespline->Finalized() && std::fabs(lastX - x) < 1.0f &&
             std::fabs(lastY - y) < 1.0f)
+        {
+            result = "same";
             return true;
+        }
         if (!MoveTo(bot->GetMapId(), x, y, z, false, false, false, true))
         {
             hasLast = false;
+            result = "refused";
             return false;
         }
         lastX = x;
         lastY = y;
         hasLast = true;
+        result = "sent";
         return true;
     };
     if (task.standDown)
@@ -11113,7 +11196,7 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
         // The parked source is this tank's victim or target: its own running auto-attack would break the control, so
         // the attack stops and the target goes with it (R5).
         hasLast = false;
-        LogSeekParkWalk(ai, bot, task.source, "stand_down", "park_hold");
+        LogSeekParkWalk(ai, bot, task.source, "stand_down", "park_hold", nullptr);
         bot->AttackStop();
         if (AI_VALUE(Unit*, "current target") == task.source)
             SET_AI_VALUE(Unit*, "current target", nullptr);
@@ -11129,8 +11212,10 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
                 ai->StopMoving();
             return true;
         }
-        LogSeekParkWalk(ai, bot, task.source, "approach", "park_approach");
-        return walkToParkSon(task.source);
+        const char* walk = nullptr;
+        const bool moved = walkToParkSon(task.source, walk);
+        LogSeekParkWalk(ai, bot, task.source, "approach", "park_approach", walk);
+        return moved;
     }
     if (task.walkout)
     {
@@ -11391,8 +11476,10 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
         const bool parkRelease = task.takeSrc && std::strcmp(task.takeSrc, "park_release") == 0;
         if (parkRelease && !SeekParkStrikeInReach(bot->GetDistance(task.source)))
         {
-            LogSeekParkWalk(ai, bot, task.source, "approach", "park_release");
-            return walkToParkSon(task.source);
+            const char* walk = nullptr;
+            const bool moved = walkToParkSon(task.source, walk);
+            LogSeekParkWalk(ai, bot, task.source, "approach", "park_release", walk);
+            return moved;
         }
         // Class-correct taunt (the Gluth swap's list: 1.12 has no paladin taunt). Attack() sticks even when the taunt
         // itself cannot fire yet (cooldown, range).
