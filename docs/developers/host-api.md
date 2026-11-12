@@ -1002,9 +1002,18 @@ read the threat list; numeric threat order is not the boss's target-selection ru
 copy only (including headless sessions). It records reported damage, the health
 sample at packet send (`hp_sample`), and clamped subtraction (`hp_est`). The packet
 can precede damage application and intervening procs; neither field is exact
-post-hit health. Miss packets, melee swings, heals, and separate periodic-aura
+post-hit health. Miss packets, melee swings, and separate periodic-aura
 packet formats are not covered. Spell IDs are not hardcoded. Rows require an
-engaged raid boss as caster and a bot or grouped player as victim. These observers
+engaged raid boss as caster and a bot or grouped player as victim.
+
+`BossHeal` observes `SMSG_SPELLHEALLOG` on the target's session copy only (a heal
+cast reaches every witness nearby, and only the target's copy becomes a row). It
+records the healer, the target, the spell, the heal amount before any overheal cut,
+the crit flag, and the target's health at packet send (`hp_sample`, `hp_max`). Heal
+packets name no boss, so a row also requires an engaged raid boss seen in that map
+and instance within the last five seconds, and a healer that is a player on the
+target's map. Heal-over-time ticks use another opcode and are not covered; no spell
+or boss id is hardcoded. These observers
 never modify combat, suppress packets, replace spell scripts, or require core edits.
 
 Only the synchronous combat damage opcode is observed directly. Current core emits it through `WorldObject::SendSpellNonMeleeDamageLog` and `Map::MessageBroadcast` on the owning map/world thread. Other packet types retain the existing deferred handling; the observer stores no player or AI pointer.

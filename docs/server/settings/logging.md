@@ -457,5 +457,9 @@ sample the current victim and top five numeric threat entries at most once per
 two seconds per boss/instance. `BossSpellHit` rows record supported victim-session
 spell-damage packets. `hp_sample` is sampled at packet
 send and `hp_est` is clamped subtraction of reported damage; neither guarantees
-exact post-hit health. Disable the option after collecting a diagnostic capture.
+exact post-hit health. `BossHeal` rows record supported target-session heal packets
+(healer, target, spell, amount, crit and the target's health sample) while an
+engaged boss of that map and instance was seen in the last five seconds; the amount
+is the heal before any overheal cut, and heal-over-time ticks use another packet and
+are not logged. Disable the option after collecting a diagnostic capture.
 See [column definitions and coverage](../../developers/host-api.md#csv-columns-unchanged-nine-column-layout).

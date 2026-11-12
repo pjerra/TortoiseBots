@@ -416,6 +416,8 @@ With `AiPlayerbot.BossStandWholeRaid = 1` (default `0`, recommended on), a bot i
 
 With `AiPlayerbot.BossStandEvents = 1` (default `0`), every bot logs one `BossStand` episode per window: `assigned` (yards to its seat, whether it stayed where it stood, and whether the window is open or held), `arrived` (ms since the assignment), `unseated` once with the reason (`not_counted`, `given_up`, `side_full`) and `released` with the reason (`other_window`, `no_boss`, `release_anchor`, `hold_time`, `dead`, `gone`). A walk can then tell a bot that never got a seat from one that got it late or walked off it. Needs `bot_events.csv`; with the key off nothing is written.
 
+With `AiPlayerbot.RaidBossDiagnostics = 1` and `bot_events.csv` on, a heal packet sent to a bot's or a grouped player's own session becomes one `BossHeal` row (healer, target, spell, the heal before any overheal cut, crit and the target's health sample) while an engaged raid boss was seen in that map and instance within the last 5 s; heal-over-time ticks send another packet and are not logged. A walk measures the P3 main tank's healing by these rows.
+
 ## Adding a boss
 
 - Read the boss from the core: creature template, spells, events, scripts, spell template. Use Turtle ids only.
