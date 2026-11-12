@@ -253,6 +253,41 @@ static void TestLatchResetsOnANewFight()
     CHECK(!latch.released);
 }
 
+// The fight identity is the seek record's engage from the read that sets it on, even with an elapsed time of 0; every
+// later read of the pull reports the same engage, so a latch released on the first read survives them.
+static void TestFightIdentityHoldsAcrossThePull()
+{
+    const std::vector<HealReserveRow> rows{{85.0f, 60.0f, 14834, 2}};
+    const std::uint64_t bossGuid = 101;
+    // The first read sets the engage; its elapsed time is 0, its identity is the engage already.
+    const HealReserveFightId first = HealReserveFightIdentity(bossGuid, 5000, 3000);
+    CHECK(first.bossGuid == bossGuid);
+    CHECK(first.startMs == 5000);
+
+    HealReserveLatch latch;
+    HealReserveRead read = HealReservePick(rows, true, 70000, 2);
+    HealReserveApplyDistressLatch(read, latch, 2, 5000, first);
+    CHECK(read.released);
+    CHECK(latch.fightStartMs == 5000);
+
+    // Later reads of the same pull report the same engage, so the released latch survives them.
+    const HealReserveFightId later = HealReserveFightIdentity(bossGuid, 5000, 3000);
+    CHECK(later.startMs == first.startMs);
+    read = HealReservePick(rows, true, 70000, 1);
+    HealReserveApplyDistressLatch(read, latch, 1, 6000, later);
+    CHECK(read.released);
+    CHECK(read.distressReleased);
+    CHECK(latch.calm);
+
+    // Without an engage the bot's own combat start is the one source; a later engage is a re-pull and resets.
+    CHECK(HealReserveFightIdentity(bossGuid, 0, 3000).startMs == 3000);
+    const HealReserveFightId nextPull = HealReserveFightIdentity(bossGuid, 9000, 3000);
+    read = HealReservePick(rows, true, 70000, 1);
+    HealReserveApplyDistressLatch(read, latch, 1, 7000, nextPull);
+    CHECK(!read.released);
+    CHECK(!latch.released);
+}
+
 // The D6 stale clear keeps running when only the pick counts refusals and no trigger row moves the window's stamp: the
 // count stays within one window instead of growing for the rest of the fight.
 static void TestPickOnlyRefusalsStayBounded()
@@ -426,6 +461,7 @@ int main()
     TestDistressCountReadsEffectiveHealth();
     TestReleasedHoldsForThreeSeconds();
     TestLatchResetsOnANewFight();
+    TestFightIdentityHoldsAcrossThePull();
     TestPickOnlyRefusalsStayBounded();
     TestWhyWindowWins();
     TestReserveNeverBelowMedium();

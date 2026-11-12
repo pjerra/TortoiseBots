@@ -124,6 +124,19 @@ namespace ai
         std::uint32_t startMs = 0;
     };
 
+    // The identity a read binds the latch to: the seek record's engage whenever the read carries one (exposed
+    // directly, so the read that sets it already names the pull although its elapsed time is 0), else the bot's own
+    // combat start. One source for the whole pull, so the latch cannot reset when the elapsed time first becomes
+    // readable.
+    inline HealReserveFightId HealReserveFightIdentity(std::uint64_t bossGuid, std::uint32_t engageMs,
+                                                       std::uint32_t combatStartMs)
+    {
+        HealReserveFightId fight;
+        fight.bossGuid = bossGuid;
+        fight.startMs = engageMs != 0 ? engageMs : combatStartMs;
+        return fight;
+    }
+
     inline void HealReserveLatchReset(HealReserveLatch& latch)
     {
         latch.released = false;

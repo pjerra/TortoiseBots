@@ -827,6 +827,7 @@ struct SeekFight
     const BossTacticRow* row = nullptr;
     Unit* boss = nullptr;
     std::uint32_t nowMs = 0;
+    std::uint32_t engageMs = 0;  // the seek record's engage (0: no record yet), the pull's identity even at elapsed 0
     std::uint32_t fightMs = 0;   // since the fight's combat start (0: not seen in combat yet)
     std::uint32_t engageMs = 0;  // the fight's combat start clock (0: not seen in combat yet)
     std::uint32_t dueMs = 0;
@@ -4219,6 +4220,7 @@ bool ReadSeekFight(PlayerbotAI* ai, Player* bot, SeekFight& out)
     const SeekRecordKey key = SeekRecordKeyOf(bot->GetInstanceId(), boss->GetObjectGuid().GetRawValue(), *row);
     std::uint32_t dueMs = 0;
     std::uint32_t cycleNo = 0;
+    std::uint32_t engageMs = 0;
     std::uint32_t fightMs = 0;
     std::uint32_t engageMs = 0;
     std::uint32_t rolled = 0;
@@ -4270,6 +4272,7 @@ bool ReadSeekFight(PlayerbotAI* ai, Player* bot, SeekFight& out)
         // this. The victim is read too: a boss in combat with the group can be without one for a tick.
         if (record.engageMs == 0 && (boss->IsInCombat() || boss->GetVictim()))
             record.engageMs = nowMs;
+        engageMs = record.engageMs;
         if (record.engageMs != 0)
         {
             fightMs = nowMs - record.engageMs;
@@ -4339,6 +4342,7 @@ bool ReadSeekFight(PlayerbotAI* ai, Player* bot, SeekFight& out)
     out.row = row;
     out.boss = boss;
     out.nowMs = nowMs;
+    out.engageMs = engageMs;
     out.fightMs = fightMs;
     out.engageMs = engageMs;
     out.dueMs = dueMs;
@@ -10129,18 +10133,13 @@ static void ResetHealReserveLatch(Player* bot)
 }
 
 // The fight the reserve's rows describe: the live boss and the fight's combat start. The start is the seek record's
-// engage (the clock this file keys its per-fight state on) and, without a live seek read, the bot's own combat start,
-// so a re-pull always changes the identity even when no early return let the latch reset on its own.
+// engage, taken as the read exposes it, and the bot's own combat start only when no seek read carries one, so a
+// re-pull always changes the identity even when no early return let the latch reset on its own.
 static HealReserveFightId HealReserveFightOf(PlayerbotAI* ai, std::uint64_t bossGuid, const SeekFight& state,
                                              bool seekRead)
 {
-    HealReserveFightId fight;
-    fight.bossGuid = bossGuid;
-    if (seekRead && state.fightMs != 0 && state.nowMs >= state.fightMs)
-        fight.startMs = state.nowMs - state.fightMs;
-    else
-        fight.startMs = static_cast<std::uint32_t>(ai->GetCombatStartTime());
-    return fight;
+    return HealReserveFightIdentity(bossGuid, seekRead ? state.engageMs : 0,
+        static_cast<std::uint32_t>(ai->GetCombatStartTime()));
 }
 
 // The boss's live `heal_reserve` rows of this bot's fight (HealReservePolicy.h): the highest reserve wins, with its
