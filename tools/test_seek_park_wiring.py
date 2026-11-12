@@ -109,7 +109,7 @@ class SeekParkWiring(unittest.TestCase):
         self.assertIn("const bool live = recorded.phase != SeekParkPhase::None", fn)
         self.assertIn("live ? recorded.parkBot : 0", fn)
         self.assertIn("live ? recorded.receiver : 0", fn)
-        self.assertIn("out.parkPreWalk = SeekParkPreWalk(", fn)
+        self.assertIn("published.preWalk = SeekParkPreWalk(", POLICY)
         self.assertLess(fn.index("GetCreature(ObjectGuid(recorded.son))"), fn.index("SeekParkCommit("))
         self.assertNotIn("state.son != in.son", POLICY)
 
@@ -215,7 +215,7 @@ class SeekParkWiring(unittest.TestCase):
         self.assertIn("return phase == SeekParkPhase::Failed && controlled && isReceiver;", POLICY)
         read = body(ACTIONS, "void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)")
         self.assertIn("readPhase != SeekParkPhase::Failed || controlled", read)
-        self.assertIn("out.parkControlled = in.controlled;", read)
+        self.assertIn("published.controlled = in.controlled;", POLICY)
         target = body(ACTIONS, "bool ai::BossSeekParkReleaseTargetAllowed(PlayerbotAI* ai, Player* bot, Unit* target)")
         self.assertIn("SeekParkFailedTakeDue(state.parkPhase, state.parkControlled, true)", target)
         self.assertIn("state.parkControlled);", target)
@@ -237,7 +237,8 @@ class SeekParkWiring(unittest.TestCase):
         self.assertIn("SeekParkCommit(record, readRevision,", read)
         self.assertIn("++it->second.revision;", latch)
         self.assertIn("if (state.breaker == readBreaker)", POLICY)
-        self.assertIn("out.parkBreaker = step.breaker;", read)
+        self.assertIn("out.parkBreaker = published.breaker;", read)
+        self.assertIn("published.breaker = commit.state.breaker;", POLICY)
         target = body(ACTIONS, "bool ai::BossSeekParkReleaseTargetAllowed(PlayerbotAI* ai, Player* bot, Unit* target)")
         self.assertIn("state.parkBreaker == bot->GetObjectGuid().GetRawValue()", target)
         self.assertIn("inline bool SeekParkBreakerDue(SeekParkPhase phase, bool controlled, bool hasReceiver, "
@@ -333,6 +334,20 @@ class SeekParkWiring(unittest.TestCase):
         self.assertIn("++it->second.revision;", cast)
         key_off = fn[:fn.index("if (!rules.on)") + fn[fn.index("if (!rules.on)"):].index("return;")]
         self.assertIn("++it->second.revision;", key_off)
+
+    def test_a_rejected_tick_publishes_nothing(self):
+        # Round 9b: a tick whose commit is rejected holds input captured before the lock, so none of it may reach the
+        # fight state. The publish happens only from an applied commit, before any out.park field is written
+        # (TestParkRejectedTickPublishesNothing).
+        fn = body(ACTIONS, "void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)")
+        self.assertIn("SeekParkPublishRead(published, commit, in, rules.releaseLeadMs)", fn)
+        self.assertLess(fn.index("SeekParkPublishRead("), fn.index("out.parkPhase ="))
+        self.assertNotIn("out.parkSonOnTank = in.sonOnTank;", fn)
+        self.assertNotIn("out.parkReceiverOk = in.receiverOk;", fn)
+        self.assertNotIn("out.parkControlled = in.controlled;", fn)
+        self.assertIn("if (!commit.applied)", POLICY)
+        self.assertLess(POLICY.index("if (!commit.applied)"),
+                        POLICY.index("published.phase = commit.state.phase;"))
 
     def test_the_trigger_only_asks(self):
         fn = body(TRIGGERS, "bool BossTacticsParkTrigger::IsActive()")

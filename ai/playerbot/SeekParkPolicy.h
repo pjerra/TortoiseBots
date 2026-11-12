@@ -595,6 +595,43 @@ namespace ai
         return result;
     }
 
+    // What the fight state publishes from one tick: the record's phase and its pick plus the facts this read's input
+    // carries.
+    struct SeekParkPublish
+    {
+        SeekParkPhase phase = SeekParkPhase::None;
+        std::uint64_t son = 0;
+        std::uint64_t parkBot = 0;
+        std::uint32_t releaseMs = 0;
+        std::uint64_t receiver = 0;
+        std::uint64_t breaker = 0;
+        bool sonOnTank = false;
+        bool receiverOk = false;
+        bool preWalk = false;
+        bool controlled = false;
+    };
+
+    // Fills the published read from a committed tick, in place. A rejected tick (another bot committed since this
+    // read) publishes nothing: every value stays as the previous tick left it, its captured inputs included, and the
+    // next tick re-reads. False: the tick was rejected.
+    inline bool SeekParkPublishRead(SeekParkPublish& published, const SeekParkCommitResult& commit,
+                                    const SeekParkInput& in, std::uint32_t releaseLeadMs)
+    {
+        if (!commit.applied)
+            return false;
+        published.phase = commit.state.phase;
+        published.son = commit.state.son;
+        published.parkBot = commit.state.parkBot;
+        published.releaseMs = commit.state.releaseMs;
+        published.receiver = commit.state.receiver;
+        published.breaker = commit.state.breaker;
+        published.sonOnTank = in.sonOnTank;
+        published.receiverOk = in.receiverOk;
+        published.preWalk = SeekParkPreWalk(commit.state.phase, in.dueKnown, in.dueInMs, releaseLeadMs);
+        published.controlled = in.controlled;
+        return true;
+    }
+
     // Whether the phase holds every source damage: Apply and Held (nobody touches a parked source, the park bot
     // included: the control breaks on any damage).
     inline bool SeekParkHolds(SeekParkPhase phase)
