@@ -20,6 +20,7 @@
 #include "playerbot/HunterSwitchPolicy.h"
 #include "playerbot/policy/combat/EvadeChasePolicy.h"
 #include "playerbot/strategy/values/PossibleTargetsValue.h"
+#include "playerbot/BossStandPolicy.h"
 #include "playerbot/BossTacticsStand.h"
 #include "AI/CreatureAI.h"
 #include <cstdio>
@@ -976,6 +977,9 @@ namespace ai
         // mod-playerbots: reach melee is useful only outside combat range.
         bool isUseful() override
         {
+            if (sPlayerbotAIConfig.bossStandHoldsMeleeReach &&
+                StandHoldsMeleeReach(true, FindBossStand(ai, bot).valid))
+                return false;
             Unit* target = GetTarget();
             if (target && bot->CanReachWithMeleeAutoAttack(target) && bot->IsWithinLOSInMap(target, true))
                 return false;

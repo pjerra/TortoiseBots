@@ -1,4 +1,5 @@
 # Changelog
+- New: behind AiPlayerbot.BossStandHoldsMeleeReach (default 0), a melee bot or a tank with a valid boss stand seat keeps it instead of running `reach melee` back toward its target once the stand trigger is quiet (needs the boss tactics and the rows).
 
 - Fixed: the `threat_free` descent history is kept per instance as well as per guid, so two raids running the same lair at once no longer share one height history: one raid's landing no longer ends the other's lift, and one fight's reset leaves the other's history standing.
 - Fixed: the cast-threat veto (`ThreatCapCountsCastThreat`) asks the same `threat_free` lift, so it no longer holds a single-target nuke the threat value already uncapped on an airborne Onyxia.
