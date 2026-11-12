@@ -32,4 +32,15 @@ namespace ai
     {
         return hasAttackers || memberNearFighting || RunFightHolds(runFightUntilMs, nowMs);
     }
+
+    // A meal puts the AI to sleep for its whole duration. Damage stands the bot
+    // up and drops the food/drink aura, but the sleep stays: the seated-only
+    // wake checks then never fire and the bot answers the refill mob 13 s late
+    // (tests/tortoise-trials/paladin-addpickup/WHY.md). Wake whenever the meal
+    // is broken or the group fights, seated or not.
+    inline bool MealSleepShouldWake(bool mealSleep, bool seated, bool seatedAura,
+        bool selfInCombat, bool memberNearFighting, bool runFightHolds)
+    {
+        return mealSleep && (!seated || !seatedAura || selfInCombat || memberNearFighting || runFightHolds);
+    }
 }

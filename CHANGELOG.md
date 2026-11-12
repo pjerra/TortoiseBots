@@ -1,5 +1,6 @@
 # Changelog
 
+- Fixed: a meal-sleeping bot now wakes the moment the meal is broken or its group fights, seated or stood up by damage, so a refill mob that hits the player or healer while the tank drinks no longer goes unanswered until the drink's sleep runs out (up to 13 s, tests/tortoise-trials/paladin-addpickup/WHY.md).
 - Fixed: a Shadow priest no longer drops Shadowform to Renew an ally another healer already covers, and drops the form only for a heal it can cast at once, not into a global cooldown or wand swing (found by Tortoise Trials, #1556).
 - Fixed: a Holy or Discipline priest in a group no longer goes 3 s without reacting after each wand shot, so its heal starts within one wand swing of a hit instead of up to 3 s later (found by Tortoise Trials, #1556).
 - Fixed: with `AiPlayerbot.RaidReactions` on (default 0), a bot driven out of a dragon's breath or tail cone only steps to one of the dragon's sides and stays put when neither side is clear, and a stay order is overruled by the raid spread only while a boss tactic is actually widening the spacing.

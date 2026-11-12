@@ -9,6 +9,7 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 ITEMS = (ROOT / "ai/playerbot/strategy/actions/UseItemAction.h").read_text()
 PLAYERBOT_AI = (ROOT / "ai/playerbot/PlayerbotAI.cpp").read_text()
+PLAYERBOT_AI_HEADER = (ROOT / "ai/playerbot/PlayerbotAI.h").read_text()
 COMMANDER = (ROOT / "commands/Commander.cpp").read_text()
 ACTION = (ROOT / "commands/Action.cpp").read_text()
 
@@ -50,6 +51,7 @@ def body_after(text, marker, start=0):
 
 SRC_ITEMS = strip_comments(ITEMS)
 SRC_AI = strip_comments(PLAYERBOT_AI)
+SRC_AI_HEADER = strip_comments(PLAYERBOT_AI_HEADER)
 SRC_COMMANDER = strip_comments(COMMANDER)
 SRC_ACTION = strip_comments(ACTION)
 
@@ -75,6 +77,76 @@ class MealGateWiringTest(unittest.TestCase):
         # The member test and the run's mark are alternatives: `&&` would
         # never wake a bot the member test cannot see.
         self.assertRegex(flat, r"IsGroupMemberNearInCombat\(\) \|\| RunFightHolds\(")
+
+    def test_meal_sleep_wake_runs_outside_the_seated_only_guard(self):
+        """WHY paladin-addpickup: a bot stood up by damage is still asleep."""
+        wake = " ".join(body_after(SRC_AI, "void PlayerbotAI::WakeFromMealSleep()").split())
+        # Every fact the policy needs comes from the world here: its own
+        # combat flag (a hit during the meal), the member test, the run mark.
+        self.assertIn("MealSleepShouldWake(", wake)
+        self.assertIn("IsSittingDown()", wake)
+        self.assertIn("HasSeatedAura(bot)", wake)
+        self.assertIn("IsInCombat(bot)", wake)
+        self.assertIn("IsGroupMemberNearInCombat()", wake)
+        self.assertIn("RunFightHolds(", wake)
+        for step in ("SetStandState(UNIT_STAND_STATE_STAND)", "ResetAIInternalUpdateDelay()",
+                     "m_mealSleep = false"):
+            self.assertIn(step, wake)
+
+        # Both branches of UpdateAI call it: the combat branch and the
+        # non-combat branch. Not only the seated bot.
+        update = body_after(SRC_AI, "void PlayerbotAI::UpdateAI(uint32 elapsed")
+        combat = body_after(update, "if (sServerFacade.IsInCombat(bot))")
+        self.assertIn("WakeFromMealSleep();", combat)
+        after_combat = update.index(combat) + len(combat)
+        non_combat = body_after(update, "else", after_combat)
+        self.assertIn("WakeFromMealSleep();", non_combat)
+
+        # And the call is outside every seated-only guard: the guard the live
+        # bug hides behind, whose span_after block may never contain it.
+        guard = "if (aiInternalUpdateDelay > 0 && !isWaiting && bot->IsSittingDown() &&"
+        calls = [i for i in range(len(update)) if update.startswith("WakeFromMealSleep();", i)]
+        self.assertGreaterEqual(len(calls), 2)
+        start = 0
+        while True:
+            try:
+                at = update.index(guard, start)
+            except ValueError:
+                break
+            block = span_after(update, guard, at)
+            for call in calls:
+                self.assertFalse(at <= call < at + len(block),
+                    "the meal sleep wake must not live inside the seated-only guard")
+            start = at + 1
+
+    def test_meal_actions_stamp_the_sleep(self):
+        drink = body_after(SRC_ITEMS, "class DrinkAction")
+        eat = body_after(SRC_ITEMS, "class EatAction")
+        for name, text in (("drink", drink), ("food", eat)):
+            self.assertEqual(text.count("ai->SetMealSleep(true);"), 4,
+                "%s: every meal sleep duration is stamped" % name)
+            # The real-item path has no SetDuration of its own: UseAction sets
+            # the 24 s meal sleep on a successful use, and the flag must follow
+            # it, or the wake check never sees an ordinary meal.
+            after_used = " ".join(text.split())
+            after_used = after_used[after_used.index("bool const used = UseAction::Execute(event);"):]
+            self.assertIn("ai->SetMealSleep(true);", after_used,
+                "%s: the real-item path stamps the sleep after a successful use" % name)
+
+    def test_reset_of_the_action_clock_clears_the_meal_flag(self):
+        reset = body_after(SRC_AI, "void PlayerbotAI::ResetAIInternalUpdateDelay()")
+        self.assertIn("PlayerbotAIBase::ResetAIInternalUpdateDelay();", reset)
+        self.assertIn("m_mealSleep = false;", reset)
+        self.assertIn("void ResetAIInternalUpdateDelay() override;", SRC_AI_HEADER,
+            "the wake, combat start and human orders all drop the clock through it")
+
+    def test_sleep_end_and_combat_start_clear_the_flag(self):
+        update_start = SRC_AI.index("void PlayerbotAI::UpdateAI(uint32 elapsed")
+        clear = SRC_AI.index("m_mealSleep = false", update_start)
+        branch = SRC_AI.index("bool isCasting = bot->IsNonMeleeSpellCasted(true);", clear)
+        self.assertLess(clear, branch,
+            "the flag clears when the delay runs out, before the branch")
+        self.assertIn("m_mealSleep = false;", body_after(SRC_AI, "void PlayerbotAI::OnCombatStarted()"))
 
     def test_run_tick_marks_while_the_run_fights_and_clears_when_it_ends(self):
         after_monitor = SRC_COMMANDER.index("RefreshCombatMonitor(commanderRaw")

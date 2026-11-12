@@ -707,6 +707,7 @@ namespace ai
             if (bot->IsSittingDown() && ai->HasSeatedMeal(true))
             {
                 SetDuration(SitFor());
+                ai->SetMealSleep(true);
                 SET_AI_VALUE(bool, "drink unfinished", true);
                 return true;
             }
@@ -722,6 +723,7 @@ namespace ai
                 {
                     ai->AddAura(bot, 24355);
                     SetDuration(SitFor());
+                    ai->SetMealSleep(true);
                     SET_AI_VALUE(bool, "drink unfinished", true);
                     return true;
                 }
@@ -754,6 +756,7 @@ namespace ai
 
                 ai->CastSpell(24355, bot);
                 SetDuration(drinkDuration);
+                ai->SetMealSleep(true);
                 bot->RemoveSpellCooldown(pSpellInfo->Id);
                 SET_AI_VALUE(bool, "drink unfinished", true);
 
@@ -777,7 +780,12 @@ namespace ai
 
             bool const used = UseAction::Execute(event);
             if (used)
+            {
+                // The real item's 24 s meal sleep needs the flag too, or the
+                // wake check never sees an ordinary drink.
+                ai->SetMealSleep(true);
                 SET_AI_VALUE(bool, "drink unfinished", true);
+            }
             return used;
         }
 
@@ -814,6 +822,7 @@ namespace ai
             if (bot->IsSittingDown() && ai->HasSeatedMeal(false))
             {
                 SetDuration(SitFor());
+                ai->SetMealSleep(true);
                 return true;
             }
 
@@ -826,6 +835,7 @@ namespace ai
                 {
                     ai->AddAura(bot, 24005);
                     SetDuration(SitFor());
+                    ai->SetMealSleep(true);
                     return true;
                 }
 
@@ -857,6 +867,7 @@ namespace ai
 
                 ai->CastSpell(24005, bot);
                 SetDuration(eatDuration);
+                ai->SetMealSleep(true);
                 bot->RemoveSpellCooldown(pSpellInfo->Id);
 
                 // Eat and drink at the same time
@@ -876,7 +887,12 @@ namespace ai
             if (AI_VALUE2(std::list<Item*>, "inventory items", name).empty())
                 return false;
 
-            return UseAction::Execute(event);
+            bool const used = UseAction::Execute(event);
+            // The real item's 24 s meal sleep needs the flag too, or the wake
+            // check never sees an ordinary meal.
+            if (used)
+                ai->SetMealSleep(true);
+            return used;
         }
 
         bool isUseful() override
