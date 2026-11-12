@@ -594,9 +594,10 @@ namespace ai
 
     struct ThreatResetStandingSample
     {
-        std::uint32_t fightMs = 0;  // the fight the sample belongs to (its engage clock)
-        std::uint32_t sinceMs = 0;  // when the reference last grew by kThreatResetStandingGrowthPct
-        float threat = -1.0f;       // the reference's threat at that read
+        std::uint32_t fightMs = 0;   // the fight the sample belongs to (its engage clock)
+        std::uint32_t sinceMs = 0;   // when the reference last grew by kThreatResetStandingGrowthPct
+        std::uint32_t touchedMs = 0; // the last read that fed the sample (ThreatResetStandingEvict)
+        float threat = -1.0f;        // the reference's threat at that read
     };
 
     // Feeds one read of the reference into its fight's sample and says whether the reference is growing. A new fight
@@ -605,6 +606,7 @@ namespace ai
     inline bool ThreatResetStandingGrows(ThreatResetStandingSample& sample, std::uint32_t fightMs, float ref,
                                          std::uint32_t nowMs)
     {
+        sample.touchedMs = nowMs;
         if (sample.threat < 0.0f || sample.fightMs != fightMs)
         {
             sample.fightMs = fightMs;
@@ -619,6 +621,43 @@ namespace ai
             return true;
         }
         return nowMs - sample.sinceMs < kThreatResetStandingSampleMs;
+    }
+
+    // The sample map's cap and eviction (GetResetStandingRead). A fight's key is never looked up again once the boss is
+    // dead, so the cap is reached by dead keys only; dropping the whole map would restart every live fight's sample,
+    // and a frozen successor would read fresh and growing for another kThreatResetStandingSampleMs.
+    constexpr std::size_t kThreatResetStandingSampleMaxEntries = 64;
+    constexpr std::uint32_t kThreatResetStandingStaleMs = 60000;
+
+    // Over the cap: erase every sample untouched for kThreatResetStandingStaleMs (a fight no bot reads any more), then
+    // the single oldest remaining one if that was not enough. `keep`, the sample the caller just wrote, is never erased.
+    template <typename Key, typename Map>
+    inline void ThreatResetStandingEvict(Map& samples, const Key& keep, std::uint32_t nowMs)
+    {
+        for (typename Map::iterator it = samples.begin(); it != samples.end();)
+        {
+            if (it->first != keep && nowMs - it->second.touchedMs >= kThreatResetStandingStaleMs)
+                it = samples.erase(it);
+            else
+                ++it;
+        }
+        if (samples.size() <= kThreatResetStandingSampleMaxEntries)
+            return;
+        typename Map::iterator oldest = samples.end();
+        std::uint32_t oldestAge = 0;
+        for (typename Map::iterator it = samples.begin(); it != samples.end(); ++it)
+        {
+            if (it->first == keep)
+                continue;
+            const std::uint32_t age = nowMs - it->second.touchedMs;
+            if (oldest == samples.end() || age > oldestAge)
+            {
+                oldest = it;
+                oldestAge = age;
+            }
+        }
+        if (oldest != samples.end())
+            samples.erase(oldest);
     }
 
     // One bot's standing hold: the window latch, shut for a successor that is not credible, for one whose threat has

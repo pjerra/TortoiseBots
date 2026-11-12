@@ -6,7 +6,9 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 // The case a failing CHECK belongs to, printed with it (set by CASE).
@@ -827,6 +829,46 @@ int main()
             CHECK(ThreatResetStandingGrows(sample, 900000, 17150.0f, 7100));
             CHECK(ThreatResetStandingGrows(sample, 900000, 17160.0f, 10000));
             CHECK(!ThreatResetStandingGrows(sample, 900000, 17170.0f, 13100));
+        }
+
+        // The sample map's cap (ThreatResetStandingEvict): 64 stale fights and one live frozen fight, then a new key.
+        // The stale keys go; the live one keeps its frozen sample instead of being cleared and re-armed as fresh for
+        // another 6 s.
+        CASE("reset_standing_sample_cap_keeps_a_live_frozen_fight");
+        {
+            using Key = std::pair<std::uint32_t, std::uint64_t>;
+            std::map<Key, ThreatResetStandingSample> samples;
+            const std::uint32_t nowMs = 900000;
+            for (std::uint32_t i = 0; i < kThreatResetStandingSampleMaxEntries; ++i)
+                samples[Key(1, i)] = ThreatResetStandingSample{700000, nowMs - 10000, nowMs - 61000, 17149.0f};
+            const Key live(2, 42);
+            CHECK(ThreatResetStandingGrows(samples[live], 800000, 17149.0f, nowMs - 7000));
+            CHECK(!ThreatResetStandingGrows(samples[live], 800000, 17160.0f, nowMs));
+            const Key fresh(3, 7);
+            CHECK(ThreatResetStandingGrows(samples[fresh], 810000, 9000.0f, nowMs));
+            CHECK(samples.size() == kThreatResetStandingSampleMaxEntries + 2);
+            ThreatResetStandingEvict(samples, fresh, nowMs);
+            CHECK(samples.size() == 2);
+            CHECK(samples.count(live) == 1);
+            CHECK(samples.count(fresh) == 1);
+            CHECK(!ThreatResetStandingGrows(samples[live], 800000, 17160.0f, nowMs + 100));
+        }
+
+        // With nothing stale the cap still holds: the single oldest sample goes, and never the key just written.
+        CASE("reset_standing_sample_cap_evicts_the_oldest_and_never_the_written_key");
+        {
+            using Key = std::pair<std::uint32_t, std::uint64_t>;
+            std::map<Key, ThreatResetStandingSample> samples;
+            const std::uint32_t nowMs = 900000;
+            for (std::uint32_t i = 0; i < kThreatResetStandingSampleMaxEntries; ++i)
+                samples[Key(1, i)] = ThreatResetStandingSample{700000, nowMs, nowMs - i * 100, 17149.0f};
+            const Key written(2, 1);
+            samples[written] = ThreatResetStandingSample{};
+            ThreatResetStandingEvict(samples, written, nowMs);
+            CHECK(samples.size() == kThreatResetStandingSampleMaxEntries);
+            CHECK(samples.count(Key(1, kThreatResetStandingSampleMaxEntries - 1)) == 0);
+            CHECK(samples.count(written) == 1);
+            CHECK(samples.count(Key(1, 0)) == 1);
         }
 
         // F6: never a tank or a healer (dps false), and an empty tank list reads no reference and holds nobody.
