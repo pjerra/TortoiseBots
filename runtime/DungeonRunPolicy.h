@@ -21764,11 +21764,8 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
                 // AiPlayerbot.DungeonRunRegroupWaitsForLast: no release while the last one fights the boss (a
                 // revive at the entrance 430 yd away pulls the entrance packs on its run back).
                 if (RegroupReleaseWaitsForLast(r, f))
-                {
                     r.note += ", the last one still fights the boss (no release yet)";
-                    return order;
-                }
-                if (!r.reviveSent || r.regroupMs % 60000 < dt)
+                else if (!r.reviveSent || r.regroupMs % 60000 < dt)
                 {
                     r.reviveSent = true;
                     order = "revive party";
