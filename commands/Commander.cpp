@@ -68,6 +68,8 @@
 #include "../runtime/GossipOrderPolicy.h"
 #include "../runtime/CommanderTelemetry.h"
 #include "../runtime/BossWindowSignal.h"
+#include "../runtime/RegroupReleaseProbePolicy.h" // RegroupReleaseProbe rows (AiPlayerbot.RaidBossDiagnostics only)
+#include "../runtime/WhyTracePolicy.h" // WhyTrace::EngineStateName: the probe names the bot's engine
 #include "../runtime/ReadyCheckPolicy.h"
 #include "../runtime/DungeonRunPolicy.h"
 #include "../runtime/MemberParticipationPolicy.h"
@@ -6469,6 +6471,172 @@ static bool CommanderLootMethod(ChatHandler* handler, CommanderOrder const& orde
     return true;
 }
 
+namespace {
+
+// The spawn rows of a creature entry, for the boss search (defined with it below, in this
+// translation unit's unnamed namespace).
+std::vector<uint32> const& BossSpawnLowGuids(uint32 mapId, uint32 entry);
+
+// RegroupReleaseProbe (AiPlayerbot.RaidBossDiagnostics only; reads only, no behaviour change): who
+// starts the fight after a `revive|party` release at a wipe. Walk 86: the plan boss evades, then
+// about 2 s later takes a bot revived 430 yd away at the entrance and walks there through trash,
+// and no code read found the starter. Armed by the release (row tick=0, the boss snapshot), then
+// one row per run tick for RegroupProbe::kTickRows ticks: per plan boss alive on the run's map
+// (entry, in combat, victim, threat list size and first five names, evade flag, distance from its
+// spawn), and per revived bot on its first kBotLivingTicks living ticks (engine, current, attack
+// and pull targets, the server's combat flag, how many units hold it on their threat list).
+// The row layout and both windows are runtime/RegroupReleaseProbePolicy.h (tools test); this file
+// only supplies what the policy cannot know without the game. Every call is on the world thread
+// (the order handler and TickDungeonRun both run there), so the state needs no lock.
+struct RegroupReleaseProbeState
+{
+    TortoiseBots::RegroupProbe::Window window;
+    std::vector<TortoiseBots::RegroupProbe::BotBudget> bots;
+    uint64 commander = 0; // the run the release came from: another commander's tick never spends it
+};
+
+RegroupReleaseProbeState& RegroupProbeState()
+{
+    static RegroupReleaseProbeState probe;
+    return probe;
+}
+
+// One bot_events.csv row in the nine-column layout the host's diagnostic rows use: the actor is the
+// unit the row is about (the boss, the revived bot), so the row carries that unit's own position.
+void WriteRegroupProbeRow(Unit* actor, std::string const& subject, std::string const& detail)
+{
+    if (!actor || !actor->IsInWorld() || !sPlayerbotAIConfig.hasLog("bot_events.csv"))
+        return;
+    std::ostringstream position;
+    position << std::fixed << std::setprecision(2);
+    ai::WorldPosition(actor).printWKT(position);
+    std::string const row = TortoiseBots::RaidBossLog::Row(sPlayerbotAIConfig.GetTimestampStr(), actor->GetName(),
+        "RegroupReleaseProbe", position.str(),
+        actor->IsPlayer() ? actor->ToPlayer()->GetRace() : 0,
+        actor->IsPlayer() ? actor->ToPlayer()->GetClass() : 0, float(actor->GetLevel()), subject, detail);
+    sPlayerbotAIConfig.log("bot_events.csv", row.c_str());
+}
+
+// The plan's boss steps, through the same spawn rows the boss search reads: a script that changed the
+// creature's entry away from its row's is still found by the row's guid, and a boss with no row on
+// this map (a script summon) has none to read.
+void WriteRegroupProbeBosses(Player* lead, ai::DungeonPlan const& plan, unsigned tick)
+{
+    Map* map = lead ? lead->GetMap() : nullptr;
+    if (!map)
+        return;
+    std::unordered_set<uint64> seen;
+    for (ai::PlanStep const& step : plan.steps)
+    {
+        if (step.kind != ai::PlanStepKind::Boss || !step.entry)
+            continue;
+        for (uint32 low : BossSpawnLowGuids(lead->GetMapId(), step.entry))
+        {
+            CreatureData const* data = sObjectMgr.GetCreatureData(low);
+            Creature* boss = data ? map->GetCreature(data->GetObjectGuid(low)) : nullptr;
+            if (!boss || !boss->IsInWorld() || !boss->IsAlive())
+                continue;
+            if (!seen.insert(boss->GetObjectGuid().GetRawValue()).second)
+                continue;
+            ThreatList const& threats = boss->GetThreatManager().getThreatList();
+            std::vector<std::string> names;
+            for (HostileReference const* ref : threats)
+            {
+                if (names.size() >= TortoiseBots::RegroupProbe::kThreatNames)
+                    break;
+                if (Unit* target = ref ? ref->getTarget() : nullptr)
+                    names.push_back(target->GetName());
+            }
+            float homeX = 0.0f, homeY = 0.0f, homeZ = 0.0f, homeO = 0.0f;
+            boss->GetRespawnCoord(homeX, homeY, homeZ, &homeO);
+            Unit* victim = boss->GetVictim();
+            WriteRegroupProbeRow(boss, TortoiseBots::RegroupProbe::BossSubject(tick, boss->GetName()),
+                TortoiseBots::RegroupProbe::BossDetail(boss->GetEntry(), boss->IsInCombat(),
+                    victim ? victim->GetName() : std::string(), threats.size(), names, boss->IsInEvadeMode(),
+                    boss->GetDistance(homeX, homeY, homeZ)));
+        }
+    }
+}
+
+// One revived bot's row, on the first kBotLivingTicks ticks it is alive. Its opponents are the units
+// that hold it on their threat list (the hostile references the core keeps on the bot), the same read
+// the attacker values use.
+void WriteRegroupProbeBot(TortoiseBots::RegroupProbe::BotBudget& budget, unsigned tick)
+{
+    Player* bot = FindCharacter(budget.guid);
+    PlayerbotAI* ai = bot ? PlayerbotAIStorage::Instance().GetAI(bot) : nullptr;
+    bool const alive = bot && ai && bot->IsInWorld() && bot->IsAlive();
+    if (!budget.Due(alive))
+        return;
+    std::string current, attack, pull;
+    if (ai::AiObjectContext* context = ai->GetAiObjectContext())
+    {
+        if (ai::Value<Unit*>* value = context->GetValue<Unit*>("current target"))
+            if (Unit* unit = value->Get())
+                current = unit->GetName();
+        if (ai::Value<ObjectGuid>* value = context->GetValue<ObjectGuid>("attack target"))
+            if (Unit* unit = ai->GetUnit(value->Get()))
+                attack = unit->GetName();
+        if (ai::Value<Unit*>* value = context->GetValue<Unit*>("pull target"))
+            if (Unit* unit = value->Get())
+                pull = unit->GetName();
+    }
+    std::size_t holders = 0;
+    for (HostileReference* ref = sServerFacade.GetHostileRefManager(bot).getFirst(); ref; ref = ref->next())
+        if (ThreatManager* source = ref->GetSource())
+            if (Unit* owner = source->getOwner())
+                if (owner->IsInWorld())
+                    ++holders;
+    ai::Engine* engine = ai->GetCurrentEngine();
+    char const* engineName = engine
+        ? TortoiseBots::WhyTrace::EngineStateName(static_cast<uint8_t>(engine->GetState())) : "none";
+    WriteRegroupProbeRow(bot, TortoiseBots::RegroupProbe::BotSubject(tick, bot->GetName()),
+        TortoiseBots::RegroupProbe::BotDetail(engineName, current, attack, pull, bot->IsInCombat(), holders));
+}
+
+// The `revive|party` release armed the probe: the release's own row (tick=0), then the run's ticks.
+void BeginRegroupReleaseProbe(Player* commander, Player* lead, std::vector<uint64> const& revivedRaw)
+{
+    if (!sPlayerbotAIConfig.raidBossDiagnostics || !commander)
+        return;
+    RegroupReleaseProbeState& probe = RegroupProbeState();
+    probe.window.Arm();
+    probe.commander = commander->GetObjectGuid().GetRawValue();
+    probe.bots.clear();
+    for (uint64 raw : revivedRaw)
+    {
+        TortoiseBots::RegroupProbe::BotBudget budget;
+        budget.guid = raw;
+        probe.bots.push_back(budget);
+    }
+    ai::DungeonPlan const* plan = nullptr;
+    if (auto it = DungeonRuns().find(probe.commander); it != DungeonRuns().end())
+        plan = it->second.run.plan;
+    // A hand-issued release outside a run has no plan: only the bot rows of the ticks that follow.
+    if (plan && lead)
+        WriteRegroupProbeBosses(lead, *plan, 0);
+    for (TortoiseBots::RegroupProbe::BotBudget& budget : probe.bots)
+        WriteRegroupProbeBot(budget, 0);
+}
+
+// One run tick of the armed window: tick 1..kTickRows, then nothing. A key switched off mid-window
+// writes nothing and spends no tick.
+void RegroupReleaseProbeTick(uint64 commanderRaw, Player* lead, ai::DungeonPlan const* plan)
+{
+    RegroupReleaseProbeState& probe = RegroupProbeState();
+    if (probe.window.Spent() || probe.commander != commanderRaw || !sPlayerbotAIConfig.raidBossDiagnostics)
+        return;
+    unsigned const tick = probe.window.Next();
+    if (!tick)
+        return;
+    if (plan && lead)
+        WriteRegroupProbeBosses(lead, *plan, tick);
+    for (TortoiseBots::RegroupProbe::BotBudget& budget : probe.bots)
+        WriteRegroupProbeBot(budget, tick);
+}
+
+} // namespace
+
 bool HandleCommanderOrder(ChatHandler* handler, char const* args)
 {
     std::string text = Trim(args ? args : "");
@@ -6622,6 +6790,8 @@ bool HandleCommanderOrder(ChatHandler* handler, char const* args)
             if (word == "party")
             {
                 uint32 revived = 0, denied = 0, dead = 0;
+                // The bots this release put back (the probe's own list; empty with the key off).
+                std::vector<uint64> revivedRaw;
                 for (Player* member : order.bots)
                 {
                     if (!member || member->IsAlive())
@@ -6654,7 +6824,10 @@ bool HandleCommanderOrder(ChatHandler* handler, char const* args)
                         member->IsInWorld() && member->FindMap())
                         member->RepopAtGraveyard();
                     if (released || running)
+                    {
                         ++revived;
+                        revivedRaw.push_back(member->GetObjectGuid().GetRawValue());
+                    }
                 }
                 if (!revived)
                 {
@@ -6664,6 +6837,9 @@ bool HandleCommanderOrder(ChatHandler* handler, char const* args)
                              : "No bot of the party is dead.");
                     return true;
                 }
+                // RegroupReleaseProbe (AiPlayerbot.RaidBossDiagnostics only): the release arms the
+                // diagnostic window and writes its first row; nothing below it changes the release.
+                BeginRegroupReleaseProbe(order.commander, order.lead, revivedRaw);
                 SendActionAck(handler, intent, "party", revived, "release");
                 return true;
             }
@@ -13782,6 +13958,10 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
     RetireLostCarrier(slot, lead, bots);
     TortoiseBots::DungeonRun::Facts facts;
     ReadRunFacts(slot, lead, bots, facts, binding->raid);
+    // RegroupReleaseProbe: a run tick inside a release's window writes its row (read-only, and only
+    // with AiPlayerbot.RaidBossDiagnostics on). Before the tick's own order, so the release this tick
+    // issues arms the window after this row and its ten ticks start on the next one.
+    RegroupReleaseProbeTick(commanderRaw, lead, slot.run.plan);
     // A stand-pull pull row: only its own formations' units (DungeonRun::ScopeStandPullFacts).
     TortoiseBots::DungeonRun::ScopeStandPullFacts(slot.run, facts);
     // The tactic rows the server reads now (a reload may have swapped them under this run's old plan): the deferral
