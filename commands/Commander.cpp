@@ -13958,12 +13958,12 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
     RetireLostCarrier(slot, lead, bots);
     TortoiseBots::DungeonRun::Facts facts;
     ReadRunFacts(slot, lead, bots, facts, binding->raid);
+    // A stand-pull pull row: only its own formations' units (DungeonRun::ScopeStandPullFacts).
+    TortoiseBots::DungeonRun::ScopeStandPullFacts(slot.run, facts);
     // RegroupReleaseProbe: a run tick inside a release's window writes its row (read-only, and only
     // with AiPlayerbot.RaidBossDiagnostics on). Before the tick's own order, so the release this tick
     // issues arms the window after this row and its ten ticks start on the next one.
     RegroupReleaseProbeTick(commanderRaw, lead, slot.run.plan);
-    // A stand-pull pull row: only its own formations' units (DungeonRun::ScopeStandPullFacts).
-    TortoiseBots::DungeonRun::ScopeStandPullFacts(slot.run, facts);
     // The tactic rows the server reads now (a reload may have swapped them under this run's old plan): the deferral
     // gate reads them beside the plan's own (DungeonRun::PullMayBeDeferred), in the tick and in the stand's answer below.
     slot.run.liveTactics = &ai::GetBossTactics();
