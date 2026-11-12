@@ -33,13 +33,14 @@ class HealReserveWiring(unittest.TestCase):
 
     def test_the_rejuvenation_spread_asks_the_rule(self):
         pick = body(DRUID, "Unit* ai::FindRejuvenationSpreadTarget(PlayerbotAI* ai, Player* bot)")
-        self.assertIn("HealTopUpAllowedFor(ai, bot, member)", pick)
+        self.assertIn('HealTopUpAllowedFor(ai, bot, member, "spread")', pick)
         useful = body(DRUID, "bool CastRejuvenationSpreadAction::isUseful()")
-        self.assertIn("HealTopUpAllowedFor(ai, bot, target)", useful)
+        self.assertIn('HealTopUpAllowedFor(ai, bot, target, "spread")', useful)
         self.assertNotIn("mediumMana", useful)
 
     def test_the_gate_reads_the_key_before_the_row_read(self):
-        fn = body(ACTIONS, "bool ai::HealTopUpAllowedFor(PlayerbotAI* ai, Player* bot, Unit* target)")
+        fn = body(ACTIONS, "bool ai::HealTopUpAllowedFor(PlayerbotAI* ai, Player* bot, Unit* target, "
+                           "const char* gate)")
         self.assertLess(fn.index("dungeonRunHealReserve"), fn.index("BossHealReserve("))
         # Key off: today's rule and nothing else is read.
         self.assertIn("manaPct >= mediumManaPct", fn)
@@ -60,7 +61,8 @@ class HealReserveWiring(unittest.TestCase):
         self.assertIn("ReadSeekFightCached(", fn)
 
     def test_the_gate_resolves_the_boss_victim_from_the_heal_row(self):
-        fn = body(ACTIONS, "bool ai::HealTopUpAllowedFor(PlayerbotAI* ai, Player* bot, Unit* target)")
+        fn = body(ACTIONS, "bool ai::HealTopUpAllowedFor(PlayerbotAI* ai, Player* bot, Unit* target, "
+                           "const char* gate)")
         self.assertIn("BossHealReserve(ai, bot, boss)", fn)
         self.assertIn("HealReserveTargetExempt(target, boss)", fn)
         # The exemption never reads the seek key's own fight state again.
@@ -89,7 +91,8 @@ class HealReserveWiring(unittest.TestCase):
         # The pick passes triage's own PredictedHealHealth; the gate builds the same number for its target.
         pick = body(PARTY_HEAL, "Unit* PartyMemberToHeal::Calculate()")
         self.assertIn("PredictedHealHealth(candidate)", pick)
-        fn = body(ACTIONS, "bool ai::HealTopUpAllowedFor(PlayerbotAI* ai, Player* bot, Unit* target)")
+        fn = body(ACTIONS, "bool ai::HealTopUpAllowedFor(PlayerbotAI* ai, Player* bot, Unit* target, "
+                           "const char* gate)")
         self.assertIn("EffectiveHealHealthPct(ai, target)", fn)
         self.assertLess(fn.index("EffectiveHealHealthPct(ai, target)"), fn.index("HealReserveSkipsTopUp("))
         self.assertIn("effectiveHealthPct", fn.split("HealReserveSkipsTopUp(", 1)[1])
@@ -101,11 +104,13 @@ class HealReserveWiring(unittest.TestCase):
         self.assertNotIn("GetHealthPercent", fn)
 
     def test_the_refusal_count_is_healer_only_per_tick_and_in_band(self):
-        count = body(ACTIONS, "static void CountHealReserveRefusal(PlayerbotAI* ai, Player* bot)")
+        count = body(ACTIONS, "static void CountHealReserveRefusal(PlayerbotAI* ai, Player* bot, Unit* target, "
+                              "float effectiveHealthPct,")
         self.assertIn("refusedTick == tick", count)
         self.assertIn("++window.refused", count)
         self.assertIn('hasLog("bot_events.csv")', count)
-        gate = body(ACTIONS, "bool ai::HealTopUpAllowedFor(PlayerbotAI* ai, Player* bot, Unit* target)")
+        gate = body(ACTIONS, "bool ai::HealTopUpAllowedFor(PlayerbotAI* ai, Player* bot, Unit* target, "
+                             "const char* gate)")
         # Only an in-band candidate of a healer counts, once per tick through the counter.
         self.assertIn("HealReserveSkipsTopUp(", gate)
         self.assertIn("ai->IsHeal(bot)", gate)
@@ -114,12 +119,106 @@ class HealReserveWiring(unittest.TestCase):
         self.assertIn('hasLog("bot_events.csv") && ai->IsHeal(bot)', gate)
         self.assertNotIn("++window.refused", gate)
 
+    def test_the_row_read_counts_the_distressed_and_picks_on_it(self):
+        fn = body(ACTIONS, "HealReserveRead ai::BossHealReserve(PlayerbotAI* ai, Player* bot, Unit*& boss)")
+        # A row's `priority` is its distress count; the raid read runs only when a row can use it.
+        self.assertIn("row->priority", fn)
+        self.assertLess(fn.index("HealReserveRaidCounts("), fn.index("HealReservePick("))
+        self.assertIn("HealReservePick(rows, clockKnown, clockKnown ? state.dueInMs : 0, counts.hurt)", fn)
+        # The raid counts carry the effective health; the boss is resolved before the latch is applied, and the latch
+        # is bound to the fight (the boss guid plus its fight start) so nothing crosses pulls.
+        self.assertIn("ApplyHealReserveLatch(bot, out, counts.calm,", fn)
+        self.assertLess(fn.index("HealReservePick("), fn.index("ApplyHealReserveLatch("))
+        self.assertLess(fn.index("bossGuid = unit->GetObjectGuid().GetRawValue()"),
+                        fn.index("ApplyHealReserveLatch("))
+        self.assertIn("HealReserveFightOf(ai, bossGuid, state, seekRead)", fn)
+        self.assertLess(fn.index("ResetHealReserveLatch(bot)"), fn.index("HealReserveRaidCounts("))
+
+    def test_the_hurt_count_reads_the_raid_not_the_pick(self):
+        fn = body(ACTIONS, "static HealReserveCounts HealReserveRaidCounts(PlayerbotAI* ai, Player* bot)")
+        self.assertIn("LiveGroupMembers(", fn)
+        # Tanks never count, grouped or alone.
+        self.assertIn("IsTank(member)", fn)
+        self.assertIn("IsTank(bot)", fn)
+        self.assertIn("mediumHealth", fn)
+        self.assertNotIn("almostFullHealth", fn)
+        self.assertNotIn("GetDistance", fn)
+        self.assertIn("UpdateTick()", fn)
+        # The count is the heal path's effective health, never raw health.
+        self.assertIn("EffectiveHealHealthPct(ai, member)", fn)
+        self.assertIn("EffectiveHealHealthPct(ai, bot)", fn)
+        self.assertNotIn("GetHealthPercent", fn)
+        self.assertIn("HealReserveCountMember(counts, read, mediumHealthPct)", fn)
+
+    def test_the_latch_lives_in_the_per_bot_reserve_state(self):
+        apply = body(ACTIONS, "static void ApplyHealReserveLatch(Player* bot, HealReserveRead& read, "
+                              "std::uint32_t calmCount, std::uint32_t nowMs,")
+        self.assertIn("g_healReserveLog[bot->GetObjectGuid().GetRawValue()].latch", apply)
+        self.assertIn("HealReserveApplyDistressLatch(read, latch, calmCount, nowMs, fight)", apply)
+        reset = body(ACTIONS, "static void ResetHealReserveLatch(Player* bot)")
+        self.assertIn("g_healReserveLog[bot->GetObjectGuid().GetRawValue()].latch", reset)
+        self.assertIn("HealReserveLatchReset(", reset)
+        state = ACTIONS[ACTIONS.index("struct HealReserveLogWindow"):]
+        self.assertIn("HealReserveLatch latch;", state[:state.index("};")])
+
+    def test_the_latch_is_bound_to_the_fight_identity(self):
+        fight = body(ACTIONS, "static HealReserveFightId HealReserveFightOf(PlayerbotAI* ai, std::uint64_t bossGuid,")
+        # The fight start is the seek record's engage as the read exposes it, never a reconstruction from the elapsed
+        # time (0 on the read that sets the engage), else the bot's combat start.
+        self.assertIn("state.engageMs", fight)
+        self.assertNotIn("state.nowMs - state.fightMs", fight)
+        self.assertIn("ai->GetCombatStartTime()", fight)
+        self.assertIn("HealReserveFightIdentity(", fight)
+
+    def test_the_seek_read_exposes_the_engage_without_elapsed_time(self):
+        # The record's engage is copied out as it is, so the read that sets it already carries the pull's identity
+        # although its elapsed time is 0.
+        fn = body(ACTIONS, "bool ReadSeekFight(PlayerbotAI* ai, Player* bot, SeekFight& out)")
+        self.assertIn("engageMs = record.engageMs;", fn)
+        self.assertIn("out.engageMs = engageMs;", fn)
+        self.assertNotIn("out.engageMs = nowMs", fn)
+
+    def test_the_row_says_why_and_who_was_refused(self):
+        self.assertIn("hurt=%d,why=%s", ACTIONS)
+        self.assertIn("HealReserveWhy(read)", ACTIONS)
+        self.assertIn('"last=%s,hp=%d,gate=%s"', ACTIONS)
+        gate = body(ACTIONS, "bool ai::HealTopUpAllowedFor(PlayerbotAI* ai, Player* bot, Unit* target, "
+                             "const char* gate)")
+        self.assertIn("char info1[160]", gate)
+        self.assertIn("char info2[96]", gate)
+        self.assertLess(gate.index("refusedRows"), gate.index("info2"))
+
+    def test_the_refusal_records_its_caller(self):
+        find = body(ACTIONS, "bool ai::HealReserveRefusesTopUp(PlayerbotAI* ai, Player* bot, Unit* target, "
+                             "float effectiveHealthPct)")
+        self.assertIn('"pick"', find)
+        gate = body(ACTIONS, "bool ai::HealTopUpAllowedFor(PlayerbotAI* ai, Player* bot, Unit* target, "
+                             "const char* gate)")
+        self.assertIn("CountHealReserveRefusal(ai, bot, target, effectiveHealthPct, gate)", gate)
+
+    def test_a_stale_refusal_count_is_cleared(self):
+        count = body(ACTIONS, "static void CountHealReserveRefusal(PlayerbotAI* ai, Player* bot, Unit* target, "
+                              "float effectiveHealthPct,")
+        # The clear runs before the count and restamps instead of zeroing, so a pick-only count keeps being cleared.
+        self.assertIn("HealReserveRefusalStale(window.ms, nowMs, kSeekLogGapMs)", count)
+        self.assertIn("window.ms = HealReserveRefusalRestamp(nowMs, kSeekLogGapMs)", count)
+        self.assertLess(count.index("HealReserveRefusalStale("), count.index("++window.refused"))
+        self.assertNotIn("window.ms = 0", count)
+        self.assertIn("window.lastName", count)
+        self.assertIn("window.lastGate", count)
+
     def test_the_policy_holds_the_pure_rules(self):
-        for name in ("HealReserveReleased(", "HealReservePick(", "HealReserveRefuses(", "HealReserveSkipsTopUp(",
-                     "HealTopUpAllowedAtHealth(", "HealReserveTopUpTier("):
+        for name in ("HealReserveReleased(", "HealReserveDistress(", "HealReserveDistressLatched(",
+                     "HealReserveApplyDistressLatch(", "HealReserveCountMember(", "HealReserveLatchReset(",
+                     "HealReserveLatchBind(", "HealReserveFightId", "HealReserveFightIdentity(", "HealReserveRefusalStale(",
+                     "HealReserveRefusalRestamp(", "HealReservePick(", "HealReserveWhy(", "HealReserveRefuses(",
+                     "HealReserveSkipsTopUp(", "HealTopUpAllowedAtHealth(", "HealReserveTopUpTier(",
+                     "kHealReserveRecoveryMarginPct", "kHealReserveDistressHoldMs"):
             self.assertIn(name, POLICY)
         self.assertIn("reservePct", POLICY)
         self.assertIn("released", POLICY)
+        self.assertIn("windowReleased", POLICY)
+        self.assertIn("distressReleased", POLICY)
         self.assertIn("bossEntry", POLICY)
         self.assertNotIn("14834", POLICY)
 

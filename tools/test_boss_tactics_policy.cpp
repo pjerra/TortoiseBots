@@ -1294,9 +1294,9 @@ int main()
         }
     }
 
-    // heal_reserve (r11-3): the healer top-up reserve. The boss itself (target_entry 0, no spell, priority 0), the
-    // reserve percent (`param`, 10-100) and the release lead (`window_s`, 0-120). A fight-scan kind, so its health
-    // band arms it; no mode word, spot or cycle columns. The map flag is the only table index.
+    // heal_reserve (r11-3): the healer top-up reserve. The boss itself (target_entry 0, no spell), the reserve percent
+    // (`param`, 10-100), the release lead (`window_s`, 0-120) and the distress count (`priority`, 0-10). A fight-scan
+    // kind, so its health band arms it; no mode word, spot or cycle columns. The map flag is the only table index.
     {
         CHECK(ParseBossTacticKind("heal_reserve") == BossTacticKind::HealReserve);
         CHECK(static_cast<int>(BossTacticKind::HealReserve) == 29);
@@ -1314,7 +1314,7 @@ int main()
         for (const BossTacticRow& bad : std::vector<BossTacticRow>{
                  [&] { BossTacticRow row = heal; row.targetEntry = 11357; return row; }(),
                  [&] { BossTacticRow row = heal; row.spellId = 24321; return row; }(),
-                 [&] { BossTacticRow row = heal; row.priority = 1; return row; }(),
+                 [&] { BossTacticRow row = heal; row.priority = 11; return row; }(),
                  [&] { BossTacticRow row = heal; row.param = 9.0f; return row; }(),
                  [&] { BossTacticRow row = heal; row.param = 101.0f; return row; }(),
                  [&] { BossTacticRow row = heal; row.windowSec = -1.0f; return row; }(),
@@ -1326,6 +1326,14 @@ int main()
         {
             BossTacticTable table;
             CHECK(!table.Add(bad));
+        }
+        // The distress count is a row field: 0 (walk 75, never releases), 2 (Hakkar) and 10 all load.
+        for (std::uint8_t distress : {0, 2, 10})
+        {
+            BossTacticRow row = heal;
+            row.priority = distress;
+            BossTacticTable table;
+            CHECK(table.Add(row));
         }
         // A health band is a fight-scan question: heal_reserve rows may carry one.
         {

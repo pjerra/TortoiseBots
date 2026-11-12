@@ -70,7 +70,7 @@ namespace ai
         GateHold = 26,        // DPS spare `boss_entry` at or below `param` % while more than `priority` blockers fight near
         TankPost = 27,        // a named tank waits at a spot for a unit that is not in the fight yet, then attacks it
         SeekPark = 28,        // the walked source is held under a control, nobody touches it, a tank takes it at the lead
-        HealReserve = 29,     // healers keep the row's mana % back from top-ups outside the row's release window
+        HealReserve = 29,     // healers keep the row's mana % back from top-ups outside its window and distress release
     };
 
     // The per-kind mode word of a row (`tactic_mode`), or Invalid when the word does not belong to the row's kind. An
@@ -636,11 +636,12 @@ namespace ai
                     row.param < 5.0f || row.param > 40.0f || row.windowSec < 10.0f || row.windowSec > 120.0f ||
                     row.spellId != 0 || (row.mode != TacticMode::Default && row.mode != TacticMode::HoldSpot)))
                 return false;
-            // heal_reserve: the boss itself (target_entry 0, no spell, priority 0), the reserve percent (`param`,
-            // 10-100) and the release lead in seconds (`window_s`, 0-120). A fight-scan kind, so its health band
-            // arms it. No mode word, no spot and no cycle columns.
+            // heal_reserve: the boss itself (target_entry 0, no spell), the reserve percent (`param`, 10-100), the
+            // release lead in seconds (`window_s`, 0-120) and the distress count (`priority`, 0-10: the living
+            // non-tanks under the medium line that release it outside the window, 0 never). A fight-scan kind, so its
+            // health band arms it. No mode word, no spot and no cycle columns.
             if (row.kind == BossTacticKind::HealReserve &&
-                (row.targetEntry != 0 || row.spellId != 0 || row.priority != 0 || row.param < 10.0f ||
+                (row.targetEntry != 0 || row.spellId != 0 || row.priority > 10 || row.param < 10.0f ||
                     row.param > 100.0f || row.windowSec < 0.0f || row.windowSec > 120.0f ||
                     row.mode != TacticMode::Default))
                 return false;

@@ -34,8 +34,8 @@ Unit* ai::FindRejuvenationSpreadTarget(PlayerbotAI* ai, Player* bot)
         if (ai->HasMyAura("rejuvenation", member))
             continue;
         // The almost-full tier's mana rule (HealReservePolicy.h through HealTopUpAllowedFor): a live heal_reserve row
-        // keeps the reserve back outside its release window, tanks and the boss's victim excepted.
-        if (!HealTopUpAllowedFor(ai, bot, member))
+        // keeps the reserve back outside its releases, tanks and the boss's victim excepted.
+        if (!HealTopUpAllowedFor(ai, bot, member, "spread"))
             continue;
         if (bot->GetDistance(member) > maxRange) // 3D, combat reach removed: the cast's own range test
             continue;
@@ -62,8 +62,8 @@ bool CastRejuvenationSpreadAction::isUseful()
         return false;
     // The almost-full tier is a mana-gated top-up tier (HealReservePolicy.h): no healer
     // HoTs below medium mana, or below a live heal_reserve row's percent outside its
-    // release window, and never double-blanket one target.
-    if (!HealTopUpAllowedFor(ai, bot, target))
+    // releases, and never double-blanket one target.
+    if (!HealTopUpAllowedFor(ai, bot, target, "spread"))
         return false;
     return CastHealingSpellAction::isUseful();
 }

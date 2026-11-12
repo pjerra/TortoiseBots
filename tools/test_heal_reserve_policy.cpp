@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <iostream>
+#include <string>
 #include <vector>
 
 #define CHECK(x) do { \
@@ -17,9 +18,17 @@
 
 using namespace ai;
 
-static HealReserveRead Live(float reservePct, float windowSec, std::uint32_t dueInMs)
+// The fight every one-shot read below belongs to.
+static const HealReserveFightId kLiveFight{101, 5000};
+
+static HealReserveRead Live(float reservePct, float windowSec, std::uint32_t dueInMs,
+                            std::uint32_t distress = 0, std::uint32_t hurt = 0)
 {
-    return HealReservePick(std::vector<HealReserveRow>{{reservePct, windowSec, 14834}}, true, dueInMs);
+    HealReserveLatch latch;
+    HealReserveRead read = HealReservePick(std::vector<HealReserveRow>{{reservePct, windowSec, 14834, distress}},
+                                           true, dueInMs, hurt);
+    HealReserveApplyDistressLatch(read, latch, hurt, 0, kLiveFight);
+    return read;
 }
 
 // The named failing case: outside the release window the top-up needs the row's reserve (85 %), so 84 % of mana is
@@ -59,13 +68,266 @@ static void TestTopUpFlagOffIsToday()
     CHECK(!HealTopUpAllowedAtHealth(true, none, 39, 40, 75.0f, 70.0f, 90.0f, false));
 }
 
+// The named failing case (walk 75, D2): outside the release window the reserve lets go while the row's distress count
+// of living non-tanks sit under the medium line. Two hurt members release it before the medium tier's own rule, so 41 %
+// of mana is allowed and 39 % refused; one hurt member is routine and the 85 % reserve stands.
+static void TestDistressReleasesOutsideWindow()
+{
+    const HealReserveRead hurt = Live(85.0f, 60.0f, 70000, 2, 2);
+    CHECK(hurt.live);
+    CHECK(hurt.released);
+    CHECK(hurt.distressReleased);
+    CHECK(!hurt.windowReleased);
+    CHECK(HealReserveWhy(hurt) == std::string("distress"));
+    CHECK(HealTopUpAllowedAtHealth(true, hurt, 41, 40, 75.0f, 70.0f, 90.0f, false));
+    CHECK(!HealTopUpAllowedAtHealth(true, hurt, 39, 40, 75.0f, 70.0f, 90.0f, false));
+
+    const HealReserveRead one = Live(85.0f, 60.0f, 70000, 2, 1);
+    CHECK(!one.released);
+    CHECK(!one.distressReleased);
+    CHECK(!HealTopUpAllowedAtHealth(true, one, 84, 40, 75.0f, 70.0f, 90.0f, false));
+    CHECK(HealTopUpAllowedAtHealth(true, one, 85, 40, 75.0f, 70.0f, 90.0f, false));
+}
+
+// The opening is held: no exemption was added for the first seconds of the fight, so the pull (due in 89 s) refuses
+// the 84 % top-up with nobody hurt.
+static void TestOpeningHoldIsKept()
+{
+    const HealReserveRead opening = Live(85.0f, 60.0f, 89000, 2, 0);
+    CHECK(opening.live);
+    CHECK(!opening.released);
+    CHECK(HealReserveWhy(opening) == std::string("none"));
+    CHECK(!HealTopUpAllowedAtHealth(true, opening, 84, 40, 75.0f, 70.0f, 90.0f, false));
+}
+
+// The distress release needs no clock: it works with the seek key off and before the first sighting.
+static void TestDistressNeedsNoClock()
+{
+    const std::vector<HealReserveRow> rows{{85.0f, 60.0f, 14834, 2}};
+    const HealReserveRead hurt = HealReservePick(rows, false, 0, 2);
+    CHECK(hurt.live);
+    CHECK(!hurt.clockKnown);
+    CHECK(hurt.distressReleased);
+    CHECK(hurt.released);
+    CHECK(HealReserveWhy(hurt) == std::string("distress"));
+    const HealReserveRead one = HealReservePick(rows, false, 0, 1);
+    CHECK(!one.distressReleased);
+    CHECK(!one.released);
+    const HealReserveRead noLead = HealReservePick(std::vector<HealReserveRow>{{85.0f, 0.0f, 14834, 2}}, true, 0, 2);
+    CHECK(!noLead.windowReleased);
+    CHECK(noLead.released);
+}
+
+// A distress count of 0 is walk 75: the reserve never releases on hurt members.
+static void TestDistressZeroIsWalk75()
+{
+    const HealReserveRead read = Live(85.0f, 60.0f, 70000, 0, 20);
+    CHECK(read.live);
+    CHECK(!read.distressReleased);
+    CHECK(!read.released);
+    CHECK(read.hurtCount == 20);
+    CHECK(HealReserveWhy(read) == std::string("none"));
+}
+
+// The named failing case of this round: the distress count read raw health, so two non-tanks at 60 % raw that the
+// incoming damage takes below the line never released the reserve, although the heal path already calls them hurt.
+// Counted on the same effective health the heal pick triages on, they are two hurt members and the release fires.
+static void TestDistressCountReadsEffectiveHealth()
+{
+    const float medium = 60.0f;
+    HealReserveCounts counts;
+    HealReserveCountMember(counts, HealReserveMember{true, true, false, 55.0f}, medium); // raw 60 %, predicted 55 %
+    HealReserveCountMember(counts, HealReserveMember{true, true, false, 58.0f}, medium); // raw 60 %, predicted 58 %
+    CHECK(counts.hurt == 2);
+    CHECK(counts.calm == 2);
+
+    HealReserveLatch latch;
+    HealReserveRead read = HealReservePick({{85.0f, 60.0f, 14834, 2}}, true, 70000, counts.hurt);
+    HealReserveApplyDistressLatch(read, latch, counts.calm, 1000, kLiveFight);
+    CHECK(read.released);
+    CHECK(read.distressReleased);
+    CHECK(!read.windowReleased);
+    CHECK(HealReserveWhy(read) == std::string("distress"));
+    CHECK(HealTopUpAllowedAtHealth(true, read, 41, 40, 75.0f, 70.0f, 90.0f, false));
+    CHECK(!HealTopUpAllowedAtHealth(true, read, 39, 40, 75.0f, 70.0f, 90.0f, false));
+
+    // Only living non-tanks on the healer's map count, and a member above the line but under the margin counts calm.
+    HealReserveCounts filtered;
+    HealReserveCountMember(filtered, HealReserveMember{false, true, false, 10.0f}, medium);
+    HealReserveCountMember(filtered, HealReserveMember{true, false, false, 10.0f}, medium);
+    HealReserveCountMember(filtered, HealReserveMember{true, true, true, 10.0f}, medium);
+    CHECK(filtered.hurt == 0 && filtered.calm == 0);
+    HealReserveCountMember(filtered, HealReserveMember{true, true, false, 65.0f}, medium);
+    CHECK(filtered.hurt == 0);
+    CHECK(filtered.calm == 1);
+}
+
+// Released, then one non-tank recovers above the line plus the margin: the release holds until 3 s of calm have
+// passed, so a hurt count hovering on the line cannot flap the reserve.
+static void TestReleasedHoldsForThreeSeconds()
+{
+    const std::vector<HealReserveRow> rows{{85.0f, 60.0f, 14834, 2}};
+    HealReserveLatch latch;
+    HealReserveRead read = HealReservePick(rows, true, 70000, 2);
+    HealReserveApplyDistressLatch(read, latch, 2, 1000, kLiveFight);
+    CHECK(read.released);
+
+    // At 3 s only one member is under the line: the calm run starts.
+    read = HealReservePick(rows, true, 70000, 1);
+    HealReserveApplyDistressLatch(read, latch, 1, 3000, kLiveFight);
+    CHECK(read.released);
+    CHECK(latch.calm);
+    // Under 3 s of calm the release still holds.
+    read = HealReservePick(rows, true, 70000, 1);
+    HealReserveApplyDistressLatch(read, latch, 1, 5999, kLiveFight);
+    CHECK(read.released);
+    CHECK(read.distressReleased);
+    CHECK(HealReserveWhy(read) == std::string("distress"));
+    // 3 s of calm: the reserve applies again.
+    read = HealReservePick(rows, true, 70000, 1);
+    HealReserveApplyDistressLatch(read, latch, 1, 6000, kLiveFight);
+    CHECK(!read.released);
+    CHECK(!read.distressReleased);
+    CHECK(HealReserveWhy(read) == std::string("none"));
+    CHECK(!HealTopUpAllowedAtHealth(true, read, 84, 40, 75.0f, 70.0f, 90.0f, false));
+    CHECK(HealTopUpAllowedAtHealth(true, read, 85, 40, 75.0f, 70.0f, 90.0f, false));
+
+    // A member above the line but still under the margin keeps the release without starting the calm clock.
+    read = HealReservePick(rows, true, 70000, 2);
+    HealReserveApplyDistressLatch(read, latch, 2, 7000, kLiveFight);
+    CHECK(read.released);
+    read = HealReservePick(rows, true, 70000, 0);
+    HealReserveApplyDistressLatch(read, latch, 2, 20000, kLiveFight);
+    CHECK(read.released);
+    CHECK(!latch.calm);
+    read = HealReservePick(rows, true, 70000, 0);
+    HealReserveApplyDistressLatch(read, latch, 2, 40000, kLiveFight);
+    CHECK(read.released);
+}
+
+// The latch is per fight, keyed by the boss and the fight's combat start: a released fight hands nothing to the next
+// one, even when the new fight's first read arrives directly and no call ever saw an empty row set.
+static void TestLatchResetsOnANewFight()
+{
+    const std::vector<HealReserveRow> rows{{85.0f, 60.0f, 14834, 2}};
+    HealReserveLatch latch;
+    HealReserveRead read = HealReservePick(rows, true, 70000, 2);
+    HealReserveApplyDistressLatch(read, latch, 2, 1000, kLiveFight);
+    CHECK(latch.released);
+
+    // Straight to a new pull of the same boss: only the fight's start changed.
+    const HealReserveFightId nextPull{101, 9000};
+    read = HealReservePick(rows, true, 70000, 1);
+    HealReserveApplyDistressLatch(read, latch, 1, 2000, nextPull);
+    CHECK(!latch.released);
+    CHECK(!latch.calm);
+    CHECK(!read.released);
+    CHECK(HealReserveWhy(read) == std::string("none"));
+
+    // Another boss guid is another fight too, even with the same start.
+    read = HealReservePick(rows, true, 70000, 2);
+    HealReserveApplyDistressLatch(read, latch, 2, 3000, nextPull);
+    CHECK(latch.released);
+    const HealReserveFightId otherBoss{102, 9000};
+    read = HealReservePick(rows, true, 70000, 1);
+    HealReserveApplyDistressLatch(read, latch, 1, 4000, otherBoss);
+    CHECK(!latch.released);
+
+    // A read with no live row is the fight's end as well, and the next fight starts unlatched.
+    read = HealReservePick(rows, true, 70000, 2);
+    HealReserveApplyDistressLatch(read, latch, 2, 5000, otherBoss);
+    CHECK(latch.released);
+    HealReserveRead none;
+    HealReserveApplyDistressLatch(none, latch, 1, 6000, otherBoss);
+    CHECK(!latch.released);
+    CHECK(!latch.calm);
+    read = HealReservePick(rows, true, 70000, 1);
+    HealReserveApplyDistressLatch(read, latch, 1, 7000, otherBoss);
+    CHECK(!read.released);
+
+    // Its own distress fires the release again.
+    read = HealReservePick(rows, true, 70000, 2);
+    HealReserveApplyDistressLatch(read, latch, 2, 8000, otherBoss);
+    CHECK(read.released);
+    HealReserveLatchReset(latch);
+    CHECK(!latch.released);
+}
+
+// The fight identity is the seek record's engage from the read that sets it on, even with an elapsed time of 0; every
+// later read of the pull reports the same engage, so a latch released on the first read survives them.
+static void TestFightIdentityHoldsAcrossThePull()
+{
+    const std::vector<HealReserveRow> rows{{85.0f, 60.0f, 14834, 2}};
+    const std::uint64_t bossGuid = 101;
+    // The first read sets the engage; its elapsed time is 0, its identity is the engage already.
+    const HealReserveFightId first = HealReserveFightIdentity(bossGuid, 5000, 3000);
+    CHECK(first.bossGuid == bossGuid);
+    CHECK(first.startMs == 5000);
+
+    HealReserveLatch latch;
+    HealReserveRead read = HealReservePick(rows, true, 70000, 2);
+    HealReserveApplyDistressLatch(read, latch, 2, 5000, first);
+    CHECK(read.released);
+    CHECK(latch.fightStartMs == 5000);
+
+    // Later reads of the same pull report the same engage, so the released latch survives them.
+    const HealReserveFightId later = HealReserveFightIdentity(bossGuid, 5000, 3000);
+    CHECK(later.startMs == first.startMs);
+    read = HealReservePick(rows, true, 70000, 1);
+    HealReserveApplyDistressLatch(read, latch, 1, 6000, later);
+    CHECK(read.released);
+    CHECK(read.distressReleased);
+    CHECK(latch.calm);
+
+    // Without an engage the bot's own combat start is the one source; a later engage is a re-pull and resets.
+    CHECK(HealReserveFightIdentity(bossGuid, 0, 3000).startMs == 3000);
+    const HealReserveFightId nextPull = HealReserveFightIdentity(bossGuid, 9000, 3000);
+    read = HealReservePick(rows, true, 70000, 1);
+    HealReserveApplyDistressLatch(read, latch, 1, 7000, nextPull);
+    CHECK(!read.released);
+    CHECK(!latch.released);
+}
+
+// The D6 stale clear keeps running when only the pick counts refusals and no trigger row moves the window's stamp: the
+// count stays within one window instead of growing for the rest of the fight.
+static void TestPickOnlyRefusalsStayBounded()
+{
+    const std::uint32_t gap = 5000;
+    std::uint32_t stamp = 1000; // the last row the trigger wrote before the healer stopped topping up
+    std::uint32_t refused = 0;
+    std::uint32_t most = 0;
+    for (std::uint32_t now = 2000; now <= 300000; now += 200)
+    {
+        if (HealReserveRefusalStale(stamp, now, gap))
+        {
+            stamp = HealReserveRefusalRestamp(now, gap);
+            refused = 0;
+        }
+        ++refused;
+        most = std::max(most, refused);
+    }
+    // The first window can be the full two gaps old when the trigger stopped; after a clear the count restarts and the
+    // clear repeats every gap. Either way the count never runs on for the rest of the fight.
+    CHECK(most <= 2 * gap / 200 + 2);
+}
+
+// The window wins the label when both releases hold.
+static void TestWhyWindowWins()
+{
+    const HealReserveRead read = Live(85.0f, 60.0f, 60000, 2, 5);
+    CHECK(read.windowReleased);
+    CHECK(read.distressReleased);
+    CHECK(read.released);
+    CHECK(HealReserveWhy(read) == std::string("window"));
+}
+
 // No clock, or a lead of 0, never releases the reserve.
 static void TestReserveNoClock()
 {
     CHECK(!HealReserveReleased(false, 0, 60.0f));
     CHECK(!HealReserveReleased(false, 60000, 60.0f));
     CHECK(!HealReserveReleased(true, 0, 0.0f));
-    const HealReserveRead none = HealReservePick(std::vector<HealReserveRow>{{85.0f, 60.0f, 14834}}, false, 0);
+    const HealReserveRead none = HealReservePick(std::vector<HealReserveRow>{{85.0f, 60.0f, 14834, 0}}, false, 0, 0);
     CHECK(none.live);
     CHECK(!none.released);
     CHECK(!none.clockKnown);
@@ -75,23 +337,26 @@ static void TestReserveNoClock()
     CHECK(!leadZero.released);
 }
 
-// Several rows keep the highest reserve, and its own window and boss go with it.
+// Several rows keep the highest reserve, and its own window, boss and distress count go with it.
 static void TestReservePickHighest()
 {
-    const std::vector<HealReserveRow> rows{{70.0f, 30.0f, 111}, {85.0f, 60.0f, 222}};
-    const HealReserveRead pick = HealReservePick(rows, true, 45000);
+    const std::vector<HealReserveRow> rows{{70.0f, 30.0f, 111, 1}, {85.0f, 60.0f, 222, 3}};
+    const HealReserveRead pick = HealReservePick(rows, true, 45000, 2);
     CHECK(pick.live);
     CHECK(pick.reservePct == 85.0f);
     CHECK(pick.bossEntry == 222);
     CHECK(pick.clockKnown);
     CHECK(pick.dueInMs == 45000);
     CHECK(pick.released);               // the 85 % row's 60 s window, not the losing row's 30 s
-    CHECK(!HealReservePick(rows, true, 70000).released);
-    CHECK(HealReservePick(rows, true, 60000).released);
-    CHECK(!HealReservePick(rows, true, 60001).released);
-    CHECK(!HealReservePick(std::vector<HealReserveRow>{}, true, 0).live);
+    CHECK(pick.distressCount == 3);     // the winning row's count, not the losing row's 1
+    CHECK(!HealReservePick(rows, true, 70000, 2).released);
+    CHECK(!HealReservePick(rows, true, 60000, 2).distressReleased); // 3 hurt members are needed
+    CHECK(HealReservePick(rows, true, 60000, 2).released);          // ... the window still releases it
+    CHECK(HealReservePick(rows, true, 70000, 3).released);          // ... and the distress count does
+    CHECK(!HealReservePick(rows, true, 60001, 2).released);
+    CHECK(!HealReservePick(std::vector<HealReserveRow>{}, true, 0, 0).live);
     // A tie keeps the first row, and its boss with it.
-    CHECK(HealReservePick({{85.0f, 60.0f, 111}, {85.0f, 30.0f, 222}}, true, 70000).bossEntry == 111);
+    CHECK(HealReservePick({{85.0f, 60.0f, 111, 0}, {85.0f, 30.0f, 222, 0}}, true, 70000, 0).bossEntry == 111);
 }
 
 // The reserve governs only the almost-full top-up tier; a 60 % member is another tier's decision.
@@ -189,6 +454,16 @@ int main()
     TestTopUpFlagOffIsToday();
     TestReserveNoClock();
     TestReservePickHighest();
+    TestDistressReleasesOutsideWindow();
+    TestOpeningHoldIsKept();
+    TestDistressNeedsNoClock();
+    TestDistressZeroIsWalk75();
+    TestDistressCountReadsEffectiveHealth();
+    TestReleasedHoldsForThreeSeconds();
+    TestLatchResetsOnANewFight();
+    TestFightIdentityHoldsAcrossThePull();
+    TestPickOnlyRefusalsStayBounded();
+    TestWhyWindowWins();
     TestReserveNeverBelowMedium();
     TestTopUpTier();
     TestPickFallsToTheExemptTank();
