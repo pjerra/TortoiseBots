@@ -117,6 +117,7 @@ These settings configure boss encounter mechanics, environmental hazard evasion,
 | [`AiPlayerbot.HoverCastHoldsSpread`](#aiplayerbothovercastholdsspread) | `0` | `1`: a ranged damage dealer in spell range of a hovering target takes no `raid spread` step, so its cast-time nukes are not refused for moving (a live `spread` row still steps). |
 | [`AiPlayerbot.HoverCastStackOnly`](#aiplayerbothovercaststackonly) | `0` | `1`: the hover hold yields only to a real stack (4.5 yd); the step is 5.5 yd, one per 8 s, and of two bots that would both step only the higher guid steps (needs `HoverCastHoldsSpread`). |
 | [`AiPlayerbot.DungeonRunGateHold`](#aiplayerbotdungeonrungatehold) | `0` | `1` (recommended on): the boss tactics keep their `gate_hold` rows — damage dealers stop on a boss at or below the row's health gate while its second unit still fights (needs the boss tactics and the rows). |
+| [`AiPlayerbot.DungeonRunTauntAfterSkipsMain`](#aiplayerbotdungeonruntauntafterskipsmain) | `0` | `1`: a `taunt_after_cast` row in mode `until_tank` that names an off-tank scans the off-tanks only, so its window never goes to the main tank and a slot past the live tank count wraps back to the first off-tank (needs the boss tactics and the rows). |
 | [`AiPlayerbot.DungeonRunWalkBackRescue`](#aiplayerbotdungeonrunwalkbackrescue) | `1` | A stuck walk back, and a placed run's lead bot revived behind its start step, are teleported to a safe point on the run's way. |
 | [`AiPlayerbot.DungeonRunDryWalk`](#aiplayerbotdungeonrundrywalk) | `0` | The run leader's route picks stay off deep water: a walk whose own way would swim goes in dry legs first, its approach hops and firing stand come from a ground-only navmesh path, and a walk-back shortcut's swim chord is refused. |
 | [`AiPlayerbot.RunTeleportReturnYd`](#aiplayerbotrunteleportreturnyd) | `0` (recommended `120`) | A party bot the run brings back from farther than this (yards) is teleported to the lead bot with its combat dropped, never summoned by portal or left to walk back; `0` off. |
@@ -1590,6 +1591,21 @@ Whether a `tank_post` row's Engage step taunts the awaited unit back off whoever
 **The gate:** the post tank's own reservation is skipped (`TankPostReservesSubject` ignores its own record), so `AiPlayerbot.DungeonRunTankPostOwnsSubject` never refuses the post's own taunt; every other tank stays refused while the reservation holds.
 
 **Diagnostics:** one `BossTacticsTankPost` row per cast (`event=taunt,step=taunt|stance|area,spell=<spell>,victim=<tank|healer|dps|none>,cast=1`), and for a word that did not cast (`gate`, `not_ready`) at most one per bot and word per 5 s; `step=none` writes nothing. The gates are read only for a taunt that can go out: a subject already on the post, in the air, or off another tank without the reservation writes no `BossTacticsTauntGate` row, and the area taunt's gates and radius scan run only once the single taunt cannot go out and the area taunt itself can (a known spell, castable now, the unit in range and off a non-tank).
+
+</details>
+
+### `AiPlayerbot.DungeonRunTauntAfterSkipsMain`
+Whether a `taunt_after_cast` row in mode `until_tank` that names an off-tank can send its window to the main tank. Off by default: walk 2g's off-tank windows wrapped to the main tank, with three live tanks the 10184 row's slot 3 read `3 % 3 = 0` and 13 of 26 window rows said `tank=0`.
+**Default:** `0` · **Values:** `0` off (the scan wraps past the last off-tank to the main tank, as before), `1` on (needs `AiPlayerbot.DungeonRunAuraTactics`; a row whose `priority` is 0 keeps naming the main tank) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+<details>
+<summary>How it works in detail</summary>
+
+**The scan:** a row whose `priority` is 1 or more is read over the off-tanks only: a slot at or past the live tank count starts at the last tank, the scan runs to the last index and wraps back to the first off-tank, and the main tank is never read. With no usable off-tank (dead, charmed out of the order, or the only tank alive) the row answers -1 and no window opens, so the main tank never leaves the boss on an off-tank's row.
+
+**The row:** a `priority` 0 row (Ayamiss's) names the main tank and is unchanged. The holder rule is unchanged too: a tank that holds a window keeps it while it is still available, so a main tank that took a window before the key was turned on keeps that one until it ends.
+
+**Diagnostics:** the `BossTacticsTauntAfter` row's `tank=` is the window's tank; with the key on an off-tank row never writes `tank=0`, and a window that found no usable off-tank writes no row at all.
 
 </details>
 
