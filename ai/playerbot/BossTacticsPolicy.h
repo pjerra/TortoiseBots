@@ -628,12 +628,13 @@ namespace ai
                     row.param > 60.0f || static_cast<float>(row.priority) > row.param ||
                     row.mode != TacticMode::Default))
                 return false;
-            // tank_post: the awaited unit (`target_entry`), the tank slot (priority 1-7), the wait spot, the arrival
-            // radius, 5-100 yd: a subject that lands and runs after a healer across the room, and the longest hold. A
-            // fight-scan kind, so its health band arms the post. No spell, no cycle columns; the only mode word is
-            // `hold_spot`.
+            // tank_post: the awaited unit (`target_entry`), the tank slot (priority 1-7; slot 0 is the main tank, which
+            // holds a post on the row's own boss only), the wait spot, the arrival radius, 5-100 yd: a subject that
+            // lands and runs after a healer across the room, and the longest hold. A fight-scan kind, so its health
+            // band arms the post. No spell, no cycle columns; the only mode word is `hold_spot`.
             if (row.kind == BossTacticKind::TankPost &&
-                (row.targetEntry == 0 || row.priority < 1 || row.priority > 7 || !row.HasSpot() ||
+                (row.targetEntry == 0 || (row.priority < 1 && row.targetEntry != row.bossEntry) ||
+                    row.priority > 7 || !row.HasSpot() ||
                     row.param < 5.0f || row.param > 100.0f || row.windowSec < 10.0f || row.windowSec > 120.0f ||
                     row.spellId != 0 || (row.mode != TacticMode::Default && row.mode != TacticMode::HoldSpot)))
                 return false;
@@ -3956,9 +3957,48 @@ namespace ai
     // With the row's `hold_spot` mode and AiPlayerbot.DungeonRunTankPostHoldSpot, the post also starts while the tank
     // holds another hostile, latches its arrival, drags the subject back to the spot, outlives its window once arrived
     // and yields to a boss stand seat. AiPlayerbot.DungeonRunTankPostLeash adds the pre-arrival walk back.
+    // AiPlayerbot.DungeonRunTankPostMain lets the main tank hold the row's own boss;
+    // AiPlayerbot.DungeonRunTankPostKeepsUnit keeps a latched post's row through a renumbering, but the main tank gives
+    // its kept row up for an open slot-0 row;
+    // AiPlayerbot.DungeonRunTankPostWaits starts a `hold_spot` post before its unit exists and leaves a done record when
+    // it ends, so it does not start again inside the band.
     constexpr float kTankPostSpotYd = 3.0f;    // the tank holds within this of the spot
     constexpr float kTankPostSearchYd = 200.0f; // the awaited unit's grid search radius
     constexpr float kTankPostDragYd = 8.0f;     // hold_spot: past this from the spot with the subject on the tank, walk back
+
+    // AiPlayerbot.DungeonRunTankPostMain: whether the main tank may hold a post (slot 0). The loader accepts a slot-0
+    // row only on the row's own boss, so the key is the whole gate: off, slot 0 is no post and the boss is taken by
+    // the ordinary pick, exactly as before the key.
+    inline bool TankPostRowUsable(bool mainKeyOn, std::uint32_t priority) { return priority != 0 || mainKeyOn; }
+
+    // Whether a row is the row this bot's tank slot names: its own slot index, and slot 0 only with the main key on,
+    // so a priority-0 row is never matched without the key.
+    inline bool TankPostSlotRow(bool mainKeyOn, std::uint32_t priority, int botIndex)
+    {
+        return botIndex >= 0 && priority == static_cast<std::uint32_t>(botIndex) &&
+            TankPostRowUsable(mainKeyOn, priority);
+    }
+
+    // AiPlayerbot.DungeonRunTankPostKeepsUnit: whether a post keeps the row it started with. A latched, living unit is
+    // the post's own: the raid tank order may renumber the row to another slot index (a tank died, GetRaidTankRoles
+    // moved this bot) and the post still holds it, instead of ending at its `slot` word and leaving the unit loose.
+    inline bool TankPostKeepsRow(bool keyOn, bool haveRecord, std::uint64_t latchedGuid, bool latchedAlive)
+    {
+        return keyOn && haveRecord && latchedGuid != 0 && latchedAlive;
+    }
+
+    // Whether a kept row gives way to the row this bot's slot names now: only the main tank does. When a tank ahead
+    // dies the raid order makes this bot index 0, and nobody else can hold the slot-0 row (Onyxia's post), so the
+    // off-tank row it kept must not keep it away from the boss.
+    inline bool TankPostKeptRowYields(bool botIsMain, bool slotRowOpen) { return botIsMain && slotRowOpen; }
+
+    // Whether another live post holds a row: a record read within kTankPostLiveMs whose tank can act, with no done flag
+    // (a post that ended for its band holds nothing). A tank must not start or keep a post on a row another live post
+    // holds, or two posts would trade the boss read by read.
+    inline bool TankPostRowHeldByOther(bool liveRecord, bool otherTankCanAct)
+    {
+        return liveRecord && otherTankCanAct;
+    }
 
     enum class TankPostDecision : std::uint8_t
     {
@@ -3992,6 +4032,9 @@ namespace ai
         bool subjectOnTank = false;       // the subject's victim is this tank
         bool seated = false;              // the tank holds a boss stand seat (read only with holdSpot)
         bool leash = false;               // hold_spot and its leash key: walk back before the arrival
+        bool waits = false;               // hold_spot and its wait key: the post runs before its unit exists
+        bool waitRow = false;             // the row's wait key and `hold_spot` mode: an ended post keeps a done record
+        bool done = false;                // the post already ended for this band: nothing starts it again until it closes
         bool slotMoved = false;           // the post's row is still in the fight, for another slot index (read by the end word only)
         std::uint64_t subjectGuid = 0;    // the awaited unit this read saw (0: none)
     };
@@ -4026,6 +4069,28 @@ namespace ai
             return false;
         return TankPostArrived(in.subjectFound, in.subjectAlive, in.subjectSelectable, in.subjectToSpotYd,
             in.arrivalRadiusYd);
+    }
+
+    // AiPlayerbot.DungeonRunTankPostWaits: whether an ending post keeps a done record until its band closes. A waiting
+    // post starts with no subject, so erasing it makes the next tick start a fresh one (its window reset) for as long
+    // as the band stands; a kept done record stops that. Any other post needs a living unit of the entry to restart, so
+    // it leaves nothing behind.
+    inline bool TankPostKeepsDoneRecord(bool waitRow, TankPostDecision step)
+    {
+        return waitRow && step == TankPostDecision::End;
+    }
+
+    // Whether a done record survives this read. A raid tank renumbering moves its row to another slot index, so the row
+    // pick no longer names it; the band still stands, and erasing the record there would let the band start the waiting
+    // post again with a fresh window. The record goes when its row leaves the fight.
+    inline bool TankPostDoneRecordStays(bool done, bool bandOpen) { return done && bandOpen; }
+
+    // The action's entry guard: a valid post runs when its step needs no subject (the waiting post's Leash walk back
+    // and its Hold at the spot run off the row alone), else only with the awaited unit.
+    inline bool TankPostActionRuns(bool valid, bool haveRow, bool haveSubject, TankPostDecision step)
+    {
+        return valid && haveRow &&
+            (haveSubject || step == TankPostDecision::Leash || step == TankPostDecision::Hold);
     }
 
     // One creature of the awaited entry as the grid search saw it ("tank post units" value).
@@ -4080,19 +4145,47 @@ namespace ai
         return best;
     }
 
+    // AiPlayerbot.DungeonRunTankPostKeepsUnit, for the tank's own target pick: whether the post's latched unit decides
+    // this comparison. 1: the new candidate is the latched unit (keep it), -1: the old one is (do not switch off it),
+    // 0: the key is off, nothing is latched, or both or neither candidate is it (the ordinary ranking decides).
+    inline int TankPostUnitPick(bool keyOn, std::uint64_t latched, std::uint64_t newGuid, std::uint64_t oldGuid)
+    {
+        if (!keyOn || latched == 0)
+            return 0;
+        bool const newIs = newGuid == latched;
+        bool const oldIs = oldGuid == latched;
+        if (newIs == oldIs)
+            return 0;
+        return newIs ? 1 : -1;
+    }
+
     // What the post's tank does this tick. A post that was held and can no longer be held ends; a row that is not
     // open (or has nothing to wait for) and holds no post does nothing. Another hostile on a group member keeps the
     // tank on it and the post waits, except in hold_spot once the subject arrives, where the subject outranks it.
     // In hold_spot the window closes only before the arrival, the arrival stays latched while the subject is alive and
-    // selectable, and a stand seat yields the post (the record is kept).
+    // selectable, and a stand seat yields the post (the record is kept). A waiting hold_spot post (its wait key on,
+    // nothing latched yet) walks to its spot and holds there with no unit at all; once it ends (its unit died, its
+    // window closed) its done record keeps the row from starting it again until the band closes.
     inline TankPostDecision TankPostStep(const TankPostIn& in)
     {
+        // A post that already ended for its band (a done record) does nothing: the row cannot start it again, and the
+        // record goes when the band closes.
+        if (in.done)
+            return TankPostDecision::None;
         if (!in.live || !in.tankCanAct)
             return in.started ? TankPostDecision::End : TankPostDecision::None;
         if (in.windowExpired && !(in.holdSpot && in.arrivedBefore))
             return in.started ? TankPostDecision::End : TankPostDecision::None;
         if (!in.subjectFound || !in.subjectAlive || in.subjectEvading)
+        {
+            if (in.waits)
+            {
+                if (in.seated)
+                    return TankPostDecision::Yield;
+                return in.botToSpotYd > kTankPostDragYd ? TankPostDecision::Leash : TankPostDecision::Hold;
+            }
             return in.started ? TankPostDecision::End : TankPostDecision::None;
+        }
         if (in.holdSpot && in.seated)
             return TankPostDecision::Yield;
         bool const arrived = TankPostArrived(in.subjectFound, in.subjectAlive, in.subjectSelectable,

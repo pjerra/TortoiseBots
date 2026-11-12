@@ -16,6 +16,7 @@ POLICY = (ROOT / "ai/playerbot/BossTacticsPolicy.h").read_text()
 MGR = (ROOT / "ai/playerbot/BossTacticsMgr.cpp").read_text()
 ACTIONS = (ROOT / "ai/playerbot/strategy/actions/BossTacticsActions.cpp").read_text()
 ACTIONS_H = (ROOT / "ai/playerbot/strategy/actions/BossTacticsActions.h").read_text()
+TANK_TARGET = (ROOT / "ai/playerbot/strategy/values/TankTargetValue.cpp").read_text()
 TRIGGERS = (ROOT / "ai/playerbot/strategy/triggers/BossTacticsTriggers.cpp").read_text()
 STRATEGY = (ROOT / "ai/playerbot/strategy/generic/BossTacticsStrategy.cpp").read_text()
 ACTION_CONTEXT = (ROOT / "ai/playerbot/strategy/actions/ActionContext.h").read_text()
@@ -530,6 +531,156 @@ class TankPostWiring(unittest.TestCase):
         self.assertIn("DungeonRunTankPostOwnsUnit", BOSS_DOCS)
         self.assertIn("`AiPlayerbot.DungeonRunTankPostOwnsUnit = 1`", BOSS_DOCS)
         self.assertIn("DungeonRunTankPostOwnsUnit", CHANGELOG)
+
+
+    def test_p3_main_tank_post_keeps_its_row_and_waits(self):
+        # Walk 2g P3: the slot-0 tank targets a whelp in 42 % of its frames, all five post ends were `reason=slot` (a
+        # tank ahead died and the row pick followed the live index), and no post could run before Onyxia was
+        # targetable. The rules are pure (TankPostRowUsable, TankPostKeepsRow, TankPostUnitPick, the step's wait) and
+        # tested in tools/test_boss_tactics_policy.cpp; these pins prove the live code uses them.
+        find = body(ACTIONS, "BossTankPost ai::FindBossTankPost")
+        # The bot's record is read before the row pick: the kept-row rule needs its latched unit.
+        self.assertLess(find.index("TankPostRecord record;"), find.index("const BossTacticRow* row = nullptr;"))
+        self.assertIn("TankPostKeepsRow(sPlayerbotAIConfig.dungeonRunTankPostKeepsUnit, haveRecord, "
+                      "record.arrivedSubjectGuid,", find)
+        self.assertIn("latchedUnit && sServerFacade.IsAlive(latchedUnit)", find)
+        # The kept row is the record's own row, with no priority test, and the slot pick runs only when it is gone,
+        # when another live post holds it, or when this bot is now the main tank with an open slot-0 row.
+        self.assertIn("candidate->kind != BossTacticKind::TankPost || !TankPostSameRow(record, *candidate)", find)
+        self.assertIn("!TankPostKeptRowYields(roles.botIndex == 0, slotRow != nullptr)", find)
+        self.assertIn("const BossTacticRow* slotRow = nullptr;", find)
+        self.assertIn("TankPostSlotRow(sPlayerbotAIConfig.dungeonRunTankPostMain, candidate->priority, "
+                      "roles.botIndex)", find)
+        self.assertIn("if (!row && slotRow)\n    {\n        row = slotRow;\n        boss = slotBoss;", find)
+        self.assertIn("inline bool TankPostSlotRow(bool mainKeyOn, std::uint32_t priority, int botIndex)", POLICY)
+        self.assertIn("inline bool TankPostRowUsable(bool mainKeyOn, std::uint32_t priority)", POLICY)
+        self.assertIn("return priority != 0 || mainKeyOn;", POLICY)
+        self.assertIn("inline bool TankPostKeepsRow(bool keyOn, bool haveRecord, std::uint64_t latchedGuid, "
+                      "bool latchedAlive)", POLICY)
+        self.assertIn("return keyOn && haveRecord && latchedGuid != 0 && latchedAlive;", POLICY)
+        # A waiting hold_spot post: the input, the start without a subject, and the action's subjectless steps.
+        self.assertIn("in.waits = sPlayerbotAIConfig.dungeonRunTankPostWaits && holdSpot &&", find)
+        self.assertIn("(!haveRecord || record.arrivedSubjectGuid == 0);", find)
+        self.assertIn("bool waits = false;", POLICY)
+        self.assertIn("if (!in.waits && (!in.subjectFound || !in.subjectAlive || in.subjectEvading ||", find)
+        action = body(ACTIONS, "bool BossTacticsTankPostAction::Execute(Event& event)")
+        self.assertIn("if (!TankPostActionRuns(task.valid, task.row != nullptr, task.subject != nullptr, task.step))",
+                      action)
+        self.assertIn("inline bool TankPostActionRuns(bool valid, bool haveRow, bool haveSubject, "
+                      "TankPostDecision step)", POLICY)
+        step = body(POLICY, "inline TankPostDecision TankPostStep(const TankPostIn& in)")
+        waits = step[step.index("if (in.waits)"):]
+        waits = waits[:waits.index("return in.started ?")]
+        self.assertIn("if (in.seated)\n                    return TankPostDecision::Yield;", waits)
+        self.assertIn("return in.botToSpotYd > kTankPostDragYd ? TankPostDecision::Leash : "
+                      "TankPostDecision::Hold;", waits)
+        # The tank's own pick keeps the latched unit before any rule that could switch it off (the seek source still
+        # reads first), and only when the key is on.
+        is_better = TANK_TARGET[TANK_TARGET.index("bool IsBetter(Unit* newUnit, Unit* oldUnit)"):]
+        is_better = is_better[:is_better.index("float newThreat")]
+        self.assertIn("::ai::TankPostUnitPick(sPlayerbotAIConfig.dungeonRunTankPostKeepsUnit,", is_better)
+        self.assertLess(is_better.index("TankPostUnitPick("), is_better.index("IsTankHoldPickup("))
+        self.assertGreater(is_better.index("TankPostUnitPick("),
+                           is_better.index("::ai::IsSeekSourceForTankPickup(ai, bot, oldUnit)"))
+        self.assertIn("if (postPick > 0)\n            return true;", is_better)
+        self.assertIn("if (postPick < 0)\n            return false;", is_better)
+        self.assertIn("inline int TankPostUnitPick(bool keyOn, std::uint64_t latched, std::uint64_t newGuid, "
+                      "std::uint64_t oldGuid)", POLICY)
+        # The latched unit is read from the live record under the post lock.
+        latched = body(ACTIONS, "std::uint64_t ai::TankPostLatchedUnit(Player* bot)")
+        self.assertIn("std::lock_guard<std::mutex> lock(g_tankPostMutex);", latched)
+        self.assertIn("WorldTimer::getMSTime() - it->second.lastReadMs >= kTankPostLiveMs", latched)
+        self.assertIn("return it->second.arrivedSubjectGuid;", latched)
+        self.assertIn("std::uint64_t TankPostLatchedUnit(Player* bot);", ACTIONS_H)
+        # The three keys: read, defaulted off, templated and documented without "recommended on".
+        for key in ("DungeonRunTankPostMain", "DungeonRunTankPostKeepsUnit", "DungeonRunTankPostWaits"):
+            self.assertIn('config.GetBoolDefault("AiPlayerbot.%s", false);' % key, CONFIG_CPP)
+            self.assertIn("bool dungeonRun%s = false;" % key[len("DungeonRun"):], CONFIG_H)
+            self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.%s = 0$" % key)
+            self.assertIn("AiPlayerbot.%s" % key, DOCS)
+            self.assertIn("`0` off",
+                          DOCS[DOCS.index("### `AiPlayerbot.%s`" % key):][:900])
+            self.assertNotIn("recommended on",
+                             DOCS[DOCS.index("### `AiPlayerbot.%s`" % key):][:900])
+            self.assertIn(key, BOSS_DOCS)
+            self.assertIn(key, CHANGELOG)
+        # The latched unit is read only with the key on: the key is tested before the record's mutex is taken.
+        self.assertIn("sPlayerbotAIConfig.dungeonRunTankPostKeepsUnit ? ::ai::TankPostLatchedUnit(bot) : 0;",
+                      is_better)
+        self.assertIn("it->second.done ||", latched)
+
+    def test_new_main_tank_takes_the_boss_row_and_a_wait_ends_once(self):
+        # Fable H1 (nobody takes Onyxia after the main tank dies), Codex T (a subjectless Hold was rejected), Fable M1 (a
+        # waiting post restarted forever). The rules are pure (TankPostRowHeldByOther, TankPostKeptRowYields,
+        # TankPostSlotRow, TankPostActionRuns, TankPostKeepsDoneRecord and the step's done input) and tested in
+        # tools/test_boss_tactics_policy.cpp; these pins prove the live code uses them.
+        find = body(ACTIONS, "BossTankPost ai::FindBossTankPost")
+        # H1a: a row another live post holds is no row for this bot, and a live post is a record read within the
+        # reservation's 3 s whose tank is in this instance and can act; only the keys leave the lock.
+        self.assertIn("std::vector<std::pair<std::uint64_t, TankPostRecord> > others;", find)
+        self.assertIn("others.push_back(entry);", find)
+        self.assertIn("TankPostRowHeldByOther(true, TankPostTankCanAct(tank))", find)
+        self.assertIn("if (TankPostSameRow(other, candidate))\n                return true;", find)
+        self.assertIn("!candidateBoss || rowHeldByOther(*candidate)", find)
+        self.assertIn("inline bool TankPostRowHeldByOther(bool liveRecord, bool otherTankCanAct)", POLICY)
+        self.assertIn("return liveRecord && otherTankCanAct;", POLICY)
+        # H1b: the new main tank gives its kept row up for an open slot-0 row; the key gates the slot-0 row itself.
+        self.assertIn("inline bool TankPostKeptRowYields(bool botIsMain, bool slotRowOpen)", POLICY)
+        self.assertIn("return botIsMain && slotRowOpen;", POLICY)
+        # Codex T: a subjectless Hold reaches the action, and the Hold branch stops the tank's move.
+        action = body(ACTIONS, "bool BossTacticsTankPostAction::Execute(Event& event)")
+        self.assertIn("if (!TankPostActionRuns(task.valid, task.row != nullptr, task.subject != nullptr, task.step))",
+                      action)
+        hold = action[action.index("if (task.step == TankPostDecision::Hold)"):]
+        self.assertIn("if (!bot->IsStopped())\n            ai->StopMoving();", hold)
+        # The subjectless Hold is let through before the branch that stops the tank: the guard runs first.
+        self.assertLess(action.index("TankPostActionRuns("),
+                        action.index("if (task.step == TankPostDecision::Hold)"))
+        self.assertIn("inline bool TankPostActionRuns(bool valid, bool haveRow, bool haveSubject, "
+                      "TankPostDecision step)", POLICY)
+        self.assertIn("(haveSubject || step == TankPostDecision::Leash || step == TankPostDecision::Hold);", POLICY)
+        # M1: an ending waiting post keeps a done record; the step does nothing with it, and the action refreshes its
+        # read time so the idle sweep cannot drop it inside the band.
+        self.assertIn("bool done = false;", ACTIONS)
+        self.assertIn("in.waitRow = sPlayerbotAIConfig.dungeonRunTankPostWaits && holdSpot;", find)
+        self.assertIn("in.done = haveRecord && record.done;", find)
+        self.assertIn("if (TankPostKeepsDoneRecord(in.waitRow, step))", find)
+        self.assertIn("stored.done = true;", find)
+        self.assertIn("if (in.done)\n        {\n            std::lock_guard<std::mutex> lock(g_tankPostMutex);", find)
+        self.assertIn("if (!record.done)\n        {\n            BossTacticRow closed;", find)
+        self.assertIn("inline bool TankPostKeepsDoneRecord(bool waitRow, TankPostDecision step)", POLICY)
+        self.assertIn("return waitRow && step == TankPostDecision::End;", POLICY)
+        self.assertIn("if (in.done)\n            return TankPostDecision::None;", POLICY)
+        self.assertIn("bool done = false;                // the post already ended", POLICY)
+        # A done record holds nothing: no latched unit, no reservation, no unit for another post's pick, no second
+        # end row on the sweep.
+        self.assertIn('if (it == g_tankPost.end() || it->second.done ||', ACTIONS)
+        reserve = body(ACTIONS, "bool ai::TankPostReservesSubject(PlayerbotAI* ai, Player* bot, Unit* target)")
+        self.assertIn("entry.first == self || entry.second.done ||", reserve)
+        owns = find[find.index("std::unordered_set<std::uint64_t> otherLatched;"):]
+        self.assertIn("entry.first == self || entry.second.done ||", owns)
+        self.assertIn("if (!it->second.done)\n                        ended.push_back(", ACTIONS)
+
+    def test_a_done_record_survives_a_renumbering(self):
+        # Codex M: a renumbering erased the waiting post's done record before its band closed, and the row started a
+        # fresh post inside the same band. The rule is pure (TankPostDoneRecordStays) and tested in
+        # tools/test_boss_tactics_policy.cpp; this pin proves the live code keeps the record while its band stands.
+        find = body(ACTIONS, "BossTankPost ai::FindBossTankPost")
+        self.assertIn("if (TankPostDoneRecordStays(record.done, bandOpen))", find)
+        self.assertIn("inline bool TankPostDoneRecordStays(bool done, bool bandOpen) { return done && bandOpen; }",
+                      POLICY)
+        # The band stands while the record's row is in the fight, whatever slot index it moved to, and its boss lives.
+        self.assertIn("if (record.done && record.map == mapId)", find)
+        self.assertIn("Unit* const recordBoss = record.bossGuid != 0 ? ai->GetUnit(ObjectGuid(record.bossGuid)) : "
+                      "nullptr;", find)
+        self.assertIn("if (recordBoss && sServerFacade.IsAlive(recordBoss))", find)
+        self.assertIn("candidate->kind == BossTacticKind::TankPost && TankPostSameRow(record, *candidate)", find)
+        # The keep refreshes the read time instead of erasing, so the idle sweep cannot drop it; the closed band still
+        # erases without a second end row.
+        keep = find[find.index("if (TankPostDoneRecordStays(record.done, bandOpen))"):]
+        keep = keep[:keep.index("g_tankPost.erase(self);")]
+        self.assertIn("it->second.lastReadMs = nowMs;", keep)
+        self.assertIn("if (!record.done)\n        {\n            BossTacticRow closed;", find)
 
 
 if __name__ == "__main__":
