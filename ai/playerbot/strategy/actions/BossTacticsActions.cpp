@@ -9063,9 +9063,10 @@ float ai::BossSpreadYd(PlayerbotAI* ai, Player* bot, float fallback)
 }
 
 // One refusal per healer per AI update, however many targets the pick and the gates ask about: the row's `refused`
-// counts the updates on which a top-up was refused, not gate evaluations. The count belongs to its row's window, so a
-// count left over from an earlier fight (no row for two log gaps) starts at this refusal instead of landing on the
-// new fight's first row. The last refusal of the window keeps its target, health and gate for the row's `last=`.
+// counts the updates on which a top-up was refused, not gate evaluations. The count belongs to its row's window: a
+// count more than two log gaps after the window's last row starts fresh, and the restamped window keeps that clear
+// running when only the pick asks (it writes no row of its own). The last refusal of the window keeps its target,
+// health and gate for the row's `last=`.
 static void CountHealReserveRefusal(PlayerbotAI* ai, Player* bot, Unit* target, float effectiveHealthPct,
                                     const char* gate)
 {
@@ -9075,9 +9076,9 @@ static void CountHealReserveRefusal(PlayerbotAI* ai, Player* bot, Unit* target, 
     const std::uint32_t nowMs = WorldTimer::getMSTime();
     std::lock_guard<std::mutex> lock(g_healReserveLogMutex);
     HealReserveLogWindow& window = g_healReserveLog[bot->GetObjectGuid().GetRawValue()];
-    if (window.ms != 0 && nowMs - window.ms > 2 * kSeekLogGapMs)
+    if (HealReserveRefusalStale(window.ms, nowMs, kSeekLogGapMs))
     {
-        window.ms = 0;
+        window.ms = HealReserveRefusalRestamp(nowMs, kSeekLogGapMs);
         window.refused = 0;
         window.refusedTick = 0xFFFFFFFFu;
         window.lastName.clear();

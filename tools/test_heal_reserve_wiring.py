@@ -189,17 +189,21 @@ class HealReserveWiring(unittest.TestCase):
     def test_a_stale_refusal_count_is_cleared(self):
         count = body(ACTIONS, "static void CountHealReserveRefusal(PlayerbotAI* ai, Player* bot, Unit* target, "
                               "float effectiveHealthPct,")
-        self.assertIn("2 * kSeekLogGapMs", count)
-        self.assertLess(count.index("2 * kSeekLogGapMs"), count.index("++window.refused"))
+        # The clear runs before the count and restamps instead of zeroing, so a pick-only count keeps being cleared.
+        self.assertIn("HealReserveRefusalStale(window.ms, nowMs, kSeekLogGapMs)", count)
+        self.assertIn("window.ms = HealReserveRefusalRestamp(nowMs, kSeekLogGapMs)", count)
+        self.assertLess(count.index("HealReserveRefusalStale("), count.index("++window.refused"))
+        self.assertNotIn("window.ms = 0", count)
         self.assertIn("window.lastName", count)
         self.assertIn("window.lastGate", count)
 
     def test_the_policy_holds_the_pure_rules(self):
         for name in ("HealReserveReleased(", "HealReserveDistress(", "HealReserveDistressLatched(",
                      "HealReserveApplyDistressLatch(", "HealReserveCountMember(", "HealReserveLatchReset(",
-                     "HealReserveLatchBind(", "HealReserveFightId", "HealReservePick(", "HealReserveWhy(",
-                     "HealReserveRefuses(", "HealReserveSkipsTopUp(", "HealTopUpAllowedAtHealth(",
-                     "HealReserveTopUpTier(", "kHealReserveRecoveryMarginPct", "kHealReserveDistressHoldMs"):
+                     "HealReserveLatchBind(", "HealReserveFightId", "HealReserveRefusalStale(",
+                     "HealReserveRefusalRestamp(", "HealReservePick(", "HealReserveWhy(", "HealReserveRefuses(",
+                     "HealReserveSkipsTopUp(", "HealTopUpAllowedAtHealth(", "HealReserveTopUpTier(",
+                     "kHealReserveRecoveryMarginPct", "kHealReserveDistressHoldMs"):
             self.assertIn(name, POLICY)
         self.assertIn("reservePct", POLICY)
         self.assertIn("released", POLICY)
