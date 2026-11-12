@@ -539,6 +539,62 @@ namespace ai
             state.breaker = breaker;
     }
 
+    // One instance's record: the park's state, the revision every committed write bumps, and when it was last read
+    // (the stale sweep's clock).
+    struct SeekParkRecord
+    {
+        SeekParkState state;
+        std::uint32_t revision = 0;
+        std::uint32_t touchedMs = 0;
+    };
+
+    // Whether two records hold the same park. A tick that wrote nothing leaves the revision alone, so the next read's
+    // update is not dropped for nothing.
+    inline bool SeekParkSameState(const SeekParkState& a, const SeekParkState& b)
+    {
+        return a.son == b.son && a.cycleNo == b.cycleNo && a.fightStartMs == b.fightStartMs &&
+            a.phase == b.phase && a.applySinceMs == b.applySinceMs && a.budgetSinceMs == b.budgetSinceMs &&
+            a.lastCastMs == b.lastCastMs && a.heldSinceMs == b.heldSinceMs && a.heldMs == b.heldMs &&
+            a.releaseMs == b.releaseMs && a.reapplies == b.reapplies && a.parkBot == b.parkBot &&
+            a.spent == b.spent && a.receiver == b.receiver && a.breaker == b.breaker &&
+            a.leadSinceMs == b.leadSinceMs && a.botSwaps == b.botSwaps &&
+            (a.why == b.why || (a.why != nullptr && b.why != nullptr && std::strcmp(a.why, b.why) == 0));
+    }
+
+    // One tick's read-modify-write of the record.
+    struct SeekParkCommitResult
+    {
+        bool applied = false;                        // this read's update was the record's (not dropped as stale)
+        bool changed = false;                        // the phase changed
+        SeekParkPhase before = SeekParkPhase::None;  // the phase the step started from
+        SeekParkState state;                         // the record after the tick
+    };
+
+    // The step consumes facts (control, due time, the source's victim, the receiver's reach) that the caller read
+    // before the lock, so a tick whose record another bot has committed since must write nothing at all: the update is
+    // dropped whole and the next tick re-reads. A stale Held read that saw the control therefore cannot resurrect it
+    // after another tick recorded the break. Every committed change bumps the revision the other reads test.
+    inline SeekParkCommitResult SeekParkCommit(SeekParkRecord& record, std::uint32_t readRevision,
+                                               const SeekParkRules& rules, const SeekParkInput& in,
+                                               SeekParkPhase readPhase, std::uint64_t readBreaker,
+                                               std::uint64_t receiver, std::uint64_t breaker,
+                                               std::uint32_t nowMs)
+    {
+        SeekParkCommitResult result;
+        result.state = record.state;
+        if (record.revision != readRevision)
+            return result;
+        const SeekParkState before = record.state;
+        SeekParkMergeRead(record.state, readPhase, readBreaker, receiver, breaker);
+        result.before = record.state.phase;
+        result.changed = SeekParkStep(record.state, rules, in, nowMs);
+        result.applied = true;
+        if (!SeekParkSameState(before, record.state))
+            ++record.revision;
+        result.state = record.state;
+        return result;
+    }
+
     // Whether the phase holds every source damage: Apply and Held (nobody touches a parked source, the park bot
     // included: the control breaks on any damage).
     inline bool SeekParkHolds(SeekParkPhase phase)

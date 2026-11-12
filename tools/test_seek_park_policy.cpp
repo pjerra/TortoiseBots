@@ -471,6 +471,122 @@ static void TestParkStaleReadKeepsTheLatch()
     CHECK(broken.receiver == aReceiver);
 }
 
+// TestParkStaleTickDropsTheUpdate (round 9): the step consumes facts (control, due time, the source's victim, the
+// receiver's reach) that the caller read before the lock. A tick whose record another bot committed since writes
+// nothing at all: a stale Held read that saw the control cannot resurrect it after another tick recorded the break, and
+// the next tick, reading the record afresh, carries on.
+static void TestParkStaleTickDropsTheUpdate()
+{
+    const SeekParkRules rules = ParkRules();
+    SeekParkRecord record;
+    SeekParkInput in = ParkInput(60000);
+    SeekParkCommitResult r = SeekParkCommit(record, record.revision, rules, in, SeekParkPhase::None, 0, 0, 0, 1000);
+    CHECK(r.applied);
+    CHECK(record.state.phase == SeekParkPhase::Apply);
+    in.controlled = true;
+    r = SeekParkCommit(record, record.revision, rules, in, SeekParkPhase::Apply, 0, 0, 0, 2000);
+    CHECK(r.applied);
+    CHECK(record.state.phase == SeekParkPhase::Held);
+
+    // A's read: Held, the control still on the source.
+    const std::uint32_t aRevision = record.revision;
+    const SeekParkPhase aPhase = record.state.phase;
+    const SeekParkInput aIn = in;
+
+    // B's tick commits the break first: the control is gone, so the park re-applies.
+    SeekParkInput bIn = in;
+    bIn.controlled = false;
+    r = SeekParkCommit(record, record.revision, rules, bIn, SeekParkPhase::Held, 0, 0, 0, 2500);
+    CHECK(r.applied);
+    CHECK(r.changed);
+    CHECK(record.state.phase == SeekParkPhase::Apply);
+    const SeekParkState broken = record.state;
+    const std::uint32_t bRevision = record.revision;
+    CHECK(bRevision != aRevision);
+
+    // A's update, computed from the Held read, lands after that commit and must write nothing.
+    r = SeekParkCommit(record, aRevision, rules, aIn, aPhase, 0, 0, 0, 2600);
+    CHECK(!r.applied);
+    CHECK(!r.changed);
+    CHECK(record.revision == bRevision);
+    CHECK(SeekParkSameState(record.state, broken));
+
+    // The next tick re-reads the record and carries on from its own facts.
+    r = SeekParkCommit(record, record.revision, rules, aIn, record.state.phase, 0, 0, 0, 2700);
+    CHECK(r.applied);
+    CHECK(record.state.phase == SeekParkPhase::Held);
+}
+
+// TestParkCommitKeepsTheLatch (round 8 through round 9's gate): a release another tick latched keeps its receiver when
+// a stale read's update lands afterwards, and a tick that writes nothing leaves the revision alone so it does not drop
+// the next read's update for nothing.
+static void TestParkCommitKeepsTheLatch()
+{
+    const SeekParkRules rules = ParkRules();
+    SeekParkRecord record;
+    SeekParkInput in = ParkInput(60000);
+    SeekParkCommitResult r = SeekParkCommit(record, record.revision, rules, in, SeekParkPhase::None, 0, 0, 0, 1000);
+    CHECK(r.applied);
+    in.controlled = true;
+    r = SeekParkCommit(record, record.revision, rules, in, SeekParkPhase::Apply, 0, 0, 0, 2000);
+    CHECK(r.applied);
+    CHECK(record.state.phase == SeekParkPhase::Held);
+    // A read that changed nothing leaves the revision alone.
+    const std::uint32_t heldRevision = record.revision;
+    r = SeekParkCommit(record, heldRevision, rules, in, SeekParkPhase::Held, 0, 0, 0, 2500);
+    CHECK(r.applied);
+    CHECK(!r.changed);
+    CHECK(record.revision == heldRevision);
+
+    in.dueInMs = 39000;
+    in.receiverInReach = true;
+    const std::uint32_t aRevision = record.revision;
+    r = SeekParkCommit(record, aRevision, rules, in, SeekParkPhase::Held, 0, 0, 0, 3000);
+    CHECK(r.applied);
+    CHECK(record.state.phase == SeekParkPhase::Release);
+    // A's read sees the open release; B's tick latches it on receiver 52 first.
+    const SeekParkPhase aPhase = record.state.phase;
+    const std::uint32_t releaseRevision = record.revision;
+    SeekParkInput bIn = in;
+    bIn.sonOnTank = true;
+    r = SeekParkCommit(record, releaseRevision, rules, bIn, SeekParkPhase::Release, 0, 52, 0, 4000);
+    CHECK(r.applied);
+    CHECK(record.state.phase == SeekParkPhase::Released);
+    CHECK(record.state.receiver == 52);
+    // A's update (receiver 41), computed from the open release, is dropped whole: the latch keeps both.
+    r = SeekParkCommit(record, aRevision, rules, in, aPhase, 0, 41, 0, 4100);
+    CHECK(!r.applied);
+    CHECK(record.state.phase == SeekParkPhase::Released);
+    CHECK(record.state.receiver == 52);
+}
+
+// TestParkSingleReaderProgresses: one bot reading and committing in turn walks the whole park, each tick capturing the
+// revision its own last commit left.
+static void TestParkSingleReaderProgresses()
+{
+    const SeekParkRules rules = ParkRules();
+    SeekParkRecord record;
+    SeekParkInput in = ParkInput(60000);
+    SeekParkCommitResult r = SeekParkCommit(record, record.revision, rules, in, record.state.phase, 0, 0, 0, 1000);
+    CHECK(r.applied);
+    CHECK(record.state.phase == SeekParkPhase::Apply);
+    in.controlled = true;
+    r = SeekParkCommit(record, record.revision, rules, in, record.state.phase, 0, 0, 0, 2000);
+    CHECK(r.applied);
+    CHECK(record.state.phase == SeekParkPhase::Held);
+    in.dueInMs = 39000;
+    in.receiverInReach = true;
+    r = SeekParkCommit(record, record.revision, rules, in, record.state.phase, 0, 0, 0, 3000);
+    CHECK(r.applied);
+    CHECK(record.state.phase == SeekParkPhase::Release);
+    in.sonOnTank = true;
+    r = SeekParkCommit(record, record.revision, rules, in, record.state.phase, 0, 52, 0, 4000);
+    CHECK(r.applied);
+    CHECK(record.state.phase == SeekParkPhase::Released);
+    CHECK(record.state.receiver == 52);
+    CHECK(record.revision == 4);
+}
+
 static void TestParkCastDue()
 {
     SeekParkState state;
@@ -1264,6 +1380,9 @@ int main()
     TestParkFailedTakeDue();
     TestParkFailedParkBreaker();
     TestParkStaleReadKeepsTheLatch();
+    TestParkStaleTickDropsTheUpdate();
+    TestParkCommitKeepsTheLatch();
+    TestParkSingleReaderProgresses();
     TestParkReleasedHolderKeepsTheSon();
     TestParkRecordKeepsItsSon();
     TestParkFightStartResets();

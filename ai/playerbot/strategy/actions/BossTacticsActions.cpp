@@ -2048,13 +2048,8 @@ bool SeekWalkoutExemptsBot(Player* bot)
     return it != g_walkouts.end() && WalkoutExempts(it->second.state, bot->GetObjectGuid().GetRawValue(), nowMs);
 }
 
-// The park's per-instance record (SeekParkPolicy.h): the phase machine's state and when it was last read, so a record
-// of an instance that unloaded goes in the stale sweep.
-struct SeekParkRecord
-{
-    SeekParkState state;
-    std::uint32_t touchedMs = 0;
-};
+// The park's per-instance record (SeekParkPolicy.h): the phase machine's state, the revision a stale read tests, and
+// when it was last read, so a record of an instance that unloaded goes in the stale sweep.
 std::mutex g_seekParkMutex;
 std::map<std::uint32_t, SeekParkRecord> g_seekParks;
 const std::uint32_t kSeekParkStaleMs = 120000;
@@ -2096,6 +2091,7 @@ void NoteBossSeekParkBreaker(Player* bot, std::uint64_t sonGuid)
         it->second.state.phase != SeekParkPhase::Failed)
         return;
     it->second.state.breaker = bot->GetObjectGuid().GetRawValue();
+    ++it->second.revision;
 }
 
 // The park's rules for this fight (D2): the key, the seek_pull cycle key and the boss's seek_park row.
@@ -2260,9 +2256,14 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
         auto const it = g_seekParks.find(instanceId);
         if (it != g_seekParks.end())
         {
-            it->second.state = SeekParkState();
-            it->second.state.cycleNo = out.cycleNo;
-            it->second.state.fightStartMs = out.engageMs;
+            SeekParkState reset;
+            reset.cycleNo = out.cycleNo;
+            reset.fightStartMs = out.engageMs;
+            if (!SeekParkSameState(it->second.state, reset))
+            {
+                it->second.state = reset;
+                ++it->second.revision;
+            }
             it->second.touchedMs = nowMs;
         }
         return;
@@ -2275,12 +2276,16 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
     Unit* const picked = out.source;
     const std::uint64_t pickedGuid = picked ? picked->GetObjectGuid().GetRawValue() : 0;
     SeekParkState recorded;
+    std::uint32_t readRevision = 0;
     {
         std::lock_guard<std::mutex> lock(g_seekParkMutex);
         SweepSeekParks(nowMs);
         auto const it = g_seekParks.find(instanceId);
         if (it != g_seekParks.end())
+        {
             recorded = it->second.state;
+            readRevision = it->second.revision;
+        }
     }
     const bool live = recorded.phase != SeekParkPhase::None && recorded.son != 0 &&
         recorded.cycleNo == out.cycleNo && recorded.fightStartMs == out.engageMs;
@@ -2387,13 +2392,14 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
         SweepSeekParks(nowMs);
         SeekParkRecord& record = g_seekParks[instanceId];
         record.touchedMs = nowMs;
-        // This read's picks merge against the record another bot may have stepped since; the machine then steps the
-        // merged state.
-        SeekParkMergeRead(record.state, readPhase, recorded.breaker,
-                          receiver ? receiver->GetObjectGuid().GetRawValue() : 0, breaker);
-        beforePhase = record.state.phase;
-        changed = SeekParkStep(record.state, rules, in, nowMs);
-        step = record.state;
+        // This read's facts were read before the lock: another bot's tick that committed since then owns the record,
+        // and this update is dropped whole (the next tick re-reads), the receiver and breaker merge included.
+        const SeekParkCommitResult commit =
+            SeekParkCommit(record, readRevision, rules, in, readPhase, recorded.breaker,
+                           receiver ? receiver->GetObjectGuid().GetRawValue() : 0, breaker, nowMs);
+        changed = commit.changed;
+        beforePhase = commit.before;
+        step = commit.state;
     }
     out.parkPhase = step.phase;
     out.parkSon = step.son;
@@ -10921,7 +10927,11 @@ void ai::NoteBossSeekParkCast(Player* bot, std::uint32_t nowMs)
     auto const it = g_seekParks.find(bot->GetInstanceId());
     if (it == g_seekParks.end())
         return;
-    it->second.state.lastCastMs = nowMs ? nowMs : 1;
+    const std::uint32_t castMs = nowMs ? nowMs : 1;
+    if (it->second.state.lastCastMs == castMs)
+        return;
+    it->second.state.lastCastMs = castMs;
+    ++it->second.revision;
 }
 
 bool BossTacticsParkAction::isUseful()
