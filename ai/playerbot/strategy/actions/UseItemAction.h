@@ -754,7 +754,12 @@ namespace ai
 
                 ai->Unmount();
 
-                ai->CastSpell(24355, bot);
+                // A refused cast (GCD, one already running) must not arm the
+                // meal's sleep: the bot would idle out the whole meal instead
+                // of retrying on the next tick.
+                if (!ai->CastSpell(24355, bot))
+                    return false;
+
                 SetDuration(drinkDuration);
                 ai->SetMealSleep(true);
                 bot->RemoveSpellCooldown(pSpellInfo->Id);
@@ -865,7 +870,11 @@ namespace ai
 
                 ai->Unmount();
 
-                ai->CastSpell(24005, bot);
+                // A refused cast must not arm the meal's sleep: the bot would
+                // idle out the whole meal instead of retrying on the next tick.
+                if (!ai->CastSpell(24005, bot))
+                    return false;
+
                 SetDuration(eatDuration);
                 ai->SetMealSleep(true);
                 bot->RemoveSpellCooldown(pSpellInfo->Id);

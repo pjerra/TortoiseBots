@@ -133,6 +133,23 @@ class MealGateWiringTest(unittest.TestCase):
             self.assertIn("ai->SetMealSleep(true);", after_used,
                 "%s: the real-item path stamps the sleep after a successful use" % name)
 
+    def test_a_refused_meal_cast_arms_no_sleep(self):
+        # Nightly priest low-mana drinks: the drink tried in the Fear Ward GCD
+        # was refused, yet the action slept the AI for the meal's whole 22 s.
+        for name, klass, spell, duration in (
+            ("drink", "class DrinkAction", 24355, "drinkDuration"),
+            ("food", "class EatAction", 24005, "eatDuration"),
+        ):
+            flat = " ".join(body_after(SRC_ITEMS, klass).split())
+            guard = "if (!ai->CastSpell(%d, bot)) return false;" % spell
+            # A failed cast returns before the duration and the sleep stamp,
+            # so the next tick retries instead of idling out the meal.
+            self.assertIn(
+                guard + " SetDuration(%s); ai->SetMealSleep(true);" % duration, flat,
+                "%s: only a successful cast arms the meal sleep" % name)
+            self.assertNotIn("ai->CastSpell(%d, bot); SetDuration(%s);" % (spell, duration), flat,
+                "%s: the cast's result is checked before the meal is armed" % name)
+
     def test_reset_of_the_action_clock_clears_the_meal_flag(self):
         reset = body_after(SRC_AI, "void PlayerbotAI::ResetAIInternalUpdateDelay()")
         self.assertIn("PlayerbotAIBase::ResetAIInternalUpdateDelay();", reset)
