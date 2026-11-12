@@ -3,8 +3,10 @@
 // AiPlayerbot.RaidBossDiagnostics only).
 //
 // Named failing cases before the policy existed: one global window another
-// commander's ticks spent, a window left behind after its run ended, and a row
-// with a victim, a selection or a holder list that broke the key=value layout.
+// commander's ticks spent, a window left behind after its run ended, a
+// hand-issued release outside a run arming a window for the next one, and a
+// row with a victim, a selection or a holder list that broke the key=value
+// layout.
 //
 // Run: g++ -std=c++17 -Wall -Wextra tools/test_regroup_release_probe_policy.cpp
 #include "../runtime/RegroupReleaseProbePolicy.h"
@@ -86,6 +88,24 @@ void Book_keeps_two_commanders_windows()
     CHECK(book.Find(42) == nullptr);
 }
 
+void Book_release_outside_a_run_leaves_no_state()
+{
+    Book book;
+    // A hand-issued release outside a run arms nothing for the commander's next ticks.
+    book.Release(7, {11}, false);
+    CHECK(book.Find(7) == nullptr);
+    // ... and it drops a window an earlier in-run release left standing.
+    book.Release(7, {11}, true);
+    CHECK(book.Find(7) != nullptr);
+    book.Release(7, {12}, false);
+    CHECK(book.Find(7) == nullptr);
+    // The commander's next run starts clean: its first tick is 1, and only its own bots are read.
+    book.Release(7, {13}, true);
+    CHECK(book.Find(7)->window.Next() == 1);
+    CHECK(book.Find(7)->bots.size() == 1);
+    CHECK(book.Find(7)->bots[0] == 13);
+}
+
 void BossDetail_keeps_the_layout()
 {
     std::string const detail = BossDetail(14834, true, "Zed", 7, {"Ilaith", "Nivvla", "Tazzle"}, false, 12.4f);
@@ -140,6 +160,7 @@ int main()
     Window_bounded_to_ten_ticks();
     Window_rearmed_by_a_second_release();
     Book_keeps_two_commanders_windows();
+    Book_release_outside_a_run_leaves_no_state();
     BossDetail_keeps_the_layout();
     BossDetail_caps_names_and_marks_an_empty_list();
     BossDetail_escapes_a_names_separators();

@@ -79,7 +79,8 @@ struct RunState
 
 // The live windows, one per commander: two runs releasing and ticking
 // interleaved never spend each other's window. A run's window is erased by a
-// new release for the same run, when it is spent, and when the run ends.
+// new release for the same run, when it is spent, when the run starts or ends,
+// and its release arms one only while the run exists.
 struct Book
 {
     std::map<std::uint64_t, RunState> runs;
@@ -96,6 +97,17 @@ struct Book
     {
         auto it = runs.find(commander);
         return it == runs.end() ? nullptr : &it->second;
+    }
+
+    // A `revive|party` release: only a live run keeps the window for the ticks after the release
+    // row; a release outside a run drops whatever window stood for that commander and leaves none,
+    // so the run it starts later begins clean.
+    void Release(std::uint64_t commander, std::vector<std::uint64_t> const& bots, bool liveRun)
+    {
+        if (liveRun)
+            Arm(commander, bots);
+        else
+            End(commander);
     }
 
     void End(std::uint64_t commander) { runs.erase(commander); }

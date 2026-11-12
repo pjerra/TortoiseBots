@@ -31,13 +31,27 @@ def run_tick_body():
 
 
 class RegroupReleaseProbeWiring(unittest.TestCase):
-    def test_the_release_arms_the_run_window(self):
+    def test_the_release_arms_only_a_live_runs_window(self):
         body = function_body("BeginRegroupReleaseProbe")
-        self.assertIn("TortoiseBots::RegroupProbe::RunState& state = RegroupProbeBook().Arm(commanderRaw, bots)", body)
+        # Only a run keeps the window; a release outside one passes false and leaves no state.
+        self.assertIn("RegroupProbeBook().Release(commanderRaw, bots, plan != nullptr)", body)
+        self.assertNotIn(".Arm(", body)
         # The release row is tick=0: the boss snapshot before any run tick spends the window.
         self.assertIn("WriteRegroupProbeBosses(map, *plan, 0)", body)
         self.assertIn("WriteRegroupProbeBot(botRaw, 0)", body)
         self.assertLess(body.index("WriteRegroupProbeBosses"), body.index("WriteRegroupProbeBot(botRaw, 0)"))
+        # The rows are the release's own, written from its bot list whether a window was armed or not.
+        self.assertIn("for (std::uint64_t botRaw : bots)", body)
+
+    def test_an_out_of_run_release_leaves_no_state(self):
+        # The book drops the commander's window for a release outside a run (the C++ test walks
+        # both cases); a run start drops whatever an earlier release left.
+        self.assertIn("void Release(std::uint64_t commander, std::vector<std::uint64_t> const& bots, bool liveRun)",
+                      POLICY)
+        self.assertIn("else\n            End(commander);", POLICY)
+        insertion = COMMANDER.index("DungeonRunSlot& stored = DungeonRuns()[commanderRaw] = slot;")
+        before = COMMANDER[COMMANDER.rindex("\n\n", 0, insertion):insertion]
+        self.assertIn("EndRegroupReleaseProbe(commanderRaw);", before)
 
     def test_the_key_gates_the_call_sites(self):
         branch = COMMANDER.index('if (word == "party")')
