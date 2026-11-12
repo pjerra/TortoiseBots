@@ -953,10 +953,11 @@ class BossTacticsSql(unittest.TestCase):
         self.assertIn("DELETE FROM `ai_boss_tactic` WHERE `map` = 249 AND `boss_entry` = 10184 "
                       "AND `kind` IN ('tank_post', 'gate_hold', 'anchor');", text)
         self.assertEqual(3, len(re.findall(r"(?m)^\(249, 10184, '", text)))
-        # The 50143/50144 rows of 20261109200100 stay.
+        # The 50143/50144 rows of 20261109200100 stay, except the Hatcher kill_first walk 2h removes
+        # (20261112200100_world.sql, pinned in test_onyxia_walk2h_burn_order).
         for key in ((249, 50143, "taunt_after_cast", 0, 0), (249, 50143, "interrupt", 0, 33439),
                     (249, 50143, "behind", 0, 33439), (249, 50143, "kill_first", 50143, 0),
-                    (249, 50144, "kill_first", 50144, 0), (249, 50144, "taunt_after_cast", 0, 0),
+                    (249, 50144, "taunt_after_cast", 0, 0),
                     (249, 50144, "behind", 0, 33441)):
             self.assertIn(key, live, "the Cindarion/Hatcher rows must stay: %s" % (key,))
 
@@ -1090,11 +1091,12 @@ class BossTacticsSql(unittest.TestCase):
                       "AND `kind` = 'hold_kill';", text)
         self.assertEqual(1, text.count("INSERT INTO `ai_boss_tactic`"))
         self.assertEqual(1, text.count("(249, 10184, 'hold_kill'"))
-        holds = [row for row in effective_rows()
-                 if row[1] == 249 and row[2] == 10184 and row[3] == "hold_kill"]
-        self.assertEqual(1, len(holds), "the Onyxia hold_kill rows are not exactly one")
-        hold = _payload_dict(holds[0])
-        self.assertEqual(name, hold["file"], "the walk 2f migration owns the hold_kill row")
+        # The row this file writes keeps its shape; walk 2h (lead decision 1) deletes it again:
+        # 20261112200100_world.sql drops the kill-first order, pinned in test_onyxia_walk2h_burn_order.
+        holds = [_payload_dict(row) for row in migration_rows()
+                 if row[0] == name and row[1] == 249 and row[2] == 10184 and row[3] == "hold_kill"]
+        self.assertEqual(1, len(holds), "the Onyxia walk 2f hold_kill insert is not exactly one")
+        hold = holds[0]
         self.assertEqual((50144, 0, 0, 0.0, "", 0, 100, 0, 0),
                          (hold["target_entry"], hold["spell_id"], hold["priority"], hold["param"],
                           hold["tactic_mode"], hold["hp_min"], hold["hp_max"], hold["bot_aura"],
@@ -1103,6 +1105,9 @@ class BossTacticsSql(unittest.TestCase):
         # The kind answers no gate: the loader refuses one, so the band stays open and no aura is set.
         self.assertFalse(hold["hp_min"] or hold["hp_max"] != 100 or hold["bot_aura"])
         self.assertIsNone(new_kind_problem(hold), "the loader rules refuse the Onyxia hold_kill row")
+        self.assertFalse([row for row in effective_rows()
+                          if row[1] == 249 and row[2] == 10184 and row[3] == "hold_kill"],
+                         "the Onyxia hold_kill row is live again after walk 2h deleted it")
 
     def test_onyxia_walk2g_hatcher_posts(self):
         # 20261112100000_world.sql: walk 2f a-2 reached P3 with the slot-1 post alone, no Hatcher was taunted and 9 of
@@ -1205,6 +1210,29 @@ class BossTacticsSql(unittest.TestCase):
                          "the 50144 taunt window is not on slot 1")
         self.assertEqual(2, live.get((249, 10184, "taunt_after_cast", 50144, 0))["priority"],
                          "the Onyxia second Hatcher window is not on slot 2")
+
+    def test_onyxia_walk2h_burn_order(self):
+        # 20261112200100_world.sql (lead decision 1): the Hatchers lost 9-25 % in 56-83 s of P3 (466k health
+        # together) while P1 takes 39 % off Onyxia in 83-97 s, so the kill-first order spent the phase on adds. The
+        # `hold_kill` row goes with it and the damage dealers fight her from the first pull; Cindarion's kill_first
+        # stays, and the 50143 gate_hold row still holds them off her while he fights.
+        name = "20261112200100_world.sql"
+        path = os.path.join(ROOT, "data/sql/world", name)
+        self.assertTrue(os.path.isfile(path), "the Onyxia walk 2h burn-order migration is missing")
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("DELETE FROM `ai_boss_tactic` WHERE `map` = 249 AND `boss_entry` = 10184 "
+                      "AND `kind` = 'hold_kill' AND `target_entry` = 50144;", text)
+        self.assertIn("DELETE FROM `ai_boss_tactic` WHERE `map` = 249 AND `boss_entry` = 50144 "
+                      "AND `kind` = 'kill_first';", text)
+        self.assertEqual(0, text.count("INSERT INTO `ai_boss_tactic`"))
+        live = {(row[1], row[2], row[3], row[4], row[5]): _payload_dict(row) for row in effective_rows()}
+        self.assertNotIn((249, 10184, "hold_kill", 50144, 0), live, "the Onyxia hold_kill row is back")
+        self.assertFalse([key for key in live if key[:2] == (249, 50144) and key[2] == "kill_first"],
+                         "a Hatcher kill_first row is back")
+        self.assertIn((249, 50143, "kill_first", 50143, 0), live, "the Cindarion kill_first row was deleted")
+        self.assertIn((249, 10184, "gate_hold", 50143, 0), live,
+                      "the 50143 gate_hold row was deleted with the Hatcher kill order")
 
     def test_onyxia_walk2b_stand_seats_are_live(self):
         # 20261110120300_world.sql: the 601 Deep Breath seats for Onyxia 10184's eight hover
@@ -2063,6 +2091,10 @@ class BossTacticsSql(unittest.TestCase):
             (531, 15275, "interrupt", 0, 7393, 0, 100),
             (531, 15276, "interrupt", 0, 7393, 0, 100),
             (532, 61224, "interrupt", 0, 57094, 0, 100),
+            # Walk 2h (lead decision 1): the Hatchers lost only 9-25 % in 56-83 s, so the P3 kill order goes with
+            # no replacement and the damage dealers fight Onyxia (20261112200100_world.sql).
+            (249, 10184, "hold_kill", 50144, 0, 0, 100),
+            (249, 50144, "kill_first", 50144, 0, 0, 100),
         }
 
         def key(row):
