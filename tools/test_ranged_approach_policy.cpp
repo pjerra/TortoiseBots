@@ -283,9 +283,59 @@ int main()
         std::cout << "  [PASS] hover second pass ignores sight\n";
     }
 
+    // HoverReachAimsAtAnchor: HoverAnchorAimPoint_CentreOutOfReach is the failing case. The room centre stands
+    // 51.4 yd 3D from the farthest hover point, outside the 46.0 yd in-range stop (the code's own trigger line
+    // 26 - 0.5 + 22 + 1.5 = 49.0 less the 3 yd slack), so a walk to the centre would end out of range. The aim
+    // must be the in-range point nearest the centre: on the ground segment from the centre toward the target's
+    // ground projection, the in-range stop less 1 yd from the target.
+    {
+        ApproachPoint aim;
+        CHECK(ai::HoverAnchorAimPoint(P(0, 0, 0), P(51.4f, 0, 0), 46.0f, aim));
+        CHECK(!Near(aim, P(0, 0, 0)));
+        CHECK(aim.x > 0.0f && aim.x < 51.4f);
+        CHECK(std::fabs(aim.y) < 0.01f && std::fabs(aim.z) < 0.01f);
+        CHECK(std::fabs(Dist(aim, P(51.4f, 0, 0)) - 45.0f) <= 0.01f);
+        std::cout << "  [PASS] hover anchor: a centre outside the line aims at the nearest in-range point\n";
+    }
+
+    // A centre already inside the in-range stop is the aim itself (38.8 yd from the target).
+    {
+        ApproachPoint aim;
+        CHECK(ai::HoverAnchorAimPoint(P(0, 0, 0), P(38.8f, 0, 0), 46.0f, aim));
+        CHECK(Near(aim, P(0, 0, 0)));
+        std::cout << "  [PASS] hover anchor: a centre in reach is the aim\n";
+    }
+
+    // HoverAnchorStopDistance_Bounds, re-pinned on the code's own trigger line (49.0, not 54.2): never nearer
+    // than today's stop (centre 30), never outside the line less the slack (centre 60), and a line inside
+    // today's stop keeps today's stop.
+    {
+        CHECK(std::fabs(ai::HoverAnchorStopDistance(42.5f, 49.0f, 48.0f) - 46.0f) <= 0.01f);
+        CHECK(std::fabs(ai::HoverAnchorStopDistance(42.5f, 49.0f, 30.0f) - 42.5f) <= 0.01f);
+        CHECK(std::fabs(ai::HoverAnchorStopDistance(42.5f, 49.0f, 60.0f) - 46.0f) <= 0.01f);
+        CHECK(std::fabs(ai::HoverAnchorStopDistance(42.5f, 44.0f, 48.0f) - 42.5f) <= 0.01f);
+        std::cout << "  [PASS] hover anchor: bounded by today's stop and the trigger line\n";
+    }
+
+    // HoverAnchorWalk_StopsOnThePath: the walk stops on the path to the aim, in range. Bot (-100,0,0) ->
+    // (-50,0,0) -> aim (6.4,0,0), target (51.4,0,0), stop 46.0; the choice is between the aim and the bot.
+    {
+        ApproachPoint const centre = P(0, 0, 0);
+        ApproachPoint const target = P(51.4f, 0, 0);
+        ApproachPoint aim;
+        CHECK(ai::HoverAnchorAimPoint(centre, target, 46.0f, aim));
+        CHECK(Near(aim, P(6.4f, 0, 0)));
+        std::vector<ApproachPoint> path = { P(-100, 0, 0), P(-50, 0, 0), aim };
+        float const stop = ai::HoverAnchorStopDistance(42.5f, 49.0f, Dist(centre, target));
+        RangedApproachChoice const choice = SelectRangedApproachPoint(path, target, stop, seesAll);
+        CHECK(choice.valid);
+        CHECK(choice.point.x > -100.0f && choice.point.x <= aim.x + 0.01f);
+        CHECK(std::fabs(Dist(choice.point, target) - stop) <= 0.1f);
+        std::cout << "  [PASS] hover anchor: the walk stops on the path to the in-range aim\n";
+    }
+
     // The row's verdict words, one per step of the walk.
     {
-        CHECK(std::string(ai::HoverReachWord(ai::HoverReachResult::NotHover)) == "not_hover");
         CHECK(std::string(ai::HoverReachWord(ai::HoverReachResult::NoGround)) == "no_ground");
         CHECK(std::string(ai::HoverReachWord(ai::HoverReachResult::NoPath)) == "no_path");
         CHECK(std::string(ai::HoverReachWord(ai::HoverReachResult::NoPoint)) == "no_point");

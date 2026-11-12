@@ -211,12 +211,73 @@ namespace ai
         return SelectRangedApproachPoint(pathToGround, target, distance, [](ApproachPoint const&) { return true; });
     }
 
-    enum class HoverReachResult : std::uint8_t { NotHover, NoGround, NoPath, NoPoint, Hazard, MoveFailed, Moved, MovedNoLos };
+    // AiPlayerbot.HoverReachAimsAtAnchor: the walk under a hovering boss parks the bot at the edge of range on the
+    // boss's side of the room, and her next hop puts it out of range again (walk 2e: 153 reaches in 510 s, one per
+    // caster per 27 s, her hop rate). With a live `anchor` row the walk follows the path to the anchor's centre
+    // instead and stops as soon as the target is in range: `reachDist` is today's stop (HoverReachDistance),
+    // `triggerDist` the centre distance at which "enemy out of spell range" stops firing, `centreToTarget` the
+    // centre's own distance to the target. The stop is never nearer than today's and never outside the trigger line.
+    constexpr float kHoverAnchorSlackYd = 3.0f;
+    // The trigger line less the slack, never inside today's hover stop: the farthest the anchor walk may stop.
+    inline float HoverAnchorReachLimit(float reachDist, float triggerDist)
+    {
+        float const hi = triggerDist - kHoverAnchorSlackYd;
+        return hi < reachDist ? reachDist : hi;
+    }
+
+    inline float HoverAnchorStopDistance(float reachDist, float triggerDist, float centreToTarget)
+    {
+        float const hi = HoverAnchorReachLimit(reachDist, triggerDist);
+        float const want = centreToTarget + kHoverAnchorSlackYd;
+        return want < reachDist ? reachDist : (want > hi ? hi : want);
+    }
+
+    // The anchor centre can itself stand outside the reach (Onyxia's room centre is 51.4 yd 3D from her farthest
+    // hover point, the in-range stop 46.0), and a walk to it would end out of range, which makes a second walk per
+    // hop. The aim is then the in-range point nearest the centre: on the ground segment from the centre toward the
+    // target's ground projection, `limit - 1` yd 3D from the target, so the path's end stands strictly inside the
+    // reach and the point selection can stop on the crossing. A centre already within `limit` is the aim itself
+    // (z stays the centre's; no boss or room constant is read). False for a centre with no ground segment to walk.
+    constexpr float kHoverAnchorAimMarginYd = 1.0f;
+    inline bool HoverAnchorAimPoint(ApproachPoint const& centre, ApproachPoint const& target, float limit,
+        ApproachPoint& out)
+    {
+        float const dx = centre.x - target.x;
+        float const dy = centre.y - target.y;
+        float const dz = centre.z - target.z;
+        float const centreDist = std::sqrt(dx * dx + dy * dy + dz * dz);
+        if (centreDist <= limit)
+        {
+            out = centre;
+            return true;
+        }
+
+        float const want = limit - kHoverAnchorAimMarginYd;
+        float const vx = target.x - centre.x;
+        float const vy = target.y - centre.y;
+        float const a = vx * vx + vy * vy;
+        if (a <= 0.0f)
+            return false;
+        float const b = 2.0f * (dx * vx + dy * vy);
+        float const c = centreDist * centreDist - want * want;
+        float const discriminant = b * b - 4.0f * a * c;
+        if (discriminant < 0.0f)
+            return false;
+        float const t = (-b - std::sqrt(discriminant)) / (2.0f * a);
+        if (t < 0.0f || t > 1.0f)
+            return false;
+
+        out.x = centre.x + t * vx;
+        out.y = centre.y + t * vy;
+        out.z = centre.z;
+        return true;
+    }
+
+    enum class HoverReachResult : std::uint8_t { NoGround, NoPath, NoPoint, Hazard, MoveFailed, Moved, MovedNoLos };
     inline const char* HoverReachWord(HoverReachResult r)
     {
         switch (r)
         {
-            case HoverReachResult::NotHover:   return "not_hover";
             case HoverReachResult::NoGround:   return "no_ground";
             case HoverReachResult::NoPath:     return "no_path";
             case HoverReachResult::NoPoint:    return "no_point";
@@ -225,6 +286,6 @@ namespace ai
             case HoverReachResult::Moved:      return "moved";
             case HoverReachResult::MovedNoLos: return "moved_nolos";
         }
-        return "not_hover";
+        return "unknown";
     }
 }

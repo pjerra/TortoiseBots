@@ -852,6 +852,10 @@ public:
     // walks to the floor under it and stops at the trigger's own combat-reach distance instead of giving up under the
     // body (default off, recommended on).
     bool rangedReachHoverTarget = false;
+    // A ranged reach under a hovering boss walks the path to the live `anchor` row's centre and stops as soon as
+    // the target is in range, so her next hop does not leave the bot out of range again (needs
+    // AiPlayerbot.RangedReachHoverTarget; default off).
+    bool hoverReachAimsAtAnchor = false;
     // The airborne-boss wand row yields to the class nuke rows for damage-dealing wand casters (Onyxia P2: mage,
     // warlock and non-healer priest; their class rows already wand only when the nuke cannot go out). Hunters,
     // melee, tanks and healers keep the row (default off).
