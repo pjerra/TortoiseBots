@@ -548,10 +548,19 @@ float ThreatMultiplier::GetValue(Action* action)
         if (threat >= 50)
         {
             Unit* const aoeTarget = action->GetTarget();
-            if (ThreatVetoLogDue(ai, bot, aoeTarget))
-                LogThreatVeto(ai, bot, action, aoeTarget, aoeTarget ? aoeTarget->GetVictim() : nullptr, "aoe", threat,
-                              ThreatValue::GetThreat(bot, aoeTarget), ThreatValue::GetTankThreat(ai, aoeTarget));
-            return 0.0f;
+            // AiPlayerbot.DungeonRunThreatFreeAoe: the `aoe` value is the worst of every possible attack target, so on
+            // airborne Onyxia it reads a whelp on the floor with no tank on it even while her own threat value is
+            // lifted. Ask the lift for this action's target: lifted, the AoE goes out, with no veto and no row.
+            bool const aoeLifted = sPlayerbotAIConfig.dungeonRunThreatFreeAoe &&
+                                   ThreatFreeLiftsAoe(true, ThreatFreeLifted(ai, bot, aoeTarget));
+            if (!aoeLifted)
+            {
+                if (ThreatVetoLogDue(ai, bot, aoeTarget))
+                    LogThreatVeto(ai, bot, action, aoeTarget, aoeTarget ? aoeTarget->GetVictim() : nullptr, "aoe",
+                                  threat, ThreatValue::GetThreat(bot, aoeTarget),
+                                  ThreatValue::GetTankThreat(ai, aoeTarget));
+                return 0.0f;
+            }
         }
     }
 

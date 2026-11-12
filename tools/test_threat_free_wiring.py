@@ -95,6 +95,25 @@ class ThreatFreeWiring(unittest.TestCase):
         self.assertIn("if (ThreatFreeLifted(ai, bot, castTarget))", cast_block)
         self.assertIn("return 1.0f;", cast_block)
 
+    def test_aoe_veto_asks_the_lift_for_its_own_target(self):
+        # AiPlayerbot.DungeonRunThreatFreeAoe: the AoE veto's `aoe` value is the worst of every possible attack target,
+        # so on airborne Onyxia a whelp on the floor kept the veto while her own threat value was lifted. The veto asks
+        # the lift for the action's target before it writes its row, and the lift is keyed.
+        start = THREAT_STRATEGY.index('if (action->GetThreatType() == ActionThreatType::ACTION_THREAT_AOE)')
+        end = THREAT_STRATEGY.index('if (ai->HasStrategy("debug threat"', start)
+        aoe_block = THREAT_STRATEGY[start:end]
+        lift = "ThreatFreeLiftsAoe(true, ThreatFreeLifted(ai, bot, aoeTarget))"
+        self.assertIn(lift, aoe_block)
+        self.assertIn("sPlayerbotAIConfig.dungeonRunThreatFreeAoe &&", aoe_block)
+        self.assertLess(aoe_block.index("if (threat >= 50)"), aoe_block.index(lift))
+        self.assertLess(aoe_block.index(lift), aoe_block.index("LogThreatVeto("))
+        self.assertIn("if (!aoeLifted)", aoe_block)
+        self.assertIn("return 0.0f;", aoe_block)
+        # No AoE row when the lift applies: the veto row sits inside the not-lifted branch only.
+        self.assertLess(aoe_block.index("if (!aoeLifted)"), aoe_block.index("LogThreatVeto("))
+        self.assertIn("inline bool ThreatFreeLiftsAoe(bool keyOn, bool targetLifted)", CAP_POLICY)
+        self.assertIn("return keyOn && targetLifted;", CAP_POLICY)
+
     def test_kind_is_parsed_and_validated(self):
         self.assertIn('if (text == "threat_free")\n            return BossTacticKind::ThreatFree;', POLICY)
         self.assertIn("ThreatFree = 29,", POLICY)
@@ -119,12 +138,18 @@ class ThreatFreeWiring(unittest.TestCase):
         load = body(CONFIG_CPP, "void PlayerbotAIConfig::LoadDungeonRunKeys(")
         self.assertIn('dungeonRunThreatFree = config.GetBoolDefault("AiPlayerbot.DungeonRunThreatFree", false);',
                       load)
+        self.assertIn('dungeonRunThreatFreeAoe = config.GetBoolDefault("AiPlayerbot.DungeonRunThreatFreeAoe", false);',
+                      load)
         self.assertIn("bool dungeonRunThreatFree = false;", CONFIG_H)
+        self.assertIn("bool dungeonRunThreatFreeAoe = false;", CONFIG_H)
         self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.DungeonRunThreatFree = 0$")
-        # Documented without "recommended on": the key is unmeasured until walk 2f.
+        self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.DungeonRunThreatFreeAoe = 0$")
+        # Documented without "recommended on": the key is unmeasured until walk 2g.
         self.assertIn("AiPlayerbot.DungeonRunThreatFree", DOCS)
+        self.assertIn("AiPlayerbot.DungeonRunThreatFreeAoe", DOCS)
         self.assertIn("threat_free", BOSS_DOCS)
         self.assertIn("AiPlayerbot.DungeonRunThreatFree", BOSS_DOCS)
+        self.assertIn("AiPlayerbot.DungeonRunThreatFreeAoe", BOSS_DOCS)
         self.assertIn("threat_free", CHANGELOG)
 
 
