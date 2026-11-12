@@ -4,6 +4,8 @@
 
 using namespace ai;
 #include "playerbot/ServerFacade.h"
+#include "playerbot/GroupMembers.h"
+#include "playerbot/BossTacticsPolicy.h"
 #include "playerbot/policy/raid/OnyxiaBreathPolicy.h"
 #include "playerbot/policy/raid/OnyxiaWhelpEggPolicy.h"
 #include "playerbot/BossTacticsStand.h"
@@ -76,10 +78,60 @@ bool OnyxiaBreathSafeZoneAction::Execute(Event& event)
     return MoveTo(bot->GetMapId(), best->x, best->y, best->z, false, IsReaction(), false, true);
 }
 
+namespace
+{
+bool IsEngagedOnyxia(Unit* unit, Player* bot)
+{
+    return unit && IsOnyxiaBossUnit(unit->GetEntry(), sServerFacade.IsAlive(unit), unit->IsInMap(bot),
+                                    unit->IsInCombat());
+}
+} // namespace
+
+ObjectGuid OnyxiaBossValue::Calculate()
+{
+    // The raid roster answers first, not the bot's own attacker list: "focus rti targets" collapses that list to the
+    // marked unit, so a whelp mark hid her and the P3 ground phase never armed. Every live member's victim and
+    // attackers is the engagement the raid sees (the source the Fankriss and Patchwerk boss lookups read); a bot
+    // without a group scans itself.
+    Group* const group = bot->GetGroup();
+    if (!group)
+    {
+        if (IsEngagedOnyxia(bot->GetVictim(), bot))
+            return bot->GetVictim()->getObjectGuid();
+        for (Unit* attacker : bot->GetAttackers())
+            if (IsEngagedOnyxia(attacker, bot))
+                return attacker->getObjectGuid();
+        return ObjectGuid();
+    }
+    for (Player* member : LiveGroupMembers(group))
+    {
+        if (!member || !member->IsInWorld() || member->GetMapId() != bot->GetMapId() ||
+            member->GetInstanceId() != bot->GetInstanceId() || !sServerFacade.IsAlive(member))
+            continue;
+        if (IsEngagedOnyxia(member->GetVictim(), bot))
+            return member->GetVictim()->getObjectGuid();
+        for (Unit* attacker : member->GetAttackers())
+            if (IsEngagedOnyxia(attacker, bot))
+                return attacker->getObjectGuid();
+    }
+    return ObjectGuid();
+}
+
 OnyxiaWhelpScan ai::ScanOnyxiaWhelps(PlayerbotAI* ai, Player* bot)
 {
     OnyxiaWhelpScan scan;
     AiObjectContext* context = ai->GetAiObjectContext();
+    // Her engagement, never the attacker list: "focus rti targets" collapses that list to the marked unit, and a
+    // whelp mark used to hide her from the phase. The cached boss value walks the raid roster's victims and attackers.
+    Unit* const boss = ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"));
+    bool bossFound = false;
+    float bossPct = 0.0f;
+    if (boss && IsOnyxiaBossUnit(boss->GetEntry(), sServerFacade.IsAlive(boss), boss->IsInMap(bot), boss->IsInCombat()))
+    {
+        bossFound = true;
+        scan.bossAirborne = boss->HasAura(kOnyxiaHoverAura);
+        bossPct = boss->GetHealthPercent();
+    }
     // Cached attackers only: whelps jump the raid, so they are on this
     // list; no grid sweep.
     const std::list<ObjectGuid> attackers = AI_VALUE(std::list<ObjectGuid>, "attackers");
@@ -93,12 +145,6 @@ OnyxiaWhelpScan ai::ScanOnyxiaWhelps(PlayerbotAI* ai, Player* bot)
         Unit* unit = ai->GetUnit(guid);
         if (!unit || !sServerFacade.IsAlive(unit))
             continue;
-        if (unit->GetEntry() == kOnyxiaEntry)
-        {
-            // Core drives phase 2 flight via the Hover aura (17131).
-            scan.bossAirborne = unit->HasAura(17131);
-            continue;
-        }
         if (unit->GetEntry() != kOnyxianWhelpEntry)
             continue;
         const float dist = bot->GetDistance(unit);
@@ -123,6 +169,10 @@ OnyxiaWhelpScan ai::ScanOnyxiaWhelps(PlayerbotAI* ai, Player* bot)
             scan.whelp = unit;
         }
     }
+    // The ground crew changes the add_crew's work, so it needs both keys; the whelp key itself is the action's own gate.
+    const bool crewOnGround = sPlayerbotAIConfig.onyxiaWhelpCrewOnGround && sPlayerbotAIConfig.onyxiaWhelpsAndEggs &&
+        sPlayerbotAIConfig.dungeonRunAddCrew;
+    scan.whelpPhase = OnyxiaWhelpPhase(scan.bossAirborne, crewOnGround, bossFound, bossPct);
     return scan;
 }
 
@@ -132,7 +182,20 @@ bool ai::IsOnyxiaWhelpDuty(PlayerbotAI* ai, Player* bot)
     if (!sPlayerbotAIConfig.dungeonRunAddCrew)
         return today;
     AiObjectContext* context = ai->GetAiObjectContext();
-    return OnyxiaWhelpDutyFor(today, AI_VALUE2(uint8, "add crew", static_cast<int32>(kOnyxiaEntry)));
+    uint8 const crewState = AI_VALUE2(uint8, "add crew", static_cast<int32>(kOnyxiaEntry));
+    if (crewState != static_cast<uint8>(AddCrewState::Waiting))
+        return OnyxiaWhelpDutyFor(today, crewState);
+    // The row still waits (its switch unit lives): the air keeps today's duty, but the P3 ground keeps only the crew's
+    // own bots on the whelps instead of every AoE ranged damage dealer of the raid.
+    Unit* const boss = ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"));
+    bool const found = boss && IsOnyxiaBossUnit(boss->GetEntry(), sServerFacade.IsAlive(boss), boss->IsInMap(bot),
+                                              boss->IsInCombat());
+    bool const airborne = found && boss->HasAura(kOnyxiaHoverAura);
+    bool const crewOnGround = sPlayerbotAIConfig.onyxiaWhelpCrewOnGround && sPlayerbotAIConfig.onyxiaWhelpsAndEggs;
+    if (!OnyxiaGroundPhase(airborne, crewOnGround, found, found ? boss->GetHealthPercent() : 0.0f))
+        return today;
+    return OnyxiaWaitingGroundDuty(today,
+        AI_VALUE2(bool, "add crew keeps duty", static_cast<int32>(kOnyxiaEntry)));
 }
 
 std::vector<GameObject*> ai::CollectOnyxiaEggs(PlayerbotAI* ai)
@@ -175,10 +238,12 @@ bool OnyxiaKillWhelpsAction::Execute(Event& event)
     (void)event;
     if (!sPlayerbotAIConfig.onyxiaWhelpsAndEggs || bot->GetMapId() != kOnyxiaMapId)
         return false;
-    if (!IsOnyxiaWhelpDuty(ai, bot) || !AI_VALUE(ObjectGuid, "explicit attack target").IsEmpty())
+    const bool duty = IsOnyxiaWhelpDuty(ai, bot);
+    if (!duty || !AI_VALUE(ObjectGuid, "explicit attack target").IsEmpty())
         return false;
     const OnyxiaWhelpScan scan = ScanOnyxiaWhelps(ai, bot);
-    if (!scan.bossAirborne || !scan.whelp)
+    // On the ground the crew is the melee and its ranged; a tank keeps its post or the generic pick.
+    if (!OnyxiaGroundDuty(duty, PlayerbotAI::IsTank(bot), scan.bossAirborne) || !scan.whelpPhase || !scan.whelp)
         return false;
     // Already on a whelp: keep it (donor early-out).
     Unit* current = AI_VALUE(Unit*, "current target");
@@ -194,16 +259,9 @@ bool OnyxiaAttackBossAction::Execute(Event& event)
     (void)event;
     if (!sPlayerbotAIConfig.dungeonRunAddCrew || bot->GetMapId() != kOnyxiaMapId)
         return false;
-    Unit* boss = nullptr;
-    for (const ObjectGuid& attackerGuid : AI_VALUE(std::list<ObjectGuid>, "attackers"))
-    {
-        Unit* attacker = ai->GetUnit(attackerGuid);
-        if (attacker && attacker->GetEntry() == kOnyxiaEntry && sServerFacade.IsAlive(attacker))
-        {
-            boss = attacker;
-            break;
-        }
-    }
+    // The trigger's own lookup: "focus rti targets" collapses the attacker list to the marked whelp, and this return
+    // must still reach her.
+    Unit* const boss = ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"));
     if (!boss || !PossibleAttackTargetsValue::IsValid(boss, bot))
         return false;
     return Attack(bot, boss);
@@ -217,14 +275,20 @@ float OnyxiaWhelpHoldMultiplier::GetValue(Action* action)
     const bool aoe = dynamic_cast<DpsAoeAction*>(action) != nullptr;
     if (!assist && !aoe)
         return 1.0f;
-    if (bot->GetMapId() != kOnyxiaMapId || !IsOnyxiaWhelpDuty(ai, bot))
+    if (bot->GetMapId() != kOnyxiaMapId)
+        return 1.0f;
+    const bool duty = IsOnyxiaWhelpDuty(ai, bot);
+    if (!duty)
         return 1.0f;
     Unit* current = AI_VALUE(Unit*, "current target");
     const bool onWhelp = current && sServerFacade.IsAlive(current) && current->GetEntry() == kOnyxianWhelpEntry;
     if (!onWhelp || !AI_VALUE(ObjectGuid, "explicit attack target").IsEmpty())
         return 1.0f;
-    // The hold only lasts while the boss is airborne (phase 2).
-    return ScanOnyxiaWhelps(ai, bot).bossAirborne ? 0.0f : 1.0f;
+    // The hold lasts while the whelp phase does: airborne, or the ground crew's last 40 % (a tank's hold ends there).
+    const OnyxiaWhelpScan scan = ScanOnyxiaWhelps(ai, bot);
+    if (!OnyxiaGroundDuty(duty, PlayerbotAI::IsTank(bot), scan.bossAirborne))
+        return 1.0f;
+    return scan.whelpPhase ? 0.0f : 1.0f;
 }
 
 bool OnyxiaAvoidEggsAction::Execute(Event& event)

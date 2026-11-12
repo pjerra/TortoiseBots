@@ -129,6 +129,7 @@ These settings configure boss encounter mechanics, environmental hazard evasion,
 | [`AiPlayerbot.EnableCustomRaidTactics`](#aiplayerbotenablecustomraidtactics) | `1` | Gates scripted encounter tactics and transition strategies for custom raids. |
 | [`AiPlayerbot.HazardEvasionDistance`](#aiplayerbothazardevasiondistance) | `12.0` | Cap in yards on the step bots take when spreading for spacing. |
 | [`AiPlayerbot.OnyxiaWhelpsAndEggs`](#aiplayerbotonyxiawhelpsandeggs) | `1` | Prioritizes whelp clearing and egg avoidance during Onyxia phase two. |
+| [`AiPlayerbot.OnyxiaWhelpCrewOnGround`](#aiplayerbotonyxiawhelpcrewonground) | `0` | `1`: the add crew keeps hunting the whelps in Onyxia's last 40 % on the ground, with the tanks on their posts (needs `AiPlayerbot.OnyxiaWhelpsAndEggs` and `AiPlayerbot.DungeonRunAddCrew`). |
 | [`AiPlayerbot.RaidEntryByCommander`](#aiplayerbotraidentrybycommander) | `1` | Waives a bot's failed entrance condition at a raid entrance with no area-trigger script when its commander is a real player who commands the raid (in the group, or through the binding of a bound raid) and meets it. |
 
 ## Settings
@@ -1944,6 +1945,25 @@ Active on map 249 (Onyxia's Lair) only while the `onyxia` fight strategy is acti
 - All bots in the encounter back away toward the nearest cave mouth (`-10,-180` north, `-16,-250` south) if they find themselves within 12 yards of unbroken Onyxia eggs.
 
 An explicit attack order always takes precedence over automated whelp targeting. When set to `0`, bots use standard target selection and ignore egg proximity.
+
+</details>
+
+### `AiPlayerbot.OnyxiaWhelpCrewOnGround`
+Keeps the whelp crew hunting the whelps in Onyxia's last 40 % on the ground, not only while she hovers.
+**Default:** `0` · **Values:** `0` off (the whelps are hunted while she hovers only), `1` on (the hunt runs in her last 40 % on the ground as well) · **Restart:** not needed (`.reload config` applies it with the other `AiPlayerbot.DungeonRun*` keys) · **Needs:** `AiPlayerbot.OnyxiaWhelpsAndEggs = 1` and `AiPlayerbot.DungeonRunAddCrew = 1`
+
+<details>
+<summary>How it works in detail</summary>
+
+The whelp duty (`AiPlayerbot.OnyxiaWhelpsAndEggs`) covers the airborne phase. With this key on, the whelp phase is also her last 40 % on the ground (the boss is found and its health is at or below 40 %), so the add crew keeps the whelps in the phase that kills the raid (walk 2g: 12-16 whelps up in P3, 21 at the peak, 28 P3 deaths to them):
+
+- the crew's melee and its ranged keep hunting the nearest whelp, as while she hovers;
+- while Cindarion still lives (the `add_crew` row still waits), only the crew's own AoE ranged damage dealers take the whelps on the ground: the rest of the raid's AoE ranged stay on her, where today's duty alone would have put every one of them on the whelps;
+- the tanks keep their boss-tactic posts (or the generic pick), so the whelp duty never pulls them off a post;
+- the other ranged damage dealers stay on her: they still leave a whelp for her (the airborne return now runs on the ground too), because the crew's melee is on the whelps there;
+- the phase 1 pull (above 40 %) is untouched.
+
+Only active on map 249 with the `onyxia` fight strategy; an explicit target order from a player always wins. When set to `0`, the hunt is airborne-only and every phase behaves as before.
 
 </details>
 

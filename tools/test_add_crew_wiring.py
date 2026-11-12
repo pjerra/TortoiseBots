@@ -3,10 +3,11 @@
 The decision is pure (ai/playerbot/BossTacticsPolicy.h: AddCrewStateFor, AddCrewMember, AddCrewRank, the loader and the
 table) and tested in tools/test_boss_tactics_policy.cpp; the Onyxia glue (OnyxiaWhelpDutyFor, ShouldReturnToOnyxia) is
 in tools/test_onyxia_whelp_egg_policy.cpp and the row shape in tools/test_boss_tactics_sql.py. These pins prove the live
-code calls the rules: the value reads the key first, the switch unit through the tank-post grid search, the raid's AoE
-ranged bots through their own AIs; the whelp duty and the return to the boss read the value only under the key; the
-trigger, the action and the value are registered; and the key is read, templated, documented without "recommended on",
-and shipped with its row.
+code calls the rules: the value reads the key first, the switch unit through the tank-post grid search, the crew's own
+place through the separate `add crew keeps duty` value (the raid's AoE ranged bots through their own AIs, whatever the
+switch unit's life); the whelp duty and the return to the boss read the value only under the key; the trigger, the
+action and the values are registered; and the key is read, templated, documented without "recommended on", and shipped
+with its row.
 
 Run: python3 -m unittest tools/test_add_crew_wiring.py
 """
@@ -76,6 +77,18 @@ class AddCrewWiring(unittest.TestCase):
         self.assertIn('AI_VALUE2(std::vector<TankPostUnit>, "tank post units", static_cast<int32>(switchEntry))',
                       value)
         self.assertIn("if (unit.alive)", value)
+        # The crew's place is the separate value: it stands whatever the switch unit's life.
+        self.assertIn('AI_VALUE2(bool, "add crew keeps duty", qualifier)', value)
+        self.assertIn("AddCrewStateFor(true, true, switchAlive, member)", value)
+        self.assertIn('creators["add crew"] = [](PlayerbotAI* ai) { return new AddCrewValue(ai); };', VALUE_CONTEXT)
+
+    def test_crew_place_reads_the_raid_whatever_the_switch(self):
+        self.assertIn("class AddCrewKeepsDutyValue : public BoolCalculatedValue, public Qualified", VALUES_H)
+        self.assertIn('BoolCalculatedValue(ai, "add crew keeps duty", 2)', VALUES_H)
+        value = body(VALUES_CPP, "bool AddCrewKeepsDutyValue::Calculate()")
+        # Key and row first: with either off there is no crew to apply, so today's duty stands.
+        self.assertLess(value.index("if (!sPlayerbotAIConfig.dungeonRunAddCrew)"), value.index("AddCrewOf("))
+        self.assertIn("return true;", value)
         # The raid's AoE ranged bots: alive group members on this map and instance, not tanks or healers, ranged by
         # their own AI and in the crew's class order.
         self.assertIn("for (Player* member : LiveGroupMembers(bot->GetGroup()))", value)
@@ -87,8 +100,8 @@ class AddCrewWiring(unittest.TestCase):
         self.assertIn("AddCrewClassOrder(member->GetClass())", value)
         self.assertIn("AddCrewRank(candidates, bot->GetObjectGuid().GetRawValue())", value)
         self.assertIn("AddCrewMember(PlayerbotAI::IsTank(bot), PlayerbotAI::IsHeal(bot), ai->IsRanged(bot),", value)
-        self.assertIn("AddCrewStateFor(true, true, switchAlive, member)", value)
-        self.assertIn('creators["add crew"] = [](PlayerbotAI* ai) { return new AddCrewValue(ai); };', VALUE_CONTEXT)
+        self.assertIn('creators["add crew keeps duty"] = [](PlayerbotAI* ai) { return new AddCrewKeepsDutyValue(ai); };',
+                      VALUE_CONTEXT)
 
     def test_whelp_duty_reads_the_value_only_under_the_key(self):
         duty = body(ACTIONS, "bool ai::IsOnyxiaWhelpDuty(PlayerbotAI* ai, Player* bot)")
@@ -96,32 +109,37 @@ class AddCrewWiring(unittest.TestCase):
                       "PlayerbotAI::IsHeal(bot), ai->IsRanged(bot));", duty)
         self.assertLess(duty.index("if (!sPlayerbotAIConfig.dungeonRunAddCrew)"), duty.index('"add crew"'))
         self.assertIn("AiObjectContext* context = ai->GetAiObjectContext();", duty)
-        self.assertIn('OnyxiaWhelpDutyFor(today, AI_VALUE2(uint8, "add crew", '
-                      "static_cast<int32>(kOnyxiaEntry)))", duty)
+        self.assertIn('uint8 const crewState = AI_VALUE2(uint8, "add crew", '
+                      "static_cast<int32>(kOnyxiaEntry));", duty)
+        self.assertIn("OnyxiaWhelpDutyFor(today, crewState)", duty)
         self.assertIn("inline bool OnyxiaWhelpDutyFor(bool todayDuty, std::uint8_t crewState)", WHELP_POLICY)
         self.assertIn("return crewState == 1 ? true : crewState == 2 ? false : todayDuty;", WHELP_POLICY)
 
     def test_other_ranged_return_to_the_boss(self):
         self.assertIn("inline bool ShouldReturnToOnyxia(bool keyOn, std::uint8_t crewState, bool rangedDps, "
-                      "bool bossAirborne,", WHELP_POLICY)
-        self.assertIn("return keyOn && crewState == 2 && rangedDps && bossAirborne && onWhelp && !explicitOrder && "
+                      "bool whelpPhase,", WHELP_POLICY)
+        self.assertIn("return keyOn && crewState == 2 && rangedDps && whelpPhase && onWhelp && !explicitOrder && "
                       "bossValid;", WHELP_POLICY)
         trigger = body(TRIGGERS, "bool OnyxiaBossDutyTrigger::IsActive()")
         self.assertIn("if (!sPlayerbotAIConfig.dungeonRunAddCrew || bot->GetMapId() != kOnyxiaMapId)", trigger)
         self.assertIn('ai->HasStrategy("onyxia", BotState::BOT_STATE_COMBAT)', trigger)
         self.assertIn("ScanOnyxiaWhelps(ai, bot)", trigger)
-        self.assertIn("scan.bossAirborne", trigger)
+        self.assertIn("scan.whelpPhase", trigger)
+        self.assertNotIn("scan.bossAirborne", trigger)
         self.assertIn("current->GetEntry() == kOnyxianWhelpEntry", trigger)
         self.assertIn('AI_VALUE(ObjectGuid, "explicit attack target")', trigger)
         self.assertIn("HoverReachTakerIsRangedDps(PlayerbotAI::IsTank(bot), PlayerbotAI::IsHeal(bot), "
                       "ai->IsRanged(bot))", trigger)
         self.assertIn('ShouldReturnToOnyxia(true, AI_VALUE2(uint8, "add crew", '
                       "static_cast<int32>(kOnyxiaEntry)),", trigger)
+        # Both the trigger and the action it fires take her from the engagement value, never the attacker list that
+        # "focus rti targets" collapses to a marked whelp.
+        self.assertIn('Unit* const boss = ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"));', trigger)
         self.assertIn("PossibleAttackTargetsValue::IsValid(boss, bot)", trigger)
-        # The action takes the live boss among the attackers and only a valid target.
         action = body(ACTIONS, "bool OnyxiaAttackBossAction::Execute(Event& event)")
         self.assertIn("if (!sPlayerbotAIConfig.dungeonRunAddCrew || bot->GetMapId() != kOnyxiaMapId)", action)
-        self.assertIn("attacker->GetEntry() == kOnyxiaEntry && sServerFacade.IsAlive(attacker)", action)
+        self.assertIn('Unit* const boss = ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"));', action)
+        self.assertNotIn('"attackers"', action)
         self.assertIn("PossibleAttackTargetsValue::IsValid(boss, bot)", action)
         self.assertIn("return Attack(bot, boss);", action)
         self.assertIn('AttackAction(ai, "onyxia attack boss")', ACTIONS_H)
