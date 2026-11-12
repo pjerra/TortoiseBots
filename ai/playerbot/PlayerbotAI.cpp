@@ -350,6 +350,7 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
     // thread and the same tick, after the maps may have despawned an add of the cached scan.
     ai::BossTacticsScanScope bossTacticsScan;
     ai::ReleaseWalkoutPet(bot);
+    ai::HoldTankFirstPet(this, bot);
     ++aiUpdateTick;
     AiObjectContext* context = aiObjectContext;
     std::unique_ptr<PerformanceMonitorOperation> pmo;

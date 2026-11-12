@@ -23,7 +23,7 @@ KINDS = {"interrupt", "kill_first", "behind", "avoid_cast", "tank_hold", "hold_k
          "linked_death", "dps_hold_after", "dispel_priority", "flee_on_aura", "freeze_on_aura",
          "taunt_after_cast", "swap_on_aura", "use_object", "seek_aura", "pull_gate", "spread", "needs_aura",
          "burn_mana", "ranged_only", "threat_successor", "anchor", "tank_ignore", "seek_pull", "gate_hold", "tank_post",
-         "heal_reserve", "seek_park"}
+         "heal_reserve", "seek_park", "tank_first"}
 # Kinds read straight from the table (the dps and tank pickers, the linked_death scan), never from a fight scan: a row
 # of one of them cannot answer a gate, so the loader refuses one.
 TABLE_READ_KINDS = {"hold_kill", "tank_hold", "one_at_a_time", "linked_death", "threat_successor", "tank_ignore"}
@@ -385,6 +385,27 @@ def new_kind_problem(row):
             return "seek_park apply budget outside [3, 15]"
         if row["tactic_mode"]:
             return "a mode word on seek_park"
+        if row["cycle_spell"] or row["cycle_s"] or has_spot:
+            return "cycle or spot columns on another kind"
+        return None
+    if kind == "tank_first":
+        # The add (target_entry, never the row's own boss), the dwell in seconds (`param`, 1-10), the longest hold of
+        # one episode (`window_s`, 5-60) and the losses that re-hold it (`priority`, 0-5). A fight-scan kind, so a health
+        # band arms it; no spell, spot, cycle columns or mode word.
+        if not row["target_entry"]:
+            return "tank_first without its add"
+        if row["target_entry"] == row["boss_entry"]:
+            return "tank_first add is its own boss"
+        if row["spell_id"]:
+            return "tank_first with a spell"
+        if not 0 <= row["priority"] <= 5:
+            return "tank_first losses outside [0, 5]"
+        if not 1.0 <= row["param"] <= 10.0:
+            return "tank_first dwell outside [1, 10]"
+        if not 5.0 <= row["window_s"] <= 60.0:
+            return "tank_first cap outside [5, 60]"
+        if row["tactic_mode"]:
+            return "a mode word on tank_first"
         if row["cycle_spell"] or row["cycle_s"] or has_spot:
             return "cycle or spot columns on another kind"
         return None
@@ -821,6 +842,56 @@ class BossTacticsSql(unittest.TestCase):
                       "AND `kind` = 'heal_reserve' AND `target_entry` = 0 AND `spell_id` = 0 "
                       "AND `hp_min` = 0 AND `hp_max` = 100;", text)
         self.assertEqual(1, len(re.findall(r"(?m)^\(309, 14834, '", text)))
+
+    def test_hakkar_tank_first_row(self):
+        # 20261113100000_world.sql (r13): no damage on a Son of Hakkar until a tank has been its victim for 3 s, and
+        # again after up to 2 losses; one hold ends after 15 s without a tank. Behind
+        # AiPlayerbot.DungeonRunAddTankFirst (default 0): off, the fight behaves as today.
+        name = "20261113100000_world.sql"
+        path = os.path.join(ROOT, "data/sql/world", name)
+        self.assertTrue(os.path.isfile(path), "the tank_first migration is missing")
+        self.assertGreater(name, "20261112200100_world.sql")
+        live = {(row[1], row[2], row[3], row[4], row[5]): _payload_dict(row) for row in effective_rows()}
+        row = live.get((309, 14834, "tank_first", 11357, 0))
+        self.assertIsNotNone(row, "the Hakkar tank_first row is missing")
+        self.assertEqual(name, row["file"], "the tank_first migration owns the row")
+        self.assertEqual((2, 3.0, 15.0, "", 0, 0.0, 0, 100),
+                         (row["priority"], row["param"], row["window_s"], row["tactic_mode"],
+                          row["cycle_spell"], row["cycle_s"], row["hp_min"], row["hp_max"]),
+                         "the Hakkar tank_first row drifted")
+        self.assertIsNone(new_kind_problem(row))
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("DELETE FROM `ai_boss_tactic` WHERE `map` = 309 AND `boss_entry` = 14834 "
+                      "AND `kind` = 'tank_first' AND `target_entry` = 11357 AND `spell_id` = 0 "
+                      "AND `hp_min` = 0 AND `hp_max` = 100;", text)
+        self.assertEqual(1, len(re.findall(r"(?m)^\(309, 14834, '", text)))
+        # The row is Hakkar's alone: no other boss, add or map carries a tank_first row (Onyxia's whelps and Hatchers
+        # must never get one), and the rollback deletes the same key.
+        others = [key for key in live if key[2] == "tank_first" and key != (309, 14834, "tank_first", 11357, 0)]
+        self.assertEqual([], others, "a tank_first row outside Hakkar's Son")
+        rollback = os.path.join(ROOT, "tools/sql/rollback/20261113100000_world.rollback.sql")
+        self.assertTrue(os.path.isfile(rollback), "the tank_first rollback is missing")
+        with open(rollback, encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("DELETE FROM `ai_boss_tactic` WHERE `map` = 309 AND `boss_entry` = 14834 "
+                      "AND `kind` = 'tank_first' AND `target_entry` = 11357 AND `spell_id` = 0 "
+                      "AND `hp_min` = 0 AND `hp_max` = 100;", text)
+        self.assertNotIn("INSERT INTO", text)
+
+    def test_tank_first_validator_bounds(self):
+        # The validator's own bounds, as BossTacticTable::Add refuses them. Mutation (SQL): a param of 0 in the row is
+        # caught by test_hakkar_tank_first_row; these pin the same bounds on a synthetic row.
+        base = {"kind": "tank_first", "map": 309, "boss_entry": 14834, "target_entry": 11357, "spell_id": 0,
+                "priority": 2, "param": 3.0, "window_s": 15.0, "tactic_mode": "", "hp_min": 0, "hp_max": 100,
+                "bot_aura": 0, "cycle_spell": 0, "cycle_s": 0.0, "spot_x": 0.0, "spot_y": 0.0, "spot_z": 0.0}
+        self.assertIsNone(new_kind_problem(dict(base)))
+        for key, value in (("target_entry", 0), ("target_entry", 14834), ("spell_id", 24321), ("priority", 6),
+                           ("param", 0.5), ("param", 10.5), ("window_s", 4.0), ("window_s", 61.0),
+                           ("tactic_mode", "until_tank"), ("spot_x", -11787.4), ("cycle_spell", 24324)):
+            broken = dict(base)
+            broken[key] = value
+            self.assertIsNotNone(new_kind_problem(broken), "%s = %r" % (key, value))
 
     def test_hakkar_seek_park_row(self):
         # r11-1 (20261111150000_world.sql): the walked Son of Hakkar is parked under a Polymorph or Hibernate, nobody

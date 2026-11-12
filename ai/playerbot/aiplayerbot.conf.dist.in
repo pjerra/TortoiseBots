@@ -1175,6 +1175,16 @@ AiPlayerbot.DungeonRunSeekVictimRelief = 0
 # budget, or breaks more often than the row allows, falls back to today's take and burn. Off keeps today's walk-out.
 AiPlayerbot.DungeonRunSeekPark = 0
 
+# Tank the add first (recommended on; needs the boss tactics and a `tank_first` row for the fight): from the moment the
+# row's add (target_entry) fights the group, every bot that is not a tank does no damage to it until a tank has been its
+# victim for the row's dwell (param) without a break, and again after up to `priority` losses (the add went back to a
+# non-tank above 20 % health); one hold lasts at most `window_s`. The damage stops at once on a loss: swings, shots and
+# casts already under way at the add are cut, a pet is pulled off, and area casts within 10 yd of it are stood down. The
+# add is free at or under 20 % health, after the row's cap without a tank, while no tank of the raid is usable (alive,
+# uncharmed, within 100 yd), and inside the last 15 s before a seek source's cycle spell. Tanks and human players are
+# never held. Off keeps today's behaviour.
+AiPlayerbot.DungeonRunAddTankFirst = 0
+
 # The walk-out's face-and-cast (Hakkar's seek pull, recommended on): at its stand the puller stops, turns to the Son
 # with an instant turn and casts in the same tick, and the bot's own per-update facing no longer turns the live, unshot
 # puller back to Hakkar; the 6 s no-shot clock counts only the time in shot position (range, sight, the stand's floor,

@@ -55,7 +55,8 @@ class SeekTakeSrcWiring(unittest.TestCase):
         self.assertIn("bool edgeTake = false;", take)
         self.assertIn("edgeTake = !chaseRefused;", take)
         self.assertLess(take.index("chaseRefused = edge != SeekTakeEdge::Allowed;"), take.index("edgeTake = !chaseRefused;"))
-        self.assertIn("task.meet, SeekTakeSrcWord(task.takeSrc, edgeTake), beyondYd);", take)
+        self.assertIn("const std::string takeSrc = SeekTakeSrcWord(task.takeSrc, edgeTake);", take)
+        self.assertIn("task.meet, takeSrc, beyondYd);", take)
 
     def test_the_field_is_documented(self):
         self.assertIn("meet=<0\\|1> src=<word>", ROWS)

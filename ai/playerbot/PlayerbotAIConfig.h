@@ -720,6 +720,12 @@ public:
     // not land within the row's budget, or breaks more often than the row allows, falls back to today's take and
     // burn. Needs dungeonRunSeekAura and dungeonRunSeekPullCycle; off keeps today's walk-out (default off).
     bool dungeonRunSeekPark = false;
+    // Tank the add first (any fight with a `tank_first` row): on, every bot that is not a tank does no damage to the
+    // row's add until a tank has been its victim for the row's dwell, and again after up to the row's losses; the add is
+    // free at or under 20 % health, after the row's cap without a tank, while no tank is usable and inside the last 15 s
+    // before a seek source's cycle spell. Needs the boss tactics strategy and a `tank_first` row; off keeps today's
+    // behaviour (default off, recommended on).
+    bool dungeonRunAddTankFirst = false;
     // The walk-out's face-and-cast (Hakkar's seek pull): on, the puller at its stand stops, turns to the Son with the
     // instant forced turn and casts in the same tick, UpdateFaceTarget leaves the live unshot puller's facing alone, and
     // the 6 s no-shot clock counts only the time spent in shot position; off, the turn-then-cast-next-tick of the walk-out

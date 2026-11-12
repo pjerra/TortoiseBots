@@ -4662,6 +4662,69 @@ int main()
         CHECK(!TankIgnoresUnit(true, std::vector<std::uint32_t>{}, engaged)); // no row
     }
 
+    // tank_first (r13): the add (target_entry, never the row's own boss), the dwell (param 1-10 s), the cap (window_s
+    // 5-60 s) and the losses (priority 0-5). A fight-scan kind, so a health band arms it; no spell, no mode word, no
+    // spot and no cycle columns. The map flag and the entry's boss list are the table indexes the readers use.
+    //   Old code: ParseBossTacticKind("tank_first") is None and the D15 row is skipped.
+    //   Mutation caught: dropping `row.targetEntry == row.bossEntry` lets the boss be held as its own add.
+    {
+        CHECK(ParseBossTacticKind("tank_first") == BossTacticKind::TankFirst);
+        CHECK(static_cast<int>(BossTacticKind::TankFirst) == 32);
+        BossTacticRow tankFirst = Row(309, 14834, BossTacticKind::TankFirst, 11357, 0, 2, 3.0f);
+        tankFirst.windowSec = 15.0f;
+        {
+            BossTacticTable table;
+            CHECK(table.Add(tankFirst));
+            CHECK(!table.HasTankFirstMap(309)); // not sealed
+            CHECK(table.TankFirstBosses(309, 11357).empty());
+            table.Seal();
+            CHECK(table.HasTankFirstMap(309));
+            CHECK(table.TankFirstBosses(309, 11357) == std::vector<std::uint32_t>{14834});
+            CHECK(table.TankFirstBosses(309, 14834).empty());
+            CHECK(table.TankFirstBosses(249, 11357).empty());
+            CHECK(!table.HasTankFirstMap(249)); // no Onyxia row: whelps and Hatchers are untouched
+        }
+        // The shape: each deviation is a different refusal.
+        for (const BossTacticRow& bad : std::vector<BossTacticRow>{
+                 [&] { BossTacticRow row = tankFirst; row.targetEntry = 0; return row; }(),
+                 [&] { BossTacticRow row = tankFirst; row.targetEntry = 14834; return row; }(),
+                 [&] { BossTacticRow row = tankFirst; row.spellId = 24321; return row; }(),
+                 [&] { BossTacticRow row = tankFirst; row.param = 0.5f; return row; }(),
+                 [&] { BossTacticRow row = tankFirst; row.param = 10.5f; return row; }(),
+                 [&] { BossTacticRow row = tankFirst; row.windowSec = 4.0f; return row; }(),
+                 [&] { BossTacticRow row = tankFirst; row.windowSec = 61.0f; return row; }(),
+                 [&] { BossTacticRow row = tankFirst; row.priority = 6; return row; }(),
+                 [&] { BossTacticRow row = tankFirst; row.mode = TacticMode::UntilTank; return row; }(),
+                 [&] { BossTacticRow row = tankFirst; row.spotX = -11787.4f; return row; }(),
+                 [&] { BossTacticRow row = tankFirst; row.cycleSpell = 24324; return row; }(),
+                 [&] { BossTacticRow row = tankFirst; row.cycleSec = 90.0f; return row; }()})
+        {
+            BossTacticTable table;
+            CHECK(!table.Add(bad));
+        }
+        // A health band is a fight-scan question: a tank_first row may carry one.
+        {
+            BossTacticTable table;
+            CHECK(table.Add(Gated(tankFirst, 0, 40)));
+        }
+        // The edges of the row's own numbers load: a 1 s dwell, a 5 s cap, no losses.
+        {
+            BossTacticRow edge = Row(309, 14834, BossTacticKind::TankFirst, 11357, 0, 0, 1.0f);
+            edge.windowSec = 5.0f;
+            BossTacticTable table;
+            CHECK(table.Add(edge));
+        }
+        // Two rows of one boss and add are still two keys when their health bands differ (the gates arm them apart).
+        {
+            BossTacticTable table;
+            CHECK(table.Add(tankFirst));
+            CHECK(!table.Add(tankFirst));
+            CHECK(table.Add(Gated(tankFirst, 0, 40)));
+            table.Seal();
+            CHECK(table.TankFirstBosses(309, 11357) == std::vector<std::uint32_t>({14834, 14834}));
+        }
+    }
+
     std::cout << "All boss tactics policy tests passed.\n";
     return 0;
 }

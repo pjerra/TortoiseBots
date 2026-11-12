@@ -71,6 +71,7 @@ namespace ai
         TankPost = 27,        // a named tank waits at a spot for a unit that is not in the fight yet, then attacks it
         SeekPark = 28,        // the walked source is held under a control, nobody touches it, a tank takes it at the lead
         HealReserve = 29,     // healers keep the row's mana % back from top-ups outside its window and distress release
+        TankFirst = 32, // non-tanks do no damage to target_entry until a tank has been its victim for param seconds
     };
 
     // The per-kind mode word of a row (`tactic_mode`), or Invalid when the word does not belong to the row's kind. An
@@ -212,6 +213,8 @@ namespace ai
             return BossTacticKind::SeekPark;
         if (text == "heal_reserve")
             return BossTacticKind::HealReserve;
+        if (text == "tank_first")
+            return BossTacticKind::TankFirst;
         return BossTacticKind::None;
     }
 
@@ -645,6 +648,14 @@ namespace ai
                     row.param > 100.0f || row.windowSec < 0.0f || row.windowSec > 120.0f ||
                     row.mode != TacticMode::Default))
                 return false;
+            // tank_first: the add (target_entry, never the row's own boss), the dwell in seconds (param, 1-10), the longest
+            // hold of one episode (window_s, 5-60) and the losses that re-hold it (priority, 0-5). A fight-scan kind, so its
+            // health band arms it. No spell, no mode word, no spot and no cycle columns.
+            if (row.kind == BossTacticKind::TankFirst &&
+                (row.targetEntry == 0 || row.targetEntry == row.bossEntry || row.spellId != 0 || row.priority > 5 ||
+                    row.param < 1.0f || row.param > 10.0f || row.windowSec < 5.0f || row.windowSec > 60.0f ||
+                    row.mode != TacticMode::Default))
+                return false;
             // The cycle columns are the seek_aura kind's and the reset window's (threat_successor with a cycle_spell),
             // the spot columns the seek_aura, anchor and tank_post kinds'.
             if (row.kind != BossTacticKind::SeekAura && row.kind != BossTacticKind::ThreatSuccessor &&
@@ -736,6 +747,11 @@ namespace ai
             }
             if (row.kind == BossTacticKind::TankIgnore)
                 tankIgnoreBosses_[row.map][row.targetEntry].push_back(row.bossEntry);
+            if (row.kind == BossTacticKind::TankFirst)
+            {
+                tankFirstMaps_[row.map] = true;
+                tankFirstBosses_[row.map][row.targetEntry].push_back(row.bossEntry);
+            }
             if (row.kind == BossTacticKind::LinkedDeath)
             {
                 linkedDeathMaps_[row.map] = true;
@@ -787,6 +803,13 @@ namespace ai
         bool HasGateHoldMap(std::uint32_t map) const
         {
             return sealed_.load(std::memory_order_acquire) && gateHoldMaps_.find(map) != gateHoldMaps_.end();
+        }
+
+        // Whether the map has a tank_first row (the damage hold and the run's healer guard look only there). False
+        // before the seal.
+        bool HasTankFirstMap(std::uint32_t map) const
+        {
+            return sealed_.load(std::memory_order_acquire) && tankFirstMaps_.find(map) != tankFirstMaps_.end();
         }
 
         // Whether the map has a linked_death row (the hold multiplier's area and DoT veto runs there: a map without a
@@ -955,6 +978,20 @@ namespace ai
             return it == byMap->second.end() ? none : it->second;
         }
 
+        // The bosses whose tank_first row names the entry on this map (empty: none): while one of them fights, the
+        // run's healer guard sends no ranged damage dealer at the entry (part W). Empty before the seal.
+        const std::vector<std::uint32_t>& TankFirstBosses(std::uint32_t map, std::uint32_t entry) const
+        {
+            static const std::vector<std::uint32_t> none;
+            if (!sealed_.load(std::memory_order_acquire) || tankFirstBosses_.empty())
+                return none;
+            auto const byMap = tankFirstBosses_.find(map);
+            if (byMap == tankFirstBosses_.end())
+                return none;
+            auto const it = byMap->second.find(entry);
+            return it == byMap->second.end() ? none : it->second;
+        }
+
         // Whether the map has a needs_aura row (the healers' Shade-victim weighting looks only there). False before
         // the seal.
         bool HasRequiredAuraMap(std::uint32_t map) const
@@ -1102,6 +1139,9 @@ namespace ai
         std::unordered_map<std::uint32_t, std::unordered_map<std::uint32_t, ThreatResetWindow>> resetWindows_;
         // tank_ignore: map -> the ignored entry -> the bosses whose row names it.
         std::unordered_map<std::uint32_t, std::unordered_map<std::uint32_t, std::vector<std::uint32_t>>> tankIgnoreBosses_;
+        // tank_first: the map flag, and map -> the add -> the bosses whose row names it.
+        std::unordered_map<std::uint32_t, bool> tankFirstMaps_;
+        std::unordered_map<std::uint32_t, std::unordered_map<std::uint32_t, std::vector<std::uint32_t>>> tankFirstBosses_;
         std::unordered_map<std::uint32_t, std::vector<LinkedDeathGroupKey>> linkedDeathGroups_;
         std::unordered_map<std::uint32_t, std::unordered_set<std::uint32_t>> noCcEntries_;
         std::unordered_map<std::uint32_t, std::vector<std::uint32_t>> freezeAuras_;

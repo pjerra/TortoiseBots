@@ -1,0 +1,168 @@
+"""Wiring pins for tank_first (r13, AiPlayerbot.DungeonRunAddTankFirst).
+
+The rule itself is ai/playerbot/TankFirstPolicy.h (tools/test_tank_first_policy.cpp). These pins prove the live code
+reaches it and that the key-off path stays today's code:
+
+ - the key is read with the other DungeonRun keys, defaults to off and is documented in the template;
+ - BossTankFirstHolds filters cheapest-first: the key, the map flag, a tank, the strategy, the unit, the row;
+ - the per-add record's mutex is taken after the fight scan (it is a leaf);
+ - HeldDpsTarget, FindBossHoldKill, FindBossSeekKill and the hold-kill action ask the hold, and the pet hold runs in
+   PlayerbotAI::UpdateAI;
+ - the hold multiplier's two early returns name the new flags, and its clause stands before the hold_kill clauses;
+ - the take branch notes its taunt after the cast;
+ - the policy header names no boss, spell or entry id.
+
+Run: python3 -m unittest tools/test_tank_first_wiring.py
+"""
+import pathlib
+import unittest
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+ACTIONS = (ROOT / "ai/playerbot/strategy/actions/BossTacticsActions.cpp").read_text()
+ACTIONS_H = (ROOT / "ai/playerbot/strategy/actions/BossTacticsActions.h").read_text()
+POLICY = (ROOT / "ai/playerbot/TankFirstPolicy.h").read_text()
+CONFIG_H = (ROOT / "ai/playerbot/PlayerbotAIConfig.h").read_text()
+CONFIG_CPP = (ROOT / "ai/playerbot/PlayerbotAIConfig.cpp").read_text()
+TEMPLATE = (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text()
+PLAYERBOT_AI = (ROOT / "ai/playerbot/PlayerbotAI.cpp").read_text()
+DPS_TARGET = (ROOT / "ai/playerbot/strategy/values/DpsTargetValue.cpp").read_text()
+
+
+def body(text, start, end="\n}\n"):
+    i = text.index(start)
+    return text[i:text.index(end, i + len(start))]
+
+
+def index_in(text, needle):
+    return text.index(needle)
+
+
+class TankFirstWiring(unittest.TestCase):
+    def test_the_key_is_read_off_by_default_and_documented(self):
+        keys = body(CONFIG_CPP, "void PlayerbotAIConfig::LoadDungeonRunKeys()")
+        self.assertIn('dungeonRunAddTankFirst = config.GetBoolDefault("AiPlayerbot.DungeonRunAddTankFirst", false);',
+                      keys)
+        self.assertIn("bool dungeonRunAddTankFirst = false;", CONFIG_H)
+        self.assertIn("AiPlayerbot.DungeonRunAddTankFirst = 0", TEMPLATE)
+        self.assertIn("# Tank the add first", TEMPLATE)
+
+    def test_the_read_filters_cheapest_first(self):
+        holds = body(ACTIONS, "bool ai::BossTankFirstHolds(PlayerbotAI* ai, Player* bot, Unit* unit)")
+        order = ["!sPlayerbotAIConfig.dungeonRunAddTankFirst",
+                 "GetBossTactics().HasTankFirstMap(bot->GetMapId())",
+                 "PlayerbotAI::IsTank(bot)",
+                 'ai->HasStrategy("boss tactics", BotState::BOT_STATE_COMBAT)',
+                 "unit->ToCreature()",
+                 "unit->IsInCombat()"]
+        positions = [index_in(holds, needle) for needle in order]
+        self.assertEqual(positions, sorted(positions), "the read's cheapest-first order moved")
+        # The row and the victim read live behind the per-tick cache, in TankFirstRead.
+        read = body(ACTIONS, "bool TankFirstRead(PlayerbotAI* ai, Player* bot, Unit* unit)")
+        self.assertIn("candidate->kind == BossTacticKind::TankFirst && candidate->targetEntry == unit->GetEntry()",
+                      read)
+        self.assertIn("TankFirstTickDue(slot.record, nowMs)", read)
+        self.assertIn("TankFirstTick(slot.record, rules, in)", read)
+        self.assertIn("TankFirstHolds(slot.record, overrideWhy)", read)
+        self.assertIn("TankFirstSweep(ai, bot, nowMs)", read)
+        # The record's mutex is a leaf: the scan and the seek read are both taken before it.
+        self.assertLess(index_in(read, "ScanBossTactics("), index_in(read, "g_tankFirstMutex"))
+        self.assertLess(index_in(read, "ReadSeekFightCached("), index_in(read, "g_tankFirstMutex"))
+
+    def test_the_hooks_ask_the_hold(self):
+        self.assertIn("if (BossTankFirstHolds(ai, bot, unit))", body(DPS_TARGET, "bool HeldDpsTarget("))
+        holdKill = body(ACTIONS, "Unit* ai::FindBossHoldKill(")
+        self.assertIn("if (BossTankFirstHolds(ai, bot, current))", holdKill)
+        # The drop comes before the seek block (the seek hold's own read).
+        self.assertLess(index_in(holdKill, "BossTankFirstHolds("), index_in(holdKill, "if (sPlayerbotAIConfig.dungeonRunSeekAura)"))
+        seekKill = body(ACTIONS, "Unit* ai::FindBossSeekKill(")
+        self.assertIn("if (BossTankFirstHolds(ai, bot, state.source))", seekKill)
+        self.assertLess(index_in(seekKill, "SeekHoldsUnit(state, state.source)"),
+                        index_in(seekKill, "BossTankFirstHolds("))
+        action = body(ACTIONS, "bool BossTacticsHoldKillAction::Execute(")
+        self.assertIn("const bool tankFirstHeld = BossTankFirstHolds(ai, bot, held);", action)
+        self.assertEqual(2, action.count("!seekHeld && !tankFirstHeld"))
+        self.assertIn("bot->InterruptSpell(CURRENT_AUTOREPEAT_SPELL)", action)
+        self.assertIn("bot->InterruptNonMeleeSpells(false)", action)
+        self.assertIn("if (tankFirstHeld)", action)
+
+    def test_the_pet_hold_runs_in_the_update_loop(self):
+        update = body(PLAYERBOT_AI, "void PlayerbotAI::UpdateAI(")
+        self.assertIn("ai::HoldTankFirstPet(this, bot);", update)
+        self.assertLess(index_in(update, "ai::ReleaseWalkoutPet(bot);"), index_in(update, "ai::HoldTankFirstPet(this, bot);"))
+        pet = body(ACTIONS, "void ai::HoldTankFirstPet(")
+        self.assertIn("pet->AttackStop();", pet)
+        self.assertIn('LogHoldKillVeto(ai, bot, "tank_first_pet", victim);', pet)
+
+    def test_the_multiplier_names_the_new_flags(self):
+        multiplier = body(ACTIONS, "float BossTacticsHoldMultiplier::GetValue(")
+        self.assertIn("const bool tankFirst = sPlayerbotAIConfig.dungeonRunAddTankFirst && "
+                      "GetBossTactics().HasTankFirstMap(bot->GetMapId()) && !PlayerbotAI::IsTank(bot) && "
+                      'ai->HasStrategy("boss tactics", BotState::BOT_STATE_COMBAT);', multiplier)
+        first_return = multiplier[multiplier.index("if (other && !GetBossTactics().HasHoldMap"):]
+        first_return = first_return[:first_return.index("return 1.0f;")]
+        self.assertIn("&& !tankFirst", first_return)
+        second_return = multiplier[multiplier.index("if (!dpsAssist && !tankAssist && !aoe"):]
+        second_return = second_return[:second_return.index("return 1.0f;")]
+        self.assertIn("!tfSingle && !tfCast", second_return)
+        self.assertIn("const bool tfSingle = tankFirst && !area && IsSingleTargetDamageAction(action);", multiplier)
+        self.assertIn("const bool tfCast = tankFirst && IsHarmfulTargetedAction(action) &&", multiplier)
+        self.assertIn("|| tankFirst) && IsAreaDamageAction(ai, action);", multiplier)
+        # The clause sits after the seek hold's and before the hold_kill clauses.
+        clause_start = multiplier.index("// tank_first (AiPlayerbot.DungeonRunAddTankFirst): no bot but a tank damages")
+        clause_end = multiplier.index("// A held subject is left alone by every bot that is not a tank or a healer")
+        self.assertLess(clause_start, clause_end)
+        self.assertIn("if (IsBattleDps(bot) && (area || attackerDebuff))", multiplier)
+        self.assertLess(clause_end, index_in(multiplier, "if (IsBattleDps(bot) && (area || attackerDebuff))"))
+        self.assertLess(index_in(multiplier, "if (seeksRow && (dpsAssist"), clause_start)
+        clause = multiplier[clause_start:clause_end]
+        self.assertNotIn("tankAssist", clause)
+        self.assertIn('LogHoldKillVeto(ai, bot, "tank_first", heldAdd);', clause)
+        self.assertIn("BossTankFirstHeldNear(ai, bot,", clause)
+
+    def test_the_take_notes_its_taunt(self):
+        take = body(ACTIONS, "bool BossTacticsSeekTankAction::Execute(")
+        note = take.index("BossTankFirstNoteTake(ai, bot, task.source, takeSrc.c_str(), cast")
+        cast = take.index("const bool cast = ai->CastSpell(taunt, task.source);")
+        self.assertLess(cast, note)
+        # ... and before the cast, the take that will cast nothing says why (the gate's, the tank's own refusal).
+        self.assertIn("TankFirstTauntWhy(ai, bot, taunt, gateRefused)", take)
+        self.assertIn('return "gate";', body(ACTIONS, "const char* TankFirstTauntWhy("))
+        self.assertIn('return "no_taunt";', body(ACTIONS, "const char* TankFirstTauntWhy("))
+        self.assertIn('return "control";', body(ACTIONS, "const char* TankFirstTauntWhy("))
+        self.assertIn('return "stance";', body(ACTIONS, "const char* TankFirstTauntWhy("))
+        self.assertIn('return "cooldown";', body(ACTIONS, "const char* TankFirstTauntWhy("))
+        self.assertIn('return "range";', body(ACTIONS, "const char* TankFirstTauntWhy("))
+
+    def test_the_policy_header_names_no_boss(self):
+        for needle in ("11357", "14834", "24324"):
+            self.assertNotIn(needle, POLICY)
+        self.assertIn("constexpr std::uint32_t kTankFirstTickMs = 250;", POLICY)
+        self.assertIn("constexpr std::uint32_t kTankFirstStaleMs = 10000;", POLICY)
+        self.assertIn("constexpr float kTankFirstTankReachYd = 100.0f;", POLICY)
+        self.assertIn("constexpr int kTankFirstSiphonMs = 15000;", POLICY)
+        self.assertIn("constexpr float kTankFirstLossMinHpPct = 20.0f;", POLICY)
+
+    def test_the_row_kind_is_registered(self):
+        # The table (BossTacticsPolicy.h) parses the word, refuses a bad shape and keeps the map flag and the entry's
+        # boss list the run's healer guard reads (part W).
+        policy = (ROOT / "ai/playerbot/BossTacticsPolicy.h").read_text()
+        self.assertIn('if (text == "tank_first")', policy)
+        self.assertIn("TankFirst = 32,", policy)
+        self.assertIn("bool HasTankFirstMap(std::uint32_t map) const", policy)
+        self.assertIn("const std::vector<std::uint32_t>& TankFirstBosses(std::uint32_t map, std::uint32_t entry) const",
+                      policy)
+        add = body(policy, "bool Add(const BossTacticRow& row)")
+        self.assertIn("row.targetEntry == row.bossEntry", add)
+        self.assertIn("row.param < 1.0f || row.param > 10.0f", add)
+        self.assertIn("row.windowSec < 5.0f || row.windowSec > 60.0f", add)
+        self.assertIn("tankFirstMaps_[row.map] = true;", add)
+        self.assertIn("tankFirstBosses_[row.map][row.targetEntry].push_back(row.bossEntry);", add)
+        # The declarations the two other translation units call.
+        self.assertIn("bool BossTankFirstHolds(PlayerbotAI* ai, Player* bot, Unit* unit);", ACTIONS_H)
+        self.assertIn("Unit* BossTankFirstHeldNear(PlayerbotAI* ai, Player* bot, Unit* around, float yd);", ACTIONS_H)
+        self.assertIn("void BossTankFirstNoteTake(", ACTIONS_H)
+        self.assertIn("void HoldTankFirstPet(PlayerbotAI* ai, Player* bot);", ACTIONS_H)
+
+
+if __name__ == "__main__":
+    unittest.main()

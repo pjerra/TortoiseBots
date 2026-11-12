@@ -121,6 +121,10 @@ namespace
         // of an active hold is skipped exactly like a held boss entry, so no free DPS bot starts on it.
         if (IsDpsHeld(ai, bot, unit))
             return true;
+        // tank_first (AiPlayerbot.DungeonRunAddTankFirst): an add no tank has held yet is skipped like any other held
+        // entry, so no free DPS bot starts on it.
+        if (BossTankFirstHolds(ai, bot, unit))
+            return true;
         const BossTacticTable& table = GetBossTactics();
         if (!table.HasMap(bot->GetMapId()))
             return false;

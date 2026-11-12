@@ -203,6 +203,17 @@ namespace ai
     // tanks, healers and bots under an explicit attack order. `trigger` (optional) names the trigger of the hold.
     bool IsDpsHeld(PlayerbotAI* ai, Player* bot, Unit* unit, DpsHoldTrigger* trigger = nullptr);
 
+    // AiPlayerbot.DungeonRunAddTankFirst: whether a tank_first row holds this bot's damage on `unit` (TankFirstPolicy.h).
+    // False for a tank, with the key off, off a tank_first map, without the strategy, and for a unit with no row in the
+    // fight. Any bot's read advances the add's shared record.
+    bool BossTankFirstHolds(PlayerbotAI* ai, Player* bot, Unit* unit);
+    // The first held add within `yd` of `around` (an area action's reach), or null.
+    Unit* BossTankFirstHeldNear(PlayerbotAI* ai, Player* bot, Unit* around, float yd);
+    // The take's taunt, noted on the add's record (how=taunt) and logged (event=taunt). No-op with the key off.
+    void BossTankFirstNoteTake(PlayerbotAI* ai, Player* bot, Unit* add, const char* src, bool cast, const char* why);
+    // The bot's pet leaves a held add (PlayerbotAI::UpdateAI). No-op with the key off or without a pet.
+    void HoldTankFirstPet(PlayerbotAI* ai, Player* bot);
+
     // The boss whose front this bot should leave, or null.
     Unit* FindBossFrontDanger(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fight);
 

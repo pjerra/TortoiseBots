@@ -97,6 +97,7 @@ These settings configure boss encounter mechanics, environmental hazard evasion,
 | [`AiPlayerbot.DungeonRunSeekNearestTakeReach`](#aiplayerbotdungeonrunseeknearesttakereach) | `0` | `1` (recommended): the first off-tank also takes a walked Son of Hakkar on a non-tank from up to 20 yd when the receiving tank is more than 15 yd from it or its meet was just lost (needs `DungeonRunSeekNearestTake`). |
 | [`AiPlayerbot.DungeonRunSeekVictimRelief`](#aiplayerbotdungeonrunseekvictimrelief) | `0` | `1` (recommended): with two or more tanks alive, another living tank takes a Son off the boss's victim tank (within 20 yd, taunt ready, off-tanks before the main tank, the nearer off-tank first) after it sat there 1 s, at most twice per Son and 8 s apart (needs `DungeonRunSeekAura`). |
 | [`AiPlayerbot.DungeonRunSeekPark`](#aiplayerbotdungeonrunseekpark) | `0` | `1`: the boss tactics park the seek's picked source, once it is inside the raid circle, under a Polymorph or Hibernate, hold every bot's damage off it (the park bot's own included), and at the row's release lead a tank takes it (or the park fails in 4 s, 8 s while its control still holds and a receiver waits), the raid gathers at the seek spot and the burn is forced (needs `DungeonRunSeekAura`, `DungeonRunSeekPullCycle` and a `seek_park` row). |
+| [`AiPlayerbot.DungeonRunAddTankFirst`](#aiplayerbotdungeonrunaddtankfirst) | `0` | `1` (recommended): every bot that is not a tank does no damage to a `tank_first` row's add until a tank has been its victim for the row's dwell, and again after each loss, so a tank takes the add before the raid burns it (Hakkar's Sons). |
 | [`AiPlayerbot.DungeonRunSeekMeetPrePlace`](#aiplayerbotdungeonrunseekmeetpreplace) | `0` | `1` (recommended): when a Hakkar walk-out starts, the receiving third tank walks to the tanks' circle edge on the puller's way back and waits there for the pulled Son (needs `DungeonRunSeekSonMeet`). |
 | [`AiPlayerbot.DungeonRunSeekMeetPrePlaceLate`](#aiplayerbotdungeonrunseekmeetpreplacelate) | `0` | `1` (recommended, still being tested): the pre-placed third tank stays on Hakkar until the puller is within 10 yd of its stand or in position, then walks (needs `DungeonRunSeekMeetPrePlace`). |
 | [`AiPlayerbot.DungeonRunSeekShotWaitsReceiver`](#aiplayerbotdungeonrunseekshotwaitsreceiver) | `0` | `1` (recommended): the Hakkar walk-out shot waits until the pre-placed receiver is within 5 yd of its point, at most 6 s, and not when the next Blood Siphon is 15 s or less away (needs `DungeonRunSeekMeetPrePlace`). |
@@ -1219,6 +1220,29 @@ Whether a walked seek source is parked under crowd control and killed late. Not 
 Diagnostics (always on with the key): one `BossTacticsSeekPull` row per phase change, `seek park: son=<guid> phase=<none|apply|held|release|released|failed> by=<bot|-> spell=<Polymorph|Hibernate|-> due_in=<s> n=<re-applies> held_ms=<ms> why=<word|-> rcv=<receiver|-> rcv_yd=<yd> on_tank=<0|1> ctl=<0|1> victim=<name|none> waited_ms=<ms>`, one `seek park cast:` row per park bot and 2 s, and the park's take, stand-down and approach as `seek take` rows (`src=park_release|park_hold|park_approach`); see [Boss tactics refusal rows](../../play/refusal-rows.md).
 
 Cost: one record per instance (state only), swept when untouched for 120 s; one group walk and one aura scan per bot per fight read while the key is on.
+
+</details>
+
+### `AiPlayerbot.DungeonRunAddTankFirst`
+Whether an add a `tank_first` row names takes no damage from any bot but a tank until a tank has held it. Recommended on.
+**Default:** `0` · **Values:** `0` off (today's damage rules), `1` on (needs the boss tactics strategy and a `tank_first` row for the fight) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+<details>
+<summary>How it works in detail</summary>
+
+**The problem:** on Hakkar, Son melee is 2206 of 4344 member deaths and the first divergence in 126 of 190 wipes; in healthy pulls 202 Sons die before a tank takes one and 829 after it, a median 18.6 s after the take. The take does not hold because the burn starts at once and the damage dealers pass the tank.
+
+**The rule:** from the first read that sees the row's add (`target_entry`) alive, in combat and with a victim that is a group member or a group member's pet, every bot that is not a tank does no damage to it until a tank has been its victim for the row's `param` seconds without a break, and again after a loss (its victim went back to a non-tank above 20 % health), up to the row's `priority` losses. One hold lasts at most the row's `window_s`; then the add is free for the rest of its life. One record per add and instance, shared by every bot, advanced at most every 250 ms: `wait`, `dwell` and `lost` hold, `burn` and `open` do not. A tank change keeps the dwell running, and a read with no victim (a stun, a target swap) neither completes nor breaks it. Tanks and human players are never held, and their swings are the threat the rule builds.
+
+**What is held:** the target pick, the assist and AoE picks, the attack, every harmful cast aimed at the add except an interrupt, the running swing, auto-repeat shot and a cast already under way at it, the attacker-debuff DoT, every area damage action within 10 yd of it, and a pet on it. A bot already on the add drops it and re-picks (`BossTacticsHoldKill` rows with `veto=tank_first` / `tank_first_pet`). The other seek rules stay: where today's rules already hold the add nothing changes.
+
+**The releases:** no usable tank (a living, uncharmed group member with the tank role, on the map, within 100 yd), and, for a seek source, the last 15 s before the cycle spell (`DungeonRunSeekAura` on): dosing comes first. A loss at or under 20 % health, or after `priority` losses, opens no hold.
+
+**Data:** Hakkar's row is a 3 s dwell, a 15 s cap and 2 losses (`20261113100000_world.sql`); Onyxia ships none.
+
+Diagnostics (always on with the key): one `BossTacticsTankFirst` row per transition (`event=arm|on_tank|settled|loss|loss_ignored|release|end`, plus `event=taunt` at every take tick); see [Boss tactics refusal rows](../../play/refusal-rows.md).
+
+Cost: one map flag and one record lookup per candidate; the record advances four times a second at most, and each instance sweeps its own records once a second.
 
 </details>
 

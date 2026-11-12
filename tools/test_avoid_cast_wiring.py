@@ -305,7 +305,10 @@ class HoldKillWiring(unittest.TestCase):
         self.assertEqual(fn.count("freeDps"), 3)
         self.assertIn("const bool freeDps = IsFreeDps(ai, bot);", fn)
         self.assertIn("if (!freeDps)", fn)
-        self.assertNotIn("PlayerbotAI::IsTank(bot)", fn)
+        # r13's tank_first key names the tank role once, in its own flag line; no hold clause does.
+        self.assertEqual(1, fn.count("PlayerbotAI::IsTank(bot)"))
+        self.assertIn("&& !PlayerbotAI::IsTank(bot) && ai->HasStrategy(\"boss tactics\", BotState::BOT_STATE_COMBAT);",
+                      fn)
         # The linked_death clauses (M3/M4) are the one place a role is read: every bot but a healer answers them, so a
         # tank's Thunder Clap or Consecration is vetoed as well.
         self.assertIn("linkedDeath && !PlayerbotAI::IsHeal(bot)", fn)
@@ -641,7 +644,8 @@ class HeldSubjectVetoWiring(unittest.TestCase):
         self.assertIn("if (other && !GetBossTactics().HasHoldMap(bot->GetMapId()) &&", fn)
         self.assertIn("!(linkedDeath && GetBossTactics().HasLinkedDeathMap(bot->GetMapId())) && !auraHolds && "
                       "!seeksRow &&", fn)
-        self.assertIn("!gateHold)", fn)
+        # r13's tank_first joins the same gate (its own wiring is in tools/test_tank_first_wiring.py).
+        self.assertIn("!gateHold && !tankFirst)", fn)
         self.assertNotIn("HasMap(bot->GetMapId())",
                          fn.replace("HasHoldMap(bot->GetMapId())", "").replace("HasLinkedDeathMap(bot->GetMapId())", ""))
         self.assertLess(fn.index("HasHoldMap(bot->GetMapId())"), fn.index("ScanBossTactics(ai, bot)"))
@@ -817,8 +821,9 @@ class HoldKillIsLogged(unittest.TestCase):
 
     def test_every_multiplier_zero_logs_its_veto(self):
         fn = body(ACTIONS, "float BossTacticsHoldMultiplier::GetValue(")
-        # Six clauses, the seek_aura one (which logs its own veto kind, "seek") and the seek DoT veto.
-        self.assertEqual(fn.count("LogHoldKillVeto("), 8)
+        # Seven clauses, the seek_aura one (which logs its own veto kind, "seek"), the seek DoT veto and r13's
+        # tank_first one.
+        self.assertEqual(fn.count("LogHoldKillVeto("), 9)
         self.assertIn('const char* const veto = dpsAssist || tankAssist || singleTarget ? "assist"', fn)
         self.assertIn(': aoe || cleaveToggle ? "aoe"', fn)
         self.assertIn(': attackerDebuff ? "dot"', fn)
