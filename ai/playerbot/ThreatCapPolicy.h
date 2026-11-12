@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <vector>
 #include <utility>
 
@@ -155,6 +156,102 @@ namespace ai
         if (maxThreat > 0 && fleeing)
             return 0;
         return ThreatPctSaturated(botThreat, maxThreat);
+    }
+
+    // The descent the `threat_free` lift ends on: the subject's z fell by more than kThreatFreeDescentYd against a
+    // sample taken within kThreatFreeDescentWindowMs. A subject hovering between points stays within 1 yd, so the lift
+    // holds there; the landing flight drops it at once instead of waiting for the gap itself to close.
+    constexpr float kThreatFreeDescentYd = 1.0f;
+    constexpr std::uint32_t kThreatFreeDescentWindowMs = 2000;
+    constexpr std::uint32_t kThreatFreeZSampleGapMs = 250;
+    constexpr std::size_t kThreatFreeZSamples = 8;
+
+    // One subject's recent height, sampled at most every kThreatFreeZSampleGapMs so the small ring spans more than a
+    // second whatever the read rate. The caller keeps one per (instance, guid) and drops it with the fight.
+    struct ThreatFreeZHistory
+    {
+        struct Sample
+        {
+            float z = 0.0f;
+            std::uint32_t atMs = 0;
+        };
+
+        Sample samples[kThreatFreeZSamples] = {};
+        std::size_t count = 0;
+        std::size_t next = 0;
+
+        bool Descending(float subjectZ, std::uint32_t nowMs)
+        {
+            bool descending = false;
+            for (std::size_t i = 0; i < count; ++i)
+                if (nowMs - samples[i].atMs <= kThreatFreeDescentWindowMs &&
+                    samples[i].z - subjectZ > kThreatFreeDescentYd)
+                    descending = true;
+            Sample const& last = samples[(next + kThreatFreeZSamples - 1) % kThreatFreeZSamples];
+            if (count == 0 || nowMs - last.atMs >= kThreatFreeZSampleGapMs)
+            {
+                samples[next] = Sample{subjectZ, nowMs};
+                next = (next + 1) % kThreatFreeZSamples;
+                if (count < kThreatFreeZSamples)
+                    ++count;
+            }
+            return descending;
+        }
+    };
+
+    // The history's key: the instance id with the raw guid. An instanced copy of the same creature can hand out the
+    // same raw guid, and two raids can run one lair at once, so a guid-only key shares one ring between them: one
+    // raid's descent ends the other's lift and its fight reset forgets the other's history.
+    struct ThreatFreeZKey
+    {
+        std::uint32_t instanceId = 0;
+        std::uint64_t guid = 0;
+
+        bool operator<(ThreatFreeZKey const& other) const
+        {
+            return instanceId != other.instanceId ? instanceId < other.instanceId : guid < other.guid;
+        }
+    };
+
+    // One ring per (instance, guid). Reset drops only the key it is given, so a fight ending in one instance leaves
+    // every other instance's history standing. The caller holds the lock around the calls.
+    class ThreatFreeZHistories
+    {
+    public:
+        bool Descending(ThreatFreeZKey const& key, float subjectZ, std::uint32_t nowMs)
+        {
+            return histories_[key].Descending(subjectZ, nowMs);
+        }
+
+        void Reset(ThreatFreeZKey const& key)
+        {
+            histories_.erase(key);
+        }
+
+        std::size_t size() const
+        {
+            return histories_.size();
+        }
+
+        void Clear()
+        {
+            histories_.clear();
+        }
+
+    private:
+        std::map<ThreatFreeZKey, ThreatFreeZHistory> histories_;
+    };
+
+    // AiPlayerbot.DungeonRunThreatFree (ai_boss_tactic kind `threat_free`): a subject that stands `gapYd` yd or more
+    // above the bot cannot be reached by any tank, so its tanks hold no threat and every damage dealer read 100 %
+    // ("the tank has no threat: hold", ThreatPctOf). Walk 2e: on airborne Onyxia the threat multiplier vetoed the
+    // casters' nukes (248 reasonless refusals, nukes 19 % of caster frames, 2.5 %/min). A non-tank reads 0 there: no
+    // cap. A tank keeps its own reading. The comparison is the raw z difference, as for ranged_only. `descending`
+    // ends the lift: her threat list is wiped at the start of the landing descent while she is still ~20 yd up, so a
+    // height-only lift would let the casters nuke a tankless boss that is already coming down on them.
+    inline bool ThreatFreeApplies(bool keyOn, bool isTank, float subjectZ, float botZ, float gapYd, bool descending)
+    {
+        return keyOn && !isTank && !descending && gapYd > 0.0f && subjectZ - botZ >= gapYd;
     }
 
     // One tank on the target as the caller resolved it from the raid's tank order (GetRaidTankRoles): index 0 is the

@@ -844,6 +844,10 @@ public:
     // The ranged_only boss-tactic kind (melee bots leave a subject that stands the row's gap above them: Ayamiss in the
     // air, so the melee take the adds): off, the rows and the held target are ignored (default off).
     bool dungeonRunRangedOnly = false;
+    // The threat_free boss-tactic kind (a non-tank reads no threat cap on a subject that stands the row's gap above it:
+    // no tank can reach airborne Onyxia, so her tanks hold no threat and the casters' nukes were vetoed): off, the rows
+    // are ignored (default off).
+    bool dungeonRunThreatFree = false;
     // A ranged reach at a hostile that hovers 8 yd or more above the floor under it inside a dungeon (Onyxia in P2)
     // walks to the floor under it and stops at the trigger's own combat-reach distance instead of giving up under the
     // body (default off, recommended on).

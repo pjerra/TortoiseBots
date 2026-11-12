@@ -155,6 +155,67 @@ int main()
     CHECK(ThreatPctOf(5000.0f, 40.0f, true, true) == 0);    // fleeing target: unchanged
     CHECK(ThreatPctOf(500.0f, 1000.0f, true, false) == 50);
     CHECK(ThreatPctOf(500.0f, 1000.0f, true, false) == ThreatPctSaturated(500.0f, 1000.0f));
+    // ThreatFreeApplies (kind `threat_free`, AiPlayerbot.DungeonRunThreatFree): a subject standing the row's gap above
+    // the bot cannot be reached by any tank, so a non-tank reads no cap on it; a tank keeps its own reading and the
+    // lift needs the key and a row. `descending` comes from the subject's z history.
+    CASE("ThreatFreeApplies_AirborneNonTank");
+    // Onyxia hovering at z -65 over a bot on the floor at -86 with her row's 10 yd gap.
+    CHECK(ThreatFreeApplies(true, false, -65.0f, -86.0f, 10.0f, false));
+    // Exactly the gap is lifted too.
+    CHECK(ThreatFreeApplies(true, false, -76.0f, -86.0f, 10.0f, false));
+    // Each of the rest alone keeps the cap: a tank, the key off, no row (gap 0), and 6 yd up on her ground phase.
+    CHECK(!ThreatFreeApplies(true, true, -65.0f, -86.0f, 10.0f, false));   // a tank keeps its own reading
+    CHECK(!ThreatFreeApplies(false, false, -65.0f, -86.0f, 10.0f, false)); // key off
+    CHECK(!ThreatFreeApplies(true, false, -65.0f, -86.0f, 0.0f, false));   // no row
+    CHECK(!ThreatFreeApplies(true, false, -80.0f, -86.0f, 10.0f, false));  // 6 yd up: on the ground
+    // ThreatFreeApplies_DescentDropsTheLift is the failing case: her threat list is wiped at the START of the landing
+    // descent while she is still ~20 yd up, and a height-only lift let the casters nuke a tankless boss that was already
+    // coming down on them. Hovering between points stays within 1 yd, so the lift holds there; a drop of more than 1 yd
+    // inside 2 s ends it at once.
+    CASE("ThreatFreeApplies_DescentDropsTheLift");
+    {
+        ThreatFreeZHistory hover;
+        CHECK(!hover.Descending(-66.0f, 1000));
+        CHECK(!hover.Descending(-66.0f, 1500));
+        CHECK(ThreatFreeApplies(true, false, -66.0f, -86.0f, 10.0f, hover.Descending(-66.0f, 2000)));
+        // A hover sway under a yard is not a descent.
+        CHECK(!hover.Descending(-66.6f, 2250));
+        CHECK(ThreatFreeApplies(true, false, -66.6f, -86.0f, 10.0f, hover.Descending(-66.6f, 2500)));
+        // The landing flight: z falls 3 yd in the last second, from 20 yd above the bot; no lift.
+        const bool falling = hover.Descending(-69.6f, 3000);
+        CHECK(falling);
+        CHECK(!ThreatFreeApplies(true, false, -69.6f, -86.0f, 10.0f, falling));
+        // The history forgets a sample older than the 2 s window: the lift comes back once the drop is outside it.
+        CHECK(!hover.Descending(-69.6f, 5500));
+        CHECK(ThreatFreeApplies(true, false, -69.6f, -86.0f, 10.0f, hover.Descending(-69.6f, 6000)));
+    }
+
+    // ThreatFreeZHistories_TwoInstancesSameGuid is the failing case of the per-instance key: an instanced copy of the
+    // same creature shares its raw guid, and two raids can run the lair at once, so a guid-only history is one ring for
+    // both raids: instance 7's sample makes instance 9 read a descent it never made, and instance 7's fight reset
+    // forgets instance 9's hover.
+    CASE("ThreatFreeZHistories_TwoInstancesSameGuid");
+    {
+        ThreatFreeZHistories histories;
+        const ThreatFreeZKey raidA{7, 0xA1};
+        const ThreatFreeZKey raidB{9, 0xA1};
+        // Both instances hover 6 yd apart, and each sample is its own instance's height, never the other's reference:
+        // a guid-only key would read instance 9's -60 as a 6 yd descent for instance 7 at -66.
+        CHECK(!histories.Descending(raidB, -60.0f, 1000));
+        CHECK(!histories.Descending(raidA, -66.0f, 1000));
+        // Instance 7 lands and drops out of combat: the fight reset clears instance 7's ring only.
+        histories.Reset(raidA);
+        // Instance 9 has come down 6 yd against its own -60 sample, still inside the window: a descent there.
+        // A guid-only key had lost that sample to the reset above, so this read 0.
+        CHECK(histories.Descending(raidB, -66.0f, 1900));
+        // Instance 7's re-pull starts a fresh hover: no descent against the ring its reset dropped.
+        CHECK(!histories.Descending(raidA, -66.0f, 2000));
+        // Both instances are tracked side by side.
+        CHECK(histories.size() == 2);
+        histories.Reset(raidB);
+        CHECK(histories.size() == 1);
+    }
+
     // hakkar_away_key_on_equals_today (fails with the first version of the key: it gave 2000): the main tank holds with
     // 40000 and the off-tanks are on Sons (not on the boss) with 2000 left over: with the key on the pick is today's.
     {

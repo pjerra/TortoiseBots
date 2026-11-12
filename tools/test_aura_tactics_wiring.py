@@ -111,7 +111,7 @@ class RowGateWiring(unittest.TestCase):
         # Every kind read straight from the table is refused a gate: the fight scan never answers it for one of them.
         gated = add[add.index("if (RowGateSet(row) && ("):add.index("if (row.kind == BossTacticKind::Interrupt")]
         for kind in ("HoldKill", "TankHold", "OneAtATime", "LinkedDeath", "ThreatSuccessor", "TankIgnore",
-                     "AddCrew"):
+                     "ThreatFree", "AddCrew"):
             self.assertIn("BossTacticKind::%s" % kind, gated)
         self.assertIn("AddCrew))", gated)
         self.assertIn("if (row.hpMin > row.hpMax || row.hpMax > 100)", add)

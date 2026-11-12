@@ -40,6 +40,13 @@ namespace ai
 	uint8 Calculate(Unit* target);
     };
 
+    // AiPlayerbot.DungeonRunThreatFree: whether the `threat_free` lift applies to this bot on `subject` right now —
+    // the key on, the boss tactics running, a row for the subject, the bot not a tank, the subject the row's gap
+    // above it and not descending. The value (ThreatValue::Calculate) and the cast-threat veto (ThreatMultiplier)
+    // ask the same question, so the veto cannot hold a cast the value just uncapped. The per-subject z history is
+    // kept in ThreatValues.cpp and dropped when the subject leaves combat (the fight reset).
+    bool ThreatFreeLifted(PlayerbotAI* ai, Player* bot, Unit* subject);
+
     // Whether the core makes this target immune to taunts: Creature::HasImmunityFlag(CREATURE_IMMUNITY_TAUNT) reads
     // creature_template.immunity_flags 0x02, which Creature.cpp applies to SPELL_EFFECT_ATTACK_ME and
     // SPELL_AURA_MOD_TAUNT (Hakkar 14834: no taunt has ever landed on him).

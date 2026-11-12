@@ -71,6 +71,7 @@ namespace ai
         GateHold = 26,        // DPS spare `boss_entry` at or below `param` % while more than `priority` blockers fight near
         TankPost = 27,        // a named tank waits at a spot for a unit that is not in the fight yet, then attacks it
         AddCrew = 28,         // once `target_entry` is dead, the boss's add duty goes to a named crew
+        ThreatFree = 29,      // non-tank bots read no threat cap on the subject while it stands `param` yd or more above them
     };
 
     // The per-kind mode word of a row (`tactic_mode`), or Invalid when the word does not belong to the row's kind. An
@@ -210,6 +211,8 @@ namespace ai
             return BossTacticKind::TankPost;
         if (text == "add_crew")
             return BossTacticKind::AddCrew;
+        if (text == "threat_free")
+            return BossTacticKind::ThreatFree;
         return BossTacticKind::None;
     }
 
@@ -494,7 +497,7 @@ namespace ai
             if (RowGateSet(row) && (row.kind == BossTacticKind::HoldKill || row.kind == BossTacticKind::TankHold ||
                     row.kind == BossTacticKind::OneAtATime || row.kind == BossTacticKind::LinkedDeath ||
                     row.kind == BossTacticKind::ThreatSuccessor || row.kind == BossTacticKind::TankIgnore ||
-                    row.kind == BossTacticKind::AddCrew))
+                    row.kind == BossTacticKind::ThreatFree || row.kind == BossTacticKind::AddCrew))
                 return false;
             if (row.kind == BossTacticKind::Interrupt && row.spellId == 0)
                 return false;
@@ -641,6 +644,13 @@ namespace ai
                 (row.targetEntry == 0 || row.targetEntry == row.bossEntry || row.spellId != 0 ||
                     row.priority > 5 || row.param != 0.0f || RowGateSet(row) || row.mode != TacticMode::Default))
                 return false;
+            // threat_free: the subject (`target_entry` 0 = the row's boss) and the vertical gap a non-tank reads no cap
+            // at (`param`, the ranged_only bounds). Read straight from the table (ThreatValue::Calculate), so a gate
+            // could never be answered; `param` is the whole rule, and it names no spell, priority or mode word.
+            if (row.kind == BossTacticKind::ThreatFree &&
+                (row.param < 3.0f || row.param > 40.0f || row.spellId != 0 || row.priority != 0 ||
+                    RowGateSet(row) || row.mode != TacticMode::Default))
+                return false;
             // The cycle columns are the seek_aura kind's and the reset window's (threat_successor with a cycle_spell),
             // the spot columns the seek_aura, anchor and tank_post kinds'.
             if (row.kind != BossTacticKind::SeekAura && row.kind != BossTacticKind::ThreatSuccessor &&
@@ -722,6 +732,8 @@ namespace ai
             // The held entry is the row's target, or its boss when the row names the boss itself (target_entry 0).
             if (row.kind == BossTacticKind::RangedOnly)
                 rangedOnlyGaps_[row.map].emplace(row.targetEntry != 0 ? row.targetEntry : row.bossEntry, row.param);
+            if (row.kind == BossTacticKind::ThreatFree)
+                threatFreeGaps_[row.map].emplace(row.targetEntry != 0 ? row.targetEntry : row.bossEntry, row.param);
             if (row.kind == BossTacticKind::ThreatSuccessor)
             {
                 threatSuccessors_[row.map].insert(TacticSubjectEntry(row));
@@ -913,6 +925,20 @@ namespace ai
             return it == byMap->second.end() ? 0.0f : it->second;
         }
 
+        // The vertical gap a map's threat_free row lifts the cap at (0: no row), keyed by the subject entry: the row's
+        // target, or its boss for target_entry 0. Read by ThreatValue::Calculate, so no gate or mode qualifies it.
+        // 0 before the seal.
+        float ThreatFreeGap(std::uint32_t map, std::uint32_t entry) const
+        {
+            if (!sealed_.load(std::memory_order_acquire) || threatFreeGaps_.empty())
+                return 0.0f;
+            auto const byMap = threatFreeGaps_.find(map);
+            if (byMap == threatFreeGaps_.end())
+                return 0.0f;
+            auto const it = byMap->second.find(entry);
+            return it == byMap->second.end() ? 0.0f : it->second;
+        }
+
         // Whether the creature entry carries a `threat_successor` row on this map: the damage dealers' threat is then
         // capped at the assigned off-tanks' highest (ThreatCapPolicy.h), so the second tank stays second for a threat
         // reset. Read from the table by ThreatValue::GetTankThreat, so no gate or mode can qualify it. False before the
@@ -1092,6 +1118,7 @@ namespace ai
         std::unordered_map<std::uint32_t, std::unordered_map<std::uint32_t, AssignedTankSlot>> assignedTankSlots_;
         std::unordered_map<std::uint32_t, std::unordered_map<std::uint32_t, std::uint32_t>> requiredAura_;
         std::unordered_map<std::uint32_t, std::unordered_map<std::uint32_t, float>> rangedOnlyGaps_;
+        std::unordered_map<std::uint32_t, std::unordered_map<std::uint32_t, float>> threatFreeGaps_;
         std::unordered_map<std::uint32_t, std::unordered_set<std::uint32_t>> threatSuccessors_;
         std::unordered_map<std::uint32_t, std::unordered_set<std::uint32_t>> strictThreatSuccessors_;
         // threat_successor with a cycle_spell: map -> the subject entry -> its reset window.

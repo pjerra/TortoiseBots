@@ -191,6 +191,7 @@ void PlayerbotAIConfig::LoadDungeonRunKeys()
     bossStandWholeRaid = config.GetBoolDefault("AiPlayerbot.BossStandWholeRaid", false);
     bossTacticsKeepsEngagedBoss = config.GetBoolDefault("AiPlayerbot.BossTacticsKeepsEngagedBoss", false);
     dungeonRunRangedOnly = config.GetBoolDefault("AiPlayerbot.DungeonRunRangedOnly", false);
+    dungeonRunThreatFree = config.GetBoolDefault("AiPlayerbot.DungeonRunThreatFree", false);
     rangedReachHoverTarget = config.GetBoolDefault("AiPlayerbot.RangedReachHoverTarget", false);
     airborneWandYieldsToNukes = config.GetBoolDefault("AiPlayerbot.AirborneWandYieldsToNukes", false);
     hoverCastHoldsSpread = config.GetBoolDefault("AiPlayerbot.HoverCastHoldsSpread", false);

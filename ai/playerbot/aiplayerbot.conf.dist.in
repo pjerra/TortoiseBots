@@ -1524,6 +1524,17 @@ AiPlayerbot.DungeonRunBurnMana = 0
 # 1 - on
 AiPlayerbot.DungeonRunRangedOnly = 0
 
+# The threat_free boss tactic of the boss tactics rows (ai_boss_tactic, docs/play/boss-tactics.md): a non-tank bot
+# reads no threat cap on the row's subject while it stands the row's gap (param, yards) or more above the bot, so its
+# nukes go out; a tank keeps its own reading, and the lift ends by itself when the subject lands. On airborne Onyxia
+# no tank can reach her, so her tanks hold no threat and every damage dealer reads "the tank has no threat: hold"
+# (walk 2e a-1: 248 refusals with no reason, nukes 19 % of caster frames). With this key off the rows are ignored, so
+# the table behaves exactly as before the kind. This is its own key on top of AiPlayerbot.DungeonTactics (or a
+# commander-bound group).
+# 0 - off: threat_free rows are ignored (Default)
+# 1 - on
+AiPlayerbot.DungeonRunThreatFree = 0
+
 # A ranged reach at a hostile that hovers at least 8 yd above the floor under it inside a dungeon (Onyxia's P2 hover
 # points stand 19-23 yd up): the bot walks the navmesh path to the floor under the target and stops where the
 # `enemy out of spell range` trigger's own measure (the centre distance plus both combat reaches) is met, instead of

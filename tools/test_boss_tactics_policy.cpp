@@ -4816,6 +4816,87 @@ int main()
         }
     }
 
+    // T3b threat_free: the subject (target_entry 0 = the row's boss) or an entry, param the vertical gap a non-tank
+    // reads no cap at (the ranged_only bounds, 3-40 yd), no spell, no priority, no gate and no mode word. Read straight
+    // from the table by ThreatValue::Calculate, so the lookup is keyed by the subject entry.
+    CHECK(ParseBossTacticKind("threat_free") == BossTacticKind::ThreatFree); // ParseThreatFreeKind
+    CHECK(static_cast<int>(BossTacticKind::ThreatFree) == 29);
+    {
+        BossTacticRow free = Row(249, 10184, BossTacticKind::ThreatFree, 0, 0, 0, 10.0f);
+        {
+            BossTacticTable table;
+            CHECK(table.Add(free));                       // ThreatFreeLoader_Rows: the Onyxia boss row
+        }
+        {
+            BossTacticRow entryTarget = free;
+            entryTarget.targetEntry = 15934;
+            entryTarget.param = 3.0f;
+            BossTacticTable table;
+            CHECK(table.Add(entryTarget));                // an entry row at the low bound
+        }
+        {
+            BossTacticRow top = free;
+            top.param = 40.0f;
+            BossTacticTable table;
+            CHECK(table.Add(top));                        // the high bound
+        }
+        {
+            BossTacticRow tooLow = free;
+            tooLow.param = 2.9f;
+            BossTacticTable table;
+            CHECK(!table.Add(tooLow));                    // below three yards
+        }
+        {
+            BossTacticRow tooHigh = free;
+            tooHigh.param = 40.5f;
+            BossTacticTable table;
+            CHECK(!table.Add(tooHigh));                   // above forty yards
+        }
+        {
+            BossTacticRow spell = free;
+            spell.spellId = 1;
+            BossTacticTable table;
+            CHECK(!table.Add(spell));                     // a spell on a kind without one
+        }
+        {
+            BossTacticRow priority = free;
+            priority.priority = 1;
+            BossTacticTable table;
+            CHECK(!table.Add(priority));                  // a priority on a kind without one
+        }
+        {
+            BossTacticTable table;
+            CHECK(!table.Add(Gated(free, 10, 100)));      // a health band a fight scan would have to answer
+        }
+        {
+            BossTacticRow mode = free;
+            mode.mode = TacticMode::HoldSpot;
+            BossTacticTable table;
+            CHECK(!table.Add(mode));                      // a mode word the kind does not take
+        }
+        // The gap is looked up by the subject: the row's boss for target_entry 0, the row's target for an entry row,
+        // and nothing before the seal.
+        {
+            BossTacticTable table;
+            CHECK(Near(table.ThreatFreeGap(249, 10184), 0.0f)); // not sealed yet
+            CHECK(table.Add(free));
+            table.Seal();
+            CHECK(Near(table.ThreatFreeGap(249, 10184), 10.0f)); // ThreatFreeGap from the boss row
+            CHECK(Near(table.ThreatFreeGap(249, 50143), 0.0f));  // another entry
+            CHECK(Near(table.ThreatFreeGap(309, 10184), 0.0f));  // another map
+        }
+        {
+            BossTacticTable table;
+            BossTacticRow entryTarget = free;
+            entryTarget.targetEntry = 15934;
+            entryTarget.param = 12.0f;
+            CHECK(table.Add(entryTarget));
+            table.Seal();
+            CHECK(Near(table.ThreatFreeGap(249, 15934), 12.0f)); // ThreatFreeGap from an entry row
+            CHECK(Near(table.ThreatFreeGap(249, 10184), 0.0f));
+        }
+    }
+
     // T4 threat_successor: the boss itself (target_entry 0), no gate, and no mode word but `strict` (below). The row turns the damage
     // dealers' threat cap into the assigned off-tanks' highest (ThreatCapPolicy.h) and is read straight from the table
     // by ThreatValue::GetTankThreat, so a gate could never be answered.

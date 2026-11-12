@@ -50,7 +50,7 @@ class AddCrewWiring(unittest.TestCase):
             self.assertIn(needle, loader)
         # Read straight from the table: a gate on it could never be answered, so the loader refuses one.
         self.assertIn("row.kind == BossTacticKind::TankIgnore ||\n                    row.kind == "
-                      "BossTacticKind::AddCrew))", POLICY)
+                      "BossTacticKind::ThreatFree || row.kind == BossTacticKind::AddCrew))", POLICY)
 
     def test_table_keeps_the_switch_unit_and_the_crew_size(self):
         self.assertIn("struct AddCrewRow", POLICY)
