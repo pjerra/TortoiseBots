@@ -186,13 +186,14 @@ class SeekSonMeetWiring(unittest.TestCase):
         self.assertIn("const bool canTaunt = taunt && ai->CanCastSpell(taunt, task.source);", take)
         self.assertIn("gateRefused ? \"taunt_gated\" : SeekTakeReasonWord(chaseRefused, taunt != nullptr, canTaunt, edgeFar),",
                       take)
-        self.assertIn("task.meet, SeekTakeSrcWord(task.takeSrc, edgeTake), beyondYd);", take)
+        self.assertIn("const std::string takeSrc = SeekTakeSrcWord(task.takeSrc, edgeTake);", take)
+        self.assertIn("task.meet, takeSrc, beyondYd);", take)
         # The park's stand-down and approach write their own `seek take` rows above; the take row itself is written
         # after the taunt verdict.
         row = take[take.index("const bool canTaunt ="):]
         self.assertIn("gateRefused ? \"taunt_gated\" : SeekTakeReasonWord(chaseRefused, taunt != nullptr, canTaunt, edgeFar),",
                       row)
-        self.assertIn("task.meet, SeekTakeSrcWord(task.takeSrc, edgeTake), beyondYd);", row)
+        self.assertIn("task.meet, takeSrc, beyondYd);", row)
         # The taunt gate is read BEFORE the row is written (the row used to say `taunt` for a refused cast), once,
         # and the same verdict ends the take.
         self.assertLess(row.index("const bool gateRefused ="), row.index("LogSeekTake("))
