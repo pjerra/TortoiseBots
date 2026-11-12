@@ -163,10 +163,20 @@ class HealReserveWiring(unittest.TestCase):
 
     def test_the_latch_is_bound_to_the_fight_identity(self):
         fight = body(ACTIONS, "static HealReserveFightId HealReserveFightOf(PlayerbotAI* ai, std::uint64_t bossGuid,")
-        # The fight start is the seek record's engage (the file's per-fight clock), else the bot's combat start.
-        self.assertIn("state.nowMs - state.fightMs", fight)
+        # The fight start is the seek record's engage as the read exposes it, never a reconstruction from the elapsed
+        # time (0 on the read that sets the engage), else the bot's combat start.
+        self.assertIn("state.engageMs", fight)
+        self.assertNotIn("state.nowMs - state.fightMs", fight)
         self.assertIn("ai->GetCombatStartTime()", fight)
-        self.assertIn("fight.startMs", fight)
+        self.assertIn("HealReserveFightIdentity(", fight)
+
+    def test_the_seek_read_exposes_the_engage_without_elapsed_time(self):
+        # The record's engage is copied out as it is, so the read that sets it already carries the pull's identity
+        # although its elapsed time is 0.
+        fn = body(ACTIONS, "bool ReadSeekFight(PlayerbotAI* ai, Player* bot, SeekFight& out)")
+        self.assertIn("engageMs = record.engageMs;", fn)
+        self.assertIn("out.engageMs = engageMs;", fn)
+        self.assertNotIn("out.engageMs = nowMs", fn)
 
     def test_the_row_says_why_and_who_was_refused(self):
         self.assertIn("hurt=%d,why=%s", ACTIONS)
@@ -200,7 +210,7 @@ class HealReserveWiring(unittest.TestCase):
     def test_the_policy_holds_the_pure_rules(self):
         for name in ("HealReserveReleased(", "HealReserveDistress(", "HealReserveDistressLatched(",
                      "HealReserveApplyDistressLatch(", "HealReserveCountMember(", "HealReserveLatchReset(",
-                     "HealReserveLatchBind(", "HealReserveFightId", "HealReserveRefusalStale(",
+                     "HealReserveLatchBind(", "HealReserveFightId", "HealReserveFightIdentity(", "HealReserveRefusalStale(",
                      "HealReserveRefusalRestamp(", "HealReservePick(", "HealReserveWhy(", "HealReserveRefuses(",
                      "HealReserveSkipsTopUp(", "HealTopUpAllowedAtHealth(", "HealReserveTopUpTier(",
                      "kHealReserveRecoveryMarginPct", "kHealReserveDistressHoldMs"):
