@@ -61,6 +61,21 @@ class SeekParkWiring(unittest.TestCase):
         self.assertIn("SeekParkHolds(", why)
         self.assertIn("SeekParkDpsHeld(", why)
 
+    def test_the_receiver_may_hit_the_parked_son(self):
+        # Round 7: the park's own strike is exempt from the seek hold beside the puller's latch, the receiver's in the
+        # live release and the failed park's receiver or breaker; every other bot's damage on it stays held
+        # (TestParkSourceHitAllowed).
+        fn = body(ACTIONS, "float BossTacticsHoldMultiplier::GetValue(Action* action)")
+        self.assertIn("const bool pullHit = IsSeekSource(state, struck) &&", fn)
+        self.assertIn("const bool parkHit = IsSeekSource(state, struck) &&", fn)
+        self.assertLess(fn.index("const bool pullHit ="), fn.index("const bool parkHit ="))
+        self.assertIn("SeekParkSourceHitAllowed(state.parkPhase, state.parkControlled,", fn)
+        self.assertIn("state.parkReceiver == bot->GetObjectGuid().GetRawValue(),", fn)
+        self.assertIn("state.parkBreaker == bot->GetObjectGuid().GetRawValue());", fn)
+        self.assertIn("if (!pullHit && !parkHit)", fn)
+        self.assertIn("inline bool SeekParkSourceHitAllowed(SeekParkPhase phase, bool controlled, bool isReceiver, "
+                      "bool isBreaker)", POLICY)
+
     def test_the_dot_and_area_vetoes_read_that_hold(self):
         # Fact 2 of the probe: nobody damages a parked source, the controlling mage included. Both vetoes go through
         # SeekHoldsUnit, which answers true for the parked source.
@@ -140,7 +155,7 @@ class SeekParkWiring(unittest.TestCase):
         approach = fn[fn.index("if (task.parkApproach)"):]
         approach = approach[:approach.index("if (task.walkout)")]
         self.assertIn("SeekParkStrikeInReach(", approach)
-        self.assertIn("walkToParkSon(task.source)", approach)
+        self.assertIn("walkToParkSon(task.source, walk)", approach)
         # The walk is clamped to the anchor and the same-walk check keeps it from re-sending every tick.
         self.assertIn("ClampMoveToBossAnchor(ai, bot, x, y, z)", fn)
         self.assertLess(fn.index("SeekParkStrikeInReach("), fn.index("BossAnchorRefusesChase("))
@@ -246,16 +261,45 @@ class SeekParkWiring(unittest.TestCase):
     def test_the_park_walk_rows_have_their_own_throttle(self):
         # Fix 5: the stand-down and approach rows must not spend the park_release take's `seek take` window.
         fn = body(ACTIONS, "bool BossTacticsSeekTankAction::Execute(Event& event)")
-        self.assertIn('LogSeekParkWalk(ai, bot, task.source, "stand_down", "park_hold")', fn)
-        self.assertIn('LogSeekParkWalk(ai, bot, task.source, "approach", "park_approach")', fn)
-        self.assertIn('LogSeekParkWalk(ai, bot, task.source, "approach", "park_release")', fn)
         walk = body(ACTIONS, "void LogSeekParkWalk(PlayerbotAI* ai, Player* bot, Unit* son, const char* reason, "
-                             "const char* src)")
+                             "const char* src,")
+        self.assertIn("const char* walk)", walk)
         self.assertIn("g_seekParkWalkLog[", walk)
         self.assertNotIn("g_seekPullLog[", walk)
-        self.assertIn("seek take: %s -> %u victim=%s reason=%s meet=%d src=%s reach_yd=%.1f beyond_yd=%.1f", walk)
+        self.assertIn("seek take: %s -> %u victim=%s reason=%s meet=%d src=%s reach_yd=%.1f beyond_yd=%.1f walk=%s",
+                      walk)
+        # Round 7: the approach row carries the walk's result, so a stalled receiver's own walk is readable.
+        self.assertIn('LogSeekParkWalk(ai, bot, task.source, "stand_down", "park_hold", nullptr)', fn)
+        approach = fn[fn.index("if (task.parkApproach)"):]
+        approach = approach[:approach.index("if (task.walkout)")]
+        self.assertLess(approach.index("walkToParkSon(task.source, walk)"),
+                        approach.index('"approach", "park_approach", walk'))
+        self.assertIn("LogSeekParkWalk(ai, bot, task.source, \"approach\", \"park_release\", walk)", fn)
         # The wait is clamped to the row's lead, so a lead under the wait still releases.
         self.assertIn("releaseLeadMs < kSeekParkReceiverWaitMs ? releaseLeadMs : kSeekParkReceiverWaitMs", POLICY)
+
+    def test_a_break_names_the_breaker(self):
+        # Round 7, data only: a Held -> Apply break writes one `seek park break:` row with the Son's victim, the units
+        # attacking it and its periodic-damage auras.
+        fn = body(ACTIONS, "void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)")
+        self.assertIn("step.phase == SeekParkPhase::Apply && recorded.phase == SeekParkPhase::Held", fn)
+        self.assertIn("LogSeekParkBreak(ai, bot, liveSon);", fn)
+        log = body(ACTIONS, "void LogSeekParkBreak(PlayerbotAI* ai, Player* bot, Unit* son)")
+        self.assertIn("seek park break: son=%u by=%s victim=%s attackers=%s auras=%s", log)
+        self.assertIn("GetAttackers()", log)
+        self.assertIn("IsPeriodicDamageAura(", log)
+        self.assertIn("GetCasterGuid()", log)
+
+    def test_the_latched_release_freezes_its_receiver(self):
+        # Round 7: after the latch the receiver is read from the record, never re-picked, and the record keeps its
+        # guid; the take itself is Release-only (TestParkReleasedHolderKeepsTheSon).
+        fn = body(ACTIONS, "void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)")
+        self.assertIn("if (readPhase == SeekParkPhase::Released && live)", fn)
+        self.assertIn("map->GetPlayer(ObjectGuid(recorded.receiver))", fn)
+        self.assertIn("if (readPhase != SeekParkPhase::Released)", fn)
+        pick = fn[fn.index("Player* receiver = nullptr;"):]
+        pick = pick[:pick.index("// The failed park's breaker")]
+        self.assertLess(pick.index("readPhase == SeekParkPhase::Released"), pick.index("PickSeekParkReceiverOf("))
 
     def test_the_trigger_only_asks(self):
         fn = body(TRIGGERS, "bool BossTacticsParkTrigger::IsActive()")
@@ -291,7 +335,7 @@ class SeekParkWiring(unittest.TestCase):
     def test_the_release_take_walks_then_strikes(self):
         # R9: out of strike reach the receiver walks to the source; in reach the take attacks and taunts as today.
         fn = body(ACTIONS, "SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)")
-        self.assertIn("SeekParkReleaseTakeDue(SeekParkReleaseLive(state.parkPhase), onTank, isReceiver)", fn)
+        self.assertIn("SeekParkReleaseTakeDue(state.parkPhase, onTank, isReceiver)", fn)
         self.assertIn("task.takeSrc = \"park_release\";", fn)
         self.assertIn("receiverDrag", fn)
 
@@ -304,8 +348,8 @@ class SeekParkWiring(unittest.TestCase):
         self.assertIn("SeekParkReleaseTank(SeekParkReleaseLive(state.parkPhase), onTank, sonHolder, isReceiver)", fn)
         self.assertIn("SeekParkExcludesSource(state.parkPhase, onTank, releaseTank, state.parkControlled)", fn)
         self.assertIn("SeekParkVetoesTankTask(state.parkPhase, task.takeSrc, onTank, state.parkControlled)", fn)
-        self.assertIn("SeekParkReleaseTakeDue(bool releaseLive, bool sonOnTank, bool isReceiver)", POLICY)
-        self.assertIn("return releaseLive && !sonOnTank && isReceiver;", POLICY)
+        self.assertIn("SeekParkReleaseTakeDue(SeekParkPhase phase, bool sonOnTank, bool isReceiver)", POLICY)
+        self.assertIn("return phase == SeekParkPhase::Release && !sonOnTank && isReceiver;", POLICY)
         self.assertIn("if (phase == SeekParkPhase::Release)", POLICY)
         self.assertIn("return controlled ? !isReleaseTank : (sonOnTank && !isReleaseTank);", POLICY)
         self.assertIn("return controlled ? !ownTake : (sonOnTank && !ownTake);", POLICY)

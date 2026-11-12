@@ -160,12 +160,13 @@ namespace ai
         return phase == SeekParkPhase::Release || phase == SeekParkPhase::Released;
     }
 
-    // Whether the release may order its own take in this read: only while the source has no tank victim. A Son already
-    // on a tank is that tank's (the take's swing is what hands it over); ordering another tank onto it is the
-    // tank-to-tank handoff walk 73 measured as harmful.
-    inline bool SeekParkReleaseTakeDue(bool releaseLive, bool sonOnTank, bool isReceiver)
+    // Whether the release may order its own take in this read: in Release only, and only while the source has no tank
+    // victim. A Son already on a tank is that tank's (the take's swing is what hands it over); ordering another tank
+    // onto it is the tank-to-tank handoff walk 73 measured as harmful. After the latch (Released) the park is done and
+    // the receiver is frozen with it: a victim that flickers off the tank never orders the take again (round 7).
+    inline bool SeekParkReleaseTakeDue(SeekParkPhase phase, bool sonOnTank, bool isReceiver)
     {
-        return releaseLive && !sonOnTank && isReceiver;
+        return phase == SeekParkPhase::Release && !sonOnTank && isReceiver;
     }
 
     // Whether this bot is the release's tank: the tank holding the source while it is on one (that holder keeps it),
@@ -210,18 +211,31 @@ namespace ai
         std::uint64_t guid = 0;
     };
 
-    // The release's receiver: the kept guid while it still qualifies, else one in reach before one that must walk,
-    // then the nearer to the source, then the lower raw guid; -1 for none.
+    // The release's receiver: the kept guid while it still qualifies and no other eligible tank stands in strike
+    // reach (a kept receiver that cannot close must not stall the release), else one in reach before one that must
+    // walk, then the nearer to the source, then the lower raw guid; -1 for none.
     inline int PickSeekParkReceiver(const std::vector<SeekParkReceiverCand>& cands, std::uint64_t kept)
     {
-        int pick = -1;
+        int keptIndex = -1;
+        bool otherInReach = false;
         for (int i = 0; i < static_cast<int>(cands.size()); ++i)
         {
             const SeekParkReceiverCand& cand = cands[static_cast<std::size_t>(i)];
             if (!cand.eligible)
                 continue;
             if (kept != 0 && cand.guid == kept)
-                return i;
+                keptIndex = i;
+            else if (cand.inReach)
+                otherInReach = true;
+        }
+        if (keptIndex >= 0 && !otherInReach)
+            return keptIndex;
+        int pick = -1;
+        for (int i = 0; i < static_cast<int>(cands.size()); ++i)
+        {
+            const SeekParkReceiverCand& cand = cands[static_cast<std::size_t>(i)];
+            if (!cand.eligible)
+                continue;
             if (pick < 0)
             {
                 pick = i;
@@ -538,6 +552,17 @@ namespace ai
     {
         if (!isParkSon)
             return false;
+        if (SeekParkReleaseLive(phase))
+            return isReceiver;
+        return phase == SeekParkPhase::Failed && controlled && (isReceiver || isBreaker);
+    }
+
+    // Whether this bot's damage on the parked source is the park's own, so the seek hold must not answer for it: the
+    // release's receiver while the release is live (its strike is what wakes the Son and hands it over), and the
+    // failed park's receiver or breaker while the Son is still controlled (their take is the only break left). Every
+    // other bot's damage on a parked source is the hold's, the park bot's own included.
+    inline bool SeekParkSourceHitAllowed(SeekParkPhase phase, bool controlled, bool isReceiver, bool isBreaker)
+    {
         if (SeekParkReleaseLive(phase))
             return isReceiver;
         return phase == SeekParkPhase::Failed && controlled && (isReceiver || isBreaker);
