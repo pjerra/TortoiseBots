@@ -460,12 +460,14 @@ send and `hp_est` is clamped subtraction of reported damage; neither guarantees
 exact post-hit health. `RegroupReleaseProbe` rows cover a `.bot cmd revive party`
 release (a run's regroup): one row per plan boss alive on the run's map and per
 revived bot alive, at the release (`tick=0`) and on each of the next ten run
-ticks, never more; a bot still a corpse writes none. A boss row carries
-`entry=`, `combat=`, `victim=`, `threat=` (list size), `top=` (the first five
-names), `evade=` and `homed=` (yards from its spawn); a bot row carries
-`engine=`, `cur=`, `atk=`, `pull=`, `vic=` (the server's victim), `sel=` (its
-selected unit's name, or the raw guid), `combat=` and `holders=` (the count of
-units that hold it on their threat list, then the first five of their names).
-Each run keeps its own ten-tick window. Reads only: the probe changes no
-behaviour. Disable the option after collecting a diagnostic capture.
+ticks, never more; a bot still a corpse writes none. A release outside a run
+has no plan: it writes the release's own bot rows and arms no window. A boss
+row carries `entry=`, `combat=`, `victim=`, `threat=` (list size), `top=` (the
+first five names), `evade=` and `homed=` (yards from its spawn); a bot row
+carries `engine=`, `cur=`, `atk=`, `pull=`, `vic=` (the server's victim), `sel=`
+(its selected unit's name, or the raw guid), `combat=` and `holders=` (the count
+of units that hold it on their threat list, then the first five of their
+names). Each run keeps its own ten-tick window, discarded when the run starts
+or ends. Reads only: the probe changes no behaviour. Disable the option after
+collecting a diagnostic capture.
 See [column definitions and coverage](../../developers/host-api.md#csv-columns-unchanged-nine-column-layout).
