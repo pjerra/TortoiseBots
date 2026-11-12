@@ -28,10 +28,20 @@
 // and the tank interrupt rows were dead (Tortoise Trials tank-bear-bash-caster
 // 0/75, tank-paladin-hoj-caster 3/32). The core stops any non-melee cast a
 // stun lands on, so a stun also skips the victim's silence-prevention and
-// interrupt-flag gate; only stun immunity (IsImmuneToSpellEffect, which reads
-// the effect's mechanic) refuses. Intercept's stun is one level away (effect
-// 64 triggers 20253, a MOD_STUN aura): the caller resolves the trigger into
+// interrupt-flag gate. Intercept's stun is one level away (effect 64 triggers
+// 20253, a MOD_STUN aura): the caller resolves the trigger into
 // effectTriggeredStun.
+//
+// Only a target that can actually be stunned is worth the cooldown, and
+// IsImmuneToSpellEffect is not enough to say so: it reads the effect's
+// mechanic, while Bash/Hammer of Justice carry STUN as the SPELL's Mechanic
+// with an empty effect mechanic (Creature::IsImmuneToSpellEffect in the core
+// reads EffectMechanic only), so a stun-immune boss passed. The caller
+// therefore fills InterruptStunImmunity from the core (spell-level immunity,
+// the creature's raw mechanic_immune_mask STUN bit, boss status, an existing
+// stun aura and stun diminishing returns); any one of them blocks the stun,
+// and a boss counts as unstunnable without the bit. The pure rule cannot
+// read the creature, but it does own the verdict.
 //
 // Pure rule on core spell state, no engine types: the trigger passes the
 // target's generic/channeled Spell pointers (or nulls) plus the
@@ -52,13 +62,47 @@ namespace ai
 
     // Effect ids from game/Spells/SpellDefines.h, aura ids from
     // game/Spells/SpellAuraDefines.h (verified 1.18.1: INTERRUPT_CAST =
-    // 68, APPLY_AURA = 6, MOD_SILENCE = 27, MOD_STUN = 12).
+    // 68, APPLY_AURA = 6, MOD_SILENCE = 27, MOD_STUN = 12), mechanic
+    // MECHANIC_STUN = 12 from SpellDefines.h.
     enum InterruptEffect : uint32_t
     {
         INTERRUPT_EFFECT_INTERRUPT_CAST = 68,
         INTERRUPT_EFFECT_APPLY_AURA = 6,
         INTERRUPT_AURA_MOD_SILENCE = 27,
         INTERRUPT_AURA_MOD_STUN = 12,
+        INTERRUPT_MECHANIC_STUN = 12,
+    };
+
+    // The creature's mechanic_immune_mask, bit for MECHANIC_STUN. Read
+    // directly because Bash/HoJ carry the stun as the spell Mechanic only,
+    // which Creature::IsImmuneToSpellEffect does not look at.
+    inline bool StunMechanicImmune(uint32_t mechanicImmuneMask)
+    {
+        return (mechanicImmuneMask & (1u << (INTERRUPT_MECHANIC_STUN - 1))) != 0;
+    }
+
+    // Why the target cannot be stunned. The pure rule has no access to the
+    // creature or the aura list, so the caller fills this in; any one true
+    // means a stun is never picked.
+    struct InterruptStunImmunity
+    {
+        // Unit::IsImmuneToSpell of the stun spell (the spell's Mechanic
+        // against mechanic_immune_mask, school immunity, and so on).
+        bool spellImmune = false;
+        // The creature's mechanic_immune_mask has the STUN bit.
+        bool stunMechanicImmune = false;
+        // A boss: world boss, the run's plan boss, or boss rank. Bosses are
+        // treated as unstunnable even without the immunity bit.
+        bool boss = false;
+        // A MOD_STUN aura is already on the target.
+        bool alreadyStunned = false;
+        // The target's stun diminishing return is at immune.
+        bool stunDiminished = false;
+
+        bool BlocksStun() const
+        {
+            return spellImmune || stunMechanicImmune || boss || alreadyStunned || stunDiminished;
+        }
     };
 
     struct InterruptTargetSpell
@@ -93,6 +137,10 @@ namespace ai
         // (Intercept 20252 effect 2 -> 20253). Resolved by the caller, which
         // is the only place that can look the triggered entry up.
         bool effectTriggeredStun[MAX_EFFECTS] = {false, false, false};
+        // Why the target cannot be stunned at all (any one blocks the stun).
+        // The caller fills it from the core; effect immunity for a stun
+        // effect is effectImmune above.
+        InterruptStunImmunity stunImmunity;
     };
 
     // True when the target has an interruptible cast in progress AND the
@@ -127,9 +175,10 @@ namespace ai
         // Does the interrupt spell itself put a stun on the target? Only
         // behind AiPlayerbot.InterruptAllowStun: a tank then spends Bash /
         // Hammer of Justice / War Stomp on the first trash cast instead of
-        // saving the 60 s cooldown.
+        // saving the 60 s cooldown. A target that cannot be stunned (immune,
+        // boss, already stunned, stun-diminished) never counts.
         bool stun = false;
-        if (allowStun)
+        if (allowStun && !interrupt.stunImmunity.BlocksStun())
         {
             for (int i = 0; i < InterruptSpellInfo::MAX_EFFECTS; ++i)
             {

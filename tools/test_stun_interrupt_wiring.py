@@ -57,9 +57,9 @@ class InterruptAllowStun(unittest.TestCase):
             POLICY,
             "inline bool ShouldInterruptTargetCasting(InterruptTargetSpell const* genericSpell,\n"
             "        InterruptTargetSpell const* channeledSpell, InterruptSpellInfo const& interrupt, bool allowStun)")
-        # The stun branch exists only behind the key.
-        stun = brace_body(signature, "bool stun = false;\n        if (allowStun)")
-        self.assertIn("if (allowStun)", signature)
+        # The stun branch exists only behind the key, and never for a target that cannot be stunned.
+        stun = brace_body(signature, "bool stun = false;\n        if (allowStun && !interrupt.stunImmunity.BlocksStun())")
+        self.assertIn("if (allowStun && !interrupt.stunImmunity.BlocksStun())", signature)
         self.assertIn("interrupt.effect[i] == INTERRUPT_EFFECT_APPLY_AURA &&\n"
                       "                        interrupt.effectAura[i] == INTERRUPT_AURA_MOD_STUN", stun)
         self.assertIn("interrupt.effectTriggeredStun[i]", stun)
@@ -83,11 +83,41 @@ class InterruptAllowStun(unittest.TestCase):
         self.assertIn("sServerFacade.LookupSpellInfo(spellInfo->EffectTriggerSpell[i])", trigger)
         self.assertIn("triggered->Effect[j] == SPELL_EFFECT_APPLY_AURA", trigger)
         self.assertIn("triggered->EffectApplyAuraName[j] == SPELL_AURA_MOD_STUN", trigger)
-        # Immunity is read on the triggered spell's own effect, so a stun-immune target refuses.
+        # Immunity is read on the triggered spell's own spell and effect, so a stun-immune target refuses.
+        self.assertIn("!target->IsImmuneToSpell(triggered, false)", trigger)
         self.assertIn("!target->IsImmuneToSpellEffect(triggered, (SpellEffectIndex)j, true)", trigger)
         self.assertIn("interrupt.effectTriggeredStun[i] = true;", trigger)
         # One level only: the trigger lookup is inside the effect loop, not recursive.
         self.assertIn("for (int32 j = EFFECT_INDEX_0; j <= EFFECT_INDEX_2; ++j)", trigger)
+
+    def test_the_glue_refuses_a_target_that_cannot_be_stunned(self):
+        """Any one of the five immunity answers blocks the stun; bosses need no immunity bit."""
+        glue = brace_body(SPELLS, "bool PlayerbotAI::IsInterruptableSpellCasting(Unit* target, std::string spell, "
+                                  "uint8 effectMask)")
+        immunity = brace_body(glue, "if (allowStun)\n    {")
+        # 1. The spell-level check reads the spell's Mechanic (Bash/HoJ stun is there, not on the effect).
+        self.assertIn("target->IsImmuneToSpell(spellInfo, false)", immunity)
+        # 2. The creature's raw mechanic_immune_mask, so a missing spell Mechanic cannot slip through.
+        self.assertIn("ai::StunMechanicImmune(info->mechanic_immune_mask)", immunity)
+        # 4. A boss counts as unstunnable without the bit: world boss, plan boss, boss rank.
+        self.assertIn("creature->IsWorldBoss()", immunity)
+        self.assertIn("info->rank == CREATURE_ELITE_WORLDBOSS", immunity)
+        self.assertIn("ai::GetDungeonPlans().IsBossEntry(creature->GetMapId(), creature->GetEntry())", immunity)
+        # 5. An existing stun aura or stun diminishing return at immune.
+        self.assertIn("target->GetAurasByType(SPELL_AURA_MOD_STUN).empty()", immunity)
+        self.assertIn("StunDiminished(target, spellInfo, false)", immunity)
+        # The DR helper covers the stun groups only.
+        dr_groups = brace_body(SPELLS, "bool IsStunDiminishingGroup(DiminishingGroup group)")
+        self.assertIn("DIMINISHING_CONTROL_STUN", dr_groups)
+        self.assertIn("DIMINISHING_TRIGGER_STUN", dr_groups)
+        self.assertIn("DIMINISHING_KIDNEYSHOT", dr_groups)
+        dr = brace_body(SPELLS, "bool StunDiminished(Unit* target, SpellEntry const* stunSpell, bool triggered)")
+        self.assertIn("target->GetDiminishing(group) == DIMINISHING_LEVEL_IMMUNE", dr)
+        # The rule asks the flag before looking for a stun.
+        self.assertIn("if (allowStun && !interrupt.stunImmunity.BlocksStun())", POLICY)
+        self.assertIn("bool BlocksStun() const", POLICY)
+        self.assertIn("INTERRUPT_MECHANIC_STUN = 12", POLICY)
+        self.assertIn("(mechanicImmuneMask & (1u << (INTERRUPT_MECHANIC_STUN - 1))) != 0", POLICY)
 
     def test_docs_and_changelog(self):
         self.assertIn("### `AiPlayerbot.InterruptAllowStun`", COMBAT_SETTINGS)

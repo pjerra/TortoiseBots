@@ -149,6 +149,57 @@ int main()
     CHECK(!ShouldInterruptTargetCasting(&bolt, nullptr, bashImmune, kStunOn));
     std::cout << "  [PASS] stun_immune_no\n";
 
+    // stun_spell_mechanic_immune: IsImmuneToSpell refused the stun spell itself
+    // (Bash/Hammer of Justice carry STUN as the spell Mechanic, the effect
+    // mechanic is empty, so IsImmuneToSpellEffect alone missed it).
+    InterruptSpellInfo bashSpellImmune = Bash();
+    bashSpellImmune.stunImmunity.spellImmune = true;
+    CHECK(!ShouldInterruptTargetCasting(&bolt, nullptr, bashSpellImmune, kStunOn));
+    std::cout << "  [PASS] stun_spell_mechanic_immune\n";
+
+    // stun_mechanic_mask_immune: the creature's mechanic_immune_mask has the
+    // STUN bit, with the stun only in the spell's Mechanic. Read directly, so
+    // a missing effect mechanic cannot slip through (fails before the fix: the
+    // rule only saw the empty effect mechanic).
+    static const uint32_t STUN_BIT = 1u << (ai::INTERRUPT_MECHANIC_STUN - 1);
+    InterruptSpellInfo bashMaskImmune = Bash();
+    bashMaskImmune.stunImmunity.stunMechanicImmune = ai::StunMechanicImmune(STUN_BIT);
+    CHECK(bashMaskImmune.stunImmunity.stunMechanicImmune);
+    CHECK(!ShouldInterruptTargetCasting(&bolt, nullptr, bashMaskImmune, kStunOn));
+    // Any other mask bit does not read as STUN immunity.
+    CHECK(!ai::StunMechanicImmune(STUN_BIT - 1));
+    CHECK(!ai::StunMechanicImmune(0));
+    std::cout << "  [PASS] stun_mechanic_mask_immune\n";
+
+    // stun_boss_no: a world boss or the run's plan boss counts as unstunnable
+    // even without the STUN bit.
+    InterruptSpellInfo bashBoss = Bash();
+    bashBoss.stunImmunity.boss = true;
+    CHECK(!ShouldInterruptTargetCasting(&bolt, nullptr, bashBoss, kStunOn));
+    std::cout << "  [PASS] stun_boss_no\n";
+
+    // stun_already_stunned_no / stun_diminished_no: a stun that cannot land
+    // for these reasons is no interrupt either.
+    InterruptSpellInfo bashStunned = Bash();
+    bashStunned.stunImmunity.alreadyStunned = true;
+    CHECK(!ShouldInterruptTargetCasting(&bolt, nullptr, bashStunned, kStunOn));
+    InterruptSpellInfo bashDiminished = Bash();
+    bashDiminished.stunImmunity.stunDiminished = true;
+    CHECK(!ShouldInterruptTargetCasting(&bolt, nullptr, bashDiminished, kStunOn));
+    std::cout << "  [PASS] stunned or stun-diminished target takes no stun\n";
+
+    // stun_normal_elite_yes: no immunity flag and no boss status (a normal
+    // elite caster) still gets the stun pick with the key on.
+    InterruptSpellInfo bashNormal = Bash();
+    CHECK(!bashNormal.stunImmunity.BlocksStun());
+    CHECK(ShouldInterruptTargetCasting(&bolt, nullptr, bashNormal, kStunOn));
+    std::cout << "  [PASS] stun_normal_elite_yes\n";
+
+    // The key off keeps refusing every stun, immune flags or not.
+    CHECK(!ShouldInterruptTargetCasting(&bolt, nullptr, bashMaskImmune, kStunOff));
+    CHECK(!ShouldInterruptTargetCasting(&bolt, nullptr, bashBoss, kStunOff));
+    std::cout << "  [PASS] the key off still refuses every stun\n";
+
     // A stun stops a cast the victim's silence prevention does not cover
     // (the core interrupts any non-melee cast on a stun).
     InterruptTargetSpell notSilencePrevented = LightningBolt();
@@ -170,6 +221,13 @@ int main()
     InterruptSpellInfo interceptImmune = intercept;
     interceptImmune.effectImmune[1] = true;
     CHECK(!ShouldInterruptTargetCasting(&bolt, nullptr, interceptImmune, kStunOn));
+    // The same target-level immunity (STUN bit, boss) refuses the triggered stun.
+    InterruptSpellInfo interceptMaskImmune = intercept;
+    interceptMaskImmune.stunImmunity.stunMechanicImmune = true;
+    CHECK(!ShouldInterruptTargetCasting(&bolt, nullptr, interceptMaskImmune, kStunOn));
+    InterruptSpellInfo interceptBoss = intercept;
+    interceptBoss.stunImmunity.boss = true;
+    CHECK(!ShouldInterruptTargetCasting(&bolt, nullptr, interceptBoss, kStunOn));
     std::cout << "  [PASS] a triggered stun counts\n";
 
     std::cout << "All interrupt-casting policy tests passed.\n";
