@@ -1859,14 +1859,36 @@ bool PlayerbotAI::IsInterruptableSpellCasting(Unit* target, std::string spell, u
     ai::InterruptSpellInfo interrupt;
     interrupt.interruptFlags = spellInfo->InterruptFlags;
     interrupt.preventionType = spellInfo->PreventionType;
+    bool const allowStun = sPlayerbotAIConfig.interruptAllowStun;
     for (int32 i = EFFECT_INDEX_0; i <= EFFECT_INDEX_2 && i < ai::InterruptSpellInfo::MAX_EFFECTS; ++i)
     {
         interrupt.effect[i] = spellInfo->Effect[i];
         interrupt.effectAura[i] = spellInfo->EffectApplyAuraName[i];
         interrupt.effectImmune[i] = target->IsImmuneToSpellEffect(spellInfo, (SpellEffectIndex)i, true);
+        // Intercept's stun is one level away: its charge triggers 20253, which
+        // is the MOD_STUN aura. Follow the trigger once, and take the immunity
+        // answer from the triggered spell's own effect (mechanic immunity
+        // included), so a stun-immune target still refuses.
+        if (allowStun && spellInfo->Effect[i] == SPELL_EFFECT_TRIGGER_SPELL)
+        {
+            SpellEntry const* triggered = sServerFacade.LookupSpellInfo(spellInfo->EffectTriggerSpell[i]);
+            if (triggered)
+            {
+                for (int32 j = EFFECT_INDEX_0; j <= EFFECT_INDEX_2; ++j)
+                {
+                    if (triggered->Effect[j] == SPELL_EFFECT_APPLY_AURA &&
+                        triggered->EffectApplyAuraName[j] == SPELL_AURA_MOD_STUN &&
+                        !target->IsImmuneToSpellEffect(triggered, (SpellEffectIndex)j, true))
+                    {
+                        interrupt.effectTriggeredStun[i] = true;
+                        break;
+                    }
+                }
+            }
+        }
     }
     (void)effectMask;
-    return ai::ShouldInterruptTargetCasting(genericSlot, channeledSlot, interrupt);
+    return ai::ShouldInterruptTargetCasting(genericSlot, channeledSlot, interrupt, allowStun);
 }
 
 bool PlayerbotAI::HasAuraToDispel(Unit* target, uint32 dispelType, const DispelOverride* override)
