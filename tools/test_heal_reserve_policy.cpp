@@ -253,6 +253,29 @@ static void TestLatchResetsOnANewFight()
     CHECK(!latch.released);
 }
 
+// The D6 stale clear keeps running when only the pick counts refusals and no trigger row moves the window's stamp: the
+// count stays within one window instead of growing for the rest of the fight.
+static void TestPickOnlyRefusalsStayBounded()
+{
+    const std::uint32_t gap = 5000;
+    std::uint32_t stamp = 1000; // the last row the trigger wrote before the healer stopped topping up
+    std::uint32_t refused = 0;
+    std::uint32_t most = 0;
+    for (std::uint32_t now = 2000; now <= 300000; now += 200)
+    {
+        if (HealReserveRefusalStale(stamp, now, gap))
+        {
+            stamp = HealReserveRefusalRestamp(now, gap);
+            refused = 0;
+        }
+        ++refused;
+        most = std::max(most, refused);
+    }
+    // The first window can be the full two gaps old when the trigger stopped; after a clear the count restarts and the
+    // clear repeats every gap. Either way the count never runs on for the rest of the fight.
+    CHECK(most <= 2 * gap / 200 + 2);
+}
+
 // The window wins the label when both releases hold.
 static void TestWhyWindowWins()
 {
@@ -403,6 +426,7 @@ int main()
     TestDistressCountReadsEffectiveHealth();
     TestReleasedHoldsForThreeSeconds();
     TestLatchResetsOnANewFight();
+    TestPickOnlyRefusalsStayBounded();
     TestWhyWindowWins();
     TestReserveNeverBelowMedium();
     TestTopUpTier();

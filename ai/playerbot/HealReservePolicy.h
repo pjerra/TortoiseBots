@@ -198,6 +198,19 @@ namespace ai
         read.released = read.windowReleased || read.distressReleased;
     }
 
+    // The refusal count belongs to its row's window: a refusal counted more than two log gaps after the window's last
+    // row starts a fresh count. The restamp moves the stamp one gap back instead of zeroing it, so the clear keeps
+    // running when only the pick asks and no trigger row moves the stamp.
+    inline bool HealReserveRefusalStale(std::uint32_t stampMs, std::uint32_t nowMs, std::uint32_t gapMs)
+    {
+        return stampMs != 0 && nowMs - stampMs > 2 * gapMs;
+    }
+
+    inline std::uint32_t HealReserveRefusalRestamp(std::uint32_t nowMs, std::uint32_t gapMs)
+    {
+        return nowMs - gapMs;
+    }
+
     // Several live rows keep the highest `param`; its `window_s`, distress count and boss go with it. A tie keeps the
     // first row. `hurtCount` is the caller's raid read for this pick; 0 skips that read.
     inline HealReserveRead HealReservePick(const std::vector<HealReserveRow>& rows, bool clockKnown,
