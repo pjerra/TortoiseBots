@@ -8472,7 +8472,8 @@ BossStandTarget ai::FindBossStand(PlayerbotAI* ai, Player* bot)
         if (haveEpisode && unit->GetEntry() == ObjectGuid(episode.boss).GetEntry())
             episodeBoss = unit;
         points = StandPointsNow(*rows, role, unit->GetPositionX(), unit->GetPositionY(), casting,
-                                [unit](uint32 aura) { return unit->HasAura(aura); }, hold, nowMs, stoppedNoTarget);
+                                [unit](uint32 aura) { return unit->HasAura(aura); }, hold, nowMs, stoppedNoTarget,
+                                sPlayerbotAIConfig.bossStandNearestSeat);
         if (!points.empty())
         {
             boss = unit;
@@ -8510,12 +8511,19 @@ BossStandTarget ai::FindBossStand(PlayerbotAI* ai, Player* bot)
     // evaluates the plan (StandMemberCounts: in the fight with THIS boss within range of the anchor, or already
     // holding a stand for this boss and anchor), so all of them compute the same plan. A bot elsewhere in the
     // instance, or one the boss is not fighting, reserves no seat.
+    // AiPlayerbot.BossStandNearestSeat: a window's seats are pooled across the roles of its anchor and window spell,
+    // and its plan carries a 20 yd walk cap; a row with no window spell keeps its role. The lane (anchor -> release
+    // anchor) is read once, before the members, because the excused post below measures spots against it.
+    const bool pooledNow = sPlayerbotAIConfig.bossStandNearestSeat && !points.empty() && points[0]->windowSpell != 0;
+    StandLane lane;
     bool selfCounts = false;
     std::vector<StandBot> bots;
     std::vector<std::uint64_t> dead;  // group members that died: their plan entry frees its spot for the living
     const ObjectGuid selfGuid = bot->GetObjectGuid();
     if (boss)
     {
+        if (bossRows)
+            lane = StandLaneOf(*bossRows, *points[0]);
         const float anchorX = points[0]->anchorX;
         const float anchorY = points[0]->anchorY;
         const uint32 bossEntry = boss->GetEntry();
@@ -8553,8 +8561,21 @@ BossStandTarget ai::FindBossStand(PlayerbotAI* ai, Player* bot)
                 PlayerbotAI* memberAi = PlayerbotAIStorage::Instance().GetAI(member);
                 if (!memberAi || !memberAi->HasStrategy("boss tactics", BotState::BOT_STATE_COMBAT))
                     continue;
-                if (StandRoleOf(PlayerbotAI::IsTank(member), PlayerbotAI::IsHeal(member), ai->IsRanged(member)) != role)
+                // AiPlayerbot.BossStandNearestSeat: a pooled window seats every role together; a tank its excused
+                // hold_spot post keeps at its own spot reserves no seat.
+                if (!pooledNow &&
+                    StandRoleOf(PlayerbotAI::IsTank(member), PlayerbotAI::IsHeal(member), ai->IsRanged(member)) != role)
                     continue;
+                if (sPlayerbotAIConfig.bossStandNearestSeat && PlayerbotAI::IsTank(member))
+                {
+                    float spotX = 0.0f, spotY = 0.0f, spotZ = 0.0f;
+                    const bool postLive = TankPostLiveSpot(member->GetObjectGuid().GetRawValue(), spotX, spotY, spotZ);
+                    const float toSpotYd = std::sqrt(stand_detail::Dist2(member->GetPositionX(),
+                        member->GetPositionY(), spotX, spotY));
+                    if (StandPostExcuses(sPlayerbotAIConfig.bossStandNearestSeat, postLive,
+                            StandSpotOutsideLane(lane, *points[0], *bossRows, spotX, spotY), toSpotYd))
+                        continue;
+                }
                 StandHold memberHold;
                 {
                     std::lock_guard<std::mutex> lock(g_standHoldMutex);
@@ -8590,6 +8611,8 @@ BossStandTarget ai::FindBossStand(PlayerbotAI* ai, Player* bot)
     // one place. `read` is the seat the read ends with (or an invalid target), `seatValid` says whether it has one;
     // `stayApplied` is the seat that is the bot's own position (S2).
     bool stayApplied = false;
+    // AiPlayerbot.BossStandNearestSeat: the read ended at the bot's own post spot instead of a seat.
+    bool postApplied = false;
     const auto finishStandRead =
         [&](BossStandTarget read, bool seatValid, const char* unseatedReason) -> BossStandTarget
     {
@@ -8681,10 +8704,13 @@ BossStandTarget ai::FindBossStand(PlayerbotAI* ai, Player* bot)
         }
         if (logAssigned)
         {
-            const float yd = std::sqrt(stand_detail::Dist2(bot->GetPositionX(), bot->GetPositionY(), read.x, read.y));
+            // The walk: the seat, the excused post's own spot, or nothing for a stay.
+            const float yd = stayApplied ? 0.0f
+                : std::sqrt(stand_detail::Dist2(bot->GetPositionX(), bot->GetPositionY(), read.x, read.y));
             char info2[96];
-            snprintf(info2, sizeof(info2), "event=assigned,yd=%.1f,stay=%d,src=%s", yd, stayApplied ? 1 : 0,
-                     hold.lastOpenMs == nowMs ? "open" : "hold");
+            snprintf(info2, sizeof(info2), "event=assigned,yd=%.1f,stay=%d,src=%s,pool=%d,post=%d", yd,
+                     stayApplied ? 1 : 0, hold.lastOpenMs == nowMs ? "open" : "hold", pooledNow ? 1 : 0,
+                     postApplied ? 1 : 0);
             LogBossStand(ai, logged, info2);
         }
         if (logArrived)
@@ -8704,30 +8730,55 @@ BossStandTarget ai::FindBossStand(PlayerbotAI* ai, Player* bot)
     if (points.empty())
         return finishStandRead(target, false, nullptr);
 
+    // AiPlayerbot.BossStandNearestSeat: a `hold_spot` post whose spot stands outside this window's lane keeps its tank
+    // at that spot instead of a seat, so the main tank holds the boss there through the breath and reserves no seat.
+    // The post action outranks the stand action, so its own step decides where the tank stands.
+    if (sPlayerbotAIConfig.bossStandNearestSeat)
+    {
+        float spotX = 0.0f, spotY = 0.0f, spotZ = 0.0f;
+        const bool postLive = TankPostLiveSpot(selfGuid.GetRawValue(), spotX, spotY, spotZ);
+        const float toSpotYd = std::sqrt(
+            stand_detail::Dist2(bot->GetPositionX(), bot->GetPositionY(), spotX, spotY));
+        if (StandPostExcuses(sPlayerbotAIConfig.bossStandNearestSeat, postLive,
+                StandSpotOutsideLane(lane, *points[0], *bossRows, spotX, spotY), toSpotYd))
+        {
+            postApplied = true;
+            target.valid = true;
+            target.stay = true;
+            target.post = true;
+            target.x = spotX;
+            target.y = spotY;
+            target.z = spotZ;
+            return finishStandRead(target, true, nullptr);
+        }
+    }
+
     // The side is the side of the lane (anchor -> release anchor) the bot stands on. The seats come from the window's
     // one plan (PlanStandSeats), built when the window opens, grown by the bots that join the fight later and by the
     // seat a dead bot frees; a seat once given never moves while its bot lives.
-    const StandLane lane = bossRows ? StandLaneOf(*bossRows, *points[0]) : StandLane();
     StandSeat seat;
     {
         std::lock_guard<std::mutex> lock(g_standHoldMutex);
         Group* group = bot->GetGroup();
         // a bot with no group plans alone: its own guid keeps two groupless bots from sharing one plan
         const uint64 groupGuid = group ? group->GetLeaderGuid().GetRawValue() : bot->GetObjectGuid().GetRawValue();
+        // A pooled window files its plan under the role Any: every role's seats are planned together.
         const StandPlanKey key{ boss->GetObjectGuid().GetRawValue(), boss->GetMapId(), boss->GetInstanceId(),
-                                points[0]->anchor, static_cast<uint8>(role), points[0]->windowSpell, groupGuid };
+                                points[0]->anchor,
+                                static_cast<uint8>(pooledNow ? StandRole::Any : role), points[0]->windowSpell,
+                                groupGuid };
         auto it = g_standPlans.find(key);
         if (it == g_standPlans.end() || StandPlanStale(nowMs, it->second.lastReadMs))
         {
             for (auto old = g_standPlans.begin(); old != g_standPlans.end();)
                 old = StandPlanStale(nowMs, old->second.lastReadMs) ? g_standPlans.erase(old) : std::next(old);
             StandPlan plan;
-            plan.seats = PlanStandSeats(points, bots, lane);
+            plan.seats = PlanStandSeats(points, bots, lane, pooledNow ? kBossStandNearYd : 0.0f);
             it = g_standPlans.insert_or_assign(key, std::move(plan)).first;
         }
         else
             // a bot engaged after the window opened, or one whose seat a death freed, gets a free seat
-            ExtendStandPlan(it->second.seats, points, bots, lane, dead);
+            ExtendStandPlan(it->second.seats, points, bots, lane, dead, pooledNow ? kBossStandNearYd : 0.0f);
         it->second.lastReadMs = nowMs;
         for (const StandSeat& planned : it->second.seats)
         {
@@ -11635,6 +11686,8 @@ struct TankPostRecord
     // A waiting post that ended for its band keeps its record (done) until the band closes: the row must not start it
     // again on the next tick with a fresh window.
     bool done = false;
+    // AiPlayerbot.BossStandNearestSeat: the row ran in mode `hold_spot`, so its spot may excuse the tank from a seat.
+    bool holdSpot = false;
     std::uint32_t looseSinceMs = 0;
     std::uint32_t unhittableSinceMs = 0;
     bool lapseLogged = false;
@@ -11818,6 +11871,20 @@ std::uint64_t ai::TankPostLatchedUnit(Player* bot)
         WorldTimer::getMSTime() - it->second.lastReadMs >= kTankPostLiveMs)
         return 0;
     return it->second.arrivedSubjectGuid;
+}
+
+// AiPlayerbot.BossStandNearestSeat: the spot of this bot's live `tank_post` in mode `hold_spot`.
+bool ai::TankPostLiveSpot(std::uint64_t botGuid, float& x, float& y, float& z)
+{
+    std::lock_guard<std::mutex> lock(g_tankPostMutex);
+    auto const it = g_tankPost.find(botGuid);
+    if (it == g_tankPost.end() || it->second.done || !it->second.holdSpot ||
+        WorldTimer::getMSTime() - it->second.lastReadMs >= kTankPostLiveMs)
+        return false;
+    x = it->second.spotX;
+    y = it->second.spotY;
+    z = it->second.spotZ;
+    return true;
 }
 
 // AiPlayerbot.DungeonRunTankPostOwnsSubject. A post is live while its tank's record was read within kTankPostLiveMs;
@@ -12220,6 +12287,7 @@ BossTankPost ai::FindBossTankPost(PlayerbotAI* ai, Player* bot, const BossTactic
     const BossStandTarget stand = (holdSpot || sPlayerbotAIConfig.dungeonRunTankPostWalks)
         ? FindBossStand(ai, bot) : BossStandTarget();
     in.seated = TankPostSeated(stand.valid, stand.stay);
+    in.laneHold = holdSpot && stand.valid && stand.post;
     in.leash = holdSpot && sPlayerbotAIConfig.dungeonRunTankPostLeash;
     // AiPlayerbot.DungeonRunTankPostWaits: a hold_spot post runs before its unit exists, from its first tick until
     // the arrival latches (a record without a latched unit keeps waiting; a latched unit's death still ends it).
@@ -12255,6 +12323,7 @@ BossTankPost ai::FindBossTankPost(PlayerbotAI* ai, Player* bot, const BossTactic
         record.spotX = row->spotX;
         record.spotY = row->spotY;
         record.spotZ = row->spotZ;
+        record.holdSpot = holdSpot;
         record.bossGuid = boss->GetObjectGuid().GetRawValue();
         record.startMs = nowMs;
         record.lastReadMs = nowMs;

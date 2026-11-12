@@ -18,6 +18,7 @@ namespace ai
     {
         bool valid = false;  // a stand row applies to this bot and seats it
         bool stay = false;   // S2's stay chose the bot's own position instead of a seat: it is not a seat to yield a post to
+        bool post = false;   // AiPlayerbot.BossStandNearestSeat: an excused post chose its own spot: the tank keeps it
         float x = 0.0f;
         float y = 0.0f;
         float z = 0.0f;      // the row's floor; the mover snaps it to the ground again

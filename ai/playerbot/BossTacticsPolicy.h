@@ -4028,6 +4028,7 @@ namespace ai
         bool holdingOtherHostile = false; // the tank holds another hostile that attacks a group member
         bool windowExpired = false;       // the row's window_s has passed since the post started
         bool holdSpot = false;            // the row's `hold_spot` mode and its key are on
+        bool laneHold = false;            // AiPlayerbot.BossStandNearestSeat: the stand marks the post's spot outside its lane
         bool arrivedBefore = false;       // this post's latched arrival counts for the unit this read saw
         bool subjectOnTank = false;       // the subject's victim is this tank
         bool seated = false;              // the tank holds a boss stand seat (read only with holdSpot)
@@ -4188,6 +4189,10 @@ namespace ai
         }
         if (in.holdSpot && in.seated)
             return TankPostDecision::Yield;
+        // AiPlayerbot.BossStandNearestSeat: an excused post keeps its tank at its own spot, so a tank farther than the
+        // drag radius walks back to it whatever its subject did (inside it the step below is today's).
+        if (in.holdSpot && in.laneHold && in.botToSpotYd > kTankPostDragYd)
+            return TankPostDecision::Leash;
         bool const arrived = TankPostArrived(in.subjectFound, in.subjectAlive, in.subjectSelectable,
                                  in.subjectToSpotYd, in.arrivalRadiusYd) ||
             (in.holdSpot && in.arrivedBefore && in.subjectSelectable);

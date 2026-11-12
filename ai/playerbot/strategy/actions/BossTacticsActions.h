@@ -192,6 +192,11 @@ namespace ai
     // that unit while it lives, so a renumbering of the raid tank order does not move the post off it.
     std::uint64_t TankPostLatchedUnit(Player* bot);
 
+    // AiPlayerbot.BossStandNearestSeat: the spot of this bot's live `tank_post` in mode `hold_spot` (false when it
+    // holds no post, its record is not current, the post ended, or its row ran in the plain mode). Takes the post lock
+    // alone: the caller never holds the stand lock.
+    bool TankPostLiveSpot(std::uint64_t botGuid, float& x, float& y, float& z);
+
     // The area taunts' own scan: whether any hostile within kAreaTauntRadiusYd of the bot is another live post's
     // reserved subject, so Challenging Shout or Challenging Roar must not cast (the selected target alone is the gate's
     // read). Logs the refusal row for the first such unit.

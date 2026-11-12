@@ -44,6 +44,7 @@ These settings configure boss encounter mechanics, environmental hazard evasion,
 | [`AiPlayerbot.BossStandEvents`](#aiplayerbotbossstandevents) | `0` | `1`: one `BossStand` row per bot and window (assigned, arrived, unseated, released) into `bot_events.csv`. |
 | [`AiPlayerbot.BossStandWholeRaid`](#aiplayerbotbossstandwholeraid) | `0` | `1`: every bot in combat with the boss counts toward its stand seats (a threat wipe keeps its seat), a bot already clear of the lane stays put, and a seated bot does not flee (recommended on). |
 | [`AiPlayerbot.BossStandHoldsMeleeReach`](#aiplayerbotbossstandholdsmeleereach) | `0` | `1`: a melee bot or a tank with a valid boss stand seat keeps it instead of running `reach melee` back toward its target (needs the boss tactics and the rows). |
+| [`AiPlayerbot.BossStandNearestSeat`](#aiplayerbotbossstandnearestseat) | `0` | `1`: a breath window's seats are pooled across its roles and planned with a 20 yd walk cap, and a `hold_spot` post whose spot stands outside the lane keeps its tank there (recommended on, needs the boss tactics and the rows). |
 | [`AiPlayerbot.BossTacticsKeepsEngagedBoss`](#aiplayerbotbosstacticskeepsengagedboss) | `0` | `1`: a boss the raid fights stays in a bot's fight for 10 s after the last bot saw it, within 150 yd and while the bot is in combat (recommended on for Onyxia's Lair; not yet tested in other raids). |
 | [`AiPlayerbot.DungeonRunCharmYield`](#aiplayerbotdungeonruncharmyield) | `0` | `1`: a bot a creature charms yields its AI, no action (area or targeted) lands on a charmed group member, and pets stand down while one is up (needs no rows or tactics). |
 | [`AiPlayerbot.DungeonRunImmuneBossVictimEscape`](#aiplayerbotdungeonrunimmunebossvictimescape) | `0` | `1` (recommended on): a boss that cannot be taunted and turns on a damage dealer or healer makes that member escape with its own ability, or a nearby paladin protect it (needs no rows or tactics). |
@@ -868,7 +869,7 @@ Whether the stand seats write one `BossStand` row per bot and window: assigned, 
 <details>
 <summary>How it works in detail</summary>
 
-**Stand rows:** one episode per bot and window (the boss guid and the anchor), so a walk can tell a bot that never got a seat from one that got it too late or left it. info1 is `boss=<entry>,anchor=<id>,role=<healer|ranged|melee>,spell=<window spell>`. info2 is `event=assigned,yd=<yards to the seat>,stay=<1 when the bot stayed where it stood>,src=<open|hold>` (`open`: the window is on this read, `hold`: the seat outlives a closed window), `event=arrived,ms=<since the seat was assigned>`, `event=unseated,reason=<not_counted|given_up|side_full>` (once per episode) and `event=released,reason=<other_window|no_boss|release_anchor|hold_time|dead|gone>,seated=<1 when it reached the seat>`. The rows cost nothing when the key is off; `bot_events.csv` must be on for any row to be written.
+**Stand rows:** one episode per bot and window (the boss guid and the anchor), so a walk can tell a bot that never got a seat from one that got it too late or left it. info1 is `boss=<entry>,anchor=<id>,role=<healer|ranged|melee>,spell=<window spell>`. info2 is `event=assigned,yd=<yards to the seat>,stay=<1 when the bot stayed where it stood>,src=<open|hold>` (`open`: the window is on this read, `hold`: the seat outlives a closed window), `pool=<1 when the window's seats were pooled across its roles (AiPlayerbot.BossStandNearestSeat)>`, `post=<1 when the seat is the bot's own excused post spot>`, `event=arrived,ms=<since the seat was assigned>`, `event=unseated,reason=<not_counted|given_up|side_full>` (once per episode) and `event=released,reason=<other_window|no_boss|release_anchor|hold_time|dead|gone>,seated=<1 when it reached the seat>`. The rows cost nothing when the key is off; `bot_events.csv` must be on for any row to be written.
 
 </details>
 ### `AiPlayerbot.BossStandWholeRaid`
@@ -889,6 +890,16 @@ Whether a melee bot or a tank with a valid boss stand seat keeps it instead of r
 <summary>How it works in detail</summary>
 
 **Seated melee:** the caster and heal reaches already yield to a seat; the melee reach did not, and the stand trigger is quiet once the bot has arrived, so nothing held a melee bot on its seat. With the key on, `reach melee` is not useful while the bot holds a valid seat (a stay counts as one): a not-useful action records no failure, so no failure backoff outlives the seat.
+
+</details>
+### `AiPlayerbot.BossStandNearestSeat`
+Whether a breath window's seats are pooled across its roles and planned with a 20 yd walk cap, and whether a `hold_spot` tank post whose spot stands outside the lane keeps its tank at that spot.
+**Default:** `0` (recommended on) · **Values:** `0` off (each role is seated on its own cells and the plan walks the least in total; a post yields to a seat as before), `1` on (needs the boss tactics and the boss stand rows; the excused post also needs a `tank_post` row in mode `hold_spot`) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+<details>
+<summary>How it works in detail</summary>
+
+**Pooled seats:** a window's seats are every role's rows of its anchor and window spell, so a melee bot may stand on a healer's cell and the other way round; a plan seats every counted bot of the side together whatever its role, and a row with no window spell (an always-on row) keeps its own role. **The walk cap:** a seat farther than 20 yd costs 300 more in the plan, under the existing 1000 for a seat beyond 35 yd, so a side first seats as many bots within 35 yd as it can, then as many within 20 yd, then walks the least in total; sides stay (no bot crosses the lane), and a seat once given never moves. **The excused post:** a `hold_spot` post's spot stands outside a window's lane when it lies beside the tick chain and at least as far from the lane line as the window's nearest seat beside it; a tank holding such a post within 20 yd of its spot keeps the spot instead of taking a seat (it reserves none, and the post walks it back past 8 yd), so a main tank can hold the boss at a spot the seats do not cover. The assigned `BossStand` row carries `pool=<1 when the window's seats were pooled>` and `post=<1 when the seat is the post's own spot>`.
 
 </details>
 ### `AiPlayerbot.BossTacticsKeepsEngagedBoss`

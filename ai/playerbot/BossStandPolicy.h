@@ -40,6 +40,8 @@ namespace ai
         Ranged = 1,
         Healer = 2,
         Melee = 3,
+        // A pooled window's plan key: every role's seats are planned together (never parsed, never a row's role).
+        Any = 4,
     };
 
     inline StandRole ParseStandRole(const std::string& text)
@@ -153,7 +155,7 @@ namespace ai
         {
             if (sealed_.load(std::memory_order_acquire))
                 return false;
-            if (row.map == 0 || row.bossEntry == 0 || row.role == StandRole::None)
+            if (row.map == 0 || row.bossEntry == 0 || row.role == StandRole::None || row.role == StandRole::Any)
                 return false;
             if (!(row.anchorR > 0.0f) || row.side > 1)
                 return false;
@@ -341,6 +343,19 @@ namespace ai
         return out;
     }
 
+    // Every role's rows of one anchor and one window spell, in table order: the seats a pooled window shares.
+    inline std::vector<const BossStandRow*> PooledStandPoints(const std::vector<BossStandRow>& rows,
+                                                              std::uint32_t anchor, std::uint32_t windowSpell)
+    {
+        std::vector<const BossStandRow*> out;
+        for (const BossStandRow& row : rows)
+        {
+            if (row.anchor == anchor && row.windowSpell == windowSpell)
+                out.push_back(&row);
+        }
+        return out;
+    }
+
     // Whether the boss is within the radius of anchor `releaseAnchor` (2D, on the radius counts): the sweep that
     // followed the cast has reached the lane's far end. 0 and an anchor the rows do not hold never reach.
     inline bool StandReleaseAnchorReached(const std::vector<BossStandRow>& rows, std::uint32_t releaseAnchor,
@@ -367,6 +382,7 @@ namespace ai
         bool armed = false;
         std::uint32_t bossEntry = 0;
         std::uint32_t anchor = 0;          // the anchor of the window the bot was last seated in
+        std::uint32_t windowSpell = 0;     // the window spell of that anchor the seats were pooled on (0: the role's own)
         std::uint32_t releaseAnchor = 0;
         std::uint32_t holdMs = 0;
         std::uint32_t lastOpenMs = 0;      // the last time the window was open: the cast's end to within a tick
@@ -377,6 +393,7 @@ namespace ai
         hold.armed = true;
         hold.bossEntry = row.bossEntry;
         hold.anchor = row.anchor;
+        hold.windowSpell = row.windowSpell;
         hold.releaseAnchor = row.releaseAnchor;
         hold.holdMs = row.holdMs;
         hold.lastOpenMs = nowMs;
@@ -395,13 +412,18 @@ namespace ai
     template <typename HasAura>
     std::vector<const BossStandRow*> StandPointsNow(const std::vector<BossStandRow>& rows, StandRole role, float bossX,
                                                     float bossY, std::uint32_t castingSpell, HasAura hasAura,
-                                                    StandHold& hold, std::uint32_t nowMs, bool stoppedNoTarget = false)
+                                                    StandHold& hold, std::uint32_t nowMs, bool stoppedNoTarget = false,
+                                                    bool pooled = false)
     {
         std::vector<const BossStandRow*> points =
             ActiveStandPoints(rows, role, bossX, bossY, castingSpell, hasAura, stoppedNoTarget);
         if (!points.empty())
         {
             StandHoldArm(hold, *points[0], nowMs);
+            // AiPlayerbot.BossStandNearestSeat: a window's seats are every role's rows of its anchor and window spell,
+            // so the roles share their cells. A row with no window spell is never pooled: it keeps its role.
+            if (pooled && points[0]->windowSpell != 0)
+                return PooledStandPoints(rows, points[0]->anchor, points[0]->windowSpell);
             return points;
         }
         if (!hold.armed)
@@ -413,7 +435,10 @@ namespace ai
             hold = StandHold();
             return points;
         }
-        return HeldStandPoints(rows, role, hold.anchor);
+        const std::vector<const BossStandRow*> held = HeldStandPoints(rows, role, hold.anchor);
+        if (pooled && !held.empty() && hold.windowSpell != 0)
+            return PooledStandPoints(rows, hold.anchor, hold.windowSpell);
+        return held;
     }
 
     // A group member of the bot's role, as the seat selection sees it. `engaged`: the boss has it on its threat list
@@ -636,6 +661,44 @@ namespace ai
         return any && std::fabs(bot) >= need;
     }
 
+    // AiPlayerbot.BossStandNearestSeat: whether a spot stands outside the breath lane of a window: beside the tick
+    // chain (its along-lane coordinate within the lane's length) and at least as far from the lane line as the
+    // window's nearest seat beside the chain (every role, both sides). False with no lane, no such seat, or a spot
+    // past either end.
+    inline bool StandSpotOutsideLane(const StandLane& lane, const BossStandRow& window,
+                                     const std::vector<BossStandRow>& rows, float spotX, float spotY)
+    {
+        if (!lane.valid)
+            return false;
+        const float length = std::sqrt(lane.dx * lane.dx + lane.dy * lane.dy);
+        if (!(length > 0.0001f))
+            return false;
+        const float anchorX = window.anchorX;
+        const float anchorY = window.anchorY;
+        const float along = (lane.dx * (spotX - anchorX) + lane.dy * (spotY - anchorY)) / length;
+        if (along < 0.0f || along > length)
+            return false;
+        float need = 0.0f;
+        bool any = false;
+        for (const BossStandRow& row : rows)
+        {
+            if (row.anchor != window.anchor || row.windowSpell != window.windowSpell)
+                continue;
+            const float rowAlong = (lane.dx * (row.x - anchorX) + lane.dy * (row.y - anchorY)) / length;
+            if (rowAlong < 0.0f || rowAlong > length)
+                continue;
+            const float lateral = std::fabs(StandLateral(lane, anchorX, anchorY, row.x, row.y));
+            if (lateral < 0.5f)
+                continue;
+            if (!any || lateral < need)
+            {
+                any = true;
+                need = lateral;
+            }
+        }
+        return any && std::fabs(StandLateral(lane, anchorX, anchorY, spotX, spotY)) >= need;
+    }
+
     // AiPlayerbot.BossStandWholeRaid: a seated bot does not flee (the seat is the escape).
     inline bool FleeYieldsToStand(bool wholeRaid, bool seated) { return wholeRaid && seated; }
 
@@ -646,6 +709,17 @@ namespace ai
     // bots): both dwarf any real walk, so the count within reach is decided first and the total walk second.
     constexpr double kBossStandFarPenalty = 1000.0;
     constexpr double kBossStandUnseatedCost = 1000000.0;
+    // AiPlayerbot.BossStandNearestSeat: a seat farther than this costs kBossStandNearPenalty more, so a side's plan
+    // first seats as many bots within kBossStandReach as it can, then as many within this, then walks the least.
+    constexpr float kBossStandNearYd = 20.0f;
+    constexpr double kBossStandNearPenalty = 300.0;
+
+    // AiPlayerbot.BossStandNearestSeat: a hold_spot post whose spot is outside the lane keeps its tank at the spot
+    // instead of a seat, while the tank stands within kBossStandNearYd of it.
+    inline bool StandPostExcuses(bool keyOn, bool postLive, bool spotOutsideLane, float botToSpotYd)
+    {
+        return keyOn && postLive && spotOutsideLane && botToSpotYd <= kBossStandNearYd;
+    }
 
     // One bot's seat in a window's plan.
     struct StandSeat
@@ -773,10 +847,12 @@ namespace ai
         }
 
         // Seats `bots` (in id order) among `spots`, min-cost: the cost is the 2D distance plus kBossStandFarPenalty
-        // beyond kBossStandReach, and a bot the spots run out for stays unseated (kBossStandUnseatedCost). The seat of
-        // bots[r] is written to plan[index[r]], left invalid when that bot is the one left out.
+        // beyond kBossStandReach (and, with a near cap, kBossStandNearPenalty beyond it), and a bot the spots run out
+        // for stays unseated (kBossStandUnseatedCost). The seat of bots[r] is written to plan[index[r]], left invalid
+        // when that bot is the one left out.
         inline void SeatBots(std::vector<StandSeat>& plan, const std::vector<std::size_t>& index,
-                             const std::vector<StandBot>& bots, const std::vector<StandSpot>& spots)
+                             const std::vector<StandBot>& bots, const std::vector<StandSpot>& spots,
+                             float nearCapYd = 0.0f)
         {
             if (bots.empty() || spots.empty())
                 return;
@@ -792,7 +868,8 @@ namespace ai
                         continue;
                     }
                     const double d = std::sqrt(Dist2(bots[r].x, bots[r].y, spots[c].x, spots[c].y));
-                    cost[r][c] = d + (d > kBossStandReach ? kBossStandFarPenalty : 0.0);
+                    cost[r][c] = d + (nearCapYd > 0.0f && d > nearCapYd ? kBossStandNearPenalty : 0.0) +
+                        (d > kBossStandReach ? kBossStandFarPenalty : 0.0);
                 }
             }
             const std::vector<std::size_t> pick = MinCostSeats(cost);
@@ -813,7 +890,7 @@ namespace ai
         // reactive dodge). Writes plan[members[r]].
         inline void SeatSide(std::vector<StandSeat>& plan, const std::vector<StandBot>& bots,
                              const std::vector<std::size_t>& members, const std::vector<const BossStandRow*>& points,
-                             std::uint8_t side)
+                             std::uint8_t side, float nearCapYd = 0.0f)
         {
             if (members.empty())
                 return;
@@ -821,7 +898,7 @@ namespace ai
             sideBots.reserve(members.size());
             for (std::size_t index : members)
                 sideBots.push_back(bots[index]);
-            SeatBots(plan, members, sideBots, SideSpots(points, side));
+            SeatBots(plan, members, sideBots, SideSpots(points, side), nearCapYd);
         }
     }
 
@@ -834,7 +911,8 @@ namespace ai
     //    (kBossStandUnseatedCost). So the plan seats as many bots within reach as it can, then walks the least in total,
     //    and a seat beyond reach is still taken.
     inline std::vector<StandSeat> PlanStandSeats(const std::vector<const BossStandRow*>& points,
-                                                 const std::vector<StandBot>& bots, const StandLane& lane)
+                                                 const std::vector<StandBot>& bots, const StandLane& lane,
+                                                 float nearCapYd = 0.0f)
     {
         std::vector<StandBot> sorted(bots);
         std::stable_sort(sorted.begin(), sorted.end(), [](const StandBot& a, const StandBot& b) { return a.id < b.id; });
@@ -869,7 +947,7 @@ namespace ai
             for (std::size_t i = 0; i < sorted.size(); ++i)
                 if (side[i] == s)
                     members.push_back(i);
-            stand_detail::SeatSide(plan, sorted, members, points, s);
+            stand_detail::SeatSide(plan, sorted, members, points, s, nearCapYd);
         }
         return plan;
     }
@@ -892,7 +970,7 @@ namespace ai
     // ascending id order.
     inline bool ExtendStandPlan(std::vector<StandSeat>& plan, const std::vector<const BossStandRow*>& points,
                                 const std::vector<StandBot>& bots, const StandLane& lane,
-                                const std::vector<std::uint64_t>& dead)
+                                const std::vector<std::uint64_t>& dead, float nearCapYd = 0.0f)
     {
         if (points.empty())
             return false;
@@ -990,7 +1068,7 @@ namespace ai
                 if (!held)
                     free.push_back(spot);
             }
-            stand_detail::SeatBots(plan, sidedIndex[s], sided[s], free);
+            stand_detail::SeatBots(plan, sidedIndex[s], sided[s], free, nearCapYd);
         }
         std::stable_sort(plan.begin(), plan.end(), [](const StandSeat& a, const StandSeat& b) { return a.id < b.id; });
         return true;
