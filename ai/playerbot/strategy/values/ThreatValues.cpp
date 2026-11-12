@@ -354,7 +354,6 @@ namespace
 // The standing hold's growth sample (ThreatResetStandingGrows), keyed by (instance id, boss guid) like the Hex scan:
 // every bot of a fight reads the same reference, so a frozen successor releases the hold for all of them. The sample
 // itself starts again when the fight's engage clock changes.
-constexpr std::size_t kStandingSampleMaxEntries = 64;
 std::mutex g_standingSampleMutex;
 std::map<std::pair<std::uint32_t, std::uint64_t>, ThreatResetStandingSample> g_standingSamples;
 }
@@ -376,12 +375,13 @@ ThreatResetStandingRead ThreatValue::GetResetStandingRead(PlayerbotAI* ai, Unit*
     if (read.ref < 0.0f)
         return read;
     const std::uint32_t nowMs = WorldTimer::getMSTime();
+    const std::pair<std::uint32_t, std::uint64_t> key = std::make_pair(
+        static_cast<std::uint32_t>(target->GetInstanceId()), target->GetObjectGuid().GetRawValue());
     std::lock_guard<std::mutex> lock(g_standingSampleMutex);
-    ThreatResetStandingSample& sample = g_standingSamples[std::make_pair(
-        static_cast<std::uint32_t>(target->GetInstanceId()), target->GetObjectGuid().GetRawValue())];
+    ThreatResetStandingSample& sample = g_standingSamples[key];
     read.frozen = !ai::ThreatResetStandingGrows(sample, fightMs, read.ref, nowMs);
-    if (g_standingSamples.size() > kStandingSampleMaxEntries)
-        g_standingSamples.clear();
+    if (g_standingSamples.size() > ai::kThreatResetStandingSampleMaxEntries)
+        ai::ThreatResetStandingEvict(g_standingSamples, key, nowMs);
     return read;
 }
 
