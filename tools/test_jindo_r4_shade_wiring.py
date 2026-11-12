@@ -32,6 +32,11 @@ def member(text, start, end):
     return text[begin:text.index(end, begin)]
 
 
+def newest_changelog_entries():
+    """The unreleased bullets above the first version heading (no entry-count window)."""
+    return CHANGELOG.split("\n## ", 1)[0]
+
+
 class ShadeCoverRow(unittest.TestCase):
     def body(self):
         return member(ACTIONS, "void ai::LogShadeCover(", "\n}\n")
@@ -79,7 +84,7 @@ class ShadeCoverRow(unittest.TestCase):
     def test_documented(self):
         self.assertIn("BossTacticsShadeCover", DOCS)
         self.assertIn("BossTacticsShadeCover", DOCS_ROWS)
-        self.assertIn("BossTacticsShadeCover", "".join(CHANGELOG.split("\n- ", 25)[1:25]))  # newest entries (the window grows with the changelog)
+        self.assertIn("BossTacticsShadeCover", newest_changelog_entries())
         for word in ("dead", "charmed", "other_shade", "out_of_range", "threat_gate", "guard", "on_boss", "other_target",
                      "no_target"):
             self.assertIn(word, member(DOCS_ROWS, "`BossTacticsShadeCover`", "\n"))
@@ -94,7 +99,7 @@ class ShadeHealerCover(unittest.TestCase):
         self.assertIn("Recommended on.", member(DOCS_RUNS, "### `AiPlayerbot.DungeonRunShadeHealerCover`", "</details>"))
         self.assertIn("recommended on", member(CONF, "# Shade healer cover at Jin'do", "AiPlayerbot.DungeonRunShadeHealerCover = 0"))
         self.assertIn("DungeonRunShadeHealerCover", DOCS)
-        self.assertIn("DungeonRunShadeHealerCover", "".join(CHANGELOG.split("\n- ", 25)[1:25]))  # newest entries (the window grows with the changelog)
+        self.assertIn("DungeonRunShadeHealerCover", newest_changelog_entries())
 
     def test_the_carrier_pick_reads_the_key(self):
         pick = member(ACTIONS, "Unit* PickBossKillFirst(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fight, KillFirstPickMode mode,\n    float carrierReachYd)\n{", "\n}\n")

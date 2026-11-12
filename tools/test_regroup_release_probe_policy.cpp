@@ -1,10 +1,10 @@
-// RegroupReleaseProbePolicy: the release window, the per-bot living-tick budget
-// and the row layout of the RegroupReleaseProbe diagnostic (bot_events.csv,
+// RegroupReleaseProbePolicy: the release window, the per-commander book and
+// the row layout of the RegroupReleaseProbe diagnostic (bot_events.csv,
 // AiPlayerbot.RaidBossDiagnostics only).
 //
-// Named failing cases before the policy existed: no window at all (every tick
-// after a release wrote a row), a bot counted on ticks it spent dead, and a
-// row with a victim or a top list that broke the key=value layout.
+// Named failing cases before the policy existed: one global window another
+// commander's ticks spent, a window left behind after its run ended, and a row
+// with a victim, a selection or a holder list that broke the key=value layout.
 //
 // Run: g++ -std=c++17 -Wall -Wextra tools/test_regroup_release_probe_policy.cpp
 #include "../runtime/RegroupReleaseProbePolicy.h"
@@ -56,17 +56,34 @@ void Window_rearmed_by_a_second_release()
     CHECK(window.Next() == 1);
 }
 
-void BotBudget_counts_living_ticks_only()
+void Book_keeps_two_commanders_windows()
 {
-    BotBudget bot;
-    bot.guid = 42;
-    CHECK(!bot.Due(false)); // a corpse writes nothing and keeps its budget
-    CHECK(bot.Due(true));
-    CHECK(!bot.Due(false));
-    CHECK(bot.Due(true));
-    CHECK(bot.Due(true));
-    CHECK(!bot.Due(true)); // three living ticks is all
-    CHECK(bot.living == kBotLivingTicks);
+    Book book;
+    book.Arm(7, {11, 12});
+    book.Arm(9, {21});
+    CHECK(book.Find(7)->bots.size() == 2);
+    // Interleaved run ticks: each commander's own window advances only on its own ticks.
+    CHECK(book.Find(7)->window.Next() == 1);
+    CHECK(book.Find(9)->window.Next() == 1);
+    CHECK(book.Find(7)->window.Next() == 2);
+    // A second release for 7 starts it over (and takes its new bots); 9's window is untouched.
+    book.Arm(7, {13});
+    CHECK(book.Find(7)->window.Next() == 1);
+    CHECK(book.Find(9)->window.Next() == 2);
+    // Both windows complete their own ten ticks.
+    for (unsigned i = 3; i <= kTickRows; ++i)
+        CHECK(book.Find(9)->window.Next() == i);
+    CHECK(book.Find(9)->window.Next() == 0);
+    for (unsigned i = 2; i <= kTickRows; ++i)
+        CHECK(book.Find(7)->window.Next() == i);
+    CHECK(book.Find(7)->window.Next() == 0);
+    // A run's end (and the module's clear) drops its window.
+    book.End(7);
+    CHECK(book.Find(7) == nullptr);
+    CHECK(book.Find(9) != nullptr);
+    book.Clear();
+    CHECK(book.Find(9) == nullptr);
+    CHECK(book.Find(42) == nullptr);
 }
 
 void BossDetail_keeps_the_layout()
@@ -94,10 +111,20 @@ void BossDetail_escapes_a_names_separators()
 
 void BotDetail_keeps_the_layout()
 {
-    std::string const detail = BotDetail("combat", "Hakkar", "Hakkar", "", true, 2);
-    CHECK(detail == "engine=combat|cur=Hakkar|atk=Hakkar|pull=-|combat=1|holders=2");
-    std::string const idle = BotDetail("non-combat", "", "", "", false, 0);
-    CHECK(idle == "engine=non-combat|cur=-|atk=-|pull=-|combat=0|holders=0");
+    std::string const detail = BotDetail("combat", "Hakkar", "Hakkar", "", "Hakkar", "123456", true, 2,
+        {"Hakkar", "Shade"});
+    CHECK(detail == "engine=combat|cur=Hakkar|atk=Hakkar|pull=-|vic=Hakkar|sel=123456|combat=1|holders=2:Hakkar,Shade");
+    std::string const idle = BotDetail("non-combat", "", "", "", "", "", false, 0, {});
+    CHECK(idle == "engine=non-combat|cur=-|atk=-|pull=-|vic=-|sel=-|combat=0|holders=0:-");
+}
+
+void BotDetail_caps_and_escapes_the_holders()
+{
+    // Six holders: the count is all of them, the names stop at kHolderNames, and a name's
+    // separators are escaped so the row stays parseable.
+    std::vector<std::string> names = {"a", "x,y", "c", "d", "e", "f"};
+    std::string const detail = BotDetail("combat", "", "", "", "", "", true, 6, names);
+    CHECK(detail.find("|holders=6:a,x%2Cy,c,d,e") != std::string::npos);
 }
 
 void Subjects_carry_the_tick_and_the_name()
@@ -112,11 +139,12 @@ int main()
 {
     Window_bounded_to_ten_ticks();
     Window_rearmed_by_a_second_release();
-    BotBudget_counts_living_ticks_only();
+    Book_keeps_two_commanders_windows();
     BossDetail_keeps_the_layout();
     BossDetail_caps_names_and_marks_an_empty_list();
     BossDetail_escapes_a_names_separators();
     BotDetail_keeps_the_layout();
+    BotDetail_caps_and_escapes_the_holders();
     Subjects_carry_the_tick_and_the_name();
     std::cout << "regroup release probe policy: all cases passed\n";
     return 0;
