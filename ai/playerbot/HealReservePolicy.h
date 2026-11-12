@@ -105,12 +105,23 @@ namespace ai
             ++counts.calm;
     }
 
-    // The per-healer distress latch: `released` holds the release, and `calm` times the run of calm frames.
+    // The per-healer distress latch: `released` holds the release, and `calm` times the run of calm frames. It belongs
+    // to one fight (the boss guid and the fight's combat start), so a latch can never cross into the next pull.
     struct HealReserveLatch
     {
         bool released = false;
         bool calm = false;
         std::uint32_t calmSinceMs = 0;
+        std::uint64_t fightBossGuid = 0;
+        std::uint32_t fightStartMs = 0;
+    };
+
+    // One fight as the reserve identifies it: the live boss and the fight's combat start (the seek record's engage, or
+    // the bot's own combat start without it).
+    struct HealReserveFightId
+    {
+        std::uint64_t bossGuid = 0;
+        std::uint32_t startMs = 0;
     };
 
     inline void HealReserveLatchReset(HealReserveLatch& latch)
@@ -118,6 +129,17 @@ namespace ai
         latch.released = false;
         latch.calm = false;
         latch.calmSinceMs = 0;
+    }
+
+    // Bind the latch to this read's fight. Anything the latch held belongs to the old fight and is dropped the moment
+    // either half of the identity differs; the fight's own later reads keep it.
+    inline void HealReserveLatchBind(HealReserveLatch& latch, const HealReserveFightId& fight)
+    {
+        if (latch.fightBossGuid == fight.bossGuid && latch.fightStartMs == fight.startMs)
+            return;
+        HealReserveLatchReset(latch);
+        latch.fightBossGuid = fight.bossGuid;
+        latch.fightStartMs = fight.startMs;
     }
 
     // The latched distress release. Members under the medium line fire it; it then holds while at least the row's
@@ -159,11 +181,13 @@ namespace ai
         return true;
     }
 
-    // Apply the latch to a pick: the distress release is the latch's, and `released` is the window or it. A read with
-    // no live row is a fight's end, so the latch goes with it.
+    // Apply the latch to a pick: the latch is bound to this read's fight first, so a read of another fight starts
+    // unreleased; then the distress release is the latch's, and `released` is the window or it. A read with no live
+    // row is a fight's end, so the latch goes with it.
     inline void HealReserveApplyDistressLatch(HealReserveRead& read, HealReserveLatch& latch, std::uint32_t calmCount,
-                                              std::uint32_t nowMs)
+                                              std::uint32_t nowMs, const HealReserveFightId& fight)
     {
+        HealReserveLatchBind(latch, fight);
         if (!read.live)
         {
             HealReserveLatchReset(latch);

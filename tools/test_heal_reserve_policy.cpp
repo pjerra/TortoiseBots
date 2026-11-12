@@ -18,13 +18,16 @@
 
 using namespace ai;
 
+// The fight every one-shot read below belongs to.
+static const HealReserveFightId kLiveFight{101, 5000};
+
 static HealReserveRead Live(float reservePct, float windowSec, std::uint32_t dueInMs,
                             std::uint32_t distress = 0, std::uint32_t hurt = 0)
 {
     HealReserveLatch latch;
     HealReserveRead read = HealReservePick(std::vector<HealReserveRow>{{reservePct, windowSec, 14834, distress}},
                                            true, dueInMs, hurt);
-    HealReserveApplyDistressLatch(read, latch, hurt, 0);
+    HealReserveApplyDistressLatch(read, latch, hurt, 0, kLiveFight);
     return read;
 }
 
@@ -140,7 +143,7 @@ static void TestDistressCountReadsEffectiveHealth()
 
     HealReserveLatch latch;
     HealReserveRead read = HealReservePick({{85.0f, 60.0f, 14834, 2}}, true, 70000, counts.hurt);
-    HealReserveApplyDistressLatch(read, latch, counts.calm, 1000);
+    HealReserveApplyDistressLatch(read, latch, counts.calm, 1000, kLiveFight);
     CHECK(read.released);
     CHECK(read.distressReleased);
     CHECK(!read.windowReleased);
@@ -166,23 +169,23 @@ static void TestReleasedHoldsForThreeSeconds()
     const std::vector<HealReserveRow> rows{{85.0f, 60.0f, 14834, 2}};
     HealReserveLatch latch;
     HealReserveRead read = HealReservePick(rows, true, 70000, 2);
-    HealReserveApplyDistressLatch(read, latch, 2, 1000);
+    HealReserveApplyDistressLatch(read, latch, 2, 1000, kLiveFight);
     CHECK(read.released);
 
     // At 3 s only one member is under the line: the calm run starts.
     read = HealReservePick(rows, true, 70000, 1);
-    HealReserveApplyDistressLatch(read, latch, 1, 3000);
+    HealReserveApplyDistressLatch(read, latch, 1, 3000, kLiveFight);
     CHECK(read.released);
     CHECK(latch.calm);
     // Under 3 s of calm the release still holds.
     read = HealReservePick(rows, true, 70000, 1);
-    HealReserveApplyDistressLatch(read, latch, 1, 5999);
+    HealReserveApplyDistressLatch(read, latch, 1, 5999, kLiveFight);
     CHECK(read.released);
     CHECK(read.distressReleased);
     CHECK(HealReserveWhy(read) == std::string("distress"));
     // 3 s of calm: the reserve applies again.
     read = HealReservePick(rows, true, 70000, 1);
-    HealReserveApplyDistressLatch(read, latch, 1, 6000);
+    HealReserveApplyDistressLatch(read, latch, 1, 6000, kLiveFight);
     CHECK(!read.released);
     CHECK(!read.distressReleased);
     CHECK(HealReserveWhy(read) == std::string("none"));
@@ -191,41 +194,60 @@ static void TestReleasedHoldsForThreeSeconds()
 
     // A member above the line but still under the margin keeps the release without starting the calm clock.
     read = HealReservePick(rows, true, 70000, 2);
-    HealReserveApplyDistressLatch(read, latch, 2, 7000);
+    HealReserveApplyDistressLatch(read, latch, 2, 7000, kLiveFight);
     CHECK(read.released);
     read = HealReservePick(rows, true, 70000, 0);
-    HealReserveApplyDistressLatch(read, latch, 2, 20000);
+    HealReserveApplyDistressLatch(read, latch, 2, 20000, kLiveFight);
     CHECK(read.released);
     CHECK(!latch.calm);
     read = HealReservePick(rows, true, 70000, 0);
-    HealReserveApplyDistressLatch(read, latch, 2, 40000);
+    HealReserveApplyDistressLatch(read, latch, 2, 40000, kLiveFight);
     CHECK(read.released);
 }
 
-// The latch is per fight: a read with no live row is the fight's end, so the next fight starts unlatched.
+// The latch is per fight, keyed by the boss and the fight's combat start: a released fight hands nothing to the next
+// one, even when the new fight's first read arrives directly and no call ever saw an empty row set.
 static void TestLatchResetsOnANewFight()
 {
     const std::vector<HealReserveRow> rows{{85.0f, 60.0f, 14834, 2}};
     HealReserveLatch latch;
     HealReserveRead read = HealReservePick(rows, true, 70000, 2);
-    HealReserveApplyDistressLatch(read, latch, 2, 1000);
+    HealReserveApplyDistressLatch(read, latch, 2, 1000, kLiveFight);
     CHECK(latch.released);
 
-    // The fight ends: no live row.
-    HealReserveRead none;
-    HealReserveApplyDistressLatch(none, latch, 1, 2000);
+    // Straight to a new pull of the same boss: only the fight's start changed.
+    const HealReserveFightId nextPull{101, 9000};
+    read = HealReservePick(rows, true, 70000, 1);
+    HealReserveApplyDistressLatch(read, latch, 1, 2000, nextPull);
     CHECK(!latch.released);
     CHECK(!latch.calm);
-
-    // The next fight's first hurt member does not inherit the release.
-    read = HealReservePick(rows, true, 70000, 1);
-    HealReserveApplyDistressLatch(read, latch, 1, 3000);
     CHECK(!read.released);
     CHECK(HealReserveWhy(read) == std::string("none"));
 
+    // Another boss guid is another fight too, even with the same start.
+    read = HealReservePick(rows, true, 70000, 2);
+    HealReserveApplyDistressLatch(read, latch, 2, 3000, nextPull);
+    CHECK(latch.released);
+    const HealReserveFightId otherBoss{102, 9000};
+    read = HealReservePick(rows, true, 70000, 1);
+    HealReserveApplyDistressLatch(read, latch, 1, 4000, otherBoss);
+    CHECK(!latch.released);
+
+    // A read with no live row is the fight's end as well, and the next fight starts unlatched.
+    read = HealReservePick(rows, true, 70000, 2);
+    HealReserveApplyDistressLatch(read, latch, 2, 5000, otherBoss);
+    CHECK(latch.released);
+    HealReserveRead none;
+    HealReserveApplyDistressLatch(none, latch, 1, 6000, otherBoss);
+    CHECK(!latch.released);
+    CHECK(!latch.calm);
+    read = HealReservePick(rows, true, 70000, 1);
+    HealReserveApplyDistressLatch(read, latch, 1, 7000, otherBoss);
+    CHECK(!read.released);
+
     // Its own distress fires the release again.
     read = HealReservePick(rows, true, 70000, 2);
-    HealReserveApplyDistressLatch(read, latch, 2, 4000);
+    HealReserveApplyDistressLatch(read, latch, 2, 8000, otherBoss);
     CHECK(read.released);
     HealReserveLatchReset(latch);
     CHECK(!latch.released);
