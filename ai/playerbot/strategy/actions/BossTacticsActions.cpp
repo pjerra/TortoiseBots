@@ -15,6 +15,7 @@
 #include <set>
 #include <tuple>
 #include <unordered_map>
+#include <unordered_set>
 #include "BossTacticsActions.h"
 #include "playerbot/BossTacticsMgr.h"
 #include "playerbot/BossEngagedPolicy.h"
@@ -11726,6 +11727,20 @@ void LogTankPostStep(PlayerbotAI* ai, const BossTacticRow& row, TankPostDecision
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsTankPost", info1, info2);
 }
 
+// One BossTacticsTankPost row when a post's Engage step starts walking to its subject
+// (AiPlayerbot.DungeonRunTankPostWalks), never while it stays on the walk.
+void LogTankPostWalk(PlayerbotAI* ai, const BossTacticRow& row, float subjectYd)
+{
+    if (!sPlayerbotAIConfig.hasLog("bot_events.csv"))
+        return;
+    char info1[64];
+    snprintf(info1, sizeof(info1), "boss=%u,subject=%u,tank=%d", row.bossEntry, row.targetEntry,
+             static_cast<int>(row.priority));
+    char info2[48];
+    snprintf(info2, sizeof(info2), "event=walk,subject_yd=%.1f", subjectYd);
+    sPlayerbotAIConfig.logEvent(ai, "BossTacticsTankPost", info1, info2);
+}
+
 // One BossTacticsTankPost row for the Engage step's taunt (AiPlayerbot.DungeonRunTankPostTaunts). A cast is always
 // written; any other word that was not `none` at most once per bot and word in kTankPostTauntLogGapMs, so a taunt held
 // off by its stance or its radius does not fill the log at the action's tick rate.
@@ -11803,6 +11818,8 @@ bool ai::TankPostReservesSubject(PlayerbotAI* ai, Player* bot, Unit* target)
         {
             if (entry.first == self || entry.second.map != bot->GetMapId() ||
                 entry.second.targetEntry != target->GetEntry() ||
+                !TankPostRecordCovers(sPlayerbotAIConfig.dungeonRunTankPostOwnsUnit,
+                    entry.second.arrivedSubjectGuid, target->GetObjectGuid().GetRawValue()) ||
                 nowMs - entry.second.lastReadMs >= kTankPostLiveMs)
                 continue;
             others.push_back(entry.first);
@@ -12032,7 +12049,24 @@ BossTankPost ai::FindBossTankPost(PlayerbotAI* ai, Player* bot, const BossTactic
 
     std::vector<TankPostUnit> const candidates =
         AI_VALUE2(std::vector<TankPostUnit>, "tank post units", static_cast<int32>(row->targetEntry));
-    const int pick = PickTankPostUnit(candidates, row->spotX, row->spotY, row->spotZ);
+    // AiPlayerbot.DungeonRunTankPostOwnsUnit: the unit this post latched wins the pick, and a unit another live post
+    // latched is no candidate, so two posts on one entry each keep their own Hatcher.
+    std::unordered_set<std::uint64_t> otherLatched;
+    if (sPlayerbotAIConfig.dungeonRunTankPostOwnsUnit)
+    {
+        std::lock_guard<std::mutex> lock(g_tankPostMutex);
+        for (std::pair<std::uint64_t const, TankPostRecord>& entry : g_tankPost)
+        {
+            if (entry.first == self || entry.second.map != mapId ||
+                entry.second.targetEntry != row->targetEntry || entry.second.arrivedSubjectGuid == 0 ||
+                nowMs - entry.second.lastReadMs >= kTankPostLiveMs)
+                continue;
+            otherLatched.insert(entry.second.arrivedSubjectGuid);
+        }
+    }
+    const std::uint64_t ownLatched = haveRecord ? record.arrivedSubjectGuid : 0;
+    const int pick = PickTankPostUnit(candidates, row->spotX, row->spotY, row->spotZ,
+        sPlayerbotAIConfig.dungeonRunTankPostOwnsUnit, ownLatched, otherLatched);
     TankPostUnit const* subjectUnit = pick < 0 ? nullptr : &candidates[pick];
     Unit* const subject = subjectUnit ? ai->GetUnit(ObjectGuid(subjectUnit->guid)) : nullptr;
     if (subjectUnit && !subject)
@@ -12061,7 +12095,9 @@ BossTankPost ai::FindBossTankPost(PlayerbotAI* ai, Player* bot, const BossTactic
     in.arrivedBefore = haveRecord &&
         TankPostLatchCounts(record.arrivedLogged, record.arrivedSubjectGuid, in.subjectGuid);
     in.subjectOnTank = subject && subject->GetVictim() == bot;
-    const BossStandTarget stand = holdSpot ? FindBossStand(ai, bot) : BossStandTarget();
+    // The walk key reads the stand for plain posts too: a breath seat, a stay included, stops the Engage walk.
+    const BossStandTarget stand = (holdSpot || sPlayerbotAIConfig.dungeonRunTankPostWalks)
+        ? FindBossStand(ai, bot) : BossStandTarget();
     in.seated = TankPostSeated(stand.valid, stand.stay);
     in.leash = holdSpot && sPlayerbotAIConfig.dungeonRunTankPostLeash;
     in.slotMoved = slotMoved;
@@ -12160,6 +12196,7 @@ BossTankPost ai::FindBossTankPost(PlayerbotAI* ai, Player* bot, const BossTactic
     const bool subjectOutranks = holdSpot && (step == TankPostDecision::Engage || step == TankPostDecision::Drag ||
                                                step == TankPostDecision::Leash);
     out.holdingOtherHostile = in.holdingOtherHostile && !subjectOutranks;
+    out.standActive = stand.valid;
     out.step = step;
     out.boss = boss;
     out.subject = subject;
@@ -12268,8 +12305,12 @@ bool BossTacticsTankPostAction::Execute(Event& event)
     if (!task.valid || !task.row || !task.subject)
     {
         hasLast = false;
+        walkLogged = false;
         return false;
     }
+    // The Engage walk's row is written once per walk episode: any other step, or a subject in reach, ends it.
+    if (task.step != TankPostDecision::Engage)
+        walkLogged = false;
     // Drag: the arrived subject is on this tank and it drifted from the spot. Leash: before the arrival the tank is
     // past 8 yd from the spot on a whelp. Both walk back keeping the target (no AttackStop, no target change), so the
     // subject follows on a drag and whatever the tank fights follows on a leash; the same spline guard as the walk.
@@ -12297,9 +12338,63 @@ bool BossTacticsTankPostAction::Execute(Event& event)
     Unit* const current = AI_VALUE(Unit*, "current target");
     if (task.step == TankPostDecision::Engage)
     {
-        hasLast = false;
+        // AiPlayerbot.DungeonRunTankPostWalks: the step walks to the subject while it is out of melee reach, instead of
+        // ending the tick on the attack (walk 2f a-2: slot 1 stood on the post 40 yd from Cindarion and the attack
+        // returned true every tick, so `reach melee` never ran).
         if (sPlayerbotAIConfig.dungeonRunTankPostTaunts && TakeSubject(task, current))
+        {
+            // With the walk off a taunt that cast resets the launch point as before; with it on a spline in flight
+            // survives the taunt tick.
+            if (!sPlayerbotAIConfig.dungeonRunTankPostWalks)
+                hasLast = false;
             return true;
+        }
+        bool walkPoint = TankPostEngageWalks(sPlayerbotAIConfig.dungeonRunTankPostWalks, false,
+            bot->CanReachWithMeleeAutoAttack(task.subject), task.standActive);
+        float x = 0.0f;
+        float y = 0.0f;
+        float z = task.subject->GetPositionZ();
+        if (walkPoint && TankPostMeleePoint(bot->GetPositionX(), bot->GetPositionY(),
+                task.subject->GetPositionX(), task.subject->GetPositionY(),
+                bot->GetCombatReach(task.subject, false, 0.0f), x, y))
+        {
+            // The point is on a floor under the unit's height; one with no ground under it is no walk.
+            Map* const map = bot->GetMap();
+            float const floor = map ? map->GetHeight(x, y, z + 5.0f) : INVALID_HEIGHT;
+            walkPoint = floor > INVALID_HEIGHT;
+            if (walkPoint)
+                z = floor + 0.05f;
+        }
+        else
+        {
+            walkPoint = false;
+        }
+        if (!walkPoint)
+            walkLogged = false;
+        else
+        {
+            // The same spline guard as the walk: already on its way to that point, leave the spline alone.
+            if (hasLast && !bot->IsStopped() && !bot->movespline->Finalized() &&
+                std::fabs(lastX - x) < 3.0f && std::fabs(lastY - y) < 3.0f)
+                return true;
+            if (current != task.subject)
+                Attack(bot, task.subject);
+            if (!walkLogged)
+            {
+                LogTankPostWalk(ai, *task.row,
+                    TankPostDistanceYd(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(),
+                        task.subject->GetPositionX(), task.subject->GetPositionY(),
+                        task.subject->GetPositionZ()));
+                walkLogged = true;
+            }
+            if (!MoveTo(bot->GetMapId(), x, y, z, false, false, false, true))
+                return false;
+            lastX = x;
+            lastY = y;
+            hasLast = true;
+            return true;
+        }
+        hasLast = false;
         if (current == task.subject)
             return false;
         return Attack(bot, task.subject);
