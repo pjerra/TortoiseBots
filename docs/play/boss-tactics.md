@@ -236,6 +236,8 @@ While she hovers, casters nuke her under `AiPlayerbot.AirborneWandYieldsToNukes 
 
 Airborne Onyxia stands 19-23 yd above the floor while no tank can reach her, so her tanks hold 0 threat and every damage dealer read 100 % ("the tank has no threat: hold"): walk 2e a-1 counted 248 nuke refusals with no reason at all (nukes 19 % of caster frames, 2.5 %/min on her). Under `AiPlayerbot.DungeonRunThreatFree = 1` (default `0`) a non-tank reads 0 threat on her while she stands the row's 10 yd or more above it and is not descending, so the threat multiplier has nothing to veto and the class nukes go out; a tank keeps its own reading, and once she starts her landing descent the lift ends at once (before the gap closes), because her threat list is wiped at the start of the descent, so nothing built in the air is carried to the ground. Every bot writes at most one such row per 10 s: one `BossTacticsThreatFree` row (`subject=10184,gap=<yd>`) goes to `bot_events.csv`.
 
+The party record's `reason` names a vetoed action `threat` (the threat multiplier) or `veto` (any other multiplier), a refused Icicles `attacked`, an unlearned spell `not-known`, an immune target `immune`, a loss of control `no-control`, a real code-0 cast check `combat`, and any other unmapped refusal `other`; a successful, useless, prerequisite or vetoed verdict and the core's no-check code 0xFF carry no reason. Every one of the threat multiplier's five vetoes (reset, successor white stop, cast-threat, keyless AoE, high threat) writes one `ThreatVeto` row per bot and target per 10 s with `site=` naming the veto, plus `target`, `action`, threat numbers, taunt immunity and victim role.
+
 ### Zul'Gurub (309)
 
 | Boss | Rows |

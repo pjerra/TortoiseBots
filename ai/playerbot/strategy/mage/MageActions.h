@@ -362,7 +362,7 @@ namespace ai
             // be bypassed between evaluation and execution.
             if (!CastSpellAction::isPossible())
                 return false;
-            return AI_VALUE(uint8, "my attacker count") == 0;
+            if (AI_VALUE(uint8, "my attacker count") == 0) return true; ai->NoteRefusal(RefuseNote::Attacked); return false;
         }
     };
 
