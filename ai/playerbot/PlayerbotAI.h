@@ -785,6 +785,12 @@ public:
     // only, no grid scan, so it is cheap enough for the per-tick resting wake.
     bool IsGroupMemberNearInCombat();
 
+    // A meal (food or drink) puts the AI to sleep for its duration; Drink and
+    // Eat set this where they set that duration (UseItemAction.h). While it is
+    // set, UpdateAI wakes the bot as soon as the meal is broken or the group
+    // fights, seated or not.
+    void SetMealSleep(bool mealSleep) { m_mealSleep = mealSleep; }
+
     // Cache master's GUID alongside the raw pointer so we can revalidate
     // the pointer each tick against ObjectAccessor — if the master Player
     // was destroyed (logout / disconnect) since SetMaster() was called,
@@ -1090,6 +1096,10 @@ private:
     void UpdateLeadTrail();
     void UpdatePortalFollow(Player* master, Group* group);
     void UpdatePartyFlight(Player* master, Group* group);
+    // A meal's sleep survives the bot standing up (damage, a cast), so the
+    // seated-only wake checks below never fire. Wake whenever the meal is
+    // broken or the group fights, seated or not.
+    void WakeFromMealSleep();
 public:
     bool PortalFollowActive() const { return !m_portalFollowGuid.IsEmpty(); }
     void StartPartyFlight();
@@ -1102,6 +1112,10 @@ protected:
 	Player* master;
 	uint8 m_forcedRole = 0;
 	bool m_petTauntAutocastOrdered = false;
+	// A meal (food or drink) is sleeping the AI for its duration
+	// (UseItemAction.h). Cleared on combat start, on the wake in UpdateAI and
+	// when the sleep runs out.
+	bool m_mealSleep = false;
 	time_t m_dungeonCatchUpAt = 0;
 	// Mage-portal follow: the party portal the master just stepped through
 	// (map it stands on), the tick the episode started, and the last tick a

@@ -707,6 +707,7 @@ namespace ai
             if (bot->IsSittingDown() && ai->HasSeatedMeal(true))
             {
                 SetDuration(SitFor());
+                ai->SetMealSleep(true);
                 SET_AI_VALUE(bool, "drink unfinished", true);
                 return true;
             }
@@ -722,6 +723,7 @@ namespace ai
                 {
                     ai->AddAura(bot, 24355);
                     SetDuration(SitFor());
+                    ai->SetMealSleep(true);
                     SET_AI_VALUE(bool, "drink unfinished", true);
                     return true;
                 }
@@ -754,6 +756,7 @@ namespace ai
 
                 ai->CastSpell(24355, bot);
                 SetDuration(drinkDuration);
+                ai->SetMealSleep(true);
                 bot->RemoveSpellCooldown(pSpellInfo->Id);
                 SET_AI_VALUE(bool, "drink unfinished", true);
 
@@ -814,6 +817,7 @@ namespace ai
             if (bot->IsSittingDown() && ai->HasSeatedMeal(false))
             {
                 SetDuration(SitFor());
+                ai->SetMealSleep(true);
                 return true;
             }
 
@@ -826,6 +830,7 @@ namespace ai
                 {
                     ai->AddAura(bot, 24005);
                     SetDuration(SitFor());
+                    ai->SetMealSleep(true);
                     return true;
                 }
 
@@ -857,6 +862,7 @@ namespace ai
 
                 ai->CastSpell(24005, bot);
                 SetDuration(eatDuration);
+                ai->SetMealSleep(true);
                 bot->RemoveSpellCooldown(pSpellInfo->Id);
 
                 // Eat and drink at the same time

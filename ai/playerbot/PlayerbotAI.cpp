@@ -449,6 +449,9 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
     {
         aiInternalUpdateDelay = 0;
         isWaiting = false;
+        // The sleep is over, meal or not: a stale meal flag would wake the
+        // next, unrelated action's delay early.
+        m_mealSleep = false;
     }
 
     // cancel logout in combat
@@ -536,6 +539,10 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
     bool isCasting = bot->IsNonMeleeSpellCasted(true);
     if (sServerFacade.IsInCombat(bot))
     {
+        // A meal-sleeping bot must act the moment combat finds it, seated or
+        // stood up by the hit.
+        WakeFromMealSleep();
+
         // Attacked while fishing: the Fishing channel has no damage interrupt flag, so the bot
         // stood channelling for up to twenty seconds while it was hit, and afterwards fought
         // with the fishing pole in hand (23 % of all deaths, warriors first). The moment combat
@@ -578,6 +585,11 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
             ResetAIInternalUpdateDelay();
 
         inCombat = false;
+
+        // Sits or stands: the meal's sleep ends as soon as the meal is broken
+        // or the group fights. The seated-only checks below cannot see a bot
+        // that damage already stood up.
+        WakeFromMealSleep();
 
         // Wake up a resting bot when its group starts fighting (#133). A meal
         // puts the AI to sleep for up to 27 s and the bot's own combat flag
@@ -1067,6 +1079,29 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
     SC_PHASE("UpdateAI.exit", bot ? bot->GetName() : "(null)");
 }
 
+void PlayerbotAI::WakeFromMealSleep()
+{
+    if (!m_mealSleep || aiInternalUpdateDelay == 0 || isWaiting)
+        return;
+
+    // Cheap checks first: a seated bot with its food or drink aura and nobody
+    // fighting keeps eating. The member test and the run's mark cover the rest
+    // of the group; the bot's own combat flag covers a hit during the meal.
+    if (!ai::MealSleepShouldWake(true, bot->IsSittingDown(), HasSeatedAura(bot),
+            sServerFacade.IsInCombat(bot), IsGroupMemberNearInCombat(),
+            ai::RunFightHolds((uint32)aiObjectContext->GetValue<int32>("manual int", "run fight until ms")->Get(),
+                WorldTimer::getMSTime())))
+        return;
+
+    if (bot->IsSittingDown())
+        bot->SetStandState(UNIT_STAND_STATE_STAND);
+
+    aiObjectContext->GetValue<std::list<ObjectGuid>>("attackers", 1)->Reset();
+    aiObjectContext->GetValue<bool>("has attackers")->Reset();
+    ResetAIInternalUpdateDelay();
+    m_mealSleep = false;
+}
+
 bool PlayerbotAI::UpdateAIReaction(uint32 elapsed, bool minimal, bool isStunned)
 {
     bool reactionFound;
@@ -1487,6 +1522,8 @@ void PlayerbotAI::OnCombatStarted()
         ChangeEngine(BotState::BOT_STATE_COMBAT);
         aiObjectContext->GetValue<bool>("drink unfinished")->Set(false);
         aiObjectContext->GetValue<bool>("rest to full")->Set(false);
+        // Combat ends any meal; a flag left set would wake the next delay early.
+        m_mealSleep = false;
         if (bot->GetStandState() == UNIT_STAND_STATE_SIT)
         {
             ResetAIInternalUpdateDelay();

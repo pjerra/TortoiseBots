@@ -76,6 +76,62 @@ class MealGateWiringTest(unittest.TestCase):
         # never wake a bot the member test cannot see.
         self.assertRegex(flat, r"IsGroupMemberNearInCombat\(\) \|\| RunFightHolds\(")
 
+    def test_meal_sleep_wake_runs_outside_the_seated_only_guard(self):
+        """WHY paladin-addpickup: a bot stood up by damage is still asleep."""
+        wake = " ".join(body_after(SRC_AI, "void PlayerbotAI::WakeFromMealSleep()").split())
+        # Every fact the policy needs comes from the world here: its own
+        # combat flag (a hit during the meal), the member test, the run mark.
+        self.assertIn("MealSleepShouldWake(", wake)
+        self.assertIn("IsSittingDown()", wake)
+        self.assertIn("HasSeatedAura(bot)", wake)
+        self.assertIn("IsInCombat(bot)", wake)
+        self.assertIn("IsGroupMemberNearInCombat()", wake)
+        self.assertIn("RunFightHolds(", wake)
+        for step in ("SetStandState(UNIT_STAND_STATE_STAND)", "ResetAIInternalUpdateDelay()",
+                     "m_mealSleep = false"):
+            self.assertIn(step, wake)
+
+        # Both branches of UpdateAI call it: the combat branch and the
+        # non-combat branch. Not only the seated bot.
+        update = body_after(SRC_AI, "void PlayerbotAI::UpdateAI(uint32 elapsed")
+        combat = body_after(update, "if (sServerFacade.IsInCombat(bot))")
+        self.assertIn("WakeFromMealSleep();", combat)
+        after_combat = update.index(combat) + len(combat)
+        non_combat = body_after(update, "else", after_combat)
+        self.assertIn("WakeFromMealSleep();", non_combat)
+
+        # And the call is outside every seated-only guard: the guard the live
+        # bug hides behind, whose span_after block may never contain it.
+        guard = "if (aiInternalUpdateDelay > 0 && !isWaiting && bot->IsSittingDown() &&"
+        calls = [i for i in range(len(update)) if update.startswith("WakeFromMealSleep();", i)]
+        self.assertGreaterEqual(len(calls), 2)
+        start = 0
+        while True:
+            try:
+                at = update.index(guard, start)
+            except ValueError:
+                break
+            block = span_after(update, guard, at)
+            for call in calls:
+                self.assertFalse(at <= call < at + len(block),
+                    "the meal sleep wake must not live inside the seated-only guard")
+            start = at + 1
+
+    def test_meal_actions_stamp_the_sleep(self):
+        drink = body_after(SRC_ITEMS, "class DrinkAction")
+        eat = body_after(SRC_ITEMS, "class EatAction")
+        for name, text in (("drink", drink), ("food", eat)):
+            self.assertEqual(text.count("ai->SetMealSleep(true);"), 3,
+                "%s: every meal sleep duration is stamped" % name)
+
+    def test_sleep_end_and_combat_start_clear_the_flag(self):
+        update_start = SRC_AI.index("void PlayerbotAI::UpdateAI(uint32 elapsed")
+        clear = SRC_AI.index("m_mealSleep = false", update_start)
+        branch = SRC_AI.index("bool isCasting = bot->IsNonMeleeSpellCasted(true);", clear)
+        self.assertLess(clear, branch,
+            "the flag clears when the delay runs out, before the branch")
+        self.assertIn("m_mealSleep = false;", body_after(SRC_AI, "void PlayerbotAI::OnCombatStarted()"))
+
     def test_run_tick_marks_while_the_run_fights_and_clears_when_it_ends(self):
         after_monitor = SRC_COMMANDER.index("RefreshCombatMonitor(commanderRaw")
         step_before = SRC_COMMANDER.index("std::size_t const stepBeforeTick", after_monitor)

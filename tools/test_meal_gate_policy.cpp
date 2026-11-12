@@ -55,6 +55,29 @@ int main()
     CHECK(MealBlocked(false, false, 12001, 10001));
     std::cout << "  [PASS] live mark holds until its expiry\n";
 
+    // The named failing case (paladin-addpickup rep3): damage stood the bot up
+    // and it is in combat, but the drink's sleep still holds the AI for 13 s.
+    // The old wake check needs a seated bot with the aura and never fires.
+    CHECK(MealSleepShouldWake(true, /*seated*/false, false, /*selfInCombat*/true, false, false));
+    std::cout << "  [PASS] stood up in combat: the meal sleep wakes\n";
+
+    // A seated bot with its aura and nobody fighting keeps its meal.
+    CHECK(!MealSleepShouldWake(true, true, true, false, false, false));
+    std::cout << "  [PASS] seated, aura on, nobody fighting: meal continues\n";
+
+    // Any one broken term wakes it.
+    CHECK(MealSleepShouldWake(true, false, true, false, false, false));
+    CHECK(MealSleepShouldWake(true, true, false, false, false, false));
+    CHECK(MealSleepShouldWake(true, true, true, true, false, false));
+    CHECK(MealSleepShouldWake(true, true, true, false, true, false));
+    CHECK(MealSleepShouldWake(true, true, true, false, false, true));
+    std::cout << "  [PASS] each broken term wakes the meal sleep\n";
+
+    // No meal sleep, no wake: an unrelated delay is never cut short.
+    CHECK(!MealSleepShouldWake(false, false, false, true, true, true));
+    CHECK(!MealSleepShouldWake(false, true, true, false, false, false));
+    std::cout << "  [PASS] no meal sleep never wakes\n";
+
     std::cout << "All meal gate policy tests passed.\n";
     return 0;
 }
