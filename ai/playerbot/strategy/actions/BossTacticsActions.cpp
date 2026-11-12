@@ -821,7 +821,6 @@ struct SeekFight
     std::uint32_t nowMs = 0;
     std::uint32_t engageMs = 0;  // the seek record's engage (0: no record yet), the pull's identity even at elapsed 0
     std::uint32_t fightMs = 0;   // since the fight's combat start (0: not seen in combat yet)
-    std::uint32_t engageMs = 0;  // the fight's combat start clock (0: not seen in combat yet)
     std::uint32_t dueMs = 0;
     std::uint32_t dueInMs = 0;   // clamped at 0: only readers that need "due but not yet seen" take the signed one
     int dueSignedMs = std::numeric_limits<int>::max(); // negative once the due time passed
@@ -4176,7 +4175,6 @@ bool ReadSeekFight(PlayerbotAI* ai, Player* bot, SeekFight& out)
     std::uint32_t cycleNo = 0;
     std::uint32_t engageMs = 0;
     std::uint32_t fightMs = 0;
-    std::uint32_t engageMs = 0;
     std::uint32_t rolled = 0;
     bool pendingSiphon = false;
     int pendingSiphonAtSec = 0;
@@ -4230,7 +4228,6 @@ bool ReadSeekFight(PlayerbotAI* ai, Player* bot, SeekFight& out)
         if (record.engageMs != 0)
         {
             fightMs = nowMs - record.engageMs;
-            engageMs = record.engageMs;
         }
         // The cycle: the row's spell on this group member (every member within 100 yd carries the dummy aura),
         // accepted once per half cycle so the raid's sightings of one siphon move the clock once. A sighting of a cycle
@@ -4298,7 +4295,6 @@ bool ReadSeekFight(PlayerbotAI* ai, Player* bot, SeekFight& out)
     out.nowMs = nowMs;
     out.engageMs = engageMs;
     out.fightMs = fightMs;
-    out.engageMs = engageMs;
     out.dueMs = dueMs;
     out.dueInMs = dueMs > nowMs ? dueMs - nowMs : 0;
     out.dueSignedMs = dueMs
