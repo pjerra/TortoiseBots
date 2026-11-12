@@ -82,4 +82,17 @@ namespace ai
         AddCrewValue(PlayerbotAI* ai) : CalculatedValue<uint8>(ai, "add crew", 2), Qualified() {}
         uint8 Calculate() override;
     };
+
+    // "add crew keeps duty::<boss>": whether this bot keeps today's add duty under the map's add_crew row, whatever
+    // the switch unit's life: true for a bot the row's crew includes (melee and tanks, the first `priority` AoE ranged
+    // bots of the raid) and for a map with no row to apply (or the key off); false for the ranged damage dealers past
+    // the crew. The Onyxia ground phase reads it while the row still waits (add crew 0), where the crew's own ranged
+    // are the only AoE ranged that keep hunting the whelps. The raid's AoE ranged bots are read through the group's
+    // live members and their own AIs.
+    class AddCrewKeepsDutyValue : public BoolCalculatedValue, public Qualified
+    {
+    public:
+        AddCrewKeepsDutyValue(PlayerbotAI* ai) : BoolCalculatedValue(ai, "add crew keeps duty", 2), Qualified() {}
+        bool Calculate() override;
+    };
 }

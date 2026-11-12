@@ -4,6 +4,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "OnyxiaBreathPolicy.h"
+
 // Pure decision rules for the optional Onyxia whelp and egg tactics
 // (AiPlayerbot.OnyxiaWhelpsAndEggs, on by default).
 // Donor behaviour: mod-playerbots @ 79bd428, src/Ai/Raid/Ony/OnyTriggers.cpp
@@ -22,6 +24,16 @@ namespace ai
     constexpr std::uint32_t kOnyxiaMapId = 249;
     constexpr std::uint32_t kOnyxianWhelpEntry = 11262;
     constexpr std::uint32_t kOnyxiaEggEntry = 176511;
+
+    // The core drives her phase-2 flight through this Hover aura.
+    constexpr std::uint32_t kOnyxiaHoverAura = 17131;
+
+    // The boss unit of an engagement scan: the entry, alive, on the bot's map and in combat. The scan holds a victim
+    // or attacker of the raid's members, so a dormant spawn or a marked whelp in the same lists is not her.
+    inline bool IsOnyxiaBossUnit(std::uint32_t entry, bool alive, bool inMap, bool inCombat)
+    {
+        return entry == kOnyxiaEntry && alive && inMap && inCombat;
+    }
 
     // Egg trap radius (gameobject_template data2 of 176511) plus a margin
     // so a bot walking past is never inside the trigger circle.
@@ -134,6 +146,22 @@ namespace ai
     inline bool OnyxiaWhelpPhase(bool bossAirborne, bool keyOn, bool bossFound, float bossPct)
     {
         return bossAirborne || (keyOn && bossFound && bossPct <= kOnyxiaGroundCrewPct);
+    }
+
+    // The ground half of the phase: the whelp phase is on and she stands. Both the whelp scan and the duty read it,
+    // so the shape of the P3 window has one definition.
+    inline bool OnyxiaGroundPhase(bool bossAirborne, bool keyOn, bool bossFound, float bossPct)
+    {
+        return !bossAirborne && OnyxiaWhelpPhase(bossAirborne, keyOn, bossFound, bossPct);
+    }
+
+    // The ground duty while the add_crew row waits (its switch unit still lives): today's duty would put every AoE
+    // ranged damage dealer of the raid on the whelps and leave none of them on her, so on the ground only the crew's
+    // own bots keep today's duty. `crewKeepsDuty` is the row's place for this bot; with no row to apply it is true
+    // and today's duty stands. The air is untouched: waiting keeps today's duty there.
+    inline bool OnyxiaWaitingGroundDuty(bool todayDuty, bool crewKeepsDuty)
+    {
+        return todayDuty && crewKeepsDuty;
     }
 
     // The whelp duty on the ground: the melee keep it (an airborne-only duty left the whole crew idle there), the tanks

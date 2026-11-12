@@ -15,7 +15,7 @@ bool OnyxiaAirborneTrigger::IsActive()
         return false;
     // Core drives phase 2 flight via the Hover aura (17131); IsFlying()
     // covers the transition frames where auras are mid-update.
-    return target->HasAura(17131) || target->IsFlying();
+    return target->HasAura(kOnyxiaHoverAura) || target->IsFlying();
 }
 
 bool OnyxiaWhelpsTrigger::IsActive()

@@ -1,5 +1,6 @@
 #pragma once
 #include "playerbot/PlayerbotAI.h"
+#include "playerbot/strategy/Value.h"
 #include "DungeonActions.h"
 #include "ChangeStrategyAction.h"
 #include "AttackAction.h"
@@ -39,6 +40,17 @@ namespace ai
         OnyxiaBreathSafeZoneAction(PlayerbotAI* ai) : MovementAction(ai, "onyxia breath safe zone") {}
         bool isUseful() override;
         bool Execute(Event& event) override;
+    };
+
+    // The engaged Onyxia of this bot's raid, from the roster's victims and attackers ("onyxia boss"). The bot's own
+    // attacker list is not enough: "focus rti targets" collapses it to the marked unit, so a whelp mark hid her and
+    // the P3 ground phase never armed. A cached guid, so readers resolve it through the bot and never hold a unit
+    // that left the world.
+    class OnyxiaBossValue : public ObjectGuidCalculatedValue
+    {
+    public:
+        OnyxiaBossValue(PlayerbotAI* ai) : ObjectGuidCalculatedValue(ai, "onyxia boss", 1) {}
+        ObjectGuid Calculate() override;
     };
 
     // Optional whelp and egg tactics (AiPlayerbot.OnyxiaWhelpsAndEggs, on

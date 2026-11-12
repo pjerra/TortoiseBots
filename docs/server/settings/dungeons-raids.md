@@ -1909,6 +1909,7 @@ Keeps the whelp crew hunting the whelps in Onyxia's last 40 % on the ground, not
 The whelp duty (`AiPlayerbot.OnyxiaWhelpsAndEggs`) covers the airborne phase. With this key on, the whelp phase is also her last 40 % on the ground (the boss is found and its health is at or below 40 %), so the add crew keeps the whelps in the phase that kills the raid (walk 2g: 12-16 whelps up in P3, 21 at the peak, 28 P3 deaths to them):
 
 - the crew's melee and its ranged keep hunting the nearest whelp, as while she hovers;
+- while Cindarion still lives (the `add_crew` row still waits), only the crew's own AoE ranged damage dealers take the whelps on the ground: the rest of the raid's AoE ranged stay on her, where today's duty alone would have put every one of them on the whelps;
 - the tanks keep their boss-tactic posts (or the generic pick), so the whelp duty never pulls them off a post;
 - the other ranged damage dealers stay on her: they still leave a whelp for her (the airborne return now runs on the ground too), because the crew's melee is on the whelps there;
 - the phase 1 pull (above 40 %) is untouched.

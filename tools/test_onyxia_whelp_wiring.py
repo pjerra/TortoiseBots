@@ -1,11 +1,13 @@
 """Wiring pins for the Onyxia ground whelp crew (walk 2h, package W).
 
-The decision is pure (ai/playerbot/policy/raid/OnyxiaWhelpEggPolicy.h: OnyxiaWhelpPhase, OnyxiaGroundDuty) and tested in
-tools/test_onyxia_whelp_egg_policy.cpp. These pins prove the live code feeds it: the scan sets the whelp phase from the
-boss's health and the two keys it needs; the whelp hunt, the kill action, the whelp hold and the return to the boss all
-read the phase instead of the raw airborne flag; the hunt, the kill and the hold ask OnyxiaGroundDuty (so a grounded tank
-keeps its post); and the key is read in LoadDungeonRunKeys, templated, documented without "recommended on", and shipped
-with its changelog line.
+The decision is pure (ai/playerbot/policy/raid/OnyxiaWhelpEggPolicy.h: OnyxiaWhelpPhase, OnyxiaGroundPhase,
+OnyxiaWaitingGroundDuty, OnyxiaGroundDuty) and tested in tools/test_onyxia_whelp_egg_policy.cpp. These pins prove the
+live code feeds it: the scan reads the engaged boss from the raid roster ("onyxia boss", never the attacker list that
+"focus rti targets" collapses to the marked unit) and sets the whelp phase from its health and the two keys it needs;
+the whelp hunt, the kill action, the whelp hold and the return to the boss all read the phase instead of the raw
+airborne flag; the hunt, the kill and the hold ask OnyxiaGroundDuty (so a grounded tank keeps its post); a waiting
+add_crew row keeps only the crew on the ground whelps; and the key is read in LoadDungeonRunKeys, templated,
+documented without "recommended on", and shipped with its changelog line.
 
 Run: python3 -m unittest tools/test_onyxia_whelp_wiring.py
 """
@@ -23,6 +25,7 @@ TEMPLATE = (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text()
 DOCS = (ROOT / "docs/server/settings/dungeons-raids.md").read_text()
 BOSS_DOCS = (ROOT / "docs/play/boss-tactics.md").read_text()
 CHANGELOG = (ROOT / "CHANGELOG.md").read_text()
+VALUE_CONTEXT = (ROOT / "ai/playerbot/strategy/values/ValueContext.h").read_text()
 
 
 def body(text, start, end="\n}\n"):
@@ -31,17 +34,51 @@ def body(text, start, end="\n}\n"):
 
 
 class OnyxiaWhelpWiring(unittest.TestCase):
-    def test_scan_sets_the_whelp_phase_from_the_boss_health(self):
+    def test_scan_reads_the_engaged_boss_beside_the_whelp_list(self):
         scan = body(ACTIONS, "OnyxiaWhelpScan ai::ScanOnyxiaWhelps(PlayerbotAI* ai, Player* bot)")
-        self.assertIn('if (unit->GetEntry() == kOnyxiaEntry)', scan)
-        self.assertIn("scan.bossAirborne = unit->HasAura(17131);", scan)
+        # The boss comes from the engagement value, never the attacker list: "focus rti targets" collapses that list
+        # to the marked unit, so a whelp mark used to hide her. The list is still scanned for whelps only.
+        self.assertIn('Unit* const boss = ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"));', scan)
+        self.assertNotIn("unit->GetEntry() == kOnyxiaEntry", scan)
+        self.assertIn("if (unit->GetEntry() != kOnyxianWhelpEntry)", scan)
+        self.assertIn("IsOnyxiaBossUnit(boss->GetEntry(), sServerFacade.IsAlive(boss), boss->IsInMap(bot), "
+                      "boss->IsInCombat())", scan)
+        self.assertIn("scan.bossAirborne = boss->HasAura(kOnyxiaHoverAura);", scan)
+        self.assertIn("bossPct = boss->GetHealthPercent();", scan)
         self.assertIn("bossFound = true;", scan)
-        self.assertIn("bossPct = unit->GetHealthPercent();", scan)
         # The ground crew changes the add_crew's work: both keys have to be on, not just its own.
         self.assertIn("sPlayerbotAIConfig.onyxiaWhelpCrewOnGround && sPlayerbotAIConfig.onyxiaWhelpsAndEggs &&", scan)
         self.assertIn("sPlayerbotAIConfig.dungeonRunAddCrew;", scan)
         self.assertIn("scan.whelpPhase = OnyxiaWhelpPhase(scan.bossAirborne, crewOnGround, bossFound, bossPct);", scan)
         self.assertIn("bool whelpPhase = false;", ACTIONS_H)
+
+    def test_boss_value_walks_the_raid_roster(self):
+        value = body(ACTIONS, "ObjectGuid OnyxiaBossValue::Calculate()")
+        # Every live member's victim and attackers, not the bot's own attacker list; a bot without a group scans itself.
+        self.assertIn("Group* const group = bot->GetGroup();", value)
+        self.assertIn("for (Player* member : LiveGroupMembers(group))", value)
+        self.assertIn("member->GetInstanceId() != bot->GetInstanceId()", value)
+        self.assertIn("IsEngagedOnyxia(member->GetVictim(), bot)", value)
+        self.assertIn("for (Unit* attacker : member->GetAttackers())", value)
+        self.assertIn("IsEngagedOnyxia(bot->GetVictim(), bot)", value)
+        self.assertIn("for (Unit* attacker : bot->GetAttackers())", value)
+        self.assertIn("return unit && IsOnyxiaBossUnit(unit->GetEntry(), sServerFacade.IsAlive(unit), "
+                      "unit->IsInMap(bot),", ACTIONS)
+        self.assertIn('creators["onyxia boss"] = [](PlayerbotAI* ai) { return new OnyxiaBossValue(ai); };',
+                      VALUE_CONTEXT)
+
+    def test_waiting_ground_duty_keeps_only_the_crew(self):
+        duty = body(ACTIONS, "bool ai::IsOnyxiaWhelpDuty(PlayerbotAI* ai, Player* bot)")
+        self.assertIn("if (crewState != static_cast<uint8>(AddCrewState::Waiting))", duty)
+        self.assertIn("OnyxiaGroundPhase(airborne, crewOnGround, found, found ? boss->GetHealthPercent() : 0.0f)",
+                      duty)
+        self.assertIn('OnyxiaWaitingGroundDuty(today,\n        AI_VALUE2(bool, "add crew keeps duty", '
+                      "static_cast<int32>(kOnyxiaEntry)));", duty)
+        self.assertIn("inline bool OnyxiaGroundPhase(bool bossAirborne, bool keyOn, bool bossFound, float bossPct)",
+                      POLICY)
+        self.assertIn("inline bool OnyxiaWaitingGroundDuty(bool todayDuty, bool crewKeepsDuty)", POLICY)
+        self.assertIn("constexpr std::uint32_t kOnyxiaHoverAura = 17131;", POLICY)
+        self.assertIn("return target->HasAura(kOnyxiaHoverAura) || target->IsFlying();", TRIGGERS)
 
     def test_hunt_trigger_reads_the_phase_and_the_ground_duty(self):
         trigger = body(TRIGGERS, "bool OnyxiaWhelpsTrigger::IsActive()")

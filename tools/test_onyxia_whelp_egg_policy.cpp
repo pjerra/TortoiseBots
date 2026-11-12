@@ -152,6 +152,36 @@ int main()
     CHECK(!OnyxiaWhelpPhase(false, true, false, 10.0f));              // no boss found: no phase
     CHECK(!OnyxiaWhelpPhase(false, false, false, 10.0f));
 
+    // OnyxiaGroundPhase_TheGroundHalf: the phase on the ground, the shared window of the scan and the duty.
+    CHECK(OnyxiaGroundPhase(false, true, true, 39.0f));
+    CHECK(!OnyxiaGroundPhase(true, true, true, 39.0f));   // airborne: not the ground half
+    CHECK(!OnyxiaGroundPhase(false, true, true, 41.0f));  // above 40 %
+    CHECK(!OnyxiaGroundPhase(false, true, false, 39.0f)); // no boss
+
+    // IsOnyxiaBossUnit_TheMarkedWhelpIsNoBoss: an engaged Onyxia counts; a live whelp in the same lists does not (under
+    // "focus rti targets" the attacker list holds only the marked unit, often a whelp), and neither does a dead or
+    // dormant one.
+    CHECK(IsOnyxiaBossUnit(kOnyxiaEntry, true, true, true));
+    CHECK(!IsOnyxiaBossUnit(kOnyxianWhelpEntry, true, true, true));
+    CHECK(!IsOnyxiaBossUnit(kOnyxiaEntry, false, true, true));
+    CHECK(!IsOnyxiaBossUnit(kOnyxiaEntry, true, false, true));
+    CHECK(!IsOnyxiaBossUnit(kOnyxiaEntry, true, true, false));
+
+    // The P3 ground phase when the attacker list holds only the focused whelp: the boss comes from the roster's
+    // engagement, so the phase still arms below 40 %.
+    bool const bossFromRoster = IsOnyxiaBossUnit(kOnyxiaEntry, true, true, true);
+    bool const bossFromTheMarkedWhelp = IsOnyxiaBossUnit(kOnyxianWhelpEntry, true, true, true);
+    CHECK(OnyxiaWhelpPhase(false, true, bossFromRoster, 39.0f));
+    CHECK(!OnyxiaWhelpPhase(false, true, bossFromTheMarkedWhelp, 39.0f));
+
+    // OnyxiaWaitingGroundDuty_CrewOnly: Cindarion still lives at 40 % (crew state 0), so only the crew's own AoE
+    // ranged keep the whelps; another AoE ranged damage dealer of the raid does not, and with no row to apply today's
+    // rule stands.
+    CHECK(OnyxiaWaitingGroundDuty(IsOnyxiaWhelpHunter(kWhelpClassMage, false, false, true), true));   // crew mage
+    CHECK(!OnyxiaWaitingGroundDuty(IsOnyxiaWhelpHunter(kWhelpClassWarlock, false, false, true), false)); // past the crew
+    CHECK(!OnyxiaWaitingGroundDuty(false, true));  // a crew melee: today's duty (no whelps) stands
+    CHECK(OnyxiaWaitingGroundDuty(true, true));    // no row: today's duty
+
     // OnyxiaGroundDuty_TanksLeaveOnGround: on the ground the melee keep the duty and the tanks drop it; in the air
     // every crew member hunts.
     CHECK(OnyxiaGroundDuty(true, false, true));   // crew melee airborne
