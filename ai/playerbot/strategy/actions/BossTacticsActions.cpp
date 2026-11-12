@@ -872,6 +872,16 @@ struct SeekFight
     std::uint64_t parkSon = 0;
     std::uint64_t parkBot = 0;
     std::uint32_t parkReleaseMs = 0;
+    // The park's read: the source on a tank (a tank victim engaged on it and no breakable control), the release's
+    // receiver, whether it stands in strike reach, whether it should already be walking to the source, and whether a
+    // breakable control still holds the source.
+    bool parkSonOnTank = false;
+    std::uint64_t parkReceiver = 0;
+    // The failed park's breaker: the ordinary off-tank whose take breaks the controlled Son when there is no receiver.
+    std::uint64_t parkBreaker = 0;
+    bool parkReceiverOk = false;
+    bool parkPreWalk = false;
+    bool parkControlled = false;
 };
 
 // The seek's reach of a Son (SeekReachYd): from B, or the nearer of B and the anchor's centre.
@@ -1200,6 +1210,11 @@ std::unordered_map<std::uint64_t, HealReserveLogWindow> g_healReserveLog;
 // The pull rows' own throttle, so a pull that keeps walking does not swallow the seek rows' 5 s window.
 std::mutex g_seekPullLogMutex;
 std::unordered_map<std::uint64_t, std::uint32_t> g_seekPullLog;
+// The park cast rows' own throttle (the same mutex): a cast attempt per park bot and 2 s.
+std::unordered_map<std::uint64_t, std::uint32_t> g_seekParkCastLog;
+// The park walk rows' own throttle (the same mutex): the stand-down and the approach repeat every tick while a tank
+// stands or walks, and must not spend the park_release take row's `seek take` window on the same bot.
+std::map<std::pair<std::uint64_t, std::string>, std::uint32_t> g_seekParkWalkLog;
 // The meet receiver's wait row has its own throttle (the take row on the same tank must not lose its window to it).
 std::unordered_map<std::uint64_t, std::uint32_t> g_seekMeetWaitLog;
 // The walk-out task, one per map instance (Hakkar's fight), shared by every bot's read; the active count lets the
@@ -1348,6 +1363,16 @@ void SweepSeekRecords(std::uint32_t instanceId)
         {
             const std::int32_t idleMs = static_cast<std::int32_t>(nowMs - it->second);
             it = idleMs > static_cast<std::int32_t>(kSeekRecordIdleMs) ? g_seekMeetWaitLog.erase(it) : std::next(it);
+        }
+        for (auto it = g_seekParkCastLog.begin(); it != g_seekParkCastLog.end();)
+        {
+            const std::int32_t idleMs = static_cast<std::int32_t>(nowMs - it->second);
+            it = idleMs > static_cast<std::int32_t>(kSeekRecordIdleMs) ? g_seekParkCastLog.erase(it) : std::next(it);
+        }
+        for (auto it = g_seekParkWalkLog.begin(); it != g_seekParkWalkLog.end();)
+        {
+            const std::int32_t idleMs = static_cast<std::int32_t>(nowMs - it->second);
+            it = idleMs > static_cast<std::int32_t>(kSeekRecordIdleMs) ? g_seekParkWalkLog.erase(it) : std::next(it);
         }
     }
 }
@@ -1676,6 +1701,53 @@ void LogSeekPullSkipAnchor(PlayerbotAI* ai, Player* bot)
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsSeekPull", "seek pull: skip anchor", "");
 }
 
+// One `seek park cast` row per park bot and 2 s: what the park action's tick did (`cast`, `refused` with the cast
+// check's code, `walk` to the cast reach, `clamp` refused by the boss anchor), the distance and the sight line. The
+// park's resists and refused casts used to be invisible in the log. A no-op unless bot_events.csv is in
+// AllowedLogFiles.
+constexpr std::uint32_t kSeekParkCastLogGapMs = 2000;
+void LogSeekParkCast(PlayerbotAI* ai, Player* bot, Unit* son, const char* step, SpellCastResult check)
+{
+    if (!ai || !bot || !son || !sPlayerbotAIConfig.hasLog("bot_events.csv"))
+        return;
+    const std::uint32_t nowMs = WorldTimer::getMSTime();
+    {
+        std::lock_guard<std::mutex> lock(g_seekPullLogMutex);
+        std::uint32_t& last = g_seekParkCastLog[bot->GetObjectGuid().GetRawValue()];
+        if (last != 0 && nowMs - last < kSeekParkCastLogGapMs)
+            return;
+        last = nowMs == 0 ? 1 : nowMs;
+    }
+    char info1[192];
+    snprintf(info1, sizeof(info1), "seek park cast: by=%s son=%u step=%s yd=%.0f los=%d check=%u", bot->GetName(),
+             son->GetGUIDLow(), step, bot->GetDistance(son), bot->IsWithinLOSInMap(son, true) ? 1 : 0,
+             static_cast<std::uint32_t>(check));
+    sPlayerbotAIConfig.logEvent(ai, "BossTacticsSeekPull", info1, "");
+}
+
+// The park's walk rows (the tank stand-down and the receiver's approach): the `seek take` text on a throttle of their
+// own, so the park_release take row on the same bot keeps its own window beside them.
+void LogSeekParkWalk(PlayerbotAI* ai, Player* bot, Unit* son, const char* reason, const char* src)
+{
+    if (!ai || !bot || !son || !sPlayerbotAIConfig.hasLog("bot_events.csv"))
+        return;
+    const std::uint32_t nowMs = WorldTimer::getMSTime();
+    {
+        std::lock_guard<std::mutex> lock(g_seekPullLogMutex);
+        std::uint32_t& last = g_seekParkWalkLog[std::make_pair(bot->GetObjectGuid().GetRawValue(),
+                                                               std::string(reason ? reason : ""))];
+        if (last != 0 && nowMs - last < kSeekLogGapMs)
+            return;
+        last = nowMs == 0 ? 1 : nowMs;
+    }
+    Unit* const victim = son->GetVictim();
+    char info1[224];
+    snprintf(info1, sizeof(info1),
+             "seek take: %s -> %u victim=%s reason=%s meet=%d src=%s reach_yd=%.1f beyond_yd=%.1f", bot->GetName(),
+             son->GetGUIDLow(), victim ? victim->GetName() : "none", reason, 0, src, bot->GetDistance(son), -99.0f);
+    sPlayerbotAIConfig.logEvent(ai, "BossTacticsSeekPull", info1, "");
+}
+
 // One `seek take` row per tank and 5 s (the pull rows' throttle): the off-tank, the Son it takes, the Son's victim and
 // why this tick did or did not taunt (`SeekTakeReasonWord`). `meet` is 1 for a take from the pulled Son's meet; `src`
 // names the take path that produced the task (`SeekTakeSrcWord`: meet, nearest, healer_clock, receiver, pickup,
@@ -1964,6 +2036,21 @@ SeekParkPhase SeekParkPhaseOf(std::uint32_t instanceId)
 bool PlayerHoldsFightSon(const std::vector<Unit*>& fightSons, std::uint32_t sonEntry, Player* member,
                          std::uint64_t exceptSon);
 
+// The failed park's breaker: with the receiver pick empty, the ordinary off-tank whose take reaches the Son is the only
+// thing that can break its control. Stored on the record like the receiver; the read drops it once it no longer
+// qualifies, and the next ordinary taker latches.
+void NoteBossSeekParkBreaker(Player* bot, std::uint64_t sonGuid)
+{
+    if (!bot || sonGuid == 0)
+        return;
+    std::lock_guard<std::mutex> lock(g_seekParkMutex);
+    auto const it = g_seekParks.find(bot->GetInstanceId());
+    if (it == g_seekParks.end() || it->second.state.breaker != 0 || it->second.state.son != sonGuid ||
+        it->second.state.phase != SeekParkPhase::Failed)
+        return;
+    it->second.state.breaker = bot->GetObjectGuid().GetRawValue();
+}
+
 // The park's rules for this fight (D2): the key, the seek_pull cycle key and the boss's seek_park row.
 SeekParkRules SeekParkRulesOf(std::uint32_t mapId, const BossTacticRow* seekRow)
 {
@@ -1980,36 +2067,46 @@ SeekParkRules SeekParkRulesOf(std::uint32_t mapId, const BossTacticRow* seekRow)
     return rules;
 }
 
-// The release's receiver (D9): the first of tanks[2], tanks[1] (three tanks) or tanks[1] (two tanks) that is alive,
-// not the boss's victim, not charmed and holds no other source. The parked source itself never counts as "other".
-Player* SeekParkReceiver(PlayerbotAI* ai, Player* bot, Unit* boss, const std::vector<Unit*>& fightSons,
-                         std::uint32_t sonEntry, std::uint64_t son)
+// The release's receiver (D9, R6): every raid tank but index 0 (the boss follows it), kept while it still qualifies,
+// else one already in strike reach, then the nearest, then the lower guid. Eligible: alive, same map and instance, not
+// charmed, not the boss's victim, holding no other source, able to move, in sight of the source, and inside the
+// anchor's chase allowance when the boss has one. The parked source itself never counts as "other".
+Player* PickSeekParkReceiverOf(PlayerbotAI* ai, Player* bot, Unit* boss, Unit* son, const std::vector<Unit*>& fightSons,
+                               std::uint32_t sonEntry, std::uint64_t kept)
 {
     if (!ai || !bot || !boss || !son)
         return nullptr;
     const RaidTankRoles roles = GetRaidTankRoles(ai);
     if (roles.tanks.size() < 2)
         return nullptr;
-    std::vector<Player*> order;
-    if (roles.tanks.size() >= 3)
+    const BossTacticRow* const anchorRow = LiveBossAnchorRow(ai, bot);
+    std::vector<SeekParkReceiverCand> cands;
+    std::vector<Player*> members;
+    for (std::size_t i = 1; i < roles.tanks.size(); ++i)
     {
-        order.push_back(roles.tanks[2]);
-        order.push_back(roles.tanks[1]);
-    }
-    else
-        order.push_back(roles.tanks[1]);
-    for (Player* const member : order)
-    {
+        Player* const member = roles.tanks[i];
+        SeekParkReceiverCand cand;
+        members.push_back(member);
         if (!member || !member->IsInWorld() || member->GetMapId() != bot->GetMapId() ||
             member->GetInstanceId() != bot->GetInstanceId())
+        {
+            cands.push_back(cand);
             continue;
-        if (!sServerFacade.IsAlive(member) || !member->GetCharmerGuid().IsEmpty() || boss->GetVictim() == member)
-            continue;
-        if (PlayerHoldsFightSon(fightSons, sonEntry, member, son))
-            continue;
-        return member;
+        }
+        PlayerbotAI* const memberAi = PlayerbotAIStorage::Instance().GetAI(member);
+        cand.guid = member->GetObjectGuid().GetRawValue();
+        cand.sonYd = member->GetDistance(son);
+        cand.eligible = sServerFacade.IsAlive(member) && member->GetCharmerGuid().IsEmpty() &&
+            boss->GetVictim() != member &&
+            !PlayerHoldsFightSon(fightSons, sonEntry, member, son->GetObjectGuid().GetRawValue()) &&
+            memberAi != nullptr && memberAi->CanMove(true) && member->IsWithinLOSInMap(son, true) &&
+            (!anchorRow || AnchorAllowsChase(AnchorCircleOf(*anchorRow, true), son->GetPositionX(),
+                                            son->GetPositionY(), kBossAnchorChaseReachYd));
+        cand.inReach = cand.eligible && SeekParkStrikeInReach(cand.sonYd);
+        cands.push_back(cand);
     }
-    return nullptr;
+    const int pick = PickSeekParkReceiver(cands, kept);
+    return pick < 0 ? nullptr : members[static_cast<std::size_t>(pick)];
 }
 
 // The park bot of one source (D6): the kept pick while it still qualifies, else the best candidate — Polymorph before
@@ -2126,20 +2223,10 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
     Map* const map = bot->GetMap();
     if (!map)
         return;
-    // D4 (review round 1): the park is the seek's own pick, and only once that Son is inside the raid circle (the
-    // take's 30 yd test): a Son outside it would be refused the chase and its burn, kill and gather key on another Son.
+    // The seek's own pick (D4: the park's burn, kill and gather key on it) and the record's source, which owns the
+    // park once one leaves None (R2): a live record is read by guid whatever this bot's pick is.
     Unit* const picked = out.source;
     const std::uint64_t pickedGuid = picked ? picked->GetObjectGuid().GetRawValue() : 0;
-    bool pickedInCircle = picked != nullptr;
-    if (picked)
-    {
-        if (const BossTacticRow* const anchorRow = LiveBossAnchorRow(ai, bot))
-        {
-            const BossAnchorCircle circle = AnchorCircleOf(*anchorRow, false);
-            pickedInCircle = InsideAnchor(circle, picked->GetPositionX(), picked->GetPositionY());
-        }
-    }
-    Unit* const son = picked && sServerFacade.IsAlive(picked) ? picked : nullptr;
     SeekParkState recorded;
     {
         std::lock_guard<std::mutex> lock(g_seekParkMutex);
@@ -2148,40 +2235,97 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
         if (it != g_seekParks.end())
             recorded = it->second.state;
     }
+    const bool live = recorded.phase != SeekParkPhase::None && recorded.son != 0 &&
+        recorded.cycleNo == out.cycleNo && recorded.fightStartMs == out.engageMs;
+    Unit* son = nullptr;
+    std::uint64_t sonGuid = 0;
+    if (live)
+    {
+        sonGuid = recorded.son;
+        son = map->GetCreature(ObjectGuid(recorded.son));
+    }
+    else
+    {
+        son = picked && sServerFacade.IsAlive(picked) ? picked : nullptr;
+        sonGuid = son ? son->GetObjectGuid().GetRawValue() : 0;
+    }
+    // The source's facts: alive (a record's dead or gone source ends the park), fighting, in the raid circle, the
+    // seek's pick, and whether a breakable control still holds it.
+    Unit* const liveSon = son && sServerFacade.IsAlive(son) ? son : nullptr;
+    const bool controlled = liveSon && PossibleAttackTargetsValue::HasBreakableCC(liveSon, bot);
+    bool sonInCircle = liveSon != nullptr;
+    if (liveSon)
+    {
+        if (const BossTacticRow* const anchorRow = LiveBossAnchorRow(ai, bot))
+        {
+            const BossAnchorCircle circle = AnchorCircleOf(*anchorRow, false);
+            sonInCircle = InsideAnchor(circle, liveSon->GetPositionX(), liveSon->GetPositionY());
+        }
+    }
     std::vector<Player*> members;
     std::string spell;
-    const std::uint64_t sonGuid = son ? son->GetObjectGuid().GetRawValue() : 0;
-    // The pick is kept while it still qualifies, and only for the source it was picked for.
-    const std::uint64_t kept = son && recorded.son == sonGuid ? recorded.parkBot : 0;
-    const int pick = son ? PickSeekParkCandidates(ai, bot, out.boss, son, kept, members, spell) : -1;
+    // The park bot is kept for the source it was picked for, and only while the record owns that source.
+    const std::uint64_t kept = live ? recorded.parkBot : 0;
+    const int pick = liveSon ? PickSeekParkCandidates(ai, bot, out.boss, liveSon, kept, members, spell) : -1;
     Player* const parkBot = pick >= 0 ? members[static_cast<std::size_t>(pick)] : nullptr;
     // The budget's clock starts when the controller stands in cast reach, not when the walk to the source begins.
     bool controllerInReach = false;
-    if (parkBot && son)
+    if (parkBot && liveSon)
     {
         PlayerbotAI* const parkAi = PlayerbotAIStorage::Instance().GetAI(parkBot);
         const float range = parkAi ? parkAi->GetRange("spell") : 0.0f;
         controllerInReach = range > 0.0f &&
-            CcCastInReach(parkBot->GetDistance(son), range, parkBot->IsWithinLOSInMap(son, true));
+            CcCastInReach(parkBot->GetDistance(liveSon), range, parkBot->IsWithinLOSInMap(liveSon, true));
     }
-    Player* const sonVictim = son ? dynamic_cast<Player*>(son->GetVictim()) : nullptr;
+    const SeekParkPhase readPhase = recorded.phase;
+    // A failed park whose source is still controlled keeps its receiver: that tank's take is what breaks the control.
+    Player* receiver = nullptr;
+    if (liveSon && readPhase != SeekParkPhase::None &&
+        (readPhase != SeekParkPhase::Failed || controlled))
+        receiver = PickSeekParkReceiverOf(ai, bot, out.boss, liveSon, out.sons, out.row->targetEntry,
+                                          live ? recorded.receiver : 0);
+    // The failed park's breaker is kept while it still qualifies; killed, charmed or Hakkar's victim, the next
+    // ordinary taker latches.
+    std::uint64_t breaker = 0;
+    if (live && recorded.breaker != 0)
+    {
+        Player* const member = map->GetPlayer(ObjectGuid(recorded.breaker));
+        if (member && SeekParkBreakerKeeps(readPhase, controlled, sServerFacade.IsAlive(member),
+                                           !member->GetCharmerGuid().IsEmpty(), out.boss->GetVictim() == member))
+            breaker = recorded.breaker;
+    }
+    Player* const sonVictim = liveSon ? dynamic_cast<Player*>(liveSon->GetVictim()) : nullptr;
+    // The stale-victim test: a tank the Son still lists is only "on the Son" when its own current target is the Son.
+    const bool victimIsTank = sonVictim && PlayerbotAI::IsTank(sonVictim);
+    bool tankEngaged = false;
+    if (victimIsTank)
+    {
+        if (PlayerbotAI* const victimAi = PlayerbotAIStorage::Instance().GetAI(sonVictim))
+            tankEngaged = victimAi->GetAiObjectContext()->GetValue<Unit*>("current target")->Get() == liveSon;
+        else
+            tankEngaged = sonVictim->GetSelectionGuid() == liveSon->GetObjectGuid();
+    }
     SeekParkInput in;
     in.son = sonGuid;
     in.pickedSon = pickedGuid;
     in.cycleNo = out.cycleNo;
     in.fightStartMs = out.engageMs;
-    in.sonAlive = son != nullptr;
-    in.sonInCombat = son && son->IsInCombat();
-    in.sonIsPick = son && sonGuid == pickedGuid;
-    in.sonInCircle = son && pickedInCircle;
-    in.controlled = son && PossibleAttackTargetsValue::HasBreakableCC(son, bot);
-    in.controlLeftMs = son ? SeekParkControlLeftMs(ai, son, recorded.parkBot) : 0;
+    in.sonAlive = liveSon != nullptr;
+    in.sonInCombat = liveSon && liveSon->IsInCombat();
+    in.sonIsPick = liveSon && sonGuid == pickedGuid;
+    in.sonInCircle = sonInCircle;
+    in.controlled = controlled;
+    in.controlLeftMs = liveSon ? SeekParkControlLeftMs(ai, liveSon, recorded.parkBot) : 0;
     in.parkBotOk = parkBot != nullptr;
+    in.parkBot = parkBot ? parkBot->GetObjectGuid().GetRawValue() : 0;
     in.controllerInReach = controllerInReach;
     in.dueKnown = out.dueMs != 0;
     in.dueInMs = out.dueInMs;
-    in.sonOnTank = sonVictim && PlayerbotAI::IsTank(sonVictim);
-    in.receiverOk = son && SeekParkReceiver(ai, bot, out.boss, out.sons, out.row->targetEntry, sonGuid) != nullptr;
+    // A stale tank victim under the control is not a tank's source, and neither is one that has stopped targeting the
+    // Son: only a tank engaged on the woken Son is.
+    in.sonOnTank = SeekParkSonOnTank(victimIsTank, tankEngaged, in.controlled);
+    in.receiverOk = receiver != nullptr;
+    in.receiverInReach = receiver && SeekParkStrikeInReach(receiver->GetDistance(liveSon));
     bool changed = false;
     SeekParkState step;
     {
@@ -2190,23 +2334,36 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
         SeekParkRecord& record = g_seekParks[instanceId];
         record.touchedMs = nowMs;
         changed = SeekParkStep(record.state, rules, in, nowMs);
-        record.state.parkBot = parkBot ? parkBot->GetObjectGuid().GetRawValue() : 0;
+        record.state.receiver = receiver ? receiver->GetObjectGuid().GetRawValue() : 0;
+        record.state.breaker = breaker;
         step = record.state;
     }
-    // The invariant the burn, kill and gather rely on: a held or released park is always the seek's pick.
-    assert((step.phase != SeekParkPhase::Held && !SeekParkReleaseLive(step.phase)) || step.son == pickedGuid);
     out.parkPhase = step.phase;
     out.parkSon = step.son;
     out.parkBot = step.parkBot;
     out.parkReleaseMs = step.releaseMs;
+    out.parkSonOnTank = in.sonOnTank;
+    out.parkReceiver = step.receiver;
+    out.parkBreaker = step.breaker;
+    out.parkReceiverOk = in.receiverOk;
+    out.parkPreWalk = SeekParkPreWalk(step.phase, in.dueKnown, in.dueInMs, rules.releaseLeadMs);
+    out.parkControlled = in.controlled;
     if (!changed)
         return;
-    // D13: one row per phase change, outside the lock (logEvent writes the log file).
-    char info1[224];
-    snprintf(info1, sizeof(info1), "seek park: son=%u phase=%s by=%s spell=%s due_in=%d n=%u held_ms=%u why=%s",
+    // D13: one row per phase change, outside the lock (logEvent writes the log file). The first eight fields keep the
+    // order and text older parsers match; the rest are the round-4 read (R13).
+    const Unit* const victim = liveSon ? liveSon->GetVictim() : nullptr;
+    const std::uint32_t waitedMs =
+        step.phase == SeekParkPhase::Release && step.leadSinceMs != 0 ? nowMs - step.leadSinceMs : 0;
+    char info1[288];
+    snprintf(info1, sizeof(info1),
+             "seek park: son=%u phase=%s by=%s spell=%s due_in=%d n=%u held_ms=%u why=%s rcv=%s rcv_yd=%.0f "
+             "on_tank=%d ctl=%d victim=%s waited_ms=%u",
              ObjectGuid(step.son).GetCounter(), SeekParkPhaseWord(step.phase), parkBot ? parkBot->GetName() : "-",
              spell.empty() ? "-" : spell.c_str(), in.dueKnown ? static_cast<int>(in.dueInMs / 1000) : -1,
-             static_cast<unsigned>(step.reapplies), SeekParkHeldMs(step, nowMs), step.why ? step.why : "");
+             static_cast<unsigned>(step.reapplies), SeekParkHeldMs(step, nowMs), step.why ? step.why : "",
+             receiver ? receiver->GetName() : "-", receiver && liveSon ? receiver->GetDistance(liveSon) : -1.0f,
+             in.sonOnTank ? 1 : 0, in.controlled ? 1 : 0, victim ? victim->GetName() : "none", waitedMs);
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsSeekPull", info1, "");
 }
 
@@ -4613,13 +4770,6 @@ bool SeekMeetHoldsUnit(const SeekFight& state, Unit* unit)
                             victim && PlayerbotAI::IsTank(victim));
 }
 
-// The victim of a source is a player tank: the release's aim, and the end of the damage dealers' wait.
-bool SeekSonVictimIsTank(Unit* son)
-{
-    Player* const victim = son ? dynamic_cast<Player*>(son->GetVictim()) : nullptr;
-    return victim && PlayerbotAI::IsTank(victim);
-}
-
 // The row's hold verdict for this source (SeekHoldWhyOf): the reason SeekHoldsUnit and the release log both read.
 SeekHoldWhy SeekHoldWhyOfUnit(const SeekFight& state, Unit* unit)
 {
@@ -4627,7 +4777,8 @@ SeekHoldWhy SeekHoldWhyOfUnit(const SeekFight& state, Unit* unit)
     // bot included (any damage breaks the control), and the released one waits for a tank.
     if (state.parkSon != 0 && unit->GetObjectGuid().GetRawValue() == state.parkSon &&
         (SeekParkHolds(state.parkPhase) ||
-         SeekParkDpsHeld(state.parkPhase, SeekSonVictimIsTank(unit), state.parkReleaseMs, state.nowMs)))
+         SeekParkDpsHeld(state.parkPhase, state.parkSonOnTank, state.parkReleaseMs, state.nowMs,
+                         state.parkReceiverOk, state.parkControlled)))
         return SeekHoldWhy::Held;
     if (SeekMeetHoldsUnit(state, unit))
         return SeekHoldWhy::Held;
@@ -4650,7 +4801,8 @@ bool SeekHoldsUnit(const SeekFight& state, Unit* unit)
     // released source for kSeekParkReleaseHoldMs until a tank has it (SeekParkDpsHeld).
     if (state.parkSon != 0 && unit->GetObjectGuid().GetRawValue() == state.parkSon &&
         (SeekParkHolds(state.parkPhase) ||
-         SeekParkDpsHeld(state.parkPhase, SeekSonVictimIsTank(unit), state.parkReleaseMs, state.nowMs)))
+         SeekParkDpsHeld(state.parkPhase, state.parkSonOnTank, state.parkReleaseMs, state.nowMs,
+                         state.parkReceiverOk, state.parkControlled)))
         return true;
     if (SeekMeetHoldsUnit(state, unit))
         return true;
@@ -5311,14 +5463,17 @@ bool ai::BossSeekParkReleaseTargetAllowed(PlayerbotAI* ai, Player* bot, Unit* ta
     if (!ai || !bot || !target || !sPlayerbotAIConfig.dungeonRunSeekPark)
         return false;
     SeekFight state;
-    if (!ReadSeekFightCached(ai, bot, state) || !SeekParkReleaseLive(state.parkPhase) || state.parkSon == 0 ||
-        !state.row)
+    if (!ReadSeekFightCached(ai, bot, state) ||
+        (!SeekParkReleaseLive(state.parkPhase) &&
+         !SeekParkFailedTakeDue(state.parkPhase, state.parkControlled, true)) ||
+        state.parkSon == 0 || !state.row)
         return false;
     if (target->GetObjectGuid().GetRawValue() != state.parkSon)
         return false;
-    Player* const receiver = SeekParkReceiver(ai, bot, state.boss, state.sons, state.row->targetEntry,
-                                              state.parkSon);
-    return SeekParkReleaseTargetAllowed(state.parkPhase, receiver == bot, true);
+    return SeekParkReleaseTargetAllowed(state.parkPhase,
+                                        state.parkReceiver == bot->GetObjectGuid().GetRawValue(),
+                                        state.parkBreaker == bot->GetObjectGuid().GetRawValue(), true,
+                                        state.parkControlled);
 }
 
 bool ai::BossSeekPetMustLeave(PlayerbotAI* ai, Player* bot)
@@ -5466,8 +5621,10 @@ SeekTask ai::FindBossSeek(PlayerbotAI* ai, Player* bot)
     if (state.walkout)
         return task;
     // The park holds the raid off the gather while its source is applied or held (D8): nobody gathers, so the r10a
-    // slots and the stands hold. A released source gathers at the spot below (D10).
-    if (SeekParkHolds(state.parkPhase))
+    // slots and the stands hold. A released source gathers at the spot below (D10). A reader whose own pick is another
+    // Son keeps seeking: the park's source is not the one its burn, kill and gather key on (R4).
+    const bool parkIsMine = !state.source || state.source->GetObjectGuid().GetRawValue() == state.parkSon;
+    if (SeekParkHolds(state.parkPhase) && parkIsMine)
         return task;
     task.row = state.row;
     task.boss = state.boss;
@@ -5544,7 +5701,7 @@ SeekTask ai::FindBossSeek(PlayerbotAI* ai, Player* bot)
     // source is within kSeekSpotYd the existing gather-on-source rule runs.
     const float sourceSpotYd =
         state.source->GetDistance3dToCenter(state.row->spotX, state.row->spotY, state.row->spotZ);
-    const bool atParkSpot = SeekParkGatherAtSpot(state.parkPhase, sourceSpotYd);
+    const bool atParkSpot = parkIsMine && SeekParkGatherAtSpot(state.parkPhase, sourceSpotYd);
     const float centreX = atParkSpot ? state.row->spotX : state.source->GetPositionX();
     const float centreY = atParkSpot ? state.row->spotY : state.source->GetPositionY();
     const float centreZ = atParkSpot ? state.row->spotZ : state.source->GetPositionZ();
@@ -10758,11 +10915,11 @@ SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot, std::uint64_
 }
 }  // namespace
 
-// The park's half of the tank pick (D9): in Release the release's receiver takes the source, so the swing breaks the
-// control with the source already on the tank; its own-source drag to the row's spot is the release's second half. Every
-// other tank task on the parked source is the park's to refuse while the source is on a tank; on a non-tank in Release
-// the normal takes apply (the control broke onto someone). The parked guid is passed into the body as an exclusion, so
-// a tank with another Son on a healer gets that task instead of an empty one.
+// The park's half of the tank pick (D9, round 4): a tank with the parked source stands down in Apply and Held; the
+// release's receiver walks to the source before the release and, in Release, its own take walks to it and strikes. Every
+// other tank task on the parked source is the park's to refuse in Release (R11), and while a tank holds it in the latch.
+// The parked guid is passed into the body as an exclusion, so a tank with another Son on a healer gets that task instead
+// of an empty one.
 SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)
 {
     if (!ai || !bot || !sPlayerbotAIConfig.dungeonRunSeekPark)
@@ -10772,16 +10929,59 @@ SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)
         !state.row)
         return FindBossSeekTankUnparked(ai, bot, 0);
     Creature* const son = bot->GetMap() ? bot->GetMap()->GetCreature(ObjectGuid(state.parkSon)) : nullptr;
-    const bool sonOnTank = SeekSonVictimIsTank(son);
-    const Player* const receiver = SeekParkReleaseLive(state.parkPhase)
-        ? SeekParkReceiver(ai, bot, state.boss, state.sons, state.row->targetEntry, state.parkSon) : nullptr;
-    const bool isReceiver = receiver && receiver == bot;
-    // The release's take goes in only while the source has no tank victim: once any tank has it, that holder keeps it
-    // and no other tank is ordered onto it (walk 73 measured the tank-to-tank handoff as harmful). The take's swing
-    // breaks the control with the source already on the tank; from then on the body's own-source branch drags it to
-    // the row's spot (the release's second half), which the wrapper lets through below.
-    if (SeekParkReleaseTakeDue(SeekParkReleaseLive(state.parkPhase), sonOnTank, isReceiver) && son &&
-        son->GetEntry() == state.row->targetEntry && sServerFacade.IsAlive(son) && son->GetVictim() != bot)
+    const bool sonLive = son && son->GetEntry() == state.row->targetEntry && sServerFacade.IsAlive(son);
+    const bool onTank = state.parkSonOnTank;
+    const bool isReceiver = state.parkReceiver != 0 && state.parkReceiver == bot->GetObjectGuid().GetRawValue();
+    // A tank the parked source fights keeps swinging at it, which breaks the control (its own auto-attack is not an
+    // action the vetoes can refuse): it stops and drops the target until the control lands (R5).
+    Unit* const currentTarget = ai->GetAiObjectContext()->GetValue<Unit*>("current target")->Get();
+    if (sonLive && SeekParkTankStandsDown(state.parkPhase, PlayerbotAI::IsTank(bot),
+                                          bot->GetVictim() == son || currentTarget == son))
+    {
+        SeekTankTask task;
+        task.valid = true;
+        task.row = state.row;
+        task.source = son;
+        task.standDown = true;
+        task.takeSrc = "park_hold";
+        task.boss = state.boss;
+        return task;
+    }
+    // The receiver walks to the source before the release and waits there: a sheeped Son never walks to the tank, and
+    // a taunt from 15 yd is nothing (R7). A take the body owes this bot on another source outranks the walk: the park
+    // is not the tank's only task.
+    if (sonLive && state.parkPreWalk && isReceiver)
+    {
+        const SeekTankTask other = FindBossSeekTankUnparked(ai, bot, state.parkSon);
+        if (other.valid && other.take)
+            return other;
+        SeekTankTask task;
+        task.valid = true;
+        task.row = state.row;
+        task.source = son;
+        task.parkApproach = true;
+        task.takeSrc = "park_approach";
+        task.boss = state.boss;
+        return task;
+    }
+    // A park that failed with the source still controlled still needs it broken: the release's receiver keeps its take
+    // until the swing lands. With no receiver the body's ordinary off-tank takes apply below (a failed park vetoes
+    // nothing).
+    if (sonLive && SeekParkFailedTakeDue(state.parkPhase, state.parkControlled, isReceiver))
+    {
+        SeekTankTask task;
+        task.valid = true;
+        task.row = state.row;
+        task.source = son;
+        task.take = true;
+        task.takeSrc = "park_release";
+        task.boss = state.boss;
+        return task;
+    }
+    // The release's take: every read the source is not on a tank (a stale tank victim under the control included), the
+    // receiver's, so its swing breaks the control with the source already on the tank. From then on the body's
+    // own-source branch drags it to the row's spot (the release's second half), which the wrapper lets through below.
+    if (sonLive && SeekParkReleaseTakeDue(SeekParkReleaseLive(state.parkPhase), onTank, isReceiver))
     {
         SeekTankTask task;
         task.valid = true;
@@ -10794,10 +10994,11 @@ SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)
     }
     // The release's own tank (the holder on a tank, the receiver while it has none) keeps the source; every other
     // tank's park path skips it, so its next task (another Son) comes back.
-    const bool sonHolder = sonOnTank && son->GetVictim() == bot;
+    const bool sonHolder = onTank && son && son->GetVictim() == bot;
     const bool releaseTank =
-        SeekParkReleaseTank(SeekParkReleaseLive(state.parkPhase), sonOnTank, sonHolder, isReceiver);
-    const bool excludeParkSon = SeekParkExcludesSource(state.parkPhase, sonOnTank, releaseTank);
+        SeekParkReleaseTank(SeekParkReleaseLive(state.parkPhase), onTank, sonHolder, isReceiver);
+    const bool excludeParkSon =
+        SeekParkExcludesSource(state.parkPhase, onTank, releaseTank, state.parkControlled);
     SeekTankTask task = FindBossSeekTankUnparked(ai, bot, excludeParkSon ? state.parkSon : 0);
     if (task.valid && task.source && task.source->GetObjectGuid().GetRawValue() == state.parkSon)
     {
@@ -10805,9 +11006,17 @@ SeekTankTask ai::FindBossSeekTank(PlayerbotAI* ai, Player* bot)
         // it to the row's spot"); every take and pull on the parked source is the phase's to refuse.
         const bool receiverDrag = SeekParkReleaseLive(state.parkPhase) && !task.take && !task.pull &&
             task.source->GetVictim() == bot;
-        if (!receiverDrag && SeekParkVetoesTankTask(state.parkPhase, task.takeSrc, sonOnTank))
+        if (!receiverDrag &&
+            SeekParkVetoesTankTask(state.parkPhase, task.takeSrc, onTank, state.parkControlled))
             return SeekTankTask();
     }
+    // A failed park with its Son still controlled and no receiver hands the break to the ordinary off-tank's take:
+    // latch that taker so the invalid-target rule stops undoing its target. The record keeps it until the control goes
+    // or it dies, is charmed or becomes the boss's victim.
+    if (task.valid && task.take && task.source &&
+        SeekParkBreakerDue(state.parkPhase, state.parkControlled, state.parkReceiver != 0,
+                           task.source->GetObjectGuid().GetRawValue() == state.parkSon))
+        NoteBossSeekParkBreaker(bot, state.parkSon);
     return task;
 }
 
@@ -10903,7 +11112,11 @@ bool BossTacticsParkAction::Execute(Event& event)
         // another unit would hold the cast bar while the control is due.
         if (task.cutCast)
             bot->CastStop();
-        if (!ai->CastSpell(task.spell, task.source))
+        // The refusal's code is the cast check's: cleared first, so a probe's failure is not read back here.
+        ai->ClearLastCastCheckFail();
+        const bool cast = ai->CastSpell(task.spell, task.source);
+        LogSeekParkCast(ai, bot, task.source, cast ? "cast" : "refused", ai->GetLastCastCheckFail());
+        if (!cast)
             return false;
         NoteBossSeekParkCast(bot, WorldTimer::getMSTime());
         return true;
@@ -10925,8 +11138,10 @@ bool BossTacticsParkAction::Execute(Event& event)
     if (!ClampMoveToBossAnchor(ai, bot, x, y, z))
     {
         hasLast = false;
+        LogSeekParkCast(ai, bot, task.source, "clamp", SPELL_CAST_OK);
         return false;
     }
+    LogSeekParkCast(ai, bot, task.source, "walk", SPELL_CAST_OK);
     if (hasLast && !bot->IsStopped() && !bot->movespline->Finalized() && std::fabs(lastX - x) < 1.0f &&
         std::fabs(lastY - y) < 1.0f)
         return true;
@@ -11096,6 +11311,64 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
     {
         hasLast = false;
         return false;
+    }
+    // The walk to the parked source: kSeekParkStandYd from its centre on the line from it to this bot, inside the boss
+    // anchor's clamp. A sheeped Son never walks to the tank, so both park walks are explicit.
+    auto walkToParkSon = [&](Unit* son) -> bool
+    {
+        const float dx = bot->GetPositionX() - son->GetPositionX();
+        const float dy = bot->GetPositionY() - son->GetPositionY();
+        const float len = std::sqrt(dx * dx + dy * dy);
+        float x = son->GetPositionX();
+        float y = son->GetPositionY();
+        if (len > 0.01f)
+        {
+            x += dx / len * kSeekParkStandYd;
+            y += dy / len * kSeekParkStandYd;
+        }
+        float z = bot->GetPositionZ();
+        bot->UpdateGroundPositionZ(x, y, z);
+        if (!ClampMoveToBossAnchor(ai, bot, x, y, z))
+        {
+            hasLast = false;
+            return false;
+        }
+        if (hasLast && !bot->IsStopped() && !bot->movespline->Finalized() && std::fabs(lastX - x) < 1.0f &&
+            std::fabs(lastY - y) < 1.0f)
+            return true;
+        if (!MoveTo(bot->GetMapId(), x, y, z, false, false, false, true))
+        {
+            hasLast = false;
+            return false;
+        }
+        lastX = x;
+        lastY = y;
+        hasLast = true;
+        return true;
+    };
+    if (task.standDown)
+    {
+        // The parked source is this tank's victim or target: its own running auto-attack would break the control, so
+        // the attack stops and the target goes with it (R5).
+        hasLast = false;
+        LogSeekParkWalk(ai, bot, task.source, "stand_down", "park_hold");
+        bot->AttackStop();
+        if (AI_VALUE(Unit*, "current target") == task.source)
+            SET_AI_VALUE(Unit*, "current target", nullptr);
+        return true;
+    }
+    if (task.parkApproach)
+    {
+        // The release's receiver: walk to the source before the release and stand in strike reach until it comes.
+        if (SeekParkStrikeInReach(bot->GetDistance(task.source)))
+        {
+            hasLast = false;
+            if (!bot->IsStopped())
+                ai->StopMoving();
+            return true;
+        }
+        LogSeekParkWalk(ai, bot, task.source, "approach", "park_approach");
+        return walkToParkSon(task.source);
     }
     if (task.walkout)
     {
@@ -11351,6 +11624,14 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
         // tank (a Shade of Jin'do).
         if (TauntAuraGated(bot, task.source))
             return false;
+        // The release's take walks to the source first: a taunt from out of strike reach does nothing to a sheeped Son,
+        // and 4 s is not enough to walk (R9).
+        const bool parkRelease = task.takeSrc && std::strcmp(task.takeSrc, "park_release") == 0;
+        if (parkRelease && !SeekParkStrikeInReach(bot->GetDistance(task.source)))
+        {
+            LogSeekParkWalk(ai, bot, task.source, "approach", "park_release");
+            return walkToParkSon(task.source);
+        }
         // Class-correct taunt (the Gluth swap's list: 1.12 has no paladin taunt). Attack() sticks even when the taunt
         // itself cannot fire yet (cooldown, range).
         const char* taunt = nullptr;

@@ -40,6 +40,7 @@ SeekParkInput ParkInput(std::uint32_t dueInMs)
     in.sonIsPick = true;
     in.sonInCircle = true;
     in.parkBotOk = true;
+    in.parkBot = 5;
     in.dueKnown = true;
     in.dueInMs = dueInMs;
     return in;
@@ -65,6 +66,7 @@ static void TestParkHeldUntilReleaseLead()
     CHECK(!SeekParkStep(state, rules, in, 3000));
     CHECK(state.phase == SeekParkPhase::Held);
     in.dueInMs = 40000;
+    in.receiverInReach = true;
     CHECK(SeekParkStep(state, rules, in, 4000));
     CHECK(state.phase == SeekParkPhase::Release);
     CHECK(state.releaseMs == 4000);
@@ -152,24 +154,30 @@ static void TestParkNeedsRoom()
 static void TestParkApplyBudget()
 {
     const SeekParkRules rules = ParkRules();
-    SeekParkState state;
-    CHECK(SeekParkStep(state, rules, ParkInput(60000), 1000));
-    CHECK(state.phase == SeekParkPhase::Apply);
-    CHECK(state.budgetSinceMs == 0);
-    // Still walking to the source: no budget runs, however long the walk.
-    CHECK(!SeekParkStep(state, rules, ParkInput(60000), 7001));
-    CHECK(state.phase == SeekParkPhase::Apply);
-    CHECK(state.budgetSinceMs == 0);
-    // In reach at 8000: the budget starts there.
-    SeekParkInput in = ParkInput(60000);
-    in.controllerInReach = true;
-    CHECK(!SeekParkStep(state, rules, in, 8000));
-    CHECK(state.budgetSinceMs == 8000);
-    CHECK(!SeekParkStep(state, rules, ParkInput(60000), 14000));
-    CHECK(state.phase == SeekParkPhase::Apply);
-    CHECK(SeekParkStep(state, rules, ParkInput(60000), 14001));
-    CHECK(state.phase == SeekParkPhase::Failed);
-    CHECK(std::strcmp(state.why, "budget") == 0);
+    {
+        SeekParkState state;
+        CHECK(SeekParkStep(state, rules, ParkInput(60000), 1000));
+        CHECK(state.phase == SeekParkPhase::Apply);
+        CHECK(state.budgetSinceMs == 0);
+        // Still walking to the source: no budget runs (the walk cap bounds it, TestParkApplyWalkCap).
+        CHECK(!SeekParkStep(state, rules, ParkInput(60000), 7001));
+        CHECK(state.phase == SeekParkPhase::Apply);
+        CHECK(state.budgetSinceMs == 0);
+    }
+    {
+        SeekParkState state;
+        CHECK(SeekParkStep(state, rules, ParkInput(60000), 1000));
+        // In reach at 2000: the budget starts there.
+        SeekParkInput in = ParkInput(60000);
+        in.controllerInReach = true;
+        CHECK(!SeekParkStep(state, rules, in, 2000));
+        CHECK(state.budgetSinceMs == 2000);
+        CHECK(!SeekParkStep(state, rules, ParkInput(60000), 8000));
+        CHECK(state.phase == SeekParkPhase::Apply);
+        CHECK(SeekParkStep(state, rules, ParkInput(60000), 8001));
+        CHECK(state.phase == SeekParkPhase::Failed);
+        CHECK(std::strcmp(state.why, "budget") == 0);
+    }
 }
 
 // TestParkReapplyCap: a broken control is re-applied up to the row's priority and the next break fails the park.
@@ -208,59 +216,166 @@ static void TestParkReapplyCap()
     CHECK(state.heldMs == 3000);
 }
 
-// TestParkVetoesTankTasks: Apply and Held veto every take path; Release on a tank all but its own; Release on a
-// non-tank nothing (the control broke onto someone, so the normal takes apply); nothing else vetoes.
+// TestParkVetoesTankTasks: Apply and Held veto every take path; Release vetoes every path but its own, whoever holds
+// the source (R11: only the release's receiver touches it in its window); a latched release on a tank vetoes all but
+// the holder's own drag, and one that broke onto a non-tank lets the ordinary takes back.
 static void TestParkVetoesTankTasks()
 {
     const char* const sources[] = {"meet", "receiver", "pickup", "pull_join", "nearest", "nearest_reach",
         "healer_clock", "victim_relief", "other", nullptr};
     for (const char* src : sources)
     {
-        CHECK(SeekParkVetoesTankTask(SeekParkPhase::Apply, src, false));
-        CHECK(SeekParkVetoesTankTask(SeekParkPhase::Apply, src, true));
-        CHECK(SeekParkVetoesTankTask(SeekParkPhase::Held, src, false));
-        CHECK(SeekParkVetoesTankTask(SeekParkPhase::Held, src, true));
-        CHECK(!SeekParkVetoesTankTask(SeekParkPhase::None, src, true));
-        CHECK(!SeekParkVetoesTankTask(SeekParkPhase::Failed, src, true));
-        // A released source on a non-tank: the ordinary takes may take it back.
-        CHECK(!SeekParkVetoesTankTask(SeekParkPhase::Release, src, false));
-        CHECK(src && std::strcmp(src, "park_release") == 0 ? !SeekParkVetoesTankTask(SeekParkPhase::Release, src, true)
-                                                           : SeekParkVetoesTankTask(SeekParkPhase::Release, src, true));
-        // A latched release reads the same as the open one.
-        CHECK(!SeekParkVetoesTankTask(SeekParkPhase::Released, src, false));
-        CHECK(src && std::strcmp(src, "park_release") == 0 ? !SeekParkVetoesTankTask(SeekParkPhase::Released, src, true)
-                                                           : SeekParkVetoesTankTask(SeekParkPhase::Released, src, true));
+        const bool own = src && std::strcmp(src, "park_release") == 0;
+        CHECK(SeekParkVetoesTankTask(SeekParkPhase::Apply, src, false, false));
+        CHECK(SeekParkVetoesTankTask(SeekParkPhase::Apply, src, true, true));
+        CHECK(SeekParkVetoesTankTask(SeekParkPhase::Held, src, false, false));
+        CHECK(SeekParkVetoesTankTask(SeekParkPhase::Held, src, true, true));
+        CHECK(!SeekParkVetoesTankTask(SeekParkPhase::None, src, true, true));
+        CHECK(!SeekParkVetoesTankTask(SeekParkPhase::Failed, src, true, true));
+        // The release's window while the source is controlled: only its own take.
+        CHECK(own ? !SeekParkVetoesTankTask(SeekParkPhase::Release, src, false, true)
+                  : SeekParkVetoesTankTask(SeekParkPhase::Release, src, false, true));
+        CHECK(own ? !SeekParkVetoesTankTask(SeekParkPhase::Release, src, true, true)
+                  : SeekParkVetoesTankTask(SeekParkPhase::Release, src, true, true));
+        // The control broke during the window: today's takes come back (Fix 3).
+        CHECK(!SeekParkVetoesTankTask(SeekParkPhase::Release, src, false, false));
+        // The latched release: every path but the own one while a tank holds the source, nothing on a non-tank.
+        CHECK(own ? !SeekParkVetoesTankTask(SeekParkPhase::Released, src, false, true)
+                  : !SeekParkVetoesTankTask(SeekParkPhase::Released, src, false, true));
+        CHECK(own ? !SeekParkVetoesTankTask(SeekParkPhase::Released, src, true, false)
+                  : SeekParkVetoesTankTask(SeekParkPhase::Released, src, true, false));
     }
-    CHECK(!SeekParkVetoesTankTask(SeekParkPhase::Release, "park_release", true));
+    CHECK(SeekParkVetoesTankTask(SeekParkPhase::Release, "nearest", false, true));
+    CHECK(!SeekParkVetoesTankTask(SeekParkPhase::Release, "park_release", false, true));
+    CHECK(!SeekParkVetoesTankTask(SeekParkPhase::Released, "nearest", false, true));
+    CHECK(SeekParkVetoesTankTask(SeekParkPhase::Released, "nearest", true, false));
 }
 
-// TestParkExcludesAndTarget: the body-skip rule and the release target exemption (decisions 3, 4 and 5).
+// TestParkExcludesAndTarget: the body-skip rule (R11) and the release target exemption (decisions 3, 4 and 5).
 static void TestParkExcludesAndTarget()
 {
     // Apply and Held: the body skips the parked source for every tank.
-    CHECK(SeekParkExcludesSource(SeekParkPhase::Apply, false, false));
-    CHECK(SeekParkExcludesSource(SeekParkPhase::Apply, true, true));
-    CHECK(SeekParkExcludesSource(SeekParkPhase::Held, true, false));
-    // Release on a tank: every bot but the receiver skips it (the receiver's drag is the release's own).
-    CHECK(SeekParkExcludesSource(SeekParkPhase::Release, true, false));
-    CHECK(!SeekParkExcludesSource(SeekParkPhase::Release, true, true));
-    // Release on a non-tank: nobody skips it, the ordinary takes apply.
-    CHECK(!SeekParkExcludesSource(SeekParkPhase::Release, false, false));
-    // A latched release reads the same as the open one.
-    CHECK(SeekParkExcludesSource(SeekParkPhase::Released, true, false));
-    CHECK(!SeekParkExcludesSource(SeekParkPhase::Released, true, true));
-    CHECK(!SeekParkExcludesSource(SeekParkPhase::Released, false, false));
-    CHECK(!SeekParkExcludesSource(SeekParkPhase::None, true, false));
-    CHECK(!SeekParkExcludesSource(SeekParkPhase::Failed, true, false));
-    // The invalid-target exemption: the receiver, its released source, only in the release.
-    CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Release, true, true));
-    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Release, false, true));
-    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Release, true, false));
-    CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Released, true, true));
-    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Released, false, true));
-    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Held, true, true));
-    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Apply, true, true));
+    CHECK(SeekParkExcludesSource(SeekParkPhase::Apply, false, false, false));
+    CHECK(SeekParkExcludesSource(SeekParkPhase::Apply, true, true, true));
+    CHECK(SeekParkExcludesSource(SeekParkPhase::Held, true, false, true));
+    // Release: every bot but the release's own skips it while the source is controlled (R11).
+    CHECK(SeekParkExcludesSource(SeekParkPhase::Release, false, false, true));
+    CHECK(!SeekParkExcludesSource(SeekParkPhase::Release, false, true, true));
+    CHECK(SeekParkExcludesSource(SeekParkPhase::Release, true, false, true));
+    CHECK(!SeekParkExcludesSource(SeekParkPhase::Release, true, true, true));
+    // The control broke during the window: the source is today's again (Fix 3).
+    CHECK(!SeekParkExcludesSource(SeekParkPhase::Release, false, false, false));
+    CHECK(!SeekParkExcludesSource(SeekParkPhase::Release, false, true, false));
+    // A latched release on a tank: every bot but the holder; on a non-tank nobody skips it.
+    CHECK(SeekParkExcludesSource(SeekParkPhase::Released, true, false, false));
+    CHECK(!SeekParkExcludesSource(SeekParkPhase::Released, true, true, false));
+    CHECK(!SeekParkExcludesSource(SeekParkPhase::Released, false, false, false));
+    CHECK(!SeekParkExcludesSource(SeekParkPhase::None, true, false, false));
+    CHECK(!SeekParkExcludesSource(SeekParkPhase::Failed, true, false, true));
+    // The invalid-target exemption: the receiver, its released source, while the release is live.
+    CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Release, true, false, true, true));
+    CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Release, true, false, true, false));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Release, false, false, true, true));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Release, true, false, false, true));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Release, false, true, true, true));
+    CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Released, true, false, true, false));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Released, false, false, true, true));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Held, true, false, true, true));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Apply, true, false, true, true));
 }
+
+// TestParkOnlyTheReceiverInRelease: F6, a second tank never takes the released Son inside its window (R11's table).
+static void TestParkOnlyTheReceiverInRelease()
+{
+    CHECK(SeekParkExcludesSource(SeekParkPhase::Release, false, false, true));
+    CHECK(!SeekParkExcludesSource(SeekParkPhase::Release, false, true, true));
+    CHECK(!SeekParkExcludesSource(SeekParkPhase::Released, false, false, true));
+    CHECK(SeekParkExcludesSource(SeekParkPhase::Released, true, false, true));
+    CHECK(!SeekParkExcludesSource(SeekParkPhase::Released, true, true, true));
+    CHECK(SeekParkExcludesSource(SeekParkPhase::Apply, true, false, true));
+    CHECK(SeekParkExcludesSource(SeekParkPhase::Held, true, true, true));
+    CHECK(!SeekParkExcludesSource(SeekParkPhase::None, true, true, true));
+    CHECK(!SeekParkExcludesSource(SeekParkPhase::Failed, true, true, true));
+    CHECK(SeekParkVetoesTankTask(SeekParkPhase::Release, "nearest", false, true));
+    CHECK(!SeekParkVetoesTankTask(SeekParkPhase::Release, "park_release", false, true));
+    CHECK(!SeekParkVetoesTankTask(SeekParkPhase::Released, "nearest", false, true));
+    CHECK(SeekParkVetoesTankTask(SeekParkPhase::Released, "nearest", true, false));
+    CHECK(!SeekParkVetoesTankTask(SeekParkPhase::Released, "park_release", true, false));
+}
+
+// TestParkBrokenControlReleasesToday (Fix 3): the receiver-only window and the 8 s hold are for a source that is still
+// controlled. An awake Son on a healer gets the ordinary takes at once and today's 4 s.
+static void TestParkBrokenControlReleasesToday()
+{
+    const SeekParkRules rules = ParkRules();
+    SeekParkState state;
+    SeekParkInput in = ParkInput(48001);
+    in.receiverOk = true;
+    CHECK(SeekParkStep(state, rules, in, 10000));
+    in.dueInMs = 40000;
+    in.controlled = true;
+    CHECK(SeekParkStep(state, rules, in, 10000));
+    CHECK(state.phase == SeekParkPhase::Release);
+    // The Polymorph ran out: the Son is awake on a non-tank. Its ordinary takes and damage are not held.
+    in.controlled = false;
+    CHECK(!SeekParkVetoesTankTask(SeekParkPhase::Release, "nearest", false, false));
+    CHECK(!SeekParkExcludesSource(SeekParkPhase::Release, false, false, false));
+    CHECK(SeekParkDpsHeld(SeekParkPhase::Release, false, 10000, 13999, true, false));
+    CHECK(!SeekParkDpsHeld(SeekParkPhase::Release, false, 10000, 14000, true, false));
+    // Today's 4 s window, not the receiver's 8.
+    CHECK(!SeekParkStep(state, rules, in, 13999));
+    CHECK(state.phase == SeekParkPhase::Release);
+    CHECK(SeekParkStep(state, rules, in, 14000));
+    CHECK(state.phase == SeekParkPhase::Failed);
+}
+
+// TestParkFailedTakeDue (Fix 2): a park that failed while its source is still controlled still gets it broken by the
+// release's receiver; with no receiver the ordinary takes answer, and an awake source uses today's takes.
+static void TestParkFailedTakeDue()
+{
+    CHECK(SeekParkFailedTakeDue(SeekParkPhase::Failed, true, true));
+    CHECK(!SeekParkFailedTakeDue(SeekParkPhase::Failed, true, false));
+    CHECK(!SeekParkFailedTakeDue(SeekParkPhase::Failed, false, true));
+    CHECK(!SeekParkFailedTakeDue(SeekParkPhase::Release, true, true));
+    CHECK(!SeekParkFailedTakeDue(SeekParkPhase::Released, true, true));
+    CHECK(!SeekParkFailedTakeDue(SeekParkPhase::Held, true, true));
+    // The receiver's target exemption covers that take.
+    CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Failed, true, false, true, true));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Failed, true, false, true, false));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Failed, true, false, false, true));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Failed, false, false, true, true));
+    // A failed park vetoes and excludes nothing: the ordinary off-tank takes reach the source.
+    CHECK(!SeekParkVetoesTankTask(SeekParkPhase::Failed, "nearest", true, true));
+    CHECK(!SeekParkExcludesSource(SeekParkPhase::Failed, true, false, true));
+}
+
+// TestParkFailedParkBreaker: the named failing case. A park that failed while its Son is still controlled and found no
+// receiver hands the break to the first ordinary off-tank that takes it: that taker's target is exempt from the
+// invalid-target rule through the walk and the attack, and only until the control goes. A breaker that died, was
+// charmed or became Hakkar's victim is dropped, and the next ordinary taker latches.
+static void TestParkFailedParkBreaker()
+{
+    // The latch: a failed, controlled park with no receiver, on a tank whose ordinary take reaches the Son.
+    CHECK(SeekParkBreakerDue(SeekParkPhase::Failed, true, false, true));
+    CHECK(!SeekParkBreakerDue(SeekParkPhase::Failed, true, true, true));   // a receiver exists
+    CHECK(!SeekParkBreakerDue(SeekParkPhase::Failed, false, false, true)); // the control broke
+    CHECK(!SeekParkBreakerDue(SeekParkPhase::Failed, true, false, false)); // the take is on another Son
+    CHECK(!SeekParkBreakerDue(SeekParkPhase::Release, true, false, true));
+    CHECK(!SeekParkBreakerDue(SeekParkPhase::Held, true, false, true));
+    // The breaker's own take targets the sheeped Son, through approach and attack, until the control is gone.
+    CHECK(SeekParkReleaseTargetAllowed(SeekParkPhase::Failed, false, true, true, true));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Failed, false, true, true, false));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Failed, false, false, true, true));
+    CHECK(!SeekParkReleaseTargetAllowed(SeekParkPhase::Release, false, true, true, true));
+    // Kept while it qualifies; the control's loss, death, a charm and Hakkar's victim each drop it.
+    CHECK(SeekParkBreakerKeeps(SeekParkPhase::Failed, true, true, false, false));
+    CHECK(!SeekParkBreakerKeeps(SeekParkPhase::Failed, false, true, false, false));
+    CHECK(!SeekParkBreakerKeeps(SeekParkPhase::Failed, true, false, false, false));
+    CHECK(!SeekParkBreakerKeeps(SeekParkPhase::Failed, true, true, true, false));
+    CHECK(!SeekParkBreakerKeeps(SeekParkPhase::Failed, true, true, false, true));
+    CHECK(!SeekParkBreakerKeeps(SeekParkPhase::Release, true, true, false, false));
+}
+
 
 // TestParkCastDue: Apply casts at once and then no more often than the gap; Held only near the control's end.
 static void TestParkCastDue()
@@ -286,19 +401,26 @@ static void TestParkCastDue()
     CHECK(!SeekParkCastDue(state, in, 12000));
 }
 
-// TestParkDpsHeldAfterRelease: the damage dealers wait for a tank, at most kSeekParkReleaseHoldMs.
+// TestParkDpsHeldAfterRelease: the damage dealers wait for a tank, at most the release's window.
 static void TestParkDpsHeldAfterRelease()
 {
-    CHECK(SeekParkDpsHeld(SeekParkPhase::Release, false, 10000, 13999));
-    CHECK(!SeekParkDpsHeld(SeekParkPhase::Release, false, 10000, 14000));
-    CHECK(!SeekParkDpsHeld(SeekParkPhase::Release, true, 10000, 10001));
+    CHECK(SeekParkDpsHeld(SeekParkPhase::Release, false, 10000, 13999, false, false));
+    CHECK(!SeekParkDpsHeld(SeekParkPhase::Release, false, 10000, 14000, false, false));
+    CHECK(SeekParkDpsHeld(SeekParkPhase::Release, false, 10000, 17999, true, true));
+    CHECK(!SeekParkDpsHeld(SeekParkPhase::Release, false, 10000, 18000, true, true));
+    // The receiver's longer hold needs a controlled source: awake, it is today's 4 s.
+    CHECK(SeekParkDpsHeld(SeekParkPhase::Release, false, 10000, 13999, true, false));
+    CHECK(!SeekParkDpsHeld(SeekParkPhase::Release, false, 10000, 14000, true, false));
+    CHECK(!SeekParkDpsHeld(SeekParkPhase::Release, true, 10000, 10001, false, false));
+    CHECK(!SeekParkDpsHeld(SeekParkPhase::Release, true, 10000, 10001, true, true));
     // A latched release reads the same as the open one.
-    CHECK(SeekParkDpsHeld(SeekParkPhase::Released, false, 10000, 13999));
-    CHECK(!SeekParkDpsHeld(SeekParkPhase::Released, false, 10000, 14000));
-    CHECK(!SeekParkDpsHeld(SeekParkPhase::Released, true, 10000, 10001));
-    CHECK(!SeekParkDpsHeld(SeekParkPhase::Held, false, 10000, 10001));
-    CHECK(!SeekParkDpsHeld(SeekParkPhase::Apply, false, 10000, 10001));
-    CHECK(!SeekParkDpsHeld(SeekParkPhase::Release, false, 0, 1000));
+    CHECK(SeekParkDpsHeld(SeekParkPhase::Released, false, 10000, 13999, false, false));
+    CHECK(!SeekParkDpsHeld(SeekParkPhase::Released, false, 10000, 14000, false, false));
+    CHECK(SeekParkDpsHeld(SeekParkPhase::Released, false, 10000, 17999, true, true));
+    CHECK(!SeekParkDpsHeld(SeekParkPhase::Released, true, 10000, 10001, true, true));
+    CHECK(!SeekParkDpsHeld(SeekParkPhase::Held, false, 10000, 10001, false, false));
+    CHECK(!SeekParkDpsHeld(SeekParkPhase::Apply, false, 10000, 10001, false, false));
+    CHECK(!SeekParkDpsHeld(SeekParkPhase::Release, false, 0, 1000, false, false));
 }
 
 // TestParkGatherAtSpot: the release gathers at the seek spot while the source is still away from it.
@@ -341,36 +463,41 @@ static void TestPickParkBot()
     CHECK(PickSeekParkBot(cands) == 1);
 }
 
-// TestParkNewCycleResets: the next cycle or another source starts over; a dead source too.
+// TestParkNewCycleResets: the next cycle, another fight or a dead source starts over; another source in the same
+// cycle does not (the record owns its Son, R2).
 static void TestParkNewCycleResets()
 {
     const SeekParkRules rules = ParkRules();
     {
+        // A new cycle throws the old record away; the new one's source is judged afresh (here too late, so declined).
         SeekParkState state;
         SeekParkInput in = ParkInput(48000);
         CHECK(SeekParkStep(state, rules, in, 1000));
         CHECK(state.phase == SeekParkPhase::Failed);
         SeekParkInput next = in;
         next.cycleNo = 4;
-        CHECK(SeekParkStep(state, rules, next, 2000));
-        CHECK(state.phase == SeekParkPhase::None);
+        SeekParkStep(state, rules, next, 2000);
+        CHECK(state.phase == SeekParkPhase::Failed);
+        CHECK(std::strcmp(state.why, "late") == 0);
+        CHECK(state.spent);
         CHECK(state.son == 77);
         CHECK(state.cycleNo == 4);
     }
     {
-        // Another source with the same cycle.
+        // Another source with the same cycle: no change, no reset.
         SeekParkState state;
         SeekParkInput in = ParkInput(48000);
         CHECK(SeekParkStep(state, rules, in, 1000));
         CHECK(state.phase == SeekParkPhase::Failed);
         SeekParkInput other = in;
         other.son = 78;
-        CHECK(SeekParkStep(state, rules, other, 2000));
-        CHECK(state.phase == SeekParkPhase::None);
-        CHECK(state.son == 78);
+        other.pickedSon = 78;
+        CHECK(!SeekParkStep(state, rules, other, 2000));
+        CHECK(state.phase == SeekParkPhase::Failed);
+        CHECK(state.son == 77);
     }
     {
-        // A release ends with the source's death.
+        // A release ends with the source's death: None, and the cycle is spent.
         SeekParkState state;
         SeekParkInput in = ParkInput(48001);
         CHECK(SeekParkStep(state, rules, in, 1000));
@@ -380,6 +507,8 @@ static void TestParkNewCycleResets()
         in.sonAlive = false;
         CHECK(SeekParkStep(state, rules, in, 3000));
         CHECK(state.phase == SeekParkPhase::None);
+        CHECK(state.spent);
+        CHECK(state.son == 77);
     }
 }
 
@@ -404,15 +533,19 @@ static void TestParkReleaseNeedsReceiver()
         CHECK(std::strcmp(state.why, "no_receiver") == 0);
     }
     {
-        // An eligible receiver that never acquires the source is no release either.
+        // An eligible receiver that never acquires the source is no release either; with a receiver the window is
+        // kSeekParkReleaseMaxMs, not today's 4 s.
         SeekParkState state;
         SeekParkInput in = ParkInput(48001);
         CHECK(SeekParkStep(state, rules, in, 10000));
         in.dueInMs = 40000;
         in.receiverOk = true;
+        in.controlled = true;
         CHECK(SeekParkStep(state, rules, in, 10000));
         CHECK(state.phase == SeekParkPhase::Release);
-        CHECK(SeekParkStep(state, rules, in, 14000));
+        CHECK(!SeekParkStep(state, rules, in, 17999));
+        CHECK(state.phase == SeekParkPhase::Release);
+        CHECK(SeekParkStep(state, rules, in, 18000));
         CHECK(state.phase == SeekParkPhase::Failed);
         CHECK(std::strcmp(state.why, "no_receiver") == 0);
     }
@@ -485,7 +618,7 @@ static void TestParkReleaseLatches()
         CHECK(std::strcmp(state.why, "no_receiver") == 0);
     }
     {
-        // A pick that moves away ends the latched release like any other record.
+        // Another reader's pick never ends the latched release: the record owns its source (R2).
         SeekParkState state;
         SeekParkInput in = ParkInput(48001);
         CHECK(SeekParkStep(state, rules, in, 1000));
@@ -496,8 +629,9 @@ static void TestParkReleaseLatches()
         CHECK(SeekParkStep(state, rules, in, 3000));
         CHECK(state.phase == SeekParkPhase::Released);
         in.pickedSon = 78;
-        CHECK(SeekParkStep(state, rules, in, 4000));
-        CHECK(state.phase == SeekParkPhase::None);
+        CHECK(!SeekParkStep(state, rules, in, 4000));
+        CHECK(state.phase == SeekParkPhase::Released);
+        CHECK(state.son == 77);
     }
     {
         // The next cycle starts a fresh park from the latched release too.
@@ -510,9 +644,326 @@ static void TestParkReleaseLatches()
         CHECK(SeekParkStep(state, rules, in, 3000));
         CHECK(state.phase == SeekParkPhase::Released);
         in.cycleNo = 4;
+        in.dueInMs = 60000;
         CHECK(SeekParkStep(state, rules, in, 4000));
-        CHECK(state.phase == SeekParkPhase::None);
+        // The new cycle's record is fresh: the same Son, still fighting with room left, parks again.
+        CHECK(state.phase == SeekParkPhase::Apply);
+        CHECK(state.son == 77);
+        CHECK(state.cycleNo == 4);
     }
+}
+
+// TestParkReleaseIgnoresStaleTankVictim: the named failing case (F1, round 5). A creature under Polymorph keeps its
+// victim, and that stale victim still targets anything. "On a tank" means a tank victim that targets the Son, with no
+// breakable control: a taunt on the sleeping Son completes nothing, and neither does a tank that moved on.
+static void TestParkReleaseIgnoresStaleTankVictim()
+{
+    CHECK(!SeekParkSonOnTank(true, true, true));
+    CHECK(!SeekParkSonOnTank(true, false, false));
+    CHECK(SeekParkSonOnTank(true, true, false));
+    CHECK(!SeekParkSonOnTank(false, true, false));
+    CHECK(!SeekParkSonOnTank(false, true, true));
+    const SeekParkRules rules = ParkRules();
+    SeekParkState state;
+    SeekParkInput in = ParkInput(60000);
+    CHECK(SeekParkStep(state, rules, in, 1000));
+    CHECK(state.phase == SeekParkPhase::Apply);
+    in.controlled = true;
+    in.controlLeftMs = 41000;
+    CHECK(SeekParkStep(state, rules, in, 2000));
+    CHECK(state.phase == SeekParkPhase::Held);
+    // The release tick: the control holds and the Son's stale victim is a tank.
+    in.receiverInReach = true;
+    in.dueInMs = 40000;
+    in.sonOnTank = SeekParkSonOnTank(true, true, true);
+    CHECK(!in.sonOnTank);
+    CHECK(SeekParkStep(state, rules, in, 3000));
+    CHECK(state.phase == SeekParkPhase::Release);
+    // It does not latch while the control holds the Son.
+    CHECK(!SeekParkStep(state, rules, in, 4000));
+    CHECK(state.phase == SeekParkPhase::Release);
+    CHECK(SeekParkReleaseTakeDue(true, SeekParkSonOnTank(true, true, true), true));
+    // The control is gone, but that stale tank now targets something else: still no release.
+    in.controlled = false;
+    in.controlLeftMs = 0;
+    in.sonOnTank = SeekParkSonOnTank(true, false, in.controlled);
+    CHECK(!in.sonOnTank);
+    CHECK(!SeekParkStep(state, rules, in, 5000));
+    CHECK(state.phase == SeekParkPhase::Release);
+    // The tank engages the Son: the release completes.
+    in.sonOnTank = SeekParkSonOnTank(true, true, in.controlled);
+    CHECK(in.sonOnTank);
+    CHECK(SeekParkStep(state, rules, in, 6000));
+    CHECK(state.phase == SeekParkPhase::Released);
+}
+
+// TestParkOnePerCycle: F4's re-entries. A cycle that started a park (or declined one) is spent, for any source; the
+// next cycle starts clean.
+static void TestParkOnePerCycle()
+{
+    const SeekParkRules rules = ParkRules();
+    SeekParkState state;
+    SeekParkInput in = ParkInput(48001);
+    CHECK(SeekParkStep(state, rules, in, 1000));
+    in.dueInMs = 40000;
+    in.sonOnTank = true;
+    CHECK(SeekParkStep(state, rules, in, 2000));
+    CHECK(SeekParkStep(state, rules, in, 3000));
+    CHECK(state.phase == SeekParkPhase::Released);
+    in.sonAlive = false;
+    CHECK(SeekParkStep(state, rules, in, 4000));
+    CHECK(state.phase == SeekParkPhase::None);
+    CHECK(state.spent);
+    // The next Son of the same cycle, with everything a park needs, is no park: the cycle is spent.
+    SeekParkInput next = ParkInput(60000);
+    next.son = 78;
+    next.pickedSon = 78;
+    CHECK(!SeekParkStep(state, rules, next, 5000));
+    CHECK(state.phase == SeekParkPhase::None);
+    // The next cycle starts clean.
+    next.cycleNo = 4;
+    CHECK(SeekParkStep(state, rules, next, 6000));
+    CHECK(state.phase == SeekParkPhase::Apply);
+    CHECK(state.son == 78);
+    // A declined park spends its cycle too.
+    {
+        SeekParkState declined;
+        SeekParkInput late = ParkInput(48000);
+        CHECK(SeekParkStep(declined, rules, late, 1000));
+        CHECK(declined.phase == SeekParkPhase::Failed);
+        CHECK(std::strcmp(declined.why, "late") == 0);
+        CHECK(declined.spent);
+        CHECK(declined.son == 77);
+    }
+}
+
+// TestParkReleaseWaitsForReceiver: F2. Held releases at the lead when the receiver stands in strike reach, else it
+// waits until kSeekParkReceiverWaitMs past the lead; Apply (no control) releases at the lead as today.
+static void TestParkReleaseWaitsForReceiver()
+{
+    const SeekParkRules rules = ParkRules();
+    {
+        SeekParkState state;
+        SeekParkInput in = ParkInput(60000);
+        CHECK(SeekParkStep(state, rules, in, 1000));
+        in.controlled = true;
+        CHECK(SeekParkStep(state, rules, in, 2000));
+        CHECK(state.phase == SeekParkPhase::Held);
+        in.receiverInReach = false;
+        in.dueInMs = 40000;
+        CHECK(!SeekParkStep(state, rules, in, 3000));
+        CHECK(state.phase == SeekParkPhase::Held);
+        CHECK(state.leadSinceMs == 3000);
+        in.dueInMs = 32001;
+        CHECK(!SeekParkStep(state, rules, in, 4000));
+        CHECK(state.phase == SeekParkPhase::Held);
+        CHECK(state.leadSinceMs == 3000);
+        in.dueInMs = 32000;
+        CHECK(SeekParkStep(state, rules, in, 5000));
+        CHECK(state.phase == SeekParkPhase::Release);
+        // The row's waited_ms reads from the first Held read at or under the lead.
+        CHECK(state.leadSinceMs == 3000);
+    }
+    {
+        // In reach at the lead: at once, no wait.
+        SeekParkState state;
+        SeekParkInput in = ParkInput(60000);
+        CHECK(SeekParkStep(state, rules, in, 1000));
+        in.controlled = true;
+        CHECK(SeekParkStep(state, rules, in, 2000));
+        in.receiverInReach = true;
+        in.dueInMs = 40000;
+        CHECK(SeekParkStep(state, rules, in, 3000));
+        CHECK(state.phase == SeekParkPhase::Release);
+    }
+    {
+        // Apply (no control on the Son) releases at the lead as today, without a receiver in reach.
+        SeekParkState state;
+        SeekParkInput in = ParkInput(60000);
+        CHECK(SeekParkStep(state, rules, in, 1000));
+        CHECK(state.phase == SeekParkPhase::Apply);
+        in.dueInMs = 40000;
+        CHECK(SeekParkStep(state, rules, in, 2000));
+        CHECK(state.phase == SeekParkPhase::Release);
+        CHECK(state.leadSinceMs == 0);
+    }
+    {
+        // A break during the wait re-applies, and that Apply releases at once (as today).
+        SeekParkState state;
+        SeekParkInput in = ParkInput(60000);
+        CHECK(SeekParkStep(state, rules, in, 1000));
+        in.controlled = true;
+        CHECK(SeekParkStep(state, rules, in, 2000));
+        in.receiverInReach = false;
+        in.dueInMs = 40000;
+        CHECK(!SeekParkStep(state, rules, in, 3000));
+        CHECK(state.phase == SeekParkPhase::Held);
+        in.controlled = false;
+        CHECK(SeekParkStep(state, rules, in, 4000));
+        CHECK(state.phase == SeekParkPhase::Apply);
+        CHECK(state.reapplies == 1);
+        CHECK(SeekParkStep(state, rules, in, 5000));
+        CHECK(state.phase == SeekParkPhase::Release);
+    }
+}
+
+// TestParkReleaseWindow: with a receiver the release's window is 8 s; without one, today's 4 s (R10).
+static void TestParkReleaseWindow()
+{
+    const SeekParkRules rules = ParkRules();
+    {
+        SeekParkState state;
+        SeekParkInput in = ParkInput(48001);
+        CHECK(SeekParkStep(state, rules, in, 10000));
+        in.dueInMs = 40000;
+        in.receiverOk = true;
+        in.controlled = true;
+        CHECK(SeekParkStep(state, rules, in, 10000));
+        CHECK(state.phase == SeekParkPhase::Release);
+        CHECK(!SeekParkStep(state, rules, in, 17999));
+        CHECK(state.phase == SeekParkPhase::Release);
+        CHECK(SeekParkStep(state, rules, in, 18000));
+        CHECK(state.phase == SeekParkPhase::Failed);
+        CHECK(std::strcmp(state.why, "no_receiver") == 0);
+    }
+    {
+        SeekParkState state;
+        SeekParkInput in = ParkInput(48001);
+        CHECK(SeekParkStep(state, rules, in, 10000));
+        in.dueInMs = 40000;
+        CHECK(SeekParkStep(state, rules, in, 10000));
+        CHECK(!SeekParkStep(state, rules, in, 13999));
+        CHECK(state.phase == SeekParkPhase::Release);
+        CHECK(SeekParkStep(state, rules, in, 14000));
+        CHECK(state.phase == SeekParkPhase::Failed);
+        CHECK(std::strcmp(state.why, "no_receiver") == 0);
+    }
+    // The damage dealers' hold follows the same two windows, the longer one only on a controlled source.
+    CHECK(SeekParkDpsHeld(SeekParkPhase::Release, false, 10000, 17999, true, true));
+    CHECK(!SeekParkDpsHeld(SeekParkPhase::Release, false, 10000, 18000, true, true));
+    CHECK(SeekParkDpsHeld(SeekParkPhase::Release, false, 10000, 13999, false, false));
+    CHECK(!SeekParkDpsHeld(SeekParkPhase::Release, false, 10000, 14000, false, false));
+}
+
+// TestPickParkReceiver: the kept guid while eligible, else in reach before not, then the nearer, then the lower guid.
+static void TestPickParkReceiver()
+{
+    std::vector<SeekParkReceiverCand> cands;
+    CHECK(PickSeekParkReceiver(cands, 0) == -1);
+    cands.push_back(SeekParkReceiverCand{false, true, 1.0f, 5});
+    CHECK(PickSeekParkReceiver(cands, 0) == -1);
+    // The kept guid wins while eligible, even farther away.
+    cands.clear();
+    cands.push_back(SeekParkReceiverCand{true, true, 2.0f, 5});
+    cands.push_back(SeekParkReceiverCand{true, false, 20.0f, 6});
+    CHECK(PickSeekParkReceiver(cands, 6) == 1);
+    // A kept guid that is no longer eligible is dropped.
+    cands.clear();
+    cands.push_back(SeekParkReceiverCand{false, true, 2.0f, 5});
+    cands.push_back(SeekParkReceiverCand{true, false, 20.0f, 6});
+    CHECK(PickSeekParkReceiver(cands, 5) == 1);
+    // In reach beats nearer but out.
+    cands.clear();
+    cands.push_back(SeekParkReceiverCand{true, false, 3.0f, 5});
+    cands.push_back(SeekParkReceiverCand{true, true, 9.0f, 6});
+    CHECK(PickSeekParkReceiver(cands, 0) == 1);
+    // Then the smaller distance.
+    cands.clear();
+    cands.push_back(SeekParkReceiverCand{true, false, 12.0f, 5});
+    cands.push_back(SeekParkReceiverCand{true, false, 8.0f, 6});
+    CHECK(PickSeekParkReceiver(cands, 0) == 1);
+    // Then the lower raw guid.
+    cands.clear();
+    cands.push_back(SeekParkReceiverCand{true, false, 8.0f, 9});
+    cands.push_back(SeekParkReceiverCand{true, false, 8.0f, 4});
+    CHECK(PickSeekParkReceiver(cands, 0) == 1);
+    // Nothing eligible: none.
+    cands.clear();
+    cands.push_back(SeekParkReceiverCand{false, true, 1.0f, 4});
+    CHECK(PickSeekParkReceiver(cands, 4) == -1);
+}
+
+// TestParkPreWalk: only Held with the due time known, from kSeekParkPreWalkMs before the lead.
+static void TestParkPreWalk()
+{
+    CHECK(SeekParkPreWalk(SeekParkPhase::Held, true, 48000, 40000));
+    CHECK(!SeekParkPreWalk(SeekParkPhase::Held, true, 48001, 40000));
+    CHECK(!SeekParkPreWalk(SeekParkPhase::Held, false, 40000, 40000));
+    CHECK(!SeekParkPreWalk(SeekParkPhase::Apply, true, 48000, 40000));
+    CHECK(!SeekParkPreWalk(SeekParkPhase::Release, true, 48000, 40000));
+    CHECK(!SeekParkPreWalk(SeekParkPhase::Released, true, 48000, 40000));
+    CHECK(!SeekParkPreWalk(SeekParkPhase::None, true, 48000, 40000));
+    CHECK(!SeekParkPreWalk(SeekParkPhase::Failed, true, 48000, 40000));
+}
+
+// TestParkTankStandsDown: Apply and Held, a tank, the parked source its victim or target.
+static void TestParkTankStandsDown()
+{
+    CHECK(SeekParkTankStandsDown(SeekParkPhase::Apply, true, true));
+    CHECK(SeekParkTankStandsDown(SeekParkPhase::Held, true, true));
+    CHECK(!SeekParkTankStandsDown(SeekParkPhase::Apply, false, true));
+    CHECK(!SeekParkTankStandsDown(SeekParkPhase::Apply, true, false));
+    CHECK(!SeekParkTankStandsDown(SeekParkPhase::Release, true, true));
+    CHECK(!SeekParkTankStandsDown(SeekParkPhase::Released, true, true));
+    CHECK(!SeekParkTankStandsDown(SeekParkPhase::Failed, true, true));
+    CHECK(!SeekParkTankStandsDown(SeekParkPhase::None, true, true));
+}
+
+// TestParkApplyWalkCap: limit 2. Apply ends kSeekParkWalkCapMs after its budget whether the park bot reached the
+// source or not.
+static void TestParkApplyWalkCap()
+{
+    const SeekParkRules rules = ParkRules();
+    SeekParkState state;
+    SeekParkInput in = ParkInput(60000);
+    CHECK(SeekParkStep(state, rules, in, 1000));
+    CHECK(state.phase == SeekParkPhase::Apply);
+    CHECK(!SeekParkStep(state, rules, in, 13000));
+    CHECK(state.phase == SeekParkPhase::Apply);
+    CHECK(SeekParkStep(state, rules, in, 13001));
+    CHECK(state.phase == SeekParkPhase::Failed);
+    CHECK(std::strcmp(state.why, "reach") == 0);
+}
+
+// TestParkBotSwapRestartsBudgetOnce: F4. A park bot swap re-opens the budget once (the new bot must walk); a second
+// swap does not.
+static void TestParkBotSwapRestartsBudgetOnce()
+{
+    const SeekParkRules rules = ParkRules();
+    SeekParkState state;
+    SeekParkInput in = ParkInput(60000);
+    in.controllerInReach = true;
+    CHECK(SeekParkStep(state, rules, in, 1000));
+    CHECK(state.phase == SeekParkPhase::Apply);
+    CHECK(state.budgetSinceMs == 1000);
+    in.parkBot = 6;
+    CHECK(!SeekParkStep(state, rules, in, 6000));
+    CHECK(state.botSwaps == 1);
+    CHECK(state.budgetSinceMs == 6000);
+    // The old budget would have failed here (6001 ms).
+    CHECK(!SeekParkStep(state, rules, in, 7001));
+    CHECK(state.phase == SeekParkPhase::Apply);
+    in.parkBot = 7;
+    CHECK(!SeekParkStep(state, rules, in, 8000));
+    CHECK(state.botSwaps == 1);
+    CHECK(state.budgetSinceMs == 6000);
+    CHECK(SeekParkStep(state, rules, in, 12001));
+    CHECK(state.phase == SeekParkPhase::Failed);
+    CHECK(std::strcmp(state.why, "budget") == 0);
+}
+
+// TestParkStrikeReach: the receiver's strike reach and the release's wait edge.
+static void TestParkStrikeReach()
+{
+    CHECK(SeekParkStrikeInReach(5.0f));
+    CHECK(!SeekParkStrikeInReach(5.1f));
+    CHECK(SeekParkReleaseNow(false, 32000, 40000));
+    CHECK(!SeekParkReleaseNow(false, 32001, 40000));
+    CHECK(SeekParkReleaseNow(true, 40000, 40000));
+    // A lead shorter than the wait still fires: the wait is clamped to the lead.
+    CHECK(SeekParkReleaseNow(false, 0, 6000));
+    CHECK(!SeekParkReleaseNow(false, 1, 6000));
+    CHECK(!SeekParkReleaseNow(false, 32000, 6000));
 }
 
 // TestParkReleasedHolderKeepsTheSon: the named failing case (round 3). Tank A completes the release, then becomes
@@ -540,11 +991,11 @@ static void TestParkReleasedHolderKeepsTheSon()
     CHECK(!SeekParkReleaseTakeDue(releaseLive, true, aHolds));
     CHECK(!SeekParkReleaseTank(releaseLive, true, false, bIsReceiver));
     CHECK(!SeekParkReleaseTakeDue(releaseLive, true, bIsReceiver));
-    CHECK(SeekParkExcludesSource(state.phase, true, false));
+    CHECK(SeekParkExcludesSource(state.phase, true, false, false));
     // The Son moves to a non-tank: the receiver's take is due and its park path sees the Son again.
     CHECK(SeekParkReleaseTank(releaseLive, false, false, bIsReceiver));
     CHECK(SeekParkReleaseTakeDue(releaseLive, false, bIsReceiver));
-    CHECK(!SeekParkExcludesSource(state.phase, false, bIsReceiver));
+    CHECK(!SeekParkExcludesSource(state.phase, false, bIsReceiver, false));
     // A non-tank victim is no holder and no receiver's Son: only the ordinary takes apply.
     CHECK(!SeekParkReleaseTakeDue(releaseLive, false, false));
     CHECK(!SeekParkReleaseTank(releaseLive, false, false, false));
@@ -553,38 +1004,64 @@ static void TestParkReleasedHolderKeepsTheSon()
     CHECK(!SeekParkReleaseTank(false, true, true, true));
 }
 
-// TestParkOnlyThePick: the park is the seek's own pick; a pick that moves away while Held or Release ends the record.
-static void TestParkOnlyThePick()
+// TestParkRecordKeepsItsSon: F5. A live record is stepped only with its own source's facts: another bot's pick, no
+// pick at all, or this bot's pick moving to another Son neither resets it nor drives its phase.
+static void TestParkRecordKeepsItsSon()
 {
     const SeekParkRules rules = ParkRules();
-    SeekParkState state;
-    SeekParkInput in = ParkInput(60000);
-    CHECK(SeekParkStep(state, rules, in, 1000));
-    CHECK(state.phase == SeekParkPhase::Apply);
-    in.controlled = true;
-    CHECK(SeekParkStep(state, rules, in, 2000));
-    CHECK(state.phase == SeekParkPhase::Held);
-    CHECK(state.son == in.pickedSon);
-    // The pick moved to another Son while this one is held: the record ends at None.
-    in.pickedSon = 78;
-    CHECK(SeekParkStep(state, rules, in, 3000));
-    CHECK(state.phase == SeekParkPhase::None);
-    CHECK(state.son == in.son);
-    // A release is the pick too.
-    SeekParkState released;
-    SeekParkInput out = ParkInput(48001);
-    CHECK(SeekParkStep(released, rules, out, 1000));
-    out.dueInMs = 40000;
-    out.sonOnTank = true;
-    CHECK(SeekParkStep(released, rules, out, 2000));
-    CHECK(released.phase == SeekParkPhase::Release);
-    out.pickedSon = 78;
-    CHECK(SeekParkStep(released, rules, out, 3000));
-    CHECK(released.phase == SeekParkPhase::None);
+    {
+        SeekParkState state;
+        SeekParkInput in = ParkInput(60000);
+        CHECK(SeekParkStep(state, rules, in, 1000));
+        in.controlled = true;
+        CHECK(SeekParkStep(state, rules, in, 2000));
+        CHECK(state.phase == SeekParkPhase::Held);
+        const std::uint32_t heldSinceMs = state.heldSinceMs;
+        // Another bot's pick.
+        in.son = 78;
+        CHECK(!SeekParkStep(state, rules, in, 3000));
+        CHECK(state.phase == SeekParkPhase::Held);
+        CHECK(state.son == 77);
+        CHECK(state.heldSinceMs == heldSinceMs);
+        // No pick at all.
+        in.son = 0;
+        CHECK(!SeekParkStep(state, rules, in, 4000));
+        CHECK(state.phase == SeekParkPhase::Held);
+        CHECK(state.son == 77);
+        CHECK(state.heldSinceMs == heldSinceMs);
+        // This bot's own pick moved to another Son: the record still holds its own.
+        in.son = 77;
+        in.pickedSon = 78;
+        CHECK(!SeekParkStep(state, rules, in, 5000));
+        CHECK(state.phase == SeekParkPhase::Held);
+        CHECK(state.son == 77);
+    }
+    {
+        // The same in the release and its latch.
+        SeekParkState state;
+        SeekParkInput in = ParkInput(60000);
+        CHECK(SeekParkStep(state, rules, in, 1000));
+        in.dueInMs = 40000;
+        CHECK(SeekParkStep(state, rules, in, 2000));
+        CHECK(state.phase == SeekParkPhase::Release);
+        in.son = 78;
+        CHECK(!SeekParkStep(state, rules, in, 3000));
+        CHECK(state.phase == SeekParkPhase::Release);
+        CHECK(state.son == 77);
+        in.son = 77;
+        in.sonOnTank = true;
+        in.pickedSon = 78;
+        CHECK(SeekParkStep(state, rules, in, 4000));
+        CHECK(state.phase == SeekParkPhase::Released);
+        in.son = 78;
+        CHECK(!SeekParkStep(state, rules, in, 5000));
+        CHECK(state.phase == SeekParkPhase::Released);
+        CHECK(state.son == 77);
+    }
 }
 
 // TestParkFightStartResets: a re-pull with the same cycle number starts over; the fight's engage clock keys the record
-// with the cycle.
+// with the cycle, so the new fight's record is judged afresh (this source still has room, so it parks again).
 static void TestParkFightStartResets()
 {
     const SeekParkRules rules = ParkRules();
@@ -593,9 +1070,12 @@ static void TestParkFightStartResets()
     CHECK(SeekParkStep(state, rules, in, 1000));
     CHECK(state.phase == SeekParkPhase::Apply);
     in.fightStartMs = 900;
-    CHECK(SeekParkStep(state, rules, in, 2000));
-    CHECK(state.phase == SeekParkPhase::None);
+    SeekParkStep(state, rules, in, 2000);
+    CHECK(state.phase == SeekParkPhase::Apply);
     CHECK(state.fightStartMs == 900);
+    // The Apply began again at this read: the fight's clock, not the old record's.
+    CHECK(state.applySinceMs == 2000);
+    CHECK(state.spent);
 }
 
 // TestParkExemptsBot: only the park bot, while it applies or holds (a held park bot is not walked back to its slot).
@@ -635,8 +1115,22 @@ int main()
     TestParkNewCycleResets();
     TestParkReleaseNeedsReceiver();
     TestParkReleaseLatches();
+    TestParkReleaseIgnoresStaleTankVictim();
+    TestParkOnePerCycle();
+    TestParkReleaseWaitsForReceiver();
+    TestParkReleaseWindow();
+    TestPickParkReceiver();
+    TestParkPreWalk();
+    TestParkTankStandsDown();
+    TestParkApplyWalkCap();
+    TestParkBotSwapRestartsBudgetOnce();
+    TestParkStrikeReach();
+    TestParkOnlyTheReceiverInRelease();
+    TestParkBrokenControlReleasesToday();
+    TestParkFailedTakeDue();
+    TestParkFailedParkBreaker();
     TestParkReleasedHolderKeepsTheSon();
-    TestParkOnlyThePick();
+    TestParkRecordKeepsItsSon();
     TestParkFightStartResets();
     TestParkExemptsBot();
     TestParkPhaseWords();

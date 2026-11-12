@@ -79,6 +79,7 @@ class ShadeCoverRow(unittest.TestCase):
     def test_documented(self):
         self.assertIn("BossTacticsShadeCover", DOCS)
         self.assertIn("BossTacticsShadeCover", DOCS_ROWS)
+        self.assertIn("BossTacticsShadeCover", CHANGELOG)  # documented somewhere in the changelog
         for word in ("dead", "charmed", "other_shade", "out_of_range", "threat_gate", "guard", "on_boss", "other_target",
                      "no_target"):
             self.assertIn(word, member(DOCS_ROWS, "`BossTacticsShadeCover`", "\n"))
@@ -93,6 +94,7 @@ class ShadeHealerCover(unittest.TestCase):
         self.assertIn("Recommended on.", member(DOCS_RUNS, "### `AiPlayerbot.DungeonRunShadeHealerCover`", "</details>"))
         self.assertIn("recommended on", member(CONF, "# Shade healer cover at Jin'do", "AiPlayerbot.DungeonRunShadeHealerCover = 0"))
         self.assertIn("DungeonRunShadeHealerCover", DOCS)
+        self.assertIn("DungeonRunShadeHealerCover", CHANGELOG)  # documented somewhere in the changelog
 
     def test_the_carrier_pick_reads_the_key(self):
         pick = member(ACTIONS, "Unit* PickBossKillFirst(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fight, KillFirstPickMode mode,\n    float carrierReachYd)\n{", "\n}\n")

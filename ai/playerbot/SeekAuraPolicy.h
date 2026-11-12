@@ -984,9 +984,12 @@ namespace ai
     // `chase_refused` when DungeonRunSeekTakeEdge refused a Son whose victim is inside but that stands too far out.
     // The take's source word (walk 56 F4, the `src=` field of the `seek take` row): which take path produced the task.
     // FindBossSeekTank names the path (`meet`, `nearest`, `nearest_reach`, `healer_clock`, `receiver`, `pickup`,
-    // `pull_join`, `victim_relief`, `park_release`, else `other`); a take the take edge let through (DungeonRunSeekTakeEdge: the Son stood outside the
+    // `pull_join`, `victim_relief`, `park_release`, `park_hold` (the park's stand-down), `park_approach` (the
+    // release's receiver walking to its source), else `other`); a take the take edge let through (DungeonRunSeekTakeEdge: the Son stood outside the
     // circle, and only the edge rule allowed the chase) gets `+edge` after it, e.g. `nearest+edge`, so the path stays
     // countable by prefix.
+    // The take's reason word carries the park's own two: `stand_down` (the tank stopped its attack on the parked
+    // source) and `approach` (the tank is walking to it, not striking yet).
     inline std::string SeekTakeSrcWord(const char* path, bool edgeTake)
     {
         std::string out = path && *path ? path : "other";
