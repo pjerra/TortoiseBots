@@ -1,5 +1,6 @@
 # Changelog
 
+- Fixed: two bots reading the same park at once no longer overwrite each other's pick, so the tank the release handed the Son to keeps it and a breaker already chosen keeps its take instead of the older read erasing them.
 - New: a `seek park break:` row on every control break (`held` -> `apply`) names the parked Son's victim, its attackers and its periodic-damage auras with their casters and time left, so the parks that held 0-2.5 s are told apart from the ones that were never cast.
 - Fixed: the release's receiver may hit the parked Son again: its own damage is exempt from the seek hold (beside the puller's latch), and so is the failed park's receiver or breaker while the Son is still controlled, so its swing is no longer vetoed and the control actually breaks.
 - Fixed: a release receiver that cannot close is replaced by another eligible tank already in strike reach instead of being kept at any distance, and the approach row carries its own walk's result (`walk=sent|same|clamp|refused`).

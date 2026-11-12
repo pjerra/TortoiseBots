@@ -377,7 +377,100 @@ static void TestParkFailedParkBreaker()
 }
 
 
-// TestParkCastDue: Apply casts at once and then no more often than the gap; Held only near the control's end.
+// TestParkStaleReadKeepsTheLatch (round 8): the record's receiver and breaker are computed outside its lock, so two
+// bots' ticks interleave in call order here. Reader A reads the record at Release with its own receiver pick; reader
+// B's tick lands first and latches the record Released with receiver R. A's write must leave R and Released intact.
+// A stale receiver never lands on a record whose phase moved past the reader's, and a breaker another read latched is
+// never cleared or replaced except by a read that saw that same breaker and dropped it.
+static void TestParkStaleReadKeepsTheLatch()
+{
+    const SeekParkRules rules = ParkRules();
+    SeekParkState record;
+    SeekParkInput in = ParkInput(60000);
+    CHECK(SeekParkStep(record, rules, in, 1000));
+    in.controlled = true;
+    CHECK(SeekParkStep(record, rules, in, 2000));
+    in.dueInMs = 39000;
+    in.receiverInReach = true;
+    CHECK(SeekParkStep(record, rules, in, 3000));
+    CHECK(record.phase == SeekParkPhase::Release);
+    const SeekParkPhase aPhase = record.phase;
+    const std::uint64_t aReceiver = 41;  // A's own pick, computed against its read
+    const std::uint64_t rReceiver = 52;  // the tank B's tick latched with
+
+    // B's tick on the same record: a tank took the source, so the release latches with B's receiver.
+    SeekParkState b = record;
+    SeekParkMergeRead(b, b.phase, 0, rReceiver, 0);
+    SeekParkInput bIn = in;
+    bIn.sonOnTank = true;
+    CHECK(SeekParkStep(b, rules, bIn, 4000));
+    CHECK(b.phase == SeekParkPhase::Released);
+    CHECK(b.receiver == rReceiver);
+
+    // A's tick, still carrying what its earlier read produced: the latch survives both the write and the step.
+    SeekParkMergeRead(b, aPhase, 0, aReceiver, 0);
+    CHECK(!SeekParkStep(b, rules, in, 5000));
+    CHECK(b.phase == SeekParkPhase::Released);
+    CHECK(b.receiver == rReceiver);
+
+    // A failed, controlled park: B's read latched the ordinary off-tank as its breaker, and A's stale read (which saw
+    // no breaker, or another one) neither clears nor replaces it.
+    SeekParkState failed;
+    CHECK(SeekParkStep(failed, rules, ParkInput(10000), 1000));
+    CHECK(failed.phase == SeekParkPhase::Failed);
+    SeekParkMergeRead(failed, SeekParkPhase::Failed, 0, 0, 61);
+    CHECK(failed.breaker == 61);
+    SeekParkMergeRead(failed, SeekParkPhase::Failed, 0, 0, 0);
+    CHECK(failed.breaker == 61);
+    SeekParkMergeRead(failed, SeekParkPhase::Failed, 0, 0, 41);
+    CHECK(failed.breaker == 61);
+    // A read that saw that breaker and no longer qualifies drops it, so the next taker can latch; the stale one after
+    // it cannot undo the drop.
+    SeekParkMergeRead(failed, SeekParkPhase::Failed, 61, 0, 0);
+    CHECK(failed.breaker == 0);
+    SeekParkMergeRead(failed, SeekParkPhase::Failed, 61, 0, 61);
+    CHECK(failed.breaker == 0);
+    SeekParkMergeRead(failed, SeekParkPhase::Failed, 0, 0, 61);
+    CHECK(failed.breaker == 61);
+
+    // A read that saw Release writes nothing on a record the phase moved past (the park failed with no receiver), but
+    // the same read at its own phase fills the record.
+    SeekParkState past = failed;
+    past.receiver = 0;
+    SeekParkMergeRead(past, SeekParkPhase::Release, 0, aReceiver, 0);
+    CHECK(past.phase == SeekParkPhase::Failed);
+    CHECK(past.receiver == 0);
+    SeekParkMergeRead(past, SeekParkPhase::Failed, 61, aReceiver, 61);
+    CHECK(past.receiver == aReceiver);
+
+    // The latched release's receiver is frozen even for a read that saw Released itself.
+    SeekParkState latched = b;
+    SeekParkMergeRead(latched, SeekParkPhase::Released, 0, 0, 0);
+    CHECK(latched.receiver == rReceiver);
+
+    // A reader at the record's own phase fills the receiver, and the merge runs before the reader's own step, so the
+    // release opens with that pick.
+    SeekParkState open;
+    SeekParkInput oIn = ParkInput(60000);
+    CHECK(SeekParkStep(open, rules, oIn, 1000));
+    oIn.controlled = true;
+    CHECK(SeekParkStep(open, rules, oIn, 2000));
+    CHECK(open.phase == SeekParkPhase::Held);
+    SeekParkMergeRead(open, SeekParkPhase::Held, 0, aReceiver, 0);
+    CHECK(open.receiver == aReceiver);
+    oIn.dueInMs = 39000;
+    oIn.receiverInReach = true;
+    CHECK(SeekParkStep(open, rules, oIn, 3000));
+    CHECK(open.phase == SeekParkPhase::Release);
+    CHECK(open.receiver == aReceiver);
+    // Held -> Apply (a broken control) is behind the reader, not past it: the write still lands.
+    SeekParkState broken = open;
+    broken.phase = SeekParkPhase::Apply;
+    broken.receiver = 0;
+    SeekParkMergeRead(broken, SeekParkPhase::Held, 0, aReceiver, 0);
+    CHECK(broken.receiver == aReceiver);
+}
+
 static void TestParkCastDue()
 {
     SeekParkState state;
@@ -1170,6 +1263,7 @@ int main()
     TestParkBrokenControlReleasesToday();
     TestParkFailedTakeDue();
     TestParkFailedParkBreaker();
+    TestParkStaleReadKeepsTheLatch();
     TestParkReleasedHolderKeepsTheSon();
     TestParkRecordKeepsItsSon();
     TestParkFightStartResets();

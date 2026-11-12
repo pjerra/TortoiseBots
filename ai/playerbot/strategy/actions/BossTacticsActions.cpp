@@ -2381,16 +2381,18 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
     in.receiverInReach = receiver && SeekParkStrikeInReach(receiver->GetDistance(liveSon));
     bool changed = false;
     SeekParkState step;
+    SeekParkPhase beforePhase = SeekParkPhase::None;
     {
         std::lock_guard<std::mutex> lock(g_seekParkMutex);
         SweepSeekParks(nowMs);
         SeekParkRecord& record = g_seekParks[instanceId];
         record.touchedMs = nowMs;
+        // This read's picks merge against the record another bot may have stepped since; the machine then steps the
+        // merged state.
+        SeekParkMergeRead(record.state, readPhase, recorded.breaker,
+                          receiver ? receiver->GetObjectGuid().GetRawValue() : 0, breaker);
+        beforePhase = record.state.phase;
         changed = SeekParkStep(record.state, rules, in, nowMs);
-        // The latched release's receiver is frozen: the record keeps the guid the latch named.
-        if (readPhase != SeekParkPhase::Released)
-            record.state.receiver = receiver ? receiver->GetObjectGuid().GetRawValue() : 0;
-        record.state.breaker = breaker;
         step = record.state;
     }
     out.parkPhase = step.phase;
@@ -2407,7 +2409,7 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
         return;
     // Round 7, data only: a break (Held -> Apply) writes the Son's victim, attackers and damage auras, so the
     // `budget` parks' breaker is named instead of inferred.
-    if (step.phase == SeekParkPhase::Apply && recorded.phase == SeekParkPhase::Held && liveSon)
+    if (step.phase == SeekParkPhase::Apply && beforePhase == SeekParkPhase::Held && liveSon)
         LogSeekParkBreak(ai, bot, liveSon);
     // D13: one row per phase change, outside the lock (logEvent writes the log file). The first eight fields keep the
     // order and text older parsers match; the rest are the round-4 read (R13).

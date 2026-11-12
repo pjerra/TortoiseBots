@@ -503,6 +503,42 @@ namespace ai
         return state.phase != before;
     }
 
+    // The phase's place in the park's progress: a read that saw an earlier phase must not write over a record another
+    // bot already moved on. Apply follows Held after a break, so only a higher rank counts as moved past.
+    inline int SeekParkPhaseRank(SeekParkPhase phase)
+    {
+        switch (phase)
+        {
+            case SeekParkPhase::None:
+                return 0;
+            case SeekParkPhase::Apply:
+                return 1;
+            case SeekParkPhase::Held:
+                return 2;
+            case SeekParkPhase::Release:
+                return 3;
+            case SeekParkPhase::Released:
+            case SeekParkPhase::Failed:
+                return 4;
+        }
+        return 0;
+    }
+
+    // The read's receiver and breaker reach the record from outside the lock, where another bot's tick may already
+    // have stepped it (bots tick on their own sessions). The record under the lock wins: a read whose phase the record
+    // has moved past writes nothing, the latched release's receiver stays frozen, and the breaker verdict applies only
+    // to the breaker the read saw, so a read that never saw another's latch cannot clear or replace it.
+    inline void SeekParkMergeRead(SeekParkState& state, SeekParkPhase readPhase, std::uint64_t readBreaker,
+                                  std::uint64_t receiver, std::uint64_t breaker)
+    {
+        if (SeekParkPhaseRank(state.phase) > SeekParkPhaseRank(readPhase))
+            return;
+        if (state.phase != SeekParkPhase::Released)
+            state.receiver = receiver;
+        if (state.breaker == readBreaker)
+            state.breaker = breaker;
+    }
+
     // Whether the phase holds every source damage: Apply and Held (nobody touches a parked source, the park bot
     // included: the control breaks on any damage).
     inline bool SeekParkHolds(SeekParkPhase phase)

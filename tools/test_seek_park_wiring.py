@@ -234,7 +234,8 @@ class SeekParkWiring(unittest.TestCase):
         self.assertIn("it->second.state.phase != SeekParkPhase::Failed", latch)
         read = body(ACTIONS, "void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)")
         self.assertIn("SeekParkBreakerKeeps(readPhase, controlled, sServerFacade.IsAlive(member),", read)
-        self.assertIn("record.state.breaker = breaker;", read)
+        self.assertIn("SeekParkMergeRead(record.state, readPhase,", read)
+        self.assertIn("if (state.breaker == readBreaker)", POLICY)
         self.assertIn("out.parkBreaker = step.breaker;", read)
         target = body(ACTIONS, "bool ai::BossSeekParkReleaseTargetAllowed(PlayerbotAI* ai, Player* bot, Unit* target)")
         self.assertIn("state.parkBreaker == bot->GetObjectGuid().GetRawValue()", target)
@@ -282,7 +283,7 @@ class SeekParkWiring(unittest.TestCase):
         # Round 7, data only: a Held -> Apply break writes one `seek park break:` row with the Son's victim, the units
         # attacking it and its periodic-damage auras.
         fn = body(ACTIONS, "void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)")
-        self.assertIn("step.phase == SeekParkPhase::Apply && recorded.phase == SeekParkPhase::Held", fn)
+        self.assertIn("step.phase == SeekParkPhase::Apply && beforePhase == SeekParkPhase::Held", fn)
         self.assertIn("LogSeekParkBreak(ai, bot, liveSon);", fn)
         log = body(ACTIONS, "void LogSeekParkBreak(PlayerbotAI* ai, Player* bot, Unit* son)")
         self.assertIn("seek park break: son=%u by=%s victim=%s attackers=%s auras=%s", log)
@@ -292,14 +293,27 @@ class SeekParkWiring(unittest.TestCase):
 
     def test_the_latched_release_freezes_its_receiver(self):
         # Round 7: after the latch the receiver is read from the record, never re-picked, and the record keeps its
-        # guid; the take itself is Release-only (TestParkReleasedHolderKeepsTheSon).
+        # guid; the take itself is Release-only (TestParkReleasedHolderKeepsTheSon). Round 8: the freeze lives in the
+        # merge, so a read that lands after the latch cannot write it either (TestParkStaleReadKeepsTheLatch).
         fn = body(ACTIONS, "void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)")
         self.assertIn("if (readPhase == SeekParkPhase::Released && live)", fn)
         self.assertIn("map->GetPlayer(ObjectGuid(recorded.receiver))", fn)
-        self.assertIn("if (readPhase != SeekParkPhase::Released)", fn)
+        self.assertIn("if (state.phase != SeekParkPhase::Released)", POLICY)
         pick = fn[fn.index("Player* receiver = nullptr;"):]
         pick = pick[:pick.index("// The failed park's breaker")]
         self.assertLess(pick.index("readPhase == SeekParkPhase::Released"), pick.index("PickSeekParkReceiverOf("))
+
+    def test_the_write_merges_against_the_locked_record(self):
+        # Round 8: the receiver and breaker are computed outside the lock, so the record write goes through the pure
+        # merge (SeekParkMergeRead / SeekParkPhaseRank, TestParkStaleReadKeepsTheLatch): a stale read never erases the
+        # latched release's receiver or another read's breaker, and a record whose phase moved past the reader's is
+        # left alone. The merge runs before the step, so a reader's own Held -> Release keeps its pick.
+        fn = body(ACTIONS, "void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)")
+        self.assertIn("SeekParkMergeRead(record.state, readPhase, recorded.breaker,", fn)
+        self.assertLess(fn.index("record.touchedMs = nowMs;"), fn.index("SeekParkMergeRead("))
+        self.assertLess(fn.index("SeekParkMergeRead("), fn.index("SeekParkStep(record.state"))
+        self.assertNotIn("record.state.receiver =", fn)
+        self.assertNotIn("record.state.breaker =", fn)
 
     def test_the_trigger_only_asks(self):
         fn = body(TRIGGERS, "bool BossTacticsParkTrigger::IsActive()")
