@@ -105,6 +105,7 @@ These settings configure boss encounter mechanics, environmental hazard evasion,
 | [`AiPlayerbot.DungeonRunSeekSiphonClock`](#aiplayerbotdungeonrunseeksiphonclock) | `0` | `1` (recommended on with `DungeonRunSeekPullCycle` and `DungeonRunSeekWalkoutFaceCast`): a Hakkar walk-out that sent no pull cast and never stood in shot position aborts as `no sight` after 15 s, and the `seek_pull` row's start and retry floors drop to 50 s, so an undosed siphon gets another pull. |
 | [`AiPlayerbot.DungeonRunSeekCycleRoll`](#aiplayerbotdungeonrunseekcycleroll) | `0` | `1` (recommended on with `DungeonRunSeekPullCycle`): a missed Blood Siphon sighting advances the fight's cycle number with the rolled due time, so the walk-out's spent cycle reopens instead of staying shut for the rest of the fight (one `BossTacticsSeekCycleRoll` row per roll). |
 | [`AiPlayerbot.DungeonRunThreatResetWindow`](#aiplayerbotdungeonrunthreatresetwindow) | `0` | A/B only, **not recommended** until the siphon clock has a walk (needs `DungeonRunSeekAura`): around Hakkar's expected Cause Insanity, a damage dealer at 95 % of the best tank that does not hold him holds its damage on him (resuming under 90 %), so the reset hands him to a tank. Stop rule: tank-turn share up less than 8 points, or Hakkar %/s per alive member down 3 % or more. |
+| [`AiPlayerbot.DungeonRunThreatResetStanding`](#aiplayerbotdungeonrunthreatresetstanding) | `0` | A/B only, **not recommended** until its walk has run (needs `DungeonRunSeekAura`): between each pair of Cause Insanity charms a damage dealer at 95 % of the tank Hakkar will turn to holds its damage on him (resuming under 90 %); replaces `DungeonRunThreatResetWindow` when both are on. Stop rule: a first-fight check fails, or Hakkar %/s per 20 alive under 0.247 after 10 fights (walk 74: 0.274). |
 | [`AiPlayerbot.DungeonRunSeekMeetPrePlaceHold`](#aiplayerbotdungeonrunseekmeetpreplacehold) | `0` | `1` (recommended on with `DungeonRunSeekMeetPrePlace`): once its pre-place walk began, the pre-placed third tank's reach actions and warrior gap closer skip the anchored boss, so its own rotation no longer drags it back into Hakkar's melee. |
 | [`AiPlayerbot.DungeonRunBurnMana`](#aiplayerbotdungeonrunburnmana) | `0` | `1`: the boss tactics keep their `burn_mana` rows — a few eligible bots drain the boss's mana while it is above the row's start percent (needs the boss tactics and the rows). |
 | [`AiPlayerbot.DungeonRunRangedOnly`](#aiplayerbotdungeonrunrangedonly) | `0` | `1`: the boss tactics keep their `ranged_only` rows — melee bots leave a subject that stands the row's gap above them and take the adds (needs the boss tactics and the rows). |
@@ -1395,7 +1396,30 @@ Whether the damage dealers hold their damage on Hakkar around each expected Caus
 
 **Stop rule for the A/B walk:** tank-turn share up less than 8 points, or Hakkar %/s per alive member down 3 % or more.
 
-**Rows:** one `BossTacticsThreatReset` row per bot per window (the k = 1, 2 and 3 gaps after one reset each log their own), `reset hold: pct=<pct> ref=<threat> since_ms=<ms>`, when the hold first holds; the `BossTacticsCharm` row gains `win=<0|1>,since_prev_ms=<ms>`.
+**Rows:** one `BossTacticsThreatReset` row per bot per window (the k = 1, 2 and 3 gaps after one reset each log their own), `reset hold: pct=<pct> ref=<threat> since_ms=<ms> held_ms=<ms>`, written when the bot's hold ends so `held_ms` is its length; the `BossTacticsCharm` row gains `win=<0|1>,since_prev_ms=<ms>`.
+
+</details>
+
+### `AiPlayerbot.DungeonRunThreatResetStanding`
+Whether the damage dealers hold their damage on Hakkar between each pair of Cause Insanity charms, measured against the tank he will turn to. A/B only, **not recommended** until its walk has run.
+**Default:** `0` · **Values:** `0` off (today's successor cap, plus the gap window if `DungeonRunThreatResetWindow` is on), `1` on (needs `AiPlayerbot.DungeonRunSeekAura` and a `threat_successor` row with a nonzero `cycle_spell`; it replaces `DungeonRunThreatResetWindow` when both are on) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+<details>
+<summary>How it works in detail</summary>
+
+**Why (walk 72-74):** Cause Insanity is cast on Hakkar's current victim every 20-25 s, deletes that victim's threat for 10 s and gives it back when the aura ends, so he turns to the highest threat among the rest for those seconds and no 110 % rule applies. In casts 2 and later a tank was the victim in 92-95 %, and he turned to a non-tank in 28-35 % of the casts made with another tank alive; the state is sticky (after a non-tank turn the next cast also went to a non-tank in 53-64 %), because the damage dealers climbed 113 threat/s on white damage against the best tank's 96. Those turns cost 0.87-1.20 non-tank deaths per fight. The opening 12 s hold cannot help: a `dps_hold_after` row fires on the engage edge only, and a hold keyed to the spell would start after the threat is gone.
+
+**What opens it:** the key on, the fight has seen at least one reset (`lastResetMs` nonzero; the 12 s opening pull hold covers the first cast), and no member wears Cause Insanity at that moment. While a charm is live the victim's threat is gone and the successor is tanking him, so its threat is no reference and the hold is shut for those 10 s.
+
+**The reference and the hold:** the highest threat among the assigned tanks that do not hold Hakkar **and are hitting him** (`ThreatResetStandingReference`; a tank away on a Son does not grow, so it is no reference and with no non-holding tank on Hakkar the hold is shut for that read). It counts only at 100 threat or more and at half the highest listed tank's threat or more, so a tank back from a rez is not waited for either. The reference must also be growing: if its threat has not grown by 2 % over the last 6 s, the hold is released for every bot of the instance until it grows again (one sample per instance and boss, started again with each fight). A damage dealer (never a tank or a healer) at or above the row's `priority` % (95) stops every damage action on Hakkar, specials and white damage, resuming under `priority − 5` (90); a bot more than 130 % above the reference is left to the plain cap. Heals and cures are never held, an action aimed at another target keeps its damage, and the target is never cleared.
+
+**Expected:** non-tank turns 35 → 22-25 %, the sticky share 64 → under 40 %, those deaths 1.2 → about 0.8 per fight, for about 1-3 % of the damage on Hakkar (a level, not a rate). Kills will not show it.
+
+**Not covered:** healers are never held (a healer was on top in 12 of walk 74's 95 non-tank turns); a charm is noticed up to 0.5 s late (the scan's 500 ms step), so the hold can read a tank's threat as a reference for that long; a reference that stops growing is noticed within 6 s, and a tank that dies or leaves the boss shuts the hold only on the next read; a bot above 130 % is left to the plain cap; with no other living tank on Hakkar there is no hold; DoT ticks already on Hakkar cannot be stopped.
+
+**Stop rule for the A/B walk:** any first-fight check (no `win=4` row before the first Cause Insanity, a `win=4` row in the 10 s after a charm, a Jin'do fight logging one, or 8 or more damage dealers held inside one cycle after 120 s), or Hakkar %/s per 20 alive under 0.247 after 10 fights (walk 74: 0.274).
+
+**Rows:** one `BossTacticsThreatReset` row per bot per reset, `reset hold: pct=<pct> ref=<threat> since_ms=<ms> win=4 held_ms=<ms>`; `win=1..3` are the gap windows. The row is written when the bot's hold ends, so `held_ms` is the time it was held in that gap, and the row's time minus `held_ms` is when the hold started. `DungeonRunThreatResetWindow` and this key together: the standing hold wins and the gap window is not read (the config load logs one line).
 
 </details>
 

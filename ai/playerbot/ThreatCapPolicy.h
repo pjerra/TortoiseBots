@@ -512,6 +512,19 @@ namespace ai
         return best;
     }
 
+    // The standing hold's reference: the highest threat among the listed tanks that do not hold the boss AND hit it (the
+    // plain cap's `onBoss` test). A tank away on a Son keeps its boss threat but does not grow while it is away, so
+    // damage dealers held against it keep their damage stopped for the whole gap between charms. -1: no such tank, and
+    // the standing hold is shut for that read.
+    inline float ThreatResetStandingReference(const std::vector<ThreatCapTank>& tanks)
+    {
+        float best = -1.0f;
+        for (const ThreatCapTank& t : tanks)
+            if (!t.holdsBoss && t.onBoss && t.threat > best)
+                best = t.threat;
+        return best;
+    }
+
     // One bot's hold around the reset window, kept across ticks like SuccessorWhiteLatch: held at or above stopPct of
     // the reference, released under stopPct - kThreatResetResumeGapPct, so a read that wobbles at the line does not
     // start and stop the damage every tick. Tanks, healers and a reference under the absolute floor are never held.
@@ -532,6 +545,134 @@ namespace ai
             return held;
         }
     };
+
+    // AiPlayerbot.DungeonRunThreatResetStanding (walk 72/74): the reset hold stays open from the end of each charm to
+    // the next reset. Shut before the first reset (the opening hold covers it) and while a charm is live (the
+    // successor is tanking: its threat is no reference).
+    constexpr std::uint32_t kThreatResetStandingIndex = 4;
+    constexpr float kThreatResetStandingMinShare = 0.5f;
+    constexpr float kThreatResetStandingMaxRatio = 1.3f;
+
+    // 0: no hold. 1..3: the gap window (window key). kThreatResetStandingIndex: the standing hold, which wins.
+    inline std::uint32_t ThreatResetHoldIndex(bool windowKey, bool standingKey, std::uint32_t windowIndex,
+                                              bool resetSeen, bool charmLive)
+    {
+        if (standingKey)
+            return resetSeen && !charmLive ? kThreatResetStandingIndex : 0;
+        return windowKey ? windowIndex : 0;
+    }
+
+    struct ThreatResetStandingRead
+    {
+        float ref = -1.0f;     // ThreatResetStandingReference
+        float highest = 0.0f;  // the highest listed tank's threat, the holder included
+        // ThreatResetStandingGrows: the reference has not grown by kThreatResetStandingGrowthPct over
+        // kThreatResetStandingSampleMs, so it cannot be waited for and the standing hold is released.
+        bool frozen = false;
+    };
+
+    inline ThreatResetStandingRead ThreatResetStandingReadOf(const std::vector<ThreatCapTank>& tanks)
+    {
+        ThreatResetStandingRead read;
+        read.ref = ThreatResetStandingReference(tanks);
+        for (const ThreatCapTank& t : tanks)
+            read.highest = std::max(read.highest, t.threat);
+        return read;
+    }
+
+    // A successor far under the top tank (back from a rez, away on an add) cannot be waited for.
+    inline bool ThreatResetStandingCredible(float ref, float highest)
+    {
+        return ref >= kThreatCapOffTankMinThreat && ref >= highest * kThreatResetStandingMinShare;
+    }
+
+    // A successor whose threat sits still cannot be waited for: a tank that only holds aggro, or one whose damage is
+    // stopped by a stun or a Shade, does not grow between charms. The sample is per fight: one entry per instance and
+    // boss, started again when the fight's engage clock changes. The caller keys it (see GetResetStandingRead).
+    constexpr std::uint32_t kThreatResetStandingSampleMs = 6000;
+    constexpr float kThreatResetStandingGrowthPct = 2.0f;
+
+    struct ThreatResetStandingSample
+    {
+        std::uint32_t fightMs = 0;   // the fight the sample belongs to (its engage clock)
+        std::uint32_t sinceMs = 0;   // when the reference last grew by kThreatResetStandingGrowthPct
+        std::uint32_t touchedMs = 0; // the last read that fed the sample (ThreatResetStandingEvict)
+        float threat = -1.0f;        // the reference's threat at that read
+    };
+
+    // Feeds one read of the reference into its fight's sample and says whether the reference is growing. A new fight
+    // starts a fresh sample; a read kThreatResetStandingGrowthPct above the sample's threat re-anchors it; a sample
+    // older than kThreatResetStandingSampleMs with less growth is frozen and reads false until it grows again.
+    inline bool ThreatResetStandingGrows(ThreatResetStandingSample& sample, std::uint32_t fightMs, float ref,
+                                         std::uint32_t nowMs)
+    {
+        sample.touchedMs = nowMs;
+        if (sample.threat < 0.0f || sample.fightMs != fightMs)
+        {
+            sample.fightMs = fightMs;
+            sample.threat = ref;
+            sample.sinceMs = nowMs;
+            return true;
+        }
+        if (ref >= sample.threat * (1.0f + kThreatResetStandingGrowthPct / 100.0f))
+        {
+            sample.threat = ref;
+            sample.sinceMs = nowMs;
+            return true;
+        }
+        return nowMs - sample.sinceMs < kThreatResetStandingSampleMs;
+    }
+
+    // The sample map's cap and eviction (GetResetStandingRead). A fight's key is never looked up again once the boss is
+    // dead, so the cap is reached by dead keys only; dropping the whole map would restart every live fight's sample,
+    // and a frozen successor would read fresh and growing for another kThreatResetStandingSampleMs.
+    constexpr std::size_t kThreatResetStandingSampleMaxEntries = 64;
+    constexpr std::uint32_t kThreatResetStandingStaleMs = 60000;
+
+    // Over the cap: erase every sample untouched for kThreatResetStandingStaleMs (a fight no bot reads any more), then
+    // the single oldest remaining one if that was not enough. `keep`, the sample the caller just wrote, is never erased.
+    template <typename Key, typename Map>
+    inline void ThreatResetStandingEvict(Map& samples, const Key& keep, std::uint32_t nowMs)
+    {
+        for (typename Map::iterator it = samples.begin(); it != samples.end();)
+        {
+            if (it->first != keep && nowMs - it->second.touchedMs >= kThreatResetStandingStaleMs)
+                it = samples.erase(it);
+            else
+                ++it;
+        }
+        if (samples.size() <= kThreatResetStandingSampleMaxEntries)
+            return;
+        typename Map::iterator oldest = samples.end();
+        std::uint32_t oldestAge = 0;
+        for (typename Map::iterator it = samples.begin(); it != samples.end(); ++it)
+        {
+            if (it->first == keep)
+                continue;
+            const std::uint32_t age = nowMs - it->second.touchedMs;
+            if (oldest == samples.end() || age > oldestAge)
+            {
+                oldest = it;
+                oldestAge = age;
+            }
+        }
+        if (oldest != samples.end())
+            samples.erase(oldest);
+    }
+
+    // One bot's standing hold: the window latch, shut for a successor that is not credible, for one whose threat has
+    // stopped growing and for a bot too far above it to be brought under in one cycle.
+    inline bool ThreatResetStandingUpdate(ThreatResetLatch& latch, bool dps, float botThreat,
+                                          const ThreatResetStandingRead& read, std::uint8_t stopPct)
+    {
+        if (!dps || read.frozen || !ThreatResetStandingCredible(read.ref, read.highest) ||
+            botThreat > read.ref * kThreatResetStandingMaxRatio)
+        {
+            latch.held = false;
+            return false;
+        }
+        return latch.Update(true, true, botThreat, read.ref, stopPct);
+    }
 
     // The core's pull lines (ThreatManager::getHostileTarget): a mob turns on an attacker whose threat passes 110 % of
     // its current victim's while it can reach that attacker with a melee swing, 130 % otherwise.

@@ -1291,6 +1291,19 @@ AiPlayerbot.DungeonRunSeekCycleRoll = 0
 # Stop rule: tank-turn share up less than 8 points, or Hakkar %/s per alive member down 3 % or more.
 AiPlayerbot.DungeonRunThreatResetWindow = 0
 
+# The standing Cause Insanity reset hold (Hakkar; A/B only, default off; replaces DungeonRunThreatResetWindow when both
+# are on). The same threat_successor row opts in and its `priority` is still the hold percent (95), but the hold is open
+# the whole time between charms, not around each expected one: from the end of each Cause Insanity to the next, a damage
+# dealer (never a tank or a healer) at or above 95 % of the tank Hakkar will turn to stops every damage action on him,
+# white damage included, resuming under 90 %. The reference must be a real successor: 100 threat or more and at least
+# half the highest tank's threat (a tank back from a rez or away on a Son is no reference), and a bot more than 130 %
+# above it is left to the plain cap. Walk 72/74: casts 2 and later went to a non-tank in 28-35 % of the casts made with
+# another tank alive, and the state was sticky (64 % of walk 74's non-tank turns repeated). Needs AiPlayerbot.DungeonRunSeekAura:
+# the charm clock is the seek fight's scan, so with the seek off the hold stays shut (the config load logs one line
+# saying so, and one more when this key meets the window key). One BossTacticsThreatReset row per bot per reset carries
+# `win=4`.
+AiPlayerbot.DungeonRunThreatResetStanding = 0
+
 # A pull_gate row makes the run leader refuse a boss pull while the boss wears the row's spell; off ignores the rows.
 AiPlayerbot.DungeonRunPullGate = 0
 

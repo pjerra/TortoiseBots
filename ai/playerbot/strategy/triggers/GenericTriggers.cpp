@@ -861,13 +861,14 @@ bool SuccessorWhiteCapTrigger::IsActive()
     return false;
 }
 
-// The reset-window white stop (AiPlayerbot.DungeonRunThreatResetWindow). The same trigger-pass shape as the successor
-// white stop: a swing or auto-repeat aimed at the boss stops on the spot while the hold against the best non-holding
-// tank fires, and it stops them again on the next pass while the hold lasts. The target is never cleared (walk 57's
-// target strip cost about 3 points) and the trigger never queues an action. Key off: returns at once.
+// The reset-window white stop (AiPlayerbot.DungeonRunThreatResetWindow, or the standing hold of
+// DungeonRunThreatResetStanding). The same trigger-pass shape as the successor white stop: a swing or auto-repeat
+// aimed at the boss stops on the spot while the hold against the best non-holding tank fires, and it stops them again
+// on the next pass while the hold lasts. The target is never cleared (walk 57's target strip cost about 3 points) and
+// the trigger never queues an action. Both keys off: returns at once.
 bool ThreatResetWhiteStopTrigger::IsActive()
 {
-    if (!sPlayerbotAIConfig.dungeonRunThreatResetWindow)
+    if (!sPlayerbotAIConfig.dungeonRunThreatResetWindow && !sPlayerbotAIConfig.dungeonRunThreatResetStanding)
         return false;
     Unit* const target = AI_VALUE(Unit*, "current target");
     if (!target || target->IsPlayer())

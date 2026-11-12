@@ -791,6 +791,11 @@ public:
     // a tank. Off by default: the walk shows an uncertain net (DPS cost against fewer non-tank deaths), so it ships as
     // an A/B and turns on only after the siphon clock has a walk.
     bool dungeonRunThreatResetWindow = false;
+    // The standing Cause Insanity reset hold (Hakkar; needs the same `threat_successor` row's `cycle_spell` and needs
+    // DungeonRunSeekAura for the charm clock): from the end of each charm to the next reset, a damage dealer at or
+    // above the row's priority % of the tank Hakkar will turn to holds its damage on him, so the reset does not hand
+    // him to a damage dealer again. Off by default; it replaces the window key on one server as an A/B.
+    bool dungeonRunThreatResetStanding = false;
     // The pull_gate boss-tactic kind (the run leader refuses a boss pull while the boss wears the row's spell above
     // its stack band, then ends the run): off, the rows are ignored (default off).
     bool dungeonRunPullGate = false;

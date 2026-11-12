@@ -34,29 +34,87 @@ bool AutoAttackAction(Action* action)
         action->getName() == "auto shot";
 }
 
-// One BossTacticsThreatReset row per bot per reset window: a walk reads whether the hold fired when it should. The key
-// packs the reset and which of the three gap windows it is, so one reset can log up to three windows.
+// One BossTacticsThreatReset row per bot per reset: a walk reads whether the hold fired and for how long. The row is
+// written when the bot's hold ends (it drops under the resume line, the gap window shuts or a charm starts), so
+// held_ms= is the time the bot was held in that gap and the row's own time minus held_ms is when the hold started. The
+// key packs the reset and the hold index (1-3 the gap windows, 4 the standing hold).
 std::mutex g_threatResetLogMutex;
-std::unordered_map<std::uint64_t, std::uint64_t> g_threatResetLog;
 
-void LogThreatResetHold(PlayerbotAI* ai, Player* bot, std::uint8_t pct, float ref, std::uint32_t sinceMs,
-                        std::uint32_t lastResetMs, std::uint32_t windowIndex)
+struct ThreatResetHoldRow
+{
+    std::uint64_t key = 0;
+    std::uint32_t sinceMs = 0;  // when this bot's hold started (0: not held)
+    std::uint32_t lastMs = 0;   // the last read that saw it held: where a hold closed by a key change ends
+    std::uint32_t readMs = 0;   // the start read's since_ms=
+    std::uint8_t pct = 0;
+    float ref = -1.0f;
+    bool logged = false;        // this key's row is out; a re-hold in the same gap logs nothing more
+};
+
+std::unordered_map<std::uint64_t, ThreatResetHoldRow> g_threatResetLog;
+
+void LogThreatResetHold(PlayerbotAI* ai, Player* bot, bool held, std::uint8_t pct, float ref,
+                        std::uint32_t sinceMs, std::uint32_t lastResetMs, std::uint32_t holdIndex,
+                        std::uint32_t nowMs)
 {
     if (!sPlayerbotAIConfig.hasLog("bot_events.csv"))
         return;
-    const std::uint64_t windowKey = (static_cast<std::uint64_t>(lastResetMs) << 8) | windowIndex;
+    const std::uint64_t key = (static_cast<std::uint64_t>(lastResetMs) << 8) | holdIndex;
+    bool emit = false;
+    std::uint32_t rowSinceMs = sinceMs, heldMs = 0, rowWin = holdIndex;
+    std::uint8_t rowPct = pct;
+    float rowRef = ref;
     {
         std::lock_guard<std::mutex> lock(g_threatResetLogMutex);
-        auto const it = g_threatResetLog.find(bot->GetObjectGuid().GetRawValue());
-        if (it != g_threatResetLog.end() && it->second == windowKey)
-            return;
-        g_threatResetLog[bot->GetObjectGuid().GetRawValue()] = windowKey;
+        ThreatResetHoldRow& row = g_threatResetLog[bot->GetObjectGuid().GetRawValue()];
+        if (row.key != key)
+        {
+            // A new reset, or a hold that shut before this read: the previous hold ends here.
+            if (row.sinceMs != 0 && !row.logged)
+            {
+                heldMs = row.lastMs - row.sinceMs;
+                rowSinceMs = row.readMs;
+                rowPct = row.pct;
+                rowRef = row.ref;
+                rowWin = static_cast<std::uint32_t>(row.key & 0xFF);
+                emit = true;
+            }
+            row = ThreatResetHoldRow();
+            row.key = key;
+        }
+        if (held)
+        {
+            if (row.sinceMs == 0)
+            {
+                row.sinceMs = nowMs;
+                row.readMs = sinceMs;
+                row.pct = pct;
+                row.ref = ref;
+            }
+            row.lastMs = nowMs;
+        }
+        else if (row.sinceMs != 0)
+        {
+            if (!row.logged)
+            {
+                heldMs = nowMs - row.sinceMs;
+                rowSinceMs = row.readMs;
+                rowPct = row.pct;
+                rowRef = row.ref;
+                rowWin = holdIndex;
+                row.logged = true;
+                emit = true;
+            }
+            row.sinceMs = 0;
+        }
         if (g_threatResetLog.size() > 4096)
             g_threatResetLog.clear();
     }
-    char info1[96];
-    snprintf(info1, sizeof(info1), "reset hold: pct=%u ref=%.0f since_ms=%u", static_cast<unsigned>(pct), ref,
-             sinceMs);
+    if (!emit)
+        return;
+    char info1[128];
+    snprintf(info1, sizeof(info1), "reset hold: pct=%u ref=%.0f since_ms=%u win=%u held_ms=%u",
+             static_cast<unsigned>(rowPct), rowRef, rowSinceMs, rowWin, heldMs);
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsThreatReset", info1, "");
 }
 
@@ -96,7 +154,9 @@ void LogInterruptVeto(PlayerbotAI* ai, Player* bot, CastInterruptSpellAction con
 
 bool ai::ThreatResetHolds(PlayerbotAI* ai, Player* bot, Unit* target)
 {
-    if (!sPlayerbotAIConfig.dungeonRunThreatResetWindow)
+    const bool windowKey = sPlayerbotAIConfig.dungeonRunThreatResetWindow;
+    const bool standingKey = sPlayerbotAIConfig.dungeonRunThreatResetStanding;
+    if (!windowKey && !standingKey)
         return false;
     if (!target || target->IsPlayer() || !bot->GetGroup())
         return false;
@@ -118,17 +178,32 @@ bool ai::ThreatResetHolds(PlayerbotAI* ai, Player* bot, Unit* target)
     const std::uint32_t nowMs = WorldTimer::getMSTime();
     const std::uint32_t sinceMs = ThreatResetSince(nowMs, view.lastResetMs, view.engageMs);
     const std::uint32_t windowIndex = ThreatResetWindowIndex(sinceMs, win->minGapMs, win->maxGapMs);
-    // A shut window holds nothing: drop the latch before the tank list is built, so the common read costs no scan.
-    if (windowIndex == 0)
+    // A shut hold holds nothing: drop the latch before the tank list is built, so the common read costs no scan.
+    const std::uint32_t holdIndex = ThreatResetHoldIndex(windowKey, standingKey, windowIndex,
+                                                        view.lastResetMs != 0, view.charmLive);
+    if (holdIndex == 0)
     {
         ai->ThreatResetCap().Update(false, false, 0.0f, 0.0f, 0);
+        // A shut hold closes the open row: the charm or the window boundary is where the bot's hold ended.
+        LogThreatResetHold(ai, bot, false, 0, -1.0f, 0, view.lastResetMs, holdIndex, nowMs);
         return false;
     }
     const float botThreat = sServerFacade.GetThreatManager(target).getThreat(bot);
-    const float ref = ThreatValue::GetResetSuccessorThreat(ai, target);
-    const bool held = ai->ThreatResetCap().Update(true, true, botThreat, ref, win->stopPct);
-    if (held)
-        LogThreatResetHold(ai, bot, ThreatPctSaturated(botThreat, ref), ref, sinceMs, view.lastResetMs, windowIndex);
+    float ref = -1.0f;
+    bool held = false;
+    if (holdIndex == kThreatResetStandingIndex)
+    {
+        const ThreatResetStandingRead read = ThreatValue::GetResetStandingRead(ai, target, view.engageMs);
+        ref = read.ref;
+        held = ThreatResetStandingUpdate(ai->ThreatResetCap(), true, botThreat, read, win->stopPct);
+    }
+    else
+    {
+        ref = ThreatValue::GetResetSuccessorThreat(ai, target);
+        held = ai->ThreatResetCap().Update(true, true, botThreat, ref, win->stopPct);
+    }
+    LogThreatResetHold(ai, bot, held, ThreatPctSaturated(botThreat, ref), ref, sinceMs, view.lastResetMs, holdIndex,
+                       nowMs);
     return held;
 }
 
@@ -330,11 +405,11 @@ float ThreatMultiplier::GetValue(Action* action)
     if (action == NULL)
         return 1.0f;
 
-    // AiPlayerbot.DungeonRunThreatResetWindow: around each expected Cause Insanity, a damage dealer at or above the
-    // row's stop percent of the best tank that does not hold Hakkar stops every damage action on him, white damage
-    // included, so the reset hands him to a tank. Heals and cures are never held, and an action aimed at another
-    // target keeps its damage.
-    if (sPlayerbotAIConfig.dungeonRunThreatResetWindow)
+    // AiPlayerbot.DungeonRunThreatResetWindow / DungeonRunThreatResetStanding: around each expected Cause Insanity, or
+    // from the end of each charm to the next reset, a damage dealer at or above the row's stop percent of the best
+    // tank that does not hold Hakkar stops every damage action on him, white damage included, so the reset hands him
+    // to a tank. Heals and cures are never held, and an action aimed at another target keeps its damage.
+    if (sPlayerbotAIConfig.dungeonRunThreatResetWindow || sPlayerbotAIConfig.dungeonRunThreatResetStanding)
     {
         Unit* const resetTarget = AI_VALUE(Unit*, "current target");
         if (!ThreatCapExempt(dynamic_cast<CastHealingSpellAction*>(action) != nullptr,
