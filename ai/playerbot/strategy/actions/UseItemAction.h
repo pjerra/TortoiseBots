@@ -780,7 +780,12 @@ namespace ai
 
             bool const used = UseAction::Execute(event);
             if (used)
+            {
+                // The real item's 24 s meal sleep needs the flag too, or the
+                // wake check never sees an ordinary drink.
+                ai->SetMealSleep(true);
                 SET_AI_VALUE(bool, "drink unfinished", true);
+            }
             return used;
         }
 
@@ -882,7 +887,12 @@ namespace ai
             if (AI_VALUE2(std::list<Item*>, "inventory items", name).empty())
                 return false;
 
-            return UseAction::Execute(event);
+            bool const used = UseAction::Execute(event);
+            // The real item's 24 s meal sleep needs the flag too, or the wake
+            // check never sees an ordinary meal.
+            if (used)
+                ai->SetMealSleep(true);
+            return used;
         }
 
         bool isUseful() override

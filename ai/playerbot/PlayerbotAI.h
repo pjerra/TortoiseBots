@@ -1100,6 +1100,10 @@ private:
     // seated-only wake checks below never fire. Wake whenever the meal is
     // broken or the group fights, seated or not.
     void WakeFromMealSleep();
+    // Waking a bot, a combat start or a human order drops the action clock;
+    // the meal's sleep ends with it, or a stale flag would cut the next,
+    // unrelated delay short.
+    void ResetAIInternalUpdateDelay() override;
 public:
     bool PortalFollowActive() const { return !m_portalFollowGuid.IsEmpty(); }
     void StartPartyFlight();

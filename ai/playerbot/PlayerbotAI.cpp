@@ -1102,6 +1102,12 @@ void PlayerbotAI::WakeFromMealSleep()
     m_mealSleep = false;
 }
 
+void PlayerbotAI::ResetAIInternalUpdateDelay()
+{
+    PlayerbotAIBase::ResetAIInternalUpdateDelay();
+    m_mealSleep = false;
+}
+
 bool PlayerbotAI::UpdateAIReaction(uint32 elapsed, bool minimal, bool isStunned)
 {
     bool reactionFound;

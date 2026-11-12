@@ -9,6 +9,7 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 ITEMS = (ROOT / "ai/playerbot/strategy/actions/UseItemAction.h").read_text()
 PLAYERBOT_AI = (ROOT / "ai/playerbot/PlayerbotAI.cpp").read_text()
+PLAYERBOT_AI_HEADER = (ROOT / "ai/playerbot/PlayerbotAI.h").read_text()
 COMMANDER = (ROOT / "commands/Commander.cpp").read_text()
 ACTION = (ROOT / "commands/Action.cpp").read_text()
 
@@ -50,6 +51,7 @@ def body_after(text, marker, start=0):
 
 SRC_ITEMS = strip_comments(ITEMS)
 SRC_AI = strip_comments(PLAYERBOT_AI)
+SRC_AI_HEADER = strip_comments(PLAYERBOT_AI_HEADER)
 SRC_COMMANDER = strip_comments(COMMANDER)
 SRC_ACTION = strip_comments(ACTION)
 
@@ -121,8 +123,22 @@ class MealGateWiringTest(unittest.TestCase):
         drink = body_after(SRC_ITEMS, "class DrinkAction")
         eat = body_after(SRC_ITEMS, "class EatAction")
         for name, text in (("drink", drink), ("food", eat)):
-            self.assertEqual(text.count("ai->SetMealSleep(true);"), 3,
+            self.assertEqual(text.count("ai->SetMealSleep(true);"), 4,
                 "%s: every meal sleep duration is stamped" % name)
+            # The real-item path has no SetDuration of its own: UseAction sets
+            # the 24 s meal sleep on a successful use, and the flag must follow
+            # it, or the wake check never sees an ordinary meal.
+            after_used = " ".join(text.split())
+            after_used = after_used[after_used.index("bool const used = UseAction::Execute(event);"):]
+            self.assertIn("ai->SetMealSleep(true);", after_used,
+                "%s: the real-item path stamps the sleep after a successful use" % name)
+
+    def test_reset_of_the_action_clock_clears_the_meal_flag(self):
+        reset = body_after(SRC_AI, "void PlayerbotAI::ResetAIInternalUpdateDelay()")
+        self.assertIn("PlayerbotAIBase::ResetAIInternalUpdateDelay();", reset)
+        self.assertIn("m_mealSleep = false;", reset)
+        self.assertIn("void ResetAIInternalUpdateDelay() override;", SRC_AI_HEADER,
+            "the wake, combat start and human orders all drop the clock through it")
 
     def test_sleep_end_and_combat_start_clear_the_flag(self):
         update_start = SRC_AI.index("void PlayerbotAI::UpdateAI(uint32 elapsed")
