@@ -1,5 +1,6 @@
 # Changelog
 
+- Fixed: a bot whose park read lost the race to another bot's update no longer hands its own stale view to the rest of its tactics; the previous values stand until its next tick.
 - Fixed: a bot that read the park just before another bot changed it no longer acts on its old view: that tick is dropped and re-read, so a broken control stays broken instead of a slower bot putting the park back.
 - Fixed: two bots reading the same park at once no longer overwrite each other's pick, so the tank the release handed the Son to keeps it and a breaker already chosen keeps its take instead of the older read erasing them.
 - New: a `seek park break:` row on every control break (`held` -> `apply`) names the parked Son's victim, its attackers and its periodic-damage auras with their casters and time left, so the parks that held 0-2.5 s are told apart from the ones that were never cast.

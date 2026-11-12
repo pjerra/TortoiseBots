@@ -587,6 +587,72 @@ static void TestParkSingleReaderProgresses()
     CHECK(record.revision == 4);
 }
 
+// TestParkRejectedTickPublishesNothing (round 9b): a tick whose commit is rejected still holds the input it captured
+// before the lock (the on-tank verdict, the receiver's qualification, the control, the due time). None of it may reach
+// the fight state: the values the last committed tick published stay, and the next tick re-reads.
+static void TestParkRejectedTickPublishesNothing()
+{
+    const SeekParkRules rules = ParkRules();
+    SeekParkRecord record;
+    SeekParkInput in = ParkInput(60000);
+    SeekParkCommitResult r = SeekParkCommit(record, record.revision, rules, in, SeekParkPhase::None, 0, 0, 0, 1000);
+    CHECK(r.applied);
+    in.controlled = true;
+    r = SeekParkCommit(record, record.revision, rules, in, SeekParkPhase::Apply, 0, 0, 0, 2000);
+    CHECK(r.applied);
+    CHECK(record.state.phase == SeekParkPhase::Held);
+
+    // What the last committed tick published, and what A's read captured before the lock.
+    SeekParkPublish published;
+    published.phase = SeekParkPhase::Held;
+    published.son = 77;
+    published.parkBot = 5;
+    published.releaseMs = 2000;
+    published.receiver = 52;
+    published.breaker = 61;
+    published.sonOnTank = true;
+    published.receiverOk = true;
+    published.preWalk = true;
+    published.controlled = true;
+    const SeekParkPublish cached = published;
+    const std::uint32_t aRevision = record.revision;
+
+    // B's tick commits the break first.
+    SeekParkInput bIn = in;
+    bIn.controlled = false;
+    r = SeekParkCommit(record, record.revision, rules, bIn, SeekParkPhase::Held, 0, 0, 0, 2500);
+    CHECK(r.applied);
+    CHECK(record.state.phase == SeekParkPhase::Apply);
+
+    // A's stale tick: rejected, and nothing of its captured facts is published.
+    SeekParkInput aIn = in;  // controlled, but the Son is on no tank, the receiver does not qualify, due 60 s away
+    r = SeekParkCommit(record, aRevision, rules, aIn, SeekParkPhase::Held, 0, 0, 0, 2600);
+    CHECK(!r.applied);
+    CHECK(!SeekParkPublishRead(published, r, aIn, rules.releaseLeadMs));
+    CHECK(published.phase == cached.phase);
+    CHECK(published.son == cached.son);
+    CHECK(published.parkBot == cached.parkBot);
+    CHECK(published.releaseMs == cached.releaseMs);
+    CHECK(published.receiver == cached.receiver);
+    CHECK(published.breaker == cached.breaker);
+    CHECK(published.sonOnTank == cached.sonOnTank);
+    CHECK(published.receiverOk == cached.receiverOk);
+    CHECK(published.preWalk == cached.preWalk);
+    CHECK(published.controlled == cached.controlled);
+
+    // The next tick re-reads and publishes its own read.
+    r = SeekParkCommit(record, record.revision, rules, aIn, record.state.phase, 0, 0, 0, 2700);
+    CHECK(r.applied);
+    CHECK(SeekParkPublishRead(published, r, aIn, rules.releaseLeadMs));
+    CHECK(published.phase == SeekParkPhase::Held);
+    CHECK(published.son == 77);
+    CHECK(published.sonOnTank == aIn.sonOnTank);
+    CHECK(published.receiverOk == aIn.receiverOk);
+    CHECK(published.preWalk == SeekParkPreWalk(SeekParkPhase::Held, aIn.dueKnown, aIn.dueInMs,
+                                               rules.releaseLeadMs));
+    CHECK(published.controlled == aIn.controlled);
+}
+
 static void TestParkCastDue()
 {
     SeekParkState state;
@@ -1383,6 +1449,7 @@ int main()
     TestParkStaleTickDropsTheUpdate();
     TestParkCommitKeepsTheLatch();
     TestParkSingleReaderProgresses();
+    TestParkRejectedTickPublishesNothing();
     TestParkReleasedHolderKeepsTheSon();
     TestParkRecordKeepsItsSon();
     TestParkFightStartResets();

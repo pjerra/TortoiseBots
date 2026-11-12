@@ -2397,20 +2397,34 @@ void UpdateSeekPark(PlayerbotAI* ai, Player* bot, SeekFight& out)
         const SeekParkCommitResult commit =
             SeekParkCommit(record, readRevision, rules, in, readPhase, recorded.breaker,
                            receiver ? receiver->GetObjectGuid().GetRawValue() : 0, breaker, nowMs);
+        // A rejected tick publishes nothing: the fight state keeps what the last committed tick left.
+        SeekParkPublish published;
+        published.phase = out.parkPhase;
+        published.son = out.parkSon;
+        published.parkBot = out.parkBot;
+        published.releaseMs = out.parkReleaseMs;
+        published.receiver = out.parkReceiver;
+        published.breaker = out.parkBreaker;
+        published.sonOnTank = out.parkSonOnTank;
+        published.receiverOk = out.parkReceiverOk;
+        published.preWalk = out.parkPreWalk;
+        published.controlled = out.parkControlled;
+        if (!SeekParkPublishRead(published, commit, in, rules.releaseLeadMs))
+            return;
         changed = commit.changed;
         beforePhase = commit.before;
         step = commit.state;
+        out.parkPhase = published.phase;
+        out.parkSon = published.son;
+        out.parkBot = published.parkBot;
+        out.parkReleaseMs = published.releaseMs;
+        out.parkSonOnTank = published.sonOnTank;
+        out.parkReceiver = published.receiver;
+        out.parkBreaker = published.breaker;
+        out.parkReceiverOk = published.receiverOk;
+        out.parkPreWalk = published.preWalk;
+        out.parkControlled = published.controlled;
     }
-    out.parkPhase = step.phase;
-    out.parkSon = step.son;
-    out.parkBot = step.parkBot;
-    out.parkReleaseMs = step.releaseMs;
-    out.parkSonOnTank = in.sonOnTank;
-    out.parkReceiver = step.receiver;
-    out.parkBreaker = step.breaker;
-    out.parkReceiverOk = in.receiverOk;
-    out.parkPreWalk = SeekParkPreWalk(step.phase, in.dueKnown, in.dueInMs, rules.releaseLeadMs);
-    out.parkControlled = in.controlled;
     if (!changed)
         return;
     // Round 7, data only: a break (Held -> Apply) writes the Son's victim, attackers and damage auras, so the
