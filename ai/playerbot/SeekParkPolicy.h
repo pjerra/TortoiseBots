@@ -160,12 +160,13 @@ namespace ai
         return phase == SeekParkPhase::Release || phase == SeekParkPhase::Released;
     }
 
-    // Whether the release may order its own take in this read: only while the source has no tank victim. A Son already
-    // on a tank is that tank's (the take's swing is what hands it over); ordering another tank onto it is the
-    // tank-to-tank handoff walk 73 measured as harmful.
-    inline bool SeekParkReleaseTakeDue(bool releaseLive, bool sonOnTank, bool isReceiver)
+    // Whether the release may order its own take in this read: in Release only, and only while the source has no tank
+    // victim. A Son already on a tank is that tank's (the take's swing is what hands it over); ordering another tank
+    // onto it is the tank-to-tank handoff walk 73 measured as harmful. After the latch (Released) the park is done and
+    // the receiver is frozen with it: a victim that flickers off the tank never orders the take again (round 7).
+    inline bool SeekParkReleaseTakeDue(SeekParkPhase phase, bool sonOnTank, bool isReceiver)
     {
-        return releaseLive && !sonOnTank && isReceiver;
+        return phase == SeekParkPhase::Release && !sonOnTank && isReceiver;
     }
 
     // Whether this bot is the release's tank: the tank holding the source while it is on one (that holder keeps it),
@@ -210,18 +211,31 @@ namespace ai
         std::uint64_t guid = 0;
     };
 
-    // The release's receiver: the kept guid while it still qualifies, else one in reach before one that must walk,
-    // then the nearer to the source, then the lower raw guid; -1 for none.
+    // The release's receiver: the kept guid while it still qualifies and no other eligible tank stands in strike
+    // reach (a kept receiver that cannot close must not stall the release), else one in reach before one that must
+    // walk, then the nearer to the source, then the lower raw guid; -1 for none.
     inline int PickSeekParkReceiver(const std::vector<SeekParkReceiverCand>& cands, std::uint64_t kept)
     {
-        int pick = -1;
+        int keptIndex = -1;
+        bool otherInReach = false;
         for (int i = 0; i < static_cast<int>(cands.size()); ++i)
         {
             const SeekParkReceiverCand& cand = cands[static_cast<std::size_t>(i)];
             if (!cand.eligible)
                 continue;
             if (kept != 0 && cand.guid == kept)
-                return i;
+                keptIndex = i;
+            else if (cand.inReach)
+                otherInReach = true;
+        }
+        if (keptIndex >= 0 && !otherInReach)
+            return keptIndex;
+        int pick = -1;
+        for (int i = 0; i < static_cast<int>(cands.size()); ++i)
+        {
+            const SeekParkReceiverCand& cand = cands[static_cast<std::size_t>(i)];
+            if (!cand.eligible)
+                continue;
             if (pick < 0)
             {
                 pick = i;
@@ -489,6 +503,135 @@ namespace ai
         return state.phase != before;
     }
 
+    // The phase's place in the park's progress: a read that saw an earlier phase must not write over a record another
+    // bot already moved on. Apply follows Held after a break, so only a higher rank counts as moved past.
+    inline int SeekParkPhaseRank(SeekParkPhase phase)
+    {
+        switch (phase)
+        {
+            case SeekParkPhase::None:
+                return 0;
+            case SeekParkPhase::Apply:
+                return 1;
+            case SeekParkPhase::Held:
+                return 2;
+            case SeekParkPhase::Release:
+                return 3;
+            case SeekParkPhase::Released:
+            case SeekParkPhase::Failed:
+                return 4;
+        }
+        return 0;
+    }
+
+    // The read's receiver and breaker reach the record from outside the lock, where another bot's tick may already
+    // have stepped it (bots tick on their own sessions). The record under the lock wins: a read whose phase the record
+    // has moved past writes nothing, the latched release's receiver stays frozen, and the breaker verdict applies only
+    // to the breaker the read saw, so a read that never saw another's latch cannot clear or replace it.
+    inline void SeekParkMergeRead(SeekParkState& state, SeekParkPhase readPhase, std::uint64_t readBreaker,
+                                  std::uint64_t receiver, std::uint64_t breaker)
+    {
+        if (SeekParkPhaseRank(state.phase) > SeekParkPhaseRank(readPhase))
+            return;
+        if (state.phase != SeekParkPhase::Released)
+            state.receiver = receiver;
+        if (state.breaker == readBreaker)
+            state.breaker = breaker;
+    }
+
+    // One instance's record: the park's state, the revision every committed write bumps, and when it was last read
+    // (the stale sweep's clock).
+    struct SeekParkRecord
+    {
+        SeekParkState state;
+        std::uint32_t revision = 0;
+        std::uint32_t touchedMs = 0;
+    };
+
+    // Whether two records hold the same park. A tick that wrote nothing leaves the revision alone, so the next read's
+    // update is not dropped for nothing.
+    inline bool SeekParkSameState(const SeekParkState& a, const SeekParkState& b)
+    {
+        return a.son == b.son && a.cycleNo == b.cycleNo && a.fightStartMs == b.fightStartMs &&
+            a.phase == b.phase && a.applySinceMs == b.applySinceMs && a.budgetSinceMs == b.budgetSinceMs &&
+            a.lastCastMs == b.lastCastMs && a.heldSinceMs == b.heldSinceMs && a.heldMs == b.heldMs &&
+            a.releaseMs == b.releaseMs && a.reapplies == b.reapplies && a.parkBot == b.parkBot &&
+            a.spent == b.spent && a.receiver == b.receiver && a.breaker == b.breaker &&
+            a.leadSinceMs == b.leadSinceMs && a.botSwaps == b.botSwaps &&
+            (a.why == b.why || (a.why != nullptr && b.why != nullptr && std::strcmp(a.why, b.why) == 0));
+    }
+
+    // One tick's read-modify-write of the record.
+    struct SeekParkCommitResult
+    {
+        bool applied = false;                        // this read's update was the record's (not dropped as stale)
+        bool changed = false;                        // the phase changed
+        SeekParkPhase before = SeekParkPhase::None;  // the phase the step started from
+        SeekParkState state;                         // the record after the tick
+    };
+
+    // The step consumes facts (control, due time, the source's victim, the receiver's reach) that the caller read
+    // before the lock, so a tick whose record another bot has committed since must write nothing at all: the update is
+    // dropped whole and the next tick re-reads. A stale Held read that saw the control therefore cannot resurrect it
+    // after another tick recorded the break. Every committed change bumps the revision the other reads test.
+    inline SeekParkCommitResult SeekParkCommit(SeekParkRecord& record, std::uint32_t readRevision,
+                                               const SeekParkRules& rules, const SeekParkInput& in,
+                                               SeekParkPhase readPhase, std::uint64_t readBreaker,
+                                               std::uint64_t receiver, std::uint64_t breaker,
+                                               std::uint32_t nowMs)
+    {
+        SeekParkCommitResult result;
+        result.state = record.state;
+        if (record.revision != readRevision)
+            return result;
+        const SeekParkState before = record.state;
+        SeekParkMergeRead(record.state, readPhase, readBreaker, receiver, breaker);
+        result.before = record.state.phase;
+        result.changed = SeekParkStep(record.state, rules, in, nowMs);
+        result.applied = true;
+        if (!SeekParkSameState(before, record.state))
+            ++record.revision;
+        result.state = record.state;
+        return result;
+    }
+
+    // What the fight state publishes from one tick: the record's phase and its pick plus the facts this read's input
+    // carries.
+    struct SeekParkPublish
+    {
+        SeekParkPhase phase = SeekParkPhase::None;
+        std::uint64_t son = 0;
+        std::uint64_t parkBot = 0;
+        std::uint32_t releaseMs = 0;
+        std::uint64_t receiver = 0;
+        std::uint64_t breaker = 0;
+        bool sonOnTank = false;
+        bool receiverOk = false;
+        bool preWalk = false;
+        bool controlled = false;
+    };
+
+    // Fills the published read from a committed tick, in place. A rejected tick (another bot committed since this
+    // read) publishes nothing: every value stays as the previous tick left it, its captured inputs included, and the
+    // next tick re-reads. False: the tick was rejected.
+    inline bool SeekParkPublishRead(SeekParkPublish& published, const SeekParkCommitResult& commit,
+                                    const SeekParkInput& in, std::uint32_t releaseLeadMs)
+    {
+        if (!commit.applied)
+            return false;
+        published.phase = commit.state.phase;
+        published.son = commit.state.son;
+        published.parkBot = commit.state.parkBot;
+        published.releaseMs = commit.state.releaseMs;
+        published.receiver = commit.state.receiver;
+        published.breaker = commit.state.breaker;
+        published.sonOnTank = in.sonOnTank;
+        published.receiverOk = in.receiverOk;
+        published.preWalk = SeekParkPreWalk(commit.state.phase, in.dueKnown, in.dueInMs, releaseLeadMs);
+        published.controlled = in.controlled;
+        return true;
+    }
+
     // Whether the phase holds every source damage: Apply and Held (nobody touches a parked source, the park bot
     // included: the control breaks on any damage).
     inline bool SeekParkHolds(SeekParkPhase phase)
@@ -538,6 +681,17 @@ namespace ai
     {
         if (!isParkSon)
             return false;
+        if (SeekParkReleaseLive(phase))
+            return isReceiver;
+        return phase == SeekParkPhase::Failed && controlled && (isReceiver || isBreaker);
+    }
+
+    // Whether this bot's damage on the parked source is the park's own, so the seek hold must not answer for it: the
+    // release's receiver while the release is live (its strike is what wakes the Son and hands it over), and the
+    // failed park's receiver or breaker while the Son is still controlled (their take is the only break left). Every
+    // other bot's damage on a parked source is the hold's, the park bot's own included.
+    inline bool SeekParkSourceHitAllowed(SeekParkPhase phase, bool controlled, bool isReceiver, bool isBreaker)
+    {
         if (SeekParkReleaseLive(phase))
             return isReceiver;
         return phase == SeekParkPhase::Failed && controlled && (isReceiver || isBreaker);
