@@ -3822,6 +3822,25 @@ static void TestRegroupWaitsForLastOnTheBoss()
     cleared.step = 1;
     CHECK(Tick(cleared, placed) == "revive party");
 
+    // ... and the last one dying while the wait runs: the release follows (the wipe recovery restarts the regroup).
+    Run seq = Start(&plan);
+    BeginRegroup(seq);
+    Facts seqF = Party(0);
+    seqF.dead = 19;
+    seqF.alive = 1;
+    seqF.regroupWaitsForLast = true;
+    seqF.engagedRead = true;
+    seqF.engagedUnits = {Unit(21, 14834, 10)};
+    seqF.members = {Mem("Survivor", 100)};
+    CHECK(Tick(seq, seqF).empty());
+    seqF.dead = 20;
+    seqF.alive = 0;
+    seqF.leadAlive = false;
+    std::string afterDeath;
+    for (int i = 0; i < 3 && afterDeath.empty(); ++i)
+        afterDeath = Tick(seq, seqF);
+    CHECK(afterDeath == "revive party");
+
     // The last one dies: no living member waits, the release goes out.
     Facts lastDead = Party(0);
     lastDead.dead = 20;
