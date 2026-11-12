@@ -177,8 +177,10 @@ namespace ai
         bool isPossible() override { return MovementAction::isPossible() && ai->CanMove(); }
     private:
         // Why the hover hold did or did not stop the spacing step: None the hold does not apply, Held it applies,
-        // Spread it would apply but a group member stands inside the spread radius, so the step goes ahead.
-        enum class HoverCastHold : std::uint8_t { None, Held, Spread };
+        // Spread it would apply but a group member stands inside the yield radius, so the step goes ahead. Waiting: a
+        // member stands inside the yield radius but this bot does not step (it stepped less than 8 s ago, or the other
+        // bot of the pair steps).
+        enum class HoverCastHold : std::uint8_t { None, Held, Spread, Waiting };
         HoverCastHold HoverCastVerdict();
         float SpreadRadiusYd();
         Player* NearestStackedAlly(float& distance);

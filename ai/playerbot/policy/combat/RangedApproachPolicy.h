@@ -191,6 +191,63 @@ namespace ai
         return keyOn && rangedDps && targetHovering && inSpellRange && !spreadRowLive && nearestAllyYd >= spreadRadius;
     }
 
+    // AiPlayerbot.HoverCastStackOnly: the hover hold yielded to any group member inside the spread radius (10 yd), so
+    // casters parked on the same hover reach point never stood still (walk 2e: 279 of 402 verdicts yielded, median
+    // nearest member 4.8 yd, each step 11 yd, a new one every 3 s). With the key on the hold yields only to a real
+    // stack, steps just past it, rests kHoverCastRestepMs, and of two bots that would both step only one does.
+    constexpr float kHoverCastStackYd = 4.5f;
+    constexpr std::uint32_t kHoverCastRestepMs = 8000;
+    inline float HoverCastYieldRadius(bool keyOn, float spreadRadius)
+    {
+        return keyOn && spreadRadius > kHoverCastStackYd ? kHoverCastStackYd : spreadRadius;
+    }
+    // What a bot inside the yield radius of its nearest member does this tick: Step, or Rest while its own
+    // kHoverCastRestepMs has not run out, or WaitForAlly while the higher guid of a pair takes the step, or
+    // StepAfterWait once that wait has run a whole rest period (the other bot never stepped, so the pair would
+    // otherwise stand inside 4.5 yd for the rest of the fight).
+    enum class HoverStackStep : std::uint8_t { Step, Rest, WaitForAlly, StepAfterWait };
+
+    // `sinceLastStackStepMs` is UINT32_MAX for a bot that never took one, and comes from the stack step's own clock, so
+    // an anchor-rejected probe (the spread step's 3 s) never widens this rest. `allyAlsoSteps`: the member is a bot and
+    // a ranged damage dealer, so the same rule moves it; then only the higher guid of the two steps, and the lower one
+    // for one rest period only (`waitStarted` false when its wait clock is unset, `waitedMs` its length).
+    inline HoverStackStep HoverCastStepVerdict(bool keyOn, bool allyAlsoSteps, bool botGuidHigher,
+        std::uint32_t sinceLastStackStepMs, bool waitStarted, std::uint32_t waitedMs)
+    {
+        if (!keyOn)
+            return HoverStackStep::Step;
+        if (sinceLastStackStepMs < kHoverCastRestepMs)
+            return HoverStackStep::Rest;
+        if (!allyAlsoSteps || botGuidHigher)
+            return HoverStackStep::Step;
+        return waitStarted && waitedMs >= kHoverCastRestepMs ? HoverStackStep::StepAfterWait
+                                                             : HoverStackStep::WaitForAlly;
+    }
+
+    // A stack step must leave the bot inside the trigger's own range: the hover reach (AiPlayerbot.HoverReachAimsAtAnchor)
+    // keeps a bot as close as 3 yd inside that line, a 5.5 yd step away crosses it, and the reach then walks the bot back
+    // beside its partner every rest. `distanceYd` is the landing point to the target with both combat reaches counted,
+    // `rangeLimitYd` is ai->GetRange("spell") - contactDistance, as the verdict measures the bot's own spot.
+    struct HoverStackLanding
+    {
+        float distance = 0.0f;
+        bool inSight = false;
+    };
+
+    inline bool HoverCastLandingInRange(float distanceYd, float rangeLimitYd, bool inSight)
+    {
+        return inSight && distanceYd <= rangeLimitYd;
+    }
+
+    // The first landing that keeps the bot in range, or -1 when no heading does (then the bot does not step).
+    inline int SelectHoverStackLanding(std::vector<HoverStackLanding> const& landings, float rangeLimitYd)
+    {
+        for (std::size_t i = 0; i < landings.size(); ++i)
+            if (HoverCastLandingInRange(landings[i].distance, rangeLimitYd, landings[i].inSight))
+                return static_cast<int>(i);
+        return -1;
+    }
+
     // The trigger ("enemy out of spell range") measures edge to edge with both combat reaches; the path walk measures
     // centre to centre. A hovering boss's reach (Onyxia 22 yd in the air) makes the centre distance the trigger allows
     // that much longer.

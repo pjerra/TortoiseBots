@@ -370,6 +370,76 @@ int main()
         std::cout << "  [PASS] hover cast: a stacked ally outranks the hold\n";
     }
 
+    // HoverCastYieldRadius_StackOnly (the failing case): with the key on the hold yields only to a real stack. A member
+    // at the 2e median 4.8 yd (inside the 10 yd spread distance, outside 4.5) no longer breaks the hold; at 4.4 yd it
+    // does. The key off keeps the caller's radius, and the radius never widens past the caller's own.
+    {
+        CHECK(std::fabs(ai::HoverCastYieldRadius(true, 10.0f) - 4.5f) < 0.001f);
+        CHECK(ai::HoverCastHoldsSpread(true, true, true, true, false, 4.8f, ai::HoverCastYieldRadius(true, 10.0f)));
+        CHECK(!ai::HoverCastHoldsSpread(true, true, true, true, false, 4.8f, ai::HoverCastYieldRadius(false, 10.0f)));
+        CHECK(!ai::HoverCastHoldsSpread(true, true, true, true, false, 4.4f, ai::HoverCastYieldRadius(true, 10.0f)));
+        CHECK(std::fabs(ai::HoverCastYieldRadius(true, 3.0f) - 3.0f) < 0.001f);
+        std::cout << "  [PASS] hover cast stack only: yields inside 4.5 yd, never wider than the caller's radius\n";
+    }
+
+    // HoverCastStepVerdict_Rules: one step per 8 s, of two bots that would both step only the higher guid steps, and a
+    // pair where the higher-guid bot never steps does not deadlock: the lower-guid bot steps after one rest period.
+    {
+        CHECK(ai::HoverCastStepVerdict(false, true, false, 0, false, 0) == ai::HoverStackStep::Step);
+        CHECK(ai::HoverCastStepVerdict(true, false, true, 7999, false, 0) == ai::HoverStackStep::Rest);
+        CHECK(ai::HoverCastStepVerdict(true, false, true, 8000, false, 0) == ai::HoverStackStep::Step);
+        CHECK(ai::HoverCastStepVerdict(true, true, true, UINT32_MAX, false, 0) == ai::HoverStackStep::Step);
+        CHECK(ai::HoverCastStepVerdict(true, false, false, UINT32_MAX, false, 0) == ai::HoverStackStep::Step);
+        // The lower guid waits one rest period (8 s) for the higher one, then steps itself.
+        CHECK(ai::HoverCastStepVerdict(true, true, false, UINT32_MAX, false, 0) == ai::HoverStackStep::WaitForAlly);
+        CHECK(ai::HoverCastStepVerdict(true, true, false, UINT32_MAX, true, 7999) == ai::HoverStackStep::WaitForAlly);
+        CHECK(ai::HoverCastStepVerdict(true, true, false, UINT32_MAX, true, 8000) == ai::HoverStackStep::StepAfterWait);
+        // A bot that is still resting does not burn its wait clock on the partner.
+        CHECK(ai::HoverCastStepVerdict(true, true, false, 2000, true, 8000) == ai::HoverStackStep::Rest);
+        std::cout << "  [PASS] hover cast step: restep clock, guid tie-break, wait cap\n";
+    }
+
+    // HoverCastStackLanding_Range: a stack step must land inside the trigger's own range. H2 keeps a bot as close as
+    // 3 yd inside that line and a 5.5 yd step away crosses it, so the reach would walk the bot back beside its partner
+    // every 8 s. With the bot 3 yd inside the line every outward heading of the step loop lands out of range and the
+    // bot does not step; a lateral heading lands inside and is taken; an out-of-sight landing is skipped.
+    {
+        float const limit = 19.0f;                 // ai->GetRange("spell") - contactDistance
+        float const step = 5.5f;                   // the stack step
+        float const inside = limit - 3.0f;         // the bot's distance to the target, combat reach counted
+        std::vector<ai::HoverStackLanding> outward;
+        for (float const d : { 0.0f, 0.6f, -0.6f })
+        {
+            float const landing = std::sqrt(inside * inside + step * step + 2.0f * inside * step * std::cos(d));
+            outward.push_back({ landing, true });
+        }
+        CHECK(!ai::HoverCastLandingInRange(outward[0].distance, limit, outward[0].inSight));
+        CHECK(!ai::HoverCastLandingInRange(outward[1].distance, limit, outward[1].inSight));
+        CHECK(!ai::HoverCastLandingInRange(outward[2].distance, limit, outward[2].inSight));
+        CHECK(ai::SelectHoverStackLanding(outward, limit) == -1);
+        std::vector<ai::HoverStackLanding> withLateral = outward;
+        float const lateral = std::sqrt(inside * inside + step * step + 2.0f * inside * step * std::cos(1.2f));
+        withLateral.push_back({ lateral, true });
+        CHECK(ai::HoverCastLandingInRange(lateral, limit, true));
+        CHECK(ai::SelectHoverStackLanding(withLateral, limit) == 3);
+        // The same landing out of sight is skipped, so an in-range but blind heading is never taken.
+        withLateral[3].inSight = false;
+        CHECK(ai::SelectHoverStackLanding(withLateral, limit) == -1);
+        std::cout << "  [PASS] hover cast stack step: out-of-range and blind landings are skipped\n";
+    }
+
+    // HoverCastRest_Rules: only a real stack step rests 8 s. An anchor-rejected probe keeps the spread step's 3 s
+    // cooldown and writes no stack clock, so it neither blocks the next stack step nor widens the stand-off.
+    {
+        std::uint32_t const now = 100000;
+        CHECK(ai::IsSpreadOnCooldown(now, now - 2999));
+        CHECK(!ai::IsSpreadOnCooldown(now, now - 3000));
+        CHECK(ai::HoverCastStepVerdict(true, false, false, UINT32_MAX, false, 0) == ai::HoverStackStep::Step);
+        CHECK(ai::HoverCastStepVerdict(true, false, false, 2999, false, 0) == ai::HoverStackStep::Rest);
+        CHECK(ai::HoverCastStepVerdict(true, false, false, 3000, false, 0) == ai::HoverStackStep::Rest);
+        CHECK(ai::HoverCastStepVerdict(true, false, false, 8000, false, 0) == ai::HoverStackStep::Step);
+        std::cout << "  [PASS] hover cast rest: 3 s probe cooldown, 8 s stack rest\n";
+    }
 
     std::cout << "Ranged approach policy tests: OK\n";
     return 0;

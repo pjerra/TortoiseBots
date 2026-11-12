@@ -10,7 +10,13 @@ the call sites in ai/:
   after the FindBossStand block, logs "hover_cast" when the hold applies and
   "hover_cast_spread" when it yields to an ally in the spread radius;
 - the verdict keeps the hold only with no ally inside RaidSpreadAction's own
-  spread radius;
+  spread radius, and under hoverCastStackOnly only inside the 4.5 yd stack radius
+  (HoverCastYieldRadius), with the step rested 8 s from its own clock and tied to
+  the higher guid for one rest period only (HoverCastStepVerdict), and a held-back
+  bot reported as hover_cast_wait;
+- Execute overrides the step radius with HoverCastYieldRadius only under both keys,
+  skips a stack step whose landing leaves spell range (HoverCastLandingInRange,
+  hover_cast_stack_norange) and arms the 8 s stack rest only on a real stack step;
 - CastSpellAction::isPossible notes all three refusals (no target, out of
   reach, CanCastSpell result);
 - both keys are read in PlayerbotAIConfig.cpp with a false default.
@@ -59,7 +65,7 @@ class AirborneNukesWiringTest(unittest.TestCase):
         # The rows describe the hold, so they no longer wait for a live boss spread row (Onyxia has none).
         hover = fn[fn.index("if (sPlayerbotAIConfig.hoverCastHoldsSpread)"):]
         self.assertNotIn("BossSpreadLive", hover)
-        self.assertIn("if (hold == HoverCastHold::Held)\n            return false;", fn)
+        self.assertIn("if (hold == HoverCastHold::Held || hold == HoverCastHold::Waiting)", fn)
         self.assertIn("HoverCastHold HoverCastVerdict();", DUNGEON_H)
 
     def test_spread_hold_asks_hover_range_and_live_row(self):
@@ -80,6 +86,54 @@ class AirborneNukesWiringTest(unittest.TestCase):
         self.assertIn("ai->NoteCastCheckFail(SPELL_FAILED_BAD_TARGETS);", fn)
         self.assertIn("ai->NoteCastCheckFail(SPELL_FAILED_OUT_OF_RANGE);", fn)
         self.assertIn("ai->NoteCastCheckFail(result);", fn)
+
+    def test_spread_verdict_stack_only_yield_radius(self):
+        fn = body(DUNGEON_CPP, "RaidSpreadAction::HoverCastHold RaidSpreadAction::HoverCastVerdict()", "\n}\n")
+        self.assertIn("HoverCastYieldRadius(sPlayerbotAIConfig.hoverCastStackOnly", fn)
+        self.assertIn("HoverCastStepVerdict(", fn)
+        self.assertIn("HoverReachTakerIsRangedDps(PlayerbotAI::IsTank(member), PlayerbotAI::IsHeal(member)", fn)
+        # The restep clock and the guid tie-break read the stack step's own clock, and the wait for the higher guid is
+        # recorded per bot so a partner that never steps cannot stall the pair.
+        self.assertIn('AI_VALUE(LastMovement&, "last movement")', fn)
+        self.assertIn("lastMove.lastStackStepMs", fn)
+        self.assertIn("lastMove.hoverStackWaitMs = nowMs;", fn)
+        self.assertIn("lastMove.hoverStackWaitMs = 0;", fn)
+        self.assertLess(fn.index("HoverCastHoldsSpread(true,"),
+                        fn.index("HoverCastStepVerdict("))
+
+    def test_stack_step_skips_a_landing_out_of_range(self):
+        fn = body(DUNGEON_CPP, "bool RaidSpreadAction::Execute(Event& event)", "\n}\n")
+        self.assertIn("HoverCastLandingInRange(landingDistance, stackRangeLimit, inSight)", fn)
+        self.assertIn('stackRangeLimit = ai->GetRange("spell") - sPlayerbotAIConfig.contactDistance', fn)
+        self.assertIn("rangeRejected = true;", fn)
+        # A rejected landing is skipped before the move, and every rejected heading means no step.
+        self.assertLess(fn.index("HoverCastLandingInRange("), fn.index("MoveTo(bot->GetMapId(), stepX"))
+        self.assertIn('"hover_cast_stack_norange"', fn)
+        # Only a real stack step arms the 8 s rest; the anchor/no-heading probe keeps the 3 s spread cooldown.
+        self.assertIn("if (stackStep)\n                    lastMove.lastStackStepMs = lastMove.lastSpreadStepMs;", fn)
+        self.assertIn("if (anchorRejected || rangeRejected)\n        lastMove.lastSpreadStepMs = WorldTimer::getMSTime();",
+                      fn)
+        self.assertNotIn("lastStackStepMs", fn[fn.index("if (anchorRejected || rangeRejected)"):])
+
+    def test_spread_useful_waits_under_stack_only(self):
+        fn = body(DUNGEON_CPP, "bool RaidSpreadAction::isUseful()", "\n}\n")
+        self.assertIn('"hover_cast_wait"', fn)
+        self.assertIn("if (hold == HoverCastHold::Held || hold == HoverCastHold::Waiting)\n            return false;", fn)
+        self.assertIn("enum class HoverCastHold : std::uint8_t { None, Held, Spread, Waiting };", DUNGEON_H)
+
+    def test_spread_execute_step_radius_under_both_keys(self):
+        fn = body(DUNGEON_CPP, "bool RaidSpreadAction::Execute(Event& event)", "\n}\n")
+        self.assertIn("sPlayerbotAIConfig.hoverCastHoldsSpread && sPlayerbotAIConfig.hoverCastStackOnly", fn)
+        self.assertIn("HoverCastVerdict() == HoverCastHold::Spread", fn)
+        self.assertIn("radius = HoverCastYieldRadius(true, radius);", fn)
+        # The step still goes just past the radius it now uses.
+        self.assertIn("std::min(radius + 1.0f, sPlayerbotAIConfig.hazardEvasionDistance)", fn)
+
+    def test_stack_only_key_is_read_in_load_dungeon_run_keys(self):
+        self.assertIn('hoverCastStackOnly = config.GetBoolDefault("AiPlayerbot.HoverCastStackOnly", false);',
+                      CONFIG_CPP)
+        fn = body(CONFIG_CPP, "void PlayerbotAIConfig::LoadDungeonRunKeys()", "\n}")
+        self.assertIn("hoverCastStackOnly = config.GetBoolDefault", fn)
 
     def test_keys_are_read_with_false_default(self):
         self.assertIn('airborneWandYieldsToNukes = config.GetBoolDefault("AiPlayerbot.AirborneWandYieldsToNukes", false);',

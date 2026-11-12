@@ -863,6 +863,9 @@ public:
     // A ranged damage dealer whose hovering target stands in spell range takes no `raid spread` spacing step, unless
     // a live boss `spread` row asks for one (default off).
     bool hoverCastHoldsSpread = false;
+    // That hold yields only to a real stack (4.5 yd) instead of any member inside the spread distance; a bot that does
+    // step rests 8 s, and of two bots that would both step out of a stack only the higher guid steps (default off).
+    bool hoverCastStackOnly = false;
     // The gate_hold boss-tactic kind (damage dealers stop on a boss at or below the row's health gate while its blocker
     // still fights): off, the rows are ignored and nothing reads the gate (default off, recommended on).
     bool dungeonRunGateHold = false;
