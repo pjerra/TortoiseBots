@@ -989,6 +989,17 @@ AiPlayerbot.PaladinJudgementUpkeep = 1
 # 1 - whelp duty and egg avoidance (Default)
 AiPlayerbot.OnyxiaWhelpsAndEggs = 1
 
+# Onyxia whelp crew on the ground.
+# With AiPlayerbot.OnyxiaWhelpsAndEggs and AiPlayerbot.DungeonRunAddCrew on, the add crew keeps the whelps in
+# Onyxia's last 40 % on the ground too, not only while she hovers: the crew's melee and its ranged keep hunting
+# the nearest whelp, the tanks keep their boss-tactic posts or the generic pick, and the other ranged damage
+# dealers stay on her (the airborne duty sent them to her because the melee could not reach a hovering boss).
+# The phase 1 pull (above 40 %) is untouched. Map 249 only, and an explicit target order from a player always
+# wins. Off by default: the hunt stays airborne-only.
+# 0 - the whelps are hunted while she hovers only (Default)
+# 1 - the crew hunts them on the ground as well, in her last 40 %
+AiPlayerbot.OnyxiaWhelpCrewOnGround = 0
+
 # Work in progress. These features are not officially released and not supported yet. Enable them at your own risk.
 # Until the official release, bug reports and feedback about them are not handled through the issue tracker; contact Hypeer directly.
 # Dungeon boss tactics.

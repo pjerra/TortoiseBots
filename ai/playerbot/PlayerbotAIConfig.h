@@ -675,6 +675,12 @@ public:
     // the rows are read (its own key on top of the tactics gate). Off, the rows are ignored, so the table behaves
     // exactly as before the kind (default off).
     bool dungeonRunAddCrew = false;
+    // AiPlayerbot.OnyxiaWhelpCrewOnGround: the whelp crew keeps the whelps on the ground too, in Onyxia's last 40 %,
+    // not only while she hovers. On, the whelp phase is the Hover aura or (she is found and her health is at or below
+    // 40 %): the crew's melee and its ranged keep hunting whelps there, the tanks keep their posts or the generic pick
+    // and the other ranged stay on her. Needs AiPlayerbot.OnyxiaWhelpsAndEggs and AiPlayerbot.DungeonRunAddCrew; off,
+    // the hunt is airborne-only as before (default off).
+    bool onyxiaWhelpCrewOnGround = false;
     // The raid guard leaves a unit to the tank a boss-tactic row assigns it to (an until_tank row with a tank slot, or
     // a tank_post row): on, the off-tank pick-ups never send another tank at it; off, the raid's off-tanks take it as
     // before (its own key on top of the raid and boss rules; default off).

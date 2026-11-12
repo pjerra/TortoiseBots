@@ -88,6 +88,8 @@ OnyxiaWhelpScan ai::ScanOnyxiaWhelps(PlayerbotAI* ai, Player* bot)
     // and only for a whelp inside the padded egg-field box.
     std::vector<OnyxiaPoint> eggs;
     bool eggsLoaded = false;
+    bool bossFound = false;
+    float bossPct = 0.0f;
     for (const ObjectGuid& guid : attackers)
     {
         Unit* unit = ai->GetUnit(guid);
@@ -97,6 +99,8 @@ OnyxiaWhelpScan ai::ScanOnyxiaWhelps(PlayerbotAI* ai, Player* bot)
         {
             // Core drives phase 2 flight via the Hover aura (17131).
             scan.bossAirborne = unit->HasAura(17131);
+            bossFound = true;
+            bossPct = unit->GetHealthPercent();
             continue;
         }
         if (unit->GetEntry() != kOnyxianWhelpEntry)
@@ -123,6 +127,10 @@ OnyxiaWhelpScan ai::ScanOnyxiaWhelps(PlayerbotAI* ai, Player* bot)
             scan.whelp = unit;
         }
     }
+    // The ground crew changes the add_crew's work, so it needs both keys; the whelp key itself is the action's own gate.
+    const bool crewOnGround = sPlayerbotAIConfig.onyxiaWhelpCrewOnGround && sPlayerbotAIConfig.onyxiaWhelpsAndEggs &&
+        sPlayerbotAIConfig.dungeonRunAddCrew;
+    scan.whelpPhase = OnyxiaWhelpPhase(scan.bossAirborne, crewOnGround, bossFound, bossPct);
     return scan;
 }
 
@@ -175,10 +183,12 @@ bool OnyxiaKillWhelpsAction::Execute(Event& event)
     (void)event;
     if (!sPlayerbotAIConfig.onyxiaWhelpsAndEggs || bot->GetMapId() != kOnyxiaMapId)
         return false;
-    if (!IsOnyxiaWhelpDuty(ai, bot) || !AI_VALUE(ObjectGuid, "explicit attack target").IsEmpty())
+    const bool duty = IsOnyxiaWhelpDuty(ai, bot);
+    if (!duty || !AI_VALUE(ObjectGuid, "explicit attack target").IsEmpty())
         return false;
     const OnyxiaWhelpScan scan = ScanOnyxiaWhelps(ai, bot);
-    if (!scan.bossAirborne || !scan.whelp)
+    // On the ground the crew is the melee and its ranged; a tank keeps its post or the generic pick.
+    if (!OnyxiaGroundDuty(duty, PlayerbotAI::IsTank(bot), scan.bossAirborne) || !scan.whelpPhase || !scan.whelp)
         return false;
     // Already on a whelp: keep it (donor early-out).
     Unit* current = AI_VALUE(Unit*, "current target");
@@ -217,14 +227,20 @@ float OnyxiaWhelpHoldMultiplier::GetValue(Action* action)
     const bool aoe = dynamic_cast<DpsAoeAction*>(action) != nullptr;
     if (!assist && !aoe)
         return 1.0f;
-    if (bot->GetMapId() != kOnyxiaMapId || !IsOnyxiaWhelpDuty(ai, bot))
+    if (bot->GetMapId() != kOnyxiaMapId)
+        return 1.0f;
+    const bool duty = IsOnyxiaWhelpDuty(ai, bot);
+    if (!duty)
         return 1.0f;
     Unit* current = AI_VALUE(Unit*, "current target");
     const bool onWhelp = current && sServerFacade.IsAlive(current) && current->GetEntry() == kOnyxianWhelpEntry;
     if (!onWhelp || !AI_VALUE(ObjectGuid, "explicit attack target").IsEmpty())
         return 1.0f;
-    // The hold only lasts while the boss is airborne (phase 2).
-    return ScanOnyxiaWhelps(ai, bot).bossAirborne ? 0.0f : 1.0f;
+    // The hold lasts while the whelp phase does: airborne, or the ground crew's last 40 % (a tank's hold ends there).
+    const OnyxiaWhelpScan scan = ScanOnyxiaWhelps(ai, bot);
+    if (!OnyxiaGroundDuty(duty, PlayerbotAI::IsTank(bot), scan.bossAirborne))
+        return 1.0f;
+    return scan.whelpPhase ? 0.0f : 1.0f;
 }
 
 bool OnyxiaAvoidEggsAction::Execute(Event& event)

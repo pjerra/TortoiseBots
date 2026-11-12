@@ -46,6 +46,9 @@ namespace ai
     struct OnyxiaWhelpScan
     {
         bool bossAirborne = false;
+        // The whelp phase: airborne, or the ground crew's last 40 % with AiPlayerbot.OnyxiaWhelpCrewOnGround on (its
+        // own key on top of AiPlayerbot.OnyxiaWhelpsAndEggs and AiPlayerbot.DungeonRunAddCrew, the crew it changes).
+        bool whelpPhase = false;
         Unit* whelp = nullptr; // nearest pickable live whelp (not within an egg's trap circle)
     };
     OnyxiaWhelpScan ScanOnyxiaWhelps(PlayerbotAI* ai, Player* bot);

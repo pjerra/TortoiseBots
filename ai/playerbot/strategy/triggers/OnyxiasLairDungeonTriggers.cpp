@@ -25,14 +25,20 @@ bool OnyxiaWhelpsTrigger::IsActive()
         return false;
     if (!bot->IsInWorld() || bot->IsBeingTeleported() || !sServerFacade.IsAlive(bot))
         return false;
-    if (!ai->HasStrategy("onyxia", BotState::BOT_STATE_COMBAT) || !IsOnyxiaWhelpDuty(ai, bot))
+    if (!ai->HasStrategy("onyxia", BotState::BOT_STATE_COMBAT))
+        return false;
+    const bool duty = IsOnyxiaWhelpDuty(ai, bot);
+    if (!duty)
         return false;
     AiObjectContext* context = ai->GetAiObjectContext();
     const bool explicitOrder = !AI_VALUE(ObjectGuid, "explicit attack target").IsEmpty();
     Unit* current = AI_VALUE(Unit*, "current target");
     const bool onWhelp = current && sServerFacade.IsAlive(current) && current->GetEntry() == kOnyxianWhelpEntry;
     const OnyxiaWhelpScan scan = ScanOnyxiaWhelps(ai, bot);
-    return ShouldHuntOnyxiaWhelps(true, true, scan.bossAirborne, true, explicitOrder, onWhelp, scan.whelp != nullptr);
+    // P3: the crew's melee and its ranged keep the whelps; a tank follows its post or the generic pick.
+    if (!OnyxiaGroundDuty(duty, PlayerbotAI::IsTank(bot), scan.bossAirborne))
+        return false;
+    return ShouldHuntOnyxiaWhelps(true, true, scan.whelpPhase, true, explicitOrder, onWhelp, scan.whelp != nullptr);
 }
 
 bool OnyxiaEggsNearTrigger::IsActive()
@@ -73,5 +79,5 @@ bool OnyxiaBossDutyTrigger::IsActive()
     const OnyxiaWhelpScan scan = ScanOnyxiaWhelps(ai, bot);
     return ShouldReturnToOnyxia(true, AI_VALUE2(uint8, "add crew", static_cast<int32>(kOnyxiaEntry)),
         HoverReachTakerIsRangedDps(PlayerbotAI::IsTank(bot), PlayerbotAI::IsHeal(bot), ai->IsRanged(bot)),
-        scan.bossAirborne, onWhelp, explicitOrder, boss && PossibleAttackTargetsValue::IsValid(boss, bot));
+        scan.whelpPhase, onWhelp, explicitOrder, boss && PossibleAttackTargetsValue::IsValid(boss, bot));
 }
