@@ -1069,6 +1069,37 @@ int main()
         CHECK(!seatOf(stuck, 13).valid);
     }
 
+    // AiPlayerbot.BossStandNearestSeat: a tank an excused post frees loses its plan entry and its seat goes to the next
+    // bot, exactly as a death does. Two spots, three bots: 1 and 2 are seated, 3 waits; excusing 1 takes its entry back
+    // and 3 takes the freed spot.
+    {
+        BossStandRow a = Row(1, 0, 0, 400, StandRole::Ranged, 777, 0, 0, 0.0f, 0.0f, 1, 0, 1);
+        BossStandRow b = Row(1, 0, 0, 400, StandRole::Ranged, 777, 0, 1, 12.0f, 0.0f, 1, 0, 1);
+        const std::vector<BossStandRow> rows = { a, b };
+        const std::vector<const BossStandRow*> points = Points(rows);
+        const StandLane lane = StandLaneOf(rows, rows[0]);
+        const std::vector<StandBot> bots = { { 1, 0.0f, 0.0f }, { 2, 12.0f, 0.0f }, { 3, 10.0f, 0.0f } };
+        std::vector<StandSeat> plan = PlanStandSeats(points, bots, lane);
+        const auto seatOf = [](const std::vector<StandSeat>& seats, std::uint64_t id)
+        {
+            for (const StandSeat& seat : seats)
+                if (seat.id == id)
+                    return seat;
+            return StandSeat();
+        };
+        CHECK(plan.size() == 3);
+        CHECK(seatOf(plan, 1).valid && seatOf(plan, 2).valid && !seatOf(plan, 3).valid);
+        // The excused tank is not in `bots` any more: its entry goes and the unseated bot takes its spot.
+        const std::vector<StandBot> rest = { { 2, 12.0f, 0.0f }, { 3, 10.0f, 0.0f } };
+        CHECK(ExtendStandPlan(plan, points, rest, lane, {}, { 1 }));
+        CHECK(plan.size() == 2);
+        CHECK(seatOf(plan, 1).id == 0);
+        CHECK(seatOf(plan, 2).valid && seatOf(plan, 2).x == 12.0f && seatOf(plan, 2).y == 0.0f);
+        CHECK(seatOf(plan, 3).valid && seatOf(plan, 3).x == 0.0f && seatOf(plan, 3).y == 0.0f);
+        // An excused id the plan does not hold frees nothing, as a dead one.
+        CHECK(!ExtendStandPlan(plan, points, rest, lane, {}, { 99 }));
+    }
+
     // Late joiners are seated jointly: two free seats on one side, at x = 0 and x = 60, and two newcomers, the lower
     // id at x = 28 (28 yd from the x = 0 seat, 32 from the x = 60 one) and the higher id standing on the x = 0 seat.
     // Seated one after another in id order the lower id bot takes the nearer x = 0 seat and leaves the higher id bot
@@ -1388,6 +1419,35 @@ int main()
         CHECK(std::fabs(Dist(21.70f, 16.40f, plan[1].x, plan[1].y) - 22.0f) < 0.05f);
     }
 
+    // WalkTiers_CountedNotBought: the solver's cost counts the tiers, it does not sum penalties. A four-bot side: plan
+    // A seats one bot 35.1 yd out and three on their seats, plan B seats all four 34.9 yd out. The summed cost of the
+    // old scheme (distance + 300 beyond 20 yd + 1000 beyond 35 yd) is 1335.1 for A and 1339.6 for B, so it takes the
+    // extra seat past kBossStandReach; the tiered weights make A the dearer one, whatever the walks.
+    {
+        const stand_detail::StandCostWeights weights = stand_detail::StandCostsFor(4, true);
+        const std::vector<double> planA = { 35.1, 0.0, 0.0, 0.0 };  // one seat past kBossStandReach
+        const std::vector<double> planB = { 34.9, 34.9, 34.9, 34.9 };
+        const auto tiered = [&weights](const std::vector<double>& plan)
+        {
+            double sum = 0.0;
+            for (double walk : plan)
+                sum += stand_detail::StandSeatCost(walk, weights, kBossStandNearYd);
+            return sum;
+        };
+        // The cost the tier weights replace: a flat 300/1000 added to the walk.
+        const auto summed = [](const std::vector<double>& plan)
+        {
+            double sum = 0.0;
+            for (double walk : plan)
+                sum += walk + (walk > 20.0 ? 300.0 : 0.0) + (walk > 35.0 ? 1000.0 : 0.0);
+            return sum;
+        };
+        CHECK(summed(planA) < summed(planB));
+        CHECK(tiered(planA) > tiered(planB));
+        // And the weights are what the solver builds its matrix from.
+        CHECK(stand_detail::StandCostsFor(4, false).nearTier == 0.0);
+    }
+
     // AiPlayerbot.BossStandNearestSeat, S1: a window's seats are every role's rows of its anchor and window spell.
     // The case that fails without pooling: the melee bot's own cell is 34 yd away while a healer cell 12 yd away
     // stands free, and the healer, beside the melee cell, walks 30 to its own.
@@ -1514,7 +1574,13 @@ int main()
         CHECK(!StandPostExcuses(true, false, true, 10.0f));
         CHECK(!StandPostExcuses(true, true, false, 10.0f));
         CHECK(kBossStandNearYd == 20.0f);
-        CHECK(kBossStandNearPenalty == 300.0);
+        // The walk tiers are counted, not bought: one more far seat costs more than every near-tier penalty and every
+        // yard the whole matrix can add, and one unseated bot more than every tier.
+        const ai::stand_detail::StandCostWeights weights = ai::stand_detail::StandCostsFor(8, true);
+        CHECK(weights.nearTier > 8.0 * kBossStandCostMaxYd);
+        CHECK(weights.farTier > 8.0 * weights.nearTier + 8.0 * kBossStandCostMaxYd);
+        CHECK(weights.unseated > 8.0 * (weights.nearTier + weights.farTier) + 8.0 * kBossStandCostMaxYd);
+        CHECK(ai::stand_detail::StandCostsFor(8, false).nearTier == 0.0);
         // A pooled plan's key role is never a row's role.
         BossStandRow anyRole = Row(1, 0, 0, 8, StandRole::Any, 777, 0, 0, 0, 20, 1, 0);
         BossStandTable table;

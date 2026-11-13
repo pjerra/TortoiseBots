@@ -705,14 +705,12 @@ namespace ai
     // Yards a bot covers in a 5 s breath cast at run speed (7 yd/s): a seat further than this is still taken, but the
     // plan seats as many bots as it can within it.
     constexpr float kBossStandReach = 35.0f;
-    // Cost added to a seat beyond kBossStandReach, and the cost of leaving a bot unseated (a side with fewer seats than
-    // bots): both dwarf any real walk, so the count within reach is decided first and the total walk second.
-    constexpr double kBossStandFarPenalty = 1000.0;
-    constexpr double kBossStandUnseatedCost = 1000000.0;
-    // AiPlayerbot.BossStandNearestSeat: a seat farther than this costs kBossStandNearPenalty more, so a side's plan
-    // first seats as many bots within kBossStandReach as it can, then as many within this, then walks the least.
+    // AiPlayerbot.BossStandNearestSeat: the 20 yd walk cap's tier.
     constexpr float kBossStandNearYd = 20.0f;
-    constexpr double kBossStandNearPenalty = 300.0;
+    // A plan's cost is lexicographic: the count of seats beyond kBossStandReach, then beyond kBossStandNearYd (when the
+    // cap applies), then the total walk. A walk longer than this is not told apart from it, which bounds the tiers'
+    // weights (stand_detail::StandCostsFor).
+    constexpr double kBossStandCostMaxYd = 100000.0;
 
     // AiPlayerbot.BossStandNearestSeat: a hold_spot post whose spot is outside the lane keeps its tank at the spot
     // instead of a seat, while the tank stands within kBossStandNearYd of it.
@@ -846,10 +844,42 @@ namespace ai
             return spots;
         }
 
-        // Seats `bots` (in id order) among `spots`, min-cost: the cost is the 2D distance plus kBossStandFarPenalty
-        // beyond kBossStandReach (and, with a near cap, kBossStandNearPenalty beyond it), and a bot the spots run out
-        // for stays unseated (kBossStandUnseatedCost). The seat of bots[r] is written to plan[index[r]], left invalid
-        // when that bot is the one left out.
+        // The weights of one assignment problem: `nearTier` per seat beyond the near cap, `farTier` per seat beyond
+        // kBossStandReach, `unseated` per bot the spots run out for. Each is one more than the total the lower tiers
+        // can add over the whole matrix (n rows of at most kBossStandCostMaxYd, or n lower weights), so the solver
+        // compares the tier counts first and the total walk last: one more seat in a higher tier always outweighs
+        // every lower-tier saving.
+        struct StandCostWeights
+        {
+            double nearTier = 0.0;
+            double farTier = 0.0;
+            double unseated = 0.0;
+        };
+
+        inline StandCostWeights StandCostsFor(std::size_t n, bool nearCap)
+        {
+            const double walk = static_cast<double>(n) * kBossStandCostMaxYd;
+            const double rows = static_cast<double>(n);
+            StandCostWeights weights;
+            weights.nearTier = nearCap ? walk + 1.0 : 0.0;
+            weights.farTier = walk + rows * weights.nearTier + 1.0;
+            weights.unseated = walk + rows * (weights.nearTier + weights.farTier) + 1.0;
+            return weights;
+        }
+
+        // One seat's cost: the walk (capped at kBossStandCostMaxYd), plus the near tier's weight beyond the cap and the
+        // far tier's beyond kBossStandReach.
+        inline double StandSeatCost(double walk, const StandCostWeights& weights, float nearCapYd)
+        {
+            const double d = std::min(walk, kBossStandCostMaxYd);
+            return d + (d > kBossStandReach ? weights.farTier : 0.0) +
+                (nearCapYd > 0.0f && d > nearCapYd ? weights.nearTier : 0.0);
+        }
+
+        // Seats `bots` (in id order) among `spots`, min-cost: the cost is the walk (capped at kBossStandCostMaxYd),
+        // plus the tier weight for a seat beyond the near cap and for one beyond kBossStandReach, and a bot the spots
+        // run out for stays unseated (its weight, above every tier). The seat of bots[r] is written to plan[index[r]],
+        // left invalid when that bot is the one left out.
         inline void SeatBots(std::vector<StandSeat>& plan, const std::vector<std::size_t>& index,
                              const std::vector<StandBot>& bots, const std::vector<StandSpot>& spots,
                              float nearCapYd = 0.0f)
@@ -857,6 +887,7 @@ namespace ai
             if (bots.empty() || spots.empty())
                 return;
             const std::size_t n = std::max(bots.size(), spots.size());
+            const StandCostWeights weights = StandCostsFor(n, nearCapYd > 0.0f);
             std::vector<std::vector<double>> cost(n, std::vector<double>(n, 0.0));
             for (std::size_t r = 0; r < bots.size(); ++r)
             {
@@ -864,12 +895,11 @@ namespace ai
                 {
                     if (c >= spots.size())
                     {
-                        cost[r][c] = kBossStandUnseatedCost;
+                        cost[r][c] = weights.unseated;
                         continue;
                     }
-                    const double d = std::sqrt(Dist2(bots[r].x, bots[r].y, spots[c].x, spots[c].y));
-                    cost[r][c] = d + (nearCapYd > 0.0f && d > nearCapYd ? kBossStandNearPenalty : 0.0) +
-                        (d > kBossStandReach ? kBossStandFarPenalty : 0.0);
+                    const double walk = std::sqrt(Dist2(bots[r].x, bots[r].y, spots[c].x, spots[c].y));
+                    cost[r][c] = StandSeatCost(walk, weights, nearCapYd);
                 }
             }
             const std::vector<std::size_t> pick = MinCostSeats(cost);
@@ -906,10 +936,10 @@ namespace ai
     //  - Side: StandSideOf. Bots on the lane line (tie) are placed after the others, in id order, each on the side
     //    with fewer bots so far (side 0 on equal counts). A bot never gets a seat on the other side.
     //  - Seats of a side: every slot of every point of that side (SlotPosition), points in `points` order, slots 0..n-1.
-    //  - Per side, a min-cost assignment of its bots (id order) to its seats: the cost is the 2D distance, plus
-    //    kBossStandFarPenalty beyond kBossStandReach; a side with more bots than seats leaves the rest unseated
-    //    (kBossStandUnseatedCost). So the plan seats as many bots within reach as it can, then walks the least in total,
-    //    and a seat beyond reach is still taken.
+    //  - Per side, a min-cost assignment of its bots (id order) to its seats: the cost is lexicographic in the count of
+    //    seats beyond kBossStandReach, the count beyond `nearCapYd` (when it is set) and the total walk; a side with
+    //    more bots than seats leaves the rest unseated. So the plan seats as many bots within reach as it can, then as
+    //    many within the cap, then walks the least, and a seat beyond reach is still taken.
     inline std::vector<StandSeat> PlanStandSeats(const std::vector<const BossStandRow*>& points,
                                                  const std::vector<StandBot>& bots, const StandLane& lane,
                                                  float nearCapYd = 0.0f)
@@ -952,17 +982,20 @@ namespace ai
         return plan;
     }
 
-    // The window's plan, grown by the members of `bots` it does not name yet, and by the entries a death freed. Every
-    // valid entry of a bot in `bots` is left where it is, so a window whose members are all named is a plain no-op
-    // (every bot asks for its seat each tick): a bot's seat never moves under it while it lives, whatever it does.
-    //  - A bot named in `dead` loses its entry first (an empty `dead` costs no work): only death frees a seat, a bot
-    //    that merely drops off the threat list keeps the one it holds.
+    // The window's plan, grown by the members of `bots` it does not name yet, and by the entries a death or an excused
+    // post freed. Every valid entry of a bot in `bots` is left where it is, so a window whose members are all named is
+    // a plain no-op (every bot asks for its seat each tick): a bot's seat never moves under it while it lives,
+    // whatever it does.
+    //  - A bot named in `dead` or `excused` loses its entry first (an empty list costs no work): only death frees a
+    //    seat for a living bot, a bot that merely drops off the threat list keeps the one it holds, and an excused
+    //    tank's seat goes to the next bot.
     //  - The real newcomers and the entries left without a seat (an earlier batch ran the side's spots out) are then
     //    seated as one batch per side, in id order; a retried entry keeps its slot, a newcomer is appended. Each
     //    takes its side (StandSideOf; a tie goes to the side with fewer members, in id order), and a side's batch
     //    takes that side's free spots together, min-cost (stand_detail::SeatBots): as many within kBossStandReach as
-    //    the spots allow, then the least total walk; seated one after another the last of them can be left a walk an
-    //    earlier one took. A spot is free while no VALID entry of the plan sits within 0.01 yd of it.
+    //    the spots allow, then the fewest beyond the near cap, then the least total walk; seated one after another the
+    //    last of them can be left a walk an earlier one took. A spot is free while no VALID entry of the plan sits
+    //    within 0.01 yd of it.
     //  - Bots beyond the free spots are added (or left) with valid = false: they keep the reactive dodge, as in
     //    PlanStandSeats.
     // An unseated entry is only worth a retry when this call freed a seat or a newcomer arrived; nothing else can
@@ -970,18 +1003,21 @@ namespace ai
     // ascending id order.
     inline bool ExtendStandPlan(std::vector<StandSeat>& plan, const std::vector<const BossStandRow*>& points,
                                 const std::vector<StandBot>& bots, const StandLane& lane,
-                                const std::vector<std::uint64_t>& dead, float nearCapYd = 0.0f)
+                                const std::vector<std::uint64_t>& dead,
+                                const std::vector<std::uint64_t>& excused = {}, float nearCapYd = 0.0f)
     {
         if (points.empty())
             return false;
         bool freed = false;
-        if (!dead.empty())
+        if (!dead.empty() || !excused.empty())
         {
+            const auto freedBy = [&](const StandSeat& seat)
+            {
+                return std::find(dead.begin(), dead.end(), seat.id) != dead.end() ||
+                    std::find(excused.begin(), excused.end(), seat.id) != excused.end();
+            };
             const std::size_t before = plan.size();
-            plan.erase(std::remove_if(plan.begin(), plan.end(),
-                                      [&dead](const StandSeat& seat)
-                                      { return std::find(dead.begin(), dead.end(), seat.id) != dead.end(); }),
-                       plan.end());
+            plan.erase(std::remove_if(plan.begin(), plan.end(), freedBy), plan.end());
             freed = plan.size() != before;
         }
 

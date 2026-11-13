@@ -305,12 +305,13 @@ class BossStandWiring(unittest.TestCase):
         self.assertIn("it->second.lastReadMs = nowMs;", fn)
         # A bot that engages after the window opened grows the plan in the else of the stale check (the window's plan
         # already exists and is fresh), under the same lock, before the read is stamped.
-        call = ("else\n            // a bot engaged after the window opened, or one whose seat a death freed, "
-                "gets a free seat\n            ExtendStandPlan(it->second.seats, points, bots, lane, dead, %s);" % cap)
+        call = ("else\n            // a bot engaged after the window opened, or one whose seat a death or an excused "
+                "post freed, gets a\n            // free seat\n            "
+                "ExtendStandPlan(it->second.seats, points, bots, lane, dead, excused, %s);" % cap)
         self.assertIn(call, fn)
         self.assertLess(fn.index("plan.seats = PlanStandSeats(points, bots, lane, %s);" % cap),
-                        fn.index("ExtendStandPlan(it->second.seats, points, bots, lane, dead, %s);" % cap))
-        self.assertLess(fn.index("ExtendStandPlan(it->second.seats, points, bots, lane, dead, %s);" % cap),
+                        fn.index("ExtendStandPlan(it->second.seats, points, bots, lane, dead, excused, %s);" % cap))
+        self.assertLess(fn.index("ExtendStandPlan(it->second.seats, points, bots, lane, dead, excused, %s);" % cap),
                         fn.index("it->second.lastReadMs = nowMs;"))
         self.assertNotIn("AssignStandSlot(", fn)
         declared = body(ACTIONS, "// The seat plan of an open window",
@@ -337,13 +338,14 @@ class BossStandWiring(unittest.TestCase):
         self.assertIn("std::vector<std::uint64_t> dead;", fn)
         self.assertIn("if (!sServerFacade.IsAlive(member))\n                {\n                    "
                       "dead.push_back(member->GetObjectGuid().GetRawValue());\n                    continue;\n                }", fn)
-        self.assertIn("ExtendStandPlan(it->second.seats, points, bots, lane, dead, "
+        self.assertIn("ExtendStandPlan(it->second.seats, points, bots, lane, dead, excused, "
                       "pooledNow ? kBossStandNearYd : 0.0f);", fn)
-        # A death frees a seat and nothing else does: the plan's seat of a member that is absent from `bots` but not
-        # dead is left alone (ExtendStandPlan removes entries of `dead` alone).
+        # A death (or an excused post) frees a seat and nothing else does: the plan's seat of a member that is absent
+        # from `bots`, not dead and not excused is left alone.
         policy = body(POLICY, "inline bool ExtendStandPlan(", end="\n    }\n")
-        self.assertIn("if (!dead.empty())", policy)
-        self.assertIn("std::find(dead.begin(), dead.end(), seat.id) != dead.end()", policy)
+        self.assertIn("if (!dead.empty() || !excused.empty())", policy)
+        self.assertIn("std::find(dead.begin(), dead.end(), seat.id) != dead.end() ||", policy)
+        self.assertIn("std::find(excused.begin(), excused.end(), seat.id) != excused.end()", policy)
 
     def test_the_plan_is_filed_by_window_spell_and_group(self):
         # Two rows of one anchor and role can open on different window spells inside the idle time: the plan of one
@@ -501,37 +503,51 @@ class BossStandWiring(unittest.TestCase):
                       "points[0]->windowSpell != 0;", fn)
         self.assertIn("if (!pooledNow &&\n                    StandRoleOf(", fn)
         self.assertIn("static_cast<uint8>(pooledNow ? StandRole::Any : role)", fn)
-        # Both plan calls carry the cap.
+        # Both plan calls carry the cap, and the grow takes back the seats of the excused tanks.
         self.assertIn("PlanStandSeats(points, bots, lane, pooledNow ? kBossStandNearYd : 0.0f)", fn)
-        self.assertIn("ExtendStandPlan(it->second.seats, points, bots, lane, dead, pooledNow ? kBossStandNearYd : 0.0f)",
+        self.assertIn("ExtendStandPlan(it->second.seats, points, bots, lane, dead, excused, pooledNow ? kBossStandNearYd : 0.0f)",
                       fn)
         # The assigned row names the pool and the excused post.
         log = f"\"event=assigned,yd=%.1f,stay=%d,src=%s,pool=%d,post=%d\""
         self.assertIn(log, fn)
         self.assertIn("pooledNow ? 1 : 0,\n                     postApplied ? 1 : 0);", fn)
-        # The excuse sits after the window's points and before the plan block, and it keeps the post's own spot.
-        excuse = fn.index("if (sPlayerbotAIConfig.bossStandNearestSeat)\n    {")
-        self.assertLess(fn.index("if (points.empty())\n        return finishStandRead(target, false, nullptr);"), excuse)
-        self.assertLess(excuse, fn.index("g_standPlans.find(key)"))
+        # The self excuse is decided before the bot is put in the candidates (so it is never seated), and its spot
+        # reaches the return after the plan block, whose grow took back the seat it held.
+        selfExcuse = fn.index("if (sPlayerbotAIConfig.bossStandNearestSeat && PlayerbotAI::IsTank(bot))")
+        self.assertLess(selfExcuse, fn.index("candidates.push_back(self);"))
+        self.assertLess(selfExcuse, fn.index("if (postLive)\n                selfExcused = StandPostExcuses(true, postLive,"))
+        self.assertIn("stand_detail::Dist2(bot->GetPositionX(), bot->GetPositionY(), selfSpotX, selfSpotY)", fn)
+        self.assertIn("if (!postLive && post.valid)", fn)
+        self.assertIn("postSpot.x = row->spotX;", body(ACTIONS, "BossTankPost ai::FindBossTankPost("))
+        self.assertIn("FindBossStand(ai, bot, postSpot)", body(ACTIONS, "BossTankPost ai::FindBossTankPost("))
+        self.assertLess(fn.index("if (points.empty())\n        return finishStandRead(target, false, nullptr);"),
+                        fn.index("g_standPlans.find(key)"))
+        self.assertIn("if (selfExcused)\n    {\n        postApplied = true;", fn)
+        self.assertLess(fn.index("g_standPlans.find(key)"), fn.index("if (selfExcused)\n    {"))
         self.assertIn("target.post = true;", fn)
-        self.assertIn("target.stay = true;\n            target.post = true;", fn)
-        # A member its excused post keeps at its spot reserves no seat.
+        self.assertIn("target.stay = true;\n        target.post = true;", fn)
+        # A member its excused post keeps at its spot reserves no seat, and its plan entry is taken back.
         self.assertLess(fn.index("if (sPlayerbotAIConfig.bossStandNearestSeat && PlayerbotAI::IsTank(member))"),
                         fn.index("candidates.push_back(candidateOf(member, memberHold));"))
+        self.assertIn("excused.push_back(member->GetObjectGuid().GetRawValue());", fn)
+        self.assertIn("excused.push_back(selfKey);", fn)
         # The policy's spot and excuse rules are the ones the glue calls.
         self.assertIn("StandSpotOutsideLane(lane, *points[0], *bossRows, spotX, spotY)", fn)
-        self.assertIn("StandPostExcuses(sPlayerbotAIConfig.bossStandNearestSeat, postLive,", fn)
+        self.assertIn("StandPostExcuses(sPlayerbotAIConfig.bossStandNearestSeat, true,", fn)
         for needle in ("inline bool StandSpotOutsideLane(", "inline bool StandPostExcuses(", "kBossStandNearYd = 20.0f",
-                       "kBossStandNearPenalty = 300.0", "PooledStandPoints("):
+                       "kBossStandCostMaxYd = 100000.0", "StandCostsFor(", "PooledStandPoints("):
             self.assertIn(needle, POLICY)
         # The post read takes the post lock alone: the caller holds no g_standHoldMutex around either call.
         member = fn[fn.index("if (sPlayerbotAIConfig.bossStandNearestSeat && PlayerbotAI::IsTank(member))"):
                     fn.index("StandHold memberHold;")]
         self.assertIn("TankPostLiveSpot(", member)
         self.assertNotIn("g_standHoldMutex", member)
-        self_read = fn[fn.index("if (sPlayerbotAIConfig.bossStandNearestSeat)\n    {"):fn.index("postApplied = true;")]
+        self_read = fn[selfExcuse:fn.index("candidates.push_back(self);")]
         self.assertIn("TankPostLiveSpot(", self_read)
         self.assertNotIn("g_standHoldMutex", self_read)
+        # The lane walk runs only for a live post in both reads.
+        self.assertIn("bool postLive = TankPostLiveSpot(selfKey, selfSpotX, selfSpotY, selfSpotZ);", fn)
+        self.assertIn("if (TankPostLiveSpot(member->GetObjectGuid().GetRawValue(), spotX, spotY, spotZ) &&", fn)
         # The post side: the flag from the stand, the leash past the drag radius before the arrival rules.
         post = body(ACTIONS, "BossTankPost ai::FindBossTankPost(")
         self.assertIn("in.laneHold = holdSpot && stand.valid && stand.post;", post)
