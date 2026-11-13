@@ -28,13 +28,17 @@ namespace ai
         return lowHealth;
     }
 
-    // A dry bot must not spend a dozen seconds per out-of-combat self-buff
-    // first (Fortitude, Shadow Protection, mage armor): the buff ladder's top
-    // sits at 19.0 and every cast at a few percent mana is dead time, so at or
-    // below this line the drink owns the tick. The priority stays under
-    // ACTION_HIGH (20) so follow, loot and pet rows keep their lead.
+    // A dry bot must not spend a dozen seconds per out-of-combat buff first
+    // (Fortitude, Shadow Protection, Arcane Intellect): every cast at a few
+    // percent mana is dead time, so at or below this line the drink owns the
+    // tick. The highest out-of-combat buff row is Arcane Intellect at 21.0
+    // (party Arcane Intellect and shaman totems 20, rogue poisons 18-20,
+    // priest Fortitude/Shadow Protection 11-13), so 21.5 clears the ladder.
+    // It sits above ACTION_HIGH, so follow and pull lose the tick while the
+    // bot is this dry; "should drink" still yields to a moving leader, and
+    // every heal, shield and ACTION_MOVE row stays above.
     constexpr std::uint32_t LOW_MANA_DRINK_PCT = 20;
-    constexpr float LOW_MANA_DRINK_PRIORITY = 19.5f;
+    constexpr float LOW_MANA_DRINK_PRIORITY = 21.5f;
 
     inline bool DrinkOutranksSelfBuffs(std::uint32_t manaPct)
     {

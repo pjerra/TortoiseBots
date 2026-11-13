@@ -4,6 +4,7 @@ The run leader stamps eating and drinking bots once a second; the gate, the
 wake check and the `.bot action rest` refusal all read the same mark.
 """
 import pathlib
+import re
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -212,6 +213,38 @@ class MealGateWiringTest(unittest.TestCase):
         self.assertIn("DrinkOutranksSelfBuffs(", trigger)
         self.assertIn("HasManaPool(bot)", trigger)
         self.assertIn("LOW_MANA_DRINK_PCT = 20", SRC_SURVIVE)
+
+        # The buff rows the review found above the old 19.5, with the value
+        # they carry in their class strategy. The drink must clear the highest
+        # (Arcane Intellect, 21.0); heal/shield rows keyed on a wounded member
+        # (22 and up) stay above on purpose.
+        priority = float(re.search(r"LOW_MANA_DRINK_PRIORITY\s*=\s*([0-9.]+)f", SRC_SURVIVE).group(1))
+        competitors = [
+            ("ai/playerbot/strategy/mage/GenericMageNonCombatStrategy.cpp",
+             'NextAction("arcane intellect", 21.0f)', 21.0),
+            ("ai/playerbot/strategy/mage/GenericMageNonCombatStrategy.cpp",
+             'NextAction("arcane intellect on party", 20.0f)', 20.0),
+            ("ai/playerbot/strategy/shaman/ElementalShamanStrategy.cpp",
+             'NextAction("windfury totem", ACTION_HIGH)', 20.0),
+            ("ai/playerbot/strategy/rogue/RogueStrategy.cpp",
+             'NextAction("apply instant poison main hand", 20.0f)', 20.0),
+            ("ai/playerbot/strategy/priest/PriestStrategy.cpp",
+             'NextAction("power word: fortitude on party", ACTION_NORMAL + 2)', 12.0),
+            ("ai/playerbot/strategy/priest/PriestStrategy.cpp",
+             'NextAction("power word: fortitude", ACTION_NORMAL + 1)', 11.0),
+            ("ai/playerbot/strategy/priest/PriestNonCombatStrategy.cpp",
+             'NextAction("shadow protection", 12.0f)', 12.0),
+        ]
+        for path, fragment, value in competitors:
+            self.assertIn(fragment, (ROOT / path).read_text(), path)
+            self.assertLess(value, priority, "%s: %s must lose to the drink" % (path, fragment))
+
+        # The named case: a priest at 5 % with missing Fortitude and Shadow
+        # Protection. Both rows sit in the same non-combat engine as the drink.
+        priest = strip_comments((ROOT / "ai/playerbot/strategy/priest/PriestStrategy.cpp").read_text())
+        buffs = body_after(priest, "void PriestBuffStrategy::InitNonCombatTriggers")
+        self.assertIn('"power word: fortitude on party"', buffs)
+        self.assertIn('"power word: fortitude"', buffs)
 
 
 if __name__ == "__main__":

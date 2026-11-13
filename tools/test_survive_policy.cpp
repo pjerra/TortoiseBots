@@ -52,14 +52,15 @@ int main()
     CHECK(!ShouldDrinkAtManaPct(true, 85, 85));
     CHECK(!ShouldDrinkAtManaPct(false, 0, 85));
 
-    // At or below 20 % the drink outranks every out-of-combat self-buff
-    // (the ladder's top is 19.0), and its priority stays under ACTION_HIGH.
+    // At or below 20 % the drink outranks every out-of-combat buff row: the
+    // highest is Arcane Intellect at 21.0, so the priority must clear 21.0
+    // while staying under the heal rows and ACTION_MOVE (30).
     CHECK(DrinkOutranksSelfBuffs(0));
     CHECK(DrinkOutranksSelfBuffs(5));
     CHECK(DrinkOutranksSelfBuffs(20));
     CHECK(!DrinkOutranksSelfBuffs(21));
-    CHECK(LOW_MANA_DRINK_PRIORITY > 19.0f);
-    CHECK(LOW_MANA_DRINK_PRIORITY < 20.0f);
+    CHECK(LOW_MANA_DRINK_PRIORITY > 21.0f);
+    CHECK(LOW_MANA_DRINK_PRIORITY < 30.0f);
 
     // The restored critical-health flee is pool-only: no real player master.
     CHECK(ShouldFleeAtCriticalHealth(false));

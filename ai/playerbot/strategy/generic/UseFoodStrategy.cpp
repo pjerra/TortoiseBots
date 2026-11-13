@@ -47,9 +47,9 @@ void UseFoodStrategy::InitNonCombatTriggers(std::list<TriggerNode*> &triggers)
             NextAction::array(0, new NextAction("food", 6.0f), NULL)));
     }
 
-    // At or below LOW_MANA_DRINK_PCT the drink outranks the out-of-combat
-    // self-buff ladder: at 1-5 % mana each buff is 12 s of dead time (and the
-    // cast may be refused), and the drink is the only way back
+    // At or below LOW_MANA_DRINK_PCT the drink outranks every out-of-combat
+    // buff row: at 1-5 % mana each buff is 12 s of dead time (and the cast may
+    // be refused), and the drink is the only way back
     // (tests/tortoise-trials/after-t1113/OPEN-3.md).
     triggers.push_back(new TriggerNode(
         "low mana drink",
