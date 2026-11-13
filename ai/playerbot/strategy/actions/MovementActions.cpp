@@ -2744,10 +2744,12 @@ bool MovementAction::ChaseTo(WorldObject* obj, float distance, float angle)
     // A live boss anchor (BossAnchorPolicy.h, Hakkar's platform): no chase to a hostile beyond its radius plus the melee
     // reach, and every chase destination stays on the circle. Without a live anchor row none of this runs.
     // The meet receiver's chase of its own meet Son inside the bounded allowance (DungeonRunSeekMeetTakeReach,
-    // MeetSonChaseExempt) skips the gate and the clamps for that target only; every other chase stays anchored.
+    // MeetSonChaseExempt) skips the gate and the clamps for that target only; every other chase stays anchored. A
+    // tank's take lease (TankFirstPolicy.h R1, TankFirstChaseExempt) skips them the same way, for the add it took.
     BossAnchorCircle anchor;
     Unit* const chased = dynamic_cast<Unit*>(obj);
-    const bool anchored = LiveBossAnchor(ai, bot, anchor) && !(chased && MeetSonChaseExempt(ai, bot, chased));
+    const bool anchored = LiveBossAnchor(ai, bot, anchor) && !(chased && (MeetSonChaseExempt(ai, bot, chased) ||
+                                                                        TankFirstChaseExempt(bot, chased)));
     if (anchored && chased && bot->IsHostileTo(chased) &&
         !AnchorAllowsChase(anchor, obj->GetPositionX(), obj->GetPositionY(), kBossAnchorChaseReachYd))
     {
