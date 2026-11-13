@@ -171,21 +171,29 @@ class SpreadSlotsWiring(unittest.TestCase):
 
     def test_the_hunter_slot_leaves_the_dead_zone_behind_the_key(self):
         # SpreadSlot_HunterSlotLeavesDeadZone at the call site: the whole group builds and orders one canonical ring
-        # list; the index (and the fallback) pick from it, and only then is the hunter's own point projected out to
-        # the boss's reach + 8 + 2 yd. A caster keeps the canonical point, and with the key off nothing moves at all.
+        # list; the index (and the fallback) pick from it, then every hunter resolves the same owner points
+        # (SpreadSlotOwnerPoints) so the projection steps around another member's point instead of landing on it.
         read = body(ACTIONS, "BossSpreadSlotTask ReadBossSpreadSlot(PlayerbotAI* ai, Player* bot)")
         self.assertIn("SpreadSlotMinRangeApplies(sPlayerbotAIConfig.spreadRangedMinRange,", read)
         self.assertIn("bot->GetClass() == CLASS_HUNTER", read)
         self.assertIn("SpreadSlotMinRangeYd(boss->GetCombatReach())", read)
-        self.assertIn("SpreadSlotOwnerPoint(points[static_cast<std::size_t>(slot)], minRange,", read)
+        self.assertIn(
+            "        ownerPoints = SpreadSlotOwnerPoints(points, minRangeByIndex, boss->GetPositionX(), "
+            "boss->GetPositionY(), cx,\n"
+            "                                            cy, minYd, spacingYd);",
+            read)
         # The order runs on the plain rings, before any class-specific projection: the shared index names the same
-        # slot for every member. Projection happens only after the owned/fallback index is chosen.
+        # slot for every member. Owner points are resolved only after the owned/fallback index is chosen.
         self.assertLess(read.index("SpreadSlotOrder(points, prefX, prefY);"), read.index("SpreadSlotMinRangeApplies("))
-        self.assertLess(read.index("const int owned = hasSlot ? index : -1;"), read.index("SpreadSlotOwnerPoint("))
-        self.assertLess(read.index("SpreadSlotOwnerPoint("), read.index("SpreadSlotPointUsable(ai, bot, cz, ownedPoint"))
-        # No list-wide class-specific rewrite of the points can come back: only the owner points are projected.
+        self.assertLess(read.index("const int owned = hasSlot ? index : -1;"), read.index("SpreadSlotOwnerPoints("))
+        self.assertIn("ownedPoint = ownedSlotPoint(owned);", read)
+        self.assertIn("sparePoint(fallback)", read)
+        # The flags name the class of every owner by guid index, so each member resolves the identical list.
+        self.assertIn("SpreadSlotIndexOf(eligible, member->GetObjectGuid().GetRawValue())", read)
+        self.assertIn("member->GetClass() == CLASS_HUNTER", read)
+        # No list-wide class-specific rewrite of the points can come back: only the owners and the spare are moved.
         self.assertNotIn("for (SpreadSlotPoint& point : points)", read)
-        self.assertEqual(read.count("SpreadSlotOwnerPoint("), 1)
+        self.assertEqual(read.count("SpreadSlotOwnerPoints("), 1)
         config = (ROOT / "ai/playerbot/PlayerbotAIConfig.cpp").read_text()
         self.assertIn('spreadRangedMinRange = config.GetBoolDefault("AiPlayerbot.SpreadRangedMinRange", false);',
                       config)

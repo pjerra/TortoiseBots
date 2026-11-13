@@ -10751,9 +10751,10 @@ BossSpreadSlotTask ReadBossSpreadSlot(PlayerbotAI* ai, Player* bot)
     const float prefY = hasSeekSpot ? state.row->spotY : cy;
 
     std::vector<SpreadSlotPoint> points;
+    float spacingYd = kSpreadSettledDistance;
     if (hasCentre)
     {
-        const float spacingYd = BossSpreadYd(ai, bot, kSpreadSettledDistance);
+        spacingYd = BossSpreadYd(ai, bot, kSpreadSettledDistance);
         points = SpreadSlotPoints(cx, cy, spacingYd, SpreadSlotRings(spacingYd, anchored, radius));
         // One canonical list the whole group builds the same way: the order runs on the plain rings, never on a
         // class-specific projection, so a guid index names the same slot for a hunter and a caster.
@@ -10780,15 +10781,38 @@ BossSpreadSlotTask ReadBossSpreadSlot(PlayerbotAI* ai, Player* bot)
     const int owned = hasSlot ? index : -1;
 
     // A hunter's own slot is projected out of Auto Shot's 8 yd dead zone only here, after the shared order and the
-    // index: the projection is radial, so it keeps the slot's bearing and every other member still names the same
-    // slot. Without it the slot lands inside the dead zone and the step-out fights its pull back.
+    // index. Every hunter in the group resolves its point the same way (SpreadSlotOwnerPoints), so a projection
+    // never lands on another member's point; a caster keeps its canonical slot.
     const bool minRange = boss && SpreadSlotMinRangeApplies(sPlayerbotAIConfig.spreadRangedMinRange,
                                                             bot->GetClass() == CLASS_HUNTER);
     const float minYd = minRange ? SpreadSlotMinRangeYd(boss->GetCombatReach()) : 0.0f;
-    const auto ownerPoint = [&](int slot) {
-        const float bossX = boss ? boss->GetPositionX() : 0.0f;
-        const float bossY = boss ? boss->GetPositionY() : 0.0f;
-        return SpreadSlotOwnerPoint(points[static_cast<std::size_t>(slot)], minRange, bossX, bossY, cx, cy, minYd);
+    std::vector<SpreadSlotPoint> ownerPoints;
+    if (minRange)
+    {
+        std::vector<char> minRangeByIndex(static_cast<std::size_t>(total), 0);
+        if (Group* group = bot->GetGroup())
+        {
+            for (Player* member : LiveGroupMembers(group))
+            {
+                if (!member || member->GetMapId() != bot->GetMapId())
+                    continue;
+                const int memberIndex = SpreadSlotIndexOf(eligible, member->GetObjectGuid().GetRawValue());
+                if (memberIndex >= 0 && memberIndex < total && member->GetClass() == CLASS_HUNTER)
+                    minRangeByIndex[static_cast<std::size_t>(memberIndex)] = 1;
+            }
+        }
+        ownerPoints = SpreadSlotOwnerPoints(points, minRangeByIndex, boss->GetPositionX(), boss->GetPositionY(), cx,
+                                            cy, minYd, spacingYd);
+    }
+    const auto ownedSlotPoint = [&](int slot) {
+        return minRange ? ownerPoints[static_cast<std::size_t>(slot)] : points[static_cast<std::size_t>(slot)];
+    };
+    // The spare slot is nobody's owned point, so it only takes the radial projection, never the collision step.
+    const auto sparePoint = [&](int slot) {
+        const SpreadSlotPoint& canonical = points[static_cast<std::size_t>(slot)];
+        if (!minRange)
+            return canonical;
+        return SpreadSlotMinRangePoint(canonical, boss->GetPositionX(), boss->GetPositionY(), cx, cy, minYd);
     };
 
     // D5: the owned slot; one spare-slot fallback when it is unusable, then the floor verdict.
@@ -10799,13 +10823,13 @@ BossSpreadSlotTask ReadBossSpreadSlot(PlayerbotAI* ai, Player* bot)
     SpreadSlotPoint ownedPoint;
     if (owned >= 0)
     {
-        ownedPoint = ownerPoint(owned);
+        ownedPoint = ownedSlotPoint(owned);
         ownedUsable = SpreadSlotPointUsable(ai, bot, cz, ownedPoint, x, y, z);
         if (!ownedUsable)
         {
             fallback = SpreadSlotFallback(index, count, total);
             fallbackUsable = fallback >= 0 && fallback < total &&
-                             SpreadSlotPointUsable(ai, bot, cz, ownerPoint(fallback), x, y, z);
+                             SpreadSlotPointUsable(ai, bot, cz, sparePoint(fallback), x, y, z);
         }
     }
     const SpreadSlotSelection selection = SpreadSlotSelect(owned, fallback, ownedUsable, fallbackUsable);
@@ -10825,7 +10849,8 @@ BossSpreadSlotTask ReadBossSpreadSlot(PlayerbotAI* ai, Player* bot)
         slotYd = pointYd(ownedPoint);
         if (selection.moveSlot >= 0)
         {
-            const SpreadSlotPoint movePoint = selection.moveSlot == owned ? ownedPoint : ownerPoint(selection.moveSlot);
+            const SpreadSlotPoint movePoint =
+                selection.moveSlot == owned ? ownedPoint : sparePoint(selection.moveSlot);
             arrived = pointYd(movePoint) <= kSpreadSlotArriveYd;
         }
         // A healer measures from the boss's victim, a damage dealer from its own target; no target is in range.

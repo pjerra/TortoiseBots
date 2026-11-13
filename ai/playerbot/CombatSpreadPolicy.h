@@ -184,17 +184,85 @@ namespace ai
         return out;
     }
 
-    // The point a slot owner stands on: the canonical slot, projected out of a
-    // min-range dead zone only when this bot's own class needs it. The
-    // projection runs after the shared order and the guid index, so a
-    // class-specific move never changes which slot an index names for the
-    // rest of the group.
-    inline SpreadSlotPoint SpreadSlotOwnerPoint(const SpreadSlotPoint& canonical, bool minRangeApplies,
-        float bossX, float bossY, float centreX, float centreY, float minYd)
+    // The angle between two points on a circle of `radiusYd` that are `spacingYd` apart: the arc step a min-range
+    // scan uses so each candidate is one spacing from the last.
+    inline float SpreadSlotSpacingAngle(float spacingYd, float radiusYd)
     {
-        if (!minRangeApplies)
-            return canonical;
-        return SpreadSlotMinRangePoint(canonical, bossX, bossY, centreX, centreY, minYd);
+        if (!(spacingYd > 0.0f) || !(radiusYd > 0.0f))
+            return 0.0f;
+        const float ratio = spacingYd / (2.0f * radiusYd);
+        return 2.0f * std::asin(ratio >= 1.0f ? 1.0f : ratio);
+    }
+
+    // Every slot owner's final point, resolved the same way on every bot. A caster keeps its canonical slot. A
+    // min-range hunter's point is projected out to the min-range circle, then stepped along it by alternating
+    // ±k spacing angles until it is at least the row's spacing from every other owner's point (an earlier owner's
+    // final point, a later owner's projected start; a caster's point is both), up to 8 steps. When no candidate
+    // clears, the least-crowded one wins and ties keep the earliest. The index order is the guid order, so the same
+    // group yields the same points on every member.
+    inline std::vector<SpreadSlotPoint> SpreadSlotOwnerPoints(const std::vector<SpreadSlotPoint>& canonical,
+        const std::vector<char>& minRangeByIndex, float bossX, float bossY, float centreX, float centreY,
+        float minYd, float spacingYd)
+    {
+        const std::size_t owners = std::min(canonical.size(), minRangeByIndex.size());
+        std::vector<SpreadSlotPoint> start(owners);
+        std::vector<SpreadSlotPoint> final(owners);
+        for (std::size_t i = 0; i < owners; ++i)
+            start[i] = minRangeByIndex[i] ? SpreadSlotMinRangePoint(canonical[i], bossX, bossY, centreX, centreY,
+                                                                     minYd)
+                                          : canonical[i];
+        const float step = SpreadSlotSpacingAngle(spacingYd, minYd);
+        for (std::size_t i = 0; i < owners; ++i)
+        {
+            const bool moved = start[i].x != canonical[i].x || start[i].y != canonical[i].y;
+            if (!moved || step <= 0.0f)
+            {
+                final[i] = start[i];
+                continue;
+            }
+            const auto clearYd = [&](const SpreadSlotPoint& point) {
+                float nearest = 1.0e30f;
+                for (std::size_t j = 0; j < owners; ++j)
+                {
+                    if (j == i)
+                        continue;
+                    const SpreadSlotPoint& other = j < i ? final[j] : start[j];
+                    const float dx = point.x - other.x;
+                    const float dy = point.y - other.y;
+                    nearest = std::min(nearest, std::sqrt(dx * dx + dy * dy));
+                }
+                return nearest;
+            };
+            SpreadSlotPoint best = start[i];
+            float bestClear = clearYd(start[i]);
+            if (bestClear >= spacingYd)
+            {
+                final[i] = best;
+                continue;
+            }
+            const float bearing = std::atan2(start[i].y - bossY, start[i].x - bossX);
+            for (int t = 1; t <= 8; ++t)
+            {
+                const float sign = (t % 2 == 1) ? 1.0f : -1.0f;
+                const float angle = bearing + sign * static_cast<float>((t + 1) / 2) * step;
+                SpreadSlotPoint candidate = start[i];
+                candidate.x = bossX + minYd * std::cos(angle);
+                candidate.y = bossY + minYd * std::sin(angle);
+                const float clear = clearYd(candidate);
+                if (clear > bestClear)
+                {
+                    best = candidate;
+                    bestClear = clear;
+                }
+                if (clear >= spacingYd)
+                {
+                    best = candidate;
+                    break;
+                }
+            }
+            final[i] = best;
+        }
+        return final;
     }
 
     // A bot's index in the slot order: the number of slot-eligible members
