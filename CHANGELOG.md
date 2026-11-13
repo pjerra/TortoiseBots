@@ -1,5 +1,7 @@
 # Changelog
 
+- Fixed: the tank that takes a `tank_first` add walks into taunt reach instead of standing on the boss circle out of range, stops and turns before the taunt so the cast lands in the same tick, steps into defensive stance or a bear form when that is what blocks it, and the add's record no longer needs a damage dealer's read to see the taunt or settle: a landed taunt by that tank settles the take at once.
+- Changed: a `tank_first` dwell now counts the time a tank actually held the add, keeps counting through a flip to a non-tank shorter than 1 s instead of restarting, and a dwell that started late still gets its own time on top of the hold's cap; Hakkar's dwell is 2 s (data: data/sql/world/20261113150000_world.sql, rollback tools/sql/rollback/20261113150000_world.rollback.sql). The take's `why` row tells the reasons apart (`walk`, `range_refused`, `los`, `gcd`, `busy`, `res=<n>`).
 - Fixed: every non-tank stops swinging or shooting an add a `tank_first` row holds, an explicitly ordered bot and a healer included (heals keep running and only the swing or the wand stops), instead of only a free damage dealer dropping it.
 - Fixed: a `tank_first` add read by several bots at once no longer settles, releases on its cap or forgets itself because one bot's clock sample was older than another's, and the fallback releases (`no_tank`, `siphon`) write their row again, one per add and reason; the first row for an add first seen on a tank is `arm` (no `on_tank` follows), and an instance nobody read for ten minutes is dropped whole (map unload).
 
