@@ -4477,6 +4477,7 @@ namespace ai
         return in.botToSpotYd > kTankPostSpotYd ? TankPostDecision::Walk : TankPostDecision::Hold;
     }
 
+<<<<<<< HEAD
     // The Engage walk's destination: a point at melee distance on the line from the tank to the subject. The action
     // walks there itself because MoveTo(Unit*) aims a hostile unit at the stance's formation spot (or refuses the move
     // when there is none), not at the unit. `reachYd` is the combined melee reach; the point stands 80 % of it from the
@@ -4502,6 +4503,17 @@ namespace ai
     inline bool TankPostEngageWalks(bool keyOn, bool tauntWentOut, bool inMeleeReach, bool standActive)
     {
         return keyOn && !tauntWentOut && !inMeleeReach && !standActive;
+=======
+    // Whether the post pins its subject for the tank's target pick (consumer: TankTargetValue::Calculate). A hold_spot
+    // post that fights its arrived subject keeps it: the tank's rotation must not hand it to the tank-assist pick (a
+    // whelp on the healer) between two Engage ticks and starve the subject's threat. A plain post, and every step that
+    // is not the arrival, pins nothing.
+    inline bool TankPostPinsTarget(bool holdSpot, TankPostDecision step, bool subjectAlive, bool subjectSelectable)
+    {
+        if (!holdSpot || !subjectAlive || !subjectSelectable)
+            return false;
+        return step == TankPostDecision::Engage || step == TankPostDecision::Drag;
+>>>>>>> bab99d218 (tank_post: keep the engaged subject in the tank's target pick)
     }
 
     // The end word of a post (the step's own order). `slotMoved`: the post's row is still in the fight, but for another
