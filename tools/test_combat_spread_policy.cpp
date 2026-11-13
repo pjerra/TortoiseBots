@@ -31,6 +31,9 @@ using ai::SpreadSlotCastCutDue;
 using ai::SpreadSlotCastStart;
 using ai::SpreadSlotFallback;
 using ai::SpreadSlotIndexOf;
+using ai::SpreadSlotMinRangeApplies;
+using ai::SpreadSlotMinRangePoint;
+using ai::SpreadSlotMinRangeYd;
 using ai::SpreadSlotOrder;
 using ai::SpreadSlotPoint;
 using ai::SpreadSlotPoints;
@@ -233,6 +236,40 @@ int main()
             CHECK(prefYd(points[i - 1]) <= prefYd(points[i]) + 0.001f);
     }
     std::cout << "  [PASS] the slot order runs nearest to the seek spot first\n";
+
+    // SpreadSlot_HunterSlotLeavesDeadZone: the rings have no floor from the boss, so a hunter's slot can sit inside
+    // Auto Shot's 8 yd dead zone. With the key on and a class that needs a minimum range, a slot nearer the boss
+    // than the boss's reach + 8 + 2 yd moves out radially to exactly that range; a slot already that far keeps its
+    // point, and the key off (or a caster) hands the ring back untouched.
+    CHECK(!SpreadSlotMinRangeApplies(false, true));
+    CHECK(!SpreadSlotMinRangeApplies(true, false));
+    CHECK(SpreadSlotMinRangeApplies(true, true));
+    CHECK(std::fabs(SpreadSlotMinRangeYd(0.0f) - 10.0f) < 0.001f);
+    CHECK(std::fabs(SpreadSlotMinRangeYd(9.0f) - 19.0f) < 0.001f);
+    CHECK(std::fabs(SpreadSlotMinRangeYd(-5.0f) - 10.0f) < 0.001f);
+    {
+        const SpreadSlotPoint inside{12.0f, 0.0f, 1, 0};
+        const SpreadSlotPoint out = SpreadSlotMinRangePoint(inside, 0.0f, 0.0f, 0.0f, 0.0f, 19.0f);
+        CHECK(std::fabs(out.x - 19.0f) < 0.001f && std::fabs(out.y) < 0.001f);
+        CHECK(out.ring == 1 && out.j == 0);
+        const SpreadSlotPoint outside{0.0f, 24.0f, 2, 3};
+        const SpreadSlotPoint kept = SpreadSlotMinRangePoint(outside, 0.0f, 0.0f, 0.0f, 0.0f, 19.0f);
+        CHECK(kept.x == 0.0f && kept.y == 24.0f);
+        const SpreadSlotPoint off = SpreadSlotMinRangePoint(inside, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f);
+        CHECK(off.x == 12.0f && off.y == 0.0f);
+        // An off-centre boss: the bearing is the boss->slot one, so the point lands exactly minYd from the boss.
+        const SpreadSlotPoint bossOff = SpreadSlotMinRangePoint(inside, 3.0f, 0.0f, 0.0f, 0.0f, 14.0f);
+        const float dx = bossOff.x - 3.0f;
+        CHECK(std::fabs(std::sqrt(dx * dx + bossOff.y * bossOff.y) - 14.0f) < 0.001f);
+        // A slot on the boss itself takes the centre's bearing instead, and always lands on the floor.
+        const SpreadSlotPoint onBoss{5.0f, 5.0f, 0, 0};
+        const SpreadSlotPoint pushed = SpreadSlotMinRangePoint(onBoss, 5.0f, 5.0f, 0.0f, 0.0f, 19.0f);
+        const float px = pushed.x - 5.0f;
+        const float py = pushed.y - 5.0f;
+        CHECK(std::fabs(std::sqrt(px * px + py * py) - 19.0f) < 0.001f);
+        CHECK(pushed.x > 5.0f && pushed.y > 5.0f);
+    }
+    std::cout << "  [PASS] a min-range slot outside the dead zone, the key off and a caster keep the ring\n";
 
     // The index counts lower guids only, and a bot outside the list has none.
     const std::vector<std::uint64_t> guids = { 50, 10, 30 };

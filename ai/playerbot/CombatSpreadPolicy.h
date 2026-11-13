@@ -62,6 +62,10 @@ namespace ai
     // another verdict (or the previous pull) must not cut the first cast.
     constexpr std::uint32_t kSpreadSlotCastGapMs = 1500;
     constexpr int kSpreadSlotMaxRings = 3;
+    // A hunter's Auto Shot has this dead zone: nearer than 8 yd it cannot shoot.
+    constexpr float kSpreadMinRangeShotYd = 8.0f;
+    // The floor a min-range slot keeps past the boss's own body.
+    constexpr float kSpreadMinRangeMarginYd = 2.0f;
 
     struct SpreadSlotPoint
     {
@@ -130,6 +134,54 @@ namespace ai
             const float by = b.y - prefY;
             return ax * ax + ay * ay < bx * bx + by * by;
         });
+    }
+
+    // Whether the min-range floor applies to this bot: the key is on and the bot's class needs a shot's minimum
+    // range (a hunter's Auto Shot has an 8 yd dead zone). Casters have no dead zone, so their slots stay on the
+    // rings even with the key on.
+    inline bool SpreadSlotMinRangeApplies(bool keyOn, bool needsMinRange)
+    {
+        return keyOn && needsMinRange;
+    }
+
+    // The floor a min-range slot keeps from the boss: the boss's combat reach (its body) plus the shot's dead zone
+    // plus the margin. A nonsense reach reads as 0 so the floor never drops below the dead zone.
+    inline float SpreadSlotMinRangeYd(float bossCombatReachYd)
+    {
+        const float reach = std::isfinite(bossCombatReachYd) && bossCombatReachYd > 0.0f ? bossCombatReachYd : 0.0f;
+        return reach + kSpreadMinRangeShotYd + kSpreadMinRangeMarginYd;
+    }
+
+    // A ring point nearer the boss than `minYd` moves out along its own bearing from the boss to exactly that
+    // range; a point already that far, or one on the boss itself (bearing taken from the centre instead, +y when
+    // that is degenerate too), keeps its ring and slot. The rings have no floor from the boss, so without this a
+    // hunter's slot lands inside Auto Shot's dead zone and the step-out fights the pull back.
+    inline SpreadSlotPoint SpreadSlotMinRangePoint(const SpreadSlotPoint& point, float bossX, float bossY,
+        float centreX, float centreY, float minYd)
+    {
+        if (!(minYd > 0.0f))
+            return point;
+        float dx = point.x - bossX;
+        float dy = point.y - bossY;
+        float yd = std::sqrt(dx * dx + dy * dy);
+        if (!std::isfinite(yd) || yd >= minYd)
+            return point;
+        if (yd < 0.01f)
+        {
+            dx = point.x - centreX;
+            dy = point.y - centreY;
+            yd = std::sqrt(dx * dx + dy * dy);
+            if (yd < 0.01f)
+            {
+                dx = 0.0f;
+                dy = 1.0f;
+                yd = 1.0f;
+            }
+        }
+        SpreadSlotPoint out = point;
+        out.x = bossX + dx / yd * minYd;
+        out.y = bossY + dy / yd * minYd;
+        return out;
     }
 
     // A bot's index in the slot order: the number of slot-eligible members

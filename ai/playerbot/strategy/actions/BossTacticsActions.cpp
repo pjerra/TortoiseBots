@@ -9394,6 +9394,16 @@ BossSpreadSlotTask ReadBossSpreadSlot(PlayerbotAI* ai, Player* bot)
     {
         const float spacingYd = BossSpreadYd(ai, bot, kSpreadSettledDistance);
         points = SpreadSlotPoints(cx, cy, spacingYd, SpreadSlotRings(spacingYd, anchored, radius));
+        // The rings have no floor from the boss, so a hunter's slot can land inside Auto Shot's 8 yd dead zone and
+        // the dead-zone step-out (about 15 yd) fights the slot's pull back. With the key on, every ring point is
+        // moved out to the boss's reach + 8 + 2 yd; a caster keeps the rings (SpreadSlotMinRangeApplies).
+        if (boss && SpreadSlotMinRangeApplies(sPlayerbotAIConfig.spreadRangedMinRange,
+                                              bot->GetClass() == CLASS_HUNTER))
+        {
+            const float minYd = SpreadSlotMinRangeYd(boss->GetCombatReach());
+            for (SpreadSlotPoint& point : points)
+                point = SpreadSlotMinRangePoint(point, boss->GetPositionX(), boss->GetPositionY(), cx, cy, minYd);
+        }
         SpreadSlotOrder(points, prefX, prefY);
     }
 
