@@ -12751,6 +12751,7 @@ BossTankPost ai::FindBossTankPost(PlayerbotAI* ai, Player* bot, const BossTactic
                                                step == TankPostDecision::Leash);
     out.holdingOtherHostile = in.holdingOtherHostile && !subjectOutranks;
     out.standActive = stand.valid;
+    out.holdSpot = holdSpot;
     out.step = step;
     out.boss = boss;
     out.subject = subject;
