@@ -382,8 +382,10 @@ namespace ai
     // The slot decision's precedence: the seek and the stand move the bot, a
     // fight duty keeps it, then the geometry. Arrival outranks the cast gate
     // (a bot at its slot holds there, cast or not). A slot inside the shot's
-    // dead zone is no place to walk to, so it outranks the range test and
-    // leaves the position to the bot's own step-out.
+    // dead zone is no place to walk to, so it outranks the floor, the range
+    // test and the walk and leaves the position to the bot's own step-out:
+    // the dead-zone point is also what makes the slot unusable, so read after
+    // the floor it could never be named.
     inline SpreadSlotVerdict SpreadSlotWanted(bool seekValid, bool standValid, bool victimOrCharmed, bool walkout,
         bool hasCentre, bool hasSlot, bool slotUsable, bool inRange, bool castBlocked, bool arrived, bool deadZone)
     {
@@ -399,10 +401,10 @@ namespace ai
             return SpreadSlotVerdict::NoCentre;
         if (!hasSlot)
             return SpreadSlotVerdict::NoSlot;
-        if (!slotUsable)
-            return SpreadSlotVerdict::Floor;
         if (deadZone)
             return SpreadSlotVerdict::DeadZone;
+        if (!slotUsable)
+            return SpreadSlotVerdict::Floor;
         if (!inRange)
             return SpreadSlotVerdict::Range;
         if (arrived)

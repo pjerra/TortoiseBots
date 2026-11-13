@@ -506,7 +506,8 @@ int main()
     std::cout << "  [PASS] fallback keeps the owned slot telemetry\n";
 
     // The verdict precedence of the slot decision, in D6 order. The last argument is the dead-zone guard: it sits
-    // after the floor (a point the floor or the map refuses is not the shot's problem) and before the range test.
+    // before the floor (the dead-zone point is what makes the slot unusable, so a floor answer would hide it) and
+    // before the range test.
     CHECK(SpreadSlotWanted(true, true, true, true, false, false, false, false, true, true, false) ==
           SpreadSlotVerdict::Seek);
     CHECK(SpreadSlotWanted(false, true, true, true, true, true, true, true, false, false, false) ==
@@ -521,17 +522,15 @@ int main()
           SpreadSlotVerdict::NoSlot);
     CHECK(SpreadSlotWanted(false, false, false, false, true, true, false, true, false, false, false) ==
           SpreadSlotVerdict::Floor);
-    // The floor outranks the dead zone: a slot the map or the anchor refuses stays a floor read.
+    // SpreadSlot_DeadZoneVerdict: a slot inside the shot's dead zone leaves the read with no usable point (the zone
+    // is what refused it), so the dead zone outranks the floor; it also outranks the range test and the walk, and
+    // the hunter keeps the step-out's position.
     CHECK(SpreadSlotWanted(false, false, false, false, true, true, false, true, false, false, true) ==
-          SpreadSlotVerdict::Floor);
+          SpreadSlotVerdict::DeadZone);
+    CHECK(SpreadSlotWanted(false, false, false, false, true, true, false, false, false, false, true) ==
+          SpreadSlotVerdict::DeadZone);
     CHECK(SpreadSlotWanted(false, false, false, false, true, true, true, false, false, false, false) ==
           SpreadSlotVerdict::Range);
-    // SpreadSlot_DeadZoneVerdict: a slot inside the shot's dead zone is no place to walk to, so it outranks the
-    // range test and the walk: the hunter keeps the step-out's position.
-    CHECK(SpreadSlotWanted(false, false, false, false, true, true, true, true, false, false, true) ==
-          SpreadSlotVerdict::DeadZone);
-    CHECK(SpreadSlotWanted(false, false, false, false, true, true, true, false, false, false, true) ==
-          SpreadSlotVerdict::DeadZone);
     // A usable point outside the zone is still a walk.
     CHECK(SpreadSlotWanted(false, false, false, false, true, true, true, true, false, false, false) ==
           SpreadSlotVerdict::SlotMove);
