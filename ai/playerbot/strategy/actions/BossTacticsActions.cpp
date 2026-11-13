@@ -8439,7 +8439,10 @@ BossStandTarget ai::FindBossStand(PlayerbotAI* ai, Player* bot, const BossStandP
         }
     }
     // What the other bots can see of this one: its hold as of the last tick, before this tick arms it again.
-    const StandHold heldBefore = hold;
+    const bool held = hold.armed;
+    const std::uint32_t heldBoss = hold.bossEntry;
+    const std::uint32_t heldAnchor = hold.anchor;
+    const std::uint32_t heldReleaseAnchor = hold.releaseAnchor;
     bool sawBoss = false;
     Unit* boss = nullptr;
     Unit* episodeBoss = nullptr;  // the unit of the recorded episode's boss, for its release reason
@@ -8533,7 +8536,7 @@ BossStandTarget ai::FindBossStand(PlayerbotAI* ai, Player* bot, const BossStandP
         const float anchorY = points[0]->anchorY;
         const uint32 bossEntry = boss->GetEntry();
         const uint32 anchor = points[0]->anchor;
-        const auto candidateOf = [&](Player* member, const StandHold& memberHold)
+        const auto candidateOf = [&](Player* member, bool holdsSameAnchor)
         {
             StandCandidate candidate;
             candidate.id = member->GetObjectGuid().GetRawValue();
@@ -8544,11 +8547,11 @@ BossStandTarget ai::FindBossStand(PlayerbotAI* ai, Player* bot, const BossStandP
             candidate.engaged = StandMemberEngaged(boss->GetThreatManager().getThreat(member) > 0.0f,
                                                    boss->GetVictim() == member, sPlayerbotAIConfig.bossStandWholeRaid,
                                                    member->IsInCombat(), boss->IsInCombat());
-            candidate.holdsSameAnchor = memberHold.armed && memberHold.bossEntry == bossEntry && memberHold.anchor == anchor;
+            candidate.holdsSameAnchor = holdsSameAnchor;
             return candidate;
         };
         std::vector<StandCandidate> candidates;
-        const StandCandidate self = candidateOf(bot, heldBefore);
+        const StandCandidate self = candidateOf(bot, held && heldBoss == bossEntry && heldAnchor == anchor);
         selfCounts = StandMemberCounts(self, anchorX, anchorY);
         // AiPlayerbot.BossStandNearestSeat: a tank its own live hold_spot post keeps at the spot is excused before it is
         // seated. The caller's row spot stands in for a post whose record does not exist yet (its first read), and the
@@ -8610,14 +8613,14 @@ BossStandTarget ai::FindBossStand(PlayerbotAI* ai, Player* bot, const BossStandP
                         continue;
                     }
                 }
-                StandHold memberHold;
+                bool memberSameAnchor = false;
                 {
                     std::lock_guard<CheckedMutex> lock(g_standHoldMutex);
                     auto it = g_standHolds.find(member->GetObjectGuid().GetRawValue());
                     if (it != g_standHolds.end())
-                        memberHold = it->second;
+                        memberSameAnchor = StandHoldAt(it->second, bossEntry, anchor);
                 }
-                candidates.push_back(candidateOf(member, memberHold));
+                candidates.push_back(candidateOf(member, memberSameAnchor));
             }
         }
         bots = SelectStandBots(candidates, anchorX, anchorY);
@@ -8682,7 +8685,7 @@ BossStandTarget ai::FindBossStand(PlayerbotAI* ai, Player* bot, const BossStandP
             else if (episodeBoss)
             {
                 const std::vector<BossStandRow>* rows = table.Rows(mapId, ObjectGuid(episode.boss).GetEntry());
-                if (rows && StandReleaseAnchorReached(*rows, heldBefore.releaseAnchor, episodeBoss->GetPositionX(),
+                if (rows && StandReleaseAnchorReached(*rows, heldReleaseAnchor, episodeBoss->GetPositionX(),
                                                       episodeBoss->GetPositionY()))
                     releaseReason = "release_anchor";
             }

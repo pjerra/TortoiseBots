@@ -184,7 +184,7 @@ class BossStandWiring(unittest.TestCase):
         self.assertIn('memberAi->HasStrategy("boss tactics", BotState::BOT_STATE_COMBAT)', fn)
         self.assertIn("StandRoleOf(PlayerbotAI::IsTank(member), PlayerbotAI::IsHeal(member), ai->IsRanged(member)) != role", fn)
         # The bot itself is judged by the same rule as the others, first.
-        self.assertLess(fn.index("const StandCandidate self = candidateOf(bot, heldBefore);"), fn.index("LiveGroupMembers(group)"))
+        self.assertLess(fn.index("const StandCandidate self = candidateOf(bot, held && heldBoss == bossEntry && heldAnchor == anchor);"), fn.index("LiveGroupMembers(group)"))
         self.assertIn("selfCounts = StandMemberCounts(self, anchorX, anchorY);", fn)
 
     def test_only_bots_in_the_fight_with_the_boss_take_seats(self):
@@ -192,7 +192,7 @@ class BossStandWiring(unittest.TestCase):
         # One rule for every bot that evaluates the plan: engaged with THIS boss (its threat list or its victim) in
         # range of the anchor, or holding a stand for the same boss and anchor.
         self.assertIn("StandMemberEngaged(boss->GetThreatManager().getThreat(member) > 0.0f,", fn)
-        self.assertIn("memberHold.armed && memberHold.bossEntry == bossEntry && memberHold.anchor == anchor", fn)
+        self.assertIn("memberSameAnchor = StandHoldAt(it->second, bossEntry, anchor);", fn)
         self.assertIn("bots = SelectStandBots(candidates, anchorX, anchorY);", fn)
         # The anchor is the one the open window picked, and the boss the one that owns it.
         self.assertIn("const float anchorX = points[0]->anchorX;", fn)
@@ -200,8 +200,8 @@ class BossStandWiring(unittest.TestCase):
         # Every member candidate is built by the one lambda; nobody is pushed unchecked.
         self.assertNotIn("bots.push_back(", fn)
         # The others read the hold the member left; the self-judgement reads its hold as of the last tick.
-        self.assertIn("const StandHold heldBefore = hold;", fn)
-        self.assertLess(fn.index("const StandHold heldBefore = hold;"), fn.index("StandPointsNow("))
+        self.assertIn("const bool held = hold.armed;", fn)
+        self.assertLess(fn.index("const bool held = hold.armed;"), fn.index("StandPointsNow("))
         # A bot that does not count leaves no hold behind.
         self.assertIn("(boss ? selfCounts :", fn)
 
@@ -528,7 +528,7 @@ class BossStandWiring(unittest.TestCase):
         self.assertIn("target.stay = true;\n        target.post = true;", fn)
         # A member its excused post keeps at its spot reserves no seat, and its plan entry is taken back.
         self.assertLess(fn.index("if (sPlayerbotAIConfig.bossStandNearestSeat && PlayerbotAI::IsTank(member))"),
-                        fn.index("candidates.push_back(candidateOf(member, memberHold));"))
+                        fn.index("candidates.push_back(candidateOf(member, memberSameAnchor));"))
         self.assertIn("excused.push_back(member->GetObjectGuid().GetRawValue());", fn)
         self.assertIn("excused.push_back(selfKey);", fn)
         # The policy's spot and excuse rules are the ones the glue calls.
@@ -539,7 +539,7 @@ class BossStandWiring(unittest.TestCase):
             self.assertIn(needle, POLICY)
         # The post read takes the post lock alone: the caller holds no g_standHoldMutex around either call.
         member = fn[fn.index("if (sPlayerbotAIConfig.bossStandNearestSeat && PlayerbotAI::IsTank(member))"):
-                    fn.index("StandHold memberHold;")]
+                    fn.index("bool memberSameAnchor = false;")]
         self.assertIn("TankPostLiveSpot(", member)
         self.assertNotIn("g_standHoldMutex", member)
         self_read = fn[selfExcuse:fn.index("candidates.push_back(self);")]

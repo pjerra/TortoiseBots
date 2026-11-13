@@ -343,15 +343,22 @@ namespace ai
         return out;
     }
 
-    // Every role's rows of one anchor and one window spell, in table order: the seats a pooled window shares.
-    inline std::vector<const BossStandRow*> PooledStandPoints(const std::vector<BossStandRow>& rows,
-                                                              std::uint32_t anchor, std::uint32_t windowSpell)
+    // Every role's rows of one anchor and one window spell that apply to the boss now (StandRowActive: the same
+    // aura, signal and radius a row is checked by alone), in table order: the seats a pooled window shares. A row
+    // whose own condition is false keeps its seat out of the pool.
+    template <typename HasAura>
+    std::vector<const BossStandRow*> PooledStandPoints(const std::vector<BossStandRow>& rows, std::uint32_t anchor,
+                                                       std::uint32_t windowSpell, float bossX, float bossY,
+                                                       std::uint32_t castingSpell, HasAura hasAura,
+                                                       bool stoppedNoTarget = false)
     {
         std::vector<const BossStandRow*> out;
         for (const BossStandRow& row : rows)
         {
-            if (row.anchor == anchor && row.windowSpell == windowSpell)
-                out.push_back(&row);
+            if (row.anchor != anchor || row.windowSpell != windowSpell ||
+                !StandRowActive(row, bossX, bossY, row.aura != 0 && hasAura(row.aura), castingSpell, stoppedNoTarget))
+                continue;
+            out.push_back(&row);
         }
         return out;
     }
@@ -386,6 +393,9 @@ namespace ai
         std::uint32_t releaseAnchor = 0;
         std::uint32_t holdMs = 0;
         std::uint32_t lastOpenMs = 0;      // the last time the window was open: the cast's end to within a tick
+        // The pooled window's rows as they were active when it was last open (StandHoldSeal). A held window rebuilds
+        // its pool from exactly these: an aura or signal that closed since must not drop the seats it opened.
+        std::vector<std::uint32_t> rowIds;
     };
 
     inline void StandHoldArm(StandHold& hold, const BossStandRow& row, std::uint32_t nowMs)
@@ -399,11 +409,44 @@ namespace ai
         hold.lastOpenMs = nowMs;
     }
 
+    // Records the pooled window's rows as its ids (their index in the boss's row vector, which the seal never
+    // reorders). Resizing in place keeps the hold's buffer across the window's ticks.
+    inline void StandHoldSeal(StandHold& hold, const std::vector<BossStandRow>& rows,
+                              const std::vector<const BossStandRow*>& points)
+    {
+        hold.rowIds.resize(points.size());
+        for (std::size_t i = 0; i < points.size(); ++i)
+            hold.rowIds[i] = static_cast<std::uint32_t>(points[i] - rows.data());
+    }
+
+    // Whether a hold seats at this boss and anchor: what another bot's read needs of it, without copying its pool.
+    inline bool StandHoldAt(const StandHold& hold, std::uint32_t bossEntry, std::uint32_t anchor)
+    {
+        return hold.armed && hold.bossEntry == bossEntry && hold.anchor == anchor;
+    }
+
     // Whether a hold still seats: armed, less than holdMs since the window was last open (wrap-safe), and the boss
     // has not reached the release anchor.
     inline bool StandHoldActive(const StandHold& hold, std::uint32_t nowMs, bool releaseReached)
     {
         return hold.armed && !releaseReached && static_cast<std::uint32_t>(nowMs - hold.lastOpenMs) < hold.holdMs;
+    }
+
+    // The pool a held window keeps: exactly the rows it was sealed on, whatever their aura or signal says now.
+    inline std::vector<const BossStandRow*> SealedStandPoints(const std::vector<BossStandRow>& rows,
+                                                              const StandHold& hold)
+    {
+        std::vector<const BossStandRow*> out;
+        out.reserve(hold.rowIds.size());
+        for (std::uint32_t id : hold.rowIds)
+        {
+            if (id >= rows.size())
+                continue;
+            const BossStandRow& row = rows[id];
+            if (row.anchor == hold.anchor && row.windowSpell == hold.windowSpell)
+                out.push_back(&row);
+        }
+        return out;
     }
 
     // The points a bot of `role` stands at now: the open window's (ActiveStandPoints; this arms or refreshes the
@@ -420,10 +463,17 @@ namespace ai
         if (!points.empty())
         {
             StandHoldArm(hold, *points[0], nowMs);
-            // AiPlayerbot.BossStandNearestSeat: a window's seats are every role's rows of its anchor and window spell,
-            // so the roles share their cells. A row with no window spell is never pooled: it keeps its role.
+            // AiPlayerbot.BossStandNearestSeat: a window's seats are every role's rows of its anchor and window spell
+            // that apply now, so the roles share their cells. A row with no window spell is never pooled: it keeps
+            // its role.
             if (pooled && points[0]->windowSpell != 0)
-                return PooledStandPoints(rows, points[0]->anchor, points[0]->windowSpell);
+            {
+                points = PooledStandPoints(rows, points[0]->anchor, points[0]->windowSpell, bossX, bossY, castingSpell,
+                                           hasAura, stoppedNoTarget);
+                StandHoldSeal(hold, rows, points);
+                return points;
+            }
+            hold.rowIds.clear();
             return points;
         }
         if (!hold.armed)
@@ -436,8 +486,14 @@ namespace ai
             return points;
         }
         const std::vector<const BossStandRow*> held = HeldStandPoints(rows, role, hold.anchor);
-        if (pooled && !held.empty() && hold.windowSpell != 0)
-            return PooledStandPoints(rows, hold.anchor, hold.windowSpell);
+        // A held window keeps the pool it was sealed on: the rows whose own conditions opened it, not those that
+        // apply now (the aura or signal may have closed while the seats go on firing).
+        if (pooled && hold.windowSpell != 0)
+        {
+            const std::vector<const BossStandRow*> sealed = SealedStandPoints(rows, hold);
+            if (!sealed.empty())
+                return sealed;
+        }
         return held;
     }
 

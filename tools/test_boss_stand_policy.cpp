@@ -1474,7 +1474,7 @@ int main()
         CHECK(std::fabs(Dist(0, 44.0f, healerPlan[0].x, healerPlan[0].y) - 30.0f) < 0.05f);
 
         // Pooled: both stand within 20 yd.
-        const std::vector<const BossStandRow*> pooled = PooledStandPoints(rows, 1, 777);
+        const std::vector<const BossStandRow*> pooled = PooledStandPoints(rows, 1, 777, 0, 0, 777, NoAura);
         CHECK(pooled.size() == 2);
         const std::vector<StandSeat> plan = PlanStandSeats(pooled, bots, lane, kBossStandNearYd);
         CHECK(plan.size() == 2);
@@ -1483,16 +1483,84 @@ int main()
             CHECK(plan[i].valid);
             CHECK(Dist(bots[i].x, bots[i].y, plan[i].x, plan[i].y) <= kBossStandNearYd);
         }
-        // The pool is the anchor and window spell only: another window's rows and the role rows of another anchor are
-        // left out, and a role with no row of its own in the window gets none.
+        // The pool is the active rows of the anchor and window spell only: another window's rows and the role rows of
+        // another anchor are left out, and a role with no row of its own in the window gets none.
         BossStandRow otherWindow = Row(1, 0, 0, 8, StandRole::Healer, 888, 0, 1, 0, 22, 1, 0, 1);
         otherWindow.releaseAnchor = 2;
         BossStandRow otherAnchor = Row(3, -100, 0, 8, StandRole::Healer, 777, 0, 0, -100, 14, 1, 0);
         std::vector<BossStandRow> more = rows;
         more.push_back(otherWindow);
         more.push_back(otherAnchor);
-        CHECK(PooledStandPoints(more, 1, 777).size() == 2);
-        CHECK(PooledStandPoints(more, 1, 888).size() == 1);
+        CHECK(PooledStandPoints(more, 1, 777, 0, 0, 777, NoAura).size() == 2);
+        CHECK(PooledStandPoints(more, 1, 888, 0, 0, 888, NoAura).size() == 1);
+    }
+
+    // PooledSeats_OnlyActiveRows: two roles' rows on one anchor and window; only the rows whose own aura and signal
+    // the boss meets join the pool. One role's row opening the window must not seat bots on a row that does not apply.
+    {
+        BossStandRow ranged = Row(1, 0, 0, 8, StandRole::Ranged, 777, 0, 0, 0, 32, 1, 0, 1, 111);
+        ranged.releaseAnchor = 2;
+        BossStandRow healer = Row(1, 0, 0, 8, StandRole::Healer, 777, 1, 0, 0, -32, 1, 0, 1, 222);
+        healer.releaseAnchor = 2;
+        BossStandRow melee = Row(1, 0, 0, 8, StandRole::Melee, 777, 0, 1, 60, 32, 1, 0, 1, 333);
+        melee.releaseAnchor = 2;
+        melee.windowSignal = StandSignal::StoppedNoTarget;
+        BossStandRow release = Row(2, 100, 0, 8, StandRole::Ranged, 777, 0, 0, 100, 32, 1, 0);
+        const std::vector<BossStandRow> rows = { ranged, healer, melee, release };
+        const auto only111 = [](std::uint32_t aura) { return aura == 111; };
+        const auto only333 = [](std::uint32_t aura) { return aura == 333; };
+        const auto all = [](std::uint32_t) { return true; };
+        // All the auras, casting: the stopped_no_target row opens on the cast too (it names the same spell).
+        CHECK(PooledStandPoints(rows, 1, 777, 0, 0, 777, all, false).size() == 3);
+        // Another spell and the boss not stopped: the melee row's signal is false, and the casting rows' window too.
+        CHECK(PooledStandPoints(rows, 1, 777, 0, 0, 888, all, false).empty());
+        // The same spell, the boss stopped without a target: only the signal row applies.
+        CHECK(PooledStandPoints(rows, 1, 777, 0, 0, 888, all, true).size() == 1);
+        // Only the ranged aura is worn: just its row, though the healer's and the melee's share anchor and window.
+        const std::vector<const BossStandRow*> pool = PooledStandPoints(rows, 1, 777, 0, 0, 777, only111);
+        CHECK(pool.size() == 1 && pool[0]->role == StandRole::Ranged);
+        // The signal row's own aura is worn but the signal is false: still out.
+        CHECK(PooledStandPoints(rows, 1, 777, 0, 0, 888, only333, false).empty());
+        CHECK(PooledStandPoints(rows, 1, 777, 0, 0, 888, only333, true).size() == 1);
+        // Through a ranged bot's read: its own row opens the window, and the pool it plans on holds no other seat.
+        StandHold hold;
+        const std::vector<const BossStandRow*> points =
+            StandPointsNow(rows, StandRole::Ranged, 0, 0, 777, only111, hold, 1000, false, true);
+        CHECK(points.size() == 1 && points[0]->role == StandRole::Ranged);
+        CHECK(hold.armed && hold.rowIds.size() == 1);
+    }
+
+    // PooledSeats_SealedKeepsItsPool: a window seals the rows it opened on; an aura that closes mid-hold does not drop
+    // the other roles' seats (the row's own condition may be false while the lane still fires).
+    {
+        BossStandRow ranged = Row(1, 0, 0, 8, StandRole::Ranged, 777, 0, 0, 0, 32, 1, 0, 1, 111);
+        ranged.releaseAnchor = 2;
+        BossStandRow healer = Row(1, 0, 0, 8, StandRole::Healer, 777, 1, 0, 0, -32, 1, 0, 1, 222);
+        healer.releaseAnchor = 2;
+        BossStandRow release = Row(2, 100, 0, 8, StandRole::Ranged, 777, 0, 0, 100, 32, 1, 0);
+        const std::vector<BossStandRow> rows = { ranged, healer, release };
+        const auto all = [](std::uint32_t) { return true; };
+        const auto none = [](std::uint32_t) { return false; };
+        StandHold hold;
+        const std::vector<const BossStandRow*> open =
+            StandPointsNow(rows, StandRole::Ranged, 0, 0, 777, all, hold, 1000, false, true);
+        CHECK(open.size() == 2 && hold.rowIds.size() == 2);
+        // Mid-hold both auras are gone and the cast has ended: the sealed two rows still seat.
+        const std::vector<const BossStandRow*> held =
+            StandPointsNow(rows, StandRole::Ranged, 20, 0, 0, none, hold, 2000, false, true);
+        CHECK(held.size() == 2 && hold.rowIds.size() == 2);
+        for (const BossStandRow* row : held)
+            CHECK(row->anchor == 1 && row->windowSpell == 777);
+        // A later window pools by the conditions of that read: only the aura the boss wears now.
+        const auto only222 = [](std::uint32_t aura) { return aura == 222; };
+        const std::vector<const BossStandRow*> openAgain =
+            StandPointsNow(rows, StandRole::Healer, 0, 0, 777, only222, hold, 3000, false, true);
+        CHECK(openAgain.size() == 1 && openAgain[0]->role == StandRole::Healer);
+        CHECK(hold.rowIds.size() == 1);
+        // And its hold keeps exactly the one row it sealed on, after that aura closes too.
+        const std::vector<const BossStandRow*> heldAgain =
+            StandPointsNow(rows, StandRole::Healer, 20, 0, 0, none, hold, 4000, false, true);
+        CHECK(heldAgain.size() == 1 && heldAgain[0]->role == StandRole::Healer);
     }
 
     // PooledSeats_AlwaysRowsKeepRole: a row with no window spell is never pooled; the roles keep their cells.
