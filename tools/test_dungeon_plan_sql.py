@@ -3563,24 +3563,22 @@ class DungeonPlanSql(unittest.TestCase):
         # was the Mobile Alert System 7849's spawn). The Launch Bay packs at -626 448 and -747 543 keep leg 3's third to
         # fifth via points as their approach stands. The vias and the seam rows of 20261024152900 are gone with the
         # walks they fixed: leg 3 now takes the upper corridor only and leg 2 the west ramp down.
-        # 20261113210000 (turtle-agent 2e64f342, plan commit 22f37d98, 2026-11-13): issue #1542, round 2, on top of
-        # 20261112234000 (deployed on test3, t1113-trials: it stays applied and its rows are replaced whole). The proof
-        # run dr-proof-gnomer (slot 4)
-        # took steps 1-127 clean in 47 min and then stalled at steps 152-154 fighting beside the lower-deck 6212/6232
-        # pack at -738.7 659.8 -323.4, the tank dying first in all five fights there. That pack is a planned pull again,
-        # as the pre-short-route rows had it (20261104160000, pull group 15): leg 3 pull group 13, before the route to
-        # the old step 152, with its old entries, positions and radius 14.7 and the old plan's own lower-deck stand
-        # -732.04 671.15 -328.66 ("pull group 18 approach", 14.2 yd from the pack on the pack's floor; the navmesh walk
-        # down to it from the old step 151 is 249.8 yd and the way back up 209.4 yd, which the approach hops express in
-        # six rows). The other lower-deck pack at -688.2 704.6 -330.7 stays dropped: the run never fought within 15 yd
-        # of it. Counts: 80 packs, 167 steps (was 159), the same five legs, four bosses and leg 2/4 rows.
+        # 20261113230000 (turtle-agent fdb153b3, 2026-11-13): issue #1542, round 3, on top of 20261112234000 and
+        # 20261113210000 (both stay applied: the second is deployed on test3, t1113-trials, and this file replaces its
+        # rows whole). Round 2's lower-deck pack is gone. The step-152 stall's pull target was spawn 33496 at
+        # -738.366 705.214 -317.977, the planned -734.65 709.46 pull (its four bodies: the 6232 and its three 6212
+        # agents), not the 6212/6232 pack at -738.7 659.8 -323.4 (its 6232 is 33460, 46 yd away). That pack's only
+        # walk is the 265 yd lower-deck loop from leg 3's -753.84 656.44 pull, across the leg's own -734.65 709.46
+        # and -691.75 720.44 pulls and the dropped -724 698 and -706 693 packs, and the corridor above has no line to
+        # it (a navmesh ray hits 5-6 yd out, so the tank has no shot there). Counts are the short route's again: 79
+        # packs, 159 steps (was 167), the same five legs, four bosses and leg 2/4 rows.
         name, text = newest_plan_text("gnomeregan")
-        self.assertEqual(name, "20261113210000_world.sql")
-        self.assertIn("('gnomeregan', 90, '6392,6329', '6392', '6220,6226,6227,7849,6223', 'turtle-agent 2e64f342 dungeons/gnomeregan.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261113230000_world.sql")
+        self.assertIn("('gnomeregan', 90, '6392,6329', '6392', '6220,6226,6227,7849,6223', 'turtle-agent fdb153b3 dungeons/gnomeregan.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         self.assertEqual(len(leg_rows(text, "gnomeregan")), 5)
         rows = [r for r in self.step_rows(text) if r["plan"] == "gnomeregan"]
-        self.assertEqual(len(rows), 167)
-        self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(5)], [26, 28, 6, 16, 4])
+        self.assertEqual(len(rows), 159)
+        self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(5)], [26, 28, 6, 15, 4])
         self.assertEqual([r["entry"] for r in rows if r["kind"] == "boss"], ["7079", "6235", "6229", "7800"])
         self.assertEqual((rows[-1]["leg"], rows[-1]["kind"], rows[-1]["entry"]), ("4", "boss", "7800"))
         self.assertFalse([r for r in rows if r["entry"] == "6228"], "the Ambassador's boss step is back")
@@ -3600,12 +3598,12 @@ class DungeonPlanSql(unittest.TestCase):
                          [("-656", "437.5", "-273")])
         self.assertEqual([(r["x"], r["y"], r["z"]) for r in leg3 if r["comment"] == "pull group 7 approach"],
                          [("-683.9", "524.3", "-273.93"), ("-690", "526", "-276.4")])
-        # The lower-deck pack of 20261104160000 is back as leg 3 pull group 13, pulled from the old lower-deck stand.
-        self.assertEqual([(r["x"], r["y"], r["z"]) for r in leg3 if r["comment"] == "pull group 13 approach"],
-                         [("-732.04", "671.15", "-328.66")])
-        self.assertEqual([(r["x"], r["y"], r["z"], r["radius"], r["entries"]) for r in leg3
-                          if r["comment"] == "pull group 13"],
-                         [("-738.66", "659.81", "-323.4", "14.7", "6212,6232")])
+        # Round 2's lower-deck pack is no row of the short route: its only walk is the lower-deck loop across the
+        # packs this route drops, so neither the pack row nor its old stand is back.
+        self.assertFalse([r for r in leg3 if abs(float(r["x"]) + 738.66) < 0.01 and abs(float(r["y"]) - 659.81) < 0.01],
+                         "the round-2 lower-deck pack is a row again")
+        self.assertFalse([r for r in leg3 if abs(float(r["x"]) + 732.04) < 0.01 and abs(float(r["y"]) - 671.15) < 0.01],
+                         "the round-2 lower-deck stand is a row again")
         # Leg 3's old `to` was the Mobile Alert System spawn 7849 (not attackable) and the old -747 543 stand lay west
         # of its pack; neither is a row again.
         self.assertFalse([r for r in leg3 if r["comment"] in ("to", "via") and abs(float(r["x"]) + 804.261) < 0.01
