@@ -83,7 +83,10 @@ class TankPostWiring(unittest.TestCase):
         self.assertIn("stored.arrivedSubjectGuid = in.subjectGuid;", find)
         self.assertIn("in.subjectOnTank = subject && subject->GetVictim() == bot", find)
         self.assertIn("const BossStandTarget stand = (holdSpot || sPlayerbotAIConfig.dungeonRunTankPostWalks)", find)
-        self.assertIn("? FindBossStand(ai, bot) : BossStandTarget();", find)
+        self.assertIn("? FindBossStand(ai, bot, postSpot) : BossStandTarget();", find)
+        # A hold_spot row hands its spot to the read: a new post has no record yet, so its tank must not be seated.
+        self.assertIn("BossStandPost postSpot;\n    if (holdSpot)\n    {\n        postSpot.valid = true;\n"
+                      "        postSpot.x = row->spotX;", find)
         self.assertIn("in.seated = TankPostSeated(stand.valid, stand.stay);", find)
         self.assertIn("out.standActive = stand.valid;", find)
         self.assertIn("if (holdSpot && currentTarget == subject)\n        in.holdingOtherHostile = false;", find)

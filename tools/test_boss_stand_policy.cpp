@@ -1069,6 +1069,37 @@ int main()
         CHECK(!seatOf(stuck, 13).valid);
     }
 
+    // AiPlayerbot.BossStandNearestSeat: a tank an excused post frees loses its plan entry and its seat goes to the next
+    // bot, exactly as a death does. Two spots, three bots: 1 and 2 are seated, 3 waits; excusing 1 takes its entry back
+    // and 3 takes the freed spot.
+    {
+        BossStandRow a = Row(1, 0, 0, 400, StandRole::Ranged, 777, 0, 0, 0.0f, 0.0f, 1, 0, 1);
+        BossStandRow b = Row(1, 0, 0, 400, StandRole::Ranged, 777, 0, 1, 12.0f, 0.0f, 1, 0, 1);
+        const std::vector<BossStandRow> rows = { a, b };
+        const std::vector<const BossStandRow*> points = Points(rows);
+        const StandLane lane = StandLaneOf(rows, rows[0]);
+        const std::vector<StandBot> bots = { { 1, 0.0f, 0.0f }, { 2, 12.0f, 0.0f }, { 3, 10.0f, 0.0f } };
+        std::vector<StandSeat> plan = PlanStandSeats(points, bots, lane);
+        const auto seatOf = [](const std::vector<StandSeat>& seats, std::uint64_t id)
+        {
+            for (const StandSeat& seat : seats)
+                if (seat.id == id)
+                    return seat;
+            return StandSeat();
+        };
+        CHECK(plan.size() == 3);
+        CHECK(seatOf(plan, 1).valid && seatOf(plan, 2).valid && !seatOf(plan, 3).valid);
+        // The excused tank is not in `bots` any more: its entry goes and the unseated bot takes its spot.
+        const std::vector<StandBot> rest = { { 2, 12.0f, 0.0f }, { 3, 10.0f, 0.0f } };
+        CHECK(ExtendStandPlan(plan, points, rest, lane, {}, { 1 }));
+        CHECK(plan.size() == 2);
+        CHECK(seatOf(plan, 1).id == 0);
+        CHECK(seatOf(plan, 2).valid && seatOf(plan, 2).x == 12.0f && seatOf(plan, 2).y == 0.0f);
+        CHECK(seatOf(plan, 3).valid && seatOf(plan, 3).x == 0.0f && seatOf(plan, 3).y == 0.0f);
+        // An excused id the plan does not hold frees nothing, as a dead one.
+        CHECK(!ExtendStandPlan(plan, points, rest, lane, {}, { 99 }));
+    }
+
     // Late joiners are seated jointly: two free seats on one side, at x = 0 and x = 60, and two newcomers, the lower
     // id at x = 28 (28 yd from the x = 0 seat, 32 from the x = 60 one) and the higher id standing on the x = 0 seat.
     // Seated one after another in id order the lower id bot takes the nearer x = 0 seat and leaves the higher id bot
@@ -1318,6 +1349,311 @@ int main()
         CHECK(unseatedRows == 0);
         CHECK(record.assignedLogged && record.arrivedLogged);
         CHECK(record.assignedMs == 1000);
+    }
+
+    // AiPlayerbot.BossStandNearestSeat, S2: the 20 yd cap is a cost tier under the 35 yd one, so a side's plan seats
+    // more bots within 20 yd before it walks the least. The case that fails without the cap: bot 1 walks 30 yd in the
+    // min-sum plan, bot 2 walks 1.
+    {
+        BossStandRow seatA = Row(1, 0, 0, 8, StandRole::Ranged, 777, 0, 0, 0, 20, 1, 0, 1);
+        seatA.releaseAnchor = 2;
+        BossStandRow seatB = Row(1, 0, 0, 8, StandRole::Ranged, 777, 0, 1, 0, 39, 1, 0, 1);
+        seatB.releaseAnchor = 2;
+        BossStandRow release = Row(2, 100, 0, 8, StandRole::Ranged, 777, 0, 0, 100, 20, 1, 0);
+        const std::vector<BossStandRow> rows = { seatA, seatB, release };
+        const std::vector<const BossStandRow*> points = { &rows[0], &rows[1] };
+        const StandLane lane = StandLaneOf(rows, rows[0]);
+        CHECK(lane.valid);
+        // Bot 1: 19.0 yd from seat A, 30.0 from seat B; bot 2: 1.0 from A, 20.0 from B.
+        const std::vector<StandBot> bots = { { 1, 18.42f, 15.32f }, { 2, 0.0f, 19.0f } };
+        CHECK(std::fabs(Dist(18.42f, 15.32f, 0, 20) - 19.0f) < 0.05f);
+        CHECK(std::fabs(Dist(18.42f, 15.32f, 0, 39) - 30.0f) < 0.05f);
+        CHECK(std::fabs(Dist(0, 19.0f, 0, 20) - 1.0f) < 0.05f);
+        CHECK(std::fabs(Dist(0, 19.0f, 0, 39) - 20.0f) < 0.05f);
+
+        const std::vector<StandSeat> capped = PlanStandSeats(points, bots, lane, kBossStandNearYd);
+        CHECK(capped.size() == 2);
+        CHECK(capped[0].valid && capped[1].valid);
+        CHECK(std::fabs(Dist(18.42f, 15.32f, capped[0].x, capped[0].y) - 19.0f) < 0.05f);
+        CHECK(std::fabs(Dist(0, 19.0f, capped[1].x, capped[1].y) - 20.0f) < 0.05f);
+
+        // The key off is today's plan, bit for bit: bot 1 takes the 30 yd seat, bot 2 the 1 yd one.
+        const std::vector<StandSeat> plain = PlanStandSeats(points, bots, lane, 0.0f);
+        const std::vector<StandSeat> implicit = PlanStandSeats(points, bots, lane);
+        CHECK(std::fabs(Dist(18.42f, 15.32f, plain[0].x, plain[0].y) - 30.0f) < 0.05f);
+        CHECK(std::fabs(Dist(0, 19.0f, plain[1].x, plain[1].y) - 1.0f) < 0.05f);
+        for (std::size_t i = 0; i < plain.size(); ++i)
+            CHECK(implicit[i].x == plain[i].x && implicit[i].y == plain[i].y);
+        // And a single bot with a free seat inside the cap never gets a farther one.
+        const std::vector<StandSeat> alone = PlanStandSeats(points, { { 7, 0.0f, 19.0f } }, lane, kBossStandNearYd);
+        CHECK(alone.size() == 1 && alone[0].valid);
+        CHECK(std::fabs(Dist(0, 19.0f, alone[0].x, alone[0].y) - 1.0f) < 0.05f);
+    }
+
+    // NearCap_ReachStillFirst: one more bot within 20 yd must not put another beyond 35. Bot 1 is 15 yd from seat A
+    // and 25 from B; bot 2 is 22 from A and 40 from B. Both within 35 (one either side of 20) is the plan; the
+    // "everyone within 20" plan would walk bot 2 40 yd. A 2000 near penalty would flip it.
+    {
+        BossStandRow seatA = Row(1, 0, 0, 8, StandRole::Ranged, 777, 0, 0, 0, 20, 1, 0, 1);
+        seatA.releaseAnchor = 2;
+        BossStandRow seatB = Row(1, 0, 0, 8, StandRole::Ranged, 777, 0, 1, 0, 50, 1, 0, 1);
+        seatB.releaseAnchor = 2;
+        BossStandRow release = Row(2, 100, 0, 8, StandRole::Ranged, 777, 0, 0, 100, 20, 1, 0);
+        const std::vector<BossStandRow> rows = { seatA, seatB, release };
+        const std::vector<const BossStandRow*> points = { &rows[0], &rows[1] };
+        const StandLane lane = StandLaneOf(rows, rows[0]);
+        const std::vector<StandBot> bots = { { 1, 12.48f, 28.33f }, { 2, 21.70f, 16.40f } };
+        CHECK(std::fabs(Dist(12.48f, 28.33f, 0, 20) - 15.0f) < 0.05f);
+        CHECK(std::fabs(Dist(12.48f, 28.33f, 0, 50) - 25.0f) < 0.05f);
+        CHECK(std::fabs(Dist(21.70f, 16.40f, 0, 20) - 22.0f) < 0.05f);
+        CHECK(std::fabs(Dist(21.70f, 16.40f, 0, 50) - 40.0f) < 0.05f);
+        const std::vector<StandSeat> plan = PlanStandSeats(points, bots, lane, kBossStandNearYd);
+        CHECK(plan.size() == 2);
+        for (std::size_t i = 0; i < plan.size(); ++i)
+        {
+            CHECK(plan[i].valid);
+            const StandBot& bot = bots[i];
+            CHECK(Dist(bot.x, bot.y, plan[i].x, plan[i].y) <= kBossStandReach);
+        }
+        CHECK(std::fabs(Dist(12.48f, 28.33f, plan[0].x, plan[0].y) - 25.0f) < 0.05f);
+        CHECK(std::fabs(Dist(21.70f, 16.40f, plan[1].x, plan[1].y) - 22.0f) < 0.05f);
+    }
+
+    // WalkTiers_CountedNotBought: the solver's cost counts the tiers, it does not sum penalties. A four-bot side: plan
+    // A seats one bot 35.1 yd out and three on their seats, plan B seats all four 34.9 yd out. The summed cost of the
+    // old scheme (distance + 300 beyond 20 yd + 1000 beyond 35 yd) is 1335.1 for A and 1339.6 for B, so it takes the
+    // extra seat past kBossStandReach; the tiered weights make A the dearer one, whatever the walks.
+    {
+        const stand_detail::StandCostWeights weights = stand_detail::StandCostsFor(4, true);
+        const std::vector<double> planA = { 35.1, 0.0, 0.0, 0.0 };  // one seat past kBossStandReach
+        const std::vector<double> planB = { 34.9, 34.9, 34.9, 34.9 };
+        const auto tiered = [&weights](const std::vector<double>& plan)
+        {
+            double sum = 0.0;
+            for (double walk : plan)
+                sum += stand_detail::StandSeatCost(walk, weights, kBossStandNearYd);
+            return sum;
+        };
+        // The cost the tier weights replace: a flat 300/1000 added to the walk.
+        const auto summed = [](const std::vector<double>& plan)
+        {
+            double sum = 0.0;
+            for (double walk : plan)
+                sum += walk + (walk > 20.0 ? 300.0 : 0.0) + (walk > 35.0 ? 1000.0 : 0.0);
+            return sum;
+        };
+        CHECK(summed(planA) < summed(planB));
+        CHECK(tiered(planA) > tiered(planB));
+        // And the weights are what the solver builds its matrix from.
+        CHECK(stand_detail::StandCostsFor(4, false).nearTier == 0.0);
+    }
+
+    // AiPlayerbot.BossStandNearestSeat, S1: a window's seats are every role's rows of its anchor and window spell.
+    // The case that fails without pooling: the melee bot's own cell is 34 yd away while a healer cell 12 yd away
+    // stands free, and the healer, beside the melee cell, walks 30 to its own.
+    {
+        BossStandRow melee = Row(1, 0, 0, 8, StandRole::Melee, 777, 0, 0, 0, 36, 1, 0, 1);
+        melee.releaseAnchor = 2;
+        BossStandRow healer = Row(1, 0, 0, 8, StandRole::Healer, 777, 0, 0, 0, 14, 1, 0, 1);
+        healer.releaseAnchor = 2;
+        BossStandRow release = Row(2, 100, 0, 8, StandRole::Ranged, 777, 0, 0, 100, 20, 1, 0);
+        const std::vector<BossStandRow> rows = { melee, healer, release };
+        const StandLane lane = StandLaneOf(rows, rows[0]);
+        CHECK(lane.valid);
+        const std::vector<StandBot> bots = { { 1, 0.0f, 2.0f }, { 2, 0.0f, 44.0f } };  // melee, healer
+        CHECK(std::fabs(Dist(0, 2.0f, 0, 14) - 12.0f) < 0.05f);
+        CHECK(std::fabs(Dist(0, 2.0f, 0, 36) - 34.0f) < 0.05f);
+        CHECK(std::fabs(Dist(0, 44.0f, 0, 14) - 30.0f) < 0.05f);
+
+        // Per role, as the plan runs today: 34 and 30.
+        const std::vector<StandSeat> meleePlan = PlanStandSeats({ &rows[0] }, { bots[0] }, lane, kBossStandNearYd);
+        const std::vector<StandSeat> healerPlan = PlanStandSeats({ &rows[1] }, { bots[1] }, lane, kBossStandNearYd);
+        CHECK(meleePlan.size() == 1 && meleePlan[0].valid);
+        CHECK(std::fabs(Dist(0, 2.0f, meleePlan[0].x, meleePlan[0].y) - 34.0f) < 0.05f);
+        CHECK(healerPlan.size() == 1 && healerPlan[0].valid);
+        CHECK(std::fabs(Dist(0, 44.0f, healerPlan[0].x, healerPlan[0].y) - 30.0f) < 0.05f);
+
+        // Pooled: both stand within 20 yd.
+        const std::vector<const BossStandRow*> pooled = PooledStandPoints(rows, 1, 777, 0, 0, 777, NoAura);
+        CHECK(pooled.size() == 2);
+        const std::vector<StandSeat> plan = PlanStandSeats(pooled, bots, lane, kBossStandNearYd);
+        CHECK(plan.size() == 2);
+        for (std::size_t i = 0; i < plan.size(); ++i)
+        {
+            CHECK(plan[i].valid);
+            CHECK(Dist(bots[i].x, bots[i].y, plan[i].x, plan[i].y) <= kBossStandNearYd);
+        }
+        // The pool is the active rows of the anchor and window spell only: another window's rows and the role rows of
+        // another anchor are left out, and a role with no row of its own in the window gets none.
+        BossStandRow otherWindow = Row(1, 0, 0, 8, StandRole::Healer, 888, 0, 1, 0, 22, 1, 0, 1);
+        otherWindow.releaseAnchor = 2;
+        BossStandRow otherAnchor = Row(3, -100, 0, 8, StandRole::Healer, 777, 0, 0, -100, 14, 1, 0);
+        std::vector<BossStandRow> more = rows;
+        more.push_back(otherWindow);
+        more.push_back(otherAnchor);
+        CHECK(PooledStandPoints(more, 1, 777, 0, 0, 777, NoAura).size() == 2);
+        CHECK(PooledStandPoints(more, 1, 888, 0, 0, 888, NoAura).size() == 1);
+    }
+
+    // PooledSeats_OnlyActiveRows: two roles' rows on one anchor and window; only the rows whose own aura and signal
+    // the boss meets join the pool. One role's row opening the window must not seat bots on a row that does not apply.
+    {
+        BossStandRow ranged = Row(1, 0, 0, 8, StandRole::Ranged, 777, 0, 0, 0, 32, 1, 0, 1, 111);
+        ranged.releaseAnchor = 2;
+        BossStandRow healer = Row(1, 0, 0, 8, StandRole::Healer, 777, 1, 0, 0, -32, 1, 0, 1, 222);
+        healer.releaseAnchor = 2;
+        BossStandRow melee = Row(1, 0, 0, 8, StandRole::Melee, 777, 0, 1, 60, 32, 1, 0, 1, 333);
+        melee.releaseAnchor = 2;
+        melee.windowSignal = StandSignal::StoppedNoTarget;
+        BossStandRow release = Row(2, 100, 0, 8, StandRole::Ranged, 777, 0, 0, 100, 32, 1, 0);
+        const std::vector<BossStandRow> rows = { ranged, healer, melee, release };
+        const auto only111 = [](std::uint32_t aura) { return aura == 111; };
+        const auto only333 = [](std::uint32_t aura) { return aura == 333; };
+        const auto all = [](std::uint32_t) { return true; };
+        // All the auras, casting: the stopped_no_target row opens on the cast too (it names the same spell).
+        CHECK(PooledStandPoints(rows, 1, 777, 0, 0, 777, all, false).size() == 3);
+        // Another spell and the boss not stopped: the melee row's signal is false, and the casting rows' window too.
+        CHECK(PooledStandPoints(rows, 1, 777, 0, 0, 888, all, false).empty());
+        // The same spell, the boss stopped without a target: only the signal row applies.
+        CHECK(PooledStandPoints(rows, 1, 777, 0, 0, 888, all, true).size() == 1);
+        // Only the ranged aura is worn: just its row, though the healer's and the melee's share anchor and window.
+        const std::vector<const BossStandRow*> pool = PooledStandPoints(rows, 1, 777, 0, 0, 777, only111);
+        CHECK(pool.size() == 1 && pool[0]->role == StandRole::Ranged);
+        // The signal row's own aura is worn but the signal is false: still out.
+        CHECK(PooledStandPoints(rows, 1, 777, 0, 0, 888, only333, false).empty());
+        CHECK(PooledStandPoints(rows, 1, 777, 0, 0, 888, only333, true).size() == 1);
+        // Through a ranged bot's read: its own row opens the window, and the pool it plans on holds no other seat.
+        StandHold hold;
+        const std::vector<const BossStandRow*> points =
+            StandPointsNow(rows, StandRole::Ranged, 0, 0, 777, only111, hold, 1000, false, true);
+        CHECK(points.size() == 1 && points[0]->role == StandRole::Ranged);
+        CHECK(hold.armed && hold.rowIds.size() == 1);
+    }
+
+    // PooledSeats_SealedKeepsItsPool: a window seals the rows it opened on; an aura that closes mid-hold does not drop
+    // the other roles' seats (the row's own condition may be false while the lane still fires).
+    {
+        BossStandRow ranged = Row(1, 0, 0, 8, StandRole::Ranged, 777, 0, 0, 0, 32, 1, 0, 1, 111);
+        ranged.releaseAnchor = 2;
+        BossStandRow healer = Row(1, 0, 0, 8, StandRole::Healer, 777, 1, 0, 0, -32, 1, 0, 1, 222);
+        healer.releaseAnchor = 2;
+        BossStandRow release = Row(2, 100, 0, 8, StandRole::Ranged, 777, 0, 0, 100, 32, 1, 0);
+        const std::vector<BossStandRow> rows = { ranged, healer, release };
+        const auto all = [](std::uint32_t) { return true; };
+        const auto none = [](std::uint32_t) { return false; };
+        StandHold hold;
+        const std::vector<const BossStandRow*> open =
+            StandPointsNow(rows, StandRole::Ranged, 0, 0, 777, all, hold, 1000, false, true);
+        CHECK(open.size() == 2 && hold.rowIds.size() == 2);
+        // Mid-hold both auras are gone and the cast has ended: the sealed two rows still seat.
+        const std::vector<const BossStandRow*> held =
+            StandPointsNow(rows, StandRole::Ranged, 20, 0, 0, none, hold, 2000, false, true);
+        CHECK(held.size() == 2 && hold.rowIds.size() == 2);
+        for (const BossStandRow* row : held)
+            CHECK(row->anchor == 1 && row->windowSpell == 777);
+        // A later window pools by the conditions of that read: only the aura the boss wears now.
+        const auto only222 = [](std::uint32_t aura) { return aura == 222; };
+        const std::vector<const BossStandRow*> openAgain =
+            StandPointsNow(rows, StandRole::Healer, 0, 0, 777, only222, hold, 3000, false, true);
+        CHECK(openAgain.size() == 1 && openAgain[0]->role == StandRole::Healer);
+        CHECK(hold.rowIds.size() == 1);
+        // And its hold keeps exactly the one row it sealed on, after that aura closes too.
+        const std::vector<const BossStandRow*> heldAgain =
+            StandPointsNow(rows, StandRole::Healer, 20, 0, 0, none, hold, 4000, false, true);
+        CHECK(heldAgain.size() == 1 && heldAgain[0]->role == StandRole::Healer);
+    }
+
+    // PooledSeats_AlwaysRowsKeepRole: a row with no window spell is never pooled; the roles keep their cells.
+    {
+        BossStandRow healer = Row(1, 0, 0, 8, StandRole::Healer, 0, 0, 0, 0, 14, 1, 0, 1);
+        BossStandRow melee = Row(1, 0, 0, 8, StandRole::Melee, 0, 0, 1, 0, 30, 1, 0, 1);
+        const std::vector<BossStandRow> rows = { healer, melee };
+        StandHold hold;
+        const std::vector<const BossStandRow*> points =
+            StandPointsNow(rows, StandRole::Healer, 0, 0, 0, NoAura, hold, 1000, false, true);
+        CHECK(points.size() == 1);
+        CHECK(points[0]->role == StandRole::Healer);
+        CHECK(points[0]->windowSpell == 0);
+        CHECK(hold.windowSpell == 0);
+    }
+
+    // PooledSeats_HeldUsesTheHoldsSpell: two window spells on one anchor; the held seats are the armed spell's, not
+    // the other window's.
+    {
+        BossStandRow healer777 = Row(1, 0, 0, 8, StandRole::Healer, 777, 0, 0, 0, 14, 1, 0, 1);
+        healer777.releaseAnchor = 2;
+        BossStandRow melee777 = Row(1, 0, 0, 8, StandRole::Melee, 777, 0, 1, 0, 30, 1, 0, 1);
+        melee777.releaseAnchor = 2;
+        BossStandRow healer888 = Row(1, 0, 0, 8, StandRole::Healer, 888, 0, 2, 0, 20, 1, 0, 1);
+        healer888.releaseAnchor = 2;
+        BossStandRow melee888 = Row(1, 0, 0, 8, StandRole::Melee, 888, 0, 3, 0, 36, 1, 0, 1);
+        melee888.releaseAnchor = 2;
+        BossStandRow release = Row(2, 100, 0, 8, StandRole::Ranged, 777, 0, 0, 100, 20, 1, 0);
+        const std::vector<BossStandRow> rows = { healer777, melee777, healer888, melee888, release };
+        StandHold hold;
+        const std::vector<const BossStandRow*> open =
+            StandPointsNow(rows, StandRole::Healer, 0, 0, 777, NoAura, hold, 1000, false, true);
+        CHECK(open.size() == 2);
+        CHECK(hold.windowSpell == 777);
+        // The window closes: the hold's own seats, every role's, for the armed spell.
+        const std::vector<const BossStandRow*> held =
+            StandPointsNow(rows, StandRole::Healer, 0, 0, 0, NoAura, hold, 2000, false, true);
+        CHECK(held.size() == 2);
+        for (const BossStandRow* row : held)
+            CHECK(row->windowSpell == 777);
+        // With the key off the held seats are the role's own rows of the anchor, whatever their window, as before.
+        StandHold plainHold;
+        CHECK(StandPointsNow(rows, StandRole::Healer, 0, 0, 777, NoAura, plainHold, 1000).size() == 1);
+        const std::vector<const BossStandRow*> plainHeld =
+            StandPointsNow(rows, StandRole::Healer, 0, 0, 0, NoAura, plainHold, 2000);
+        CHECK(plainHeld.size() == 2);
+        for (const BossStandRow* row : plainHeld)
+            CHECK(row->role == StandRole::Healer);
+    }
+
+    // StandSpotOutsideLane_BesideTheChain: the lane runs along +x from (0, 0) to (100, 0); the window's nearest seat
+    // beside the chain stands 32 yd out. A spot 35 yd out is outside, one 16 yd out is inside, and a spot past either
+    // end of the lane is not beside the chain at all.
+    {
+        StandLane lane;
+        lane.valid = true;
+        lane.dx = 100.0f;
+        lane.dy = 0.0f;
+        BossStandRow window = Row(1, 0, 0, 8, StandRole::Ranged, 777, 0, 0, 50, 32, 1, 0);
+        BossStandRow minus = Row(1, 0, 0, 8, StandRole::Ranged, 777, 1, 0, 50, -34, 1, 0);
+        BossStandRow otherWindow = Row(1, 0, 0, 8, StandRole::Ranged, 888, 0, 2, 50, 12, 1, 0);
+        const std::vector<BossStandRow> rows = { window, minus, otherWindow };
+        CHECK(StandSpotOutsideLane(lane, window, rows, 50.0f, 35.0f));
+        CHECK(!StandSpotOutsideLane(lane, window, rows, 50.0f, 16.0f));
+        CHECK(StandSpotOutsideLane(lane, window, rows, 50.0f, -35.0f));
+        CHECK(!StandSpotOutsideLane(lane, window, rows, 101.0f, 35.0f));   // past the far end
+        CHECK(!StandSpotOutsideLane(lane, window, rows, -1.0f, 35.0f));    // behind the anchor
+        CHECK(!StandSpotOutsideLane(StandLane(), window, rows, 50.0f, 35.0f));
+        // No seat of the window beside the chain: nothing to measure against.
+        const std::vector<BossStandRow> onlyOther = { otherWindow };
+        CHECK(!StandSpotOutsideLane(lane, window, onlyOther, 50.0f, 35.0f));
+    }
+
+    // StandPostExcuses_NeedsKeyPostAndNearSpot: only a live post, a spot outside the lane and a tank within 20 yd.
+    {
+        CHECK(StandPostExcuses(true, true, true, 20.0f));
+        CHECK(!StandPostExcuses(true, true, true, 20.1f));
+        CHECK(!StandPostExcuses(false, true, true, 10.0f));
+        CHECK(!StandPostExcuses(true, false, true, 10.0f));
+        CHECK(!StandPostExcuses(true, true, false, 10.0f));
+        CHECK(kBossStandNearYd == 20.0f);
+        // The walk tiers are counted, not bought: one more far seat costs more than every near-tier penalty and every
+        // yard the whole matrix can add, and one unseated bot more than every tier.
+        const ai::stand_detail::StandCostWeights weights = ai::stand_detail::StandCostsFor(8, true);
+        CHECK(weights.nearTier > 8.0 * kBossStandCostMaxYd);
+        CHECK(weights.farTier > 8.0 * weights.nearTier + 8.0 * kBossStandCostMaxYd);
+        CHECK(weights.unseated > 8.0 * (weights.nearTier + weights.farTier) + 8.0 * kBossStandCostMaxYd);
+        CHECK(ai::stand_detail::StandCostsFor(8, false).nearTier == 0.0);
+        // A pooled plan's key role is never a row's role.
+        BossStandRow anyRole = Row(1, 0, 0, 8, StandRole::Any, 777, 0, 0, 0, 20, 1, 0);
+        BossStandTable table;
+        CHECK(!table.Add(anyRole));
+        CHECK(static_cast<int>(StandRole::Any) == 4);
     }
 
     // AiPlayerbot.BossStandWholeRaid: a member counts while it is in combat with the boss, so Onyxia's Fireball

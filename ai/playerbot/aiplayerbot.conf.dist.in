@@ -1696,6 +1696,15 @@ AiPlayerbot.BossStandWholeRaid = 0
 # 0 - off: a seated bot walks back toward its target with "reach melee" once the stand trigger is quiet (Default)
 # 1 - on
 AiPlayerbot.BossStandHoldsMeleeReach = 0
+# The nearest seat of a breath window: on, a window's seats are every role's rows of its anchor and window spell (the
+# roles pool their cells; a row with no window spell keeps its role), and the plan counts a side's seats beyond 35 yd
+# first, then those beyond 20 yd, then the total walk, so a farther seat is never taken to shorten another bot's walk;
+# a hold_spot tank post whose spot stands outside the window's lane (at least as far from the lane line as the
+# window's nearest seat beside it) keeps its tank at that spot up to 20 yd away instead of taking a seat (a seat it
+# already held is taken back and given to the next bot). Needs the boss stand rows and the boss tactics.
+# 0 - off: every role is seated on its own cells and the plan walks the least (Default)
+# 1 - on
+AiPlayerbot.BossStandNearestSeat = 0
 # A boss the raid is fighting stays in every raid bot's fight for 10 s after the last bot saw it in its attacker list
 # (a melee bot that cannot reach an airborne Onyxia gives up on her, so she vanishes from that bot's attacker list and
 # every row and seat for her goes dark for it). The bots that see the boss note it in one registry; a bot that lost it

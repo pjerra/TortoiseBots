@@ -1203,6 +1203,31 @@ static void TestTankPost_EngagesSelectableOutOfCombatSubject()
     CHECK(TankPostStep(in) == TankPostDecision::Hold);
 }
 
+// AiPlayerbot.BossStandNearestSeat: an excused post (its spot marks the tank's lane as outside) keeps the tank at the
+// spot, so past the drag radius the step walks back with its target kept whatever the subject does. Inside it the step
+// is today's: an arrived subject is engaged where it stands.
+static void TestTankPost_LaneHoldLeashes()
+{
+    TankPostIn in = TankPostWaiting();
+    in.holdSpot = true;
+    in.laneHold = true;
+    in.subjectSelectable = true;
+    in.subjectToSpotYd = 2.0f;  // arrived, off the tank
+    in.botToSpotYd = 12.0f;
+    CHECK(!in.subjectOnTank);
+    CHECK(TankPostStep(in) == TankPostDecision::Leash);  // old code: Engage, walking 12 yd out of its spot
+    in.botToSpotYd = 6.0f;
+    CHECK(TankPostStep(in) == TankPostDecision::Engage);
+    // Without the lane hold (the hold_spot key off, the spot inside the lane, or the stand off) today's step stays.
+    in.botToSpotYd = 12.0f;
+    in.laneHold = false;
+    CHECK(TankPostStep(in) == TankPostDecision::Engage);
+    // A seat still outranks the post.
+    in.laneHold = true;
+    in.seated = true;
+    CHECK(TankPostStep(in) == TankPostDecision::Yield);
+}
+
 // The mutation case: dropping the selectable check from TankPostArrived makes an unselectable unit "arrived", so this
 // check fails.
 static void TestTankPost_UnselectableSubjectNotArrived()
@@ -2025,6 +2050,7 @@ int main()
     TestTankPost_SlotTankWalksToSpotWhileSubjectUnselectable();
     TestTankPost_UnselectableSubjectNotArrived();
     TestTankPost_EngagesSelectableOutOfCombatSubject();
+    TestTankPost_LaneHoldLeashes();
     TestAssignedTankSlot_UntilTankAndTankPostRows();
     TestAssignedTankSlot_EnabledKindUsesItsOwnSlot();
     TestTankPost_HoldSpotDragsSubjectBackToSpot();

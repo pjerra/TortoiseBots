@@ -862,6 +862,10 @@ public:
     // A melee bot or a tank with a valid boss stand seat keeps it instead of running "reach melee" back toward its
     // target (default off).
     bool bossStandHoldsMeleeReach = false;
+    // A window's stand seats are every role's rows of its anchor and window spell that apply to the boss now (the same
+    // aura, signal and radius each row is read by alone), pooled and planned with a 20 yd walk cap; a held window keeps
+    // the rows it opened on. A hold_spot post whose spot stands outside the breath lane keeps its tank there (default off).
+    bool bossStandNearestSeat = false;
     // A boss the raid is fighting stays in every raid bot's fight for 10 s after the last bot saw it in its attacker
     // list (a melee bot that cannot reach an airborne boss gives up on it): within 150 yd and while the bot itself is
     // in combat, so its boss-tactic rows and stand seats stay active (default off).
