@@ -16,6 +16,13 @@ ACTIONS = (ROOT / "ai/playerbot/strategy/actions/BossTacticsActions.cpp").read_t
 SPELLS = (ROOT / "ai/playerbot/PlayerbotAISpells.cpp").read_text()
 GENERIC_SPELL = (ROOT / "ai/playerbot/strategy/actions/GenericSpellActions.cpp").read_text()
 CMAKE = (ROOT / "TortoiseBots.cmake").read_text()
+DIAGNOSTIC_WRITERS = (
+    "ai/playerbot/CastCancelLog.cpp",
+    "ai/playerbot/BotDiagnostics.cpp",
+    "ai/playerbot/HealerDiagnostics.cpp",
+    "ai/playerbot/BotActionLog.cpp",
+)
+CACHED_TARGET = re.compile(r"\bgetUnitTarget\s*\(")
 
 LOG_ROW = "void ai::LogCastCancel(PlayerbotAI* ai, const char* site, CurrentSpellTypes slot, float movedYd)"
 
@@ -52,6 +59,24 @@ class CastCancelWiring(unittest.TestCase):
         # Observation only: the writer never interrupts, moves or casts.
         for forbidden in ("Interrupt", "CastStop", "MoveTo(", "CastSpell"):
             self.assertNotIn(forbidden, fn)
+
+    def test_the_cast_cancel_row_resolves_its_target_by_guid(self):
+        # The cast's unit target is a raw pointer the map refreshes only in the caster's next Spell::update, and the
+        # map frees a removed unit at the end of its tick. A cancel that logs a target freed in that tick (Jin'do's
+        # death despawns the summons the bots are casting at) would read freed memory. The row resolves the guid it
+        # holds instead, so a target that left the world reads none.
+        fn = body(LOG, LOG_ROW)
+        self.assertIn("cast->m_targets.getUnitTargetGuid()", fn)
+        self.assertIn("ObjectAccessor::GetUnit(*bot,", fn)
+        self.assertNotIn("getUnitTarget()", fn)
+        self.assertLess(fn.index("getUnitTargetGuid()"), fn.index("target ? target->GetName()"))
+
+    def test_no_diagnostic_row_reads_a_cached_target_pointer(self):
+        # The same rule for every writer that ends a row after a possible removal: a cached m_targets pointer is
+        # never read in a diagnostic row.
+        for rel in DIAGNOSTIC_WRITERS:
+            text = (ROOT / rel).read_text()
+            self.assertIsNone(CACHED_TARGET.search(text), f"{rel} reads a cached m_targets pointer")
 
     def test_the_multi_slot_helpers_log_one_row_per_real_cancel(self):
         # A CastStop drops every preparing non-melee slot with a cast time; one row each, and the rows are the same
