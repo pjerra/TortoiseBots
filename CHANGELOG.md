@@ -1,5 +1,7 @@
 # Changelog
 
+- Fixed: a meal-sleeping bot now wakes at once when neither its Food nor its Drink aura is on it (`.unaura`, or a meal cut short), instead of idling out the rest of the drink's sleep at low mana (tests/tortoise-trials/after-t1113/OPEN-3.md).
+- Changed: at or below 20 % mana the out-of-combat drink outranks the self-buffs (Power Word: Fortitude, Shadow Protection and the rest), so a dry bot refills instead of spending a dozen seconds per buff first.
 - Fixed: a meal-sleeping bot now wakes the moment the meal is broken or its group fights, seated or stood up by damage, so a refill mob that hits the player or healer while the tank drinks no longer goes unanswered until the drink's sleep runs out (up to 13 s, tests/tortoise-trials/paladin-addpickup/WHY.md).
 - Fixed: with `AiPlayerbot.RaidReactions` on (default 0), a bot driven out of a dragon's breath or tail cone only steps to one of the dragon's sides and stays put when neither side is clear, and a stay order is overruled by the raid spread only while a boss tactic is actually widening the spacing.
 - New: behind `AiPlayerbot.RaidReactions` (default 0), the reaction engine's universal raid answers — environmental hazard step-away, bomb runout, Four Horsemen mark rotation, dragon flank and ranged raid spread — actually run: the `react` strategy they live in had no creator and every reaction engine skipped it silently (#1589).

@@ -1087,7 +1087,8 @@ void PlayerbotAI::WakeFromMealSleep()
     // Cheap checks first: a seated bot with its food or drink aura and nobody
     // fighting keeps eating. The member test and the run's mark cover the rest
     // of the group; the bot's own combat flag covers a hit during the meal.
-    if (!ai::MealSleepShouldWake(true, bot->IsSittingDown(), HasSeatedAura(bot),
+    if (!ai::MealSleepShouldWake(true, bot->IsSittingDown(),
+            HasSeatedMeal(true) || HasSeatedMeal(false),
             sServerFacade.IsInCombat(bot), IsGroupMemberNearInCombat(),
             ai::RunFightHolds((uint32)aiObjectContext->GetValue<int32>("manual int", "run fight until ms")->Get(),
                 WorldTimer::getMSTime())))

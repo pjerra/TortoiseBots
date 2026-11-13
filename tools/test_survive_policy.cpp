@@ -11,10 +11,12 @@
     } \
 } while (0)
 
+using ai::DrinkOutranksSelfBuffs;
 using ai::DrinkStopManaPct;
 using ai::FormatDeathAttackers;
 using ai::IsDeathAttackerSnapshotFresh;
 using ai::IsHopelessSingleAttacker;
+using ai::LOW_MANA_DRINK_PRIORITY;
 using ai::RestStopHealthPct;
 using ai::ShouldAnswerAttacker;
 using ai::ShouldDrinkAtManaPct;
@@ -49,6 +51,15 @@ int main()
     CHECK(ShouldDrinkAtManaPct(true, 84, 85));
     CHECK(!ShouldDrinkAtManaPct(true, 85, 85));
     CHECK(!ShouldDrinkAtManaPct(false, 0, 85));
+
+    // At or below 20 % the drink outranks every out-of-combat self-buff
+    // (the ladder's top is 19.0), and its priority stays under ACTION_HIGH.
+    CHECK(DrinkOutranksSelfBuffs(0));
+    CHECK(DrinkOutranksSelfBuffs(5));
+    CHECK(DrinkOutranksSelfBuffs(20));
+    CHECK(!DrinkOutranksSelfBuffs(21));
+    CHECK(LOW_MANA_DRINK_PRIORITY > 19.0f);
+    CHECK(LOW_MANA_DRINK_PRIORITY < 20.0f);
 
     // The restored critical-health flee is pool-only: no real player master.
     CHECK(ShouldFleeAtCriticalHealth(false));

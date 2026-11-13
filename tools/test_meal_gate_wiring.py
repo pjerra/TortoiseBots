@@ -12,6 +12,10 @@ PLAYERBOT_AI = (ROOT / "ai/playerbot/PlayerbotAI.cpp").read_text()
 PLAYERBOT_AI_HEADER = (ROOT / "ai/playerbot/PlayerbotAI.h").read_text()
 COMMANDER = (ROOT / "commands/Commander.cpp").read_text()
 ACTION = (ROOT / "commands/Action.cpp").read_text()
+FOOD = (ROOT / "ai/playerbot/strategy/generic/UseFoodStrategy.cpp").read_text()
+GENERIC_TRIGGERS = (ROOT / "ai/playerbot/strategy/triggers/GenericTriggers.cpp").read_text()
+TRIGGER_CONTEXT = (ROOT / "ai/playerbot/strategy/triggers/TriggerContext.h").read_text()
+SURVIVE = (ROOT / "ai/playerbot/SurvivePolicy.h").read_text()
 
 MARK = '"run fight until ms"'
 
@@ -54,6 +58,10 @@ SRC_AI = strip_comments(PLAYERBOT_AI)
 SRC_AI_HEADER = strip_comments(PLAYERBOT_AI_HEADER)
 SRC_COMMANDER = strip_comments(COMMANDER)
 SRC_ACTION = strip_comments(ACTION)
+SRC_FOOD = strip_comments(FOOD)
+SRC_GENERIC_TRIGGERS = strip_comments(GENERIC_TRIGGERS)
+SRC_TRIGGER_CONTEXT = strip_comments(TRIGGER_CONTEXT)
+SRC_SURVIVE = strip_comments(SURVIVE)
 
 
 class MealGateWiringTest(unittest.TestCase):
@@ -85,7 +93,10 @@ class MealGateWiringTest(unittest.TestCase):
         # combat flag (a hit during the meal), the member test, the run mark.
         self.assertIn("MealSleepShouldWake(", wake)
         self.assertIn("IsSittingDown()", wake)
-        self.assertIn("HasSeatedAura(bot)", wake)
+        # The meal term is a Food or Drink aura, not any aura standing would
+        # break: a removed drink ends the sleep.
+        self.assertIn("HasSeatedMeal(true) || HasSeatedMeal(false)", wake)
+        self.assertNotIn("HasSeatedAura(bot)", wake)
         self.assertIn("IsInCombat(bot)", wake)
         self.assertIn("IsGroupMemberNearInCombat()", wake)
         self.assertIn("RunFightHolds(", wake)
@@ -188,6 +199,19 @@ class MealGateWiringTest(unittest.TestCase):
     def test_rest_refusal_names_the_same_gate(self):
         self.assertIn("in.groupFighting = GroupIsFighting(ai);", SRC_ACTION)
         self.assertNotIn("IsGroupMemberNearInCombat", SRC_ACTION)
+
+    def test_low_mana_drink_outranks_the_self_buffs(self):
+        """OPEN-3: at 5 % mana the first action was PW:Fortitude, not Drink."""
+        flat = " ".join(body_after(SRC_FOOD, "void UseFoodStrategy::InitNonCombatTriggers").split())
+        self.assertIn(
+            '"low mana drink", NextAction::array(0, new NextAction("drink", ai::LOW_MANA_DRINK_PRIORITY), NULL)',
+            flat)
+        # The trigger exists, is registered, and reads the shared 20 % line.
+        self.assertIn('creators["low mana drink"]', SRC_TRIGGER_CONTEXT)
+        trigger = " ".join(body_after(SRC_GENERIC_TRIGGERS, "bool LowManaDrinkTrigger::IsActive()").split())
+        self.assertIn("DrinkOutranksSelfBuffs(", trigger)
+        self.assertIn("HasManaPool(bot)", trigger)
+        self.assertIn("LOW_MANA_DRINK_PCT = 20", SRC_SURVIVE)
 
 
 if __name__ == "__main__":

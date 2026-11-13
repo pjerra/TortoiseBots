@@ -28,6 +28,19 @@ namespace ai
         return lowHealth;
     }
 
+    // A dry bot must not spend a dozen seconds per out-of-combat self-buff
+    // first (Fortitude, Shadow Protection, mage armor): the buff ladder's top
+    // sits at 19.0 and every cast at a few percent mana is dead time, so at or
+    // below this line the drink owns the tick. The priority stays under
+    // ACTION_HIGH (20) so follow, loot and pet rows keep their lead.
+    constexpr std::uint32_t LOW_MANA_DRINK_PCT = 20;
+    constexpr float LOW_MANA_DRINK_PRIORITY = 19.5f;
+
+    inline bool DrinkOutranksSelfBuffs(std::uint32_t manaPct)
+    {
+        return manaPct <= LOW_MANA_DRINK_PCT;
+    }
+
     // Drink stop, the mana analogue of the rest stop above. The drink trigger
     // still opens at its old line; only the stop rises to the almost-full
     // level so a cheat-bot caster does not re-pull half-oom. Bots without

@@ -38,9 +38,15 @@ namespace ai
     // wake checks then never fire and the bot answers the refill mob 13 s late
     // (tests/tortoise-trials/paladin-addpickup/WHY.md). Wake whenever the meal
     // is broken or the group fights, seated or not.
-    inline bool MealSleepShouldWake(bool mealSleep, bool seated, bool seatedAura,
+    //
+    // mealAura is a Food or Drink aura specifically, not any aura that standing
+    // would break: a removed drink (`.unaura`, a cut meal) must end the sleep
+    // even while some other seated aura keeps the bot sitting, or the AI idles
+    // out the rest of the meal at low mana
+    // (tests/tortoise-trials/after-t1113/OPEN-3.md).
+    inline bool MealSleepShouldWake(bool mealSleep, bool seated, bool mealAura,
         bool selfInCombat, bool memberNearFighting, bool runFightHolds)
     {
-        return mealSleep && (!seated || !seatedAura || selfInCombat || memberNearFighting || runFightHolds);
+        return mealSleep && (!seated || !mealAura || selfInCombat || memberNearFighting || runFightHolds);
     }
 }

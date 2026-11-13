@@ -89,6 +89,12 @@ bool HighManaTrigger::IsActive()
     return HasManaPool(bot) && AI_VALUE2(uint8, "mana", "self target") < 65;
 }
 
+bool LowManaDrinkTrigger::IsActive()
+{
+    return HasManaPool(bot) &&
+        ai::DrinkOutranksSelfBuffs(AI_VALUE2(uint8, "mana", "self target"));
+}
+
 bool ResumeDrinkTrigger::IsActive()
 {
     if (!AI_VALUE(bool, "drink unfinished"))

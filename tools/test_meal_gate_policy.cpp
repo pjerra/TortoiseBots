@@ -67,7 +67,10 @@ int main()
 
     // Any one broken term wakes it.
     CHECK(MealSleepShouldWake(true, false, true, false, false, false));
+    // The meal aura is gone (removed by `.unaura`, or the meal ended early):
+    // the sleep ends on the next update, seated or not.
     CHECK(MealSleepShouldWake(true, true, false, false, false, false));
+    std::cout << "  [PASS] a removed food or drink aura wakes the meal sleep\n";
     CHECK(MealSleepShouldWake(true, true, true, true, false, false));
     CHECK(MealSleepShouldWake(true, true, true, false, true, false));
     CHECK(MealSleepShouldWake(true, true, true, false, false, true));
