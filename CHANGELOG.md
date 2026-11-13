@@ -1,5 +1,10 @@
 # Changelog
 
+- Fixed: the "lose aggro" trigger stays quiet while a fresh mob has no victim yet (no flag).
+- Fixed: the AoE taunts re-walk the loose-add count at cast time instead of the cached trigger value, so a shout or roar queued for loose adds stands down once the pack settles onto tanks (no flag).
+- Fixed: the AoE taunts also stand down at cast time. Challenging Shout and Challenging Roar re-check the "loose adds near" count before they fire, so a shout queued for loose adds no longer fires after the pack settles (no flag, no per-mob tank check).
+- Fixed: a tank bot no longer taunts a mob off a tank player. A taunt queued while a fresh mob had no victim yet outlived its reach walk and fired after the mob turned onto the tank player, so each generic taunt now stands down at cast time while its mob stands on another tank (no flag).
+
 - Fixed: a meal-sleeping bot now wakes the moment the meal is broken or its group fights, seated or stood up by damage, so a refill mob that hits the player or healer while the tank drinks no longer goes unanswered until the drink's sleep runs out (up to 13 s, tests/tortoise-trials/paladin-addpickup/WHY.md).
 - Fixed: a Shadow priest no longer drops Shadowform to Renew an ally another healer already covers, and drops the form only for a heal it can cast at once, not into a global cooldown or wand swing (found by Tortoise Trials, #1556).
 - Fixed: a Holy or Discipline priest in a group no longer goes 3 s without reacting after each wand shot, so its heal starts within one wand swing of a hit instead of up to 3 s later (found by Tortoise Trials, #1556).

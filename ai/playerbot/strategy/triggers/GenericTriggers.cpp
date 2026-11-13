@@ -11,7 +11,8 @@
 #include "playerbot/HealerManaPolicy.h"
 #include "playerbot/MainTankPolicy.h"
 #include "playerbot/TankAddPickupPolicy.h"
-#include "playerbot/policy/combat/AoeTauntPolicy.h"
+#include "playerbot/strategy/actions/BossTacticsActions.h"
+#include "playerbot/policy/combat/LoseAggroPolicy.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/policy/travel/PointDangerPolicy.h"
 #include "playerbot/ReadyRebuffPolicy.h"
@@ -366,18 +367,21 @@ bool LoseAggroTrigger::IsActive()
 
     if(!AI_VALUE2(bool, "has aggro", "current target"))
     {
-        // Check if the aggro has been taken by another tank
+        // Check if the aggro has been taken by another tank. A mob with no
+        // victim yet (a fresh refill mob before its first swing) is not
+        // held by anyone: stay quiet, the mob picks a victim within a tick
+        // and the rules below then decide (LoseAggroPolicy.h).
         if(ai->IsTank(bot))
         {
             Unit* target = AI_VALUE(Unit*, "current target");
             if(target && !target->IsPlayer())
             {
                 Unit* targetsTarget = target->GetVictim();
-                if(targetsTarget && targetsTarget->IsPlayer())
-                {
-                    Player* targetsPlayerTarget = (Player*)targetsTarget;
-                    return !ai->IsTank(targetsPlayerTarget);
-                }
+                LoseAggroSeen seen;
+                seen.victimExists = targetsTarget != nullptr;
+                seen.victimIsPlayer = targetsTarget && targetsTarget->IsPlayer();
+                seen.victimIsTank = seen.victimIsPlayer && ai->IsTank((Player*)targetsTarget);
+                return LoseAggroTankBranch(seen);
             }
         }
 
@@ -389,50 +393,7 @@ bool LoseAggroTrigger::IsActive()
 
 bool LooseAddsNearTrigger::IsActive()
 {
-    Group* group = bot->GetGroup();
-    if (!group)
-        return false;
-
-    // The "attackers" value collapses to the focus RTI mark while a "focus
-    // rti targets" strategy runs, so a marked pack hides its own loose adds.
-    // Count group victims straight from the core instead: every group member
-    // (and the bot) reports the units attacking it, before any strategy
-    // filter runs. Players are not mobs (PvP: skip them).
-    std::vector<LooseAddCandidate> candidates;
-    std::set<ObjectGuid> seen;
-    std::list<Unit*> members;
-    members.push_back(bot);
-    for (Group::member_citerator itr = group->GetMemberSlots().begin(); itr != group->GetMemberSlots().end(); ++itr)
-    {
-        if (Player* member = sObjectMgr.GetPlayer(itr->guid))
-            members.push_back(member);
-    }
-    for (Unit* member : members)
-    {
-        if (!member || !member->IsInWorld())
-            continue;
-        for (Unit* attacker : member->GetAttackers())
-        {
-            if (!attacker || !attacker->IsAlive())
-                continue;
-            if (attacker->IsPlayer())
-                continue;
-            if (!seen.insert(attacker->getObjectGuid()).second)
-                continue;
-            if (!attacker->GetVictim())
-                continue;
-            Player* victimPlayer = attacker->GetVictim()->ToPlayer();
-            if (!victimPlayer || !group->IsMember(victimPlayer->GetObjectGuid()))
-                continue;
-            LooseAddCandidate candidate;
-            candidate.victimIsGroupPlayer = true;
-            candidate.victimIsTank = ai->IsTank(victimPlayer);
-            candidate.distanceToBot = bot->GetDistance(attacker);
-            candidates.push_back(candidate);
-        }
-    }
-
-    return ShouldAoeTaunt(CountLooseAddsInReach(candidates));
+    return AoeTauntStillNeeded(ai, bot);
 }
 
 bool HasAggroTrigger::IsActive()
