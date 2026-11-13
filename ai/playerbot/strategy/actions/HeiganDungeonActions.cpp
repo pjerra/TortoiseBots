@@ -57,7 +57,8 @@ bool HeiganDanceMoveAction::Execute(Event& event)
     }
     if (spotYd < 4.0f)
         return false;
-    return MoveTo(bot->GetMapId(), kHeiganSafeSpots[area][0], kHeiganSafeSpots[area][1], kHeiganSafeSpots[area][2]);
+    return MoveTo(bot->GetMapId(), kHeiganSafeSpots[area][0], kHeiganSafeSpots[area][1], kHeiganSafeSpots[area][2],
+                  false, false, false, false, "heigan_dance");
 }
 
 float HeiganDanceSuppressionMultiplier::GetValue(Action* action)
@@ -95,5 +96,5 @@ bool HeiganHoldPlatformAction::Execute(Event& event)
 {
     if (bot->GetDistance2d(2794.26f, -3706.67f) < 4.0f)
         return false;
-    return MoveTo(bot->GetMapId(), 2794.26f, -3706.67f, 276.54f);
+    return MoveTo(bot->GetMapId(), 2794.26f, -3706.67f, 276.54f, false, false, false, false, "heigan_platform");
 }

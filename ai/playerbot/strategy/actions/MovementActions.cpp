@@ -2219,7 +2219,7 @@ bool MovementAction::MoveTo(uint32 mapId, float x, float y, float z, bool idle, 
 }
 
 
-bool MovementAction::MoveTo(Unit* target, float distance)
+bool MovementAction::MoveTo(Unit* target, float distance, const char* castCancelSite)
 {
     LastMovement& unitMove = AI_VALUE(LastMovement&, "last movement");
     ++unitMove.moveTries;
@@ -2272,7 +2272,7 @@ bool MovementAction::MoveTo(Unit* target, float distance)
         float dx = tx;
         float dy = ty;
         float dz = tz;
-        return MoveTo(target->GetMapId(), dx, dy, dz);
+        return MoveTo(target->GetMapId(), dx, dy, dz, false, false, false, false, castCancelSite);
     }
 
     return true;
@@ -2416,7 +2416,7 @@ bool MovementAction::Follow(Unit* target, float distance, float angle)
             }
         }
         if (!target->IsTaxiFlying()/* || bot->GetTransport()*/)
-           return MoveTo(target, ai->GetRange("follow"));
+           return MoveTo(target, ai->GetRange("follow"), "follow");
     }
 
     // Handle water transition
@@ -2479,7 +2479,7 @@ bool MovementAction::Follow(Unit* target, float distance, float angle)
     {
         ai::LogCastCancelStop(ai, "follow");
         bot->CastStop();
-        ai->InterruptSpell();
+        ai->InterruptSpell(true, "follow");
     }
 
     AI_VALUE(LastMovement&, "last movement").Set(target);
@@ -4402,7 +4402,7 @@ bool MoveOutOfEnemyContactAction::Execute(Event& event)
     if (!target)
         return false;
 
-    return MoveTo(target, sPlayerbotAIConfig.contactDistance);
+    return MoveTo(target, sPlayerbotAIConfig.contactDistance, "step_out");
 }
 
 bool MoveOutOfEnemyContactAction::isUseful()
@@ -5491,7 +5491,7 @@ bool JumpAction::DoJump(const WorldPosition &dest, const WorldPosition& highestP
     if (!goodLanding)
         ai->SetFallAfterJump();
 
-    ai->InterruptSpell(false);
+    ai->InterruptSpell(false, "jump");
     ai->StopMoving();
     ai->SetJumpDestination(landing);
     bot->SetFallInformation(maxHeight);

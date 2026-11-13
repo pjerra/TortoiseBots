@@ -82,7 +82,7 @@ bool MoveAwayFromHazard::Execute(Event& event)
                             bot->SummonCreature(15631, point.getX(), point.getY(), point.getZ(), 0.0f, TEMPSPAWN_TIMED_DESPAWN, 5000.0f);
                         }
 
-                        if (MoveTo(bot->GetMapId(), point.getX(), point.getY(), point.getZ(), false, IsReaction(), false, true))
+                        if (MoveTo(bot->GetMapId(), point.getX(), point.getY(), point.getZ(), false, IsReaction(), false, true, "avoid_hazard"))
                         {
                             if (IsReaction())
                             {
@@ -221,7 +221,7 @@ bool MoveAwayFromCreature::Execute(Event& event)
                 bot->SummonCreature(15631, validPoint->getX(), validPoint->getY(), validPoint->getZ(), 0.0f, TEMPSPAWN_TIMED_DESPAWN, 5000.0f);
             }
 
-            if (MoveTo(bot->GetMapId(), validPoint->getX(), validPoint->getY(), validPoint->getZ(), false, IsReaction(), false, true))
+            if (MoveTo(bot->GetMapId(), validPoint->getX(), validPoint->getY(), validPoint->getZ(), false, IsReaction(), false, true, "avoid_creature"))
             {
                 if (IsReaction())
                 {
@@ -362,7 +362,7 @@ bool ai::RunOutFromGroup(MovementAction& mover, PlayerbotAI* ai, Player* bot, fl
             const float angle = away + angles[idx];
             if (!FindStep(ai, bot, botPos, angle, step, out) ||
                 !mover.MoveTo(bot->GetMapId(), out.getX(), out.getY(), out.getZ(), false, mover.IsReaction(), false,
-                              true))
+                              true, "group_runout"))
                 return false;
             // Hold the reaction until the carrier arrives, so it is not
             // re-planned every tick on the way out.
@@ -492,7 +492,7 @@ bool FourHorsemenRotateAction::Execute(Event& event)
     FourHorsemenCornerSpot(spots, nextIdx, offset, x, y);
     WorldPosition point(bot->GetMapId(), x, y, next->GetPositionZ());
     point.setZ(point.GetHeight());
-    return MoveTo(bot->GetMapId(), point.getX(), point.getY(), point.getZ(), false, IsReaction(), false, true);
+    return MoveTo(bot->GetMapId(), point.getX(), point.getY(), point.getZ(), false, IsReaction(), false, true, "horsemen_rotate");
 }
 
 bool DragonFlankAction::isUseful()
@@ -524,7 +524,7 @@ bool DragonFlankAction::Execute(Event& event)
                    destination.getZ() + bot->GetCollisionHeight()) &&
             bossPos.canPathTo(destination, bot) &&
             MoveTo(bot->GetMapId(), destination.getX(), destination.getY(), destination.getZ(), false,
-                IsReaction(), false, true);
+                IsReaction(), false, true, "dragon_flank");
     });
     return chosen >= 0;
 }
@@ -676,7 +676,7 @@ bool RaidSpreadAction::Execute(Event& event)
                 anchorRejected = true;
                 continue;
             }
-            if (MoveTo(bot->GetMapId(), stepX, stepY, stepZ, false, IsReaction(), false, true))
+            if (MoveTo(bot->GetMapId(), stepX, stepY, stepZ, false, IsReaction(), false, true, "raid_spread"))
             {
                 if (logSpread)
                     LogBossSpread(ai, bot, "stepped", -1, -1.0f, -1);
@@ -724,7 +724,7 @@ bool DragonTankFaceAwayAction::Execute(Event& event)
         return false;
     if (!botPos.canPathTo(point, bot))
         return false;
-    return MoveTo(bot->GetMapId(), point.getX(), point.getY(), point.getZ(), false, IsReaction(), false, true);
+    return MoveTo(bot->GetMapId(), point.getX(), point.getY(), point.getZ(), false, IsReaction(), false, true, "dragon_faceaway");
 }
 
 bool MoveAwayFromCreature::IsValidPoint(const WorldPosition& point, const std::list<Creature*>& creatures, const std::list<HazardPosition>& hazards)
@@ -918,7 +918,7 @@ bool VaelBurningAdrenalineFleeAction::Execute(Event& event)
     for (float d : angles)
     {
         if (FindStep(ai, bot, botPos, baseAngle + d, 3.0f, out) &&
-            MoveTo(bot->GetMapId(), out.getX(), out.getY(), out.getZ(), false, IsReaction(), false, true))
+            MoveTo(bot->GetMapId(), out.getX(), out.getY(), out.getZ(), false, IsReaction(), false, true, "vael_flee"))
             return true;
     }
     return false;
@@ -980,5 +980,5 @@ bool MoveAwayFromPlayerWithDebuff::Execute(Event& event)
     }
     if (bestClearance < 0.0f)
         return false;
-    return MoveTo(bot->GetMapId(), best.getX(), best.getY(), best.getZ(), false, IsReaction(), false, true);
+    return MoveTo(bot->GetMapId(), best.getX(), best.getY(), best.getZ(), false, IsReaction(), false, true, "debuff_avoid");
 }

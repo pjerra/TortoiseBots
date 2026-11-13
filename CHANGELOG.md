@@ -1,5 +1,6 @@
 # Changelog
 
+- Changed: every cast-cancel caller now names its own site in the `CastCancel` row (`reaction_cast`, `target_select`, `follow`, `jump`, `drink`, `eat`, `knockback`, `ai_reset`, `engine_reinit`, and one per module walk such as `avoid_cast`, `seek_pull_walk`, `onyxia_breath`, `heigan_dance`), so the 95 % `ai` share walk 99 measured splits by caller; behaviour is unchanged and the core's own cancels (movement, a dead or out-of-range target) still write no row.
 - Fixed: a hunter's spread point (and its spare) inside Auto Shot's dead zone for her current target is no longer walked to, so her dead-zone step-out keeps the position instead of the slot pulling her back; the read says `dead_zone`, needs no new key, and logs the row.
 - Fixed: the cast-cancel diagnostic row resolves its target from the guid it holds as the row is written, so a cancel at a unit removed in the same world tick (Jin'do's death despawns the summons the bots are casting at) reads `none` instead of freed memory and no longer crashes the server.
 

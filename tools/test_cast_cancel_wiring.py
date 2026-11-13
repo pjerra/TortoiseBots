@@ -214,6 +214,164 @@ class CastCancelWiring(unittest.TestCase):
         seek = ACTIONS.index('ai::LogCastCancelStop(ai, "seek_stop");')
         self.assertLess(seek, ACTIONS.index("bot->CastStop();", seek))
 
+    def test_every_interrupt_spell_caller_names_its_site(self):
+        # Walk 99: 95 % of the rows carried the choke point's own `ai` label, so the caller whose cast died could not
+        # be read. Every PlayerbotAI::InterruptSpell caller now passes a site; the remaining allowlist is empty on
+        # purpose, and a new unnamed caller fails here instead of shipping another anonymous row.
+        allow = ()
+        missing = []
+        calls = 0
+        for path in sorted((ROOT / "ai").rglob("*")):
+            if path.suffix not in (".cpp", ".h"):
+                continue
+            text = path.read_text()
+            for where, recv, args in _calls(text, "InterruptSpell"):
+                if recv not in (None, "ai", "this"):
+                    continue  # the bot-side Unit::InterruptSpell(type, false): pinned by the audit above
+                if any("const char* site" in arg for arg in args):
+                    continue  # the declaration, not a call
+                calls += 1
+                site = args[1] if len(args) > 1 else ""
+                if site and site != "nullptr":
+                    continue
+                line = text.count("\n", 0, where) + 1
+                missing.append(f"{path.relative_to(ROOT)}:{line}: InterruptSpell({', '.join(args)})")
+        self.assertEqual(missing, [], "unnamed InterruptSpell callers:\n" + "\n".join(missing))
+        # The scan really walked the callers (the three in PlayerbotAI alone, plus the actions).
+        self.assertGreaterEqual(calls, 10)
+
+    def test_every_module_walk_names_its_cancel_site(self):
+        # A module MoveTo cancels the bot's cast inside MoveTo2 (its own interrupt), so the walk must name itself
+        # there: one site per reason, and no anonymous `ai` row from a raid walk. The allowlist is empty on purpose
+        # (the unit-chase overload now carries the site too) and is matched verbatim, so it cannot silently grow.
+        allow = ()
+        missing = []
+        sites = 0
+        for path in _module_paths():
+            text = path.read_text()
+            for where, recv, args in _calls(text, "MoveTo"):
+                sites += 1
+                joined = f"MoveTo({', '.join(args)})"
+                if any(re.fullmatch(r'"[^"]+"', arg) for arg in args):
+                    continue
+                if joined in allow:
+                    continue
+                line = text.count("\n", 0, where) + 1
+                missing.append(f"{path.relative_to(ROOT)}:{line}: {joined}")
+        self.assertEqual(missing, [], "unnamed module walks:\n" + "\n".join(missing))
+        self.assertGreaterEqual(sites, 40)
+
+    def test_the_split_sites_are_the_ones_walk_99_asked_for(self):
+        # The labels the walk's 95 % `ai` share is split into, each at the caller that owns it.
+        SPELLS = (ROOT / "ai/playerbot/PlayerbotAISpells.cpp").read_text()
+        AI = (ROOT / "ai/playerbot/PlayerbotAI.cpp").read_text()
+        PACKETS = (ROOT / "ai/playerbot/PlayerbotAIPackets.cpp").read_text()
+        TARGETS = (ROOT / "ai/playerbot/strategy/actions/ChooseTargetActions.cpp").read_text()
+        MOVEMENT = (ROOT / "ai/playerbot/strategy/actions/MovementActions.cpp").read_text()
+        ITEMS = (ROOT / "ai/playerbot/strategy/actions/UseItemAction.h").read_text()
+        self.assertIn("site ? site : \"ai\"", SPELLS)
+        for text, label in (
+            (AI, 'InterruptSpell(true, "reaction_cast")'),
+            (AI, 'InterruptSpell(true, "ai_reset")'),
+            (AI, 'InterruptSpell(true, "engine_reinit")'),
+            (PACKETS, 'InterruptSpell(false, "knockback")'),
+            (TARGETS, 'ai->InterruptSpell(true, "target_select")'),
+            (MOVEMENT, 'ai->InterruptSpell(true, "follow")'),
+            (MOVEMENT, 'ai->InterruptSpell(false, "jump")'),
+            (ITEMS, 'ai->InterruptSpell(true, "drink")'),
+            (ITEMS, 'ai->InterruptSpell(true, "eat")'),
+            (ACTIONS, 'started = MoveTo(tank, radius, "flee")'),
+            (MOVEMENT, 'return MoveTo(target, ai->GetRange("follow"), "follow")'),
+            (MOVEMENT, 'return MoveTo(target, sPlayerbotAIConfig.contactDistance, "step_out")'),
+        ):
+            self.assertIn(label, text)
+        # Only the label is new: every site keeps the withMeleeAndAuto flag it had before.
+        self.assertNotIn("InterruptSpell(false, \"reaction_cast\")", AI)
+        self.assertNotIn("InterruptSpell(false, \"target_select\")", TARGETS)
+        self.assertNotIn("InterruptSpell(true, \"jump\")", MOVEMENT)
+
+
+def _split_args(text):
+    args, depth, start = [], 0, 0
+    in_string = None
+    for i, c in enumerate(text):
+        if in_string:
+            if c == in_string and text[i - 1] != "\\":
+                in_string = None
+            continue
+        if c in "\"'":
+            in_string = c
+        elif c in "([{":
+            depth += 1
+        elif c in ")]}":
+            depth -= 1
+        elif c == "," and depth == 0:
+            args.append(text[start:i].strip())
+            start = i + 1
+    tail = text[start:].strip()
+    if tail:
+        args.append(tail)
+    return args
+
+
+def _code(text):
+    """The text with comments blanked (newlines kept), so a quoted `InterruptSpell()` in a comment is not a call."""
+    out = list(text)
+    i, n = 0, len(text)
+    while i < n:
+        if text.startswith("//", i):
+            while i < n and text[i] != "\n":
+                out[i] = " "
+                i += 1
+        elif text.startswith("/*", i):
+            while i < n and not text.startswith("*/", i):
+                if text[i] != "\n":
+                    out[i] = " "
+                i += 1
+            for k in range(i, min(i + 2, n)):
+                out[k] = " "
+            i += 2
+        else:
+            i += 1
+    return "".join(out)
+
+
+def _calls(text, name):
+    """(offset, receiver, top-level args) for each `name(` call; the receiver is the token before `->` or None."""
+    text = _code(text)
+    for match in re.finditer(rf"\b{name}\s*\(", text):
+        start = match.end() - 1
+        depth, end = 0, start
+        while end < len(text):
+            if text[end] == "(":
+                depth += 1
+            elif text[end] == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            end += 1
+        before = text[:match.start()].rstrip()
+        recv = None
+        if before.endswith("->"):
+            tail = before[:-2].rstrip()
+            word = re.search(r"[A-Za-z_]\w*$", tail)
+            recv = word.group(0) if word else None
+        elif before.endswith("::"):
+            recv = "::"
+        yield match.start(), recv, _split_args(text[start + 1:end])
+
+
+def _module_paths():
+    actions = ROOT / "ai/playerbot/strategy/actions"
+    paths = sorted(actions.glob("*DungeonActions.*"))
+    paths += [
+        actions / "BossTacticsActions.cpp",
+        actions / "PatchwerkSoakerActions.cpp",
+        actions / "ViscidusActions.cpp",
+        actions / "FankrissFocusActions.cpp",
+    ]
+    return paths
+
 
 if __name__ == "__main__":
     unittest.main()

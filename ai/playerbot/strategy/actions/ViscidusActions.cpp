@@ -252,7 +252,7 @@ bool ViscidusCombatAction::MoveRing()
     bool fallback = false;
     bool safe = CheckedRoute(point);
     if (!safe) { fallback = true; safe = RingFallback(point); }
-    bool moved = safe && (WorldPosition(bot).distance(point) < 1.0f || MoveTo(point));
+    bool moved = safe && (WorldPosition(bot).distance(point) < 1.0f || MoveTo(point, false, false, false, false, "viscidus_ring"));
     uint32 now = WorldTimer::getMSTime();
     if (!ringReported || uint32(now - ringReported) > 3000)
     {
@@ -294,7 +294,7 @@ bool ViscidusCombatAction::Retreat()
         if (!CheckedRoute(point)) continue;
         ai::LogCastCancelNonMelee(ai, "viscidus_retreat", false);
         bot->InterruptNonMeleeSpells(false);
-        moved = MoveTo(point);
+        moved = MoveTo(point, false, false, false, false, "viscidus_retreat");
         if (moved) break;
     }
     uint32 now = WorldTimer::getMSTime();

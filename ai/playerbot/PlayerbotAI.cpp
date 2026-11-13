@@ -1094,7 +1094,8 @@ bool PlayerbotAI::UpdateAIReaction(uint32 elapsed, bool minimal, bool isStunned)
         {
             if(reaction->ShouldInterruptCast())
             {
-                InterruptSpell();
+                // The reaction engine's own cancel: the label splits it from the target picks and the walks.
+                InterruptSpell(true, "reaction_cast");
             }
 
             if (reaction->ShouldInterruptMovement())
@@ -2658,7 +2659,7 @@ void PlayerbotAI::Reset(bool full)
         RESET_AI_VALUE2(std::string, "manual string", "future travel purpose");
         RESET_AI_VALUE2(int, "manual int", "future travel relevance");
 
-        InterruptSpell();
+        InterruptSpell(true, "ai_reset");
 
         StopMoving();
 
@@ -3902,7 +3903,7 @@ void PlayerbotAI::UpdatePartyFlight(Player* master, Group* group)
 
 void PlayerbotAI::ReInitCurrentEngine()
 {
-    InterruptSpell();
+    InterruptSpell(true, "engine_reinit");
     currentEngine->Init();
 }
 

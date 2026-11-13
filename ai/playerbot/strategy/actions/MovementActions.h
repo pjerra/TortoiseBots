@@ -100,7 +100,8 @@ namespace ai
         bool MoveTo2(const WorldPosition& endPos, bool idle = false, bool react = false, bool noPath = false, bool ignoreEnemyTargets = false, PackHoldResult* packHold = nullptr, const char* castCancelSite = nullptr);
 
         bool MoveTo(uint32 mapId, float x, float y, float z, bool idle = false, bool react = false, bool noPath = false, bool ignoreEnemyTargets = false, const char* castCancelSite = nullptr);
-        bool MoveTo(Unit* target, float distance = 0.0f);
+        // A chase to a unit walks through the same interrupt: the site names the reason there too.
+        bool MoveTo(Unit* target, float distance = 0.0f, const char* castCancelSite = nullptr);
         bool MoveNear(WorldObject* target, float distance = sPlayerbotAIConfig.contactDistance);
         // One checked step on land (LandWalkPolicy.h): asks the core for a real
         // navmesh path with steep slopes excluded and walks it only when the

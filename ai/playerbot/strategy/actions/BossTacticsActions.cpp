@@ -6411,7 +6411,7 @@ bool BossTacticsFleeAction::Execute(Event& event)
             return false;
         allyYd = bot->GetDistance2d(tank);
         if (allyYd > radius)
-            started = MoveTo(tank, radius);
+            started = MoveTo(tank, radius, "flee");
     }
     else
     {
@@ -8160,7 +8160,7 @@ bool BossTacticsAvoidCastAction::Execute(Event& event)
         // walk (MoveTo2); what is left (a wand's auto-repeat) is stopped only once a walk is under way, so a bot with
         // no way out keeps its heal or bolt.
         bool const casting = bot->IsNonMeleeSpellCasted(true);
-        if (!MoveTo(bot->GetMapId(), spots[i].x, spots[i].y, spots[i].z, false, false, false, true))
+        if (!MoveTo(bot->GetMapId(), spots[i].x, spots[i].y, spots[i].z, false, false, false, true, "avoid_cast"))
             continue;
         // MoveTo can say yes without a walk (a collapsed path rebuilt next tick, a transport or teleport wait): only a
         // walk under way counts; otherwise the next point is tried.
@@ -8208,7 +8208,7 @@ bool BossTacticsStepBehindAction::Execute(Event& event)
                          bot->GetPositionX(), bot->GetPositionY(), 3.0f, x, y);
     float z = boss->GetPositionZ();
     bot->UpdateGroundPositionZ(x, y, z);
-    return MoveTo(bot->GetMapId(), x, y, z);
+    return MoveTo(bot->GetMapId(), x, y, z, false, false, false, false, "step_behind");
 }
 
 namespace
@@ -8737,7 +8737,7 @@ bool BossTacticsStandAction::Execute(Event& event)
         bot->CastStop();
     }
     const uint64 key = bot->GetObjectGuid().GetRawValue();
-    if (!MoveTo(bot->GetMapId(), seatX, seatY, z, false, false, false, true))
+    if (!MoveTo(bot->GetMapId(), seatX, seatY, z, false, false, false, true, "stand"))
     {
         // A seat the mover keeps refusing is given up on after three tries (FindBossStand returns invalid for it).
         std::lock_guard<std::mutex> lock(g_standHoldMutex);
@@ -9237,7 +9237,7 @@ bool BossTacticsUseObjectAction::Execute(Event& event)
         const float z = task.object->GetPositionZ();
         if (logIt)
             LogUseObject(ai, bot, "walk", task, nowMs, 0, nullptr);
-        if (!MoveTo(bot->GetMapId(), x, y, z, false, false, false, true))
+        if (!MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, "use_object"))
             return false;
         lastX = x;
         lastY = y;
@@ -9290,7 +9290,7 @@ bool BossTacticsObjectAnchorAction::Execute(Event& event)
     // The walk point sits between the object and the tank; its z comes from the ground under it.
     float z = anchor.object->GetPositionZ();
     bot->UpdateGroundPositionZ(anchor.x, anchor.y, z);
-    return MoveTo(bot->GetMapId(), anchor.x, anchor.y, z);
+    return MoveTo(bot->GetMapId(), anchor.x, anchor.y, z, false, false, false, false, "use_object_anchor");
 }
 
 bool ai::BossSpreadLive(PlayerbotAI* ai, Player* bot)
@@ -10594,7 +10594,7 @@ bool BossTacticsSeekAction::Execute(Event& event)
     if (hasLast && !bot->IsStopped() && !bot->movespline->Finalized() && std::fabs(lastX - x) < 1.0f &&
         std::fabs(lastY - y) < 1.0f)
         return true;
-    if (!MoveTo(bot->GetMapId(), x, y, z, false, false, false, true))
+    if (!MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, "seek_move"))
         return false;
     lastX = x;
     lastY = y;
@@ -10941,7 +10941,7 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
             ai::LogCastCancelNonMelee(ai, "seek_walk_out", true, std::sqrt(walkX * walkX + walkY * walkY));
             bot->InterruptNonMeleeSpells(true);
         }
-        const bool moved = MoveTo(bot->GetMapId(), x, y, z, false, false, false, true);
+        const bool moved = MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, "seek_walk_out");
         if (outbound)
         {
             LastMovement& lastMove = AI_VALUE(LastMovement&, "last movement");
@@ -11142,7 +11142,7 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
                 if (hasLast && !bot->IsStopped() && !bot->movespline->Finalized() && std::fabs(lastX - x) < 1.0f &&
                     std::fabs(lastY - y) < 1.0f)
                     return true;
-                if (!MoveTo(bot->GetMapId(), x, y, z, false, false, false, true))
+                if (!MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, "seek_pull_stand"))
                     return false;
                 lastX = x;
                 lastY = y;
@@ -11188,7 +11188,7 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
             if (hasLast && !bot->IsStopped() && !bot->movespline->Finalized() && std::fabs(lastX - x) < 1.0f &&
                 std::fabs(lastY - y) < 1.0f)
                 return true;
-            if (!MoveTo(bot->GetMapId(), x, y, z, false, false, false, true))
+            if (!MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, "seek_pull_walk"))
                 return false;
             lastX = x;
             lastY = y;
@@ -11219,7 +11219,7 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
         if (hasLast && !bot->IsStopped() && !bot->movespline->Finalized() && std::fabs(lastX - x) < 1.0f &&
             std::fabs(lastY - y) < 1.0f)
             return true;
-        if (!MoveTo(bot->GetMapId(), x, y, z, false, false, false, true))
+        if (!MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, "seek_gather"))
             return false;
         lastX = x;
         lastY = y;
@@ -12102,7 +12102,7 @@ bool BossTacticsTankPostAction::Execute(Event& event)
             return true;
         float z = task.z;
         bot->UpdateGroundPositionZ(task.x, task.y, z);
-        if (!MoveTo(bot->GetMapId(), task.x, task.y, z, false, false, false, true))
+        if (!MoveTo(bot->GetMapId(), task.x, task.y, z, false, false, false, true, "tank_post_drag"))
             return false;
         lastX = task.x;
         lastY = task.y;
@@ -12150,7 +12150,7 @@ bool BossTacticsTankPostAction::Execute(Event& event)
     float z = task.z;
     bot->UpdateGroundPositionZ(task.x, task.y, z);
     bot->AttackStop();
-    if (!MoveTo(bot->GetMapId(), task.x, task.y, z, false, false, false, true))
+    if (!MoveTo(bot->GetMapId(), task.x, task.y, z, false, false, false, true, "tank_post_walk"))
         return false;
     lastX = task.x;
     lastY = task.y;
