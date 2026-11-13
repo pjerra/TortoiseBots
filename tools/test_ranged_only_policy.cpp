@@ -24,8 +24,12 @@ int main()
     CHECK(!RangedOnlyHolds(true, 87.0f, 85.0f, 8.0f, false)); // MeleeFreeAfterLanding
     // The threshold is inclusive: exactly 8 yd above still holds.
     CHECK(RangedOnlyHolds(true, 93.0f, 85.0f, 8.0f, false)); // ExactThresholdHolds
-    // An explicit attack order outranks the tactic: the bot keeps the ordered subject until the order is cleared.
-    CHECK(!RangedOnlyHolds(true, 105.0f, 85.0f, 8.0f, true)); // ExplicitOrderBeatsTheHold
+    // The row outranks the bot's own attack order while it is engaged (Onyxia P2: the pull order lasted the whole air
+    // phase and the tanks chased the airborne boss). The 5th argument is still the caller's order input; it no longer
+    // exempts the bot, and the flipped check fails on the old policy.
+    CHECK(RangedOnlyHolds(true, 105.0f, 85.0f, 8.0f, true)); // ExplicitOrderDoesNotBeatTheEngagedRow
+    // Outside a row (no gap for the target) nothing holds, so the player's order still wins as before.
+    CHECK(!RangedOnlyHolds(true, 105.0f, 85.0f, 0.0f, true)); // NoRowLeavesTheOrderAlone
 
     std::cout << "All ranged only policy tests passed.\n";
     return 0;

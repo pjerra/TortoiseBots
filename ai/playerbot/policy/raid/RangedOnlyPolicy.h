@@ -11,11 +11,14 @@
 namespace ai
 {
     // Whether a melee bot standing `botFloorZ` under a subject at `subjectZ` is held off it: the subject stands
-    // `gapYd` yd or more above the bot. The threshold is inclusive (exactly gapYd holds); a ranged bot is never held,
-    // and an explicit attack order outranks the hold (as it does for hold_kill), so an ordered bot keeps the subject.
-    inline bool RangedOnlyHolds(bool isMeleeBot, float subjectZ, float botFloorZ, float gapYd, bool hasExplicitOrder)
+    // `gapYd` yd or more above the bot. The threshold is inclusive (exactly gapYd holds); a ranged bot is never held.
+    // The caller passes the row's gap, so a subject with no ranged_only row (0) is never held and a player's attack
+    // order still wins there. Inside a row the hold outranks that order as well (Onyxia P2: the pull order lasted the
+    // whole air phase and kept the tanks on the airborne boss), so `hasExplicitOrder` no longer exempts the bot; it
+    // stays in the signature as the caller's input.
+    inline bool RangedOnlyHolds(bool isMeleeBot, float subjectZ, float botFloorZ, float gapYd, bool /*hasExplicitOrder*/)
     {
-        if (!isMeleeBot || hasExplicitOrder || gapYd <= 0.0f)
+        if (!isMeleeBot || gapYd <= 0.0f)
             return false;
         return subjectZ - botFloorZ >= gapYd;
     }
