@@ -23,6 +23,8 @@ using ai::IsMagmaHazard;
 using ai::IsSlimeHazard;
 using ai::KeepNavmeshZOverMagma;
 using ai::KeepStairNavmeshZ;
+using ai::kMeleeRingSamples;
+using ai::kTwoPi;
 using ai::LiquidHazard;
 using ai::MagmaGuardApplies;
 using ai::MagmaInteriorSamples;
@@ -35,7 +37,12 @@ using ai::MagmaRouteRefusalFor;
 using ai::MagmaNudgeBlocked;
 using ai::kMagmaMaxInteriorSamples;
 using ai::kMagmaRefusalSeconds;
-
+using ai::kMagmaRefusalGridYd;
+using ai::MeleeRingAngle;
+using ai::MeleeRingPlan;
+using ai::MeleeRingPoint;
+using ai::MeleeRingStep;
+using ai::PlanMeleeRing;
 // GridMapDefines.h, mirrored for the test (the static_asserts in
 // MovementActions.cpp pin the header's copies to the core's).
 constexpr std::uint32_t kMagma = 0x01, kOcean = 0x02, kSlime = 0x04, kWater = 0x08;
@@ -434,6 +441,61 @@ int main()
         MagmaPoint const melee = ChaseGoalPoint(tx, ty, facing, 0.0f, facing + pi);
         CHECK(melee.x == tx && melee.y == ty);
         std::cout << "  [PASS] the chase guard's goal is the angled MoveChase slot, not a radial point\n";
+    }
+
+    // A zero-offset (melee) chase has no angle of its own: the core paths to
+    // a random attack point on a ring around the target, so the guard samples
+    // the ring at eight bearings on that radius. The ring geometry: index 0
+    // due east, 2 north, 4 west.
+    {
+        MagmaPoint const east = MeleeRingPoint(0.0f, 0.0f, 2.0f, 0);
+        MagmaPoint const north = MeleeRingPoint(0.0f, 0.0f, 2.0f, 2);
+        MagmaPoint const west = MeleeRingPoint(0.0f, 0.0f, 2.0f, 4);
+        CHECK(std::fabs(east.x - 2.0f) < 0.01f && std::fabs(east.y) < 0.01f);
+        CHECK(std::fabs(north.x) < 0.01f && std::fabs(north.y - 2.0f) < 0.01f);
+        CHECK(std::fabs(west.x + 2.0f) < 0.01f && std::fabs(west.y) < 0.01f);
+        CHECK(std::fabs(MeleeRingAngle(4) - 3.14159265f) < 0.001f);
+        std::cout << "  [PASS] the melee ring has eight bearings at the core's radius\n";
+    }
+
+    // A dry ring changes nothing: the core keeps its random attack point.
+    {
+        bool dry[kMeleeRingSamples] = {};
+        MeleeRingPlan const plan = PlanMeleeRing(dry, 0.0f);
+        CHECK(plan.step == MeleeRingStep::KeepRandom);
+        CHECK(dry[0] == false);
+        std::cout << "  [PASS] a dry melee ring keeps the core's random attack point\n";
+    }
+
+    // A mixed ring chases an explicit dry bearing: the one nearest the bot's
+    // own, so the bot does not cross the target.
+    {
+        bool mixed[kMeleeRingSamples] = {};
+        mixed[3] = mixed[4] = mixed[5] = true;  // lava on the west half
+        MeleeRingPlan const plan = PlanMeleeRing(mixed, 0.0f);  // the bot stands due east
+        CHECK(plan.step == MeleeRingStep::ChaseAngle);
+        CHECK(plan.index == 0);
+        CHECK(std::fabs(plan.angle) < 0.001f);
+        MagmaPoint const chase = MeleeRingPoint(0.0f, 0.0f, 2.0f, plan.index);
+        CHECK(std::fabs(chase.x - 2.0f) < 0.01f && std::fabs(chase.y) < 0.01f);
+        // Bearing just south of the wet sector: the nearest dry bearing is
+        // north-north-west (index 2); the bearing is normalised first.
+        MeleeRingPlan const near = PlanMeleeRing(mixed, 2.6f);
+        CHECK(near.step == MeleeRingStep::ChaseAngle);
+        CHECK(near.index == 2);
+        CHECK(PlanMeleeRing(mixed, kTwoPi + 2.6f).index == 2);
+        CHECK(PlanMeleeRing(mixed, 2.6f - kTwoPi).index == 2);
+        std::cout << "  [PASS] a mixed melee ring chases the dry bearing nearest the bot\n";
+    }
+
+    // Every bearing in magma: hold, a random pick is a lava death.
+    {
+        bool allWet[kMeleeRingSamples];
+        for (int i = 0; i < kMeleeRingSamples; ++i)
+            allWet[i] = true;
+        MeleeRingPlan const plan = PlanMeleeRing(allWet, 0.0f);
+        CHECK(plan.step == MeleeRingStep::Hold);
+        std::cout << "  [PASS] an all-magma melee ring holds\n";
     }
 
     std::cout << "All magma hazard policy tests passed.\n";

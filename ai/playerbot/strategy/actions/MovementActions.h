@@ -143,12 +143,20 @@ namespace ai
         // when it handled the follow this tick; false to follow normally.
         bool HoldFollowOutOfMagma(Unit* target, float distance, float angle);
         // The same for the chase goal MoveChase is handed (`distance` from the
-        // target at `angle` off the target's facing; the target itself for
-        // melee, whatever the angle): held, no tank pass. `angle` must be the
-        // final one given to MoveChase, so the guard plans against the same
-        // point the core chase walks to. True when it handled the chase this
-        // tick; false to chase normally.
+        // target at `angle` off the target's facing): held, no tank pass.
+        // `angle` must be the final one given to MoveChase, so the guard plans
+        // against the same point the core chase walks to. A zero distance is a
+        // melee chase: the core picks a random attack point on a ring around
+        // the target, so HoldMeleeChaseOutOfMagma decides. True when it
+        // handled the chase this tick; false to chase normally.
         bool HoldChaseOutOfMagma(WorldObject* target, float distance, float angle);
+        // The zero-offset chase: the core paths to a random attack point on
+        // the melee ring around the target, so the ring is sampled at eight
+        // bearings (MagmaHazardPolicy.h: ai::PlanMeleeRing). All dry: the
+        // core's pick stands. Mixed: MoveChase on the dry bearing nearest
+        // the bot, with an explicit angle the core honours for a nonzero
+        // offset. All magma: held. True when it handled the chase.
+        bool HoldMeleeChaseOutOfMagma(WorldObject* target);
         // AiPlayerbot.AvoidCreatureAuras: true when a move's end point lies in
         // a listed creature's ring (rear flank, set behind, move out of
         // collision refuse it; the hazard registry only bends the path). A
@@ -208,6 +216,12 @@ namespace ai
         ObjectGuid keepoutChaseHoldTarget;
         uint32 keepoutChaseHoldSinceMs = 0;
         uint32 keepoutChaseHoldLastMs = 0;
+        // The melee chase re-pointed onto a dry magma-ring bearing
+        // (HoldMeleeChaseOutOfMagma): the target and the body-relative angle
+        // handed to MoveChase. Re-dispatching an unchanged one would reset the
+        // chase generator every tick.
+        ObjectGuid magmaRingChaseTarget;
+        float magmaRingChaseAngle = 0.0f;
     };
 
     class FleeAction : public MovementAction

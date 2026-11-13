@@ -272,12 +272,56 @@ class MagmaGuardWiringTest(unittest.TestCase):
         check = at(g, "if (!SlotGoesIntoMagma(bot, goal, magmaAt))")
         self.assertLess(goal, check)
         self.assertIn("target->GetOrientation(), slotDistance, angle);", g)
-        self.assertIn("distance + bot->GetObjectBoundingRadius()", g)
+        self.assertIn("distance + target->GetObjectBoundingRadius() + bot->GetObjectBoundingRadius();", g)
+        # A zero-offset (melee) chase has no angle: the ring guard decides.
+        self.assertIn("if (!(distance > 0.0f))\n        return HoldMeleeChaseOutOfMagma(target);", g)
         self.assertNotIn("CreatureAuraChaseGoal", g)
         self.assertIn("ai->StopMoving();", g)
         # Lava kills a tank too: no tank pass on this hold.
         self.assertNotIn("IsTank", g)
         self.assertIn('LogMagmaRefusal(bot, AI_VALUE(LastMovement&, "last movement"), magmaAt, "chase goal");', g)
+
+    def test_melee_chase_ring(self):
+        # Round 3 (Codex HIGH r2): a zero-offset chase has no angle; the core
+        # paths to a random attack point on a ring around the target, so the
+        # target's own spot says nothing. Dry ring keeps the core's pick, a
+        # mixed ring chases the dry bearing nearest the bot with an explicit
+        # angle the core honours for a nonzero offset, all-magma holds.
+        g = body(MOVES, "bool MovementAction::HoldMeleeChaseOutOfMagma(", "\n}\n")
+        # Already in melee reach with line of sight: the core does not move.
+        self.assertLess(at(g, "bot->CanReachWithMeleeAutoAttack(chased)"),
+                        at(g, "ai::kMeleeRingSamples"))
+        self.assertIn("float const radius = target->GetObjectBoundingRadius() + bot->GetMeleeReach();", g)
+        # The random point can be as close as the bounding radii: a target
+        # standing in lava holds before any ring sample decides.
+        self.assertIn("if (targetPos.isInMagma())", g)
+        self.assertLess(at(g, "if (targetPos.isInMagma())"), at(g, "for (int i = 0; i < ai::kMeleeRingSamples; ++i)"))
+        self.assertIn('LogMagmaRefusal(bot, AI_VALUE(LastMovement&, "last movement"), targetPos, "melee chase ring");', g)
+        loop = at(g, "for (int i = 0; i < ai::kMeleeRingSamples; ++i)")
+        self.assertIn("ai::MeleeRingPoint(target->GetPositionX(), target->GetPositionY(), radius, i)", g[loop:])
+        plan = at(g, "ai::PlanMeleeRing(inMagma, target->GetAngle(bot))")
+        self.assertLess(loop, plan)
+        keep = at(g, "if (plan.step == ai::MeleeRingStep::KeepRandom)")
+        self.assertRegex(g[keep:keep + 200], r"return false;")
+        hold = at(g, "if (plan.step == ai::MeleeRingStep::Hold)")
+        self.assertLess(plan, hold)
+        self.assertGreater(at(g[hold:], "ai->StopMoving();") + hold, hold)
+        self.assertIn('LogMagmaRefusal(bot, lastMove, magmaAt, "melee chase ring");', g[hold:])
+        # Mixed: offset such that the core's target-radius + offset + the bot's
+        # radius lands on the sampled ring, and the sampled bearing relative
+        # to the target's facing (the core adds the facing back).
+        self.assertIn(
+            "float const offset = radius - target->GetObjectBoundingRadius() - bot->GetObjectBoundingRadius();", g)
+        self.assertIn("float const chaseAngle = plan.angle - target->GetOrientation();", g)
+        self.assertIn("mm.MoveChase(chased, offset, chaseAngle);", g)
+        # A chase already running on that bearing is left alone: re-dispatching
+        # every tick would reset the generator.
+        self.assertIn("magmaRingChaseTarget == target->getObjectGuid()", g)
+        self.assertIn("magmaRingChaseAngle - chaseAngle", g)
+        # An offset the generator would round to zero falls back to a walk.
+        fallback = at(g, "if (!(offset > 0.0f))")
+        self.assertLess(fallback, at(g, "mm.MoveChase(chased, offset, chaseAngle);"))
+        self.assertIn("return MoveTo(dryPoint.GetMapId(), dryPoint.getX(), dryPoint.getY(), dryPoint.getZ());", g)
 
     def test_healer_stand_path_is_calculated(self):
         # The healer stand's PathFinder was read without calculate(), so its end

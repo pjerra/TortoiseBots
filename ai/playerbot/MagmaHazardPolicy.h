@@ -227,12 +227,12 @@ namespace ai
     // The point the core chase generator is handed: `distance` from the target
     // at `angle` off the target's facing (TargetedMovementGenerator's
     // m_fOffset/m_fAngle, the pair ChaseTo passes to MoveChase; the generator
-    // adds the chaser's bounding radius to the offset, so the caller passes
-    // that effective distance). A zero distance is a melee chase: the core
-    // sends the bot to an attack point on the creature itself and ignores the
-    // angle, so the goal is the target's spot. The magma guard must plan
-    // against THIS point: a point derived from the bot's side of the target is
-    // dry while an angled or behind slot at the same distance sits in the lava.
+    // adds both bounding radii to the offset, so the caller passes that
+    // effective distance). A zero distance is a melee chase: the core picks an
+    // attack point on the melee ring below and ignores the angle. The magma
+    // guard must plan against THIS point: a point derived from the bot's side
+    // of the target is dry while an angled or behind slot at the same distance
+    // sits in the lava.
     inline MagmaPoint ChaseGoalPoint(float targetX, float targetY, float targetOrientation, float distance,
         float angle)
     {
@@ -245,6 +245,85 @@ namespace ai
         goal.x = targetX + distance * std::cos(slot);
         goal.y = targetY + distance * std::sin(slot);
         return goal;
+    }
+
+    // A zero-offset (melee) chase has no angle to check: the core asks
+    // Unit::GetRandomAttackPoint for a point between the two bounding radii and
+    // the target radius plus the attacker's combat reach (GetMeleeReach) out
+    // from the target, at the attacker's bearing plus a random spread. Any
+    // bearing of that ring can be picked, so the guard samples it at eight
+    // fixed world bearings on the outer radius, the farthest the core can go.
+    constexpr int kMeleeRingSamples = 8;
+    constexpr float kTwoPi = 6.28318530717958647692f;
+
+    inline float MeleeRingAngle(int index)
+    {
+        return static_cast<float>(index) * (kTwoPi / static_cast<float>(kMeleeRingSamples));
+    }
+
+    inline MagmaPoint MeleeRingPoint(float targetX, float targetY, float radius, int index)
+    {
+        MagmaPoint point;
+        float const angle = MeleeRingAngle(index);
+        point.x = targetX + radius * std::cos(angle);
+        point.y = targetY + radius * std::sin(angle);
+        return point;
+    }
+
+    enum class MeleeRingStep
+    {
+        KeepRandom,  // no bearing is magma: the core keeps its random pick
+        ChaseAngle,  // mixed: chase the dry bearing nearest the bot
+        Hold,        // every bearing is magma: do not chase at all
+    };
+
+    struct MeleeRingPlan
+    {
+        MeleeRingStep step = MeleeRingStep::KeepRandom;
+        int index = 0;       // the dry bearing to chase (ChaseAngle)
+        float angle = 0.0f;  // that bearing, world radians around the target
+    };
+
+    // `inMagma` holds the eight ring samples' verdict; `botBearing` is the
+    // world bearing from the target to the bot (WorldObject::GetAngle). All
+    // dry: keep whatever the core would pick. All wet: hold, a random pick is
+    // a lava death. Mixed: the dry bearing nearest the bot's own, so the chase
+    // stays on the side the bot already stands on instead of crossing the
+    // target.
+    inline MeleeRingPlan PlanMeleeRing(bool const (&inMagma)[kMeleeRingSamples], float botBearing)
+    {
+        MeleeRingPlan plan;
+        botBearing = std::fmod(botBearing, kTwoPi);
+        if (botBearing < 0.0f)
+            botBearing += kTwoPi;
+        int dry = 0;
+        for (int i = 0; i < kMeleeRingSamples; ++i)
+            if (!inMagma[i])
+                ++dry;
+        if (dry == kMeleeRingSamples)
+            return plan;
+        if (dry == 0)
+        {
+            plan.step = MeleeRingStep::Hold;
+            return plan;
+        }
+        plan.step = MeleeRingStep::ChaseAngle;
+        float best = -1.0f;
+        for (int i = 0; i < kMeleeRingSamples; ++i)
+        {
+            if (inMagma[i])
+                continue;
+            float delta = std::fabs(MeleeRingAngle(i) - botBearing);
+            if (delta > kTwoPi / 2.0f)
+                delta = kTwoPi - delta;
+            if (best < 0.0f || delta < best)
+            {
+                best = delta;
+                plan.index = i;
+                plan.angle = MeleeRingAngle(i);
+            }
+        }
+        return plan;
     }
 
     // The verdict on a route. `cut` true: it walks into magma after dry

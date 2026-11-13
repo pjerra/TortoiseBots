@@ -1,6 +1,6 @@
 # Changelog
 
-- Fixed: on instance maps a follower's follow slot, or a chaser's chase goal, that sits in magma (or whose route walks into it) holds outside instead of stepping in, so the party no longer follows onto a shallow lava shelf the navmesh reads as plain ground (RFC first-bridge deaths, 2026-11-13), and a healer's pull stand is no longer always rejected because its path was never calculated.
+- Fixed: on instance maps a follower's follow slot, or a chaser's chase goal, that sits in magma (or whose route walks into it) holds outside instead of stepping in, so the party no longer follows onto a shallow lava shelf the navmesh reads as plain ground (RFC first-bridge deaths, 2026-11-13); a melee chaser whose attack ring around its target touches lava chases the dry side nearest it and holds when the whole ring is lava; and a healer's pull stand is no longer always rejected because its path was never calculated.
 - Fixed: a summoned bot's live hunter pet or warlock demon is teleported with it and resummoned beside it instead of walking through the instance to its owner and pulling whatever it passes (#1606).
 - Fixed: a Shadow priest no longer drops Shadowform to Renew an ally another healer already covers, and drops the form only for a heal it can cast at once, not into a global cooldown or wand swing (found by Tortoise Trials, #1556).
 - Fixed: a Holy or Discipline priest in a group no longer goes 3 s without reacting after each wand shot, so its heal starts within one wand swing of a hit instead of up to 3 s later (found by Tortoise Trials, #1556).

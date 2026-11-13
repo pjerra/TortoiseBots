@@ -2620,15 +2620,18 @@ bool MovementAction::HoldChaseOutOfMagma(WorldObject* target, float distance, fl
     // holding a mob, while lava kills a tank exactly as fast as anything else.
     if (WorldPosition(bot).isInMagma())
         return false;
+    // A zero-offset (melee) chase has no angle: the core sends the bot to a
+    // random attack point on the melee ring, so the whole ring decides.
+    if (!(distance > 0.0f))
+        return HoldMeleeChaseOutOfMagma(target);
     // Chase goal: the slot MoveChase aims for, `distance` from the target at
-    // `angle` off the target's facing (the target itself for a melee chase),
-    // with the final angle ChaseTo hands to MoveChase. MoveChase places the
-    // point `distance` plus the chaser's bounding radius out
-    // (TargetedMovementGenerator's GetNearPointAroundPosition). Planning
-    // against a point on the bot's side of the target instead cleared a dry
-    // radial goal while the behind slot the core actually walks to sat in the
-    // lava.
-    float const slotDistance = distance > 0.0f ? distance + bot->GetObjectBoundingRadius() : 0.0f;
+    // `angle` off the target's facing, with the final angle ChaseTo hands to
+    // MoveChase. MoveChase places the point `distance` plus both bounding
+    // radii out (TargetedMovementGenerator's GetNearPointAroundPosition).
+    // Planning against a point on the bot's side of the target instead cleared
+    // a dry radial goal while the behind slot the core actually walks to sat
+    // in the lava.
+    float const slotDistance = distance + target->GetObjectBoundingRadius() + bot->GetObjectBoundingRadius();
     ai::MagmaPoint const goalPoint = ai::ChaseGoalPoint(target->GetPositionX(), target->GetPositionY(),
         target->GetOrientation(), slotDistance, angle);
     WorldPosition goal(target->GetMapId(), goalPoint.x, goalPoint.y, target->GetPositionZ());
@@ -2640,6 +2643,92 @@ bool MovementAction::HoldChaseOutOfMagma(WorldObject* target, float distance, fl
         return false;
     ai->StopMoving();
     LogMagmaRefusal(bot, AI_VALUE(LastMovement&, "last movement"), magmaAt, "chase goal");
+    return true;
+}
+
+bool MovementAction::HoldMeleeChaseOutOfMagma(WorldObject* target)
+{
+    Unit* const chased = dynamic_cast<Unit*>(target);
+    if (!chased)
+        return false;
+    // Already in melee reach of the target with line of sight: the core chase
+    // does not move at all, so there is no destination to guard.
+    if (bot->CanReachWithMeleeAutoAttack(chased))
+        return false;
+    // The core's random attack point can be as close as the two bounding
+    // radii, so a target standing in lava has no reliably dry ring around it.
+    WorldPosition const targetPos(target);
+    if (targetPos.isInMagma())
+    {
+        magmaRingChaseTarget = ObjectGuid();
+        ai->StopMoving();
+        LogMagmaRefusal(bot, AI_VALUE(LastMovement&, "last movement"), targetPos, "melee chase ring");
+        return true;
+    }
+    // The core's random attack point sits on a ring around the target: at
+    // most the target radius plus the bot's combat reach out. A dry target
+    // spot says nothing about which bearing the core draws.
+    float const radius = target->GetObjectBoundingRadius() + bot->GetMeleeReach();
+    bool inMagma[ai::kMeleeRingSamples] = {};
+    WorldPosition magmaAt;
+    bool magmaSeen = false;
+    for (int i = 0; i < ai::kMeleeRingSamples; ++i)
+    {
+        ai::MagmaPoint const samplePoint = ai::MeleeRingPoint(target->GetPositionX(), target->GetPositionY(), radius, i);
+        WorldPosition sample(target->GetMapId(), samplePoint.x, samplePoint.y, target->GetPositionZ());
+        float const ground = sample.GetHeight();
+        if (ground > INVALID_HEIGHT)
+            sample.setZ(ground);
+        inMagma[i] = sample.isInMagma();
+        if (inMagma[i] && !magmaSeen)
+        {
+            magmaAt = sample;
+            magmaSeen = true;
+        }
+    }
+    ai::MeleeRingPlan const plan = ai::PlanMeleeRing(inMagma, target->GetAngle(bot));
+    if (plan.step == ai::MeleeRingStep::KeepRandom)
+    {
+        magmaRingChaseTarget = ObjectGuid();
+        return false;
+    }
+    LastMovement& lastMove = AI_VALUE(LastMovement&, "last movement");
+    if (plan.step == ai::MeleeRingStep::Hold)
+    {
+        magmaRingChaseTarget = ObjectGuid();
+        ai->StopMoving();
+        LogMagmaRefusal(bot, lastMove, magmaAt, "melee chase ring");
+        return true;
+    }
+    // Mixed ring: chase the dry bearing nearest the bot's. MoveChase with a
+    // nonzero offset honours the angle (GetNearPointAroundPosition, no random
+    // step) and places the point target radius + offset + the bot's bounding
+    // radius out, so this offset lands the core on the sampled bearing.
+    float const offset = radius - target->GetObjectBoundingRadius() - bot->GetObjectBoundingRadius();
+    float const chaseAngle = plan.angle - target->GetOrientation();
+    MotionMaster& mm = *bot->GetMotionMaster();
+    // Same target and bearing as the chase already running: re-dispatching
+    // would reset the generator every tick.
+    if (magmaRingChaseTarget == target->getObjectGuid() && std::fabs(magmaRingChaseAngle - chaseAngle) < 0.01f &&
+        mm.GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE && sServerFacade.GetChaseTarget(bot) == target)
+        return true;
+    if (!(offset > 0.0f))
+    {
+        // The generator adds both radii itself, so a zero offset would land
+        // back in the random branch: walk to the dry bearing instead.
+        ai::MagmaPoint const dry = ai::MeleeRingPoint(target->GetPositionX(), target->GetPositionY(), radius,
+            plan.index);
+        WorldPosition dryPoint(target->GetMapId(), dry.x, dry.y, target->GetPositionZ());
+        float const dryGround = dryPoint.GetHeight();
+        if (dryGround > INVALID_HEIGHT)
+            dryPoint.setZ(dryGround);
+        return MoveTo(dryPoint.GetMapId(), dryPoint.getX(), dryPoint.getY(), dryPoint.getZ());
+    }
+    magmaRingChaseTarget = target->getObjectGuid();
+    magmaRingChaseAngle = chaseAngle;
+    bot->SetTargetGuid(chased->getObjectGuid());
+    bot->Attack(chased, false);
+    mm.MoveChase(chased, offset, chaseAngle);
     return true;
 }
 
