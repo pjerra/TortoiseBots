@@ -242,6 +242,8 @@ namespace ai
         std::uint32_t cycleSpell = 0;
         float cycleSec = 0.0f;
         float spotX = 0.0f, spotY = 0.0f, spotZ = 0.0f;
+        // tank_post (a `hold_spot` post): the healers held on the post's tank (`healers`, 0-4). 0 for every other kind.
+        std::uint8_t healers = 0;
 
         bool HasSpot() const { return spotX != 0.0f || spotY != 0.0f || spotZ != 0.0f; }
     };
@@ -469,6 +471,9 @@ namespace ai
         std::uint8_t crewSize = 0;
     };
 
+    // A `hold_spot` tank_post row's healers: the most the rule takes (`healers`, 0-4).
+    constexpr std::uint8_t kTankPostHealersMax = 4;
+
     class BossTacticTable
     {
     public:
@@ -631,12 +636,17 @@ namespace ai
             // tank_post: the awaited unit (`target_entry`), the tank slot (priority 1-7; slot 0 is the main tank, which
             // holds a post on the row's own boss only), the wait spot, the arrival radius, 5-100 yd: a subject that
             // lands and runs after a healer across the room, and the longest hold. A fight-scan kind, so its health
-            // band arms the post. No spell, no cycle columns; the only mode word is `hold_spot`.
+            // band arms the post. No cycle columns; the only mode word is `hold_spot`. A `hold_spot` row may name the
+            // boss spell whose aura marks the cast the tank answers (`spell_id`) and the healers it holds on its tank
+            // (`healers`, 0-4); a plain post names neither.
             if (row.kind == BossTacticKind::TankPost &&
                 (row.targetEntry == 0 || (row.priority < 1 && row.targetEntry != row.bossEntry) ||
                     row.priority > 7 || !row.HasSpot() ||
                     row.param < 5.0f || row.param > 100.0f || row.windowSec < 10.0f || row.windowSec > 120.0f ||
-                    row.spellId != 0 || (row.mode != TacticMode::Default && row.mode != TacticMode::HoldSpot)))
+                    (row.spellId != 0 && row.mode != TacticMode::HoldSpot) ||
+                    row.healers > kTankPostHealersMax ||
+                    (row.healers != 0 && row.mode != TacticMode::HoldSpot) ||
+                    (row.mode != TacticMode::Default && row.mode != TacticMode::HoldSpot)))
                 return false;
             // add_crew: the switch unit whose death hands the boss's adds over (`target_entry`, never the boss itself)
             // and the crew size (`priority`, 0-5; the first `priority` AoE ranged bots of the crew class order join the
@@ -653,9 +663,11 @@ namespace ai
                     RowGateSet(row) || row.mode != TacticMode::Default))
                 return false;
             // The cycle columns are the seek_aura kind's and the reset window's (threat_successor with a cycle_spell),
-            // the spot columns the seek_aura, anchor and tank_post kinds'.
+            // the spot columns the seek_aura, anchor and tank_post kinds', the healers count the tank_post kind's.
             if (row.kind != BossTacticKind::SeekAura && row.kind != BossTacticKind::ThreatSuccessor &&
                 (row.cycleSpell != 0 || row.cycleSec != 0.0f))
+                return false;
+            if (row.kind != BossTacticKind::TankPost && row.healers != 0)
                 return false;
             if (row.kind != BossTacticKind::SeekAura && row.kind != BossTacticKind::Anchor &&
                 row.kind != BossTacticKind::TankPost && row.HasSpot())
@@ -4144,6 +4156,210 @@ namespace ai
             }
         }
         return best;
+    }
+
+    // AiPlayerbot.DungeonRunTankPostHealers: the healers a `hold_spot` post holds on its tank.
+    constexpr float kTankPostHealerYd = 30.0f;      // a post healer stays within this of the holder (2D)
+    constexpr float kTankPostHealerWalkYd = 25.0f;  // its walk back ends this far from the holder
+    constexpr float kTankPostHealerFlankYd = 20.0f; // or this far beside the held unit
+    constexpr float kTankPostHealerUnitYd = 15.0f;  // the held unit counts while it is this near the holder
+    constexpr float kTankPostHealerMinManaPct = 10.0f;
+    // An incumbent keeps its seat unless a candidate clears one of these: a better tank seat, this much more mana, or
+    // (with the mana inside the same margin both ways) this much less distance. Without the margin two near-equal
+    // healers trade the seat on every scan.
+    constexpr float kTankPostHealerSwapManaPct = 20.0f;
+    constexpr float kTankPostHealerSwapYd = 10.0f;
+    struct TankPostHealerCandidate
+    {
+        std::uint64_t guid = 0;
+        std::uint8_t seatRank = 1; // 0: the raid layout seats it on this holder, 1: no tank seat, 2: a seat on another tank
+        float manaPct = 100.0f;    // of its maximum; under kTankPostHealerMinManaPct it is no candidate
+        float ydToHolder = 0.0f;
+    };
+    inline bool TankPostHealerHasMana(const TankPostHealerCandidate& candidate)
+    {
+        return candidate.manaPct >= kTankPostHealerMinManaPct;
+    }
+    // Seat rank, then more mana, then the shorter walk, then guid.
+    inline bool TankPostHealerOutranks(const TankPostHealerCandidate& a, const TankPostHealerCandidate& b)
+    {
+        if (a.seatRank != b.seatRank)
+            return a.seatRank < b.seatRank;
+        if (a.manaPct != b.manaPct)
+            return a.manaPct > b.manaPct;
+        if (a.ydToHolder != b.ydToHolder)
+            return a.ydToHolder < b.ydToHolder;
+        return a.guid < b.guid;
+    }
+    // Whether a challenger takes an incumbent's seat: a better tank seat outright, else the mana margin, else the walk
+    // margin while the mana stays inside its own margin (a healer far behind on mana is not closer by default).
+    inline bool TankPostHealerDisplaces(const TankPostHealerCandidate& challenger,
+                                        const TankPostHealerCandidate& incumbent)
+    {
+        if (challenger.seatRank != incumbent.seatRank)
+            return challenger.seatRank < incumbent.seatRank;
+        if (challenger.manaPct - incumbent.manaPct >= kTankPostHealerSwapManaPct)
+            return true;
+        if (incumbent.manaPct - challenger.manaPct >= kTankPostHealerSwapManaPct)
+            return false;
+        return incumbent.ydToHolder - challenger.ydToHolder >= kTankPostHealerSwapYd;
+    }
+    // The post's healers: every candidate with the mana for it, the incumbents among them, ranked together on each
+    // scan by seat rank, mana, distance, guid; an incumbent under kTankPostHealerMinManaPct is out at once. The
+    // ranking fills the free seats; a full set takes a candidate only where it displaces the weakest holder by a
+    // clear margin. Never more than kTankPostHealersMax.
+    inline std::vector<std::uint64_t> PickTankPostHealers(const std::vector<std::uint64_t>& current,
+        const std::vector<TankPostHealerCandidate>& candidates, std::size_t want)
+    {
+        std::vector<std::uint64_t> picked;
+        std::size_t const cap = std::min<std::size_t>(want, kTankPostHealersMax);
+        if (cap == 0)
+            return picked;
+        std::vector<TankPostHealerCandidate> ranked;
+        for (const TankPostHealerCandidate& candidate : candidates)
+        {
+            if (TankPostHealerHasMana(candidate))
+                ranked.push_back(candidate);
+        }
+        std::sort(ranked.begin(), ranked.end(), TankPostHealerOutranks);
+        std::vector<TankPostHealerCandidate> holders;
+        for (const std::uint64_t guid : current)
+        {
+            const auto found = std::find_if(ranked.begin(), ranked.end(),
+                [guid](const TankPostHealerCandidate& candidate) { return candidate.guid == guid; });
+            if (found != ranked.end() && holders.size() < cap)
+                holders.push_back(*found);
+        }
+        std::sort(holders.begin(), holders.end(), TankPostHealerOutranks);
+        for (const TankPostHealerCandidate& candidate : ranked)
+        {
+            const auto held = std::find_if(holders.begin(), holders.end(),
+                [&candidate](const TankPostHealerCandidate& holder) { return holder.guid == candidate.guid; });
+            if (held != holders.end())
+                continue;
+            if (holders.size() < cap)
+            {
+                holders.push_back(candidate);
+                continue;
+            }
+            std::size_t weakest = 0;
+            for (std::size_t i = 1; i < holders.size(); ++i)
+            {
+                if (TankPostHealerOutranks(holders[weakest], holders[i]))
+                    weakest = i;
+            }
+            if (!TankPostHealerDisplaces(candidate, holders[weakest]))
+                continue;
+            holders[weakest] = candidate;
+        }
+        std::sort(holders.begin(), holders.end(), TankPostHealerOutranks);
+        for (const TankPostHealerCandidate& holder : holders)
+            picked.push_back(holder.guid);
+        return picked;
+    }
+    enum class TankPostHealPick : std::uint8_t { Normal, Holder, None };
+    inline TankPostHealPick TankPostHealPickOf(bool onDuty, bool holderHealable)
+    {
+        return !onDuty ? TankPostHealPick::Normal : holderHealable ? TankPostHealPick::Holder : TankPostHealPick::None;
+    }
+    inline bool TankPostHealerFar(float ydToHolder) { return ydToHolder > kTankPostHealerYd; }
+    // Where a post healer walks: beside the held unit (kTankPostHealerFlankYd from it, at a right angle to the line
+    // from the unit to the holder, on the healer's side) while the unit stands within kTankPostHealerUnitYd of the
+    // holder; else kTankPostHealerWalkYd from the holder toward the healer.
+    inline void TankPostHealerPoint(bool haveUnit, float unitX, float unitY, float holderX, float holderY,
+                                    float botX, float botY, float& x, float& y)
+    {
+        if (haveUnit)
+        {
+            const float dx = holderX - unitX;
+            const float dy = holderY - unitY;
+            const float line = std::sqrt(dx * dx + dy * dy);
+            const float ux = unitX - holderX;
+            const float uy = unitY - holderY;
+            if (line >= 0.1f && std::sqrt(ux * ux + uy * uy) <= kTankPostHealerUnitYd)
+            {
+                const float side = dx * (botY - unitY) - dy * (botX - unitX) >= 0.0f ? 1.0f : -1.0f;
+                x = unitX - side * dy / line * kTankPostHealerFlankYd;
+                y = unitY + side * dx / line * kTankPostHealerFlankYd;
+                return;
+            }
+        }
+        const float bx = botX - holderX;
+        const float by = botY - holderY;
+        const float botYd = std::sqrt(bx * bx + by * by);
+        if (botYd >= 0.1f)
+        {
+            x = holderX + bx / botYd * kTankPostHealerWalkYd;
+            y = holderY + by / botYd * kTankPostHealerWalkYd;
+            return;
+        }
+        x = holderX;
+        y = holderY + kTankPostHealerWalkYd;
+    }
+
+    // Walk 2i C (AiPlayerbot.DungeonRunTankPostHealers): the holder's defensive cooldown at the first cast the row's
+    // spell marks. The window is long enough for a feared tank (the Roar's own fear lasts 3 s).
+    constexpr std::uint32_t kTankPostCooldownTryMs = 10000;
+    // The first sighting that counts: the key, a row spell, the unit was on this tank at least once (so a cast at the
+    // landing, before the tank has her, spends nothing), nothing seen yet, and a raid member carries the aura now.
+    inline bool TankPostCooldownSeen(bool keyOn, std::uint32_t rowSpell, bool heldOnce, bool seenBefore,
+                                     bool auraOnRaid)
+    {
+        return keyOn && rowSpell != 0 && heldOnce && !seenBefore && auraOnRaid;
+    }
+    // Whether a tick counts as the unit being held on this tank: it is on the tank and no raid member carries the row's
+    // aura. A landing cast shows both at once (the Roar as she turns to the tank), and only a tick without the aura
+    // makes the next sighting a fresh application.
+    inline bool TankPostCooldownHolds(bool onTank, bool auraOnRaid) { return onTank && !auraOnRaid; }
+    // The defensive actions of a tank class, in cast order; empty for a class with none. By class id only: the code
+    // names no boss and no spell id. A druid tank stands in bear or dire bear form, where CastBarkskinAction refuses,
+    // so Frenzied Regeneration is its only entry.
+    inline std::vector<const char*> TankPostCooldownActions(std::uint8_t classId)
+    {
+        if (classId == 1) // CLASS_WARRIOR
+            return {"shield wall", "last stand"};
+        if (classId == 11) // CLASS_DRUID
+            return {"frenzied regeneration"};
+        return {};
+    }
+    enum class TankPostCooldown : std::uint8_t { None, Cast, GiveUp };
+    // Cast while an action is left inside the window; GiveUp once at its end with actions left; else None.
+    inline TankPostCooldown TankPostCooldownStep(bool seen, std::size_t tried, std::size_t total,
+                                                 std::uint32_t msSinceSeen)
+    {
+        if (!seen || tried >= total)
+            return TankPostCooldown::None;
+        return msSinceSeen >= kTankPostCooldownTryMs ? TankPostCooldown::GiveUp : TankPostCooldown::Cast;
+    }
+    // The name this tick asks for: the first at or past `tried` that its own action accepts now (isUseful and
+    // isPossible both true). A name the action refuses (a form, an empty resource, a standing buff) is passed over
+    // without spending it, so an entry the tank cannot run can never hide the one behind it. `total` when every name
+    // left is refused: nothing to cast, nothing spent.
+    template <typename UsableFn>
+    inline std::size_t TankPostCooldownPick(std::size_t tried, std::size_t total, UsableFn usable)
+    {
+        for (std::size_t i = tried; i < total; ++i)
+            if (usable(i))
+                return i;
+        return total;
+    }
+    struct TankPostCooldownAttempt
+    {
+        std::uint8_t tried = 0;
+        bool closed = false;
+    };
+    // What the tick spent. `cast`: the name's cast went out and the window is over. `spent`: the action accepted but
+    // the cast did not go out (on cooldown), so the next tick goes on past it, and the window closes once nothing is
+    // left. A refused action is neither and never reaches this.
+    enum class TankPostCooldownOutcome : std::uint8_t { Cast, Spent };
+    inline TankPostCooldownAttempt TankPostCooldownAfter(std::size_t index, std::size_t total,
+                                                         TankPostCooldownOutcome outcome)
+    {
+        std::size_t const nextIndex = index + 1 < 255 ? index + 1 : 255;
+        TankPostCooldownAttempt next;
+        next.tried = static_cast<std::uint8_t>(nextIndex);
+        next.closed = outcome == TankPostCooldownOutcome::Cast || nextIndex >= total;
+        return next;
     }
 
     // AiPlayerbot.DungeonRunTankPostKeepsUnit, for the tank's own target pick: whether the post's latched unit decides

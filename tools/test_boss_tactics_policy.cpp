@@ -1849,6 +1849,243 @@ static void TestTankPostRow_RadiusCap()
     CHECK(loads(40.0f));
 }
 
+// Walk 2i H: the healers a `hold_spot` post holds on its tank. Every candidate and the incumbents are ranked together
+// on each scan: the raid layout's seat on this holder, then more mana, then distance, then guid. A healer under 10 %
+// mana is no candidate at all, and an incumbent keeps its seat unless a challenger clears the swap margin. The failing
+// case is the fill itself: sorting by distance first picks B (5 yd) over C (the layout's own tank seat, 40 yd).
+static void TestPickTankPostHealers_ReranksAndFills()
+{
+    auto const candidate = [](std::uint64_t guid, std::uint8_t rank, float manaPct, float yd)
+    {
+        TankPostHealerCandidate c;
+        c.guid = guid;
+        c.seatRank = rank;
+        c.manaPct = manaPct;
+        c.ydToHolder = yd;
+        return c;
+    };
+    const std::vector<TankPostHealerCandidate> all = {
+        candidate(1, 1, 60.0f, 30.0f),   // A: held, no tank seat
+        candidate(2, 2, 100.0f, 5.0f),   // B: another tank's seat, nearest
+        candidate(3, 0, 100.0f, 40.0f),  // C: the layout's seat on this holder
+        candidate(4, 1, 5.0f, 10.0f),    // D: under the mana floor
+        candidate(5, 1, 60.0f, 25.0f),   // E: no tank seat, 5 yd closer than A
+    };
+    CHECK(PickTankPostHealers({1}, all, 2) == std::vector<std::uint64_t>({3, 1})); // C fills; E is inside the margin
+    CHECK(PickTankPostHealers({}, all, 2) == std::vector<std::uint64_t>({3, 5}));  // the ranked pair, never D
+    CHECK(PickTankPostHealers({1}, all, 0).empty());            // want 0: nobody
+    CHECK(PickTankPostHealers({}, {candidate(2, 1, 100.0f, 5.0f)}, 2) == std::vector<std::uint64_t>({2}));
+    CHECK(PickTankPostHealers({}, all, 9).size() == 4);          // never more than kTankPostHealersMax
+    // A held healer that is no candidate any more is dropped; a held pair with no challenger keeps both seats and
+    // the output is the ranked order.
+    const std::vector<TankPostHealerCandidate> held = {
+        candidate(1, 1, 60.0f, 30.0f),
+        candidate(5, 1, 60.0f, 25.0f),
+    };
+    CHECK(PickTankPostHealers({1, 5}, held, 2) == std::vector<std::uint64_t>({5, 1}));
+    CHECK(PickTankPostHealers({5}, {candidate(3, 0, 100.0f, 1.0f)}, 2) == std::vector<std::uint64_t>({3}));
+    CHECK(PickTankPostHealers({4}, all, 2) == std::vector<std::uint64_t>({3, 5})); // the held one has no mana
+}
+
+// The depleted pair: two held healers run under 10 % mana while two full-mana ones stand free, so both seats are
+// reassigned on the very scan. The failing case is the old sticky set, which kept them until they died.
+static void TestPickTankPostHealers_DepletedPairIsSwapped()
+{
+    auto const candidate = [](std::uint64_t guid, float manaPct, float yd)
+    {
+        TankPostHealerCandidate c;
+        c.guid = guid;
+        c.seatRank = 1;
+        c.manaPct = manaPct;
+        c.ydToHolder = yd;
+        return c;
+    };
+    const std::vector<TankPostHealerCandidate> all = {
+        candidate(11, 5.0f, 10.0f),   // held, under the floor
+        candidate(12, 2.0f, 12.0f),   // held, under the floor
+        candidate(21, 100.0f, 20.0f), // free
+        candidate(22, 90.0f, 25.0f),  // free
+    };
+    CHECK(PickTankPostHealers({11, 12}, all, 2) == std::vector<std::uint64_t>({21, 22}));
+    CHECK(PickTankPostHealers({11, 12}, all, 1) == std::vector<std::uint64_t>({21}));
+}
+
+// The margin that keeps a seat still: a better seat wins outright, 20 % more mana wins, and 10 yd wins only while the
+// mana stays inside its own margin; a near-equal challenger leaves the incumbent where it is.
+static void TestPickTankPostHealers_SwapMargins()
+{
+    auto const candidate = [](std::uint64_t guid, std::uint8_t rank, float manaPct, float yd)
+    {
+        TankPostHealerCandidate c;
+        c.guid = guid;
+        c.seatRank = rank;
+        c.manaPct = manaPct;
+        c.ydToHolder = yd;
+        return c;
+    };
+    CHECK(kTankPostHealerSwapManaPct == 20.0f);
+    CHECK(kTankPostHealerSwapYd == 10.0f);
+    CHECK(!TankPostHealerDisplaces(candidate(2, 1, 90.0f, 10.0f), candidate(1, 1, 75.0f, 10.0f))); // 15 % mana
+    CHECK(TankPostHealerDisplaces(candidate(2, 1, 95.0f, 10.0f), candidate(1, 1, 75.0f, 10.0f)));  // 20 %
+    CHECK(!TankPostHealerDisplaces(candidate(2, 1, 60.0f, 5.0f), candidate(1, 1, 95.0f, 30.0f)));  // mana far behind
+    CHECK(TankPostHealerDisplaces(candidate(2, 1, 90.0f, 20.0f), candidate(1, 1, 85.0f, 30.0f)));  // 10 yd
+    CHECK(!TankPostHealerDisplaces(candidate(2, 1, 90.0f, 21.5f), candidate(1, 1, 85.0f, 30.0f))); // 8.5 yd
+    CHECK(TankPostHealerDisplaces(candidate(2, 0, 50.0f, 40.0f), candidate(1, 1, 100.0f, 5.0f)));  // seat
+    // A held healer inside the margin keeps its seat on the next scan; the same pair the other way keeps the other.
+    const std::vector<TankPostHealerCandidate> all = {
+        candidate(1, 1, 75.0f, 10.0f),
+        candidate(2, 1, 90.0f, 10.0f),
+    };
+    CHECK(PickTankPostHealers({1}, all, 1) == std::vector<std::uint64_t>({1}));
+    CHECK(PickTankPostHealers({2}, all, 1) == std::vector<std::uint64_t>({2}));
+}
+
+// AiPlayerbot.DungeonRunTankPostHealers: a post healer's heal target is its holder or nobody.
+static void TestTankPostHealPickOf_HolderOrNobody()
+{
+    CHECK(TankPostHealPickOf(false, true) == TankPostHealPick::Normal);  // no duty: today's pick
+    CHECK(TankPostHealPickOf(false, false) == TankPostHealPick::Normal);
+    CHECK(TankPostHealPickOf(true, true) == TankPostHealPick::Holder);   // on duty, in reach: the holder
+    CHECK(TankPostHealPickOf(true, false) == TankPostHealPick::None);    // out of reach: nobody, never another target
+}
+
+// The walk back: beside the held unit while it stands near the holder, else a point on the line to the healer.
+static void TestTankPostHealerPoint_FlankOrLine()
+{
+    float x = 0.0f;
+    float y = 0.0f;
+    // Unit (0, 0), holder (10, 0): the flank is 20 yd from the unit on the healer's side of that line.
+    TankPostHealerPoint(true, 0.0f, 0.0f, 10.0f, 0.0f, -5.0f, 40.0f, x, y);
+    CHECK(Near(x, 0.0f) && Near(y, 20.0f));
+    TankPostHealerPoint(true, 0.0f, 0.0f, 10.0f, 0.0f, -5.0f, -40.0f, x, y);
+    CHECK(Near(x, 0.0f) && Near(y, -20.0f));
+    // The flank only while the unit stands within 15 yd of the holder; else the line, 25 yd from the holder.
+    TankPostHealerPoint(true, 0.0f, 0.0f, 16.0f, 0.0f, -5.0f, 40.0f, x, y);
+    const float dx = x - 16.0f;
+    const float dy = y - 0.0f;
+    CHECK(Near(std::sqrt(dx * dx + dy * dy), 25.0f));
+    CHECK(x < 16.0f && y > 0.0f);
+    // No unit: the same line.
+    TankPostHealerPoint(false, 0.0f, 0.0f, 10.0f, 0.0f, 10.0f, 40.0f, x, y);
+    CHECK(Near(x, 10.0f) && Near(y, 25.0f));
+}
+
+// Walk 2i H: the leash is 30 yd (2D), not 30.01.
+static void TestTankPostHealerFar_PastThirty()
+{
+    CHECK(kTankPostHealerYd == 30.0f);
+    CHECK(!TankPostHealerFar(0.0f));
+    CHECK(!TankPostHealerFar(30.0f));
+    CHECK(TankPostHealerFar(30.1f));
+}
+
+// Walk 2i C: the holder's cooldown fires on the first sighting of the row's spell after its unit was on it, once per
+// post. The failing case is the landing cast: without heldOnce a Roar at the landing spends the window before the
+// tank has her, and the first Roar that matters finds nothing left.
+static void TestTankPostCooldownSeen_FirstSightingAfterHold()
+{
+    CHECK(TankPostCooldownSeen(true, 18431, true, false, true));
+    CHECK(!TankPostCooldownSeen(false, 18431, true, false, true));  // key off
+    CHECK(!TankPostCooldownSeen(true, 0, true, false, true));       // no row spell
+    CHECK(!TankPostCooldownSeen(true, 18431, false, false, true));  // the landing cast, before the tank had her
+    CHECK(!TankPostCooldownSeen(true, 18431, true, true, true));    // a second Roar of the same post
+    CHECK(!TankPostCooldownSeen(true, 18431, true, false, false));  // no aura seen
+    CHECK(kTankPostCooldownTryMs == 10000);
+}
+
+// The class's defensive actions, in cast order; a class with none keeps its own rules. A druid tank stands in bear
+// or dire bear form, where CastBarkskinAction refuses, so its only entry is Frenzied Regeneration.
+static void TestTankPostCooldownActions_ByClass()
+{
+    CHECK(TankPostCooldownActions(1) == std::vector<const char*>({"shield wall", "last stand"}));
+    CHECK(TankPostCooldownActions(11) == std::vector<const char*>({"frenzied regeneration"}));
+    CHECK(TankPostCooldownActions(2).empty());   // paladin, no fallback
+    CHECK(TankPostCooldownActions(5).empty());   // priest
+    CHECK(TankPostCooldownActions(0).empty());
+}
+
+// The real actions' form guards, as the class actions state them: CastBarkskinAction refuses in cat, bear, dire bear
+// and tree of life form; shield wall and last stand carry no form guard. The standalone harness has no bot to build
+// the action objects for, so the guard is pinned here and every configured name must pass it. The failing case is the
+// list that named barkskin for a bear tank: the action refuses, and the window closed without a fallback.
+static bool TankPostActionRefusedInTankForm(std::uint8_t classId, const char* action)
+{
+    if (classId == 11) // CLASS_DRUID, tanking in bear or dire bear form
+        return std::strcmp(action, "barkskin") == 0;
+    return false;
+}
+
+static void TestTankPostCooldownActions_RunInTheTankForm()
+{
+    CHECK(TankPostActionRefusedInTankForm(11, "barkskin"));              // the guard the list must respect
+    CHECK(!TankPostActionRefusedInTankForm(11, "frenzied regeneration"));
+    for (std::uint8_t classId = 0; classId < 12; ++classId)
+        for (const char* name : TankPostCooldownActions(classId))
+            CHECK(!TankPostActionRefusedInTankForm(classId, name));
+}
+
+// The window: cast while a name is left, give up once at its end, nothing after the last one.
+static void TestTankPostCooldownStep_WindowAndGiveUp()
+{
+    CHECK(TankPostCooldownStep(true, 0, 2, 500) == TankPostCooldown::Cast);
+    CHECK(TankPostCooldownStep(true, 1, 2, 9999) == TankPostCooldown::Cast);
+    CHECK(TankPostCooldownStep(true, 2, 2, 500) == TankPostCooldown::None);
+    CHECK(TankPostCooldownStep(true, 1, 2, 10000) == TankPostCooldown::GiveUp);
+    CHECK(TankPostCooldownStep(false, 0, 2, 500) == TankPostCooldown::None);
+    CHECK(TankPostCooldownStep(true, 0, 0, 500) == TankPostCooldown::None);
+}
+
+// The hold tick: the unit on this tank with no raid member carrying the row's aura. The landing Roar shows both at
+// once, so that tick counts nothing and the next fresh Roar is the first sighting. The failing case is the old gate,
+// which counted the landing tick and spent the window on a Roar the tank already wore.
+static void TestTankPostCooldownHolds_LandingRoarDoesNotCount()
+{
+    CHECK(TankPostCooldownHolds(true, false));
+    CHECK(!TankPostCooldownHolds(true, true));   // the landing: she is on the tank and the raid still carries it
+    CHECK(!TankPostCooldownHolds(false, false));
+    bool heldOnce = false;
+    heldOnce = heldOnce || TankPostCooldownHolds(true, true);
+    CHECK(!heldOnce);
+    CHECK(!TankPostCooldownSeen(true, 18431, heldOnce, false, true)); // the landing Roar does not fire
+    heldOnce = heldOnce || TankPostCooldownHolds(true, false);        // the aura faded while she was on the tank
+    CHECK(heldOnce);
+    CHECK(!TankPostCooldownSeen(true, 18431, heldOnce, false, false)); // no aura now: nothing to answer
+    CHECK(TankPostCooldownSeen(true, 18431, heldOnce, false, true));   // the next fresh Roar fires
+}
+
+// A refused action is not an attempt: the tick passes it and asks the next name now, so a form-locked entry cannot
+// hold the window. Nothing to spend when every name left refuses; the one-name druid list is that case. The failing
+// case is the old tick, which asked only the first name and treated its form refusal as spent.
+static void TestTankPostCooldownPick_RefusedIsPassedOver()
+{
+    const std::vector<const char*> names = TankPostCooldownActions(1); // shield wall, last stand
+    CHECK(TankPostCooldownPick(0, names.size(), [](std::size_t i) { return i != 0; }) == 1);
+    CHECK(TankPostCooldownPick(0, names.size(), [](std::size_t) { return false; }) == names.size());
+    CHECK(TankPostCooldownPick(0, names.size(), [](std::size_t) { return true; }) == 0);
+    CHECK(TankPostCooldownPick(1, names.size(), [](std::size_t) { return true; }) == 1);
+    const std::vector<const char*> bear = TankPostCooldownActions(11);
+    CHECK(bear.size() == 1);
+    CHECK(TankPostCooldownPick(0, bear.size(), [](std::size_t) { return false; }) == bear.size());
+}
+
+// An action that accepted but whose cast did not go out (on cooldown) spends its name: shield wall leaves last stand
+// for the next tick, and the last spent name closes the window. A cast closes it at once, whatever is left.
+static void TestTankPostCooldownAfter_SpentAndCast()
+{
+    const std::vector<const char*> names = TankPostCooldownActions(1);
+    TankPostCooldownAttempt attempt = TankPostCooldownAfter(0, names.size(), TankPostCooldownOutcome::Spent);
+    CHECK(attempt.tried == 1);
+    CHECK(!attempt.closed);
+    CHECK(TankPostCooldownStep(true, attempt.tried, names.size(), 500) == TankPostCooldown::Cast);
+    CHECK(std::strcmp(names[attempt.tried], "last stand") == 0);
+    attempt = TankPostCooldownAfter(attempt.tried, names.size(), TankPostCooldownOutcome::Spent);
+    CHECK(attempt.closed);
+    CHECK(TankPostCooldownStep(true, attempt.tried, names.size(), 500) == TankPostCooldown::None);
+    CHECK(TankPostCooldownAfter(0, names.size(), TankPostCooldownOutcome::Cast).closed);
+    CHECK(TankPostCooldownAfter(0, 1, TankPostCooldownOutcome::Spent).closed); // the druid's one name
+    CHECK(TankPostCooldownAfter(255, 300, TankPostCooldownOutcome::Spent).tried == 255); // the count saturates
+}
+
 static CastDangerZone Zone(float x, float y, float z, float radius)
 {
     CastDangerZone zone;
@@ -2077,6 +2314,19 @@ int main()
     TestTankPostTauntStep_AreaOnlyOffNonTank();
     TestTankPostTauntWord_All();
     TestTankPostRow_RadiusCap();
+    TestPickTankPostHealers_ReranksAndFills();
+    TestPickTankPostHealers_DepletedPairIsSwapped();
+    TestPickTankPostHealers_SwapMargins();
+    TestTankPostHealPickOf_HolderOrNobody();
+    TestTankPostHealerPoint_FlankOrLine();
+    TestTankPostHealerFar_PastThirty();
+    TestTankPostCooldownSeen_FirstSightingAfterHold();
+    TestTankPostCooldownActions_ByClass();
+    TestTankPostCooldownActions_RunInTheTankForm();
+    TestTankPostCooldownStep_WindowAndGiveUp();
+    TestTankPostCooldownHolds_LandingRoarDoesNotCount();
+    TestTankPostCooldownPick_RefusedIsPassedOver();
+    TestTankPostCooldownAfter_SpentAndCast();
     AddCrewState_SwitchesAfterDeath();
     AddCrewLoader_Rows();
     AddCrewRank_Order();
@@ -2642,6 +2892,35 @@ int main()
         CHECK(table.HasKindFor(249, 10184, BossTacticKind::TankPost));
         CHECK(!table.HasKindFor(249, 10184, BossTacticKind::Interrupt));
         CHECK(!table.HasKindFor(309, 10184, BossTacticKind::TankPost));
+    }
+
+    // Walk 2i H: the row's `healers` count and its `spell_id` belong to a `hold_spot` post. A plain post refuses both,
+    // four is the most healers the loader takes, and no other kind takes the count (TestTankPostRow_HealersAndSpell:
+    // without the two hold_spot tests the plain-post rows below load).
+    {
+        CHECK(kTankPostHealersMax == 4);
+        BossTacticTable table;
+        auto held = [](std::uint32_t target, std::uint32_t spell, std::uint8_t priority, std::uint8_t healers,
+                       TacticMode mode)
+        {
+            BossTacticRow row = Row(249, 10184, BossTacticKind::TankPost, target, spell, priority, 90.0f);
+            row.windowSec = 120.0f;
+            row.spotX = 20.0f;
+            row.spotY = -218.0f;
+            row.spotZ = -85.3f;
+            row.mode = mode;
+            row.healers = healers;
+            return row;
+        };
+        CHECK(table.Add(held(10184, 18431, 0, 2, TacticMode::HoldSpot)));  // the 2i row: a spell and two healers
+        CHECK(!table.Add(held(50144, 18431, 2, 0, TacticMode::Default)));  // a spell on a plain post
+        CHECK(!table.Add(held(50144, 0, 2, 1, TacticMode::Default)));      // healers on a plain post
+        CHECK(!table.Add(held(50144, 0, 2, 5, TacticMode::HoldSpot)));     // healers 5
+        BossTacticRow behind = Row(249, 10184, BossTacticKind::Behind, 0, 18435, 0, 40.0f);
+        behind.hpMax = 40;
+        behind.healers = 1;
+        CHECK(!table.Add(behind));                                          // healers on another kind
+        CHECK(table.Size() == 1);
     }
 
     // Activation gate: needs rows on the map, then the opt-in or a commander binding.
