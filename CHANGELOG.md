@@ -1,5 +1,8 @@
 # Changelog
 
+- Fixed: every non-tank stops swinging or shooting an add a `tank_first` row holds, an explicitly ordered bot and a healer included (heals keep running and only the swing or the wand stops), instead of only a free damage dealer dropping it.
+- Fixed: a `tank_first` add read by several bots at once no longer settles, releases on its cap or forgets itself because one bot's clock sample was older than another's, and the fallback releases (`no_tank`, `siphon`) write their row again, one per add and reason; the first row for an add first seen on a tank is `arm` (no `on_tank` follows), and an instance nobody read for ten minutes is dropped whole (map unload).
+
 - New: behind AiPlayerbot.DungeonRunAddTankFirst (default 0, recommended on, needs the boss tactics and a `tank_first` row), no bot but a tank damages the row's add until a tank has been its victim for the row's dwell, and again after each loss: the picks, the attack, harmful casts already aimed at it, area damage within 10 yd and pets are held, the add is free at or under 20 % health, after the row's cap, while no tank is usable and inside the last 15 s before a seek source's cycle spell, and Hakkar ships the row (a 3 s dwell, a 15 s cap, 2 losses) for his Sons (20261113100000_world.sql).
 
 - Fixed: on a long-running server the Hakkar reset hold no longer forgets every fight's growth sample when a new fight starts: the samples no bot has read for a minute are dropped and only the single oldest is traded for the new one, so a live fight's successor whose threat had stopped growing is no longer read as growing for another 6 s.

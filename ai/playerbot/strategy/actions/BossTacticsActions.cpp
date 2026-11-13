@@ -6675,14 +6675,15 @@ void TankFirstLogOverride(PlayerbotAI* ai, Player* bot, Unit* add, std::uint32_t
     char info2[384];
     snprintf(info1, sizeof(info1), "event=release");
     snprintf(info2, sizeof(info2), "add=%u:%u,reason=%s,phase=%s,held_ms=%u,victim=%s", entry,
-             static_cast<std::uint32_t>(add->GetGUIDLow()), why, TankFirstPhaseWord(snap.phase), in.nowMs - snap.episodeMs,
-             victimText);
+             static_cast<std::uint32_t>(add->GetGUIDLow()), why, TankFirstPhaseWord(snap.phase),
+             TankFirstAgeMs(in.nowMs, snap.episodeMs), victimText);
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsTankFirst", info1, info2);
 }
 
 // The dropped records (a dead or vanished add, one out of combat, or one nobody read for kTankFirstStaleMs): one end
-// row each, at most one sweep a second per instance.
-void TankFirstSweep(PlayerbotAI* ai, Player* bot, std::uint32_t nowMs)
+// row each, at most one sweep a second per instance. The clock is read under the lock: a sample taken before it can
+// predate the stamp of the read that just ran.
+void TankFirstSweep(PlayerbotAI* ai, Player* bot)
 {
     struct Ended
     {
@@ -6697,9 +6698,31 @@ void TankFirstSweep(PlayerbotAI* ai, Player* bot, std::uint32_t nowMs)
     std::vector<Ended> ended;
     {
         std::lock_guard<std::mutex> lock(g_tankFirstMutex);
+        const std::uint32_t nowMs = WorldTimer::getMSTime();
         const std::uint32_t instance = bot->GetInstanceId();
+        // An instance no read has reached for kTankFirstPruneMs is gone: the map unloaded, or its fight ended and every
+        // bot moved on. Its records and its clock go together; this sweep is the only place either is touched, so a
+        // record's instance always has a clock. Once a second, and never the caller's own instance (its read just ran
+        // and its clock is stamped below).
+        static std::uint32_t lastPruneMs = 0;
+        if (lastPruneMs == 0 || TankFirstAgeMs(nowMs, lastPruneMs) >= kTankFirstSweepGapMs)
+        {
+            lastPruneMs = nowMs;
+            for (auto it = g_tankFirstSweepMs.begin(); it != g_tankFirstSweepMs.end();)
+            {
+                if (it->first == instance || TankFirstAgeMs(nowMs, it->second) <= kTankFirstPruneMs)
+                {
+                    ++it;
+                    continue;
+                }
+                const std::uint32_t gone = it->first;
+                it = g_tankFirstSweepMs.erase(it);
+                for (auto rec = g_tankFirst.begin(); rec != g_tankFirst.end();)
+                    rec = rec->first.first == gone ? g_tankFirst.erase(rec) : std::next(rec);
+            }
+        }
         std::uint32_t& last = g_tankFirstSweepMs[instance];
-        if (last != 0 && nowMs - last < kTankFirstSweepGapMs)
+        if (last != 0 && TankFirstAgeMs(nowMs, last) < kTankFirstSweepGapMs)
             return;
         last = nowMs;
         Map* const map = bot->GetMap();
@@ -6719,7 +6742,7 @@ void TankFirstSweep(PlayerbotAI* ai, Player* bot, std::uint32_t nowMs)
                 reason = "dead";
             else if (!creature->IsInCombat())
                 reason = "reset";
-            else if (nowMs - it->second.record.seenMs > kTankFirstStaleMs)
+            else if (TankFirstStale(nowMs, it->second.record.seenMs))
                 reason = "stale";
             if (!reason)
             {
@@ -6730,7 +6753,7 @@ void TankFirstSweep(PlayerbotAI* ai, Player* bot, std::uint32_t nowMs)
             end.entry = it->second.entry;
             end.low = guid.GetCounter();
             end.reason = reason;
-            end.lifeMs = nowMs - it->second.record.firstMs;
+            end.lifeMs = TankFirstAgeMs(nowMs, it->second.record.firstMs);
             end.heldTotalMs = it->second.record.heldTotalMs;
             end.losses = it->second.record.losses;
             end.settles = it->second.record.settles;
@@ -6767,7 +6790,6 @@ bool TankFirstRead(PlayerbotAI* ai, Player* bot, Unit* unit)
     }
     if (!row)
         return false;
-    const std::uint32_t nowMs = WorldTimer::getMSTime();
     Unit* const victim = unit->GetVictim();
     const bool victimAlive = victim && sServerFacade.IsAlive(victim);
     const TankFirstVictim victimKind = !victimAlive ? TankFirstVictim::None
@@ -6802,8 +6824,7 @@ bool TankFirstRead(PlayerbotAI* ai, Player* bot, Unit* unit)
     }
     const char* const overrideWhy = TankFirstOverride(usableTanks, seekSource, dueKnown, dueInMs);
     const TankFirstRules rules = TankFirstRulesOf(row->param, row->windowSec, row->priority);
-    const TankFirstIn in{ victimKind, victimAlive ? victim->GetObjectGuid().GetRawValue() : 0,
-                          unit->GetHealthPercent(), nowMs };
+    TankFirstIn in{ victimKind, victimAlive ? victim->GetObjectGuid().GetRawValue() : 0, unit->GetHealthPercent(), 0 };
     TankFirstRecord snap;
     TankFirstPhase phaseBefore = TankFirstPhase::Wait;
     TankFirstOut out;
@@ -6812,6 +6833,10 @@ bool TankFirstRead(PlayerbotAI* ai, Player* bot, Unit* unit)
     bool holds = false;
     {
         std::lock_guard<std::mutex> lock(g_tankFirstMutex);
+        // The clock is read under the lock: a sample from before it can predate the stamp a bot on the same add wrote
+        // while this one waited.
+        const std::uint32_t nowMs = WorldTimer::getMSTime();
+        in.nowMs = nowMs;
         const auto key = std::make_pair(bot->GetInstanceId(), unit->GetObjectGuid().GetRawValue());
         auto const found = g_tankFirst.find(key);
         const bool armed = found != g_tankFirst.end() && found->second.record.armed;
@@ -6825,13 +6850,9 @@ bool TankFirstRead(PlayerbotAI* ai, Player* bot, Unit* unit)
         if (TankFirstTickDue(slot.record, nowMs))
             out = TankFirstTick(slot.record, rules, in);
         holds = TankFirstHolds(slot.record, overrideWhy);
-        if (overrideWhy && holds && slot.overrideWhy != overrideWhy)
-        {
-            slot.overrideWhy = overrideWhy;
-            overrideStarted = overrideWhy;
-        }
-        else if (!overrideWhy)
-            slot.overrideWhy = nullptr;
+        // The phase, never the hold: an override holds nothing, and asking the hold here left both reasons unlogged.
+        overrideStarted = TankFirstOverrideStarted(overrideWhy, slot.overrideWhy, slot.record.phase);
+        slot.overrideWhy = overrideWhy;
         snap = slot.record;
         entry = slot.entry;
     }
@@ -6839,7 +6860,7 @@ bool TankFirstRead(PlayerbotAI* ai, Player* bot, Unit* unit)
         TankFirstLogEvent(ai, bot, unit, entry, rules, snap, phaseBefore, out, in);
     if (overrideStarted)
         TankFirstLogOverride(ai, bot, unit, entry, snap, in, overrideStarted);
-    TankFirstSweep(ai, bot, nowMs);
+    TankFirstSweep(ai, bot);
     return holds;
 }
 
@@ -6878,6 +6899,26 @@ void ai::HoldTankFirstPet(PlayerbotAI* ai, Player* bot)
     if (pet->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
         pet->GetMotionMaster()->MoveFollow(bot, PET_FOLLOW_DIST, PET_FOLLOW_ANGLE);
     LogHoldKillVeto(ai, bot, "tank_first_pet", victim);
+}
+
+// A bot on an add a tank_first row holds stops what is already under way at it: the melee swing and the auto-repeat
+// shot, the two attacks the engine keeps running without re-picking. An explicit attack order and a healer's wand reach
+// here where the free-DPS drop (FindBossHoldKill) does not; heals and every other cast keep running, and the hold
+// multiplier stands down the next damage cast. A no-op with the key off, for a tank, and for a bot whose current
+// target is no held add.
+void ai::HoldTankFirstDamage(PlayerbotAI* ai, Player* bot)
+{
+    if (!ai || !bot || !sPlayerbotAIConfig.dungeonRunAddTankFirst || PlayerbotAI::IsTank(bot))
+        return;
+    AiObjectContext* context = ai->GetAiObjectContext();
+    Value<Unit*>* const current = context->GetValue<Unit*>("current target");
+    Unit* const target = current ? current->Get() : nullptr;
+    if (!target || !BossTankFirstHolds(ai, bot, target))
+        return;
+    bot->AttackStop();
+    if (bot->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
+        bot->InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
+    LogHoldKillVeto(ai, bot, "tank_first", target);
 }
 
 bool ai::BossTankFirstHolds(PlayerbotAI* ai, Player* bot, Unit* unit)
@@ -6958,14 +6999,14 @@ void ai::BossTankFirstNoteTake(PlayerbotAI* ai, Player* bot, Unit* add, const ch
         return;
     if (!GetBossTactics().HasTankFirstMap(bot->GetMapId()))
         return;
-    const std::uint32_t nowMs = WorldTimer::getMSTime();
     if (cast)
     {
-        // The taunt hands the add to this tank: the next OnTank reads `how=taunt`.
+        // The taunt hands the add to this tank: the next OnTank reads `how=taunt`. The clock is read under the record's
+        // lock: a sample from before it can be older than the note the tank's other thread just wrote.
         std::lock_guard<std::mutex> lock(g_tankFirstMutex);
         auto const it = g_tankFirst.find(std::make_pair(bot->GetInstanceId(), add->GetObjectGuid().GetRawValue()));
         if (it != g_tankFirst.end())
-            TankFirstNoteTaunt(it->second.record, bot->GetObjectGuid().GetRawValue(), nowMs);
+            TankFirstNoteTaunt(it->second.record, bot->GetObjectGuid().GetRawValue(), WorldTimer::getMSTime());
     }
     if (!sPlayerbotAIConfig.hasLog("bot_events.csv"))
         return;
@@ -6973,14 +7014,15 @@ void ai::BossTankFirstNoteTake(PlayerbotAI* ai, Player* bot, Unit* add, const ch
     {
         // One row per tank, add and second; a cast is never throttled.
         std::lock_guard<std::mutex> lock(g_tankFirstTauntLogMutex);
+        const std::uint32_t nowMs = WorldTimer::getMSTime();
         if (g_tankFirstTauntLog.size() > 256)
         {
             for (auto it = g_tankFirstTauntLog.begin(); it != g_tankFirstTauntLog.end();)
-                it = nowMs - it->second >= 1000 ? g_tankFirstTauntLog.erase(it) : std::next(it);
+                it = TankFirstAgeMs(nowMs, it->second) >= 1000 ? g_tankFirstTauntLog.erase(it) : std::next(it);
         }
         std::uint32_t& last = g_tankFirstTauntLog[std::make_pair(bot->GetObjectGuid().GetRawValue(),
                                                                  add->GetObjectGuid().GetRawValue())];
-        if (last != 0 && nowMs - last < 1000)
+        if (last != 0 && TankFirstAgeMs(nowMs, last) < 1000)
             return;
         last = nowMs;
     }
@@ -12513,8 +12555,14 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
         // is noted below.
         const std::string takeSrc = SeekTakeSrcWord(task.takeSrc, edgeTake);
         if (!canTaunt || gateRefused)
-            BossTankFirstNoteTake(ai, bot, task.source, takeSrc.c_str(), false,
-                                  TankFirstTauntWhy(ai, bot, taunt, gateRefused));
+        {
+            // The why reads auras and cooldowns, so it is built only where the hold could use it: off-key or off a
+            // tank_first map the take row is not written at all.
+            const char* takeWhy = "";
+            if (sPlayerbotAIConfig.dungeonRunAddTankFirst && GetBossTactics().HasTankFirstMap(bot->GetMapId()))
+                takeWhy = TankFirstTauntWhy(ai, bot, taunt, gateRefused);
+            BossTankFirstNoteTake(ai, bot, task.source, takeSrc.c_str(), false, takeWhy);
+        }
         // A cap-guarded take (DungeonRunSeekNearestTakeReach: `nearest_reach`, `healer_clock`) is latched only once it
         // really starts (the attack or chase command went out, the tank is already after it, or the taunt cast), and a
         // refused or failed one clears its latch (Codex round 2). Key off: no latch is ever read or written.

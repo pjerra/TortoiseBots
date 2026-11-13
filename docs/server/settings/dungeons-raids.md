@@ -1234,15 +1234,15 @@ Whether an add a `tank_first` row names takes no damage from any bot but a tank 
 
 **The rule:** from the first read that sees the row's add (`target_entry`) alive, in combat and with a victim that is a group member or a group member's pet, every bot that is not a tank does no damage to it until a tank has been its victim for the row's `param` seconds without a break, and again after a loss (its victim went back to a non-tank above 20 % health), up to the row's `priority` losses. One hold lasts at most the row's `window_s`; then the add is free for the rest of its life. One record per add and instance, shared by every bot, advanced at most every 250 ms: `wait`, `dwell` and `lost` hold, `burn` and `open` do not. A tank change keeps the dwell running, and a read with no victim (a stun, a target swap) neither completes nor breaks it. Tanks and human players are never held, and their swings are the threat the rule builds.
 
-**What is held:** the target pick, the assist and AoE picks, the attack, every harmful cast aimed at the add except an interrupt, the running swing, auto-repeat shot and a cast already under way at it, the attacker-debuff DoT, every area damage action within 10 yd of it, and a pet on it. A bot already on the add drops it and re-picks (`BossTacticsHoldKill` rows with `veto=tank_first` / `tank_first_pet`). The other seek rules stay: where today's rules already hold the add nothing changes.
+**What is held:** the target pick, the assist and AoE picks, the attack, every harmful cast aimed at the add except an interrupt, the running swing, auto-repeat shot and a cast already under way at it, the attacker-debuff DoT, every area damage action within 10 yd of it, and a pet on it. The swing and the auto-repeat shot stop for every non-tank, an explicit attack order and a healer included (heals keep running). A bot already on the add drops it and re-picks (`BossTacticsHoldKill` rows with `veto=tank_first` / `tank_first_pet`). The other seek rules stay: where today's rules already hold the add nothing changes. An add first seen on a tank arms straight into the dwell, so its first row is `arm` and no `on_tank` follows.
 
-**The releases:** no usable tank (a living, uncharmed group member with the tank role, on the map, within 100 yd), and, for a seek source, the last 15 s before the cycle spell (`DungeonRunSeekAura` on): dosing comes first. A loss at or under 20 % health, or after `priority` losses, opens no hold.
+**The releases:** no usable tank (a living, uncharmed group member with the tank role, on the map, within 100 yd), and, for a seek source, the last 15 s before the cycle spell (`DungeonRunSeekAura` on): dosing comes first. A loss at or under 20 % health, or after `priority` losses, opens no hold. Each override writes one `release` row per add and reason, on the read that starts it (never while the add is already free); the cap writes its own.
 
 **Data:** Hakkar's row is a 3 s dwell, a 15 s cap and 2 losses (`20261113100000_world.sql`); Onyxia ships none.
 
 Diagnostics (always on with the key): one `BossTacticsTankFirst` row per transition (`event=arm|on_tank|settled|loss|loss_ignored|release|end`, plus `event=taunt` at every take tick); see [Boss tactics refusal rows](../../play/refusal-rows.md).
 
-Cost: one map flag and one record lookup per candidate; the record advances four times a second at most, and each instance sweeps its own records once a second.
+Cost: one map flag and one record lookup per candidate; the record advances four times a second at most, and each instance sweeps its own records once a second, dropping an instance's records and clock once no read has reached it for ten minutes (its map unloaded).
 
 </details>
 

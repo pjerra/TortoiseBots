@@ -213,6 +213,9 @@ namespace ai
     void BossTankFirstNoteTake(PlayerbotAI* ai, Player* bot, Unit* add, const char* src, bool cast, const char* why);
     // The bot's pet leaves a held add (PlayerbotAI::UpdateAI). No-op with the key off or without a pet.
     void HoldTankFirstPet(PlayerbotAI* ai, Player* bot);
+    // The bot itself leaves a held add: the running swing and auto-repeat shot stop for any non-tank, an explicit attack
+    // order and a healer included (heals keep running). PlayerbotAI::UpdateAI. No-op with the key off or a tank.
+    void HoldTankFirstDamage(PlayerbotAI* ai, Player* bot);
 
     // The boss whose front this bot should leave, or null.
     Unit* FindBossFrontDanger(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fight);

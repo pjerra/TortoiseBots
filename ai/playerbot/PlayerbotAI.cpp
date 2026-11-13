@@ -351,6 +351,7 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
     ai::BossTacticsScanScope bossTacticsScan;
     ai::ReleaseWalkoutPet(bot);
     ai::HoldTankFirstPet(this, bot);
+    ai::HoldTankFirstDamage(this, bot);
     ++aiUpdateTick;
     AiObjectContext* context = aiObjectContext;
     std::unique_ptr<PerformanceMonitorOperation> pmo;

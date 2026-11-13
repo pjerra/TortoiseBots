@@ -303,7 +303,8 @@ int main()
         CHECK(TankFirstTickDue(r, 1000));
     }
 
-    // TestFirstSightingOnATank: an add first seen on a tank is in the dwell from its arm, and the event stays Arm.
+    // TestFirstSightingOnATank: an add first seen on a tank is in the dwell from its arm, and the event stays Arm: the
+    // log's first row is `arm` and no `on_tank` follows (a first-fight reading accepts arm -> settled).
     //   Old code: none.
     //   Mutation caught: step 1 returning before the victim read (the add waits 3 s more).
     {
@@ -316,6 +317,66 @@ int main()
         CHECK(r.firstMs == 5000);
         CHECK(TankFirstHolds(r, nullptr));
         CHECK(TankFirstTick(r, kRow, In(TankFirstVictim::Tank, 21, 100.0f, 8000)).event == TankFirstEvent::Settled);
+    }
+
+    // TestClockSkew: a stamp another thread wrote while this read waited can be newer than the read's own clock sample.
+    //   Old code: none (the record did not exist).
+    //   Mutations caught: the raw unsigned age back in any compare (a future tankSince settles, a future episodeMs
+    //   releases on the cap, a future seenMs erases the record, a future tickMs advances early).
+    {
+        TankFirstRecord r;
+        r.armed = true;
+        r.firstMs = 1000;
+        r.episodeMs = 1000;
+        r.tickMs = 1000;
+        r.seenMs = 5000;
+        r.phase = TankFirstPhase::Dwell;
+        r.dwellFrom = TankFirstPhase::Wait;
+        r.tankSinceMs = 5000; // stamped after this read's sample
+        r.tank = 21;
+        TankFirstOut out = TankFirstTick(r, kRow, In(TankFirstVictim::Tank, 21, 100.0f, 3000));
+        CHECK(out.event == TankFirstEvent::None);
+        CHECK(r.phase == TankFirstPhase::Dwell);
+        CHECK(TankFirstHolds(r, nullptr));
+        CHECK(r.settles == 0);
+        CHECK(TankFirstAgeMs(3000, 5000) == 0);
+        // A future episode start wraps the cap: it releases nothing and adds no held time.
+        r.phase = TankFirstPhase::Wait;
+        r.episodeMs = 9000;
+        r.tankSinceMs = 0;
+        out = TankFirstTick(r, kRow, In(TankFirstVictim::NonTank, 12, 100.0f, 4000));
+        CHECK(out.event == TankFirstEvent::None);
+        CHECK(r.phase == TankFirstPhase::Wait);
+        CHECK(r.heldTotalMs == 0);
+        // The sweep's stale test: a read older than the stamp saw nothing stale, and the threshold itself is inclusive.
+        CHECK(!TankFirstStale(4000, 9000));
+        CHECK(!TankFirstStale(kTankFirstStaleMs, 0));
+        CHECK(TankFirstStale(kTankFirstStaleMs + 1, 0));
+        // A future tick stamp does not make the record due.
+        r.tickMs = 9000;
+        CHECK(!TankFirstTickDue(r, 4000));
+        // The taunt age clamps too: a future note is still the taunt.
+        TankFirstRecord taunt;
+        TankFirstNoteTaunt(taunt, 21, 9000);
+        CHECK(std::string(TankFirstHow(taunt, 21, 4000)) == "taunt");
+    }
+
+    // TestOverrideReleaseRows: one release row per add and reason, on the read that starts the override.
+    //   Old code: none (the release row did not exist).
+    //   Mutation caught: asking the hold (always false under an override) instead of the phase (both rows were dead).
+    {
+        const char* const noTank = TankFirstOverride(0, false, false, 0);
+        const char* const siphon = TankFirstOverride(1, true, true, 15000);
+        CHECK(std::string(noTank) == "no_tank");
+        CHECK(std::string(siphon) == "siphon");
+        CHECK(TankFirstOverrideStarted(noTank, nullptr, TankFirstPhase::Wait) == noTank);
+        CHECK(TankFirstOverrideStarted(noTank, noTank, TankFirstPhase::Wait) == nullptr);
+        CHECK(TankFirstOverrideStarted(siphon, noTank, TankFirstPhase::Dwell) == siphon);
+        CHECK(TankFirstOverrideStarted(noTank, nullptr, TankFirstPhase::Burn) == nullptr);
+        CHECK(TankFirstOverrideStarted(noTank, nullptr, TankFirstPhase::Open) == nullptr);
+        CHECK(TankFirstOverrideStarted(nullptr, noTank, TankFirstPhase::Wait) == nullptr);
+        // The override coming back after it ended is a new start.
+        CHECK(TankFirstOverrideStarted(noTank, nullptr, TankFirstPhase::Lost) == noTank);
     }
 
     // The row's own numbers (D15) come out of TankFirstRulesOf.

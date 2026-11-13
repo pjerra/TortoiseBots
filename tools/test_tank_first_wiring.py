@@ -5,12 +5,13 @@ reaches it and that the key-off path stays today's code:
 
  - the key is read with the other DungeonRun keys, defaults to off and is documented in the template;
  - BossTankFirstHolds filters cheapest-first: the key, the map flag, a tank, the strategy, the unit, the row;
- - the per-add record's mutex is taken after the fight scan (it is a leaf);
- - HeldDpsTarget, FindBossHoldKill, FindBossSeekKill and the hold-kill action ask the hold, and the pet hold runs in
-   PlayerbotAI::UpdateAI;
- - the hold multiplier's two early returns name the new flags, and its clause stands before the hold_kill clauses;
- - the take branch notes its taunt after the cast;
- - the policy header names no boss, spell or entry id.
+ - the per-add record's mutex is taken after the fight scan (it is a leaf), and the clock is read under it, in the read
+   and in the sweep;
+ - the hold-kill action, HeldDpsTarget, FindBossHoldKill and FindBossSeekKill ask the hold, and the pet and the bot's
+   own swing/shot stop in PlayerbotAI::UpdateAI (any non-tank, ordered bots and healers included);
+ - an override's release row starts on the phase (one per add and reason), and the take's why is built only after the
+   key;
+ - the instance's records and its sweep clock are pruned once nobody read that instance for ten minutes;
 
 Run: python3 -m unittest tools/test_tank_first_wiring.py
 """
@@ -63,10 +64,28 @@ class TankFirstWiring(unittest.TestCase):
         self.assertIn("TankFirstTickDue(slot.record, nowMs)", read)
         self.assertIn("TankFirstTick(slot.record, rules, in)", read)
         self.assertIn("TankFirstHolds(slot.record, overrideWhy)", read)
-        self.assertIn("TankFirstSweep(ai, bot, nowMs)", read)
-        # The record's mutex is a leaf: the scan and the seek read are both taken before it.
+        self.assertIn("TankFirstSweep(ai, bot);", read)
+        # The clock is sampled under the record's lock, after the scan and the seek read (the mutex is a leaf).
         self.assertLess(index_in(read, "ScanBossTactics("), index_in(read, "g_tankFirstMutex"))
         self.assertLess(index_in(read, "ReadSeekFightCached("), index_in(read, "g_tankFirstMutex"))
+        self.assertLess(index_in(read, "std::lock_guard<std::mutex> lock(g_tankFirstMutex);"),
+                        index_in(read, "WorldTimer::getMSTime()"))
+
+    def test_the_ages_never_wrap(self):
+        # A read's clock sample can predate a stamp another thread wrote, so every age clamps (TankFirstAgeMs).
+        self.assertIn("inline std::uint32_t TankFirstAgeMs(std::uint32_t nowMs, std::uint32_t stampMs)", POLICY)
+        self.assertIn("return nowMs < stampMs ? 0 : nowMs - stampMs;", POLICY)
+        for raw in ("now - record.", "nowMs - r.", "nowMs - it->second"):
+            self.assertNotIn(raw, POLICY)
+        self.assertIn("TankFirstAgeMs(now, record.tankSinceMs) >= rules.dwellMs", POLICY)
+        self.assertIn("TankFirstAgeMs(now, record.episodeMs) >= rules.capMs", POLICY)
+        self.assertIn("TankFirstAgeMs(nowMs, r.tickMs) >= kTankFirstTickMs", POLICY)
+        self.assertIn("return TankFirstAgeMs(nowMs, seenMs) > kTankFirstStaleMs;", POLICY)
+        sweep = body(ACTIONS, "void TankFirstSweep(PlayerbotAI* ai, Player* bot)")
+        self.assertLess(index_in(sweep, "std::lock_guard<std::mutex> lock(g_tankFirstMutex);"),
+                        index_in(sweep, "WorldTimer::getMSTime()"))
+        self.assertIn("TankFirstStale(nowMs, it->second.record.seenMs)", sweep)
+        self.assertIn("end.lifeMs = TankFirstAgeMs(nowMs, it->second.record.firstMs);", sweep)
 
     def test_the_hooks_ask_the_hold(self):
         self.assertIn("if (BossTankFirstHolds(ai, bot, unit))", body(DPS_TARGET, "bool HeldDpsTarget("))
@@ -84,14 +103,46 @@ class TankFirstWiring(unittest.TestCase):
         self.assertIn("bot->InterruptSpell(CURRENT_AUTOREPEAT_SPELL)", action)
         self.assertIn("bot->InterruptNonMeleeSpells(false)", action)
         self.assertIn("if (tankFirstHeld)", action)
+        # The override's release row starts on the phase, never on the hold (an override holds nothing): one row per
+        # add and reason.
+        read = body(ACTIONS, "bool TankFirstRead(PlayerbotAI* ai, Player* bot, Unit* unit)")
+        self.assertIn("overrideStarted = TankFirstOverrideStarted(overrideWhy, slot.overrideWhy, slot.record.phase);",
+                      read)
+        self.assertIn("slot.overrideWhy = overrideWhy;", read)
 
     def test_the_pet_hold_runs_in_the_update_loop(self):
         update = body(PLAYERBOT_AI, "void PlayerbotAI::UpdateAI(")
         self.assertIn("ai::HoldTankFirstPet(this, bot);", update)
+        self.assertIn("ai::HoldTankFirstDamage(this, bot);", update)
         self.assertLess(index_in(update, "ai::ReleaseWalkoutPet(bot);"), index_in(update, "ai::HoldTankFirstPet(this, bot);"))
+        self.assertLess(index_in(update, "ai::HoldTankFirstPet(this, bot);"),
+                        index_in(update, "ai::HoldTankFirstDamage(this, bot);"))
+        self.assertLess(index_in(update, "ai::HoldTankFirstDamage(this, bot);"), index_in(update, "++aiUpdateTick;"))
         pet = body(ACTIONS, "void ai::HoldTankFirstPet(")
         self.assertIn("pet->AttackStop();", pet)
         self.assertIn('LogHoldKillVeto(ai, bot, "tank_first_pet", victim);', pet)
+
+    def test_the_bot_drop_reaches_every_non_tank(self):
+        # An explicit attack order and a healer keep swinging or shooting a held add: the drop runs for every non-tank
+        # from the update loop, before the engine and outside the free-DPS pick.
+        drop = body(ACTIONS, "void ai::HoldTankFirstDamage(")
+        self.assertIn("PlayerbotAI::IsTank(bot)", drop)
+        self.assertIn('context->GetValue<Unit*>("current target")', drop)
+        self.assertIn("if (!target || !BossTankFirstHolds(ai, bot, target))", drop)
+        self.assertIn("bot->AttackStop();", drop)
+        self.assertIn("bot->InterruptSpell(CURRENT_AUTOREPEAT_SPELL)", drop)
+        self.assertIn("bot->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL)", drop)
+        for gate in ("IsFreeDps", "IsHeal", "IsBattleDps", "FindBossHoldKill"):
+            self.assertNotIn(gate, drop)
+        self.assertNotIn("HoldTankFirstDamage", body(ACTIONS, "Unit* ai::FindBossHoldKill("))
+        self.assertIn("void HoldTankFirstDamage(PlayerbotAI* ai, Player* bot);", ACTIONS_H)
+
+    def test_the_instance_records_are_pruned(self):
+        self.assertIn("constexpr std::uint32_t kTankFirstPruneMs = 600000;", POLICY)
+        sweep = body(ACTIONS, "void TankFirstSweep(PlayerbotAI* ai, Player* bot)")
+        self.assertIn("TankFirstAgeMs(nowMs, it->second) <= kTankFirstPruneMs", sweep)
+        self.assertIn("it = g_tankFirstSweepMs.erase(it);", sweep)
+        self.assertIn("rec = rec->first.first == gone ? g_tankFirst.erase(rec) : std::next(rec);", sweep)
 
     def test_the_multiplier_names_the_new_flags(self):
         multiplier = body(ACTIONS, "float BossTacticsHoldMultiplier::GetValue(")
@@ -124,8 +175,12 @@ class TankFirstWiring(unittest.TestCase):
         note = take.index("BossTankFirstNoteTake(ai, bot, task.source, takeSrc.c_str(), cast")
         cast = take.index("const bool cast = ai->CastSpell(taunt, task.source);")
         self.assertLess(cast, note)
-        # ... and before the cast, the take that will cast nothing says why (the gate's, the tank's own refusal).
+        # ... and before the cast, the take that will cast nothing says why (the gate's, the tank's own refusal). The
+        # why reads auras and cooldowns, so it is built only after the key and the map flag.
         self.assertIn("TankFirstTauntWhy(ai, bot, taunt, gateRefused)", take)
+        self.assertLess(index_in(take, "sPlayerbotAIConfig.dungeonRunAddTankFirst && "
+                                       "GetBossTactics().HasTankFirstMap(bot->GetMapId())"),
+                        index_in(take, "TankFirstTauntWhy(ai, bot, taunt, gateRefused)"))
         self.assertIn('return "gate";', body(ACTIONS, "const char* TankFirstTauntWhy("))
         self.assertIn('return "no_taunt";', body(ACTIONS, "const char* TankFirstTauntWhy("))
         self.assertIn('return "control";', body(ACTIONS, "const char* TankFirstTauntWhy("))
