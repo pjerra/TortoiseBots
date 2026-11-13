@@ -16,7 +16,18 @@ namespace ai
     // the table. A second call does nothing.
     void LoadBossTactics();
 
-    // One pass over `ai_boss_tactic` into an empty table, then its seal: the rows skipped. `rowsRead` (a reload) gets
-    // the rows the query handed it, accepted or not.
-    std::uint32_t ReadBossTacticRows(BossTacticTable& table, std::uint64_t* rowsRead = nullptr);
+    // What one pass over `ai_boss_tactic` could not use: a refused row of a kind this build knows (an error, and a
+    // reload refuses the whole set on one) and a row of a kind it does not know (foreign data: skipped here and by a
+    // reload alike, never a refusal).
+    struct BossTacticLoadCounts
+    {
+        std::uint32_t refused = 0;
+        std::uint32_t foreign = 0;
+
+        std::uint32_t Skipped() const { return refused + foreign; }
+    };
+
+    // One pass over `ai_boss_tactic` into an empty table, then its seal: the rows it could not use, split by verdict
+    // (JudgeTacticRow). `rowsRead` (a reload) gets the rows the query handed it, accepted or not.
+    BossTacticLoadCounts ReadBossTacticRows(BossTacticTable& table, std::uint64_t* rowsRead = nullptr);
 }

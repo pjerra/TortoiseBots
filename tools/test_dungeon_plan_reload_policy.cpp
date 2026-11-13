@@ -185,7 +185,7 @@ static void TestOtherRefusalsKeepTheOldSet()
         Server server;
         const DungeonPlanTable* before = &server.plans.Current();
         PlanLoadCounts counts;
-        std::uint32_t skippedTactics = 0;
+        std::uint32_t refusedTactics = 0;
         if (which == 0)
             counts.skippedBosses = 1;
         else if (which == 1)
@@ -193,13 +193,51 @@ static void TestOtherRefusalsKeepTheOldSet()
         else if (which == 2)
             counts.skippedNeeds = 1;
         else
-            skippedTactics = 1;
+            refusedTactics = 1;
         PlanReloadOutcome const out = CommitPlanReload(server.plans, OldSet(), counts, server.tactics, Tactics(2),
-            skippedTactics, {}, {});
+            refusedTactics, {}, {});
         CHECK(!out.swapped);
         CHECK(!out.reason.empty());
         CHECK(&server.plans.Current() == before);
     }
+}
+
+static void TestForeignTacticKindRefusesNothing()
+{
+    // A boss tactic row of a kind this build does not know (the Onyxia air_target row of an unmerged line, window_s 7):
+    // the startup load has always skipped it, and a reload skips it too (BossTacticsPolicy.h JudgeTacticRow), so it is
+    // not a refused tactic and the set swaps. A row of a known kind the table refused still keeps the old set
+    // (TestOtherRefusalsKeepTheOldSet).
+    Server server;
+    const BossTacticTable* tacticsBefore = &server.tactics.Current();
+
+    auto nextTactics = std::make_shared<BossTacticTable>();
+    BossTacticRow foreign;
+    foreign.map = 249;
+    foreign.bossEntry = 10184;
+    foreign.kind = ParseBossTacticKind("air_target");
+    foreign.spellId = 17131;
+    foreign.windowSec = 7.0f;
+    CHECK(foreign.kind == BossTacticKind::None);
+    CHECK(!nextTactics->Add(foreign));
+    CHECK(JudgeTacticRow(foreign.kind, false) == TacticRowVerdict::Foreign);
+    // The same table with a usable row too: only the usable rows are loaded.
+    BossTacticRow spread = foreign;
+    spread.kind = BossTacticKind::Spread;
+    spread.spellId = 0;
+    spread.param = 10.0f;
+    CHECK(nextTactics->Add(spread));
+    nextTactics->Seal();
+    CHECK(nextTactics->Size() == 1);
+
+    // The reload judges refused rows only: the foreign row refuses nothing, so both tables swap.
+    PlanReloadOutcome const out = CommitPlanReload(server.plans, OldSet(), PlanLoadCounts(), server.tactics,
+        nextTactics, 0, {}, {});
+    CHECK(out.swapped);
+    CHECK(out.reason.empty());
+    CHECK(&server.tactics.Current() == nextTactics.get());
+    CHECK(&server.tactics.Current() != tacticsBefore);
+    CHECK(server.tactics.Current().Size() == 1);
 }
 
 static void TestMissingPlanKeepsTheOldSet()
@@ -587,6 +625,7 @@ int main()
     TestUnchangedReloadListsNothing();
     TestBadRowKeepsTheOldSet();
     TestOtherRefusalsKeepTheOldSet();
+    TestForeignTacticKindRefusesNothing();
     TestMissingPlanKeepsTheOldSet();
     TestRunningRunKeepsItsPlan();
     TestOwns();

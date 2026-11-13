@@ -247,7 +247,7 @@ PlanReloadReport ai::ReloadDungeonPlans(std::vector<DungeonPlan const*> const& i
     // The tactics first: the new plans' boss steps join the new tactic rows (JoinBossTactics).
     auto nextTactics = std::make_shared<BossTacticTable>();
     std::uint64_t tacticRowsRead = 0;
-    uint32 const skippedTactics = ReadBossTacticRows(*nextTactics, &tacticRowsRead);
+    BossTacticLoadCounts const tacticCounts = ReadBossTacticRows(*nextTactics, &tacticRowsRead);
     auto next = std::make_shared<DungeonPlanTable>();
     PlanLoadCounts counts;
     ReadDungeonPlanRows(*next, counts, *nextTactics);
@@ -259,8 +259,13 @@ PlanReloadReport ai::ReloadDungeonPlans(std::vector<DungeonPlan const*> const& i
     }
     report.summary = PlanLoadSummary(*next, counts);
     report.tacticRows = uint32(nextTactics->Size());
+    report.tacticForeign = tacticCounts.foreign;
     report.outcome = CommitPlanReload(DungeonPlanHolder(), std::move(next), counts, BossTacticsHolder(), std::move(nextTactics),
-        skippedTactics, reads, inUse, &ai::ReconcileSeekFightState);
+        tacticCounts.refused, reads, inUse, &ai::ReconcileSeekFightState);
+    // Foreign kinds are not a refusal (JudgeTacticRow): boot skips the same rows, so the two paths agree.
+    if (tacticCounts.foreign)
+        sLog.outString(">> %u ai_boss_tactic rows of a kind this build does not know skipped (the startup load skips "
+            "them too: they are inert, not a refused tactic)", tacticCounts.foreign);
     if (report.outcome.swapped)
         sLog.outString(">> %s, %u boss tactic rows (reloaded by .bot run reloadplans)", report.summary.c_str(), report.tacticRows);
     else

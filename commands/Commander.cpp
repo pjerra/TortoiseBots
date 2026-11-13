@@ -14672,6 +14672,9 @@ static bool HandleReloadPlans(ChatHandler* handler, std::string const& intent)
     handler->PSendSysMessage("%s, reloaded (dungeon bosses %u -> %u, boss tactic rows %u -> %u)", report.summary.c_str(),
         uint32(report.outcome.bossesBefore), uint32(plans.BossCount()), uint32(report.outcome.tacticsBefore),
         report.tacticRows);
+    if (report.tacticForeign)
+        handler->PSendSysMessage("%u boss tactic rows of a kind this build does not know skipped (inert here; the "
+            "startup load skips them too, so they refuse nothing)", uint32(report.tacticForeign));
     if (report.outcome.changes.empty())
         handler->PSendSysMessage("Plans changed: none");
     for (std::string const& change : report.outcome.changes)

@@ -93,12 +93,12 @@ class ReloadPlansWiring(unittest.TestCase):
         self.assertIn('sLog.outString(">> %s", PlanLoadSummary(table, counts).c_str());', load)
         self.assertIn("report.summary = PlanLoadSummary(*next, counts);", reload)
         # boss tactics through the startup reader too
-        self.assertIn("uint32 const skippedTactics = ReadBossTacticRows(*nextTactics, &tacticRowsRead);", reload)
+        self.assertIn("BossTacticLoadCounts const tacticCounts = ReadBossTacticRows(*nextTactics, &tacticRowsRead);", reload)
         self.assertIn("ReadBossTacticRows(table);", body(TACTICS, "void ai::LoadBossTactics()"))
         self.assertEqual(TACTICS.count("WorldDatabase.Query("), 1)
         # the decision is the tested commit, into the holders the getters read
         self.assertIn("CommitPlanReload(DungeonPlanHolder(), std::move(next), counts, BossTacticsHolder(), "
-                      "std::move(nextTactics),\n        skippedTactics, reads, inUse, &ai::ReconcileSeekFightState);",
+                      "std::move(nextTactics),\n        tacticCounts.refused, reads, inUse, &ai::ReconcileSeekFightState);",
                       reload)
         self.assertIn("return DungeonPlanHolder().Current();", body(MGR, "DungeonPlanTable& ai::GetDungeonPlans()"))
         self.assertIn("return BossTacticsHolder().Current();", body(TACTICS, "BossTacticTable& ai::GetBossTactics()"))
@@ -129,7 +129,19 @@ class ReloadPlansWiring(unittest.TestCase):
             self.assertIn('{"%s", ' % name, tables)
         self.assertIn("`timeout_s`, `entries`", tables)
         self.assertIn("`map`, `boss_entry`, `kind`, `target_entry`, `spell_id`, `priority`, `param`", tables)
-        self.assertIn("++*rowsRead;", body(TACTICS, "std::uint32_t ai::ReadBossTacticRows("))
+        self.assertIn("++*rowsRead;", body(TACTICS, "BossTacticLoadCounts ai::ReadBossTacticRows("))
+
+        # One rule for boot and reload (BossTacticsPolicy.h JudgeTacticRow): the reader judges every row through it, a
+        # foreign kind only bumps `foreign`, and the reload judges `refused` alone, so a row of a kind this build does
+        # not know refuses nothing (it stayed inert at boot all along).
+        reader = body(TACTICS, "BossTacticLoadCounts ai::ReadBossTacticRows(")
+        self.assertIn("switch (JudgeTacticRow(row.kind, table.Add(row)))", reader)
+        self.assertIn("case TacticRowVerdict::Foreign:", reader)
+        self.assertIn("++counts.foreign;", reader)
+        self.assertIn("case TacticRowVerdict::Refused:", reader)
+        self.assertIn("++counts.refused;", reader)
+        self.assertIn("counts.refused, counts.foreign", body(TACTICS, "void ai::LoadBossTactics()"))
+        self.assertIn("report.tacticForeign = tacticCounts.foreign;", reload)
 
         # The revision of each table covers exactly the columns its loader SELECTs, in order: they cannot drift.
         def joined(text):

@@ -8,8 +8,10 @@
 // sealed tables, the same code and the same row checks as at startup. CommitPlanReload then decides:
 //   - a failed query or a table that changed while it was read (JudgeTableReads: the core's Query answers null for an
 //     error and for no rows alike, so each table's row count and checksum are read before and after the load);
-//   - any refused row (a plan, leg, step, need or boss row skipped, a plan's cut or dropped unit list, a tactic row
-//     skipped), a plan of the old set that is gone or has no steps any more: the old tables stay, nothing changes, the
+//   - any refused row (a plan, leg, step, need or boss row skipped, a plan's cut or dropped unit list, a tactic row of
+//     a kind this build knows refused; a tactic row of a kind it does not know is foreign data and is skipped by the
+//     startup load and by the reload alike, BossTacticsPolicy.h JudgeTacticRow), a plan of the old set that is gone or
+//     has no steps any more: the old tables stay, nothing changes, the
 //     reason is returned (at startup such rows are skipped with an error line; a reload is stricter, since the old set
 //     works);
 //   - else both new tables replace the old ones at once.
@@ -212,19 +214,21 @@ namespace ai
         return true;
     }
 
-    // Why the new set may not replace the old one, or "" when it may. Both tables are sealed.
+    // Why the new set may not replace the old one, or "" when it may. Both tables are sealed. `refusedTactics`: the
+    // `ai_boss_tactic` rows of a kind this build knows that the loader refused (BossTacticLoadCounts::refused); a row
+    // of a kind it does not know is foreign data and refuses nothing (BossTacticsPolicy.h JudgeTacticRow), as at boot.
     inline std::string JudgePlanReload(const DungeonPlanTable& old, const DungeonPlanTable& next, const PlanLoadCounts& counts,
-        std::uint32_t skippedTactics)
+        std::uint32_t refusedTactics)
     {
         if (!old.Sealed())
             return "the dungeon plans were not loaded at startup (the AI is off): nothing to reload";
         if (!next.Sealed())
             return "the new plan set was not sealed";
-        if (counts.Refused() || skippedTactics)
+        if (counts.Refused() || refusedTactics)
         {
             std::string why = std::to_string(counts.skippedPlans) + " plan, " + std::to_string(counts.skippedLegs) +
                 " leg, " + std::to_string(counts.skippedSteps) +
-                " step, " + std::to_string(counts.skippedBosses) + " boss and " + std::to_string(skippedTactics) +
+                " step, " + std::to_string(counts.skippedBosses) + " boss and " + std::to_string(refusedTactics) +
                 " boss tactic rows refused, " + std::to_string(counts.badUnits) + " plans with bad unit lists";
             for (const std::string& r : counts.refusals)
                 why += "; " + r;
@@ -270,12 +274,13 @@ namespace ai
     };
 
     // Replaces both tables when JudgeTableReads and JudgePlanReload allow it, else changes nothing. `reads`: the six
-    // tables' revisions and rows read. `inUse`: every run's plan pointer. `beforeInstall`: called with the new tactic
+    // tables' revisions and rows read. `refusedTactics`: the boss tactic rows of a known kind the loader refused.
+    // `inUse`: every run's plan pointer. `beforeInstall`: called with the new tactic
     // table just before the old one is retired, so the seek_aura fight records can be reconciled against the rows that
     // replace the ones they were keyed from (and the old table may then be freed).
     inline PlanReloadOutcome CommitPlanReload(ReloadableTable<DungeonPlanTable>& plans, std::shared_ptr<DungeonPlanTable> next,
         const PlanLoadCounts& counts, ReloadableTable<BossTacticTable>& tactics, std::shared_ptr<BossTacticTable> nextTactics,
-        std::uint32_t skippedTactics, const std::vector<TableRead>& reads, const std::vector<const DungeonPlan*>& inUse,
+        std::uint32_t refusedTactics, const std::vector<TableRead>& reads, const std::vector<const DungeonPlan*>& inUse,
         const std::function<void(const BossTacticTable&)>& beforeInstall = std::function<void(const BossTacticTable&)>())
     {
         PlanReloadOutcome out;
@@ -291,7 +296,7 @@ namespace ai
         }
         out.reason = JudgeTableReads(reads);
         if (out.reason.empty())
-            out.reason = JudgePlanReload(plans.Current(), *next, counts, skippedTactics);
+            out.reason = JudgePlanReload(plans.Current(), *next, counts, refusedTactics);
         if (out.reason.empty() && !nextTactics->Sealed())
             out.reason = "the new boss tactic table was not sealed";
         if (!out.reason.empty())

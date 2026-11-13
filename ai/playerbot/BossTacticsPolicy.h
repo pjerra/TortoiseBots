@@ -427,6 +427,27 @@ namespace ai
         return row.targetEntry ? row.targetEntry : row.bossEntry;
     }
 
+    // What the loader does with one `ai_boss_tactic` row it read (BossTacticsMgr.cpp ReadBossTacticRows).
+    enum class TacticRowVerdict : std::uint8_t
+    {
+        Loaded = 0,
+        Refused = 1, // a kind this build knows, but the row cannot be used: an error, and a reload refuses on one
+        Foreign = 2, // a kind this build does not know: a row of another line of the server, inert here
+    };
+
+    // The verdict for a row of `kind` that BossTacticTable::Add answered `accepted` for. Every row of a kind this build
+    // knows is judged by Add alone. A row whose kind it does not know is FOREIGN DATA, not a refused tactic: the
+    // startup load has always skipped such a row and gone on, and a reload does the same (one rule), so a database that
+    // also carries rows of a newer line still boots and still reloads. Refusing the whole set for a kind no code in
+    // this build can read turned every `.bot run reloadplans` on test2 into "1 boss tactic row refused" (the Onyxia
+    // `air_target` row, map 249 boss 10184, of an unmerged line; 2026-11-13).
+    inline TacticRowVerdict JudgeTacticRow(BossTacticKind kind, bool accepted)
+    {
+        if (kind == BossTacticKind::None)
+            return TacticRowVerdict::Foreign;
+        return accepted ? TacticRowVerdict::Loaded : TacticRowVerdict::Refused;
+    }
+
     // A table's revision: unique for the process, assigned when the table is constructed. A freed table's address can
     // come back for a changed table, so a cache of the table's content keys on the revision, never on the address.
     inline std::uint64_t NextBossTacticRevision()

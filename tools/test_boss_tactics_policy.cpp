@@ -2686,6 +2686,29 @@ int main()
         CHECK(!table.HasMap(70));  // an empty sealed table has no map: the tactics stay off
     }
 
+    // One rule for the startup load and a reload (JudgeTacticRow): a row of a kind this build does not know is FOREIGN
+    // data, skipped and logged by both, so a database that also carries rows of another line still reloads; a row of a
+    // known kind the table cannot use is REFUSED, and a reload of the whole set is refused on it. The row that started
+    // this (Onyxia air_target, map 249 boss 10184, an unmerged line) is the foreign case, whatever its window_s.
+    {
+        BossTacticRow foreign = Row(249, 10184, ParseBossTacticKind("air_target"), 0, 17131);
+        foreign.windowSec = 7.0f;  // the column default; a kind with no window rule takes any value
+        CHECK(foreign.kind == BossTacticKind::None);
+        BossTacticTable table;
+        CHECK(!table.Add(foreign));
+        CHECK(JudgeTacticRow(foreign.kind, false) == TacticRowVerdict::Foreign);
+        CHECK(JudgeTacticRow(BossTacticKind::None, true) == TacticRowVerdict::Foreign);  // kind decides, not Add
+
+        BossTacticRow bad = Row(249, 10184, BossTacticKind::Spread, 0, 0, 0, 1.0f);  // under the kind's 5 yd floor
+        CHECK(!table.Add(bad));
+        CHECK(JudgeTacticRow(bad.kind, false) == TacticRowVerdict::Refused);
+        bad.param = 10.0f;
+        CHECK(table.Add(bad));
+        CHECK(JudgeTacticRow(bad.kind, true) == TacticRowVerdict::Loaded);
+        table.Seal();
+        CHECK(table.Size() == 1);
+    }
+
     // Row gates: a boss health band and a bot aura. The band is inclusive, and with the master key off a gated row is
     // closed (today's behaviour, before the columns existed); an ungated row stays open either way.
     {
