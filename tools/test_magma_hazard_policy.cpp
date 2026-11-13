@@ -17,6 +17,7 @@
 
 using ai::ClassifyLiquidHazard;
 using ai::CutPathBeforeMagma;
+using ai::FollowSlotHolds;
 using ai::IsMagmaHazard;
 using ai::IsSlimeHazard;
 using ai::KeepNavmeshZOverMagma;
@@ -377,6 +378,35 @@ int main()
         std::cout << "  [PASS] unconfirmed holes stay clamped at any drop size, confirmed floors restore\n";
     }
 
+
+    // The follow slot / chase goal hold (RFC first-bridge deaths 2026-11-13):
+    // the follow or chase generator is never handed a goal in magma, and a
+    // route into magma holds it too; off an instance map (guard off) nothing
+    // is held, and a magma slot with no magma in the route still holds.
+    {
+        int held = 0;
+        for (int guard = 0; guard <= 1; ++guard)
+            for (int slot = 0; slot <= 1; ++slot)
+                for (int route = 0; route <= 1; ++route)
+                {
+                    bool const want = guard && (slot || route);
+                    bool const got = FollowSlotHolds(guard, slot, route);
+                    if (got)
+                        ++held;
+                    if (want != got)
+                    {
+                        std::cerr << "FollowSlotHolds(" << guard << "," << slot << ","
+                            << route << ") = " << got << ", want " << want << "\n";
+                    }
+                    CHECK(got == want);
+                }
+        CHECK(held == 3);
+        CHECK(FollowSlotHolds(true, true, false));   // the Ragefire shelf: the slot itself is under the lava
+        CHECK(FollowSlotHolds(true, false, true));   // a dry slot across a lava strip: the route walks in
+        CHECK(!FollowSlotHolds(false, true, true));  // the guard does not apply on this map
+        CHECK(!FollowSlotHolds(true, false, false)); // a dry slot with a dry route: follow normally
+        std::cout << "  [PASS] a follow or chase goal in magma holds, or its route into magma\n";
+    }
 
     std::cout << "All magma hazard policy tests passed.\n";
     return 0;

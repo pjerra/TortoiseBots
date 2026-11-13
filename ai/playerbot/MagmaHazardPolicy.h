@@ -185,6 +185,22 @@ namespace ai
             r.originZ == MagmaGridCell(fromZ, kMagmaRefusalOriginGridYd);
     }
 
+    // A follower's follow slot, or a chaser's chase goal, that is magma, or a
+    // route to it that walks into magma after dry ground: the bot holds at its
+    // own spot instead of taking the engine's follow or chase move. Neither
+    // generator samples the terrain, and both goals come off the navmesh,
+    // which calls a shallow lava shelf plain ground (RFC first-bridge deaths
+    // 2026-11-13: the Ragefire Chasm follow slot landed on a shelf 0.1-0.4 yd
+    // under the lava surface, 605 a tick). A bot already standing in magma is
+    // never held there: it walks out first, so its own spot is not a reason to
+    // hold and the caller leaves the goal alone.
+    inline bool FollowSlotHolds(bool guard, bool slotInMagma, bool routeInMagma)
+    {
+        if (!guard)
+            return false;
+        return slotInMagma || routeInMagma;
+    }
+
     // A commander task's walk nudge (a plain core MovePoint to its standing
     // point, BotCommands NudgeTaskWalk) on an instance map waits while the
     // bot's magma refusal memory on this map is still in its window, or when the

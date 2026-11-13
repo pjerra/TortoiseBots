@@ -203,6 +203,78 @@ class MagmaGuardWiringTest(unittest.TestCase):
         self.assertNotIn("return true", helper)
         self.assertNotIn("SendActionError", helper)
 
+    def test_follow_holds_out_of_magma(self):
+        # RFC first-bridge deaths 2026-11-13: the follow slot comes off the
+        # navmesh (a shallow lava shelf reads as plain ground) and the native
+        # follow is never sampled. The hold runs before the FOLLOW_MOTION_TYPE
+        # early return, so a follow already running is re-checked, and before
+        # the native dispatch for a new one.
+        f = body(MOVES, "bool MovementAction::Follow(Unit* target, float distance, float angle)\n", "\n}\n")
+        hold = at(f, "if (HoldFollowOutOfMagma(target, distance, angle))")
+        running = at(f, "if (bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == FOLLOW_MOTION_TYPE)")
+        dispatch = at(f, "mm.MoveFollow(target, distance, angle);")
+        self.assertLess(hold, running)
+        self.assertLess(hold, dispatch)
+        # Both follow call sites reach this one guarded dispatch: the 2-arg
+        # overload (Follow(target, distance)) delegates, and every party
+        # form-up (FormUpOnLead, FormUpOnPlayer) orders the "follow chat
+        # shortcut" action, which is this MovementAction.
+        two = body(MOVES, "bool MovementAction::Follow(Unit* target, float distance)\n", "\n}\n")
+        self.assertIn("return Follow(target, distance, GetFollowAngle());", two)
+        self.assertNotIn("MoveFollow(", two)
+        for formup in ("uint32 FormUpOnPlayer(Player* commander",
+                       "uint32 FormUpOnLead(Player* commander"):
+            site = body(COMMANDS, formup, "\n}\n")
+            self.assertIn('"follow chat shortcut", ai::Event("follow", "", commander)', site)
+            self.assertNotIn("MoveFollow(", site)
+
+    def test_follow_hold_rule_and_fallbacks(self):
+        f = body(MOVES, "bool MovementAction::HoldFollowOutOfMagma(", "\n}\n")
+        slot = at(f, "WorldPosition const slot(target->GetMapId(),")
+        check = at(f, "if (!SlotGoesIntoMagma(bot, slot, magmaAt))")
+        self.assertLess(slot, check)
+        # A bot already standing in magma walks out instead of holding.
+        self.assertIn("if (WorldPosition(bot).isInMagma())\n        return false;", f)
+        # The slot is magma but the target's own spot is dry: follow the
+        # target itself; otherwise stop and hold.
+        self.assertIn("if (!SlotGoesIntoMagma(bot, WorldPosition(target), targetMagmaAt))", f)
+        self.assertIn("mm.MoveFollow(target, 0.0f, 0.0f);", f)
+        self.assertIn("ai->StopMoving();", f)
+        self.assertIn('LogMagmaRefusal(bot, AI_VALUE(LastMovement&, "last movement"), magmaAt, "follow slot");', f)
+        # The route goes through the SAME sampled guard MoveTo uses, not a
+        # second copy of the sampler.
+        helper = body(MOVES, "static bool SlotGoesIntoMagma(", "\n}\n")
+        self.assertIn("path.calculate(slot.getX(), slot.getY(), slot.getZ(), false);", helper)
+        self.assertIn("RouteEntersMagma(bot, WorldPosition(bot), route, magmaAt)", helper)
+        self.assertIn("ai::MagmaGuardApplies(bot->GetMap()->IsDungeon())", helper)
+        self.assertIn("ai::CutPathBeforeMagma(start, route,", body(MOVES, "static bool RouteEntersLiquidHazard(", "\n}\n"))
+
+    def test_chase_holds_out_of_magma(self):
+        f = body(MOVES, "bool MovementAction::ChaseTo(", "\n}\n")
+        hold = at(f, "if (HoldChaseOutOfMagma(obj, distance))")
+        far = at(f, "if (distanceToTarget > sPlayerbotAIConfig.sightDistance")
+        self.assertLess(hold, far)
+        g = body(MOVES, "bool MovementAction::HoldChaseOutOfMagma(", "\n}\n")
+        goal = at(g, "CreatureAuraChaseGoal(bot->GetPositionX(), bot->GetPositionY(),")
+        check = at(g, "if (!SlotGoesIntoMagma(bot, goal, magmaAt))")
+        self.assertLess(goal, check)
+        self.assertIn("ai->StopMoving();", g)
+        # Lava kills a tank too: no tank pass on this hold.
+        self.assertNotIn("IsTank", g)
+        self.assertIn('LogMagmaRefusal(bot, AI_VALUE(LastMovement&, "last movement"), magmaAt, "chase goal");', g)
+
+    def test_healer_stand_path_is_calculated(self):
+        # The healer stand's PathFinder was read without calculate(), so its end
+        # was (0, 0, 0) and every stand was rejected (found 2026-11-13).
+        f = body(COMMANDS, "bool HealerPullStand(Player* lead, Unit* target, Player* healer, float& ox, float& oy, float& oz)",
+                 "\n}\n")
+        calc = at(f, "path.calculate(px, py, ground, false);")
+        kind = at(f, "path.getPathType()")
+        end = at(f, "path.getActualEndPosition()")
+        self.assertLess(calc, kind)
+        self.assertLess(calc, end)
+        self.assertEqual(f.count("path.calculate("), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

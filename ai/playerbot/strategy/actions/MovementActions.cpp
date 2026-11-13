@@ -217,6 +217,35 @@ static void RefuseMagmaMove(Player* bot, LastMovement& lastMove, const WorldPosi
     LogMagmaRefusal(bot, lastMove, magmaAt, what);
 }
 
+// The follow slot / chase goal of HoldFollowOutOfMagma and
+// HoldChaseOutOfMagma: magma at the goal, or a route to it that walks into
+// magma after dry ground. The route is the plain PathFinder (the core's, which
+// excludes no liquid) sampled by the SAME guard MoveTo uses (RouteEntersMagma),
+// so a hold stands exactly where a MoveTo to that spot would be refused; the
+// guard's own rules are in ai::FollowSlotHolds. `magmaAt` is the goal or the
+// route's first magma point, for the log.
+static bool SlotGoesIntoMagma(Player* bot, const WorldPosition& slot, WorldPosition& magmaAt)
+{
+    if (!ai::MagmaGuardApplies(bot->GetMap()->IsDungeon()))
+        return false;
+    if (slot.isInMagma(bot->GetMap()->GetTerrain()))
+    {
+        magmaAt = slot;
+        return true;
+    }
+    PathFinder path(bot);
+    path.calculate(slot.getX(), slot.getY(), slot.getZ(), false);
+    std::vector<WorldPosition> points;
+    Movement::PointsArray const& meshPoints = path.getPath();
+    points.reserve(meshPoints.size());
+    for (Vector3 const& p : meshPoints)
+        points.push_back(WorldPosition(slot.GetMapId(), p.x, p.y, p.z));
+    if (points.size() < 2)
+        return false;
+    TravelPath route(std::move(points));
+    return RouteEntersMagma(bot, WorldPosition(bot), route, magmaAt);
+}
+
 // Mounted follow spacing: the on-foot follow slot (FollowDistance 1.5 yd) is
 // smaller than a mount model, so mounted companions parked on top of the
 // master and each other after every ride. Out of combat and outside
@@ -2489,6 +2518,15 @@ bool MovementAction::Follow(Unit* target, float distance, float angle)
     if (sPlayerbotAIConfig.avoidCreatureAuras && HoldFollowOutsideKeepout(target, distance, angle))
         return true;
 
+    // Magma hold (MagmaHazardPolicy.h, RFC first-bridge deaths 2026-11-13):
+    // the native follow is not magma-sampled, and the core puts its slot on
+    // the navmesh, which calls a shallow lava shelf plain ground (Ragefire
+    // Chasm's first-bridge shelf: 0.1-0.4 yd under the surface, 605 a tick).
+    // Checked before the FOLLOW_MOTION_TYPE early return, so a follow already
+    // running is re-checked too; it resumes once the slot is clear.
+    if (HoldFollowOutOfMagma(target, distance, angle))
+        return true;
+
     if (bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == FOLLOW_MOTION_TYPE)
     {
         Unit* currentTarget = sServerFacade.GetChaseTarget(bot);
@@ -2533,6 +2571,70 @@ bool MovementAction::HoldFollowOutsideKeepout(Unit* target, float distance, floa
     float const slotY = target->GetPositionY() + distance * sin(slotAngle);
     return HoldOutsideKeepout(slotX, slotY, target->GetPositionX(), target->GetPositionY(),
         keepoutFollowEngaged, FOLLOW_MOTION_TYPE);
+}
+
+bool MovementAction::HoldFollowOutOfMagma(Unit* target, float distance, float angle)
+{
+    // Instance maps only (MagmaHazardPolicy.h): the open world keeps its old
+    // movement, no added terrain query for the random population.
+    if (!ai::MagmaGuardApplies(bot->GetMap()->IsDungeon()))
+        return false;
+    // A bot already standing in magma walks out first: holding it there is a
+    // death, and the MoveTo guard lets it out too (MagmaHazardPolicy.h).
+    if (WorldPosition(bot).isInMagma())
+        return false;
+    // Follow goal: the slot the native follow aims for (target position plus
+    // `distance` at `angle` off the target's facing), the same point
+    // HoldFollowOutsideKeepout plans against.
+    float const slotAngle = target->GetOrientation() + angle;
+    WorldPosition const slot(target->GetMapId(),
+        target->GetPositionX() + distance * cos(slotAngle),
+        target->GetPositionY() + distance * sin(slotAngle), target->GetPositionZ());
+    WorldPosition magmaAt;
+    if (!SlotGoesIntoMagma(bot, slot, magmaAt))
+        return false;
+    LogMagmaRefusal(bot, AI_VALUE(LastMovement&, "last movement"), magmaAt, "follow slot");
+    // The slot is magma but the target's own spot is dry and reachable: follow
+    // the target itself (distance 0) until the slot clears. A follow already
+    // running on that goal is left alone; re-dispatching it every tick would
+    // reset the generator and jitter.
+    WorldPosition targetMagmaAt;
+    if (!SlotGoesIntoMagma(bot, WorldPosition(target), targetMagmaAt))
+    {
+        MotionMaster& mm = *bot->GetMotionMaster();
+        if (mm.GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE ||
+            sServerFacade.GetChaseTarget(bot) != target)
+            mm.MoveFollow(target, 0.0f, 0.0f);
+        return true;
+    }
+    ai->StopMoving();
+    return true;
+}
+
+bool MovementAction::HoldChaseOutOfMagma(WorldObject* target, float distance)
+{
+    // Instance maps only, as above.
+    if (!ai::MagmaGuardApplies(bot->GetMap()->IsDungeon()))
+        return false;
+    // No tank pass: the keep-out's tank exemption is about picking up and
+    // holding a mob, while lava kills a tank exactly as fast as anything else.
+    if (WorldPosition(bot).isInMagma())
+        return false;
+    // Chase goal: `distance` from the target toward the bot (the target itself
+    // for a melee chase), the point HoldChaseOutsideKeepout plans against.
+    float gx = 0.0f, gy = 0.0f;
+    CreatureAuraChaseGoal(bot->GetPositionX(), bot->GetPositionY(),
+        target->GetPositionX(), target->GetPositionY(), distance, gx, gy);
+    WorldPosition goal(target->GetMapId(), gx, gy, target->GetPositionZ());
+    float const ground = goal.GetHeight();
+    if (ground > INVALID_HEIGHT)
+        goal.setZ(ground);
+    WorldPosition magmaAt;
+    if (!SlotGoesIntoMagma(bot, goal, magmaAt))
+        return false;
+    ai->StopMoving();
+    LogMagmaRefusal(bot, AI_VALUE(LastMovement&, "last movement"), magmaAt, "chase goal");
+    return true;
 }
 
 bool MovementAction::HoldChaseOutsideKeepout(WorldObject* target, float distance)
@@ -2741,6 +2843,12 @@ bool MovementAction::ChaseTo(WorldObject* obj, float distance, float angle)
     // end-point shift and the core chase fallback, which ends in melee
     // contact with the target whatever hazard it stands in).
     if (sPlayerbotAIConfig.avoidCreatureAuras && HoldChaseOutsideKeepout(obj, distance))
+        return true;
+
+    // Magma hold (MagmaHazardPolicy.h, RFC first-bridge deaths 2026-11-13):
+    // the chase goal comes off the navmesh unsampled, so a melee chase could
+    // walk onto a lava-covered shelf. Before every chase branch below.
+    if (HoldChaseOutOfMagma(obj, distance))
         return true;
 
     // A live boss anchor (BossAnchorPolicy.h, Hakkar's platform): no chase to a hostile beyond its radius plus the melee

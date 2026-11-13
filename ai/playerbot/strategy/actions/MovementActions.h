@@ -135,6 +135,17 @@ namespace ai
         // off outside it instead of chasing in. True when it handled the
         // chase this tick; false to chase normally.
         bool HoldChaseOutsideKeepout(WorldObject* target, float distance);
+        // The follow slot (target position plus `distance` at `angle`) in
+        // magma, or a route to it that walks into magma after dry ground: the
+        // native follow is not sampled, so the bot follows the target itself
+        // or holds instead (MagmaHazardPolicy.h: ai::FollowSlotHolds). On an
+        // instance map only, never while the bot itself stands in magma. True
+        // when it handled the follow this tick; false to follow normally.
+        bool HoldFollowOutOfMagma(Unit* target, float distance, float angle);
+        // The same for a chase goal (`distance` from the target toward the
+        // bot, the target for melee): held, no tank pass. True when it handled
+        // the chase this tick; false to chase normally.
+        bool HoldChaseOutOfMagma(WorldObject* target, float distance);
         // AiPlayerbot.AvoidCreatureAuras: true when a move's end point lies in
         // a listed creature's ring (rear flank, set behind, move out of
         // collision refuse it; the hazard registry only bends the path). A
