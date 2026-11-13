@@ -211,6 +211,16 @@ namespace ai
     Unit* BossTankFirstHeldNear(PlayerbotAI* ai, Player* bot, Unit* around, float yd);
     // The take's taunt, noted on the add's record (how=taunt) and logged (event=taunt). No-op with the key off.
     void BossTankFirstNoteTake(PlayerbotAI* ai, Player* bot, Unit* add, const char* src, bool cast, const char* why);
+    // Whether the add's shared record holds it now (the phase only, never the overrides), advancing the record when it
+    // is due: the take's own read, so a tank's take is seen without a non-tank reader (TankFirstPolicy.h R1/R2/R8).
+    // False with the key off, off a tank_first map, without a row, or on an add whose record is not armed yet.
+    bool BossTankFirstTakeHolding(PlayerbotAI* ai, Player* bot, Unit* add);
+    // The take's chase lease (R1): this tank may chase this add into melee for kTankFirstChaseLeaseMs, against the
+    // boss anchor that keeps it out of taunt range. Its own leaf map; keyed by instance and tank.
+    void TankFirstGrantChase(Player* bot, Unit* add);
+    // Whether the bot's chase of `target` is excused by its live lease: the same add, not lapsed. MovementActions.cpp's
+    // ChaseTo and BossAnchorRefusesChase read it beside MeetSonChaseExempt.
+    bool TankFirstChaseExempt(Player* bot, Unit* target);
     // The bot's pet leaves a held add (PlayerbotAI::UpdateAI). No-op with the key off or without a pet.
     void HoldTankFirstPet(PlayerbotAI* ai, Player* bot);
     // The bot itself leaves a held add: the running swing and auto-repeat shot stop for any non-tank, an explicit attack

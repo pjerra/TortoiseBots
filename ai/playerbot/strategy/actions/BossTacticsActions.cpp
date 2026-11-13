@@ -6530,6 +6530,29 @@ constexpr std::uint32_t kTankFirstSweepGapMs = 1000;
 std::mutex g_tankFirstTauntLogMutex;
 std::map<std::pair<std::uint64_t, std::uint64_t>, std::uint32_t> g_tankFirstTauntLog;
 
+// The take's chase lease (R1): the tank that took a holding add may chase it into melee for kTankFirstChaseLeaseMs,
+// against the boss anchor that would otherwise keep it out of taunt range. Its own leaf mutex; keyed by instance and
+// tank, one add at a time.
+std::mutex g_tankFirstLeaseMutex;
+struct TankFirstLease
+{
+    std::uint64_t add = 0;
+    std::uint32_t writtenMs = 0;
+};
+std::map<std::pair<std::uint32_t, std::uint64_t>, TankFirstLease> g_tankFirstLease;
+
+// The take's `why` reads the taunt's cast result through TankFirstPolicy.h's game-free ints: a core renumbering of
+// SpellCastResult is a compile error here, never a wrong log word.
+static_assert(static_cast<int>(SPELL_CAST_OK) == kTankFirstCastOk, "TankFirstPolicy.h's CAST_OK is stale");
+static_assert(static_cast<int>(SPELL_FAILED_LINE_OF_SIGHT) == kTankFirstCastLineOfSight,
+              "TankFirstPolicy.h's LINE_OF_SIGHT is stale");
+static_assert(static_cast<int>(SPELL_FAILED_NOT_READY) == kTankFirstCastNotReady,
+              "TankFirstPolicy.h's NOT_READY is stale");
+static_assert(static_cast<int>(SPELL_FAILED_OUT_OF_RANGE) == kTankFirstCastOutOfRange,
+              "TankFirstPolicy.h's OUT_OF_RANGE is stale");
+static_assert(static_cast<int>(SPELL_FAILED_SPELL_IN_PROGRESS) == kTankFirstCastInProgress,
+              "TankFirstPolicy.h's SPELL_IN_PROGRESS is stale");
+
 // D5: a living player tank, no creature charmer. A pet, a totem, a non-tank player and a charmed tank are no tank.
 bool TankFirstIsTank(Unit* unit)
 {
@@ -6638,8 +6661,8 @@ void TankFirstLogEvent(PlayerbotAI* ai, Player* bot, Unit* add, std::uint32_t en
             break;
         case TankFirstEvent::Settled:
             snprintf(info1, sizeof(info1), "event=settled");
-            snprintf(info2, sizeof(info2), "add=%u:%u,tank=%s,held_ms=%u,n=%u", entry, low, tankRef, out.ms,
-                     static_cast<unsigned>(snap.settles));
+            snprintf(info2, sizeof(info2), "add=%u:%u,tank=%s,how=%s,held_ms=%u,n=%u", entry, low, tankRef,
+                     TankFirstHow(snap, snap.tank, in.nowMs), out.ms, static_cast<unsigned>(snap.settles));
             break;
         case TankFirstEvent::Loss:
             snprintf(info1, sizeof(info1), "event=loss");
@@ -6963,6 +6986,60 @@ bool ai::BossTankFirstHolds(PlayerbotAI* ai, Player* bot, Unit* unit)
     return held;
 }
 
+// Whether the add's shared record holds it now (the phase, never the overrides): the take's own read, so a tank's take
+// advances and sees the record without a non-tank reader (R1/R2/R8). A tank's read runs TankFirstRead, which has no
+// tank gate of its own (BossTankFirstHolds is the one with the tank filter).
+bool ai::BossTankFirstTakeHolding(PlayerbotAI* ai, Player* bot, Unit* add)
+{
+    if (!ai || !bot || !add || !sPlayerbotAIConfig.dungeonRunAddTankFirst)
+        return false;
+    if (!GetBossTactics().HasTankFirstMap(bot->GetMapId()))
+        return false;
+    TankFirstRead(ai, bot, add);
+    std::lock_guard<std::mutex> lock(g_tankFirstMutex);
+    const auto it = g_tankFirst.find(std::make_pair(bot->GetInstanceId(), add->GetObjectGuid().GetRawValue()));
+    return it != g_tankFirst.end() && TankFirstPhaseHolds(it->second.record.phase);
+}
+
+// The take's chase lease (R1): this tank and add, from now. Each take tick rewrites it, so a take that keeps chasing or
+// casting keeps it alive; it lapses kTankFirstChaseLeaseMs after the last one.
+void ai::TankFirstGrantChase(Player* bot, Unit* add)
+{
+    if (!bot || !add)
+        return;
+    std::lock_guard<std::mutex> lock(g_tankFirstLeaseMutex);
+    if (g_tankFirstLease.size() > 256)
+    {
+        // A bound on the map: the lapsed leases of tanks that never chase again go first.
+        const std::uint32_t nowMs = WorldTimer::getMSTime();
+        for (auto it = g_tankFirstLease.begin(); it != g_tankFirstLease.end();)
+            it = TankFirstChaseLeaseLive(it->second.writtenMs, nowMs) ? std::next(it) : g_tankFirstLease.erase(it);
+    }
+    TankFirstLease& lease = g_tankFirstLease[std::make_pair(bot->GetInstanceId(), bot->GetObjectGuid().GetRawValue())];
+    lease.add = add->GetObjectGuid().GetRawValue();
+    lease.writtenMs = WorldTimer::getMSTime();
+}
+
+// Whether this bot's chase of `target` is excused by its live take lease (R1): the same add, not lapsed. Lapsed is
+// dropped where it is read; another add's lease stays (the tank may take two).
+bool ai::TankFirstChaseExempt(Player* bot, Unit* target)
+{
+    if (!bot || !target || !sPlayerbotAIConfig.dungeonRunAddTankFirst)
+        return false;
+    if (!GetBossTactics().HasTankFirstMap(bot->GetMapId()))
+        return false;
+    std::lock_guard<std::mutex> lock(g_tankFirstLeaseMutex);
+    const auto it = g_tankFirstLease.find(std::make_pair(bot->GetInstanceId(), bot->GetObjectGuid().GetRawValue()));
+    if (it == g_tankFirstLease.end())
+        return false;
+    if (!TankFirstChaseLeaseLive(it->second.writtenMs, WorldTimer::getMSTime()))
+    {
+        g_tankFirstLease.erase(it);
+        return false;
+    }
+    return it->second.add == target->GetObjectGuid().GetRawValue();
+}
+
 // The first held add within `yd` of `around`: an area action's reach judges every add the fight has a tank_first row
 // for, not only the target it picked.
 Unit* ai::BossTankFirstHeldNear(PlayerbotAI* ai, Player* bot, Unit* around, float yd)
@@ -7001,6 +7078,16 @@ void ai::BossTankFirstNoteTake(PlayerbotAI* ai, Player* bot, Unit* add, const ch
         return;
     if (cast)
     {
+        // R8: a record this very take creates arms first, so the taunt below is noted on it; the read after the note
+        // ticks the record that already existed, so its settle (`how=taunt`) needs no non-tank reader either.
+        bool known = false;
+        {
+            std::lock_guard<std::mutex> lock(g_tankFirstMutex);
+            known = g_tankFirst.find(std::make_pair(bot->GetInstanceId(), add->GetObjectGuid().GetRawValue())) !=
+                g_tankFirst.end();
+        }
+        if (!known)
+            TankFirstRead(ai, bot, add);
         // The taunt hands the add to this tank: the next OnTank reads `how=taunt`. The clock is read under the record's
         // lock: a sample from before it can be older than the note the tank's other thread just wrote.
         std::lock_guard<std::mutex> lock(g_tankFirstMutex);
@@ -7008,6 +7095,9 @@ void ai::BossTankFirstNoteTake(PlayerbotAI* ai, Player* bot, Unit* add, const ch
         if (it != g_tankFirst.end())
             TankFirstNoteTaunt(it->second.record, bot->GetObjectGuid().GetRawValue(), WorldTimer::getMSTime());
     }
+    // R8: the tank's take advances the add's record itself (the victim read, the throttle, the row), so its taunt is
+    // seen and settled without a non-tank reader. TankFirstRead's own throttle makes a second read in the tick cheap.
+    TankFirstRead(ai, bot, add);
     if (!sPlayerbotAIConfig.hasLog("bot_events.csv"))
         return;
     if (!cast)
@@ -10944,8 +11034,8 @@ bool ai::BossAnchorRefusesChase(PlayerbotAI* ai, Player* bot, Unit* unit, bool r
     if (!row)
         return false;
     // The meet receiver's chase of its own meet Son inside the bounded allowance (DungeonRunSeekMeetTakeReach): only
-    // that target is let through; every other chase keeps the circle.
-    if (MeetSonChaseExempt(ai, bot, unit))
+    // that target is let through; every other chase keeps the circle. The same for a tank's take lease (R1).
+    if (MeetSonChaseExempt(ai, bot, unit) || TankFirstChaseExempt(bot, unit))
         return false;
     const BossAnchorCircle circle = raidCircle ? AnchorCircleOf(*row, false) : AnchorCircleOf(*row, PlayerbotAI::IsTank(bot));
     return !InsideAnchor(circle, unit->GetPositionX(), unit->GetPositionY());
@@ -12137,8 +12227,11 @@ bool TauntAuraGated(Player* bot, Unit* subject)
 }
 
 // Why the take's taunt does not go out this tick, first that applies (the `event=taunt` row's cast=0 `why`): the
-// taunt gate, no taunt at all, the tank out of control or silenced, its stance or form, its spell cooldown, its range.
-const char* TankFirstTauntWhy(PlayerbotAI* ai, Player* bot, const char* taunt, bool gateRefused)
+// taunt gate, no taunt at all, the tank out of control or silenced, its stance or form, then the cast result's own word
+// (TankFirstPolicy.h's TankFirstTauntWhyOf: walk/range_refused, los, gcd/cooldown, busy). A result with no word of its
+// own is `res=<n>` in `noWord`, which must outlive the call.
+const char* TankFirstTauntWhyNow(PlayerbotAI* ai, Player* bot, const char* taunt, bool gateRefused,
+                                 SpellCastResult result, bool leased, char* noWord, std::size_t noWordSize)
 {
     if (gateRefused)
         return "gate";
@@ -12155,9 +12248,26 @@ const char* TankFirstTauntWhy(PlayerbotAI* ai, Player* bot, const char* taunt, b
         return "stance";
     const std::uint32_t spellId =
         ai->GetAiObjectContext()->GetValue<std::uint32_t>("spell id", taunt)->Get();
-    if (spellId != 0 && bot->HasSpellCooldown(spellId))
-        return "cooldown";
-    return "range";
+    const bool spellCooldown = spellId != 0 && bot->HasSpellCooldown(spellId);
+    if (const char* const word = TankFirstTauntWhyOf(static_cast<int>(result), leased, spellCooldown))
+        return word;
+    snprintf(noWord, noWordSize, "res=%d", static_cast<int>(result));
+    return noWord;
+}
+
+// R4: the take's stance refusal, a cast of its own (the taunt goes next tick). A warrior steps into defensive stance, a
+// druid into a bear form; no other dance. True when the cast went out.
+bool TankFirstTakeForm(PlayerbotAI* ai, Player* bot)
+{
+    switch (bot->GetClass())
+    {
+        case CLASS_WARRIOR:
+            return ai->CastSpell("defensive stance", bot);
+        case CLASS_DRUID:
+            return ai->CastSpell("bear form", bot) || ai->CastSpell("dire bear form", bot);
+        default:
+            return false;
+    }
 }
 }
 
@@ -12546,22 +12656,46 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
                 edgeTake = !chaseRefused;
             }
         }
-        const bool canTaunt = taunt && ai->CanCastSpell(taunt, task.source);
+        // tank_first (AiPlayerbot.DungeonRunAddTankFirst, R1-R4): the take's own record read, the chase lease and the
+        // taunt's why all need the key and a tank_first row; without them the take keeps today's code.
+        const bool tankFirstTake = sPlayerbotAIConfig.dungeonRunAddTankFirst &&
+            GetBossTactics().HasTankFirstMap(bot->GetMapId());
+        const bool tankFirstHolding = tankFirstTake && BossTankFirstTakeHolding(ai, bot, task.source);
+        SpellCastResult castResult = SPELL_FAILED_ERROR;
+        const bool canTaunt =
+            taunt && ai->CanCastSpell(taunt, task.source, 0, nullptr, false, false, false, &castResult);
+        if (canTaunt)
+            castResult = SPELL_CAST_OK;
         // The taunt gate (a taunt-immune boss, a Shade) is read before the row, so the row never says `taunt` for a
         // cast that the gate then refuses.
         const bool gateRefused = canTaunt && TauntRefusedByGate(ai, bot, task.source, taunt);
-        // tank_first (AiPlayerbot.DungeonRunAddTankFirst): the take tick's taunt goes on the add's shared record
-        // (`how=taunt` on its next OnTank) and as its own row. A take that casts nothing says why here; the cast itself
-        // is noted below.
+        // R1: the take's chase lease, written before the chase it excuses (the walk below and the Attack's own chase go
+        // through ChaseTo, which the anchor would clamp short of melee). Only a holding record, an allowed take and a
+        // tank that is not the boss's victim: Hakkar's own tank stays anchored.
+        const bool tankFirstLease = tankFirstHolding &&
+            TankFirstChaseLeaseOk(true, !chaseRefused, task.boss != nullptr && task.boss->GetVictim() == bot);
+        if (tankFirstLease)
+            TankFirstGrantChase(bot, task.source);
+        // The take tick's taunt goes on the add's shared record (`how=taunt` on its next settle) and as its own row. A
+        // take that casts nothing says why here; the cast itself is noted below.
         const std::string takeSrc = SeekTakeSrcWord(task.takeSrc, edgeTake);
         if (!canTaunt || gateRefused)
         {
-            // The why reads auras and cooldowns, so it is built only where the hold could use it: off-key or off a
-            // tank_first map the take row is not written at all.
+            // The why reads auras, cooldowns and the cast result, so it is built only where the row could use it:
+            // off-key or off a tank_first map the take row is not written at all.
+            char takeWhyBuffer[16];
             const char* takeWhy = "";
-            if (sPlayerbotAIConfig.dungeonRunAddTankFirst && GetBossTactics().HasTankFirstMap(bot->GetMapId()))
-                takeWhy = TankFirstTauntWhy(ai, bot, taunt, gateRefused);
+            if (tankFirstTake)
+                takeWhy = TankFirstTauntWhyNow(ai, bot, taunt, gateRefused, castResult, tankFirstLease, takeWhyBuffer,
+                                               sizeof(takeWhyBuffer));
             BossTankFirstNoteTake(ai, bot, task.source, takeSrc.c_str(), false, takeWhy);
+            // R4: the stance refusal is a cast of its own, and the taunt goes next tick. R2: an out-of-range or
+            // out-of-sight taunt walks to the Son (ChaseTo paths a lost sight the same way, and the lease keeps it off
+            // the anchor), and the tick is spent.
+            if (tankFirstHolding && std::strcmp(takeWhy, "stance") == 0 && TankFirstTakeForm(ai, bot))
+                return true;
+            if (tankFirstHolding && std::strcmp(takeWhy, "walk") == 0)
+                return ChaseTo(task.source, ATTACK_DISTANCE - 1.0f);
         }
         // A cap-guarded take (DungeonRunSeekNearestTakeReach: `nearest_reach`, `healer_clock`) is latched only once it
         // really starts (the attack or chase command went out, the tank is already after it, or the taunt cast), and a
@@ -12629,6 +12763,15 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
                     SeekReliefTakeRollback(bot, task.source, task.pickMs);
             }
             return false;
+        }
+        // R2: the taunt needs the Son in front (the core's facing check), and a chasing tank is moving. The stop comes
+        // before the forced turn, so the stop's spline cannot undo the facing, and the taunt goes out this same tick.
+        if (tankFirstHolding &&
+            !sServerFacade.isInFront(bot, task.source, sPlayerbotAIConfig.sightDistance, CAST_ANGLE_IN_FRONT))
+        {
+            if (!bot->IsStopped())
+                ai->StopMoving();
+            sServerFacade.SetFacingTo(bot, task.source, true);
         }
         // The Son's victim is read before the cast: the taunt's own effect may already hand the Son to this tank, and
         // `from=` names the tank the Son was taken off.

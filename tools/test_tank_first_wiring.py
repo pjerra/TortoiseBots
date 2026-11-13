@@ -71,13 +71,19 @@ class TankFirstWiring(unittest.TestCase):
         self.assertLess(index_in(read, "std::lock_guard<std::mutex> lock(g_tankFirstMutex);"),
                         index_in(read, "WorldTimer::getMSTime()"))
 
-    def test_the_ages_never_wrap(self):
-        # A read's clock sample can predate a stamp another thread wrote, so every age clamps (TankFirstAgeMs).
+    def test_the_ages_survive_the_clock_wrap(self):
+        # Two hazards: a read's clock sample can predate a stamp another thread wrote, and any stamp can predate the
+        # clock's ~49.7-day wrap. The age is the modulo difference (WorldTimer::getMSTimeDiff's arithmetic) and a stamp
+        # newer than the read clamps to 0.
         self.assertIn("inline std::uint32_t TankFirstAgeMs(std::uint32_t nowMs, std::uint32_t stampMs)", POLICY)
-        self.assertIn("return nowMs < stampMs ? 0 : nowMs - stampMs;", POLICY)
+        self.assertIn("const std::uint32_t age = nowMs - stampMs;", POLICY)
+        self.assertIn("return age > UINT32_MAX / 2 ? 0 : age;", POLICY)
         for raw in ("now - record.", "nowMs - r.", "nowMs - it->second"):
             self.assertNotIn(raw, POLICY)
-        self.assertIn("TankFirstAgeMs(now, record.tankSinceMs) >= rules.dwellMs", POLICY)
+        self.assertIn("record.tankMs += elapsed;", POLICY)
+        self.assertIn("record.tankMs >= rules.dwellMs", POLICY)
+        self.assertIn("TankFirstAgeMs(now, record.nonTankSinceMs) >= kTankFirstFlipMs", POLICY)
+        self.assertIn("rules.capMs + rules.dwellMs", POLICY)
         self.assertIn("TankFirstAgeMs(now, record.episodeMs) >= rules.capMs", POLICY)
         self.assertIn("TankFirstAgeMs(nowMs, r.tickMs) >= kTankFirstTickMs", POLICY)
         self.assertIn("return TankFirstAgeMs(nowMs, seenMs) > kTankFirstStaleMs;", POLICY)
@@ -175,18 +181,72 @@ class TankFirstWiring(unittest.TestCase):
         note = take.index("BossTankFirstNoteTake(ai, bot, task.source, takeSrc.c_str(), cast")
         cast = take.index("const bool cast = ai->CastSpell(taunt, task.source);")
         self.assertLess(cast, note)
-        # ... and before the cast, the take that will cast nothing says why (the gate's, the tank's own refusal). The
-        # why reads auras and cooldowns, so it is built only after the key and the map flag.
-        self.assertIn("TankFirstTauntWhy(ai, bot, taunt, gateRefused)", take)
-        self.assertLess(index_in(take, "sPlayerbotAIConfig.dungeonRunAddTankFirst && "
-                                       "GetBossTactics().HasTankFirstMap(bot->GetMapId())"),
-                        index_in(take, "TankFirstTauntWhy(ai, bot, taunt, gateRefused)"))
-        self.assertIn('return "gate";', body(ACTIONS, "const char* TankFirstTauntWhy("))
-        self.assertIn('return "no_taunt";', body(ACTIONS, "const char* TankFirstTauntWhy("))
-        self.assertIn('return "control";', body(ACTIONS, "const char* TankFirstTauntWhy("))
-        self.assertIn('return "stance";', body(ACTIONS, "const char* TankFirstTauntWhy("))
-        self.assertIn('return "cooldown";', body(ACTIONS, "const char* TankFirstTauntWhy("))
-        self.assertIn('return "range";', body(ACTIONS, "const char* TankFirstTauntWhy("))
+        # ... and before the cast, the take that will cast nothing says why (the gate's, the tank's own refusal, the
+        # cast result). The why reads auras, cooldowns and the result, so it is built only after the key and the map
+        # flag.
+        self.assertIn("TankFirstTauntWhyNow(ai, bot, taunt, gateRefused, castResult, tankFirstLease", take)
+        self.assertLess(index_in(take, "const bool tankFirstTake = sPlayerbotAIConfig.dungeonRunAddTankFirst"),
+                        index_in(take, "TankFirstTauntWhyNow(ai, bot, taunt, gateRefused, castResult, tankFirstLease"))
+        why = body(ACTIONS, "const char* TankFirstTauntWhyNow(")
+        self.assertIn('return "gate";', why)
+        self.assertIn('return "no_taunt";', why)
+        self.assertIn('return "control";', why)
+        self.assertIn('return "stance";', why)
+        self.assertIn("TankFirstTauntWhyOf(static_cast<int>(result), leased, spellCooldown)", why)
+        self.assertIn('snprintf(noWord, noWordSize, "res=%d", static_cast<int>(result));', why)
+        # R4: the stance refusal is a cast of its own, the taunt's next tick; R2: an out-of-range or out-of-sight taunt
+        # with the lease walks (or paths), the tick spent.
+        self.assertIn('std::strcmp(takeWhy, "stance") == 0 && TankFirstTakeForm(ai, bot)', take)
+        self.assertIn('std::strcmp(takeWhy, "walk") == 0', take)
+        self.assertIn("return ChaseTo(task.source, ATTACK_DISTANCE - 1.0f);", take)
+        form = body(ACTIONS, "bool TankFirstTakeForm(")
+        self.assertIn('ai->CastSpell("defensive stance", bot)', form)
+        self.assertIn('ai->CastSpell("bear form", bot) || ai->CastSpell("dire bear form", bot)', form)
+        # R2: the cast in reach stops and turns first (the core's facing check), before the taunt goes out.
+        stop = take.index("ai->StopMoving();", take.index("R2: the taunt needs the Son in front"))
+        face = take.index("sServerFacade.SetFacingTo(bot, task.source, true);", take.index("R2: the taunt needs the Son in front"))
+        self.assertLess(stop, face)
+        self.assertLess(face, cast)
+
+    def test_the_lease_excuses_the_take_chase(self):
+        # R1: the take's own read and its lease come before the walk and the Attack's chase, and both the chase gate
+        # and the anchor's refusal read TankFirstChaseExempt beside MeetSonChaseExempt. Hakkar's tank is kept out by the
+        # boss-victim test, which is the pure policy's (TankFirstChaseLeaseOk).
+        take = body(ACTIONS, "bool BossTacticsSeekTankAction::Execute(")
+        holding = take.index("BossTankFirstTakeHolding(ai, bot, task.source)")
+        lease = take.index("TankFirstChaseLeaseOk(true, !chaseRefused,", holding)
+        grant = take.index("TankFirstGrantChase(bot, task.source);", lease)
+        self.assertLess(holding, lease)
+        self.assertLess(lease, grant)
+        self.assertLess(grant, take.index("ChaseTo(task.source, ATTACK_DISTANCE - 1.0f);"))
+        self.assertIn("task.boss != nullptr && task.boss->GetVictim() == bot", take)
+        refusal = body(ACTIONS, "bool ai::BossAnchorRefusesChase(")
+        self.assertIn("if (MeetSonChaseExempt(ai, bot, unit) || TankFirstChaseExempt(bot, unit))", refusal)
+        movement = (ROOT / "ai/playerbot/strategy/actions/MovementActions.cpp").read_text()
+        chase = body(movement, "bool MovementAction::ChaseTo(")
+        self.assertLess(index_in(chase, "MeetSonChaseExempt(ai, bot, chased)"),
+                        index_in(chase, "TankFirstChaseExempt(bot, chased)"))
+        self.assertIn("const bool anchored = LiveBossAnchor(ai, bot, anchor) &&", chase)
+        # The lease file: its own leaf mutex, and the age helper for the lapsed test.
+        grant_body = body(ACTIONS, "void ai::TankFirstGrantChase(")
+        self.assertIn("std::lock_guard<std::mutex> lock(g_tankFirstLeaseMutex);", grant_body)
+        exempt = body(ACTIONS, "bool ai::TankFirstChaseExempt(")
+        self.assertIn("TankFirstChaseLeaseLive(it->second.writtenMs, WorldTimer::getMSTime())", exempt)
+        self.assertIn("g_tankFirstLease.erase(it);", exempt)
+        self.assertIn("bool BossTankFirstTakeHolding(PlayerbotAI* ai, Player* bot, Unit* add);", ACTIONS_H)
+        self.assertIn("void TankFirstGrantChase(Player* bot, Unit* add);", ACTIONS_H)
+        self.assertIn("bool TankFirstChaseExempt(Player* bot, Unit* target);", ACTIONS_H)
+
+    def test_the_tank_advances_the_record(self):
+        # R8: a take, cast or not, advances the add's record (the victim read, the throttle, the row), so a landed
+        # taunt settles without a non-tank's read and without waiting for one.
+        note = body(ACTIONS, "void ai::BossTankFirstNoteTake(")
+        self.assertIn("TankFirstRead(ai, bot, add);", note)
+        holding = body(ACTIONS, "bool ai::BossTankFirstTakeHolding(")
+        self.assertIn("TankFirstRead(ai, bot, add);", holding)
+        self.assertIn("TankFirstPhaseHolds(it->second.record.phase)", holding)
+        # The phase only, never the hold: an override frees the add from damage, not from the take's own walk.
+        self.assertNotIn("TankFirstHolds(", holding)
 
     def test_the_policy_header_names_no_boss(self):
         for needle in ("11357", "14834", "24324"):

@@ -844,9 +844,10 @@ class BossTacticsSql(unittest.TestCase):
         self.assertEqual(1, len(re.findall(r"(?m)^\(309, 14834, '", text)))
 
     def test_hakkar_tank_first_row(self):
-        # 20261113100000_world.sql (r13): no damage on a Son of Hakkar until a tank has been its victim for 3 s, and
-        # again after up to 2 losses; one hold ends after 15 s without a tank. Behind
-        # AiPlayerbot.DungeonRunAddTankFirst (default 0): off, the fight behaves as today.
+        # 20261113100000_world.sql (r13): no damage on a Son of Hakkar until a tank has been its victim, and again after
+        # up to 2 losses; one hold ends after 15 s without a tank. Round 2 (20261113150000_world.sql) moves the dwell
+        # from 3 s to 2 s on the same key. Behind AiPlayerbot.DungeonRunAddTankFirst (default 0): off, the fight behaves
+        # as today.
         name = "20261113100000_world.sql"
         path = os.path.join(ROOT, "data/sql/world", name)
         self.assertTrue(os.path.isfile(path), "the tank_first migration is missing")
@@ -855,7 +856,7 @@ class BossTacticsSql(unittest.TestCase):
         row = live.get((309, 14834, "tank_first", 11357, 0))
         self.assertIsNotNone(row, "the Hakkar tank_first row is missing")
         self.assertEqual(name, row["file"], "the tank_first migration owns the row")
-        self.assertEqual((2, 3.0, 15.0, "", 0, 0.0, 0, 100),
+        self.assertEqual((2, 2.0, 15.0, "", 0, 0.0, 0, 100),
                          (row["priority"], row["param"], row["window_s"], row["tactic_mode"],
                           row["cycle_spell"], row["cycle_s"], row["hp_min"], row["hp_max"]),
                          "the Hakkar tank_first row drifted")
@@ -866,6 +867,26 @@ class BossTacticsSql(unittest.TestCase):
                       "AND `kind` = 'tank_first' AND `target_entry` = 11357 AND `spell_id` = 0 "
                       "AND `hp_min` = 0 AND `hp_max` = 100;", text)
         self.assertEqual(1, len(re.findall(r"(?m)^\(309, 14834, '", text)))
+        # Round 2's own migration moves the dwell to 2 s, keyed exactly like the row above, and its rollback puts 3 s
+        # back. An edit of the applied 20261113100000 file would move the value without one.
+        round2 = "20261113150000_world.sql"
+        round2_path = os.path.join(ROOT, "data/sql/world", round2)
+        self.assertTrue(os.path.isfile(round2_path), "the round-2 dwell migration is missing")
+        self.assertGreater(round2, name)
+        with open(round2_path, encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("UPDATE `ai_boss_tactic` SET `param` = 2,", text)
+        self.assertIn("WHERE `map` = 309 AND `boss_entry` = 14834 AND `kind` = 'tank_first' "
+                      "AND `target_entry` = 11357 AND `spell_id` = 0 AND `hp_min` = 0 AND `hp_max` = 100;", text)
+        self.assertNotIn("DELETE FROM", text)
+        rollback2 = os.path.join(ROOT, "tools/sql/rollback/20261113150000_world.rollback.sql")
+        self.assertTrue(os.path.isfile(rollback2), "the round-2 dwell rollback is missing")
+        with open(rollback2, encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("UPDATE `ai_boss_tactic` SET `param` = 3,", text)
+        self.assertIn("WHERE `map` = 309 AND `boss_entry` = 14834 AND `kind` = 'tank_first' "
+                      "AND `target_entry` = 11357 AND `spell_id` = 0 AND `hp_min` = 0 AND `hp_max` = 100;", text)
+        self.assertNotIn("INSERT INTO", text)
         # The row is Hakkar's alone: no other boss, add or map carries a tank_first row (Onyxia's whelps and Hatchers
         # must never get one), and the rollback deletes the same key.
         others = [key for key in live if key[2] == "tank_first" and key != (309, 14834, "tank_first", 11357, 0)]

@@ -43,6 +43,9 @@ TankFirstIn In(TankFirstVictim victim, std::uint64_t guid, float hp, std::uint32
 // The Hakkar row (D15): a 3 s dwell, a 15 s cap, 2 losses.
 const TankFirstRules kRow = Rules(3000, 15000, 2);
 
+// The walk's row after round 2 (R6): a 2 s dwell, the same 15 s cap and 2 losses.
+const TankFirstRules kRow2 = Rules(2000, 15000, 2);
+
 // A record that is already in `burn`: a non-tank had it, a tank held it for the dwell at t = 1000.
 void ToBurn(TankFirstRecord& r, std::uint32_t dwellStart)
 {
@@ -138,7 +141,7 @@ int main()
     }
 
     // TestBrokenDwellKeepsEpisodeClock: a dwell that falls back to a non-tank does not restart the episode, so the cap
-    // still ends 15 s after the first sighting.
+    // still ends 15 s after the first sighting. A fall back needs kTankFirstFlipMs of non-tank reads in a row (R6).
     //   Old code: none (no dwell exists).
     //   Mutation caught: `episodeMs = now` on the fall back (the hold could never end).
     {
@@ -146,15 +149,17 @@ int main()
         CHECK(TankFirstTick(r, kRow, In(TankFirstVictim::NonTank, 11, 100.0f, 0)).event == TankFirstEvent::Arm);
         CHECK(TankFirstTick(r, kRow, In(TankFirstVictim::Tank, 21, 100.0f, 10000)).event == TankFirstEvent::OnTank);
         CHECK(r.phase == TankFirstPhase::Dwell);
-        // The tank loses it before the dwell: back to wait, and still held.
-        const TankFirstOut back = TankFirstTick(r, kRow, In(TankFirstVictim::NonTank, 12, 100.0f, 12000));
+        // The tank loses it before the dwell: the first non-tank read still keeps the dwell (a blip between reads) ...
+        CHECK(TankFirstTick(r, kRow, In(TankFirstVictim::NonTank, 12, 100.0f, 12000)).event == TankFirstEvent::None);
+        CHECK(r.phase == TankFirstPhase::Dwell);
+        CHECK(TankFirstHolds(r, nullptr));
+        // ... and 1000 ms of them in a row fall it back to where it came from, still held.
+        const TankFirstOut back = TankFirstTick(r, kRow, In(TankFirstVictim::NonTank, 12, 100.0f, 13000));
         CHECK(back.event == TankFirstEvent::None);
         CHECK(r.phase == TankFirstPhase::Wait);
         CHECK(TankFirstHolds(r, nullptr));
         CHECK(r.episodeMs == 0); // the first sighting's clock
-        // A tank again: a new dwell, from 13000 (it would settle at 16000).
-        CHECK(TankFirstTick(r, kRow, In(TankFirstVictim::Tank, 21, 100.0f, 13000)).event == TankFirstEvent::OnTank);
-        const TankFirstOut out = TankFirstTick(r, kRow, In(TankFirstVictim::Tank, 21, 100.0f, 15000));
+        const TankFirstOut out = TankFirstTick(r, kRow, In(TankFirstVictim::NonTank, 12, 100.0f, 15000));
         CHECK(out.event == TankFirstEvent::Release);
         CHECK(std::string(out.why) == "cap");
         CHECK(r.phase == TankFirstPhase::Open);
@@ -232,10 +237,12 @@ int main()
         CHECK(r.losses == 1);
     }
 
-    // TestUnknownVictim: no victim neither completes nor breaks the dwell and opens no loss, and the dwell runs on
-    // across a tank change.
+    // TestUnknownVictimPausesTheDwell: no victim adds no tank time, so the dwell pauses: the unknown read neither
+    // completes nor breaks the dwell and opens no loss. A run bridged by unknown reads does not settle early; a
+    // known-tank run still settles, and a tank change keeps the dwell.
     //   Old code: none.
-    //   Mutation caught: None treated as NonTank (the dwell breaks and a burn loses).
+    //   Mutations caught: an unknown read credited to the dwell (the paused run settles at 4100); None treated as
+    //   NonTank (the dwell breaks and the take loses).
     {
         TankFirstRecord r;
         CHECK(TankFirstTick(r, kRow, In(TankFirstVictim::NonTank, 11, 100.0f, 0)).event == TankFirstEvent::Arm);
@@ -244,19 +251,44 @@ int main()
         CHECK(out.event == TankFirstEvent::None);
         CHECK(r.phase == TankFirstPhase::Dwell);
         CHECK(r.tankSinceMs == 1000); // not reset
+        CHECK(r.tankMs == 0);         // and the unknown read credited nothing
         CHECK(TankFirstHolds(r, nullptr));
-        // Tank A -> tank B keeps the dwell.
+        // Tank A -> tank B keeps the dwell, and B's first read credits only its own interval.
         out = TankFirstTick(r, kRow, In(TankFirstVictim::Tank, 22, 100.0f, 2500));
         CHECK(out.event == TankFirstEvent::None);
         CHECK(r.phase == TankFirstPhase::Dwell);
         CHECK(r.tank == 22);
         CHECK(r.tankSinceMs == 1000);
-        CHECK(TankFirstTick(r, kRow, In(TankFirstVictim::Tank, 22, 100.0f, 4000)).event == TankFirstEvent::Settled);
+        CHECK(r.tankMs == 500);
+        CHECK(TankFirstTick(r, kRow, In(TankFirstVictim::Tank, 22, 100.0f, 4000)).event == TankFirstEvent::None);
+        CHECK(r.tankMs == 2000);
+        CHECK(TankFirstTick(r, kRow, In(TankFirstVictim::Tank, 22, 100.0f, 5000)).event == TankFirstEvent::Settled);
         // No victim in a burn opens no loss.
-        out = TankFirstTick(r, kRow, In(TankFirstVictim::None, 0, 60.0f, 5000));
+        out = TankFirstTick(r, kRow, In(TankFirstVictim::None, 0, 60.0f, 6000));
         CHECK(out.event == TankFirstEvent::None);
         CHECK(r.phase == TankFirstPhase::Burn);
         CHECK(r.losses == 0);
+        // Two seconds of unknown reads after one second of tank time leave 1 s of the 3 s dwell: the pause holds the
+        // dwell up, and only the tank's own further reads settle it.
+        TankFirstRecord n;
+        CHECK(TankFirstTick(n, kRow, In(TankFirstVictim::NonTank, 11, 100.0f, 0)).event == TankFirstEvent::Arm);
+        CHECK(TankFirstTick(n, kRow, In(TankFirstVictim::Tank, 21, 100.0f, 1000)).event == TankFirstEvent::OnTank);
+        CHECK(TankFirstTick(n, kRow, In(TankFirstVictim::Tank, 21, 100.0f, 2000)).event == TankFirstEvent::None);
+        CHECK(n.tankMs == 1000);
+        out = TankFirstTick(n, kRow, In(TankFirstVictim::None, 0, 100.0f, 4000));
+        CHECK(out.event == TankFirstEvent::None);
+        CHECK(n.phase == TankFirstPhase::Dwell);
+        CHECK(n.tankMs == 1000);
+        out = TankFirstTick(n, kRow, In(TankFirstVictim::Tank, 21, 100.0f, 4100));
+        CHECK(out.event == TankFirstEvent::None); // 1.1 s of tank time in all, short of the 3 s dwell
+        CHECK(n.phase == TankFirstPhase::Dwell);
+        CHECK(n.tankMs == 1100);
+        CHECK(TankFirstTick(n, kRow, In(TankFirstVictim::Tank, 21, 100.0f, 5000)).event == TankFirstEvent::None);
+        CHECK(n.tankMs == 2000);
+        out = TankFirstTick(n, kRow, In(TankFirstVictim::Tank, 21, 100.0f, 6000));
+        CHECK(out.event == TankFirstEvent::Settled);
+        CHECK(n.phase == TankFirstPhase::Burn);
+        CHECK(n.tankMs == 3000);
     }
 
     // TestOverrides: no usable tank frees the add, and so does a seek source inside the last 15 s before its cycle
@@ -319,6 +351,141 @@ int main()
         CHECK(TankFirstTick(r, kRow, In(TankFirstVictim::Tank, 21, 100.0f, 8000)).event == TankFirstEvent::Settled);
     }
 
+    // TestTauntLandingSettles: a taunt by the very tank the add turned to settles without the dwell, from `wait` and
+    // from a running `dwell` (R5).
+    //   Old code: the take casts its taunt and the record still waits out the dwell (the take row said `taunt`, the
+    //   record never heard it), and only a non-tank's read moved it.
+    //   Mutation caught: the tauntBy compare dropped (any tank's taunt would settle).
+    {
+        TankFirstRecord r;
+        CHECK(TankFirstTick(r, kRow2, In(TankFirstVictim::NonTank, 11, 100.0f, 0)).event == TankFirstEvent::Arm);
+        TankFirstNoteTaunt(r, 21, 1000);
+        TankFirstOut out = TankFirstTick(r, kRow2, In(TankFirstVictim::Tank, 21, 100.0f, 1250));
+        CHECK(out.event == TankFirstEvent::Settled);
+        CHECK(r.phase == TankFirstPhase::Burn);
+        CHECK(!TankFirstHolds(r, nullptr));
+        CHECK(std::string(TankFirstHow(r, 21, 1250)) == "taunt");
+        // From a running dwell the same taunt settles at once.
+        TankFirstRecord dwell;
+        CHECK(TankFirstTick(dwell, kRow2, In(TankFirstVictim::NonTank, 11, 100.0f, 0)).event == TankFirstEvent::Arm);
+        CHECK(TankFirstTick(dwell, kRow2, In(TankFirstVictim::Tank, 21, 100.0f, 1000)).event == TankFirstEvent::OnTank);
+        TankFirstNoteTaunt(dwell, 21, 1100);
+        out = TankFirstTick(dwell, kRow2, In(TankFirstVictim::Tank, 21, 100.0f, 1250));
+        CHECK(out.event == TankFirstEvent::Settled);
+        CHECK(dwell.phase == TankFirstPhase::Burn);
+        // Another tank's taunt is no proof: its take still waits out the dwell.
+        TankFirstRecord other;
+        CHECK(TankFirstTick(other, kRow2, In(TankFirstVictim::NonTank, 11, 100.0f, 0)).event == TankFirstEvent::Arm);
+        TankFirstNoteTaunt(other, 22, 1000);
+        out = TankFirstTick(other, kRow2, In(TankFirstVictim::Tank, 21, 100.0f, 1250));
+        CHECK(out.event == TankFirstEvent::OnTank);
+        CHECK(other.phase == TankFirstPhase::Dwell);
+    }
+
+    // TestCumulativeDwell: the dwell sums tank time across a short non-tank blip instead of restarting (R6).
+    //   Old code: the dwell is one continuous stamp; any non-tank read dropped it back to wait.
+    //   Mutation caught: reset tankMs on any non-tank read (the last 0.8 s would fall short).
+    {
+        TankFirstRecord r;
+        CHECK(TankFirstTick(r, kRow2, In(TankFirstVictim::NonTank, 11, 100.0f, 1000)).event == TankFirstEvent::Arm);
+        CHECK(TankFirstTick(r, kRow2, In(TankFirstVictim::Tank, 21, 100.0f, 2000)).event == TankFirstEvent::OnTank);
+        TankFirstOut out = TankFirstTick(r, kRow2, In(TankFirstVictim::Tank, 21, 100.0f, 3200));
+        CHECK(out.event == TankFirstEvent::None);
+        CHECK(r.phase == TankFirstPhase::Dwell);
+        CHECK(r.tankMs == 1200);
+        // 500 ms on a healer: no tank time, and no fall back.
+        out = TankFirstTick(r, kRow2, In(TankFirstVictim::NonTank, 12, 100.0f, 3700));
+        CHECK(out.event == TankFirstEvent::None);
+        CHECK(r.phase == TankFirstPhase::Dwell);
+        CHECK(r.tankMs == 1200);
+        // 0.8 s back on the tank: 2.0 s in all, settled.
+        out = TankFirstTick(r, kRow2, In(TankFirstVictim::Tank, 21, 100.0f, 4500));
+        CHECK(out.event == TankFirstEvent::Settled);
+        CHECK(r.phase == TankFirstPhase::Burn);
+        CHECK(r.tankMs == 2000);
+        CHECK(out.ms == 3500); // the episode from the first sighting at 1000
+    }
+
+    // TestFlipDebounce: a non-tank falls the dwell back at 1000 ms in a row, not at 999 (R6).
+    //   Old code: the first non-tank read fell it back.
+    //   Mutation caught: the flip compare `>=` -> `>`.
+    {
+        TankFirstRecord r;
+        CHECK(TankFirstTick(r, kRow, In(TankFirstVictim::NonTank, 11, 100.0f, 0)).event == TankFirstEvent::Arm);
+        CHECK(TankFirstTick(r, kRow, In(TankFirstVictim::Tank, 21, 100.0f, 1000)).event == TankFirstEvent::OnTank);
+        CHECK(TankFirstTick(r, kRow, In(TankFirstVictim::NonTank, 12, 100.0f, 2000)).event == TankFirstEvent::None);
+        CHECK(TankFirstTick(r, kRow, In(TankFirstVictim::NonTank, 12, 100.0f, 2999)).event == TankFirstEvent::None);
+        CHECK(r.phase == TankFirstPhase::Dwell);
+        CHECK(TankFirstHolds(r, nullptr));
+        CHECK(TankFirstTick(r, kRow, In(TankFirstVictim::NonTank, 12, 100.0f, 3000)).event == TankFirstEvent::None);
+        CHECK(r.phase == TankFirstPhase::Wait);
+        CHECK(TankFirstHolds(r, nullptr));
+    }
+
+    // TestDwellCapExtends: in the dwell the cap is window_s plus the dwell, so a take that lands at 14 s settles at
+    // 16 s instead of ending on the cap at 15 s (R7); the extension still ends the hold at 17 s.
+    //   Old code: the cap released at 15 s from the first sighting, whenever the dwell started.
+    //   Mutation caught: the extension dropped (a `cap` at 15000).
+    {
+        TankFirstRecord r;
+        CHECK(TankFirstTick(r, kRow2, In(TankFirstVictim::NonTank, 11, 100.0f, 0)).event == TankFirstEvent::Arm);
+        CHECK(TankFirstTick(r, kRow2, In(TankFirstVictim::Tank, 21, 100.0f, 14000)).event == TankFirstEvent::OnTank);
+        TankFirstOut out = TankFirstTick(r, kRow2, In(TankFirstVictim::Tank, 21, 100.0f, 15000));
+        CHECK(out.event == TankFirstEvent::None);
+        CHECK(r.phase == TankFirstPhase::Dwell);
+        CHECK(TankFirstHolds(r, nullptr));
+        out = TankFirstTick(r, kRow2, In(TankFirstVictim::Tank, 21, 100.0f, 16000));
+        CHECK(out.event == TankFirstEvent::Settled);
+        CHECK(r.phase == TankFirstPhase::Burn);
+        CHECK(r.heldTotalMs == 16000);
+        // The extension ends at 17 s: a dwell whose blips kept its tank time short releases on the cap.
+        TankFirstRecord late;
+        CHECK(TankFirstTick(late, kRow2, In(TankFirstVictim::NonTank, 11, 100.0f, 0)).event == TankFirstEvent::Arm);
+        CHECK(TankFirstTick(late, kRow2, In(TankFirstVictim::Tank, 21, 100.0f, 14000)).event == TankFirstEvent::OnTank);
+        CHECK(TankFirstTick(late, kRow2, In(TankFirstVictim::NonTank, 12, 100.0f, 14500)).event == TankFirstEvent::None);
+        CHECK(TankFirstTick(late, kRow2, In(TankFirstVictim::NonTank, 12, 100.0f, 15499)).event == TankFirstEvent::None);
+        CHECK(late.phase == TankFirstPhase::Dwell); // the 999 ms blip is no fall back
+        CHECK(TankFirstTick(late, kRow2, In(TankFirstVictim::Tank, 21, 100.0f, 15500)).event == TankFirstEvent::None);
+        CHECK(TankFirstTick(late, kRow2, In(TankFirstVictim::NonTank, 12, 100.0f, 15600)).event == TankFirstEvent::None);
+        CHECK(TankFirstTick(late, kRow2, In(TankFirstVictim::NonTank, 12, 100.0f, 16599)).event == TankFirstEvent::None);
+        CHECK(TankFirstTick(late, kRow2, In(TankFirstVictim::Tank, 21, 100.0f, 16600)).event == TankFirstEvent::None);
+        CHECK(late.tankMs < kRow2.dwellMs);
+        out = TankFirstTick(late, kRow2, In(TankFirstVictim::None, 0, 100.0f, 17000));
+        CHECK(out.event == TankFirstEvent::Release);
+        CHECK(std::string(out.why) == "cap");
+        CHECK(late.phase == TankFirstPhase::Open);
+    }
+
+    // TestChaseLeaseBounds: a lease needs a holding record, an allowed take and a tank that is not the boss's victim,
+    // and it lapses kTankFirstChaseLeaseMs after it was written (R1).
+    //   Old code: none (the take never chased, the anchor held every walk).
+    //   Mutation caught: the boss-victim test dropped (Hakkar's own tank would walk off its circle).
+    {
+        CHECK(!TankFirstChaseLeaseOk(false, true, false)); // the record is not holding
+        CHECK(!TankFirstChaseLeaseOk(true, false, false)); // the take was refused
+        CHECK(!TankFirstChaseLeaseOk(true, true, true));   // the boss's own victim
+        CHECK(TankFirstChaseLeaseOk(true, true, false));
+        CHECK(!TankFirstChaseLeaseLive(0, 5000));          // no lease
+        CHECK(TankFirstChaseLeaseLive(1000, 2500));        // exactly the lease
+        CHECK(!TankFirstChaseLeaseLive(1000, 2501));       // lapsed
+        CHECK(TankFirstChaseLeaseLive(5000, 4000));        // a read sampled before the write never lapses it
+    }
+
+    // TestTauntWhyOfResult: each taunt result maps to its own word (R3).
+    //   Old code: every CanCastSpell false was `range`, a catch-all.
+    //   Mutation caught: LINE_OF_SIGHT mapped to the plain range word.
+    {
+        CHECK(std::string(TankFirstTauntWhyOf(kTankFirstCastOk, false, false)) == "ok");
+        CHECK(std::string(TankFirstTauntWhyOf(kTankFirstCastOutOfRange, true, false)) == "walk");
+        CHECK(std::string(TankFirstTauntWhyOf(kTankFirstCastOutOfRange, false, false)) == "range_refused");
+        CHECK(std::string(TankFirstTauntWhyOf(kTankFirstCastLineOfSight, true, false)) == "walk");
+        CHECK(std::string(TankFirstTauntWhyOf(kTankFirstCastLineOfSight, false, false)) == "los");
+        CHECK(std::string(TankFirstTauntWhyOf(kTankFirstCastNotReady, false, false)) == "gcd");
+        CHECK(std::string(TankFirstTauntWhyOf(kTankFirstCastNotReady, false, true)) == "cooldown");
+        CHECK(std::string(TankFirstTauntWhyOf(kTankFirstCastInProgress, false, false)) == "busy");
+        CHECK(TankFirstTauntWhyOf(55, false, false) == nullptr); // the caller writes res=55
+    }
+
     // TestClockSkew: a stamp another thread wrote while this read waited can be newer than the read's own clock sample.
     //   Old code: none (the record did not exist).
     //   Mutations caught: the raw unsigned age back in any compare (a future tankSince settles, a future episodeMs
@@ -377,6 +544,56 @@ int main()
         CHECK(TankFirstOverrideStarted(nullptr, noTank, TankFirstPhase::Wait) == nullptr);
         // The override coming back after it ended is a new start.
         CHECK(TankFirstOverrideStarted(noTank, nullptr, TankFirstPhase::Lost) == noTank);
+    }
+
+    // TestClockRollover: WorldTimer wraps every ~49.7 days, and a stamp taken just before the wrap with a read just
+    // after it gives the small age between them, so a hold still ends at its cap instead of standing for the next wrap.
+    //   Old code: `nowMs < stampMs ? 0 : nowMs - stampMs` read a post-wrap age as 0 (the wrap looks like a future
+    //   stamp), so a hold, a dwell or a lease written before it never aged again.
+    //   Mutations caught: the old clamp back (age 0 across the wrap, the cap at 14000 never fires); the clamp dropped
+    //   (a post-wrap age reads ~4.3e9 and releases on the spot).
+    {
+        const std::uint32_t before = UINT32_MAX - 999; // 1000 ms before the wrap
+        const std::uint32_t after = 1000;              // 1000 ms after it: the age is 2000, not 0 nor ~4.3e9
+        CHECK(TankFirstAgeMs(after, before) == 2000);
+        CHECK(!TankFirstStale(after, before));
+        CHECK(TankFirstStale(10000, before));
+        // The chase lease across the wrap: live for its 1500 ms, lapsed after.
+        CHECK(TankFirstChaseLeaseLive(before, 500));
+        CHECK(!TankFirstChaseLeaseLive(before, 501));
+        // A hold still ends at its cap: 15000 ms past the episode start, which is 14000 ms after the wrap.
+        TankFirstRecord r;
+        r.armed = true;
+        r.firstMs = before;
+        r.episodeMs = before;
+        r.tickMs = before;
+        r.seenMs = before;
+        r.phase = TankFirstPhase::Wait;
+        TankFirstOut out = TankFirstTick(r, kRow2, In(TankFirstVictim::NonTank, 12, 100.0f, 13000));
+        CHECK(out.event == TankFirstEvent::None);
+        CHECK(r.phase == TankFirstPhase::Wait);
+        CHECK(TankFirstHolds(r, nullptr));
+        out = TankFirstTick(r, kRow2, In(TankFirstVictim::NonTank, 12, 100.0f, 14000));
+        CHECK(out.event == TankFirstEvent::Release);
+        CHECK(std::string(out.why) == "cap");
+        CHECK(out.ms == 15000);
+        CHECK(r.phase == TankFirstPhase::Open);
+        // A dwell that started before the wrap still settles on its tank time after it.
+        TankFirstRecord d;
+        d.armed = true;
+        d.firstMs = before;
+        d.episodeMs = before;
+        d.tickMs = before;
+        d.seenMs = before;
+        d.phase = TankFirstPhase::Dwell;
+        d.dwellFrom = TankFirstPhase::Wait;
+        d.tankSinceMs = before;
+        d.tank = 21;
+        out = TankFirstTick(d, kRow2, In(TankFirstVictim::Tank, 21, 100.0f, 1000));
+        CHECK(out.event == TankFirstEvent::Settled);
+        CHECK(d.phase == TankFirstPhase::Burn);
+        CHECK(d.tankMs == 2000);
+        CHECK(out.ms == 2000);
     }
 
     // The row's own numbers (D15) come out of TankFirstRulesOf.
