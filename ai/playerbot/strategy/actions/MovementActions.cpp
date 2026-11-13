@@ -1615,7 +1615,7 @@ MovementAction::SwimHandoffResult MovementAction::SwimHandoff(const WorldPositio
 }
 
  
- bool MovementAction::MoveTo2(const WorldPosition& endPos, bool idle, bool react, bool noPath, bool ignoreEnemyTargets, PackHoldResult* packHold)
+ bool MovementAction::MoveTo2(const WorldPosition& endPos, bool idle, bool react, bool noPath, bool ignoreEnemyTargets, PackHoldResult* packHold, const char* castCancelSite)
 {
     LastMovement& lastMove = AI_VALUE(LastMovement&, "last movement");
     // A new try: its own fail reason and path type only (the FAILED line's note).
@@ -1841,7 +1841,7 @@ MovementAction::SwimHandoffResult MovementAction::SwimHandoff(const WorldPositio
             bot->SetStandState(UNIT_STAND_STATE_STAND);
 
         if (bot->IsNonMeleeSpellCasted(true, false, true))
-            ai->InterruptSpell(false);
+            ai->InterruptSpell(false, castCancelSite, castCancelSite ? std::sqrt(startPos.sqDistance2d(endPos)) : 0.0f);
     }
 
     if (totalDistance > sPlayerbotAIConfig.reactDistance && !detailedMove)
@@ -2213,9 +2213,9 @@ bool MovementAction::TryPlaceUnstick(LastMovement& lastMove)
     return moved;
 }
 
-bool MovementAction::MoveTo(uint32 mapId, float x, float y, float z, bool idle, bool react, bool noPath, bool ignoreEnemyTargets)
+bool MovementAction::MoveTo(uint32 mapId, float x, float y, float z, bool idle, bool react, bool noPath, bool ignoreEnemyTargets, const char* castCancelSite)
 {
-    return MoveTo2(WorldPosition(mapId, x, y, z), idle, react, noPath, ignoreEnemyTargets);
+    return MoveTo2(WorldPosition(mapId, x, y, z), idle, react, noPath, ignoreEnemyTargets, nullptr, castCancelSite);
 }
 
 

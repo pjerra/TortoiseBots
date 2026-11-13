@@ -504,14 +504,26 @@ void ViscidusCombatAction::Update()
             if ((spell->m_targets.getUnitTargetGuid() == boss->GetObjectGuid() ||
                  AI_VALUE(Unit*, "current target") == boss) &&
                 ViscidusBlocksSpell(ai, spell->m_spellInfo->Id, boss))
-            { ai::LogCastCancel(ai, "viscidus_freeze", type); bot->InterruptSpell(type, false); ai->SetActionDuration(uint32(0)); }
+            {
+                // The core's InterruptSpell(type, false) leaves a delayed cast alone: only a real cancel writes a row.
+                if (spell->getState() != SPELL_STATE_DELAYED)
+                    ai::LogCastCancel(ai, "viscidus_freeze", type);
+                bot->InterruptSpell(type, false);
+                ai->SetActionDuration(uint32(0));
+            }
     Unit* target = Target();
     if (!target || ai->IsHeal(bot) || !isPossible() || InsideViscidusToxin(ai)) return;
     if (target->GetEntry() == 15667 && bot->GetClass() == CLASS_MAGE)
         for (CurrentSpellTypes type : {CURRENT_GENERIC_SPELL, CURRENT_CHANNELED_SPELL})
             if (Spell* spell = bot->GetCurrentSpell(type))
                 if (!IsPositiveSpell(spell->m_spellInfo) && (IsChanneledSpell(spell->m_spellInfo) || GetSpellCastTime(spell->m_spellInfo, bot)))
-                { ai::LogCastCancel(ai, "viscidus_handoff", type); bot->InterruptSpell(type, false); ai->SetActionDuration(uint32(0)); }
+                {
+                    // The core's InterruptSpell(type, false) leaves a delayed cast alone: only a real cancel writes a row.
+                    if (spell->getState() != SPELL_STATE_DELAYED)
+                        ai::LogCastCancel(ai, "viscidus_handoff", type);
+                    bot->InterruptSpell(type, false);
+                    ai->SetActionDuration(uint32(0));
+                }
     bool change = AI_VALUE(Unit*, "current target") != target || bot->GetVictim() != target;
     if (!change) return;
     // Prompt target selection only: movement/casting remain engine actions.

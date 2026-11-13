@@ -122,12 +122,43 @@ class CastCancelWiring(unittest.TestCase):
         # The 6 s cut: one row per slot CastStop really drops.
         self.assertIn('ai::LogCastCancelStop(ai, "spread_cut", SlotWalkYd(bot, task));', fn)
         self.assertLess(fn.index('"spread_cut"'), fn.index("bot->CastStop()"))
-        # The walk: its own interrupt carries the walk's site, so the row names the slot really dropped and MoveTo's
-        # own pass (which would log under `ai`) finds nothing live. One real cancel, one row.
-        self.assertIn('ai->InterruptSpell(false, "spread_slot", SlotWalkYd(bot, task));', fn)
-        self.assertLess(fn.index('"spread_slot"'), fn.index("MoveTo(bot->GetMapId(), task.x, task.y, task.z"))
+        # The walk names itself at MoveTo's own interrupt, which runs only after a real path exists, so the action
+        # never cancels on its own: a bot already at the slot and a move that paths nowhere write nothing and drop
+        # nothing. One real cancel, one row.
+        self.assertIn(
+            'MoveTo(bot->GetMapId(), task.x, task.y, task.z, false, false, false, true, "spread_slot")', fn)
+        self.assertNotIn("InterruptSpell", fn)
         # No per-tick slot read just to gate the diagnostic: the key is read before the first slot inside the row.
         self.assertNotIn("IsNonMeleeSpellCasted", fn)
+
+    def test_the_movement_interrupt_names_the_walk_and_its_distance(self):
+        # MoveTo2's own interrupt is the one real cancel; it runs after the path is non-empty, and a caller that
+        # names the walk gets its row with the distance the walk takes the bot. Every other caller keeps site `ai`
+        # and no distance.
+        movement = (ROOT / "ai/playerbot/strategy/actions/MovementActions.cpp").read_text()
+        fn = body(movement, "bool MovementAction::MoveTo2(const WorldPosition& endPos, bool idle, bool react, "
+                            "bool noPath, bool ignoreEnemyTargets, PackHoldResult* packHold, "
+                            "const char* castCancelSite)")
+        self.assertIn("ai->InterruptSpell(false, castCancelSite, castCancelSite ? std::sqrt(startPos.sqDistance2d(endPos)) : 0.0f);",
+                      fn)
+        self.assertLess(fn.index("MOVE_FAIL_CLIPPED_EMPTY"), fn.index("InterruptSpell(false, castCancelSite"))
+
+    def test_a_cancel_that_skips_a_delayed_cast_writes_no_row(self):
+        # InterruptSpell(type, false) leaves a cast in the delayed state to land, so these sites check the state
+        # before the row: only a real cancel is named, and it is named just before the interrupt.
+        viscidus = (ROOT / "ai/playerbot/strategy/actions/ViscidusActions.cpp").read_text()
+        self.assertIn(
+            'if (spell->getState() != SPELL_STATE_DELAYED)\n'
+            '                    ai::LogCastCancel(ai, "viscidus_freeze", type);\n'
+            '                bot->InterruptSpell(type, false);', viscidus)
+        self.assertIn(
+            'if (spell->getState() != SPELL_STATE_DELAYED)\n'
+            '                        ai::LogCastCancel(ai, "viscidus_handoff", type);\n'
+            '                    bot->InterruptSpell(type, false);', viscidus)
+        fankriss = (ROOT / "ai/playerbot/strategy/actions/FankrissFocusActions.cpp").read_text()
+        self.assertIn(
+            'if(spell->getState()!=SPELL_STATE_DELAYED)ai::LogCastCancel(ai,"fankriss",type);'
+            'bot->InterruptSpell(type,false);', fankriss)
 
     def test_the_seek_walkout_interrupts_log(self):
         self.assertIn('ai::LogCastCancelNonMelee(ai, "seek_shot", false);', ACTIONS)

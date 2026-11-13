@@ -10673,12 +10673,10 @@ bool BossTacticsSpreadSlotAction::Execute(Event& event)
     if (hasLast && !bot->IsStopped() && !bot->movespline->Finalized() && std::fabs(lastX - task.x) < 1.0f &&
         std::fabs(lastY - task.y) < 1.0f)
         return true;
-    // The walk's own interrupt: MoveTo breaks a cast to step to the slot, which is how a healer's heal or a caster's
-    // spell dies between the spread steps. The interrupt is taken here under the walk's site, so a slot really
-    // dropped writes exactly one row (MoveTo's own pass then finds nothing live) and a refused move writes none. No
-    // slot is read to decide whether to log: the read is the interrupt's own, and the row gates on the key first.
-    ai->InterruptSpell(false, "spread_slot", SlotWalkYd(bot, task));
-    if (!MoveTo(bot->GetMapId(), task.x, task.y, task.z, false, false, false, true))
+    // The walk's own cancel: MoveTo breaks a cast only once it has a path, which is how a healer's heal or a caster's
+    // spell dies between the spread steps. Naming the walk at that interrupt keeps one row per real cancel: a bot
+    // already at the slot and a move that paths nowhere drop nothing and write nothing.
+    if (!MoveTo(bot->GetMapId(), task.x, task.y, task.z, false, false, false, true, "spread_slot"))
     {
         hasLast = false;
         LogBossSpread(ai, bot, "move_failed", task.slot, task.slotYd, task.fallback, nullptr, true);

@@ -55,9 +55,9 @@ namespace ai
         bool MoveNear(uint32 mapId, float x, float y, float z, float distance = sPlayerbotAIConfig.contactDistance);
         bool FlyDirect(const WorldPosition &startPosition,  const WorldPosition &endPosition , WorldPosition& movePosition, TravelPath movePath);
 
-        inline bool MoveTo(const WorldLocation& location, bool idle = false, bool react = false, bool noPath = false, bool ignoreEnemyTargets = false)
+        inline bool MoveTo(const WorldLocation& location, bool idle = false, bool react = false, bool noPath = false, bool ignoreEnemyTargets = false, const char* castCancelSite = nullptr)
         {
-           return MoveTo(location.mapId, location.x, location.y, location.z, idle, react, noPath, ignoreEnemyTargets);
+           return MoveTo(location.mapId, location.x, location.y, location.z, idle, react, noPath, ignoreEnemyTargets, castCancelSite);
         }
 
         static bool UseTaxi(PlayerbotAI* ai, uint32 entry = 0, bool needNpc = true);
@@ -97,9 +97,9 @@ namespace ai
 
         // packHold non-null: the route also ends just outside the aggro radius of the first
         // unpulled hostile creature on it (dungeon hold-before-pack follow); see ClipPath.
-        bool MoveTo2(const WorldPosition& endPos, bool idle = false, bool react = false, bool noPath = false, bool ignoreEnemyTargets = false, PackHoldResult* packHold = nullptr);
+        bool MoveTo2(const WorldPosition& endPos, bool idle = false, bool react = false, bool noPath = false, bool ignoreEnemyTargets = false, PackHoldResult* packHold = nullptr, const char* castCancelSite = nullptr);
 
-        bool MoveTo(uint32 mapId, float x, float y, float z, bool idle = false, bool react = false, bool noPath = false, bool ignoreEnemyTargets = false);
+        bool MoveTo(uint32 mapId, float x, float y, float z, bool idle = false, bool react = false, bool noPath = false, bool ignoreEnemyTargets = false, const char* castCancelSite = nullptr);
         bool MoveTo(Unit* target, float distance = 0.0f);
         bool MoveNear(WorldObject* target, float distance = sPlayerbotAIConfig.contactDistance);
         // One checked step on land (LandWalkPolicy.h): asks the core for a real
