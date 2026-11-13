@@ -9,6 +9,10 @@
 //   burn  -- a non-tank is the victim, above 20 % and budget left -> lost (a new episode)
 //   wait/dwell/lost -- the episode is window_s old ---------------> open (for good)
 //
+// The dwell is the tank time the record has seen (R6): a tank's ticks sum it up, a non-tank's ticks neither add to nor
+// (for up to kTankFirstFlipMs in a row) break it, and a landed taunt by that very tank settles at once (R5). In the
+// dwell the cap is the row's window plus the dwell (R7), so a take that lands late still settles.
+//
 // The episode clock starts at the first sighting (wait) or at the loss (lost) and one episode never holds longer than
 // the row's window_s. A dwell that falls back does not restart it. A victim that is no victim at all (a stun, a swap
 // between two reads) neither completes nor breaks the dwell and opens no loss. Two releases override the phase each
@@ -24,11 +28,22 @@ namespace ai
 {
     constexpr float kTankFirstLossMinHpPct = 20.0f;        // a loss at or under this health opens no hold
     constexpr std::uint32_t kTankFirstTauntHowMs = 2000;   // a taunt this recent makes the take `how=taunt`
+    constexpr std::uint32_t kTankFirstFlipMs = 1000;       // a non-tank falls the dwell back only after this long in a row
+    constexpr std::uint32_t kTankFirstChaseLeaseMs = 1500; // a take's chase of a held add is excused this long
     constexpr std::uint32_t kTankFirstTickMs = 250;        // the record advances at most this often
     constexpr std::uint32_t kTankFirstStaleMs = 10000;     // a record nobody read this long is dropped
     constexpr std::uint32_t kTankFirstPruneMs = 600000;    // an instance nobody read this long is gone (map unload)
     constexpr float kTankFirstTankReachYd = 100.0f;        // a tank farther than this is not usable
     constexpr int kTankFirstSiphonMs = 15000;              // a seek source this close to its cycle is free (= kSeekForceMs)
+
+    // The core's SpellCastResult values the take's `why` reads (the taunt's CanCastSpell result), as ints so this
+    // header stays game-free. BossTacticsActions.cpp static_asserts them against SpellDefines.h: a core renumbering is
+    // a compile error there, never a silently wrong log word.
+    constexpr int kTankFirstCastOk = 0xFF;         // SPELL_CAST_OK
+    constexpr int kTankFirstCastLineOfSight = 42;  // SPELL_FAILED_LINE_OF_SIGHT
+    constexpr int kTankFirstCastNotReady = 60;     // SPELL_FAILED_NOT_READY
+    constexpr int kTankFirstCastOutOfRange = 89;   // SPELL_FAILED_OUT_OF_RANGE
+    constexpr int kTankFirstCastInProgress = 97;   // SPELL_FAILED_SPELL_IN_PROGRESS
 
     enum class TankFirstPhase : std::uint8_t
     {
@@ -69,6 +84,8 @@ namespace ai
         std::uint32_t firstMs = 0;      // the first sighting
         std::uint32_t episodeMs = 0;    // the running hold's start
         std::uint32_t tankSinceMs = 0;  // the dwell's start (0: no tank)
+        std::uint32_t tankMs = 0;       // the dwell's tank time, summed across short non-tank blips (R6)
+        std::uint32_t nonTankSinceMs = 0; // the running non-tank streak (0: none), the flip's debounce (R6)
         std::uint32_t settledMs = 0;    // the last burn's start
         std::uint32_t tickMs = 0;       // the last advance
         std::uint32_t seenMs = 0;       // the last read
@@ -122,7 +139,14 @@ namespace ai
             record.phase = TankFirstPhase::Wait;
             out.event = TankFirstEvent::Arm;
         }
+        // The interval since the last advance: the dwell counts it as tank time only when this read's victim is one (or
+        // unknown, which counted on the continuous clock too). A first call has no interval.
+        const std::uint32_t elapsed = first ? 0 : TankFirstAgeMs(now, record.tickMs);
         record.tickMs = now;
+        // R5: a taunt by this very victim within kTankFirstTauntHowMs settles at once. The dwell only exists to prove
+        // the tank can hold the add by threat; a landed taunt is that proof already.
+        const bool tauntVictim = in.victim == TankFirstVictim::Tank && record.tauntBy != 0 &&
+            record.tauntBy == in.victimGuid && TankFirstAgeMs(now, record.tauntMs) <= kTankFirstTauntHowMs;
         switch (record.phase)
         {
             case TankFirstPhase::Open:
@@ -155,7 +179,10 @@ namespace ai
                         record.phase = TankFirstPhase::Lost;
                         record.dwellFrom = TankFirstPhase::Lost;
                         record.episodeMs = now;
+                        // The next dwell counts from zero: the tank time of the burn's dwell is spent.
                         record.tankSinceMs = 0;
+                        record.tankMs = 0;
+                        record.nonTankSinceMs = 0;
                         record.lossIgnoredLogged = false;
                         out.event = TankFirstEvent::Loss;
                         out.ms = TankFirstAgeMs(now, record.settledMs);
@@ -180,15 +207,38 @@ namespace ai
                     record.phase = TankFirstPhase::Dwell;
                     record.tankSinceMs = now;
                     record.tank = in.victimGuid;
-                    out.event = TankFirstEvent::OnTank;
-                    out.ms = TankFirstAgeMs(now, record.episodeMs);
+                    record.tankMs = 0;
+                    record.nonTankSinceMs = 0;
+                    if (tauntVictim)
+                    {
+                        record.heldTotalMs += TankFirstAgeMs(now, record.episodeMs);
+                        record.phase = TankFirstPhase::Burn;
+                        record.settledMs = now;
+                        ++record.settles;
+                        record.lossIgnoredLogged = false;
+                        out.event = TankFirstEvent::Settled;
+                        out.ms = TankFirstAgeMs(now, record.episodeMs);
+                    }
+                    else
+                    {
+                        out.event = TankFirstEvent::OnTank;
+                        out.ms = TankFirstAgeMs(now, record.episodeMs);
+                    }
                 }
                 break;
             case TankFirstPhase::Dwell:
-                if (in.victim == TankFirstVictim::Tank)
+                if (in.victim != TankFirstVictim::NonTank)
                 {
-                    record.tank = in.victimGuid;
-                    if (TankFirstAgeMs(now, record.tankSinceMs) >= rules.dwellMs)
+                    // R6: the dwell is the tank time the record has seen, summed across the short non-tank blips (a
+                    // healer's threat between two reads) instead of restarted by them. A victim that is no victim at
+                    // all counts as it did on the continuous clock, but only a tank's own read completes the dwell.
+                    if (in.victim == TankFirstVictim::Tank)
+                    {
+                        record.tank = in.victimGuid;
+                        record.nonTankSinceMs = 0;
+                    }
+                    record.tankMs += elapsed;
+                    if (in.victim == TankFirstVictim::Tank && (tauntVictim || record.tankMs >= rules.dwellMs))
                     {
                         // The settle is checked before the cap, so a dwell that completes on the cap's tick burns.
                         record.heldTotalMs += TankFirstAgeMs(now, record.episodeMs);
@@ -201,17 +251,29 @@ namespace ai
                         break;
                     }
                 }
-                else if (in.victim == TankFirstVictim::NonTank)
+                else
                 {
-                    // A non-tank took the add back: the phase it came from holds again, and the episode clock is not
-                    // touched.
-                    record.phase = record.dwellFrom;
-                    record.tankSinceMs = 0;
+                    // R6: a non-tank falls the dwell back only after kTankFirstFlipMs in a row; a shorter blip keeps
+                    // it. The episode clock is not touched either way; the next dwell counts from zero.
+                    if (record.nonTankSinceMs == 0)
+                        record.nonTankSinceMs = now;
+                    if (TankFirstAgeMs(now, record.nonTankSinceMs) >= kTankFirstFlipMs)
+                    {
+                        record.phase = record.dwellFrom;
+                        record.tankSinceMs = 0;
+                        record.tankMs = 0;
+                        record.nonTankSinceMs = 0;
+                    }
                 }
                 if (record.phase == TankFirstPhase::Dwell || record.phase == TankFirstPhase::Wait ||
                     record.phase == TankFirstPhase::Lost)
                 {
-                    if (TankFirstAgeMs(now, record.episodeMs) >= rules.capMs)
+                    // R7: a dwell gets its own time on top of the cap (17 s on the row's 2 s and 15 s), so a take that
+                    // lands late settles instead of ending on the cap the moment it starts. Wait and lost keep the
+                    // cap itself, also on the tick a dwell just fell back to one of them.
+                    const std::uint32_t capMs = record.phase == TankFirstPhase::Dwell ? rules.capMs + rules.dwellMs
+                                                                                    : rules.capMs;
+                    if (TankFirstAgeMs(now, record.episodeMs) >= capMs)
                     {
                         record.heldTotalMs += TankFirstAgeMs(now, record.episodeMs);
                         record.phase = TankFirstPhase::Open;
@@ -271,6 +333,37 @@ namespace ai
         if (previousWhy && std::strcmp(previousWhy, overrideWhy) == 0)
             return nullptr;
         return overrideWhy;
+    }
+
+    // R1: whether a take writes a chase lease. Only a holding record, an allowed take (the anchor and the edge check
+    // let the chase through) and a tank that is not the boss's own victim: Hakkar's tank stays anchored.
+    inline bool TankFirstChaseLeaseOk(bool recordHolds, bool takeAllowed, bool bossVictim)
+    {
+        return recordHolds && takeAllowed && !bossVictim;
+    }
+
+    // Whether a lease written at `writtenMs` still excuses the chase (a stamp of 0: no lease). The age clamps, so a
+    // read whose clock sample predates the write is not lapsed.
+    inline bool TankFirstChaseLeaseLive(std::uint32_t writtenMs, std::uint32_t nowMs)
+    {
+        return writtenMs != 0 && TankFirstAgeMs(nowMs, writtenMs) <= kTankFirstChaseLeaseMs;
+    }
+
+    // R3: the `event=taunt` row's `why` of the taunt's own cast result. Null: the result has no word of its own (the
+    // caller writes `res=<n>`). Out of range and out of sight are a walk only while a lease excuses the chase.
+    inline const char* TankFirstTauntWhyOf(int result, bool leased, bool spellCooldown)
+    {
+        if (result == kTankFirstCastOk)
+            return "ok";
+        if (result == kTankFirstCastOutOfRange)
+            return leased ? "walk" : "range_refused";
+        if (result == kTankFirstCastLineOfSight)
+            return leased ? "walk" : "los";
+        if (result == kTankFirstCastNotReady)
+            return spellCooldown ? "cooldown" : "gcd";
+        if (result == kTankFirstCastInProgress)
+            return "busy";
+        return nullptr;
     }
 
     // How a take got the add: `taunt` for a taunt by that tank within kTankFirstTauntHowMs, else `threat`.
