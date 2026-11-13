@@ -1,5 +1,6 @@
 # Changelog
 
+- New: behind `AiPlayerbot.InterruptAllowStun` (default 0, recommended on), a stun counts as an interrupt, so Bash, Hammer of Justice, War Stomp, Repentance and Intercept's triggered stun answer a cast on any target that can actually be stunned even though those spells have no interrupt-cast effect and the victim's cast is not silence-prevented; a stun is never picked for a target immune by spell, effect or mechanic mask, a boss (world boss, the run's plan boss or boss rank, even without the immunity bit), or one already stunned or stun-diminished, and every tank stun row was dead before (Tortoise Trials tank-bear-bash-caster 0/75, tank-paladin-hoj-caster 3/32).
 - Fixed: the "lose aggro" trigger stays quiet while a fresh mob has no victim yet (no flag).
 - Fixed: the AoE taunts re-walk the loose-add count at cast time instead of the cached trigger value, so a shout or roar queued for loose adds stands down once the pack settles onto tanks (no flag).
 - Fixed: the AoE taunts also stand down at cast time. Challenging Shout and Challenging Roar re-check the "loose adds near" count before they fire, so a shout queued for loose adds no longer fires after the pack settles (no flag, no per-mob tank check).
