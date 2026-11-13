@@ -17,6 +17,7 @@ using ai::FormatDeathAttackers;
 using ai::IsDeathAttackerSnapshotFresh;
 using ai::IsHopelessSingleAttacker;
 using ai::LOW_MANA_DRINK_PRIORITY;
+using ai::LowManaDrinkUseful;
 using ai::RestStopHealthPct;
 using ai::ShouldAnswerAttacker;
 using ai::ShouldDrinkAtManaPct;
@@ -61,6 +62,16 @@ int main()
     CHECK(!DrinkOutranksSelfBuffs(21));
     CHECK(LOW_MANA_DRINK_PRIORITY > 28.0f);
     CHECK(LOW_MANA_DRINK_PRIORITY < 30.0f);
+
+    // A druid at 15 % mana with a poisoned party member: the boosted row is
+    // not useful while the cleanse is pending, so abolish poison runs first
+    // and the plain "high mana" drink follows it on the next tick.
+    CHECK(LowManaDrinkUseful(15, false));
+    CHECK(!LowManaDrinkUseful(15, true));
+    CHECK(LowManaDrinkUseful(20, false));
+    CHECK(!LowManaDrinkUseful(20, true));
+    CHECK(!LowManaDrinkUseful(0, true));
+    CHECK(!LowManaDrinkUseful(25, false));
 
     // The restored critical-health flee is pool-only: no real player master.
     CHECK(ShouldFleeAtCriticalHealth(false));

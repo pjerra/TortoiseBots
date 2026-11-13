@@ -38,12 +38,25 @@ namespace ai
     // under ACTION_MOVE (30), so a movement row still wins a moving tick;
     // "should drink" already yields to a moving leader, and every heal row
     // (ACTION_LIGHT_HEAL and up) stays above.
+    //
+    // It also outranks a warlock's life tap (23.0), a documented limit: at
+    // 20 % or less mana the warlock drinks instead of tapping.
     constexpr std::uint32_t LOW_MANA_DRINK_PCT = 20;
     constexpr float LOW_MANA_DRINK_PRIORITY = 28.5f;
 
     inline bool DrinkOutranksSelfBuffs(std::uint32_t manaPct)
     {
         return manaPct <= LOW_MANA_DRINK_PCT;
+    }
+
+    // A party member in reach carrying a debuff this bot's own cure removes
+    // takes the tick back: the cleanse would otherwise queue under the
+    // boosted drink row and wait out the whole meal. The plain "high mana"
+    // drink row still sits below the cleanse, so the drink follows on the
+    // next tick.
+    inline bool LowManaDrinkUseful(std::uint32_t manaPct, bool partyCleansePending)
+    {
+        return DrinkOutranksSelfBuffs(manaPct) && !partyCleansePending;
     }
 
     // Drink stop, the mana analogue of the rest stop above. The drink trigger

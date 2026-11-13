@@ -1,5 +1,6 @@
 # Changelog
 
+- Changed: the low-mana drink now waits while a party member within reach carries a debuff the bot's own cure removes, so the cleanse runs first and the drink follows; a warlock at 20 % mana or less still drinks instead of life-tapping.
 - Fixed: a meal-sleeping bot now wakes at once when neither its Food nor its Drink aura is on it (`.unaura`, or a meal cut short), instead of idling out the rest of the drink's sleep at low mana (tests/tortoise-trials/after-t1113/OPEN-3.md).
 - Changed: at or below 20 % mana the out-of-combat drink outranks the self-buffs (Power Word: Fortitude, Shadow Protection and the rest), so a dry bot refills instead of spending a dozen seconds per buff first.
 - Fixed: a meal-sleeping bot now wakes the moment the meal is broken or its group fights, seated or stood up by damage, so a refill mob that hits the player or healer while the tank drinks no longer goes unanswered until the drink's sleep runs out (up to 13 s, tests/tortoise-trials/paladin-addpickup/WHY.md).

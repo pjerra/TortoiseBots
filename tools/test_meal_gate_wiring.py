@@ -260,6 +260,44 @@ class MealGateWiringTest(unittest.TestCase):
         queued = [("drink", priority), ("power word: fortitude", 11.0), ("shadow protection", 11.0)]
         self.assertEqual("drink", max(queued, key=lambda row: row[1])[0])
 
+    def test_low_mana_drink_yields_to_a_party_cleanse(self):
+        """A druid at 15 % mana with a poisoned party member cleanses, then drinks."""
+        trigger = " ".join(body_after(SRC_GENERIC_TRIGGERS, "bool LowManaDrinkTrigger::IsActive()").split())
+        self.assertIn("LowManaDrinkUseful(", trigger)
+        self.assertIn("PartyCleansePending(", trigger)
+
+        # The cleanse gate reads the cure triggers' own value, not a second
+        # party scan, for every dispel type a party cure of this module
+        # removes.
+        helper = " ".join(body_after(SRC_GENERIC_TRIGGERS, "bool PartyCleansePending(").split())
+        self.assertIn('"party member to dispel"', helper)
+        table = " ".join(span_after(SRC_GENERIC_TRIGGERS, "PartyCureSpell const kPartyCureSpells[]").split())
+        for dispel in ("DISPEL_POISON", "DISPEL_DISEASE", "DISPEL_CURSE", "DISPEL_MAGIC"):
+            self.assertIn(dispel, table)
+        # Only a cure whose spell the bot knows may hold the drink back: a
+        # warrior, or a paladin without Cleanse, still drinks.
+        self.assertIn("HasSpell(", helper)
+
+        # The scenario. The druid's out-of-combat abolish poison row is 20.0
+        # and the plain "high mana" drink row 6.0; the boosted low-mana row is
+        # above both, which is exactly the defect the gate closes.
+        druid = strip_comments((ROOT / "ai/playerbot/strategy/druid/GenericDruidNonCombatStrategy.cpp").read_text())
+        self.assertIn('NextAction("abolish poison on party", 20.0f)', druid)
+        food = " ".join(body_after(SRC_FOOD, "void UseFoodStrategy::InitNonCombatTriggers").split())
+        self.assertIn('"high mana", NextAction::array(0, new NextAction("drink", 6.0f), NULL)', food)
+        boosted = float(re.search(r"LOW_MANA_DRINK_PRIORITY\s*=\s*([0-9.]+)f", SRC_SURVIVE).group(1))
+        self.assertGreater(boosted, 20.0, "a dry druid's drink used to outrank the cleanse")
+        # The gate drops the boosted row while the member is poisoned, so the
+        # cleanse is now the highest useful row; the plain drink follows it.
+        queued = [("abolish poison on party", 20.0), ("drink", 6.0)]
+        self.assertEqual("abolish poison on party", max(queued, key=lambda row: row[1])[0])
+
+        # And the pure rule behind it: at 15 % the drink is wanted, but not
+        # while the cleanse is pending.
+        policy = " ".join(body_after(SRC_SURVIVE, "inline bool LowManaDrinkUseful").split())
+        self.assertIn("DrinkOutranksSelfBuffs(manaPct)", policy)
+        self.assertIn("!partyCleansePending", policy)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -51,6 +51,55 @@ bool HasManaPool(Player* bot)
 {
     return bot && bot->GetMaxPower(POWER_MANA) > 0;
 }
+
+// The party cures this module casts, each with the dispel type its spell
+// removes. The gate is on the spell the bot knows, so a warrior, or a
+// paladin without Cleanse, is never held back from the drink by a debuff it
+// cannot remove. Devour Magic is left out: it is the felhunter's spell (not
+// in the bot's own spell map) and its row already sits above the drink.
+struct PartyCureSpell
+{
+    char const* spell;
+    std::uint32_t type;
+};
+
+PartyCureSpell const kPartyCureSpells[] =
+{
+    { "abolish poison", DISPEL_POISON },
+    { "cure poison", DISPEL_POISON },
+    { "purify", DISPEL_POISON },
+    { "purify", DISPEL_DISEASE },
+    { "cleanse", DISPEL_POISON },
+    { "cleanse", DISPEL_DISEASE },
+    { "cleanse", DISPEL_MAGIC },
+    { "cure disease", DISPEL_DISEASE },
+    { "abolish disease", DISPEL_DISEASE },
+    { "remove lesser curse", DISPEL_CURSE },
+    { "remove curse", DISPEL_CURSE },
+};
+
+// A party member in reach carrying a debuff this bot's cure removes: the
+// cure triggers' own target value, so the drink and the cleanse cannot
+// disagree on who needs curing. Each dispel type is asked once, and only
+// while the bot knows a spell for it.
+bool PartyCleansePending(PlayerbotAI* ai)
+{
+    std::uint32_t askedTypes = 0;
+    for (PartyCureSpell const& cure : kPartyCureSpells)
+    {
+        std::uint32_t const bit = 1u << cure.type;
+        if (askedTypes & bit)
+            continue;
+        if (!ai->HasSpell(cure.spell))
+            continue;
+
+        askedTypes |= bit;
+        Value<Unit*>* target = ai->GetAiObjectContext()->GetValue<Unit*>("party member to dispel", cure.type);
+        if (target && target->Get())
+            return true;
+    }
+    return false;
+}
 }  // namespace
 
 bool NoManaTrigger::IsActive()
@@ -91,8 +140,15 @@ bool HighManaTrigger::IsActive()
 
 bool LowManaDrinkTrigger::IsActive()
 {
-    return HasManaPool(bot) &&
-        ai::DrinkOutranksSelfBuffs(AI_VALUE2(uint8, "mana", "self target"));
+    if (!HasManaPool(bot))
+        return false;
+
+    uint8 const manaPct = AI_VALUE2(uint8, "mana", "self target");
+    // Only a dry bot pays for the cleanse lookup, and the boosted row holds
+    // back while a party cleanse this bot can cast is pending: the cleanse
+    // runs first, the plain "high mana" drink follows it.
+    bool const cleansePending = ai::DrinkOutranksSelfBuffs(manaPct) && PartyCleansePending(ai);
+    return ai::LowManaDrinkUseful(manaPct, cleansePending);
 }
 
 bool ResumeDrinkTrigger::IsActive()
