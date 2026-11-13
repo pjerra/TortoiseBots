@@ -183,7 +183,8 @@ class SeekSonMeetWiring(unittest.TestCase):
         self.assertIn("seek take: %s -> %u victim=%s reason=%s meet=%d src=%s", ACTIONS)
         take = execute()
         take = take[take.index("if (task.take)"):take.index("if (task.pull)")]
-        self.assertIn("const bool canTaunt = taunt && ai->CanCastSpell(taunt, task.source);", take)
+        self.assertIn("const bool canTaunt =\n            taunt && ai->CanCastSpell(taunt, task.source, 0, nullptr, false, false, false, &castResult);",
+                      take)
         self.assertIn("gateRefused ? \"taunt_gated\" : SeekTakeReasonWord(chaseRefused, taunt != nullptr, canTaunt, edgeFar),",
                       take)
         self.assertIn("const std::string takeSrc = SeekTakeSrcWord(task.takeSrc, edgeTake);", take)
@@ -654,11 +655,13 @@ class MeetReceiverExemptWiring(unittest.TestCase):
 
     def test_the_three_hook_sites_skip_only_that_target(self):
         refuses = body(ACTIONS, "bool ai::BossAnchorRefusesChase(PlayerbotAI* ai, Player* bot, Unit* unit, bool raidCircle)")
-        self.assertIn("if (MeetSonChaseExempt(ai, bot, unit))\n        return false;", refuses)
+        self.assertIn("if (MeetSonChaseExempt(ai, bot, unit) || TankFirstChaseExempt(bot, unit))\n        return false;",
+                      refuses)
         move = (ROOT / "ai/playerbot/strategy/actions/MovementActions.cpp").read_text()
         chase = move[move.index("bool MovementAction::ChaseTo(WorldObject* obj, float distance, float angle)"):]
         chase = chase[:chase.index("\n}\n")]
-        hook = "const bool anchored = LiveBossAnchor(ai, bot, anchor) && !(chased && MeetSonChaseExempt(ai, bot, chased));"
+        hook = ("const bool anchored = LiveBossAnchor(ai, bot, anchor) && !(chased && (MeetSonChaseExempt(ai, bot, chased) ||\n"
+                "                                                                        TankFirstChaseExempt(bot, chased)));")
         self.assertIn(hook, chase)
         # The gate and both clamps read that one `anchored`.
         self.assertLess(chase.index(hook), chase.index("!AnchorAllowsChase(anchor, obj->GetPositionX(), obj->GetPositionY(), kBossAnchorChaseReachYd)"))
