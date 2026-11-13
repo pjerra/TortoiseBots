@@ -224,6 +224,29 @@ namespace ai
         float x = 0.0f, y = 0.0f, z = 0.0f;
     };
 
+    // The point the core chase generator is handed: `distance` from the target
+    // at `angle` off the target's facing (TargetedMovementGenerator's
+    // m_fOffset/m_fAngle, the pair ChaseTo passes to MoveChase; the generator
+    // adds the chaser's bounding radius to the offset, so the caller passes
+    // that effective distance). A zero distance is a melee chase: the core
+    // sends the bot to an attack point on the creature itself and ignores the
+    // angle, so the goal is the target's spot. The magma guard must plan
+    // against THIS point: a point derived from the bot's side of the target is
+    // dry while an angled or behind slot at the same distance sits in the lava.
+    inline MagmaPoint ChaseGoalPoint(float targetX, float targetY, float targetOrientation, float distance,
+        float angle)
+    {
+        MagmaPoint goal;
+        goal.x = targetX;
+        goal.y = targetY;
+        if (!(distance > 0.0f))
+            return goal;
+        float const slot = targetOrientation + angle;
+        goal.x = targetX + distance * std::cos(slot);
+        goal.y = targetY + distance * std::sin(slot);
+        return goal;
+    }
+
     // The verdict on a route. `cut` true: it walks into magma after dry
     // ground (MoveTo2 then refuses the whole move and dispatches nothing);
     // `keepPoints`, `addPoint` and `point` say where the dry part ends (the

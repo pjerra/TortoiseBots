@@ -251,13 +251,29 @@ class MagmaGuardWiringTest(unittest.TestCase):
 
     def test_chase_holds_out_of_magma(self):
         f = body(MOVES, "bool MovementAction::ChaseTo(", "\n}\n")
-        hold = at(f, "if (HoldChaseOutOfMagma(obj, distance))")
+        # The angle MoveChase is handed is final before the guard plans the
+        # goal (the behind strategy replaces it), so the guard checks the slot
+        # the core chase walks to, not a radial point on the bot's side.
+        behind = at(f, 'if (ai->HasStrategy("behind", BotState::BOT_STATE_COMBAT))')
+        clamp = at(f, "if (angle > 20)")
+        hold = at(f, "if (HoldChaseOutOfMagma(obj, distance, angle))")
         far = at(f, "if (distanceToTarget > sPlayerbotAIConfig.sightDistance")
-        self.assertLess(hold, far)
+        # After the far/out-of-sight hand-off (a MoveTo to the target itself,
+        # guarded by MoveTo), before the point move and core chase.
+        self.assertLess(behind, hold)
+        self.assertLess(clamp, hold)
+        self.assertLess(far, hold)
+        # One angle clamp, before the guard: no later replacement between the
+        # guarded goal and the MoveChase dispatch.
+        self.assertEqual(f.count("angle > 20"), 1)
+        self.assertEqual(f.count("angle = 0"), 1)
         g = body(MOVES, "bool MovementAction::HoldChaseOutOfMagma(", "\n}\n")
-        goal = at(g, "CreatureAuraChaseGoal(bot->GetPositionX(), bot->GetPositionY(),")
+        goal = at(g, "ai::ChaseGoalPoint(target->GetPositionX(), target->GetPositionY(),")
         check = at(g, "if (!SlotGoesIntoMagma(bot, goal, magmaAt))")
         self.assertLess(goal, check)
+        self.assertIn("target->GetOrientation(), slotDistance, angle);", g)
+        self.assertIn("distance + bot->GetObjectBoundingRadius()", g)
+        self.assertNotIn("CreatureAuraChaseGoal", g)
         self.assertIn("ai->StopMoving();", g)
         # Lava kills a tank too: no tank pass on this hold.
         self.assertNotIn("IsTank", g)

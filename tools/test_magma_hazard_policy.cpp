@@ -16,6 +16,7 @@
 } while (0)
 
 using ai::ClassifyLiquidHazard;
+using ai::ChaseGoalPoint;
 using ai::CutPathBeforeMagma;
 using ai::FollowSlotHolds;
 using ai::IsMagmaHazard;
@@ -406,6 +407,33 @@ int main()
         CHECK(!FollowSlotHolds(false, true, true));  // the guard does not apply on this map
         CHECK(!FollowSlotHolds(true, false, false)); // a dry slot with a dry route: follow normally
         std::cout << "  [PASS] a follow or chase goal in magma holds, or its route into magma\n";
+    }
+
+    // The chase goal is the slot MoveChase is handed: `distance` from the
+    // target at the FINAL angle off the target's facing, not a point on the
+    // bot's side of the target. Target beside lava facing +x, bot to the east:
+    // the radial point toward the bot (what a distance-only goal checked) is
+    // dry, the behind slot at the same distance is in the lava and must hold.
+    {
+        float const pi = std::acos(-1.0f);
+        float const tx = 0.0f, ty = 0.0f, facing = 0.0f, distance = 2.0f;
+        auto lava = [](MagmaPoint const& p) { return p.x < -1.5f; };
+        MagmaPoint const radial = P(tx + distance, ty);  // target -> bot
+        MagmaPoint const behind = ChaseGoalPoint(tx, ty, facing, distance, facing + pi);
+        CHECK(!lava(radial));
+        CHECK(lava(behind));
+        CHECK(std::fabs(behind.x + distance) < 0.01f && std::fabs(behind.y) < 0.01f);
+        CHECK(!FollowSlotHolds(true, lava(radial), false));  // the dry radial point alone clears the guard
+        CHECK(FollowSlotHolds(true, lava(behind), false));   // the slot the core chase walks to holds
+        // The core adds the angle to the target's facing: a target turned half
+        // around with the angle caller-side lands on the same slot.
+        MagmaPoint const turned = ChaseGoalPoint(tx, ty, facing + pi, distance, facing);
+        CHECK(std::fabs(turned.x - behind.x) < 0.01f && std::fabs(turned.y - behind.y) < 0.01f);
+        // A melee chase (distance 0) sends the bot to the creature itself,
+        // whatever the angle.
+        MagmaPoint const melee = ChaseGoalPoint(tx, ty, facing, 0.0f, facing + pi);
+        CHECK(melee.x == tx && melee.y == ty);
+        std::cout << "  [PASS] the chase guard's goal is the angled MoveChase slot, not a radial point\n";
     }
 
     std::cout << "All magma hazard policy tests passed.\n";

@@ -2611,7 +2611,7 @@ bool MovementAction::HoldFollowOutOfMagma(Unit* target, float distance, float an
     return true;
 }
 
-bool MovementAction::HoldChaseOutOfMagma(WorldObject* target, float distance)
+bool MovementAction::HoldChaseOutOfMagma(WorldObject* target, float distance, float angle)
 {
     // Instance maps only, as above.
     if (!ai::MagmaGuardApplies(bot->GetMap()->IsDungeon()))
@@ -2620,12 +2620,18 @@ bool MovementAction::HoldChaseOutOfMagma(WorldObject* target, float distance)
     // holding a mob, while lava kills a tank exactly as fast as anything else.
     if (WorldPosition(bot).isInMagma())
         return false;
-    // Chase goal: `distance` from the target toward the bot (the target itself
-    // for a melee chase), the point HoldChaseOutsideKeepout plans against.
-    float gx = 0.0f, gy = 0.0f;
-    CreatureAuraChaseGoal(bot->GetPositionX(), bot->GetPositionY(),
-        target->GetPositionX(), target->GetPositionY(), distance, gx, gy);
-    WorldPosition goal(target->GetMapId(), gx, gy, target->GetPositionZ());
+    // Chase goal: the slot MoveChase aims for, `distance` from the target at
+    // `angle` off the target's facing (the target itself for a melee chase),
+    // with the final angle ChaseTo hands to MoveChase. MoveChase places the
+    // point `distance` plus the chaser's bounding radius out
+    // (TargetedMovementGenerator's GetNearPointAroundPosition). Planning
+    // against a point on the bot's side of the target instead cleared a dry
+    // radial goal while the behind slot the core actually walks to sat in the
+    // lava.
+    float const slotDistance = distance > 0.0f ? distance + bot->GetObjectBoundingRadius() : 0.0f;
+    ai::MagmaPoint const goalPoint = ai::ChaseGoalPoint(target->GetPositionX(), target->GetPositionY(),
+        target->GetOrientation(), slotDistance, angle);
+    WorldPosition goal(target->GetMapId(), goalPoint.x, goalPoint.y, target->GetPositionZ());
     float const ground = goal.GetHeight();
     if (ground > INVALID_HEIGHT)
         goal.setZ(ground);
@@ -2838,17 +2844,19 @@ bool MovementAction::ChaseTo(WorldObject* obj, float distance, float angle)
         return false;
     }
 
+    // The angle MoveChase is handed is final before the guards plan against
+    // the chase goal: the behind strategy replaces the caller's angle, and
+    // the core treats an angle above 20 (radians) as 0.
+    if (ai->HasStrategy("behind", BotState::BOT_STATE_COMBAT))
+        angle = GetFollowAngle() / 3 + obj->getOrientation() + M_PI;
+    if (angle > 20)
+        angle = 0;
+
     // Creature aura keep-out: never chase into a listed creature's pulse.
     // Before every chase branch below (the far/out-of-sight walk, the hazard
     // end-point shift and the core chase fallback, which ends in melee
     // contact with the target whatever hazard it stands in).
     if (sPlayerbotAIConfig.avoidCreatureAuras && HoldChaseOutsideKeepout(obj, distance))
-        return true;
-
-    // Magma hold (MagmaHazardPolicy.h, RFC first-bridge deaths 2026-11-13):
-    // the chase goal comes off the navmesh unsampled, so a melee chase could
-    // walk onto a lava-covered shelf. Before every chase branch below.
-    if (HoldChaseOutOfMagma(obj, distance))
         return true;
 
     // A live boss anchor (BossAnchorPolicy.h, Hakkar's platform): no chase to a hostile beyond its radius plus the melee
@@ -2865,9 +2873,6 @@ bool MovementAction::ChaseTo(WorldObject* obj, float distance, float angle)
         return false;
     }
 
-
-    if (ai->HasStrategy("behind", BotState::BOT_STATE_COMBAT))
-        angle = GetFollowAngle() / 3 + obj->getOrientation() + M_PI;
 
     UpdateMovementState();
 
@@ -2898,6 +2903,15 @@ bool MovementAction::ChaseTo(WorldObject* obj, float distance, float angle)
             return false;
         return MoveTo(targetPosition.GetMapId(), farX, farY, farZ);
     }
+
+    // Magma hold (MagmaHazardPolicy.h, RFC first-bridge deaths 2026-11-13):
+    // the chase goal comes off the navmesh unsampled, so a melee chase could
+    // walk onto a lava-covered shelf. Here, after the far/out-of-sight
+    // hand-off above (a MoveTo to the target itself, guarded by MoveTo) and
+    // before the point move and core chase below; `angle` is the final one
+    // MoveChase gets, so the guard plans against the slot the core walks to.
+    if (HoldChaseOutOfMagma(obj, distance, angle))
+        return true;
 
     const Vector3 directionToTarget = (targetPoint - botPoint).directionOrZero();
     Vector3 endPoint = botPoint + (directionToTarget * std::min(distance, distanceToTarget));
@@ -3048,7 +3062,6 @@ bool MovementAction::ChaseTo(WorldObject* obj, float distance, float angle)
     }
 
     if (!endPosition.isValid()) return false;
-    if (angle > 20) angle = 0;
 
     // The core chase follows its target wherever it goes: never toward one outside a live boss anchor.
     if (anchored && !InsideAnchor(anchor, obj->GetPositionX(), obj->GetPositionY()))

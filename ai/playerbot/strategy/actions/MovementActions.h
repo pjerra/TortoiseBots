@@ -142,10 +142,13 @@ namespace ai
         // instance map only, never while the bot itself stands in magma. True
         // when it handled the follow this tick; false to follow normally.
         bool HoldFollowOutOfMagma(Unit* target, float distance, float angle);
-        // The same for a chase goal (`distance` from the target toward the
-        // bot, the target for melee): held, no tank pass. True when it handled
-        // the chase this tick; false to chase normally.
-        bool HoldChaseOutOfMagma(WorldObject* target, float distance);
+        // The same for the chase goal MoveChase is handed (`distance` from the
+        // target at `angle` off the target's facing; the target itself for
+        // melee, whatever the angle): held, no tank pass. `angle` must be the
+        // final one given to MoveChase, so the guard plans against the same
+        // point the core chase walks to. True when it handled the chase this
+        // tick; false to chase normally.
+        bool HoldChaseOutOfMagma(WorldObject* target, float distance, float angle);
         // AiPlayerbot.AvoidCreatureAuras: true when a move's end point lies in
         // a listed creature's ring (rear flank, set behind, move out of
         // collision refuse it; the hazard registry only bends the path). A
