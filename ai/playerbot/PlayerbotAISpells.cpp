@@ -6,6 +6,7 @@
 #include "playerbot/GroupMembers.h"
 #include "../../runtime/RemoteCommanderTasks.h"
 #include "playerbot/InterruptCastingPolicy.h"
+#include "playerbot/CastCancelLog.h"
 #include "playerbot/policy/combat/TargetFacingPolicy.h"
 #include "strategy/values/LastMovementValue.h"
 #include "strategy/values/LastSpellCastValue.h"
@@ -1797,6 +1798,9 @@ void PlayerbotAI::InterruptSpell(bool withMeleeAndAuto)
         Spell* currentSpell = bot->GetCurrentSpell((CurrentSpellTypes)type);
         if (currentSpell && currentSpell->m_spellInfo && (currentSpell->m_spellInfo->InterruptFlags & SPELL_INTERRUPT_FLAG_INTERRUPT))
         {
+            // The CastCancel row: this is the one choke point every ai->InterruptSpell() caller's cancel goes through
+            // (the reaction engine, movement, target picks), so a cast lost here is named even when the caller is not.
+            LogCastCancel(this, "ai");
             bot->InterruptSpell((CurrentSpellTypes)type);
             SpellInterrupted(currentSpell->m_spellInfo->Id);
         }

@@ -16,6 +16,7 @@
 #include <tuple>
 #include <unordered_map>
 #include "BossTacticsActions.h"
+#include "playerbot/CastCancelLog.h"
 #include "playerbot/BossTacticsMgr.h"
 #include "playerbot/BossStandMgr.h"
 #include "playerbot/SeekAuraPolicy.h"
@@ -7609,6 +7610,7 @@ bool BossTacticsFreezeAction::Execute(Event& event)
     if (still.attackStop)
     {
         bot->AttackStop();
+        ai::LogCastCancel(ai, "freeze");
         bot->CastStop();
     }
     if (still.dropGenerator)
@@ -8613,7 +8615,10 @@ bool BossTacticsTankSwapHoldAction::Execute(Event& event)
     Spell* melee = bot->GetCurrentSpell(CURRENT_MELEE_SPELL);
     if ((generic && generic->m_targets.getUnitTarget() == boss) ||
         (melee && melee->m_targets.getUnitTarget() == boss))
+    {
+        ai::LogCastCancel(ai, "tank_swap");
         bot->CastStop();
+    }
     AiObjectContext* context = ai->GetAiObjectContext();
     context->GetValue<Unit*>("current target")->Set(nullptr);
     context->GetValue<ObjectGuid>("attack target")->Set(ObjectGuid());
@@ -9452,7 +9457,10 @@ bool BossTacticsAvoidCastAction::Execute(Event& event)
         if (casting)
         {
             if (bot->IsNonMeleeSpellCasted(true))
+            {
+                ai::LogCastCancel(ai, "avoid_cast");
                 bot->CastStop();
+            }
             stopped = true;
         }
         if (logIt)
@@ -9771,7 +9779,12 @@ bool BossTacticsStandAction::Execute(Event& event)
     // The cast of a bot on its way out is of no use: stop it, as the reactive dodge does - unless it is already close
     // to its seat, where a cast in progress is let finish.
     if (StandShouldStopCast(bot->GetPositionX(), bot->GetPositionY(), seatX, seatY))
+    {
+        const float seatDx = bot->GetPositionX() - seatX;
+        const float seatDy = bot->GetPositionY() - seatY;
+        ai::LogCastCancel(ai, "stand", std::sqrt(seatDx * seatDx + seatDy * seatDy));
         bot->CastStop();
+    }
     const uint64 key = bot->GetObjectGuid().GetRawValue();
     if (!MoveTo(bot->GetMapId(), seatX, seatY, z, false, false, false, true))
     {
@@ -12144,6 +12157,17 @@ bool BossTacticsSeekAction::Execute(Event& event)
     return true;
 }
 
+namespace
+{
+// How far the step to the slot moves the bot (2D): the distance the CastCancel row reports for a slot walk.
+float SlotWalkYd(Player* bot, const BossSpreadSlotTask& task)
+{
+    const float dx = bot->GetPositionX() - task.x;
+    const float dy = bot->GetPositionY() - task.y;
+    return std::sqrt(dx * dx + dy * dy);
+}
+}  // namespace
+
 bool BossTacticsSpreadSlotAction::isUseful()
 {
     return ai->CanMove();
@@ -12174,6 +12198,7 @@ bool BossTacticsSpreadSlotAction::Execute(Event& event)
         castSeenMs = clock.seenMs;
         if (SpreadSlotCastCutDue(ai->IsHeal(bot), castSinceMs, nowMs))
         {
+            ai::LogCastCancel(ai, "spread_cut", SlotWalkYd(bot, task));
             bot->CastStop();
             castSinceMs = 0;
             castSeenMs = 0;
@@ -12203,6 +12228,10 @@ bool BossTacticsSpreadSlotAction::Execute(Event& event)
     if (hasLast && !bot->IsStopped() && !bot->movespline->Finalized() && std::fabs(lastX - task.x) < 1.0f &&
         std::fabs(lastY - task.y) < 1.0f)
         return true;
+    // The walk's own interrupt: MoveTo breaks a cast or the auto-repeat to step to the slot, which is how a healer's
+    // heal or a caster's spell dies between the spread steps. Logged with the distance the step moves the bot.
+    if (MoveBlockedByCast(bot->IsNonMeleeSpellCasted(false, true, true), false))
+        ai::LogCastCancel(ai, "spread_slot", SlotWalkYd(bot, task));
     if (!MoveTo(bot->GetMapId(), task.x, task.y, task.z, false, false, false, true))
     {
         hasLast = false;
@@ -12466,6 +12495,7 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
                                         cast && cast->m_spellInfo ? cast->m_spellInfo->Id : 0);
                     return true;
                 }
+                ai::LogCastCancel(ai, "seek_shot");
                 bot->InterruptNonMeleeSpells(false);
                 if (!bot->IsStopped())
                     ai->StopMoving();
@@ -12549,7 +12579,10 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
                 ? bot->GetMap()->GetPlayer(ObjectGuid(meetReceiver)) : nullptr;
             const bool meetBack = receiver && receiver->IsInWorld();
             if (bot->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
+            {
+                ai::LogCastCancel(ai, "seek_walk_back");
                 bot->InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
+            }
             bot->AttackStop();
             if (meetBack)
                 WalkoutMeetBackPoint(true, receiver->GetPositionX(), receiver->GetPositionY(), tank,
@@ -12570,7 +12603,12 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
             return true;
         // A cast, a channel or the auto-repeat running when the walk starts holds the mover: stop it first.
         if (outbound && bot->IsNonMeleeSpellCasted(true))
+        {
+            const float walkX = bot->GetPositionX() - x;
+            const float walkY = bot->GetPositionY() - y;
+            ai::LogCastCancel(ai, "seek_walk_out", std::sqrt(walkX * walkX + walkY * walkY));
             bot->InterruptNonMeleeSpells(true);
+        }
         const bool moved = MoveTo(bot->GetMapId(), x, y, z, false, false, false, true);
         if (outbound)
         {

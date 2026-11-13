@@ -1,5 +1,6 @@
 #pragma once
 #include "playerbot/PlayerbotAI.h"
+#include "playerbot/CastCancelLog.h"
 #include "DungeonActions.h"
 #include "ChangeStrategyAction.h"
 #include "MovementActions.h"
@@ -91,6 +92,7 @@ namespace ai
             {
                 ai->ChangeStrategy("+stealthed", BotState::BOT_STATE_COMBAT);
                 ai->ChangeStrategy("+stealthed", BotState::BOT_STATE_NON_COMBAT);
+                ai::LogCastCancel(ai, "bwl_stealth");
                 bot->InterruptSpell(CURRENT_MELEE_SPELL);
                 return true;
             }

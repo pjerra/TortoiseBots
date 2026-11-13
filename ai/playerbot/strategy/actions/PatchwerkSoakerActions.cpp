@@ -1,4 +1,5 @@
 #include "playerbot/playerbot.h"
+#include "playerbot/CastCancelLog.h"
 #include "PatchwerkSoakerActions.h"
 #include "PatchwerkSafety.h"
 #include "playerbot/PatchwerkSoakerPolicy.h"
@@ -265,6 +266,7 @@ bool PatchwerkMainEngageAction::Execute(Event& event)
     // is identical. This also consumes the request: a peer cannot repeat it.
     if (!ai->DoSpecificAction("pull end", event, true))
         return false;
+    ai::LogCastCancel(ai, "patchwerk_pull_end");
     bot->InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
     ai->ClearActionClock();
     if (!Attack(GetMaster(), boss))

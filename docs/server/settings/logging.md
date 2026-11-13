@@ -468,6 +468,14 @@ carries `engine=`, `cur=`, `atk=`, `pull=`, `vic=` (the server's victim), `sel=`
 (its selected unit's name, or the raw guid), `combat=` and `holders=` (the count
 of units that hold it on their threat list, then the first five of their
 names). Each run keeps its own ten-tick window, discarded when the run starts
-or ends. Reads only: the probe changes no behaviour. Disable the option after
-collecting a diagnostic capture.
+or ends. Reads only: the probe changes no behaviour.
+
+The key also gates the `CastCancel` row: every
+module-side cast cancel (the spread slot's step, the seek walk-out, the
+wasteful-heal interrupt, the AI's interrupt choke point, movement and the
+encounter actions) writes the bot, `site=`, `slot=` (generic, channeled,
+autorepeat or melee), `spell=`, `cast_pct=` (how far the cast had got, `-1` for
+an instant), `target=` and `moved_yd=` (how far the cancel moved the bot). It
+is observation only and changes no cast. Disable the option after collecting a
+diagnostic capture.
 See [column definitions and coverage](../../developers/host-api.md#csv-columns-unchanged-nine-column-layout).
