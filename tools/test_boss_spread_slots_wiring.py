@@ -171,18 +171,22 @@ class SpreadSlotsWiring(unittest.TestCase):
         self.assertIn('creators["boss tactics spread slot"]', ACTION_CONTEXT)
 
     def test_the_hunter_slot_leaves_the_dead_zone_behind_the_key(self):
-        # SpreadSlot_HunterSlotLeavesDeadZone at the call site: with SpreadRangedMinRange on, a hunter's ring points
-        # are moved out to the boss's reach + 8 + 2 yd before the order is taken; a caster keeps them, and with the
-        # key off nothing is moved at all (the old behaviour exactly).
+        # SpreadSlot_HunterSlotLeavesDeadZone at the call site: the whole group builds and orders one canonical ring
+        # list; the index (and the fallback) pick from it, and only then is the hunter's own point projected out to
+        # the boss's reach + 8 + 2 yd. A caster keeps the canonical point, and with the key off nothing moves at all.
         read = body(ACTIONS, "BossSpreadSlotTask ReadBossSpreadSlot(PlayerbotAI* ai, Player* bot)")
         self.assertIn("SpreadSlotMinRangeApplies(sPlayerbotAIConfig.spreadRangedMinRange,", read)
         self.assertIn("bot->GetClass() == CLASS_HUNTER", read)
         self.assertIn("SpreadSlotMinRangeYd(boss->GetCombatReach())", read)
-        self.assertIn("point = SpreadSlotMinRangePoint(point,", read)
-        self.assertLess(read.index("SpreadSlotMinRangePoint("), read.index("SpreadSlotOrder(points, prefX, prefY);"))
-        # The floor only exists behind the key: the ring build itself still runs before the min-range block, and the
-        # block is a single if, so the key off takes the plain rings.
-        self.assertLess(read.index("points = SpreadSlotPoints("), read.index("SpreadSlotMinRangeApplies("))
+        self.assertIn("SpreadSlotOwnerPoint(points[static_cast<std::size_t>(slot)], minRange,", read)
+        # The order runs on the plain rings, before any class-specific projection: the shared index names the same
+        # slot for every member. Projection happens only after the owned/fallback index is chosen.
+        self.assertLess(read.index("SpreadSlotOrder(points, prefX, prefY);"), read.index("SpreadSlotMinRangeApplies("))
+        self.assertLess(read.index("const int owned = hasSlot ? index : -1;"), read.index("SpreadSlotOwnerPoint("))
+        self.assertLess(read.index("SpreadSlotOwnerPoint("), read.index("SpreadSlotPointUsable(ai, bot, cz, ownedPoint"))
+        # No list-wide class-specific rewrite of the points can come back: only the owner points are projected.
+        self.assertNotIn("for (SpreadSlotPoint& point : points)", read)
+        self.assertEqual(read.count("SpreadSlotOwnerPoint("), 1)
         config = (ROOT / "ai/playerbot/PlayerbotAIConfig.cpp").read_text()
         self.assertIn('spreadRangedMinRange = config.GetBoolDefault("AiPlayerbot.SpreadRangedMinRange", false);',
                       config)
