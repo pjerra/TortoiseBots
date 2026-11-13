@@ -237,10 +237,12 @@ int main()
         CHECK(r.losses == 1);
     }
 
-    // TestUnknownVictim: no victim neither completes nor breaks the dwell and opens no loss, and the dwell runs on
-    // across a tank change.
+    // TestUnknownVictimPausesTheDwell: no victim adds no tank time, so the dwell pauses: the unknown read neither
+    // completes nor breaks the dwell and opens no loss. A run bridged by unknown reads does not settle early; a
+    // known-tank run still settles, and a tank change keeps the dwell.
     //   Old code: none.
-    //   Mutation caught: None treated as NonTank (the dwell breaks and a burn loses).
+    //   Mutations caught: an unknown read credited to the dwell (the paused run settles at 4100); None treated as
+    //   NonTank (the dwell breaks and the take loses).
     {
         TankFirstRecord r;
         CHECK(TankFirstTick(r, kRow, In(TankFirstVictim::NonTank, 11, 100.0f, 0)).event == TankFirstEvent::Arm);
@@ -249,29 +251,44 @@ int main()
         CHECK(out.event == TankFirstEvent::None);
         CHECK(r.phase == TankFirstPhase::Dwell);
         CHECK(r.tankSinceMs == 1000); // not reset
+        CHECK(r.tankMs == 0);         // and the unknown read credited nothing
         CHECK(TankFirstHolds(r, nullptr));
-        // Tank A -> tank B keeps the dwell.
+        // Tank A -> tank B keeps the dwell, and B's first read credits only its own interval.
         out = TankFirstTick(r, kRow, In(TankFirstVictim::Tank, 22, 100.0f, 2500));
         CHECK(out.event == TankFirstEvent::None);
         CHECK(r.phase == TankFirstPhase::Dwell);
         CHECK(r.tank == 22);
         CHECK(r.tankSinceMs == 1000);
-        CHECK(TankFirstTick(r, kRow, In(TankFirstVictim::Tank, 22, 100.0f, 4000)).event == TankFirstEvent::Settled);
+        CHECK(r.tankMs == 500);
+        CHECK(TankFirstTick(r, kRow, In(TankFirstVictim::Tank, 22, 100.0f, 4000)).event == TankFirstEvent::None);
+        CHECK(r.tankMs == 2000);
+        CHECK(TankFirstTick(r, kRow, In(TankFirstVictim::Tank, 22, 100.0f, 5000)).event == TankFirstEvent::Settled);
         // No victim in a burn opens no loss.
-        out = TankFirstTick(r, kRow, In(TankFirstVictim::None, 0, 60.0f, 5000));
+        out = TankFirstTick(r, kRow, In(TankFirstVictim::None, 0, 60.0f, 6000));
         CHECK(out.event == TankFirstEvent::None);
         CHECK(r.phase == TankFirstPhase::Burn);
         CHECK(r.losses == 0);
-        // No victim does not complete the dwell either, even once its time is in: only a tank's own read does.
+        // Two seconds of unknown reads after one second of tank time leave 1 s of the 3 s dwell: the pause holds the
+        // dwell up, and only the tank's own further reads settle it.
         TankFirstRecord n;
         CHECK(TankFirstTick(n, kRow, In(TankFirstVictim::NonTank, 11, 100.0f, 0)).event == TankFirstEvent::Arm);
         CHECK(TankFirstTick(n, kRow, In(TankFirstVictim::Tank, 21, 100.0f, 1000)).event == TankFirstEvent::OnTank);
+        CHECK(TankFirstTick(n, kRow, In(TankFirstVictim::Tank, 21, 100.0f, 2000)).event == TankFirstEvent::None);
+        CHECK(n.tankMs == 1000);
         out = TankFirstTick(n, kRow, In(TankFirstVictim::None, 0, 100.0f, 4000));
         CHECK(out.event == TankFirstEvent::None);
         CHECK(n.phase == TankFirstPhase::Dwell);
-        CHECK(n.tankMs == 3000);
+        CHECK(n.tankMs == 1000);
         out = TankFirstTick(n, kRow, In(TankFirstVictim::Tank, 21, 100.0f, 4100));
+        CHECK(out.event == TankFirstEvent::None); // 1.1 s of tank time in all, short of the 3 s dwell
+        CHECK(n.phase == TankFirstPhase::Dwell);
+        CHECK(n.tankMs == 1100);
+        CHECK(TankFirstTick(n, kRow, In(TankFirstVictim::Tank, 21, 100.0f, 5000)).event == TankFirstEvent::None);
+        CHECK(n.tankMs == 2000);
+        out = TankFirstTick(n, kRow, In(TankFirstVictim::Tank, 21, 100.0f, 6000));
         CHECK(out.event == TankFirstEvent::Settled);
+        CHECK(n.phase == TankFirstPhase::Burn);
+        CHECK(n.tankMs == 3000);
     }
 
     // TestOverrides: no usable tank frees the add, and so does a seek source inside the last 15 s before its cycle

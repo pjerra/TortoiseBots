@@ -9,14 +9,15 @@
 //   burn  -- a non-tank is the victim, above 20 % and budget left -> lost (a new episode)
 //   wait/dwell/lost -- the episode is window_s old ---------------> open (for good)
 //
-// The dwell is the tank time the record has seen (R6): a tank's ticks sum it up, a non-tank's ticks neither add to nor
-// (for up to kTankFirstFlipMs in a row) break it, and a landed taunt by that very tank settles at once (R5). In the
-// dwell the cap is the row's window plus the dwell (R7), so a take that lands late still settles.
+// The dwell is the tank time the record has seen (R6): only a tank's ticks add to it, a non-tank's ticks neither add
+// nor (for up to kTankFirstFlipMs in a row) break it, an unknown victim's ticks pause it, and a landed taunt by that
+// very tank settles at once (R5). In the dwell the cap is the row's window plus the dwell (R7), so a take that lands
+// late still settles.
 //
 // The episode clock starts at the first sighting (wait) or at the loss (lost) and one episode never holds longer than
 // the row's window_s. A dwell that falls back does not restart it. A victim that is no victim at all (a stun, a swap
-// between two reads) neither completes nor breaks the dwell and opens no loss. Two releases override the phase each
-// tick (D8): no usable tank on the map, and a seek source whose siphon is 15 s away or less.
+// between two reads) adds no tank time, neither completes nor breaks the dwell and opens no loss. Two releases
+// override the phase each tick (D8): no usable tank on the map, and a seek source whose siphon is 15 s away or less.
 //
 // Pure logic: no game headers. The behaviour is tested in tools/test_tank_first_policy.cpp; the read and the hooks are
 // pinned in tools/test_tank_first_wiring.py.
@@ -84,7 +85,7 @@ namespace ai
         std::uint32_t firstMs = 0;      // the first sighting
         std::uint32_t episodeMs = 0;    // the running hold's start
         std::uint32_t tankSinceMs = 0;  // the dwell's start (0: no tank)
-        std::uint32_t tankMs = 0;       // the dwell's tank time, summed across short non-tank blips (R6)
+        std::uint32_t tankMs = 0;       // the dwell's tank time (tank reads only), summed across short non-tank blips (R6)
         std::uint32_t nonTankSinceMs = 0; // the running non-tank streak (0: none), the flip's debounce (R6)
         std::uint32_t settledMs = 0;    // the last burn's start
         std::uint32_t tickMs = 0;       // the last advance
@@ -227,18 +228,15 @@ namespace ai
                 }
                 break;
             case TankFirstPhase::Dwell:
-                if (in.victim != TankFirstVictim::NonTank)
+                if (in.victim == TankFirstVictim::Tank)
                 {
                     // R6: the dwell is the tank time the record has seen, summed across the short non-tank blips (a
-                    // healer's threat between two reads) instead of restarted by them. A victim that is no victim at
-                    // all counts as it did on the continuous clock, but only a tank's own read completes the dwell.
-                    if (in.victim == TankFirstVictim::Tank)
-                    {
-                        record.tank = in.victimGuid;
-                        record.nonTankSinceMs = 0;
-                    }
+                    // healer's threat between two reads) instead of restarted by them. Only a tank's own read adds to
+                    // it and completes it.
+                    record.tank = in.victimGuid;
+                    record.nonTankSinceMs = 0;
                     record.tankMs += elapsed;
-                    if (in.victim == TankFirstVictim::Tank && (tauntVictim || record.tankMs >= rules.dwellMs))
+                    if (tauntVictim || record.tankMs >= rules.dwellMs)
                     {
                         // The settle is checked before the cap, so a dwell that completes on the cap's tick burns.
                         record.heldTotalMs += TankFirstAgeMs(now, record.episodeMs);
@@ -251,7 +249,7 @@ namespace ai
                         break;
                     }
                 }
-                else
+                else if (in.victim == TankFirstVictim::NonTank)
                 {
                     // R6: a non-tank falls the dwell back only after kTankFirstFlipMs in a row; a shorter blip keeps
                     // it. The episode clock is not touched either way; the next dwell counts from zero.
@@ -265,6 +263,8 @@ namespace ai
                         record.nonTankSinceMs = 0;
                     }
                 }
+                // An unknown victim neither credits tank time nor breaks the dwell: the dwell pauses, so no read that
+                // cannot see the tank can settle the take on that tank's behalf.
                 if (record.phase == TankFirstPhase::Dwell || record.phase == TankFirstPhase::Wait ||
                     record.phase == TankFirstPhase::Lost)
                 {
