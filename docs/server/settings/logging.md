@@ -457,5 +457,12 @@ sample the current victim and top five numeric threat entries at most once per
 two seconds per boss/instance. `BossSpellHit` rows record supported victim-session
 spell-damage packets. `hp_sample` is sampled at packet
 send and `hp_est` is clamped subtraction of reported damage; neither guarantees
-exact post-hit health. Disable the option after collecting a diagnostic capture.
+exact post-hit health. The key also gates the `CastCancel` row: every
+module-side cast cancel (the spread slot's step, the seek walk-out, the
+wasteful-heal interrupt, the AI's interrupt choke point, movement and the
+encounter actions) writes the bot, `site=`, `slot=` (generic, channeled,
+autorepeat or melee), `spell=`, `cast_pct=` (how far the cast had got, `-1` for
+an instant), `target=` and `moved_yd=` (how far the cancel moved the bot). It
+is observation only and changes no cast. Disable the option after collecting a
+diagnostic capture.
 See [column definitions and coverage](../../developers/host-api.md#csv-columns-unchanged-nine-column-layout).

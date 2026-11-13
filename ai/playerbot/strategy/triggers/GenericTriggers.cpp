@@ -1,4 +1,5 @@
 #include "playerbot/playerbot.h"
+#include "playerbot/CastCancelLog.h"
 #include "playerbot/strategy/actions/FankrissFocusActions.h"
 #include "playerbot/RaidTankHealing.h"
 #include "playerbot/strategy/actions/PatchwerkSoakerActions.h"
@@ -873,7 +874,10 @@ bool SuccessorWhiteCapTrigger::IsActive()
     if (stops.melee)
         bot->AttackStop();
     if (stops.autoRepeat)
+    {
+        ai::LogCastCancel(ai, "successor_white");
         bot->InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
+    }
     return false;
 }
 
@@ -902,7 +906,10 @@ bool ThreatResetWhiteStopTrigger::IsActive()
     if (stops.melee)
         bot->AttackStop();
     if (stops.autoRepeat)
+    {
+        ai::LogCastCancel(ai, "reset_white");
         bot->InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
+    }
     return false;
 }
 
