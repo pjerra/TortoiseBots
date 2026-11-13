@@ -18,6 +18,7 @@
 // pinned in tools/test_tank_first_wiring.py.
 
 #include <cstdint>
+#include <cstring>
 
 namespace ai
 {
@@ -25,6 +26,7 @@ namespace ai
     constexpr std::uint32_t kTankFirstTauntHowMs = 2000;   // a taunt this recent makes the take `how=taunt`
     constexpr std::uint32_t kTankFirstTickMs = 250;        // the record advances at most this often
     constexpr std::uint32_t kTankFirstStaleMs = 10000;     // a record nobody read this long is dropped
+    constexpr std::uint32_t kTankFirstPruneMs = 600000;    // an instance nobody read this long is gone (map unload)
     constexpr float kTankFirstTankReachYd = 100.0f;        // a tank farther than this is not usable
     constexpr int kTankFirstSiphonMs = 15000;              // a seek source this close to its cycle is free (= kSeekForceMs)
 
@@ -95,6 +97,14 @@ namespace ai
         std::uint32_t ms = 0;
     };
 
+    // An age that never wraps. Every stamp here is written under the record's lock from that writer's own clock and a
+    // reader's sample can be older (it was taken before the lock), so an unsigned subtraction would read ~4.3e9 ms and
+    // settle, release or erase on the spot. A stamp newer than the read counts as age 0 (SeekAgeMs's rule).
+    inline std::uint32_t TankFirstAgeMs(std::uint32_t nowMs, std::uint32_t stampMs)
+    {
+        return nowMs < stampMs ? 0 : nowMs - stampMs;
+    }
+
     // One advance of the record (D6, D7). The caller throttles with TankFirstTickDue.
     inline TankFirstOut TankFirstTick(TankFirstRecord& record, const TankFirstRules& rules, const TankFirstIn& in)
     {
@@ -148,7 +158,7 @@ namespace ai
                         record.tankSinceMs = 0;
                         record.lossIgnoredLogged = false;
                         out.event = TankFirstEvent::Loss;
-                        out.ms = now - record.settledMs;
+                        out.ms = TankFirstAgeMs(now, record.settledMs);
                     }
                 }
                 else if (in.victim == TankFirstVictim::Tank)
@@ -156,13 +166,13 @@ namespace ai
                 break;
             case TankFirstPhase::Wait:
             case TankFirstPhase::Lost:
-                if (now - record.episodeMs >= rules.capMs)
+                if (TankFirstAgeMs(now, record.episodeMs) >= rules.capMs)
                 {
-                    record.heldTotalMs += now - record.episodeMs;
+                    record.heldTotalMs += TankFirstAgeMs(now, record.episodeMs);
                     record.phase = TankFirstPhase::Open;
                     out.event = TankFirstEvent::Release;
                     out.why = "cap";
-                    out.ms = now - record.episodeMs;
+                    out.ms = TankFirstAgeMs(now, record.episodeMs);
                 }
                 else if (in.victim == TankFirstVictim::Tank)
                 {
@@ -171,23 +181,23 @@ namespace ai
                     record.tankSinceMs = now;
                     record.tank = in.victimGuid;
                     out.event = TankFirstEvent::OnTank;
-                    out.ms = now - record.episodeMs;
+                    out.ms = TankFirstAgeMs(now, record.episodeMs);
                 }
                 break;
             case TankFirstPhase::Dwell:
                 if (in.victim == TankFirstVictim::Tank)
                 {
                     record.tank = in.victimGuid;
-                    if (now - record.tankSinceMs >= rules.dwellMs)
+                    if (TankFirstAgeMs(now, record.tankSinceMs) >= rules.dwellMs)
                     {
                         // The settle is checked before the cap, so a dwell that completes on the cap's tick burns.
-                        record.heldTotalMs += now - record.episodeMs;
+                        record.heldTotalMs += TankFirstAgeMs(now, record.episodeMs);
                         record.phase = TankFirstPhase::Burn;
                         record.settledMs = now;
                         ++record.settles;
                         record.lossIgnoredLogged = false;
                         out.event = TankFirstEvent::Settled;
-                        out.ms = now - record.episodeMs;
+                        out.ms = TankFirstAgeMs(now, record.episodeMs);
                         break;
                     }
                 }
@@ -201,13 +211,13 @@ namespace ai
                 if (record.phase == TankFirstPhase::Dwell || record.phase == TankFirstPhase::Wait ||
                     record.phase == TankFirstPhase::Lost)
                 {
-                    if (now - record.episodeMs >= rules.capMs)
+                    if (TankFirstAgeMs(now, record.episodeMs) >= rules.capMs)
                     {
-                        record.heldTotalMs += now - record.episodeMs;
+                        record.heldTotalMs += TankFirstAgeMs(now, record.episodeMs);
                         record.phase = TankFirstPhase::Open;
                         out.event = TankFirstEvent::Release;
                         out.why = "cap";
-                        out.ms = now - record.episodeMs;
+                        out.ms = TankFirstAgeMs(now, record.episodeMs);
                     }
                 }
                 break;
@@ -220,7 +230,14 @@ namespace ai
     // Whether the record's own clock allows another advance now.
     inline bool TankFirstTickDue(const TankFirstRecord& r, std::uint32_t nowMs)
     {
-        return !r.armed || nowMs - r.tickMs >= kTankFirstTickMs;
+        return !r.armed || TankFirstAgeMs(nowMs, r.tickMs) >= kTankFirstTickMs;
+    }
+
+    // Whether the record is stale (nobody read it for kTankFirstStaleMs): the sweep drops it. A read that arrived
+    // before the stamp another thread wrote is not stale.
+    inline bool TankFirstStale(std::uint32_t nowMs, std::uint32_t seenMs)
+    {
+        return TankFirstAgeMs(nowMs, seenMs) > kTankFirstStaleMs;
     }
 
     // Whether the phase holds the add's damage (wait, dwell and a lost add; burn and open do not).
@@ -245,10 +262,21 @@ namespace ai
         return TankFirstPhaseHolds(r.phase) && overrideWhy == nullptr;
     }
 
+    // The release row an override owes: one per add and reason, on the read that starts it. An override ahead of a
+    // phase that already frees the add (burn, open) writes none: the add is free either way.
+    inline const char* TankFirstOverrideStarted(const char* overrideWhy, const char* previousWhy, TankFirstPhase phase)
+    {
+        if (!overrideWhy || !TankFirstPhaseHolds(phase))
+            return nullptr;
+        if (previousWhy && std::strcmp(previousWhy, overrideWhy) == 0)
+            return nullptr;
+        return overrideWhy;
+    }
+
     // How a take got the add: `taunt` for a taunt by that tank within kTankFirstTauntHowMs, else `threat`.
     inline const char* TankFirstHow(const TankFirstRecord& r, std::uint64_t tank, std::uint32_t nowMs)
     {
-        if (tank != 0 && r.tauntBy == tank && nowMs - r.tauntMs <= kTankFirstTauntHowMs)
+        if (tank != 0 && r.tauntBy == tank && TankFirstAgeMs(nowMs, r.tauntMs) <= kTankFirstTauntHowMs)
             return "taunt";
         return "threat";
     }
