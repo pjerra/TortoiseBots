@@ -52,7 +52,7 @@ bool HeiganDanceMoveAction::Execute(Event& event)
         // New safe spot: stop the current cast so the move starts now
         // (donor HeiganDanceAction::MoveToWaypoint).
         lastArea = area;
-        ai::LogCastCancel(ai, "heigan_dance", spotYd);
+        ai::LogCastCancelStop(ai, "heigan_dance", spotYd);
         bot->CastStop();
     }
     if (spotYd < 4.0f)

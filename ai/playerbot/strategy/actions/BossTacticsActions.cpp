@@ -7610,7 +7610,7 @@ bool BossTacticsFreezeAction::Execute(Event& event)
     if (still.attackStop)
     {
         bot->AttackStop();
-        ai::LogCastCancel(ai, "freeze");
+        ai::LogCastCancelStop(ai, "freeze");
         bot->CastStop();
     }
     if (still.dropGenerator)
@@ -8616,7 +8616,7 @@ bool BossTacticsTankSwapHoldAction::Execute(Event& event)
     if ((generic && generic->m_targets.getUnitTarget() == boss) ||
         (melee && melee->m_targets.getUnitTarget() == boss))
     {
-        ai::LogCastCancel(ai, "tank_swap");
+        ai::LogCastCancelStop(ai, "tank_swap");
         bot->CastStop();
     }
     AiObjectContext* context = ai->GetAiObjectContext();
@@ -9458,7 +9458,7 @@ bool BossTacticsAvoidCastAction::Execute(Event& event)
         {
             if (bot->IsNonMeleeSpellCasted(true))
             {
-                ai::LogCastCancel(ai, "avoid_cast");
+                ai::LogCastCancelStop(ai, "avoid_cast");
                 bot->CastStop();
             }
             stopped = true;
@@ -9782,7 +9782,7 @@ bool BossTacticsStandAction::Execute(Event& event)
     {
         const float seatDx = bot->GetPositionX() - seatX;
         const float seatDy = bot->GetPositionY() - seatY;
-        ai::LogCastCancel(ai, "stand", std::sqrt(seatDx * seatDx + seatDy * seatDy));
+        ai::LogCastCancelStop(ai, "stand", std::sqrt(seatDx * seatDx + seatDy * seatDy));
         bot->CastStop();
     }
     const uint64 key = bot->GetObjectGuid().GetRawValue();
@@ -10785,7 +10785,11 @@ BossSpreadSlotTask ReadBossSpreadSlot(PlayerbotAI* ai, Player* bot)
     // never lands on another member's point; a caster keeps its canonical slot.
     const bool minRange = boss && SpreadSlotMinRangeApplies(sPlayerbotAIConfig.spreadRangedMinRange,
                                                             bot->GetClass() == CLASS_HUNTER);
-    const float minYd = minRange ? SpreadSlotMinRangeYd(boss->GetCombatReach()) : 0.0f;
+    // One boss position for every member: a drift of a fraction of a yard between two members' reads must not hand
+    // them two different maps.
+    const float bossX = boss ? SpreadSlotBossGrid(boss->GetPositionX()) : 0.0f;
+    const float bossY = boss ? SpreadSlotBossGrid(boss->GetPositionY()) : 0.0f;
+    const float minYd = minRange ? SpreadSlotMinRangeYd(boss->GetCombatReach(), bot->GetCombatReach()) : 0.0f;
     std::vector<SpreadSlotPoint> ownerPoints;
     if (minRange)
     {
@@ -10801,8 +10805,9 @@ BossSpreadSlotTask ReadBossSpreadSlot(PlayerbotAI* ai, Player* bot)
                     minRangeByIndex[static_cast<std::size_t>(memberIndex)] = 1;
             }
         }
-        ownerPoints = SpreadSlotOwnerPoints(points, minRangeByIndex, boss->GetPositionX(), boss->GetPositionY(), cx,
-                                            cy, minYd, spacingYd);
+        // Only the first `count` indices own a point; the rest of the ring is empty ground for this group.
+        ownerPoints = SpreadSlotOwnerPoints(points, minRangeByIndex, static_cast<std::size_t>(count), bossX, bossY,
+                                            cx, cy, minYd, spacingYd);
     }
     const auto ownedSlotPoint = [&](int slot) {
         return minRange ? ownerPoints[static_cast<std::size_t>(slot)] : points[static_cast<std::size_t>(slot)];
@@ -10812,7 +10817,7 @@ BossSpreadSlotTask ReadBossSpreadSlot(PlayerbotAI* ai, Player* bot)
         const SpreadSlotPoint& canonical = points[static_cast<std::size_t>(slot)];
         if (!minRange)
             return canonical;
-        return SpreadSlotMinRangePoint(canonical, boss->GetPositionX(), boss->GetPositionY(), cx, cy, minYd);
+        return SpreadSlotMinRangePoint(canonical, bossX, bossY, cx, cy, minYd);
     };
 
     // D5: the owned slot; one spare-slot fallback when it is unusable, then the floor verdict.
@@ -12167,7 +12172,7 @@ bool BossTacticsSeekAction::Execute(Event& event)
         if (SeekActionConsumesTick(task.atSpot, moving))
         {
             ai->StopMoving();
-            ai::LogCastCancel(ai, "seek_stop");
+            ai::LogCastCancelStop(ai, "seek_stop");
             bot->CastStop();
             return true;
         }
@@ -12233,7 +12238,7 @@ bool BossTacticsSpreadSlotAction::Execute(Event& event)
         castSeenMs = clock.seenMs;
         if (SpreadSlotCastCutDue(ai->IsHeal(bot), castSinceMs, nowMs))
         {
-            ai::LogCastCancel(ai, "spread_cut", SlotWalkYd(bot, task));
+            ai::LogCastCancelStop(ai, "spread_cut", SlotWalkYd(bot, task));
             bot->CastStop();
             castSinceMs = 0;
             castSeenMs = 0;
@@ -12263,10 +12268,11 @@ bool BossTacticsSpreadSlotAction::Execute(Event& event)
     if (hasLast && !bot->IsStopped() && !bot->movespline->Finalized() && std::fabs(lastX - task.x) < 1.0f &&
         std::fabs(lastY - task.y) < 1.0f)
         return true;
-    // The walk's own interrupt: MoveTo breaks a cast or the auto-repeat to step to the slot, which is how a healer's
-    // heal or a caster's spell dies between the spread steps. Logged with the distance the step moves the bot.
-    if (MoveBlockedByCast(bot->IsNonMeleeSpellCasted(false, true, true), false))
-        ai::LogCastCancel(ai, "spread_slot", SlotWalkYd(bot, task));
+    // The walk's own interrupt: MoveTo breaks a cast to step to the slot, which is how a healer's heal or a caster's
+    // spell dies between the spread steps. The interrupt is taken here under the walk's site, so a slot really
+    // dropped writes exactly one row (MoveTo's own pass then finds nothing live) and a refused move writes none. No
+    // slot is read to decide whether to log: the read is the interrupt's own, and the row gates on the key first.
+    ai->InterruptSpell(false, "spread_slot", SlotWalkYd(bot, task));
     if (!MoveTo(bot->GetMapId(), task.x, task.y, task.z, false, false, false, true))
     {
         hasLast = false;
@@ -12530,7 +12536,7 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
                                         cast && cast->m_spellInfo ? cast->m_spellInfo->Id : 0);
                     return true;
                 }
-                ai::LogCastCancel(ai, "seek_shot");
+                ai::LogCastCancelNonMelee(ai, "seek_shot", false);
                 bot->InterruptNonMeleeSpells(false);
                 if (!bot->IsStopped())
                     ai->StopMoving();
@@ -12615,7 +12621,7 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
             const bool meetBack = receiver && receiver->IsInWorld();
             if (bot->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
             {
-                ai::LogCastCancel(ai, "seek_walk_back");
+                ai::LogCastCancel(ai, "seek_walk_back", CURRENT_AUTOREPEAT_SPELL);
                 bot->InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
             }
             bot->AttackStop();
@@ -12641,7 +12647,7 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
         {
             const float walkX = bot->GetPositionX() - x;
             const float walkY = bot->GetPositionY() - y;
-            ai::LogCastCancel(ai, "seek_walk_out", std::sqrt(walkX * walkX + walkY * walkY));
+            ai::LogCastCancelNonMelee(ai, "seek_walk_out", true, std::sqrt(walkX * walkX + walkY * walkY));
             bot->InterruptNonMeleeSpells(true);
         }
         const bool moved = MoveTo(bot->GetMapId(), x, y, z, false, false, false, true);

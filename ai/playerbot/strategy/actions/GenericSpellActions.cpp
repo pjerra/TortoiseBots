@@ -1183,7 +1183,7 @@ bool StopWandAction::Execute(Event& event)
     // Sleep until both the last shot's GCD (it ends with the ranged timer)
     // and the GCD of the bot's own last cast have run out (WandPolicy.h).
     uint32 const wait = WandStopWaitMs(bot->GetAttackTimer(RANGED_ATTACK), ai->SpellGlobalCooldownRemainingMs(), sPlayerbotAIConfig.reactDelay);
-    ai::LogCastCancel(ai, "wand");
+    ai::LogCastCancel(ai, "wand", CURRENT_AUTOREPEAT_SPELL);
     bot->InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
     SetDuration(wait);
     return true;
@@ -1221,7 +1221,7 @@ bool InterruptCurrentSpellAction::Execute(Event& event)
         {
             // The "heal target full health" trigger's cancel (HealInterruptStrategy): the heal was started on a
             // target that turned out full, so this is the interrupt that loses the mana and the cast.
-            ai::LogCastCancel(ai, "heal_full");
+            ai::LogCastCancel(ai, "heal_full", (CurrentSpellTypes)type);
             bot->InterruptSpell((CurrentSpellTypes)type);
             ai->SpellInterrupted(currentSpell->m_spellInfo->Id);
             interrupted = true;

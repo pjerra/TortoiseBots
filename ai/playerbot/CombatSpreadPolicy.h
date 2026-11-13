@@ -64,8 +64,12 @@ namespace ai
     constexpr int kSpreadSlotMaxRings = 3;
     // A hunter's Auto Shot has this dead zone: nearer than 8 yd it cannot shoot.
     constexpr float kSpreadMinRangeShotYd = 8.0f;
-    // The floor a min-range slot keeps past the boss's own body.
-    constexpr float kSpreadMinRangeMarginYd = 2.0f;
+    // The floor's own margin past the arrival slack: a hunter standing `kSpreadSlotArriveYd` inside its point is still
+    // this far outside the dead zone.
+    constexpr float kSpreadMinRangeMarginYd = 1.0f;
+    // The grid the owner-point search rounds the boss position to: every member reads the same map even when the boss
+    // drifted a fraction of a yard between two of their reads.
+    constexpr float kSpreadSlotBossGridYd = 1.0f;
 
     struct SpreadSlotPoint
     {
@@ -144,12 +148,24 @@ namespace ai
         return keyOn && needsMinRange;
     }
 
-    // The floor a min-range slot keeps from the boss: the boss's combat reach (its body) plus the shot's dead zone
-    // plus the margin. A nonsense reach reads as 0 so the floor never drops below the dead zone.
-    inline float SpreadSlotMinRangeYd(float bossCombatReachYd)
+    // The floor a min-range slot keeps from the boss: the boss's body, the shot's dead zone, the bot's own body, the
+    // arrival slack (an arrived hunter stands up to that far inside its point) and the margin, so an arrived hunter is
+    // never inside the dead zone. A nonsense reach reads as 0 so the floor never drops below the dead zone.
+    inline float SpreadSlotMinRangeYd(float bossCombatReachYd, float playerCombatReachYd)
     {
-        const float reach = std::isfinite(bossCombatReachYd) && bossCombatReachYd > 0.0f ? bossCombatReachYd : 0.0f;
-        return reach + kSpreadMinRangeShotYd + kSpreadMinRangeMarginYd;
+        const float boss = std::isfinite(bossCombatReachYd) && bossCombatReachYd > 0.0f ? bossCombatReachYd : 0.0f;
+        const float self =
+            std::isfinite(playerCombatReachYd) && playerCombatReachYd > 0.0f ? playerCombatReachYd : 0.0f;
+        return boss + kSpreadMinRangeShotYd + self + kSpreadSlotArriveYd + kSpreadMinRangeMarginYd;
+    }
+
+    // The boss position the owner-point search uses, snapped down to the grid: two members that read the boss a
+    // fraction of a yard apart still build one map.
+    inline float SpreadSlotBossGrid(float yd)
+    {
+        if (!std::isfinite(yd))
+            return 0.0f;
+        return std::floor(yd / kSpreadSlotBossGridYd) * kSpreadSlotBossGridYd;
     }
 
     // A ring point nearer the boss than `minYd` moves out along its own bearing from the boss to exactly that
@@ -196,15 +212,16 @@ namespace ai
 
     // Every slot owner's final point, resolved the same way on every bot. A caster keeps its canonical slot. A
     // min-range hunter's point is projected out to the min-range circle, then stepped along it by alternating
-    // ±k spacing angles until it is at least the row's spacing from every other owner's point (an earlier owner's
-    // final point, a later owner's projected start; a caster's point is both), up to 8 steps. When no candidate
+    // ±k spacing angles until it is at least the row's spacing from every other OWNED point (an earlier owner's final
+    // point, a later owner's projected start; a caster's point is both), up to 8 steps. An unowned ring point is
+    // nobody's place to stand: it is empty ground and never pushes a hunter off its bearing. When no candidate
     // clears, the least-crowded one wins and ties keep the earliest. The index order is the guid order, so the same
     // group yields the same points on every member.
     inline std::vector<SpreadSlotPoint> SpreadSlotOwnerPoints(const std::vector<SpreadSlotPoint>& canonical,
-        const std::vector<char>& minRangeByIndex, float bossX, float bossY, float centreX, float centreY,
-        float minYd, float spacingYd)
+        const std::vector<char>& minRangeByIndex, std::size_t ownerCount, float bossX, float bossY, float centreX,
+        float centreY, float minYd, float spacingYd)
     {
-        const std::size_t owners = std::min(canonical.size(), minRangeByIndex.size());
+        const std::size_t owners = std::min(std::min(canonical.size(), minRangeByIndex.size()), ownerCount);
         std::vector<SpreadSlotPoint> start(owners);
         std::vector<SpreadSlotPoint> final(owners);
         for (std::size_t i = 0; i < owners; ++i)

@@ -273,7 +273,7 @@ void StopOwnCast(Player* bot)
         // The registry lookup takes a lock, so the diagnostics key gates it first.
         if (sPlayerbotAIConfig.raidBossDiagnostics)
             if (PlayerbotAI* ai = GET_PLAYERBOT_AI(bot))
-                ai::LogCastCancel(ai, "victim_escape");
+                ai::LogCastCancelNonMelee(ai, "victim_escape", false);
         bot->InterruptNonMeleeSpells(false);
     }
 }
