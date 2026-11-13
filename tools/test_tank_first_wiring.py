@@ -71,10 +71,13 @@ class TankFirstWiring(unittest.TestCase):
         self.assertLess(index_in(read, "std::lock_guard<std::mutex> lock(g_tankFirstMutex);"),
                         index_in(read, "WorldTimer::getMSTime()"))
 
-    def test_the_ages_never_wrap(self):
-        # A read's clock sample can predate a stamp another thread wrote, so every age clamps (TankFirstAgeMs).
+    def test_the_ages_survive_the_clock_wrap(self):
+        # Two hazards: a read's clock sample can predate a stamp another thread wrote, and any stamp can predate the
+        # clock's ~49.7-day wrap. The age is the modulo difference (WorldTimer::getMSTimeDiff's arithmetic) and a stamp
+        # newer than the read clamps to 0.
         self.assertIn("inline std::uint32_t TankFirstAgeMs(std::uint32_t nowMs, std::uint32_t stampMs)", POLICY)
-        self.assertIn("return nowMs < stampMs ? 0 : nowMs - stampMs;", POLICY)
+        self.assertIn("const std::uint32_t age = nowMs - stampMs;", POLICY)
+        self.assertIn("return age > UINT32_MAX / 2 ? 0 : age;", POLICY)
         for raw in ("now - record.", "nowMs - r.", "nowMs - it->second"):
             self.assertNotIn(raw, POLICY)
         self.assertIn("record.tankMs += elapsed;", POLICY)
