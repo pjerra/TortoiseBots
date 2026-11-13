@@ -1,5 +1,6 @@
 # Changelog
 
+- Changed: Hakkar's `seek_pull` row walks one Son of Hakkar out per Blood Siphon cycle (priority 3 -> 1) and burns an engaged Son from 45 s before the siphon instead of on arrival (param 75 -> 45), the Son-timing variant A of walks 93 + 94 (50/80 Hakkar kills against 12/112).
 - Fixed: a hunter's spread point only steps aside for the points the rest of her group actually owns, since an empty ring point is nobody's place to stand, so no two members of the group are left closer than the raid's spacing.
 - Fixed: the hunter's minimum distance from the boss now also counts her own body size, the two yards within which she already counts as being on her point, and a yard of margin, so a hunter standing on her point is never inside Auto Shot's dead zone.
 - Fixed: every member snaps the boss's position down to the whole yard before it works out the spread points, so a boss drifting a fraction of a yard between two bots' reads no longer leaves them standing on two different maps.
