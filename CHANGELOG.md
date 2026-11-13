@@ -1,6 +1,6 @@
 # Changelog
 
-- Fixed: a `ranged_only` row now outranks a melee bot's own attack order while the row holds the target (the stale order is dropped), so Onyxia P2 tanks stop chasing the airborne boss and take the adds, while a subject with no row still leaves a player's order alone (needs `AiPlayerbot.DungeonRunRangedOnly`).
+- Fixed: a `ranged_only` row now outranks a melee bot's own attack order while the row is active (its boss in the fight, the stale order is dropped), so Onyxia P2 tanks stop chasing the airborne boss and take the adds, while a subject with no active row still leaves a player's order alone (needs `AiPlayerbot.DungeonRunRangedOnly`).
 - Fixed: a `tank_post` in `hold_spot` mode keeps its engaged subject in the tank's own target pick, so the tank-assist pick (a whelp on the healer) no longer takes the tick between two Engage calls and the post's tank stops sitting at 99 % rage on the whelp while the subject is on it.
 - Fixed: a summoned bot's live hunter pet or warlock demon is teleported with it and resummoned beside it instead of walking through the instance to its owner and pulling whatever it passes (#1606).
 - Fixed: a Shadow priest no longer drops Shadowform to Renew an ally another healer already covers, and drops the form only for a heal it can cast at once, not into a global cooldown or wand swing (found by Tortoise Trials, #1556).

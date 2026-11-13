@@ -12690,9 +12690,14 @@ bool ai::IsRangedOnlyHeld(PlayerbotAI* ai, Player* bot, Unit* unit, float* gapYd
     // The kind holds melee damage and tanks: a healer keeps its own business in the air phase.
     if (PlayerbotAI::IsHeal(bot))
         return false;
-    // The table carries the hold keyed by the held entry: the row's boss for target_entry 0, or its own target. The
-    // kind's key and the strategy are the caller's gate, so a key-off table answers 0 and changes nothing.
-    const float rowGap = GetBossTactics().RangedOnlyGap(bot->GetMapId(), unit->GetEntry());
+    // The map's row is only the pre-filter: every row the fight scan reads is one of them, so a 0 here means no active
+    // row either and every map without the kind skips the scan. The gap itself comes from the fight scan, never from
+    // the static table: a row whose boss is not engaged is not in the fight, and it must not erase a player's order on
+    // its subject.
+    if (!(GetBossTactics().RangedOnlyGap(bot->GetMapId(), unit->GetEntry()) > 0.0f))
+        return false;
+    const BossTacticsFight fight = ScanBossTactics(ai, bot);
+    const float rowGap = RangedOnlyFightGap(fight.rows, unit->GetEntry());
     if (!(rowGap > 0.0f))
         return false;
     const float gap = unit->GetPositionZ() - bot->GetPositionZ();
