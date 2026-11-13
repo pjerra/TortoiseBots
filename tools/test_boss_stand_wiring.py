@@ -215,8 +215,10 @@ class BossStandWiring(unittest.TestCase):
         self.assertIn("bot->AttackStop();", fn)
         self.assertIn("bot->CastStop();", fn)
         self.assertLess(fn.index("bot->CastStop();"), fn.index("MoveTo("))
-        # A bot within 6 yd of its seat keeps the cast it is in.
-        self.assertIn("if (StandShouldStopCast(bot->GetPositionX(), bot->GetPositionY(), seatX, seatY))\n        bot->CastStop();", fn)
+        # A bot within 6 yd of its seat keeps the cast it is in: the near-seat guard alone gates the stop, and the stop
+        # comes before the walk.
+        self.assertIn("if (StandShouldStopCast(bot->GetPositionX(), bot->GetPositionY(), seatX, seatY))", fn)
+        self.assertLess(fn.index("if (StandShouldStopCast("), fn.index("bot->CastStop();"))
         self.assertIn("StandArrived(bot->GetPositionX(), bot->GetPositionY(), seatX, seatY)", fn)
         # The seat the bot walks to is the row's, through a live boss anchor's clamp (test_boss_anchor_wiring.py).
         self.assertIn("float seatX = stand.x;", fn)
