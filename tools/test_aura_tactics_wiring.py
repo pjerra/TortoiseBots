@@ -479,8 +479,9 @@ class DpsHoldWiring(unittest.TestCase):
         self.assertIn("BossTacticKind::DpsHoldAfter", multiplier)
         # The seek_aura row joins the area clause (a blast beside the Son takes it): the seek wiring has its own
         # guards in tools/test_seek_aura_wiring.py.
-        self.assertIn("const bool area = (holdsRows || dpsHoldRows || seeksRow) && IsAreaDamageAction(ai, action);",
-                      multiplier)
+        # r13's tank_first joins the same clause (its own wiring is in tools/test_tank_first_wiring.py).
+        self.assertIn("const bool area = (holdsRows || dpsHoldRows || seeksRow || tankFirst) && "
+                      "IsAreaDamageAction(ai, action);", multiplier)
 
     def test_the_hold_logs_one_row_per_trigger_and_bot(self):
         log = body(ACTIONS, "void LogDpsHold(")

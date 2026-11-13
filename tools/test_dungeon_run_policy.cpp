@@ -28353,6 +28353,54 @@ static void TestJindoTrollGoesToDpsNotTank()
     }
 }
 
+// r13 part W: a tank_first add (a Son of Hakkar) on a healer gets no ranged damage dealer while its boss fights — the
+// damage on it is held until a tank has taken it, so the guard's order would only burn it. With the boss out of the
+// facts it is an ordinary add again, and the off-tanks still take it (RaidGuardTick), which is what the rule wants.
+//   Old code: RaidHealerGuard orders `attack <guid> <dps>` at the add.
+//   Mutation caught: TankFirstFact returning true without its boss in the fight.
+static void TestRaidHealerGuardLeavesTankFirstAdd()
+{
+    {
+        DungeonPlan plan;
+        Run r = RaidBossRun(plan);
+        Facts f = FocusGuardFacts();
+        UnitFact son = Hitter(45201, 11357, 18, true);
+        son.tankFirstBoss = 10184;
+        f.partyAttackers = {son};
+        CHECK(TankFirstFact(f, f.partyAttackers[0]));
+        std::string order;
+        CHECK(!RaidHealerGuard(r, f, kTickMs, order));
+        CHECK(order.empty());
+        // With the healer guard on, the off-tank finds a free ranged dps for the add and leaves it too, so nobody burns
+        // the Son while the hold waits for a tank.
+        CHECK(GuardTick(r, f).empty());
+    }
+    {
+        // The row's boss is not in this fight: the add is a normal one and the nearest ranged dps takes it.
+        DungeonPlan plan;
+        Run r = RaidBossRun(plan);
+        Facts f = FocusGuardFacts();
+        UnitFact son = Hitter(45201, 11357, 18, true);
+        son.tankFirstBoss = 11380;
+        f.partyAttackers = {son};
+        CHECK(!TankFirstFact(f, f.partyAttackers[0]));
+        std::string order;
+        CHECK(RaidHealerGuard(r, f, kTickMs, order));
+        CHECK(order == "attack 45201 NearDps");
+    }
+    {
+        // The boss among the party's attackers is enough of a fight (no engaged list in the facts).
+        Facts f = FocusGuardFacts();
+        f.units.clear();
+        UnitFact son = Hitter(45201, 11357, 18, true);
+        son.tankFirstBoss = 10184;
+        f.partyAttackers = {son};
+        UnitFact boss = HpUnit(0xF1300027C8000001ull, 10184, 1000000, 1000000);
+        f.partyAttackers.push_back(boss);
+        CHECK(TankFirstFact(f, f.partyAttackers[0]));
+    }
+}
+
 // The totem focus is issued before the guard: a totem kill-first unit takes the tick over a guard-worthy healer add.
 // With the key off the guard's order goes out first and the focus waits for the next tick, as today.
 static void TestTotemFocusBeatsGuard()
@@ -37889,6 +37937,7 @@ int main()
     TestTotemFocusKeyOffJoinsAll();
     TestFocusSkipsDelusionsCarrier();
     TestJindoTrollGoesToDpsNotTank();
+    TestRaidHealerGuardLeavesTankFirstAdd();
     TestTankIgnoreHealerAddGoesToTheOffTank();
     TestExplicitTotemFocusArmsEveryBot();
     TestTankHoldFocusUnchanged();
