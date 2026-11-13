@@ -51,10 +51,16 @@ class RangedOnlyWiring(unittest.TestCase):
         self.assertIn("ai->IsRanged(bot)", hold)
         self.assertIn("PlayerbotAI::IsHeal(bot)", hold)
         self.assertIn("GetBossTactics().RangedOnlyGap(bot->GetMapId(), unit->GetEntry())", hold)
-        # An explicit attack order is the policy's input, so DPS and tank picks see the same exception as the trigger.
+        # The order is still the policy's input, but it no longer exempts the bot from an engaged row: the row's own
+        # gap decides, so a subject with no row is never held and a player's order wins there as before.
         self.assertIn('GetValue<ObjectGuid>("explicit attack target")', hold)
         self.assertIn("RangedOnlyHolds(true, unit->GetPositionZ(), bot->GetPositionZ(), rowGap, ordered)", hold)
         self.assertIn("float gap = unit->GetPositionZ() - bot->GetPositionZ();", hold)
+        policy = (ROOT / "ai/playerbot/policy/raid/RangedOnlyPolicy.h").read_text()
+        self.assertIn("inline bool RangedOnlyHolds(bool isMeleeBot, float subjectZ, float botFloorZ, float gapYd, "
+                      "bool /*hasExplicitOrder*/)", policy)
+        self.assertNotIn("hasExplicitOrder ||", policy)
+        self.assertIn("if (!isMeleeBot || gapYd <= 0.0f)", policy)
 
     def test_trigger_drops_the_target_and_logs(self):
         trigger = body(TRIGGERS, "bool BossTacticsRangedOnlyTrigger::IsActive()")
@@ -63,6 +69,13 @@ class RangedOnlyWiring(unittest.TestCase):
         action = body(ACTIONS, "bool BossTacticsRangedOnlyAction::Execute(Event& event)")
         self.assertIn("IsRangedOnlyHeld(ai, bot, held)", action)
         self.assertIn("FindBossKillFirst(ai, bot, fight)", action)
+        # The held target can be the bot's own order (the walk's or a player's pull order): the row outranks it, so
+        # the order is cleared before the pick, and nothing re-picks the airborne boss while the row holds it.
+        self.assertIn('if (AI_VALUE(ObjectGuid, "explicit attack target") == held->GetObjectGuid())', action)
+        self.assertIn('context->GetValue<ObjectGuid>("explicit attack target")->Set(ObjectGuid());', action)
+        self.assertIn('context->GetValue<ObjectGuid>("automated attack target")->Set(ObjectGuid());', action)
+        self.assertLess(action.index('explicit attack target") == held->GetObjectGuid()'),
+                        action.index("FindBossKillFirst(ai, bot, fight)"))
 
     def test_trigger_and_action_are_registered(self):
         self.assertIn('creators["boss tactics ranged only"] = [](PlayerbotAI* ai) '

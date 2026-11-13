@@ -12696,6 +12696,8 @@ bool ai::IsRangedOnlyHeld(PlayerbotAI* ai, Player* bot, Unit* unit, float* gapYd
     if (!(rowGap > 0.0f))
         return false;
     const float gap = unit->GetPositionZ() - bot->GetPositionZ();
+    // The order is still read for the policy, but it no longer exempts the bot from the row: the row's own gap does
+    // (a subject with no row never gets here). The action drops the order once the row holds its target.
     const bool ordered = !ai->GetAiObjectContext()->GetValue<ObjectGuid>("explicit attack target")->Get().IsEmpty();
     if (!RangedOnlyHolds(true, unit->GetPositionZ(), bot->GetPositionZ(), rowGap, ordered))
         return false;
@@ -12821,6 +12823,16 @@ bool BossTacticsRangedOnlyAction::Execute(Event& event)
         held = nullptr;
     if (!held)
         return false;
+    AiObjectContext* context = ai->GetAiObjectContext();
+    // The held target can also be the bot's own attack order (a pull order given by the walk or a player lasts through
+    // the air phase: Onyxia P2 ran 89 tanks episodes of 20 s or more on the airborne boss). The row outranks that
+    // order while it holds the target, so the order is dropped before the bot turns to the pick; nothing re-picks the
+    // subject while the row holds it, and the order is untouched outside a row.
+    if (AI_VALUE(ObjectGuid, "explicit attack target") == held->GetObjectGuid())
+    {
+        context->GetValue<ObjectGuid>("explicit attack target")->Set(ObjectGuid());
+        context->GetValue<ObjectGuid>("automated attack target")->Set(ObjectGuid());
+    }
     // The kill_first add is the pick the row exists for (Ayamiss's larva and hornet while she is in the air).
     if (Unit* pick = FindBossKillFirst(ai, bot, fight))
     {
@@ -12847,7 +12859,6 @@ bool BossTacticsRangedOnlyAction::Execute(Event& event)
         return Attack(bot, nearest);
     // Nothing to switch to: drop the pick and stop, so every picker (which skips a held subject) waits the air phase
     // out instead of swinging at the air.
-    AiObjectContext* context = ai->GetAiObjectContext();
     context->GetValue<Unit*>("current target")->Set(nullptr);
     context->GetValue<ObjectGuid>("attack target")->Set(ObjectGuid());
     bot->AttackStop();
