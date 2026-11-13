@@ -34,6 +34,7 @@ using ai::SpreadSlotCastCutDue;
 using ai::SpreadSlotCastStart;
 using ai::SpreadSlotFallback;
 using ai::SpreadSlotIndexOf;
+using ai::SpreadSlotInsideMinRange;
 using ai::SpreadSlotMinRangeApplies;
 using ai::SpreadSlotMinRangePoint;
 using ai::SpreadSlotMinRangeYd;
@@ -259,6 +260,16 @@ int main()
     CHECK(std::fabs(SpreadSlotMinRangeYd(9.0f, 1.5f) - 21.5f) < 0.001f);
     CHECK(std::fabs(SpreadSlotMinRangeYd(-5.0f, -2.0f) - 11.0f) < 0.001f);
     CHECK(std::fabs(SpreadSlotMinRangeYd(3.0f, 1.5f) - SpreadSlotMinRangeYd(3.0f, 0.0f) - 1.5f) < 0.001f);
+    // SlotInsideHunterMinRange: the runtime guard the spread read uses, independent of the floor. A slot 10 yd from
+    // the target centre with 7.5 yd of reach between the two bodies leaves 2.5 yd of shot, inside Auto Shot's 8 yd
+    // minimum plus the 2 yd margin; at 25 yd it leaves 17.5 yd and clears. A class with no minimum range never bites.
+    CHECK(SpreadSlotInsideMinRange(10.0f, 7.5f, 8.0f));
+    CHECK(!SpreadSlotInsideMinRange(25.0f, 7.5f, 8.0f));
+    CHECK(!SpreadSlotInsideMinRange(0.0f, 0.0f, 0.0f));
+    CHECK(SpreadSlotInsideMinRange(9.99f, 0.0f, 8.0f));  // inside by the margin alone
+    CHECK(!SpreadSlotInsideMinRange(10.0f, 0.0f, 8.0f));  // exactly at min + margin: outside
+    CHECK(SpreadSlotInsideMinRange(14.9f, 5.0f, 8.0f));  // 9.9 yd of shot, still inside
+    CHECK(!SpreadSlotInsideMinRange(15.1f, 5.0f, 8.0f));  // 10.1 yd of shot, outside
     // SpreadSlot_ArrivedHunterStaysOutOfTheDeadZone: HunterTargetInDeadZone takes both combat reaches off the target
     // distance and compares the rest with Auto Shot's 8 yd minimum. A hunter reads as arrived while up to
     // kSpreadSlotArriveYd inside its point, so the floor must clear the dead zone by that slack plus its own margin.
@@ -494,31 +505,45 @@ int main()
     }
     std::cout << "  [PASS] fallback keeps the owned slot telemetry\n";
 
-    // The verdict precedence of the slot decision, in D6 order.
-    CHECK(SpreadSlotWanted(true, true, true, true, false, false, false, false, true, true) ==
+    // The verdict precedence of the slot decision, in D6 order. The last argument is the dead-zone guard: it sits
+    // after the floor (a point the floor or the map refuses is not the shot's problem) and before the range test.
+    CHECK(SpreadSlotWanted(true, true, true, true, false, false, false, false, true, true, false) ==
           SpreadSlotVerdict::Seek);
-    CHECK(SpreadSlotWanted(false, true, true, true, true, true, true, true, false, false) ==
+    CHECK(SpreadSlotWanted(false, true, true, true, true, true, true, true, false, false, false) ==
           SpreadSlotVerdict::Stand);
-    CHECK(SpreadSlotWanted(false, false, true, true, true, true, true, true, false, false) ==
+    CHECK(SpreadSlotWanted(false, false, true, true, true, true, true, true, false, false, false) ==
           SpreadSlotVerdict::Victim);
-    CHECK(SpreadSlotWanted(false, false, false, true, true, true, true, true, false, false) ==
+    CHECK(SpreadSlotWanted(false, false, false, true, true, true, true, true, false, false, false) ==
           SpreadSlotVerdict::Walkout);
-    CHECK(SpreadSlotWanted(false, false, false, false, false, true, true, true, false, false) ==
+    CHECK(SpreadSlotWanted(false, false, false, false, false, true, true, true, false, false, false) ==
           SpreadSlotVerdict::NoCentre);
-    CHECK(SpreadSlotWanted(false, false, false, false, true, false, true, true, false, false) ==
+    CHECK(SpreadSlotWanted(false, false, false, false, true, false, true, true, false, false, false) ==
           SpreadSlotVerdict::NoSlot);
-    CHECK(SpreadSlotWanted(false, false, false, false, true, true, false, true, false, false) ==
+    CHECK(SpreadSlotWanted(false, false, false, false, true, true, false, true, false, false, false) ==
           SpreadSlotVerdict::Floor);
-    CHECK(SpreadSlotWanted(false, false, false, false, true, true, true, false, false, false) ==
+    // The floor outranks the dead zone: a slot the map or the anchor refuses stays a floor read.
+    CHECK(SpreadSlotWanted(false, false, false, false, true, true, false, true, false, false, true) ==
+          SpreadSlotVerdict::Floor);
+    CHECK(SpreadSlotWanted(false, false, false, false, true, true, true, false, false, false, false) ==
           SpreadSlotVerdict::Range);
-    CHECK(SpreadSlotWanted(false, false, false, false, true, true, true, true, false, true) ==
-          SpreadSlotVerdict::SlotHold);
-    CHECK(SpreadSlotWanted(false, false, false, false, true, true, true, true, true, false) ==
-          SpreadSlotVerdict::Cast);
-    CHECK(SpreadSlotWanted(false, false, false, false, true, true, true, true, false, false) ==
+    // SpreadSlot_DeadZoneVerdict: a slot inside the shot's dead zone is no place to walk to, so it outranks the
+    // range test and the walk: the hunter keeps the step-out's position.
+    CHECK(SpreadSlotWanted(false, false, false, false, true, true, true, true, false, false, true) ==
+          SpreadSlotVerdict::DeadZone);
+    CHECK(SpreadSlotWanted(false, false, false, false, true, true, true, false, false, false, true) ==
+          SpreadSlotVerdict::DeadZone);
+    // A usable point outside the zone is still a walk.
+    CHECK(SpreadSlotWanted(false, false, false, false, true, true, true, true, false, false, false) ==
           SpreadSlotVerdict::SlotMove);
+    CHECK(SpreadSlotWanted(false, false, false, false, true, true, true, false, false, false, false) !=
+          SpreadSlotVerdict::DeadZone);
+    CHECK(SpreadSlotWanted(false, false, false, false, true, true, true, true, false, true, false) ==
+          SpreadSlotVerdict::SlotHold);
+    CHECK(SpreadSlotWanted(false, false, false, false, true, true, true, true, true, false, false) ==
+          SpreadSlotVerdict::Cast);
     CHECK(std::string(SpreadSlotVerdictWord(SpreadSlotVerdict::SlotHold)) == "slot_hold");
     CHECK(std::string(SpreadSlotVerdictWord(SpreadSlotVerdict::NoCentre)) == "no_centre");
+    CHECK(std::string(SpreadSlotVerdictWord(SpreadSlotVerdict::DeadZone)) == "dead_zone");
     CHECK(std::string(SpreadSlotVerdictWord(SpreadSlotVerdict::MoveFailed)) == "move_failed");
     std::cout << "  [PASS] slot verdict precedence and words\n";
 

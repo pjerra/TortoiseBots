@@ -1,5 +1,6 @@
 # Changelog
 
+- Fixed: a hunter's spread point (and its spare) inside Auto Shot's dead zone for her current target is no longer walked to, so her dead-zone step-out keeps the position instead of the slot pulling her back; the read says `dead_zone`, needs no new key, and logs the row.
 - Fixed: the cast-cancel diagnostic row resolves its target from the guid it holds as the row is written, so a cancel at a unit removed in the same world tick (Jin'do's death despawns the summons the bots are casting at) reads `none` instead of freed memory and no longer crashes the server.
 
 - Fixed: a hunter's spread point only steps aside for the points the rest of her group actually owns, since an empty ring point is nobody's place to stand, so no two members of the group are left closer than the raid's spacing.

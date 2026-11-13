@@ -67,6 +67,9 @@ namespace ai
     // The floor's own margin past the arrival slack: a hunter standing `kSpreadSlotArriveYd` inside its point is still
     // this far outside the dead zone.
     constexpr float kSpreadMinRangeMarginYd = 1.0f;
+    // The dead-zone guard's margin past the shot's minimum range: a slot this near its target cannot be shot from, so
+    // walking to it cancels the shot and hands the position back to the step-out.
+    constexpr float kSpreadSlotMinRangeMarginYd = 2.0f;
     // The grid the owner-point search rounds the boss position to: every member reads the same map even when the boss
     // drifted a fraction of a yard between two of their reads.
     constexpr float kSpreadSlotBossGridYd = 1.0f;
@@ -146,6 +149,14 @@ namespace ai
     inline bool SpreadSlotMinRangeApplies(bool keyOn, bool needsMinRange)
     {
         return keyOn && needsMinRange;
+    }
+
+    // Whether a slot point lies inside the shot's dead zone for its current target: the point's distance to the
+    // target centre, less the reach between the two bodies, is the distance the shot would cover, and it must clear
+    // the shot's minimum range by the margin. A min range of 0 (a class without a dead zone) never bites.
+    inline bool SpreadSlotInsideMinRange(float slotToTargetCentreYd, float reachYd, float minRangeYd)
+    {
+        return minRangeYd > 0 && slotToTargetCentreYd - reachYd < minRangeYd + kSpreadSlotMinRangeMarginYd;
     }
 
     // The floor a min-range slot keeps from the boss: the boss's body, the shot's dead zone, the bot's own body, the
@@ -341,6 +352,7 @@ namespace ai
         Range,
         Cast,
         Floor,
+        DeadZone,
         NoSlot,
         NoCentre,
         MoveFailed,
@@ -359,6 +371,7 @@ namespace ai
             case SpreadSlotVerdict::Range: return "range";
             case SpreadSlotVerdict::Cast: return "cast";
             case SpreadSlotVerdict::Floor: return "floor";
+            case SpreadSlotVerdict::DeadZone: return "dead_zone";
             case SpreadSlotVerdict::NoSlot: return "no_slot";
             case SpreadSlotVerdict::NoCentre: return "no_centre";
             case SpreadSlotVerdict::MoveFailed: return "move_failed";
@@ -368,9 +381,11 @@ namespace ai
 
     // The slot decision's precedence: the seek and the stand move the bot, a
     // fight duty keeps it, then the geometry. Arrival outranks the cast gate
-    // (a bot at its slot holds there, cast or not).
+    // (a bot at its slot holds there, cast or not). A slot inside the shot's
+    // dead zone is no place to walk to, so it outranks the range test and
+    // leaves the position to the bot's own step-out.
     inline SpreadSlotVerdict SpreadSlotWanted(bool seekValid, bool standValid, bool victimOrCharmed, bool walkout,
-        bool hasCentre, bool hasSlot, bool slotUsable, bool inRange, bool castBlocked, bool arrived)
+        bool hasCentre, bool hasSlot, bool slotUsable, bool inRange, bool castBlocked, bool arrived, bool deadZone)
     {
         if (seekValid)
             return SpreadSlotVerdict::Seek;
@@ -386,6 +401,8 @@ namespace ai
             return SpreadSlotVerdict::NoSlot;
         if (!slotUsable)
             return SpreadSlotVerdict::Floor;
+        if (deadZone)
+            return SpreadSlotVerdict::DeadZone;
         if (!inRange)
             return SpreadSlotVerdict::Range;
         if (arrived)

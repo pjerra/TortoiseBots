@@ -9472,25 +9472,56 @@ BossSpreadSlotTask ReadBossSpreadSlot(PlayerbotAI* ai, Player* bot)
         return SpreadSlotMinRangePoint(canonical, bossX, bossY, cx, cy, minYd);
     };
 
-    // D5: the owned slot; one spare-slot fallback when it is unusable, then the floor verdict.
+    // The shot's dead zone: a hunter's slot nearer its own target than Auto Shot's minimum range (plus the margin)
+    // cannot be shot from, so walking to it cancels her shot and the step-out walks her back out. The reach is the
+    // same centre-to-edge term HunterStepOutAction uses.
+    Unit* const shotTarget = AI_VALUE(Unit*, "current target");
+    float shotMaxYd = 0.0f;
+    float shotMinYd = 0.0f;
+    const bool shotMinRange = shotTarget && ai->GetSpellRange("auto shot", &shotMaxYd, &shotMinYd) && shotMinYd > 0.0f;
+    float shotReachYd = 0.0f;
+    if (shotMinRange)
+        shotReachYd = std::max(0.0f, sServerFacade.getDistance2d(bot, shotTarget) -
+                                         bot->GetDistance(shotTarget, SizeFactor::CombatReach));
+    const auto insideShotMinRange = [&](const SpreadSlotPoint& point) {
+        if (!shotMinRange)
+            return false;
+        const float dx = point.x - shotTarget->GetPositionX();
+        const float dy = point.y - shotTarget->GetPositionY();
+        return SpreadSlotInsideMinRange(std::sqrt(dx * dx + dy * dy), shotReachYd, shotMinYd);
+    };
+
+    // D5: the owned slot; one spare-slot fallback when it is unusable, then the floor verdict. A point inside the
+    // dead zone is unusable for the move, but only the floor and the dead zone itself can refuse the position.
     bool ownedUsable = false;
+    bool ownedDeadZone = false;
     int fallback = -1;
     bool fallbackUsable = false;
+    bool spareDeadZone = false;
     float x = 0.0f, y = 0.0f, z = 0.0f;
     SpreadSlotPoint ownedPoint;
     if (owned >= 0)
     {
         ownedPoint = ownedSlotPoint(owned);
-        ownedUsable = SpreadSlotPointUsable(ai, bot, cz, ownedPoint, x, y, z);
+        ownedDeadZone = insideShotMinRange(ownedPoint);
+        ownedUsable = !ownedDeadZone && SpreadSlotPointUsable(ai, bot, cz, ownedPoint, x, y, z);
         if (!ownedUsable)
         {
             fallback = SpreadSlotFallback(index, count, total);
-            fallbackUsable = fallback >= 0 && fallback < total &&
-                             SpreadSlotPointUsable(ai, bot, cz, sparePoint(fallback), x, y, z);
+            if (fallback >= 0 && fallback < total)
+            {
+                const SpreadSlotPoint spare = sparePoint(fallback);
+                spareDeadZone = insideShotMinRange(spare);
+                fallbackUsable = !spareDeadZone && SpreadSlotPointUsable(ai, bot, cz, spare, x, y, z);
+            }
+            else
+                fallback = -1;
         }
     }
     const SpreadSlotSelection selection = SpreadSlotSelect(owned, fallback, ownedUsable, fallbackUsable);
     const bool slotUsable = selection.moveSlot >= 0;
+    // No owned or spare slot outside the dead zone: the hunter keeps the step-out's position instead of walking back.
+    const bool deadZone = shotMinRange && ownedDeadZone && (fallback < 0 || spareDeadZone);
 
     // The row always reports the owned slot and its distance; the walk and the arrival use the point actually stood on.
     const auto pointYd = [bot](const SpreadSlotPoint& point) {
@@ -9511,8 +9542,7 @@ BossSpreadSlotTask ReadBossSpreadSlot(PlayerbotAI* ai, Player* bot)
             arrived = pointYd(movePoint) <= kSpreadSlotArriveYd;
         }
         // A healer measures from the boss's victim, a damage dealer from its own target; no target is in range.
-        Unit* const targetUnit = ai->IsHeal(bot) ? (boss ? boss->GetVictim() : nullptr) :
-                                                  AI_VALUE(Unit*, "current target");
+        Unit* const targetUnit = ai->IsHeal(bot) ? (boss ? boss->GetVictim() : nullptr) : shotTarget;
         if (slotUsable && targetUnit)
         {
             const float tx = x - targetUnit->GetPositionX();
@@ -9523,7 +9553,7 @@ BossSpreadSlotTask ReadBossSpreadSlot(PlayerbotAI* ai, Player* bot)
 
     const bool castBlocked = MoveBlockedByCast(bot->IsNonMeleeSpellCasted(false, true, true), false);
     task.verdict = SpreadSlotWanted(seek.valid, stand.valid, victimOrCharmed, walkout, hasCentre, hasSlot,
-                                    slotUsable, inRange, castBlocked, arrived);
+                                    slotUsable, inRange, castBlocked, arrived, deadZone);
     task.slot = selection.slot;
     task.fallback = selection.fallback;
     task.slotYd = selection.slot >= 0 ? slotYd : -1.0f;
