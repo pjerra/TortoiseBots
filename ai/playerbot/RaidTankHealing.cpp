@@ -114,12 +114,12 @@ bool ai::StopUnsafeRaidHealerFiller(PlayerbotAI* ai)
         return false;
     if (offensiveCast)
     {
-        ai::LogCastCancel(ai, "patchwerk_filler");
+        ai::LogCastCancel(ai, "patchwerk_filler", CURRENT_GENERIC_SPELL);
         bot->InterruptSpell(CURRENT_GENERIC_SPELL);
     }
     if (wand)
     {
-        ai::LogCastCancel(ai, "patchwerk_filler");
+        ai::LogCastCancel(ai, "patchwerk_filler", CURRENT_AUTOREPEAT_SPELL);
         bot->InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
     }
     return true;

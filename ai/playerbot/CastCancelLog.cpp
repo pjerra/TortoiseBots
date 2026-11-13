@@ -5,53 +5,78 @@
 
 namespace
 {
-    // The bot's own cast, in the order a cancel loses it: a normal cast bar, a channel, the auto-repeat (Auto Shot,
-    // Shoot, a wand) and last a melee-slot spell. The row names the slot it read.
-    struct LiveCast
+    // The row's slot word.
+    const char* SlotWord(CurrentSpellTypes slot)
     {
-        Spell* spell = nullptr;
-        const char* slot = "";
-    };
-
-    LiveCast FindLiveCast(Player* bot)
-    {
-        static const CurrentSpellTypes kSlots[] = {
-            CURRENT_GENERIC_SPELL, CURRENT_CHANNELED_SPELL, CURRENT_AUTOREPEAT_SPELL, CURRENT_MELEE_SPELL };
-        static const char* const kWords[] = { "generic", "channeled", "autorepeat", "melee" };
-        for (int i = 0; i < 4; ++i)
+        switch (slot)
         {
-            Spell* spell = bot->GetCurrentSpell(kSlots[i]);
-            if (spell && spell->m_spellInfo)
-            {
-                LiveCast cast;
-                cast.spell = spell;
-                cast.slot = kWords[i];
-                return cast;
-            }
+            case CURRENT_GENERIC_SPELL: return "generic";
+            case CURRENT_CHANNELED_SPELL: return "channeled";
+            case CURRENT_AUTOREPEAT_SPELL: return "autorepeat";
+            case CURRENT_MELEE_SPELL: return "melee";
         }
-        return LiveCast();
+        return "generic";
+    }
+
+    // The gate, read before any slot: off, a call costs the branch and writes nothing.
+    bool CastCancelEnabled()
+    {
+        return sPlayerbotAIConfig.raidBossDiagnostics && sPlayerbotAIConfig.hasLog("bot_events.csv");
     }
 }
 
-void ai::LogCastCancel(PlayerbotAI* ai, const char* site, float movedYd)
+void ai::LogCastCancel(PlayerbotAI* ai, const char* site, CurrentSpellTypes slot, float movedYd)
 {
-    // The key first: off, the row costs one branch and no slot read.
-    if (!ai || !site || !sPlayerbotAIConfig.raidBossDiagnostics || !sPlayerbotAIConfig.hasLog("bot_events.csv"))
+    if (!ai || !site || static_cast<int>(slot) >= CURRENT_MAX_SPELL || !CastCancelEnabled())
         return;
     Player* const bot = ai->GetBot();
     if (!bot)
         return;
-    const LiveCast cast = FindLiveCast(bot);
-    if (!cast.spell)
+    Spell* const cast = bot->GetCurrentSpell(slot);
+    if (!cast || !cast->m_spellInfo)
         return;
     // A cast bar has its total in m_casttime; a channel's total is the spell's duration.
-    int totalMs = cast.spell->GetCastTime();
+    int totalMs = cast->GetCastTime();
     if (totalMs <= 0)
-        totalMs = static_cast<int>(GetSpellDuration(cast.spell->m_spellInfo));
-    const int pct = CastCancelPct(totalMs, cast.spell->GetCastedTime());
-    Unit* const target = cast.spell->m_targets.getUnitTarget();
+        totalMs = static_cast<int>(GetSpellDuration(cast->m_spellInfo));
+    const int pct = CastCancelPct(totalMs, cast->GetCastedTime());
+    Unit* const target = cast->m_targets.getUnitTarget();
     char info1[192];
     snprintf(info1, sizeof(info1), "site=%s,slot=%s,spell=%u,cast_pct=%d,target=%s,moved_yd=%.1f",
-             site, cast.slot, cast.spell->m_spellInfo->Id, pct, target ? target->GetName() : "none", movedYd);
+             site, SlotWord(slot), cast->m_spellInfo->Id, pct, target ? target->GetName() : "none", movedYd);
     sPlayerbotAIConfig.logEvent(ai, "CastCancel", info1, "");
+}
+
+void ai::LogCastCancelStop(PlayerbotAI* ai, const char* site, float movedYd)
+{
+    if (!ai || !site || !CastCancelEnabled())
+        return;
+    Player* const bot = ai->GetBot();
+    if (!bot)
+        return;
+    // Unit::CastStop's own set and condition: a preparing cast that has run for a while, one row each.
+    for (const CurrentSpellTypes slot : { CURRENT_GENERIC_SPELL, CURRENT_AUTOREPEAT_SPELL, CURRENT_CHANNELED_SPELL })
+    {
+        Spell* const cast = bot->GetCurrentSpell(slot);
+        if (cast && cast->m_spellInfo && cast->getState() == SPELL_STATE_PREPARING && cast->GetCastedTime())
+            LogCastCancel(ai, site, slot, movedYd);
+    }
+}
+
+void ai::LogCastCancelNonMelee(PlayerbotAI* ai, const char* site, bool withDelayed, float movedYd)
+{
+    if (!ai || !site || !CastCancelEnabled())
+        return;
+    Player* const bot = ai->GetBot();
+    if (!bot)
+        return;
+    for (const CurrentSpellTypes slot : { CURRENT_GENERIC_SPELL, CURRENT_AUTOREPEAT_SPELL })
+    {
+        Spell* const cast = bot->GetCurrentSpell(slot);
+        if (cast && cast->m_spellInfo && (withDelayed || cast->getState() != SPELL_STATE_DELAYED))
+            LogCastCancel(ai, site, slot, movedYd);
+    }
+    if (Spell* const channel = bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
+        if (channel->m_spellInfo)
+            LogCastCancel(ai, site, CURRENT_CHANNELED_SPELL, movedYd);
 }

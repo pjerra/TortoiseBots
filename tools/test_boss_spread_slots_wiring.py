@@ -177,12 +177,18 @@ class SpreadSlotsWiring(unittest.TestCase):
         read = body(ACTIONS, "BossSpreadSlotTask ReadBossSpreadSlot(PlayerbotAI* ai, Player* bot)")
         self.assertIn("SpreadSlotMinRangeApplies(sPlayerbotAIConfig.spreadRangedMinRange,", read)
         self.assertIn("bot->GetClass() == CLASS_HUNTER", read)
-        self.assertIn("SpreadSlotMinRangeYd(boss->GetCombatReach())", read)
+        # The floor covers the boss's body, the shot's dead zone, the hunter's own body, the arrival slack and a yard.
+        self.assertIn("SpreadSlotMinRangeYd(boss->GetCombatReach(), bot->GetCombatReach())", read)
         self.assertIn(
-            "        ownerPoints = SpreadSlotOwnerPoints(points, minRangeByIndex, boss->GetPositionX(), "
-            "boss->GetPositionY(), cx,\n"
-            "                                            cy, minYd, spacingYd);",
+            "        ownerPoints = SpreadSlotOwnerPoints(points, minRangeByIndex, static_cast<std::size_t>(count), "
+            "bossX, bossY,\n"
+            "                                            cx, cy, minYd, spacingYd);",
             read)
+        # Only the group's own slots are obstacles, and every member rounds the boss to the same 1 yd grid before
+        # building the map, so a fractional drift between two reads still names the same points.
+        self.assertIn("SpreadSlotBossGrid(boss->GetPositionX())", read)
+        self.assertIn("SpreadSlotBossGrid(boss->GetPositionY())", read)
+        self.assertLess(read.index("SpreadSlotBossGrid(boss->GetPositionX())"), read.index("SpreadSlotOwnerPoints("))
         # The order runs on the plain rings, before any class-specific projection: the shared index names the same
         # slot for every member. Owner points are resolved only after the owned/fallback index is chosen.
         self.assertLess(read.index("SpreadSlotOrder(points, prefX, prefY);"), read.index("SpreadSlotMinRangeApplies("))

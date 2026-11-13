@@ -92,7 +92,7 @@ namespace ai
             {
                 ai->ChangeStrategy("+stealthed", BotState::BOT_STATE_COMBAT);
                 ai->ChangeStrategy("+stealthed", BotState::BOT_STATE_NON_COMBAT);
-                ai::LogCastCancel(ai, "bwl_stealth");
+                ai::LogCastCancel(ai, "bwl_stealth", CURRENT_MELEE_SPELL);
                 bot->InterruptSpell(CURRENT_MELEE_SPELL);
                 return true;
             }

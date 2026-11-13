@@ -519,7 +519,7 @@ namespace ai
                 // Combat engine only: out of combat a prowling druid keeps its
                 // normal non-combat actions (see DpsFeralDruidStealthedStrategy).
                 ai->ChangeStrategy("+stealthed", BotState::BOT_STATE_COMBAT);
-                ai::LogCastCancel(ai, "druid_stealth");
+                ai::LogCastCancel(ai, "druid_stealth", CURRENT_MELEE_SPELL);
                 bot->InterruptSpell(CURRENT_MELEE_SPELL);
             }
 

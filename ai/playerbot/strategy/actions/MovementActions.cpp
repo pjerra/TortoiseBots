@@ -2477,7 +2477,7 @@ bool MovementAction::Follow(Unit* target, float distance, float angle)
 
     if (bot->IsNonMeleeSpellCasted(true))
     {
-        ai::LogCastCancel(ai, "follow");
+        ai::LogCastCancelStop(ai, "follow");
         bot->CastStop();
         ai->InterruptSpell();
     }

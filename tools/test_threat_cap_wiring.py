@@ -123,7 +123,7 @@ class ThreatSuccessorStrict(unittest.TestCase):
         self.assertIn("    if (stops.melee)\n        bot->AttackStop();\n", trigger)
         # The stop stays in the trigger pass; the CastCancel diagnostic logs before it interrupts.
         self.assertIn("    if (stops.autoRepeat)\n    {\n", trigger)
-        self.assertIn('        ai::LogCastCancel(ai, "successor_white");\n        bot->InterruptSpell(CURRENT_AUTOREPEAT_SPELL);',
+        self.assertIn('        ai::LogCastCancel(ai, "successor_white", CURRENT_AUTOREPEAT_SPELL);\n        bot->InterruptSpell(CURRENT_AUTOREPEAT_SPELL);',
                       trigger)
         self.assertEqual(1, trigger.count("bot->AttackStop();"))
         self.assertEqual(1, trigger.count("bot->InterruptSpell(CURRENT_AUTOREPEAT_SPELL);"))
@@ -346,7 +346,7 @@ class ThreatResetWindow(unittest.TestCase):
         self.assertIn("SuccessorWhiteStopsOf(true, meleeOnTarget, autoRepeatOnTarget)", trigger)
         self.assertIn("    if (stops.melee)\n        bot->AttackStop();\n", trigger)
         self.assertIn("    if (stops.autoRepeat)\n    {\n", trigger)
-        self.assertIn('        ai::LogCastCancel(ai, "reset_white");\n        bot->InterruptSpell(CURRENT_AUTOREPEAT_SPELL);',
+        self.assertIn('        ai::LogCastCancel(ai, "reset_white", CURRENT_AUTOREPEAT_SPELL);\n        bot->InterruptSpell(CURRENT_AUTOREPEAT_SPELL);',
                       trigger)
         self.assertTrue(trigger.rstrip().endswith("return false;"))
         self.assertNotIn("ClearTarget", trigger)

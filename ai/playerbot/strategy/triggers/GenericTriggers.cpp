@@ -875,7 +875,7 @@ bool SuccessorWhiteCapTrigger::IsActive()
         bot->AttackStop();
     if (stops.autoRepeat)
     {
-        ai::LogCastCancel(ai, "successor_white");
+        ai::LogCastCancel(ai, "successor_white", CURRENT_AUTOREPEAT_SPELL);
         bot->InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
     }
     return false;
@@ -907,7 +907,7 @@ bool ThreatResetWhiteStopTrigger::IsActive()
         bot->AttackStop();
     if (stops.autoRepeat)
     {
-        ai::LogCastCancel(ai, "reset_white");
+        ai::LogCastCancel(ai, "reset_white", CURRENT_AUTOREPEAT_SPELL);
         bot->InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
     }
     return false;

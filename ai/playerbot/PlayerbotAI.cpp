@@ -546,7 +546,7 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
             if (Spell* channel = bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
                 if (channel->m_spellInfo && std::string(channel->m_spellInfo->SpellName[0]).find("Fishing") == 0)
                 {
-                    ai::LogCastCancel(this, "fishing");
+                    ai::LogCastCancel(this, "fishing", CURRENT_CHANNELED_SPELL);
                     bot->InterruptSpell(CURRENT_CHANNELED_SPELL);
                     isCasting = bot->IsNonMeleeSpellCasted(true);
                 }
@@ -950,7 +950,7 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
                     if (PatchwerkOpeningBlocksSpell(this, spell->m_spellInfo->Id,
                         aiObjectContext->GetValue<Unit*>("current target")->Get()))
                     {
-                        ai::LogCastCancel(this, "patchwerk_opening");
+                        ai::LogCastCancel(this, "patchwerk_opening", CurrentSpellTypes(slot));
                         bot->InterruptSpell(CurrentSpellTypes(slot));
                     }
             if (Pet* pet = bot->GetPet())
@@ -982,7 +982,7 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
         {
             if (!soakWasStaging)
             {
-                ai::LogCastCancel(this, "patchwerk_soak_stage");
+                ai::LogCastCancelNonMelee(this, "patchwerk_soak_stage", false);
                 bot->InterruptNonMeleeSpells(false);
                 ResetAIInternalUpdateDelay();
                 if (sPlayerbotAIConfig.hasLog("bot_events.csv"))
@@ -1010,7 +1010,7 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
             if (!soakWasActive)
             {
                 WakePatchwerkPullMain(this);
-                ai::LogCastCancel(this, "patchwerk_soak_engage");
+                ai::LogCastCancelNonMelee(this, "patchwerk_soak_engage", false);
                 bot->InterruptNonMeleeSpells(false);
                 ResetAIInternalUpdateDelay();
                 if (sPlayerbotAIConfig.hasLog("bot_events.csv"))
