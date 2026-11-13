@@ -50,9 +50,17 @@ class RangedOnlyWiring(unittest.TestCase):
         self.assertIn("sPlayerbotAIConfig.dungeonRunRangedOnly", hold)
         self.assertIn("ai->IsRanged(bot)", hold)
         self.assertIn("PlayerbotAI::IsHeal(bot)", hold)
-        self.assertIn("GetBossTactics().RangedOnlyGap(bot->GetMapId(), unit->GetEntry())", hold)
-        # The order is still the policy's input, but it no longer exempts the bot from an engaged row: the row's own
-        # gap decides, so a subject with no row is never held and a player's order wins there as before.
+        # The gap is the fight scan's own row (its boss is engaged there), never the map's static table: the static
+        # lookup is only the pre-filter that skips the scan on a map without the kind (a row missing from the scan
+        # leaves the order of an unengaged encounter alone).
+        self.assertIn("GetBossTactics().RangedOnlyGap(bot->GetMapId(), unit->GetEntry()) > 0.0f", hold)
+        self.assertIn("const BossTacticsFight fight = ScanBossTactics(ai, bot);", hold)
+        self.assertIn("RangedOnlyFightGap(fight.rows, unit->GetEntry())", hold)
+        self.assertLess(hold.index("RangedOnlyGap(bot->GetMapId()"), hold.index("ScanBossTactics(ai, bot)"))
+        self.assertLess(hold.index("ScanBossTactics(ai, bot)"),
+                        hold.index("RangedOnlyFightGap(fight.rows, unit->GetEntry())"))
+        # The order is still the policy's input, but it no longer exempts the bot from an active row: the row's own
+        # gap decides, so a subject with no active row is never held and a player's order wins there as before.
         self.assertIn('GetValue<ObjectGuid>("explicit attack target")', hold)
         self.assertIn("RangedOnlyHolds(true, unit->GetPositionZ(), bot->GetPositionZ(), rowGap, ordered)", hold)
         self.assertIn("float gap = unit->GetPositionZ() - bot->GetPositionZ();", hold)
@@ -61,6 +69,10 @@ class RangedOnlyWiring(unittest.TestCase):
                       "bool /*hasExplicitOrder*/)", policy)
         self.assertNotIn("hasExplicitOrder ||", policy)
         self.assertIn("if (!isMeleeBot || gapYd <= 0.0f)", policy)
+        # Only a row of the active fight answers the hold; a row the scan does not carry is a boss that is not engaged.
+        self.assertIn("inline float RangedOnlyFightGap(const ActiveBossRows& rows, std::uint32_t entry)", policy)
+        self.assertIn("row->kind != BossTacticKind::RangedOnly", policy)
+        self.assertIn("(row->targetEntry != 0 ? row->targetEntry : row->bossEntry) == entry", policy)
 
     def test_trigger_drops_the_target_and_logs(self):
         trigger = body(TRIGGERS, "bool BossTacticsRangedOnlyTrigger::IsActive()")
