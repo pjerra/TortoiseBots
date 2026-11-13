@@ -295,6 +295,18 @@ Unit* TankTargetValue::Calculate()
     if (Unit* patchwerk = GetAssignedPatchwerkTankTarget(ai))
         return patchwerk;
 
+    // A hold_spot post keeps its subject once the tank fights it: the tank-assist pick (a whelp on the healer) must
+    // not steal the tick between two Engage calls, or the post's slot-1 tank sits at 99 % rage on a whelp. The read is
+    // transition-guarded and the fight scan is cached per update tick, so the second read of a tick costs nothing; a
+    // plain post pins nothing and the key-off map pays no scan.
+    if (sPlayerbotAIConfig.dungeonRunTankPost)
+    {
+        const BossTankPost post = FindBossTankPost(ai, bot, ScanBossTactics(ai, bot));
+        if (TankPostPinsTarget(post.holdSpot, post.step, post.subject && post.subject->IsAlive(),
+                post.subject && !post.subject->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE)))
+            return post.subject;
+    }
+
     // A Four Horsemen mark carrier fights the horseman at its new corner:
     // the rotation outranks raid marks here, or the mark walks the tank
     // back into the mark it just left (DpsTargetValue keeps the same order).

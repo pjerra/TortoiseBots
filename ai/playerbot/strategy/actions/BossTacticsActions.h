@@ -910,12 +910,15 @@ namespace ai
     // for, and what the post does this tick. `valid` is true only for the row's own tank, only while the post runs and
     // only when the tank may act; `holdingOtherHostile` means the tank keeps another hostile that attacks a group
     // member, so the post waits and the action stands down (a hold_spot post clears it once the subject has arrived:
-    // the subject then outranks that hostile). The post's state (start, arrival, window) is kept per bot
+    // the subject then outranks that hostile). `holdSpot` is the row's hold_spot mode with its key on, which pins the
+    // subject in Engage and Drag (TankPostPinsTarget): the tank target keeps the subject instead of the tank-assist
+    // pick. The post's state (start, arrival, window) is kept per bot
     // in one record, written and read here alone, so each post logs one start, one arrival and one end.
     struct BossTankPost
     {
         bool valid = false;
         bool holdingOtherHostile = false;
+        bool holdSpot = false;
         TankPostDecision step = TankPostDecision::None;
         Unit* boss = nullptr;
         Unit* subject = nullptr;

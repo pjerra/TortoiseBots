@@ -4064,6 +4064,17 @@ namespace ai
         return in.botToSpotYd > kTankPostSpotYd ? TankPostDecision::Walk : TankPostDecision::Hold;
     }
 
+    // Whether the post pins its subject for the tank's target pick (consumer: TankTargetValue::Calculate). A hold_spot
+    // post that fights its arrived subject keeps it: the tank's rotation must not hand it to the tank-assist pick (a
+    // whelp on the healer) between two Engage ticks and starve the subject's threat. A plain post, and every step that
+    // is not the arrival, pins nothing.
+    inline bool TankPostPinsTarget(bool holdSpot, TankPostDecision step, bool subjectAlive, bool subjectSelectable)
+    {
+        if (!holdSpot || !subjectAlive || !subjectSelectable)
+            return false;
+        return step == TankPostDecision::Engage || step == TankPostDecision::Drag;
+    }
+
     // The end word of a post (the step's own order). `slotMoved`: the post's row is still in the fight, but for another
     // slot index than this bot now holds (a tank died and GetRaidTankRoles renumbered): "slot", not "band".
     inline const char* TankPostEndWord(bool live, bool slotMoved, bool tankCanAct, bool windowExpired,

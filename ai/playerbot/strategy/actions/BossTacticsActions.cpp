@@ -12399,6 +12399,7 @@ BossTankPost ai::FindBossTankPost(PlayerbotAI* ai, Player* bot, const BossTactic
     const bool subjectOutranks = holdSpot && (step == TankPostDecision::Engage || step == TankPostDecision::Drag ||
                                                step == TankPostDecision::Leash);
     out.holdingOtherHostile = in.holdingOtherHostile && !subjectOutranks;
+    out.holdSpot = holdSpot;
     out.step = step;
     out.boss = boss;
     out.subject = subject;

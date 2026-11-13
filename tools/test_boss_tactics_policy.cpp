@@ -1341,6 +1341,25 @@ static void TestTankPost_NoLeashAfterArrival()
     CHECK(TankPostStep(in) == TankPostDecision::Engage);
 }
 
+// The post pins its subject for the tank's target pick only while it fights it: hold_spot in Engage or Drag with an
+// alive, selectable subject. A plain post (hold_spot off) pins nothing, so the key-off behaviour is unchanged, and
+// neither does the walk, the hold, the leash, the yield or a dead/unselectable subject.
+static void TestTankPost_PinsSubjectInEngage()
+{
+    CHECK(TankPostPinsTarget(true, TankPostDecision::Engage, true, true));
+    CHECK(TankPostPinsTarget(true, TankPostDecision::Drag, true, true));
+    CHECK(!TankPostPinsTarget(true, TankPostDecision::Hold, true, true));
+    CHECK(!TankPostPinsTarget(true, TankPostDecision::Walk, true, true));
+    CHECK(!TankPostPinsTarget(true, TankPostDecision::Leash, true, true));
+    CHECK(!TankPostPinsTarget(true, TankPostDecision::Yield, true, true));
+    CHECK(!TankPostPinsTarget(true, TankPostDecision::None, true, true));
+    CHECK(!TankPostPinsTarget(true, TankPostDecision::End, true, true));
+    CHECK(!TankPostPinsTarget(false, TankPostDecision::Engage, true, true)); // a plain post: today's pick
+    CHECK(!TankPostPinsTarget(false, TankPostDecision::Drag, true, true));
+    CHECK(!TankPostPinsTarget(true, TankPostDecision::Engage, false, true)); // dead subject
+    CHECK(!TankPostPinsTarget(true, TankPostDecision::Engage, true, false)); // unselectable subject
+}
+
 // One step row per episode: a post that stays in the drag writes nothing more, a post that leaves it and comes back
 // writes again, and Walk, Hold, Engage and End are rows the post never writes.
 static void TestTankPost_StepEnteredOncePerEpisode()
@@ -1766,6 +1785,7 @@ int main()
     TestTankPost_LeashOffKeepsHold();
     TestTankPost_LeashYieldsToSeat();
     TestTankPost_NoLeashAfterArrival();
+    TestTankPost_PinsSubjectInEngage();
     TestTankPost_StepEnteredOncePerEpisode();
     TestTankPost_HoldSpotModeLoadsOnlyOnTankPost();
     TestTankPostTauntStep_OffAnotherTank();

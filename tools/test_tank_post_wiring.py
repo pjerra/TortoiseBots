@@ -28,6 +28,8 @@ BOSS_DOCS = (ROOT / "docs/play/boss-tactics.md").read_text()
 CHANGELOG = (ROOT / "CHANGELOG.md").read_text()
 WARRIOR = (ROOT / "ai/playerbot/strategy/warrior/WarriorActions.h").read_text()
 DRUID = (ROOT / "ai/playerbot/strategy/druid/DruidActions.h").read_text()
+TANK_VALUE = (ROOT / "ai/playerbot/strategy/values/TankTargetValue.cpp").read_text()
+POLICY_TEST = (ROOT / "tools/test_boss_tactics_policy.cpp").read_text()
 
 
 def body(text, start, end="\n}\n"):
@@ -158,6 +160,28 @@ class TankPostWiring(unittest.TestCase):
         self.assertIn('"event=%s,tank_yd=%.1f,subject_yd=%.1f,on_tank=%d"', step_log)
         self.assertIn('sPlayerbotAIConfig.logEvent(ai, "BossTacticsTankPost", info1, info2)', step_log)
         self.assertIn('sPlayerbotAIConfig.hasLog("bot_events.csv")', step_log)
+
+    def test_tank_pick_keeps_the_post_subject(self):
+        # The tank's own pick keeps the post's engaged subject: the tank-assist pick (a whelp on the healer) otherwise
+        # takes the tick between two Engage calls and the post's slot-1 tank sits at 99 % rage on the whelp
+        # (ony2gb-b-1 Cackle 13:38-13:41Z and the three other walk cases).
+        calculate = body(TANK_VALUE, "Unit* TankTargetValue::Calculate()")
+        self.assertIn("if (sPlayerbotAIConfig.dungeonRunTankPost)", calculate)
+        self.assertIn("const BossTankPost post = FindBossTankPost(ai, bot, ScanBossTactics(ai, bot));", calculate)
+        self.assertIn("TankPostPinsTarget(post.holdSpot, post.step, post.subject && post.subject->IsAlive(),",
+                      calculate)
+        self.assertIn("return post.subject;", calculate)
+        # Before the raid marks and the tournament it must outrun, and after an explicit order and the assigned tanks.
+        self.assertLess(calculate.index("TankPostPinsTarget"), calculate.index("FourHorsemenRotationTarget"))
+        self.assertLess(calculate.index("GetExplicitAttackTarget"), calculate.index("TankPostPinsTarget"))
+        self.assertLess(calculate.index("GetAssignedPatchwerkTankTarget"), calculate.index("TankPostPinsTarget"))
+        # The post carries the row's mode and its key to that read; the helper is pure in the policy and tested there.
+        self.assertIn("bool holdSpot = false;", ACTIONS_H)
+        self.assertIn("out.holdSpot = holdSpot;", ACTIONS)
+        self.assertIn("inline bool TankPostPinsTarget(bool holdSpot, TankPostDecision step, bool subjectAlive, "
+                      "bool subjectSelectable)", POLICY)
+        self.assertIn("TankPostPinsTarget(true, TankPostDecision::Engage, true, true)", POLICY_TEST)
+        self.assertIn("TestTankPost_PinsSubjectInEngage();", POLICY_TEST)
 
     def test_trigger_and_action_are_registered(self):
         self.assertIn('creators["boss tank post"] = [](PlayerbotAI* ai) '
