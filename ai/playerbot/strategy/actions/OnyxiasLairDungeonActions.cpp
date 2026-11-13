@@ -1,6 +1,7 @@
 
 #include "playerbot/playerbot.h"
 #include "OnyxiasLairDungeonActions.h"
+#include "playerbot/CastCancelLog.h"
 
 using namespace ai;
 #include "playerbot/ServerFacade.h"
@@ -72,6 +73,7 @@ bool OnyxiaBreathSafeZoneAction::Execute(Event& event)
     if (!ShouldMoveToBreathSafeZone(true, bot->IsWithinDist2d(best->x, best->y, kBreathSafeZoneRadius)))
         return false;
     bot->AttackStop();
+    ai::LogCastCancel(ai, "onyxia_breath", bot->GetDistance2d(best->x, best->y));
     bot->CastStop();
     return MoveTo(bot->GetMapId(), best->x, best->y, best->z, false, IsReaction(), false, true);
 }

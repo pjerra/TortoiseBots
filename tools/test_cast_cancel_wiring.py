@@ -6,6 +6,7 @@ ai/playerbot/CastCancelLog.cpp. These pins hold the gate and the cancel sites: w
 written, and each module-side cancel logs before it interrupts.
 """
 import pathlib
+import re
 import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -75,6 +76,42 @@ class CastCancelWiring(unittest.TestCase):
         fn = body(GENERIC_SPELL, "bool InterruptCurrentSpellAction::Execute(Event& event)")
         self.assertIn('LogCastCancel(ai, "heal_full")', fn)
         self.assertLess(fn.index('"heal_full"'), fn.index("bot->InterruptSpell("))
+
+    def test_every_module_side_cancel_is_instrumented(self):
+        # Mechanical audit of the module sources: a direct `bot->CastStop/InterruptSpell/InterruptNonMeleeSpells`
+        # loses the bot's own cast, so it must log on its own line or the line just above it. The AI's member
+        # `InterruptSpell()` callers are covered by the choke point pinned above and are not these calls. A new
+        # uninstrumented direct site fails here instead of shipping an invisible cancel.
+        cancel = re.compile(r"\bbot\s*->\s*(?:CastStop|InterruptSpell|InterruptNonMeleeSpells)\s*\(")
+        missing = []
+        sites = 0
+        for path in sorted((ROOT / "ai").rglob("*")):
+            if path.suffix not in (".cpp", ".h"):
+                continue
+            lines = path.read_text().splitlines()
+            for number, line in enumerate(lines):
+                if not cancel.search(line):
+                    continue
+                sites += 1
+                previous = lines[number - 1] if number else ""
+                if "LogCastCancel(" in line or "LogCastCancel(" in previous:
+                    continue
+                missing.append(f"{path.relative_to(ROOT)}:{number + 1}: {line.strip()}")
+        self.assertEqual(missing, [], "uninstrumented module-side cast cancels:\n" + "\n".join(missing))
+        # The count only guards against the scan silently matching nothing.
+        self.assertGreaterEqual(sites, 25)
+
+    def test_the_encounter_and_movement_cancels_name_their_site(self):
+        # The movement-driven cancels the review named (Heigan's dance, Onyxia's breath, the follow start and the
+        # seek's at-spot stop) log the distance the pending walk takes the bot, so the row shows why the cast died.
+        HEIGAN = (ROOT / "ai/playerbot/strategy/actions/HeiganDungeonActions.cpp").read_text()
+        ONYXIA = (ROOT / "ai/playerbot/strategy/actions/OnyxiasLairDungeonActions.cpp").read_text()
+        MOVEMENT = (ROOT / "ai/playerbot/strategy/actions/MovementActions.cpp").read_text()
+        self.assertIn('ai::LogCastCancel(ai, "heigan_dance", spotYd);\n        bot->CastStop();', HEIGAN)
+        self.assertIn('ai::LogCastCancel(ai, "onyxia_breath", bot->GetDistance2d(best->x, best->y));\n    bot->CastStop();', ONYXIA)
+        self.assertIn('ai::LogCastCancel(ai, "follow");\n        bot->CastStop();', MOVEMENT)
+        seek = ACTIONS.index('ai::LogCastCancel(ai, "seek_stop");')
+        self.assertLess(seek, ACTIONS.index("bot->CastStop();", seek))
 
 
 if __name__ == "__main__":

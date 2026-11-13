@@ -10755,16 +10755,8 @@ BossSpreadSlotTask ReadBossSpreadSlot(PlayerbotAI* ai, Player* bot)
     {
         const float spacingYd = BossSpreadYd(ai, bot, kSpreadSettledDistance);
         points = SpreadSlotPoints(cx, cy, spacingYd, SpreadSlotRings(spacingYd, anchored, radius));
-        // The rings have no floor from the boss, so a hunter's slot can land inside Auto Shot's 8 yd dead zone and
-        // the dead-zone step-out (about 15 yd) fights the slot's pull back. With the key on, every ring point is
-        // moved out to the boss's reach + 8 + 2 yd; a caster keeps the rings (SpreadSlotMinRangeApplies).
-        if (boss && SpreadSlotMinRangeApplies(sPlayerbotAIConfig.spreadRangedMinRange,
-                                              bot->GetClass() == CLASS_HUNTER))
-        {
-            const float minYd = SpreadSlotMinRangeYd(boss->GetCombatReach());
-            for (SpreadSlotPoint& point : points)
-                point = SpreadSlotMinRangePoint(point, boss->GetPositionX(), boss->GetPositionY(), cx, cy, minYd);
-        }
+        // One canonical list the whole group builds the same way: the order runs on the plain rings, never on a
+        // class-specific projection, so a guid index names the same slot for a hunter and a caster.
         SpreadSlotOrder(points, prefX, prefY);
     }
 
@@ -10787,19 +10779,33 @@ BossSpreadSlotTask ReadBossSpreadSlot(PlayerbotAI* ai, Player* bot)
     const bool hasSlot = hasCentre && index >= 0 && index < total;
     const int owned = hasSlot ? index : -1;
 
+    // A hunter's own slot is projected out of Auto Shot's 8 yd dead zone only here, after the shared order and the
+    // index: the projection is radial, so it keeps the slot's bearing and every other member still names the same
+    // slot. Without it the slot lands inside the dead zone and the step-out fights its pull back.
+    const bool minRange = boss && SpreadSlotMinRangeApplies(sPlayerbotAIConfig.spreadRangedMinRange,
+                                                            bot->GetClass() == CLASS_HUNTER);
+    const float minYd = minRange ? SpreadSlotMinRangeYd(boss->GetCombatReach()) : 0.0f;
+    const auto ownerPoint = [&](int slot) {
+        const float bossX = boss ? boss->GetPositionX() : 0.0f;
+        const float bossY = boss ? boss->GetPositionY() : 0.0f;
+        return SpreadSlotOwnerPoint(points[static_cast<std::size_t>(slot)], minRange, bossX, bossY, cx, cy, minYd);
+    };
+
     // D5: the owned slot; one spare-slot fallback when it is unusable, then the floor verdict.
     bool ownedUsable = false;
     int fallback = -1;
     bool fallbackUsable = false;
     float x = 0.0f, y = 0.0f, z = 0.0f;
+    SpreadSlotPoint ownedPoint;
     if (owned >= 0)
     {
-        ownedUsable = SpreadSlotPointUsable(ai, bot, cz, points[static_cast<std::size_t>(owned)], x, y, z);
+        ownedPoint = ownerPoint(owned);
+        ownedUsable = SpreadSlotPointUsable(ai, bot, cz, ownedPoint, x, y, z);
         if (!ownedUsable)
         {
             fallback = SpreadSlotFallback(index, count, total);
             fallbackUsable = fallback >= 0 && fallback < total &&
-                             SpreadSlotPointUsable(ai, bot, cz, points[static_cast<std::size_t>(fallback)], x, y, z);
+                             SpreadSlotPointUsable(ai, bot, cz, ownerPoint(fallback), x, y, z);
         }
     }
     const SpreadSlotSelection selection = SpreadSlotSelect(owned, fallback, ownedUsable, fallbackUsable);
@@ -10816,9 +10822,12 @@ BossSpreadSlotTask ReadBossSpreadSlot(PlayerbotAI* ai, Player* bot)
     bool inRange = true;
     if (owned >= 0)
     {
-        slotYd = pointYd(points[static_cast<std::size_t>(owned)]);
+        slotYd = pointYd(ownedPoint);
         if (selection.moveSlot >= 0)
-            arrived = pointYd(points[static_cast<std::size_t>(selection.moveSlot)]) <= kSpreadSlotArriveYd;
+        {
+            const SpreadSlotPoint movePoint = selection.moveSlot == owned ? ownedPoint : ownerPoint(selection.moveSlot);
+            arrived = pointYd(movePoint) <= kSpreadSlotArriveYd;
+        }
         // A healer measures from the boss's victim, a damage dealer from its own target; no target is in range.
         Unit* const targetUnit = ai->IsHeal(bot) ? (boss ? boss->GetVictim() : nullptr) :
                                                   AI_VALUE(Unit*, "current target");
@@ -12133,6 +12142,7 @@ bool BossTacticsSeekAction::Execute(Event& event)
         if (SeekActionConsumesTick(task.atSpot, moving))
         {
             ai->StopMoving();
+            ai::LogCastCancel(ai, "seek_stop");
             bot->CastStop();
             return true;
         }

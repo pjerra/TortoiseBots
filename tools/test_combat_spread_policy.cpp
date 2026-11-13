@@ -33,6 +33,7 @@ using ai::SpreadSlotMinRangeApplies;
 using ai::SpreadSlotMinRangePoint;
 using ai::SpreadSlotMinRangeYd;
 using ai::SpreadSlotOrder;
+using ai::SpreadSlotOwnerPoint;
 using ai::SpreadSlotPoint;
 using ai::SpreadSlotPoints;
 using ai::SpreadSlotRings;
@@ -268,6 +269,72 @@ int main()
         CHECK(pushed.x > 5.0f && pushed.y > 5.0f);
     }
     std::cout << "  [PASS] a min-range slot outside the dead zone, the key off and a caster keep the ring\n";
+
+    // SpreadSlot_MixedGroupAgreesOnOwnership: hunter, mage and priest each build and order one canonical list around
+    // an off-centre boss. The guid index names the same slot for all of them with the key on, no two step onto one
+    // point, and only the hunter's own point is projected, radially, out of the dead zone. The projection never
+    // reorders the shared list, so the casters' points are the canonical ones.
+    {
+        const float spacingYd = 10.0f;
+        const float cx = 0.0f;
+        const float cy = 0.0f;
+        const float bossX = 6.0f;   // the boss stands off the ring centre
+        const float bossY = -4.0f;
+        const float prefX = bossX + 12.0f;
+        const float prefY = bossY - 8.0f;
+        const std::uint64_t hunterGuid = 10;
+        const std::uint64_t mageGuid = 20;
+        const std::uint64_t priestGuid = 30;
+        const std::vector<std::uint64_t> eligible = { hunterGuid, mageGuid, priestGuid };
+        const auto canonical = [&]() {
+            std::vector<SpreadSlotPoint> points =
+                SpreadSlotPoints(cx, cy, spacingYd, SpreadSlotRings(spacingYd, true, 60.0f));
+            SpreadSlotOrder(points, prefX, prefY);
+            return points;
+        };
+        const std::vector<SpreadSlotPoint> shared = canonical();
+        // Every class builds the same order from the same fight: the list is class-independent.
+        for (const std::vector<SpreadSlotPoint>& same : {canonical(), canonical()})
+            for (std::size_t i = 0; i < shared.size(); ++i)
+                CHECK(shared[i].x == same[i].x && shared[i].y == same[i].y && shared[i].ring == same[i].ring &&
+                      shared[i].j == same[i].j);
+        const int hunterIndex = SpreadSlotIndexOf(eligible, hunterGuid);
+        const int mageIndex = SpreadSlotIndexOf(eligible, mageGuid);
+        const int priestIndex = SpreadSlotIndexOf(eligible, priestGuid);
+        CHECK(hunterIndex == 0 && mageIndex == 1 && priestIndex == 2);
+        // Distinct slots: ownership never doubles up.
+        const auto apart = [](const SpreadSlotPoint& a, const SpreadSlotPoint& b) {
+            const float dx = a.x - b.x;
+            const float dy = a.y - b.y;
+            return std::sqrt(dx * dx + dy * dy);
+        };
+        const SpreadSlotPoint ownedHunter = shared[static_cast<std::size_t>(hunterIndex)];
+        const SpreadSlotPoint ownedMage = shared[static_cast<std::size_t>(mageIndex)];
+        const SpreadSlotPoint ownedPriest = shared[static_cast<std::size_t>(priestIndex)];
+        CHECK(apart(ownedHunter, ownedMage) > 0.5f);
+        CHECK(apart(ownedMage, ownedPriest) > 0.5f);
+        CHECK(apart(ownedHunter, ownedPriest) > 0.5f);
+        const float minYd = SpreadSlotMinRangeYd(5.0f);
+        const auto ownerPoint = [&](const SpreadSlotPoint& slot, bool hunter) {
+            return SpreadSlotOwnerPoint(slot, SpreadSlotMinRangeApplies(true, hunter), bossX, bossY, cx, cy, minYd);
+        };
+        const SpreadSlotPoint hunter = ownerPoint(ownedHunter, true);
+        const SpreadSlotPoint mage = ownerPoint(ownedMage, false);
+        const SpreadSlotPoint priest = ownerPoint(ownedPriest, false);
+        // A caster's slot is untouched; the hunter's keeps the slot's bearing and lands outside the dead zone.
+        CHECK(mage.x == ownedMage.x && mage.y == ownedMage.y);
+        CHECK(priest.x == ownedPriest.x && priest.y == ownedPriest.y);
+        CHECK(hunter.x != ownedHunter.x || hunter.y != ownedHunter.y);
+        const float hdx = hunter.x - bossX;
+        const float hdy = hunter.y - bossY;
+        CHECK(std::sqrt(hdx * hdx + hdy * hdy) >= minYd - 0.001f);
+        CHECK(std::fabs(std::atan2(hdy, hdx) -
+                        std::atan2(ownedHunter.y - bossY, ownedHunter.x - bossX)) < 0.001f);
+        // The key off hands the whole ring back, hunter included.
+        const SpreadSlotPoint plain = ownerPoint(ownedHunter, false);
+        CHECK(plain.x == ownedHunter.x && plain.y == ownedHunter.y);
+    }
+    std::cout << "  [PASS] a mixed group agrees on one canonical slot and the hunter steps out of the dead zone\n";
 
     // The index counts lower guids only, and a bot outside the list has none.
     const std::vector<std::uint64_t> guids = { 50, 10, 30 };

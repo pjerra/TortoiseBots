@@ -184,6 +184,19 @@ namespace ai
         return out;
     }
 
+    // The point a slot owner stands on: the canonical slot, projected out of a
+    // min-range dead zone only when this bot's own class needs it. The
+    // projection runs after the shared order and the guid index, so a
+    // class-specific move never changes which slot an index names for the
+    // rest of the group.
+    inline SpreadSlotPoint SpreadSlotOwnerPoint(const SpreadSlotPoint& canonical, bool minRangeApplies,
+        float bossX, float bossY, float centreX, float centreY, float minYd)
+    {
+        if (!minRangeApplies)
+            return canonical;
+        return SpreadSlotMinRangePoint(canonical, bossX, bossY, centreX, centreY, minYd);
+    }
+
     // A bot's index in the slot order: the number of slot-eligible members
     // with a lower raw guid. -1 when the bot is not one of them.
     inline int SpreadSlotIndexOf(const std::vector<std::uint64_t>& eligibleGuids, std::uint64_t self)

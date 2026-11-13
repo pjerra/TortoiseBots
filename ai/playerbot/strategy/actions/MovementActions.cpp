@@ -4,6 +4,7 @@
 #include "playerbot/playerbot.h"
 #include "playerbot/PerformanceMonitor.h"
 #include "MovementActions.h"
+#include "playerbot/CastCancelLog.h"
 #include "BossTacticsActions.h"
 #include "Movement/MotionMaster.h"
 #include "Movement/MovementGenerator.h"
@@ -2474,6 +2475,7 @@ bool MovementAction::Follow(Unit* target, float distance, float angle)
 
     if (bot->IsNonMeleeSpellCasted(true))
     {
+        ai::LogCastCancel(ai, "follow");
         bot->CastStop();
         ai->InterruptSpell();
     }
