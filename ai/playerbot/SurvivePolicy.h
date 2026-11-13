@@ -29,16 +29,17 @@ namespace ai
     }
 
     // A dry bot must not spend a dozen seconds per out-of-combat buff first
-    // (Fortitude, Shadow Protection, Arcane Intellect): every cast at a few
-    // percent mana is dead time, so at or below this line the drink owns the
-    // tick. The highest out-of-combat buff row is Arcane Intellect at 21.0
-    // (party Arcane Intellect and shaman totems 20, rogue poisons 18-20,
-    // priest Fortitude/Shadow Protection 11-13), so 21.5 clears the ladder.
-    // It sits above ACTION_HIGH, so follow and pull lose the tick while the
-    // bot is this dry; "should drink" still yields to a moving leader, and
-    // every heal, shield and ACTION_MOVE row stays above.
+    // (Fortitude, Shadow Protection, Arcane Intellect, Soul Link): every cast
+    // at a few percent mana is dead time, so at or below this line the drink
+    // owns the tick. The highest buff-maintenance rows in the class strategies
+    // are Soul Link and Righteous Fury at 28.0 (Demon Armor 27.0, Arcane
+    // Intellect 21.0, rogue poisons and shaman totems 20.0, priest
+    // Fortitude/Shadow Protection 11-13), so 28.5 clears the ladder. It stays
+    // under ACTION_MOVE (30), so a movement row still wins a moving tick;
+    // "should drink" already yields to a moving leader, and every heal row
+    // (ACTION_LIGHT_HEAL and up) stays above.
     constexpr std::uint32_t LOW_MANA_DRINK_PCT = 20;
-    constexpr float LOW_MANA_DRINK_PRIORITY = 21.5f;
+    constexpr float LOW_MANA_DRINK_PRIORITY = 28.5f;
 
     inline bool DrinkOutranksSelfBuffs(std::uint32_t manaPct)
     {

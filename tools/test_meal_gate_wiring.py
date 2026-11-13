@@ -214,37 +214,51 @@ class MealGateWiringTest(unittest.TestCase):
         self.assertIn("HasManaPool(bot)", trigger)
         self.assertIn("LOW_MANA_DRINK_PCT = 20", SRC_SURVIVE)
 
-        # The buff rows the review found above the old 19.5, with the value
-        # they carry in their class strategy. The drink must clear the highest
-        # (Arcane Intellect, 21.0); heal/shield rows keyed on a wounded member
-        # (22 and up) stay above on purpose.
+        # Every buff-maintenance row declared by the class strategies, with
+        # the value that row carries. The highest are Soul Link and Righteous
+        # Fury at 28.0; the drink must clear the top, not an older tail.
         priority = float(re.search(r"LOW_MANA_DRINK_PRIORITY\s*=\s*([0-9.]+)f", SRC_SURVIVE).group(1))
         competitors = [
+            ("ai/playerbot/strategy/warlock/GenericWarlockNonCombatStrategy.cpp",
+             'NextAction("soul link", 28.0f)', 28.0),
+            ("ai/playerbot/strategy/paladin/PaladinBuffStrategies.cpp",
+             'NextAction("righteous fury", ACTION_HIGH + 8)', 28.0),
+            ("ai/playerbot/strategy/warlock/GenericWarlockNonCombatStrategy.cpp",
+             'NextAction("demon armor", 27.0f)', 27.0),
             ("ai/playerbot/strategy/mage/GenericMageNonCombatStrategy.cpp",
              'NextAction("arcane intellect", 21.0f)', 21.0),
             ("ai/playerbot/strategy/mage/GenericMageNonCombatStrategy.cpp",
              'NextAction("arcane intellect on party", 20.0f)', 20.0),
             ("ai/playerbot/strategy/shaman/ElementalShamanStrategy.cpp",
              'NextAction("windfury totem", ACTION_HIGH)', 20.0),
-            ("ai/playerbot/strategy/rogue/RogueStrategy.cpp",
+            ("ai/playerbot/strategy/rogue/GenericRogueNonCombatStrategy.cpp",
              'NextAction("apply instant poison main hand", 20.0f)', 20.0),
+            ("ai/playerbot/strategy/druid/GenericDruidNonCombatStrategy.cpp",
+             'NextAction("mark of the wild", 14.0f)', 14.0),
             ("ai/playerbot/strategy/priest/PriestStrategy.cpp",
-             'NextAction("power word: fortitude on party", ACTION_NORMAL + 2)', 12.0),
+             'NextAction("prayer of fortitude on party", ACTION_NORMAL + 3)', 13.0),
             ("ai/playerbot/strategy/priest/PriestStrategy.cpp",
              'NextAction("power word: fortitude", ACTION_NORMAL + 1)', 11.0),
-            ("ai/playerbot/strategy/priest/PriestNonCombatStrategy.cpp",
-             'NextAction("shadow protection", 12.0f)', 12.0),
+            ("ai/playerbot/strategy/priest/PriestStrategy.cpp",
+             'NextAction("shadow protection", ACTION_NORMAL + 1)', 11.0),
         ]
         for path, fragment, value in competitors:
             self.assertIn(fragment, (ROOT / path).read_text(), path)
             self.assertLess(value, priority, "%s: %s must lose to the drink" % (path, fragment))
+        # ACTION_MOVE (30) still owns a moving tick, and the real heal rows
+        # (ACTION_LIGHT_HEAL, 60, and up) stay above.
+        self.assertLess(priority, 30.0)
 
         # The named case: a priest at 5 % with missing Fortitude and Shadow
-        # Protection. Both rows sit in the same non-combat engine as the drink.
+        # Protection. Both rows sit in the same non-combat engine as the
+        # drink; the engine executes the highest relevance, so the drink is
+        # chosen first.
         priest = strip_comments((ROOT / "ai/playerbot/strategy/priest/PriestStrategy.cpp").read_text())
         buffs = body_after(priest, "void PriestBuffStrategy::InitNonCombatTriggers")
-        self.assertIn('"power word: fortitude on party"', buffs)
         self.assertIn('"power word: fortitude"', buffs)
+        self.assertIn('"shadow protection"', buffs)
+        queued = [("drink", priority), ("power word: fortitude", 11.0), ("shadow protection", 11.0)]
+        self.assertEqual("drink", max(queued, key=lambda row: row[1])[0])
 
 
 if __name__ == "__main__":
