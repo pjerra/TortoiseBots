@@ -169,6 +169,27 @@ class SpreadSlotsWiring(unittest.TestCase):
         self.assertIn('creators["boss tactics spread slot"]', TRIGGER_CONTEXT)
         self.assertIn('creators["boss tactics spread slot"]', ACTION_CONTEXT)
 
+    def test_the_hunter_slot_leaves_the_dead_zone_behind_the_key(self):
+        # SpreadSlot_HunterSlotLeavesDeadZone at the call site: with SpreadRangedMinRange on, a hunter's ring points
+        # are moved out to the boss's reach + 8 + 2 yd before the order is taken; a caster keeps them, and with the
+        # key off nothing is moved at all (the old behaviour exactly).
+        read = body(ACTIONS, "BossSpreadSlotTask ReadBossSpreadSlot(PlayerbotAI* ai, Player* bot)")
+        self.assertIn("SpreadSlotMinRangeApplies(sPlayerbotAIConfig.spreadRangedMinRange,", read)
+        self.assertIn("bot->GetClass() == CLASS_HUNTER", read)
+        self.assertIn("SpreadSlotMinRangeYd(boss->GetCombatReach())", read)
+        self.assertIn("point = SpreadSlotMinRangePoint(point,", read)
+        self.assertLess(read.index("SpreadSlotMinRangePoint("), read.index("SpreadSlotOrder(points, prefX, prefY);"))
+        # The floor only exists behind the key: the ring build itself still runs before the min-range block, and the
+        # block is a single if, so the key off takes the plain rings.
+        self.assertLess(read.index("points = SpreadSlotPoints("), read.index("SpreadSlotMinRangeApplies("))
+        config = (ROOT / "ai/playerbot/PlayerbotAIConfig.cpp").read_text()
+        self.assertIn('spreadRangedMinRange = config.GetBoolDefault("AiPlayerbot.SpreadRangedMinRange", false);',
+                      config)
+        template = (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text()
+        self.assertIn("\nAiPlayerbot.SpreadRangedMinRange = 0", template)
+        docs = (ROOT / "docs/server/settings/dungeons-raids.md").read_text()
+        self.assertIn("AiPlayerbot.SpreadRangedMinRange", docs)
+
 
 if __name__ == "__main__":
     unittest.main()

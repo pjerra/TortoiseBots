@@ -814,6 +814,10 @@ public:
     // The fixed ranged slots of a live spread row (each ranged bot and healer owns a ring point and stands on it
     // whenever the seek does not need it): off, today's step-away (default off, recommended on).
     bool dungeonRunBossSpreadSlots = false;
+    // The spread ring slots' minimum range for a class that shoots from a dead zone (a hunter's Auto Shot, 8 yd):
+    // on, such a bot's slot never lands nearer the boss than the boss's reach + 8 + 2 yd; off, the rings as they
+    // are (default off, recommended on).
+    bool spreadRangedMinRange = false;
     // Protection potions from a boss's spread row: the row's spell names the school (fire, nature or shadow) and its
     // priority the roles that drink (1 tanks, 2 melee damage, 4 ranged damage, 8 healers). Off, only the bosses of the
     // built-in entry table use one (default off).
