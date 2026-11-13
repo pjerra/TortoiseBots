@@ -546,6 +546,56 @@ int main()
         CHECK(TankFirstOverrideStarted(noTank, nullptr, TankFirstPhase::Lost) == noTank);
     }
 
+    // TestClockRollover: WorldTimer wraps every ~49.7 days, and a stamp taken just before the wrap with a read just
+    // after it gives the small age between them, so a hold still ends at its cap instead of standing for the next wrap.
+    //   Old code: `nowMs < stampMs ? 0 : nowMs - stampMs` read a post-wrap age as 0 (the wrap looks like a future
+    //   stamp), so a hold, a dwell or a lease written before it never aged again.
+    //   Mutations caught: the old clamp back (age 0 across the wrap, the cap at 14000 never fires); the clamp dropped
+    //   (a post-wrap age reads ~4.3e9 and releases on the spot).
+    {
+        const std::uint32_t before = UINT32_MAX - 999; // 1000 ms before the wrap
+        const std::uint32_t after = 1000;              // 1000 ms after it: the age is 2000, not 0 nor ~4.3e9
+        CHECK(TankFirstAgeMs(after, before) == 2000);
+        CHECK(!TankFirstStale(after, before));
+        CHECK(TankFirstStale(10000, before));
+        // The chase lease across the wrap: live for its 1500 ms, lapsed after.
+        CHECK(TankFirstChaseLeaseLive(before, 500));
+        CHECK(!TankFirstChaseLeaseLive(before, 501));
+        // A hold still ends at its cap: 15000 ms past the episode start, which is 14000 ms after the wrap.
+        TankFirstRecord r;
+        r.armed = true;
+        r.firstMs = before;
+        r.episodeMs = before;
+        r.tickMs = before;
+        r.seenMs = before;
+        r.phase = TankFirstPhase::Wait;
+        TankFirstOut out = TankFirstTick(r, kRow2, In(TankFirstVictim::NonTank, 12, 100.0f, 13000));
+        CHECK(out.event == TankFirstEvent::None);
+        CHECK(r.phase == TankFirstPhase::Wait);
+        CHECK(TankFirstHolds(r, nullptr));
+        out = TankFirstTick(r, kRow2, In(TankFirstVictim::NonTank, 12, 100.0f, 14000));
+        CHECK(out.event == TankFirstEvent::Release);
+        CHECK(std::string(out.why) == "cap");
+        CHECK(out.ms == 15000);
+        CHECK(r.phase == TankFirstPhase::Open);
+        // A dwell that started before the wrap still settles on its tank time after it.
+        TankFirstRecord d;
+        d.armed = true;
+        d.firstMs = before;
+        d.episodeMs = before;
+        d.tickMs = before;
+        d.seenMs = before;
+        d.phase = TankFirstPhase::Dwell;
+        d.dwellFrom = TankFirstPhase::Wait;
+        d.tankSinceMs = before;
+        d.tank = 21;
+        out = TankFirstTick(d, kRow2, In(TankFirstVictim::Tank, 21, 100.0f, 1000));
+        CHECK(out.event == TankFirstEvent::Settled);
+        CHECK(d.phase == TankFirstPhase::Burn);
+        CHECK(d.tankMs == 2000);
+        CHECK(out.ms == 2000);
+    }
+
     // The row's own numbers (D15) come out of TankFirstRulesOf.
     {
         const TankFirstRules row = TankFirstRulesOf(3.0f, 15.0f, 2);

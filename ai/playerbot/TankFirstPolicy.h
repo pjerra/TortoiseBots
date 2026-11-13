@@ -115,12 +115,15 @@ namespace ai
         std::uint32_t ms = 0;
     };
 
-    // An age that never wraps. Every stamp here is written under the record's lock from that writer's own clock and a
-    // reader's sample can be older (it was taken before the lock), so an unsigned subtraction would read ~4.3e9 ms and
-    // settle, release or erase on the spot. A stamp newer than the read counts as age 0 (SeekAgeMs's rule).
+    // An age that survives the clock's ~49.7-day rollover: the difference is taken modulo 2^32, the rule the core's
+    // WorldTimer::getMSTimeDiff follows, so a stamp taken just before the wrap and a read just after give the small age
+    // between them and a hold still ends at its cap. A stamp newer than the read counts as age 0: another bot can write
+    // the stamp under the record's lock while a reader already holds an older clock sample, and that difference reads
+    // past half the range (SeekAgeMs's rule).
     inline std::uint32_t TankFirstAgeMs(std::uint32_t nowMs, std::uint32_t stampMs)
     {
-        return nowMs < stampMs ? 0 : nowMs - stampMs;
+        const std::uint32_t age = nowMs - stampMs; // modulo 2^32: the wrap is a small age, never ~4.3e9
+        return age > UINT32_MAX / 2 ? 0 : age;
     }
 
     // One advance of the record (D6, D7). The caller throttles with TankFirstTickDue.
