@@ -6941,7 +6941,10 @@ void ai::HoldTankFirstDamage(PlayerbotAI* ai, Player* bot)
         return;
     bot->AttackStop();
     if (bot->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
+    {
+        ai::LogCastCancel(ai, "tank_first", CURRENT_AUTOREPEAT_SPELL);
         bot->InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
+    }
     LogHoldKillVeto(ai, bot, "tank_first", target);
 }
 
@@ -8279,12 +8282,16 @@ bool BossTacticsHoldKillAction::Execute(Event& event)
         // A swing or a shot already under way is the damage the hold exists to stop: the auto-repeat shot goes, and so
         // does a generic or channelled cast aimed at the add (one targeted at anything else may finish).
         if (bot->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL))
+        {
+            ai::LogCastCancel(ai, "tank_first", CURRENT_AUTOREPEAT_SPELL);
             bot->InterruptSpell(CURRENT_AUTOREPEAT_SPELL);
+        }
         for (CurrentSpellTypes type : {CURRENT_GENERIC_SPELL, CURRENT_CHANNELED_SPELL})
         {
             Spell* const cast = bot->GetCurrentSpell(type);
             if (cast && cast->m_targets.getUnitTarget() == held)
             {
+                ai::LogCastCancelNonMelee(ai, "tank_first", false);
                 bot->InterruptNonMeleeSpells(false);
                 break;
             }
@@ -12097,7 +12104,10 @@ bool BossTacticsParkAction::Execute(Event& event)
         // A running cast of its own is cut once before the park's first cast (D7): a channel or a nuke aimed at
         // another unit would hold the cast bar while the control is due.
         if (task.cutCast)
+        {
+            ai::LogCastCancelStop(ai, "seek_park_cut");
             bot->CastStop();
+        }
         // The refusal's code is the cast check's: cleared first, so a probe's failure is not read back here.
         ai->ClearLastCastCheckFail();
         const bool cast = ai->CastSpell(task.spell, task.source);
