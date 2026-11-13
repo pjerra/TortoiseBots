@@ -2686,25 +2686,31 @@ int main()
         CHECK(!table.HasMap(70));  // an empty sealed table has no map: the tactics stay off
     }
 
-    // One rule for the startup load and a reload (JudgeTacticRow): a row of a kind this build does not know is FOREIGN
-    // data, skipped and logged by both, so a database that also carries rows of another line still reloads; a row of a
-    // known kind the table cannot use is REFUSED, and a reload of the whole set is refused on it. The row that started
-    // this (Onyxia air_target, map 249 boss 10184, an unmerged line) is the foreign case, whatever its window_s.
+    // One rule for the startup load and a reload (JudgeTacticRow), decided by the kind STRING, not just the parsed
+    // enum: only the closed foreign list is skipped (air_target), a typo'd kind is REFUSED like any unusable row, and a
+    // known valid kind is accepted. The row that started this (Onyxia air_target, map 249 boss 10184, an unmerged
+    // line) is the foreign case; this build does not implement it and does not validate its columns.
     {
+        CHECK(ParseBossTacticKind("spred") == BossTacticKind::None);
+        CHECK(!IsKnownForeignTacticKind("spred"));
+        CHECK(JudgeTacticRow(BossTacticKind::None, "spred", true) == TacticRowVerdict::Refused);  // typo, not foreign
+        CHECK(JudgeTacticRow(BossTacticKind::None, "", true) == TacticRowVerdict::Refused);  // empty kind
+        CHECK(ParseBossTacticKind("air_target") == BossTacticKind::None);
+        CHECK(IsKnownForeignTacticKind("air_target"));
+        CHECK(JudgeTacticRow(BossTacticKind::None, "air_target", true) == TacticRowVerdict::Foreign);
+
         BossTacticRow foreign = Row(249, 10184, ParseBossTacticKind("air_target"), 0, 17131);
-        foreign.windowSec = 7.0f;  // the column default; a kind with no window rule takes any value
-        CHECK(foreign.kind == BossTacticKind::None);
+        foreign.windowSec = 7.0f;  // unread: a foreign row's columns are never validated
         BossTacticTable table;
         CHECK(!table.Add(foreign));
-        CHECK(JudgeTacticRow(foreign.kind, false) == TacticRowVerdict::Foreign);
-        CHECK(JudgeTacticRow(BossTacticKind::None, true) == TacticRowVerdict::Foreign);  // kind decides, not Add
+        CHECK(JudgeTacticRow(foreign.kind, "air_target", false) == TacticRowVerdict::Foreign);  // string decides
 
         BossTacticRow bad = Row(249, 10184, BossTacticKind::Spread, 0, 0, 0, 1.0f);  // under the kind's 5 yd floor
         CHECK(!table.Add(bad));
-        CHECK(JudgeTacticRow(bad.kind, false) == TacticRowVerdict::Refused);
+        CHECK(JudgeTacticRow(bad.kind, "spread", false) == TacticRowVerdict::Refused);
         bad.param = 10.0f;
         CHECK(table.Add(bad));
-        CHECK(JudgeTacticRow(bad.kind, true) == TacticRowVerdict::Loaded);
+        CHECK(JudgeTacticRow(bad.kind, "spread", true) == TacticRowVerdict::Loaded);  // a known valid kind
         table.Seal();
         CHECK(table.Size() == 1);
     }

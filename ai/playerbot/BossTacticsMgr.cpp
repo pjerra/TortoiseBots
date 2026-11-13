@@ -18,7 +18,7 @@ BossTacticTable& ai::GetBossTactics()
 }
 
 // One pass over `ai_boss_tactic` into `table` (empty, not sealed), then the seal; returns what it could not use, split
-// by verdict (a refused row of a known kind, a row of a kind this build does not know). The startup load and
+// by verdict (a refused row, a row of a kind on the closed foreign list). The startup load and
 // `.bot run reloadplans` both read through here.
 BossTacticLoadCounts ai::ReadBossTacticRows(BossTacticTable& table, std::uint64_t* rowsRead)
 {
@@ -38,7 +38,8 @@ BossTacticLoadCounts ai::ReadBossTacticRows(BossTacticTable& table, std::uint64_
             BossTacticRow row;
             row.map = fields[0].GetUInt32();
             row.bossEntry = fields[1].GetUInt32();
-            row.kind = ParseBossTacticKind(fields[2].GetCppString());
+            std::string const kindText = fields[2].GetCppString();
+            row.kind = ParseBossTacticKind(kindText);
             row.targetEntry = fields[3].GetUInt32();
             row.spellId = fields[4].GetUInt32();
             row.priority = fields[5].GetUInt8();
@@ -79,23 +80,25 @@ BossTacticLoadCounts ai::ReadBossTacticRows(BossTacticTable& table, std::uint64_
                     at = comma + 1;
                 }
             }
-            switch (JudgeTacticRow(row.kind, table.Add(row)))
+            switch (JudgeTacticRow(row.kind, kindText, table.Add(row)))
             {
                 case TacticRowVerdict::Loaded:
                     break;
                 case TacticRowVerdict::Foreign:
-                    // A kind this build does not know: a row of another line of the server. Boot has always skipped
-                    // it; a reload skips it too, so such a row never refuses a reload of the whole set.
+                    // A kind on the loader's closed foreign list (IsKnownForeignTacticKind): a row of another line of
+                    // the server, not implemented here. Boot has always skipped it; a reload skips it too, so such a
+                    // row never refuses a reload of the whole set.
                     ++counts.foreign;
                     sLog.outString("ai_boss_tactic: map %u boss %u kind '%s' target %u spell %u ignored (a kind this "
-                        "build does not know: a row of another line of the server, not a tactic here)", row.map,
-                        row.bossEntry, fields[2].GetCppString().c_str(), row.targetEntry, row.spellId);
+                        "build does not implement: a row of another line of the server, not a tactic here)", row.map,
+                        row.bossEntry, kindText.c_str(), row.targetEntry, row.spellId);
                     break;
                 case TacticRowVerdict::Refused:
                     ++counts.refused;
                     sLog.outError("ai_boss_tactic: map %u boss %u kind '%s' target %u spell %u skipped (a zero map "
-                        "or boss, a key column it cannot use, a health band outside 0-100, a gate on a kind read straight "
-                        "from the table, a mode word its kind does not take, an avoid_cast without a spell or a radius, "
+                        "or boss, an unknown kind (only the listed foreign kinds are skipped), a key column it cannot "
+                        "use, a health band outside 0-100, a gate on a kind read straight from the table, a mode word its "
+                        "kind does not take, an avoid_cast without a spell or a radius, "
                         "another kind's missing or out-of-range spell or param, a linked_death window that is not positive, "
                         "a use_object without a target, a clicker role above 2, a boss range outside 0-60, a window that is "
                         "neither 0 nor at least 10 s, a row with neither aura nor timer, a seek_aura, pull_gate or spread "
@@ -103,7 +106,7 @@ BossTacticLoadCounts ai::ReadBossTacticRows(BossTacticTable& table, std::uint64_
                         "cannot use, a tank_post row it cannot use, an add_crew row it cannot use, "
                         "a threat_free row it cannot use, a gate_hold row whose blocker is its own boss, a cycle or spot "
                         "column on another kind, a healers count on another kind, or a second row of the key)", row.map,
-                        row.bossEntry, fields[2].GetCppString().c_str(), row.targetEntry, row.spellId);
+                        row.bossEntry, kindText.c_str(), row.targetEntry, row.spellId);
                     break;
             }
         } while (result->NextRow());
@@ -120,9 +123,9 @@ void ai::LoadBossTactics()
     if (table.Sealed())
         return;
     BossTacticLoadCounts const counts = ReadBossTacticRows(table);
-    // The same line a reload prints its own counts on: a refused row of a kind this build knows, and a row of a kind
-    // it does not know (skipped here and by a reload alike, so the two never disagree).
-    sLog.outString(">> Loaded %u boss tactic rows (%u skipped: %u refused, %u of a kind this build does not know)",
+    // The same line a reload prints its own counts on: a refused row, and a row of a kind this build knows to be
+    // foreign (skipped here and by a reload alike, so the two never disagree).
+    sLog.outString(">> Loaded %u boss tactic rows (%u skipped: %u refused, %u of a listed foreign kind)",
         uint32(table.Size()), counts.Skipped(), counts.refused, counts.foreign);
     sLog.outString();
 }

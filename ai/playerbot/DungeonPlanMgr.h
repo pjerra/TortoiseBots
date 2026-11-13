@@ -22,7 +22,7 @@ namespace ai
         PlanReloadOutcome outcome;
         std::string summary;       // the boot line of the NEW rows (PlanLoadSummary), also when refused
         std::uint32_t tacticRows = 0;
-        std::uint32_t tacticForeign = 0; // rows of a kind this build does not know: skipped by boot and by the reload alike
+        std::uint32_t tacticForeign = 0; // rows of a listed foreign kind: skipped by boot and by the reload alike
     };
 
     // `.bot run reloadplans`, world thread only: reads the four plan tables and `ai_boss_tactic` again through the

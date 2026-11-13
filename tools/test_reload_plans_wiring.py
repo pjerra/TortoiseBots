@@ -132,10 +132,11 @@ class ReloadPlansWiring(unittest.TestCase):
         self.assertIn("++*rowsRead;", body(TACTICS, "BossTacticLoadCounts ai::ReadBossTacticRows("))
 
         # One rule for boot and reload (BossTacticsPolicy.h JudgeTacticRow): the reader judges every row through it, a
-        # foreign kind only bumps `foreign`, and the reload judges `refused` alone, so a row of a kind this build does
-        # not know refuses nothing (it stayed inert at boot all along).
+        # row of a listed foreign kind only bumps `foreign`, and the reload judges `refused` alone, so such a row
+        # refuses nothing (it stayed inert at boot all along) while any other unknown kind is refused.
         reader = body(TACTICS, "BossTacticLoadCounts ai::ReadBossTacticRows(")
-        self.assertIn("switch (JudgeTacticRow(row.kind, table.Add(row)))", reader)
+        self.assertIn("switch (JudgeTacticRow(row.kind, kindText, table.Add(row)))", reader)
+        self.assertIn("std::string const kindText = fields[2].GetCppString();", reader)
         self.assertIn("case TacticRowVerdict::Foreign:", reader)
         self.assertIn("++counts.foreign;", reader)
         self.assertIn("case TacticRowVerdict::Refused:", reader)

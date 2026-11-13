@@ -14673,7 +14673,7 @@ static bool HandleReloadPlans(ChatHandler* handler, std::string const& intent)
         uint32(report.outcome.bossesBefore), uint32(plans.BossCount()), uint32(report.outcome.tacticsBefore),
         report.tacticRows);
     if (report.tacticForeign)
-        handler->PSendSysMessage("%u boss tactic rows of a kind this build does not know skipped (inert here; the "
+        handler->PSendSysMessage("%u boss tactic rows of a listed foreign kind skipped (inert here; the "
             "startup load skips them too, so they refuse nothing)", uint32(report.tacticForeign));
     if (report.outcome.changes.empty())
         handler->PSendSysMessage("Plans changed: none");

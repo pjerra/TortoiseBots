@@ -204,7 +204,7 @@ static void TestOtherRefusalsKeepTheOldSet()
 
 static void TestForeignTacticKindRefusesNothing()
 {
-    // A boss tactic row of a kind this build does not know (the Onyxia air_target row of an unmerged line, window_s 7):
+    // A boss tactic row of a listed foreign kind (the Onyxia air_target row of an unmerged line, window_s 7):
     // the startup load has always skipped it, and a reload skips it too (BossTacticsPolicy.h JudgeTacticRow), so it is
     // not a refused tactic and the set swaps. A row of a known kind the table refused still keeps the old set
     // (TestOtherRefusalsKeepTheOldSet).
@@ -220,7 +220,7 @@ static void TestForeignTacticKindRefusesNothing()
     foreign.windowSec = 7.0f;
     CHECK(foreign.kind == BossTacticKind::None);
     CHECK(!nextTactics->Add(foreign));
-    CHECK(JudgeTacticRow(foreign.kind, false) == TacticRowVerdict::Foreign);
+    CHECK(JudgeTacticRow(foreign.kind, "air_target", false) == TacticRowVerdict::Foreign);
     // The same table with a usable row too: only the usable rows are loaded.
     BossTacticRow spread = foreign;
     spread.kind = BossTacticKind::Spread;

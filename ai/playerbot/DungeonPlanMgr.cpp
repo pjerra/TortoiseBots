@@ -262,9 +262,9 @@ PlanReloadReport ai::ReloadDungeonPlans(std::vector<DungeonPlan const*> const& i
     report.tacticForeign = tacticCounts.foreign;
     report.outcome = CommitPlanReload(DungeonPlanHolder(), std::move(next), counts, BossTacticsHolder(), std::move(nextTactics),
         tacticCounts.refused, reads, inUse, &ai::ReconcileSeekFightState);
-    // Foreign kinds are not a refusal (JudgeTacticRow): boot skips the same rows, so the two paths agree.
+    // Listed foreign kinds are not a refusal (JudgeTacticRow): boot skips the same rows, so the two paths agree.
     if (tacticCounts.foreign)
-        sLog.outString(">> %u ai_boss_tactic rows of a kind this build does not know skipped (the startup load skips "
+        sLog.outString(">> %u ai_boss_tactic rows of a listed foreign kind skipped (the startup load skips "
             "them too: they are inert, not a refused tactic)", tacticCounts.foreign);
     if (report.outcome.swapped)
         sLog.outString(">> %s, %u boss tactic rows (reloaded by .bot run reloadplans)", report.summary.c_str(), report.tacticRows);

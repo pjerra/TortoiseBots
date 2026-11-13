@@ -17,7 +17,7 @@ namespace ai
     void LoadBossTactics();
 
     // What one pass over `ai_boss_tactic` could not use: a refused row of a kind this build knows (an error, and a
-    // reload refuses the whole set on one) and a row of a kind it does not know (foreign data: skipped here and by a
+    // reload refuses the whole set on one) and a row of a listed foreign kind (foreign data: skipped here and by a
     // reload alike, never a refusal).
     struct BossTacticLoadCounts
     {

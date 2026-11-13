@@ -9,7 +9,7 @@
 //   - a failed query or a table that changed while it was read (JudgeTableReads: the core's Query answers null for an
 //     error and for no rows alike, so each table's row count and checksum are read before and after the load);
 //   - any refused row (a plan, leg, step, need or boss row skipped, a plan's cut or dropped unit list, a tactic row of
-//     a kind this build knows refused; a tactic row of a kind it does not know is foreign data and is skipped by the
+//     a kind this build knows refused; a tactic row of a listed foreign kind is foreign data and is skipped by the
 //     startup load and by the reload alike, BossTacticsPolicy.h JudgeTacticRow), a plan of the old set that is gone or
 //     has no steps any more: the old tables stay, nothing changes, the
 //     reason is returned (at startup such rows are skipped with an error line; a reload is stricter, since the old set
@@ -216,7 +216,7 @@ namespace ai
 
     // Why the new set may not replace the old one, or "" when it may. Both tables are sealed. `refusedTactics`: the
     // `ai_boss_tactic` rows of a kind this build knows that the loader refused (BossTacticLoadCounts::refused); a row
-    // of a kind it does not know is foreign data and refuses nothing (BossTacticsPolicy.h JudgeTacticRow), as at boot.
+    // of a listed foreign kind is foreign data and refuses nothing (BossTacticsPolicy.h JudgeTacticRow), as at boot.
     inline std::string JudgePlanReload(const DungeonPlanTable& old, const DungeonPlanTable& next, const PlanLoadCounts& counts,
         std::uint32_t refusedTactics)
     {
