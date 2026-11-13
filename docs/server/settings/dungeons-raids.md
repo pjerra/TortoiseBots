@@ -799,7 +799,7 @@ Whether the boss tactics keep their `ranged_only` rows: melee bots leave a subje
 <details>
 <summary>How it works in detail</summary>
 
-**Ranged only:** a boss tactic row of the `ranged_only` kind (see [Boss Tactics](../../play/boss-tactics.md#kinds)) names the subject (`target_entry`, `0` = the row's boss) and the vertical gap in yards (`param`, 3 to 40). A melee bot (melee damage or a tank) standing `param` yd or more below the subject skips it in the free-damage and tank picks and drops it if it already holds it, then takes a `kill_first` pick or the nearest attacker that is not held; a ranged bot and a healer are never held. An explicit attack order beats the hold: an ordered bot keeps the subject until the order is cleared (as for `hold_kill`). The heights are the two units' own z, never the navmesh. When the subject lands the gap closes and the hold ends by itself. The `BossTacticsRangedOnly` row (`subject=<entry>, gap=<yd>`) goes to `bot_events.csv` at most once per 5 s per bot. Ayamiss climbs 20 yd for her air phase (boss_ayamiss.cpp:193-205).
+**Ranged only:** a boss tactic row of the `ranged_only` kind (see [Boss Tactics](../../play/boss-tactics.md#kinds)) names the subject (`target_entry`, `0` = the row's boss) and the vertical gap in yards (`param`, 3 to 40). A melee bot (melee damage or a tank) standing `param` yd or more below the subject skips it in the free-damage and tank picks and drops it if it already holds it, then takes a `kill_first` pick or the nearest attacker that is not held; a ranged bot and a healer are never held. An engaged row outranks the bot's own attack order: the ordered subject is dropped from the order and the bot takes the pick (a subject with no row still leaves a player's order alone). The heights are the two units' own z, never the navmesh. When the subject lands the gap closes and the hold ends by itself. The `BossTacticsRangedOnly` row (`subject=<entry>, gap=<yd>`) goes to `bot_events.csv` at most once per 5 s per bot. Ayamiss climbs 20 yd for her air phase (boss_ayamiss.cpp:193-205).
 
 </details>
 ### `AiPlayerbot.RangedReachHoverTarget`
@@ -1523,6 +1523,8 @@ The mode is the row's `tactic_mode` column (`hold_spot`) and only a `tank_post` 
 **Arrival:** the arrival latches for that unit from the first arrived tick, whatever the tank does on it (a drag back, or a stand seat yielding the post), and once logged the post stays arrived for that one unit while it is alive and selectable, wherever it walks, so a landed boss that runs to its top-threat victim is still the post's. A second unit of the same entry starts unarrived. An arrived unit outranks any other hostile (the post engages it, not holds), and a hostile counts as "other" only when it is not that unit.
 
 **Drag:** while the arrived unit's victim is this tank, the tank more than 8 yd from the spot and the tank not seated, the tank walks back to the spot with the target kept (no attack stop, no target change), so the unit follows it there.
+
+**Target:** an engaged post (`Engage` or `Drag`) pins its subject in the tank's own target pick (`TankPostPinsTarget`), so the tank-assist pick (a whelp the healer pulled) no longer takes the tick between two Engage calls: the post's tank keeps hitting the subject instead of idling at full rage on the whelp.
 
 **Seat:** while the tank holds a boss stand seat (`FindBossStand`), the post yields: the trigger is inactive, the record is kept, and the breath seat moves the tank with the unit following it. The post resumes when the seat is released.
 
