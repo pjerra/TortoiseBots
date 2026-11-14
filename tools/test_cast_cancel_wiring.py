@@ -139,9 +139,10 @@ class CastCancelWiring(unittest.TestCase):
         fn = body(movement, "bool MovementAction::MoveTo2(const WorldPosition& endPos, bool idle, bool react, "
                             "bool noPath, bool ignoreEnemyTargets, PackHoldResult* packHold, "
                             "const char* castCancelSite)")
-        self.assertIn("ai->InterruptSpell(false, castCancelSite, castCancelSite ? std::sqrt(startPos.sqDistance2d(endPos)) : 0.0f);",
+        self.assertIn('char const* const site = castCancelSite ? castCancelSite : "move_to";', fn)
+        self.assertIn("ai->InterruptSpell(false, site, castCancelSite ? std::sqrt(startPos.sqDistance2d(endPos)) : 0.0f);",
                       fn)
-        self.assertLess(fn.index("MOVE_FAIL_CLIPPED_EMPTY"), fn.index("InterruptSpell(false, castCancelSite"))
+        self.assertLess(fn.index("MOVE_FAIL_CLIPPED_EMPTY"), fn.index("InterruptSpell(false, site"))
 
     def test_a_cancel_that_skips_a_delayed_cast_writes_no_row(self):
         # InterruptSpell(type, false) leaves a cast in the delayed state to land, so these sites check the state
@@ -240,26 +241,50 @@ class CastCancelWiring(unittest.TestCase):
         # The scan really walked the callers (the three in PlayerbotAI alone, plus the actions).
         self.assertGreaterEqual(calls, 10)
 
-    def test_every_module_walk_names_its_cancel_site(self):
-        # A module MoveTo cancels the bot's cast inside MoveTo2 (its own interrupt), so the walk must name itself
-        # there: one site per reason, and no anonymous `ai` row from a raid walk. The allowlist is empty on purpose
-        # (the unit-chase overload now carries the site too) and is matched verbatim, so it cannot silently grow.
-        allow = ()
-        missing = []
-        sites = 0
+    def test_no_module_walk_reaches_the_ai_default(self):
+        # A module MoveTo cancels the bot's cast inside MoveTo2, its only interrupt. An unnamed walk falls back to
+        # `move_to` there, so no caller (the whole source tree, not a hand-picked allowlist) can write the choke
+        # point's anonymous `ai` row. The four busiest walkers name themselves instead of sharing that bucket.
+        movement = (ROOT / "ai/playerbot/strategy/actions/MovementActions.cpp").read_text()
+        fn = body(movement, "bool MovementAction::MoveTo2(const WorldPosition& endPos, bool idle, bool react, "
+                            "bool noPath, bool ignoreEnemyTargets, PackHoldResult* packHold, "
+                            "const char* castCancelSite)")
+        self.assertEqual(fn.count("InterruptSpell("), 1)
+        self.assertIn('castCancelSite ? castCancelSite : "move_to"', fn)
+        self.assertNotIn('"ai"', fn)
+
+        walks = named = 0
+        problems = []
         for path in _module_paths():
             text = path.read_text()
-            for where, recv, args in _calls(text, "MoveTo"):
-                sites += 1
-                joined = f"MoveTo({', '.join(args)})"
-                if any(re.fullmatch(r'"[^"]+"', arg) for arg in args):
-                    continue
-                if joined in allow:
-                    continue
-                line = text.count("\n", 0, where) + 1
-                missing.append(f"{path.relative_to(ROOT)}:{line}: {joined}")
-        self.assertEqual(missing, [], "unnamed module walks:\n" + "\n".join(missing))
-        self.assertGreaterEqual(sites, 40)
+            for name in ("MoveTo", "MoveTo2"):
+                for where, recv, args in _calls(text, name):
+                    walks += 1
+                    site = args[-1] if args else ""
+                    if re.fullmatch(r'"[^"]*"', site):
+                        named += 1
+                        if site in ('"ai"', '""'):
+                            line = text.count("\n", 0, where) + 1
+                            problems.append(f"{path.relative_to(ROOT)}:{line}: {name} names itself {site}")
+                    elif site == "nullptr":
+                        line = text.count("\n", 0, where) + 1
+                        problems.append(f"{path.relative_to(ROOT)}:{line}: {name} passes a null site")
+                    # An omitted site is covered by the `move_to` fallback pinned above; a variable site is a
+                    # forwarding helper (MoveTo -> MoveTo2) whose caller lands on the same fallback.
+        self.assertEqual(problems, [], "walks that reach the `ai` default:\n" + "\n".join(problems))
+        # The scan really walked the module (well over the actions' forty), and the explicit sites are still there.
+        self.assertGreaterEqual(walks, 150)
+        self.assertGreaterEqual(named, 40)
+
+        FOLLOW = (ROOT / "ai/playerbot/strategy/actions/FollowActions.cpp").read_text()
+        REACH = (ROOT / "ai/playerbot/strategy/actions/ReachTargetActions.h").read_text()
+        REVIVE = (ROOT / "ai/playerbot/strategy/actions/ReviveFromCorpseAction.cpp").read_text()
+        TRAVEL = (ROOT / "ai/playerbot/strategy/actions/MoveToTravelTargetAction.cpp").read_text()
+        self.assertEqual(FOLLOW.count('"move_follow"'), 4)
+        self.assertIn('MoveTo2(target, false, false, false, false, nullptr, "move_follow")', movement)
+        self.assertEqual(REACH.count('"move_reach"'), 5)
+        self.assertEqual(REVIVE.count('"move_revive"'), 3)
+        self.assertEqual(TRAVEL.count('"move_travel"'), 1)
 
     def test_the_split_sites_are_the_ones_walk_99_asked_for(self):
         # The labels the walk's 95 % `ai` share is split into, each at the caller that owns it.
@@ -362,15 +387,8 @@ def _calls(text, name):
 
 
 def _module_paths():
-    actions = ROOT / "ai/playerbot/strategy/actions"
-    paths = sorted(actions.glob("*DungeonActions.*"))
-    paths += [
-        actions / "BossTacticsActions.cpp",
-        actions / "PatchwerkSoakerActions.cpp",
-        actions / "ViscidusActions.cpp",
-        actions / "FankrissFocusActions.cpp",
-    ]
-    return paths
+    """Every module source, so a walk outside the actions folder (and outside a hand-picked list) is covered too."""
+    return sorted(p for p in (ROOT / "ai/playerbot").rglob("*") if p.suffix in (".cpp", ".h"))
 
 
 if __name__ == "__main__":

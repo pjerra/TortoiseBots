@@ -1841,7 +1841,12 @@ MovementAction::SwimHandoffResult MovementAction::SwimHandoff(const WorldPositio
             bot->SetStandState(UNIT_STAND_STATE_STAND);
 
         if (bot->IsNonMeleeSpellCasted(true, false, true))
-            ai->InterruptSpell(false, castCancelSite, castCancelSite ? std::sqrt(startPos.sqDistance2d(endPos)) : 0.0f);
+        {
+            // An unnamed walk still names itself: the choke point's `ai` label is left for interrupts that come from
+            // outside a walk, so a caller that passes no site is not an anonymous row.
+            char const* const site = castCancelSite ? castCancelSite : "move_to";
+            ai->InterruptSpell(false, site, castCancelSite ? std::sqrt(startPos.sqDistance2d(endPos)) : 0.0f);
+        }
     }
 
     if (totalDistance > sPlayerbotAIConfig.reactDistance && !detailedMove)
@@ -2348,7 +2353,7 @@ void MovementAction::UpdateMovementState()
 bool MovementAction::Follow(Unit* target, float distance, float angle)
 {
     if (!ai->IsSafe(target))
-        return MoveTo2(target);
+        return MoveTo2(target, false, false, false, false, nullptr, "move_follow");
 
     MotionMaster &mm = *bot->GetMotionMaster();
 
