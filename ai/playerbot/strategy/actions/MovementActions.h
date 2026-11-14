@@ -11,6 +11,7 @@
 #include "../../policy/loot/CreatureAuraKeepoutPolicy.h"
 #include "playerbot/policy/dungeon/LedgeStepDownPolicy.h"
 #include "playerbot/policy/combat/SetBehindPolicy.h"
+#include "playerbot/MagmaHazardPolicy.h"
 #include <atomic>
 
 namespace ai
@@ -209,6 +210,34 @@ namespace ai
         // The keep-out creature the last follow decision held, approached or
         // backed off from (empty when it followed normally): goal hysteresis.
         ObjectGuid keepoutFollowEngaged;
+        // The follow target the last magma hold re-pointed at distance 0
+        // (HoldFollowOutOfMagma, empty when the native follow runs at its own
+        // slot). The follow generator keeps that distance through Follow's
+        // FOLLOW_MOTION_TYPE early return, so the clearing slot must send a
+        // fresh MoveFollow at the caller's distance and angle.
+        ObjectGuid magmaFollowEngaged;
+        // Magma guard per-tick cost (MagmaHazardPolicy.h, kMagmaRecheckYd /
+        // kMagmaRecheckMs): the follow slot and the chase goal checked last,
+        // with the verdict. A fresh check inside the window reuses it instead
+        // of a liquid query and a route calculation.
+        struct MagmaSlotMemo
+        {
+            bool valid = false;
+            bool held = false;
+            float x = 0.0f, y = 0.0f;
+            uint32 atMs = 0;
+        };
+        MagmaSlotMemo magmaFollowMemo;
+        MagmaSlotMemo magmaChaseMemo;
+        // The melee ring's last sampled verdicts (HoldMeleeChaseOutOfMagma):
+        // reused while the target, its radius and the ring centre are inside
+        // the re-check window, so a held melee chase costs no ring queries.
+        bool magmaRingMemoValid = false;
+        ObjectGuid magmaRingMemoTarget;
+        float magmaRingMemoX = 0.0f, magmaRingMemoY = 0.0f, magmaRingMemoRadius = 0.0f;
+        uint32 magmaRingMemoAtMs = 0;
+        bool magmaRingMemoInMagma[ai::kMeleeRingSamples] = {};
+        WorldPosition magmaRingMemoMagmaAt;
         // The same for chase decisions (HoldChaseOutsideKeepout).
         ObjectGuid keepoutChaseEngaged;
         // Bounded chase hold: the target held on, since when, and the last

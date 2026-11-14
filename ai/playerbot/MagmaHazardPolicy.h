@@ -117,6 +117,69 @@ namespace ai
         return mapIsInstance;
     }
 
+    // Instance maps whose terrain liquid data (the .map MLIQ chunk: type flag
+    // 0x01, or liquid entry 3 "Magma") carries magma. Only here does the
+    // follow/chase guard spend a sampled route calculation; elsewhere it keeps
+    // the end-point liquid lookup alone. False positives only cost (the
+    // samples come back dry). A map whose lava is WMO liquid the ADT query
+    // cannot see (Dragonmaw Retreat 816, no liquid layer in its .map tiles)
+    // gains nothing from the guard, so it is not listed.
+    // Data: a scan of the shipped data/maps found ADT magma on 808 only
+    // (Hateforge Quarry); 389 (Ragefire Chasm, RFC first-bridge deaths
+    // 2026-11-13, magma in the guard's own logs) and the classic lava
+    // instances are listed from their lava. A map added later is learned from
+    // its own liquid data by the caller instead (MagmaRouteCheckAllowed
+    // below).
+    inline bool MagmaMapLiquidListed(std::uint32_t mapId)
+    {
+        switch (mapId)
+        {
+            case 229:  // Blackrock Spire
+            case 230:  // Blackrock Depths
+            case 389:  // Ragefire Chasm
+            case 409:  // Molten Core
+            case 469:  // Blackwing Lair
+            case 800:  // Karazhan Crypt (Turtle)
+            case 808:  // Hateforge Quarry (Turtle)
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    // Whether the follow/chase guards may spend a sampled ROUTE calculation on
+    // a map: the maps above, plus any map where a check has already seen
+    // magma (`mapSeenMagma` is the caller's per-map flag, set from the cheap
+    // end-point lookup the guard still runs on unlisted instance maps). Until
+    // then an unlisted map gets only that end-point lookup, so a lava map
+    // missing from the list still cannot put a follow slot in the lava; it
+    // only lacks the route half of the guard until its first hit.
+    inline bool MagmaRouteCheckAllowed(bool mapListed, bool mapSeenMagma)
+    {
+        return mapListed || mapSeenMagma;
+    }
+
+    // The follow/chase guard's per-bot re-check clock: the slot or goal last
+    // checked is re-checked when it moved kMagmaRecheckYd or more, or when
+    // kMagmaRecheckMs passed (the route starts at the bot, which may have
+    // moved, and the world changes under a held bot).
+    constexpr float kMagmaRecheckYd = 2.0f;
+    constexpr std::uint32_t kMagmaRecheckMs = 1000;
+
+    // `have`: a verdict was stored. `nowMs`/`lastMs` are WorldTimer::getMSTime()
+    // values (uint32, wrap-safe).
+    inline bool MagmaRecheckDue(bool have, float x, float y, float lastX, float lastY,
+        std::uint32_t nowMs, std::uint32_t lastMs)
+    {
+        if (!have)
+            return true;
+        if (static_cast<std::uint32_t>(nowMs - lastMs) >= kMagmaRecheckMs)
+            return true;
+        float const dx = x - lastX;
+        float const dy = y - lastY;
+        return dx * dx + dy * dy >= kMagmaRecheckYd * kMagmaRecheckYd;
+    }
+
     // A bot's memory of the last destination the guard refused: the same
     // destination (same map, same 2 yd cell) is refused again without terrain
     // queries until `until` (wall-clock seconds).
@@ -201,6 +264,28 @@ namespace ai
         return slotInMagma || routeInMagma;
     }
 
+    // What the follow guard does with this tick (MovementActions.cpp,
+    // HoldFollowOutOfMagma).
+    enum class MagmaFollowAction
+    {
+        FollowUpstream,  // the slot is dry: the native follow runs untouched
+        HoldOnTarget,    // the slot is wet, the target dry: follow the target itself (distance 0)
+        HoldInPlace,     // the slot and the target's own spot are wet: stop here
+        RestoreFollow,   // the slot cleared after a HoldOnTarget: re-dispatch the native follow at the caller's distance
+    };
+
+    // `engaged`: a HoldOnTarget re-pointed the running follow at distance 0.
+    // The engine follow keeps its distance through the
+    // FOLLOW_MOTION_TYPE early return, so clearing the slot alone would leave
+    // the follower parked on the master (round 4 regression): the caller must
+    // send a fresh MoveFollow with the original distance and angle.
+    inline MagmaFollowAction PlanMagmaFollow(bool slotInMagma, bool targetInMagma, bool engaged)
+    {
+        if (!slotInMagma)
+            return engaged ? MagmaFollowAction::RestoreFollow : MagmaFollowAction::FollowUpstream;
+        return targetInMagma ? MagmaFollowAction::HoldInPlace : MagmaFollowAction::HoldOnTarget;
+    }
+
     // A commander task's walk nudge (a plain core MovePoint to its standing
     // point, BotCommands NudgeTaskWalk) on an instance map waits while the
     // bot's magma refusal memory on this map is still in its window, or when the
@@ -253,6 +338,11 @@ namespace ai
     // from the target, at the attacker's bearing plus a random spread. Any
     // bearing of that ring can be picked, so the guard samples it at eight
     // fixed world bearings on the outer radius, the farthest the core can go.
+    // Accepted limit: one point per bearing and only on the outer radius. A
+    // lava sliver between two sample bearings, and an inner point (the core
+    // may draw as close as the two bounding radii) that the outer sample
+    // misses, go unchecked; sampling the spokes and the inner ring would cost
+    // a route calculation per bearing.
     constexpr int kMeleeRingSamples = 8;
     constexpr float kTwoPi = 6.28318530717958647692f;
 

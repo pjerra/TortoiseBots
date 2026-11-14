@@ -26,22 +26,28 @@ using ai::KeepStairNavmeshZ;
 using ai::kMeleeRingSamples;
 using ai::kTwoPi;
 using ai::LiquidHazard;
+using ai::MagmaFollowAction;
 using ai::MagmaGuardApplies;
 using ai::MagmaInteriorSamples;
+using ai::MagmaMapLiquidListed;
 using ai::MagmaPathCut;
 using ai::MagmaPoint;
+using ai::MagmaRecheckDue;
 using ai::MagmaRefusal;
 using ai::MagmaRefusalActive;
 using ai::MagmaRefusalFor;
+using ai::MagmaRouteCheckAllowed;
 using ai::MagmaRouteRefusalFor;
 using ai::MagmaNudgeBlocked;
 using ai::kMagmaMaxInteriorSamples;
+using ai::kMagmaRecheckMs;
 using ai::kMagmaRefusalSeconds;
 using ai::kMagmaRefusalGridYd;
 using ai::MeleeRingAngle;
 using ai::MeleeRingPlan;
 using ai::MeleeRingPoint;
 using ai::MeleeRingStep;
+using ai::PlanMagmaFollow;
 using ai::PlanMeleeRing;
 // GridMapDefines.h, mirrored for the test (the static_asserts in
 // MovementActions.cpp pin the header's copies to the core's).
@@ -496,6 +502,63 @@ int main()
         MeleeRingPlan const plan = PlanMeleeRing(allWet, 0.0f);
         CHECK(plan.step == MeleeRingStep::Hold);
         std::cout << "  [PASS] an all-magma melee ring holds\n";
+    }
+
+    // Followers parked on the master (round 4 regression): the follow hold
+    // re-points the running generator at distance 0, and the generator keeps
+    // that distance through the FOLLOW_MOTION_TYPE early return. When the slot
+    // clears, the guard must hand the caller's distance and angle back.
+    {
+        CHECK(PlanMagmaFollow(false, false, false) == MagmaFollowAction::FollowUpstream);
+        CHECK(PlanMagmaFollow(true, false, false) == MagmaFollowAction::HoldOnTarget);
+        CHECK(PlanMagmaFollow(true, true, false) == MagmaFollowAction::HoldInPlace);
+        // Wet slot, dry target, then the slot clears on a later tick: restore,
+        // never keep following at distance 0.
+        bool engaged = false;
+        MagmaFollowAction const wet = PlanMagmaFollow(true, false, engaged);
+        CHECK(wet == MagmaFollowAction::HoldOnTarget);
+        engaged = true;  // the hold re-pointed the running follow at distance 0
+        MagmaFollowAction const cleared = PlanMagmaFollow(false, false, engaged);
+        CHECK(cleared == MagmaFollowAction::RestoreFollow);
+        engaged = false;  // the restore hands the generator the caller's slot back
+        CHECK(PlanMagmaFollow(false, false, engaged) == MagmaFollowAction::FollowUpstream);
+        // A wet target spot holds in place whether or not a distance-0 follow
+        // was running before: clearing the slot alone must not look like a
+        // restore there.
+        CHECK(PlanMagmaFollow(true, true, true) == MagmaFollowAction::HoldInPlace);
+        std::cout << "  [PASS] a cleared follow slot restores the caller's distance\n";
+    }
+
+    // Per-tick cost (round 4): the re-check window is 2 yd of slot movement or
+    // 1 s, whichever comes first; the clock is wrap-safe.
+    {
+        CHECK(kMagmaRecheckMs == 1000);
+        CHECK(MagmaRecheckDue(false, 0.0f, 0.0f, 0.0f, 0.0f, 0, 0));        // no verdict yet
+        CHECK(!MagmaRecheckDue(true, 9.9f, 10.0f, 8.0f, 10.0f, 500, 100)); // 1.9 yd inside 1 s: reuse
+        CHECK(MagmaRecheckDue(true, 12.1f, 10.0f, 10.0f, 10.0f, 500, 100));
+        CHECK(MagmaRecheckDue(true, 10.0f, 10.0f, 10.0f, 10.0f, 1100, 100));
+        // The y term counts too: 0.9 yd on each axis is still inside 2 yd.
+        CHECK(!MagmaRecheckDue(true, 10.9f, 10.9f, 10.0f, 10.0f, 500, 100));
+        // Wrap: the uint32 clock passes 2^32 inside the window.
+        CHECK(!MagmaRecheckDue(true, 0.0f, 0.0f, 0.0f, 0.0f, 0x00000010u, 0xFFFFFFF0u));
+        CHECK(MagmaRecheckDue(true, 0.0f, 0.0f, 0.0f, 0.0f, 0x00000400u, 0xFFFFFFF0u));
+        std::cout << "  [PASS] the guard re-checks after 2 yd or 1 s, wrap-safe\n";
+    }
+
+    // The map gate: only maps whose liquid data carries magma pay for the
+    // route calculation. A dungeon without magma (Wailing Caverns) does not.
+    {
+        CHECK(MagmaMapLiquidListed(808));  // Hateforge Quarry
+        CHECK(MagmaMapLiquidListed(389));  // Ragefire Chasm
+        CHECK(MagmaMapLiquidListed(409));  // Molten Core
+        CHECK(!MagmaMapLiquidListed(33));  // Shadowfang Keep
+        CHECK(!MagmaMapLiquidListed(47));  // Wailing Caverns
+        CHECK(!MagmaMapLiquidListed(0));   // the open world is not an instance map
+        CHECK(!MagmaRouteCheckAllowed(false, false));  // no magma ever seen: end-point lookup only
+        CHECK(MagmaRouteCheckAllowed(true, false));    // a listed map
+        CHECK(MagmaRouteCheckAllowed(false, true));    // learned from its own liquid data
+        CHECK(MagmaRouteCheckAllowed(true, true));
+        std::cout << "  [PASS] the route guard runs only where magma liquid is known\n";
     }
 
     std::cout << "All magma hazard policy tests passed.\n";
