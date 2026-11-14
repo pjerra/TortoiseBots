@@ -40,6 +40,9 @@ using ai::MagmaRouteCheckAllowed;
 using ai::MagmaRouteRefusalFor;
 using ai::MagmaNudgeBlocked;
 using ai::kMagmaMaxInteriorSamples;
+using ai::kMagmaDryFloorAboveYd;
+using ai::MagmaMoveZPlan;
+using ai::PlanMagmaMoveZ;
 using ai::kMagmaRecheckMs;
 using ai::kMagmaRefusalSeconds;
 using ai::kMagmaRefusalGridYd;
@@ -561,6 +564,24 @@ int main()
         CHECK(MagmaRouteCheckAllowed(false, true));    // learned from its own liquid data
         CHECK(MagmaRouteCheckAllowed(true, true));
         std::cout << "  [PASS] the guard runs only where magma liquid is known\n";
+    }
+
+    // RFC first-bridge deaths 2026-11-14: the core's server-moved clamp
+    // answers liquid level - 2 over a thin floor above lava (surface -30.1,
+    // clamp -32.1), so a move probed at the navmesh z reads dry and the bot
+    // is moved into the magma. A dry navmesh z above the clamp is the floor
+    // the leader walks and the move is sent at it; without one the move is
+    // refused.
+    {
+        CHECK(kMagmaDryFloorAboveYd == 1.0f);
+        CHECK(PlanMagmaMoveZ(true, true, true, -29.9f, -32.1f) == MagmaMoveZPlan::KeepNavmeshZ);  // 2.2 yd floor
+        CHECK(PlanMagmaMoveZ(true, true, true, -31.0f, -32.1f) == MagmaMoveZPlan::KeepNavmeshZ);  // 1.1 yd
+        CHECK(PlanMagmaMoveZ(true, true, true, -31.1f, -32.1f) == MagmaMoveZPlan::Refuse);        // exactly 1 yd: no floor
+        CHECK(PlanMagmaMoveZ(true, true, true, -32.1f, -32.1f) == MagmaMoveZPlan::Refuse);        // navmesh z is the clamp
+        CHECK(PlanMagmaMoveZ(true, true, false, -29.9f, -32.1f) == MagmaMoveZPlan::Refuse);       // navmesh point is wet too
+        CHECK(PlanMagmaMoveZ(true, false, false, -32.1f, -32.1f) == MagmaMoveZPlan::Move);        // clamp dry
+        CHECK(PlanMagmaMoveZ(false, true, true, -29.9f, -32.1f) == MagmaMoveZPlan::Move);         // open world: unchanged
+        std::cout << "  [PASS] a clamp into magma is sent at a dry navmesh floor above it, else refused\n";
     }
 
     std::cout << "All magma hazard policy tests passed.\n";

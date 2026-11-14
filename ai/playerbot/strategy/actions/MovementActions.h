@@ -136,12 +136,15 @@ namespace ai
         // off outside it instead of chasing in. True when it handled the
         // chase this tick; false to chase normally.
         bool HoldChaseOutsideKeepout(WorldObject* target, float distance);
-        // The follow slot (target position plus `distance` at `angle`) in
-        // magma, or a route to it that walks into magma after dry ground: the
-        // native follow is not sampled, so the bot follows the target itself
-        // or holds instead (MagmaHazardPolicy.h: ai::FollowSlotHolds). On an
-        // instance map only, never while the bot itself stands in magma. True
-        // when it handled the follow this tick; false to follow normally.
+        // The follow slot (target position plus `distance` at `angle`) probed
+        // at the z the core will MOVE the bot to (MagmaHazardPolicy.h,
+        // ai::MagmaAtMoveZ: the core's UpdateAllowedPositionZ clamp), or a
+        // route to it that walks into magma after dry ground. A sinking slot
+        // is walked to at the dry navmesh z by the module (the slot, else
+        // behind the leader) and the native follow resumes once it clears; a
+        // hold only when no dry navmesh point exists. On an instance map only,
+        // never while the bot itself stands in magma. True when it handled
+        // the follow this tick; false to follow normally.
         bool HoldFollowOutOfMagma(Unit* target, float distance, float angle);
         // The same for the chase goal MoveChase is handed (`distance` from the
         // target at `angle` off the target's facing): held, no tank pass.
@@ -230,6 +233,11 @@ namespace ai
             float x = 0.0f, y = 0.0f;
             WorldPosition hazard;
             uint32 atMs = 0;
+            // A dry navmesh point the guard walks the follower to instead of
+            // the core's sinking slot (the slot itself, else behind the
+            // leader). `escape` false: no dry point, the follower holds.
+            bool escape = false;
+            float escapeX = 0.0f, escapeY = 0.0f, escapeZ = 0.0f;
         };
         MagmaSlotMemo magmaFollowMemo;
         MagmaSlotMemo magmaChaseMemo;

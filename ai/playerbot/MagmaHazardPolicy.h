@@ -252,15 +252,20 @@ namespace ai
             r.originZ == MagmaGridCell(fromZ, kMagmaRefusalOriginGridYd);
     }
 
-    // A follower's follow slot, or a chaser's chase goal, that is magma, or a
-    // route to it that walks into magma after dry ground: the bot holds at its
-    // own spot instead of taking the engine's follow or chase move. Neither
+    // A follower's follow slot, or a chaser's chase goal, whose MOVE point is
+    // magma (the core lowers a server-moved point with
+    // UpdateAllowedPositionZ, so over a thin floor above liquid it answers
+    // liquid level - 2), or a route to it that walks into magma after dry
+    // ground: the engine's follow or chase move is not taken. Neither
     // generator samples the terrain, and both goals come off the navmesh,
     // which calls a shallow lava shelf plain ground (RFC first-bridge deaths
     // 2026-11-13: the Ragefire Chasm follow slot landed on a shelf 0.1-0.4 yd
-    // under the lava surface, 605 a tick). A bot already standing in magma is
-    // never held there: it walks out first, so its own spot is not a reason to
-    // hold and the caller leaves the goal alone.
+    // under the lava surface, 605 a tick). The movement layer then walks a
+    // dry navmesh point instead of holding (MovementActions.cpp,
+    // ai::MagmaAtMoveZ / DryNavmeshPoint) and holds only when none exists. A
+    // bot already standing in magma is never held there: it walks out first,
+    // so its own spot is not a reason to hold and the caller leaves the goal
+    // alone.
     inline bool FollowSlotHolds(bool guard, bool slotInMagma, bool routeInMagma)
     {
         if (!guard)
@@ -268,14 +273,15 @@ namespace ai
         return slotInMagma || routeInMagma;
     }
 
-    // What the follow guard does with this tick (MovementActions.cpp,
-    // HoldFollowOutOfMagma).
+    // What the follow guard's fallback does when no dry navmesh point exists
+    // (MovementActions.cpp, HoldFollowOutOfMagma; the dry-point walk runs
+    // before this plan).
     enum class MagmaFollowAction
     {
         FollowUpstream,  // the slot is dry: the native follow runs untouched
         HoldOnTarget,    // the slot is wet, the target dry: follow the target itself (distance 0)
         HoldInPlace,     // the slot and the target's own spot are wet: stop here
-        RestoreFollow,   // the slot cleared after a HoldOnTarget: re-dispatch the native follow at the caller's distance
+        RestoreFollow,   // the slot cleared after a module walk or a distance-0 follow: re-dispatch the native follow at the caller's distance
     };
 
     // `engaged`: a HoldOnTarget re-pointed the running follow at distance 0.
@@ -548,5 +554,36 @@ namespace ai
     inline bool KeepStairNavmeshZ(bool lowered, bool bigDrop, bool clampedInMagmaOrSlime)
     {
         return lowered && bigDrop && !clampedInMagmaOrSlime;
+    }
+
+    // The core moves a bot (a server-moved player) to the point its
+    // UpdateAllowedPositionZ clamp answers, and over a thin floor above
+    // liquid that clamp is liquid level - 2 (GetWaterOrGroundLevel, swim=true),
+    // inside the magma, while the navmesh floor the leader walks is 2 yd up.
+    // A dry navmesh z more than this far above the clamp is the floor the
+    // move is sent at instead (RFC first-bridge deaths 2026-11-14: the
+    // follower died at surface - 2 while the leader walked the same x/y 2 yd
+    // above); nearer is no floor a bot can stand on, so the move is refused.
+    constexpr float kMagmaDryFloorAboveYd = 1.0f;
+
+    // The verdict on a point the core will clamp before it moves the bot
+    // there: DispatchMovement's per-point check and MoveTo2's end-point one.
+    enum class MagmaMoveZPlan
+    {
+        Move,          // the clamp is dry: dispatch it
+        KeepNavmeshZ,  // the clamp sank into magma, the navmesh z is dry and above: send that z
+        Refuse,        // the clamp sank and the navmesh z is no rescue: refuse the move
+    };
+
+    // `moveInMagma`: the clamped point is in magma; `navmeshDry`: the point at
+    // the navmesh z is dry; `navmeshZ`/`moveZ`: the two heights.
+    inline MagmaMoveZPlan PlanMagmaMoveZ(bool guardApplies, bool moveInMagma, bool navmeshDry,
+        float navmeshZ, float moveZ)
+    {
+        if (!guardApplies || !moveInMagma)
+            return MagmaMoveZPlan::Move;
+        if (navmeshDry && navmeshZ - moveZ > kMagmaDryFloorAboveYd)
+            return MagmaMoveZPlan::KeepNavmeshZ;
+        return MagmaMoveZPlan::Refuse;
     }
 }
