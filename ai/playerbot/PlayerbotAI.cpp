@@ -8,6 +8,7 @@
 #include "playerbot/GroupMembers.h"
 #include "playerbot/TransportSnapPolicy.h"
 #include "playerbot/CharmYieldPolicy.h"
+#include "playerbot/ReactionCastGuardPolicy.h"
 #include "playerbot/policy/combat/MealGatePolicy.h"
 #include "playerbot/policy/dungeon/ReturnHoldPolicy.h"
 #include "playerbot/playerbot.h"
@@ -1068,6 +1069,21 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
     SC_PHASE("UpdateAI.exit", bot ? bot->GetName() : "(null)");
 }
 
+// The reaction cast guard's heal read (ReactionCastGuardPolicy.h): the spell heals outright (Flash Heal, Holy
+// Light, Regrowth's direct part) or over time (Renew, a Regrowth's bloom), by its effects. The bot role read
+// (IsHealSpell) also carries class-icon shortcuts and the max-health heal; the guard wants the heal itself.
+static bool ReactionCastIsHeal(const SpellEntry* entry)
+{
+    if (!entry)
+        return false;
+    for (uint8 i = 0; i < MAX_EFFECT_INDEX; ++i)
+    {
+        if (entry->Effect[i] == SPELL_EFFECT_HEAL || entry->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_HEAL)
+            return true;
+    }
+    return false;
+}
+
 bool PlayerbotAI::UpdateAIReaction(uint32 elapsed, bool minimal, bool isStunned)
 {
     bool reactionFound;
@@ -1086,7 +1102,28 @@ bool PlayerbotAI::UpdateAIReaction(uint32 elapsed, bool minimal, bool isStunned)
         const Reaction* reaction = reactionEngine->GetReaction();
         if(reaction)
         {
-            if(reaction->ShouldInterruptCast())
+            // The pick decides the break, before the action's Execute can find it has nothing to do. A positioning
+            // reaction that ends in a no-op more often than not (`boss tactics seek`, `raid spread`) therefore leaves
+            // a healer's heal alone once it is under way (ReactionCastGuardPolicy.h, AiPlayerbot.ReactionHealCastGuardPct).
+            const bool interruptCast = reaction->ShouldInterruptCast();
+            int castPct = -1;
+            bool castIsHeal = false;
+            if (interruptCast)
+            {
+                // Only a cast that is really running: a generic spell left behind after its cast finished is no heal
+                // under way, so it keeps -1 and the break goes ahead.
+                if (Spell* cast = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL))
+                {
+                    if (cast->getState() == SPELL_STATE_CASTING)
+                    {
+                        castPct = ReactionCastPct(cast->GetCastTime(), cast->GetCastedTime());
+                        castIsHeal = ReactionCastIsHeal(cast->m_spellInfo);
+                    }
+                }
+            }
+
+            if (ReactionCastBreakDue(interruptCast, reaction->YieldsToHealCast(),
+                    sPlayerbotAIConfig.reactionHealCastGuardPct, IsHeal(bot), castIsHeal, castPct))
             {
                 InterruptSpell();
             }

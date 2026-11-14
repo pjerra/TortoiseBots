@@ -831,6 +831,10 @@ public:
     // The fixed ranged slots of a live spread row (each ranged bot and healer owns a ring point and stands on it
     // whenever the seek does not need it): off, today's step-away (default off, recommended on).
     bool dungeonRunBossSpreadSlots = false;
+    // The opening percent of a healer's heal that a positioning reaction (`boss tactics seek`, `raid spread`) may
+    // still cut; from it on the heal stands (ReactionCastGuardPolicy.h). Off, every reaction breaks the cast at pick
+    // time, as before (default 0 = off, recommended on at 1).
+    int reactionHealCastGuardPct = 0;
     // One BossStand row per bot's stand episode (assigned, arrived, unseated, released) into bot_events.csv: off, the
     // stand code writes nothing and reads no episode state (needs the boss stand rows and the bot_events.csv log;
     // default off).

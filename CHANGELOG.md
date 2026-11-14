@@ -1,5 +1,6 @@
 # Changelog
 
+- New: behind AiPlayerbot.ReactionHealCastGuardPct (default 0, recommended on at 1), the reaction engine no longer breaks a healer's heal once it is under way for the two positioning reactions that usually finish without a step — `boss tactics seek` and `raid spread` (walk 102: 10.5 heals cut per healer per fight, a median cut at 4 % of the cast, 74.5 % of the labelled cuts to the seek); every emergency still breaks the cast, a seek or spread that really walks still breaks it, and the key's percent is the opening of the cast that may still be cut.
 - Fixed: a summoned bot's live hunter pet or warlock demon is teleported with it and resummoned beside it instead of walking through the instance to its owner and pulling whatever it passes (#1606).
 - Fixed: a Shadow priest no longer drops Shadowform to Renew an ally another healer already covers, and drops the form only for a heal it can cast at once, not into a global cooldown or wand swing (found by Tortoise Trials, #1556).
 - Fixed: a Holy or Discipline priest in a group no longer goes 3 s without reacting after each wand shot, so its heal starts within one wand swing of a hit instead of up to 3 s later (found by Tortoise Trials, #1556).
