@@ -46,7 +46,7 @@ class MagmaGuardWiringTest(unittest.TestCase):
         f = self.move2
         guard = at(f, "bool const magmaGuard = ai::MagmaGuardApplies(bot->GetMap()->IsDungeon());")
         memory = at(f, "ai::MagmaRefusalActive(lastMove.magmaRefusal, endPos.GetMapId()")
-        end = at(f, "if (endPos.isInMagma())")
+        end = at(f, "ai::MagmaMoveProbe const endMove = ai::MagmaAtMoveZ(bot, endPos.getX()")
         clip = at(f, "movePath.ClipPath(ai, mover, ignoreEnemyTargets, packHold);")
         route = at(f, "RouteEntersMagma(bot, startPos, movePath, magmaAt)")
         dispatch = at(f, "DispatchMovement(movePath, generatePath, masterWalking)")
@@ -57,8 +57,10 @@ class MagmaGuardWiringTest(unittest.TestCase):
         f = self.move2
         memory = f[at(f, "ai::MagmaRefusalActive("):]
         self.assertRegex(memory, r"^[^}]*lastMove\.moveFailReason = MOVE_FAIL_MAGMA;\s*return false;")
-        end = f[at(f, "if (endPos.isInMagma())"):]
-        self.assertRegex(end, r"^[^}]*RefuseMagmaMove\(bot, lastMove, endPos, endPos, nullptr, \"end point\"\);\s*return false;")
+        end = f[at(f, "ai::MagmaMoveProbe const endMove = ai::MagmaAtMoveZ(bot, endPos.getX()"):]
+        self.assertRegex(end, r"^[^}]*PlanMagmaMoveZ\(true, endMove\.moveInMagma, endMove\.navmeshDry, "
+                               r"endMove\.navmeshZ,\s*endMove\.moveZ\) == ai::MagmaMoveZPlan::Refuse[\s\S]*?"
+                               r"RefuseMagmaMove\(bot, lastMove, endPos, magmaAt, nullptr, \"end point\"\);\s*return false;")
         route = f[at(f, "RouteEntersMagma(bot, startPos, movePath, magmaAt)"):]
         self.assertRegex(route, r"^[^}]*RefuseMagmaMove\(bot, lastMove, endPos, magmaAt, &startPos, \"route\"\);\s*return false;")
 
@@ -173,9 +175,16 @@ class MagmaGuardWiringTest(unittest.TestCase):
 
     def test_formation_station_skips_a_slot_in_magma(self):
         f = body(TRIGGERS, "class FormationStationTrigger", "\n    };\n")
-        magma = at(f, "if (MagmaGuardApplies(bot->GetMap()->IsDungeon()) && WorldPosition(loc).isInMagma())")
+        probe = at(f, "ai::MagmaMoveProbe const move = ai::MagmaAtMoveZ(bot, loc.x, loc.y, loc.z);")
+        plan = at(f, "ai::PlanMagmaMoveZ(true, move.moveInMagma, move.navmeshDry, move.navmeshZ, move.moveZ)")
         step = at(f, "return FormationStationStep(memory, formation->GetSerial(),")
-        self.assertLess(magma, step)
+        self.assertLess(probe, step)
+        self.assertLess(plan, step)
+        # Only a clamp the navmesh cannot rescue skips the station; a dry
+        # navmesh floor above the clamp is a walk MoveTo makes.
+        self.assertIn("ai::MagmaMoveZPlan::Refuse)", f[plan:step])
+        self.assertRegex(f[plan:step], r"Refuse\)\s*return false;")
+        self.assertIn("TB_LOG_BASIC(", f[probe:plan])
 
     def test_run_leader_holds_the_lead_while_resting(self):
         f = body(COMMANDS, "void TickDungeonRun(uint64 commanderRaw, uint32 dt)", "\n}\n")
@@ -231,8 +240,11 @@ class MagmaGuardWiringTest(unittest.TestCase):
     def test_follow_hold_rule_and_fallbacks(self):
         f = body(MOVES, "bool MovementAction::HoldFollowOutOfMagma(", "\n}\n")
         slot = at(f, "WorldPosition const slot(target->GetMapId(),")
-        check = at(f, "slotInMagma = SlotGoesIntoMagma(bot, slot, magmaAt);")
+        check = at(f, "slotInMagma = SlotGoesIntoMagma(bot, slot, magmaAt, &slotMove);")
         self.assertLess(slot, check)
+        # The slot is probed at the z the core will MOVE the bot to (its own
+        # clamp), not the navmesh z it was planned at (RFC 2026-11-14).
+        self.assertIn("ai::MagmaMoveProbe slotMove;", f)
         # A bot already standing in magma walks out instead of holding.
         self.assertIn("if (WorldPosition(bot).isInMagma())\n        return engaged;", f)
         # The slot is magma but the target's own spot is dry: follow the
@@ -244,7 +256,13 @@ class MagmaGuardWiringTest(unittest.TestCase):
         self.assertIn("case ai::MagmaFollowAction::HoldInPlace:", f)
         self.assertIn("ai->StopMoving();", f)
         self.assertIn("magmaFollowEngaged = targetGuid;", f)
-        self.assertIn('LogMagmaRefusal(bot, AI_VALUE(LastMovement&, "last movement"), magmaAt, "follow slot");', f)
+        self.assertIn('LogMagmaMoveZ(bot, AI_VALUE(LastMovement&, "last movement"), "follow slot", slotX, slotY, slotMove);', f)
+        # Round 6: a sinking slot is walked at the dry navmesh z by the module,
+        # not held (the core follow cannot reach the floor above the lava).
+        self.assertIn("if (slotInMagma && magmaFollowMemo.escape)", f)
+        self.assertIn("MoveTo(escape.GetMapId(), escape.getX(), escape.getY(), escape.getZ())", f)
+        self.assertIn("DryNavmeshPoint(bot, slotX, slotY, target->GetPositionZ(), escape)", f)
+        self.assertIn("float const behind = target->GetOrientation() + 3.14159265f;", f)
         # Round 4 regression: the hold re-pointed the generator at distance 0,
         # and the FOLLOW_MOTION_TYPE early return would keep it there. The
         # clearing slot must send a fresh MoveFollow with the caller's slot.
@@ -275,10 +293,120 @@ class MagmaGuardWiringTest(unittest.TestCase):
         self.assertLess(route_gate, calc)
         self.assertIn("RouteEntersMagma(bot, WorldPosition(bot), route, magmaAt)", helper)
         self.assertIn("ai::MagmaGuardApplies(bot->GetMap()->IsDungeon())", helper)
-        # The end-point lookup that also learns the map runs before the gate.
-        self.assertLess(at(helper, "if (slot.isInMagma(bot->GetMap()->GetTerrain()))"), route_gate)
+        # The end-point probe that also learns the map runs before the gate.
+        probe = at(helper, "ai::MagmaMoveProbe const move = ai::MagmaAtMoveZ(bot, slot.getX(), slot.getY(), slot.getZ());")
+        self.assertLess(probe, route_gate)
         self.assertIn("NoteMagmaSeenOnMap(slot.GetMapId());", helper)
         self.assertIn("ai::CutPathBeforeMagma(start, route,", body(MOVES, "static bool RouteEntersLiquidHazard(", "\n}\n"))
+
+    def test_move_z_probe_is_the_cores_clamp(self):
+        # RFC 2026-11-14: the guard probed the unclamped z, where magma under
+        # a thin floor reads ABOVE_WATER and dry, while the core's own
+        # UpdateAllowedPositionZ (swim=true) answered liquid level - 2, in the
+        # lava. The probe applies the core's clamp to a copy, then the core's
+        # in-magma rule at that height.
+        f = body(WORLDPOS, "MagmaMoveProbe ai::MagmaAtMoveZ(", "\n}\n")
+        clamp = at(f, "mover->UpdateAllowedPositionZ(x, y, probe.moveZ);")
+        magma = at(f, "probe.moveInMagma = WorldPosition(mover->GetMapId(), x, y, probe.moveZ).isInMagma(terrain);")
+        self.assertLess(clamp, magma)
+        self.assertIn("probe.moveZ = z;", f[:clamp])
+        self.assertIn("z - probe.moveZ > ai::kMagmaDryFloorAboveYd", f)
+        # A guard probes the slot through it, not with its own isInMagma.
+        helper = body(MOVES, "static bool SlotGoesIntoMagma(", "\n}\n")
+        self.assertIn("ai::MagmaMoveProbe const move = ai::MagmaAtMoveZ(bot, slot.getX(), slot.getY(), slot.getZ());", helper)
+        self.assertNotIn("slot.isInMagma(", helper)
+
+    def test_sinking_follow_slot_walks_a_navmesh_z_instead_of_holding(self):
+        # Round 6: the slot's core move point is 2 yd under the dry navmesh
+        # floor. Holding would strand the follower; the module walks the dry
+        # navmesh point (the slot, else behind the leader) and the native
+        # follow resumes once the slot clears (RestoreFollow above).
+        f = body(MOVES, "bool MovementAction::HoldFollowOutOfMagma(", "\n}\n")
+        escape = at(f, "if (slotInMagma && magmaFollowMemo.escape)")
+        plan = at(f, "switch (ai::PlanMagmaFollow(slotInMagma, targetInMagma, engaged))")
+        self.assertLess(escape, plan)
+        block = f[escape:plan]
+        self.assertIn("MoveTo(escape.GetMapId(), escape.getX(), escape.getY(), escape.getZ())", block)
+        self.assertIn("return true;", block)
+        self.assertIn("magmaFollowEngaged = targetGuid;", block)
+        self.assertIn("DryNavmeshPoint(bot, slotX, slotY, target->GetPositionZ(), escape)", f)
+        helper = body(MOVES, "static bool DryNavmeshPoint(", "\n}\n")
+        self.assertIn("Vector3 const& end = points.back();", helper)
+        self.assertIn("out = WorldPosition(bot->GetMapId(), end.x, end.y, end.z);", helper)
+        self.assertIn("ai::MagmaMoveZPlan::Refuse", helper)
+
+    def test_dispatch_refuses_a_sinking_waypoint(self):
+        # Round 6: a point the spline would send into lava is raised to the dry
+        # navmesh z when that is more than 1 yd above, and the whole move is
+        # refused otherwise. Round 7 (Codex r6): the backing point generator
+        # used to be created before this loop, so a refusal only cleared a
+        # movement that had already launched and the generator kept the
+        # unvalidated endpoint. No generator exists until every waypoint has
+        # passed the guard, and the one created takes the checked end z.
+        f = body(MOVES, "bool MovementAction::DispatchMovement(", "\n}\n")
+        sink = at(f, "bool const magmaMoveSinks = magmaFloorClampedMagma && !stairRestore && !magmaFloorGuardFire;")
+        plan = at(f, "ai::MagmaMoveZPlan const plan = ai::PlanMagmaMoveZ(true, move.moveInMagma,")
+        keep = at(f[plan:], "p.z = navmeshZ;") + plan
+        refuse = at(f, "RefuseMagmaMove(bot, dispatchMove, magmaAt, magmaAt, nullptr, \"clamped waypoint\");")
+        generator = at(f, "mm.MovePoint(path.back().GetMapId(), pointPath.back().x, pointPath.back().y, "
+                          "pointPath.back().z,")
+        launch = at(f, "init.Launch();")
+        self.assertLess(sink, plan)
+        self.assertLess(plan, keep)
+        self.assertLess(keep, refuse)
+        self.assertLess(refuse, generator)
+        self.assertLess(generator, launch)
+        # Nothing launches before the verdict: the leg from the hazard rewrite
+        # to the sinking check carries no point generator at all.
+        self.assertNotIn("mm.MovePoint(",
+            f[at(f, "bool const hazardRewrote = GeneratePathAvoidingHazards(path);"):sink])
+        # A refusal is the whole move's answer: the MagmaRefuse row, then a
+        # return, with no movement call behind it.
+        self.assertNotIn("mm.", f[refuse:at(f[refuse:], "return false;") + refuse])
+        # Every decision row names the site and both heights, at level 1.
+        log = body(MOVES, "static void LogMagmaMoveZ(", "\n}\n")
+        self.assertIn("TB_LOG_BASIC(", log)
+        self.assertIn("magma %s at %.1f %.1f %.1f: move z %.1f, navmesh z %.1f", log)
+        self.assertLess(at(log, "lastMove.magmaLogAt = now;"), at(log, "TB_LOG_BASIC("))
+        self.assertIn('"clamped waypoint"', f[sink:launch])
+
+    def test_every_dispatch_move_waits_for_its_magma_verdict(self):
+        # Round 8 (Codex r7): the single-point legs launched before the
+        # waypoint guard, so a clipped route whose point clamps into lava
+        # still moved. One shared verdict now runs on the ACTUAL dispatch
+        # point before every move in DispatchMovement.
+        f = body(MOVES, "bool MovementAction::DispatchMovement(", "\n}\n")
+        verdict = at(f, "if (!DispatchPointMagmaChecked(bot, dispatchMove, checkedX, checkedY, checkedZ, "
+                        "\"dispatch point\"))")
+        plain = at(f, "mm.MovePoint(movePosition.GetMapId(),")
+        checked = at(f, "if (!WalkChecked(movePosition, moveMode == FORCED_MOVEMENT_WALK))")
+        endpoint = at(f, "mm.MovePoint(path.back().GetMapId(), pointPath.back().x")
+        launch = at(f, "init.Launch();")
+        self.assertLess(verdict, plain)
+        self.assertLess(verdict, checked)
+        self.assertLess(endpoint, launch)
+        # The multi-point generator sits behind its per-waypoint verdict: no
+        # point generator between the hazard rewrite and the sinking check.
+        sink = at(f, "bool const magmaMoveSinks")
+        self.assertLess(sink, endpoint)
+        self.assertNotIn("mm.MovePoint(",
+            f[at(f, "bool const hazardRewrote = GeneratePathAvoidingHazards(path);"):sink])
+        # A refused single point is the branch's whole answer: the row (named
+        # for the site) and a return, with nothing launched behind it.
+        refused = f[verdict:at(f[verdict:], "return false;") + verdict]
+        self.assertNotIn("mm.", refused)
+        self.assertIn('"dispatch point"', f[verdict:plain])
+
+    def test_land_walk_checks_its_reached_point(self):
+        # Round 8 (Codex r7): WalkChecked dispatches through LaunchLandWalk,
+        # whose MovePoint used the navmesh-reached endpoint without a magma
+        # check, so a checked single point could still walk into lava.
+        f = body(MOVES, "bool MovementAction::LaunchLandWalk(", "\n}\n")
+        verdict = at(f, "if (!DispatchPointMagmaChecked(bot, lastMove, reachedX, reachedY, reachedZ, \"land walk\"))")
+        move = at(f, "bot->GetMotionMaster()->MovePoint(endPos.GetMapId(), reachedX, reachedY, reachedZ,")
+        launch = at(f, "init.Launch();")
+        self.assertLess(verdict, move)
+        self.assertLess(move, launch)
 
     def test_chase_holds_out_of_magma(self):
         f = body(MOVES, "bool MovementAction::ChaseTo(", "\n}\n")
@@ -301,7 +429,7 @@ class MagmaGuardWiringTest(unittest.TestCase):
         g = body(MOVES, "bool MovementAction::HoldChaseOutOfMagma(", "\n}\n")
         goal = at(g, "ai::ChaseGoalPoint(target->GetPositionX(), target->GetPositionY(),")
         memo = at(g, "ai::MagmaRecheckDue(magmaChaseMemo.valid, goalPoint.x, goalPoint.y,")
-        check = at(g, "held = SlotGoesIntoMagma(bot, goal, magmaAt);")
+        check = at(g, "held = SlotGoesIntoMagma(bot, goal, magmaAt, &goalMove);")
         self.assertLess(goal, memo)
         self.assertLess(memo, check)
         # The memo verdict answers a goal inside the re-check window before any
