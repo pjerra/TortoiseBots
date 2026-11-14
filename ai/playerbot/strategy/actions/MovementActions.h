@@ -218,13 +218,17 @@ namespace ai
         ObjectGuid magmaFollowEngaged;
         // Magma guard per-tick cost (MagmaHazardPolicy.h, kMagmaRecheckYd /
         // kMagmaRecheckMs): the follow slot and the chase goal checked last,
-        // with the verdict. A fresh check inside the window reuses it instead
-        // of a liquid query and a route calculation.
+        // with the verdict. A memo hit answers before any terrain query: a dry
+        // verdict returns at once, and only a held one pays the own-spot and
+        // plan work. `hazard` is the refusal point for the log; `targetHeld`
+        // is the follow target's own spot, for PlanMagmaFollow.
         struct MagmaSlotMemo
         {
             bool valid = false;
             bool held = false;
+            bool targetHeld = false;
             float x = 0.0f, y = 0.0f;
+            WorldPosition hazard;
             uint32 atMs = 0;
         };
         MagmaSlotMemo magmaFollowMemo;
@@ -232,7 +236,12 @@ namespace ai
         // The melee ring's last sampled verdicts (HoldMeleeChaseOutOfMagma):
         // reused while the target, its radius and the ring centre are inside
         // the re-check window, so a held melee chase costs no ring queries.
+        // A memo hit answers before the reach check and the target's liquid:
+        // `held` false is a dry ring; `targetHeld` says the target's own spot
+        // was wet (the ring verdicts are not sampled then).
         bool magmaRingMemoValid = false;
+        bool magmaRingMemoHeld = false;
+        bool magmaRingMemoTargetHeld = false;
         ObjectGuid magmaRingMemoTarget;
         float magmaRingMemoX = 0.0f, magmaRingMemoY = 0.0f, magmaRingMemoRadius = 0.0f;
         uint32 magmaRingMemoAtMs = 0;

@@ -117,25 +117,29 @@ namespace ai
         return mapIsInstance;
     }
 
-    // Instance maps whose terrain liquid data (the .map MLIQ chunk: type flag
-    // 0x01, or liquid entry 3 "Magma") carries magma. Only here does the
-    // follow/chase guard spend a sampled route calculation; elsewhere it keeps
-    // the end-point liquid lookup alone. False positives only cost (the
-    // samples come back dry). A map whose lava is WMO liquid the ADT query
-    // cannot see (Dragonmaw Retreat 816, no liquid layer in its .map tiles)
-    // gains nothing from the guard, so it is not listed.
+    // Instance maps whose liquid data carries magma: the .map MLIQ chunk (type
+    // flag 0x01, or liquid entry 3 "Magma") on terrain, or the WMO liquid the
+    // vmap query answers (the core's getLiquidStatus asks the vmaps first).
+    // Only here, or on a map learned below, does the follow/chase guard spend
+    // a terrain query at all. False positives only cost (the samples come back
+    // dry). A map whose lava neither query can see (Dragonmaw Retreat 816, no
+    // liquid in its .map tiles) gains nothing from the guard, so it is not
+    // listed.
     // Data: a scan of the shipped data/maps found ADT magma on 808 only
     // (Hateforge Quarry); 389 (Ragefire Chasm, RFC first-bridge deaths
     // 2026-11-13, magma in the guard's own logs) and the classic lava
-    // instances are listed from their lava. A map added later is learned from
-    // its own liquid data by the caller instead (MagmaRouteCheckAllowed
-    // below).
+    // instances are listed from their lava. 249 (Onyxia's Lair) has no .map
+    // tiles at all; its lair WMO group's vmap liquid is LiquidType 3 "Magma",
+    // which is what the guard's query reads there. A map added later is
+    // learned from its own liquid data by the caller instead
+    // (MagmaRouteCheckAllowed below).
     inline bool MagmaMapLiquidListed(std::uint32_t mapId)
     {
         switch (mapId)
         {
             case 229:  // Blackrock Spire
             case 230:  // Blackrock Depths
+            case 249:  // Onyxia's Lair
             case 389:  // Ragefire Chasm
             case 409:  // Molten Core
             case 469:  // Blackwing Lair
@@ -147,13 +151,13 @@ namespace ai
         }
     }
 
-    // Whether the follow/chase guards may spend a sampled ROUTE calculation on
-    // a map: the maps above, plus any map where a check has already seen
-    // magma (`mapSeenMagma` is the caller's per-map flag, set from the cheap
-    // end-point lookup the guard still runs on unlisted instance maps). Until
-    // then an unlisted map gets only that end-point lookup, so a lava map
-    // missing from the list still cannot put a follow slot in the lava; it
-    // only lacks the route half of the guard until its first hit.
+    // Whether the follow/chase guards run on a map at all: the maps above, or
+    // any map where a move's own magma check has already answered magma
+    // (`mapSeenMagma` is the caller's per-map flag, set by MoveTo2's end-point
+    // and route checks and by the melee ring). Elsewhere they cost nothing,
+    // terrain queries included; a lava map missing from the list is learned by
+    // a move order before the guard needs it, so it is never unguarded for a
+    // check that costs per tick.
     inline bool MagmaRouteCheckAllowed(bool mapListed, bool mapSeenMagma)
     {
         return mapListed || mapSeenMagma;

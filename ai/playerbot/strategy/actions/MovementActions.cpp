@@ -138,13 +138,14 @@ static bool ReplayStoredLeg(Player* bot, const WorldPosition& botPos, const std:
 // One "move refused: magma" line per bot per this many seconds.
 static constexpr time_t kMagmaLogSeconds = 10;
 
-// MagmaHazardPolicy.h, MagmaRouteCheckAllowed: maps the guard has actually
-// seen magma on, so an unlisted map upgrades from the cheap end-point lookup
-// to the full sampled route once its own liquid data answers magma. One
-// relaxed flag per map id, written by whichever map thread finds the first
-// hit and read on every follow/chase tick. Map ids are the .map file's three
-// digits (custom ones below 1000); anything past the table is simply never
-// learned and keeps the end-point lookup.
+// MagmaHazardPolicy.h, MagmaRouteCheckAllowed: maps where the guard has
+// actually seen magma, so an unlisted map upgrades to the full guard once its
+// own liquid data answers magma. One relaxed flag per map id, written by
+// whichever map thread finds the first hit and read on every follow/chase
+// tick. A map is learned by MoveTo2's end-point and route checks (every move
+// order) and by the melee ring; the follow/chase guard itself runs on listed
+// or learned maps only. Map ids are the .map file's three digits (custom ones
+// below 1000); anything past the table is simply never learned.
 static constexpr uint32 kMagmaSeenMapLimit = 4096;
 static std::atomic<bool> gMagmaSeenOnMap[kMagmaSeenMapLimit];
 
@@ -157,6 +158,16 @@ static void NoteMagmaSeenOnMap(uint32 mapId)
 {
     if (mapId < kMagmaSeenMapLimit)
         gMagmaSeenOnMap[mapId].store(true, std::memory_order_relaxed);
+}
+
+// MagmaHazardPolicy.h: the follow/chase guard runs on an instance map where
+// magma can be (MagmaGuardApplies, MagmaRouteCheckAllowed). Elsewhere it costs
+// nothing at all, terrain queries included: MoveTo2's end-point and route
+// checks still learn a map that is missing from the list.
+static bool MagmaGuardOn(Player* bot)
+{
+    return ai::MagmaGuardApplies(bot->GetMap()->IsDungeon()) &&
+        ai::MagmaRouteCheckAllowed(ai::MagmaMapLiquidListed(bot->GetMapId()), MagmaSeenOnMap(bot->GetMapId()));
 }
 
 static void LogMagmaRefusal(Player* bot, LastMovement& lastMove, const WorldPosition& at, const char* what)
@@ -2621,11 +2632,13 @@ bool MovementAction::HoldFollowOutOfMagma(Unit* target, float distance, float an
     // (MagmaHazardPolicy.h: PlanMagmaFollow, RestoreFollow).
     bool const engaged = magmaFollowEngaged == targetGuid;
 
-    // Instance maps only (MagmaHazardPolicy.h): the open world keeps its old
-    // movement, no added terrain query for the random population. Leaving the
-    // map ends a hold too: the follow generator would keep the distance-0 goal
-    // it was handed, so the caller's own slot is sent again.
-    if (!ai::MagmaGuardApplies(bot->GetMap()->IsDungeon()))
+    // Where the guard runs at all (MagmaHazardPolicy.h): an instance map where
+    // magma can be, a listed lava map or one a move's own check has learned.
+    // The open world keeps its old movement, and an unlisted map without
+    // magma answer is not queried per tick. Leaving the map ends a hold too:
+    // the follow generator would keep the distance-0 goal it was handed, so
+    // the caller's own slot is sent again.
+    if (!MagmaGuardOn(bot))
     {
         if (!engaged)
             return false;
@@ -2633,42 +2646,52 @@ bool MovementAction::HoldFollowOutOfMagma(Unit* target, float distance, float an
         mm.MoveFollow(target, distance, angle);
         return true;
     }
-    // A bot already standing in magma walks out first: holding it there is a
-    // death, and the MoveTo guard lets it out too (MagmaHazardPolicy.h). A
-    // hold that already walks it to the target itself keeps running: that is
-    // the way out.
-    if (WorldPosition(bot).isInMagma())
-        return engaged;
     // Follow goal: the slot the native follow aims for (target position plus
     // `distance` at `angle` off the target's facing), the same point
     // HoldFollowOutsideKeepout plans against.
     float const slotAngle = target->GetOrientation() + angle;
     float const slotX = target->GetPositionX() + distance * cos(slotAngle);
     float const slotY = target->GetPositionY() + distance * sin(slotAngle);
-    // Per-tick cost: the same slot, checked less than kMagmaRecheckMs ago and
-    // not moved kMagmaRecheckYd, answers from the memo; a running follow then
-    // costs this compare, no liquid query and no route.
+    // Per-tick cost: the memo answers first. The same slot, checked less than
+    // kMagmaRecheckMs ago and not moved kMagmaRecheckYd, is a dry follow at
+    // once; only a held verdict goes on to the plan, and only a due check
+    // costs the bot's own liquid, the slot's route and the target's spot.
     uint32 const nowMs = WorldTimer::getMSTime();
-    if (!ai::MagmaRecheckDue(magmaFollowMemo.valid, slotX, slotY, magmaFollowMemo.x, magmaFollowMemo.y, nowMs,
-            magmaFollowMemo.atMs))
-        return magmaFollowMemo.held;
+    bool const recheck = ai::MagmaRecheckDue(magmaFollowMemo.valid, slotX, slotY, magmaFollowMemo.x,
+        magmaFollowMemo.y, nowMs, magmaFollowMemo.atMs);
+    if (!recheck && !magmaFollowMemo.held)
+        return false;
 
-    WorldPosition const slot(target->GetMapId(), slotX, slotY, target->GetPositionZ());
-    WorldPosition magmaAt;
-    bool const slotInMagma = SlotGoesIntoMagma(bot, slot, magmaAt);
-    // The target's own spot is planned against only when the slot is wet: it
-    // decides between following the target itself and holding in place.
-    bool targetInMagma = false;
-    if (slotInMagma)
+    // A bot already standing in magma walks out first: holding it there is a
+    // death, and the MoveTo guard lets it out too (MagmaHazardPolicy.h). A
+    // hold that already walks it to the target itself keeps running: that is
+    // the way out.
+    if (WorldPosition(bot).isInMagma())
+        return engaged;
+
+    WorldPosition magmaAt = magmaFollowMemo.hazard;
+    bool slotInMagma = magmaFollowMemo.held;
+    bool targetInMagma = magmaFollowMemo.targetHeld;
+    if (recheck)
     {
-        WorldPosition targetMagmaAt;
-        targetInMagma = SlotGoesIntoMagma(bot, WorldPosition(target), targetMagmaAt);
+        WorldPosition const slot(target->GetMapId(), slotX, slotY, target->GetPositionZ());
+        slotInMagma = SlotGoesIntoMagma(bot, slot, magmaAt);
+        // The target's own spot is planned against only when the slot is wet:
+        // it decides between following the target itself and holding in place.
+        targetInMagma = false;
+        if (slotInMagma)
+        {
+            WorldPosition targetMagmaAt;
+            targetInMagma = SlotGoesIntoMagma(bot, WorldPosition(target), targetMagmaAt);
+        }
+        magmaFollowMemo.valid = true;
+        magmaFollowMemo.held = slotInMagma;
+        magmaFollowMemo.targetHeld = targetInMagma;
+        magmaFollowMemo.x = slotX;
+        magmaFollowMemo.y = slotY;
+        magmaFollowMemo.hazard = magmaAt;
+        magmaFollowMemo.atMs = nowMs;
     }
-    magmaFollowMemo.valid = true;
-    magmaFollowMemo.held = slotInMagma;
-    magmaFollowMemo.x = slotX;
-    magmaFollowMemo.y = slotY;
-    magmaFollowMemo.atMs = nowMs;
 
     switch (ai::PlanMagmaFollow(slotInMagma, targetInMagma, engaged))
     {
@@ -2707,12 +2730,8 @@ bool MovementAction::HoldFollowOutOfMagma(Unit* target, float distance, float an
 
 bool MovementAction::HoldChaseOutOfMagma(WorldObject* target, float distance, float angle)
 {
-    // Instance maps only, as above.
-    if (!ai::MagmaGuardApplies(bot->GetMap()->IsDungeon()))
-        return false;
-    // No tank pass: the keep-out's tank exemption is about picking up and
-    // holding a mob, while lava kills a tank exactly as fast as anything else.
-    if (WorldPosition(bot).isInMagma())
+    // Where the guard runs at all, as above.
+    if (!MagmaGuardOn(bot))
         return false;
     // A zero-offset (melee) chase has no angle: the core sends the bot to a
     // random attack point on the melee ring, so the whole ring decides.
@@ -2728,23 +2747,38 @@ bool MovementAction::HoldChaseOutOfMagma(WorldObject* target, float distance, fl
     float const slotDistance = distance + target->GetObjectBoundingRadius() + bot->GetObjectBoundingRadius();
     ai::MagmaPoint const goalPoint = ai::ChaseGoalPoint(target->GetPositionX(), target->GetPositionY(),
         target->GetOrientation(), slotDistance, angle);
-    WorldPosition goal(target->GetMapId(), goalPoint.x, goalPoint.y, target->GetPositionZ());
-    float const ground = goal.GetHeight();
-    if (ground > INVALID_HEIGHT)
-        goal.setZ(ground);
-    // Per-tick cost: the same goal checked inside the re-check window answers
-    // from the memo (a chased target barely moves between two ChaseTo ticks).
+    // Per-tick cost: the goal point and the memo come first (a chased target
+    // barely moves between two ChaseTo ticks). A dry verdict inside the window
+    // returns at once; the height query and the route run only on a held hit
+    // or a due check.
     uint32 const nowMs = WorldTimer::getMSTime();
-    if (!ai::MagmaRecheckDue(magmaChaseMemo.valid, goalPoint.x, goalPoint.y, magmaChaseMemo.x, magmaChaseMemo.y, nowMs,
-            magmaChaseMemo.atMs))
-        return magmaChaseMemo.held;
-    WorldPosition magmaAt;
-    bool const held = SlotGoesIntoMagma(bot, goal, magmaAt);
-    magmaChaseMemo.valid = true;
-    magmaChaseMemo.held = held;
-    magmaChaseMemo.x = goalPoint.x;
-    magmaChaseMemo.y = goalPoint.y;
-    magmaChaseMemo.atMs = nowMs;
+    bool const recheck = ai::MagmaRecheckDue(magmaChaseMemo.valid, goalPoint.x, goalPoint.y, magmaChaseMemo.x,
+        magmaChaseMemo.y, nowMs, magmaChaseMemo.atMs);
+    if (!recheck && !magmaChaseMemo.held)
+        return false;
+    // No tank pass: the keep-out's tank exemption is about picking up and
+    // holding a mob, while lava kills a tank exactly as fast as anything else.
+    // A bot already standing in magma walks out first: its own spot is no
+    // reason to hold the chase.
+    if (WorldPosition(bot).isInMagma())
+        return false;
+
+    WorldPosition magmaAt = magmaChaseMemo.hazard;
+    bool held = magmaChaseMemo.held;
+    if (recheck)
+    {
+        WorldPosition goal(target->GetMapId(), goalPoint.x, goalPoint.y, target->GetPositionZ());
+        float const ground = goal.GetHeight();
+        if (ground > INVALID_HEIGHT)
+            goal.setZ(ground);
+        held = SlotGoesIntoMagma(bot, goal, magmaAt);
+        magmaChaseMemo.valid = true;
+        magmaChaseMemo.held = held;
+        magmaChaseMemo.x = goalPoint.x;
+        magmaChaseMemo.y = goalPoint.y;
+        magmaChaseMemo.hazard = magmaAt;
+        magmaChaseMemo.atMs = nowMs;
+    }
     if (!held)
         return false;
     ai->StopMoving();
@@ -2757,47 +2791,67 @@ bool MovementAction::HoldMeleeChaseOutOfMagma(WorldObject* target)
     Unit* const chased = dynamic_cast<Unit*>(target);
     if (!chased)
         return false;
+    // The core's random attack point sits on a ring around the target: at
+    // most the target radius plus the bot's combat reach out.
+    float const radius = target->GetObjectBoundingRadius() + bot->GetMeleeReach();
+    uint32 const nowMs = WorldTimer::getMSTime();
+    // The ring is re-sampled only when the target, its radius or the ring's
+    // centre moved, or the window passed. Per-tick cost: a memo hit answers
+    // before the reach check, the target's liquid and the eight samples, and
+    // a dry one means the core chase runs untouched.
+    bool const ringUnchanged = magmaRingMemoValid && magmaRingMemoTarget == target->getObjectGuid() &&
+        std::fabs(radius - magmaRingMemoRadius) < 0.5f;
+    bool const ringDue = ai::MagmaRecheckDue(ringUnchanged, target->GetPositionX(), target->GetPositionY(),
+        magmaRingMemoX, magmaRingMemoY, nowMs, magmaRingMemoAtMs);
+    if (!ringDue && !magmaRingMemoHeld)
+        return false;
+
     // Already in melee reach of the target with line of sight: the core chase
     // does not move at all, so there is no destination to guard.
     if (bot->CanReachWithMeleeAutoAttack(chased))
         return false;
-    // The core's random attack point can be as close as the two bounding
-    // radii, so a target standing in lava has no reliably dry ring around it.
-    WorldPosition const targetPos(target);
-    if (targetPos.isInMagma())
-    {
-        NoteMagmaSeenOnMap(bot->GetMapId());
-        magmaRingChaseTarget = ObjectGuid();
-        ai->StopMoving();
-        LogMagmaRefusal(bot, AI_VALUE(LastMovement&, "last movement"), targetPos, "melee chase ring");
-        return true;
-    }
-    // No magma has ever answered on this map: the single target lookup above
-    // is the whole guard, so no ring sampling (8 liquid and height queries)
-    // on the maps that have none.
-    if (!ai::MagmaRouteCheckAllowed(ai::MagmaMapLiquidListed(bot->GetMapId()), MagmaSeenOnMap(bot->GetMapId())))
-        return false;
-    // The core's random attack point sits on a ring around the target: at
-    // most the target radius plus the bot's combat reach out. A dry target
-    // spot says nothing about which bearing the core draws.
-    float const radius = target->GetObjectBoundingRadius() + bot->GetMeleeReach();
     bool inMagma[ai::kMeleeRingSamples] = {};
-    WorldPosition magmaAt;
-    uint32 const nowMs = WorldTimer::getMSTime();
-    // The ring is re-sampled only when the target, its radius or the ring's
-    // centre moved, or the window passed (per-tick cost: a held melee chase
-    // otherwise pays 8 liquid queries a tick).
-    bool const ringUnchanged = magmaRingMemoValid && magmaRingMemoTarget == target->getObjectGuid() &&
-        std::fabs(radius - magmaRingMemoRadius) < 0.5f;
-    if (!ai::MagmaRecheckDue(ringUnchanged, target->GetPositionX(), target->GetPositionY(), magmaRingMemoX,
-            magmaRingMemoY, nowMs, magmaRingMemoAtMs))
+    WorldPosition magmaAt = magmaRingMemoMagmaAt;
+    if (ringDue)
     {
-        for (int i = 0; i < ai::kMeleeRingSamples; ++i)
-            inMagma[i] = magmaRingMemoInMagma[i];
-        magmaAt = magmaRingMemoMagmaAt;
-    }
-    else
-    {
+        // The core's random attack point can be as close as the two bounding
+        // radii, so a target standing in lava has no reliably dry ring around
+        // it.
+        WorldPosition const targetPos(target);
+        if (targetPos.isInMagma())
+        {
+            NoteMagmaSeenOnMap(bot->GetMapId());
+            magmaRingChaseTarget = ObjectGuid();
+            magmaRingMemoValid = true;
+            magmaRingMemoHeld = true;
+            magmaRingMemoTargetHeld = true;
+            magmaRingMemoTarget = target->getObjectGuid();
+            magmaRingMemoX = target->GetPositionX();
+            magmaRingMemoY = target->GetPositionY();
+            magmaRingMemoRadius = radius;
+            magmaRingMemoAtMs = nowMs;
+            magmaRingMemoMagmaAt = targetPos;
+            ai->StopMoving();
+            LogMagmaRefusal(bot, AI_VALUE(LastMovement&, "last movement"), targetPos, "melee chase ring");
+            return true;
+        }
+        // No magma has ever answered on this map: the single target lookup
+        // above is the whole guard, so no ring sampling (8 liquid and height
+        // queries) on the maps that have none. The dry verdict is remembered
+        // so the next ticks inside the window answer from it.
+        if (!ai::MagmaRouteCheckAllowed(ai::MagmaMapLiquidListed(bot->GetMapId()), MagmaSeenOnMap(bot->GetMapId())))
+        {
+            magmaRingMemoValid = true;
+            magmaRingMemoHeld = false;
+            magmaRingMemoTargetHeld = false;
+            magmaRingMemoTarget = target->getObjectGuid();
+            magmaRingMemoX = target->GetPositionX();
+            magmaRingMemoY = target->GetPositionY();
+            magmaRingMemoRadius = radius;
+            magmaRingMemoAtMs = nowMs;
+            return false;
+        }
+        // A dry target spot says nothing about which bearing the core draws.
         bool magmaSeen = false;
         for (int i = 0; i < ai::kMeleeRingSamples; ++i)
         {
@@ -2816,6 +2870,8 @@ bool MovementAction::HoldMeleeChaseOutOfMagma(WorldObject* target)
         if (magmaSeen)
             NoteMagmaSeenOnMap(bot->GetMapId());
         magmaRingMemoValid = true;
+        magmaRingMemoHeld = magmaSeen;
+        magmaRingMemoTargetHeld = false;
         magmaRingMemoTarget = target->getObjectGuid();
         magmaRingMemoX = target->GetPositionX();
         magmaRingMemoY = target->GetPositionY();
@@ -2825,7 +2881,17 @@ bool MovementAction::HoldMeleeChaseOutOfMagma(WorldObject* target)
             magmaRingMemoInMagma[i] = inMagma[i];
         magmaRingMemoMagmaAt = magmaAt;
     }
-    ai::MeleeRingPlan const plan = ai::PlanMeleeRing(inMagma, target->GetAngle(bot));
+    // A memo hit whose target stood in lava: the ring verdicts were not
+    // sampled then, so the target's own spot decides on its own.
+    if (!ringDue && magmaRingMemoTargetHeld)
+    {
+        magmaRingChaseTarget = ObjectGuid();
+        ai->StopMoving();
+        LogMagmaRefusal(bot, AI_VALUE(LastMovement&, "last movement"), magmaAt, "melee chase ring");
+        return true;
+    }
+    ai::MeleeRingPlan const plan = ringDue ? ai::PlanMeleeRing(inMagma, target->GetAngle(bot))
+                                           : ai::PlanMeleeRing(magmaRingMemoInMagma, target->GetAngle(bot));
     if (plan.step == ai::MeleeRingStep::KeepRandom)
     {
         magmaRingChaseTarget = ObjectGuid();

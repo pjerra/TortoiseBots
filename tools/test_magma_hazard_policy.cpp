@@ -545,20 +545,22 @@ int main()
         std::cout << "  [PASS] the guard re-checks after 2 yd or 1 s, wrap-safe\n";
     }
 
-    // The map gate: only maps whose liquid data carries magma pay for the
-    // route calculation. A dungeon without magma (Wailing Caverns) does not.
+    // The map gate: the follow/chase guard only runs where the liquid data
+    // carries magma, so a dungeon without magma (Wailing Caverns) pays
+    // nothing, terrain queries included.
     {
         CHECK(MagmaMapLiquidListed(808));  // Hateforge Quarry
         CHECK(MagmaMapLiquidListed(389));  // Ragefire Chasm
         CHECK(MagmaMapLiquidListed(409));  // Molten Core
+        CHECK(MagmaMapLiquidListed(249));  // Onyxia's Lair (WMO liquid, LiquidType 3)
         CHECK(!MagmaMapLiquidListed(33));  // Shadowfang Keep
         CHECK(!MagmaMapLiquidListed(47));  // Wailing Caverns
         CHECK(!MagmaMapLiquidListed(0));   // the open world is not an instance map
-        CHECK(!MagmaRouteCheckAllowed(false, false));  // no magma ever seen: end-point lookup only
+        CHECK(!MagmaRouteCheckAllowed(false, false));  // no magma known: the guard stays off
         CHECK(MagmaRouteCheckAllowed(true, false));    // a listed map
         CHECK(MagmaRouteCheckAllowed(false, true));    // learned from its own liquid data
         CHECK(MagmaRouteCheckAllowed(true, true));
-        std::cout << "  [PASS] the route guard runs only where magma liquid is known\n";
+        std::cout << "  [PASS] the guard runs only where magma liquid is known\n";
     }
 
     std::cout << "All magma hazard policy tests passed.\n";
