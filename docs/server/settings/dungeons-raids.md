@@ -1665,6 +1665,17 @@ A 65 % white stop was removed in 405801e86 because it cost a fifth of the raid's
 
 </details>
 
+### `AiPlayerbot.ThreatBackoffMeasuresHolder`
+Whether the damage threat back-off measures the mob's real holder instead of a tank that no longer holds it. Recommended on.
+**Default:** `0` · **Values:** `0` off (the reference is the tank's threat alone, as today), `1` on (while the bot's target is on another non-tank group member — not a tank, not this bot — the reference is `max(tank, holder)`; a taunt-immune target, a target with a `threat_successor` boss-tactic row and the bot itself as the victim keep the tank's) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+<details>
+<summary>How it works in detail</summary>
+
+The back-off vetoes a damage dealer's single-target attacks at 80 % of the reference tank's threat, and the only escape (`HighThreatProjectionEscapes`) needs the bot's threat to rise at the last 5 s rate: **deltaThreat > 0**. When the tank has lost the mob and builds no threat, both sides of the comparison are frozen. In Tortoise Trials run t1106r (rep 2) the mob's victim was the priest from t=60 to 165 while the tank landed 2 hits in 110 s; the mage read `bot=142 tank=157` (90 %, over the line) for 74 s, cast nothing between t=17.0 and t=126.7, and Counterspell failed its own exemption (281 % > 130 %) at the same veto. Holding back protected nothing: the mob was already on the priest. With the key on, the reference becomes `max(tank, holder)`, so the damage dealer is capped against the threat of whoever the mob is actually on and keeps working; the tank's reference still wins when it is the higher one, so a tank that holds or leads the mob keeps the plain cap. Key off is today's code, with no extra lookup.
+
+</details>
+
 ### `AiPlayerbot.DungeonRunThreatSuccessorKeepsAway`
 Whether the successor pick on a boss with a `threat_successor` row keeps a tank cursed by Delusions of Jin'do, which stands on its Shade by design. Not recommended on: the Zul'Gurub walk ran with it off.
 **Default:** `0` · **Values:** `0` off (a cursed tank that is not hitting the boss drops out of the pick), `1` on (a tank wearing Delusions 24306 counts as on the boss while its threat is above 0 and at least half the highest tank's) · **Restart:** not needed (`.reload config` applies it on the next world tick)

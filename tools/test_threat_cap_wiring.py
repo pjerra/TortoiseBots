@@ -226,6 +226,55 @@ class ThreatValueSaturation(unittest.TestCase):
         self.assertIn("inline std::uint8_t ThreatPctSaturated(float botThreat, float maxThreat)", THREAT_POLICY)
 
 
+class ThreatBackoffMeasuresHolderWiring(unittest.TestCase):
+    """AiPlayerbot.ThreatBackoffMeasuresHolder: the back-off measures the mob's real holder, not a tank that lost it."""
+
+    def test_the_key_ships_off(self):
+        self.assertIn("bool threatBackoffMeasuresHolder = false;", CONFIG_H)
+        self.assertIn('config.GetBoolDefault("AiPlayerbot.ThreatBackoffMeasuresHolder", false)', CONFIG_CPP)
+        self.assertIn("\nAiPlayerbot.ThreatBackoffMeasuresHolder = 0\n", CONF)
+        self.assertIn('config.GetBoolDefault("AiPlayerbot.ThreatBackoffMeasuresHolder", false)',
+                      brace_body(CONFIG_CPP, "void PlayerbotAIConfig::LoadDungeonRunKeys()"))
+
+    def test_the_policy_takes_the_holder_only_behind_the_key(self):
+        flat = re.sub(r"\s+", " ", THREAT_POLICY)
+        self.assertIn("inline float ThreatBackoffReference(bool keyOn, float tankThreat, "
+                      "bool victimIsOtherNonTankMember, bool targetExempt, float victimThreat)", flat)
+        self.assertIn("return keyOn && victimIsOtherNonTankMember && !targetExempt ? "
+                      "std::max(tankThreat, victimThreat) : tankThreat;", flat)
+
+    def test_calculate_measures_the_holder_before_the_pct(self):
+        values = (ROOT / "ai/playerbot/strategy/values/ThreatValues.cpp").read_text()
+        calc = brace_body(values, "uint8 ThreatValue::Calculate(Unit* target)")
+        # The call reads the key itself and runs after maxThreat is set, before the "no reference" return and before
+        # ThreatPctOf reads the reference.
+        self.assertIn("ThreatBackoffReference(sPlayerbotAIConfig.threatBackoffMeasuresHolder,", calc)
+        self.assertLess(calc.index("ThreatBackoffReference("), calc.index("ThreatPctOf("))
+        self.assertLess(calc.index("ThreatBackoffReference("), calc.index("if (maxThreat < 0)\n        return 0;"))
+        # Key on only: the victim is the target's living holder as a Player; the holder counts when it is a group
+        # member that is not this bot and not a tank, and the reference stays the tank's on an exempt target.
+        self.assertIn("dynamic_cast<Player*>(target->GetVictim())", calc)
+        self.assertIn("victim != bot", calc)
+        self.assertIn("group->IsMember(victim->GetObjectGuid())", calc)
+        self.assertIn("!ai->IsTank(victim)", calc)
+        self.assertIn("ai::TargetTauntImmune(target) || ai::ThreatSuccessorTarget(target)", calc)
+        self.assertIn("sServerFacade.GetThreatManager(target).getThreat(victim)", calc)
+        # The key guard: every new lookup sits inside it, so the off path is today's code.
+        guard = calc[calc.index("if (sPlayerbotAIConfig.threatBackoffMeasuresHolder)"):]
+        guard = guard[:guard.index("\n    }")] if "\n    }" in guard else guard
+        for lookup in ("dynamic_cast<Player*>(target->GetVictim())", "group->IsMember(victim->GetObjectGuid())",
+                       "ai->IsTank(victim)", "getThreat(victim)"):
+            self.assertIn(lookup, guard)
+
+    def test_the_key_is_documented(self):
+        self.assertIn("### `AiPlayerbot.ThreatBackoffMeasuresHolder`", SETTINGS)
+        self.assertIn("Recommended on.", SETTINGS)
+        section = SETTINGS[SETTINGS.index("### `AiPlayerbot.ThreatBackoffMeasuresHolder`"):]
+        section = section[:section.index("\n### ")]
+        self.assertIn("max(tank, holder)", section)
+        self.assertIn("ThreatBackoffMeasuresHolder", CHANGELOG)
+
+
 class SonHoldTimings(unittest.TestCase):
     def test_the_policy_constants(self):
         self.assertIn("constexpr std::uint32_t kSeekHealerTakeMs = 3000;", SEEK_POLICY)

@@ -144,6 +144,24 @@ int main()
     CHECK(ThreatPctOf(5000.0f, 40.0f, true, true) == 0);    // fleeing target: unchanged
     CHECK(ThreatPctOf(500.0f, 1000.0f, true, false) == 50);
     CHECK(ThreatPctOf(500.0f, 1000.0f, true, false) == ThreatPctSaturated(500.0f, 1000.0f));
+    // backoff_measures_holder (fails on the old code: ThreatBackoffReference does not exist): the mage's 110 s stall
+    // (t1106r rep2, `ThreatCapInterrupt spell=counterspell pct=281 flat=300 line=1.30 bot=142 tank=157`). The mob sits
+    // on the priest (600) while the tank that lost it reads 157: 142/157 = 90 % vetoes every damage action and the mage
+    // cannot climb, so with the key on the reference is the holder's 600 and 142/600 = 23 % lets it cast.
+    CHECK(ThreatBackoffReference(true, 157.0f, true, false, 600.0f) == 600.0f);
+    CHECK(ThreatPctOf(142.0f, ThreatBackoffReference(true, 157.0f, true, false, 600.0f), true, false) == 23);
+    CHECK(ThreatPctOf(142.0f, ThreatBackoffReference(true, 157.0f, true, false, 600.0f), true, false) <
+        kThreatHighLinePct);
+    // Key off: the tank's 157 stands, so the 90 % veto stays exactly as today.
+    CHECK(ThreatBackoffReference(false, 157.0f, true, false, 600.0f) == 157.0f);
+    CHECK(ThreatPctOf(142.0f, ThreatBackoffReference(false, 157.0f, true, false, 600.0f), true, false) == 90);
+    CHECK(ThreatPctOf(142.0f, ThreatBackoffReference(false, 157.0f, true, false, 600.0f), true, false) >=
+        kThreatHighLinePct);
+    // The old reference when the victim is this bot (it still backs off so the tank can take the mob back), on an
+    // exempt target (taunt-immune, or a `threat_successor` row whose cap is its own logic), or a holder under the tank.
+    CHECK(ThreatBackoffReference(true, 157.0f, false, false, 600.0f) == 157.0f);
+    CHECK(ThreatBackoffReference(true, 157.0f, true, true, 600.0f) == 157.0f);
+    CHECK(ThreatBackoffReference(true, 157.0f, true, false, 100.0f) == 157.0f);
     // hakkar_away_key_on_equals_today (fails with the first version of the key: it gave 2000): the main tank holds with
     // 40000 and the off-tanks are on Sons (not on the boss) with 2000 left over: with the key on the pick is today's.
     {

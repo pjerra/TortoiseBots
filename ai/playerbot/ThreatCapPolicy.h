@@ -142,6 +142,18 @@ namespace ai
         return static_cast<std::uint8_t>(pct);
     }
 
+    // The reference the damage threat back-off measures against when the mob sits on a group member that is not a tank
+    // (AiPlayerbot.ThreatBackoffMeasuresHolder). The old reference is the tank's threat alone, and a tank that lost the
+    // mob builds none: the mage in t1106r run 2 read 142 against a frozen tank 157 (90 %, over the 80 % line) for 74 s
+    // while the priest held the mob, and its own threat could not rise while every damage action was vetoed
+    // (HighThreatProjectionEscapes needs a rising delta). With the key on the reference is the larger of the tank's and
+    // the holder's threat, so a damage dealer does not pull the mob off its holder. It stays the tank's on an exempt
+    // target (taunt-immune, or a `threat_successor` row whose cap is its own logic), when the victim is this bot (it
+    // still backs off so a tank can take the mob back), and with the key off.
+    inline float ThreatBackoffReference(bool keyOn, float tankThreat, bool victimIsOtherNonTankMember,
+                                        bool targetExempt, float victimThreat)
+    { return keyOn && victimIsOtherNonTankMember && !targetExempt ? std::max(tankThreat, victimThreat) : tankThreat; }
+
     // The relative threat a damage dealer reads against `maxThreat` (ThreatValue::Calculate after its friendly/player/group
     // checks). < 0: no reference, no cap (0). A reference of exactly 0 on a target in combat that is not fleeing reads 100:
     // the damage dealers are held, never uncapped. That is what a successor whose threat a Hex just wiped gives under
