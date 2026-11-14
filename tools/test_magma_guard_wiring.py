@@ -370,6 +370,44 @@ class MagmaGuardWiringTest(unittest.TestCase):
         self.assertLess(at(log, "lastMove.magmaLogAt = now;"), at(log, "TB_LOG_BASIC("))
         self.assertIn('"clamped waypoint"', f[sink:launch])
 
+    def test_every_dispatch_move_waits_for_its_magma_verdict(self):
+        # Round 8 (Codex r7): the single-point legs launched before the
+        # waypoint guard, so a clipped route whose point clamps into lava
+        # still moved. One shared verdict now runs on the ACTUAL dispatch
+        # point before every move in DispatchMovement.
+        f = body(MOVES, "bool MovementAction::DispatchMovement(", "\n}\n")
+        verdict = at(f, "if (!DispatchPointMagmaChecked(bot, dispatchMove, checkedX, checkedY, checkedZ, "
+                        "\"dispatch point\"))")
+        plain = at(f, "mm.MovePoint(movePosition.GetMapId(),")
+        checked = at(f, "if (!WalkChecked(movePosition, moveMode == FORCED_MOVEMENT_WALK))")
+        endpoint = at(f, "mm.MovePoint(path.back().GetMapId(), pointPath.back().x")
+        launch = at(f, "init.Launch();")
+        self.assertLess(verdict, plain)
+        self.assertLess(verdict, checked)
+        self.assertLess(endpoint, launch)
+        # The multi-point generator sits behind its per-waypoint verdict: no
+        # point generator between the hazard rewrite and the sinking check.
+        sink = at(f, "bool const magmaMoveSinks")
+        self.assertLess(sink, endpoint)
+        self.assertNotIn("mm.MovePoint(",
+            f[at(f, "bool const hazardRewrote = GeneratePathAvoidingHazards(path);"):sink])
+        # A refused single point is the branch's whole answer: the row (named
+        # for the site) and a return, with nothing launched behind it.
+        refused = f[verdict:at(f[verdict:], "return false;") + verdict]
+        self.assertNotIn("mm.", refused)
+        self.assertIn('"dispatch point"', f[verdict:plain])
+
+    def test_land_walk_checks_its_reached_point(self):
+        # Round 8 (Codex r7): WalkChecked dispatches through LaunchLandWalk,
+        # whose MovePoint used the navmesh-reached endpoint without a magma
+        # check, so a checked single point could still walk into lava.
+        f = body(MOVES, "bool MovementAction::LaunchLandWalk(", "\n}\n")
+        verdict = at(f, "if (!DispatchPointMagmaChecked(bot, lastMove, reachedX, reachedY, reachedZ, \"land walk\"))")
+        move = at(f, "bot->GetMotionMaster()->MovePoint(endPos.GetMapId(), reachedX, reachedY, reachedZ,")
+        launch = at(f, "init.Launch();")
+        self.assertLess(verdict, move)
+        self.assertLess(move, launch)
+
     def test_chase_holds_out_of_magma(self):
         f = body(MOVES, "bool MovementAction::ChaseTo(", "\n}\n")
         # The angle MoveChase is handed is final before the guard plans the

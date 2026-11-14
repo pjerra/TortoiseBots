@@ -272,6 +272,46 @@ static void RefuseMagmaMove(Player* bot, LastMovement& lastMove, const WorldPosi
     LogMagmaRefusal(bot, lastMove, magmaAt, what);
 }
 
+// The magma verdict for ONE point a dispatch is about to send the core to,
+// the one-point legs included: the same lowered-z check DispatchMovement's
+// waypoint loop runs per point (ai::MagmaAtMoveZ at the z the core's own clamp
+// will move the bot to). Round 6's policy applies: a dry navmesh floor more
+// than kMagmaDryFloorAboveYd over the clamp reroutes the point there, anything
+// else writes the MagmaRefuse row and refuses the whole move before a
+// generator exists. A bot already standing in lava keeps walking its own
+// footing (kMagmaWalkOutYd) so the guard cannot trap it. `z` is rewritten on a
+// reroute; the caller dispatches nothing on false.
+static bool DispatchPointMagmaChecked(Player* bot, LastMovement& lastMove, float& x, float& y, float& z,
+    const char* site)
+{
+    if (!ai::MagmaGuardApplies(bot->GetMap()->IsDungeon()) || bot->GetTransport())
+        return true;
+    ai::MagmaMoveProbe const move = ai::MagmaAtMoveZ(bot, x, y, z);
+    if (!move.moveInMagma)
+        return true;
+    ai::MagmaMoveZPlan const plan = ai::PlanMagmaMoveZ(true, move.moveInMagma, move.navmeshDry,
+        move.navmeshZ, move.moveZ);
+    if (plan == ai::MagmaMoveZPlan::KeepNavmeshZ)
+    {
+        z = move.navmeshZ;
+        LogMagmaMoveZ(bot, lastMove, site, x, y, move);
+        return true;
+    }
+    float const dx = x - bot->GetPositionX();
+    float const dy = y - bot->GetPositionY();
+    bool const walkingOut = WorldPosition(bot).isInMagma(bot->GetMap()->GetTerrain()) &&
+        dx * dx + dy * dy <= kMagmaWalkOutYd * kMagmaWalkOutYd;
+    LogMagmaMoveZ(bot, lastMove, walkingOut ? "walking out" : site, x, y, move);
+    if (walkingOut)
+    {
+        z = move.moveZ;
+        return true;
+    }
+    WorldPosition const magmaAt(bot->GetMapId(), x, y, move.moveZ);
+    RefuseMagmaMove(bot, lastMove, magmaAt, magmaAt, nullptr, site);
+    return false;
+}
+
 // The follow slot / chase goal of HoldFollowOutOfMagma and
 // HoldChaseOutOfMagma: magma at the goal, or a route to it that walks into
 // magma after dry ground. The goal is probed at the z the core will MOVE the
@@ -421,7 +461,20 @@ bool MovementAction::LaunchLandWalk(Player* bot, const WorldPosition& endPos, bo
         ai::LandWalkVerdict::Walk)
         return false;
 
-    bot->GetMotionMaster()->MovePoint(endPos.GetMapId(), reached.getX(), reached.getY(), reached.getZ(),
+    // `reached` is the point the core generator walks to, and the checked
+    // step can resolve somewhere other than the asked point: it takes the
+    // same magma verdict as every other launch, before the generator exists.
+    PlayerbotAI* const botAi = PlayerbotAIStorage::Instance().GetAI(bot);
+    if (!botAi || !botAi->GetAiObjectContext())
+        return false;
+    float reachedX = reached.getX();
+    float reachedY = reached.getY();
+    float reachedZ = reached.getZ();
+    LastMovement& lastMove = botAi->GetAiObjectContext()->GetValue<LastMovement&>("last movement")->Get();
+    if (!DispatchPointMagmaChecked(bot, lastMove, reachedX, reachedY, reachedZ, "land walk"))
+        return false;
+
+    bot->GetMotionMaster()->MovePoint(endPos.GetMapId(), reachedX, reachedY, reachedZ,
         (walk ? MOVE_WALK_MODE : MOVE_RUN_MODE) | MOVE_PATHFINDING);
     Movement::MoveSplineInit init(*bot, "LandWalk");
     init.MovebyPath(WorldPosition().toPointsArray(path));
@@ -1201,6 +1254,7 @@ void MovementAction::UpdateFlyingState(
 bool MovementAction::DispatchMovement(TravelPath movePath, bool generatePath, bool masterWalking)
 {
     MotionMaster& mm = *bot->GetMotionMaster();
+    LastMovement& dispatchMove = AI_VALUE(LastMovement&, "last movement");
 
     mm.Clear();
 
@@ -1255,15 +1309,27 @@ bool MovementAction::DispatchMovement(TravelPath movePath, bool generatePath, bo
     {
         // A single point ahead cannot seed a spline (path[0] is the current
         // position). A leg the pathfinder owns (generatePath) walks as a
-        // checked launch; a noPath/fly/swim leg keeps its old MovePoint, as
-        // before. The hazard rewrite is skipped: with no segment there is
-        // nothing to bend around a hazard.
+        // checked launch; a noPath/fly/swim leg keeps its plain MovePoint.
+        // The hazard rewrite is skipped: with no segment there is nothing to
+        // bend around a hazard. This point IS what the dispatch hands the
+        // core (a clipped route tail can clamp into lava even when the end
+        // point MoveTo2 probed was dry), so it takes the same magma verdict
+        // as every spline waypoint before either launch below.
         WorldPosition movePosition = path.back();
+        float checkedX = movePosition.getX();
+        float checkedY = movePosition.getY();
+        float checkedZ = movePosition.getZ();
+        if (!DispatchPointMagmaChecked(bot, dispatchMove, checkedX, checkedY, checkedZ, "dispatch point"))
+        {
+            dispatchMove.setPath(TravelPath());
+            return false;
+        }
+        movePosition = WorldPosition(movePosition.GetMapId(), checkedX, checkedY, checkedZ);
         if (!generatePath)
         {
-            // A noPath/fly/swim leg keeps its old launch exactly (a MovePoint
-            // with pathfinding, as before): these legs asked for no module
-            // route, so there is nothing checked to walk.
+            // A noPath/fly/swim leg keeps its plain launch (a MovePoint with
+            // pathfinding): these legs asked for no module route, so only the
+            // point itself is checked.
             uint32 moveOptions = (moveMode == FORCED_MOVEMENT_WALK) ? MOVE_WALK_MODE : MOVE_RUN_MODE;
             moveOptions |= MOVE_PATHFINDING;
             mm.MovePoint(movePosition.GetMapId(),
@@ -1276,7 +1342,7 @@ bool MovementAction::DispatchMovement(TravelPath movePath, bool generatePath, bo
         }
         if (!WalkChecked(movePosition, moveMode == FORCED_MOVEMENT_WALK))
         {
-            AI_VALUE(LastMovement&, "last movement").setPath(TravelPath());
+            dispatchMove.setPath(TravelPath());
             return false;
         }
         return true;
@@ -1332,7 +1398,6 @@ bool MovementAction::DispatchMovement(TravelPath movePath, bool generatePath, bo
     // point, the two liquid lookups only on a lowered point.
     TerrainInfo const* dispatchTerrain = bot->GetMap()->GetTerrain();
     bool const dispatchMagmaGuard = ai::MagmaGuardApplies(bot->GetMap()->IsDungeon());
-    LastMovement& dispatchMove = AI_VALUE(LastMovement&, "last movement");
     bool botMagmaChecked = false;
     bool botInMagma = false;
 
