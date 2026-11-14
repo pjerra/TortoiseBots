@@ -1667,7 +1667,7 @@ A 65 % white stop was removed in 405801e86 because it cost a fifth of the raid's
 
 ### `AiPlayerbot.ThreatBackoffMeasuresHolder`
 Whether the damage threat back-off measures the mob's real holder instead of a tank that no longer holds it. Recommended on.
-**Default:** `0` · **Values:** `0` off (the reference is the tank's threat alone, as today), `1` on (while the bot's target is on another non-tank group member — not a tank, not this bot — the reference is `max(tank, holder)`; a taunt-immune target, a target with a `threat_successor` boss-tactic row and the bot itself as the victim keep the tank's; a mob the bot itself has held for 3 s releases the back-off, per mob: a switch to another mob on the bot starts its own 3 s) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+**Default:** `0` · **Values:** `0` off (the reference is the tank's threat alone, as today), `1` on (while the bot's target is on another non-tank group member — not a tank, not this bot — the reference is `max(tank, holder)`; a taunt-immune target, a target with a `threat_successor` boss-tactic row and the bot itself as the victim keep the tank's; a mob the bot itself has held for 3 s releases the back-off, per mob: any change of the bot's target, even one it only reads below the 80 % line, starts the grace over) · **Restart:** not needed (`.reload config` applies it on the next world tick)
 
 <details>
 <summary>How it works in detail</summary>

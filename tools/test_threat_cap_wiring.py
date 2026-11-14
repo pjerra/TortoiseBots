@@ -274,20 +274,37 @@ class ThreatBackoffMeasuresHolderWiring(unittest.TestCase):
         self.assertIn("return keyOn && victimIsBot && !targetExempt && heldMs >= kThreatSelfHeldGraceMs;", flat)
         self.assertIn("ai::SelfHeldClock& ThreatSelfHeld() { return threatSelfHeld_; }",
                       (ROOT / "ai/playerbot/PlayerbotAI.h").read_text())
-        # The release sits in the high-threat branch, ahead of its `return 0.0f`, and reads the victim behind the key.
-        branch = STRATEGY[STRATEGY.index('if (AI_VALUE2(bool, "trigger active", "high threat"))'):]
-        branch = branch[:branch.index("Unit* victim = target ? target->GetVictim() : nullptr;")]
-        self.assertIn("ThreatBackoffYieldsOnSelf(sPlayerbotAIConfig.threatBackoffMeasuresHolder", branch)
-        self.assertIn("target->GetVictim() == bot", branch)
-        self.assertIn("TargetTauntImmune(target) || ThreatSuccessorTarget(target)", branch)
-        self.assertIn("return 1.0f;", branch)
-        guard = branch[branch.index("if (sPlayerbotAIConfig.threatBackoffMeasuresHolder)"):]
-        self.assertIn("target->GetVictim() == bot", guard)
-        self.assertIn("target->IsAlive()", guard)
-        # The clock is keyed by the target GUID and exempt targets pass held false, so neither a switch between two
-        # mobs nor an exempt target hands elapsed time to the next one.
-        self.assertIn("ThreatSelfHeld().Update( target ? target->GetObjectGuid().GetRawValue() : 0, "
-                      "victimIsBot && !targetExempt, WorldTimer::getMSTime())", re.sub(r"\s+", " ", guard))
+        # The clock update and the line test are one evaluation (ThreatSelfHeldRelease), so a call site cannot feed
+        # the clock only at the high line.
+        self.assertIn("inline bool ThreatSelfHeldRelease(SelfHeldClock& clock, bool keyOn, std::uint64_t targetGuid, "
+                      "bool victimIsBot, bool targetExempt, bool lineActive, std::uint32_t now)", flat)
+        release = re.sub(r"\s+", " ", brace_body(THREAT_POLICY, "inline bool ThreatSelfHeldRelease("))
+        self.assertIn("if (!keyOn) return false;", release)
+        self.assertIn("std::uint32_t const heldMs = clock.Update(targetGuid, victimIsBot && !targetExempt, now);",
+                      release)
+        self.assertIn("return lineActive && ThreatBackoffYieldsOnSelf(keyOn, victimIsBot, targetExempt, heldMs);",
+                      release)
+        self.assertLess(release.index("clock.Update("), release.index("return lineActive &&"))
+        # The observation sits ahead of the high-threat branch: r5 fed the clock only inside it, so a target seen
+        # below the line was never recorded and a return to it after the grace released at once.
+        self.assertIn("bool const measuresHolder = sPlayerbotAIConfig.threatBackoffMeasuresHolder;", STRATEGY)
+        site = STRATEGY.index("ThreatSelfHeldRelease(")
+        branch_start = STRATEGY.index("if (highThreat)\n    {")
+        self.assertLess(site, branch_start)
+        call = re.sub(r"\s+", " ", STRATEGY[STRATEGY.rindex("if (measuresHolder && ThreatSelfHeldRelease("):])
+        call = call[:call.index("return 1.0f;")]
+        self.assertIn("measuresHolder && ThreatSelfHeldRelease( ai->ThreatSelfHeld(), measuresHolder,", call)
+        self.assertIn("target->GetObjectGuid().GetRawValue()", call)
+        self.assertIn("target->GetVictim() == bot", call)
+        self.assertIn("target->IsAlive()", call)
+        self.assertIn("TargetTauntImmune(target) || ThreatSuccessorTarget(target)", call)
+        self.assertIn("highThreat, WorldTimer::getMSTime()", call)
+        # The branch no longer feeds the clock: its only write is the key-off clear, so a reload that turns the key
+        # on starts the grace over.
+        branch = STRATEGY[branch_start:]
+        self.assertNotIn("ThreatBackoffYieldsOnSelf", branch)
+        self.assertEqual(STRATEGY.count("ThreatSelfHeld().Update("), 1)
+        self.assertIn("if (!measuresHolder)\n            ai->ThreatSelfHeld().Update(0, false, 0);", branch)
 
     def test_the_key_is_documented(self):
         self.assertIn("### `AiPlayerbot.ThreatBackoffMeasuresHolder`", SETTINGS)
@@ -342,7 +359,7 @@ class CureIgnoresThreat(unittest.TestCase):
         self.assertIn("bool const cure = dynamic_cast<CurePartyMemberAction*>(action) != nullptr;", multiplier)
         self.assertIn("ThreatCapExempt(heal, cure, sPlayerbotAIConfig.dungeonRunCureIgnoresThreat)", multiplier)
         # The exemption runs before the high-threat veto it skips.
-        self.assertLess(multiplier.index("ThreatCapExempt("), multiplier.index('"trigger active", "high threat"))\n    {'))
+        self.assertLess(multiplier.index("ThreatCapExempt("), multiplier.index("if (highThreat)\n    {"))
         self.assertIn("return heal || (partyCure && cureIgnoresThreat);", THREAT_POLICY)
 
     def test_docs_and_changelog(self):
@@ -521,7 +538,7 @@ class InterruptIgnoresThreat(unittest.TestCase):
         # The exemption runs before the high-threat veto it skips (and before the AoE veto, which an interrupt never
         # reaches: it is a SINGLE-threat action).
         exemptAt = multiplier.index("ThreatCapInterruptExempt(")
-        self.assertLess(exemptAt, multiplier.index('if (AI_VALUE2(bool, "trigger active", "high threat"))\n    {'))
+        self.assertLess(exemptAt, multiplier.index("if (highThreat)\n    {"))
         self.assertLess(exemptAt, multiplier.index("ActionThreatType::ACTION_THREAT_AOE)\n"))
         # The old heal-only exit is gone, so heals pass through the same call.
         self.assertNotIn("if (dynamic_cast<CastHealingSpellAction*>(action))\n", multiplier)
@@ -547,7 +564,7 @@ class InterruptIgnoresThreat(unittest.TestCase):
 
     def test_a_veto_logs_its_numbers(self):
         multiplier = brace_body(STRATEGY, "float ThreatMultiplier::GetValue(Action* action)")
-        veto = brace_body(multiplier, 'if (AI_VALUE2(bool, "trigger active", "high threat"))\n    {')
+        veto = brace_body(multiplier, "if (highThreat)\n    {")
         self.assertIn("if (interruptKey)\n            LogInterruptVeto(ai, bot, interruptAction, interruptBotThreat, "
                       "interruptTankThreat, interruptFlatThreat,\n                             interruptRanged);"
                       "\n        return 0.0f;", veto)

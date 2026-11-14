@@ -163,9 +163,10 @@ namespace ai
     // One bot's hold clock on its current target, kept across ticks like SuccessorWhiteLatch: `since` is 0 while the
     // mob is not on this bot and restarts on the tick it comes back, so every hold gets the full grace again. The
     // clock is keyed by the target GUID: a switch from mob A to mob B (both on the bot) starts B's own hold instead of
-    // carrying A's elapsed time. `held` is false for an exempt target too, so a taunt-immune or `threat_successor`
-    // target neither accrues grace nor hands its time to the next normal target. The unsigned subtraction survives the
-    // 32-bit clock wrap.
+    // carrying A's elapsed time. The caller observes every combat evaluation, not only the ticks at the high line
+    // (ThreatSelfHeldRelease), so a target seen only below the line still starts or resets the hold. `held` is false
+    // for an exempt target too, so a taunt-immune or `threat_successor` target neither accrues grace nor hands its
+    // time to the next normal target. The unsigned subtraction survives the 32-bit clock wrap.
     struct SelfHeldClock
     {
         std::uint64_t guid = 0;
@@ -196,6 +197,22 @@ namespace ai
     inline bool ThreatBackoffYieldsOnSelf(bool keyOn, bool victimIsBot, bool targetExempt, std::uint32_t heldMs)
     {
         return keyOn && victimIsBot && !targetExempt && heldMs >= kThreatSelfHeldGraceMs;
+    }
+
+    // One evaluation of that release (AiPlayerbot.ThreatBackoffMeasuresHolder): the caller runs it on every combat
+    // evaluation, ahead of its own `high threat` test, and says with `lineActive` whether the veto is being applied at
+    // all. The clock is observed either way, so a target seen only below the line still starts or resets the hold:
+    // fed only inside the high-threat branch, a return to a mob after its grace inherited the time it spent on
+    // another target and released at once. Key off: no clock work at all.
+    inline bool ThreatSelfHeldRelease(SelfHeldClock& clock, bool keyOn, std::uint64_t targetGuid, bool victimIsBot,
+                                      bool targetExempt, bool lineActive, std::uint32_t now)
+    {
+        if (!keyOn)
+            return false;
+        // The update must run before `lineActive` is tested: folding it into that condition skips the clock on
+        // every target below the line, and a later return to an old one inherits its time.
+        std::uint32_t const heldMs = clock.Update(targetGuid, victimIsBot && !targetExempt, now);
+        return lineActive && ThreatBackoffYieldsOnSelf(keyOn, victimIsBot, targetExempt, heldMs);
     }
 
     // The relative threat a damage dealer reads against `maxThreat` (ThreatValue::Calculate after its friendly/player/group

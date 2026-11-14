@@ -214,6 +214,37 @@ int main()
         CHECK(wrap.Update(mobA, false, 0x00000200u) == 0);
         CHECK(wrap.Update(mobB, true, 0x00000200u) == 0);
     }
+    // self_held_release_sees_every_target: the call site observes the bot's current target on every combat evaluation,
+    // ahead of the high-threat test, so a mob seen only below the line still resets the hold. A high and self-held ->
+    // B below the line -> A after the grace: A gets a fresh grace, never its old elapsed time. Fed only inside the
+    // high-threat branch the B tick is never recorded, A's GUID and start survive, and the return to A releases at
+    // once.
+    {
+        SelfHeldClock clock;
+        constexpr std::uint64_t mobA = 0x2001;
+        constexpr std::uint64_t mobB = 0x2002;
+        CHECK(!ThreatSelfHeldRelease(clock, true, mobA, true, false, true, 1000));  // A starts its hold
+        CHECK(!ThreatSelfHeldRelease(clock, true, mobA, true, false, true, 3999));  // under the grace: vetoed
+        CHECK(!ThreatSelfHeldRelease(clock, true, mobB, true, false, false, 4100)); // B below the line: observed
+        CHECK(!ThreatSelfHeldRelease(clock, true, mobA, true, false, true, 4200));  // back to A: a fresh grace
+        CHECK(!ThreatSelfHeldRelease(clock, true, mobA, true, false, true, 7199));
+        CHECK(ThreatSelfHeldRelease(clock, true, mobA, true, false, true, 7200));
+        // The observation happens whatever the line says: an exempt target (taunt-immune / `threat_successor`) and a
+        // target on someone else both reset, so the next normal hold starts over.
+        SelfHeldClock reset;
+        CHECK(!ThreatSelfHeldRelease(reset, true, mobA, true, false, true, 1000));
+        CHECK(!ThreatSelfHeldRelease(reset, true, mobB, true, true, false, 1500));  // exempt, below the line
+        CHECK(!ThreatSelfHeldRelease(reset, true, mobA, true, false, true, 1600));
+        CHECK(!ThreatSelfHeldRelease(reset, true, mobA, false, false, false, 2000)); // not self-held
+        CHECK(!ThreatSelfHeldRelease(reset, true, mobA, true, false, true, 2100));
+        CHECK(!ThreatSelfHeldRelease(reset, true, mobA, true, false, true, 5099));
+        CHECK(ThreatSelfHeldRelease(reset, true, mobA, true, false, true, 5100));
+        // Key off: no clock work at all, and no release.
+        SelfHeldClock off;
+        CHECK(!ThreatSelfHeldRelease(off, false, mobA, true, false, true, 1000));
+        CHECK(!ThreatSelfHeldRelease(off, false, mobA, true, false, true, 60000));
+        CHECK(off.guid == 0 && off.since == 0);
+    }
     // hakkar_away_key_on_equals_today (fails with the first version of the key: it gave 2000): the main tank holds with
     // 40000 and the off-tanks are on Sons (not on the boss) with 2000 left over: with the key on the pick is today's.
     {

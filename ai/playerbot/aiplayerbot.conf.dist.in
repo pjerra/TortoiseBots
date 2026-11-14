@@ -1695,8 +1695,9 @@ AiPlayerbot.InterruptIgnoresThreat = 0
 # holder. A taunt-immune target, a target with a `threat_successor` boss-tactic row, and the bot itself as the victim
 # keep the old tank reference, the bot only while it has held the mob for less than 3 s: after 3 s the back-off releases,
 # since holding still cannot hand the mob back (in t1114b run 5 a mage stood 11.6 s at 90 % of a frozen tank while the
-# mob on it went from 16 % to 0 % health). The 3 s are per mob: a switch to another mob that is on the bot starts its
-# own 3 s instead of inheriting the first one's, and a dead or exempt target accrues none.
+# mob on it went from 16 % to 0 % health). The 3 s are per mob: any change of the bot's target, even one it only reads
+# below the high-threat line, starts the new mob's own 3 s instead of inheriting the first one's, and a dead or exempt
+# target accrues none.
 # Recommended on. `.reload config` reads it again with the AiPlayerbot.DungeonRun* keys.
 # 0 - off: the tank's threat alone, as before (Default)
 # 1 - on
