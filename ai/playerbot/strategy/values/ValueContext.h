@@ -192,6 +192,7 @@ namespace ai
             creators["rti cc target"] = [](PlayerbotAI* ai) { return new RtiCcTargetValue(ai); };
             creators["duel target"] = [](PlayerbotAI* ai) { return new DuelTargetValue(ai); };
             creators["party member to dispel"] = [](PlayerbotAI* ai) { return new PartyMemberToDispel(ai); };
+            creators["party member to dispel peek"] = [](PlayerbotAI* ai) { return new PartyMemberToDispel(ai, "party member to dispel peek", false); };
             creators["party member to protect"] = [](PlayerbotAI* ai) { return new PartyMemberToProtect(ai); };
             creators["tank to remove roots"] = [](PlayerbotAI* ai) { return new TankToRemoveRoots(ai); };
             creators["party member to remove roots"] = [](PlayerbotAI* ai) { return new PartyMemberToRemoveRoots(ai); };

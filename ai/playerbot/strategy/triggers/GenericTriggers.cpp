@@ -53,10 +53,11 @@ bool HasManaPool(Player* bot)
 }
 
 // The party cures this module casts, each with the dispel type its spell
-// removes. The gate is on the spell the bot knows, so a warrior, or a
-// paladin without Cleanse, is never held back from the drink by a debuff it
-// cannot remove. Devour Magic is left out: it is the felhunter's spell (not
-// in the bot's own spell map) and its row already sits above the drink.
+// removes. A spell the bot does not know does not resolve (the gate is the
+// known rank), so a warrior, or a paladin without Cleanse, is never held
+// back from the drink by a debuff it cannot remove. Devour Magic is left
+// out: it is the felhunter's spell (not in the bot's own spell map) and its
+// row already sits above the drink.
 struct PartyCureSpell
 {
     char const* spell;
@@ -78,23 +79,44 @@ PartyCureSpell const kPartyCureSpells[] =
     { "remove curse", DISPEL_CURSE },
 };
 
-// A party member in reach carrying a debuff this bot's cure removes: the
-// cure triggers' own target value, so the drink and the cleanse cannot
-// disagree on who needs curing. Each dispel type is asked once, and only
-// while the bot knows a spell for it.
+// One cast of `spellId` costs the bot: the flat DBC cost, or the percentage
+// the core charges when the flat cost is 0 (the same shape the buff mana
+// floor uses).
+std::uint32_t CureManaCost(SpellEntry const* info, Player* bot)
+{
+    if (!info)
+        return 0;
+    return info->manaCost
+        ? std::uint32_t(info->manaCost)
+        : std::uint32_t(info->ManaCostPercentage) * bot->GetCreateMana() / 100;
+}
+
+// A party member in reach carrying a debuff this bot's cure removes AND the
+// cure can be cast right now (mana for the spell, off cooldown). The scan is
+// the read-only "party member to dispel peek" value, so asking never claims
+// the target: a drinker that cannot cure would otherwise reserve a member
+// another cleanser could take, and the member would stay uncleansed.
 bool PartyCleansePending(PlayerbotAI* ai)
 {
+    Player* bot = ai->GetBot();
     std::uint32_t askedTypes = 0;
     for (PartyCureSpell const& cure : kPartyCureSpells)
     {
         std::uint32_t const bit = 1u << cure.type;
         if (askedTypes & bit)
             continue;
-        if (!ai->HasSpell(cure.spell))
+
+        std::uint32_t const spellId = ai->GetAiObjectContext()->GetValue<uint32>("spell id", std::string(cure.spell))->Get();
+        if (!spellId)
+            continue;
+        SpellEntry const* info = sServerFacade.LookupSpellInfo(spellId);
+        if (!ai::CureCastableNow(bot->GetPower(POWER_MANA), CureManaCost(info, bot),
+                sServerFacade.IsSpellReady(bot, spellId)))
             continue;
 
+        // Another spell of the same type would answer the same value.
         askedTypes |= bit;
-        Value<Unit*>* target = ai->GetAiObjectContext()->GetValue<Unit*>("party member to dispel", cure.type);
+        Value<Unit*>* target = ai->GetAiObjectContext()->GetValue<Unit*>("party member to dispel peek", cure.type);
         if (target && target->Get())
             return true;
     }

@@ -16,6 +16,7 @@ ACTION = (ROOT / "commands/Action.cpp").read_text()
 FOOD = (ROOT / "ai/playerbot/strategy/generic/UseFoodStrategy.cpp").read_text()
 GENERIC_TRIGGERS = (ROOT / "ai/playerbot/strategy/triggers/GenericTriggers.cpp").read_text()
 TRIGGER_CONTEXT = (ROOT / "ai/playerbot/strategy/triggers/TriggerContext.h").read_text()
+VALUE_CONTEXT = (ROOT / "ai/playerbot/strategy/values/ValueContext.h").read_text()
 SURVIVE = (ROOT / "ai/playerbot/SurvivePolicy.h").read_text()
 
 MARK = '"run fight until ms"'
@@ -62,7 +63,19 @@ SRC_ACTION = strip_comments(ACTION)
 SRC_FOOD = strip_comments(FOOD)
 SRC_GENERIC_TRIGGERS = strip_comments(GENERIC_TRIGGERS)
 SRC_TRIGGER_CONTEXT = strip_comments(TRIGGER_CONTEXT)
+SRC_VALUE_CONTEXT = strip_comments(VALUE_CONTEXT)
 SRC_SURVIVE = strip_comments(SURVIVE)
+
+
+def model_low_mana_drink_useful(mana_pct, cleanse_pending):
+    """Mirror of ai::LowManaDrinkUseful; tools/test_survive_policy.cpp pins it."""
+    limit = int(re.search(r"LOW_MANA_DRINK_PCT\s*=\s*([0-9]+)", SRC_SURVIVE).group(1))
+    return mana_pct <= limit and not cleanse_pending
+
+
+def model_cure_castable(power, mana_cost, off_cooldown):
+    """Mirror of ai::CureCastableNow; tools/test_survive_policy.cpp pins it."""
+    return off_cooldown and power >= mana_cost
 
 
 class MealGateWiringTest(unittest.TestCase):
@@ -266,17 +279,18 @@ class MealGateWiringTest(unittest.TestCase):
         self.assertIn("LowManaDrinkUseful(", trigger)
         self.assertIn("PartyCleansePending(", trigger)
 
-        # The cleanse gate reads the cure triggers' own value, not a second
-        # party scan, for every dispel type a party cure of this module
-        # removes.
+        # The cleanse gate reads the cure triggers' own scan in its
+        # claim-free form, not a second party scan, for every dispel type a
+        # party cure of this module removes.
         helper = " ".join(body_after(SRC_GENERIC_TRIGGERS, "bool PartyCleansePending(").split())
-        self.assertIn('"party member to dispel"', helper)
+        self.assertIn('"party member to dispel peek"', helper)
         table = " ".join(span_after(SRC_GENERIC_TRIGGERS, "PartyCureSpell const kPartyCureSpells[]").split())
         for dispel in ("DISPEL_POISON", "DISPEL_DISEASE", "DISPEL_CURSE", "DISPEL_MAGIC"):
             self.assertIn(dispel, table)
-        # Only a cure whose spell the bot knows may hold the drink back: a
-        # warrior, or a paladin without Cleanse, still drinks.
-        self.assertIn("HasSpell(", helper)
+        # Only a cure whose spell the bot knows may hold the drink back: the
+        # known rank resolves, so a warrior, or a paladin without Cleanse,
+        # still drinks.
+        self.assertIn('"spell id"', helper)
 
         # The scenario. The druid's out-of-combat abolish poison row is 20.0
         # and the plain "high mana" drink row 6.0; the boosted low-mana row is
@@ -297,6 +311,54 @@ class MealGateWiringTest(unittest.TestCase):
         policy = " ".join(body_after(SRC_SURVIVE, "inline bool LowManaDrinkUseful").split())
         self.assertIn("DrinkOutranksSelfBuffs(manaPct)", policy)
         self.assertIn("!partyCleansePending", policy)
+
+    def test_low_mana_drink_check_registers_no_dispel_claim(self):
+        """The drink gate may not reserve a target the drinker cannot cure."""
+        helper = " ".join(body_after(SRC_GENERIC_TRIGGERS, "bool PartyCleansePending(").split())
+        # The non-claiming scan: never the value the cleanse decision claims.
+        self.assertIn('"party member to dispel peek"', helper)
+        self.assertNotIn('"party member to dispel"', helper)
+        # Registered as a claim-free instance of the same scan.
+        self.assertIn('creators["party member to dispel peek"]', SRC_VALUE_CONTEXT)
+        self.assertRegex(
+            " ".join(body_after(SRC_VALUE_CONTEXT, 'creators["party member to dispel peek"]').split()),
+            r'PartyMemberToDispel\(ai, "party member to dispel peek",\s*false\)')
+
+        # Only the actual cleanse decision claims and logs its pick.
+        value = strip_comments((ROOT / "ai/playerbot/strategy/values/PartyMemberToDispel.cpp").read_text())
+        calc = " ".join(body_after(value, "Unit* PartyMemberToDispel::Calculate()").split())
+        self.assertIn("if (claim && target && target == predicate.GetPick()", calc)
+        self.assertIn("if (claim && target && bot->GetGroup()) BuffClaimRegistry::Claim(", calc)
+
+        # The gate asks only when the cure is castable: enough mana for the
+        # spell and off cooldown. A dry druid at 2 % of 1000 mana (20) cannot
+        # pay Abolish Poison's 60, so the drink stays allowed and the scan is
+        # never run.
+        self.assertIn("ai::CureCastableNow(", helper)
+        self.assertIn("sServerFacade.IsSpellReady(", helper)
+        self.assertIn("ManaCost", helper)
+        policy = " ".join(body_after(SRC_SURVIVE, "inline bool CureCastableNow").split())
+        self.assertIn("offCooldown", policy)
+        self.assertIn("power >= manaCost", policy)
+
+        # The model of the 2 % case: not castable -> no pending cleanse -> the
+        # boosted drink row stays useful.
+        self.assertFalse(model_cure_castable(20, 60, True))
+        self.assertTrue(model_low_mana_drink_useful(2, False))
+
+    def test_low_mana_drink_blocked_when_the_cure_is_castable(self):
+        """A druid at 15 % mana can pay the cure: the drink yields to it."""
+        helper = " ".join(body_after(SRC_GENERIC_TRIGGERS, "bool PartyCleansePending(").split())
+        self.assertIn("ai::CureCastableNow(", helper)
+        self.assertIn("sServerFacade.IsSpellReady(", helper)
+        # 15 % of 1000 mana is 150, enough for Abolish Poison's 60 and the
+        # spell is ready: the cleanse is pending, so the boosted row is not
+        # useful and the cleanse row (20.0) owns the tick. The plain drink
+        # row (6.0) follows it.
+        self.assertTrue(model_cure_castable(150, 60, True))
+        self.assertFalse(model_low_mana_drink_useful(15, True))
+        queued = [("abolish poison on party", 20.0), ("drink", 6.0)]
+        self.assertEqual("abolish poison on party", max(queued, key=lambda row: row[1])[0])
 
 
 if __name__ == "__main__":

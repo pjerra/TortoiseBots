@@ -29,6 +29,7 @@ using ai::OutnumberedFleeHealthLine;
 using ai::ShouldSeedDrink;
 using ai::ShouldSelfHealerHoldGround;
 using ai::DeathAttackerEntry;
+using ai::CureCastableNow;
 int main()
 {
     // Rest stop: cheat bots eat to almost-full, everyone else to low.
@@ -72,6 +73,16 @@ int main()
     CHECK(!LowManaDrinkUseful(20, true));
     CHECK(!LowManaDrinkUseful(0, true));
     CHECK(!LowManaDrinkUseful(25, false));
+
+    // The cleanse gate only holds the drink back when the cure can be cast
+    // now: ablution at 2 % of 1000 mana (20) cannot pay Abolish Poison's 60,
+    // so the drink is allowed; at 15 % (150) it can, and a cooling cure
+    // leaves the drink too.
+    CHECK(!CureCastableNow(20, 60, true));
+    CHECK(CureCastableNow(150, 60, true));
+    CHECK(CureCastableNow(60, 60, true));
+    CHECK(!CureCastableNow(150, 60, false));
+    CHECK(CureCastableNow(0, 0, true));
 
     // The restored critical-health flee is pool-only: no real player master.
     CHECK(ShouldFleeAtCriticalHealth(false));

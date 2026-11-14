@@ -160,8 +160,9 @@ Unit* PartyMemberToDispel::Calculate()
         target = predicate.GetFallback();
 
     // The decision row: which aura ranked the carrier, under which mode, and how far it stood from the group when the
-    // cure was picked (the Grobbulus release wants the clear distance at pick time).
-    if (target && target == predicate.GetPick() && predicate.GetPickAuraId() != 0)
+    // cure was picked (the Grobbulus release wants the clear distance at pick time). Only the claiming reader writes it:
+    // the read-only form must not report a cure decision it never made.
+    if (claim && target && target == predicate.GetPick() && predicate.GetPickAuraId() != 0)
     {
         DispelVerdict verdict;
         verdict.auraId = predicate.GetPickAuraId();
@@ -171,8 +172,9 @@ Unit* PartyMemberToDispel::Calculate()
     }
 
     // Claim the pick so the next dispeller of this type that recalculates
-    // (same tick or the next few seconds) prefers somebody else.
-    if (target && bot->GetGroup())
+    // (same tick or the next few seconds) prefers somebody else. A read-only
+    // reader (the drink gate) never reserves a target it may not cure.
+    if (claim && target && bot->GetGroup())
         BuffClaimRegistry::Claim(bot->GetObjectGuid(), target->GetObjectGuid(), claimKey);
 
     return target;

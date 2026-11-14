@@ -59,6 +59,15 @@ namespace ai
         return DrinkOutranksSelfBuffs(manaPct) && !partyCleansePending;
     }
 
+    // The cleanse may only hold that row back when the cure can be cast now:
+    // its mana cost is covered and the spell is off cooldown. An unaffordable
+    // or cooling cure leaves the drink to run, so a dry bot never idles on a
+    // cleanse it cannot pay for.
+    inline bool CureCastableNow(std::uint32_t power, std::uint32_t manaCost, bool offCooldown)
+    {
+        return offCooldown && power >= manaCost;
+    }
+
     // Drink stop, the mana analogue of the rest stop above. The drink trigger
     // still opens at its old line; only the stop rises to the almost-full
     // level so a cheat-bot caster does not re-pull half-oom. Bots without
