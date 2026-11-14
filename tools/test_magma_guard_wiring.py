@@ -203,6 +203,213 @@ class MagmaGuardWiringTest(unittest.TestCase):
         self.assertNotIn("return true", helper)
         self.assertNotIn("SendActionError", helper)
 
+    def test_follow_holds_out_of_magma(self):
+        # RFC first-bridge deaths 2026-11-13: the follow slot comes off the
+        # navmesh (a shallow lava shelf reads as plain ground) and the native
+        # follow is never sampled. The hold runs before the FOLLOW_MOTION_TYPE
+        # early return, so a follow already running is re-checked, and before
+        # the native dispatch for a new one.
+        f = body(MOVES, "bool MovementAction::Follow(Unit* target, float distance, float angle)\n", "\n}\n")
+        hold = at(f, "if (HoldFollowOutOfMagma(target, distance, angle))")
+        running = at(f, "if (bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == FOLLOW_MOTION_TYPE)")
+        dispatch = at(f, "mm.MoveFollow(target, distance, angle);")
+        self.assertLess(hold, running)
+        self.assertLess(hold, dispatch)
+        # Both follow call sites reach this one guarded dispatch: the 2-arg
+        # overload (Follow(target, distance)) delegates, and every party
+        # form-up (FormUpOnLead, FormUpOnPlayer) orders the "follow chat
+        # shortcut" action, which is this MovementAction.
+        two = body(MOVES, "bool MovementAction::Follow(Unit* target, float distance)\n", "\n}\n")
+        self.assertIn("return Follow(target, distance, GetFollowAngle());", two)
+        self.assertNotIn("MoveFollow(", two)
+        for formup in ("uint32 FormUpOnPlayer(Player* commander",
+                       "uint32 FormUpOnLead(Player* commander"):
+            site = body(COMMANDS, formup, "\n}\n")
+            self.assertIn('"follow chat shortcut", ai::Event("follow", "", commander)', site)
+            self.assertNotIn("MoveFollow(", site)
+
+    def test_follow_hold_rule_and_fallbacks(self):
+        f = body(MOVES, "bool MovementAction::HoldFollowOutOfMagma(", "\n}\n")
+        slot = at(f, "WorldPosition const slot(target->GetMapId(),")
+        check = at(f, "slotInMagma = SlotGoesIntoMagma(bot, slot, magmaAt);")
+        self.assertLess(slot, check)
+        # A bot already standing in magma walks out instead of holding.
+        self.assertIn("if (WorldPosition(bot).isInMagma())\n        return engaged;", f)
+        # The slot is magma but the target's own spot is dry: follow the
+        # target itself; otherwise stop and hold.
+        self.assertIn("targetInMagma = SlotGoesIntoMagma(bot, WorldPosition(target), targetMagmaAt);", f)
+        self.assertIn("switch (ai::PlanMagmaFollow(slotInMagma, targetInMagma, engaged))", f)
+        self.assertIn("case ai::MagmaFollowAction::HoldOnTarget:", f)
+        self.assertIn("mm.MoveFollow(target, 0.0f, 0.0f);", f)
+        self.assertIn("case ai::MagmaFollowAction::HoldInPlace:", f)
+        self.assertIn("ai->StopMoving();", f)
+        self.assertIn("magmaFollowEngaged = targetGuid;", f)
+        self.assertIn('LogMagmaRefusal(bot, AI_VALUE(LastMovement&, "last movement"), magmaAt, "follow slot");', f)
+        # Round 4 regression: the hold re-pointed the generator at distance 0,
+        # and the FOLLOW_MOTION_TYPE early return would keep it there. The
+        # clearing slot must send a fresh MoveFollow with the caller's slot.
+        restore = at(f, "case ai::MagmaFollowAction::RestoreFollow:")
+        hold = at(f, "case ai::MagmaFollowAction::HoldOnTarget:")
+        self.assertLess(restore, hold)
+        restore_body = f[restore:hold]
+        self.assertIn("magmaFollowEngaged = ObjectGuid();", restore_body)
+        self.assertIn("if (distance > 0.0f)", restore_body)
+        self.assertIn("mm.MoveFollow(target, distance, angle);", restore_body)
+        # Leaving the guard's map ends a hold too.
+        gate = at(f, "if (!MagmaGuardOn(bot))")
+        self.assertLess(gate, restore)
+        self.assertIn("if (!engaged)\n            return false;", f[gate:restore])
+        self.assertIn("mm.MoveFollow(target, distance, angle);", f[gate:restore])
+        # Per-tick cost: a fresh memo answers before any terrain work.
+        memo = at(f, "ai::MagmaRecheckDue(magmaFollowMemo.valid, slotX, slotY,")
+        self.assertLess(memo, check)
+        self.assertIn("if (!recheck && !magmaFollowMemo.held)\n        return false;", f[memo:check])
+        self.assertIn("magmaFollowMemo.held = slotInMagma;", f[check:])
+        # The route goes through the SAME sampled guard MoveTo uses, not a
+        # second copy of the sampler.
+        helper = body(MOVES, "static bool SlotGoesIntoMagma(", "\n}\n")
+        route_gate = at(helper, "ai::MagmaRouteCheckAllowed(ai::MagmaMapLiquidListed(bot->GetMapId()),")
+        self.assertIn("MagmaSeenOnMap(bot->GetMapId()));", helper)
+        self.assertIn("if (!routeCheck)\n        return false;", helper[route_gate:])
+        calc = at(helper, "path.calculate(slot.getX(), slot.getY(), slot.getZ(), false);")
+        self.assertLess(route_gate, calc)
+        self.assertIn("RouteEntersMagma(bot, WorldPosition(bot), route, magmaAt)", helper)
+        self.assertIn("ai::MagmaGuardApplies(bot->GetMap()->IsDungeon())", helper)
+        # The end-point lookup that also learns the map runs before the gate.
+        self.assertLess(at(helper, "if (slot.isInMagma(bot->GetMap()->GetTerrain()))"), route_gate)
+        self.assertIn("NoteMagmaSeenOnMap(slot.GetMapId());", helper)
+        self.assertIn("ai::CutPathBeforeMagma(start, route,", body(MOVES, "static bool RouteEntersLiquidHazard(", "\n}\n"))
+
+    def test_chase_holds_out_of_magma(self):
+        f = body(MOVES, "bool MovementAction::ChaseTo(", "\n}\n")
+        # The angle MoveChase is handed is final before the guard plans the
+        # goal (the behind strategy replaces it), so the guard checks the slot
+        # the core chase walks to, not a radial point on the bot's side.
+        behind = at(f, 'if (ai->HasStrategy("behind", BotState::BOT_STATE_COMBAT))')
+        clamp = at(f, "if (angle > 20)")
+        hold = at(f, "if (HoldChaseOutOfMagma(obj, distance, angle))")
+        far = at(f, "if (distanceToTarget > sPlayerbotAIConfig.sightDistance")
+        # After the far/out-of-sight hand-off (a MoveTo to the target itself,
+        # guarded by MoveTo), before the point move and core chase.
+        self.assertLess(behind, hold)
+        self.assertLess(clamp, hold)
+        self.assertLess(far, hold)
+        # One angle clamp, before the guard: no later replacement between the
+        # guarded goal and the MoveChase dispatch.
+        self.assertEqual(f.count("angle > 20"), 1)
+        self.assertEqual(f.count("angle = 0"), 1)
+        g = body(MOVES, "bool MovementAction::HoldChaseOutOfMagma(", "\n}\n")
+        goal = at(g, "ai::ChaseGoalPoint(target->GetPositionX(), target->GetPositionY(),")
+        memo = at(g, "ai::MagmaRecheckDue(magmaChaseMemo.valid, goalPoint.x, goalPoint.y,")
+        check = at(g, "held = SlotGoesIntoMagma(bot, goal, magmaAt);")
+        self.assertLess(goal, memo)
+        self.assertLess(memo, check)
+        # The memo verdict answers a goal inside the re-check window before any
+        # terrain query or route calculation.
+        self.assertIn("if (!recheck && !magmaChaseMemo.held)\n        return false;", g[memo:check])
+        self.assertIn("magmaChaseMemo.held = held;", g[check:])
+        self.assertIn("target->GetOrientation(), slotDistance, angle);", g)
+        self.assertIn("distance + target->GetObjectBoundingRadius() + bot->GetObjectBoundingRadius();", g)
+        # A zero-offset (melee) chase has no angle: the ring guard decides.
+        self.assertIn("if (!(distance > 0.0f))\n        return HoldMeleeChaseOutOfMagma(target);", g)
+        self.assertNotIn("CreatureAuraChaseGoal", g)
+        self.assertIn("ai->StopMoving();", g)
+        # Lava kills a tank too: no tank pass on this hold.
+        self.assertNotIn("IsTank", g)
+        self.assertIn('LogMagmaRefusal(bot, AI_VALUE(LastMovement&, "last movement"), magmaAt, "chase goal");', g)
+
+    def test_melee_chase_ring(self):
+        # Round 3 (Codex HIGH r2): a zero-offset chase has no angle; the core
+        # paths to a random attack point on a ring around the target, so the
+        # target's own spot says nothing. Dry ring keeps the core's pick, a
+        # mixed ring chases the dry bearing nearest the bot with an explicit
+        # angle the core honours for a nonzero offset, all-magma holds.
+        g = body(MOVES, "bool MovementAction::HoldMeleeChaseOutOfMagma(", "\n}\n")
+        # Already in melee reach with line of sight: the core does not move.
+        self.assertLess(at(g, "bot->CanReachWithMeleeAutoAttack(chased)"),
+                        at(g, "ai::kMeleeRingSamples"))
+        self.assertIn("float const radius = target->GetObjectBoundingRadius() + bot->GetMeleeReach();", g)
+        # The random point can be as close as the bounding radii: a target
+        # standing in lava holds before any ring sample decides.
+        self.assertIn("if (targetPos.isInMagma())", g)
+        self.assertLess(at(g, "if (targetPos.isInMagma())"), at(g, "for (int i = 0; i < ai::kMeleeRingSamples; ++i)"))
+        self.assertIn('LogMagmaRefusal(bot, AI_VALUE(LastMovement&, "last movement"), targetPos, "melee chase ring");', g)
+        # Round 4 per-tick cost: the target lookup is the whole guard on a map
+        # whose liquid has never answered magma; the eight ring samples and
+        # their height queries run only where magma is known.
+        gate = at(g, "if (!ai::MagmaRouteCheckAllowed(ai::MagmaMapLiquidListed(bot->GetMapId()), MagmaSeenOnMap(bot->GetMapId())))")
+        loop = at(g, "for (int i = 0; i < ai::kMeleeRingSamples; ++i)")
+        self.assertLess(at(g, "if (targetPos.isInMagma())"), gate)
+        self.assertLess(gate, loop)
+        self.assertIn("return false;", g[gate:loop])
+        self.assertIn("ai::MeleeRingPoint(target->GetPositionX(), target->GetPositionY(), radius, i)", g[loop:])
+        plan = at(g, "ai::PlanMeleeRing(inMagma, target->GetAngle(bot))")
+        self.assertLess(loop, plan)
+        # The ring samples are reused inside the re-check window instead of
+        # being taken again every tick.
+        self.assertIn("ai::MagmaRecheckDue(ringUnchanged, target->GetPositionX(), target->GetPositionY(),", g)
+        self.assertLess(at(g, "ai::MagmaRecheckDue(ringUnchanged,"), plan)
+        keep = at(g, "if (plan.step == ai::MeleeRingStep::KeepRandom)")
+        self.assertRegex(g[keep:keep + 200], r"return false;")
+        hold = at(g, "if (plan.step == ai::MeleeRingStep::Hold)")
+        self.assertLess(plan, hold)
+        self.assertGreater(at(g[hold:], "ai->StopMoving();") + hold, hold)
+        self.assertIn('LogMagmaRefusal(bot, lastMove, magmaAt, "melee chase ring");', g[hold:])
+        # Mixed: offset such that the core's target-radius + offset + the bot's
+        # radius lands on the sampled ring, and the sampled bearing relative
+        # to the target's facing (the core adds the facing back).
+        self.assertIn(
+            "float const offset = radius - target->GetObjectBoundingRadius() - bot->GetObjectBoundingRadius();", g)
+        self.assertIn("float const chaseAngle = plan.angle - target->GetOrientation();", g)
+        self.assertIn("mm.MoveChase(chased, offset, chaseAngle);", g)
+        # A chase already running on that bearing is left alone: re-dispatching
+        # every tick would reset the generator.
+        self.assertIn("magmaRingChaseTarget == target->getObjectGuid()", g)
+        self.assertIn("magmaRingChaseAngle - chaseAngle", g)
+        # An offset the generator would round to zero falls back to a walk.
+        fallback = at(g, "if (!(offset > 0.0f))")
+        self.assertLess(fallback, at(g, "mm.MoveChase(chased, offset, chaseAngle);"))
+        self.assertIn("return MoveTo(dryPoint.GetMapId(), dryPoint.getX(), dryPoint.getY(), dryPoint.getZ());", g)
+
+    def test_terrain_queries_wait_for_the_memo(self):
+        # Round 5: the per-tick cost was still open. The memo answers first on
+        # every map the guard runs on; the bot's own liquid, the goal height,
+        # the target's liquid and the ring samples run only on a held memo hit
+        # or a due re-check, and a map where magma cannot be costs nothing.
+        for start in ("bool MovementAction::HoldFollowOutOfMagma(", "bool MovementAction::HoldChaseOutOfMagma("):
+            f = body(MOVES, start, "\n}\n")
+            gate = at(f, "if (!MagmaGuardOn(bot))")
+            memo = at(f, "ai::MagmaRecheckDue(")
+            self.assertLess(gate, memo)
+            self.assertLess(memo, at(f, "if (WorldPosition(bot).isInMagma())"))
+
+        helper = body(MOVES, "static bool MagmaGuardOn(Player* bot)", "\n}\n")
+        self.assertIn("ai::MagmaGuardApplies(bot->GetMap()->IsDungeon())", helper)
+        self.assertIn("ai::MagmaRouteCheckAllowed(ai::MagmaMapLiquidListed(bot->GetMapId()), "
+                      "MagmaSeenOnMap(bot->GetMapId()))", helper)
+
+        g = body(MOVES, "bool MovementAction::HoldChaseOutOfMagma(", "\n}\n")
+        memo = at(g, "ai::MagmaRecheckDue(magmaChaseMemo.valid,")
+        self.assertLess(memo, at(g, "float const ground = goal.GetHeight();"))
+
+        m = body(MOVES, "bool MovementAction::HoldMeleeChaseOutOfMagma(", "\n}\n")
+        memo = at(m, "ai::MagmaRecheckDue(ringUnchanged,")
+        self.assertLess(memo, at(m, "bot->CanReachWithMeleeAutoAttack(chased)"))
+        self.assertLess(memo, at(m, "if (targetPos.isInMagma())"))
+        self.assertLess(memo, at(m, "for (int i = 0; i < ai::kMeleeRingSamples; ++i)"))
+
+    def test_healer_stand_path_is_calculated(self):
+        # The healer stand's PathFinder was read without calculate(), so its end
+        # was (0, 0, 0) and every stand was rejected (found 2026-11-13).
+        f = body(COMMANDS, "bool HealerPullStand(Player* lead, Unit* target, Player* healer, float& ox, float& oy, float& oz)",
+                 "\n}\n")
+        calc = at(f, "path.calculate(px, py, ground, false);")
+        kind = at(f, "path.getPathType()")
+        end = at(f, "path.getActualEndPosition()")
+        self.assertLess(calc, kind)
+        self.assertLess(calc, end)
+        self.assertEqual(f.count("path.calculate("), 1)
+
 
 if __name__ == "__main__":
     unittest.main()
