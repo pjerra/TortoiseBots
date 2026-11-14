@@ -154,6 +154,67 @@ namespace ai
                                         bool targetExempt, float victimThreat)
     { return keyOn && victimIsOtherNonTankMember && !targetExempt ? std::max(tankThreat, victimThreat) : tankThreat; }
 
+    // How long this bot must hold a mob itself before the damage back-off releases it
+    // (AiPlayerbot.ThreatBackoffMeasuresHolder, ThreatBackoffYieldsOnSelf). Backing off a mob already on the bot
+    // protects nothing and cannot hand it back, yet the tank reference it is measured against can be a frozen number:
+    // in t1114b run 5 the mage stood silent for 11.6 s next to a mob on itself that went from 16 % to 0 % health.
+    constexpr std::uint32_t kThreatSelfHeldGraceMs = 3000;
+
+    // One bot's hold clock on its current target, kept across ticks like SuccessorWhiteLatch: `since` is 0 while the
+    // mob is not on this bot and restarts on the tick it comes back, so every hold gets the full grace again. The
+    // clock is keyed by the target GUID: a switch from mob A to mob B (both on the bot) starts B's own hold instead of
+    // carrying A's elapsed time. The caller observes every combat evaluation, not only the ticks at the high line
+    // (ThreatSelfHeldRelease), so a target seen only below the line still starts or resets the hold. `held` is false
+    // for an exempt target too, so a taunt-immune or `threat_successor` target neither accrues grace nor hands its
+    // time to the next normal target. The unsigned subtraction survives the 32-bit clock wrap.
+    struct SelfHeldClock
+    {
+        std::uint64_t guid = 0;
+        std::uint32_t since = 0;
+
+        std::uint32_t Update(std::uint64_t targetGuid, bool held, std::uint32_t now)
+        {
+            if (targetGuid == 0 || targetGuid != guid)
+            {
+                guid = targetGuid;
+                since = 0;
+            }
+            if (!held)
+            {
+                since = 0;
+                return 0;
+            }
+            if (since == 0)
+                since = now;
+            return now - since;
+        }
+    };
+
+    // The self-victim release in ThreatMultiplier's high-threat branch, behind the same key as ThreatBackoffReference:
+    // the bot has held the mob for the grace period, so the damage goes out instead of waiting for a tank that has
+    // lost it. Taunt-immune targets and `threat_successor` rows keep their own logic, and with the key off the branch
+    // is untouched.
+    inline bool ThreatBackoffYieldsOnSelf(bool keyOn, bool victimIsBot, bool targetExempt, std::uint32_t heldMs)
+    {
+        return keyOn && victimIsBot && !targetExempt && heldMs >= kThreatSelfHeldGraceMs;
+    }
+
+    // One evaluation of that release (AiPlayerbot.ThreatBackoffMeasuresHolder): the caller runs it on every combat
+    // evaluation, ahead of its own `high threat` test, and says with `lineActive` whether the veto is being applied at
+    // all. The clock is observed either way, so a target seen only below the line still starts or resets the hold:
+    // fed only inside the high-threat branch, a return to a mob after its grace inherited the time it spent on
+    // another target and released at once. Key off: no clock work at all.
+    inline bool ThreatSelfHeldRelease(SelfHeldClock& clock, bool keyOn, std::uint64_t targetGuid, bool victimIsBot,
+                                      bool targetExempt, bool lineActive, std::uint32_t now)
+    {
+        if (!keyOn)
+            return false;
+        // The update must run before `lineActive` is tested: folding it into that condition skips the clock on
+        // every target below the line, and a later return to an old one inherits its time.
+        std::uint32_t const heldMs = clock.Update(targetGuid, victimIsBot && !targetExempt, now);
+        return lineActive && ThreatBackoffYieldsOnSelf(keyOn, victimIsBot, targetExempt, heldMs);
+    }
+
     // The relative threat a damage dealer reads against `maxThreat` (ThreatValue::Calculate after its friendly/player/group
     // checks). < 0: no reference, no cap (0). A reference of exactly 0 on a target in combat that is not fleeing reads 100:
     // the damage dealers are held, never uncapped. That is what a successor whose threat a Hex just wiped gives under
