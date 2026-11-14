@@ -2812,9 +2812,12 @@ class DungeonPlanSql(unittest.TestCase):
         # + 67 + 8 pulls), bosses in leg order. The lava points are out of the pulls, leg 7's start is on
         # Flamelash's platform, the packs that stand at five bosses are those boss rows' entries, the four rares
         # are pulls of their own, and no pull reaches beyond its own spread.
+        # b6a round 2 (20261115002300, turtle-agent 4dbff2bf): the leg-6 group-12 lead row (audit step 717) stood 3.7 yd
+        # under its floor and the server answered its hop to the pull NOPATH; the approach cut's lead row now takes its z
+        # from the navmesh floor. It is the same set of rows (972 steps, 983 rows).
         name, text = newest_plan_text("blackrock_depths")
-        self.assertEqual(name, "20261114234004_world.sql")
-        self.assertIn("('blackrock_depths', 230, '8903,8892,8890,8891', '8903', '8894,8898,8896,8904,8900', 'turtle-agent e5642c9a dungeons/blackrock_depths.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261115002300_world.sql")
+        self.assertIn("('blackrock_depths', 230, '8903,8892,8890,8891', '8903', '8894,8898,8896,8904,8900', 'turtle-agent 4dbff2bf dungeons/blackrock_depths.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         self.assertEqual(len(leg_rows(text, "blackrock_depths")), 10)
         rows = [r for r in self.step_rows(text) if r["plan"] == "blackrock_depths"]
         self.assertEqual(len(rows), 972)

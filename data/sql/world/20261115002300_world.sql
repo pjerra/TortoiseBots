@@ -5,22 +5,23 @@
 --
 -- Idempotent: each plan's rows are deleted, then inserted. The tables come from 20261014150000_world.sql.
 --
--- Route audit batch B6a, blackrock_depths: the leg-0 group-29 stand moves out of High Interrogator Gerstahn's
--- 12 yd script aggro (10.5 -> 17 yd off him), the leg-1 group-25 and leg-8 group-46 stands snap to their floors, and
--- the 204.6 yd hop into leg 8's pull 57 splits at the bridge floor. turtle-agent e5642c9a.
+-- Route audit batch B6a, blackrock_depths, round 2: the leg-6 group-12 lead row (audit step 717, this file's leg 6 seq 87)
+-- stood 3.7 yd under its floor and the server answered its hop to the pull NOPATH; the approach cut's lead row now takes its
+-- z from the navmesh floor (turtle-agent 4dbff2bf), as do the eight other lead rows this plan's cut writes. turtle-agent
+-- 4dbff2bf.
 --
 -- Exported with `plan-export --allow-draft --gm-cross-direct --floor-aware --approach-hops --mmaps <the server's
--- mmaps> --rev e5642c9a --stamp 20261114234004`, the options of this plan's 20261104030000 migration. plan-check
--- from that tree: 0 of 1006 points fail (as before); the exported cut's lints lose boss_aggro 1 -> 0 and off-floor
--- 3 -> 1. The leg-6 group-12 corner (3.7 yd under its floor) and the two leg-1 hops over the leg length stay: an
--- approach there would have to carry the exporter's whole 73-point cut (the plan allows 4).
+-- mmaps> --rev 4dbff2bf --stamp 20261115002300`, the options of this plan's 20261104030000 migration. plan-check
+-- from that tree: 0 of 1006 points fail (as before); the exported cut's lints: water 0, off-floor 0 (1 before),
+-- boss_aggro 0, reach 4 -> 2; 793 findings (221 fail) against 798 (224) of the 20261114234004 export. Same rows:
+-- 972 steps, 983 rows; nine 'approach path' rows take their floor z.
 
 -- blackrock_depths: map 230, 10 legs, 972 steps
 DELETE FROM `ai_dungeon_step` WHERE `plan` = 'blackrock_depths';
 DELETE FROM `ai_dungeon_leg` WHERE `plan` = 'blackrock_depths';
 DELETE FROM `ai_dungeon_plan` WHERE `plan` = 'blackrock_depths';
 INSERT INTO `ai_dungeon_plan` (`plan`, `map`, `cc_priority`, `cc_always`, `kill_first`, `source`, `comment`) VALUES
-('blackrock_depths', 230, '8903,8892,8890,8891', '8903', '8894,8898,8896,8904,8900', 'turtle-agent e5642c9a dungeons/blackrock_depths.json', 'plan v1, draft (not mapped, not live-checked)');
+('blackrock_depths', 230, '8903,8892,8890,8891', '8903', '8894,8898,8896,8904,8900', 'turtle-agent 4dbff2bf dungeons/blackrock_depths.json', 'plan v1, draft (not mapped, not live-checked)');
 INSERT INTO `ai_dungeon_leg` (`plan`, `leg`, `name`, `comment`) VALUES
 ('blackrock_depths', 0, 'high_interrogator_gerstahn', ''),
 ('blackrock_depths', 1, 'houndmaster_grebmar', ''),
@@ -252,7 +253,7 @@ INSERT INTO `ai_dungeon_step` (`plan`, `leg`, `seq`, `kind`, `entry`, `x`, `y`, 
 ('blackrock_depths', 1, 154, 'move', 0, 598.3333, -120.0001, -39.966633, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 1, 155, 'move', 0, 598.86664, -122.933426, -38.50775, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 1, 156, 'move', 0, 602.6, -137.33342, -38.342285, 0, 0, 0, 0, 0, '', 'approach path'),
-('blackrock_depths', 1, 157, 'move', 0, 629, -158.94, -37.02, 0, 0, 0, 0, 0, '', 'approach path'),
+('blackrock_depths', 1, 157, 'move', 0, 629, -158.94, -38.29326, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 1, 158, 'pull', 0, 652.2, -177.92, -35.85, 16, 0, 0, 0, 0, '8916,8896,8902,8895,8893', 'pull group 39'),
 ('blackrock_depths', 1, 159, 'pull', 0, 653.34, -190.51, -35.53, 7, 0, 0, 0, 0, '8904', 'pull group 40'),
 ('blackrock_depths', 1, 160, 'pull', 0, 635, -147.39, -35.87, 14, 0, 0, 0, 0, '8902,8916,8896,8894', 'pull group 41'),
@@ -358,7 +359,7 @@ INSERT INTO `ai_dungeon_step` (`plan`, `leg`, `seq`, `kind`, `entry`, `x`, `y`, 
 ('blackrock_depths', 1, 260, 'move', 0, 592.86664, -66.40011, -51.700504, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 1, 261, 'move', 0, 564.3333, -52.800117, -59.967407, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 1, 262, 'move', 0, 555.9333, -52.26678, -60.82328, 0, 0, 0, 0, 0, '', 'approach path'),
-('blackrock_depths', 1, 263, 'move', 0, 540.78, -66.3, -61.53, 0, 0, 0, 0, 0, '', 'approach path'),
+('blackrock_depths', 1, 263, 'move', 0, 540.78, -66.3, -62.89041, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 1, 264, 'pull', 0, 518.78, -86.67, -62.56, 9, 0, 0, 0, 0, '8890', 'pull group 56'),
 ('blackrock_depths', 1, 265, 'pull', 0, 508.45, -72.6, -62.53, 7, 0, 0, 0, 0, '8921', 'pull group 57'),
 ('blackrock_depths', 1, 266, 'pull', 0, 496.6, -58.76, -62.57, 9, 0, 0, 0, 0, '8890', 'pull group 58'),
@@ -482,7 +483,7 @@ INSERT INTO `ai_dungeon_step` (`plan`, `leg`, `seq`, `kind`, `entry`, `x`, `y`, 
 ('blackrock_depths', 4, 43, 'move', 0, 593.1333, 10.399997, -69.1793, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 4, 44, 'move', 0, 602.3333, 9.866664, -72.50062, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 4, 45, 'move', 0, 609.4383, 7.9186134, -73.70473, 0, 0, 0, 0, 0, '', 'approach path'),
-('blackrock_depths', 4, 46, 'move', 0, 628.54, -24.99, -73.32, 0, 0, 0, 0, 0, '', 'approach path'),
+('blackrock_depths', 4, 46, 'move', 0, 628.54, -24.99, -73.353355, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 4, 47, 'pull', 0, 639.33, -52.72, -73.84, 8, 0, 0, 0, 0, '8921', 'pull group 8'),
 ('blackrock_depths', 4, 48, 'pull', 0, 650.6, -48.31, -73.3, 7, 0, 0, 0, 0, '8910', 'pull group 9'),
 ('blackrock_depths', 4, 49, 'pull', 0, 667.57, -29.29, -73.42, 10, 0, 0, 0, 0, '8893,8895,8894', 'pull group 10'),
@@ -507,7 +508,7 @@ INSERT INTO `ai_dungeon_step` (`plan`, `leg`, `seq`, `kind`, `entry`, `x`, `y`, 
 ('blackrock_depths', 4, 68, 'move', 0, 746.02655, -84.434364, -45.722492, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 4, 69, 'move', 0, 757.948, -69.171745, -46.222492, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 4, 70, 'move', 0, 759.72125, -64.52143, -46.176155, 0, 0, 0, 0, 0, '', 'approach path'),
-('blackrock_depths', 4, 71, 'move', 0, 748.54, -41.59, -46.15, 0, 0, 0, 0, 0, '', 'approach path'),
+('blackrock_depths', 4, 71, 'move', 0, 748.54, -41.59, -46.126713, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 4, 72, 'pull', 0, 735.39, -14.62, -46.12, 8, 0, 0, 0, 0, '8899,8911', 'pull group 13'),
 ('blackrock_depths', 4, 73, 'move', 0, 747.2666, -33.066788, -46.15995, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 4, 74, 'move', 0, 759.72125, -64.52143, -46.176155, 0, 0, 0, 0, 0, '', 'approach path'),
@@ -740,7 +741,7 @@ INSERT INTO `ai_dungeon_step` (`plan`, `leg`, `seq`, `kind`, `entry`, `x`, `y`, 
 ('blackrock_depths', 6, 84, 'move', 0, 1260.7881, -322.12134, -81.20366, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 6, 85, 'move', 0, 1237.3334, -341.33337, -93.02249, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 6, 86, 'move', 0, 1216, -362.6667, -94.02249, 0, 0, 0, 0, 0, '', 'approach path'),
-('blackrock_depths', 6, 87, 'move', 0, 1155.39, -422.63, -100.97, 0, 0, 0, 0, 0, '', 'approach path'),
+('blackrock_depths', 6, 87, 'move', 0, 1155.39, -422.63, -97.24603, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 6, 88, 'pull', 0, 1134.13, -443.66, -103.41, 14, 0, 0, 0, 0, '8911', 'pull group 12'),
 ('blackrock_depths', 6, 89, 'move', 0, 1211.9333, -372.00003, -93.08947, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 6, 90, 'move', 0, 1219, -372.2667, -95.04842, 0, 0, 0, 0, 0, '', 'approach path'),
@@ -807,7 +808,7 @@ INSERT INTO `ai_dungeon_step` (`plan`, `leg`, `seq`, `kind`, `entry`, `x`, `y`, 
 ('blackrock_depths', 6, 151, 'move', 0, 789.33325, -170.66675, -73.822495, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 6, 152, 'move', 0, 853.33325, -234.66673, -71.722496, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 6, 153, 'move', 0, 906.66656, -288.00006, -71.8076, 0, 0, 0, 0, 0, '', 'approach path'),
-('blackrock_depths', 6, 154, 'move', 0, 941.66, -322.99, -71.62, 0, 0, 0, 0, 0, '', 'approach path'),
+('blackrock_depths', 6, 154, 'move', 0, 941.66, -322.99, -71.722496, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 6, 155, 'boss', 9056, 963.267, -343.735, -71.7394, 0, 0, 0, 0, 0, '8897,8905', 'boss'),
 ('blackrock_depths', 7, 0, 'move', 0, 927.84106, -308.45062, -71.66896, 0, 0, 0, 0, 0, '', 'via'),
 ('blackrock_depths', 7, 1, 'move', 0, 892.41516, -273.16626, -71.796745, 0, 0, 0, 0, 0, '', 'via'),
@@ -887,7 +888,7 @@ INSERT INTO `ai_dungeon_step` (`plan`, `leg`, `seq`, `kind`, `entry`, `x`, `y`, 
 ('blackrock_depths', 7, 75, 'move', 0, 1113.2667, -145.33342, -72.80504, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 7, 76, 'move', 0, 1107.212, -147.2121, -68.952225, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 7, 77, 'move', 0, 1077.8, -174.93341, -65.18432, 0, 0, 0, 0, 0, '', 'approach path'),
-('blackrock_depths', 7, 78, 'move', 0, 1031.57, -218.47, -62.55, 0, 0, 0, 0, 0, '', 'approach path'),
+('blackrock_depths', 7, 78, 'move', 0, 1031.57, -218.47, -61.622482, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 7, 79, 'boss', 9156, 1009.75, -239.017, -61.3038, 0, 0, 0, 0, 0, '', 'boss'),
 ('blackrock_depths', 8, 0, 'move', 0, 1077.8, -174.93341, -65.18432, 0, 0, 0, 0, 0, '', 'path'),
 ('blackrock_depths', 8, 1, 'move', 0, 1113.2667, -145.33342, -72.80504, 0, 0, 0, 0, 0, '', 'path'),
@@ -974,7 +975,7 @@ INSERT INTO `ai_dungeon_step` (`plan`, `leg`, `seq`, `kind`, `entry`, `x`, `y`, 
 ('blackrock_depths', 8, 82, 'pull', 0, 1419.98, -741.37, -85.07, 17, 0, 0, 0, 0, '8899,8904,8915', 'pull group 61'),
 ('blackrock_depths', 8, 83, 'move', 0, 1418.748, -764.63837, -91.844505, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 8, 84, 'move', 0, 1397.2284, -763.0148, -91.92249, 0, 0, 0, 0, 0, '', 'approach path'),
-('blackrock_depths', 8, 85, 'move', 0, 1376.85, -745.01, -91.92, 0, 0, 0, 0, 0, '', 'approach path'),
+('blackrock_depths', 8, 85, 'move', 0, 1376.85, -745.01, -92.566246, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 8, 86, 'pull', 0, 1351.49, -732.59, -89.37, 18, 0, 0, 0, 0, '8904', 'pull group 62'),
 ('blackrock_depths', 8, 87, 'pull', 0, 1350.25, -747.65, -85.12, 10, 0, 0, 0, 0, '8903,8904', 'pull group 63'),
 ('blackrock_depths', 8, 88, 'move', 0, 1340.4667, -751.2001, -85.194786, 0, 0, 0, 0, 0, '', 'approach path'),
@@ -1000,8 +1001,8 @@ INSERT INTO `ai_dungeon_step` (`plan`, `leg`, `seq`, `kind`, `entry`, `x`, `y`, 
 ('blackrock_depths', 9, 7, 'pull', 0, 1350.49, -800.83, -85.07, 12, 0, 0, 0, 0, '8915,8904,8903', 'pull group 6'),
 ('blackrock_depths', 9, 8, 'move', 0, 1340.4667, -793.8667, -84.79711, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 9, 9, 'move', 0, 1341, -782.6667, -91.33328, 0, 0, 0, 0, 0, '', 'approach path'),
-('blackrock_depths', 9, 10, 'move', 0, 1384.34, -776.62, -92.11, 0, 0, 0, 0, 0, '', 'approach path'),
+('blackrock_depths', 9, 10, 'move', 0, 1384.34, -776.62, -92.6644, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 9, 11, 'pull', 0, 1414.05, -772.48, -92.64, 12, 0, 0, 0, 0, '8915,8904', 'pull group 7'),
 ('blackrock_depths', 9, 12, 'move', 0, 1397, -783.2, -91.92249, 0, 0, 0, 0, 0, '', 'approach path'),
-('blackrock_depths', 9, 13, 'move', 0, 1372.68, -827.03, -91.98, 0, 0, 0, 0, 0, '', 'approach path'),
+('blackrock_depths', 9, 13, 'move', 0, 1372.68, -827.03, -92.11388, 0, 0, 0, 0, 0, '', 'approach path'),
 ('blackrock_depths', 9, 14, 'boss', 9019, 1380.18, -831.645, -87.59, 0, 0, 0, 0, 0, '', 'boss');
