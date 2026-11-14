@@ -1613,7 +1613,7 @@ MovementAction::SwimHandoffResult MovementAction::SwimHandoff(const WorldPositio
 }
 
  
- bool MovementAction::MoveTo2(const WorldPosition& endPos, bool idle, bool react, bool noPath, bool ignoreEnemyTargets, PackHoldResult* packHold)
+ bool MovementAction::MoveTo2(const WorldPosition& endPos, bool idle, bool react, bool noPath, bool ignoreEnemyTargets, PackHoldResult* packHold, const char* castCancelSite)
 {
     LastMovement& lastMove = AI_VALUE(LastMovement&, "last movement");
     // A new try: its own fail reason and path type only (the FAILED line's note).
@@ -1839,7 +1839,12 @@ MovementAction::SwimHandoffResult MovementAction::SwimHandoff(const WorldPositio
             bot->SetStandState(UNIT_STAND_STATE_STAND);
 
         if (bot->IsNonMeleeSpellCasted(true, false, true))
-            ai->InterruptSpell(false);
+        {
+            // An unnamed walk still names itself: the choke point's `ai` label is left for interrupts that come from
+            // outside a walk, so a caller that passes no site is not an anonymous row.
+            char const* const site = castCancelSite ? castCancelSite : "move_to";
+            ai->InterruptSpell(false, site, castCancelSite ? std::sqrt(startPos.sqDistance2d(endPos)) : 0.0f);
+        }
     }
 
     if (totalDistance > sPlayerbotAIConfig.reactDistance && !detailedMove)
@@ -2211,13 +2216,13 @@ bool MovementAction::TryPlaceUnstick(LastMovement& lastMove)
     return moved;
 }
 
-bool MovementAction::MoveTo(uint32 mapId, float x, float y, float z, bool idle, bool react, bool noPath, bool ignoreEnemyTargets)
+bool MovementAction::MoveTo(uint32 mapId, float x, float y, float z, bool idle, bool react, bool noPath, bool ignoreEnemyTargets, const char* castCancelSite)
 {
-    return MoveTo2(WorldPosition(mapId, x, y, z), idle, react, noPath, ignoreEnemyTargets);
+    return MoveTo2(WorldPosition(mapId, x, y, z), idle, react, noPath, ignoreEnemyTargets, nullptr, castCancelSite);
 }
 
 
-bool MovementAction::MoveTo(Unit* target, float distance)
+bool MovementAction::MoveTo(Unit* target, float distance, const char* castCancelSite)
 {
     LastMovement& unitMove = AI_VALUE(LastMovement&, "last movement");
     ++unitMove.moveTries;
@@ -2270,7 +2275,7 @@ bool MovementAction::MoveTo(Unit* target, float distance)
         float dx = tx;
         float dy = ty;
         float dz = tz;
-        return MoveTo(target->GetMapId(), dx, dy, dz);
+        return MoveTo(target->GetMapId(), dx, dy, dz, false, false, false, false, castCancelSite);
     }
 
     return true;
@@ -2346,7 +2351,7 @@ void MovementAction::UpdateMovementState()
 bool MovementAction::Follow(Unit* target, float distance, float angle)
 {
     if (!ai->IsSafe(target))
-        return MoveTo2(target);
+        return MoveTo2(target, false, false, false, false, nullptr, "move_follow");
 
     MotionMaster &mm = *bot->GetMotionMaster();
 
@@ -2414,7 +2419,7 @@ bool MovementAction::Follow(Unit* target, float distance, float angle)
             }
         }
         if (!target->IsTaxiFlying()/* || bot->GetTransport()*/)
-           return MoveTo(target, ai->GetRange("follow"));
+           return MoveTo(target, ai->GetRange("follow"), "follow");
     }
 
     // Handle water transition
@@ -2477,7 +2482,7 @@ bool MovementAction::Follow(Unit* target, float distance, float angle)
     {
         ai::LogCastCancelStop(ai, "follow");
         bot->CastStop();
-        ai->InterruptSpell();
+        ai->InterruptSpell(true, "follow");
     }
 
     AI_VALUE(LastMovement&, "last movement").Set(target);
@@ -4392,7 +4397,7 @@ bool MoveOutOfEnemyContactAction::Execute(Event& event)
     if (!target)
         return false;
 
-    return MoveTo(target, sPlayerbotAIConfig.contactDistance);
+    return MoveTo(target, sPlayerbotAIConfig.contactDistance, "step_out");
 }
 
 bool MoveOutOfEnemyContactAction::isUseful()
@@ -5481,7 +5486,7 @@ bool JumpAction::DoJump(const WorldPosition &dest, const WorldPosition& highestP
     if (!goodLanding)
         ai->SetFallAfterJump();
 
-    ai->InterruptSpell(false);
+    ai->InterruptSpell(false, "jump");
     ai->StopMoving();
     ai->SetJumpDestination(landing);
     bot->SetFallInformation(maxHeight);

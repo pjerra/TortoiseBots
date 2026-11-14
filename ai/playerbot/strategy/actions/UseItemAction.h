@@ -728,7 +728,7 @@ namespace ai
                 }
 
                 bot->AddUnitState(UNIT_STAND_STATE_SIT);
-                ai->InterruptSpell();
+                ai->InterruptSpell(true, "drink");
 
                 float drinkDuration = AI_VALUE(float, "drink duration");
 
@@ -809,7 +809,7 @@ namespace ai
                 }
 
                 bot->AddUnitState(UNIT_STAND_STATE_SIT);
-                ai->InterruptSpell();
+                ai->InterruptSpell(true, "eat");
 
                 float eatDuration = AI_VALUE(float, "eat duration");
 

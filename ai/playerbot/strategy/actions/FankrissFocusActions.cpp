@@ -106,7 +106,7 @@ void ai::UpdateFankrissFocus(PlayerbotAI* ai) {
  if(FankrissSingleTargetActive(ai)) {
   Player* bot=ai->GetBot();
   for(CurrentSpellTypes type:{CURRENT_GENERIC_SPELL,CURRENT_CHANNELED_SPELL,CURRENT_MELEE_SPELL})
-   if(Spell* spell=bot->GetCurrentSpell(type))if(FankrissAoeSpell(spell->m_spellInfo)){ai::LogCastCancel(ai,"fankriss",type);bot->InterruptSpell(type,false);}
+   if(Spell* spell=bot->GetCurrentSpell(type))if(FankrissAoeSpell(spell->m_spellInfo)){if(spell->getState()!=SPELL_STATE_DELAYED)ai::LogCastCancel(ai,"fankriss",type);bot->InterruptSpell(type,false);}
   std::vector<uint32> remove;
   for(auto const& entry:bot->GetSpellAuraHolderMap())
    if(entry.second&&entry.second->GetCasterGuid()==bot->GetObjectGuid()&&FankrissAoeSpell(entry.second->GetSpellProto()))

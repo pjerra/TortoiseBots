@@ -472,8 +472,8 @@ or ends. Reads only: the probe changes no behaviour.
 
 The key also gates the `CastCancel` row: every
 module-side cast cancel (the spread slot's step, the seek walk-out, the
-wasteful-heal interrupt, the AI's interrupt choke point, movement and the
-encounter actions) writes the bot, `site=`, `slot=` (generic, channeled,
+wasteful-heal interrupt, the AI's interrupt choke point (a walk with no site
+of its own reads `move_to`) and the encounter actions) writes the bot, `site=`, `slot=` (generic, channeled,
 autorepeat or melee), `spell=`, `cast_pct=` (how far the cast had got, `-1` for
 an instant), `target=` (resolved by guid when the row is written, `none` once the unit left the world) and `moved_yd=` (how far the cancel moved the bot). It
 is observation only and changes no cast. Disable the option after collecting a

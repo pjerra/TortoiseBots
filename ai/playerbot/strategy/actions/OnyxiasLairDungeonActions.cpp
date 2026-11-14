@@ -75,7 +75,7 @@ bool OnyxiaBreathSafeZoneAction::Execute(Event& event)
     bot->AttackStop();
     ai::LogCastCancelStop(ai, "onyxia_breath", bot->GetDistance2d(best->x, best->y));
     bot->CastStop();
-    return MoveTo(bot->GetMapId(), best->x, best->y, best->z, false, IsReaction(), false, true);
+    return MoveTo(bot->GetMapId(), best->x, best->y, best->z, false, IsReaction(), false, true, "onyxia_breath");
 }
 
 OnyxiaWhelpScan ai::ScanOnyxiaWhelps(PlayerbotAI* ai, Player* bot)
@@ -214,5 +214,5 @@ bool OnyxiaAvoidEggsAction::Execute(Event& event)
                                FindOnyxiaEggInDanger(ai, bot) != nullptr))
         return false;
     const OnyxiaEggExit& exit = kOnyxiaEggExits[NearestOnyxiaEggExit(bot->GetPositionX(), bot->GetPositionY())];
-    return MoveTo(bot->GetMapId(), exit.x, exit.y, exit.z, false, IsReaction(), false, true);
+    return MoveTo(bot->GetMapId(), exit.x, exit.y, exit.z, false, IsReaction(), false, true, "onyxia_eggs");
 }

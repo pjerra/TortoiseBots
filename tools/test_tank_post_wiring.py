@@ -103,7 +103,7 @@ class TankPostWiring(unittest.TestCase):
         # The drag walks back to the spot keeping the target: no target change and no attack stop on that path.
         drag = action[action.index("if (task.step == TankPostDecision::Drag)"):]
         drag = drag[:drag.index("// Walk or hold")]
-        self.assertIn("MoveTo(bot->GetMapId(), task.x, task.y, z, false, false, false, true)", drag)
+        self.assertIn('MoveTo(bot->GetMapId(), task.x, task.y, z, false, false, false, true, "tank_post_drag")', drag)
         self.assertNotIn("AttackStop", drag)
         # One row per post event, named as the spec has it.
         self.assertIn('sPlayerbotAIConfig.logEvent(ai, "BossTacticsTankPost", info1, info2)', ACTIONS)

@@ -202,7 +202,7 @@ class BossStandWiring(unittest.TestCase):
         probe = fn.index("const float probeZ = StandProbeZ(seatZ, bot->GetPositionZ());")
         snap = fn.index("bot->UpdateGroundPositionZ(seatX, seatY, z);")
         keep = fn.index("z = StandSnappedZ(seatZ, probeZ, z);")
-        move = fn.index("MoveTo(bot->GetMapId(), seatX, seatY, z, false, false, false, true)")
+        move = fn.index('MoveTo(bot->GetMapId(), seatX, seatY, z, false, false, false, true, "stand")')
         self.assertLess(probe, snap)
         self.assertLess(snap, keep)
         self.assertLess(keep, move)
