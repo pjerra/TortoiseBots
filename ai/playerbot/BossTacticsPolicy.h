@@ -427,6 +427,36 @@ namespace ai
         return row.targetEntry ? row.targetEntry : row.bossEntry;
     }
 
+    // What the loader does with one `ai_boss_tactic` row it read (BossTacticsMgr.cpp ReadBossTacticRows).
+    enum class TacticRowVerdict : std::uint8_t
+    {
+        Loaded = 0,
+        Refused = 1, // a kind this build knows, but the row cannot be used: an error, and a reload refuses on one
+        Foreign = 2, // a listed foreign kind: a row of another line of the server, inert here
+    };
+
+    // The `kind` strings this build does not implement but knows to be a row of another line of the server. CLOSED
+    // list: any other string ParseBossTacticKind does not know is a typo in this build's data and is refused like any
+    // other unusable row. `air_target` is Onyxia's row of the other work: this build does not implement it, skips the
+    // row, and never validates its columns (`window_s` included, which the column default leaves at 7).
+    inline bool IsKnownForeignTacticKind(const std::string& kindText)
+    {
+        return kindText == "air_target";
+    }
+
+    // The verdict for one `ai_boss_tactic` row: `kind` is ParseBossTacticKind of `kindText`, `accepted` is
+    // BossTacticTable::Add's answer. A row of a kind this build knows is judged by Add alone. A row of a kind it does
+    // not know is FOREIGN only when `kindText` is on the closed list above (IsKnownForeignTacticKind): the startup load
+    // has always skipped such a row and gone on, and a reload does the same (one rule), so a database that also carries
+    // the other line's row still boots and still reloads. Any other unknown kind is REFUSED: the startup load logs an
+    // error line and a reload keeps the old tables, as for every unusable row.
+    inline TacticRowVerdict JudgeTacticRow(BossTacticKind kind, const std::string& kindText, bool accepted)
+    {
+        if (kind == BossTacticKind::None)
+            return IsKnownForeignTacticKind(kindText) ? TacticRowVerdict::Foreign : TacticRowVerdict::Refused;
+        return accepted ? TacticRowVerdict::Loaded : TacticRowVerdict::Refused;
+    }
+
     // A table's revision: unique for the process, assigned when the table is constructed. A freed table's address can
     // come back for a changed table, so a cache of the table's content keys on the revision, never on the address.
     inline std::uint64_t NextBossTacticRevision()
