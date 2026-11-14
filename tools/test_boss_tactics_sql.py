@@ -1249,13 +1249,77 @@ class BossTacticsSql(unittest.TestCase):
         self.assertEqual("20261112200000_world.sql", main["file"])
         self.assertIn("UPDATE `ai_boss_tactic` SET `spell_id` = 18431, `healers` = 2,", text)
         self.assertIsNone(new_kind_problem(main), "the loader mirror refuses the slot-0 Onyxia post")
-        # The other three posts keep both columns at 0.
-        for key in ((50143, 1), (50144, 1), (50144, 2)):
+        # The two Hatcher posts keep both columns at 0. The slot-1 Cindarion post gains `healers` 2 and keeps
+        # `spell_id` 0 in walk 2j (20261114100000_world.sql, pinned in test_onyxia_walk2j_rows).
+        for key in ((50144, 1), (50144, 2)):
             post = shape[key]
             self.assertEqual((0, 0), (post["spell_id"], post["healers"]),
                              "the post on %u gained a spell or healers" % key[0])
         # No stand row and no other 2i row changed.
         self.assertNotIn("ai_boss_stand", text)
+
+    def test_onyxia_walk2j_rows(self):
+        # 20261114100000_world.sql: walk 2i evidence, two data-only changes (P and W), no C++ and no key.
+        # P: the slot-1 post on Cindarion holds two healers. In 19 counted pulls the slot-1 tank died while Cindarion
+        # lived in 17, a median +122 s after he appeared, healed for 340 heal/s against 507 damage/s; the post's
+        # reader covers any `hold_spot` row with `healers > 0` (BossTacticsActions.cpp:12622), so the row is data.
+        # W: `hold_kill` on the whelps 11262 with Cindarion 50143 as the blocker, budget 0: within 40 yd of him 28 %
+        # of the melee and 12 % of the ranged frames were on whelps that attack nobody, and his own loss tracked the
+        # DPS frames on him (rho 0.80) and ran against the frames on whelps (rho -0.90).
+        name = "20261114100000_world.sql"
+        path = os.path.join(ROOT, "data/sql/world", name)
+        self.assertTrue(os.path.isfile(path), "the Onyxia walk 2j row migration is missing")
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+        # P: one UPDATE, scoped to the 41-65 band of the slot-1 post on 50143, setting healers and the comment.
+        self.assertEqual(1, text.count("UPDATE `ai_boss_tactic`"))
+        self.assertIn("SET `healers` = 2, `comment` = ", text)
+        self.assertIn("WHERE `map` = 249 AND `boss_entry` = 10184 AND `kind` = 'tank_post' AND "
+                      "`target_entry` = 50143 AND `priority` = 1 AND `hp_min` = 41 AND `hp_max` = 65;", text)
+        live = {(row[1], row[2], row[3], row[4], row[5]): _payload_dict(row) for row in effective_rows()}
+        posts = [_payload_dict(row) for row in effective_rows()
+                 if row[1] == 249 and row[2] == 10184 and row[3] == "tank_post"]
+        shape = {(post["target_entry"], post["priority"]): post for post in posts}
+        self.assertEqual(4, len(posts), "the Onyxia tank_post rows are not four")
+        self.assertEqual([(10184, 0), (50143, 1), (50144, 1), (50144, 2)], sorted(shape),
+                         "the four Onyxia posts do not fill slots 0, 1, 1 and 2")
+        cindarion = shape[(50143, 1)]
+        # The row itself stays the 2e/2h INSERT; walk 2j sets its healers and comment, and leaves spell_id 0 so the
+        # post has no defensive-cooldown window (that is the slot-0 row's).
+        self.assertEqual("20261111160100_world.sql", cindarion["file"])
+        self.assertEqual((0, 2, 41, 65, 90.0, "hold_spot", (8.0, -200.0, -85.8)),
+                         (cindarion["spell_id"], cindarion["healers"], cindarion["hp_min"], cindarion["hp_max"],
+                          cindarion["param"], cindarion["tactic_mode"],
+                          (cindarion["spot_x"], cindarion["spot_y"], cindarion["spot_z"])),
+                         "the slot-1 Cindarion post drifted")
+        self.assertIn("2 healers within 30 yd", text)
+        self.assertIsNone(new_kind_problem(cindarion), "the loader mirror refuses the slot-1 Cindarion post")
+        # The slot-0 row keeps its own spell and two healers: walk 2j adds no third held healer.
+        self.assertEqual((18431, 2), (shape[(10184, 0)]["spell_id"], shape[(10184, 0)]["healers"]),
+                         "the slot-0 Onyxia post changed with walk 2j")
+        # W: exactly one whelp row, written by this file, and the DELETE frees its key before the INSERT re-adds it.
+        whelps = [_payload_dict(row) for row in effective_rows()
+                  if row[0] == name and row[1] == 249 and row[2] == 11262 and row[3] == "hold_kill"]
+        self.assertEqual(1, len(whelps), "the walk 2j whelp hold_kill insert is not exactly one")
+        whelp = whelps[0]
+        self.assertTrue(len([row for row in effective_rows()
+                             if row[1] == 249 and row[2] == 11262 and row[3] == "hold_kill"]) == 1,
+                        "the whelp hold_kill row exists more than once")
+        self.assertEqual((50143, 0, 0, 0.0, "", 0, 100, 0),
+                         (whelp["target_entry"], whelp["spell_id"], whelp["priority"], whelp["param"],
+                          whelp["tactic_mode"], whelp["hp_min"], whelp["hp_max"], whelp["bot_aura"]),
+                         "the whelp hold_kill row drifted")
+        self.assertIsNone(new_kind_problem(whelp), "the loader rules refuse the whelp hold_kill row")
+        self.assertIn("DELETE FROM `ai_boss_tactic` WHERE `map` = 249 AND `boss_entry` = 11262 "
+                      "AND `kind` = 'hold_kill' AND `target_entry` = 50143;", text)
+        self.assertLess(text.index("DELETE FROM `ai_boss_tactic`"), text.index("INSERT INTO `ai_boss_tactic`"))
+        self.assertEqual(1, text.count("(249, 11262, 'hold_kill'"))
+        # The older Cindarion and Hatcher rows the change must not disturb.
+        for key in ((249, 50143, "kill_first", 50143, 0), (249, 10184, "gate_hold", 50143, 0),
+                    (249, 10184, "add_crew", 50143, 0)):
+            self.assertIn(key, live, "walk 2j disturbed %s" % (key,))
+        self.assertNotIn((249, 10184, "hold_kill", 50144, 0), live,
+                         "walk 2j revived the Hatcher hold_kill row")
 
     def test_onyxia_walk2h_burn_order(self):
         # 20261112200100_world.sql (lead decision 1): the Hatchers lost 9-25 % in 56-83 s of P3 (466k health
@@ -2531,6 +2595,8 @@ class BossTacticsCoreData(unittest.TestCase):
         15085: "sql/base/tw_world_gameobject_scripts.sql, brazier 180327 script 21610 command 10 summons Wushoolay",
         50144: "src/scripts/dungeons/onyxias_lair/boss_onyxia.cpp:720-721 "
                "(Onyxia summons two Onyxian Hatchers at the 40 % landing)",
+        11262: "src/scripts/dungeons/onyxias_lair/boss_onyxia.cpp:551-552 and 629-630 "
+               "(Onyxia summons her whelps at the phase-2 and P3 spawn points; no creature row spawns them)",
     }
     # Entries whose template row lives in sql/database_updates/world rather than the base dumps
     # (creature_template 20260510092659_world.sql). 50143's row is NOT waived: the core update file is parsed and
