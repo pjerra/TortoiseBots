@@ -399,6 +399,24 @@ uint8 ThreatValue::Calculate(Unit* target)
         maxThreat = AI_VALUE2(float, "tank threat", qualifier);
     }
 
+    // AiPlayerbot.ThreatBackoffMeasuresHolder: a mob sitting on another non-tank member is held against that holder's
+    // threat too (ThreatCapPolicy.h ThreatBackoffReference). Key off: no victim or threat lookup, today's reference.
+    Player* victim = nullptr;
+    bool victimIsOtherNonTankMember = false;
+    bool targetExempt = false;
+    float victimThreat = 0.0f;
+    if (sPlayerbotAIConfig.threatBackoffMeasuresHolder)
+    {
+        victim = dynamic_cast<Player*>(target->GetVictim());
+        victimIsOtherNonTankMember = victim && victim != bot && group->IsMember(victim->GetObjectGuid()) &&
+            !ai->IsTank(victim);
+        targetExempt = ai::TargetTauntImmune(target) || ai::ThreatSuccessorTarget(target);
+        if (victimIsOtherNonTankMember && !targetExempt)
+            victimThreat = sServerFacade.GetThreatManager(target).getThreat(victim);
+    }
+    maxThreat = ThreatBackoffReference(sPlayerbotAIConfig.threatBackoffMeasuresHolder, maxThreat,
+        victimIsOtherNonTankMember, targetExempt, victimThreat);
+
     if (maxThreat < 0)
         return 0;
 

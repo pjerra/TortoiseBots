@@ -1,5 +1,6 @@
 # Changelog
 
+- New: behind AiPlayerbot.ThreatBackoffMeasuresHolder (default 0, recommended on), the damage threat back-off measures the mob's real holder: while a bot's target is on another non-tank group member, the reference is the larger of the tank's threat and that holder's, so a mage no longer stands idle for 74 s at 90 % of a tank that lost the mob while the priest held it; taunt-immune and `threat_successor` targets, and the bot as the victim, keep the old reference.
 - Fixed: a summoned bot's live hunter pet or warlock demon is teleported with it and resummoned beside it instead of walking through the instance to its owner and pulling whatever it passes (#1606).
 - Fixed: a Shadow priest no longer drops Shadowform to Renew an ally another healer already covers, and drops the form only for a heal it can cast at once, not into a global cooldown or wand swing (found by Tortoise Trials, #1556).
 - Fixed: a Holy or Discipline priest in a group no longer goes 3 s without reacting after each wand shot, so its heal starts within one wand swing of a hit instead of up to 3 s later (found by Tortoise Trials, #1556).

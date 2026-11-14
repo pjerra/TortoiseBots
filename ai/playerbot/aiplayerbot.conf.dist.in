@@ -1687,6 +1687,18 @@ AiPlayerbot.DungeonRunRaidHealerGuard = 0
 # 1 - on
 AiPlayerbot.InterruptIgnoresThreat = 0
 
+# The damage threat back-off measures the mob's real holder. The reference the damage dealers are capped against is the
+# tank's threat, but a tank that lost the mob builds none: in t1106r run 2 a mage read 142 against a frozen tank 157
+# (90 %, over the 80 % high-threat line) for 74 s while the priest held the mob, and it cast nothing while every damage
+# action, Counterspell included, was vetoed. With this on, while the bot's target is on another non-tank group member,
+# the reference is the larger of the tank's threat and that holder's, so a damage dealer does not pull the mob off its
+# holder. A taunt-immune target, a target with a `threat_successor` boss-tactic row, and the bot itself as the victim
+# keep the old tank reference.
+# Recommended on. `.reload config` reads it again with the AiPlayerbot.DungeonRun* keys.
+# 0 - off: the tank's threat alone, as before (Default)
+# 1 - on
+AiPlayerbot.ThreatBackoffMeasuresHolder = 0
+
 # A bot does not probe a cast the target's facing makes impossible: Gouge (the target must face the caster) from behind,
 # or a from-behind-only spell such as Backstab from the front. The core refuses both in its cast check, broadcasts a
 # spell failure to everyone nearby each time it is asked, and the bot read a Gouge from behind as castable: a rogue on
