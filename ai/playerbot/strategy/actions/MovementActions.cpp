@@ -1325,13 +1325,6 @@ bool MovementAction::DispatchMovement(TravelPath movePath, bool generatePath, bo
         }
     }
 
-    // The spline below is what moves the bot. The point generator stays under
-    // it, aimed at the last walked point: code that asks "is a walk in flight"
-    // reads POINT_MOTION_TYPE (the ghost corpse run), and it re-paths in the
-    // core when the speed changes.
-    mm.MovePoint(path.back().GetMapId(), path.back().getX(), path.back().getY(), path.back().getZ(),
-        (moveMode == FORCED_MOVEMENT_WALK ? MOVE_WALK_MODE : MOVE_RUN_MODE) | MOVE_PATHFINDING);
-
     std::vector<G3D::Vector3> pointPath = WorldPosition().toPointsArray(path);
     float size = WorldPosition().GetPathLength(path);
 
@@ -1468,11 +1461,8 @@ bool MovementAction::DispatchMovement(TravelPath movePath, bool generatePath, bo
                 {
                     WorldPosition const magmaAt(bot->GetMapId(), p.x, p.y, clampedZ);
                     RefuseMagmaMove(bot, dispatchMove, magmaAt, magmaAt, nullptr, "clamped waypoint");
-                    // The point generator set above already walks the path's
-                    // end, and that is where the sinking z was planned:
-                    // cancel it, or the "refused" move still walks the bot.
-                    // Nothing is launched.
-                    mm.Clear();
+                    // The route is checked whole before any generator exists,
+                    // so a refused waypoint launches nothing at all.
                     return false;
                 }
             }
@@ -1480,6 +1470,15 @@ bool MovementAction::DispatchMovement(TravelPath movePath, bool generatePath, bo
         if (bot->GetTransport())
             bot->GetTransport()->CalculatePassengerOffset(p.x, p.y, p.z);
     }
+
+    // The spline below is what moves the bot. The point generator stays under
+    // it, aimed at the last CHECKED point: code that asks "is a walk in
+    // flight" reads POINT_MOTION_TYPE (the ghost corpse run), and it re-paths
+    // in the core when the speed changes. Created only here, after the magma
+    // verdict, so a refused endpoint never reaches a generator and the one
+    // created keeps any dry navmesh z the check restored.
+    mm.MovePoint(path.back().GetMapId(), pointPath.back().x, pointPath.back().y, pointPath.back().z,
+        (moveMode == FORCED_MOVEMENT_WALK ? MOVE_WALK_MODE : MOVE_RUN_MODE) | MOVE_PATHFINDING);
 
     Movement::MoveSplineInit init(*bot, "DispatchMovement");
     init.MovebyPath(pointPath);

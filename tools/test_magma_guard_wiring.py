@@ -336,21 +336,33 @@ class MagmaGuardWiringTest(unittest.TestCase):
         self.assertIn("ai::MagmaMoveZPlan::Refuse", helper)
 
     def test_dispatch_refuses_a_sinking_waypoint(self):
-        # Round 6: after the clamp loop, a point the spline would send into
-        # lava is raised to the dry navmesh z when that is more than 1 yd
-        # above, and the whole move is refused (nothing launched) otherwise.
+        # Round 6: a point the spline would send into lava is raised to the dry
+        # navmesh z when that is more than 1 yd above, and the whole move is
+        # refused otherwise. Round 7 (Codex r6): the backing point generator
+        # used to be created before this loop, so a refusal only cleared a
+        # movement that had already launched and the generator kept the
+        # unvalidated endpoint. No generator exists until every waypoint has
+        # passed the guard, and the one created takes the checked end z.
         f = body(MOVES, "bool MovementAction::DispatchMovement(", "\n}\n")
         sink = at(f, "bool const magmaMoveSinks = magmaFloorClampedMagma && !stairRestore && !magmaFloorGuardFire;")
         plan = at(f, "ai::MagmaMoveZPlan const plan = ai::PlanMagmaMoveZ(true, move.moveInMagma,")
         keep = at(f[plan:], "p.z = navmeshZ;") + plan
         refuse = at(f, "RefuseMagmaMove(bot, dispatchMove, magmaAt, magmaAt, nullptr, \"clamped waypoint\");")
-        clear = at(f[refuse:], "mm.Clear();") + refuse
+        generator = at(f, "mm.MovePoint(path.back().GetMapId(), pointPath.back().x, pointPath.back().y, "
+                          "pointPath.back().z,")
         launch = at(f, "init.Launch();")
         self.assertLess(sink, plan)
         self.assertLess(plan, keep)
         self.assertLess(keep, refuse)
-        self.assertLess(refuse, clear)
-        self.assertLess(clear, launch)
+        self.assertLess(refuse, generator)
+        self.assertLess(generator, launch)
+        # Nothing launches before the verdict: the leg from the hazard rewrite
+        # to the sinking check carries no point generator at all.
+        self.assertNotIn("mm.MovePoint(",
+            f[at(f, "bool const hazardRewrote = GeneratePathAvoidingHazards(path);"):sink])
+        # A refusal is the whole move's answer: the MagmaRefuse row, then a
+        # return, with no movement call behind it.
+        self.assertNotIn("mm.", f[refuse:at(f[refuse:], "return false;") + refuse])
         # Every decision row names the site and both heights, at level 1.
         log = body(MOVES, "static void LogMagmaMoveZ(", "\n}\n")
         self.assertIn("TB_LOG_BASIC(", log)
