@@ -177,19 +177,42 @@ int main()
         CHECK(!ThreatBackoffYieldsOnSelf(false, false, true, 60000));
 
         SelfHeldClock clock;
-        CHECK(clock.Update(true, 1000) == 0);   // the first tick held starts the clock, no grace yet
-        CHECK(clock.Update(true, 4000) == 3000);
-        CHECK(ThreatBackoffYieldsOnSelf(true, true, false, clock.Update(true, 4001)));
-        CHECK(clock.Update(false, 5000) == 0); // the mob leaves: reset
-        CHECK(clock.Update(true, 5000) == 0);  // and back: the full grace starts over
-        CHECK(clock.Update(true, 7999) == 2999);
-        CHECK(!ThreatBackoffYieldsOnSelf(true, true, false, clock.Update(true, 7999)));
-        CHECK(clock.Update(true, 8000) == 3000);
+        constexpr std::uint64_t mobA = 0x1001;
+        constexpr std::uint64_t mobB = 0x1002;
+        CHECK(clock.Update(mobA, true, 1000) == 0); // the first tick held starts the clock, no grace yet
+        CHECK(clock.Update(mobA, true, 4000) == 3000);
+        CHECK(ThreatBackoffYieldsOnSelf(true, true, false, clock.Update(mobA, true, 4001)));
+        // The hold is per target (fails on the per-bot clock: mob B inherited A's 3.1 s and released at once): a
+        // switch from A to B starts B's own grace even though `held` never went false.
+        CHECK(clock.Update(mobB, true, 4100) == 0);
+        CHECK(clock.Update(mobB, true, 7099) == 2999);
+        CHECK(!ThreatBackoffYieldsOnSelf(true, true, false, clock.Update(mobB, true, 7099)));
+        CHECK(clock.Update(mobB, true, 7100) == 3000);
+        CHECK(ThreatBackoffYieldsOnSelf(true, true, false, clock.Update(mobB, true, 7100)));
+        // Switching back is a change too: A restarts instead of resuming its old time.
+        CHECK(clock.Update(mobA, true, 7200) == 0);
+        CHECK(clock.Update(mobA, true, 10199) == 2999);
+        CHECK(clock.Update(mobA, true, 10200) == 3000);
+
+        CHECK(clock.Update(mobA, false, 11000) == 0); // the mob leaves: reset
+        CHECK(clock.Update(mobA, true, 11000) == 0);  // and back: the full grace starts over
+        CHECK(clock.Update(mobA, true, 13999) == 2999);
+        // An exempt target never accrues: held false ticks leave nothing for the next normal target to inherit.
+        CHECK(clock.Update(mobB, true, 14000) == 0);
+        CHECK(clock.Update(mobB, false, 14000) == 0); // taunt-immune / `threat_successor` tick
+        CHECK(clock.Update(mobB, false, 60000) == 0); // many exempt ticks later
+        CHECK(clock.Update(mobB, true, 60000) == 0);  // no target change, still the full grace
+        CHECK(clock.Update(mobB, true, 62999) == 2999);
+        // No target: nothing accrues, and the first tick on any target starts over.
+        CHECK(clock.Update(0, true, 70000) == 0);
+        CHECK(clock.Update(0, false, 90000) == 0);
+        CHECK(clock.Update(mobA, true, 90000) == 0);
         // The clock survives the 32-bit wrap (since 0xFFFFFF00, now 0x100: 512 ms).
         SelfHeldClock wrap;
-        CHECK(wrap.Update(true, 0xFFFFFF00u) == 0);
-        CHECK(wrap.Update(true, 0x00000100u) == 512u);
-        CHECK(wrap.Update(false, 0x00000200u) == 0);
+        CHECK(wrap.Update(mobA, true, 0xFFFFFF00u) == 0);
+        CHECK(wrap.Update(mobA, true, 0x00000100u) == 512u);
+        CHECK(wrap.Update(mobA, false, 0x00000200u) == 0);
+        CHECK(wrap.Update(mobB, true, 0x00000200u) == 0);
     }
     // hakkar_away_key_on_equals_today (fails with the first version of the key: it gave 2000): the main tank holds with
     // 40000 and the off-tanks are on Sons (not on the boss) with 2000 left over: with the key on the pick is today's.

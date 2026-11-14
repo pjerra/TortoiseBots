@@ -162,13 +162,22 @@ namespace ai
 
     // One bot's hold clock on its current target, kept across ticks like SuccessorWhiteLatch: `since` is 0 while the
     // mob is not on this bot and restarts on the tick it comes back, so every hold gets the full grace again. The
-    // unsigned subtraction survives the 32-bit clock wrap.
+    // clock is keyed by the target GUID: a switch from mob A to mob B (both on the bot) starts B's own hold instead of
+    // carrying A's elapsed time. `held` is false for an exempt target too, so a taunt-immune or `threat_successor`
+    // target neither accrues grace nor hands its time to the next normal target. The unsigned subtraction survives the
+    // 32-bit clock wrap.
     struct SelfHeldClock
     {
+        std::uint64_t guid = 0;
         std::uint32_t since = 0;
 
-        std::uint32_t Update(bool held, std::uint32_t now)
+        std::uint32_t Update(std::uint64_t targetGuid, bool held, std::uint32_t now)
         {
+            if (targetGuid == 0 || targetGuid != guid)
+            {
+                guid = targetGuid;
+                since = 0;
+            }
             if (!held)
             {
                 since = 0;

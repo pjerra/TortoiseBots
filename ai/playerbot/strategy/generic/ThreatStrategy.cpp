@@ -258,18 +258,23 @@ float ThreatMultiplier::GetValue(Action* action)
         // damage has to stop for the tanks' threat to pass the member.
         Unit* target = AI_VALUE(Unit*, "current target");
         // AiPlayerbot.ThreatBackoffMeasuresHolder: a mob that has been on this bot for kThreatSelfHeldGraceMs is not
-        // coming back by backing off, so the veto releases (ThreatCapPolicy.h ThreatBackoffYieldsOnSelf). Key off: no
-        // victim read, and the clock is cleared so a reload that turns the key on starts its grace over.
+        // coming back by backing off, so the veto releases (ThreatCapPolicy.h ThreatBackoffYieldsOnSelf). The hold runs
+        // per target: switching from one mob to another starts the new mob's own grace, and a dead or exempt target
+        // (taunt-immune, `threat_successor`) neither accrues nor passes its time on. Key off: no victim read, and the
+        // clock is cleared so a reload that turns the key on starts its grace over.
         if (sPlayerbotAIConfig.threatBackoffMeasuresHolder)
         {
-            bool const victimIsBot = target && target->GetVictim() == bot;
+            bool const victimIsBot = target && target->IsAlive() && target->GetVictim() == bot;
+            bool const targetExempt = TargetTauntImmune(target) || ThreatSuccessorTarget(target);
+            std::uint32_t const heldMs = ai->ThreatSelfHeld().Update(
+                target ? target->GetObjectGuid().GetRawValue() : 0, victimIsBot && !targetExempt,
+                WorldTimer::getMSTime());
             if (ThreatBackoffYieldsOnSelf(sPlayerbotAIConfig.threatBackoffMeasuresHolder, victimIsBot,
-                    TargetTauntImmune(target) || ThreatSuccessorTarget(target),
-                    ai->ThreatSelfHeld().Update(victimIsBot, WorldTimer::getMSTime())))
+                    targetExempt, heldMs))
                 return 1.0f;
         }
         else
-            ai->ThreatSelfHeld().Update(false, 0);
+            ai->ThreatSelfHeld().Update(0, false, 0);
         Unit* victim = target ? target->GetVictim() : nullptr;
         Player* victimPlayer = victim ? victim->ToPlayer() : nullptr;
         bool const hitsMember = victimPlayer && bot->GetGroup() && bot->GetGroup()->IsMember(victimPlayer->GetObjectGuid());

@@ -283,7 +283,11 @@ class ThreatBackoffMeasuresHolderWiring(unittest.TestCase):
         self.assertIn("return 1.0f;", branch)
         guard = branch[branch.index("if (sPlayerbotAIConfig.threatBackoffMeasuresHolder)"):]
         self.assertIn("target->GetVictim() == bot", guard)
-        self.assertIn("ThreatSelfHeld().Update(victimIsBot, WorldTimer::getMSTime())", guard)
+        self.assertIn("target->IsAlive()", guard)
+        # The clock is keyed by the target GUID and exempt targets pass held false, so neither a switch between two
+        # mobs nor an exempt target hands elapsed time to the next one.
+        self.assertIn("ThreatSelfHeld().Update( target ? target->GetObjectGuid().GetRawValue() : 0, "
+                      "victimIsBot && !targetExempt, WorldTimer::getMSTime())", re.sub(r"\s+", " ", guard))
 
     def test_the_key_is_documented(self):
         self.assertIn("### `AiPlayerbot.ThreatBackoffMeasuresHolder`", SETTINGS)
