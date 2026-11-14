@@ -2707,23 +2707,25 @@ class DungeonPlanSql(unittest.TestCase):
         # Grovetender Engryss' first (they stood 11 yd from him), and the two pulls at the patrolling Roaming Felguard 2566320 are one
         # group of four. No pull row stands within 25 yd of a boss.
         name, text = newest_plan_text("crescent_grove")
-        self.assertEqual(name, "20261104160000_world.sql")
-        self.assertIn("('crescent_grove', 802, '92101', '92101', '92124,92123,92119,92125,92126,92114,92121', 'turtle-agent ca6fb6d dungeons/crescent_grove.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261114234001_world.sql")
+        self.assertIn("('crescent_grove', 802, '92101', '92101', '92124,92123,92119,92125,92126,92114,92121', 'turtle-agent 63cba6a8 dungeons/crescent_grove.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         self.assertEqual(leg_rows(text, "crescent_grove"),
                          {0: ("grovetender_engryss", ""), 1: ("keeper_ranathos", ""), 2: ("high_priestess_a'lathea", ""),
                           3: ("fenektis_the_deceiver", ""), 4: ("master_raxxieth", "")})
         rows = [r for r in self.step_rows(text) if r["plan"] == "crescent_grove"]
-        self.assertEqual(len(rows), 497)
-        self.assertEqual({leg: len(leg_steps(rows, leg)) for leg in range(5)}, {0: 93, 1: 173, 2: 81, 3: 97, 4: 53})
+        self.assertEqual(len(rows), 528)
+        self.assertEqual({leg: len(leg_steps(rows, leg)) for leg in range(5)}, {0: 104, 1: 181, 2: 87, 3: 101, 4: 55})
         # The walk to pull group 49: three approach moves on the dry shore (the exporter would otherwise cut the hop through the
-        # lake), each hop of at most 50 yd (the cut threshold), then the pull row.
+        # lake), each hop of at most 50 yd (the cut threshold), then the pull row. b6a (2026-11-14): the second approach
+        # point moves onto its own floor (-284 -95 273.79 -> -285.1 -96.3 272.8; it stood 5.8 yd under the mesh), so the
+        # block is rows 66-68 and the hop after them is the exporter's own path row.
         leg2 = leg_steps(rows, 2)
-        self.assertEqual([(r["kind"], r["x"], r["y"], r["z"], r["comment"]) for r in leg2[63:67]],
+        self.assertEqual([(r["kind"], r["x"], r["y"], r["z"], r["comment"]) for r in leg2[66:70]],
                          [("move", "-240", "-75", "275.39", "pull group 49 approach"),
-                          ("move", "-284", "-95", "273.79", "pull group 49 approach"),
+                          ("move", "-285.1", "-96.3", "272.8", "pull group 49 approach"),
                           ("move", "-312", "-135", "280.11", "pull group 49 approach"),
-                          ("pull", "-335.39", "-176.91", "292.37", "pull group 49")])
-        hops = [leg2[72]] + leg2[73:77]
+                          ("move", "-301.4951", "-136.18536", "273.28897", "approach path")])
+        hops = [leg2[65]] + leg2[66:73]
         for a, b in zip(hops, hops[1:]):
             self.assertLessEqual(math.dist([float(a["x"]), float(a["y"]), float(a["z"])],
                                            [float(b["x"]), float(b["y"]), float(b["z"])]), 50.0, (a["seq"], b["seq"]))
@@ -2811,11 +2813,11 @@ class DungeonPlanSql(unittest.TestCase):
         # Flamelash's platform, the packs that stand at five bosses are those boss rows' entries, the four rares
         # are pulls of their own, and no pull reaches beyond its own spread.
         name, text = newest_plan_text("blackrock_depths")
-        self.assertEqual(name, "20261104030000_world.sql")
-        self.assertIn("('blackrock_depths', 230, '8903,8892,8890,8891', '8903', '8894,8898,8896,8904,8900', 'turtle-agent 1b9a5c6 dungeons/blackrock_depths.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261114234004_world.sql")
+        self.assertIn("('blackrock_depths', 230, '8903,8892,8890,8891', '8903', '8894,8898,8896,8904,8900', 'turtle-agent e5642c9a dungeons/blackrock_depths.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         self.assertEqual(len(leg_rows(text, "blackrock_depths")), 10)
         rows = [r for r in self.step_rows(text) if r["plan"] == "blackrock_depths"]
-        self.assertEqual(len(rows), 852)
+        self.assertEqual(len(rows), 972)
         pulls = [r for r in rows if r["kind"] == "pull"]
         self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(10)],
                          [30, 60, 6, 11, 30, 23, 14, 8, 67, 8])
@@ -2910,7 +2912,9 @@ class DungeonPlanSql(unittest.TestCase):
             return [round(abs(float(a["z"]) - float(b["z"])), 2)
                     for a, b in zip(steps, steps[1:]) if a["kind"] == "pull" and b["kind"] == "pull"
                     and abs(float(a["z"]) - float(b["z"])) > 10]
-        self.assertEqual(floor_jumps(5), [21.81])
+        # b6a (2026-11-14): leg 5's group 6 -> group 7 rise now has move rows between the two pulls (the dev plan's
+        # approach), so both legs pass here.
+        self.assertEqual(floor_jumps(5), [])
         self.assertEqual(floor_jumps(6), [])
         self.assertIn("DELETE FROM `ai_dungeon_step` WHERE `plan` = 'blackrock_depths';", text)
         self.assertIn("DELETE FROM `ai_dungeon_boss` WHERE `map` IN (230) AND `entry` IN (9018, 9319, 9016, 9033, 8983, 9017, 9056, 9156, 9938, 9019);", migrations_text())
@@ -3273,13 +3277,13 @@ class DungeonPlanSql(unittest.TestCase):
         # split packs are merged; Epochronos' guard is the last pull of leg 2; every radius (< 16 yd) reaches its own
         # group from the row point and no further. Medivh 50105 is faction 35 (friendly) and stays as a destination row.
         name, text = newest_plan_text("black_morass")
-        self.assertEqual(name, "20261104030000_world.sql")
-        self.assertIn("('black_morass', 269, '', '', '65124,65102,65105,61575', 'turtle-agent 1b9a5c6 dungeons/black_morass.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261114234003_world.sql")
+        self.assertIn("('black_morass', 269, '', '', '65124,65102,65105,61575', 'turtle-agent 21ff6369 dungeons/black_morass.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         legs = leg_rows(text, "black_morass")
         self.assertEqual([legs[i][0] for i in range(4)],
                          ["antnormi", "medivh", "time-lord_epochronos", "chronar"])
         rows = [r for r in self.step_rows(text) if r["plan"] == "black_morass"]
-        self.assertEqual(len(rows), 499)
+        self.assertEqual(len(rows), 514)
         self.assertEqual({r["kind"] for r in rows}, {"move", "pull", "boss"})
         self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(4)],
                          [131, 23, 66, 32])
@@ -3288,12 +3292,13 @@ class DungeonPlanSql(unittest.TestCase):
             self.assertEqual(leg_steps(rows, leg)[-1]["kind"], "boss", leg)
         # Leg 0 opens with the 69 via rows from the landing walk (the r28d step-1 fix), then the to row, then pulls.
         steps0 = leg_steps(rows, 0)
-        self.assertEqual([r["kind"] for r in steps0[:69]], ["move"] * 69)
+        # b6a (2026-11-14) adds one via (the west point that keeps the walk after Epochronos' ledge out of his aggro).
+        self.assertEqual([r["kind"] for r in steps0[:70]], ["move"] * 70)
         self.assertEqual([(r["x"], r["y"]) for r in steps0[:2]],
                          [("-1950.93", "6581.6"), ("-1936", "6595.73")])
-        self.assertEqual((steps0[69]["kind"], steps0[69]["x"], steps0[69]["y"], steps0[69]["comment"]),
+        self.assertEqual((steps0[70]["kind"], steps0[70]["x"], steps0[70]["y"], steps0[70]["comment"]),
                          ("move", "-1961.5", "6797", "to"))
-        self.assertEqual((steps0[70]["kind"], steps0[70]["x"], steps0[70]["y"], steps0[70]["z"], steps0[70]["entries"]),
+        self.assertEqual((steps0[71]["kind"], steps0[71]["x"], steps0[71]["y"], steps0[71]["z"], steps0[71]["entries"]),
                          ("pull", "-1961.5", "6797", "26.53", "65112"))
         self.assertEqual([r["entries"] for r in rows if r["kind"] == "boss"], ["", "", "", ""])
         pulls = [r for r in rows if r["kind"] == "pull"]
@@ -3968,14 +3973,14 @@ class DungeonPlanSql(unittest.TestCase):
         # island), then to the stand 18.8 yd from the boss (ray clear) and the boss approach; corrosis starts with the
         # reverse hop down the same seam (exact launch at the ramp top), then the server-path waypoint.
         name, text = newest_plan_text("hateforge_quarry")
-        self.assertEqual(name, "20261104030000_world.sql")
-        self.assertIn("('hateforge_quarry', 808, '60717,60720,60719,60725', '', '60718,60726,60723,60712,60738', 'turtle-agent 1b9a5c6 dungeons/hateforge_quarry.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261114234002_world.sql")
+        self.assertIn("('hateforge_quarry', 808, '60717,60720,60719,60725', '', '60718,60726,60723,60712,60738', 'turtle-agent 695b2986 dungeons/hateforge_quarry.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         legs = leg_rows(text, "hateforge_quarry")
         self.assertEqual([legs[i][0] for i in range(6)],
                          ["high_foreman_bargul_blackhammer", "bargul_terrace", "corrosis", "har'gesh_doomcaller",
                           "engineer_figgles", "hatereaver_annihilator"])
         rows = [r for r in self.step_rows(text) if r["plan"] == "hateforge_quarry"]
-        self.assertEqual(len(rows), 352)
+        self.assertEqual(len(rows), 440)
         self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(6)], [54, 0, 29, 5, 60, 7])
         for leg in range(6):
             # Leg 0 is the trash clear (its boss moved to the terrace leg); every other leg ends on its boss.
@@ -4000,11 +4005,16 @@ class DungeonPlanSql(unittest.TestCase):
                          [("-8200", "-3300", "165.59"), ("-8200", "-3320", "139.32"), ("-8208.1", "-3324.23", "140.71"),
                           ("-8211.95", "-3331.25", "140.73"), ("-8227.35", "-3359.3", "138.4"),
                           ("-8234.23", "-3371.84", "133.15"), ("-8260", "-3380", "140.61"), ("-8278", "-3360", "170.699"),
+                          ("-8280.081", "-3502.7717", "175.47253"), ("-8257.4", "-3500", "174.7"),
+                          ("-8283.93", "-3373.33", "170"),
                           ("-8311.76", "-3338.32", "173.56"), ("-8300.24", "-3327.22", "171.57"),
                           ("-8288.72", "-3316.11", "176.03"), ("-8282.97", "-3310.56", "172.91")])
+        # b6a (2026-11-14): group 30's two rows snap the off-floor corner onto the floor and split the 138.2 yd hop;
+        # group 33 gets the single point that splits its 138.2 yd hop on the bridge floor.
         self.assertEqual([r[0] for r in leg0_approaches],
                          ["pull group 10 approach"] * 3 + ["pull group 11 approach", "pull group 12 approach",
                                                            "pull group 13 approach"] + ["pull group 14 approach"] * 2
+                         + ["pull group 30 approach"] * 2 + ["pull group 33 approach"]
                          + ["pull group 50 approach"] * 4)
         # The hfq-fix6 Corrosis approach: four rows; the off-mesh chord point is gone.
         self.assertEqual([(r["x"], r["y"], r["z"]) for r in corrosis if r["kind"] == "move" and r["comment"] == "boss approach"],
@@ -4037,7 +4047,12 @@ class DungeonPlanSql(unittest.TestCase):
         # then -8069 -3442 z164.04, both in the ADT liquid; now -8076 -3484 z169.7 then -8063 -3449 z169.1, south round
         # the channel, both dry); group 22 one, groups 24 and 25 two each, group 26 one.
         self.assertEqual([(r["comment"], r["x"], r["y"], r["z"]) for r in leg_steps(rows, 4) if r["kind"] == "move" and r["comment"].endswith(" approach")],
-                         [("pull group 21 approach", "-8076", "-3484", "169.7"),
+                         [("pull group 14 approach", "-8286.33", "-3374.8", "170.7"),
+                          ("pull group 19 approach", "-8283.93", "-3373.33", "170"),
+                          ("pull group 19 approach", "-8097.23", "-3415.65", "168.19"),
+                          ("pull group 19 approach", "-8120", "-3437", "172"),
+                          ("pull group 19 approach", "-8141.1", "-3458.4", "175.9"),
+                          ("pull group 21 approach", "-8076", "-3484", "169.7"),
                           ("pull group 21 approach", "-8063", "-3449", "169.1"),
                           ("pull group 22 approach", "-8069.9", "-3459.9", "167.78"),
                           ("pull group 24 approach", "-8049.48", "-3436.5", "168.37"),
