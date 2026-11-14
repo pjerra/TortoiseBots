@@ -818,6 +818,10 @@ public:
     // on, such a bot's slot never lands nearer the boss than the boss's reach + 8 + 2 yd; off, the rings as they
     // are (default off, recommended on).
     bool spreadRangedMinRange = false;
+    // The opening percent of a healer's heal that a positioning reaction (`boss tactics seek`, `raid spread`) may
+    // still cut; from it on the heal stands (ReactionCastGuardPolicy.h). Off, every reaction breaks the cast at pick
+    // time, as before (default 0 = off, recommended on at 1).
+    int reactionHealCastGuardPct = 0;
     // Protection potions from a boss's spread row: the row's spell names the school (fire, nature or shadow) and its
     // priority the roles that drink (1 tanks, 2 melee damage, 4 ranged damage, 8 healers). Off, only the bosses of the
     // built-in entry table use one (default off).

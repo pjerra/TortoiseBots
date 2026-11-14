@@ -174,6 +174,10 @@ namespace ai
         bool isUseful() override;
         bool Execute(Event& event) override;
         bool isPossible() override { return MovementAction::isPossible() && ai->CanMove(); }
+        // Most spacing passes end in a no-op (a slot hold, an existing gap), so as a reaction it must not break a
+        // healer's heal at pick time (walk 102: the second cut source after the seek; ReactionCastGuardPolicy.h,
+        // AiPlayerbot.ReactionHealCastGuardPct). A step it really starts still breaks the cast (MoveTo).
+        bool ReactionYieldsToHealCast() const override { return true; }
     };
 
     // Explicit tank command: face the current dragon boss away from the
