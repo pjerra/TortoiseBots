@@ -14,10 +14,10 @@ class PartyMemberToDispelPredicate : public FindPlayerPredicate, public Playerbo
 {
 public:
     PartyMemberToDispelPredicate(PlayerbotAI* ai, uint32 dispelType, std::string const& claimKey,
-                                 const ActiveBossRows& dispelRows) :
+                                 const ActiveBossRows& dispelRows, bool logExclusions) :
         PlayerbotAIAware(ai), FindPlayerPredicate(), dispelType(dispelType), claimKey(claimKey), rows(dispelRows),
-        best(nullptr), bestTier(kDispelTargetRejected), bestRank(0), picked(nullptr), pickAuraId(0),
-        pickMode(TacticMode::Default), pickRank(0), pickAllyYd(0.0f) {}
+        logExclusions(logExclusions), best(nullptr), bestTier(kDispelTargetRejected), bestRank(0), picked(nullptr),
+        pickAuraId(0), pickMode(TacticMode::Default), pickRank(0), pickAllyYd(0.0f) {}
 
 public:
     // True only for a best-tier member (in cast range, in sight, not picked
@@ -49,7 +49,11 @@ public:
             verdict = DispelMemberVerdict(rows, auras, dispelType, allyYd, sPlayerbotAIConfig.bombRunoutDistance);
             if (verdict.excluded)
             {
-                LogDispelExcluded(ai, bot, verdict, unit, allyYd);
+                // The read-only peek writes no decision trail: an exclusion it
+                // noticed is not a cleanse decision, and logging it every peek
+                // would flood the trail with rows the cleanser never made.
+                if (logExclusions)
+                    LogDispelExcluded(ai, bot, verdict, unit, allyYd);
                 return false;
             }
             // A never-dispel aura a `clear` row releases: the verdict left the member in, so the carrier is clear and
@@ -125,6 +129,7 @@ private:
     uint32 dispelType;
     std::string claimKey;
     const ActiveBossRows& rows;
+    bool logExclusions;
     Unit* best;
     int bestTier;
     int bestRank;
@@ -154,7 +159,7 @@ Unit* PartyMemberToDispel::Calculate()
         }
     }
 
-    PartyMemberToDispelPredicate predicate(ai, dispelType, claimKey, dispelRows);
+    PartyMemberToDispelPredicate predicate(ai, dispelType, claimKey, dispelRows, claim);
     Unit* target = FindPartyMember(predicate);
     if (!target)
         target = predicate.GetFallback();

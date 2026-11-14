@@ -79,45 +79,34 @@ PartyCureSpell const kPartyCureSpells[] =
     { "remove curse", DISPEL_CURSE },
 };
 
-// One cast of `spellId` costs the bot: the flat DBC cost, or the percentage
-// the core charges when the flat cost is 0 (the same shape the buff mana
-// floor uses).
-std::uint32_t CureManaCost(SpellEntry const* info, Player* bot)
-{
-    if (!info)
-        return 0;
-    return info->manaCost
-        ? std::uint32_t(info->manaCost)
-        : std::uint32_t(info->ManaCostPercentage) * bot->GetCreateMana() / 100;
-}
-
 // A party member in reach carrying a debuff this bot's cure removes AND the
-// cure can be cast right now (mana for the spell, off cooldown). The scan is
-// the read-only "party member to dispel peek" value, so asking never claims
-// the target: a drinker that cannot cure would otherwise reserve a member
-// another cleanser could take, and the member would stay uncleansed.
+// cure can be cast right now. "Can be cast" is the module's own cast check,
+// the same one the cure action runs before it casts: a resolved spell with
+// the mana in hand is not enough, since a stunned, mounted, silenced or
+// locked-out bot, or one in a form the spell refuses, would hold the drink
+// back for a cure the core rejects. The scan is the read-only "party member
+// to dispel peek" value, so asking never claims the target: a drinker that
+// cannot cure would otherwise reserve a member another cleanser could take,
+// and the member would stay uncleansed.
 bool PartyCleansePending(PlayerbotAI* ai)
 {
-    Player* bot = ai->GetBot();
-    std::uint32_t askedTypes = 0;
     for (PartyCureSpell const& cure : kPartyCureSpells)
     {
-        std::uint32_t const bit = 1u << cure.type;
-        if (askedTypes & bit)
-            continue;
-
         std::uint32_t const spellId = ai->GetAiObjectContext()->GetValue<uint32>("spell id", std::string(cure.spell))->Get();
         if (!spellId)
             continue;
-        SpellEntry const* info = sServerFacade.LookupSpellInfo(spellId);
-        if (!ai::CureCastableNow(bot->GetPower(POWER_MANA), CureManaCost(info, bot),
-                sServerFacade.IsSpellReady(bot, spellId)))
+
+        Value<Unit*>* target = ai->GetAiObjectContext()->GetValue<Unit*>("party member to dispel peek", cure.type);
+        Unit* member = target ? target->Get() : nullptr;
+        if (!member)
             continue;
 
-        // Another spell of the same type would answer the same value.
-        askedTypes |= bit;
-        Value<Unit*>* target = ai->GetAiObjectContext()->GetValue<Unit*>("party member to dispel peek", cure.type);
-        if (target && target->Get())
+        // The range check is skipped as the cure action skips it: a member
+        // just outside cast range stays a candidate and the cure queues its
+        // reach prerequisite. The result is passed explicitly so this probe
+        // does not record its refusal as the bot's last failed cast.
+        SpellCastResult reason = SPELL_CAST_OK;
+        if (ai->CanCastSpell(spellId, member, 0, true, nullptr, true, false, false, &reason))
             return true;
     }
     return false;

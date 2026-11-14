@@ -73,9 +73,9 @@ def model_low_mana_drink_useful(mana_pct, cleanse_pending):
     return mana_pct <= limit and not cleanse_pending
 
 
-def model_cure_castable(power, mana_cost, off_cooldown):
-    """Mirror of ai::CureCastableNow; tools/test_survive_policy.cpp pins it."""
-    return off_cooldown and power >= mana_cost
+def model_party_cleanse_pending(member_needs_cure, cast_ok):
+    """Mirror of PartyCleansePending: a member to cure AND the cast allowed."""
+    return member_needs_cure and cast_ok
 
 
 class MealGateWiringTest(unittest.TestCase):
@@ -330,35 +330,44 @@ class MealGateWiringTest(unittest.TestCase):
         self.assertIn("if (claim && target && target == predicate.GetPick()", calc)
         self.assertIn("if (claim && target && bot->GetGroup()) BuffClaimRegistry::Claim(", calc)
 
-        # The gate asks only when the cure is castable: enough mana for the
-        # spell and off cooldown. A dry druid at 2 % of 1000 mana (20) cannot
-        # pay Abolish Poison's 60, so the drink stays allowed and the scan is
-        # never run.
-        self.assertIn("ai::CureCastableNow(", helper)
-        self.assertIn("sServerFacade.IsSpellReady(", helper)
-        self.assertIn("ManaCost", helper)
-        policy = " ".join(body_after(SRC_SURVIVE, "inline bool CureCastableNow").split())
-        self.assertIn("offCooldown", policy)
-        self.assertIn("power >= manaCost", policy)
+        # The read-only peek writes nothing to the decision trail either: the
+        # row that excludes a member is the claiming cleanse's to report.
+        self.assertIn("PartyMemberToDispelPredicate predicate(ai, dispelType, claimKey, dispelRows, claim)",
+                      calc)
+        predicate = " ".join(body_after(value, "virtual bool Check(Unit* unit)").split())
+        self.assertIn("if (logExclusions) LogDispelExcluded(", predicate)
 
-        # The model of the 2 % case: not castable -> no pending cleanse -> the
-        # boosted drink row stays useful.
-        self.assertFalse(model_cure_castable(20, 60, True))
-        self.assertTrue(model_low_mana_drink_useful(2, False))
+        # The gate decides castability with the module's real cast check, the
+        # same one the cure action runs: a judged-only-known spell is not
+        # castable while the bot is stunned, mounted, silenced or locked out.
+        self.assertIn("ai->CanCastSpell(", helper)
+        self.assertNotIn("ai::CureCastableNow(", helper)
+        self.assertIn("CanCastSpell(spellId, member, 0, true, nullptr, true, false, false, &reason)", helper)
+
+        # The model of the dry-but-castable case: the drink gate yields.
+        self.assertFalse(model_low_mana_drink_useful(15, model_party_cleanse_pending(True, True)))
 
     def test_low_mana_drink_blocked_when_the_cure_is_castable(self):
-        """A druid at 15 % mana can pay the cure: the drink yields to it."""
+        """A druid at 15 % mana can cast the cure: the drink yields to it."""
         helper = " ".join(body_after(SRC_GENERIC_TRIGGERS, "bool PartyCleansePending(").split())
-        self.assertIn("ai::CureCastableNow(", helper)
-        self.assertIn("sServerFacade.IsSpellReady(", helper)
-        # 15 % of 1000 mana is 150, enough for Abolish Poison's 60 and the
-        # spell is ready: the cleanse is pending, so the boosted row is not
-        # useful and the cleanse row (20.0) owns the tick. The plain drink
-        # row (6.0) follows it.
-        self.assertTrue(model_cure_castable(150, 60, True))
-        self.assertFalse(model_low_mana_drink_useful(15, True))
+        # The candidate the peek found is the one probed, and the probe is the
+        # cure action's own check: no range gate here (the cure queues its
+        # reach prerequisite), the real caster state decides.
+        self.assertIn("CanCastSpell(spellId, member, 0, true, nullptr, true, false, false, &reason)", helper)
+
+        # 15 % of 1000 mana, off cooldown, nothing blocking: the cleanse is
+        # pending, so the boosted row is not useful and the cleanse row (20.0)
+        # owns the tick. The plain drink row (6.0) follows it.
+        self.assertFalse(model_low_mana_drink_useful(15, model_party_cleanse_pending(True, True)))
         queued = [("abolish poison on party", 20.0), ("drink", 6.0)]
         self.assertEqual("abolish poison on party", max(queued, key=lambda row: row[1])[0])
+
+        # Silenced (or mounted, stunned, locked out of the school, in a form
+        # the spell refuses): the member still needs the cure, but the cast is
+        # refused, so the drink is allowed instead of idling on a cleanse that
+        # cannot run. On the nominal gate alone this case held the drink.
+        self.assertFalse(model_party_cleanse_pending(True, False))
+        self.assertTrue(model_low_mana_drink_useful(15, model_party_cleanse_pending(True, False)))
 
 
 if __name__ == "__main__":
