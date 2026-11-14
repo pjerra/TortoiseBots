@@ -157,11 +157,40 @@ int main()
     CHECK(ThreatPctOf(142.0f, ThreatBackoffReference(false, 157.0f, true, false, 600.0f), true, false) == 90);
     CHECK(ThreatPctOf(142.0f, ThreatBackoffReference(false, 157.0f, true, false, 600.0f), true, false) >=
         kThreatHighLinePct);
-    // The old reference when the victim is this bot (it still backs off so the tank can take the mob back), on an
-    // exempt target (taunt-immune, or a `threat_successor` row whose cap is its own logic), or a holder under the tank.
+    // The old reference when the victim is this bot (it backs off through the 3 s grace so the tank can take the mob
+    // back), on an exempt target (taunt-immune, or a `threat_successor` row whose cap is its own logic), or a holder
+    // under the tank.
     CHECK(ThreatBackoffReference(true, 157.0f, false, false, 600.0f) == 157.0f);
     CHECK(ThreatBackoffReference(true, 157.0f, true, true, 600.0f) == 157.0f);
     CHECK(ThreatBackoffReference(true, 157.0f, true, false, 100.0f) == 157.0f);
+
+    // backoff_yields_on_self: a mob the bot itself has held for 3 s releases the back-off (t1114b rep 5: the mob on
+    // the mage, the mage silent 11.6 s at 90 % of a frozen tank while the mob went 16 % -> 0 % health). Under the
+    // grace, on an exempt target, with the key off, or with the victim elsewhere the old veto stands.
+    {
+        CHECK(kThreatSelfHeldGraceMs == 3000);
+        CHECK(ThreatBackoffYieldsOnSelf(true, true, false, 3000));
+        CHECK(!ThreatBackoffYieldsOnSelf(true, true, false, 2999));
+        CHECK(!ThreatBackoffYieldsOnSelf(true, true, true, 3000));   // taunt-immune / `threat_successor`
+        CHECK(!ThreatBackoffYieldsOnSelf(false, true, false, 3000)); // key off
+        CHECK(!ThreatBackoffYieldsOnSelf(true, false, false, 3000)); // the mob is on someone else
+        CHECK(!ThreatBackoffYieldsOnSelf(false, false, true, 60000));
+
+        SelfHeldClock clock;
+        CHECK(clock.Update(true, 1000) == 0);   // the first tick held starts the clock, no grace yet
+        CHECK(clock.Update(true, 4000) == 3000);
+        CHECK(ThreatBackoffYieldsOnSelf(true, true, false, clock.Update(true, 4001)));
+        CHECK(clock.Update(false, 5000) == 0); // the mob leaves: reset
+        CHECK(clock.Update(true, 5000) == 0);  // and back: the full grace starts over
+        CHECK(clock.Update(true, 7999) == 2999);
+        CHECK(!ThreatBackoffYieldsOnSelf(true, true, false, clock.Update(true, 7999)));
+        CHECK(clock.Update(true, 8000) == 3000);
+        // The clock survives the 32-bit wrap (since 0xFFFFFF00, now 0x100: 512 ms).
+        SelfHeldClock wrap;
+        CHECK(wrap.Update(true, 0xFFFFFF00u) == 0);
+        CHECK(wrap.Update(true, 0x00000100u) == 512u);
+        CHECK(wrap.Update(false, 0x00000200u) == 0);
+    }
     // hakkar_away_key_on_equals_today (fails with the first version of the key: it gave 2000): the main tank holds with
     // 40000 and the off-tanks are on Sons (not on the boss) with 2000 left over: with the key on the pick is today's.
     {

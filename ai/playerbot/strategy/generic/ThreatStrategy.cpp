@@ -257,6 +257,19 @@ float ThreatMultiplier::GetValue(Action* action)
         // the back-off is never yielded: the tank cannot take it back, so the
         // damage has to stop for the tanks' threat to pass the member.
         Unit* target = AI_VALUE(Unit*, "current target");
+        // AiPlayerbot.ThreatBackoffMeasuresHolder: a mob that has been on this bot for kThreatSelfHeldGraceMs is not
+        // coming back by backing off, so the veto releases (ThreatCapPolicy.h ThreatBackoffYieldsOnSelf). Key off: no
+        // victim read, and the clock is cleared so a reload that turns the key on starts its grace over.
+        if (sPlayerbotAIConfig.threatBackoffMeasuresHolder)
+        {
+            bool const victimIsBot = target && target->GetVictim() == bot;
+            if (ThreatBackoffYieldsOnSelf(sPlayerbotAIConfig.threatBackoffMeasuresHolder, victimIsBot,
+                    TargetTauntImmune(target) || ThreatSuccessorTarget(target),
+                    ai->ThreatSelfHeld().Update(victimIsBot, WorldTimer::getMSTime())))
+                return 1.0f;
+        }
+        else
+            ai->ThreatSelfHeld().Update(false, 0);
         Unit* victim = target ? target->GetVictim() : nullptr;
         Player* victimPlayer = victim ? victim->ToPlayer() : nullptr;
         bool const hitsMember = victimPlayer && bot->GetGroup() && bot->GetGroup()->IsMember(victimPlayer->GetObjectGuid());

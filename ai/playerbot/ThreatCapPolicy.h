@@ -154,6 +154,41 @@ namespace ai
                                         bool targetExempt, float victimThreat)
     { return keyOn && victimIsOtherNonTankMember && !targetExempt ? std::max(tankThreat, victimThreat) : tankThreat; }
 
+    // How long this bot must hold a mob itself before the damage back-off releases it
+    // (AiPlayerbot.ThreatBackoffMeasuresHolder, ThreatBackoffYieldsOnSelf). Backing off a mob already on the bot
+    // protects nothing and cannot hand it back, yet the tank reference it is measured against can be a frozen number:
+    // in t1114b run 5 the mage stood silent for 11.6 s next to a mob on itself that went from 16 % to 0 % health.
+    constexpr std::uint32_t kThreatSelfHeldGraceMs = 3000;
+
+    // One bot's hold clock on its current target, kept across ticks like SuccessorWhiteLatch: `since` is 0 while the
+    // mob is not on this bot and restarts on the tick it comes back, so every hold gets the full grace again. The
+    // unsigned subtraction survives the 32-bit clock wrap.
+    struct SelfHeldClock
+    {
+        std::uint32_t since = 0;
+
+        std::uint32_t Update(bool held, std::uint32_t now)
+        {
+            if (!held)
+            {
+                since = 0;
+                return 0;
+            }
+            if (since == 0)
+                since = now;
+            return now - since;
+        }
+    };
+
+    // The self-victim release in ThreatMultiplier's high-threat branch, behind the same key as ThreatBackoffReference:
+    // the bot has held the mob for the grace period, so the damage goes out instead of waiting for a tank that has
+    // lost it. Taunt-immune targets and `threat_successor` rows keep their own logic, and with the key off the branch
+    // is untouched.
+    inline bool ThreatBackoffYieldsOnSelf(bool keyOn, bool victimIsBot, bool targetExempt, std::uint32_t heldMs)
+    {
+        return keyOn && victimIsBot && !targetExempt && heldMs >= kThreatSelfHeldGraceMs;
+    }
+
     // The relative threat a damage dealer reads against `maxThreat` (ThreatValue::Calculate after its friendly/player/group
     // checks). < 0: no reference, no cap (0). A reference of exactly 0 on a target in combat that is not fleeing reads 100:
     // the damage dealers are held, never uncapped. That is what a successor whose threat a Hex just wiped gives under

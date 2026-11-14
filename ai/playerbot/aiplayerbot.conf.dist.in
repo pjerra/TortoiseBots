@@ -1693,7 +1693,9 @@ AiPlayerbot.InterruptIgnoresThreat = 0
 # action, Counterspell included, was vetoed. With this on, while the bot's target is on another non-tank group member,
 # the reference is the larger of the tank's threat and that holder's, so a damage dealer does not pull the mob off its
 # holder. A taunt-immune target, a target with a `threat_successor` boss-tactic row, and the bot itself as the victim
-# keep the old tank reference.
+# keep the old tank reference, the bot only while it has held the mob for less than 3 s: after 3 s the back-off releases,
+# since holding still cannot hand the mob back (in t1114b run 5 a mage stood 11.6 s at 90 % of a frozen tank while the
+# mob on it went from 16 % to 0 % health).
 # Recommended on. `.reload config` reads it again with the AiPlayerbot.DungeonRun* keys.
 # 0 - off: the tank's threat alone, as before (Default)
 # 1 - on

@@ -266,12 +266,33 @@ class ThreatBackoffMeasuresHolderWiring(unittest.TestCase):
                        "ai->IsTank(victim)", "getThreat(victim)"):
             self.assertIn(lookup, guard)
 
+    def test_the_backoff_yields_on_self_after_the_grace(self):
+        flat = re.sub(r"\s+", " ", THREAT_POLICY)
+        self.assertIn("constexpr std::uint32_t kThreatSelfHeldGraceMs = 3000;", flat)
+        self.assertIn("inline bool ThreatBackoffYieldsOnSelf(bool keyOn, bool victimIsBot, bool targetExempt, "
+                      "std::uint32_t heldMs)", flat)
+        self.assertIn("return keyOn && victimIsBot && !targetExempt && heldMs >= kThreatSelfHeldGraceMs;", flat)
+        self.assertIn("ai::SelfHeldClock& ThreatSelfHeld() { return threatSelfHeld_; }",
+                      (ROOT / "ai/playerbot/PlayerbotAI.h").read_text())
+        # The release sits in the high-threat branch, ahead of its `return 0.0f`, and reads the victim behind the key.
+        branch = STRATEGY[STRATEGY.index('if (AI_VALUE2(bool, "trigger active", "high threat"))'):]
+        branch = branch[:branch.index("Unit* victim = target ? target->GetVictim() : nullptr;")]
+        self.assertIn("ThreatBackoffYieldsOnSelf(sPlayerbotAIConfig.threatBackoffMeasuresHolder", branch)
+        self.assertIn("target->GetVictim() == bot", branch)
+        self.assertIn("TargetTauntImmune(target) || ThreatSuccessorTarget(target)", branch)
+        self.assertIn("return 1.0f;", branch)
+        guard = branch[branch.index("if (sPlayerbotAIConfig.threatBackoffMeasuresHolder)"):]
+        self.assertIn("target->GetVictim() == bot", guard)
+        self.assertIn("ThreatSelfHeld().Update(victimIsBot, WorldTimer::getMSTime())", guard)
+
     def test_the_key_is_documented(self):
         self.assertIn("### `AiPlayerbot.ThreatBackoffMeasuresHolder`", SETTINGS)
         self.assertIn("Recommended on.", SETTINGS)
         section = SETTINGS[SETTINGS.index("### `AiPlayerbot.ThreatBackoffMeasuresHolder`"):]
         section = section[:section.index("\n### ")]
         self.assertIn("max(tank, holder)", section)
+        self.assertIn("a mob the bot itself has held for 3 s releases the back-off", section)
+        self.assertIn("after 3 s the back-off releases", CONF)
         self.assertIn("ThreatBackoffMeasuresHolder", CHANGELOG)
 
 

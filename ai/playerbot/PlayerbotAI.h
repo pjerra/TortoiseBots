@@ -484,6 +484,9 @@ public:
     // This bot's hold around a boss's Cause Insanity reset window (AiPlayerbot.DungeonRunThreatResetWindow,
     // ThreatCapPolicy.h ThreatResetLatch): holds at stopPct of the reset reference, resumes 5 points under it.
     ai::ThreatResetLatch& ThreatResetCap() { return threatResetCap_; }
+    // This bot's hold clock on its own current target (AiPlayerbot.ThreatBackoffMeasuresHolder,
+    // ThreatCapPolicy.h SelfHeldClock): the high-threat back-off releases after kThreatSelfHeldGraceMs.
+    ai::SelfHeldClock& ThreatSelfHeld() { return threatSelfHeld_; }
     bool IsRanged(Player* player, bool inGroup = true);
     bool IsMelee(Player* player, bool inGroup = true);
     Creature* GetCreature(ObjectGuid guid) const;
@@ -1201,6 +1204,8 @@ protected:
     ai::SuccessorWhiteLatch successorWhiteCap_;
     // The Cause Insanity reset-window hold the last read decided (per bot, so the 5-point resume band holds).
     ai::ThreatResetLatch threatResetCap_;
+    // How long the bot has held its target (the self-victim release of the threat back-off).
+    ai::SelfHeldClock threatSelfHeld_;
     time_t m_chatGatePublishedAt = 0;
     void PublishChatGate();
     std::vector<std::string> m_recordedMessages;
