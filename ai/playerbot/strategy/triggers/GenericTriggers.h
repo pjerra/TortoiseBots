@@ -755,6 +755,15 @@ namespace ai
         virtual bool IsActive() override;
     };
 
+    // A drink at or below LOW_MANA_DRINK_PCT outranks the self-buff ladder.
+    class LowManaDrinkTrigger : public Trigger
+    {
+    public:
+        LowManaDrinkTrigger(PlayerbotAI* ai) : Trigger(ai, "low mana drink") {}
+
+        virtual bool IsActive() override;
+    };
+
     class ResumeDrinkTrigger : public Trigger
     {
     public:

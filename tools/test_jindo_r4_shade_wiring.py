@@ -90,7 +90,7 @@ class ShadeCoverRow(unittest.TestCase):
     def test_documented(self):
         self.assertIn("BossTacticsShadeCover", DOCS)
         self.assertIn("BossTacticsShadeCover", DOCS_ROWS)
-        self.assertIn("BossTacticsShadeCover", CHANGELOG)
+        self.assertIn("BossTacticsShadeCover", CHANGELOG)  # the row's own entry, wherever newer ones land
         for word in ("dead", "charmed", "other_shade", "out_of_range", "threat_gate", "guard", "on_boss", "other_target",
                      "no_target"):
             self.assertIn(word, member(DOCS_ROWS, "`BossTacticsShadeCover`", "\n"))

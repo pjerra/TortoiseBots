@@ -14,10 +14,10 @@ class PartyMemberToDispelPredicate : public FindPlayerPredicate, public Playerbo
 {
 public:
     PartyMemberToDispelPredicate(PlayerbotAI* ai, uint32 dispelType, std::string const& claimKey,
-                                 const ActiveBossRows& dispelRows) :
+                                 const ActiveBossRows& dispelRows, bool logExclusions) :
         PlayerbotAIAware(ai), FindPlayerPredicate(), dispelType(dispelType), claimKey(claimKey), rows(dispelRows),
-        best(nullptr), bestTier(kDispelTargetRejected), bestRank(0), picked(nullptr), pickAuraId(0),
-        pickMode(TacticMode::Default), pickRank(0), pickAllyYd(0.0f) {}
+        logExclusions(logExclusions), best(nullptr), bestTier(kDispelTargetRejected), bestRank(0), picked(nullptr),
+        pickAuraId(0), pickMode(TacticMode::Default), pickRank(0), pickAllyYd(0.0f) {}
 
 public:
     // True only for a best-tier member (in cast range, in sight, not picked
@@ -49,7 +49,11 @@ public:
             verdict = DispelMemberVerdict(rows, auras, dispelType, allyYd, sPlayerbotAIConfig.bombRunoutDistance);
             if (verdict.excluded)
             {
-                LogDispelExcluded(ai, bot, verdict, unit, allyYd);
+                // The read-only peek writes no decision trail: an exclusion it
+                // noticed is not a cleanse decision, and logging it every peek
+                // would flood the trail with rows the cleanser never made.
+                if (logExclusions)
+                    LogDispelExcluded(ai, bot, verdict, unit, allyYd);
                 return false;
             }
             // A never-dispel aura a `clear` row releases: the verdict left the member in, so the carrier is clear and
@@ -125,6 +129,7 @@ private:
     uint32 dispelType;
     std::string claimKey;
     const ActiveBossRows& rows;
+    bool logExclusions;
     Unit* best;
     int bestTier;
     int bestRank;
@@ -154,14 +159,15 @@ Unit* PartyMemberToDispel::Calculate()
         }
     }
 
-    PartyMemberToDispelPredicate predicate(ai, dispelType, claimKey, dispelRows);
+    PartyMemberToDispelPredicate predicate(ai, dispelType, claimKey, dispelRows, claim);
     Unit* target = FindPartyMember(predicate);
     if (!target)
         target = predicate.GetFallback();
 
     // The decision row: which aura ranked the carrier, under which mode, and how far it stood from the group when the
-    // cure was picked (the Grobbulus release wants the clear distance at pick time).
-    if (target && target == predicate.GetPick() && predicate.GetPickAuraId() != 0)
+    // cure was picked (the Grobbulus release wants the clear distance at pick time). Only the claiming reader writes it:
+    // the read-only form must not report a cure decision it never made.
+    if (claim && target && target == predicate.GetPick() && predicate.GetPickAuraId() != 0)
     {
         DispelVerdict verdict;
         verdict.auraId = predicate.GetPickAuraId();
@@ -171,8 +177,9 @@ Unit* PartyMemberToDispel::Calculate()
     }
 
     // Claim the pick so the next dispeller of this type that recalculates
-    // (same tick or the next few seconds) prefers somebody else.
-    if (target && bot->GetGroup())
+    // (same tick or the next few seconds) prefers somebody else. A read-only
+    // reader (the drink gate) never reserves a target it may not cure.
+    if (claim && target && bot->GetGroup())
         BuffClaimRegistry::Claim(bot->GetObjectGuid(), target->GetObjectGuid(), claimKey);
 
     return target;

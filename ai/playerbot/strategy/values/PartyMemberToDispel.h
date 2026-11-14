@@ -9,10 +9,16 @@ namespace ai
     class PartyMemberToDispel : public PartyMemberValue, public Qualified
 	{
 	public:
-        PartyMemberToDispel(PlayerbotAI* ai, std::string name = "party member to dispel") :
-          PartyMemberValue(ai, name), Qualified() {}
+        // claim=false is the read-only form (the drink gate asks who needs a
+        // cure without reserving anybody); only the cleanse decision claims
+        // its pick and writes the pick row.
+        PartyMemberToDispel(PlayerbotAI* ai, std::string name = "party member to dispel", bool claim = true) :
+          PartyMemberValue(ai, name), Qualified(), claim(claim) {}
 
     protected:
         virtual Unit* Calculate() override;
+
+    private:
+        bool claim;
 	};
 }

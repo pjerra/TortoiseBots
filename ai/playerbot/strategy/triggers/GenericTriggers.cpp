@@ -52,6 +52,66 @@ bool HasManaPool(Player* bot)
 {
     return bot && bot->GetMaxPower(POWER_MANA) > 0;
 }
+
+// The party cures this module casts, each with the dispel type its spell
+// removes. A spell the bot does not know does not resolve (the gate is the
+// known rank), so a warrior, or a paladin without Cleanse, is never held
+// back from the drink by a debuff it cannot remove. Devour Magic is left
+// out: it is the felhunter's spell (not in the bot's own spell map) and its
+// row already sits above the drink.
+struct PartyCureSpell
+{
+    char const* spell;
+    std::uint32_t type;
+};
+
+PartyCureSpell const kPartyCureSpells[] =
+{
+    { "abolish poison", DISPEL_POISON },
+    { "cure poison", DISPEL_POISON },
+    { "purify", DISPEL_POISON },
+    { "purify", DISPEL_DISEASE },
+    { "cleanse", DISPEL_POISON },
+    { "cleanse", DISPEL_DISEASE },
+    { "cleanse", DISPEL_MAGIC },
+    { "cure disease", DISPEL_DISEASE },
+    { "abolish disease", DISPEL_DISEASE },
+    { "remove lesser curse", DISPEL_CURSE },
+    { "remove curse", DISPEL_CURSE },
+};
+
+// A party member in reach carrying a debuff this bot's cure removes AND the
+// cure can be cast right now. "Can be cast" is the module's own cast check,
+// the same one the cure action runs before it casts: a resolved spell with
+// the mana in hand is not enough, since a stunned, mounted, silenced or
+// locked-out bot, or one in a form the spell refuses, would hold the drink
+// back for a cure the core rejects. The scan is the read-only "party member
+// to dispel peek" value, so asking never claims the target: a drinker that
+// cannot cure would otherwise reserve a member another cleanser could take,
+// and the member would stay uncleansed.
+bool PartyCleansePending(PlayerbotAI* ai)
+{
+    for (PartyCureSpell const& cure : kPartyCureSpells)
+    {
+        std::uint32_t const spellId = ai->GetAiObjectContext()->GetValue<uint32>("spell id", std::string(cure.spell))->Get();
+        if (!spellId)
+            continue;
+
+        Value<Unit*>* target = ai->GetAiObjectContext()->GetValue<Unit*>("party member to dispel peek", cure.type);
+        Unit* member = target ? target->Get() : nullptr;
+        if (!member)
+            continue;
+
+        // The range check is skipped as the cure action skips it: a member
+        // just outside cast range stays a candidate and the cure queues its
+        // reach prerequisite. The result is passed explicitly so this probe
+        // does not record its refusal as the bot's last failed cast.
+        SpellCastResult reason = SPELL_CAST_OK;
+        if (ai->CanCastSpell(spellId, member, 0, true, nullptr, true, false, false, &reason))
+            return true;
+    }
+    return false;
+}
 }  // namespace
 
 bool NoManaTrigger::IsActive()
@@ -88,6 +148,19 @@ bool HighManaTrigger::IsActive()
     // Refill-wanted line (mana below the high-water mark): same 0-power
     // trap as LowManaTrigger above, fixed the same way.
     return HasManaPool(bot) && AI_VALUE2(uint8, "mana", "self target") < 65;
+}
+
+bool LowManaDrinkTrigger::IsActive()
+{
+    if (!HasManaPool(bot))
+        return false;
+
+    uint8 const manaPct = AI_VALUE2(uint8, "mana", "self target");
+    // Only a dry bot pays for the cleanse lookup, and the boosted row holds
+    // back while a party cleanse this bot can cast is pending: the cleanse
+    // runs first, the plain "high mana" drink follows it.
+    bool const cleansePending = ai::DrinkOutranksSelfBuffs(manaPct) && PartyCleansePending(ai);
+    return ai::LowManaDrinkUseful(manaPct, cleansePending);
 }
 
 bool ResumeDrinkTrigger::IsActive()
