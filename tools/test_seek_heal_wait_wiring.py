@@ -13,7 +13,10 @@ only prove the live code feeds it and that nothing else changed:
    at or below its ACTION_EMERGENCY + 5, so a hold in front of one would starve it. The predicate
    asks the avoid-aoe condition (AoeHazardEscapeDue) and every trigger in
    kSeekHealWaitEmergencyMoves (ReactionCastGuardPolicy.h), and each listed trigger/action pair
-   still exists as an ACTION_EMERGENCY row in the strategy sources;
+   still exists as an ACTION_EMERGENCY row in the strategy sources. The reverse is pinned too:
+   every emergency row a reaction engine can carry (movement or not) is either listed or named
+   with why it is not a healer's escape, and every name the predicate asks resolves through
+   GetTrigger;
  - the cast read is the shared PlayerbotAI::ReadGenericCast the reaction guard's break uses,
    so the two can never disagree about what a heal under way is;
  - the key is read with default 0, clamped to 0-3000, beside the cast guard's percent in the
@@ -69,6 +72,120 @@ SOURCE_ROW = re.compile(
     r'(ACTION_EMERGENCY(?:\s*\+\s*\d+)?|[\d.]+f)')
 REACTION_ROW = re.compile(
     r'\{\s*"([^"]+)",\s*"([^"]+)",\s*kReactionRaidEmergency\s*\+\s*\d+\s*\}')
+
+ACTION_CONTEXT = (ROOT / "ai/playerbot/strategy/actions/ActionContext.h").read_text()
+TRIGGER_CONTEXT = (ROOT / "ai/playerbot/strategy/triggers/TriggerContext.h").read_text()
+
+# Every action a row can name; a row whose action has no creator could never run.
+ACTION_NAMES = set(re.findall(r'creators\["([^"]+)"\]', ACTION_CONTEXT))
+# GetTrigger (TriggerContext.h) resolves a trigger by name; every listed name must be there.
+TRIGGER_NAMES = set(re.findall(r'creators\["([^"]+)"\]', TRIGGER_CONTEXT))
+
+
+def is_emergency(relevance):
+    return relevance == "ACTION_EMERGENCY" or relevance.startswith("ACTION_EMERGENCY +") or \
+        float(relevance.rstrip("f")) >= 90.0
+
+
+def function_body(text, start):
+    """`text` from `start` (just past an opening brace) to its matching close, comments/strings skipped."""
+    depth, i, state = 1, start, None
+    while i < len(text):
+        ch = text[i]
+        if state == "line":
+            if ch == "\n":
+                state = None
+        elif state == "block":
+            if text.startswith("*/", i):
+                state, i = None, i + 1
+        elif state in ("string", "char"):
+            if ch == "\\":
+                i += 1
+            elif (state == "string" and ch == '"') or (state == "char" and ch == "'"):
+                state = None
+        elif text.startswith("//", i):
+            state, i = "line", i + 1
+        elif text.startswith("/*", i):
+            state, i = "block", i + 1
+        elif ch == '"':
+            state = "string"
+        elif ch == "'":
+            state = "char"
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start:i]
+        i += 1
+    raise ValueError("unbalanced braces in a trigger-init body")
+
+
+def reaction_trigger_rows():
+    """Every emergency row a reaction engine can carry, by (trigger, action).
+
+    Scans each InitReactionTriggers body and follows its own calls (InitCombatTriggers,
+    another strategy's InitReactionTriggers), so a row the reaction copy registers that way is
+    found too. The `react` strategy's rows are data (ReactionRowsPolicy.h) and are added here.
+    """
+    init = re.compile(r"void\s+(\w+)::(Init\w+Triggers)\s*\([^)]*\)\s*\{")
+    bodies = {}
+    for source in sorted((ROOT / "ai/playerbot/strategy").rglob("*.cpp")):
+        text = source.read_text()
+        for match in init.finditer(text):
+            bodies[(match.group(1), match.group(2))] = function_body(text, match.end())
+    calls = (
+        re.compile(r"(\w+)::(Init\w+Triggers)\s*\(\s*triggers\s*\)"),
+        re.compile(r"(\w+Strategy)\(ai\)\.(Init\w+Triggers)\s*\(\s*triggers\s*\)"),
+        re.compile(r"(?<![:.\w])(Init\w+Triggers)\s*\(\s*triggers\s*\)"),
+    )
+    seen, rows = set(), {}
+    for owner, method in bodies:
+        if method != "InitReactionTriggers":
+            continue
+        stack = [(owner, method)]
+        while stack:
+            key = stack.pop()
+            if key in seen or key not in bodies:
+                continue
+            seen.add(key)
+            body = bodies[key]
+            for trigger, action, relevance in SOURCE_ROW.findall(body):
+                if is_emergency(relevance):
+                    rows[(trigger, action)] = relevance
+            stack += [match for match in calls[0].findall(body)]
+            stack += [match for match in calls[1].findall(body)]
+            stack += [(key[0], match) for match in calls[2].findall(body)]
+    for trigger, action in REACTION_ROW.findall(REACTION_ROWS):
+        rows[(trigger, action)] = "kReactionRaidEmergency"
+    return rows
+
+
+# Reaction-carried emergency rows the seek's heal wait must NOT stand down for, with why. A row here is still a real
+# emergency row; it just is not a healer's escape (a hold, a potion, a tank action, the seek itself, spacing).
+NOT_A_HEALER_ESCAPE = {
+    # The avoid-aoe condition itself: the wait already asks it through AoeHazardEscapeDue, whose trigger also
+    # registers the creature-aura keep-outs, so it is deliberately not in the list.
+    ("aoe threat nearby", "avoid aoe"): "asked through AoeHazardEscapeDue",
+    # The seek's own row: the wait is the seek standing down, so it cannot yield to itself.
+    ("boss tactics seek", "boss tactics seek"): "the seek's own row",
+    # Ranged spacing, not an escape: the spread action yields to a healer's cast itself.
+    ("raid spread needed", "raid spread"): "spacing, not an escape",
+    # Tank actions: a healer never carries one.
+    ("boss tactics tank swap", "boss tactics tank swap"): "tank swap",
+    ("fankriss swap needed", "fankriss swap"): "fankriss tank row",
+    ("fankriss spawn pickup needed", "fankriss spawn pickup"): "fankriss tank row",
+    # A hand of protection on the immune boss's victim: no movement, and a healer can cast it.
+    ("immune boss victim protect", "bop immune boss victim"): "a buff, not an escape",
+    # The melee soaker's hold, gated on the `patchwerk melee safety` strategy a healer does not carry.
+    ("patchwerk melee unsafe", "patchwerk melee retreat"): "patchwerk melee soaker row",
+    # Reaction-only holds and casts that move nobody.
+    ("boss tactics freeze", "boss tactics freeze"): "a hold",
+    ("heal target full health", "interrupt current spell"): "an interrupt",
+    ("medium mana", "dark rune"): "a potion",
+    ("medium mana", "mana potion"): "a potion",
+    ("high mana", "mana potion"): "a potion",
+}
 
 
 class SeekHealWaitWiring(unittest.TestCase):
@@ -134,30 +251,76 @@ class SeekHealWaitWiring(unittest.TestCase):
                 source_rows[(trigger, action)] = relevance
         for trigger, action in REACTION_ROW.findall(REACTION_ROWS):
             source_rows[(trigger, action)] = "kReactionRaidEmergency"
-        listed = dict(re.findall(r'\{\s*"([^"]+)",\s*"([^"]+)"\s*\}', POLICY))
-        self.assertEqual(listed, {
-            "has area debuff": "flee from area",
-            "immune boss victim": "immune boss victim escape",
-            "environmental hazard nearby": "move away from hazard",
-            "raid bomb debuff": "raid bomb runout",
-            "four horsemen mark": "four horsemen rotate",
-            "dragon breath risk": "dragon flank",
-            "boss tactics flee": "boss tactics flee",
-            "boss tactics avoid cast": "boss tactics avoid cast",
-            "razorgore cone": "escape razorgore cone",
-            "razorgore ranged": "back off razorgore",
-            "golemagg splash": "back off golemagg",
-            "magmadar lava bomb": "move away from hazard",
-            "geddon inferno": "move away from geddon",
-            "onyxia deep breath": "onyxia breath safe zone",
-            "grobbulus injection ranged": "grobbulus go behind",
-            "solnius emerald rot": "raid bomb runout",
-            "viscidus melee danger": "viscidus keep distance",
-            "viscidus toxin nearby": "viscidus toxin escape",
-        })
-        for trigger, action in listed.items():
+        listed = re.findall(r'\{\s*"([^"]+)",\s*"([^"]+)"\s*\}', POLICY)
+        self.assertCountEqual(listed, [
+            ("has area debuff", "flee from area"),
+            ("immune boss victim", "immune boss victim escape"),
+            ("environmental hazard nearby", "move away from hazard"),
+            ("raid bomb debuff", "raid bomb runout"),
+            # The same bomb trigger on Vael drives the carrier's own flee, so the list carries both rows.
+            ("raid bomb debuff", "vael adrenaline flee"),
+            ("four horsemen mark", "four horsemen rotate"),
+            ("dragon breath risk", "dragon flank"),
+            ("boss tactics flee", "boss tactics flee"),
+            ("boss tactics avoid cast", "boss tactics avoid cast"),
+            ("razorgore cone", "escape razorgore cone"),
+            ("razorgore ranged", "back off razorgore"),
+            ("golemagg splash", "back off golemagg"),
+            ("magmadar lava bomb", "move away from hazard"),
+            ("geddon inferno", "move away from geddon"),
+            ("onyxia deep breath", "onyxia breath safe zone"),
+            ("grobbulus injection ranged", "grobbulus go behind"),
+            ("solnius emerald rot", "raid bomb runout"),
+            ("viscidus melee danger", "viscidus keep distance"),
+            ("viscidus toxin nearby", "viscidus toxin escape"),
+        ])
+        for trigger, action in listed:
             self.assertIn((trigger, action), source_rows,
                           f"no ACTION_EMERGENCY row for {trigger!r} -> {action!r}")
+
+    def test_a_wait_that_ran_out_is_closed_before_the_rule_reads_it(self):
+        # The wait's end is recorded at its own untilMs before in.msSinceWaitEnd and the rule: a heal already under
+        # way on the first pass past the slack cannot start a fresh wait inside the rewait spacing.
+        settle = "ai::SettleSeekHealWait(nowMs, healWaitUntilMs, healWaitActive, healWaitEndMs, healWaitEnded);"
+        self.assertIn(settle, WAIT)
+        self.assertIn("inline void SettleSeekHealWait(", POLICY)
+        self.assertIn("endMs = untilMs;", POLICY)
+        self.assertIn("nowMs <= untilMs + kSeekHealWaitEndSlackMs", POLICY)
+        close = WAIT.index(settle)
+        self.assertLess(close, WAIT.index("const bool inWait ="))
+        self.assertLess(close, WAIT.index("in.msSinceWaitEnd = waitEndedMsAgo;"))
+        self.assertLess(close, WAIT.index("SeekHealWaitDue(in)"))
+        # Only a wait's first pass sets its end; a heal read inside the slack leaves untilMs alone.
+        self.assertEqual(WAIT.count("healWaitUntilMs = nowMs + rem;"), 1)
+        # A wait the rule cuts short (an emergency came due) still ends at the pass's clock.
+        self.assertIn("healWaitEndMs = nowMs;", WAIT)
+
+    def test_every_emergency_reaction_row_is_listed_or_excluded(self):
+        # The reverse of the list check: a future escape row cannot be missed silently. Every emergency row a reaction
+        # engine can carry is either asked by EmergencyMoveDue or named here with why it is not a healer's escape.
+        rows = reaction_trigger_rows()
+        self.assertTrue(rows, "no reaction rows found: the InitReactionTriggers scan broke")
+        # Anchors for the scan's own reach: avoid aoe's InitCombatTriggers copy, the BWL reaction copy and boss
+        # tactics' own reaction rows.
+        for anchor in (("has area debuff", "flee from area"),
+                       ("raid bomb debuff", "vael adrenaline flee"),
+                       ("boss tactics seek", "boss tactics seek")):
+            self.assertIn(anchor, rows, f"the reaction scan no longer reaches {anchor!r}")
+        for trigger, action in rows:
+            self.assertIn(action, ACTION_NAMES, f"no action creator for {action!r}")
+        listed = set(re.findall(r'\{\s*"([^"]+)",\s*"([^"]+)"\s*\}', POLICY))
+        uncovered = sorted(pair for pair in rows
+                           if pair not in listed and pair not in NOT_A_HEALER_ESCAPE)
+        self.assertEqual(uncovered, [],
+                         "emergency reaction rows with no wait decision: " + repr(uncovered))
+        stale = sorted(pair for pair in NOT_A_HEALER_ESCAPE if pair not in rows)
+        self.assertEqual(stale, [], f"excluded rows that are no longer reaction rows: {stale}")
+        unreachable = sorted(pair for pair in listed if pair not in rows)
+        self.assertEqual(unreachable, [], f"listed rows no reaction engine carries: {unreachable}")
+        # Every name the predicate asks resolves through GetTrigger (TriggerContext.h); GetTrigger returns NULL for
+        # an unregistered name, and EmergencyMoveDue then silently asks nothing.
+        for trigger in {pair[0] for pair in listed} | {pair[0] for pair in NOT_A_HEALER_ESCAPE}:
+            self.assertIn(trigger, TRIGGER_NAMES, f"no GetTrigger registration for {trigger!r}")
 
     def test_one_hazard_condition_for_the_trigger_and_the_seek(self):
         # Declared once, beside the action it belongs to, and used by the trigger that queues the escape and by the

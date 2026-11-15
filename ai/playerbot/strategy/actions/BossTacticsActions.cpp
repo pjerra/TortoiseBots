@@ -10779,6 +10779,9 @@ bool BossTacticsSeekAction::Execute(Event& event)
     // above never reaches here, so the gather's own stand is untouched.
     {
         const std::uint32_t nowMs = WorldTimer::getMSTime();
+        // The wait's end is recorded before the rule reads it, at the wait's own end: a heal already under way on the
+        // first pass past the slack must not start a second wait inside the rewait spacing.
+        ai::SettleSeekHealWait(nowMs, healWaitUntilMs, healWaitActive, healWaitEndMs, healWaitEnded);
         const bool inWait = healWaitActive && nowMs <= healWaitUntilMs + ai::kSeekHealWaitEndSlackMs;
         std::uint32_t waitEndedMsAgo = std::numeric_limits<std::uint32_t>::max();
         if (healWaitEnded && nowMs >= healWaitEndMs)
@@ -10815,8 +10818,8 @@ bool BossTacticsSeekAction::Execute(Event& event)
             hasLast = false;
             return false;
         }
-        // A wait that ran out ends here: the rewait spacing counts from now, so the walk goes and a chain of heals
-        // cannot park the bot short of the cloud.
+        // A wait the rule cut short (an emergency came due, or the key went off) ends here: the rewait spacing counts
+        // from now, so the walk goes and a chain of heals cannot park the bot short of the cloud.
         if (healWaitActive)
         {
             healWaitActive = false;

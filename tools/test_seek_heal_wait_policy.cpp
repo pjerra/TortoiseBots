@@ -8,6 +8,10 @@
 // The case that fails on the first version of the wait (the field does not exist, so the input is ignored):
 // - the same pass with an emergency move or escape due (EmergencyMoveDue: the avoid-aoe condition and every trigger
 //   in kSeekHealWaitEmergencyMoves): the walk must go, so the escape the seek outranks can hold its own tick.
+// The case that fails on the next version (the wait's end was recorded only on a pass that did not wait, so a second
+// heal already under way started a fresh wait):
+// - a wait that ends at 900 ms is closed at 900, not at the pass that notices (1101), and heal 2 on that pass gets no
+//   new wait until 5 s since 900 have passed.
 //
 // Build and run:
 //   g++ -std=c++17 -Wall -Wextra tools/test_seek_heal_wait_policy.cpp -o /tmp/test_seek_heal_wait
@@ -195,6 +199,8 @@ int main()
             "razorgore cone", "razorgore ranged", "golemagg splash", "magmadar lava bomb", "geddon inferno",
             "onyxia deep breath", "grobbulus injection ranged", "solnius emerald rot", "viscidus melee danger",
             "viscidus toxin nearby",
+            // Two rows share the bomb trigger: the universal runout and Vael's own flee.
+            "raid bomb debuff",
         };
         CHECK(sizeof(ai::kSeekHealWaitEmergencyMoves) / sizeof(ai::kSeekHealWaitEmergencyMoves[0]) ==
               sizeof(expected) / sizeof(expected[0]));
@@ -260,6 +266,34 @@ int main()
         SeekHealWaitIn in = Base();
         in.cast = &renew;
         CHECK(ReactionCastPct(renew) == 99);
+        CHECK(SeekHealWaitDue(in));
+    }
+
+    // 3b. A wait that ran out ends at its own untilMs, not at the pass that notices, and a second heal already under
+    // way on that pass cannot start a fresh wait inside the rewait spacing (the old caller read "no earlier wait").
+    {
+        std::uint32_t untilMs = 900; // heal 1: started at 0 with 900 ms left
+        bool active = true;
+        std::uint32_t endMs = 0;
+        bool ended = false;
+        // At the end of the slack the wait still stands, and its end does not move.
+        ai::SettleSeekHealWait(1100, untilMs, active, endMs, ended);
+        CHECK(active);
+        CHECK(!ended);
+        CHECK(untilMs == 900);
+        // One ms later it is closed at the cast's end, not at this pass's clock.
+        ai::SettleSeekHealWait(1101, untilMs, active, endMs, ended);
+        CHECK(!active);
+        CHECK(ended);
+        CHECK(endMs == 900);
+        // Heal 2 is already casting on that pass: only 201 ms since the end, so no new wait.
+        ReactionCastRead const heal2 = Prepare(1500, 900);
+        SeekHealWaitIn in = Base();
+        in.cast = &heal2;
+        in.msSinceWaitEnd = 1101 - endMs;
+        CHECK(!SeekHealWaitDue(in));
+        // Once the rewait spacing is over, heal 2 earns its own wait.
+        in.msSinceWaitEnd = ai::kSeekHealRewaitMs;
         CHECK(SeekHealWaitDue(in));
     }
 

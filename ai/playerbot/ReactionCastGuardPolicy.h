@@ -101,6 +101,20 @@ namespace ai
     constexpr std::uint32_t kSeekHealRewaitMs = 5000;     // no second wait within this of the last one's end
     constexpr std::uint32_t kSeekHealWaitEndSlackMs = 200; // the wait reads as over this long past its end
 
+    // Close a wait whose end has passed before the rule reads it. The end is the wait's own untilMs (the cast's
+    // remainder), never the pass that notices: a heal read inside kSeekHealWaitEndSlackMs cannot move it, and with a
+    // second heal already under way the next wait still needs kSeekHealRewaitMs since the first cast's end, so a
+    // chain of heals cannot start a fresh wait between them.
+    inline void SettleSeekHealWait(std::uint32_t nowMs, std::uint32_t& untilMs, bool& active,
+                                   std::uint32_t& endMs, bool& ended)
+    {
+        if (!active || nowMs <= untilMs + kSeekHealWaitEndSlackMs)
+            return;
+        active = false;
+        ended = true;
+        endMs = untilMs;
+    }
+
     // The trigger rows behind the emergency moves and escapes a healer's reaction engine can carry: all of them sit
     // at ACTION_EMERGENCY and above, and every one has to go before the seek's wait (`avoid aoe` itself is asked
     // through AoeHazardEscapeDue, whose trigger also registers the creature-aura keep-outs, so it is not listed
@@ -121,6 +135,8 @@ namespace ai
         // ReactionRowsPolicy.h:39-40; BlackwingLairDungeonStrategies.cpp:189-190 (Vael) and
         // EmeraldSanctumDungeonStrategies.cpp:58-59 (Solnius) reuse the same trigger.
         { "raid bomb debuff", "raid bomb runout" },
+        // BlackwingLairDungeonStrategies.cpp:189-190: the same bomb trigger on Vael drives the carrier's own flee.
+        { "raid bomb debuff", "vael adrenaline flee" },
         // ReactionRowsPolicy.h:40-41.
         { "four horsemen mark", "four horsemen rotate" },
         // ReactionRowsPolicy.h:41-42.
