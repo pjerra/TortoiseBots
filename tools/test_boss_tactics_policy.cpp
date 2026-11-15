@@ -2248,6 +2248,125 @@ static void AddCrewMember_Roles()
     CHECK(!AddCrewMember(false, false, true, 0, 0));  // crew 0 is the melee and the tanks
 }
 
+// DungeonRunHoldKillHealerPeel (Onyxia walk 2l): a ranged free DPS bot claims one add of a hold_kill row's spared entry
+// while that add eats a group healer, and the hold is lifted for that bot on that unit alone. The claim store is the
+// action's (BossTacticsActions.cpp); the rules here are the lift (KillHeldFor, DpsLeavesAlone) and the pick.
+static void HoldKillPeelLiftsClaimedHealerAttacker()
+{
+    // The W-shaped row: entry 1 is spared while more than 0 living blockers of entry 2 stand near, and one does (today
+    // DpsLeavesAlone(true, rows, 1, ...) is true).
+    BossTacticRow whelps = Row(249, 1, BossTacticKind::HoldKill, 2, 0, 0);
+    const std::vector<BossTacticRow> rows = { whelps };
+    const ActiveBossRows active = Active(rows);
+    const auto countNear = [](std::uint32_t entry) -> std::uint32_t { return entry == 2 ? 1u : 0u; };
+    const auto noFighters = [](const BossTacticRow&) -> std::uint32_t { return 0; };
+    CHECK(KillHeld(active, 1, countNear));
+    CHECK(DpsLeavesAlone(true, active, 1, 100, countNear, noFighters));
+    // The claim's owner is not held on its own unit ...
+    CHECK(!KillHeldFor(active, 1, countNear, true));
+    CHECK(!DpsLeavesAlone(true, active, 1, 100, countNear, noFighters, true));
+    // ... and every other bot still is: the lift is the claimant's, not the row's.
+    CHECK(KillHeldFor(active, 1, countNear, false));
+    CHECK(DpsLeavesAlone(true, active, 1, 100, countNear, noFighters, false));
+    // A tank or a healer keeps its own pick either way.
+    CHECK(!DpsLeavesAlone(false, active, 1, 100, countNear, noFighters, true));
+    // The peel never lifts a gate_hold row on the same entry.
+    BossTacticRow gate = Row(249, 1, BossTacticKind::GateHold, 3, 0, 0, 100.0f);
+    gate.windowSec = 200.0f;
+    const std::vector<BossTacticRow> both = { whelps, gate };
+    const auto fighters = [](const BossTacticRow&) -> std::uint32_t { return 1; };
+    CHECK(DpsLeavesAlone(true, Active(both), 1, 100, countNear, fighters, true));
+    CHECK(DpsLeavesAlone(true, Active(both), 1, 100, countNear, fighters, false));
+}
+
+static PeelCandidate PeelAdd(std::uint64_t guid, float distance, bool healer = true)
+{
+    PeelCandidate c;
+    c.guid = guid;
+    c.distance = distance;
+    c.victimHealer = healer;
+    c.alive = true;
+    return c;
+}
+
+static void HealerPeelPick_OneHealerAddPerBot()
+{
+    const std::uint64_t bot = 100;
+    const std::uint32_t now = 60000;
+    // The claim's reach and its window: live at exactly kHoldKillPeelClaimMs, lapsed one millisecond later.
+    CHECK(kHoldKillPeelReachYd == 35.0f);
+    CHECK(kHoldKillPeelClaimMs == 3000);
+    CHECK(PeelClaimLive(bot, now - 3000, now));
+    CHECK(!PeelClaimLive(bot, now - 3001, now));
+    CHECK(!PeelClaimLive(0, now, now));
+    CHECK(Peelable(true, false, true, 35.0f));
+    CHECK(!Peelable(true, false, true, 36.0f));
+    // Nearest first, and the lower guid breaks a distance tie.
+    {
+        std::vector<PeelCandidate> c = { PeelAdd(30, 12.0f), PeelAdd(20, 8.0f), PeelAdd(10, 8.0f) };
+        const int pick = PickHealerPeel(c, bot, now, 0, 4, true);
+        CHECK(pick == 2);
+        CHECK(c[pick].guid == 10);
+    }
+    // Only an add that eats a group healer, is alive, is not running home, is in reach and has nobody of ours on it.
+    {
+        std::vector<PeelCandidate> c = { PeelAdd(10, 8.0f, false) };   // its victim is a tank
+        CHECK(PickHealerPeel(c, bot, now, 0, 4, true) == -1);
+        c = { PeelAdd(10, 8.0f) };
+        c[0].alive = false;
+        CHECK(PickHealerPeel(c, bot, now, 0, 4, true) == -1);
+        c[0].alive = true;
+        c[0].evading = true;
+        CHECK(PickHealerPeel(c, bot, now, 0, 4, true) == -1);
+        c[0].evading = false;
+        c[0].distance = 36.0f;
+        CHECK(PickHealerPeel(c, bot, now, 0, 4, true) == -1);
+        c[0].distance = 35.0f;
+        CHECK(PickHealerPeel(c, bot, now, 0, 4, true) == 0);
+        c[0].weHoldIt = true;                                          // a group member is already on it
+        CHECK(PickHealerPeel(c, bot, now, 0, 4, true) == -1);
+    }
+    // A melee bot and the key off (cap 0) never claim.
+    {
+        std::vector<PeelCandidate> c = { PeelAdd(10, 8.0f) };
+        CHECK(PickHealerPeel(c, bot, now, 0, 4, false) == -1);
+        CHECK(PickHealerPeel(c, bot, now, 0, 0, true) == -1);
+    }
+    // One claim per unit: a live claim of another bot's is not claimable, a lapsed one is.
+    {
+        std::vector<PeelCandidate> c = { PeelAdd(10, 8.0f) };
+        c[0].claimBot = 200;
+        c[0].claimStampMs = now - 1000;
+        CHECK(PickHealerPeel(c, bot, now, 1, 4, true) == -1);
+        c[0].claimStampMs = now - 3001;
+        CHECK(PickHealerPeel(c, bot, now, 0, 4, true) == 0);
+    }
+    // The cap: the instance's live claims (the bot's own excluded) decide whether a new one is taken.
+    {
+        std::vector<PeelCandidate> c = { PeelAdd(10, 8.0f) };
+        CHECK(PickHealerPeel(c, bot, now, 3, 4, true) == 0);
+        CHECK(PickHealerPeel(c, bot, now, 4, 4, true) == -1);
+        CHECK(PickHealerPeel(c, bot, now, 5, 4, true) == -1);
+    }
+    // The bot keeps its own live claim, its own swing's weHoldIt included, even at the cap; a claim that no longer
+    // qualifies is not kept, and the bot then takes the nearest qualifying one only when the cap allows it.
+    {
+        std::vector<PeelCandidate> c = { PeelAdd(10, 8.0f), PeelAdd(20, 4.0f) };
+        c[0].claimBot = bot;
+        c[0].claimStampMs = now - 500;
+        c[0].weHoldIt = true;
+        CHECK(PickHealerPeel(c, bot, now, 4, 4, true) == 0);
+        c[0].victimHealer = false;
+        CHECK(PickHealerPeel(c, bot, now, 4, 4, true) == -1);
+        CHECK(PickHealerPeel(c, bot, now, 3, 4, true) == 1);
+        // A lapsed own claim is unclaimed again: the nearer one wins.
+        std::vector<PeelCandidate> d = { PeelAdd(10, 8.0f), PeelAdd(20, 4.0f) };
+        d[0].claimBot = bot;
+        d[0].claimStampMs = now - 3001;
+        CHECK(PickHealerPeel(d, bot, now, 0, 4, true) == 1);
+    }
+}
+
 int main()
 {
     std::cout << "Starting TortoiseBots boss tactics policy tests...\n";
@@ -2302,6 +2421,8 @@ int main()
     GateHold_EvadedBlockerReleases();
     GateHold_AboveGateNotHeld();
     GateHold_RowShape();
+    HoldKillPeelLiftsClaimedHealerAttacker();
+    HealerPeelPick_OneHealerAddPerBot();
     TestTankPost_SlotTankWalksToSpotWhileSubjectUnselectable();
     TestTankPost_UnselectableSubjectNotArrived();
     TestTankPost_EngagesSelectableOutOfCombatSubject();

@@ -296,8 +296,8 @@ class HoldKillWiring(unittest.TestCase):
 
     def test_the_hold_multiplier_reads_killheld_for_dps(self):
         fn = body(ACTIONS, "float BossTacticsHoldMultiplier::GetValue(")
-        # The DPS rows stand down on a held current target.
-        self.assertIn("KillHeld(fight.rows, current->GetEntry(), countNear)", fn)
+        # The DPS rows stand down on a held current target (the healer peel's own claim lifts it: KillHeldFor).
+        self.assertIn("KillHeldFor(fight.rows, current->GetEntry(), countNear, HoldKillPeelOwns(ai, bot, current))", fn)
         self.assertIn('dynamic_cast<DpsAssistAction*>(action)', fn)
         self.assertIn('dynamic_cast<DpsAoeAction*>(action)', fn)
         # L-c: both hold clauses use the free-DPS gate HeldDpsTarget and the action use (IsFreeDps: no tank, no healer,
@@ -314,7 +314,7 @@ class HoldKillWiring(unittest.TestCase):
         # L-a: the pick the row would send the bot to, not only the current target: the dps aoe target for the AoE rows,
         # the dps target for the assist rows.
         self.assertIn('aoe ? AI_VALUE(Unit*, "dps aoe target") : AI_VALUE(Unit*, "dps target")', fn)
-        self.assertIn("KillHeld(fight.rows, picked->GetEntry(), countNear)", fn)
+        self.assertIn("KillHeldFor(fight.rows, picked->GetEntry(), countNear, peelOwned)", fn)
 
     def test_the_hold_kill_trigger_reads_killheld_and_dps_only(self):
         self.assertIn('Trigger(ai, "boss tactics hold kill", 1)', TRIGGERS_H)
@@ -408,7 +408,7 @@ class HoldKillWiring(unittest.TestCase):
         # The kill_first pick first, else the nearest creature this bot may attack, by the kill_first candidate rules.
         self.assertIn("FindBossKillFirst(ai, bot, fight)", fn)
         self.assertIn("PossibleAttackTargetsValue::IsValid(unit, bot)", fn)
-        self.assertIn("PickNearestUnheld(fight.rows, candidates, countNear)", fn)
+        self.assertIn("PickNearestUnheld(fight.rows, candidates, countNear, 0, claimedByOther)", fn)
         self.assertIn("Attack(bot, fight.units[nearestIndex])", fn)
         # Nothing to switch to: drop the held pick and stop attacking it, so the assist rows re-pick.
         self.assertIn('GetValue<Unit*>("current target")->Set(nullptr)', fn)
@@ -833,7 +833,8 @@ class HoldKillIsLogged(unittest.TestCase):
     def test_one_row_per_bot_per_kind_per_five_seconds(self):
         due = body(ACTIONS, "bool HoldKillLogDue(")
         self.assertIn('hasLog("bot_events.csv")', due)
-        self.assertIn("nowMs - last < kHoldKillLogGapMs", due)
+        # The gap is per kind: the peel's own rows turn inside a 5 s bucket (tools/test_holdkill_peel_wiring.py).
+        self.assertIn("nowMs - last < HoldKillLogGap(kind)", due)
         self.assertIn("constexpr uint32 kHoldKillLogGapMs = 5000;", ACTIONS)
         # The buckets are per bot AND kind: the action's row and the multiplier's veto row never swallow each other.
         self.assertIn("bool HoldKillLogDue(Player* bot, HoldKillLogKind kind)", due)

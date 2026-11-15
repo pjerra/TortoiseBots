@@ -179,6 +179,7 @@ ref survives line drift.
 | 19 | `BossTacticsDpsHold` | `subject=<entry>`; info2 `trigger=<engage\|band\|spell\|blink\|none>,held_ms=<n>` | LogDpsHold | yes: `trigger=` | keep |
 | 20 | `BossTacticsHoldKill` pick | `held=<e>:<g>,hp=<pct>,held_ms=<n>`; info2 `blockers=..,to=..` | LogHoldKillPick | not a refusal (the hold's pick) | document |
 | 21 | `BossTacticsHoldKill` veto | `veto=<assist\|aoe\|area\|dot\|sole>` | LogHoldKillVeto | yes: `veto=` | keep |
+| 20a | `BossTacticsHoldKill` peel | `peel=<claim\|keep\|lapse>`; info2 `unit=<e>:<g>,victim=<name>,claims=<n>` | LogHoldKillPeel | not a refusal (with `DungeonRunHoldKillHealerPeel`, what a ranged free dps did with its claim on one held add that eats a group healer: `claim` a new one, `keep` its own live one, `lapse` a claim it no longer keeps; `claims` is the instance's live claims; at most one per bot per 2 s) | new |
 | 22 | `BossTacticsDispel` pick | `aura=<id>,carrier=<guid>`; info2 `mode=..,rank=..,ally_yd=..,verdict=pick` | LogDispel | yes: `verdict=` | keep |
 | 23 | `BossTacticsDispel` excluded / wait | same shape, `verdict=excluded` / `verdict=wait` | LogDispel | yes: `verdict=` | keep |
 | 24 | `BossTacticsSonHold` start | `son=<e>,event=start,reason=tick,held_ms=..` | PushSonHoldRow | yes: `reason=` | keep |

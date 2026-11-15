@@ -66,6 +66,7 @@ These settings configure boss encounter mechanics, environmental hazard evasion,
 | [`AiPlayerbot.DungeonRunRaid`](#aiplayerbotdungeonrunraid) | `0` | Lets the run leader bind the commander's raid of 6 to 40 bots and runs it with the raid rules (needs `AiPlayerbot.DungeonSelfClear` and `AiPlayerbot.RemoteCommander`). |
 | [`AiPlayerbot.DungeonRunRaidBossRules`](#aiplayerbotdungeonrunraidbossrules) | `0` | `1`: a raid's boss fight runs up to 1200 s, survives its deaths while the boss still loses hp, and sends its adds to the off-tanks instead of the main tank. |
 | [`AiPlayerbot.DungeonRunRaidHealerGuard`](#aiplayerbotdungeonrunraidhealerguard) | `0` | `1`: in a raid boss fight with the main tank on the boss, and in a raid trash fight once the main tank held its current target (kept on for the fight), an add on a healer goes to the nearest ranged dps within 35 yd of it (up to two per add), and the off-tanks take only such an add when no ranged dps is free. |
+| [`AiPlayerbot.DungeonRunHoldKillHealerPeel`](#aiplayerbotdungeonrunholdkillhealerpeel) | `0` | N (`1`-`20`; 4 typical, recommended on at `4`): a ranged damage dealer with no order claims one add of a `hold_kill` row's held entry at a time while that add eats a group healer, at most N live claims per map instance, and the hold is lifted for the claimant on that unit alone. |
 | [`AiPlayerbot.DungeonRunGuardClockHittable`](#aiplayerbotdungeonrunguardclockhittable) | `0` | `1`: the raid guard's assignment clock starts on the first hittable tick (attackable and selectable), and a `tank_post` unit gets the post's 15 s grace instead of 8 s. |
 | [`AiPlayerbot.FankrissSwapStacks`](#aiplayerbotfankrissswapstacks) | `5` | Mortal Wound stacks at which an opt-in `fankriss tank` taunts Fankriss off the current tank (1-9). |
 | [`AiPlayerbot.PatchwerkOpeningDelay`](#aiplayerbotpatchwerkopeningdelay) | `4` | Seconds the DPS hold Patchwerk after an opt-in `patchwerk main` engages him (`0` = off, else 3-5). |
@@ -691,6 +692,22 @@ A raid's adds on healers (boss and trash fights): sent to the raid's ranged dps,
 - with `1`: a healer add goes to the nearest ranged dps (up to two per add, within 35 yd, nearest first)
 - off-tanks take it only when no ranged dps is free
 - with `0`: off-tanks take the healers' adds as before
+
+</details>
+
+### `AiPlayerbot.DungeonRunHoldKillHealerPeel`
+A ranged damage dealer claims one add of a `hold_kill` row's held entry while that add eats a group healer.
+**Default:** `0` (off) · **Values:** `0` off; otherwise at most that many live claims per map instance (`1`-`20`; 4 to 8 typical) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+<details>
+<summary>How it works in detail</summary>
+
+**The peel:** a `hold_kill` row keeps every free damage dealer off its `boss_entry` while the row's blocker lives (the Onyxia whelp row: whelps 11262 spared while Cindarion 50143 lives). The healer guard sends ranged dps at such an add, but one order at a time and 2 s apart, and when the order ends the hold sends the bot back to the boss, so the wave eats the healers (walks 2j-2k: healer deaths by whelp 5.75 a pull, 93 % of the second-phase deaths after the first healer death). The peel is bot-side, inside the hold:
+- a ranged damage dealer with no explicit order claims one unit at a time: an add of the row's `boss_entry`, alive, not evading, within 35 yd of the bot, whose current victim is a group healer, unclaimed and not already attacked by a group member. Nearest first, the lower guid on a tie.
+- one claim per unit, one per bot, and no new claim while the instance already holds the key's count of live claims.
+- the hold is lifted for the claimant alone, on its own unit: the dps target, the assist and the attack pickers leave that bot on the add, the `hold_kill` action never sends it back, and the area and attacker-debuff (DoT) vetoes around it stay.
+- the claim is kept while the bot is on the add and the add still eats a healer; 3 s after its last refresh (the add died, its victim changed, the bot moved on) it lapses and the hold applies again. `gate_hold`, `one_at_a_time` and `seek_aura` holds are untouched, and the healer guard's own orders still win over a peel.
+- `bot_events.csv` gets a `BossTacticsHoldKill` row with `peel=claim|keep|lapse`, `unit=<entry>:<guid low>`, `victim=<name>` and `claims=<n>` (at most one per bot per 2 s).
 
 </details>
 

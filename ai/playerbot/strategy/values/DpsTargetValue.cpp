@@ -161,7 +161,7 @@ namespace
         const auto countFighting = [ai](const BossTacticRow& row)
         { return GateHoldFighters(ai, row.targetEntry, GateHoldRadius(row.windowSec)); };
         return DpsLeavesAlone(true, active, unit->GetEntry(), static_cast<int>(unit->GetHealthPercent()), countNear,
-                              countFighting);
+                              countFighting, HoldKillPeelOwns(ai, bot, unit));
     }
 
     // Solnius Call of Nightmare (Emerald Sanctum, 807): while a major add

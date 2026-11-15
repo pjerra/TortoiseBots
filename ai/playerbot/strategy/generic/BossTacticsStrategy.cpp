@@ -36,6 +36,13 @@ void BossTacticsStrategy::InitCombatTriggers(std::list<TriggerNode*>& triggers)
         "boss tactics hold kill",
         NextAction::array(0, new NextAction("boss tactics hold kill", ACTION_HIGH + 2), NULL)));
 
+    // A ranged free DPS bot claims one add of a hold_kill row's spared entry while that add eats a group healer
+    // (AiPlayerbot.DungeonRunHoldKillHealerPeel): the hold is lifted for the claimant on its own add only, and the
+    // hold-kill trigger above is false for that bot, so the two never fight over one bot.
+    triggers.push_back(new TriggerNode(
+        "boss tactics healer peel",
+        NextAction::array(0, new NextAction("boss tactics healer peel", ACTION_HIGH + 2), NULL)));
+
     // A linked_death group is held: a DPS bot on another member takes the equalise pick, so the raid spreads its damage
     // instead of leaving one member to die and be raised.
     triggers.push_back(new TriggerNode(

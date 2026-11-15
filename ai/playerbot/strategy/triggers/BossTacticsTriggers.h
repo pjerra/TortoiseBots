@@ -81,6 +81,16 @@ namespace ai
         bool IsActive() override;
     };
 
+    // A ranged free DPS bot with a healer peel (AiPlayerbot.DungeonRunHoldKillHealerPeel) to take, keep or drop: an add
+    // of a hold_kill row's spared entry eats a group healer and no other bot has it, or this bot's own claim no longer
+    // qualifies.
+    class BossTacticsHealerPeelTrigger : public Trigger
+    {
+    public:
+        BossTacticsHealerPeelTrigger(PlayerbotAI* ai) : Trigger(ai, "boss tactics healer peel", 1) {}
+        bool IsActive() override;
+    };
+
     // This free DPS bot's current target is the subject of an active dps_hold_after hold: stop and wait it out.
     class BossTacticsDpsHoldTrigger : public Trigger
     {

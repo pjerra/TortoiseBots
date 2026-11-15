@@ -1742,6 +1742,15 @@ namespace ai
         return false;
     }
 
+    // KillHeld for a bot whose own claim lifts the hold on that unit (the healer peel). Every other hold_kill rule is
+    // unchanged: the lift is the claimant's, one unit, and only while its claim is live (the caller asks
+    // HoldKillPeelOwns).
+    inline bool KillHeldFor(const ActiveBossRows& rows, std::uint32_t entry,
+                            const std::function<std::uint32_t(std::uint32_t)>& countNear, bool peelOwned)
+    {
+        return !peelOwned && KillHeld(rows, entry, countNear);
+    }
+
     // Whether a unit of a hold_kill row's blocker entry counts towards its budget: a creature fighting, or one that
     // can never fight at all (UNIT_FLAG_NOT_SELECTABLE — the Portal of Madness 15141 only ticks its summon and is
     // never an attacker). A loose Voidwalker that has not woken yet is neither, so it does not hold the Servant.
@@ -1798,14 +1807,90 @@ namespace ai
     // is taken long before this runs.
     inline bool DpsLeavesAlone(bool freeDpsBot, const ActiveBossRows& rows, std::uint32_t entry, int hpPct,
                                const std::function<std::uint32_t(std::uint32_t)>& countNear,
-                               const std::function<std::uint32_t(const BossTacticRow&)>& countFighting)
+                               const std::function<std::uint32_t(const BossTacticRow&)>& countFighting,
+                               bool peelOwned = false)
     {
         if (!freeDpsBot)
             return false;
-        if (KillHeld(rows, entry, countNear))
+        if (KillHeldFor(rows, entry, countNear, peelOwned))
             return true;
         return GateHeld(rows, entry, hpPct, countFighting);
     }
+
+    // The healer peel (Onyxia walk 2l): an add of a hold_kill row's spared entry that eats a group healer is claimed by
+    // one ranged damage dealer at a time, and the hold is lifted for that claim's owner alone, so the bot stays on the
+    // add instead of being sent back to the boss. The reach is the claim's, from the claimant; a claim older than
+    // kHoldKillPeelClaimMs without a refresh (the add died, its victim stopped being a healer, the viewpoint bot died or
+    // moved on) lapses and the hold applies again.
+    constexpr float kHoldKillPeelReachYd = 35.0f;
+    constexpr std::uint32_t kHoldKillPeelClaimMs = 3000;
+
+    // A living unit of a hold_kill row's spared entry, as the peel's pick sees it. `claimBot` is the bot holding the
+    // unit's claim (0 when unclaimed) and `claimStampMs` its last refresh: the caller's store, the policy keeps none.
+    struct PeelCandidate
+    {
+        std::uint64_t guid = 0;
+        float distance = 0.0f; // from the bot
+        bool victimHealer = false;
+        bool alive = false;
+        bool evading = false;
+        bool weHoldIt = false;       // a member or their pet already attacks it
+        std::uint64_t claimBot = 0;  // the claim's owner, 0 when unclaimed
+        std::uint32_t claimStampMs = 0;
+    };
+
+    // Whether a claim is live at `nowMs`: it has an owner and its last refresh is at most kHoldKillPeelClaimMs old (one
+    // millisecond later it has lapsed). An unsigned age that wrapped (a stamp from another thread's later read) reads
+    // as older than any window, which drops the claim instead of extending it.
+    inline bool PeelClaimLive(std::uint64_t bot, std::uint32_t stampMs, std::uint32_t nowMs)
+    {
+        return bot != 0 && nowMs - stampMs <= kHoldKillPeelClaimMs;
+    }
+
+    // Whether a unit of a hold_kill row's spared entry may be peeled at all: alive, not running home, eating a group
+    // healer, and within the claim's reach of the bot. Who else is on it (weHoldIt) and who claims it are the pick's
+    // business, not this rule's.
+    inline bool Peelable(bool alive, bool evading, bool victimHealer, float distance)
+    {
+        return alive && !evading && victimHealer && distance <= kHoldKillPeelReachYd;
+    }
+
+    // The unit this bot peels, or -1: index into `c`. -1 for anything but a ranged free DPS and for a cap of 0 (the key
+    // off). A bot keeps its own live claim while that unit still qualifies, and only the first check ignores
+    // `weHoldIt`, because the claimant's own swing is what makes it true for the unit it already holds. A new claim is
+    // the nearest qualifying unclaimed unit, a lapsed claim counting as unclaimed, and only while the instance has
+    // fewer than `cap` live claims besides this bot's (`cap` is the live claims of the instance, the bot's own
+    // included; its own claim is not counted again). A distance tie goes to the lower guid, so two bots reading one
+    // list agree on the unit.
+    inline int PickHealerPeel(const std::vector<PeelCandidate>& c, std::uint64_t bot, std::uint32_t nowMs,
+                              int liveClaimsOthers, int cap, bool rangedFreeDps)
+    {
+        if (!rangedFreeDps || cap <= 0)
+            return -1;
+        for (std::size_t i = 0; i < c.size(); ++i)
+        {
+            const PeelCandidate& p = c[i];
+            if (p.claimBot == bot && PeelClaimLive(p.claimBot, p.claimStampMs, nowMs) &&
+                Peelable(p.alive, p.evading, p.victimHealer, p.distance))
+                return static_cast<int>(i);
+        }
+        if (liveClaimsOthers >= cap)
+            return -1;
+        int best = -1;
+        for (std::size_t i = 0; i < c.size(); ++i)
+        {
+            const PeelCandidate& p = c[i];
+            if (!Peelable(p.alive, p.evading, p.victimHealer, p.distance) || p.weHoldIt)
+                continue;
+            if (PeelClaimLive(p.claimBot, p.claimStampMs, nowMs))
+                continue;
+            if (best < 0 || p.distance < c[best].distance ||
+                (p.distance == c[best].distance && p.guid < c[best].guid))
+                best = static_cast<int>(i);
+        }
+        return best;
+    }
+
 
     // A living unit of the paced entry that fights, as the one_at_a_time pick sees it: health first, guid as the
     // tie-break. `eligible` is whether it may be THE pick (not crowd-controlled, not running home); only PickSoleKill
@@ -2929,6 +3014,7 @@ namespace ai
     // A live creature in the fight, as the kill-first pick sees it.
     struct TacticCandidate
     {
+        std::uint64_t guid = 0;
         std::uint32_t entry = 0;
         float distance = 0.0f;
         bool pickable = false;  // alive, attackable, reachable by the caller's rules
@@ -3952,11 +4038,13 @@ namespace ai
     // Index of the nearest candidate a free DPS bot may attack: the same candidate rules the kill_first pick applies
     // (pickable, kBossTacticsEngageRange) minus the entries a hold_kill row holds, so a bot switching off a held entry
     // lands on the blocker or a loose add and never on another held entry. `seekHeldEntry`: a seek_aura source the row
-    // holds right now (its entry is not a hold_kill one), skipped too, so the drop never re-picks another Son. -1 when
+    // holds right now (its entry is not a hold_kill one), skipped too, so the drop never re-picks another Son.
+    // `claimedByOther` (optional): a unit another bot's healer peel has claimed, never this bot's switch. -1 when
     // nothing is left.
     inline int PickNearestUnheld(const ActiveBossRows& rows, const std::vector<TacticCandidate>& candidates,
                                  const std::function<std::uint32_t(std::uint32_t)>& countNear,
-                                 std::uint32_t seekHeldEntry = 0)
+                                 std::uint32_t seekHeldEntry = 0,
+                                 const std::function<bool(std::uint64_t)>& claimedByOther = nullptr)
     {
         int best = -1;
         float bestDistance = 0.0f;
@@ -3966,6 +4054,8 @@ namespace ai
             if (!c.pickable || c.distance > kBossTacticsEngageRange)
                 continue;
             if (seekHeldEntry != 0 && c.entry == seekHeldEntry)
+                continue;
+            if (claimedByOther && claimedByOther(c.guid))
                 continue;
             if (KillHeld(rows, c.entry, countNear))
                 continue;

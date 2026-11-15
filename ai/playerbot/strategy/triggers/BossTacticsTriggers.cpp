@@ -366,6 +366,25 @@ bool BossTacticsHoldKillTrigger::IsActive()
     return !fight.rows.empty() && FindBossHoldKill(ai, bot, fight) != nullptr;
 }
 
+bool BossTacticsHealerPeelTrigger::IsActive()
+{
+    if (!sPlayerbotAIConfig.dungeonRunHoldKillHealerPeel || !Ready(ai, bot))
+        return false;
+    const BossTacticsFight fight = ScanBossTactics(ai, bot);
+    if (fight.rows.empty())
+        return false;
+    const BossHealerPeelScan scan = ScanBossHealerPeel(ai, bot, fight);
+    // A claim of this bot's that the pick did not keep is the action's to drop and log, with nothing left to claim.
+    if (scan.lapseDue)
+        return true;
+    if (scan.pick < 0)
+        return false;
+    // Already on the unit it keeps or claims: the read that kept it refreshes the claim and writes the keep row, so
+    // there is nothing to switch to.
+    AiObjectContext* context = ai->GetAiObjectContext();
+    return AI_VALUE(Unit*, "current target") != scan.units[scan.pick];
+}
+
 bool BossTacticsDpsHoldTrigger::IsActive()
 {
     if (!Ready(ai, bot))

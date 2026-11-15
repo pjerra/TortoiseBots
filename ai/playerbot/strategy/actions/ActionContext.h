@@ -380,6 +380,7 @@ namespace ai
             creators["boss tactics kill first"] = [](PlayerbotAI* ai) { return new BossTacticsKillFirstAction(ai); };
             creators["boss tactics carrier strike"] = [](PlayerbotAI* ai) { return new BossTacticsCarrierStrikeAction(ai); };
             creators["boss tactics hold kill"] = [](PlayerbotAI* ai) { return new BossTacticsHoldKillAction(ai); };
+            creators["boss tactics healer peel"] = [](PlayerbotAI* ai) { return new BossTacticsHealerPeelAction(ai); };
             creators["boss tactics linked death"] = [](PlayerbotAI* ai) { return new BossTacticsLinkedDeathAction(ai); };
             creators["boss tactics dps hold"] = [](PlayerbotAI* ai) { return new BossTacticsDpsHoldAction(ai); };
             creators["boss tactics step behind"] = [](PlayerbotAI* ai) { return new BossTacticsStepBehindAction(ai); };

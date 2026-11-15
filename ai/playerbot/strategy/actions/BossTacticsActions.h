@@ -251,8 +251,42 @@ namespace ai
 
     // The held boss entry this DPS bot is on right now, or null: its current target's entry has a hold_kill row whose
     // blocker (a Mad Voidwalker, a Portal of Madness) still lives within kHoldKillRangeYd. Tanks, healers and bots
-    // under an explicit attack order never see their target as held.
+    // under an explicit attack order never see their target as held. A claim of this bot's own healer peel (below) is
+    // not held for it.
     Unit* FindBossHoldKill(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fight);
+
+    // Whether this bot's own live healer peel claim (AiPlayerbot.DungeonRunHoldKillHealerPeel) is on `unit`: the hold
+    // is lifted for the claimant on that one add and no other. The claim's stamp refreshes on every such read while the
+    // unit still eats a group healer (one keep row, rate-limited); a claim whose stamp is older than
+    // kHoldKillPeelClaimMs is dead and the hold applies again. False for any other bot's claim, and with the key off.
+    bool HoldKillPeelOwns(PlayerbotAI* ai, Player* bot, Unit* unit);
+
+    // One claim of this bot's, as the scan hands it to the action: the unit and its entry (the store's), so a claim
+    // dropped for a better one or for a lapse can be logged after the unit is gone.
+    struct HealerPeelOwnClaim
+    {
+        std::uint64_t guid = 0;
+        std::uint32_t entry = 0;
+        std::uint32_t stampMs = 0;
+    };
+
+    // One read of the healer peel: the held entries' units within the claim's reach with their claim state, the
+    // instance's live claim counts, this bot's claims, and PickHealerPeel's answer. The trigger and the action both read
+    // it, so they agree on the pick and on a lapse; the grid read behind the candidates is cached per bot and entry for
+    // a second.
+    struct BossHealerPeelScan
+    {
+        std::vector<PeelCandidate> candidates;
+        std::vector<Unit*> units;             // the same order as candidates
+        std::uint32_t liveClaims = 0;         // live claims of the instance, this bot's included
+        std::uint32_t liveClaimsOthers = 0;   // ... every other bot's
+        std::vector<HealerPeelOwnClaim> ownClaims; // this bot's claims of the instance, a unit outside the candidates included
+        int pick = -1;                        // the unit to keep or claim, -1 when there is none
+        bool lapseDue = false;                // an own claim the pick did not keep: the action drops it and logs
+    };
+    // Collects the candidates from the "kill first grid units" reads of the fight's hold_kill boss entries and asks
+    // PickHealerPeel. Gated by the key, the "boss tactics" strategy and the map's rows: an empty scan otherwise.
+    BossHealerPeelScan ScanBossHealerPeel(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fight);
 
     // Whether a free DPS bot leaves `unit` alone right now under a dps_hold_after row of its entry: the fight-wide
     // hold state was started by the row's engage, band, spell or blink trigger and has not run out (DpsHoldTick).
@@ -340,6 +374,17 @@ namespace ai
     {
     public:
         BossTacticsHoldKillAction(PlayerbotAI* ai) : AttackAction(ai, "boss tactics hold kill") {}
+        bool Execute(Event& event) override;
+    };
+
+    // One add of a hold_kill row's spared entry that eats a group healer is peeled by one ranged free damage dealer at a
+    // time: this bot claims the pick (nearest first, its own live claim kept) and attacks it, and the hold-kill rule
+    // leaves it alone on that unit (HoldKillPeelOwns). A claim the pick no longer keeps is dropped and logged; with
+    // nothing to peel the action does nothing.
+    class BossTacticsHealerPeelAction : public AttackAction
+    {
+    public:
+        BossTacticsHealerPeelAction(PlayerbotAI* ai) : AttackAction(ai, "boss tactics healer peel") {}
         bool Execute(Event& event) override;
     };
 
