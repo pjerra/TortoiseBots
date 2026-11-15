@@ -2367,6 +2367,66 @@ static void HealerPeelPick_OneHealerAddPerBot()
     }
 }
 
+// The claim store's one-step rule (HoldKillPeelClaims::TryClaim): the pick's snapshot is only a hint, so the claim
+// itself refuses another bot's live claim on the unit, a second unit for one bot, and the cap, against the live map.
+static void HealerPeelClaims_TryClaimIsAtomic()
+{
+    const std::uint32_t inst = 249;
+    const std::uint32_t now = 100000;
+    // Two bots that both read one free unit before either claims: exactly one wins and the other gets nothing.
+    {
+        HoldKillPeelClaims store;
+        CHECK(store.TryClaim(inst, 5000, 100, 2, now, 4));
+        CHECK(!store.TryClaim(inst, 5000, 200, 2, now, 4));   // the loser's write used to steal the unit
+        CHECK(store.Of(inst).at(5000).botGuid == 100);
+        CHECK(store.LiveCount(inst) == 1);
+    }
+    // The cap N with N+1 bots: N claim, the last is refused, and another instance's claims do not count.
+    {
+        HoldKillPeelClaims store;
+        CHECK(store.TryClaim(inst, 5000, 100, 2, now, 4));
+        CHECK(store.TryClaim(inst, 5001, 200, 2, now, 4));
+        CHECK(store.TryClaim(inst, 5002, 300, 2, now, 4));
+        CHECK(store.TryClaim(inst, 5003, 400, 2, now, 4));
+        CHECK(!store.TryClaim(inst, 5004, 500, 2, now, 4));
+        CHECK(store.LiveCount(inst) == 4);
+        CHECK(store.TryClaim(inst + 1, 5000, 600, 2, now, 4));
+        CHECK(store.LiveCount(inst + 1) == 1);
+    }
+    // The owner refreshes its own claim, at the cap included: the stamp moves, the claim stays.
+    {
+        HoldKillPeelClaims store;
+        CHECK(store.TryClaim(inst, 5000, 100, 2, now, 1));
+        CHECK(store.TryClaim(inst, 5000, 100, 2, now + 1000, 1));
+        CHECK(store.Of(inst).at(5000).stampMs == now + 1000);
+        CHECK(store.LiveCount(inst) == 1);
+    }
+    // One claim per bot: a live claim on another unit refuses the move until it is dropped.
+    {
+        HoldKillPeelClaims store;
+        CHECK(store.TryClaim(inst, 5000, 100, 2, now, 4));
+        CHECK(!store.TryClaim(inst, 5001, 100, 2, now, 4));
+        CHECK(store.LiveCount(inst) == 1);
+        CHECK(store.Drop(inst, 5000, 100));
+        CHECK(!store.Drop(inst, 5000, 100));                   // only the owner may drop it
+        CHECK(store.TryClaim(inst, 5001, 100, 2, now, 4));
+    }
+    // A claim lapses at the window's end: the unit and its slot are free one millisecond later, never before.
+    {
+        HoldKillPeelClaims store;
+        CHECK(store.TryClaim(inst, 5000, 100, 2, now, 1));
+        CHECK(!store.TryClaim(inst, 5000, 200, 2, now + kHoldKillPeelClaimMs, 1));
+        CHECK(store.TryClaim(inst, 5000, 200, 2, now + kHoldKillPeelClaimMs + 1, 1));
+        CHECK(store.Of(inst).at(5000).botGuid == 200);
+    }
+    // The key off (cap 0) never claims.
+    {
+        HoldKillPeelClaims store;
+        CHECK(!store.TryClaim(inst, 5000, 100, 2, now, 0));
+        CHECK(store.Of(inst).empty());
+    }
+}
+
 int main()
 {
     std::cout << "Starting TortoiseBots boss tactics policy tests...\n";
@@ -2423,6 +2483,7 @@ int main()
     GateHold_RowShape();
     HoldKillPeelLiftsClaimedHealerAttacker();
     HealerPeelPick_OneHealerAddPerBot();
+    HealerPeelClaims_TryClaimIsAtomic();
     TestTankPost_SlotTankWalksToSpotWhileSubjectUnselectable();
     TestTankPost_UnselectableSubjectNotArrived();
     TestTankPost_EngagesSelectableOutOfCombatSubject();

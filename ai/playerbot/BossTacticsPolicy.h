@@ -1855,6 +1855,96 @@ namespace ai
         return alive && !evading && victimHealer && distance <= kHoldKillPeelReachYd;
     }
 
+    // The healer peel's claim store: one claim per unit of a map instance (instance copies of one DB spawn share the
+    // guid, so one raid's claim never blocks another's) and one claim per bot, a stamp refreshed by the claimant's
+    // reads and lapsed after kHoldKillPeelClaimMs. The map rules live here, free of game state, so the contention
+    // cases are unit-tested; the caller owns the lock, because the action writes it and every bot's hold tests read it.
+    struct HoldKillPeelClaims
+    {
+        struct Claim
+        {
+            std::uint64_t botGuid = 0;
+            std::uint32_t entry = 0;
+            std::uint32_t stampMs = 0;
+        };
+        using Key = std::pair<std::uint32_t, std::uint64_t>; // map instance, unit's raw guid
+        std::map<Key, Claim> claims;
+
+        // Drops every claim past the window: a stale stamp is a claim that lapsed (PeelClaimLive), so the map never
+        // grows past the live claims.
+        void Prune(std::uint32_t nowMs)
+        {
+            for (auto it = claims.begin(); it != claims.end();)
+            {
+                if (nowMs - it->second.stampMs > kHoldKillPeelClaimMs)
+                    it = claims.erase(it);
+                else
+                    ++it;
+            }
+        }
+
+        // The instance's live claims. Prune first, so every entry counted is live.
+        std::uint32_t LiveCount(std::uint32_t instanceId)
+        {
+            std::uint32_t live = 0;
+            for (const auto& claim : claims)
+                if (claim.first.first == instanceId)
+                    ++live;
+            return live;
+        }
+
+        // The instance's live claims by unit guid, for the scan's one read.
+        std::map<std::uint64_t, Claim> Of(std::uint32_t instanceId)
+        {
+            std::map<std::uint64_t, Claim> out;
+            for (const auto& claim : claims)
+                if (claim.first.first == instanceId)
+                    out.emplace(claim.first.second, claim.second);
+            return out;
+        }
+
+        // Takes or refreshes this bot's claim on `unitGuid` in one step against the live store: false when another
+        // bot holds a live claim on the unit (one claim per unit), when this bot already holds one on another unit
+        // (one per bot), or when the instance already has `cap` live claims and this bot holds none on this unit.
+        // Otherwise the claim is inserted or refreshed and true returned. `cap` 0 (the key off) never claims.
+        bool TryClaim(std::uint32_t instanceId, std::uint64_t unitGuid, std::uint64_t botGuid, std::uint32_t entry,
+                      std::uint32_t nowMs, std::uint32_t cap)
+        {
+            if (cap == 0 || botGuid == 0)
+                return false;
+            Prune(nowMs);
+            bool ownOnUnit = false;
+            for (const auto& claim : claims)
+            {
+                if (claim.first.first != instanceId || claim.second.botGuid != botGuid)
+                    continue;
+                if (claim.first.second != unitGuid)
+                    return false;
+                ownOnUnit = true;
+            }
+            auto const it = claims.find(Key(instanceId, unitGuid));
+            if (it != claims.end() && it->second.botGuid != botGuid)
+                return false;
+            if (!ownOnUnit && LiveCount(instanceId) >= cap)
+                return false;
+            Claim& claim = claims[Key(instanceId, unitGuid)];
+            claim.botGuid = botGuid;
+            claim.entry = entry;
+            claim.stampMs = nowMs;
+            return true;
+        }
+
+        // Drops this bot's claim on the unit; false when it holds none.
+        bool Drop(std::uint32_t instanceId, std::uint64_t unitGuid, std::uint64_t botGuid)
+        {
+            auto const it = claims.find(Key(instanceId, unitGuid));
+            if (it == claims.end() || it->second.botGuid != botGuid)
+                return false;
+            claims.erase(it);
+            return true;
+        }
+    };
+
     // The unit this bot peels, or -1: index into `c`. -1 for anything but a ranged free DPS and for a cap of 0 (the key
     // off). A bot keeps its own live claim while that unit still qualifies, and only the first check ignores
     // `weHoldIt`, because the claimant's own swing is what makes it true for the unit it already holds. A new claim is
