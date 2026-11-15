@@ -26,6 +26,7 @@
 #include "playerbot/CastKeepsRunningPolicy.h"
 #include "playerbot/SeekFightStatePolicy.h"
 #include "playerbot/SeekWalkoutPolicy.h"
+#include "playerbot/ReactionCastGuardPolicy.h"
 #include "Maps/PathFinder.h"
 #include "playerbot/strategy/values/LastMovementValue.h"
 #include "Maps/GridNotifiers.h"
@@ -1643,6 +1644,19 @@ void LogSeek(PlayerbotAI* ai, Player* bot, const SeekTask& task)
     char info1[128];
     snprintf(info1, sizeof(info1), "phase=%s,aura=%d,dist=%.1f,due_in=%u,cycle=%u", phase, task.hasAura ? 1 : 0,
              task.dist, static_cast<unsigned>(task.dueInMs / 1000), task.cycleNo);
+    sPlayerbotAIConfig.logEvent(ai, "BossTacticsSeek", info1, "");
+}
+
+// One row per seek heal wait (AiPlayerbot.ReactionHealSeekWaitMs), on the wait's first pass: the heal's own remainder,
+// the time left to the siphon and the walk the wait holds back. The seek row's own writer, unthrottled: a wait is
+// logged once, and the walk 103 shape (a heal of 2 s or less left, the siphon 3 s or more past it) has to be countable.
+void LogSeekHealWait(PlayerbotAI* ai, std::uint32_t remMs, std::uint32_t dueInMs, std::uint32_t travelMs)
+{
+    if (!sPlayerbotAIConfig.hasLog("bot_events.csv"))
+        return;
+    char info1[128];
+    snprintf(info1, sizeof(info1), "event=heal_wait,rem_ms=%u,due_in=%u,travel_ms=%u", static_cast<unsigned>(remMs),
+             static_cast<unsigned>(dueInMs / 1000), static_cast<unsigned>(travelMs));
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsSeek", info1, "");
 }
 
@@ -10872,6 +10886,60 @@ bool BossTacticsSeekAction::Execute(Event& event)
     if (hasLast && !bot->IsStopped() && !bot->movespline->Finalized() && std::fabs(lastX - x) < 1.0f &&
         std::fabs(lastY - y) < 1.0f)
         return true;
+    // The heal wait (AiPlayerbot.ReactionHealSeekWaitMs, ReactionCastGuardPolicy.h): the walk below breaks whatever
+    // cast is under way once it has a path, so a healer nearly through a heal keeps the walk standing while the
+    // cast's remainder, the walk there and the margin all fit inside the time left to the siphon. The at-spot pass
+    // above never reaches here, so the gather's own stand is untouched.
+    {
+        const std::uint32_t nowMs = WorldTimer::getMSTime();
+        // The wait's end is recorded before the rule reads it, at the wait's own end: a heal already under way on the
+        // first pass past the slack must not start a second wait inside the rewait spacing.
+        ai::SettleSeekHealWait(nowMs, healWaitUntilMs, healWaitActive, healWaitEndMs, healWaitEnded);
+        const bool inWait = healWaitActive && nowMs <= healWaitUntilMs + ai::kSeekHealWaitEndSlackMs;
+        std::uint32_t waitEndedMsAgo = std::numeric_limits<std::uint32_t>::max();
+        if (healWaitEnded && nowMs >= healWaitEndMs)
+            waitEndedMsAgo = nowMs - healWaitEndMs;
+        ai::ReactionCastRead cast;
+        const bool castRead = ai->ReadGenericCast(bot, cast);
+        ai::SeekHealWaitIn in;
+        in.waitMaxMs = sPlayerbotAIConfig.reactionHealSeekWaitMs;
+        in.botIsHealer = ai->IsHeal(bot);
+        in.cast = castRead ? &cast : nullptr;
+        in.dueInMs = task.dueInMs;
+        in.travelMs = ai::SeekTravelMs(task.dist, bot->GetSpeed(MOVE_RUN));
+        // A walk into a cloud: the poison on the ground is gone when the cloud's own time runs out.
+        in.cloudLeftMs = task.phase == SeekTask::Phase::Cloud && task.cloud
+            ? static_cast<std::int32_t>(task.cloud->GetDuration()) : -1;
+        in.inWait = inWait;
+        in.msSinceWaitEnd = waitEndedMsAgo;
+        // An emergency move or escape comes first: this seek is picked ahead of every one at or below its
+        // relevance, so a hold here would starve it. Ask only when the wait would otherwise stand; with the key off
+        // the rule already says no, and no trigger is read.
+        in.hazardDue = ai::SeekHealWaitDue(in) && ai::EmergencyMoveDue(ai);
+        if (ai::SeekHealWaitDue(in))
+        {
+            if (!inWait)
+            {
+                const std::uint32_t total = static_cast<std::uint32_t>(cast.totalMs);
+                const std::uint32_t rem = cast.remainingMs > total ? total : cast.remainingMs;
+                healWaitActive = true;
+                healWaitUntilMs = nowMs + rem;
+                healWaitEnded = false;
+                LogSeekHealWait(ai, rem, task.dueInMs, in.travelMs);
+            }
+            // No walk this pass; the next pass after the wait starts a walk from the top.
+            hasLast = false;
+            return false;
+        }
+        // A wait the rule cut short (an emergency came due, or the key went off) ends here: the rewait spacing counts
+        // from now, so the walk goes and a chain of heals cannot park the bot short of the cloud.
+        if (healWaitActive)
+        {
+            healWaitActive = false;
+            healWaitEnded = true;
+            healWaitEndMs = nowMs;
+        }
+    }
     if (!MoveTo(bot->GetMapId(), x, y, z, false, false, false, true, "seek_move"))
         return false;
     lastX = x;

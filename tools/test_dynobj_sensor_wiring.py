@@ -178,11 +178,14 @@ class DynObjHazardWiring(unittest.TestCase):
         self.assertIn('"flee from area"', FLEE_STRATEGY)
 
     def test_the_trigger_steps_out_proactively(self):
-        fn = body(TRIGGERS, "bool AoeThreatNearbyTrigger::IsActive()")
         # The step fires as the cloud forms, on the centre test, not only once
-        # the aura has landed ("has area debuff").
+        # the aura has landed ("has area debuff"). The condition is the shared
+        # AoeHazardEscapeDue, so the seek's heal wait asks exactly the same one.
+        fn = body(MOVEMENT, "bool ai::AoeHazardEscapeDue(")
         self.assertIn("CollectDamagingDynObjHazards(ai, bot, clouds, true)", fn)
         self.assertIn("InsideAoeHazard(cloud, bot->GetPositionX()", fn)
+        trigger = body(TRIGGERS, "bool AoeThreatNearbyTrigger::IsActive()")
+        self.assertIn("return AoeHazardEscapeDue(ai, bot);", trigger)
 
 
 class DynObjHoldWiring(unittest.TestCase):

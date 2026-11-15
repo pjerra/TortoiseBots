@@ -191,6 +191,8 @@ void PlayerbotAIConfig::LoadDungeonRunKeys()
     dungeonRunBossSpreadSlots = config.GetBoolDefault("AiPlayerbot.DungeonRunBossSpreadSlots", false);
     reactionHealCastGuardPct =
         std::min(100, std::max(0, config.GetIntDefault("AiPlayerbot.ReactionHealCastGuardPct", 0)));
+    reactionHealSeekWaitMs =
+        std::min(3000, std::max(0, config.GetIntDefault("AiPlayerbot.ReactionHealSeekWaitMs", 0)));
     dungeonRunBossProtectionPotion = config.GetBoolDefault("AiPlayerbot.DungeonRunBossProtectionPotion", false);
     dungeonRunHealReserve = config.GetBoolDefault("AiPlayerbot.DungeonRunHealReserve", false);
     spreadRangedMinRange = config.GetBoolDefault("AiPlayerbot.SpreadRangedMinRange", false);

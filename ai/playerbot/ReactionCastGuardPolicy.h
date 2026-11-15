@@ -25,7 +25,9 @@
 // in CASTING; it has no separate channeling state, the compat shim maps
 // SPELL_STATE_CHANNELING onto CASTING.
 
+#include <cmath>
 #include <cstdint>
+#include <limits>
 
 namespace ai
 {
@@ -79,5 +81,144 @@ namespace ai
         if (!cast || !cast->isHeal) return true;
         const int pct = ReactionCastPct(*cast);
         return pct < 0 || pct < guardPct;
+    }
+
+    // The seek's heal wait (AiPlayerbot.ReactionHealSeekWaitMs): `boss tactics seek` walks the bot into the row's
+    // cloud or to the gather around a dying source, and its walk (MoveTo) breaks whatever cast is under way. A healer
+    // that is nearly through a heal has nothing to gain from that: the walk stands for the rest of the cast when the
+    // remainder, the walk there and a margin all fit inside the time left to the siphon.
+    //
+    // Walk 103 measured 410 `seek_move` rows with a heal under way (a median cut at 43 % of the cast, ~3.1 per
+    // healer-fight). 94 % of the known-spell rows had 2 s or less left and the siphon was still due 3 s or more past
+    // that: the heal was worth more than the walk, so the walk is what should have waited.
+    //
+    // Any due emergency move or escape always wins: the reaction engine runs one picked action a tick, and the seek
+    // is picked ahead of every emergency row at or below its ACTION_EMERGENCY + 5, so a seek that stands its walk
+    // down to hold a heal would starve those. EmergencyMoveDue (MovementActions.h) is the one shared predicate: the
+    // avoid-aoe condition itself (AoeHazardEscapeDue) plus every trigger below. Otherwise a healer standing in a
+    // hostile ground effect, or one whose escape is due, could keep casting for the wait.
+    constexpr std::uint32_t kSeekHealWaitMarginMs = 3000; // slack over the walk's own length
+    constexpr std::uint32_t kSeekHealRewaitMs = 5000;     // no second wait within this of the last one's end
+    constexpr std::uint32_t kSeekHealWaitEndSlackMs = 200; // the wait reads as over this long past its end
+
+    // Close a wait whose end has passed before the rule reads it. The end is the wait's own untilMs (the cast's
+    // remainder), never the pass that notices: a heal read inside kSeekHealWaitEndSlackMs cannot move it, and with a
+    // second heal already under way the next wait still needs kSeekHealRewaitMs since the first cast's end, so a
+    // chain of heals cannot start a fresh wait between them.
+    inline void SettleSeekHealWait(std::uint32_t nowMs, std::uint32_t& untilMs, bool& active,
+                                   std::uint32_t& endMs, bool& ended)
+    {
+        if (!active || nowMs <= untilMs + kSeekHealWaitEndSlackMs)
+            return;
+        active = false;
+        ended = true;
+        endMs = untilMs;
+    }
+
+    // The trigger rows behind the emergency moves and escapes a healer's reaction engine can carry: all of them sit
+    // at ACTION_EMERGENCY and above, and every one has to go before the seek's wait (`avoid aoe` itself is asked
+    // through AoeHazardEscapeDue, whose trigger also registers the creature-aura keep-outs, so it is not listed
+    // here). Each action is a movement or escape action; the comment names the row's home in the strategy sources.
+    struct SeekHealWaitEmergencyMove
+    {
+        char const* trigger;
+        char const* action;
+    };
+
+    constexpr SeekHealWaitEmergencyMove kSeekHealWaitEmergencyMoves[] = {
+        // CombatStrategy.cpp:84-85, the reactive fallback below `avoid aoe` (combat and reaction engines).
+        { "has area debuff", "flee from area" },
+        // CombatStrategy.cpp:97-98, the reaction copy of the always-on `avoid aoe` strategy.
+        { "immune boss victim", "immune boss victim escape" },
+        // ReactionRowsPolicy.h:35-36, the `react` strategy's rows (AiPlayerbot.RaidReactions on).
+        { "environmental hazard nearby", "move away from hazard" },
+        // ReactionRowsPolicy.h:39-40; BlackwingLairDungeonStrategies.cpp:189-190 (Vael) and
+        // EmeraldSanctumDungeonStrategies.cpp:58-59 (Solnius) reuse the same trigger.
+        { "raid bomb debuff", "raid bomb runout" },
+        // BlackwingLairDungeonStrategies.cpp:189-190: the same bomb trigger on Vael drives the carrier's own flee.
+        { "raid bomb debuff", "vael adrenaline flee" },
+        // ReactionRowsPolicy.h:40-41.
+        { "four horsemen mark", "four horsemen rotate" },
+        // ReactionRowsPolicy.h:41-42.
+        { "dragon breath risk", "dragon flank" },
+        // BossTacticsStrategy.cpp:206-207, the reaction copy (the combat copy is at 59-60).
+        { "boss tactics flee", "boss tactics flee" },
+        // BossTacticsStrategy.cpp:184-185, the reaction copy (combat and non-combat copies too).
+        { "boss tactics avoid cast", "boss tactics avoid cast" },
+        // BlackwingLairDungeonStrategies.cpp:100-101.
+        { "razorgore cone", "escape razorgore cone" },
+        // BlackwingLairDungeonStrategies.cpp:104-105.
+        { "razorgore ranged", "back off razorgore" },
+        // MoltenCoreDungeonStrategies.cpp:124-125.
+        { "golemagg splash", "back off golemagg" },
+        // MoltenCoreDungeonStrategies.cpp:187-188 (relevance 100).
+        { "magmadar lava bomb", "move away from hazard" },
+        // MoltenCoreDungeonStrategies.cpp:226-227.
+        { "geddon inferno", "move away from geddon" },
+        // OnyxiasLairDungeonStrategies.cpp:82-83.
+        { "onyxia deep breath", "onyxia breath safe zone" },
+        // GrobbulusDungeonStrategies.cpp:28-29.
+        { "grobbulus injection ranged", "grobbulus go behind" },
+        // EmeraldSanctumDungeonStrategies.cpp:58-59.
+        { "solnius emerald rot", "raid bomb runout" },
+        // TempleOfAhnQirajStrategies.cpp:65-68, the reaction copy.
+        { "viscidus melee danger", "viscidus keep distance" },
+        { "viscidus toxin nearby", "viscidus toxin escape" },
+    };
+
+    // How long a walk of `distYd` takes at `speedYdS`. A speed of 0 (rooted, or no run speed read to trust) makes
+    // the walk unbounded, which refuses every wait: the bot walks as before.
+    inline std::uint32_t SeekTravelMs(float distYd, float speedYdS)
+    {
+        if (!(speedYdS > 0.0f))
+            return std::numeric_limits<std::uint32_t>::max();
+        if (!(distYd > 0.0f))
+            return 0;
+        const double ms = static_cast<double>(distYd) / static_cast<double>(speedYdS) * 1000.0;
+        const double limit = static_cast<double>(std::numeric_limits<std::uint32_t>::max());
+        return ms >= limit ? std::numeric_limits<std::uint32_t>::max() : static_cast<std::uint32_t>(std::ceil(ms));
+    }
+
+    // One seek pass as the wait reads it: the key, the bot's role, the generic slot's read, the time left to the
+    // siphon, the walk's own length, the cloud's time left when the walk is into one, a due hazard escape, and the
+    // wait's own state.
+    struct SeekHealWaitIn
+    {
+        int waitMaxMs = 0;                        // AiPlayerbot.ReactionHealSeekWaitMs, clamped 0-3000
+        bool botIsHealer = false;
+        ReactionCastRead const* cast = nullptr;   // the bot's generic slot (NULL: no cast)
+        std::uint32_t dueInMs = 0;                // the seek's task.dueInMs: 0 means the clock is unknown
+        std::uint32_t travelMs = 0;               // SeekTravelMs(dist, the bot's run speed)
+        std::int32_t cloudLeftMs = -1;            // the cloud's own duration left (cloud phase); -1: the gather
+        // EmergencyMoveDue (MovementActions.h): an emergency move or escape is due (the avoid-aoe condition or any
+        // trigger in kSeekHealWaitEmergencyMoves), so a wait here must never stand in front of it.
+        bool hazardDue = false;
+        bool inWait = false;                      // a wait already runs (its cast's remainder has not run out)
+        std::uint32_t msSinceWaitEnd = std::numeric_limits<std::uint32_t>::max(); // none yet
+    };
+
+    // Does the seek stand its walk down for the heal under way?
+    // - an emergency move or escape is due: no (the emergency comes first, whatever the heal's progress);
+    // - no key, no healer, no cast / not a heal / no progress to read: no;
+    // - more of the cast left than the key allows: no (the walk goes, and breaks it as before);
+    // - the siphon due before the cast, the walk and the margin are done: no (walking late beats healing now);
+    // - a cloud that runs out inside that same time: no (the poison on the ground is gone by the time it would land);
+    // - a wait that ended within kSeekHealRewaitMs: no (the bot walks, so a chain of heals cannot park it).
+    inline bool SeekHealWaitDue(SeekHealWaitIn const& in)
+    {
+        if (in.hazardDue) return false;
+        if (in.waitMaxMs <= 0) return false;
+        if (!in.botIsHealer) return false;
+        if (!in.cast || !in.cast->isHeal) return false;
+        if (ReactionCastPct(*in.cast) < 0) return false;
+        // ReactionCastPct above proves a total above 0; a countdown over it reads as a fresh cast.
+        const std::uint32_t rem = in.cast->remainingMs > static_cast<std::uint32_t>(in.cast->totalMs)
+            ? static_cast<std::uint32_t>(in.cast->totalMs) : in.cast->remainingMs;
+        if (rem > static_cast<std::uint32_t>(in.waitMaxMs)) return false;
+        const std::uint64_t need = static_cast<std::uint64_t>(rem) + in.travelMs + kSeekHealWaitMarginMs;
+        if (in.dueInMs == 0 || static_cast<std::uint64_t>(in.dueInMs) < need) return false;
+        if (in.cloudLeftMs >= 0 && static_cast<std::uint64_t>(in.cloudLeftMs) < need) return false;
+        if (!in.inWait && in.msSinceWaitEnd < kSeekHealRewaitMs) return false;
+        return true;
     }
 } // namespace ai

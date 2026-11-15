@@ -13,6 +13,7 @@
 #include "playerbot/FleeManager.h"
 #include "playerbot/LootObjectStack.h"
 #include "playerbot/PlayerbotAIConfig.h"
+#include "playerbot/ReactionCastGuardPolicy.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/strategy/values/PositionValue.h"
 #include "playerbot/strategy/values/Stances.h"
@@ -4578,6 +4579,59 @@ bool FleeFromAreaAction::isUseful()
     // range control) keeps its own rules.
     Unit* target = AI_VALUE(Unit*, "current target");
     return !(PlayerbotAI::IsTank(bot) && target && target->GetVictim() == bot);
+}
+
+// The hazard-escape condition behind `avoid aoe`, shared with the seek's heal wait so the two cannot disagree about
+// whether an escape is due. The sensors are the trigger's own; the action's landing checks stay in isUseful.
+bool ai::AoeHazardEscapeDue(PlayerbotAI* ai, Player* bot)
+{
+    if (!ai || !bot || !bot->IsInWorld() || bot->IsBeingTeleported() || !sServerFacade.IsAlive(bot))
+        return false;
+    AiObjectContext* context = ai->GetAiObjectContext();
+    // Any one sensor firing is enough; each read is value-cached (dynobj scan,
+    // dynobj aura check, 30yd trap scan, 15yd trigger scan).
+    // The cloud's own centre test, ahead of the aura check: the step must fire
+    // as the cloud forms, before its first 1 s tick lands. Creature-cast clouds
+    // only, the same sensor the step-out uses, so the open world and PvP
+    // against players are unchanged.
+    std::vector<AoeHazardCircle> clouds;
+    CollectDamagingDynObjHazards(ai, bot, clouds, true);
+    for (AoeHazardCircle const& cloud : clouds)
+    {
+        if (InsideAoeHazard(cloud, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ()))
+            return true;
+    }
+    if (AI_VALUE2(bool, "has area debuff", "self target"))
+        return true;
+    if (!AI_VALUE(std::list<ObjectGuid>, "nearest damaging traps").empty())
+        return true;
+    return !AI_VALUE(std::list<ObjectGuid>, "possible triggers").empty();
+}
+
+// Every emergency move or escape a healer's reaction engine can carry, in one predicate: the seek's heal wait must
+// never stand in front of one (ReactionCastGuardPolicy.h, SeekHealWaitDue). The triggers are its own; reading them
+// here, rather than reimplementing their conditions, keeps the two from disagreeing. `aoe threat nearby` is not
+// read this way: its IsActive also registers the creature-aura keep-outs, so the avoid-aoe condition itself
+// (AoeHazardEscapeDue, which reads the same sensors) stands for it.
+bool ai::EmergencyMoveDue(PlayerbotAI* ai)
+{
+    if (!ai)
+        return false;
+    Player* bot = ai->GetBot();
+    if (!bot || !bot->IsInWorld() || bot->IsBeingTeleported() || !sServerFacade.IsAlive(bot))
+        return false;
+    if (AoeHazardEscapeDue(ai, bot))
+        return true;
+    AiObjectContext* context = ai->GetAiObjectContext();
+    if (!context)
+        return false;
+    for (ai::SeekHealWaitEmergencyMove const& move : ai::kSeekHealWaitEmergencyMoves)
+    {
+        Trigger* trigger = context->GetTrigger(move.trigger);
+        if (trigger && trigger->IsActive())
+            return true;
+    }
+    return false;
 }
 
 bool AvoidAoeAction::isUseful()

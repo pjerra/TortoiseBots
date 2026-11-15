@@ -292,6 +292,20 @@ namespace ai
         virtual bool isUseful() override;
     };
 
+    // The condition behind `avoid aoe`: any of the three strafe sensors sees danger — a damaging dynamic object's
+    // aura or centre on the bot, a damaging trap in range, a listed trigger NPC in range, or an area debuff on the
+    // bot. One rule for the trigger that queues the escape and for the seek's heal wait (through EmergencyMoveDue
+    // below), which declines to hold a healer's cast while an escape is due (ReactionCastGuardPolicy.h,
+    // SeekHealWaitDue).
+    bool AoeHazardEscapeDue(PlayerbotAI* ai, Player* bot);
+
+    // Is an emergency move or escape due that must preempt the seek's heal wait? One shared predicate for every
+    // trigger in ai::kSeekHealWaitEmergencyMoves (ReactionCastGuardPolicy.h: flee from area, immune boss victim
+    // escape, the raid reaction rows and the encounter escapes a healer's reaction engine can carry), plus the
+    // avoid-aoe condition above. The reaction engine runs one picked action a tick and picks `boss tactics seek`
+    // (ACTION_EMERGENCY + 5) ahead of every row at or below it, so a hold here would starve those escapes.
+    bool EmergencyMoveDue(PlayerbotAI* ai);
+
     // Proactive AoE avoidance (donor AvoidAoeAction shape): three sensors —
     // dynobj aura affecting the bot, damaging trap GO in range, trigger NPC
     // in range — then a strafe-first step-out that stays in combat range

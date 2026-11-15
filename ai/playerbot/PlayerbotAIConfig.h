@@ -873,6 +873,11 @@ public:
     // still cut; from it on the heal stands (ReactionCastGuardPolicy.h). Off, every reaction breaks the cast at pick
     // time, as before (default 0 = off, recommended on at 1).
     int reactionHealCastGuardPct = 0;
+    // How much of a healer's heal may be left for the seek's walk to stand down for it, in ms: the walk stands while
+    // the cast's remainder, the walk there and a margin fit inside the time left to the siphon
+    // (ReactionCastGuardPolicy.h, SeekHealWaitDue). Off, the walk breaks the cast as before (default 0 = off,
+    // recommended on at 2000).
+    int reactionHealSeekWaitMs = 0;
     // One BossStand row per bot's stand episode (assigned, arrived, unseated, released) into bot_events.csv: off, the
     // stand code writes nothing and reads no episode state (needs the boss stand rows and the bot_events.csv log;
     // default off).
