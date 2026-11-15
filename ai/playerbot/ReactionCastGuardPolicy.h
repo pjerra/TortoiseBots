@@ -91,8 +91,8 @@ namespace ai
     // Walk 103 measured 410 `seek_move` rows with a heal under way (a median cut at 43 % of the cast, ~3.1 per
     // healer-fight). 94 % of the known-spell rows had 2 s or less left and the siphon was still due 3 s or more past
     // that: the heal was worth more than the walk, so the walk is what should have waited.
-    constexpr std::uint32_t kSeekHealWaitMarginMs = 3000;  // slack over the walk's own length
-    constexpr std::uint32_t kSeekHealRewaitMs = 5000;      // no second wait within this of the last one's end
+    constexpr std::uint32_t kSeekHealWaitMarginMs = 3000; // slack over the walk's own length
+    constexpr std::uint32_t kSeekHealRewaitMs = 5000;     // no second wait within this of the last one's end
     constexpr std::uint32_t kSeekHealWaitEndSlackMs = 200; // the wait reads as over this long past its end
 
     // How long a walk of `distYd` takes at `speedYdS`. A speed of 0 (rooted, or no run speed read to trust) makes
