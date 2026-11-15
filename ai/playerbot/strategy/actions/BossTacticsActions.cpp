@@ -8431,7 +8431,7 @@ bool BossTacticsHoldKillAction::Execute(Event& event)
         for (CurrentSpellTypes type : {CURRENT_GENERIC_SPELL, CURRENT_CHANNELED_SPELL})
         {
             Spell* const cast = bot->GetCurrentSpell(type);
-            if (cast && cast->m_targets.getUnitTarget() == held)
+            if (cast && cast->m_targets.getUnitTargetGuid() == held->GetObjectGuid())
             {
                 ai::LogCastCancelNonMelee(ai, "tank_first", false);
                 bot->InterruptNonMeleeSpells(false);

@@ -52,7 +52,7 @@ class SeekVictimReliefWiring(unittest.TestCase):
         self.assertEqual(1, ACTIONS.count("task.takeSrc = \"victim_relief\";"))
 
     def test_VictimRelief_MainAndFourthTankReachRelief(self):
-        fn = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot)")
+        fn = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot, std::uint64_t")
         gate_start = fn.index("if (!thirdTank && !pickupTank && !healerTaker)\n    {")
         gate = fn[gate_start:fn.index("SeekFight state;", gate_start)]
         # The bots the gate drops (no pull job, and no hunter/ranged fallback: the main tank, a fourth tank, a
@@ -71,7 +71,7 @@ class SeekVictimReliefWiring(unittest.TestCase):
             self.assertNotIn(field, early)
 
     def test_VictimRelief_KeyOffTheEarlyBlockReadsNothing(self):
-        fn = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot)")
+        fn = body(ACTIONS, "SeekTankTask FindBossSeekTankUnparked(PlayerbotAI* ai, Player* bot, std::uint64_t")
         gate_start = fn.index("if (!thirdTank && !pickupTank && !healerTaker)\n    {")
         gate = fn[gate_start:fn.index("SeekFight state;", gate_start)]
         flag = gate.index("if (roles.botIndex >= 0 && sPlayerbotAIConfig.dungeonRunSeekVictimRelief)")
