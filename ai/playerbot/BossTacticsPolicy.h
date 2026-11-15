@@ -1920,16 +1920,27 @@ namespace ai
             std::uint32_t hpPct = 0; // the unit's health when the claim was taken, for the lapse row
         };
         using Key = std::pair<std::uint32_t, std::uint64_t>; // map instance, unit's raw guid
+        // A claim Prune dropped, with its unit's key: the caller writes the timeout row after it releases the lock.
+        struct Lapsed
+        {
+            Key key;
+            Claim claim;
+        };
         std::map<Key, Claim> claims;
 
         // Drops every claim past the window: a stale stamp is a claim that lapsed (PeelClaimLive), so the map never
         // grows past the live claims. A stamp ahead of `nowMs` stays: another thread's later clock read is not a lapse.
-        void Prune(std::uint32_t nowMs)
+        // `lapsed` receives what was dropped, so a claim that expired before its owner read it again can still be said.
+        void Prune(std::uint32_t nowMs, std::vector<Lapsed>* lapsed = nullptr)
         {
             for (auto it = claims.begin(); it != claims.end();)
             {
                 if (!PeelClaimLive(it->second.botGuid, it->second.stampMs, nowMs))
+                {
+                    if (lapsed)
+                        lapsed->push_back(Lapsed{it->first, it->second});
                     it = claims.erase(it);
+                }
                 else
                     ++it;
             }

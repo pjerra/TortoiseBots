@@ -272,7 +272,7 @@ namespace ai
         std::uint32_t stampMs = 0;
         std::uint32_t hpPct = 0;
         std::uint32_t ageMs = 0;
-        const char* reason = "timeout"; // dead|victim_not_ours|reach|not_free|bot_dead|timeout
+        const char* reason = "released"; // dead|victim_not_ours|reach|not_free|bot_dead|released|timeout
     };
 
     // One read of the healer peel: the held entries' units within the claim's reach with their claim state, the

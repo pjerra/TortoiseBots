@@ -1840,6 +1840,17 @@ AiPlayerbot.DungeonRunRaidHealerGuard = 0
 # Recommended on at 4.
 AiPlayerbot.DungeonRunHoldKillHealerPeel = 0
 
+# A boss step's pack focus spares hold_kill entries (Onyxia walk 2l): the run leader's pack focus puts the party's
+# skull on a boss step's best add when no plan kill_first unit of the fight is left, and a hold_kill row's spared
+# entry is one of those adds: in Onyxia P2 the leader sent a party-wide "kill whelp 11262 first" order about every
+# focus tick (85 a fight), every bot that took it counted as ordered, and the hold's own free-DPS test failed, so
+# the whelps pulled the damage dealers off Cindarion and the healer peel's claims lapsed. With this on, an entry a
+# hold_kill row of the plan's map spares (the row's boss_entry) is never the pack focus, and a bot with an explicit
+# attack target whose unit is dead or no longer in the world is free again rather than blocked by that order.
+# 0 - off: the pack focus may skull a hold_kill entry, and a dead target still reads as an order (Default)
+# 1 - on
+AiPlayerbot.DungeonRunPackFocusSparesHoldKill = 0
+
 # Pure interrupts skip the damage threat back-off the way heals do. Kick, Pummel, Shield Bash, Bash, Counterspell and
 # Silence are single-target spell actions, so a damage dealer whose threat on its target sat at the 80 % line had them
 # vetoed like a nuke and let the cast finish: a rogue stood idle at full energy in 21 of 50 Kick windows (Tortoise

@@ -18,6 +18,10 @@ W7: a run skull record is live only while its unit is a living hostile of the fi
 W8: a kill_first unit that is only passive (in no combat yet) keeps the run's skull: the record survives on a living,
     attackable kill_first unit (SkullUnitLives), PickKillFirst keeps the focused one, the pack's fallback waits for its
     death, and FocusGone does not end the focus on it.
+W9: with AiPlayerbot.DungeonRunPackFocusSparesHoldKill (default 0) a boss step's fallback never skulls an entry a
+    hold_kill row of the plan's map spares (HoldKillRowNames), and a bot whose explicit attack target died or left the
+    world is free again (IsFreeDps); the peel's lapse rows get their own log bucket, and the peel trigger's claim test
+    asks the map before any mutex or group lookup (GetBossTactics().HasMap).
 """
 import pathlib
 import unittest
@@ -25,6 +29,13 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 POLICY = (ROOT / "runtime/DungeonRunPolicy.h").read_text()
 COMMANDER = (ROOT / "commands/Commander.cpp").read_text()
+ACTIONS = (ROOT / "ai/playerbot/strategy/actions/BossTacticsActions.cpp").read_text()
+GENERIC_TRIGGERS = (ROOT / "ai/playerbot/strategy/triggers/GenericTriggers.cpp").read_text()
+CONFIG_H = (ROOT / "ai/playerbot/PlayerbotAIConfig.h").read_text()
+CONFIG = (ROOT / "ai/playerbot/PlayerbotAIConfig.cpp").read_text()
+CONF_DIST = (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text()
+SETTINGS_DOC = (ROOT / "docs/server/settings/dungeons-raids.md").read_text()
+PLAY_DOC = (ROOT / "docs/play/boss-tactics.md").read_text()
 
 
 def body(text, start, end="\n}\n"):
@@ -59,7 +70,7 @@ class PackFocusWiringTest(unittest.TestCase):
     def test_a_boss_add_is_no_boss_and_no_tactic_row_unit(self):
         fn = body(POLICY, "inline const UnitFact* PickPackFocus(")
         self.assertIn("if (boss && (IsStepBoss(*s, u) || (r.plan && r.plan->KillFirstRank(u.entry) >= 0) ||", fn)
-        self.assertIn("BossTacticOwnsEntry(r, *s, u.entry)))", fn)
+        self.assertIn("BossTacticOwnsEntry(r, *s, u.entry) ||", fn)
         own = body(POLICY, "inline bool BossTacticOwnsEntry(const Run& r, const PlanStep& s, std::uint32_t entry)\n{")
         self.assertIn("(row.kind == ai::BossTacticKind::KillFirst || row.kind == ai::BossTacticKind::LinkedDeath)",
                       own)
@@ -120,6 +131,55 @@ class PackFocusWiringTest(unittest.TestCase):
         fn = body(POLICY, "inline bool FocusGone(")
         self.assertIn("for (const UnitFact& u : f.killFirst)", fn)
         self.assertIn("for (const UnitFact& u : f.engagedUnits)", fn)
+
+
+class PackFocusSparesHoldKill(unittest.TestCase):
+    """The pack focus's hold_kill spare (Onyxia walk 2l3): a boss step's fallback must not skull an entry a hold_kill
+    row spares, or the focus order commits every bot that takes it and the hold and the healer peel have no free DPS."""
+
+    def test_the_key_is_off_by_default(self):
+        self.assertIn('GetIntDefault("AiPlayerbot.DungeonRunPackFocusSparesHoldKill", 0)', CONFIG)
+        self.assertIn("\nAiPlayerbot.DungeonRunPackFocusSparesHoldKill = 0\n", CONF_DIST)
+        self.assertIn("uint32 dungeonRunPackFocusSparesHoldKill = 0;", CONFIG_H)
+        # Read by the reloadable DungeonRun* loader, next to the peel key it completes.
+        self.assertLess(CONFIG.index('GetIntDefault("AiPlayerbot.DungeonRunHoldKillHealerPeel"'),
+                        CONFIG.index('GetIntDefault("AiPlayerbot.DungeonRunPackFocusSparesHoldKill"'))
+
+    def test_the_facts_bit_reaches_the_policy(self):
+        self.assertIn("bool packFocusSparesHoldKill = false;", POLICY)
+        self.assertIn("f.packFocusSparesHoldKill = "
+                      "sPlayerbotAIConfig.dungeonRunPackFocusSparesHoldKill != 0;", COMMANDER)
+
+    def test_the_pack_focus_asks_the_rows(self):
+        self.assertIn("inline bool HoldKillRowNames(const Run& r, std::uint32_t entry)", POLICY)
+        helper = body(POLICY, "inline bool HoldKillRowNames(")
+        self.assertIn("r.liveTactics->Rows(r.plan->map, entry)", helper)
+        self.assertIn("row.kind == ai::BossTacticKind::HoldKill && row.bossEntry == entry", helper)
+        fn = body(POLICY, "inline const UnitFact* PickPackFocus(")
+        self.assertIn("(f.packFocusSparesHoldKill && HoldKillRowNames(r, u.entry))", fn)
+
+    def test_a_dead_explicit_order_is_no_order(self):
+        fn = body(ACTIONS, "bool IsFreeDps(")
+        self.assertIn('context->GetValue<ObjectGuid>("explicit attack target")->Get();', fn)
+        self.assertIn("if (!sPlayerbotAIConfig.dungeonRunPackFocusSparesHoldKill)\n        return false;", fn)
+        self.assertIn("Unit* const unit = ObjectAccessor::GetUnit(*bot, ordered);", fn)
+        self.assertIn("return !unit || !unit->IsInWorld() || !unit->IsAlive();", fn)
+
+    def test_the_peel_trigger_asks_the_map_first(self):
+        single = body(GENERIC_TRIGGERS, "bool NotDpsTargetActiveTrigger::IsActive()")
+        self.assertIn("sPlayerbotAIConfig.dungeonRunHoldKillHealerPeel &&", single)
+        self.assertIn("GetBossTactics().HasMap(bot->GetMapId())", single)
+        self.assertLess(single.index("GetBossTactics().HasMap(bot->GetMapId())"),
+                        single.index("HoldKillPeelOwns(ai, bot, target);"))
+        aoe = body(GENERIC_TRIGGERS, "bool NotDpsAoeTargetActiveTrigger::IsActive()")
+        self.assertIn("sPlayerbotAIConfig.dungeonRunHoldKillHealerPeel && "
+                      "GetBossTactics().HasMap(bot->GetMapId())", aoe)
+        self.assertLess(aoe.index("GetBossTactics().HasMap(bot->GetMapId())"),
+                        aoe.index("HoldKillPeelOwns(ai, bot, target);"))
+
+    def test_the_key_is_documented(self):
+        self.assertIn("### `AiPlayerbot.DungeonRunPackFocusSparesHoldKill`", SETTINGS_DOC)
+        self.assertIn("DungeonRunPackFocusSparesHoldKill", PLAY_DOC)
 
 
 if __name__ == "__main__":

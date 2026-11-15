@@ -11724,9 +11724,10 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
         f.bossTacticNoCc = ai::GetBossTactics().NoCcEntries(lead->GetMapId());
     f.autoCcRisky = f.autoCc && sPlayerbotAIConfig.dungeonRunAutoCcRisky;
     f.autoCcAbove = sPlayerbotAIConfig.dungeonRunAutoCcAbove;
-    // The totem focus and the aura-gated targets (FocusSkipsBot, GuardSkipsUnit): read every tick, so a reload switches
-    // them mid-run.
+    // The totem focus, the pack focus's hold_kill spare and the aura-gated targets (FocusSkipsBot, GuardSkipsUnit,
+    // PickPackFocus): read every tick, so a reload switches them mid-run.
     f.totemFocus = sPlayerbotAIConfig.dungeonRunTotemFocus;
+    f.packFocusSparesHoldKill = sPlayerbotAIConfig.dungeonRunPackFocusSparesHoldKill != 0;
     f.auraGatedTargets = sPlayerbotAIConfig.dungeonRunAuraGatedTargets;
     f.respawnNest = sPlayerbotAIConfig.dungeonRunRespawnNest; // AiPlayerbot.DungeonRunRespawnNest
     // The guard's walk back after a won fight (DungeonRun::GuardWalkBackWanted): read every tick, so a config

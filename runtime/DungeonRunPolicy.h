@@ -2050,6 +2050,9 @@ struct Facts
     // the guard, and the guard skips totems. AiPlayerbot.DungeonRunAuraGatedTargets: the guard skips an aura-gated unit
     // (UnitFact::auraGated).
     bool totemFocus = false;
+    // AiPlayerbot.DungeonRunPackFocusSparesHoldKill: a boss step's pack focus never skulls an entry a hold_kill row of
+    // the plan's map spares (PickPackFocus), and a dead or gone explicit attack target counts as no order.
+    bool packFocusSparesHoldKill = false;
     bool auraGatedTargets = false;
     // The living damage dealers the totem focus may send (not a tank, not a healer, not a carrier of an aura-gated
     // row), read with Facts::killFirst: the totem re-send wants TotemFocusDpsWanted(dpsAlive) on the totem. 0: none
@@ -10866,6 +10869,23 @@ inline bool BossTacticOwnsEntry(const Run& r, const PlanStep& s, std::uint32_t e
     return false;
 }
 
+// Whether a live hold_kill row of the plan's map spares `entry`: the row's boss_entry is the unit its DPS leave alone
+// while the row's blocker lives (Onyxia P2: the whelps 11262). Such an entry keeps its row's rule and is never the pack
+// focus's fallback: a focus order on it commits an explicit attack target on every bot that takes it, which makes those
+// bots not free for the hold and the healer peel.
+inline bool HoldKillRowNames(const Run& r, std::uint32_t entry)
+{
+    if (!r.liveTactics || !r.plan || !entry)
+        return false;
+    const std::vector<ai::BossTacticRow>* const rows = r.liveTactics->Rows(r.plan->map, entry);
+    if (!rows)
+        return false;
+    for (const ai::BossTacticRow& row : *rows)
+        if (row.kind == ai::BossTacticKind::HoldKill && row.bossEntry == entry)
+            return true;
+    return false;
+}
+
 // The pack's own focus. The run's skull otherwise comes from the plan's kill_first list alone, so a wing whose list
 // names one entry (scarlet_library: 4291, its Scarlet Diviner) had a skull on that entry's pulls and none on the
 // others — "the tank only marks the Scarlet Diviners". When no kill_first unit of this fight is eligible, the step's
@@ -10875,7 +10895,9 @@ inline bool BossTacticOwnsEntry(const Run& r, const PlanStep& s, std::uint32_t e
 // only the boss is left. Only a unit of this fight: alive (the read lists living ones), not friendly, attackable, not
 // evading, not under the run's crowd control (an aura, or an order out — Run::ccSent), not one whose focus order was
 // refused a moment ago, and within kKillFirstMaxYd of the lead bot (the focus sends every bot at it). An event and a
-// rest fight keep their own rule.
+// rest fight keep their own rule. With AiPlayerbot.DungeonRunPackFocusSparesHoldKill on, an add a hold_kill row of the
+// plan's map spares is passed over too (HoldKillRowNames): the row owns it, and a focus order would commit every bot
+// that takes it, so no bot is free for the hold or the healer peel.
 inline const UnitFact* PickPackFocus(const Run& r, const Facts& f)
 {
     const PlanStep* const s = Current(r);
@@ -10900,7 +10922,8 @@ inline const UnitFact* PickPackFocus(const Run& r, const Facts& f)
             continue;
         // A boss step's fallback is for its adds: the boss itself and the units its own rows name keep their rule.
         if (boss && (IsStepBoss(*s, u) || (r.plan && r.plan->KillFirstRank(u.entry) >= 0) ||
-                BossTacticOwnsEntry(r, *s, u.entry)))
+                BossTacticOwnsEntry(r, *s, u.entry) ||
+                (f.packFocusSparesHoldKill && HoldKillRowNames(r, u.entry))))
             continue;
         // Its focus was refused a moment ago (kFocusRefusedIgnoreMs).
         auto const refused = r.focusRefused.find(u.guid);

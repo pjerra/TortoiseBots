@@ -153,7 +153,8 @@ class TheClaimStore(unittest.TestCase):
         self.assertIn("std::lock_guard<std::mutex> lock(g_holdKillPeelMutex);", claims_of)
         self.assertIn("const std::uint32_t clockMs = WorldTimer::getMSTime();", claims_of)
         self.assertIn("*nowMs = clockMs;", claims_of)
-        self.assertIn("g_holdKillPeelClaims.Prune(clockMs);", claims_of)
+        self.assertIn("g_holdKillPeelClaims.Prune(clockMs, lapsed);", claims_of)
+        self.assertIn("std::vector<HoldKillPeelClaims::Lapsed>* lapsed = nullptr", claims_of)
 
     def test_the_claim_refreshes_while_the_victim_stays_ours(self):
         fn = body(ACTIONS, "bool ai::HoldKillPeelOwns(")
@@ -184,7 +185,7 @@ class TheClaimStore(unittest.TestCase):
         # The candidates come from the entries the fight still holds, through the hold's own grid search; an entry the
         # hold has released contributes nothing.
         scan = body(ACTIONS, "ai::BossHealerPeelScan ai::ScanBossHealerPeel(")
-        self.assertIn("HoldKillPeelClaimsOf(bot->GetInstanceId(), &nowMs)", scan)
+        self.assertIn("HoldKillPeelClaimsOf(bot->GetInstanceId(), &nowMs, &lapsed)", scan)
         self.assertIn("for (std::uint32_t entry : PeelEntries(fight.rows, countNear))", scan)
         self.assertNotIn("row->bossEntry", scan)
         self.assertIn('"kill first grid units"', scan)
@@ -210,7 +211,9 @@ class TheClaimantKeepsItsWhelp(unittest.TestCase):
 
     def test_the_dps_triggers_ask_the_claim(self):
         single = body(GENERIC_TRIGGERS, "bool NotDpsTargetActiveTrigger::IsActive()")
-        self.assertIn("if (!enemy && !holdsCurrent && sPlayerbotAIConfig.dungeonRunHoldKillHealerPeel)", single)
+        self.assertIn("if (!enemy && !holdsCurrent && sPlayerbotAIConfig.dungeonRunHoldKillHealerPeel &&",
+                      single)
+        self.assertIn("GetBossTactics().HasMap(bot->GetMapId()))", single)
         self.assertIn("holdsCurrent = HoldKillPeelOwns(ai, bot, target);", single)
         self.assertLess(single.index("CarrierHoldsCurrent("), single.index("HoldKillPeelOwns(ai, bot, target);"))
         aoe = body(GENERIC_TRIGGERS, "bool NotDpsAoeTargetActiveTrigger::IsActive()")
@@ -235,7 +238,7 @@ class TheClaimantKeepsItsWhelp(unittest.TestCase):
         self.assertIn("own.hpPct", fn)
         scan = body(ACTIONS, "ai::BossHealerPeelScan ai::ScanBossHealerPeel(")
         self.assertIn("PeelKeepRefusal(botAlive, rangedFreeDps, unitAlive, evading, victimOurs, distance)", scan)
-        self.assertIn("own.reason = refusal ? refusal : \"timeout\";", scan)
+        self.assertIn('own.reason = refusal ? refusal : "released";', scan)
         self.assertIn("own.hpPct = claim.second.hpPct;", scan)
         self.assertIn("std::uint32_t hpPct = 0; // the unit's health when the claim was taken", POLICY)
         self.assertIn("claim.hpPct = hpPct;", POLICY)
@@ -252,16 +255,29 @@ class TheClaimantKeepsItsWhelp(unittest.TestCase):
 
 class ThePeelIsLogged(unittest.TestCase):
     """Walk 2l reads the peel off bot_events.csv: one BossTacticsHoldKill row with peel=claim|keep|lapse and the unit,
-    its victim and the instance's claim count. Its own 2 s bucket, because a claim only lives 3 s."""
+    its victim and the instance's claim count. Its own 2 s bucket, because a claim only lives 3 s, and the lapse has
+    one of its own so a keep read on the same tick cannot swallow the reason."""
 
     def test_the_row_is_written(self):
         log = body(ACTIONS, "void LogHoldKillPeel(")
         self.assertIn('snprintf(info1, sizeof(info1), "peel=%s", word);', log)
         self.assertIn('"unit=%u:%u,victim=%s,claims=%u"', log)
         self.assertIn('sPlayerbotAIConfig.logEvent(ai, "BossTacticsHoldKill", info1, info2);', log)
-        self.assertIn("HoldKillLogDue(bot, HoldKillLogKind::Peel)", log)
+        self.assertIn("HoldKillLogDue(bot, reason ? HoldKillLogKind::PeelLapse : HoldKillLogKind::Peel)", log)
         self.assertIn("constexpr uint32 kHoldKillPeelLogGapMs = 2000;", ACTIONS)
-        self.assertIn("return kind == HoldKillLogKind::Peel ? kHoldKillPeelLogGapMs : kHoldKillLogGapMs;", ACTIONS)
+        self.assertIn("kind == HoldKillLogKind::Peel || kind == HoldKillLogKind::PeelLapse", ACTIONS)
+        self.assertIn("? kHoldKillPeelLogGapMs\n", ACTIONS)
+
+    def test_a_timeout_lapse_is_written_when_the_store_prunes(self):
+        self.assertIn("struct Lapsed", POLICY)
+        prune = body(POLICY, "void Prune(", "\n        }\n")
+        self.assertIn("lapsed->push_back(Lapsed{it->first, it->second});", prune)
+        scan = body(ACTIONS, "ai::BossHealerPeelScan ai::ScanBossHealerPeel(")
+        self.assertIn("std::vector<HoldKillPeelClaims::Lapsed> lapsed;", scan)
+        self.assertIn('"timeout", ageMs,', scan)
+        # The locked read only collects; the row is written after it returns.
+        self.assertLess(scan.index("HoldKillPeelClaimsOf(bot->GetInstanceId(), &nowMs, &lapsed)"),
+                        scan.index('LogHoldKillPeel(ai, bot, "lapse", old.claim.entry'))
 
     def test_every_claim_end_is_one_of_the_three_words(self):
         fn = body(ACTIONS, "bool BossTacticsHealerPeelAction::Execute(")

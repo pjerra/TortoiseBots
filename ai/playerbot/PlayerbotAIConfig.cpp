@@ -133,6 +133,8 @@ void PlayerbotAIConfig::LoadDungeonRunKeys()
     dungeonRunRaidHealerGuard = config.GetBoolDefault("AiPlayerbot.DungeonRunRaidHealerGuard", false);
     dungeonRunHoldKillHealerPeel = static_cast<uint32>(std::min(20, std::max(0,
         config.GetIntDefault("AiPlayerbot.DungeonRunHoldKillHealerPeel", 0))));
+    dungeonRunPackFocusSparesHoldKill =
+        config.GetIntDefault("AiPlayerbot.DungeonRunPackFocusSparesHoldKill", 0) ? 1u : 0u;
     interruptIgnoresThreat = config.GetBoolDefault("AiPlayerbot.InterruptIgnoresThreat", false);
     spellFacingPrecheck = config.GetBoolDefault("AiPlayerbot.SpellFacingPrecheck", false);
     threatCapCountsCastThreat = config.GetBoolDefault("AiPlayerbot.ThreatCapCountsCastThreat", false);

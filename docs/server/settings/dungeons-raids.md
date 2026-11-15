@@ -67,6 +67,7 @@ These settings configure boss encounter mechanics, environmental hazard evasion,
 | [`AiPlayerbot.DungeonRunRaidBossRules`](#aiplayerbotdungeonrunraidbossrules) | `0` | `1`: a raid's boss fight runs up to 1200 s, survives its deaths while the boss still loses hp, and sends its adds to the off-tanks instead of the main tank. |
 | [`AiPlayerbot.DungeonRunRaidHealerGuard`](#aiplayerbotdungeonrunraidhealerguard) | `0` | `1`: in a raid boss fight with the main tank on the boss, and in a raid trash fight once the main tank held its current target (kept on for the fight), an add on a healer goes to the nearest ranged dps within 35 yd of it (up to two per add), and the off-tanks take only such an add when no ranged dps is free. |
 | [`AiPlayerbot.DungeonRunHoldKillHealerPeel`](#aiplayerbotdungeonrunholdkillhealerpeel) | `0` | N (`1`-`20`; 4 typical, recommended on at `4`): a ranged damage dealer with no order claims one add of a `hold_kill` row's held entry at a time while that add eats a group healer, at most N live claims per map instance, and the hold is lifted for the claimant on that unit alone. |
+| [`AiPlayerbot.DungeonRunPackFocusSparesHoldKill`](#aiplayerbotdungeonrunpackfocussparesholdkill) | `0` | `1`: a boss step's pack focus never skulls an entry a `hold_kill` row of the plan's map spares, and an explicit attack target whose unit died or left the world counts as no order. |
 | [`AiPlayerbot.DungeonRunGuardClockHittable`](#aiplayerbotdungeonrunguardclockhittable) | `0` | `1`: the raid guard's assignment clock starts on the first hittable tick (attackable and selectable), and a `tank_post` unit gets the post's 15 s grace instead of 8 s. |
 | [`AiPlayerbot.FankrissSwapStacks`](#aiplayerbotfankrissswapstacks) | `5` | Mortal Wound stacks at which an opt-in `fankriss tank` taunts Fankriss off the current tank (1-9). |
 | [`AiPlayerbot.PatchwerkOpeningDelay`](#aiplayerbotpatchwerkopeningdelay) | `4` | Seconds the DPS hold Patchwerk after an opt-in `patchwerk main` engages him (`0` = off, else 3-5). |
@@ -707,7 +708,23 @@ A ranged damage dealer claims one add of a `hold_kill` row's held entry while th
 - one claim per unit, one per bot, and no new claim while the instance already holds the key's count of live claims.
 - the hold is lifted for the claimant alone, on its own unit: the dps target, the assist and the attack pickers leave that bot on the add, the `hold_kill` action never sends it back, and the area and attacker-debuff (DoT) vetoes around it stay.
 - the claim is kept while the bot is on the add and the add's victim is still one of ours, the claimant included (the claimant's own hits take the add off the healer): alive, not evading, within 40 yd, and no longer needing a healer victim. 3 s after its last refresh (the add died, its victim left the group, the bot moved on) it lapses and the hold applies again. `gate_hold`, `one_at_a_time` and `seek_aura` holds are untouched, and the healer guard's own orders still win over a peel.
-- `bot_events.csv` gets a `BossTacticsHoldKill` row with `peel=claim|keep|lapse`, `unit=<entry>:<guid low>`, `victim=<name>` and `claims=<n>` (at most one per bot per 2 s). A lapse instead says why and what it cost: `reason=dead|victim_not_ours|reach|not_free|bot_dead|timeout`, `age=<ms>`, `hp=<claim %>-><now %>`, `claims=<n>`.
+- `bot_events.csv` gets a `BossTacticsHoldKill` row with `peel=claim|keep|lapse`, `unit=<entry>:<guid low>`, `victim=<name>` and `claims=<n>` (at most one per bot per 2 s; a lapse has its own bucket, so a keep read on the same tick cannot swallow it). A lapse instead says why and what it cost: `reason=dead|victim_not_ours|reach|not_free|bot_dead|released|timeout`, `age=<ms>`, `hp=<claim %>-><now %>`, `claims=<n>`. `released` is a claim the candidate list dropped because the row stopped holding the entry; `timeout` is one the 3 s stamp expired before its owner's scan saw it again, written when the claim store prunes it.
+
+</details>
+
+### `AiPlayerbot.DungeonRunPackFocusSparesHoldKill`
+A boss step's pack focus never skulls an entry a `hold_kill` row of the plan's map spares.
+**Default:** `0` (off) · **Values:** `0` off, `1` on · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+<details>
+<summary>How it works in detail</summary>
+
+**The order the hold outlived:** when no `kill_first` unit of the fight is left, a boss step's pack focus puts the party's skull on the step's best add (never the boss, never a unit a `kill_first` or `linked_death` row names). A `hold_kill` row's spared entry is one of those adds (Onyxia P2: the whelps 11262, held while Cindarion 50143 lives), so the leader sent a party-wide "kill whelp first" order about every focus tick, and every bot that took it carried an explicit attack target. That made those bots not free for the hold and for the healer peel, so the hold let them go and the peel's claims lapsed.
+
+- with `1`, an entry a `hold_kill` row of the plan's map spares (the row's `boss_entry`) is never the pack focus: the row, the healer peel and the bots' own picks decide who fights it
+- the same key treats an explicit attack target whose unit died or left the world as no order at all, so a bot whose focus target died is free again instead of being held off by a spent order
+- a `kill_first` unit the plan lists is unchanged (the plan's own choice is never the fallback), and a pull or move step's fallback is unchanged: only a boss step's `hold_kill` entries are passed over
+- with `0` the pack focus may skull a `hold_kill` entry and a dead target still reads as an order, as before
 
 </details>
 

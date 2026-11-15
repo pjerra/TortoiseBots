@@ -8199,6 +8199,44 @@ static void TestBossAddsGetTheSkull()
     CHECK(r.focusGuid == 0);
 }
 
+// A boss step whose only add a hold_kill row spares: with AiPlayerbot.DungeonRunPackFocusSparesHoldKill the fallback
+// never skulls it (Onyxia P2: the leader's "kill whelp 11262 first" order committed every bot that took it, so none was
+// free for the hold or the healer peel). The key off keeps today's skull on the whelp.
+static void TestBossStepPackFocusSparesHoldKillAdds()
+{
+    DungeonPlan plan;
+    plan.map = 249;
+    plan.steps = {Step(PlanStepKind::Boss, 10, 0, 0)};
+    plan.steps[0].entry = 10184; // Onyxia
+    plan.steps[0].entries = {11262};
+    ai::NormalizePlanStep(plan.steps[0]);
+    ai::BossTacticTable table;
+    ai::BossTacticRow row;
+    row.map = 249;
+    row.bossEntry = 11262;   // the held whelp
+    row.kind = ai::BossTacticKind::HoldKill;
+    row.targetEntry = 50143; // Cindarion, the row's blocker
+    CHECK(table.Add(row));
+    table.Seal();
+    Facts f = Party(0);
+    f.anyInCombat = true;
+    f.engagedUnits = {Engaged(Unit(1, 10184, 2)), Engaged(Unit(2, 11262, 4)), Engaged(Unit(3, 50143, 6))};
+    f.engagedUnits[1].caster = true;
+    f.engagedUnits[2].hostile = false; // the row's friend: never a candidate
+    // Key off: the whelp is the boss step's add and takes the fallback skull, as today.
+    Run off = Start(&plan);
+    off.liveTactics = &table;
+    CHECK(Tick(off, f) == "focus 2");
+    CHECK(off.focusGuid == 2);
+    // Key on: the held whelp is no add of the pack focus, and nothing else is left, so no skull goes out.
+    Facts spares = f;
+    spares.packFocusSparesHoldKill = true;
+    Run on = Start(&plan);
+    on.liveTactics = &table;
+    CHECK(Tick(on, spares).empty());
+    CHECK(on.focusGuid == 0);
+}
+
 // A pack that aggros during a move step is focused like a pulled one.
 static void TestMoveAggroGetsTheSkull()
 {
@@ -37938,6 +37976,7 @@ int main()
     TestPackFocusLeavesHeldAndUnattackableUnitsOut();
     TestPackFocusIsBoundedOnTheStep();
     TestBossAddsGetTheSkull();
+    TestBossStepPackFocusSparesHoldKillAdds();
     TestMoveAggroGetsTheSkull();
     TestHumanSkullIsAdopted();
     TestSkullRecordDiesWithItsUnit();

@@ -55,6 +55,7 @@
 #include "GenericSpellActions.h"
 #include "playerbot/strategy/values/PossibleAttackTargetsValue.h"
 #include "Objects/Totem.h"
+#include "ObjectAccessor.h"
 #include "Objects/Creature.h"
 #include "Pet.h"
 #include "Spells/SpellMgr.h"
@@ -99,13 +100,21 @@ Spell* ListedCastSpell(const ActiveBossRows& active, Unit* caster)
 // lift (IsFreeDps) and for those it may not (the area and attacker-debuff veto). Declared in BossTacticsActions.h: the
 // carrier strike trigger reads it too.
 
-// A bot on tank or healer duty keeps it; an explicit player order wins.
+// A bot on tank or healer duty keeps it; an explicit player order wins. With
+// AiPlayerbot.DungeonRunPackFocusSparesHoldKill, an order whose unit died or left the world is spent: the bot is free
+// again, so a focus order it outlived does not keep it out of the hold or the healer peel.
 bool IsFreeDps(PlayerbotAI* ai, Player* bot)
 {
     if (!IsBattleDps(bot))
         return false;
     AiObjectContext* context = ai->GetAiObjectContext();
-    return AI_VALUE(ObjectGuid, "explicit attack target").IsEmpty();
+    ObjectGuid const ordered = context->GetValue<ObjectGuid>("explicit attack target")->Get();
+    if (ordered.IsEmpty())
+        return true;
+    if (!sPlayerbotAIConfig.dungeonRunPackFocusSparesHoldKill)
+        return false;
+    Unit* const unit = ObjectAccessor::GetUnit(*bot, ordered);
+    return !unit || !unit->IsInWorld() || !unit->IsAlive();
 }
 
 // dps_hold_after's fight-wide state, one entry per map instance, subject and row (BossTacticsPolicy.h DpsHoldState).
@@ -572,20 +581,23 @@ Unit* LinkedDeathHeldNear(PlayerbotAI* ai, Unit* around, const BossLinkedDeathSc
 // string is built.
 constexpr uint32 kHoldKillLogGapMs = 5000;
 // The peel's rows turn faster than the hold's: a claim lives 3 s, so a claim, a keep and the lapse that ends it would
-// never fit one 5 s bucket.
+// never fit one 5 s bucket. A lapse gets its own bucket: the keep and the lapse can race on one tick (the own claim is
+// refreshed by a hold read and dropped by the scan), and the reason must not be the keep's row to swallow.
 constexpr uint32 kHoldKillPeelLogGapMs = 2000;
 enum class HoldKillLogKind : std::uint8_t
 {
     Action,
     Veto,
     Peel,
+    PeelLapse,
 };
 std::mutex g_holdKillLogMutex;
 std::unordered_map<uint64, uint32> g_holdKillLog;
 
 uint32 HoldKillLogGap(HoldKillLogKind kind)
 {
-    return kind == HoldKillLogKind::Peel ? kHoldKillPeelLogGapMs : kHoldKillLogGapMs;
+    return kind == HoldKillLogKind::Peel || kind == HoldKillLogKind::PeelLapse ? kHoldKillPeelLogGapMs
+                                                                              : kHoldKillLogGapMs;
 }
 
 // The linked_death release latch per group and map instance: map, instance, anchor, group id. Its state is the group's
@@ -697,14 +709,15 @@ std::uint32_t LiveHoldKillPeelClaims(std::uint32_t instanceId)
 
 // The instance's live claims, copied under the lock; `nowMs` (optional) receives the clock read under that same lock,
 // so the caller's liveness tests use the instant the prune used instead of an earlier one whose age could wrap.
-std::map<std::uint64_t, HoldKillPeelClaims::Claim> HoldKillPeelClaimsOf(std::uint32_t instanceId,
-                                                                       std::uint32_t* nowMs)
+// `lapsed` (optional) receives the claims the prune dropped, for the caller to log after it releases the lock.
+std::map<std::uint64_t, HoldKillPeelClaims::Claim> HoldKillPeelClaimsOf(
+    std::uint32_t instanceId, std::uint32_t* nowMs, std::vector<HoldKillPeelClaims::Lapsed>* lapsed = nullptr)
 {
     std::lock_guard<std::mutex> lock(g_holdKillPeelMutex);
     const std::uint32_t clockMs = WorldTimer::getMSTime();
     if (nowMs)
         *nowMs = clockMs;
-    g_holdKillPeelClaims.Prune(clockMs);
+    g_holdKillPeelClaims.Prune(clockMs, lapsed);
     return g_holdKillPeelClaims.Of(instanceId);
 }
 
@@ -733,16 +746,18 @@ bool PeelVictimIsGroupMember(Player* bot, Unit* unit)
 }
 
 // The peel's row: what this bot's read did with its claim, and the claim count it saw. A lapse also says why the keep
-// was refused and how the unit's health moved since the claim.
+// was refused and how the unit's health moved since the claim; one the scan never saw again is written when the store
+// prunes it (`reason=timeout`, the 3 s stamp ran out). A keep the candidate list dropped because the hold ended is
+// `released`, not a timeout: nothing expired, the row stopped holding the entry.
 //   info1 = "peel=claim|keep|lapse"
 //   info2 = "unit=<entry>:<guid low>,victim=<name>,claims=<n>", or for a lapse
-//           "unit=<entry>:<guid low>,reason=<dead|victim_not_ours|reach|not_free|bot_dead|timeout>,age=<ms>,
-//            hp=<claim %>-><now %>,claims=<n>"
+//           "unit=<entry>:<guid low>,reason=<dead|victim_not_ours|reach|not_free|bot_dead|released|timeout>,
+//            age=<ms>,hp=<claim %>-><now %>,claims=<n>"
 void LogHoldKillPeel(PlayerbotAI* ai, Player* bot, const char* word, std::uint32_t entry, std::uint64_t guid,
                      Unit* victim, std::uint32_t claims, const char* reason = nullptr, std::uint32_t ageMs = 0,
                      std::uint32_t hpAtClaim = 0)
 {
-    if (!HoldKillLogDue(bot, HoldKillLogKind::Peel))
+    if (!HoldKillLogDue(bot, reason ? HoldKillLogKind::PeelLapse : HoldKillLogKind::Peel))
         return;
     char info1[32];
     snprintf(info1, sizeof(info1), "peel=%s", word);
@@ -6060,8 +6075,9 @@ ai::BossHealerPeelScan ai::ScanBossHealerPeel(PlayerbotAI* ai, Player* bot, cons
     const std::uint64_t botGuid = bot->GetObjectGuid().GetRawValue();
     // The clock comes back from the locked read, so this scan's liveness tests share the instant the prune used.
     std::uint32_t nowMs = 0;
+    std::vector<HoldKillPeelClaims::Lapsed> lapsed;
     const std::map<std::uint64_t, HoldKillPeelClaims::Claim> claims =
-        HoldKillPeelClaimsOf(bot->GetInstanceId(), &nowMs);
+        HoldKillPeelClaimsOf(bot->GetInstanceId(), &nowMs, &lapsed);
     for (const auto& claim : claims)
     {
         if (!PeelClaimLive(claim.second.botGuid, claim.second.stampMs, nowMs))
@@ -6079,6 +6095,17 @@ ai::BossHealerPeelScan ai::ScanBossHealerPeel(PlayerbotAI* ai, Player* bot, cons
         own.hpPct = claim.second.hpPct;
         own.ageMs = claim.second.stampMs > nowMs ? 0 : nowMs - claim.second.stampMs;
         scan.ownClaims.push_back(own);
+    }
+    // A claim the 3 s stamp expired before this scan could return it to its owner: the prune dropped it, so the rows
+    // this bot writes are the only place it can still be said. The unit's one lookup runs here, outside the lock.
+    for (const HoldKillPeelClaims::Lapsed& old : lapsed)
+    {
+        if (old.key.first != bot->GetInstanceId())
+            continue;
+        Unit* const unit = ai->GetUnit(ObjectGuid(old.key.second));
+        const std::uint32_t ageMs = old.claim.stampMs > nowMs ? 0 : nowMs - old.claim.stampMs;
+        LogHoldKillPeel(ai, bot, "lapse", old.claim.entry, old.key.second, unit, scan.liveClaims, "timeout", ageMs,
+                        old.claim.hpPct);
     }
     // The candidates: every unit of a hold_kill entry the fight still holds (PeelEntries) that the bot's own grid
     // search sees ("kill first grid units", the hold's cached search and never the attackers list), claim state filled
@@ -6135,7 +6162,7 @@ ai::BossHealerPeelScan ai::ScanBossHealerPeel(PlayerbotAI* ai, Player* bot, cons
         const float distance = candidate ? candidate->distance
             : (unit ? bot->GetDistance(unit) : std::numeric_limits<float>::max());
         const char* refusal = PeelKeepRefusal(botAlive, rangedFreeDps, unitAlive, evading, victimOurs, distance);
-        own.reason = refusal ? refusal : "timeout";
+        own.reason = refusal ? refusal : "released";
         scan.lapseDue = true;
         break;
     }

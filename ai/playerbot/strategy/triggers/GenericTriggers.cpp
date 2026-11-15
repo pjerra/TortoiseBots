@@ -1590,8 +1590,10 @@ bool NotDpsTargetActiveTrigger::IsActive()
             }
             // AiPlayerbot.DungeonRunHoldKillHealerPeel: the claimant's own add is held by the row, and the dps target
             // is the boss the hold sends everyone else to, so "dps assist" would pull the claimant off it every tick.
-            // The claim itself is the lift (HoldKillPeelOwns), the same suppression as the carrier's.
-            if (!enemy && !holdsCurrent && sPlayerbotAIConfig.dungeonRunHoldKillHealerPeel)
+            // The claim itself is the lift (HoldKillPeelOwns), the same suppression as the carrier's. The map is
+            // asked first: without boss-tactic rows there is no hold to lift, and no peel mutex or group lookup runs.
+            if (!enemy && !holdsCurrent && sPlayerbotAIConfig.dungeonRunHoldKillHealerPeel &&
+                GetBossTactics().HasMap(bot->GetMapId()))
                 holdsCurrent = HoldKillPeelOwns(ai, bot, target);
 
             Unit* dps = (!enemy && !holdsCurrent) ? AI_VALUE(Unit*, "dps target") : nullptr;
@@ -1622,9 +1624,10 @@ bool NotDpsAoeTargetActiveTrigger::IsActive()
             }
 
             // The healer peel's claimant keeps its own add: the AoE row's pick is the held boss (or the pile around
-            // it), and switching to it would leave the add. Same suppression as the single-target trigger's.
+            // it), and switching to it would leave the add. Same suppression as the single-target trigger's, and the
+            // same map gate: no rows, no hold, no peel lookup.
             bool holdsCurrent = false;
-            if (sPlayerbotAIConfig.dungeonRunHoldKillHealerPeel)
+            if (sPlayerbotAIConfig.dungeonRunHoldKillHealerPeel && GetBossTactics().HasMap(bot->GetMapId()))
                 holdsCurrent = HoldKillPeelOwns(ai, bot, target);
             if (holdsCurrent)
                 return false;
