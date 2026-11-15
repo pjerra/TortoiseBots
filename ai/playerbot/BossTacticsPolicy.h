@@ -1834,7 +1834,7 @@ namespace ai
         bool victimHealer = false;
         bool alive = false;
         bool evading = false;
-        bool weHoldIt = false;       // a member or their pet already attacks it
+        bool weHoldIt = false;       // a group member besides this bot and the unit's victim attacks it
         std::uint64_t claimBot = 0;  // the claim's owner, 0 when unclaimed
         std::uint32_t claimStampMs = 0;
     };
@@ -3108,8 +3108,23 @@ namespace ai
         bool victimOurs = false; // its victim is a member of the bot's group (or one of their pets)
         bool victimHealer = false; // ... and that member is a healer (the Shades of Jin'do eat the healers first)
         bool weHoldIt = false;   // a member or their pet is on its threat list, or attacks it
+        bool memberAttacks = false; // a group member besides the bot and the unit's victim attacks it
         std::uint64_t owner = 0; // owner, else creator, else the temporary summon's summoner (0: none)
     };
+
+    // A grid hit as the healer peel sees it: its `weHoldIt` is the attackers-list fact (`memberAttacks`), never the
+    // threat flag, because the healer a whelp eats is always on the whelp's threat list and would veto every real peel.
+    inline PeelCandidate PeelCandidateFromGrid(const KillFirstGridUnit& hit, bool unitAlive)
+    {
+        PeelCandidate candidate;
+        candidate.guid = hit.guid;
+        candidate.distance = hit.distance;
+        candidate.victimHealer = hit.victimHealer;
+        candidate.alive = hit.alive && unitAlive;
+        candidate.evading = hit.evading;
+        candidate.weHoldIt = hit.memberAttacks;
+        return candidate;
+    }
 
     // Whether a grid hit of a kill_first entry may join the pick: alive, not running home, and part of our fight --
     // it is engaged with the group (its victim is ours, or one of ours holds it), or it is a ward or totem of a unit

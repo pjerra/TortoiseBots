@@ -2459,6 +2459,36 @@ static void HealerPeelEntries_OnlyHeldEntriesArePeeled()
     CHECK(PeelEntries(both, blockerGone).empty());
 }
 
+// The live pull: a whelp eating a healer always has that healer on its threat list, so the grid's threat flag
+// (`weHoldIt`) is true for every real whelp. Only another group member actually attacking it (the attackers list,
+// `memberAttacks`) may keep the peel off.
+static void HealerPeelCandidateFromGrid_MemberThreatIsNotAnAttack()
+{
+    const std::uint64_t bot = 100;
+    const std::uint32_t now = 60000;
+    KillFirstGridUnit hit;
+    hit.guid = 5000;
+    hit.entry = 2;
+    hit.distance = 10.0f;
+    hit.alive = true;
+    hit.victimHealer = true;
+    hit.weHoldIt = true;         // the eaten healer's threat: true for every real whelp
+    hit.memberAttacks = false;   // nobody besides the bot and its victim is on the attackers list
+    PeelCandidate c = PeelCandidateFromGrid(hit, true);
+    CHECK(c.alive && c.victimHealer);
+    std::vector<PeelCandidate> candidates = { c };
+    CHECK(PickHealerPeel(candidates, bot, now, 0, 4, true) == 0);
+    CHECK(!c.weHoldIt);
+    // A member other than the victim attacks it: the peel leaves the unit to that member.
+    hit.memberAttacks = true;
+    candidates[0] = PeelCandidateFromGrid(hit, true);
+    CHECK(PickHealerPeel(candidates, bot, now, 0, 4, true) == -1);
+    // A dead unit is not a candidate either.
+    hit.memberAttacks = false;
+    candidates[0] = PeelCandidateFromGrid(hit, false);
+    CHECK(PickHealerPeel(candidates, bot, now, 0, 4, true) == -1);
+}
+
 int main()
 {
     std::cout << "Starting TortoiseBots boss tactics policy tests...\n";
@@ -2517,6 +2547,7 @@ int main()
     HealerPeelPick_OneHealerAddPerBot();
     HealerPeelClaims_TryClaimIsAtomic();
     HealerPeelEntries_OnlyHeldEntriesArePeeled();
+    HealerPeelCandidateFromGrid_MemberThreatIsNotAnAttack();
     TestTankPost_SlotTankWalksToSpotWhileSubjectUnselectable();
     TestTankPost_UnselectableSubjectNotArrived();
     TestTankPost_EngagesSelectableOutOfCombatSubject();

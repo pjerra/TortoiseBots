@@ -125,11 +125,12 @@ std::vector<KillFirstGridUnit> KillFirstGridUnitsValue::Calculate()
         unit.victimHealer = unit.victimOurs && victim && PlayerbotAI::IsHeal(victim);
         for (Unit* attacker : creature->GetAttackers())
         {
-            if (IsGroupUnit(attacker, bot, group))
-            {
-                unit.weHoldIt = true;
-                break;
-            }
+            if (!IsGroupUnit(attacker, bot, group))
+                continue;
+            unit.weHoldIt = true;
+            if (attacker != creature->GetVictim() &&
+                attacker->GetCharmerOrOwnerPlayerOrPlayerItself() != bot)
+                unit.memberAttacks = true;
         }
         // A member that pulled and stopped swinging is off the attackers list but still on the threat list: a hit in
         // combat with an NPC or a stranger is neither, and stays out.

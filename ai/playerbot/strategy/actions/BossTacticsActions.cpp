@@ -6082,13 +6082,7 @@ ai::BossHealerPeelScan ai::ScanBossHealerPeel(PlayerbotAI* ai, Player* bot, cons
             Unit* const unit = ai->GetUnit(ObjectGuid(hit.guid));
             if (!unit || !unit->IsInWorld())
                 continue;
-            PeelCandidate c;
-            c.guid = hit.guid;
-            c.distance = hit.distance;
-            c.victimHealer = hit.victimHealer;
-            c.alive = hit.alive && unit->IsAlive();
-            c.evading = hit.evading;
-            c.weHoldIt = hit.weHoldIt;
+            PeelCandidate c = PeelCandidateFromGrid(hit, unit->IsAlive());
             auto const claim = claims.find(hit.guid);
             if (claim != claims.end())
             {

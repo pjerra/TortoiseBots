@@ -25,6 +25,7 @@ TACTICS_STRATEGY = (STRATEGY / "generic/BossTacticsStrategy.cpp").read_text()
 ACTION_CONTEXT = (STRATEGY / "actions/ActionContext.h").read_text()
 TRIGGER_CONTEXT = (STRATEGY / "triggers/TriggerContext.h").read_text()
 DPS_TARGET = (STRATEGY / "values/DpsTargetValue.cpp").read_text()
+GRID_VALUE = (STRATEGY / "values/HoldKillBlockersValue.cpp").read_text()
 CONFIG_H = (ROOT / "ai/playerbot/PlayerbotAIConfig.h").read_text()
 CONFIG = (ROOT / "ai/playerbot/PlayerbotAIConfig.cpp").read_text()
 CONF_DIST = (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text()
@@ -216,16 +217,41 @@ class ThePeelIsLogged(unittest.TestCase):
         self.assertIn("healer peel", PLAY_DOC)
 
 
+class ThePeelFollowsTheAttackersList(unittest.TestCase):
+    """A whelp eating a healer always has that healer on its threat list, so the grid's threat flag is true for every
+    real peel. The peel's "someone else is already on it" therefore comes from the attackers list (`memberAttacks`),
+    never from the threat flag that kill_first eligibility keeps."""
+
+    def test_the_grid_hit_carries_member_attacks(self):
+        grid = body(GRID_VALUE, "std::vector<KillFirstGridUnit> KillFirstGridUnitsValue::Calculate()")
+        attackers = grid[grid.index("for (Unit* attacker : creature->GetAttackers())"):]
+        self.assertIn("unit.memberAttacks = true;", attackers)
+        self.assertIn("attacker != creature->GetVictim()", attackers)
+        self.assertIn("attacker->GetCharmerOrOwnerPlayerOrPlayerItself() != bot", attackers)
+        # The threat-based flag keeps its own meaning for kill_first eligibility.
+        self.assertIn("unit.weHoldIt = holds(bot) || holds(bot->GetPet());", grid)
+
+    def test_the_scan_maps_through_the_pure_rule(self):
+        fn = body(ACTIONS, "ai::BossHealerPeelScan ai::ScanBossHealerPeel(")
+        self.assertIn("PeelCandidateFromGrid(hit, unit->IsAlive())", fn)
+        self.assertNotIn("c.weHoldIt = hit.weHoldIt;", fn)
+        rule = body(POLICY, "inline PeelCandidate PeelCandidateFromGrid(", "\n    }\n")
+        self.assertIn("candidate.weHoldIt = hit.memberAttacks;", rule)
+        self.assertIn("bool memberAttacks = false;", POLICY)
+
+
 class ThePolicyIsUnitTested(unittest.TestCase):
     def test_the_failing_case_is_named(self):
         self.assertIn("static void HoldKillPeelLiftsClaimedHealerAttacker()", POLICY_TEST)
         self.assertIn("static void HealerPeelPick_OneHealerAddPerBot()", POLICY_TEST)
         self.assertIn("static void HealerPeelClaims_TryClaimIsAtomic()", POLICY_TEST)
         self.assertIn("static void HealerPeelEntries_OnlyHeldEntriesArePeeled()", POLICY_TEST)
+        self.assertIn("static void HealerPeelCandidateFromGrid_MemberThreatIsNotAnAttack()", POLICY_TEST)
         self.assertIn("HoldKillPeelLiftsClaimedHealerAttacker();", POLICY_TEST)
         self.assertIn("HealerPeelPick_OneHealerAddPerBot();", POLICY_TEST)
         self.assertIn("HealerPeelClaims_TryClaimIsAtomic();", POLICY_TEST)
         self.assertIn("HealerPeelEntries_OnlyHeldEntriesArePeeled();", POLICY_TEST)
+        self.assertIn("HealerPeelCandidateFromGrid_MemberThreatIsNotAnAttack();", POLICY_TEST)
         self.assertIn("if (!KillHeld(rows, row->bossEntry, countNear))", POLICY)
         # The lift is the policy's, and only through KillHeldFor: KillHeld itself never learns about claims.
         killheld = body(POLICY, "    inline bool KillHeld(", "\n    }\n")
