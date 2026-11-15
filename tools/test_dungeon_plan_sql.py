@@ -3548,84 +3548,60 @@ class DungeonPlanSql(unittest.TestCase):
         # The ai_dungeon_boss rows stay in 20261022210300 (the boss seed is per map and a repeat would trip test_boss_table_is_the_seed);
         # this file replaces the plan rows only.
 
-    def test_gnomeregan_is_the_plan_with_the_pack_fixes(self):
-        # 20261024152900 (turtle-agent d04ea67, 2026-10-24): r34 slotF stopped at step 424 of 628 because the lead stood
-        # on the -677.7 416.1 z -271 navmesh seam and the next hop was refused. The full skipped-pull server replay over
-        # the exported rows fixed that seam stop and four more refused/under-floor cut rows (leg 0 pull groups 70/71,
-        # leg 2 pull group 8, leg 3's -683.9 to -725.33 ramp hop and pull group 18); 20261024151000 stays applied and
-        # its plan is carried over except the rows named here. The plan row's unit lists are unchanged; the counts are
-        # 5 legs, 627 steps, bosses in leg order (7800 last).
+    def test_gnomeregan_is_the_reordered_plan(self):
+        # 20261115010000 (turtle-agent 0d9273bf, issue #1542 route order fix; the method and the measurements are in the
+        # route-order audit of 2026-11-12): the four bosses in the same order and the same five legs, and the packs that
+        # stand within about 25 yd of the four boss walks kept in the order the walk meets them. 89 packs go, and a moved
+        # pack lands in the leg whose walk passes it; three leg `to` points move onto that walk (each an existing deployed
+        # path row) and two packs carry the old via points as their approach, so no point is invented. 159 steps (165 rows
+        # with the five leg rows and the plan row): 79 pulls (26 + 28 + 6 + 15 + 4), 76 moves, 4 bosses. The walk is
+        # 4,352 yd against the straight 2,999 (the deployed rows: 16,956), measured in the audit; a full clear of 159 of
+        # 159 units took 4,454 s with 0 wipes live, against 139-180 min for the deployed rows.
         name, text = newest_plan_text("gnomeregan")
-        self.assertEqual(name, "20261104160000_world.sql")
-        self.assertIn("('gnomeregan', 90, '6392,6329', '6392', '6220,6226,6227,7849,6223', 'turtle-agent ca6fb6d dungeons/gnomeregan.json', 'plan v1, draft (not mapped, not live-checked)');", text)
-        self.assertEqual(len(leg_rows(text, "gnomeregan")), 5)
+        self.assertEqual(name, "20261115010000_world.sql")
+        self.assertIn("('gnomeregan', 90, '6392,6329', '6392', '6220,6226,6227,7849,6223', 'turtle-agent 46933c48 dungeons/gnomeregan.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        legs = leg_rows(text, "gnomeregan")
+        self.assertEqual([legs[i][0] for i in range(5)],
+                         ["viscous_fallout", "electrocutioner_6000", "crowd_pummeler_9-60", "thermaplugg_route",
+                          "mekgineer_thermaplugg"])
         rows = [r for r in self.step_rows(text) if r["plan"] == "gnomeregan"]
-        self.assertEqual(len(rows), 501)
-        self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(5)], [87, 37, 17, 23, 4])
+        self.assertEqual(len(rows), 159)
+        self.assertEqual({leg: len(leg_steps(rows, leg)) for leg in range(5)}, {0: 43, 1: 46, 2: 35, 3: 29, 4: 6})
+        self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(5)],
+                         [26, 28, 6, 15, 4])
         self.assertEqual([r["entry"] for r in rows if r["kind"] == "boss"], ["7079", "6235", "6229", "7800"])
         self.assertEqual((rows[-1]["leg"], rows[-1]["kind"], rows[-1]["entry"]), ("4", "boss", "7800"))
+        self.assertEqual({r["kind"] for r in rows}, {"move", "pull", "boss"})
         self.assertFalse([r for r in rows if r["entry"] == "6228"], "the Ambassador's boss step is back")
-        # Step 376 (1-based) is the Electrocutioner's boss row; the failed exporter cut is gone, and its two approach moves stand before it.
-        self.assertEqual((rows[314]["leg"], rows[314]["kind"], rows[314]["entry"]), ("1", "boss", "6235"))
-        leg1 = leg_steps(rows, 1)
-        self.assertEqual([(r["kind"], r["comment"]) for r in leg1[-3:]],
-                         [("move", "boss approach"), ("move", "boss approach"), ("boss", "boss")])
-        self.assertEqual([(float(r["x"]), float(r["y"]), float(r["z"])) for r in leg1[-3:-1]],
-                         [(-524.0, 582.7, -230.56), (-541.58, 534.7, -216.68)])
-        self.assertFalse([r for r in leg1 if abs(float(r["x"]) + 541.31885) < 0.001 and abs(float(r["y"]) - 535.48035) < 0.001],
-                         "the off-mesh exporter cut is back")
-        # Leg 2: the via on the Electrocutioner ramp floor and the z -312 pull. Its approach now ends at -672.8 417.3
-        # after the -677.7 416.1 seam instead of standing on it: no move row of the leg is within 2 yd of the seam, and
-        # -704 426.6665 -273.06 is the explicit hop into the seam's far side. The last move before the pull is the
-        # 32.1 yd stand the cut generates; the old -623.2 and -822.7 approach rows are now path rows.
-        leg2 = leg_steps(rows, 2)
-        self.assertEqual((leg2[0]["kind"], leg2[0]["x"], leg2[0]["y"], leg2[0]["z"], leg2[0]["comment"]),
-                         ("move", "-544.9", "551.8", "-219.18", "via"))
-        k = [j for j, r in enumerate(leg2) if r["kind"] == "pull" and r["comment"] == "pull group 2"][0]
-        self.assertEqual((int(leg2[k]["seq"]), leg2[k]["entries"], float(leg2[k]["radius"])), (53, "6226", 10.0))
-        approach = [r for r in leg2[:k] if r["kind"] == "move" and r["comment"] == "pull group 2 approach"]
-        self.assertEqual([(r["x"], r["y"], r["z"]) for r in approach],
-                         [("-704", "426.6665", "-273.06"), ("-672.8", "417.3", "-273.06"),
-                          ("-671.10754", "524.2145", "-272.87"), ("-751.2637", "548.34406", "-290.81")])
-        self.assertEqual([int(r["seq"]) for r in approach], [35, 36, 43, 44])
-        seam = [(-677.7, 416.1, -271.0)]
-        self.assertGreater(min(math.dist([float(r[c]) for c in ("x", "y", "z")], seam[0])
-                               for r in leg2 if r["kind"] == "move"), 2.0,
-                           "a move row stands on the -677.7 416.1 navmesh seam again")
-        # Pull group 8's approach replaces the under-floor cut row -656.09 520.05 -276.72 (3.86 yd under the floor)
-        # and the two seam rows the old cut wrote:
-        self.assertEqual([(r["x"], r["y"], r["z"]) for r in leg2
-                          if r["kind"] == "move" and r["comment"] == "pull group 8 approach"],
-                         [("-656.0925", "520.0519", "-272.87"), ("-672.8", "417.3", "-273.06"),
-                          ("-700", "426.6665", "-273.06")])
-        self.assertFalse([r for r in leg2 if abs(float(r["x"]) + 677.6001) < 0.001 and abs(float(r["y"]) - 416) < 0.001],
-                         "the seam cut row is back")
-        start = [j for j, r in enumerate(leg2) if r["kind"] == "pull" and r["comment"] == "pull group 1"][0] + 1
-        walk = leg2[start:k]
-        self.assertEqual(len(walk), 22, "the walk from pull group 1 to the z -312 pull is 22 move rows")
-        self.assertTrue(all(r["kind"] == "move" for r in walk))
-        self.assertAlmostEqual(math.dist([float(leg2[k - 1][c]) for c in ("x", "y", "z")],
-                                         [float(leg2[k][c]) for c in ("x", "y", "z")]), 33.7, places=1)
-        # Leg 0's ring loop: pull group 70's -536.32 183.47 -193.66 and pull group 71's -509 128 -154.52 and
-        # -520 210 -188.9 are the floor points that replace the refused -533.33 192 and -512 128 cut hops (r34's
-        # step-210 refusal went to -509 128). The -512 128 row may not come back.
-        leg0 = leg_steps(rows, 0)
-        self.assertEqual([(r["x"], r["y"], r["z"]) for r in leg0
-                          if r["comment"] in ("pull group 70 approach", "pull group 71 approach")],
-                         [("-536.32", "183.47", "-193.66"), ("-509", "128", "-154.52"),
-                          ("-520", "210", "-188.9")])
-        self.assertFalse([r for r in leg0 if r["kind"] == "move" and r["x"] == "-512" and r["y"] == "128"],
-                         "the refused -512 128 cut row is back")
-        # Leg 3: the via chain crosses the seam at -704 and -672.8 and breaks the refused -683.9 to -725.33 ramp
-        # hop at -690 526 -276.4; pull group 18's approach is the floor point under the old -324.05 cut row.
-        leg3 = leg_steps(rows, 3)
-        self.assertEqual([(r["x"], r["y"], r["z"]) for r in leg3 if r["comment"] == "via"],
-                         [("-704", "426.6665", "-273.06"), ("-672.8", "417.3", "-273.06"),
-                          ("-656", "437.5", "-273"), ("-683.9", "524.3", "-273.93"),
-                          ("-690", "526", "-276.4")])
-        self.assertEqual([(r["x"], r["y"], r["z"]) for r in leg3 if r["comment"] == "pull group 18 approach"],
-                         [("-732.04", "671.15", "-328.66")])
-        self.assertEqual(re.findall(r"(?m)^DELETE FROM `ai_dungeon_step` WHERE `plan` = '(\w+)';", text), ['blackfathom_deeps', 'crescent_grove', 'deadmines', 'dragonmaw_retreat', 'frostmane_hollow', 'gnomeregan', 'lower_blackrock_spire', 'razorfen_downs', 'razorfen_kraul', 'scarlet_armory', 'scarlet_cathedral', 'scarlet_graveyard', 'scarlet_library', 'scholomance', 'stormwind_stockade', 'stormwind_vault', 'stratholme_live', 'uldaman', 'zul_gurub', 'ruins_of_ahnqiraj', 'naxxramas', 'ragefire_chasm', 'wailing_caverns'])
+        # The five leg `to` rows are deployed rows (leg 0 its own point; legs 1-4 the path row right after the previous
+        # boss row): the walk lives on the existing plan, no point is invented.
+        tos = [[r for r in leg_steps(rows, leg) if r["comment"] == "to"][0] for leg in range(5)]
+        self.assertEqual([(r["kind"], r["comment"]) for r in tos], [("move", "to")] * 5)
+        self.assertEqual([(float(r["x"]), float(r["y"]), float(r["z"])) for r in tos],
+                         [(-397.217, 50.1614, -154.714), (-460.06668, 69.59998, -210.75957),
+                          (-646.2001, 419.99988, -230.55956), (-672.8, 417.3, -273.06),
+                          (-664.285, 697.697, -331.711)])
+        # The two via rows left: leg 2's Electrocutioner ramp stand and leg 3's first via. The old leg 3 via chain
+        # (-656 437.5, -683.9 524.3, -690 526) is now the approach of two leg 3 packs, on the walk.
+        self.assertEqual([(int(r["leg"]), r["x"], r["y"], r["z"]) for r in rows if r["comment"] == "via"],
+                         [(2, "-544.9", "551.8", "-219.18"), (3, "-704", "426.6665", "-273.06")])
+        self.assertEqual([(r["x"], r["y"], r["z"]) for r in rows if r["comment"] == "pull group 7 approach"],
+                         [("-445.5", "212.2", "-207.9"), ("-683.9", "524.3", "-273.93"), ("-690", "526", "-276.4")])
+        # The 89 dropped packs are not walked: none of their areas holds a pull row. The dormitory rings' far side, the
+        # west wing, the Launch Bay's east ring and lower floor, the Engineering Labs' lower floor and south wing, and
+        # the final corridors' lower-deck platform (the set is listed in the audit's GNOMEREGAN-FIX.md).
+        pulls = [r for r in rows if r["kind"] == "pull"]
+        for x, y, z in ((-532.0, 165.0, -155.0), (-620.0, 58.0, -200.0), (-465.0, 487.0, -231.0),
+                        (-503.0, 528.0, -273.0), (-867.0, 334.0, -316.0), (-860.0, 292.0, -273.0),
+                        (-740.0, 656.0, -322.0), (-688.0, 705.0, -331.0)):
+            self.assertFalse([r for r in pulls
+                              if math.dist((x, y, z), (float(r["x"]), float(r["y"]), float(r["z"]))) < 8.0],
+                             "a dropped pack at %s %s %s is a pull again" % (x, y, z))
+        self.assertEqual(re.findall(r"(?m)^DELETE FROM `ai_dungeon_step` WHERE `plan` = '(\w+)';", text), ['gnomeregan'])
+        # The Labs door's hold goes with the Labs: the short route never passes 90858, so the Workshop Key row of
+        # 20261026130000 is deleted and none is written (the leg_need tests read the rows the migrations leave).
+        self.assertIn("DELETE FROM `ai_dungeon_leg_need` WHERE `plan` = 'gnomeregan';", text)
+        self.assertNotIn("INSERT INTO `ai_dungeon_leg_need`", text)
         # The map's ai_dungeon_boss seed stays in 20261022210500 (all five bosses incl. 6228, unchanged): this file
         # must not seed it again (the boss seed test asserts every (map, entry) is seeded once).
         self.assertNotRegex(text, r"(?m)^(?:INSERT|REPLACE) INTO `ai_dungeon_boss`")
@@ -5032,18 +5008,27 @@ class DungeonPlanSql(unittest.TestCase):
         "scholomance": {(1, 13873): (2, 0, 175167)},
         "dire_maul_west": {(2, 18249): (2, 300, 300601)},
         "dire_maul_north": {(2, 18266): (2, 0, 177219), (3, 18268): (2, 200, 177217)},
-        "gnomeregan": {(2, 6893): (2, 150, 90858)},
+        # gnomeregan's (2, 6893, door 90858) is deleted by 20261115010000: the short route never comes within
+        # 25 yd of the Labs door, so the Workshop Key and its door hold go with the 89 dropped packs.
         "stormwrought_ruins": {(4, 41913): (2, 185, 2020233)},
         "dragonmaw_retreat": {(3, 41876): (2, 160, 2020232)},
     }
 
-    def need_rows(self, text):
-        for block in re.findall(r"INSERT INTO `ai_dungeon_leg_need` \(([^)]*)\) VALUES(.*?);", text, re.S):
-            cols = [c.strip(" `") for c in block[0].split(",")]
-            for row in re.findall(r"(?m)^\((.*)\)[,;]?\s*$", block[1]):
-                values = [v.strip() for v in re.findall(r"\s*('(?:[^']|'')*'|[^,]+)", row)]
-                plain = [v[1:-1] if len(v) >= 2 and v[0] == "'" and v[-1] == "'" else v for v in values]
-                yield dict(zip(cols, plain))
+    def need_rows(self):
+        # The rows as the server ends up with them: migrations in name order, each plan's DELETE before the INSERTs that
+        # follow it in the same file (the template 20261026130000 uses), and a later migration may only delete: a plan
+        # whose route no longer crosses its door drops the row (gnomeregan's 90858 after the short route).
+        rows = []
+        for _name, text in sorted(migrations()):
+            for plan in re.findall(r"(?m)^DELETE FROM `ai_dungeon_leg_need` WHERE `plan` = '([a-z0-9_]+)';", text):
+                rows = [r for r in rows if r["plan"] != plan]
+            for block in re.findall(r"INSERT INTO `ai_dungeon_leg_need` \(([^)]*)\) VALUES(.*?);", text, re.S):
+                cols = [c.strip(" `") for c in block[0].split(",")]
+                for row in re.findall(r"(?m)^\((.*)\)[,;]?\s*$", block[1]):
+                    values = [v.strip() for v in re.findall(r"\s*('(?:[^']|'')*'|[^,]+)", row)]
+                    plain = [v[1:-1] if len(v) >= 2 and v[0] == "'" and v[-1] == "'" else v for v in values]
+                    rows.append(dict(zip(cols, plain)))
+        return rows
 
     def test_leg_need_table_is_created_idempotently(self):
         seen = [name for name, text in migrations() if "CREATE TABLE IF NOT EXISTS `ai_dungeon_leg_need`" in text]
@@ -5051,9 +5036,8 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertEqual(seen[0], "20261026130000_world.sql", seen)
 
     def test_leg_need_rows_match_the_plans(self):
-        full = "\n".join(text for _name, text in migrations())
         rows = {}
-        for row in self.need_rows(full):
+        for row in self.need_rows():
             rows.setdefault(row["plan"], {})[(int(row["leg"]), int(row["item"]))] = (
                 int(row["mode"]), int(row["pick"]), int(row["object"]))
         for plan, want in self.EXPECTED_LEG_NEEDS.items():
@@ -5083,8 +5067,7 @@ class DungeonPlanSql(unittest.TestCase):
         # Review round 2 (Opus 3): each door row is on the first leg with a step within 6.5 yd of the door (the route
         # crosses it there), or, where no step comes that close (Dire Maul North's courtyard, crossed between leg 1's
         # boss and leg 2), the first leg with a step within the hold's 25 yd; and that leg has a step within 25 yd.
-        full = "\n".join(text for _name, text in migrations())
-        doors = [(n["plan"], int(n["leg"]), int(n["object"])) for n in self.need_rows(full) if n["mode"] == "2"]
+        doors = [(n["plan"], int(n["leg"]), int(n["object"])) for n in self.need_rows() if n["mode"] == "2"]
         self.assertTrue(doors)
         for plan, leg, obj in doors:
             _name, text = newest_plan_text(plan)
@@ -5100,8 +5083,7 @@ class DungeonPlanSql(unittest.TestCase):
             self.assertLessEqual(near[leg], 25.0, "%s door %d" % (plan, obj))
 
     def test_leg_need_zulfarrak_leg_is_gahzrilla(self):
-        full = "\n".join(text for _name, text in migrations())
-        zf = [r for r in self.need_rows(full) if r["plan"] == "zulfarrak"]
+        zf = [r for r in self.need_rows() if r["plan"] == "zulfarrak"]
         self.assertEqual(len(zf), 1, zf)
         row = zf[0]
         self.assertEqual((row["leg"], row["item"], row["mode"]), ("9", "9240", "1"))
