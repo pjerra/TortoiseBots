@@ -10,7 +10,7 @@ DELETE FROM `ai_dungeon_step` WHERE `plan` = 'zul_gurub';
 DELETE FROM `ai_dungeon_leg` WHERE `plan` = 'zul_gurub';
 DELETE FROM `ai_dungeon_plan` WHERE `plan` = 'zul_gurub';
 INSERT INTO `ai_dungeon_plan` (`plan`, `map`, `cc_priority`, `cc_always`, `kill_first`, `source`, `comment`) VALUES
-('zul_gurub', 309, '14532,14882,14825,11353,11338,11357,11356,11350,14821,11351,11831,11340,11339,11359,15111,15043', '', '14987,15112,14750,15146,11830,14883', 'turtle-agent 78d3f24df243f4227a6461eecda06520f2bdb945 dungeons/z', 'plan v1, mapped (live-walked in ZG walks 31-34: Jeklik, Venoxis, Mar''li, Thekal and Mandokir killed; Arlokk via the gong step; Hakkar pending)');
+('zul_gurub', 309, '14532,14882,14825,11353,11338,11357,11356,11350,14821,11351,11831,11340,11339,11359,15111,15043', '', '14987,15112,14750,15146,11830,14883', 'turtle-agent 6f6e14c3de7c94d3dcdfc44da5adbf41c627f886 dungeons/z', 'plan v1, mapped (live-walked in ZG walks 31-34: Jeklik, Venoxis, Mar''li, Thekal and Mandokir killed; Arlokk via the gong step; Hakkar pending)');
 INSERT INTO `ai_dungeon_leg` (`plan`, `leg`, `name`, `comment`) VALUES
 ('zul_gurub', 0, 'high_priestess_jeklik', ''),
 ('zul_gurub', 1, 'high_priest_venoxis', ''),
@@ -57,7 +57,7 @@ INSERT INTO `ai_dungeon_step` (`plan`, `leg`, `seq`, `kind`, `entry`, `x`, `y`, 
 ('zul_gurub', 0, 32, 'move', 0, -12099, -1448, 130.96, 0, 0, 0, 0, 0, '', 'pull group 9 approach'),
 ('zul_gurub', 0, 33, 'pull', 0, -12148, -1458, 131.3, 72, 0, 0, 8192, 0, '11351,11831', 'pull group 9; stand pull'),
 ('zul_gurub', 0, 34, 'move', 0, -12093, -1464, 131.5, 0, 0, 0, 0, 0, '', 'pull group 10 approach'),
-('zul_gurub', 0, 35, 'move', 0, -12130, -1495.7, 133, 0, 0, 0, 0, 0, '', 'pull group 10 approach'),
+('zul_gurub', 0, 35, 'move', 0, -12114, -1491, 131.63, 0, 0, 0, 0, 0, '', 'pull group 10 approach'),
 ('zul_gurub', 0, 36, 'pull', 0, -12148, -1485, 130.8, 4.6, 0, 0, 8192, 0, '11368,14750', 'pull group 10; stand pull'),
 ('zul_gurub', 0, 37, 'move', 0, -12108, -1479, 130.9, 0, 0, 0, 0, 0, '', 'pull group 11 approach'),
 ('zul_gurub', 0, 38, 'pull', 0, -12153.9, -1489.43, 130.73, 1, 0, 0, 8192, 0, '11368,14750', 'pull group 11; stand pull'),
