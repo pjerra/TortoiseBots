@@ -2134,5 +2134,3 @@ Whether a breath window's seats are pooled across its roles and planned by the w
 **Default:** `0` · **Values:** `0` off (each role keeps its own seats), `1` on (recommended on; needs the boss tactics and the boss stand rows) · **Restart:** not needed (`.reload config` applies it on the next world tick)
 
 A window's seats are pooled across the roles of its anchor and window spell and planned by the count beyond 35 yd, then beyond 20 yd, then the total walk, with a 20 yd walk cap; a `hold_spot` tank post whose spot stands outside the window's lane keeps its tank at that spot within 20 yd instead of taking a seat (a seat it already held goes to the next bot). The `assigned` row carries `pool=` and `post=`. Walk 2g-2h: median seat walk 27.4 yd, 65-68 % over 20 yd.
-
-</details>
