@@ -647,6 +647,12 @@ public:
     // interrupt-cast effect and the victim's cast is not silence-prevented. Off = as before (only silence / interrupt
     // effects count, and the tank stun rows never fire).
     bool interruptAllowStun = false;
+    // The damage threat back-off measures the mob's real holder: while the bot's target is on a group member that is not
+    // a tank (and not this bot), the reference is the larger of the tank's threat and that holder's, so a tank that lost
+    // the mob cannot freeze the damage dealers (t1106r run 2: a mage read 90 % of a tank that landed 2 hits in 110 s
+    // and cast nothing). Off = today (the tank's threat alone). Taunt-immune and `threat_successor` targets, and the
+    // bot as the victim, keep the old reference.
+    bool threatBackoffMeasuresHolder = false;
     // PlayerbotAI::CanCastSpell refuses a unit-target cast the target's facing makes impossible (Gouge from behind,
     // Backstab from the front) before it probes the core's CheckCast, which broadcasts a spell failure on every probe.
     // Off = as before (the probe runs, and a Gouge from behind reads as castable and fails in the real cast).

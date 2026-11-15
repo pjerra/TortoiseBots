@@ -198,7 +198,8 @@ float ThreatMultiplier::GetValue(Action* action)
     // while the caster finished. It is measured on the interrupt's own target (the "interrupt target" pick, which can
     // be another mob than the current target) against the core's pull line: the bot's threat plus the interrupt's flat
     // threat (spell threat table) under 110 % of the tank's when the mob can reach the bot in melee, 130 % otherwise
-    // (ThreatCapPolicy.h ThreatCapInterruptExempt). Earth Shock and Death Coil rows stay gated.
+    // (ThreatCapPolicy.h ThreatCapInterruptExempt). A caster already attacking this bot is exempt outright: kicking it
+    // takes nothing from a tank that does not hold it. Earth Shock and Death Coil rows stay gated.
     bool const heal = dynamic_cast<CastHealingSpellAction*>(action) != nullptr;
     bool const cure = dynamic_cast<CurePartyMemberAction*>(action) != nullptr;
     CastInterruptSpellAction const* interruptAction = dynamic_cast<CastInterruptSpellAction*>(action);
@@ -208,6 +209,7 @@ float ThreatMultiplier::GetValue(Action* action)
     float interruptTankThreat = 0.0f;
     float interruptFlatThreat = 0.0f;
     bool interruptRanged = false;
+    bool interruptVictimIsBot = false;
     if (interruptKey)
     {
         Unit* const interruptTarget = action->GetTarget();
@@ -217,10 +219,13 @@ float ThreatMultiplier::GetValue(Action* action)
             interruptFlatThreat = threatEntry->threat;
         // The core's own test for the 110 % rule: can the mob reach this attacker with a melee swing.
         interruptRanged = !interruptTarget || !interruptTarget->CanReachWithMeleeAutoAttack(bot);
+        // The mob is on this bot: it cannot be pulled from the tank, so the pull line does not apply.
+        interruptVictimIsBot = interruptTarget != nullptr && interruptTarget->GetVictim() == bot;
     }
     if (ThreatCapExempt(heal, cure, sPlayerbotAIConfig.dungeonRunCureIgnoresThreat) ||
         ThreatCapInterruptExempt(interrupt, sPlayerbotAIConfig.interruptIgnoresThreat, interruptBotThreat,
-                                 interruptTankThreat, interruptFlatThreat, interruptRanged))
+                                 interruptTankThreat, interruptFlatThreat, interruptRanged,
+                                 interruptVictimIsBot))
         return 1.0f;
 
     if (!AI_VALUE(bool, "group"))
@@ -249,14 +254,30 @@ float ThreatMultiplier::GetValue(Action* action)
         }
     }
 
-    if (AI_VALUE2(bool, "trigger active", "high threat"))
+    bool const highThreat = AI_VALUE2(bool, "trigger active", "high threat");
+    bool const measuresHolder = sPlayerbotAIConfig.threatBackoffMeasuresHolder;
+    Unit* const target = AI_VALUE(Unit*, "current target");
+    // AiPlayerbot.ThreatBackoffMeasuresHolder: a mob that has been on this bot for kThreatSelfHeldGraceMs is not
+    // coming back by backing off, so the veto releases (ThreatCapPolicy.h ThreatBackoffYieldsOnSelf). The hold runs
+    // per target: switching from one mob to another starts the new mob's own grace, and a dead or exempt target
+    // (taunt-immune, `threat_successor`) neither accrues nor passes its time on. The clock is fed on every evaluation,
+    // not only at the high line, so a switch below it resets the previous target's hold too. Key off: no clock work
+    // here; the branch below clears the clock so a reload that turns the key on starts its grace over.
+    if (measuresHolder && ThreatSelfHeldRelease(
+            ai->ThreatSelfHeld(), measuresHolder, target ? target->GetObjectGuid().GetRawValue() : 0,
+            target && target->IsAlive() && target->GetVictim() == bot,
+            TargetTauntImmune(target) || ThreatSuccessorTarget(target), highThreat, WorldTimer::getMSTime()))
+        return 1.0f;
+
+    if (highThreat)
     {
         // In a commanded party a mob already hitting the healer or a damage
         // bot is off the tank: backing off it leaves it there
         // (RemoteCommander::CommandedBackoffYields). On a taunt-immune target
         // the back-off is never yielded: the tank cannot take it back, so the
         // damage has to stop for the tanks' threat to pass the member.
-        Unit* target = AI_VALUE(Unit*, "current target");
+        if (!measuresHolder)
+            ai->ThreatSelfHeld().Update(0, false, 0);
         Unit* victim = target ? target->GetVictim() : nullptr;
         Player* victimPlayer = victim ? victim->ToPlayer() : nullptr;
         bool const hitsMember = victimPlayer && bot->GetGroup() && bot->GetGroup()->IsMember(victimPlayer->GetObjectGuid());

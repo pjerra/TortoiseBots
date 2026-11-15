@@ -72,7 +72,7 @@ Mages provide high-burst ranged spell DPS, dependable crowd control (*Polymorph*
 ## Utility & interrupts
 
 - **Polymorph CC:** Casts *Polymorph* on targets assigned via `.bot action cc <mark>`. Stands still during casting and prevents AoE spells near sheeped mobs.
-- **Interrupts:** Casts *Counterspell* immediately upon detecting dangerous enemy spell casts, locking the school.
+- **Interrupts:** Casts *Counterspell* immediately upon detecting dangerous enemy spell casts, locking the school. With `AiPlayerbot.InterruptIgnoresThreat = 1` (recommended) it also goes out while the mage is over the threat back-off line, and always on a caster that is already attacking the mage.
 - **Food & Drink Conjuration:** Conjures food and water out of combat, sharing stacks with party members in need. On every trade it conjures a fresh full stack on the spot: food for everyone, water for mana users, at the best rank the mage knows that the trader's level can use. Free and unlimited, whoever opened the window.
 - **Food & Drink Conjuration:** Conjures food and water out of combat, sharing stacks with party members in need.
 - **Portals:** Whisper `portal` to list the cities the mage knows, `portal <city>` to cast it (unique prefix works); `.bot service <Name>` reports the list for the addon and `.bot service <Name> portal <spellId>` casts it. Out of combat only, rune is free. Only the mage's group can use the portal, so invite the bot first.

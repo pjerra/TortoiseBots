@@ -144,6 +144,107 @@ int main()
     CHECK(ThreatPctOf(5000.0f, 40.0f, true, true) == 0);    // fleeing target: unchanged
     CHECK(ThreatPctOf(500.0f, 1000.0f, true, false) == 50);
     CHECK(ThreatPctOf(500.0f, 1000.0f, true, false) == ThreatPctSaturated(500.0f, 1000.0f));
+    // backoff_measures_holder (fails on the old code: ThreatBackoffReference does not exist): the mage's 110 s stall
+    // (t1106r rep2, `ThreatCapInterrupt spell=counterspell pct=281 flat=300 line=1.30 bot=142 tank=157`). The mob sits
+    // on the priest (600) while the tank that lost it reads 157: 142/157 = 90 % vetoes every damage action and the mage
+    // cannot climb, so with the key on the reference is the holder's 600 and 142/600 = 23 % lets it cast.
+    CHECK(ThreatBackoffReference(true, 157.0f, true, false, 600.0f) == 600.0f);
+    CHECK(ThreatPctOf(142.0f, ThreatBackoffReference(true, 157.0f, true, false, 600.0f), true, false) == 23);
+    CHECK(ThreatPctOf(142.0f, ThreatBackoffReference(true, 157.0f, true, false, 600.0f), true, false) <
+        kThreatHighLinePct);
+    // Key off: the tank's 157 stands, so the 90 % veto stays exactly as today.
+    CHECK(ThreatBackoffReference(false, 157.0f, true, false, 600.0f) == 157.0f);
+    CHECK(ThreatPctOf(142.0f, ThreatBackoffReference(false, 157.0f, true, false, 600.0f), true, false) == 90);
+    CHECK(ThreatPctOf(142.0f, ThreatBackoffReference(false, 157.0f, true, false, 600.0f), true, false) >=
+        kThreatHighLinePct);
+    // The old reference when the victim is this bot (it backs off through the 3 s grace so the tank can take the mob
+    // back), on an exempt target (taunt-immune, or a `threat_successor` row whose cap is its own logic), or a holder
+    // under the tank.
+    CHECK(ThreatBackoffReference(true, 157.0f, false, false, 600.0f) == 157.0f);
+    CHECK(ThreatBackoffReference(true, 157.0f, true, true, 600.0f) == 157.0f);
+    CHECK(ThreatBackoffReference(true, 157.0f, true, false, 100.0f) == 157.0f);
+
+    // backoff_yields_on_self: a mob the bot itself has held for 3 s releases the back-off (t1114b rep 5: the mob on
+    // the mage, the mage silent 11.6 s at 90 % of a frozen tank while the mob went 16 % -> 0 % health). Under the
+    // grace, on an exempt target, with the key off, or with the victim elsewhere the old veto stands.
+    {
+        CHECK(kThreatSelfHeldGraceMs == 3000);
+        CHECK(ThreatBackoffYieldsOnSelf(true, true, false, 3000));
+        CHECK(!ThreatBackoffYieldsOnSelf(true, true, false, 2999));
+        CHECK(!ThreatBackoffYieldsOnSelf(true, true, true, 3000));   // taunt-immune / `threat_successor`
+        CHECK(!ThreatBackoffYieldsOnSelf(false, true, false, 3000)); // key off
+        CHECK(!ThreatBackoffYieldsOnSelf(true, false, false, 3000)); // the mob is on someone else
+        CHECK(!ThreatBackoffYieldsOnSelf(false, false, true, 60000));
+
+        SelfHeldClock clock;
+        constexpr std::uint64_t mobA = 0x1001;
+        constexpr std::uint64_t mobB = 0x1002;
+        CHECK(clock.Update(mobA, true, 1000) == 0); // the first tick held starts the clock, no grace yet
+        CHECK(clock.Update(mobA, true, 4000) == 3000);
+        CHECK(ThreatBackoffYieldsOnSelf(true, true, false, clock.Update(mobA, true, 4001)));
+        // The hold is per target (fails on the per-bot clock: mob B inherited A's 3.1 s and released at once): a
+        // switch from A to B starts B's own grace even though `held` never went false.
+        CHECK(clock.Update(mobB, true, 4100) == 0);
+        CHECK(clock.Update(mobB, true, 7099) == 2999);
+        CHECK(!ThreatBackoffYieldsOnSelf(true, true, false, clock.Update(mobB, true, 7099)));
+        CHECK(clock.Update(mobB, true, 7100) == 3000);
+        CHECK(ThreatBackoffYieldsOnSelf(true, true, false, clock.Update(mobB, true, 7100)));
+        // Switching back is a change too: A restarts instead of resuming its old time.
+        CHECK(clock.Update(mobA, true, 7200) == 0);
+        CHECK(clock.Update(mobA, true, 10199) == 2999);
+        CHECK(clock.Update(mobA, true, 10200) == 3000);
+
+        CHECK(clock.Update(mobA, false, 11000) == 0); // the mob leaves: reset
+        CHECK(clock.Update(mobA, true, 11000) == 0);  // and back: the full grace starts over
+        CHECK(clock.Update(mobA, true, 13999) == 2999);
+        // An exempt target never accrues: held false ticks leave nothing for the next normal target to inherit.
+        CHECK(clock.Update(mobB, true, 14000) == 0);
+        CHECK(clock.Update(mobB, false, 14000) == 0); // taunt-immune / `threat_successor` tick
+        CHECK(clock.Update(mobB, false, 60000) == 0); // many exempt ticks later
+        CHECK(clock.Update(mobB, true, 60000) == 0);  // no target change, still the full grace
+        CHECK(clock.Update(mobB, true, 62999) == 2999);
+        // No target: nothing accrues, and the first tick on any target starts over.
+        CHECK(clock.Update(0, true, 70000) == 0);
+        CHECK(clock.Update(0, false, 90000) == 0);
+        CHECK(clock.Update(mobA, true, 90000) == 0);
+        // The clock survives the 32-bit wrap (since 0xFFFFFF00, now 0x100: 512 ms).
+        SelfHeldClock wrap;
+        CHECK(wrap.Update(mobA, true, 0xFFFFFF00u) == 0);
+        CHECK(wrap.Update(mobA, true, 0x00000100u) == 512u);
+        CHECK(wrap.Update(mobA, false, 0x00000200u) == 0);
+        CHECK(wrap.Update(mobB, true, 0x00000200u) == 0);
+    }
+    // self_held_release_sees_every_target: the call site observes the bot's current target on every combat evaluation,
+    // ahead of the high-threat test, so a mob seen only below the line still resets the hold. A high and self-held ->
+    // B below the line -> A after the grace: A gets a fresh grace, never its old elapsed time. Fed only inside the
+    // high-threat branch the B tick is never recorded, A's GUID and start survive, and the return to A releases at
+    // once.
+    {
+        SelfHeldClock clock;
+        constexpr std::uint64_t mobA = 0x2001;
+        constexpr std::uint64_t mobB = 0x2002;
+        CHECK(!ThreatSelfHeldRelease(clock, true, mobA, true, false, true, 1000));  // A starts its hold
+        CHECK(!ThreatSelfHeldRelease(clock, true, mobA, true, false, true, 3999));  // under the grace: vetoed
+        CHECK(!ThreatSelfHeldRelease(clock, true, mobB, true, false, false, 4100)); // B below the line: observed
+        CHECK(!ThreatSelfHeldRelease(clock, true, mobA, true, false, true, 4200));  // back to A: a fresh grace
+        CHECK(!ThreatSelfHeldRelease(clock, true, mobA, true, false, true, 7199));
+        CHECK(ThreatSelfHeldRelease(clock, true, mobA, true, false, true, 7200));
+        // The observation happens whatever the line says: an exempt target (taunt-immune / `threat_successor`) and a
+        // target on someone else both reset, so the next normal hold starts over.
+        SelfHeldClock reset;
+        CHECK(!ThreatSelfHeldRelease(reset, true, mobA, true, false, true, 1000));
+        CHECK(!ThreatSelfHeldRelease(reset, true, mobB, true, true, false, 1500));  // exempt, below the line
+        CHECK(!ThreatSelfHeldRelease(reset, true, mobA, true, false, true, 1600));
+        CHECK(!ThreatSelfHeldRelease(reset, true, mobA, false, false, false, 2000)); // not self-held
+        CHECK(!ThreatSelfHeldRelease(reset, true, mobA, true, false, true, 2100));
+        CHECK(!ThreatSelfHeldRelease(reset, true, mobA, true, false, true, 5099));
+        CHECK(ThreatSelfHeldRelease(reset, true, mobA, true, false, true, 5100));
+        // Key off: no clock work at all, and no release.
+        SelfHeldClock off;
+        CHECK(!ThreatSelfHeldRelease(off, false, mobA, true, false, true, 1000));
+        CHECK(!ThreatSelfHeldRelease(off, false, mobA, true, false, true, 60000));
+        CHECK(off.guid == 0 && off.since == 0);
+    }
     // hakkar_away_key_on_equals_today (fails with the first version of the key: it gave 2000): the main tank holds with
     // 40000 and the off-tanks are on Sons (not on the boss) with 2000 left over: with the key on the pick is today's.
     {
@@ -658,15 +759,27 @@ int main()
         CHECK(ThreatResetSince(100000, 0, 0) == 0);
     }
 
-    // ThreatCapInterruptExempt(interrupt, key, botThreat, tankThreat, flatThreat, ranged) is the call
+    // ThreatCapInterruptExempt(interrupt, key, botThreat, tankThreat, flatThreat, ranged, victimIsBot) is the call
     // ThreatMultiplier::GetValue makes before its high-threat veto (heals are exempt beside it). Tank 1000 throughout.
 
+    // counterspell_on_the_bots_own_victim_is_exempt: the failing case of the round-7 trial
+    // dps-mage-counterspell-caster (6 of 20 misses were Counterspell vetoed). The caster mob is on the mage, so the
+    // mage's 1400 plus Counterspell's 300 flat is 1700, far over the 1300 ranged line, and the pull line vetoed the
+    // interrupt while the mob stayed on the mage every second: a mob already attacking the bot cannot be pulled from a
+    // tank that is not its victim.
+    CHECK(ThreatCapInterruptExempt(true, true, 1400.0f, 1000.0f, 300.0f, true, true));
+    // The same numbers with the mob on the tank (or anyone else) keep the pull line's veto: 1700 is over 1300.
+    CHECK(!ThreatCapInterruptExempt(true, true, 1400.0f, 1000.0f, 300.0f, true, false));
+    // Key off: no exemption, even on the bot's own victim.
+    CHECK(!ThreatCapInterruptExempt(true, false, 1400.0f, 1000.0f, 300.0f, true, true));
+
     // interrupt_exempt_behind_key: key off is never exempt, at any threat; a non-interrupt never is either.
-    CHECK(ThreatCapInterruptExempt(true, true, 800.0f, 1000.0f, 0.0f, false));
-    CHECK(!ThreatCapInterruptExempt(true, false, 800.0f, 1000.0f, 0.0f, false));
-    CHECK(!ThreatCapInterruptExempt(true, false, 0.0f, 1000.0f, 0.0f, true));
-    CHECK(!ThreatCapInterruptExempt(false, true, 800.0f, 1000.0f, 0.0f, false));
-    CHECK(!ThreatCapInterruptExempt(false, false, 0.0f, 1000.0f, 0.0f, false));
+    CHECK(ThreatCapInterruptExempt(true, true, 800.0f, 1000.0f, 0.0f, false, false));
+    CHECK(!ThreatCapInterruptExempt(true, false, 800.0f, 1000.0f, 0.0f, false, false));
+    CHECK(!ThreatCapInterruptExempt(true, false, 0.0f, 1000.0f, 0.0f, true, false));
+    CHECK(!ThreatCapInterruptExempt(false, true, 800.0f, 1000.0f, 0.0f, false, false));
+    CHECK(!ThreatCapInterruptExempt(false, true, 800.0f, 1000.0f, 0.0f, false, true));
+    CHECK(!ThreatCapInterruptExempt(false, false, 0.0f, 1000.0f, 0.0f, false, false));
 
     // The core's pull line (ThreatManager::getHostileTarget): 110 % in melee reach, 130 % from range.
     CHECK(kAggroPullMeleeFactor == 1.1f);
@@ -677,34 +790,35 @@ int main()
     // kick_at_105_exempt: the failing case under round 1's 100 % ceiling. A rogue at 105 % of the tank in melee with
     // Kick (no flat threat) does not pull the mob, so it kicks (live AFTER round 1: 3594 `MULT threat x0.000` on the
     // rogue against 42 OK, Kick 0.469).
-    CHECK(ThreatCapInterruptExempt(true, true, 1050.0f, 1000.0f, 0.0f, false));
+    CHECK(ThreatCapInterruptExempt(true, true, 1050.0f, 1000.0f, 0.0f, false, false));
     // kick_at_111_melee_vetoed: over the 110 % melee line the veto stands.
-    CHECK(!ThreatCapInterruptExempt(true, true, 1110.0f, 1000.0f, 0.0f, false));
+    CHECK(!ThreatCapInterruptExempt(true, true, 1110.0f, 1000.0f, 0.0f, false, false));
     // The same 111 % from range is under the 130 % line.
-    CHECK(ThreatCapInterruptExempt(true, true, 1110.0f, 1000.0f, 0.0f, true));
+    CHECK(ThreatCapInterruptExempt(true, true, 1110.0f, 1000.0f, 0.0f, true, false));
     // At the line itself it is vetoed (strictly under): 1300 ranged.
-    CHECK(!ThreatCapInterruptExempt(true, true, 1300.0f, 1000.0f, 0.0f, true));
+    CHECK(!ThreatCapInterruptExempt(true, true, 1300.0f, 1000.0f, 0.0f, true, false));
 
     // counterspell_flat_threat_counts: Counterspell carries 300 flat threat (tw_world_spell_threat 2139). A mage at
     // 100 % of the tank plus 300 is 130 %, at the ranged line: vetoed. At 80 % plus 300 = 110 % it is under: exempt.
-    CHECK(!ThreatCapInterruptExempt(true, true, 1000.0f, 1000.0f, 300.0f, true));
-    CHECK(ThreatCapInterruptExempt(true, true, 800.0f, 1000.0f, 300.0f, true));
+    CHECK(!ThreatCapInterruptExempt(true, true, 1000.0f, 1000.0f, 300.0f, true, false));
+    CHECK(ThreatCapInterruptExempt(true, true, 800.0f, 1000.0f, 300.0f, true, false));
     // Without the flat threat the 100 % mage would read exempt: the flat threat is what vetoes it.
-    CHECK(ThreatCapInterruptExempt(true, true, 1000.0f, 1000.0f, 0.0f, true));
+    CHECK(ThreatCapInterruptExempt(true, true, 1000.0f, 1000.0f, 0.0f, true, false));
     // Shield Bash (180 flat) in melee at 95 %: 1130 is over 1100, vetoed; at 90 % (1080) exempt.
-    CHECK(!ThreatCapInterruptExempt(true, true, 950.0f, 1000.0f, 180.0f, false));
-    CHECK(ThreatCapInterruptExempt(true, true, 900.0f, 1000.0f, 180.0f, false));
+    CHECK(!ThreatCapInterruptExempt(true, true, 950.0f, 1000.0f, 180.0f, false, false));
+    CHECK(ThreatCapInterruptExempt(true, true, 900.0f, 1000.0f, 180.0f, false, false));
 
     // interrupt_no_tank_keeps_the_veto: with no tank threat on the mob (0, or GetTankThreat's -1 for no tank on it)
-    // there is no line to stay under; the back-off answers as today.
-    CHECK(!ThreatCapInterruptExempt(true, true, 0.0f, 0.0f, 0.0f, false));
-    CHECK(!ThreatCapInterruptExempt(true, true, 50.0f, 0.0f, 0.0f, true));
-    CHECK(!ThreatCapInterruptExempt(true, true, 0.0f, -1.0f, 0.0f, false));
+    // there is no line to stay under; the back-off answers as today. Not so when the mob is on the bot itself.
+    CHECK(!ThreatCapInterruptExempt(true, true, 0.0f, 0.0f, 0.0f, false, false));
+    CHECK(!ThreatCapInterruptExempt(true, true, 50.0f, 0.0f, 0.0f, true, false));
+    CHECK(!ThreatCapInterruptExempt(true, true, 0.0f, -1.0f, 0.0f, false, false));
+    CHECK(ThreatCapInterruptExempt(true, true, 0.0f, 0.0f, 0.0f, false, true));
 
     // interrupt_uses_interrupt_target_numbers: the caster to kick is not always the current target. The bot sits at
     // 120 % on its current target and at 50 % on the caster: the caster's numbers decide, so the Kick goes.
-    CHECK(!ThreatCapInterruptExempt(true, true, 1200.0f, 1000.0f, 0.0f, false));
-    CHECK(ThreatCapInterruptExempt(true, true, 500.0f, 1000.0f, 0.0f, false));
+    CHECK(!ThreatCapInterruptExempt(true, true, 1200.0f, 1000.0f, 0.0f, false, false));
+    CHECK(ThreatCapInterruptExempt(true, true, 500.0f, 1000.0f, 0.0f, false, false));
 
     // ThreatCapPercentOf (the veto row's pct=): unsaturated; a tank with no threat reads 100, no tank on the target
     // (-1) reads 0 like the high-threat line.
