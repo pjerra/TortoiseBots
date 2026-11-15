@@ -57,7 +57,7 @@ INSERT INTO `ai_dungeon_leg_need` (`plan`, `leg`, `item`, `mode`, `pick`, `objec
 
 DELETE FROM `ai_dungeon_leg_need` WHERE `plan` = 'dire_maul_west';
 INSERT INTO `ai_dungeon_leg_need` (`plan`, `leg`, `item`, `mode`, `pick`, `object`, `name`, `how`, `comment`) VALUES
-('dire_maul_west', 2, 18249, 2, 300, 300601, 'Crescent Key', 'Dire Maul: Pusillin (East), quest', 'DM West Door 300601: leg 2 seq 20 crosses it first');
+('dire_maul_west', 4, 18249, 2, 300, 300601, 'Crescent Key', 'Dire Maul: Pusillin (East), quest', 'DM West Door 300601: leg 4 seq 20 (46.1333 500.5332) crosses it first');
 
 DELETE FROM `ai_dungeon_leg_need` WHERE `plan` = 'dire_maul_north';
 INSERT INTO `ai_dungeon_leg_need` (`plan`, `leg`, `item`, `mode`, `pick`, `object`, `name`, `how`, `comment`) VALUES
