@@ -5,18 +5,20 @@
 --
 -- Idempotent: each plan's rows are deleted, then inserted. The tables come from 20261014150000_world.sql.
 
--- turtle-agent b2b48721 (fix/route-order-maraudon_purple): `plan-export --allow-draft --gm-cross-direct
--- --floor-aware --approach-hops --mmaps <the server's mmaps> --rev b2b48721 --stamp 20261114231500`. Route order
--- for Sagiroth/TortoiseBots#1542 (the Gnomeregan method, audit 2026-11-12): each of the 101 packs sits on the leg
--- whose walk passes it, in the order along that walk, and the 40 packs no leg passes within aggro reach are
--- dropped. 243 steps instead of 1,273, 8,711 yd instead of 36,333; see maraudon_purple-FIX.md for the tables.
+-- turtle-agent b058b987 (fix/route-order-maraudon_purple): `plan-export --allow-draft --gm-cross-direct
+-- --floor-aware --approach-hops --mmaps <the server's mmaps> --rev b058b987 --stamp 20261115003000`. Route order
+-- for Sagiroth/TortoiseBots#1542, round 3 (the Gnomeregan method, audit 2026-11-12/15): each of the 106 packs sits on
+-- the leg whose walk passes it, in the order along that walk, and the 35 packs no leg passes within aggro reach are
+-- dropped. The ledge under the ring is planned: the deck above the -62 pack at 771 -353 wakes it, so the pack keeps
+-- the deployed plan's stand 788 -365, and the four packs the one legal walk to it passes come with it. 280 steps
+-- instead of 1,273 and 9,371 yd instead of 36,333; see maraudon_purple-FIX.md for the tables.
 
--- maraudon_purple: map 349, 6 legs, 243 steps
+-- maraudon_purple: map 349, 6 legs, 280 steps
 DELETE FROM `ai_dungeon_step` WHERE `plan` = 'maraudon_purple';
 DELETE FROM `ai_dungeon_leg` WHERE `plan` = 'maraudon_purple';
 DELETE FROM `ai_dungeon_plan` WHERE `plan` = 'maraudon_purple';
 INSERT INTO `ai_dungeon_plan` (`plan`, `map`, `cc_priority`, `cc_always`, `kill_first`, `source`, `comment`) VALUES
-('maraudon_purple', 349, '11793,11794', '', '12224,13142,12220,12217', 'turtle-agent b2b48721 dungeons/maraudon_purple.json', 'plan v1, draft (not mapped, not live-checked)');
+('maraudon_purple', 349, '11793,11794', '', '12224,13142,12220,12217', 'turtle-agent b058b987 dungeons/maraudon_purple.json', 'plan v1, draft (not mapped, not live-checked)');
 INSERT INTO `ai_dungeon_leg` (`plan`, `leg`, `name`, `comment`) VALUES
 ('maraudon_purple', 0, 'lord_vyletongue', ''),
 ('maraudon_purple', 1, 'celebras_the_cursed', ''),
@@ -48,23 +50,60 @@ INSERT INTO `ai_dungeon_step` (`plan`, `leg`, `seq`, `kind`, `entry`, `x`, `y`, 
 ('maraudon_purple', 0, 20, 'pull', 0, 871.09, -333.46, -49.71, 5, 0, 0, 0, 0, '12216,12217,11791,11790', 'pull group 12'),
 ('maraudon_purple', 0, 21, 'pull', 0, 837.05, -356.68, -51.82, 5, 0, 0, 0, 0, '12217,12216,11790,11791', 'pull group 13'),
 ('maraudon_purple', 0, 22, 'pull', 0, 801.16, -337.74, -51.44, 5, 0, 0, 0, 0, '12217,12216,11791,11790', 'pull group 14'),
-('maraudon_purple', 0, 23, 'pull', 0, 736.45, -336.69, -50.76, 5, 0, 0, 0, 0, '11791,12217,12216,11790', 'pull group 15'),
-('maraudon_purple', 0, 24, 'move', 0, 724.88135, -336.69507, -51.104107, 0, 0, 0, 0, 0, '', 'approach path'),
-('maraudon_purple', 0, 25, 'pull', 0, 697.09, -372.95, -51.94, 7, 0, 0, 0, 0, '13142', 'pull group 16'),
-('maraudon_purple', 0, 26, 'pull', 0, 679.63, -346.59, -51.94, 7, 0, 0, 0, 0, '11790,12216,12217,11791,11792', 'pull group 17'),
-('maraudon_purple', 0, 27, 'pull', 0, 650.52, -349.33, -51.94, 7, 0, 0, 0, 0, '13142', 'pull group 18'),
-('maraudon_purple', 0, 28, 'pull', 0, 637.87, -313.86, -51.57, 5, 0, 0, 0, 0, '12217,12216,11791', 'pull group 19'),
-('maraudon_purple', 0, 29, 'pull', 0, 639.61, -261.65, -52.78, 7, 0, 0, 0, 0, '13142', 'pull group 20'),
-('maraudon_purple', 0, 30, 'pull', 0, 627.64, -260.4, -53.24, 7, 0, 0, 0, 0, '13141', 'pull group 21'),
-('maraudon_purple', 0, 31, 'pull', 0, 614.71, -206.54, -64.3, 7, 0, 0, 0, 0, '13142', 'pull group 22'),
-('maraudon_purple', 0, 32, 'pull', 0, 656.93, -227.15, -64.31, 7, 0, 0, 0, 0, '13142', 'pull group 23'),
-('maraudon_purple', 0, 33, 'pull', 0, 647.04, -201.6, -64.31, 7, 0, 0, 0, 0, '13141', 'pull group 24'),
-('maraudon_purple', 0, 34, 'pull', 0, 680.85, -197.11, -60.47, 5, 0, 0, 0, 0, '11791,12217,12216', 'pull group 25'),
-('maraudon_purple', 0, 35, 'pull', 0, 692.31, -265.62, -52.81, 7, 0, 0, 0, 0, '13142', 'pull group 26'),
-('maraudon_purple', 0, 36, 'move', 0, 703.99994, -234.66673, -48.127975, 0, 0, 0, 0, 0, '', 'approach path'),
-('maraudon_purple', 0, 37, 'pull', 0, 707.84, -197, -47.17, 5, 0, 0, 0, 0, '12216,12217,11791', 'pull group 27'),
-('maraudon_purple', 0, 38, 'pull', 0, 721.61, -219.29, -47.17, 5, 0, 0, 1, 0, '11792', 'pull group 28'),
-('maraudon_purple', 0, 39, 'boss', 12236, 748.874, -219.647, -47.6926, 0, 0, 0, 0, 0, '', 'boss'),
+('maraudon_purple', 0, 23, 'move', 0, 870.3879, -368.788, -52.027977, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 24, 'move', 0, 874.65454, -381.05466, -52.027977, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 25, 'move', 0, 875.57153, -394.74805, -51.884308, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 26, 'move', 0, 864.96155, -405.6814, -52.142654, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 27, 'move', 0, 855.81464, -421.97165, -52.78011, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 28, 'move', 0, 837.5999, -437.13333, -56.053192, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 29, 'move', 0, 826.8518, -440.10498, -56.159195, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 30, 'move', 0, 803.66656, -427.73334, -53.571583, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 31, 'move', 0, 799.3999, -423.2, -53.44596, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 32, 'move', 0, 801.26654, -414.93335, -53.92386, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 33, 'move', 0, 820.1999, -393.33334, -58.72779, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 34, 'pull', 0, 855.32, -382.35, -64, 5, 0, 0, 0, 0, '13141', 'pull group 15'),
+('maraudon_purple', 0, 35, 'move', 0, 820.1999, -393.33334, -58.72779, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 36, 'pull', 0, 790.94, -418.98, -53.51, 5, 0, 0, 0, 0, '12216,11790,12217', 'pull group 16'),
+('maraudon_purple', 0, 37, 'pull', 0, 816.5, -376.74, -59.1, 7, 0, 0, 0, 0, '13141', 'pull group 17'),
+('maraudon_purple', 0, 38, 'pull', 0, 796.36, -373.9, -59.07, 7, 0, 0, 0, 0, '13141', 'pull group 18'),
+('maraudon_purple', 0, 39, 'move', 0, 788.1852, -365.43832, -59.882713, 0, 0, 0, 0, 0, '', 'pull group 19 approach'),
+('maraudon_purple', 0, 40, 'pull', 0, 771.38, -352.87, -61.57, 5, 0, 0, 0, 0, '13142', 'pull group 19'),
+('maraudon_purple', 0, 41, 'move', 0, 788.1852, -365.43832, -59.882713, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 42, 'move', 0, 800.5999, -400.53336, -58.49583, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 43, 'move', 0, 797.5999, -405.33334, -54.627975, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 44, 'move', 0, 794.0666, -410.93335, -53.81131, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 45, 'move', 0, 799.3999, -423.2, -53.44596, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 46, 'move', 0, 803.66656, -427.73334, -53.571583, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 47, 'move', 0, 823.3999, -437.06668, -55.965866, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 48, 'move', 0, 826.8518, -440.10498, -56.159195, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 49, 'move', 0, 831.9185, -439.57166, -56.032677, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 50, 'move', 0, 852.1852, -423.305, -52.799618, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 51, 'move', 0, 864.96155, -405.6814, -52.142654, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 52, 'move', 0, 869.6119, -401.32132, -51.462208, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 53, 'move', 0, 875.57153, -394.74805, -51.884308, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 54, 'move', 0, 874.65454, -381.05466, -52.027977, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 55, 'move', 0, 868.79987, -370.73337, -52.027977, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 56, 'move', 0, 870.3879, -368.788, -52.027977, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 57, 'move', 0, 855.4546, -360.54538, -51.509148, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 58, 'move', 0, 790.4813, -338.56174, -50.81064, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 59, 'move', 0, 764.07, -333.3, -50.64, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 60, 'pull', 0, 736.45, -336.69, -50.76, 5, 0, 0, 0, 0, '11791,12217,12216,11790', 'pull group 20'),
+('maraudon_purple', 0, 61, 'move', 0, 724.88135, -336.69507, -51.104107, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 62, 'pull', 0, 697.09, -372.95, -51.94, 7, 0, 0, 0, 0, '13142', 'pull group 21'),
+('maraudon_purple', 0, 63, 'pull', 0, 679.63, -346.59, -51.94, 7, 0, 0, 0, 0, '11790,12216,12217,11791,11792', 'pull group 22'),
+('maraudon_purple', 0, 64, 'pull', 0, 650.52, -349.33, -51.94, 7, 0, 0, 0, 0, '13142', 'pull group 23'),
+('maraudon_purple', 0, 65, 'pull', 0, 637.87, -313.86, -51.57, 5, 0, 0, 0, 0, '12217,12216,11791', 'pull group 24'),
+('maraudon_purple', 0, 66, 'pull', 0, 639.61, -261.65, -52.78, 7, 0, 0, 0, 0, '13142', 'pull group 25'),
+('maraudon_purple', 0, 67, 'pull', 0, 627.64, -260.4, -53.24, 7, 0, 0, 0, 0, '13141', 'pull group 26'),
+('maraudon_purple', 0, 68, 'pull', 0, 614.71, -206.54, -64.3, 7, 0, 0, 0, 0, '13142', 'pull group 27'),
+('maraudon_purple', 0, 69, 'pull', 0, 656.93, -227.15, -64.31, 7, 0, 0, 0, 0, '13142', 'pull group 28'),
+('maraudon_purple', 0, 70, 'pull', 0, 647.04, -201.6, -64.31, 7, 0, 0, 0, 0, '13141', 'pull group 29'),
+('maraudon_purple', 0, 71, 'pull', 0, 680.85, -197.11, -60.47, 5, 0, 0, 0, 0, '11791,12217,12216', 'pull group 30'),
+('maraudon_purple', 0, 72, 'pull', 0, 692.31, -265.62, -52.81, 7, 0, 0, 0, 0, '13142', 'pull group 31'),
+('maraudon_purple', 0, 73, 'move', 0, 703.99994, -234.66673, -48.127975, 0, 0, 0, 0, 0, '', 'approach path'),
+('maraudon_purple', 0, 74, 'pull', 0, 707.84, -197, -47.17, 5, 0, 0, 0, 0, '12216,12217,11791', 'pull group 32'),
+('maraudon_purple', 0, 75, 'pull', 0, 721.61, -219.29, -47.17, 5, 0, 0, 1, 0, '11792', 'pull group 33'),
+('maraudon_purple', 0, 76, 'boss', 12236, 748.874, -219.647, -47.6926, 0, 0, 0, 0, 0, '', 'boss'),
 ('maraudon_purple', 1, 0, 'move', 0, 709.2, -211.5, -47.1, 0, 0, 0, 0, 0, '', 'to'),
 ('maraudon_purple', 1, 1, 'pull', 0, 688.89, -164.71, -48.67, 7, 0, 0, 0, 0, '13142', 'pull group 0'),
 ('maraudon_purple', 1, 2, 'pull', 0, 669.35, -152.99, -50.1, 7, 0, 0, 0, 0, '13141', 'pull group 1'),

@@ -1473,26 +1473,27 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertIn("DELETE FROM `ai_dungeon_boss` WHERE `map` IN (129) AND `entry` IN (7357, 8567, 62679, 7358);", migrations_text())
 
     def test_maraudon_purple_is_the_route_ordered_plan(self):
-        # The route order of 2026-11-14 (turtle-agent b2b48721, branch fix/route-order-maraudon_purple, issue #1542, the
-        # Gnomeregan method): each of the 101 packs sits on the leg whose walk passes it, in the order along that walk,
-        # and the 40 packs no leg passes within aggro reach are dropped. 6 legs, 243 rows (29 + 25 + 23 + 7 + 12 + 5
-        # pulls), bosses in leg order, no boss.first. The plan row carries the humanoid casters and kill_first; Meshlok
-        # the Harvester 12237 (rank 2) is in the skip list, the critters 2914/4076/6145/13321 and Celebras' 13743 are in
-        # no pull. The measured order (8,633 yd against the deployed 36,333, 7 backtracks against 57) is in
-        # TortoiseBots-audit tests/route-audit-1112/order/maraudon_purple-FIX.md.
+        # The route order of 2026-11-14, round 3 (turtle-agent b058b987, branch fix/route-order-maraudon_purple, issue
+        # #1542, the Gnomeregan method): each of the 106 packs sits on the leg whose walk passes it, in the order along
+        # that walk, and the 35 packs no leg passes within aggro reach are dropped (round 3 plans the ledge under the
+        # ring, which the deck above wakes). 6 legs, 280 rows (34 + 25 + 23 + 7 + 12 + 5 pulls), bosses in leg order, no
+        # boss.first. The plan row carries the humanoid casters and kill_first; Meshlok the Harvester 12237 (rank 2) is
+        # in the skip list, the critters 2914/4076/6145/13321 and Celebras' 13743 are in no pull. The measured order
+        # (9,371 yd against the deployed 36,333, 10 backtracks against 57) is in TortoiseBots-audit
+        # tests/route-audit-1112/order/maraudon_purple-FIX.md.
         name, text = newest_plan_text("maraudon_purple")
-        self.assertEqual(name, "20261114231500_world.sql")
-        self.assertIn("('maraudon_purple', 349, '11793,11794', '', '12224,13142,12220,12217', 'turtle-agent b2b48721 dungeons/maraudon_purple.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261115003000_world.sql")
+        self.assertIn("('maraudon_purple', 349, '11793,11794', '', '12224,13142,12220,12217', 'turtle-agent b058b987 dungeons/maraudon_purple.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         self.assertEqual(leg_rows(text, "maraudon_purple"),
                          {0: ("lord_vyletongue", ""), 1: ("celebras_the_cursed", ""), 2: ("landslide", ""),
                           3: ("tinkerer_gizlock", ""), 4: ("rotgrip", ""), 5: ("princess_theradras", "")})
         rows = [r for r in self.step_rows(text) if r["plan"] == "maraudon_purple"]
-        self.assertEqual(len(rows), 243)
+        self.assertEqual(len(rows), 280)
         self.assertEqual([r["entry"] for r in rows if r["kind"] == "boss"],
                          ["12236", "12225", "12203", "13601", "13596", "12201"])
         self.assertEqual({r["kind"] for r in rows}, {"move", "pull", "boss"})
         self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(6)],
-                         [29, 25, 23, 7, 12, 5])
+                         [34, 25, 23, 7, 12, 5])
         for leg in range(6):
             self.assertEqual(leg_steps(rows, leg)[-1]["kind"], "boss", leg)
         pulls = [r for r in rows if r["kind"] == "pull"]
