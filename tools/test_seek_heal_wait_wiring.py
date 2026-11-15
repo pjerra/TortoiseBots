@@ -8,6 +8,9 @@ only prove the live code feeds it and that nothing else changed:
  - BossTacticsSeekAction::Execute builds the read after its anchor clamp and its same-spline
    early return, and before the walk, stands the walk down on a due wait (return false, no
    walk started), and logs one row per wait through the seek row's own writer;
+ - the wait refuses itself while the avoid-aoe trigger's condition holds (AoeHazardEscapeDue):
+   `avoid aoe` shares the seek's ACTION_EMERGENCY + 5, so a hold in front of it would starve
+   the escape. One condition, used by the trigger that queues the escape and by the seek;
  - the cast read is the shared PlayerbotAI::ReadGenericCast the reaction guard's break uses,
    so the two can never disagree about what a heal under way is;
  - the key is read with default 0, clamped to 0-3000, beside the cast guard's percent in the
@@ -31,6 +34,9 @@ POLICY_TEST = (ROOT / "tools/test_seek_heal_wait_policy.cpp").read_text()
 CONFIG_H = (ROOT / "ai/playerbot/PlayerbotAIConfig.h").read_text()
 CONFIG_CPP = (ROOT / "ai/playerbot/PlayerbotAIConfig.cpp").read_text()
 TEMPLATE = (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text()
+MOVEMENT_CPP = (ROOT / "ai/playerbot/strategy/actions/MovementActions.cpp").read_text()
+MOVEMENT_H = (ROOT / "ai/playerbot/strategy/actions/MovementActions.h").read_text()
+TRIGGERS_CPP = (ROOT / "ai/playerbot/strategy/triggers/GenericTriggers.cpp").read_text()
 
 WAIT_HEAD = "// The heal wait (AiPlayerbot.ReactionHealSeekWaitMs, ReactionCastGuardPolicy.h)"
 WALK = "MoveTo(bot->GetMapId(), x, y, z, false, false, false, true"
@@ -47,6 +53,8 @@ WAIT = EXEC[EXEC.index(WAIT_HEAD):EXEC.index(WALK)]
 READ = block(PLAYERBOT_AI, "bool PlayerbotAI::ReadGenericCast")
 REACTION = block(PLAYERBOT_AI, "bool PlayerbotAI::UpdateAIReaction")
 LOG = block(SEEK_CPP, "void LogSeekHealWait(")
+HAZARD = block(MOVEMENT_CPP, "bool ai::AoeHazardEscapeDue(")
+TRIGGER = block(TRIGGERS_CPP, "bool AoeThreatNearbyTrigger::IsActive(")
 
 
 class SeekHealWaitWiring(unittest.TestCase):
@@ -76,6 +84,34 @@ class SeekHealWaitWiring(unittest.TestCase):
         self.assertIn("healWaitActive = false;", WAIT)
         self.assertIn("healWaitEnded = true;", WAIT)
         self.assertIn("healWaitEndMs = nowMs;", WAIT)
+
+    def test_a_due_hazard_escape_outranks_the_wait(self):
+        # `avoid aoe` queues at the seek's own ACTION_EMERGENCY + 5, so the seek asks its condition while it builds
+        # the pass, before the rule can decline the walk.
+        ASK = "in.hazardDue = sPlayerbotAIConfig.reactionHealSeekWaitMs > 0 && AoeHazardEscapeDue(ai, bot);"
+        self.assertIn(ASK, WAIT)
+        ask = WAIT.index(ASK)
+        self.assertLess(ask, WAIT.index("ai::SeekHealWaitDue(in)"))
+        self.assertLess(ask, WAIT.index("return false;"))
+        # The rule refuses the wait outright for it (the policy test proves the wait is cut).
+        self.assertIn("if (in.hazardDue) return false;", POLICY)
+
+    def test_one_hazard_condition_for_the_trigger_and_the_seek(self):
+        # Declared once, beside the action it belongs to, and used by the trigger that queues the escape and by the
+        # seek's wait: the two cannot disagree about whether an escape is due.
+        self.assertIn("bool AoeHazardEscapeDue(PlayerbotAI* ai, Player* bot);", MOVEMENT_H)
+        self.assertEqual(MOVEMENT_CPP.count("bool ai::AoeHazardEscapeDue("), 1)
+        for sensor in ("CollectDamagingDynObjHazards(ai, bot, clouds, true)", "InsideAoeHazard(cloud,",
+                       'AI_VALUE2(bool, "has area debuff", "self target")',
+                       'AI_VALUE(std::list<ObjectGuid>, "nearest damaging traps")',
+                       'AI_VALUE(std::list<ObjectGuid>, "possible triggers")'):
+            self.assertIn(sensor, HAZARD)
+        # The trigger keeps its creature-aura keep-out registration and returns the shared rule, with no second copy
+        # of the sensors.
+        self.assertIn('SET_AI_VALUE(Hazard, "add hazard", std::move(hazard));', TRIGGER)
+        self.assertIn("return AoeHazardEscapeDue(ai, bot);", TRIGGER)
+        self.assertNotIn("InsideAoeHazard(", TRIGGER)
+        self.assertNotIn("CollectDamagingDynObjHazards", TRIGGER)
 
     def test_the_reads_the_rule_takes(self):
         # The key, the role, the siphon's clock and the walk's own length from the bot's run speed.
@@ -146,6 +182,8 @@ class SeekHealWaitWiring(unittest.TestCase):
         self.assertIn("constexpr std::uint32_t kSeekHealWaitMarginMs = 3000;", POLICY)
         self.assertIn("constexpr std::uint32_t kSeekHealRewaitMs = 5000;", POLICY)
         # Each refusal of the rule, in order.
+        self.assertIn("bool hazardDue = false;", POLICY)
+        self.assertIn("if (in.hazardDue) return false;", POLICY)
         self.assertIn("if (in.waitMaxMs <= 0) return false;", POLICY)
         self.assertIn("if (!in.botIsHealer) return false;", POLICY)
         self.assertIn("if (!in.cast || !in.cast->isHeal) return false;", POLICY)

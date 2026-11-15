@@ -10794,6 +10794,10 @@ bool BossTacticsSeekAction::Execute(Event& event)
         // A walk into a cloud: the poison on the ground is gone when the cloud's own time runs out.
         in.cloudLeftMs = task.phase == SeekTask::Phase::Cloud && task.cloud
             ? static_cast<std::int32_t>(task.cloud->GetDuration()) : -1;
+        // `avoid aoe` queues at the same relevance as this seek, so a hold here could starve it; ask its own
+        // condition and let the escape go first. Only with the key on: off, no wait is due and the sensors are not
+        // read.
+        in.hazardDue = sPlayerbotAIConfig.reactionHealSeekWaitMs > 0 && AoeHazardEscapeDue(ai, bot);
         in.inWait = inWait;
         in.msSinceWaitEnd = waitEndedMsAgo;
         if (ai::SeekHealWaitDue(in))

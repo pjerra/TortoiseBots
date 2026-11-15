@@ -5,6 +5,9 @@
 // The case that fails on the old code (no wait at all, the walk cuts every cast):
 // - key 2000, a healer, a Flash Heal with 900 ms of 1500 left, the siphon due in 44 s, a 300 ms walk and the
 //   gather (no cloud): the walk must stand down.
+// The case that fails on the first version of the wait (the field does not exist, so the input is ignored):
+// - the same pass with a hazard escape due (AoeHazardEscapeDue): the walk must go, so `avoid aoe` can hold the
+//   emergency that shares the seek's ACTION_EMERGENCY + 5 relevance.
 //
 // Build and run:
 //   g++ -std=c++17 -Wall -Wextra tools/test_seek_heal_wait_policy.cpp -o /tmp/test_seek_heal_wait
@@ -46,7 +49,7 @@ static ReactionCastRead Prepare(std::int32_t totalMs, std::uint32_t remainingMs,
 }
 
 // One seek pass as the live code builds it: the walk value, a healer, the siphon 44 s away, a 300 ms walk, the
-// gather (no cloud) and no earlier wait.
+// gather (no cloud), no hazard escape and no earlier wait.
 static SeekHealWaitIn Base()
 {
     SeekHealWaitIn in;
@@ -56,6 +59,7 @@ static SeekHealWaitIn Base()
     in.dueInMs = 44000;
     in.travelMs = 300;
     in.cloudLeftMs = -1;
+    in.hazardDue = false;
     in.inWait = false;
     in.msSinceWaitEnd = kNoWait;
     return in;
@@ -75,6 +79,25 @@ int main()
     }
 
     // 2. Every other input alone puts the walk back on the road (the cast breaks as before).
+    {
+        SeekHealWaitIn in = Base(); // a due hazard escape: `avoid aoe` comes first
+        in.cast = &flashHeal;
+        in.hazardDue = true;
+        CHECK(!SeekHealWaitDue(in));
+        // Even while a wait that already started runs: the emergency still cuts it short.
+        in.inWait = true;
+        CHECK(!SeekHealWaitDue(in));
+        // And it changes nothing when no wait would be due anyway.
+        in.hazardDue = false;
+        in.inWait = false;
+        CHECK(SeekHealWaitDue(in));
+    }
+    {
+        SeekHealWaitIn in = Base(); // the field's default is no hazard
+        in.cast = &flashHeal;
+        CHECK(!SeekHealWaitIn{}.hazardDue);
+        CHECK(SeekHealWaitDue(in));
+    }
     {
         SeekHealWaitIn in = Base(); // the key off
         in.cast = &flashHeal;

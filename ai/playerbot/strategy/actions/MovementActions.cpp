@@ -3863,6 +3863,33 @@ bool FleeFromAreaAction::isUseful()
     return !(PlayerbotAI::IsTank(bot) && target && target->GetVictim() == bot);
 }
 
+// The hazard-escape condition behind `avoid aoe`, shared with the seek's heal wait so the two cannot disagree about
+// whether an escape is due. The sensors are the trigger's own; the action's landing checks stay in isUseful.
+bool ai::AoeHazardEscapeDue(PlayerbotAI* ai, Player* bot)
+{
+    if (!ai || !bot || !bot->IsInWorld() || bot->IsBeingTeleported() || !sServerFacade.IsAlive(bot))
+        return false;
+    AiObjectContext* context = ai->GetAiObjectContext();
+    // Any one sensor firing is enough; each read is value-cached (dynobj scan,
+    // dynobj aura check, 30yd trap scan, 15yd trigger scan).
+    // The cloud's own centre test, ahead of the aura check: the step must fire
+    // as the cloud forms, before its first 1 s tick lands. Creature-cast clouds
+    // only, the same sensor the step-out uses, so the open world and PvP
+    // against players are unchanged.
+    std::vector<AoeHazardCircle> clouds;
+    CollectDamagingDynObjHazards(ai, bot, clouds, true);
+    for (AoeHazardCircle const& cloud : clouds)
+    {
+        if (InsideAoeHazard(cloud, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ()))
+            return true;
+    }
+    if (AI_VALUE2(bool, "has area debuff", "self target"))
+        return true;
+    if (!AI_VALUE(std::list<ObjectGuid>, "nearest damaging traps").empty())
+        return true;
+    return !AI_VALUE(std::list<ObjectGuid>, "possible triggers").empty();
+}
+
 bool AvoidAoeAction::isUseful()
 {
     if (!MovementAction::isUseful())

@@ -1753,8 +1753,9 @@ AiPlayerbot.ReactionHealCastGuardPct = 0
 # siphon, and while the cloud's own time left does too. Walk 103: 410 seek_move rows had a heal under way (a median cut
 # at 43 % of the cast, ~3.1 per healer-fight), and 94 % of the known-spell rows had 2 s or less left with the siphon
 # still due 3 s or more past that. One BossTacticsSeek row (event=heal_wait) per wait; at most one wait per cast, and
-# none within 5 s of the last one's end, so a chain of heals cannot park the bot short of the cloud. Every emergency,
-# the at-spot stop and the other walks are unchanged, and a walk that starts still breaks the cast itself.
+# none within 5 s of the last one's end, so a chain of heals cannot park the bot short of the cloud. A due hazard
+# escape (`avoid aoe`, the same ACTION_EMERGENCY + 5 as the seek) refuses the wait outright, so the emergency still
+# cuts. The at-spot stop and the other walks are unchanged, and a walk that starts still breaks the cast itself.
 # It matters most with AiPlayerbot.ReactionHealCastGuardPct on: with that key off the reaction engine still breaks a
 # healer's cast the moment it picks the seek, before the walk's own wait can be read.
 # `.reload config` reads it again.

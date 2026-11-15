@@ -217,6 +217,12 @@ namespace ai
         virtual bool isUseful() override;
     };
 
+    // The condition behind `avoid aoe`: any of the three strafe sensors sees danger — a damaging dynamic object's
+    // aura or centre on the bot, a damaging trap in range, a listed trigger NPC in range, or an area debuff on the
+    // bot. One rule for the trigger that queues the escape and for the seek's heal wait, which declines to hold a
+    // healer's cast while an escape is due (ReactionCastGuardPolicy.h, SeekHealWaitDue).
+    bool AoeHazardEscapeDue(PlayerbotAI* ai, Player* bot);
+
     // Proactive AoE avoidance (donor AvoidAoeAction shape): three sensors —
     // dynobj aura affecting the bot, damaging trap GO in range, trigger NPC
     // in range — then a strafe-first step-out that stays in combat range

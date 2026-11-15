@@ -91,6 +91,10 @@ namespace ai
     // Walk 103 measured 410 `seek_move` rows with a heal under way (a median cut at 43 % of the cast, ~3.1 per
     // healer-fight). 94 % of the known-spell rows had 2 s or less left and the siphon was still due 3 s or more past
     // that: the heal was worth more than the walk, so the walk is what should have waited.
+    //
+    // A due hazard escape always wins: `avoid aoe` and `boss tactics seek` share ACTION_EMERGENCY + 5, so a seek that
+    // stands its walk down to hold a heal must ask the avoid-aoe condition itself (AoeHazardEscapeDue) and refuse the
+    // wait while it holds. Otherwise a healer standing in a hostile ground effect could keep casting for the wait.
     constexpr std::uint32_t kSeekHealWaitMarginMs = 3000; // slack over the walk's own length
     constexpr std::uint32_t kSeekHealRewaitMs = 5000;     // no second wait within this of the last one's end
     constexpr std::uint32_t kSeekHealWaitEndSlackMs = 200; // the wait reads as over this long past its end
@@ -109,7 +113,8 @@ namespace ai
     }
 
     // One seek pass as the wait reads it: the key, the bot's role, the generic slot's read, the time left to the
-    // siphon, the walk's own length, the cloud's time left when the walk is into one, and the wait's own state.
+    // siphon, the walk's own length, the cloud's time left when the walk is into one, a due hazard escape, and the
+    // wait's own state.
     struct SeekHealWaitIn
     {
         int waitMaxMs = 0;                        // AiPlayerbot.ReactionHealSeekWaitMs, clamped 0-3000
@@ -118,11 +123,15 @@ namespace ai
         std::uint32_t dueInMs = 0;                // the seek's task.dueInMs: 0 means the clock is unknown
         std::uint32_t travelMs = 0;               // SeekTravelMs(dist, the bot's run speed)
         std::int32_t cloudLeftMs = -1;            // the cloud's own duration left (cloud phase); -1: the gather
+        // The avoid-aoe trigger's condition (AoeHazardEscapeDue): a hazard escape is queued at the same relevance
+        // as the seek, so a wait here must never stand in front of it.
+        bool hazardDue = false;
         bool inWait = false;                      // a wait already runs (its cast's remainder has not run out)
         std::uint32_t msSinceWaitEnd = std::numeric_limits<std::uint32_t>::max(); // none yet
     };
 
     // Does the seek stand its walk down for the heal under way?
+    // - a hazard escape is due: no (the emergency comes first, whatever the heal's progress);
     // - no key, no healer, no cast / not a heal / no progress to read: no;
     // - more of the cast left than the key allows: no (the walk goes, and breaks it as before);
     // - the siphon due before the cast, the walk and the margin are done: no (walking late beats healing now);
@@ -130,6 +139,7 @@ namespace ai
     // - a wait that ended within kSeekHealRewaitMs: no (the bot walks, so a chain of heals cannot park it).
     inline bool SeekHealWaitDue(SeekHealWaitIn const& in)
     {
+        if (in.hazardDue) return false;
         if (in.waitMaxMs <= 0) return false;
         if (!in.botIsHealer) return false;
         if (!in.cast || !in.cast->isHeal) return false;
