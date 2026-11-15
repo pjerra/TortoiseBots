@@ -512,10 +512,16 @@ class InterruptIgnoresThreat(unittest.TestCase):
     def test_the_policy_needs_the_key_and_the_pull_line(self):
         self.assertIn(
             "inline bool ThreatCapInterruptExempt(bool interrupt, bool interruptIgnoresThreat, float botThreat, "
-            "float tankThreat,\n                                         float flatThreat, bool ranged)",
+            "float tankThreat,\n                                         float flatThreat, bool ranged, "
+            "bool victimIsBot)",
             THREAT_POLICY)
-        self.assertIn("if (!interrupt || !interruptIgnoresThreat || tankThreat <= 0.0f)\n            return false;",
-                      THREAT_POLICY)
+        self.assertIn("if (!interrupt || !interruptIgnoresThreat)\n            return false;", THREAT_POLICY)
+        # Round 7: the mob is on the bot, so its threat never vetoes the interrupt.
+        self.assertIn("if (victimIsBot)\n            return true;", THREAT_POLICY)
+        self.assertLess(THREAT_POLICY.index("if (!interrupt || !interruptIgnoresThreat)\n            return false;"),
+                        THREAT_POLICY.index("if (victimIsBot)\n            return true;"))
+        self.assertLess(THREAT_POLICY.index("if (victimIsBot)\n            return true;"),
+                        THREAT_POLICY.index("if (tankThreat <= 0.0f)\n            return false;"))
         self.assertIn("return botThreat + flatThreat < AggroPullFactor(ranged) * tankThreat;", THREAT_POLICY)
         # The core's 110 % / 130 % rule (ThreatManager::getHostileTarget).
         self.assertIn("constexpr float kAggroPullMeleeFactor = 1.1f;", THREAT_POLICY)
@@ -532,7 +538,8 @@ class InterruptIgnoresThreat(unittest.TestCase):
         exempt = multiplier[multiplier.index("ThreatCapExempt(heal"):]
         self.assertIn("ThreatCapInterruptExempt(interrupt, sPlayerbotAIConfig.interruptIgnoresThreat, "
                       "interruptBotThreat,", exempt)
-        self.assertIn("interruptTankThreat, interruptFlatThreat, interruptRanged))", exempt)
+        self.assertIn("interruptTankThreat, interruptFlatThreat, interruptRanged,\n"
+                      "                                 interruptVictimIsBot))", exempt)
         self.assertLess(exempt.index("ThreatCapInterruptExempt("), exempt.index("return 1.0f;"))
         self.assertIn('#include "playerbot/ThreatCapPolicy.h"', STRATEGY)
         # The exemption runs before the high-threat veto it skips (and before the AoE veto, which an interrupt never
@@ -542,6 +549,19 @@ class InterruptIgnoresThreat(unittest.TestCase):
         self.assertLess(exemptAt, multiplier.index("ActionThreatType::ACTION_THREAT_AOE)\n"))
         # The old heal-only exit is gone, so heals pass through the same call.
         self.assertNotIn("if (dynamic_cast<CastHealingSpellAction*>(action))\n", multiplier)
+
+    def test_the_interrupt_target_on_the_bot_is_exempt(self):
+        # Round 7 (dps-mage-counterspell-caster): the caster mob's victim flips to the mage every second, and a mob
+        # already attacking the bot cannot be pulled from a tank that does not hold it, its threat never vetoes the
+        # interrupt. The call passes the interrupt target's own victim.
+        multiplier = brace_body(STRATEGY, "float ThreatMultiplier::GetValue(Action* action)")
+        self.assertIn("bool interruptVictimIsBot = false;", multiplier)
+        inputs = multiplier[multiplier.index("if (interruptKey)\n    {"):
+                            multiplier.index("ThreatCapInterruptExempt(")]
+        self.assertIn("interruptVictimIsBot = interruptTarget != nullptr && interruptTarget->GetVictim() == bot;",
+                      inputs)
+        self.assertIn("ThreatCapInterruptExempt(interrupt, sPlayerbotAIConfig.interruptIgnoresThreat, "
+                      "interruptBotThreat,", multiplier)
 
     def test_the_numbers_are_read_on_the_interrupt_target(self):
         multiplier = brace_body(STRATEGY, "float ThreatMultiplier::GetValue(Action* action)")

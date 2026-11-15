@@ -198,7 +198,8 @@ float ThreatMultiplier::GetValue(Action* action)
     // while the caster finished. It is measured on the interrupt's own target (the "interrupt target" pick, which can
     // be another mob than the current target) against the core's pull line: the bot's threat plus the interrupt's flat
     // threat (spell threat table) under 110 % of the tank's when the mob can reach the bot in melee, 130 % otherwise
-    // (ThreatCapPolicy.h ThreatCapInterruptExempt). Earth Shock and Death Coil rows stay gated.
+    // (ThreatCapPolicy.h ThreatCapInterruptExempt). A caster already attacking this bot is exempt outright: kicking it
+    // takes nothing from a tank that does not hold it. Earth Shock and Death Coil rows stay gated.
     bool const heal = dynamic_cast<CastHealingSpellAction*>(action) != nullptr;
     bool const cure = dynamic_cast<CurePartyMemberAction*>(action) != nullptr;
     CastInterruptSpellAction const* interruptAction = dynamic_cast<CastInterruptSpellAction*>(action);
@@ -208,6 +209,7 @@ float ThreatMultiplier::GetValue(Action* action)
     float interruptTankThreat = 0.0f;
     float interruptFlatThreat = 0.0f;
     bool interruptRanged = false;
+    bool interruptVictimIsBot = false;
     if (interruptKey)
     {
         Unit* const interruptTarget = action->GetTarget();
@@ -217,10 +219,13 @@ float ThreatMultiplier::GetValue(Action* action)
             interruptFlatThreat = threatEntry->threat;
         // The core's own test for the 110 % rule: can the mob reach this attacker with a melee swing.
         interruptRanged = !interruptTarget || !interruptTarget->CanReachWithMeleeAutoAttack(bot);
+        // The mob is on this bot: it cannot be pulled from the tank, so the pull line does not apply.
+        interruptVictimIsBot = interruptTarget != nullptr && interruptTarget->GetVictim() == bot;
     }
     if (ThreatCapExempt(heal, cure, sPlayerbotAIConfig.dungeonRunCureIgnoresThreat) ||
         ThreatCapInterruptExempt(interrupt, sPlayerbotAIConfig.interruptIgnoresThreat, interruptBotThreat,
-                                 interruptTankThreat, interruptFlatThreat, interruptRanged))
+                                 interruptTankThreat, interruptFlatThreat, interruptRanged,
+                                 interruptVictimIsBot))
         return 1.0f;
 
     if (!AI_VALUE(bool, "group"))

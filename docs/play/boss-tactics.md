@@ -398,6 +398,7 @@ Some raid mechanics are handled in the class/raid AI rather than as `ai_boss_tac
 - **Nefarian class calls:** a priest carrying Corrupted Healing keeps to Renew and Power Word: Shield instead of direct heals; damage dealers kill the corrupted totems first and then the Corrupted Infernals, never bouncing back to Nefarian. An explicit attack order still wins, and tanks and healers keep their jobs.
 - **Solnius adds:** during Call of Nightmare, a damage dealer's `dps assist` target is the live Solnius add (the one it already hits, else the nearest from the cached attackers list), so the add focus is not reset to Solnius every tick. The Araxxna egg check re-reads its nearby list at most once every five seconds.
 - **Area-spell opener gate:** a Frost mage withholds Flamestrike for the first 10 seconds of a fight (the Blizzard opener gate), so it does not open a fresh pack before the tank holds it.
+- **Interrupts over the threat line:** with `AiPlayerbot.InterruptIgnoresThreat` on, a pure interrupt (Kick, Pummel, Shield Bash, Bash, Counterspell, Silence) goes out past the damage threat back-off while it would not pull the caster off the tank, and always on a caster that is already attacking the bot: a mob on the bot cannot be pulled off a tank that does not hold it (Tortoise Trials dps-mage-counterspell-caster: 6 of 20 misses were Counterspell vetoed while the caster stayed on the mage). Earth Shock and Death Coil stay gated.
 
 ## Known limits
 
