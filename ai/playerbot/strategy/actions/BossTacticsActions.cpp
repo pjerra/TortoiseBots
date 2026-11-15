@@ -648,9 +648,10 @@ void LogHoldKillPick(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fight
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsHoldKill", info1, info2);
 }
 
-// The multiplier's row: why it stood the action down (`veto` is the action class, or "sole" when the one_at_a_time pick
-// rather than a hold_kill budget holds the subject) and the subject when the veto has one.
-//   info1 = "veto=<assist|aoe|area|dot|sole>"
+// The multiplier's row: why it stood the action down (`veto` is the action class, "sole" when the one_at_a_time pick
+// rather than a hold_kill budget holds the subject, or "peel" when the bot's own healer claim is on its current target
+// and the row would send it elsewhere) and the subject when the veto has one.
+//   info1 = "veto=<assist|aoe|area|dot|sole|peel>"
 //   info2 = "held=<entry>:<guid low>,hp=<pct>,held_ms=<n>" or "held=none"
 void LogHoldKillVeto(PlayerbotAI* ai, Player* bot, const char* veto, Unit* subject,
                      const std::map<std::uint64_t, SeekHeldSon>* holdSince = nullptr, std::uint32_t holdNowMs = 0)
@@ -680,10 +681,10 @@ HoldKillPeelClaims g_holdKillPeelClaims;
 // scan's snapshot, so two bots cannot take one unit or exceed the cap. The clock is read under the lock too: a stamp
 // another thread landed after an outside read would wrap its age and look lapsed, freeing the unit it just claimed.
 bool TryClaimHoldKillPeel(std::uint32_t instanceId, std::uint64_t unitGuid, std::uint64_t botGuid,
-                          std::uint32_t entry, std::uint32_t cap)
+                          std::uint32_t entry, std::uint32_t hpPct, std::uint32_t cap)
 {
     std::lock_guard<std::mutex> lock(g_holdKillPeelMutex);
-    return g_holdKillPeelClaims.TryClaim(instanceId, unitGuid, botGuid, entry, WorldTimer::getMSTime(), cap);
+    return g_holdKillPeelClaims.TryClaim(instanceId, unitGuid, botGuid, entry, hpPct, WorldTimer::getMSTime(), cap);
 }
 
 // The instance's live claims, for the row.
@@ -716,34 +717,45 @@ bool DropHoldKillPeelClaim(Player* bot, std::uint32_t instanceId, std::uint64_t 
     return g_holdKillPeelClaims.Drop(instanceId, unitGuid, botGuid);
 }
 
-// Whether `unit`'s current victim is a healer of this bot's group: a member (or a pet's owner) PlayerbotAI calls a
-// healer. The peel's subject, and its claim's refresh rule: an add that turned on a tank is no longer peeled.
-bool PeelVictimIsGroupHealer(Player* bot, Unit* unit)
+// Whether `unit`'s current victim is one of this bot's group: a member (or a pet's owner), the bot itself included.
+// The peel's keep rule: once the claimant's own hits take the add, the victim is the claimant and the claim must
+// stand; a start is stricter (Peelable needs a healer).
+bool PeelVictimIsGroupMember(Player* bot, Unit* unit)
 {
     Unit* const victim = unit ? unit->GetVictim() : nullptr;
     Player* const owner = victim ? victim->GetCharmerOrOwnerPlayerOrPlayerItself() : nullptr;
     if (!owner)
         return false;
+    if (owner == bot)
+        return true;
     Group* const group = bot->GetGroup();
-    if (owner != bot && (!group || !group->IsMember(owner->GetObjectGuid())))
-        return false;
-    return PlayerbotAI::IsHeal(owner);
+    return group && group->IsMember(owner->GetObjectGuid());
 }
 
-// The peel's row: what this bot's read did with its claim, and the claim count it saw.
+// The peel's row: what this bot's read did with its claim, and the claim count it saw. A lapse also says why the keep
+// was refused and how the unit's health moved since the claim.
 //   info1 = "peel=claim|keep|lapse"
-//   info2 = "unit=<entry>:<guid low>,victim=<name>,claims=<n>"
+//   info2 = "unit=<entry>:<guid low>,victim=<name>,claims=<n>", or for a lapse
+//           "unit=<entry>:<guid low>,reason=<dead|victim_not_ours|reach|not_free|bot_dead|timeout>,age=<ms>,
+//            hp=<claim %>-><now %>,claims=<n>"
 void LogHoldKillPeel(PlayerbotAI* ai, Player* bot, const char* word, std::uint32_t entry, std::uint64_t guid,
-                     Unit* victim, std::uint32_t claims)
+                     Unit* victim, std::uint32_t claims, const char* reason = nullptr, std::uint32_t ageMs = 0,
+                     std::uint32_t hpAtClaim = 0)
 {
     if (!HoldKillLogDue(bot, HoldKillLogKind::Peel))
         return;
     char info1[32];
     snprintf(info1, sizeof(info1), "peel=%s", word);
     char info2[160];
-    snprintf(info2, sizeof(info2), "unit=%u:%u,victim=%s,claims=%u", entry,
-             static_cast<unsigned>(ObjectGuid(guid).GetCounter()), victim ? victim->GetName() : "none",
-             static_cast<unsigned>(claims));
+    if (reason)
+        snprintf(info2, sizeof(info2), "unit=%u:%u,reason=%s,age=%u,hp=%u->%u,claims=%u", entry,
+                 static_cast<unsigned>(ObjectGuid(guid).GetCounter()), reason, static_cast<unsigned>(ageMs),
+                 static_cast<unsigned>(hpAtClaim),
+                 static_cast<unsigned>(victim ? victim->GetHealthPercent() : 0), static_cast<unsigned>(claims));
+    else
+        snprintf(info2, sizeof(info2), "unit=%u:%u,victim=%s,claims=%u", entry,
+                 static_cast<unsigned>(ObjectGuid(guid).GetCounter()), victim ? victim->GetName() : "none",
+                 static_cast<unsigned>(claims));
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsHoldKill", info1, info2);
 }
 
@@ -6010,9 +6022,9 @@ bool ai::HoldKillPeelOwns(PlayerbotAI* ai, Player* bot, Unit* unit)
     const std::uint64_t botGuid = bot->GetObjectGuid().GetRawValue();
     const std::uint64_t unitGuid = unit->GetObjectGuid().GetRawValue();
     const std::uint32_t instanceId = bot->GetInstanceId();
-    // PeelVictimIsGroupHealer reads another bot's strategy state (IsHeal), so it is computed before the lock: no game
-    // call runs under the peel mutex.
-    const bool victimHealer = PeelVictimIsGroupHealer(bot, unit);
+    // PeelVictimIsGroupMember reads another bot's strategy state (a pet's owner), so it is computed before the lock:
+    // no game call runs under the peel mutex.
+    const bool victimOurs = PeelVictimIsGroupMember(bot, unit);
     bool refresh = false;
     std::uint32_t claims = 0;
     std::uint32_t entry = 0;
@@ -6024,10 +6036,10 @@ bool ai::HoldKillPeelOwns(PlayerbotAI* ai, Player* bot, Unit* unit)
             return false;
         if (!PeelClaimLive(it->second.botGuid, it->second.stampMs, nowMs))
             return false;
-        // The stamp refreshes on every read while the unit still eats a group healer; a read that does not (a whelp
-        // that turned on a tank) still lifts the hold, because a claim only lapses kHoldKillPeelClaimMs after its last
-        // refresh.
-        refresh = victimHealer;
+        // The stamp refreshes on every read while the unit's victim is still one of ours, the claimant itself
+        // included: taking the add off the healer must not end the claim. A read that does not (a whelp on an NPC or
+        // a stranger) still lifts the hold until the claim lapses kHoldKillPeelClaimMs after its last refresh.
+        refresh = victimOurs;
         if (refresh)
             it->second.stampMs = nowMs;
         entry = it->second.entry;
@@ -6064,6 +6076,8 @@ ai::BossHealerPeelScan ai::ScanBossHealerPeel(PlayerbotAI* ai, Player* bot, cons
         own.guid = claim.first;
         own.entry = claim.second.entry;
         own.stampMs = claim.second.stampMs;
+        own.hpPct = claim.second.hpPct;
+        own.ageMs = claim.second.stampMs > nowMs ? 0 : nowMs - claim.second.stampMs;
         scan.ownClaims.push_back(own);
     }
     // The candidates: every unit of a hold_kill entry the fight still holds (PeelEntries) that the bot's own grid
@@ -6097,10 +6111,31 @@ ai::BossHealerPeelScan ai::ScanBossHealerPeel(PlayerbotAI* ai, Player* bot, cons
     scan.pick = PickHealerPeel(scan.candidates, botGuid, nowMs, static_cast<int>(scan.liveClaimsOthers),
                                static_cast<int>(sPlayerbotAIConfig.dungeonRunHoldKillHealerPeel), rangedFreeDps);
     const std::uint64_t pickGuid = scan.pick >= 0 ? scan.candidates[scan.pick].guid : 0;
-    for (const HealerPeelOwnClaim& own : scan.ownClaims)
+    // Why an own claim the pick did not keep was refused: the action drops it and writes the reason, so the scan
+    // asks the same rule here (a claim outside the candidates, its entry no longer held, is read from the unit).
+    const bool botAlive = sServerFacade.IsAlive(bot);
+    for (HealerPeelOwnClaim& own : scan.ownClaims)
     {
         if (own.guid == pickGuid)
             continue;
+        const PeelCandidate* candidate = nullptr;
+        for (const PeelCandidate& c : scan.candidates)
+        {
+            if (c.guid == own.guid)
+            {
+                candidate = &c;
+                break;
+            }
+        }
+        Unit* const unit = ai->GetUnit(ObjectGuid(own.guid));
+        const bool unitAlive = unit && unit->IsInWorld() && unit->IsAlive();
+        Creature* const creature = unit ? unit->ToCreature() : nullptr;
+        const bool evading = creature && creature->IsInEvadeMode();
+        const bool victimOurs = candidate ? candidate->victimOurs : PeelVictimIsGroupMember(bot, unit);
+        const float distance = candidate ? candidate->distance
+            : (unit ? bot->GetDistance(unit) : std::numeric_limits<float>::max());
+        const char* refusal = PeelKeepRefusal(botAlive, rangedFreeDps, unitAlive, evading, victimOurs, distance);
+        own.reason = refusal ? refusal : "timeout";
         scan.lapseDue = true;
         break;
     }
@@ -7430,8 +7465,8 @@ bool BossTacticsHealerPeelAction::Execute(Event& event)
     const BossHealerPeelScan scan = ScanBossHealerPeel(ai, bot, fight);
     Unit* const pick = scan.pick >= 0 ? scan.units[scan.pick] : nullptr;
     const std::uint64_t pickGuid = pick ? pick->GetObjectGuid().GetRawValue() : 0;
-    // A claim of this bot's that the pick did not keep is dropped and said so: its unit died, stopped eating a healer,
-    // or a nearer one took its place.
+    // A claim of this bot's that the pick did not keep is dropped and said so, with the scan's reason: its unit died,
+    // its victim is not ours any more, it drifted out of the keep's reach, or this bot is no longer a free ranged DPS.
     const std::uint32_t instanceId = bot->GetInstanceId();
     for (const HealerPeelOwnClaim& own : scan.ownClaims)
     {
@@ -7440,7 +7475,8 @@ bool BossTacticsHealerPeelAction::Execute(Event& event)
         if (!DropHoldKillPeelClaim(bot, instanceId, own.guid))
             continue;
         Unit* const gone = ai->GetUnit(ObjectGuid(own.guid));
-        LogHoldKillPeel(ai, bot, "lapse", own.entry, own.guid, gone ? gone->GetVictim() : nullptr, scan.liveClaims);
+        LogHoldKillPeel(ai, bot, "lapse", own.entry, own.guid, gone, scan.liveClaims, own.reason, own.ageMs,
+                        own.hpPct);
     }
     if (!pick)
         return false;
@@ -7449,7 +7485,7 @@ bool BossTacticsHealerPeelAction::Execute(Event& event)
     // claim would leave two bots on one unit while only the last writer gets the lift.
     const bool own = scan.candidates[scan.pick].claimBot == bot->GetObjectGuid().GetRawValue();
     if (!TryClaimHoldKillPeel(instanceId, pickGuid, bot->GetObjectGuid().GetRawValue(), pick->GetEntry(),
-            sPlayerbotAIConfig.dungeonRunHoldKillHealerPeel))
+            static_cast<std::uint32_t>(pick->GetHealthPercent()), sPlayerbotAIConfig.dungeonRunHoldKillHealerPeel))
         return false;
     if (!own)
         LogHoldKillPeel(ai, bot, "claim", pick->GetEntry(), pickGuid, pick->GetVictim(),
@@ -7975,9 +8011,18 @@ float BossTacticsHoldMultiplier::GetValue(Action* action)
     // would send the bot to — the dps target for the assist, the dps aoe target for the AoE — as well as on the current
     // one. A tank or healer keeps its own pick, and TankAssistAction never has a kill_first pick to hold.
     const bool freeDps = IsFreeDps(ai, bot);
+    Unit* current = AI_VALUE(Unit*, "current target");
     if ((dpsAssist || aoe) && freeDps)
     {
         Unit* picked = aoe ? AI_VALUE(Unit*, "dps aoe target") : AI_VALUE(Unit*, "dps target");
+        // The healer peel's claimant never leaves its own add for the row's pick: the dps target (the tank's victim,
+        // the raid mark) is something else while the add is held, and the assist row would pull the bot back to the
+        // boss. The hold is lifted for the claimed add alone, so the action stands down instead of retargeting.
+        if (current && picked && picked != current && HoldKillPeelOwns(ai, bot, current))
+        {
+            LogHoldKillVeto(ai, bot, "peel", current);
+            return 0.0f;
+        }
         // The healer peel's claimant keeps the single-target action on its own unit: the assist row sends it to the add
         // it claimed, and the hold would stand that down every tick. The AoE rows are not lifted (their veto below is
         // about the pile around the add, which the peel does not change).
@@ -7989,7 +8034,6 @@ float BossTacticsHoldMultiplier::GetValue(Action* action)
             return 0.0f;
         }
     }
-    Unit* current = AI_VALUE(Unit*, "current target");
     if (!current)
         return 1.0f;
     if (FindBossKillFirst(ai, bot, fight) == current)

@@ -2285,6 +2285,7 @@ static PeelCandidate PeelAdd(std::uint64_t guid, float distance, bool healer = t
     c.guid = guid;
     c.distance = distance;
     c.victimHealer = healer;
+    c.victimOurs = healer;   // a group healer's victim is one of ours
     c.alive = true;
     return c;
 }
@@ -2359,6 +2360,7 @@ static void HealerPeelPick_OneHealerAddPerBot()
         c[0].weHoldIt = true;
         CHECK(PickHealerPeel(c, bot, now, 4, 4, true) == 0);
         c[0].victimHealer = false;
+        c[0].victimOurs = false;
         CHECK(PickHealerPeel(c, bot, now, 4, 4, true) == -1);
         CHECK(PickHealerPeel(c, bot, now, 3, 4, true) == 1);
         // A lapsed own claim is unclaimed again: the nearer one wins.
@@ -2367,6 +2369,68 @@ static void HealerPeelPick_OneHealerAddPerBot()
         d[0].claimStampMs = now - 3001;
         CHECK(PickHealerPeel(d, bot, now, 0, 4, true) == 1);
     }
+}
+
+// Walk 2l2: the claimant's own hits take the whelp off the healer, so its victim becomes the peeler (victimHealer
+// false, victimOurs true) while it is still claimed. r4 dropped the claim on that first swing (Peelable needed a
+// healer), the hold re-applied, the whelp went back to a healer and another bot claimed it: 22 claims a pull, 5 of 37
+// whelps dying while claimed. A keep now needs only a group victim, a 40 yd reach, life and no evade; a start still
+// needs a healer.
+static void HoldKillPeelKeepsClaimWhenWhelpTurnsOnClaimant()
+{
+    const std::uint64_t bot = 100;
+    const std::uint32_t now = 60000;
+    CHECK(kHoldKillPeelKeepYd == 40.0f);
+    CHECK(kHoldKillPeelReachYd == 35.0f);
+    // The own claim's unit: distance 20, victim the claimant itself (ours, not a healer).
+    {
+        std::vector<PeelCandidate> c = { PeelAdd(10, 20.0f, false) };
+        c[0].victimOurs = true;                 // the claimant's own swing made it the victim
+        c[0].claimBot = bot;
+        c[0].claimStampMs = now - 500;
+        CHECK(PickHealerPeel(c, bot, now, 0, 4, true) == 0);   // r4: -1 (Peelable required victimHealer)
+    }
+    // The keep's reach is 40 yd, one more drops the claim.
+    CHECK(PeelKeepable(true, false, true, 40.0f));
+    CHECK(!PeelKeepable(true, false, true, 41.0f));
+    CHECK(PeelKeepable(true, false, true, 36.0f)); // beyond a start's reach, still kept
+    // A dead or evading unit, or one whose victim is not ours, is not kept.
+    CHECK(!PeelKeepable(false, false, true, 10.0f));
+    CHECK(!PeelKeepable(true, true, true, 10.0f));
+    CHECK(!PeelKeepable(true, false, false, 10.0f));
+    {
+        std::vector<PeelCandidate> c = { PeelAdd(10, 20.0f, false) };
+        c[0].victimOurs = true;
+        c[0].claimBot = bot;
+        c[0].claimStampMs = now - 500;
+        c[0].alive = false;
+        CHECK(PickHealerPeel(c, bot, now, 0, 4, true) == -1);
+        c[0].alive = true;
+        c[0].evading = true;
+        CHECK(PickHealerPeel(c, bot, now, 0, 4, true) == -1);
+        c[0].evading = false;
+        c[0].victimOurs = false;
+        CHECK(PickHealerPeel(c, bot, now, 0, 4, true) == -1);
+    }
+    // The keep's reasons are the scan's row: one word per refusal, nullptr when it is kept.
+    CHECK(PeelKeepRefusal(true, true, true, false, true, 10.0f) == nullptr);
+    CHECK(std::strcmp(PeelKeepRefusal(false, true, true, false, true, 10.0f), "bot_dead") == 0);
+    CHECK(std::strcmp(PeelKeepRefusal(true, true, false, false, true, 10.0f), "dead") == 0);
+    CHECK(std::strcmp(PeelKeepRefusal(true, false, true, false, true, 10.0f), "not_free") == 0);
+    CHECK(std::strcmp(PeelKeepRefusal(true, true, true, true, true, 10.0f), "timeout") == 0);
+    CHECK(std::strcmp(PeelKeepRefusal(true, true, true, false, true, 41.0f), "reach") == 0);
+    CHECK(std::strcmp(PeelKeepRefusal(true, true, true, false, false, 10.0f), "victim_not_ours") == 0);
+    // A NEW claim still needs a healer victim, its reach and an empty attackers list: a group victim alone is not
+    // enough to start one.
+    {
+        std::vector<PeelCandidate> c = { PeelAdd(10, 8.0f, false) };
+        c[0].victimOurs = true;
+        CHECK(PickHealerPeel(c, bot, now, 0, 4, true) == -1);
+    }
+    // The dps-assist trigger's hold: an own claim (holdsCurrent) keeps the bot quiet on its current target even when
+    // the dps target is elsewhere; without it the same state fires.
+    CHECK(!NotDpsTargetFires(false, false, true, true, false));
+    CHECK(NotDpsTargetFires(false, false, false, true, false));
 }
 
 // The claim store's one-step rule (HoldKillPeelClaims::TryClaim): the pick's snapshot is only a hint, so the claim
@@ -2378,63 +2442,65 @@ static void HealerPeelClaims_TryClaimIsAtomic()
     // Two bots that both read one free unit before either claims: exactly one wins and the other gets nothing.
     {
         HoldKillPeelClaims store;
-        CHECK(store.TryClaim(inst, 5000, 100, 2, now, 4));
-        CHECK(!store.TryClaim(inst, 5000, 200, 2, now, 4));   // the loser's write used to steal the unit
+        CHECK(store.TryClaim(inst, 5000, 100, 2, 60, now, 4));
+        CHECK(!store.TryClaim(inst, 5000, 200, 2, 60, now, 4));   // the loser's write used to steal the unit
         CHECK(store.Of(inst).at(5000).botGuid == 100);
         CHECK(store.LiveCount(inst) == 1);
     }
     // The cap N with N+1 bots: N claim, the last is refused, and another instance's claims do not count.
     {
         HoldKillPeelClaims store;
-        CHECK(store.TryClaim(inst, 5000, 100, 2, now, 4));
-        CHECK(store.TryClaim(inst, 5001, 200, 2, now, 4));
-        CHECK(store.TryClaim(inst, 5002, 300, 2, now, 4));
-        CHECK(store.TryClaim(inst, 5003, 400, 2, now, 4));
-        CHECK(!store.TryClaim(inst, 5004, 500, 2, now, 4));
+        CHECK(store.TryClaim(inst, 5000, 100, 2, 60, now, 4));
+        CHECK(store.TryClaim(inst, 5001, 200, 2, 60, now, 4));
+        CHECK(store.TryClaim(inst, 5002, 300, 2, 60, now, 4));
+        CHECK(store.TryClaim(inst, 5003, 400, 2, 60, now, 4));
+        CHECK(!store.TryClaim(inst, 5004, 500, 2, 60, now, 4));
         CHECK(store.LiveCount(inst) == 4);
-        CHECK(store.TryClaim(inst + 1, 5000, 600, 2, now, 4));
+        CHECK(store.TryClaim(inst + 1, 5000, 600, 2, 60, now, 4));
         CHECK(store.LiveCount(inst + 1) == 1);
     }
-    // The owner refreshes its own claim, at the cap included: the stamp moves, the claim stays.
+    // The owner refreshes its own claim, at the cap included: the stamp moves, the claim stays, and the health kept
+    // for the lapse row stays the one the claim was taken at.
     {
         HoldKillPeelClaims store;
-        CHECK(store.TryClaim(inst, 5000, 100, 2, now, 1));
-        CHECK(store.TryClaim(inst, 5000, 100, 2, now + 1000, 1));
+        CHECK(store.TryClaim(inst, 5000, 100, 2, 60, now, 1));
+        CHECK(store.TryClaim(inst, 5000, 100, 2, 35, now + 1000, 1));
         CHECK(store.Of(inst).at(5000).stampMs == now + 1000);
+        CHECK(store.Of(inst).at(5000).hpPct == 60);
         CHECK(store.LiveCount(inst) == 1);
     }
     // One claim per bot: a live claim on another unit refuses the move until it is dropped.
     {
         HoldKillPeelClaims store;
-        CHECK(store.TryClaim(inst, 5000, 100, 2, now, 4));
-        CHECK(!store.TryClaim(inst, 5001, 100, 2, now, 4));
+        CHECK(store.TryClaim(inst, 5000, 100, 2, 60, now, 4));
+        CHECK(!store.TryClaim(inst, 5001, 100, 2, 60, now, 4));
         CHECK(store.LiveCount(inst) == 1);
         CHECK(store.Drop(inst, 5000, 100));
         CHECK(!store.Drop(inst, 5000, 100));                   // only the owner may drop it
-        CHECK(store.TryClaim(inst, 5001, 100, 2, now, 4));
+        CHECK(store.TryClaim(inst, 5001, 100, 2, 60, now, 4));
     }
     // A claim lapses at the window's end: the unit and its slot are free one millisecond later, never before.
     {
         HoldKillPeelClaims store;
-        CHECK(store.TryClaim(inst, 5000, 100, 2, now, 1));
-        CHECK(!store.TryClaim(inst, 5000, 200, 2, now + kHoldKillPeelClaimMs, 1));
-        CHECK(store.TryClaim(inst, 5000, 200, 2, now + kHoldKillPeelClaimMs + 1, 1));
+        CHECK(store.TryClaim(inst, 5000, 100, 2, 60, now, 1));
+        CHECK(!store.TryClaim(inst, 5000, 200, 2, 60, now + kHoldKillPeelClaimMs, 1));
+        CHECK(store.TryClaim(inst, 5000, 200, 2, 60, now + kHoldKillPeelClaimMs + 1, 1));
         CHECK(store.Of(inst).at(5000).botGuid == 200);
     }
     // A stamp ahead of the pruning clock is another thread's later read: the claim survives the prune and still owns
     // its unit.
     {
         HoldKillPeelClaims store;
-        CHECK(store.TryClaim(inst, 5000, 100, 2, now + 5, 4));
+        CHECK(store.TryClaim(inst, 5000, 100, 2, 60, now + 5, 4));
         store.Prune(now);
         CHECK(store.LiveCount(inst) == 1);
         CHECK(store.Of(inst).at(5000).botGuid == 100);
-        CHECK(!store.TryClaim(inst, 5000, 200, 2, now, 4));
+        CHECK(!store.TryClaim(inst, 5000, 200, 2, 60, now, 4));
     }
     // The key off (cap 0) never claims.
     {
         HoldKillPeelClaims store;
-        CHECK(!store.TryClaim(inst, 5000, 100, 2, now, 0));
+        CHECK(!store.TryClaim(inst, 5000, 100, 2, 60, now, 0));
         CHECK(store.Of(inst).empty());
     }
 }
@@ -2472,10 +2538,11 @@ static void HealerPeelCandidateFromGrid_MemberThreatIsNotAnAttack()
     hit.distance = 10.0f;
     hit.alive = true;
     hit.victimHealer = true;
+    hit.victimOurs = true;
     hit.weHoldIt = true;         // the eaten healer's threat: true for every real whelp
     hit.memberAttacks = false;   // nobody besides the bot and its victim is on the attackers list
     PeelCandidate c = PeelCandidateFromGrid(hit, true);
-    CHECK(c.alive && c.victimHealer);
+    CHECK(c.alive && c.victimHealer && c.victimOurs);
     std::vector<PeelCandidate> candidates = { c };
     CHECK(PickHealerPeel(candidates, bot, now, 0, 4, true) == 0);
     CHECK(!c.weHoldIt);
@@ -2545,6 +2612,7 @@ int main()
     GateHold_RowShape();
     HoldKillPeelLiftsClaimedHealerAttacker();
     HealerPeelPick_OneHealerAddPerBot();
+    HoldKillPeelKeepsClaimWhenWhelpTurnsOnClaimant();
     HealerPeelClaims_TryClaimIsAtomic();
     HealerPeelEntries_OnlyHeldEntriesArePeeled();
     HealerPeelCandidateFromGrid_MemberThreatIsNotAnAttack();

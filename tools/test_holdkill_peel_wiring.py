@@ -21,6 +21,7 @@ ACTIONS = (STRATEGY / "actions/BossTacticsActions.cpp").read_text()
 ACTIONS_H = (STRATEGY / "actions/BossTacticsActions.h").read_text()
 TRIGGERS = (STRATEGY / "triggers/BossTacticsTriggers.cpp").read_text()
 TRIGGERS_H = (STRATEGY / "triggers/BossTacticsTriggers.h").read_text()
+GENERIC_TRIGGERS = (STRATEGY / "triggers/GenericTriggers.cpp").read_text()
 TACTICS_STRATEGY = (STRATEGY / "generic/BossTacticsStrategy.cpp").read_text()
 ACTION_CONTEXT = (STRATEGY / "actions/ActionContext.h").read_text()
 TRIGGER_CONTEXT = (STRATEGY / "triggers/TriggerContext.h").read_text()
@@ -154,26 +155,28 @@ class TheClaimStore(unittest.TestCase):
         self.assertIn("*nowMs = clockMs;", claims_of)
         self.assertIn("g_holdKillPeelClaims.Prune(clockMs);", claims_of)
 
-    def test_the_claim_refreshes_only_while_the_victim_stays_a_healer(self):
+    def test_the_claim_refreshes_while_the_victim_stays_ours(self):
         fn = body(ACTIONS, "bool ai::HoldKillPeelOwns(")
         self.assertIn("it->second.botGuid != botGuid", fn)          # never another bot's claim
         self.assertIn("PeelClaimLive(it->second.botGuid, it->second.stampMs, nowMs)", fn)
-        self.assertIn("refresh = victimHealer;", fn)
-        # The healer test reads another bot's strategy state, so it runs before the peel lock.
-        self.assertLess(fn.index("const bool victimHealer = PeelVictimIsGroupHealer(bot, unit);"),
+        self.assertIn("refresh = victimOurs;", fn)
+        # The group test reads another bot's strategy state, so it runs before the peel lock.
+        self.assertLess(fn.index("const bool victimOurs = PeelVictimIsGroupMember(bot, unit);"),
                         fn.index("std::lock_guard<std::mutex> lock(g_holdKillPeelMutex);"))
         self.assertLess(fn.index("std::lock_guard<std::mutex> lock(g_holdKillPeelMutex);"),
                         fn.index("LogHoldKillPeel(ai, bot, \"keep\""))
-        healer = body(ACTIONS, "bool PeelVictimIsGroupHealer(")
-        self.assertIn("PlayerbotAI::IsHeal(owner)", healer)
-        self.assertIn("group->IsMember(owner->GetObjectGuid())", healer)
+        member = body(ACTIONS, "bool PeelVictimIsGroupMember(")
+        self.assertIn("if (owner == bot)", member)                   # the claimant counts
+        self.assertIn("group->IsMember(owner->GetObjectGuid())", member)
+        self.assertNotIn("IsHeal", member)                           # a keep never needs a healer
 
     def test_the_action_claims_its_pick_and_drops_a_lapsed_one(self):
         fn = body(ACTIONS, "bool BossTacticsHealerPeelAction::Execute(")
         self.assertIn("const BossHealerPeelScan scan = ScanBossHealerPeel(ai, bot, fight);", fn)
         self.assertIn("DropHoldKillPeelClaim(bot, instanceId, own.guid)", fn)
         self.assertIn("TryClaimHoldKillPeel(instanceId, pickGuid, bot->GetObjectGuid().GetRawValue(), "
-                      "pick->GetEntry(),", fn)
+                      "pick->GetEntry(),\n            static_cast<std::uint32_t>(pick->GetHealthPercent()), "
+                      "sPlayerbotAIConfig.dungeonRunHoldKillHealerPeel)", fn)
         # The attack is behind the granted claim, never on the scan's own guess.
         granted = fn.index("TryClaimHoldKillPeel(")
         self.assertLess(fn.index("return false;", granted), fn.index("return Attack(bot, pick);"))
@@ -189,6 +192,62 @@ class TheClaimStore(unittest.TestCase):
         self.assertIn("IsFreeDps(ai, bot) && ai->IsRanged(bot)", scan)
         switch = body(ACTIONS, "bool BossTacticsHoldKillAction::Execute(")
         self.assertIn("HoldKillPeelClaimsOf(bot->GetInstanceId(), nullptr)", switch)
+
+
+class TheClaimantKeepsItsWhelp(unittest.TestCase):
+    """Walk 2l2: the claim's start and its keep are different rules. A start needs an add eating a group healer; a keep
+    needs only that the add's victim is still one of ours, at 40 yd, because the claimant's own hits make it the
+    victim. The claim then refreshes instead of lapsing and being re-taken."""
+
+    def test_the_keep_is_weaker_than_the_start(self):
+        self.assertIn("constexpr float kHoldKillPeelKeepYd = 40.0f;", POLICY)
+        self.assertIn("PeelKeepable(p.alive, p.evading, p.victimOurs, p.distance)", POLICY)
+        start = body(POLICY, "    inline int PickHealerPeel(", "\n    }\n")
+        self.assertIn("Peelable(p.alive, p.evading, p.victimHealer, p.distance) || p.weHoldIt", start)
+        self.assertIn("return PeelKeepRefusal(true, true, alive, evading, victimOurs, distance) == nullptr;", POLICY)
+        self.assertIn("candidate.victimOurs = hit.victimOurs;", POLICY)
+        self.assertIn("bool victimOurs = false;", POLICY)
+
+    def test_the_dps_triggers_ask_the_claim(self):
+        single = body(GENERIC_TRIGGERS, "bool NotDpsTargetActiveTrigger::IsActive()")
+        self.assertIn("if (!enemy && !holdsCurrent && sPlayerbotAIConfig.dungeonRunHoldKillHealerPeel)", single)
+        self.assertIn("holdsCurrent = HoldKillPeelOwns(ai, bot, target);", single)
+        self.assertLess(single.index("CarrierHoldsCurrent("), single.index("HoldKillPeelOwns(ai, bot, target);"))
+        aoe = body(GENERIC_TRIGGERS, "bool NotDpsAoeTargetActiveTrigger::IsActive()")
+        self.assertIn("holdsCurrent = HoldKillPeelOwns(ai, bot, target);", aoe)
+        self.assertIn('Unit* dps = AI_VALUE(Unit*, "dps aoe target");', aoe)
+        self.assertLess(aoe.index("HoldKillPeelOwns(ai, bot, target);"),
+                        aoe.index('AI_VALUE(Unit*, "dps aoe target")'))
+
+    def test_the_multiplier_vetoes_the_assist_row_on_an_own_claim(self):
+        fn = body(ACTIONS, "float BossTacticsHoldMultiplier::GetValue(")
+        self.assertIn("if (current && picked && picked != current && HoldKillPeelOwns(ai, bot, current))", fn)
+        self.assertIn('LogHoldKillVeto(ai, bot, "peel", current);', fn)
+        # The belt-and-braces veto stands the action down before the row's own held check.
+        self.assertLess(fn.index('LogHoldKillVeto(ai, bot, "peel"'),
+                        fn.index("KillHeldFor(fight.rows, picked->GetEntry(), countNear, peelOwned)"))
+
+    def test_the_lapse_row_says_why(self):
+        log = body(ACTIONS, "void LogHoldKillPeel(")
+        self.assertIn('"unit=%u:%u,reason=%s,age=%u,hp=%u->%u,claims=%u"', log)
+        fn = body(ACTIONS, "bool BossTacticsHealerPeelAction::Execute(")
+        self.assertIn("own.reason, own.ageMs,", fn)
+        self.assertIn("own.hpPct", fn)
+        scan = body(ACTIONS, "ai::BossHealerPeelScan ai::ScanBossHealerPeel(")
+        self.assertIn("PeelKeepRefusal(botAlive, rangedFreeDps, unitAlive, evading, victimOurs, distance)", scan)
+        self.assertIn("own.reason = refusal ? refusal : \"timeout\";", scan)
+        self.assertIn("own.hpPct = claim.second.hpPct;", scan)
+        self.assertIn("std::uint32_t hpPct = 0; // the unit's health when the claim was taken", POLICY)
+        self.assertIn("claim.hpPct = hpPct;", POLICY)
+
+    def test_the_key_off_path_is_a_no_op(self):
+        # Every new read is behind the key's existing gates: the claim test returns first, the scan is empty, and the
+        # action and trigger already return before any of it.
+        fn = body(ACTIONS, "bool ai::HoldKillPeelOwns(")
+        self.assertIn("if (!sPlayerbotAIConfig.dungeonRunHoldKillHealerPeel || !ai || !bot || !unit)", fn)
+        scan = body(ACTIONS, "ai::BossHealerPeelScan ai::ScanBossHealerPeel(")
+        self.assertIn("if (!ai || !bot || !sPlayerbotAIConfig.dungeonRunHoldKillHealerPeel || fight.rows.empty())",
+                      scan)
 
 
 class ThePeelIsLogged(unittest.TestCase):
@@ -247,11 +306,13 @@ class ThePolicyIsUnitTested(unittest.TestCase):
         self.assertIn("static void HealerPeelClaims_TryClaimIsAtomic()", POLICY_TEST)
         self.assertIn("static void HealerPeelEntries_OnlyHeldEntriesArePeeled()", POLICY_TEST)
         self.assertIn("static void HealerPeelCandidateFromGrid_MemberThreatIsNotAnAttack()", POLICY_TEST)
+        self.assertIn("static void HoldKillPeelKeepsClaimWhenWhelpTurnsOnClaimant()", POLICY_TEST)
         self.assertIn("HoldKillPeelLiftsClaimedHealerAttacker();", POLICY_TEST)
         self.assertIn("HealerPeelPick_OneHealerAddPerBot();", POLICY_TEST)
         self.assertIn("HealerPeelClaims_TryClaimIsAtomic();", POLICY_TEST)
         self.assertIn("HealerPeelEntries_OnlyHeldEntriesArePeeled();", POLICY_TEST)
         self.assertIn("HealerPeelCandidateFromGrid_MemberThreatIsNotAnAttack();", POLICY_TEST)
+        self.assertIn("HoldKillPeelKeepsClaimWhenWhelpTurnsOnClaimant();", POLICY_TEST)
         self.assertIn("if (!KillHeld(rows, row->bossEntry, countNear))", POLICY)
         # The lift is the policy's, and only through KillHeldFor: KillHeld itself never learns about claims.
         killheld = body(POLICY, "    inline bool KillHeld(", "\n    }\n")

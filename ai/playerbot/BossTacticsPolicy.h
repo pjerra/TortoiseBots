@@ -1819,10 +1819,13 @@ namespace ai
 
     // The healer peel (Onyxia walk 2l): an add of a hold_kill row's spared entry that eats a group healer is claimed by
     // one ranged damage dealer at a time, and the hold is lifted for that claim's owner alone, so the bot stays on the
-    // add instead of being sent back to the boss. The reach is the claim's, from the claimant; a claim older than
-    // kHoldKillPeelClaimMs without a refresh (the add died, its victim stopped being a healer, the viewpoint bot died or
-    // moved on) lapses and the hold applies again.
+    // add instead of being sent back to the boss. Starting a claim needs a healer victim; keeping an own claim only
+    // needs the victim to stay one of ours, because the claimant's own hits turn the add on it (walk 2l2: the claim
+    // dropped on the peeler's first swing and the add went back to a healer). A claim older than kHoldKillPeelClaimMs
+    // without a refresh (the add died, its victim left the group, the viewpoint bot died or moved on) lapses and the
+    // hold applies again.
     constexpr float kHoldKillPeelReachYd = 35.0f;
+    constexpr float kHoldKillPeelKeepYd = 40.0f;
     constexpr std::uint32_t kHoldKillPeelClaimMs = 3000;
 
     // A living unit of a hold_kill row's spared entry, as the peel's pick sees it. `claimBot` is the bot holding the
@@ -1832,6 +1835,7 @@ namespace ai
         std::uint64_t guid = 0;
         float distance = 0.0f; // from the bot
         bool victimHealer = false;
+        bool victimOurs = false;     // its victim is a group member (the claimant included), healer or not
         bool alive = false;
         bool evading = false;
         bool weHoldIt = false;       // a group member besides this bot and the unit's victim attacks it
@@ -1854,6 +1858,33 @@ namespace ai
     inline bool Peelable(bool alive, bool evading, bool victimHealer, float distance)
     {
         return alive && !evading && victimHealer && distance <= kHoldKillPeelReachYd;
+    }
+
+    // Why this bot may not keep a claim on a unit right now; nullptr when it may. A keep is weaker than a start: the
+    // victim only has to be a group member (the claimant's own hits make it the victim), and the unit may drift out to
+    // kHoldKillPeelKeepYd. Only an explicit refusal is logged; a claim it accepts is refreshed by the caller.
+    inline const char* PeelKeepRefusal(bool botAlive, bool botFreeRangedDps, bool unitAlive, bool unitEvading,
+                                       bool victimOurs, float distance)
+    {
+        if (!botAlive)
+            return "bot_dead";
+        if (!unitAlive)
+            return "dead";
+        if (!botFreeRangedDps)
+            return "not_free";
+        if (unitEvading)
+            return "timeout";     // it is running home: nothing left to peel, only the clock to run out
+        if (distance > kHoldKillPeelKeepYd)
+            return "reach";
+        if (!victimOurs)
+            return "victim_not_ours";
+        return nullptr;
+    }
+
+    // Whether an own live claim's unit still qualifies to be kept (PeelKeepRefusal without the caller's bot checks).
+    inline bool PeelKeepable(bool alive, bool evading, bool victimOurs, float distance)
+    {
+        return PeelKeepRefusal(true, true, alive, evading, victimOurs, distance) == nullptr;
     }
 
     // The hold_kill entries the peel may draw units from right now: each row's spared entry while the row still holds
@@ -1886,6 +1917,7 @@ namespace ai
             std::uint64_t botGuid = 0;
             std::uint32_t entry = 0;
             std::uint32_t stampMs = 0;
+            std::uint32_t hpPct = 0; // the unit's health when the claim was taken, for the lapse row
         };
         using Key = std::pair<std::uint32_t, std::uint64_t>; // map instance, unit's raw guid
         std::map<Key, Claim> claims;
@@ -1926,9 +1958,11 @@ namespace ai
         // Takes or refreshes this bot's claim on `unitGuid` in one step against the live store: false when another
         // bot holds a live claim on the unit (one claim per unit), when this bot already holds one on another unit
         // (one per bot), or when the instance already has `cap` live claims and this bot holds none on this unit.
-        // Otherwise the claim is inserted or refreshed and true returned. `cap` 0 (the key off) never claims.
+        // Otherwise the claim is inserted or refreshed and true returned. `hpPct` is the unit's health, stored when
+        // the claim is taken and kept across refreshes so the lapse row can say where it started. `cap` 0 (the key
+        // off) never claims.
         bool TryClaim(std::uint32_t instanceId, std::uint64_t unitGuid, std::uint64_t botGuid, std::uint32_t entry,
-                      std::uint32_t nowMs, std::uint32_t cap)
+                      std::uint32_t hpPct, std::uint32_t nowMs, std::uint32_t cap)
         {
             if (cap == 0 || botGuid == 0)
                 return false;
@@ -1948,8 +1982,12 @@ namespace ai
             if (!ownOnUnit && LiveCount(instanceId) >= cap)
                 return false;
             Claim& claim = claims[Key(instanceId, unitGuid)];
-            claim.botGuid = botGuid;
-            claim.entry = entry;
+            if (!ownOnUnit)
+            {
+                claim.botGuid = botGuid;
+                claim.entry = entry;
+                claim.hpPct = hpPct;
+            }
             claim.stampMs = nowMs;
             return true;
         }
@@ -1966,9 +2004,10 @@ namespace ai
     };
 
     // The unit this bot peels, or -1: index into `c`. -1 for anything but a ranged free DPS and for a cap of 0 (the key
-    // off). A bot keeps its own live claim while that unit still qualifies, and only the first check ignores
-    // `weHoldIt`, because the claimant's own swing is what makes it true for the unit it already holds. A new claim is
-    // the nearest qualifying unclaimed unit, a lapsed claim counting as unclaimed, and only while the instance has
+    // off). A bot keeps its own live claim while that unit still qualifies (PeelKeepable: a group victim, wider reach),
+    // and only that check ignores `weHoldIt`, because the claimant's own swing is what makes it true for the unit it
+    // already holds. A new claim is the nearest unit that may be peeled at all (Peelable: a healer victim, the claim's
+    // reach, unclaimed, nobody of ours on it), a lapsed claim counting as unclaimed, and only while the instance has
     // fewer than `cap` live claims besides this bot's (`cap` is the live claims of the instance, the bot's own
     // included; its own claim is not counted again). A distance tie goes to the lower guid, so two bots reading one
     // list agree on the unit.
@@ -1981,7 +2020,7 @@ namespace ai
         {
             const PeelCandidate& p = c[i];
             if (p.claimBot == bot && PeelClaimLive(p.claimBot, p.claimStampMs, nowMs) &&
-                Peelable(p.alive, p.evading, p.victimHealer, p.distance))
+                PeelKeepable(p.alive, p.evading, p.victimOurs, p.distance))
                 return static_cast<int>(i);
         }
         if (liveClaimsOthers >= cap)
@@ -3120,6 +3159,7 @@ namespace ai
         candidate.guid = hit.guid;
         candidate.distance = hit.distance;
         candidate.victimHealer = hit.victimHealer;
+        candidate.victimOurs = hit.victimOurs;
         candidate.alive = hit.alive && unitAlive;
         candidate.evading = hit.evading;
         candidate.weHoldIt = hit.memberAttacks;
@@ -4111,7 +4151,8 @@ namespace ai
 
     // Whether "not dps target active" fires, for a live non-player current target. The hostile player target is
     // decided first and is never suppressed by the hold (a carrier on a Shade still switches to an enemy player);
-    // the hold (`holdsCurrent`) only suppresses the dps-target comparison. No enemy and no dps target: no fire.
+    // the hold (`holdsCurrent`, the carrier's or the healer peel's own claim) only suppresses the dps-target
+    // comparison. No enemy and no dps target: no fire.
     inline bool NotDpsTargetFires(bool enemyKnown, bool targetIsEnemy, bool holdsCurrent, bool dpsKnown,
                                   bool targetIsDps)
     {

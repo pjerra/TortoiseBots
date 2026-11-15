@@ -257,17 +257,22 @@ namespace ai
 
     // Whether this bot's own live healer peel claim (AiPlayerbot.DungeonRunHoldKillHealerPeel) is on `unit`: the hold
     // is lifted for the claimant on that one add and no other. The claim's stamp refreshes on every such read while the
-    // unit still eats a group healer (one keep row, rate-limited); a claim whose stamp is older than
-    // kHoldKillPeelClaimMs is dead and the hold applies again. False for any other bot's claim, and with the key off.
+    // unit's victim is still a group member, the claimant itself included (one keep row, rate-limited); a claim whose
+    // stamp is older than kHoldKillPeelClaimMs is dead and the hold applies again. False for any other bot's claim, and
+    // with the key off.
     bool HoldKillPeelOwns(PlayerbotAI* ai, Player* bot, Unit* unit);
 
     // One claim of this bot's, as the scan hands it to the action: the unit and its entry (the store's), so a claim
-    // dropped for a better one or for a lapse can be logged after the unit is gone.
+    // dropped for a better one or for a lapse can be logged after the unit is gone. `hpPct` is the unit's health when
+    // the claim was taken, `ageMs` how long its stamp has stood, and `reason` why the scan refused to keep it.
     struct HealerPeelOwnClaim
     {
         std::uint64_t guid = 0;
         std::uint32_t entry = 0;
         std::uint32_t stampMs = 0;
+        std::uint32_t hpPct = 0;
+        std::uint32_t ageMs = 0;
+        const char* reason = "timeout"; // dead|victim_not_ours|reach|not_free|bot_dead|timeout
     };
 
     // One read of the healer peel: the held entries' units within the claim's reach with their claim state, the
@@ -282,7 +287,7 @@ namespace ai
         std::uint32_t liveClaimsOthers = 0;   // ... every other bot's
         std::vector<HealerPeelOwnClaim> ownClaims; // this bot's claims of the instance, a unit outside the candidates included
         int pick = -1;                        // the unit to keep or claim, -1 when there is none
-        bool lapseDue = false;                // an own claim the pick did not keep: the action drops it and logs
+        bool lapseDue = false;                // an own claim the pick did not keep: the action drops it and logs why
     };
     // Collects the candidates from the "kill first grid units" reads of the fight's hold_kill boss entries and asks
     // PickHealerPeel. Gated by the key, the "boss tactics" strategy and the map's rows: an empty scan otherwise.

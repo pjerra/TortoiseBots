@@ -1831,9 +1831,10 @@ AiPlayerbot.DungeonRunRaidHealerGuard = 0
 # add of a hold_kill row's spared entry whose victim is a group healer, within 35 yd of itself, unclaimed and not
 # already attacked by a group member: the nearest first, one claim per add, one per bot. The hold is lifted for the
 # claimant alone on its own add (single-target attacks; the AoE veto near it stays), and the claim is kept while the
-# bot is on the add and the add still eats a healer; 3 s after its last refresh (the add died, its victim stopped being
-# a healer, the bot moved on) the hold applies again. gate_hold, one_at_a_time and seek_aura holds are untouched, and the
-# healer guard keeps its own orders. Needs the boss tactics and the rows. `.reload config` reads it again.
+# bot is on the add and the add's victim is still one of ours, the claimant included (its own hits take the add off the
+# healer), within 40 yd; 3 s after its last refresh (the add died, its victim left the group, the bot moved on) the
+# hold applies again. gate_hold, one_at_a_time and seek_aura holds are untouched, and the healer guard keeps its own
+# orders. Needs the boss tactics and the rows. `.reload config` reads it again.
 # 0 - off: every free damage dealer leaves the held entry alone (Default)
 # N - at most N live claims per map instance; 4 to 8 typical (walk 2l runs 4); 1 to 20
 # Recommended on at 4.

@@ -1588,6 +1588,11 @@ bool NotDpsTargetActiveTrigger::IsActive()
                 holdsCurrent = CarrierHoldsCurrent(sPlayerbotAIConfig.dungeonRunCarrierHold, requiredAura != 0,
                     requiredAura != 0 && bot->HasAura(requiredAura));
             }
+            // AiPlayerbot.DungeonRunHoldKillHealerPeel: the claimant's own add is held by the row, and the dps target
+            // is the boss the hold sends everyone else to, so "dps assist" would pull the claimant off it every tick.
+            // The claim itself is the lift (HoldKillPeelOwns), the same suppression as the carrier's.
+            if (!enemy && !holdsCurrent && sPlayerbotAIConfig.dungeonRunHoldKillHealerPeel)
+                holdsCurrent = HoldKillPeelOwns(ai, bot, target);
 
             Unit* dps = (!enemy && !holdsCurrent) ? AI_VALUE(Unit*, "dps target") : nullptr;
             return NotDpsTargetFires(enemy != nullptr, target == enemy, holdsCurrent, dps != nullptr, target == dps);
@@ -1615,6 +1620,14 @@ bool NotDpsAoeTargetActiveTrigger::IsActive()
             {
                 return target != enemy;
             }
+
+            // The healer peel's claimant keeps its own add: the AoE row's pick is the held boss (or the pile around
+            // it), and switching to it would leave the add. Same suppression as the single-target trigger's.
+            bool holdsCurrent = false;
+            if (sPlayerbotAIConfig.dungeonRunHoldKillHealerPeel)
+                holdsCurrent = HoldKillPeelOwns(ai, bot, target);
+            if (holdsCurrent)
+                return false;
 
             Unit* dps = AI_VALUE(Unit*, "dps aoe target");
             if (dps)

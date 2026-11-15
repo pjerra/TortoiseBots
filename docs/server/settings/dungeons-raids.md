@@ -706,8 +706,8 @@ A ranged damage dealer claims one add of a `hold_kill` row's held entry while th
 - a ranged damage dealer with no explicit order claims one unit at a time: an add of the row's `boss_entry`, alive, not evading, within 35 yd of the bot, whose current victim is a group healer, unclaimed and not already attacked by a group member. Nearest first, the lower guid on a tie.
 - one claim per unit, one per bot, and no new claim while the instance already holds the key's count of live claims.
 - the hold is lifted for the claimant alone, on its own unit: the dps target, the assist and the attack pickers leave that bot on the add, the `hold_kill` action never sends it back, and the area and attacker-debuff (DoT) vetoes around it stay.
-- the claim is kept while the bot is on the add and the add still eats a healer; 3 s after its last refresh (the add died, its victim changed, the bot moved on) it lapses and the hold applies again. `gate_hold`, `one_at_a_time` and `seek_aura` holds are untouched, and the healer guard's own orders still win over a peel.
-- `bot_events.csv` gets a `BossTacticsHoldKill` row with `peel=claim|keep|lapse`, `unit=<entry>:<guid low>`, `victim=<name>` and `claims=<n>` (at most one per bot per 2 s).
+- the claim is kept while the bot is on the add and the add's victim is still one of ours, the claimant included (the claimant's own hits take the add off the healer): alive, not evading, within 40 yd, and no longer needing a healer victim. 3 s after its last refresh (the add died, its victim left the group, the bot moved on) it lapses and the hold applies again. `gate_hold`, `one_at_a_time` and `seek_aura` holds are untouched, and the healer guard's own orders still win over a peel.
+- `bot_events.csv` gets a `BossTacticsHoldKill` row with `peel=claim|keep|lapse`, `unit=<entry>:<guid low>`, `victim=<name>` and `claims=<n>` (at most one per bot per 2 s). A lapse instead says why and what it cost: `reason=dead|victim_not_ours|reach|not_free|bot_dead|timeout`, `age=<ms>`, `hp=<claim %>-><now %>`, `claims=<n>`.
 
 </details>
 

@@ -817,14 +817,15 @@ class HoldKillIsLogged(unittest.TestCase):
 
     def test_every_multiplier_zero_logs_its_veto(self):
         fn = body(ACTIONS, "float BossTacticsHoldMultiplier::GetValue(")
-        # Six clauses, the seek_aura one (which logs its own veto kind, "seek") and the seek DoT veto.
-        self.assertEqual(fn.count("LogHoldKillVeto("), 8)
+        # Six clauses, the seek_aura one (which logs its own veto kind, "seek"), the seek DoT veto and the peel veto.
+        self.assertEqual(fn.count("LogHoldKillVeto("), 9)
         self.assertIn('const char* const veto = dpsAssist || tankAssist || singleTarget ? "assist"', fn)
         self.assertIn(': aoe || cleaveToggle ? "aoe"', fn)
         self.assertIn(': attackerDebuff ? "dot"', fn)
         self.assertIn(': attackerDebuff ? "dot" : "area";', fn)
         self.assertNotIn('"heal"', fn)
         self.assertIn('held == HoldReason::Sole ? "sole" : veto', fn)
+        self.assertIn('LogHoldKillVeto(ai, bot, "peel", current);', fn)
         veto = body(ACTIONS, "void LogHoldKillVeto(")
         self.assertIn('sPlayerbotAIConfig.logEvent(ai, "BossTacticsHoldKill", std::string("veto=") + veto, info2);', veto)
         self.assertIn('"held=%u:%u,hp=%u,held_ms=%u"', veto)
