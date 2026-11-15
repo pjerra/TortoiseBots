@@ -12,6 +12,7 @@
 #include "playerbot/FleeManager.h"
 #include "playerbot/LootObjectStack.h"
 #include "playerbot/PlayerbotAIConfig.h"
+#include "playerbot/ReactionCastGuardPolicy.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/strategy/values/PositionValue.h"
 #include "playerbot/strategy/values/Stances.h"
@@ -3888,6 +3889,32 @@ bool ai::AoeHazardEscapeDue(PlayerbotAI* ai, Player* bot)
     if (!AI_VALUE(std::list<ObjectGuid>, "nearest damaging traps").empty())
         return true;
     return !AI_VALUE(std::list<ObjectGuid>, "possible triggers").empty();
+}
+
+// Every emergency move or escape a healer's reaction engine can carry, in one predicate: the seek's heal wait must
+// never stand in front of one (ReactionCastGuardPolicy.h, SeekHealWaitDue). The triggers are its own; reading them
+// here, rather than reimplementing their conditions, keeps the two from disagreeing. `aoe threat nearby` is not
+// read this way: its IsActive also registers the creature-aura keep-outs, so the avoid-aoe condition itself
+// (AoeHazardEscapeDue, which reads the same sensors) stands for it.
+bool ai::EmergencyMoveDue(PlayerbotAI* ai)
+{
+    if (!ai)
+        return false;
+    Player* bot = ai->GetBot();
+    if (!bot || !bot->IsInWorld() || bot->IsBeingTeleported() || !sServerFacade.IsAlive(bot))
+        return false;
+    if (AoeHazardEscapeDue(ai, bot))
+        return true;
+    AiObjectContext* context = ai->GetAiObjectContext();
+    if (!context)
+        return false;
+    for (ai::SeekHealWaitEmergencyMove const& move : ai::kSeekHealWaitEmergencyMoves)
+    {
+        Trigger* trigger = context->GetTrigger(move.trigger);
+        if (trigger && trigger->IsActive())
+            return true;
+    }
+    return false;
 }
 
 bool AvoidAoeAction::isUseful()

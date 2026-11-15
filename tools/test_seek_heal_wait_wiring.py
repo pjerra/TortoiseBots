@@ -8,9 +8,12 @@ only prove the live code feeds it and that nothing else changed:
  - BossTacticsSeekAction::Execute builds the read after its anchor clamp and its same-spline
    early return, and before the walk, stands the walk down on a due wait (return false, no
    walk started), and logs one row per wait through the seek row's own writer;
- - the wait refuses itself while the avoid-aoe trigger's condition holds (AoeHazardEscapeDue):
-   `avoid aoe` shares the seek's ACTION_EMERGENCY + 5, so a hold in front of it would starve
-   the escape. One condition, used by the trigger that queues the escape and by the seek;
+ - the wait refuses itself while an emergency move or escape is due (EmergencyMoveDue): the
+   reaction engine runs one picked action a tick and picks the seek ahead of every emergency row
+   at or below its ACTION_EMERGENCY + 5, so a hold in front of one would starve it. The predicate
+   asks the avoid-aoe condition (AoeHazardEscapeDue) and every trigger in
+   kSeekHealWaitEmergencyMoves (ReactionCastGuardPolicy.h), and each listed trigger/action pair
+   still exists as an ACTION_EMERGENCY row in the strategy sources;
  - the cast read is the shared PlayerbotAI::ReadGenericCast the reaction guard's break uses,
    so the two can never disagree about what a heal under way is;
  - the key is read with default 0, clamped to 0-3000, beside the cast guard's percent in the
@@ -55,6 +58,17 @@ REACTION = block(PLAYERBOT_AI, "bool PlayerbotAI::UpdateAIReaction")
 LOG = block(SEEK_CPP, "void LogSeekHealWait(")
 HAZARD = block(MOVEMENT_CPP, "bool ai::AoeHazardEscapeDue(")
 TRIGGER = block(TRIGGERS_CPP, "bool AoeThreatNearbyTrigger::IsActive(")
+EMERGENCY = block(MOVEMENT_CPP, "bool ai::EmergencyMoveDue(")
+REACTION_ROWS = (ROOT / "ai/playerbot/ReactionRowsPolicy.h").read_text()
+STRATEGY_SOURCES = "".join(
+    p.read_text() for p in sorted((ROOT / "ai/playerbot/strategy").rglob("*.cpp")))
+
+# Every emergency movement row names its trigger and action in this shape; Viscidus puts both on one line.
+SOURCE_ROW = re.compile(
+    r'"([^"]+)"\s*,\s*\n?\s*NextAction::array\(0, new NextAction\("([^"]+)",\s*'
+    r'(ACTION_EMERGENCY(?:\s*\+\s*\d+)?|[\d.]+f)')
+REACTION_ROW = re.compile(
+    r'\{\s*"([^"]+)",\s*"([^"]+)",\s*kReactionRaidEmergency\s*\+\s*\d+\s*\}')
 
 
 class SeekHealWaitWiring(unittest.TestCase):
@@ -85,16 +99,65 @@ class SeekHealWaitWiring(unittest.TestCase):
         self.assertIn("healWaitEnded = true;", WAIT)
         self.assertIn("healWaitEndMs = nowMs;", WAIT)
 
-    def test_a_due_hazard_escape_outranks_the_wait(self):
-        # `avoid aoe` queues at the seek's own ACTION_EMERGENCY + 5, so the seek asks its condition while it builds
-        # the pass, before the rule can decline the walk.
-        ASK = "in.hazardDue = sPlayerbotAIConfig.reactionHealSeekWaitMs > 0 && AoeHazardEscapeDue(ai, bot);"
+    def test_a_due_emergency_move_outranks_the_wait(self):
+        # The seek is picked ahead of every emergency row at or below its ACTION_EMERGENCY + 5, so it asks the
+        # shared predicate while it builds the pass, before the rule can grant the wait.
+        ASK = "in.hazardDue = ai::SeekHealWaitDue(in) && ai::EmergencyMoveDue(ai);"
         self.assertIn(ASK, WAIT)
         ask = WAIT.index(ASK)
-        self.assertLess(ask, WAIT.index("ai::SeekHealWaitDue(in)"))
+        # All inputs first (the rule reads inWait/msSinceWaitEnd), then the emergency question, then the grant.
+        self.assertGreater(ask, WAIT.index("in.msSinceWaitEnd = waitEndedMsAgo;"))
+        self.assertLess(ask, WAIT.index("if (ai::SeekHealWaitDue(in))"))
         self.assertLess(ask, WAIT.index("return false;"))
-        # The rule refuses the wait outright for it (the policy test proves the wait is cut).
+        # The rule refuses the wait outright for it (the policy test proves every listed kind cuts the wait).
         self.assertIn("if (in.hazardDue) return false;", POLICY)
+
+    def test_the_emergency_move_predicate_checks_every_listed_trigger(self):
+        # One predicate, declared beside the hazard condition and asking the same sensors plus each trigger.
+        self.assertIn("bool EmergencyMoveDue(PlayerbotAI* ai);", MOVEMENT_H)
+        self.assertEqual(MOVEMENT_CPP.count("bool ai::EmergencyMoveDue("), 1)
+        self.assertIn("if (AoeHazardEscapeDue(ai, bot))", EMERGENCY)
+        self.assertIn("for (ai::SeekHealWaitEmergencyMove const& move : ai::kSeekHealWaitEmergencyMoves)",
+                      EMERGENCY)
+        self.assertIn("context->GetTrigger(move.trigger)", EMERGENCY)
+        self.assertIn("trigger->IsActive()", EMERGENCY)
+        # `aoe threat nearby` is asked through the shared condition, not the trigger: the trigger also registers
+        # the creature-aura keep-outs.
+        self.assertNotIn('"aoe threat nearby"', EMERGENCY)
+
+        # Every listed trigger/action pair is still an emergency row in a strategy source (or in the reaction
+        # rows' policy list), at ACTION_EMERGENCY or above.
+        source_rows = {}
+        for trigger, action, relevance in SOURCE_ROW.findall(STRATEGY_SOURCES):
+            if relevance == "ACTION_EMERGENCY" or relevance.startswith("ACTION_EMERGENCY +") or \
+                    float(relevance.rstrip("f")) >= 90.0:
+                source_rows[(trigger, action)] = relevance
+        for trigger, action in REACTION_ROW.findall(REACTION_ROWS):
+            source_rows[(trigger, action)] = "kReactionRaidEmergency"
+        listed = dict(re.findall(r'\{\s*"([^"]+)",\s*"([^"]+)"\s*\}', POLICY))
+        self.assertEqual(listed, {
+            "has area debuff": "flee from area",
+            "immune boss victim": "immune boss victim escape",
+            "environmental hazard nearby": "move away from hazard",
+            "raid bomb debuff": "raid bomb runout",
+            "four horsemen mark": "four horsemen rotate",
+            "dragon breath risk": "dragon flank",
+            "boss tactics flee": "boss tactics flee",
+            "boss tactics avoid cast": "boss tactics avoid cast",
+            "razorgore cone": "escape razorgore cone",
+            "razorgore ranged": "back off razorgore",
+            "golemagg splash": "back off golemagg",
+            "magmadar lava bomb": "move away from hazard",
+            "geddon inferno": "move away from geddon",
+            "onyxia deep breath": "onyxia breath safe zone",
+            "grobbulus injection ranged": "grobbulus go behind",
+            "solnius emerald rot": "raid bomb runout",
+            "viscidus melee danger": "viscidus keep distance",
+            "viscidus toxin nearby": "viscidus toxin escape",
+        })
+        for trigger, action in listed.items():
+            self.assertIn((trigger, action), source_rows,
+                          f"no ACTION_EMERGENCY row for {trigger!r} -> {action!r}")
 
     def test_one_hazard_condition_for_the_trigger_and_the_seek(self):
         # Declared once, beside the action it belongs to, and used by the trigger that queues the escape and by the

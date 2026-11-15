@@ -6,8 +6,8 @@
 // - key 2000, a healer, a Flash Heal with 900 ms of 1500 left, the siphon due in 44 s, a 300 ms walk and the
 //   gather (no cloud): the walk must stand down.
 // The case that fails on the first version of the wait (the field does not exist, so the input is ignored):
-// - the same pass with a hazard escape due (AoeHazardEscapeDue): the walk must go, so `avoid aoe` can hold the
-//   emergency that shares the seek's ACTION_EMERGENCY + 5 relevance.
+// - the same pass with an emergency move or escape due (EmergencyMoveDue: the avoid-aoe condition and every trigger
+//   in kSeekHealWaitEmergencyMoves): the walk must go, so the escape the seek outranks can hold its own tick.
 //
 // Build and run:
 //   g++ -std=c++17 -Wall -Wextra tools/test_seek_heal_wait_policy.cpp -o /tmp/test_seek_heal_wait
@@ -18,6 +18,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <limits>
 
 using ai::ReactionCastPct;
@@ -157,6 +158,48 @@ int main()
         in.cast = &flashHeal;
         in.msSinceWaitEnd = 4000;
         CHECK(!SeekHealWaitDue(in));
+    }
+
+    // 2b. Every emergency move the wait refuses to stand in front of (EmergencyMoveDue, MovementActions.cpp): one
+    // policy case per listed trigger kind. The predicate's own wiring is pinned in test_seek_heal_wait_wiring.py;
+    // here each kind's due state, the one bool the rule takes, has to cut the wait.
+    for (ai::SeekHealWaitEmergencyMove const& move : ai::kSeekHealWaitEmergencyMoves)
+    {
+        SeekHealWaitIn in = Base();
+        in.cast = &flashHeal;
+        in.hazardDue = true;
+        CHECK(!SeekHealWaitDue(in));
+        CHECK(move.trigger && *move.trigger);
+        CHECK(move.action && *move.action);
+    }
+    {
+        SeekHealWaitIn in = Base(); // the avoid-aoe condition itself, which has no row in the list
+        in.cast = &flashHeal;
+        in.hazardDue = true;
+        CHECK(!SeekHealWaitDue(in));
+    }
+    {
+        // The list itself: one entry per kind the predicate asks. Dropping a trigger from the predicate's list
+        // leaves it unasked and turns this red.
+        auto const listed = [](char const* trigger) {
+            for (ai::SeekHealWaitEmergencyMove const& move : ai::kSeekHealWaitEmergencyMoves)
+            {
+                if (std::strcmp(move.trigger, trigger) == 0)
+                    return true;
+            }
+            return false;
+        };
+        char const* const expected[] = {
+            "has area debuff", "immune boss victim", "environmental hazard nearby", "raid bomb debuff",
+            "four horsemen mark", "dragon breath risk", "boss tactics flee", "boss tactics avoid cast",
+            "razorgore cone", "razorgore ranged", "golemagg splash", "magmadar lava bomb", "geddon inferno",
+            "onyxia deep breath", "grobbulus injection ranged", "solnius emerald rot", "viscidus melee danger",
+            "viscidus toxin nearby",
+        };
+        CHECK(sizeof(ai::kSeekHealWaitEmergencyMoves) / sizeof(ai::kSeekHealWaitEmergencyMoves[0]) ==
+              sizeof(expected) / sizeof(expected[0]));
+        for (char const* trigger : expected)
+            CHECK(listed(trigger));
     }
 
     // 3. Boundaries.

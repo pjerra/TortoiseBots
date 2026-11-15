@@ -92,12 +92,63 @@ namespace ai
     // healer-fight). 94 % of the known-spell rows had 2 s or less left and the siphon was still due 3 s or more past
     // that: the heal was worth more than the walk, so the walk is what should have waited.
     //
-    // A due hazard escape always wins: `avoid aoe` and `boss tactics seek` share ACTION_EMERGENCY + 5, so a seek that
-    // stands its walk down to hold a heal must ask the avoid-aoe condition itself (AoeHazardEscapeDue) and refuse the
-    // wait while it holds. Otherwise a healer standing in a hostile ground effect could keep casting for the wait.
+    // Any due emergency move or escape always wins: the reaction engine runs one picked action a tick, and the seek
+    // is picked ahead of every emergency row at or below its ACTION_EMERGENCY + 5, so a seek that stands its walk
+    // down to hold a heal would starve those. EmergencyMoveDue (MovementActions.h) is the one shared predicate: the
+    // avoid-aoe condition itself (AoeHazardEscapeDue) plus every trigger below. Otherwise a healer standing in a
+    // hostile ground effect, or one whose escape is due, could keep casting for the wait.
     constexpr std::uint32_t kSeekHealWaitMarginMs = 3000; // slack over the walk's own length
     constexpr std::uint32_t kSeekHealRewaitMs = 5000;     // no second wait within this of the last one's end
     constexpr std::uint32_t kSeekHealWaitEndSlackMs = 200; // the wait reads as over this long past its end
+
+    // The trigger rows behind the emergency moves and escapes a healer's reaction engine can carry: all of them sit
+    // at ACTION_EMERGENCY and above, and every one has to go before the seek's wait (`avoid aoe` itself is asked
+    // through AoeHazardEscapeDue, whose trigger also registers the creature-aura keep-outs, so it is not listed
+    // here). Each action is a movement or escape action; the comment names the row's home in the strategy sources.
+    struct SeekHealWaitEmergencyMove
+    {
+        char const* trigger;
+        char const* action;
+    };
+
+    constexpr SeekHealWaitEmergencyMove kSeekHealWaitEmergencyMoves[] = {
+        // CombatStrategy.cpp:84-85, the reactive fallback below `avoid aoe` (combat and reaction engines).
+        { "has area debuff", "flee from area" },
+        // CombatStrategy.cpp:97-98, the reaction copy of the always-on `avoid aoe` strategy.
+        { "immune boss victim", "immune boss victim escape" },
+        // ReactionRowsPolicy.h:35-36, the `react` strategy's rows (AiPlayerbot.RaidReactions on).
+        { "environmental hazard nearby", "move away from hazard" },
+        // ReactionRowsPolicy.h:39-40; BlackwingLairDungeonStrategies.cpp:189-190 (Vael) and
+        // EmeraldSanctumDungeonStrategies.cpp:58-59 (Solnius) reuse the same trigger.
+        { "raid bomb debuff", "raid bomb runout" },
+        // ReactionRowsPolicy.h:40-41.
+        { "four horsemen mark", "four horsemen rotate" },
+        // ReactionRowsPolicy.h:41-42.
+        { "dragon breath risk", "dragon flank" },
+        // BossTacticsStrategy.cpp:206-207, the reaction copy (the combat copy is at 59-60).
+        { "boss tactics flee", "boss tactics flee" },
+        // BossTacticsStrategy.cpp:184-185, the reaction copy (combat and non-combat copies too).
+        { "boss tactics avoid cast", "boss tactics avoid cast" },
+        // BlackwingLairDungeonStrategies.cpp:100-101.
+        { "razorgore cone", "escape razorgore cone" },
+        // BlackwingLairDungeonStrategies.cpp:104-105.
+        { "razorgore ranged", "back off razorgore" },
+        // MoltenCoreDungeonStrategies.cpp:124-125.
+        { "golemagg splash", "back off golemagg" },
+        // MoltenCoreDungeonStrategies.cpp:187-188 (relevance 100).
+        { "magmadar lava bomb", "move away from hazard" },
+        // MoltenCoreDungeonStrategies.cpp:226-227.
+        { "geddon inferno", "move away from geddon" },
+        // OnyxiasLairDungeonStrategies.cpp:82-83.
+        { "onyxia deep breath", "onyxia breath safe zone" },
+        // GrobbulusDungeonStrategies.cpp:28-29.
+        { "grobbulus injection ranged", "grobbulus go behind" },
+        // EmeraldSanctumDungeonStrategies.cpp:58-59.
+        { "solnius emerald rot", "raid bomb runout" },
+        // TempleOfAhnQirajStrategies.cpp:65-68, the reaction copy.
+        { "viscidus melee danger", "viscidus keep distance" },
+        { "viscidus toxin nearby", "viscidus toxin escape" },
+    };
 
     // How long a walk of `distYd` takes at `speedYdS`. A speed of 0 (rooted, or no run speed read to trust) makes
     // the walk unbounded, which refuses every wait: the bot walks as before.
@@ -123,15 +174,15 @@ namespace ai
         std::uint32_t dueInMs = 0;                // the seek's task.dueInMs: 0 means the clock is unknown
         std::uint32_t travelMs = 0;               // SeekTravelMs(dist, the bot's run speed)
         std::int32_t cloudLeftMs = -1;            // the cloud's own duration left (cloud phase); -1: the gather
-        // The avoid-aoe trigger's condition (AoeHazardEscapeDue): a hazard escape is queued at the same relevance
-        // as the seek, so a wait here must never stand in front of it.
+        // EmergencyMoveDue (MovementActions.h): an emergency move or escape is due (the avoid-aoe condition or any
+        // trigger in kSeekHealWaitEmergencyMoves), so a wait here must never stand in front of it.
         bool hazardDue = false;
         bool inWait = false;                      // a wait already runs (its cast's remainder has not run out)
         std::uint32_t msSinceWaitEnd = std::numeric_limits<std::uint32_t>::max(); // none yet
     };
 
     // Does the seek stand its walk down for the heal under way?
-    // - a hazard escape is due: no (the emergency comes first, whatever the heal's progress);
+    // - an emergency move or escape is due: no (the emergency comes first, whatever the heal's progress);
     // - no key, no healer, no cast / not a heal / no progress to read: no;
     // - more of the cast left than the key allows: no (the walk goes, and breaks it as before);
     // - the siphon due before the cast, the walk and the margin are done: no (walking late beats healing now);
