@@ -5,12 +5,12 @@
 --
 -- Idempotent: each plan's rows are deleted, then inserted. The tables come from 20261014150000_world.sql.
 
--- zul_gurub: map 309, 9 legs, 687 steps
+-- zul_gurub: map 309, 9 legs, 689 steps
 DELETE FROM `ai_dungeon_step` WHERE `plan` = 'zul_gurub';
 DELETE FROM `ai_dungeon_leg` WHERE `plan` = 'zul_gurub';
 DELETE FROM `ai_dungeon_plan` WHERE `plan` = 'zul_gurub';
 INSERT INTO `ai_dungeon_plan` (`plan`, `map`, `cc_priority`, `cc_always`, `kill_first`, `source`, `comment`) VALUES
-('zul_gurub', 309, '14532,14882,14825,11353,11338,11357,11356,11350,14821,11351,11831,11340,11339,11359,15111,15043', '', '14987,15112,14750,15146,11830,14883', 'turtle-agent b44ea33a5c22ff4dee9585d03d5b736d7b4d7f21 dungeons/z', 'plan v1, mapped (live-walked in ZG walks 31-34: Jeklik, Venoxis, Mar''li, Thekal and Mandokir killed; Arlokk via the gong step; Hakkar pending)');
+('zul_gurub', 309, '14532,14882,14825,11353,11338,11357,11356,11350,14821,11351,11831,11340,11339,11359,15111,15043', '', '14987,15112,14750,15146,11830,14883', 'turtle-agent 29e0b36f3d3bb8d1e14f4fbad8fb9e5c903838f5 dungeons/z', 'plan v1, mapped (live-walked in ZG walks 31-34: Jeklik, Venoxis, Mar''li, Thekal and Mandokir killed; Arlokk via the gong step; Hakkar pending)');
 INSERT INTO `ai_dungeon_leg` (`plan`, `leg`, `name`, `comment`) VALUES
 ('zul_gurub', 0, 'high_priestess_jeklik', ''),
 ('zul_gurub', 1, 'high_priest_venoxis', ''),
@@ -58,17 +58,19 @@ INSERT INTO `ai_dungeon_step` (`plan`, `leg`, `seq`, `kind`, `entry`, `x`, `y`, 
 ('zul_gurub', 0, 33, 'pull', 0, -12148, -1458, 131.3, 72, 0, 0, 8192, 0, '11351,11831', 'pull group 9; stand pull'),
 ('zul_gurub', 0, 34, 'move', 0, -12114.5, -1446.8, 131.32, 0, 0, 0, 0, 0, '', 'pull group 10 approach'),
 ('zul_gurub', 0, 35, 'pull', 0, -12148, -1485, 130.8, 6.5, 11, 0, 8192, 0, '11368,14750', 'pull group 10; stand pull'),
-('zul_gurub', 0, 36, 'move', 0, -12183, -1488, 131.2, 0, 0, 0, 0, 0, '', 'pull group 11 approach'),
-('zul_gurub', 0, 37, 'pull', 0, -12208.9, -1478.72, 131.26, 5.5, 0, 0, 8192, 0, '11368,14750', 'pull group 11; stand pull'),
-('zul_gurub', 0, 38, 'move', 0, -12211, -1491, 132.6, 0, 0, 0, 0, 0, '', 'pull group 12 approach'),
-('zul_gurub', 0, 39, 'pull', 0, -12217.7, -1465.73, 130.67, 6, 3, 0, 8192, 0, '11351,11831', 'pull group 12; stand pull'),
-('zul_gurub', 0, 40, 'move', 0, -12268, -1488, 131.23, 0, 0, 0, 0, 0, '', 'pull group 13 approach'),
-('zul_gurub', 0, 41, 'pull', 0, -12269.87, -1455.78, 131.06, 40, 0, 0, 8192, 0, '14750,11368', 'pull group 13; stand pull'),
-('zul_gurub', 0, 42, 'move', 0, -12250, -1418, 130.65, 0, 0, 0, 0, 0, '', 'pull group 14 approach'),
-('zul_gurub', 0, 43, 'pull', 0, -12238.93, -1418.93, 130.92, 13, 10, 0, 8192, 0, '11831,11351,11368,14750', 'pull group 14; stand pull'),
-('zul_gurub', 0, 44, 'move', 0, -12210, -1445, 130.7, 0, 0, 0, 0, 0, '', 'boss approach'),
-('zul_gurub', 0, 45, 'move', 0, -12269.3, -1389.4, 131.5, 0, 0, 0, 0, 0, '', 'boss approach'),
-('zul_gurub', 0, 46, 'boss', 14517, -12289.1, -1384.13, 134.27, 0, 0, 0, 0, 0, '', 'boss'),
+('zul_gurub', 0, 36, 'move', 0, -12108, -1479, 130.9, 0, 0, 0, 0, 0, '', 'pull group 11 approach'),
+('zul_gurub', 0, 37, 'pull', 0, -12153.9, -1489.43, 130.73, 1, 0, 0, 8192, 0, '11368,14750', 'pull group 11; stand pull'),
+('zul_gurub', 0, 38, 'move', 0, -12183, -1488, 131.2, 0, 0, 0, 0, 0, '', 'pull group 12 approach'),
+('zul_gurub', 0, 39, 'pull', 0, -12208.9, -1478.72, 131.26, 5.5, 0, 0, 8192, 0, '11368,14750', 'pull group 12; stand pull'),
+('zul_gurub', 0, 40, 'move', 0, -12211, -1491, 132.6, 0, 0, 0, 0, 0, '', 'pull group 13 approach'),
+('zul_gurub', 0, 41, 'pull', 0, -12217.7, -1465.73, 130.67, 6, 3, 0, 8192, 0, '11351,11831', 'pull group 13; stand pull'),
+('zul_gurub', 0, 42, 'move', 0, -12268, -1488, 131.23, 0, 0, 0, 0, 0, '', 'pull group 14 approach'),
+('zul_gurub', 0, 43, 'pull', 0, -12269.87, -1455.78, 131.06, 40, 0, 0, 8192, 0, '14750,11368', 'pull group 14; stand pull'),
+('zul_gurub', 0, 44, 'move', 0, -12250, -1418, 130.65, 0, 0, 0, 0, 0, '', 'pull group 15 approach'),
+('zul_gurub', 0, 45, 'pull', 0, -12238.93, -1418.93, 130.92, 13, 10, 0, 8192, 0, '11831,11351,11368,14750', 'pull group 15; stand pull'),
+('zul_gurub', 0, 46, 'move', 0, -12210, -1445, 130.7, 0, 0, 0, 0, 0, '', 'boss approach'),
+('zul_gurub', 0, 47, 'move', 0, -12269.3, -1389.4, 131.5, 0, 0, 0, 0, 0, '', 'boss approach'),
+('zul_gurub', 0, 48, 'boss', 14517, -12289.1, -1384.13, 134.27, 0, 0, 0, 0, 0, '', 'boss'),
 ('zul_gurub', 1, 0, 'move', 0, -12287.799, -1383.7334, 134.06396, 0, 0, 0, 0, 0, '', 'path'),
 ('zul_gurub', 1, 1, 'move', 0, -12281.494, -1382.5853, 132.52621, 0, 0, 0, 0, 0, '', 'path'),
 ('zul_gurub', 1, 2, 'move', 0, -12271.133, -1387.7334, 131.22035, 0, 0, 0, 0, 0, '', 'path'),
