@@ -2298,6 +2298,8 @@ static void HealerPeelPick_OneHealerAddPerBot()
     CHECK(kHoldKillPeelClaimMs == 3000);
     CHECK(PeelClaimLive(bot, now - 3000, now));
     CHECK(!PeelClaimLive(bot, now - 3001, now));
+    // A stamp ahead of this clock (another thread's later read) is live, never a wrapped age.
+    CHECK(PeelClaimLive(bot, now + 5, now));
     CHECK(!PeelClaimLive(0, now, now));
     CHECK(Peelable(true, false, true, 35.0f));
     CHECK(!Peelable(true, false, true, 36.0f));
@@ -2419,12 +2421,42 @@ static void HealerPeelClaims_TryClaimIsAtomic()
         CHECK(store.TryClaim(inst, 5000, 200, 2, now + kHoldKillPeelClaimMs + 1, 1));
         CHECK(store.Of(inst).at(5000).botGuid == 200);
     }
+    // A stamp ahead of the pruning clock is another thread's later read: the claim survives the prune and still owns
+    // its unit.
+    {
+        HoldKillPeelClaims store;
+        CHECK(store.TryClaim(inst, 5000, 100, 2, now + 5, 4));
+        store.Prune(now);
+        CHECK(store.LiveCount(inst) == 1);
+        CHECK(store.Of(inst).at(5000).botGuid == 100);
+        CHECK(!store.TryClaim(inst, 5000, 200, 2, now, 4));
+    }
     // The key off (cap 0) never claims.
     {
         HoldKillPeelClaims store;
         CHECK(!store.TryClaim(inst, 5000, 100, 2, now, 0));
         CHECK(store.Of(inst).empty());
     }
+}
+
+// Only a hold_kill entry the fight still holds is peeled: with the blockers gone the hold is off, so its units are
+// ordinary targets and the peel draws no candidate.
+static void HealerPeelEntries_OnlyHeldEntriesArePeeled()
+{
+    BossTacticRow whelps = Row(249, 1, BossTacticKind::HoldKill, 2, 0, 0);
+    const std::vector<BossTacticRow> heldRows = { whelps };
+    const ActiveBossRows active = Active(heldRows);
+    const auto blockerPresent = [](std::uint32_t entry) -> std::uint32_t { return entry == 2 ? 1u : 0u; };
+    const auto blockerGone = [](std::uint32_t) -> std::uint32_t { return 0u; };
+    CHECK(PeelEntries(active, blockerPresent) == std::vector<std::uint32_t>{ 1 });
+    CHECK(PeelEntries(active, blockerGone).empty());
+    // Rows sharing an entry list it once; other kinds never contribute an entry.
+    BossTacticRow second = Row(249, 1, BossTacticKind::HoldKill, 2, 0, 0);
+    BossTacticRow killFirst = Row(249, 4, BossTacticKind::KillFirst, 0, 0, 0);
+    const std::vector<BossTacticRow> bothRows = { whelps, second, killFirst };
+    const ActiveBossRows both = Active(bothRows);
+    CHECK(PeelEntries(both, blockerPresent) == std::vector<std::uint32_t>{ 1 });
+    CHECK(PeelEntries(both, blockerGone).empty());
 }
 
 int main()
@@ -2484,6 +2516,7 @@ int main()
     HoldKillPeelLiftsClaimedHealerAttacker();
     HealerPeelPick_OneHealerAddPerBot();
     HealerPeelClaims_TryClaimIsAtomic();
+    HealerPeelEntries_OnlyHeldEntriesArePeeled();
     TestTankPost_SlotTankWalksToSpotWhileSubjectUnselectable();
     TestTankPost_UnselectableSubjectNotArrived();
     TestTankPost_EngagesSelectableOutOfCombatSubject();

@@ -1840,11 +1840,12 @@ namespace ai
     };
 
     // Whether a claim is live at `nowMs`: it has an owner and its last refresh is at most kHoldKillPeelClaimMs old (one
-    // millisecond later it has lapsed). An unsigned age that wrapped (a stamp from another thread's later read) reads
-    // as older than any window, which drops the claim instead of extending it.
+    // millisecond later it has lapsed). A stamp ahead of `nowMs` is a clock read of another thread's that ran after
+    // this one; it counts as live rather than wrapping into an age older than any window and dropping a claim that was
+    // just refreshed.
     inline bool PeelClaimLive(std::uint64_t bot, std::uint32_t stampMs, std::uint32_t nowMs)
     {
-        return bot != 0 && nowMs - stampMs <= kHoldKillPeelClaimMs;
+        return bot != 0 && (stampMs > nowMs || nowMs - stampMs <= kHoldKillPeelClaimMs);
     }
 
     // Whether a unit of a hold_kill row's spared entry may be peeled at all: alive, not running home, eating a group
@@ -1853,6 +1854,25 @@ namespace ai
     inline bool Peelable(bool alive, bool evading, bool victimHealer, float distance)
     {
         return alive && !evading && victimHealer && distance <= kHoldKillPeelReachYd;
+    }
+
+    // The hold_kill entries the peel may draw units from right now: each row's spared entry while the row still holds
+    // it (KillHeld), once even when rows share the entry. Once the blockers that keep the hold are gone the entry is no
+    // longer held, so its units are ordinary targets and the peel stops.
+    inline std::vector<std::uint32_t> PeelEntries(const ActiveBossRows& rows,
+        const std::function<std::uint32_t(std::uint32_t)>& countNear)
+    {
+        std::vector<std::uint32_t> out;
+        for (const BossTacticRow* row : rows)
+        {
+            if (row->kind != BossTacticKind::HoldKill || row->bossEntry == 0)
+                continue;
+            if (!KillHeld(rows, row->bossEntry, countNear))
+                continue;
+            if (std::find(out.begin(), out.end(), row->bossEntry) == out.end())
+                out.push_back(row->bossEntry);
+        }
+        return out;
     }
 
     // The healer peel's claim store: one claim per unit of a map instance (instance copies of one DB spawn share the
@@ -1871,12 +1891,12 @@ namespace ai
         std::map<Key, Claim> claims;
 
         // Drops every claim past the window: a stale stamp is a claim that lapsed (PeelClaimLive), so the map never
-        // grows past the live claims.
+        // grows past the live claims. A stamp ahead of `nowMs` stays: another thread's later clock read is not a lapse.
         void Prune(std::uint32_t nowMs)
         {
             for (auto it = claims.begin(); it != claims.end();)
             {
-                if (nowMs - it->second.stampMs > kHoldKillPeelClaimMs)
+                if (!PeelClaimLive(it->second.botGuid, it->second.stampMs, nowMs))
                     it = claims.erase(it);
                 else
                     ++it;

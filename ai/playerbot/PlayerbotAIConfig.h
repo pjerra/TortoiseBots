@@ -640,7 +640,7 @@ public:
     // The healer peel inside a hold_kill row's hold: at most this many live claims per map instance (0 = off), each a
     // ranged free damage dealer on one add of the row's spared entry whose victim is a group healer; the hold is lifted
     // for the claimant alone (BossTacticsPolicy's PickHealerPeel; default 0, recommended on at 4).
-    uint32 dungeonRunHoldKillHealerPeel;
+    uint32 dungeonRunHoldKillHealerPeel = 0;
     // Pure interrupts (Kick, Pummel, Shield Bash, Bash, Counterspell, Silence) skip the damage threat back-off the way
     // heals do, so a damage dealer at the 80 % high-threat line still stops a cast, while the interrupt would not pull
     // its target off the tank (bot threat plus the spell's flat threat under 110 % of the tank's in melee, 130 %
