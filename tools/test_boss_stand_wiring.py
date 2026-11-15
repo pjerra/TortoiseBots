@@ -370,7 +370,12 @@ class BossStandWiring(unittest.TestCase):
             declared = body(DUNGEON_ACTIONS_H, "class %s" % cls, end="\n    };\n")
             self.assertIn("bool isUseful() override;", declared)
             fn = body(DUNGEON_ACTIONS, "bool %s::isUseful()" % cls)
-            self.assertIn("if (!MovementAction::isUseful())\n        return false;", fn)
+            if cls == "DragonFlankAction":
+                self.assertIn("if (!MovementAction::isUseful())\n        return false;", fn)
+            else:
+                # The spread action may step past the base movement gate through the key-gated stay exemption.
+                self.assertIn("if (!MovementAction::isUseful())\n    {\n", fn)
+                self.assertIn("if (!IsRaidSpreadStayExempt(sPlayerbotAIConfig.raidReactions,", fn)
             # Both read the seat before they report themselves usable; the spread action's slot verdict row logs the
             # stand on the way, and it still answers false for a seated bot.
             self.assertIn("FindBossStand(ai, bot).valid", fn)
