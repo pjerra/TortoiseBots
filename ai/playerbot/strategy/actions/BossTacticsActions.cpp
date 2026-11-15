@@ -26,6 +26,7 @@
 #include "playerbot/SeekAuraPolicy.h"
 #include "playerbot/TankFirstPolicy.h"
 #include "playerbot/SeekParkPolicy.h"
+#include "../../../../runtime/DungeonRunPolicy.h"
 #include "playerbot/CastKeepsRunningPolicy.h"
 #include "playerbot/SeekFightStatePolicy.h"
 #include "playerbot/SeekWalkoutPolicy.h"
