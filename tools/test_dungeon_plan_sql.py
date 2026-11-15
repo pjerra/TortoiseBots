@@ -1532,14 +1532,14 @@ class DungeonPlanSql(unittest.TestCase):
         # 13036), the Isalien trigger/pair (16045, 16097) and Pimgib (14349) are out of every pull; Pimgib is Lethtendris' first. No pull
         # row stands within 20 yd of a boss, and every radius is the pack's own spread (5-21.5 yd).
         name, text = newest_plan_text("dire_maul_east")
-        self.assertEqual(name, "20261104030000_world.sql")
-        self.assertIn("('dire_maul_east', 429, '', '', '11461,13196,11457', 'turtle-agent 1b9a5c6 dungeons/dire_maul_east.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261115070300_world.sql")
+        self.assertIn("('dire_maul_east', 429, '', '', '11461,13196,11457', 'turtle-agent 91cc4615 dungeons/dire_maul_east.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         self.assertEqual(leg_rows(text, "dire_maul_east"),
                          {0: ("zevrim_thornhoof", ""), 1: ("hydrospawn", ""), 2: ("lethtendris", ""),
                           3: ("alzzin_the_wildshaper", "")})
         rows = [r for r in self.step_rows(text) if r["plan"] == "dire_maul_east"]
-        self.assertEqual(len(rows), 248)
-        self.assertEqual({leg: len(leg_steps(rows, leg)) for leg in range(4)}, {0: 114, 1: 57, 2: 22, 3: 55})
+        self.assertEqual(len(rows), 261)
+        self.assertEqual({leg: len(leg_steps(rows, leg)) for leg in range(4)}, {0: 125, 1: 58, 2: 22, 3: 56})
         pulls = [r for r in rows if r["kind"] == "pull"]
         self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(4)], [52, 30, 1, 6])
         self.assertEqual([r["entry"] for r in rows if r["kind"] == "boss"], ["11490", "13280", "14327", "11492"])
@@ -2815,9 +2815,12 @@ class DungeonPlanSql(unittest.TestCase):
         # b6a round 2 (20261115002300, turtle-agent 4dbff2bf): the leg-6 group-12 lead row (audit step 717) stood 3.7 yd
         # under its floor and the server answered its hop to the pull NOPATH; the approach cut's lead row now takes its z
         # from the navmesh floor. It is the same set of rows (972 steps, 983 rows).
+        # live rows (20261115070000, turtle-agent f4e53e4, map-gps-B 2026-11-15): three rows onto the floor the GPS run
+        # measured at their own x and y - leg 1 group 37 approach[3] -83.9 -> -84.49, leg 3 group 10 approach[0] -59.5 ->
+        # -60.03 and leg 4's `to` -59 -> -60.02. Same 972 steps, 983 rows.
         name, text = newest_plan_text("blackrock_depths")
-        self.assertEqual(name, "20261115002300_world.sql")
-        self.assertIn("('blackrock_depths', 230, '8903,8892,8890,8891', '8903', '8894,8898,8896,8904,8900', 'turtle-agent 4dbff2bf dungeons/blackrock_depths.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261115070000_world.sql")
+        self.assertIn("('blackrock_depths', 230, '8903,8892,8890,8891', '8903', '8894,8898,8896,8904,8900', 'turtle-agent f4e53e4 dungeons/blackrock_depths.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         self.assertEqual(len(leg_rows(text, "blackrock_depths")), 10)
         rows = [r for r in self.step_rows(text) if r["plan"] == "blackrock_depths"]
         self.assertEqual(len(rows), 972)
@@ -2871,7 +2874,7 @@ class DungeonPlanSql(unittest.TestCase):
                          [("565", "-53", "-60"), ("583", "17", "-69"), ("672.5", "-94", "-71.389")])
         self.assertEqual([(r["x"], r["y"], r["z"]) for r in leg1 if r["comment"] == "pull group 37 approach"],
                          [("589.9", "-117.9", "-39.7"), ("584.2", "-124.2", "-49.7"),
-                          ("583.6", "-143.7", "-53.2"), ("582.8", "-164.4", "-83.9")])
+                          ("583.6", "-143.7", "-53.2"), ("582.8", "-164.4", "-84.49")])
         self.assertNotIn("16079", [r["entries"] for r in pulls])
         leg1pulls = [r["entries"] for r in leg_steps(rows, 1) if r["kind"] == "pull"]
         self.assertEqual(leg1pulls[19:22], ["8892", "8892,8891", "8892,8891"])
@@ -3976,8 +3979,8 @@ class DungeonPlanSql(unittest.TestCase):
         # island), then to the stand 18.8 yd from the boss (ray clear) and the boss approach; corrosis starts with the
         # reverse hop down the same seam (exact launch at the ramp top), then the server-path waypoint.
         name, text = newest_plan_text("hateforge_quarry")
-        self.assertEqual(name, "20261114234002_world.sql")
-        self.assertIn("('hateforge_quarry', 808, '60717,60720,60719,60725', '', '60718,60726,60723,60712,60738', 'turtle-agent 695b2986 dungeons/hateforge_quarry.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261115070100_world.sql")
+        self.assertIn("('hateforge_quarry', 808, '60717,60720,60719,60725', '', '60718,60726,60723,60712,60738', 'turtle-agent eb08c3c3 dungeons/hateforge_quarry.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         legs = leg_rows(text, "hateforge_quarry")
         self.assertEqual([legs[i][0] for i in range(6)],
                          ["high_foreman_bargul_blackhammer", "bargul_terrace", "corrosis", "har'gesh_doomcaller",
@@ -4007,7 +4010,7 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertEqual([r[1:] for r in leg0_approaches],
                          [("-8200", "-3300", "165.59"), ("-8200", "-3320", "139.32"), ("-8208.1", "-3324.23", "140.71"),
                           ("-8211.95", "-3331.25", "140.73"), ("-8227.35", "-3359.3", "138.4"),
-                          ("-8234.23", "-3371.84", "133.15"), ("-8260", "-3380", "140.61"), ("-8278", "-3360", "170.699"),
+                          ("-8234.23", "-3371.84", "132.59"), ("-8260", "-3380", "140.61"), ("-8278", "-3360", "170.699"),
                           ("-8280.081", "-3502.7717", "175.47253"), ("-8257.4", "-3500", "174.7"),
                           ("-8283.93", "-3373.33", "170"),
                           ("-8311.76", "-3338.32", "173.56"), ("-8300.24", "-3327.22", "171.57"),
