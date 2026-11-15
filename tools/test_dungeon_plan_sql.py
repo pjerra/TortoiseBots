@@ -1875,36 +1875,43 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertIn("(329, 10811, 'Archivist Galford'),\n(329, 10813, 'Balnazzar'),\n(329, 10997, 'Cannon Master Willey');", migrations_text())
 
     def test_stratholme_undead_has_the_rivendare_room_leg(self):
-        # 20261024152300 (turtle-agent prep/stratholme_undead 47c914f, 2026-10-24): 20261024150200 again with the
-        # Rivendare pull for RUN-LESSONS r32 slotD (round 1's hold worked through Slaughter Square: every abomination
-        # pull passed, the hold ended '13 of 13 down', the Black Guards fought, Ramstein met; but the run ended
-        # 'plan done' with Baron Rivendare 10440 ALIVE at 100 %, ~85 yd from the hold spot, never pulled: the plan
-        # format cannot hold a boss row after a hold in the same leg, so the boss is a new last leg 5
-        # 'baron_rivendare_room'. Its 'to' walks from the hold spot to Rivendare's room (through the gate the event
-        # opens) and its boss row pulls 10440 at his spawn (the normal boss row shape, entries ''). Legs 0-4
-        # byte-identical to 20261024150200. 6 legs, 253 steps (15 + 20 + 22 + 13 + 13 + 0 pulls; 164 moves;
-        # 5 boss rows + 1 hold); the new leg's 10 rows are the only step rows added. Boss table unchanged (all five);
-        # the ai_boss_tactic row (329, 10440, kill_first) is NOT carried here: 20261024150200 already wrote it with
-        # the same values, so 152300 carries no ai_boss_tactic statement at all (a second DELETE+INSERT of the same
-        # key fails the unique gate; 20261024152000's plain re-INSERT failed the same way, replaced here).
+        # 20261115093000 (turtle-agent 636297f, issue #1542 route order fix; the method and the measurements are in the
+        # route-order audit of 2026-11-12, order/stratholme_undead-FIX.md): the same six legs and the same five bosses in
+        # the same order, with each pack in the leg whose boss-to-boss walk passes it. 22 packs move to another leg, 23
+        # of the draft's 83 are dropped (the northern lane: King's Square and the street north of Elder's Square), the
+        # four leg `to` anchors move onto the walk and the legs' own packs are ordered along it: 101 steps (1 + 9 + 6 + 5
+        # + 7 + 7 moves; 1 + 14 + 8 + 12 + 25 + 0 pulls; 5 bosses + the leg-4 hold), 5,176 -> 2,530 yd walked. The two
+        # event groups are untouched: the three ziggurats' five-acolyte packs (10399) each and all 13 Slaughter Square
+        # pulls of leg 4, so the Ash'ari Crystals, Ramstein and the Baron's selectability are the same.
         name, text = newest_plan_text("stratholme_undead")
-        self.assertEqual(name, "20261104030000_world.sql")
-        self.assertIn("('stratholme_undead', 329, '', '', '10393,10411,10400,10398', 'turtle-agent 1b9a5c6 dungeons/stratholme_undead.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261115093000_world.sql")
+        self.assertIn("('stratholme_undead', 329, '', '', '10393,10411,10400,10398', 'turtle-agent 636297f dungeons/stratholme_undead.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         legs = leg_rows(text, "stratholme_undead")
         self.assertEqual([legs[i][0] for i in range(6)],
                          ["magistrate_barthilas", "nerub'enkan", "maleki_the_pallid",
                           "baroness_anastari", "baron_rivendare", "baron_rivendare_room"])
         rows = [r for r in self.step_rows(text) if r["plan"] == "stratholme_undead"]
-        self.assertEqual(len(rows), 202)
+        self.assertEqual(len(rows), 101)
         self.assertEqual({r["kind"] for r in rows}, {"move", "pull", "boss", "hold"})
-        self.assertEqual(len([r for r in rows if r["kind"] == "move"]), 113)
+        self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "move"]) for leg in range(6)],
+                         [1, 9, 6, 5, 7, 7])
         self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(6)],
-                         [15, 20, 22, 13, 13, 0])
+                         [1, 14, 8, 12, 25, 0])
         bosses = [r for r in rows if r["kind"] == "boss"]
         self.assertEqual([r["entry"] for r in bosses], ["10435", "10437", "10438", "10436", "10440"])
         self.assertEqual([r["entries"] for r in bosses], ["", "", "10398,10400", "", ""])
         for leg in range(4):
             self.assertEqual(leg_steps(rows, leg)[-1]["kind"], "boss", leg)
+        # Every leg walks to a `to` that is an existing row of the deployed plan: the plan's own leg-0 and leg-5 points
+        # (deployed steps 1 and 201) and the deployed rows at steps 9, 103, 139 and 144 for legs 1-4.
+        tos = {r["leg"]: r for r in rows if r["kind"] == "move" and r["comment"] == "to"}
+        self.assertEqual([r["leg"] for r in rows if r["kind"] == "move" and r["comment"] == "to"],
+                         ["0", "1", "2", "3", "4", "5"])
+        self.assertEqual([(round(float(tos[str(leg)]["x"]), 4), round(float(tos[str(leg)]["y"]), 4),
+                           round(float(tos[str(leg)]["z"]), 5)) for leg in range(6)],
+                         [(3636.06, -3636.82, 138.218), (3681.2666, -3611.2, 138.25056),
+                          (3882.6665, -3541.3333, 138.17378), (4028.0664, -3644.0, 135.19165),
+                          (3945.5186, -3645.2283, 137.74643), (4032.79, -3333.02, 115.061)])
         # leg 4 still ends in the whole-square units hold (round 1, unchanged)
         leg4 = leg_steps(rows, 4)
         self.assertEqual(leg4[-1]["kind"], "hold")
@@ -1915,13 +1922,15 @@ class DungeonPlanSql(unittest.TestCase):
                          ("68", "0", "0", "300", "10440,10416,10417"))
         self.assertIn("10440 counts while still friendly", hold[0]["comment"])
         self.assertEqual(leg4[-1]["seq"], hold[0]["seq"])
-        # the 13 Slaughter Square pulls still cover their wander area (radius 18 = spread 0 + 10 over wander 8)
+        # the 13 event pulls still cover their wander area (radius 18 = spread 0 + 10 over wander 8) and are the only
+        # 10416/10417 pulls; the other 12 of leg 4's packs are trash the walk up from Anastari's road passes
         pulls4 = [r for r in leg4 if r["kind"] == "pull"]
-        self.assertEqual(len(pulls4), 13)
-        self.assertEqual({r["entries"] for r in pulls4}, {"10416", "10417"})
-        for r in pulls4:
-            self.assertEqual(float(r["radius"]), 18.0, r["comment"])
-        # leg 5 walks from the hold spot to Rivendare's room and pulls him at his spawn
+        self.assertEqual(len(pulls4), 25)
+        event = [r for r in pulls4 if float(r["radius"]) == 18.0]
+        self.assertEqual(len(event), 13)
+        self.assertEqual({r["entries"] for r in event}, {"10416", "10417"})
+        self.assertFalse([r for r in rows if r["kind"] == "pull" and float(r["radius"]) == 18.0 and r["leg"] != "4"])
+        # leg 5 walks from the hold spot to Rivendare's room and pulls him at his spawn (unchanged)
         leg5 = leg_steps(rows, 5)
         self.assertEqual(len(leg5), 8)
         self.assertEqual([r["kind"] for r in leg5], ["move"] * 7 + ["boss"])
@@ -1935,19 +1944,21 @@ class DungeonPlanSql(unittest.TestCase):
         # the neutral units of faction 7 and the crystals are in no pull
         listed = {e for r in pulls for e in r["entries"].split(",") if e}
         self.assertFalse(listed & {"10384", "10385", "10558", "10415"})
-        # the two hostile rares are explicit, each in one pack, and are kill_first entries
-        self.assertEqual([(r["leg"], float(r["radius"])) for r in pulls if "10393" in r["entries"].split(",")],
-                         [("0", 12.5)])
+        # the hostile rare Stonespine 10809 rides in one pack, in leg 4 (its street is on the way north); Skul 10393's
+        # pack stood 83 yd off every boss-to-boss walk and is one of the 23 dropped, so no pull names him
         self.assertEqual([(r["leg"], float(r["radius"])) for r in pulls if "10809" in r["entries"].split(",")],
-                         [("2", 5.0)])
-        # leg 2 opens with the two corridor packs the draft had at the end of leg 1 (the exporter writes a leg's boss last)
+                         [("4", 5.0)])
+        self.assertFalse([r for r in pulls if "10393" in r["entries"].split(",")])
+        # leg 2 opens on the pack at Nerub'enkan's ziggurat exit (3877.7 -3533.1), not on the draft's corridor packs
         pulls2 = [r for r in leg_steps(rows, 2) if r["kind"] == "pull"]
-        self.assertEqual([(r["entries"], round(dist(r, 3954.9, -3565.8))) for r in pulls2[:1]], [("10398,10400", 0)])
-        self.assertLessEqual(dist(pulls2[1], 3970.6, -3546.6), 0.1)
-        # the spec's bbox cut this formation in half: the pull at 3543 -3421 is the whole formation plus the two ghouls in it
-        cadaver = [r for r in pulls if abs(float(r["x"]) - 3542.65) < 0.1 and abs(float(r["y"]) + 3420.89) < 0.1]
-        self.assertEqual([(r["entries"], float(r["radius"])) for r in cadaver],
-                         [("10390,10391,10381,10382,10405", 8.9)])
+        self.assertEqual(pulls2[0]["entries"], "10408,10400,10398,10413")
+        self.assertLessEqual(dist(pulls2[0], 3877.7, -3533.1), 0.5)
+        # the three ziggurats' five-acolyte packs stay in their own boss's leg, last before him
+        acolytes = [r for r in pulls if r["entries"] == "10399"]
+        self.assertEqual([r["leg"] for r in acolytes], ["1", "2", "3"])
+        for leg in ("1", "2", "3"):
+            self.assertEqual((leg_steps(rows, int(leg))[-2]["kind"], leg_steps(rows, int(leg))[-2]["entries"]),
+                             ("pull", "10399"), leg)
         self.assertIn("DELETE FROM `ai_dungeon_step` WHERE `plan` = 'stratholme_undead';", text)
         self.assertIn("DELETE FROM `ai_dungeon_boss` WHERE `map` IN (329) AND `entry` IN (10435, 10437, 10438, 10436, 10440);", migrations_text())
         self.assertTrue({(329, 10435), (329, 10436), (329, 10437), (329, 10438), (329, 10440)}
