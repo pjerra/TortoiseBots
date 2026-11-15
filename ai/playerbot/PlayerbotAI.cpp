@@ -1084,6 +1084,25 @@ static bool ReactionCastIsHeal(const SpellEntry* entry)
     return false;
 }
 
+// The generic slot as the core counts it: a cast bar counts down in PREPARING, the channel phase is CASTING (this
+// core has no separate channeling state). Any other state is a spell left behind after its cast finished, not a
+// heal under way, and reads 0. Shared by the pick's break and the seek's heal wait.
+bool PlayerbotAI::ReadGenericCast(Player* caster, ai::ReactionCastRead& cast)
+{
+    cast = ai::ReactionCastRead();
+    Spell* spell = caster ? caster->GetCurrentSpell(CURRENT_GENERIC_SPELL) : nullptr;
+    if (!spell)
+        return false;
+    cast.state = spell->getState();
+    cast.remainingMs = spell->GetCastedTime();
+    // A channel counts its duration down, while GetCastTime() holds the pre-channel cast time
+    // (usually 0); a cast bar counts its cast time down.
+    cast.totalMs = cast.state == SPELL_STATE_CASTING && spell->m_spellInfo
+        ? spell->m_spellInfo->CalculateDuration(caster) : spell->GetCastTime();
+    cast.isHeal = ReactionCastIsHeal(spell->m_spellInfo);
+    return true;
+}
+
 bool PlayerbotAI::UpdateAIReaction(uint32 elapsed, bool minimal, bool isStunned)
 {
     bool reactionFound;
@@ -1106,23 +1125,9 @@ bool PlayerbotAI::UpdateAIReaction(uint32 elapsed, bool minimal, bool isStunned)
             // reaction that ends in a no-op more often than not (`boss tactics seek`, `raid spread`) therefore leaves
             // a healer's heal alone once it is under way (ReactionCastGuardPolicy.h, AiPlayerbot.ReactionHealCastGuardPct).
             const bool interruptCast = reaction->ShouldInterruptCast();
-            ReactionCastRead cast;
+            ai::ReactionCastRead cast;
             if (interruptCast)
-            {
-                // The generic slot as the core counts it: a cast bar counts down in PREPARING, the channel phase is
-                // CASTING (this core has no separate channeling state). Any other state is a spell left behind after
-                // its cast finished, not a heal under way, and stays 0 so the break goes ahead.
-                if (Spell* spell = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL))
-                {
-                    cast.state = spell->getState();
-                    cast.remainingMs = spell->GetCastedTime();
-                    // A channel counts its duration down, while GetCastTime() holds the pre-channel cast time
-                    // (usually 0); a cast bar counts its cast time down.
-                    cast.totalMs = cast.state == SPELL_STATE_CASTING && spell->m_spellInfo
-                        ? spell->m_spellInfo->CalculateDuration(bot) : spell->GetCastTime();
-                    cast.isHeal = ReactionCastIsHeal(spell->m_spellInfo);
-                }
-            }
+                ReadGenericCast(bot, cast);
 
             if (ReactionCastBreakDue(interruptCast, reaction->YieldsToHealCast(),
                     sPlayerbotAIConfig.reactionHealCastGuardPct, IsHeal(bot), &cast))

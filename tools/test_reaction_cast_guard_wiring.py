@@ -41,6 +41,11 @@ TEMPLATE = (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text()
 CALL = PLAYERBOT_AI[PLAYERBOT_AI.index("bool PlayerbotAI::UpdateAIReaction"):]
 CALL = CALL[:CALL.index("\n}")]
 
+# The generic slot's read itself, shared with the seek's heal wait (`boss tactics seek`): T21 moved it out of the
+# call site into PlayerbotAI::ReadGenericCast, so these pins follow it there.
+READ = PLAYERBOT_AI[PLAYERBOT_AI.index("bool PlayerbotAI::ReadGenericCast"):]
+READ = READ[:READ.index("\n}")]
+
 YIELD_TRUE = "bool ReactionYieldsToHealCast() const override { return true; }"
 
 
@@ -84,8 +89,10 @@ class ReactionCastGuardWiring(unittest.TestCase):
         self.assertIn("ReactionCastRead const flashHeal4 = Prepare(2500, 2400);", POLICY_TEST)
         self.assertIn("CHECK(!ReactionCastBreakDue(true, kYields, 1, kHealer, &flashHeal4));", POLICY_TEST)
         # The live read feeds the state, not a CASTING gate.
-        self.assertIn("cast.state = spell->getState();", CALL)
-        self.assertNotIn("if (cast->getState() ==", CALL)
+        self.assertIn("cast.state = spell->getState();", READ)
+        self.assertNotIn("if (cast->getState() ==", READ)
+        # The call site uses that shared read (the seek's heal wait reads through it too).
+        self.assertIn("ReadGenericCast(bot, cast);", CALL)
 
     def test_preparing_heal_with_key_off_is_cut(self):
         # The same cast with the key at 0: cut, as before.
@@ -99,14 +106,14 @@ class ReactionCastGuardWiring(unittest.TestCase):
         self.assertIn("const bool interruptCast = reaction->ShouldInterruptCast();", CALL)
         # The read comes from the generic slot's own state and clock.
         self.assertIn("ReactionCastRead cast;", CALL)
-        self.assertIn("Spell* spell = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL)", CALL)
-        self.assertIn("cast.remainingMs = spell->GetCastedTime();", CALL)
+        self.assertIn("Spell* spell = caster ? caster->GetCurrentSpell(CURRENT_GENERIC_SPELL) : nullptr;", READ)
+        self.assertIn("cast.remainingMs = spell->GetCastedTime();", READ)
         # A channel counts its duration down (GetCastTime holds the pre-channel cast time, usually 0); a bar
         # counts its cast time down.
-        self.assertIn("cast.totalMs = cast.state == SPELL_STATE_CASTING && spell->m_spellInfo", CALL)
-        self.assertIn("? spell->m_spellInfo->CalculateDuration(bot) : spell->GetCastTime();", CALL)
+        self.assertIn("cast.totalMs = cast.state == SPELL_STATE_CASTING && spell->m_spellInfo", READ)
+        self.assertIn("? spell->m_spellInfo->CalculateDuration(caster) : spell->GetCastTime();", READ)
         # A heal by its effects: a direct heal or a periodic one.
-        self.assertIn("cast.isHeal = ReactionCastIsHeal(spell->m_spellInfo);", CALL)
+        self.assertIn("cast.isHeal = ReactionCastIsHeal(spell->m_spellInfo);", READ)
         self.assertIn("entry->Effect[i] == SPELL_EFFECT_HEAL", PLAYERBOT_AI)
         self.assertIn("entry->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_HEAL", PLAYERBOT_AI)
 

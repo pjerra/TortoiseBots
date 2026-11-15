@@ -825,6 +825,15 @@ namespace ai
         float lastX = 0.0f;
         float lastY = 0.0f;
         bool hasLast = false;
+        // The heal wait (ReactionCastGuardPolicy.h, AiPlayerbot.ReactionHealSeekWaitMs): its first pass sets
+        // `healWaitUntilMs` (now + the cast's remainder) and writes the one heal_wait row; a pass past that end
+        // (with the policy's slack) no longer counts as a wait.
+        std::uint32_t healWaitUntilMs = 0;
+        bool healWaitActive = false;
+        // When the last wait ended, and whether one ever did: the policy's rewait spacing reads it, so a chain of
+        // heals cannot park the bot short of the cloud.
+        std::uint32_t healWaitEndMs = 0;
+        bool healWaitEnded = false;
     };
 
     // The fixed slot between the doses (DungeonRunBossSpreadSlots): stand on the owned point, walk back to it once the

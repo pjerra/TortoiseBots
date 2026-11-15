@@ -13,6 +13,7 @@
 #include "BotDiagnostics.h"
 #include "HealerDiagnostics.h"
 #include "playerbot/DeathClusterPolicy.h"
+#include "playerbot/ReactionCastGuardPolicy.h"
 #include "playerbot/CastKeepsRunningPolicy.h"
 #include "playerbot/GatherSpotPolicy.h"
 #include "playerbot/policy/heal/DispelTargetPolicy.h"
@@ -1088,6 +1089,11 @@ public:
     void ClearLastCastCheckFail() { lastCastCheckFail = SPELL_CAST_OK; }
     void NoteCastCheckFail(SpellCastResult result) { lastCastCheckFail = result; }
     ai::Event& GetLastEvent() { return lastEvent; }
+
+    // The bot's generic cast slot as the reaction guard reads it (ReactionCastGuardPolicy.h): its state, its
+    // countdown, the channel's own duration for a total, and whether the spell heals. One read, shared by the pick's
+    // break (UpdateAIReaction) and the seek's heal wait (`boss tactics seek`). False with a zeroed read: no spell.
+    bool ReadGenericCast(Player* caster, ai::ReactionCastRead& cast);
 
 #ifdef BUILD_ELUNA
     MaNGOS::unique_weak_ptr<PlayerbotAI> GetWeakPtr() const { return m_weakRef; }

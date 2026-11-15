@@ -1746,6 +1746,22 @@ AiPlayerbot.RaidReactions = 0
 # 1-100 - the opening percent of the cast that may still be cut
 AiPlayerbot.ReactionHealCastGuardPct = 0
 
+# How much of a healer's heal the seek's walk stands down for, in ms (0-3000, recommended on at 2000). The seek walks
+# a bot into the row's poison cloud or to the gather around a dying source, and that walk (MoveTo) breaks whatever cast
+# is under way. A healer nearly through a heal has nothing to gain from that: with this key on, `boss tactics seek`
+# holds its walk while the cast's remainder, the walk there and a 3 s margin all fit inside the time left to the
+# siphon, and while the cloud's own time left does too. Walk 103: 410 seek_move rows had a heal under way (a median cut
+# at 43 % of the cast, ~3.1 per healer-fight), and 94 % of the known-spell rows had 2 s or less left with the siphon
+# still due 3 s or more past that. One BossTacticsSeek row (event=heal_wait) per wait; at most one wait per cast, and
+# none within 5 s of the last one's end, so a chain of heals cannot park the bot short of the cloud. Every emergency,
+# the at-spot stop and the other walks are unchanged, and a walk that starts still breaks the cast itself.
+# It matters most with AiPlayerbot.ReactionHealCastGuardPct on: with that key off the reaction engine still breaks a
+# healer's cast the moment it picks the seek, before the walk's own wait can be read.
+# `.reload config` reads it again.
+# 0 - off: the walk breaks the cast as before (Default)
+# 1-3000 - the longest heal remainder, in ms, the walk waits for
+AiPlayerbot.ReactionHealSeekWaitMs = 0
+
 # Opt-in "fankriss tank" role (.bot strategy +fankriss tank): an assigned tank with no Mortal Wound
 # stacks taunts Fankriss off the current tank at this many stacks (1-9, clamped). Does not enable the role.
 AiPlayerbot.FankrissSwapStacks = 5
