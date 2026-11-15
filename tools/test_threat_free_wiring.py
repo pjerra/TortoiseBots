@@ -116,7 +116,7 @@ class ThreatFreeWiring(unittest.TestCase):
 
     def test_kind_is_parsed_and_validated(self):
         self.assertIn('if (text == "threat_free")\n            return BossTacticKind::ThreatFree;', POLICY)
-        self.assertIn("ThreatFree = 29,", POLICY)
+        self.assertIn("ThreatFree = 30,", POLICY)
         loader = body(POLICY, "            // threat_free: the subject")
         for needle in ("row.param < 3.0f", "row.param > 40.0f", "row.spellId != 0", "row.priority != 0",
                        "RowGateSet(row)", "row.mode != TacticMode::Default"):
