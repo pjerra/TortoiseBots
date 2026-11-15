@@ -116,7 +116,6 @@ class SeekVictimReliefWiring(unittest.TestCase):
                        POLICY.index("inline bool SeekVictimReliefClaimFor(")]
         self.assertIn("if ((selfIdx == 0) != (claimIdx == 0))", beats)
         self.assertIn("return claimIdx == 0;", beats)
-
     def test_VictimRelief_LatchKeyedByInstanceAndSon(self):
         self.assertIn(
             "inline std::pair<std::uint32_t, std::uint64_t> SeekReliefKey(std::uint32_t instanceId, "

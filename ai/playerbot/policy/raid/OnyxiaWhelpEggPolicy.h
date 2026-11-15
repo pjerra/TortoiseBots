@@ -4,6 +4,8 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "OnyxiaBreathPolicy.h"
+
 // Pure decision rules for the optional Onyxia whelp and egg tactics
 // (AiPlayerbot.OnyxiaWhelpsAndEggs, on by default).
 // Donor behaviour: mod-playerbots @ 79bd428, src/Ai/Raid/Ony/OnyTriggers.cpp
@@ -22,6 +24,16 @@ namespace ai
     constexpr std::uint32_t kOnyxiaMapId = 249;
     constexpr std::uint32_t kOnyxianWhelpEntry = 11262;
     constexpr std::uint32_t kOnyxiaEggEntry = 176511;
+
+    // The core drives her phase-2 flight through this Hover aura.
+    constexpr std::uint32_t kOnyxiaHoverAura = 17131;
+
+    // The boss unit of an engagement scan: the entry, alive, on the bot's map and in combat. The scan holds a victim
+    // or attacker of the raid's members, so a dormant spawn or a marked whelp in the same lists is not her.
+    inline bool IsOnyxiaBossUnit(std::uint32_t entry, bool alive, bool inMap, bool inCombat)
+    {
+        return entry == kOnyxiaEntry && alive && inMap && inCombat;
+    }
 
     // Egg trap radius (gameobject_template data2 of 176511) plus a margin
     // so a bot walking past is never inside the trigger circle.
@@ -126,12 +138,44 @@ namespace ai
         return crewState == 1 ? true : crewState == 2 ? false : todayDuty;
     }
 
-    // A ranged damage dealer off the crew on a whelp while she hovers goes back to her (not on an explicit order). The
-    // crew has the whelps, so a bot past it that stays would leave her to the melee, who cannot reach her in the air.
-    inline bool ShouldReturnToOnyxia(bool keyOn, std::uint8_t crewState, bool rangedDps, bool bossAirborne,
+    // AiPlayerbot.OnyxiaWhelpCrewOnGround: the whelp phase. While she hovers it is the airborne phase as before; with
+    // the key on and the boss found, it also covers her last 40 % on the ground, so the crew keeps the whelps there too
+    // instead of leaving P3 (the phase that kills the raid) to the melee and tanks (walk 2g: 12-16 whelps up in P3, 21
+    // at the peak, 28 P3 deaths to them). P1 stays untouched: it runs above 40 %.
+    constexpr float kOnyxiaGroundCrewPct = 40.0f;
+    inline bool OnyxiaWhelpPhase(bool bossAirborne, bool keyOn, bool bossFound, float bossPct)
+    {
+        return bossAirborne || (keyOn && bossFound && bossPct <= kOnyxiaGroundCrewPct);
+    }
+
+    // The ground half of the phase: the whelp phase is on and she stands. Both the whelp scan and the duty read it,
+    // so the shape of the P3 window has one definition.
+    inline bool OnyxiaGroundPhase(bool bossAirborne, bool keyOn, bool bossFound, float bossPct)
+    {
+        return !bossAirborne && OnyxiaWhelpPhase(bossAirborne, keyOn, bossFound, bossPct);
+    }
+
+    // The ground duty while the add_crew row waits (its switch unit still lives): today's duty would put every AoE
+    // ranged damage dealer of the raid on the whelps and leave none of them on her, so on the ground only the crew's
+    // own bots keep today's duty. `crewKeepsDuty` is the row's place for this bot; with no row to apply it is true
+    // and today's duty stands. The air is untouched: waiting keeps today's duty there.
+    inline bool OnyxiaWaitingGroundDuty(bool todayDuty, bool crewKeepsDuty)
+    {
+        return todayDuty && crewKeepsDuty;
+    }
+
+    // The whelp duty on the ground: the melee keep it (an airborne-only duty left the whole crew idle there), the tanks
+    // follow their boss-tactic posts or the generic pick, and the other ranged stay on her (the air duty's job was to
+    // keep the ranged on her because the melee could not reach a hovering boss).
+    inline bool OnyxiaGroundDuty(bool duty, bool isTank, bool bossAirborne) { return duty && (bossAirborne || !isTank); }
+
+    // A ranged damage dealer off the crew on a whelp goes back to her (not on an explicit order) while the whelp phase
+    // runs: the crew has the whelps, so a bot past it that stays would leave her to the melee (who cannot reach her in
+    // the air; on the ground the crew's melee is on the whelps too).
+    inline bool ShouldReturnToOnyxia(bool keyOn, std::uint8_t crewState, bool rangedDps, bool whelpPhase,
                                      bool onWhelp, bool explicitOrder, bool bossValid)
     {
-        return keyOn && crewState == 2 && rangedDps && bossAirborne && onWhelp && !explicitOrder && bossValid;
+        return keyOn && crewState == 2 && rangedDps && whelpPhase && onWhelp && !explicitOrder && bossValid;
     }
 
     struct OnyxiaPoint { float x, y; };
@@ -159,13 +203,13 @@ namespace ai
         return alive && distance <= kOnyxiaWhelpEngageRange && !whelpNearEgg;
     }
 
-    // Whelp hunt decision: phase 2 only (boss airborne), feature on, the
-    // bot is on whelp duty, no whelp is its target yet, and a whelp is
-    // available. An explicit order from the master always wins.
-    inline bool ShouldHuntOnyxiaWhelps(bool featureOn, bool onOnyxiaMap, bool bossAirborne, bool assigned,
+    // Whelp hunt decision: the whelp phase (airborne, or the ground crew's last 40 % with the key on), feature on, the
+    // bot is on whelp duty, no whelp is its target yet, and a whelp is available. An explicit order from the master
+    // always wins.
+    inline bool ShouldHuntOnyxiaWhelps(bool featureOn, bool onOnyxiaMap, bool whelpPhase, bool assigned,
                                        bool hasExplicitOrder, bool alreadyOnWhelp, bool whelpAvailable)
     {
-        return featureOn && onOnyxiaMap && bossAirborne && assigned && !hasExplicitOrder &&
+        return featureOn && onOnyxiaMap && whelpPhase && assigned && !hasExplicitOrder &&
                !alreadyOnWhelp && whelpAvailable;
     }
 

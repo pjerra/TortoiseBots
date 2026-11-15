@@ -1032,6 +1032,17 @@ AiPlayerbot.PaladinJudgementUpkeep = 1
 # 1 - whelp duty and egg avoidance (Default)
 AiPlayerbot.OnyxiaWhelpsAndEggs = 1
 
+# Onyxia whelp crew on the ground.
+# With AiPlayerbot.OnyxiaWhelpsAndEggs and AiPlayerbot.DungeonRunAddCrew on, the add crew keeps the whelps in
+# Onyxia's last 40 % on the ground too, not only while she hovers: the crew's melee and its ranged keep hunting
+# the nearest whelp, the tanks keep their boss-tactic posts or the generic pick, and the other ranged damage
+# dealers stay on her (the airborne duty sent them to her because the melee could not reach a hovering boss).
+# The phase 1 pull (above 40 %) is untouched. Map 249 only, and an explicit target order from a player always
+# wins. Off by default: the hunt stays airborne-only.
+# 0 - the whelps are hunted while she hovers only (Default)
+# 1 - the crew hunts them on the ground as well, in her last 40 %
+AiPlayerbot.OnyxiaWhelpCrewOnGround = 0
+
 # Work in progress. These features are not officially released and not supported yet. Enable them at your own risk.
 # Until the official release, bug reports and feedback about them are not handled through the issue tracker; contact Hypeer directly.
 # Dungeon boss tactics.
@@ -1315,6 +1326,15 @@ AiPlayerbot.DungeonRunSeekWalkoutFocus = 0
 # or drinking. Needs AiPlayerbot.DungeonRunSeekWalkoutFocus = 1 (without it nothing is held); the hold also ends when
 # Hakkar dies, leaves combat or evades. Off keeps the old behaviour.
 AiPlayerbot.DungeonRunSeekWalkoutHoldCombat = 0
+
+# The walk-out's kept boss for Hakkar's seek pull (recommended on): a walk-out puller more than AiPlayerbot.SightDistance
+# from the raid loses the seek boss from its attackers list, so the seek row's boss tactics trigger closes while the
+# walk-out focus holds its other actions and it stands frozen at its stand. With this on, the fight scan adds the boss of
+# that bot's running, unshot walk-out task to the fight while the boss still fights (alive, in combat, not evading), for
+# that bot only, and logs one "seek pull: walk-out kept boss" row a walk-out. It works for any seek_aura boss and needs no
+# boss constants. Needs AiPlayerbot.DungeonRunSeekWalkoutFocus = 1 (the focus is what holds the puller's other actions;
+# without it the kept boss saves nothing). Off keeps today's scan.
+AiPlayerbot.DungeonRunSeekPullerKeepsFight = 0
 
 # The victim relief (Hakkar's Sons, needs DungeonRunSeekAura; keep off for now: the relief claim fix is in, it is on
 # only after a live walk shows a gain): with two or more tanks alive, a seek source whose victim is the boss's own
@@ -1627,7 +1647,6 @@ AiPlayerbot.DungeonRunHealReserve = 0
 # 0 - off: the rings as they are (Default)
 # 1 - on (recommended on)
 AiPlayerbot.SpreadRangedMinRange = 0
-
 # An avoid_cast row in mode `all` also clears the tanks: while its spell is cast no bot holds the caster, so every
 # tank walks out of that blast too (the Zul'Gurub Bat Rider's self-destruct, where nothing is gained by staying).
 # With the key off the row behaves like a default row (a tank the caster is on still holds it). This is its own
@@ -1656,6 +1675,26 @@ AiPlayerbot.DungeonRunBurnMana = 0
 # 1 - on
 AiPlayerbot.DungeonRunRangedOnly = 0
 
+# The threat_free boss tactic of the boss tactics rows (ai_boss_tactic, docs/play/boss-tactics.md): a non-tank bot
+# reads no threat cap on the row's subject while it stands the row's gap (param, yards) or more above the bot, so its
+# nukes go out; a tank keeps its own reading, and the lift ends by itself when the subject lands. On airborne Onyxia
+# no tank can reach her, so her tanks hold no threat and every damage dealer reads "the tank has no threat: hold"
+# (walk 2e a-1: 248 refusals with no reason, nukes 19 % of caster frames). With this key off the rows are ignored, so
+# the table behaves exactly as before the kind. This is its own key on top of AiPlayerbot.DungeonTactics (or a
+# commander-bound group).
+# 0 - off: threat_free rows are ignored (Default)
+# 1 - on
+AiPlayerbot.DungeonRunThreatFree = 0
+
+# The AoE threat veto (ActionThreatType::ACTION_THREAT_AOE) reads the `aoe` threat value, the worst of every possible
+# attack target; on airborne Onyxia that worst target is a whelp on the floor with no tank on it, so the veto held every
+# AoE whose own target is the lifted boss (walk 2f a-1: `site=aoe` on 134 of 134 ThreatVeto rows). With this key on,
+# the AoE veto asks the threat-free lift for the action's own target and lets the AoE go out when that subject is
+# lifted: a tank, a target without a live `threat_free` row and the landing descent keep the veto, and the veto row is
+# not written when the lift applies. Needs AiPlayerbot.DungeonRunThreatFree. `.reload config` reads it again.
+# 0 - off: every AoE on a subject over 50 % aoe threat is vetoed (Default)
+# 1 - on: an AoE on a lifted subject goes out
+AiPlayerbot.DungeonRunThreatFreeAoe = 0
 # A ranged reach at a hostile that hovers at least 8 yd above the floor under it inside a dungeon (Onyxia's P2 hover
 # points stand 19-23 yd up): the bot walks the navmesh path to the floor under the target and stops where the
 # `enemy out of spell range` trigger's own measure (the centre distance plus both combat reaches) is met, instead of
@@ -1666,6 +1705,16 @@ AiPlayerbot.DungeonRunRangedOnly = 0
 # 1 - on
 AiPlayerbot.RangedReachHoverTarget = 0
 
+# A ranged reach under a hovering boss (AiPlayerbot.RangedReachHoverTarget = 1) walks the path to the live `anchor`
+# row's centre instead of the floor under the boss, and stops as soon as the target is in reach: the anchor's centre
+# plus 3 yd, never nearer than the plain hover stop and never outside the `enemy out of spell range` trigger's line.
+# A bot parked at the edge of range on the boss's side loses her after her next hop; from the room centre most hover
+# points stay in reach. Every step writes a BossReachHover row with `aim=anchor` (or `aim=target` for the plain walk
+# under her) and the stop distance it used. With the key off, or without a live anchor row, the reach behaves exactly
+# as before. Needs AiPlayerbot.RangedReachHoverTarget. `.reload config` reads it again.
+# 0 - off: the walk under the boss's body (Default)
+# 1 - on
+AiPlayerbot.HoverReachAimsAtAnchor = 0
 # The airborne-boss wand row (Onyxia P2 "onyxia airborne" -> shoot): with the key on the row is not useful for a
 # damage-dealing wand caster (mage, warlock, non-healer priest), so their class nuke rows cast instead; their class
 # rows already wand only when the nuke cannot go out ("no mana", "unaffordable", "wand blocks nuke"). Hunters, melee,
@@ -1681,6 +1730,13 @@ AiPlayerbot.AirborneWandYieldsToNukes = 0
 # 1 - on
 AiPlayerbot.HoverCastHoldsSpread = 0
 
+# The hover hold yields only to a real stack (4.5 yd), not to any group member inside the spread distance (Onyxia P2:
+# the hold yielded in 279 of 402 verdicts, median nearest member 4.8 yd, and each step was 11 yd every 3 s). With the
+# key on the step is 5.5 yd, a bot takes one step per 8 s, and of two ranged bots that would both step only the one
+# with the higher guid does. Does nothing unless AiPlayerbot.HoverCastHoldsSpread is 1. `.reload config` reads it again.
+# 0 - off: the hold yields to any member inside the spread distance (Default)
+# 1 - on
+AiPlayerbot.HoverCastStackOnly = 0
 # The gate_hold boss tactic of the boss tactics rows (recommended on; ai_boss_tactic, docs/play/boss-tactics.md):
 # damage dealers leave the row's boss alone once its health is at or below the row's gate percent (param, 1-99) while
 # more than `priority` units of the row's blocker (target_entry) within the row's radius (window_s, 0 = 200 yd, else
@@ -1714,6 +1770,21 @@ AiPlayerbot.BossStandEvents = 0
 # 0 - off: a stand seats only bots on the boss's threat list or its victim, every seat is walked to (Default)
 # 1 - on
 AiPlayerbot.BossStandWholeRaid = 0
+# A melee bot or a tank with a valid boss stand seat keeps it instead of running "reach melee" back toward its target:
+# on, "reach melee" is not useful while the bot holds a stand seat (a stay counts as a seat). Needs the boss stand rows
+# and the boss tactics.
+# 0 - off: a seated bot walks back toward its target with "reach melee" once the stand trigger is quiet (Default)
+# 1 - on
+AiPlayerbot.BossStandHoldsMeleeReach = 0
+# The nearest seat of a breath window: on, a window's seats are every role's rows of its anchor and window spell (the
+# roles pool their cells; a row with no window spell keeps its role), and the plan counts a side's seats beyond 35 yd
+# first, then those beyond 20 yd, then the total walk, so a farther seat is never taken to shorten another bot's walk;
+# a hold_spot tank post whose spot stands outside the window's lane (at least as far from the lane line as the
+# window's nearest seat beside it) keeps its tank at that spot up to 20 yd away instead of taking a seat (a seat it
+# already held is taken back and given to the next bot). Needs the boss stand rows and the boss tactics.
+# 0 - off: every role is seated on its own cells and the plan walks the least (Default)
+# 1 - on
+AiPlayerbot.BossStandNearestSeat = 0
 # A boss the raid is fighting stays in every raid bot's fight for 10 s after the last bot saw it in its attacker list
 # (a melee bot that cannot reach an airborne Onyxia gives up on her, so she vanishes from that bot's attacker list and
 # every row and seat for her goes dark for it). The bots that see the boss note it in one registry; a bot that lost it
@@ -1776,6 +1847,19 @@ AiPlayerbot.InterruptIgnoresThreat = 0
 # 0 - off: the probe runs as before (Default)
 # 1 - on
 AiPlayerbot.SpellFacingPrecheck = 0
+# The threat back-off counts the cast's own threat. A bot in a group holds single-target spells while its threat on the
+# target reads at or above 80 % of the tank's, but that check sees only the threat it has when the cast starts: a
+# Fireball started at 79 % lands about 3 s later as one 400-690 threat hit and carries the mage past the core's 130 %
+# ranged pull line (Tortoise Trials, non-fire mages: 48 of 87 aggro onsets within 5 s of a Fireball hit). With 1 a
+# single-target damage spell aimed at a mob a tank holds is also held while the bot's threat plus the spell's expected
+# threat reaches 100 % of the tank's: its average direct damage with spell power (a channel counts every tick), times
+# the spell threat table's multiplier, plus its flat threat, with the caster's threat modifiers. A cast that could crit
+# is also held while a crit would reach the core's pull line (110 % in the mob's melee reach, else 130 %). Not counted:
+# the target's damage-taken debuffs, the ticks of a DoT that is not channeled. Interrupts and heals are not held.
+# Recommended on. `.reload config` reads it again with the AiPlayerbot.DungeonRun* keys.
+# 0 - off: only the threat at cast start is checked, as before (Default)
+# 1 - on
+AiPlayerbot.ThreatCapCountsCastThreat = 0
 
 # A raid binding's healer seats (.bot commander bind <LeadBot> raid, only read with AiPlayerbot.DungeonRunRaid = 1):
 # with 1 the seats go by class instead of member order. The raid seats take a group healer first (priest, then druid,

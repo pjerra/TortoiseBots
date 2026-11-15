@@ -157,6 +157,7 @@ class MigrationTextWidths(unittest.TestCase):
         # Columns the migrations add rather than create: a varchar added by ALTER carries its width there.
         self.assertEqual(96, widths["ai_boss_tactic"]["burn_order"])
         self.assertEqual(255, widths["ai_dungeon_plan"]["cc_priority"])
+        self.assertEqual(None, widths["ai_boss_tactic"]["healers"])
 
     def test_the_scan_reaches_the_row_data(self):
         # A guard that reads no values passes everything: the 601 Deep Breath seats alone are 601 stand rows.

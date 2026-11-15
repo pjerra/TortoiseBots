@@ -112,6 +112,39 @@ void LogThreatCap(PlayerbotAI* ai, Player* bot, const ThreatCapPick& pick, Unit*
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsThreatCap", info1, "");
 }
 
+// One threat_free row per bot per 10 s: the subject a non-tank reads no threat cap on, and how far above it stands. The
+// lift changes no action of its own (the nukes simply go out), so a walk could not tell it from a row that never
+// loaded. The throttle is checked before any string is built. A no-op unless bot_events.csv is in
+// AiPlayerbot.AllowedLogFiles.
+constexpr std::uint32_t kThreatFreeLogGapMs = 10000;
+
+std::mutex g_threatFreeLogMutex;
+std::unordered_map<std::uint64_t, std::uint32_t> g_threatFreeLog;
+
+void LogThreatFree(PlayerbotAI* ai, Player* bot, Unit* subject, float gapYd)
+{
+    if (!sPlayerbotAIConfig.hasLog("bot_events.csv"))
+        return;
+    const std::uint32_t nowMs = WorldTimer::getMSTime();
+    {
+        std::lock_guard<std::mutex> lock(g_threatFreeLogMutex);
+        std::uint32_t& last = g_threatFreeLog[bot->GetObjectGuid().GetRawValue()];
+        if (last != 0 && nowMs - last < kThreatFreeLogGapMs)
+            return;
+        last = nowMs;
+    }
+    char info1[128];
+    snprintf(info1, sizeof(info1), "subject=%u,gap=%.1f", subject->GetEntry(), gapYd);
+    sPlayerbotAIConfig.logEvent(ai, "BossTacticsThreatFree", info1, "");
+}
+
+// The subject z history the lift reads, one small ring per (instance, guid). It is dropped while the subject is out of
+// combat (the fight reset), so a new pull starts its own history instead of inheriting the last one's height.
+constexpr std::size_t kThreatFreeZMaxSubjects = 64;
+
+std::mutex g_threatFreeZMutex;
+ai::ThreatFreeZHistories g_threatFreeZ;
+
 // BossTacticsHex: one row per Jin'do Hex (17172) on a member of the fight, so a walk can see who the boss turned to after
 // it. Hex lands on the boss's current victim and wipes that member's threat; the row is the state right after:
 //   info1 = "holder=<main|off|dps> ot_threat=<n> mt_threat=<n> top_dps=<name>:<threat>"
@@ -224,6 +257,37 @@ void LogHexSnapshot(PlayerbotAI* ai, Unit* boss, const RaidTankRoles& roles, Gro
              topDps ? topDps->GetName() : "none", topDpsThreat);
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsHex", info1, "");
 }
+}
+
+bool ai::ThreatFreeLifted(PlayerbotAI* ai, Player* bot, Unit* subject)
+{
+    if (!ai || !bot || !subject || !sPlayerbotAIConfig.dungeonRunThreatFree)
+        return false;
+    if (!ai->HasStrategy("boss tactics", BotState::BOT_STATE_COMBAT))
+        return false;
+    const bool isTank = PlayerbotAI::IsTank(bot);
+    if (isTank)
+        return false;
+    const float gap = GetBossTactics().ThreatFreeGap(subject->GetMapId(), subject->GetEntry());
+    if (gap <= 0.0f)
+        return false;
+
+    bool descending = false;
+    const std::uint32_t nowMs = WorldTimer::getMSTime();
+    {
+        std::lock_guard<std::mutex> lock(g_threatFreeZMutex);
+        const ai::ThreatFreeZKey key{static_cast<std::uint32_t>(subject->GetInstanceId()),
+                                     subject->GetObjectGuid().GetRawValue()};
+        if (!subject->IsInCombat())
+            g_threatFreeZ.Reset(key);
+        else
+        {
+            descending = g_threatFreeZ.Descending(key, subject->GetPositionZ(), nowMs);
+            if (g_threatFreeZ.size() > kThreatFreeZMaxSubjects)
+                g_threatFreeZ.Clear();
+        }
+    }
+    return ThreatFreeApplies(true, isTank, subject->GetPositionZ(), bot->GetPositionZ(), gap, descending);
 }
 
 float ThreatValue::GetThreat(Player* player, Unit* target)
@@ -386,6 +450,12 @@ uint8 ThreatValue::Calculate(Unit* target)
     Group* group = bot->GetGroup();
     if (!group)
         return 0;
+
+    if (ThreatFreeLifted(ai, bot, target))
+    {
+        LogThreatFree(ai, bot, target, target->GetPositionZ() - bot->GetPositionZ());
+        return 0;
+    }
 
     float botThreat, maxThreat;
     if (qualifier == "aoe")

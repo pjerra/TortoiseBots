@@ -45,6 +45,28 @@ void Write(Unit* actor, char const* event, std::string const& subject, std::stri
         float(actor->GetLevel()), subject, detail);
     sPlayerbotAIConfig.log("bot_events.csv", row.c_str());
 }
+
+// Heal packets carry no boss reference, so ObservePacket needs to know which (map, instance) pairs hold an engaged
+// boss. Its own mutex: ObservePacket never takes the diagnostics mutex, and OnUnitUpdate fans out on map workers.
+std::mutex bossSeenMutex;
+std::map<std::pair<uint32_t, uint32_t>, uint32_t> bossSeen;
+constexpr uint32_t kHealBossSeenMs = 5000;
+
+void NoteEngagedBoss(uint32_t map, uint32_t instance, uint32_t now)
+{
+    std::lock_guard<std::mutex> guard(bossSeenMutex);
+    bossSeen[{map, instance}] = now;
+    for (auto it = bossSeen.begin(); it != bossSeen.end();)
+        if (uint32(now - it->second) > kHealBossSeenMs) it = bossSeen.erase(it);
+        else ++it;
+}
+
+bool EngagedBossRecent(uint32_t map, uint32_t instance, uint32_t now)
+{
+    std::lock_guard<std::mutex> guard(bossSeenMutex);
+    auto it = bossSeen.find({map, instance});
+    return it != bossSeen.end() && uint32(now - it->second) <= kHealBossSeenMs;
+}
 }
 
 RaidBossDiagnostics::Key RaidBossDiagnostics::Identity(Unit* unit)
@@ -63,6 +85,7 @@ void RaidBossDiagnostics::OnUnitUpdate(Unit* unit, uint32 diff)
         uint32 now = WorldTimer::getMSTime();
         Clock& clock = clocks[Identity(boss)];
         clock.seen = now;
+        NoteEngagedBoss(boss->GetMapId(), boss->GetInstanceId(), now);
         if (!clock.throttle.Due(diff)) return;
         // A removed creature need not emit combat-exit. Retire unseen state
         // on the next snapshot, using wrap-safe time and no stored Unit pointers.
@@ -93,17 +116,34 @@ void RaidBossDiagnostics::OnUnitExitCombat(Unit* unit)
 
 void RaidBossDiagnostics::ObservePacket(WorldSession* session, WorldPacket const& packet)
 {
-    if (packet.getOpcode() != SMSG_SPELLNONMELEEDAMAGELOG ||
+    uint16 const opcode = packet.getOpcode();
+    if ((opcode != SMSG_SPELLNONMELEEDAMAGELOG && opcode != SMSG_SPELLHEALLOG) ||
         !sPlayerbotAIConfig.raidBossDiagnostics || !session ||
         !sPlayerbotAIConfig.hasLog("bot_events.csv")) return;
-    // Unlike chat, this opcode is emitted synchronously by combat processing
-    // (WorldObject::SendSpellNonMeleeDamageLog -> Map::MessageBroadcast).
-    // Only this opcode may inspect the victim here: it runs on the owning map
+    // Unlike chat, these opcodes are emitted synchronously by combat processing
+    // (WorldObject::SendSpellNonMeleeDamageLog and SendHealSpellLog -> Map::MessageBroadcast).
+    // Only these opcodes may inspect the victim here: they run on the owning map
     // worker or world thread, where player/AI lifetime is stable. Never route
     // asynchronous chat or channel packets through these object reads.
     Player* victim = session->GetPlayer();
     if (!victim || !victim->IsInWorld() || !victim->GetMap()->IsRaid() ||
         (!victim->GetGroup() && !PlayerbotAIStorage::Instance().GetAI(victim))) return;
+
+    if (opcode == SMSG_SPELLHEALLOG)
+    {
+        // A heal packet names no boss; the row needs an engaged boss in this map and instance just now.
+        if (!EngagedBossRecent(victim->GetMapId(), victim->GetInstanceId(), WorldTimer::getMSTime())) return;
+        RaidBossLog::Heal heal;
+        if (!RaidBossLog::ParseHeal(packet.contents(), packet.size(), heal) ||
+            !RaidBossLog::TargetCopy(victim->GetObjectGuid().GetRawValue(), heal)) return;
+        Player* healer = victim->GetMap()->GetPlayer(ObjectGuid(heal.caster));
+        if (!healer) return;
+        // Only the target's session copy: the cast reaches every witness nearby.
+        Write(victim, "BossHeal", healer->GetName(), RaidBossLog::HealRow(victim->GetMapId(),
+            victim->GetInstanceId(), heal, healer->GetName(), victim->GetName(), victim->GetHealth(),
+            victim->GetMaxHealth()));
+        return;
+    }
 
     RaidBossLog::Damage damage;
     if (!RaidBossLog::ParseDamage(packet.contents(), packet.size(), damage) ||

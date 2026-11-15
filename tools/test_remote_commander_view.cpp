@@ -501,6 +501,19 @@ static void TestActionResultFields()
     CHECK(b[17] == "spellstone" && b[18] == "-");
     CHECK(b[19] == "oom_with_s");
     CHECK(b[19].size() == kMaxReasonBytes);
+    // The longest new refuse word (10 bytes) is written whole, not cut.
+    s.Clear();
+    PartyMember& c = s.AddPartyMember();
+    c.guid = 9;
+    c.name = "NoCtl";
+    c.action = "frostbolt";
+    c.result = 'I';
+    c.reason = "no-control";
+    BuildFrame(s, 10, frame, scratch);
+    CheckGrammar(frame, 10);
+    std::vector<std::string> d = Split(Payload(frame.lines[1]), ',');
+    CHECK(d.size() == 20);
+    CHECK(d[19] == "no-control");
     // Every result letter the grammar names passes through; reuse resets the slots.
     for (char c : std::string("OFIUPV"))
     {

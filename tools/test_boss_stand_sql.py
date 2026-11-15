@@ -22,6 +22,7 @@ ROW = re.compile(
     r"^\((\d+), (\d+), (\d+), (-?[\d.]+), (-?[\d.]+), ([\d.]+), '(\w+)', (\d+), (\d+), (\d+), (\d+), "
     r"(-?[\d.]+), (-?[\d.]+), (-?[\d.]+), (-?[\d.]+), (-?[\d.]+), (\d+), (\d+), (\d+), '(\w+)', '(?:[^']|'')*'\)[,;]$"
 )
+DELETE = re.compile(r"^DELETE FROM `ai_boss_stand` WHERE `map` = (\d+)(?: AND `boss_entry` = (\d+))?;?$")
 FIELDS = ("map", "boss", "anchor", "ax", "ay", "ar", "role", "window", "aura", "side", "seq",
           "x", "y", "z", "dx", "dy", "slots", "hold", "release", "signal")
 
@@ -45,14 +46,25 @@ VENOXIS_SEATS = 12
 
 
 def migration_rows():
-    rows = []
+    """The rows a boot ends up with, in file order: each file's DELETEs drop the live seats they name first."""
+    live = {}
+    order = []
     for path in sorted(glob.glob(os.path.join(ROOT, "data/sql/world/*_world.sql"))):
+        name = os.path.basename(path)
         with open(path, encoding="utf-8") as handle:
             text = handle.read()
-        if "INSERT INTO `ai_boss_stand`" not in text:
+        if "`ai_boss_stand`" not in text:
             continue
         in_insert = False
         for line in text.splitlines():
+            delete = DELETE.match(line.strip())
+            if delete:
+                map_id, boss = int(delete.group(1)), int(delete.group(2)) if delete.group(2) else None
+                for key in [key for key, row in live.items()
+                            if row["map"] == map_id and (boss is None or row["boss"] == boss)]:
+                    del live[key]
+                    order.remove(key)
+                continue
             if line.startswith("INSERT INTO `ai_boss_stand`"):
                 in_insert = True
                 continue
@@ -60,15 +72,19 @@ def migration_rows():
                 continue
             match = ROW.match(line)
             if not match:
-                raise AssertionError("unparsable ai_boss_stand row in %s: %s" % (os.path.basename(path), line))
+                raise AssertionError("unparsable ai_boss_stand row in %s: %s" % (name, line))
             values = match.groups()
-            row = {"file": os.path.basename(path)}
-            for name, value in zip(FIELDS, values):
-                row[name] = value if name in ("role", "signal") else float(value)
-            rows.append(row)
+            row = {"file": name}
+            for field, value in zip(FIELDS, values):
+                row[field] = value if field in ("role", "signal") else float(value)
+            key = (row["map"], row["boss"], row["anchor"], row["role"], row["window"], row["side"], row["seq"])
+            if key in live:
+                raise AssertionError("duplicate key %s in %s" % (key, name))
+            live[key] = row
+            order.append(key)
             if line.endswith(";"):
                 in_insert = False
-    return rows
+    return [live[key] for key in order]
 
 
 def slot_positions(row):
@@ -195,6 +211,38 @@ class BossStandVenoxisSql(unittest.TestCase):
                 distance = math.hypot(seats[i][0] - seats[j][0], seats[i][1] - seats[j][1])
                 self.assertGreaterEqual(distance, VENOXIS_SEAT_GAP - 0.05,
                                         "%s and %s are %.2f yd apart" % (seats[i][2], seats[j][2], distance))
+
+
+class BossStandOnyxiaSql(unittest.TestCase):
+    def test_onyxia_walk2f_melee_seats_near_t(self):
+        # 20261111170300_world.sql: on T's side (the raid centre T = (8.0, -200.0)) for anchors 3, 4, 7 and 8 the
+        # melee quota is seated first, nearest T, so a melee bot and the slot-1 tank walk the shortest way out of
+        # the lane. Walk 2e b-2: the tank's seat was 30.9 yd from T and he died on the way, and seated rogues ran
+        # back in. Anchor 3 has no usable cell nearer than 34.5 yd; 4, 7 and 8 are inside 25 yd.
+        rows = [row for row in migration_rows() if row["map"] == 249 and row["boss"] == 10184]
+        self.assertEqual(601, len(rows), "the walk 2f migration must live with the 601 Deep Breath seats")
+        for anchor in range(1, 9):
+            seat_rows = [row for row in rows if row["anchor"] == anchor]
+            self.assertEqual(len(seat_rows), len(set((row["x"], row["y"]) for row in seat_rows)),
+                             "anchor %d seats a cell twice" % anchor)
+        for row in rows:
+            where = "%s anchor %d %s side %d seq %d" % (row["file"], row["anchor"], row["role"], row["side"],
+                                                        row["seq"])
+            self.assertEqual(12000, row["hold"], where)
+            self.assertEqual(((int(row["anchor"]) + 3) % 8) + 1, row["release"], where)
+        raid_t = (8.0, -200.0)
+        for anchor, side in ((3, 1), (4, 0), (7, 0), (8, 1)):
+            seats = [row for row in rows
+                     if row["anchor"] == anchor and row["side"] == side and row["role"] == "melee"]
+            self.assertEqual(13, len(seats), "anchor %d side %d has %d melee seats" % (anchor, side, len(seats)))
+            nearest = min(math.hypot(row["x"] - raid_t[0], row["y"] - raid_t[1]) for row in seats)
+            if anchor == 3:
+                # No usable cell of this side lies nearer T; the generator's own floor check is the limit.
+                self.assertLessEqual(nearest, 35.0,
+                                     "anchor 3's nearest T-side melee seat is %.1f yd from T" % nearest)
+            else:
+                self.assertLessEqual(nearest, 25.0,
+                                     "anchor %d's nearest T-side melee seat is %.1f yd from T" % (anchor, nearest))
 
 
 if __name__ == "__main__":

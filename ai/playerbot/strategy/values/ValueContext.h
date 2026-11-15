@@ -2,6 +2,7 @@
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/strategy/actions/FankrissRaidActions.h"
 #include "playerbot/strategy/actions/PatchwerkSoakerActions.h"
+#include "playerbot/strategy/actions/OnyxiasLairDungeonActions.h"
 #include "playerbot/RaidTankHealing.h"
 #include "playerbot/strategy/AiObjectContext.h"
 
@@ -122,6 +123,7 @@ namespace ai
         ValueContext()
         {
             creators["fankriss active boss"] = [](PlayerbotAI* ai) { return new FankrissActiveBossValue(ai); };
+            creators["onyxia boss"] = [](PlayerbotAI* ai) { return new OnyxiaBossValue(ai); };
             creators["raid tank needs healing"] = [](PlayerbotAI* ai) { return new RaidTankHealingValue(ai); };
             creators["patchwerk soaker to shield"] = [](PlayerbotAI* ai) { return new PatchwerkSoakerShieldValue(ai); };
             creators["patchwerk soak boss"] = [](PlayerbotAI* ai) { return new PatchwerkSoakBossValue(ai); };
@@ -248,6 +250,7 @@ namespace ai
             creators["fighting blockers"] = [](PlayerbotAI* ai) { return new GateHoldFightingBlockersValue(ai); };
             creators["tank post units"] = [](PlayerbotAI* ai) { return new TankPostUnitsValue(ai); };
             creators["add crew"] = [](PlayerbotAI* ai) { return new AddCrewValue(ai); };
+            creators["add crew keeps duty"] = [](PlayerbotAI* ai) { return new AddCrewKeepsDutyValue(ai); };
             creators["sole kill candidates"] = [](PlayerbotAI* ai) { return new SoleKillCandidatesValue(ai); };
             creators["kill first grid units"] = [](PlayerbotAI* ai) { return new KillFirstGridUnitsValue(ai); };
             creators["item for spell"] = [](PlayerbotAI* ai) { return new ItemForSpellValue(ai); };

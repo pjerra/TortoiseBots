@@ -128,7 +128,7 @@ namespace ai
         // instead of cutting the joined lastAction text). Result letter: O ok, F failed, I impossible,
         // U useless, P prerequisites queued first, V dropped before running (veto or failure backoff),
         // '-' none yet. castFail is the SpellCastResult of the last failed cast check made while the action
-        // was judged (0 = none or not a cast).
+        // was judged for a failed or impossible verdict, 0xFF when the verdict carries no reason.
         char const* GetLastOutcomeName() const { return lastOutcomeName; }
         char GetLastOutcomeResult() const { return lastOutcomeResult; }
         uint32 GetLastOutcomeCastFail() const { return lastOutcomeCastFail; }
@@ -220,7 +220,7 @@ namespace ai
         std::string lastAction;
         char lastOutcomeName[24] = {0};
         char lastOutcomeResult = '-';
-        uint32 lastOutcomeCastFail = 0;
+        uint32 lastOutcomeCastFail = 0xFF;
         void NoteOutcome(Action* action, char result);
         ActionExecutionListeners actionExecutionListeners;
         BotState state;

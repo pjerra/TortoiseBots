@@ -168,7 +168,10 @@ class BossAnchorFixRound1(unittest.TestCase):
         fn = body(DUNGEON, "bool RaidSpreadAction::Execute(Event& event)")
         self.assertIn("anchorRejected = true;", fn)
         tail = fn[fn.rindex("anchorRejected"):]
-        self.assertIn("lastMove.lastSpreadStepMs = WorldTimer::getMSTime();", fn[fn.index("if (anchorRejected)"):])
+        tail = fn[fn.index("if (anchorRejected || rangeRejected)"):]
+        self.assertIn("lastMove.lastSpreadStepMs = WorldTimer::getMSTime();", tail)
+        # That rest is the spread step's own 3 s: only a real stack step arms the 8 s stack clock.
+        self.assertNotIn("lastStackStepMs", tail)
 
     def test_take_of_a_son_outside_drops_the_chase(self):
         fn = body(ACTIONS, "bool BossTacticsSeekTankAction::Execute(Event& event)")

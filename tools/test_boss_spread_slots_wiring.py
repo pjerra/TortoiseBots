@@ -145,7 +145,6 @@ class SpreadSlotsWiring(unittest.TestCase):
         self.assertIn("slot.verdict == SpreadSlotVerdict::DeadZone", trigger)
         slot_trigger = body(TRIGGERS, "bool BossTacticsSpreadSlotTrigger::IsActive()")
         self.assertNotIn("SpreadSlotVerdict::DeadZone", slot_trigger)
-
     def test_the_read_reports_the_owned_slot_not_the_fallback(self):
         read = body(ACTIONS, "BossSpreadSlotTask ReadBossSpreadSlot(PlayerbotAI* ai, Player* bot)")
         self.assertIn("SpreadSlotSelect(owned, fallback, ownedUsable, fallbackUsable)", read)
@@ -238,7 +237,6 @@ class SpreadSlotsWiring(unittest.TestCase):
         self.assertIn("\nAiPlayerbot.SpreadRangedMinRange = 0", template)
         docs = (ROOT / "docs/server/settings/dungeons-raids.md").read_text()
         self.assertIn("AiPlayerbot.SpreadRangedMinRange", docs)
-
 
 if __name__ == "__main__":
     unittest.main()

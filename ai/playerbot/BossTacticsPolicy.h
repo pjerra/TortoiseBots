@@ -72,6 +72,7 @@ namespace ai
         TankPost = 27,        // a named tank waits at a spot for a unit that is not in the fight yet, then attacks it
         AddCrew = 28,         // once `target_entry` is dead, the boss's add duty goes to a named crew
         HealReserve = 29,     // healers keep the row's mana % back from top-ups outside the row's release window
+        ThreatFree = 30,      // non-tank bots read no threat cap on the subject while it stands `param` yd or more above them
     };
 
     // The per-kind mode word of a row (`tactic_mode`), or Invalid when the word does not belong to the row's kind. An
@@ -213,6 +214,8 @@ namespace ai
             return BossTacticKind::HealReserve;
         if (text == "add_crew")
             return BossTacticKind::AddCrew;
+        if (text == "threat_free")
+            return BossTacticKind::ThreatFree;
         return BossTacticKind::None;
     }
 
@@ -427,6 +430,36 @@ namespace ai
         return row.targetEntry ? row.targetEntry : row.bossEntry;
     }
 
+    // What the loader does with one `ai_boss_tactic` row it read (BossTacticsMgr.cpp ReadBossTacticRows).
+    enum class TacticRowVerdict : std::uint8_t
+    {
+        Loaded = 0,
+        Refused = 1, // a kind this build knows, but the row cannot be used: an error, and a reload refuses on one
+        Foreign = 2, // a listed foreign kind: a row of another line of the server, inert here
+    };
+
+    // The `kind` strings this build does not implement but knows to be a row of another line of the server. CLOSED
+    // list: any other string ParseBossTacticKind does not know is a typo in this build's data and is refused like any
+    // other unusable row. `air_target` is Onyxia's row of the other work: this build does not implement it, skips the
+    // row, and never validates its columns (`window_s` included, which the column default leaves at 7).
+    inline bool IsKnownForeignTacticKind(const std::string& kindText)
+    {
+        return kindText == "air_target";
+    }
+
+    // The verdict for one `ai_boss_tactic` row: `kind` is ParseBossTacticKind of `kindText`, `accepted` is
+    // BossTacticTable::Add's answer. A row of a kind this build knows is judged by Add alone. A row of a kind it does
+    // not know is FOREIGN only when `kindText` is on the closed list above (IsKnownForeignTacticKind): the startup load
+    // has always skipped such a row and gone on, and a reload does the same (one rule), so a database that also carries
+    // the other line's row still boots and still reloads. Any other unknown kind is REFUSED: the startup load logs an
+    // error line and a reload keeps the old tables, as for every unusable row.
+    inline TacticRowVerdict JudgeTacticRow(BossTacticKind kind, const std::string& kindText, bool accepted)
+    {
+        if (kind == BossTacticKind::None)
+            return IsKnownForeignTacticKind(kindText) ? TacticRowVerdict::Foreign : TacticRowVerdict::Refused;
+        return accepted ? TacticRowVerdict::Loaded : TacticRowVerdict::Refused;
+    }
+
     // A table's revision: unique for the process, assigned when the table is constructed. A freed table's address can
     // come back for a changed table, so a cache of the table's content keys on the revision, never on the address.
     inline std::uint64_t NextBossTacticRevision()
@@ -502,7 +535,7 @@ namespace ai
             if (RowGateSet(row) && (row.kind == BossTacticKind::HoldKill || row.kind == BossTacticKind::TankHold ||
                     row.kind == BossTacticKind::OneAtATime || row.kind == BossTacticKind::LinkedDeath ||
                     row.kind == BossTacticKind::ThreatSuccessor || row.kind == BossTacticKind::TankIgnore ||
-                    row.kind == BossTacticKind::AddCrew))
+                    row.kind == BossTacticKind::ThreatFree || row.kind == BossTacticKind::AddCrew))
                 return false;
             if (row.kind == BossTacticKind::Interrupt && row.spellId == 0)
                 return false;
@@ -663,6 +696,13 @@ namespace ai
                 (row.targetEntry == 0 || row.targetEntry == row.bossEntry || row.spellId != 0 ||
                     row.priority > 5 || row.param != 0.0f || RowGateSet(row) || row.mode != TacticMode::Default))
                 return false;
+            // threat_free: the subject (`target_entry` 0 = the row's boss) and the vertical gap a non-tank reads no cap
+            // at (`param`, the ranged_only bounds). Read straight from the table (ThreatValue::Calculate), so a gate
+            // could never be answered; `param` is the whole rule, and it names no spell, priority or mode word.
+            if (row.kind == BossTacticKind::ThreatFree &&
+                (row.param < 3.0f || row.param > 40.0f || row.spellId != 0 || row.priority != 0 ||
+                    RowGateSet(row) || row.mode != TacticMode::Default))
+                return false;
             // The cycle columns are the seek_aura kind's and the reset window's (threat_successor with a cycle_spell),
             // the spot columns the seek_aura, anchor and tank_post kinds', the healers count the tank_post kind's.
             if (row.kind != BossTacticKind::SeekAura && row.kind != BossTacticKind::ThreatSuccessor &&
@@ -748,6 +788,8 @@ namespace ai
             // The held entry is the row's target, or its boss when the row names the boss itself (target_entry 0).
             if (row.kind == BossTacticKind::RangedOnly)
                 rangedOnlyGaps_[row.map].emplace(row.targetEntry != 0 ? row.targetEntry : row.bossEntry, row.param);
+            if (row.kind == BossTacticKind::ThreatFree)
+                threatFreeGaps_[row.map].emplace(row.targetEntry != 0 ? row.targetEntry : row.bossEntry, row.param);
             if (row.kind == BossTacticKind::ThreatSuccessor)
             {
                 threatSuccessors_[row.map].insert(TacticSubjectEntry(row));
@@ -945,6 +987,20 @@ namespace ai
             return it == byMap->second.end() ? 0.0f : it->second;
         }
 
+        // The vertical gap a map's threat_free row lifts the cap at (0: no row), keyed by the subject entry: the row's
+        // target, or its boss for target_entry 0. Read by ThreatValue::Calculate, so no gate or mode qualifies it.
+        // 0 before the seal.
+        float ThreatFreeGap(std::uint32_t map, std::uint32_t entry) const
+        {
+            if (!sealed_.load(std::memory_order_acquire) || threatFreeGaps_.empty())
+                return 0.0f;
+            auto const byMap = threatFreeGaps_.find(map);
+            if (byMap == threatFreeGaps_.end())
+                return 0.0f;
+            auto const it = byMap->second.find(entry);
+            return it == byMap->second.end() ? 0.0f : it->second;
+        }
+
         // Whether the creature entry carries a `threat_successor` row on this map: the damage dealers' threat is then
         // capped at the assigned off-tanks' highest (ThreatCapPolicy.h), so the second tank stays second for a threat
         // reset. Read from the table by ThreatValue::GetTankThreat, so no gate or mode can qualify it. False before the
@@ -1125,6 +1181,7 @@ namespace ai
         std::unordered_map<std::uint32_t, std::unordered_map<std::uint32_t, AssignedTankSlot>> assignedTankSlots_;
         std::unordered_map<std::uint32_t, std::unordered_map<std::uint32_t, std::uint32_t>> requiredAura_;
         std::unordered_map<std::uint32_t, std::unordered_map<std::uint32_t, float>> rangedOnlyGaps_;
+        std::unordered_map<std::uint32_t, std::unordered_map<std::uint32_t, float>> threatFreeGaps_;
         std::unordered_map<std::uint32_t, std::unordered_set<std::uint32_t>> threatSuccessors_;
         std::unordered_map<std::uint32_t, std::unordered_set<std::uint32_t>> strictThreatSuccessors_;
         // threat_successor with a cycle_spell: map -> the subject entry -> its reset window.
@@ -4033,6 +4090,7 @@ namespace ai
         bool holdingOtherHostile = false; // the tank holds another hostile that attacks a group member
         bool windowExpired = false;       // the row's window_s has passed since the post started
         bool holdSpot = false;            // the row's `hold_spot` mode and its key are on
+        bool laneHold = false;            // AiPlayerbot.BossStandNearestSeat: the stand marks the post's spot outside its lane
         bool arrivedBefore = false;       // this post's latched arrival counts for the unit this read saw
         bool subjectOnTank = false;       // the subject's victim is this tank
         bool seated = false;              // the tank holds a boss stand seat (read only with holdSpot)
@@ -4397,6 +4455,10 @@ namespace ai
         }
         if (in.holdSpot && in.seated)
             return TankPostDecision::Yield;
+        // AiPlayerbot.BossStandNearestSeat: an excused post keeps its tank at its own spot, so a tank farther than the
+        // drag radius walks back to it whatever its subject did (inside it the step below is today's).
+        if (in.holdSpot && in.laneHold && in.botToSpotYd > kTankPostDragYd)
+            return TankPostDecision::Leash;
         bool const arrived = TankPostArrived(in.subjectFound, in.subjectAlive, in.subjectSelectable,
                                  in.subjectToSpotYd, in.arrivalRadiusYd) ||
             (in.holdSpot && in.arrivedBefore && in.subjectSelectable);
@@ -4536,6 +4598,7 @@ namespace ai
                 return "none";
         }
     }
+
     // --- add_crew --------------------------------------------------------------------------------------------------
     // AiPlayerbot.DungeonRunAddCrew: once the row's switch unit (`target_entry`) is dead, the boss's add duty goes to
     // the melee, the tanks and the first `priority` AoE ranged bots of the raid; the other ranged damage dealers stay

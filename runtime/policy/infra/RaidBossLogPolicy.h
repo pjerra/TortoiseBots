@@ -86,11 +86,15 @@ inline std::string Threat(uint32_t entry, uint32_t map, uint32_t instance, uint6
     return out.str();
 }
 
-struct Damage { uint64_t victim = 0, caster = 0; uint32_t spell = 0, amount = 0; };
-inline bool ParseDamage(uint8_t const* data, size_t size, Damage& result)
+// Packed guids, then fixed-width fields; a short buffer fails without reading past its end.
+struct PacketReader
 {
+    uint8_t const* data = nullptr;
+    size_t size = 0;
     size_t pos = 0;
-    auto packed = [&](uint64_t& guid) {
+
+    bool Packed(uint64_t& guid)
+    {
         if (pos == size) return false;
         uint8_t mask = data[pos++];
         guid = 0;
@@ -101,18 +105,39 @@ inline bool ParseDamage(uint8_t const* data, size_t size, Damage& result)
                 guid |= uint64_t(data[pos++]) << (8 * i);
             }
         return true;
-    };
-    if (!packed(result.victim) || !packed(result.caster) || size - pos < 28) return false;
-    auto u32 = [&]() {
+    }
+
+    uint32_t U32()
+    {
         uint32_t v = 0;
         for (unsigned i = 0; i < 4; ++i) v |= uint32_t(data[pos++]) << (8 * i);
         return v;
-    };
-    result.spell = u32(); result.amount = u32();
+    }
+
+    uint8_t U8() { return data[pos++]; }
+};
+
+struct Damage { uint64_t victim = 0, caster = 0; uint32_t spell = 0, amount = 0; };
+inline bool ParseDamage(uint8_t const* data, size_t size, Damage& result)
+{
+    PacketReader reader{data, size};
+    if (!reader.Packed(result.victim) || !reader.Packed(result.caster) || size - reader.pos < 28) return false;
+    result.spell = reader.U32(); result.amount = reader.U32();
     return result.victim && result.caster && result.spell;
 }
 
+// SMSG_SPELLHEALLOG: packed target, packed caster, then the spell, the heal before any overheal cut, and the crit flag.
+struct Heal { uint64_t target = 0, caster = 0; uint32_t spell = 0, amount = 0; bool crit = false; };
+inline bool ParseHeal(uint8_t const* data, size_t size, Heal& result)
+{
+    PacketReader reader{data, size};
+    if (!reader.Packed(result.target) || !reader.Packed(result.caster) || size - reader.pos < 9) return false;
+    result.spell = reader.U32(); result.amount = reader.U32(); result.crit = reader.U8() != 0;
+    return result.target && result.caster && result.spell;
+}
+
 inline bool VictimCopy(uint64_t recipient, Damage const& damage) { return recipient == damage.victim; }
+inline bool TargetCopy(uint64_t recipient, Heal const& heal) { return recipient == heal.target; }
 inline std::string Hit(uint32_t entry, uint32_t map, uint32_t instance, Damage const& damage,
     std::string const& caster, std::string const& victim, uint32_t health)
 {
@@ -122,6 +147,19 @@ inline std::string Hit(uint32_t entry, uint32_t map, uint32_t instance, Damage c
         << "|spell=" << damage.spell << "|victim=" << Name(victim) << "|victim_guid=" << damage.victim
         << "|reported_damage=" << damage.amount << "|hp_sample=" << health
         << "|hp_est=" << (damage.amount < health ? health - damage.amount : 0)
+        << "|hp_sample_at=packet_send";
+    return out.str();
+}
+
+inline std::string HealRow(uint32_t map, uint32_t instance, Heal const& heal, std::string const& healer,
+    std::string const& target, uint32_t health, uint32_t maxHealth)
+{
+    std::ostringstream out;
+    out << "map=" << map << "|instance=" << instance
+        << "|healer=" << Name(healer) << "|healer_guid=" << heal.caster
+        << "|spell=" << heal.spell << "|target=" << Name(target) << "|target_guid=" << heal.target
+        << "|amount=" << heal.amount << "|crit=" << (heal.crit ? 1 : 0)
+        << "|hp_sample=" << health << "|hp_max=" << maxHealth
         << "|hp_sample_at=packet_send";
     return out.str();
 }

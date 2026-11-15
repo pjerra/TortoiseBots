@@ -1203,6 +1203,30 @@ static void TestTankPost_EngagesSelectableOutOfCombatSubject()
     CHECK(TankPostStep(in) == TankPostDecision::Hold);
 }
 
+// AiPlayerbot.BossStandNearestSeat: an excused post (its spot marks the tank's lane as outside) keeps the tank at the
+// spot, so past the drag radius the step walks back with its target kept whatever the subject does. Inside it the step
+// is today's: an arrived subject is engaged where it stands.
+static void TestTankPost_LaneHoldLeashes()
+{
+    TankPostIn in = TankPostWaiting();
+    in.holdSpot = true;
+    in.laneHold = true;
+    in.subjectSelectable = true;
+    in.subjectToSpotYd = 2.0f;  // arrived, off the tank
+    in.botToSpotYd = 12.0f;
+    CHECK(!in.subjectOnTank);
+    CHECK(TankPostStep(in) == TankPostDecision::Leash);  // old code: Engage, walking 12 yd out of its spot
+    in.botToSpotYd = 6.0f;
+    CHECK(TankPostStep(in) == TankPostDecision::Engage);
+    // Without the lane hold (the hold_spot key off, the spot inside the lane, or the stand off) today's step stays.
+    in.botToSpotYd = 12.0f;
+    in.laneHold = false;
+    CHECK(TankPostStep(in) == TankPostDecision::Engage);
+    // A seat still outranks the post.
+    in.laneHold = true;
+    in.seated = true;
+    CHECK(TankPostStep(in) == TankPostDecision::Yield);
+}
 // The mutation case: dropping the selectable check from TankPostArrived makes an unselectable unit "arrived", so this
 // check fails.
 static void TestTankPost_UnselectableSubjectNotArrived()
@@ -2262,6 +2286,7 @@ int main()
     TestTankPost_SlotTankWalksToSpotWhileSubjectUnselectable();
     TestTankPost_UnselectableSubjectNotArrived();
     TestTankPost_EngagesSelectableOutOfCombatSubject();
+    TestTankPost_LaneHoldLeashes();
     TestAssignedTankSlot_UntilTankAndTankPostRows();
     TestAssignedTankSlot_EnabledKindUsesItsOwnSlot();
     TestTankPost_HoldSpotDragsSubjectBackToSpot();
@@ -2601,7 +2626,6 @@ int main()
             CHECK(table.Add(edge));
         }
     }
-
     // Kind text: exactly the lowercase spellings the table holds.
     CHECK(ParseBossTacticKind("interrupt") == BossTacticKind::Interrupt);
     CHECK(ParseBossTacticKind("kill_first") == BossTacticKind::KillFirst);
@@ -2705,6 +2729,35 @@ int main()
         CHECK(table.Size() == 0);
         table.Seal();
         CHECK(!table.HasMap(70));  // an empty sealed table has no map: the tactics stay off
+    }
+
+    // One rule for the startup load and a reload (JudgeTacticRow), decided by the kind STRING, not just the parsed
+    // enum: only the closed foreign list is skipped (air_target), a typo'd kind is REFUSED like any unusable row, and a
+    // known valid kind is accepted. The row that started this (Onyxia air_target, map 249 boss 10184, an unmerged
+    // line) is the foreign case; this build does not implement it and does not validate its columns.
+    {
+        CHECK(ParseBossTacticKind("spred") == BossTacticKind::None);
+        CHECK(!IsKnownForeignTacticKind("spred"));
+        CHECK(JudgeTacticRow(BossTacticKind::None, "spred", true) == TacticRowVerdict::Refused);  // typo, not foreign
+        CHECK(JudgeTacticRow(BossTacticKind::None, "", true) == TacticRowVerdict::Refused);  // empty kind
+        CHECK(ParseBossTacticKind("air_target") == BossTacticKind::None);
+        CHECK(IsKnownForeignTacticKind("air_target"));
+        CHECK(JudgeTacticRow(BossTacticKind::None, "air_target", true) == TacticRowVerdict::Foreign);
+
+        BossTacticRow foreign = Row(249, 10184, ParseBossTacticKind("air_target"), 0, 17131);
+        foreign.windowSec = 7.0f;  // unread: a foreign row's columns are never validated
+        BossTacticTable table;
+        CHECK(!table.Add(foreign));
+        CHECK(JudgeTacticRow(foreign.kind, "air_target", false) == TacticRowVerdict::Foreign);  // string decides
+
+        BossTacticRow bad = Row(249, 10184, BossTacticKind::Spread, 0, 0, 0, 1.0f);  // under the kind's 5 yd floor
+        CHECK(!table.Add(bad));
+        CHECK(JudgeTacticRow(bad.kind, "spread", false) == TacticRowVerdict::Refused);
+        bad.param = 10.0f;
+        CHECK(table.Add(bad));
+        CHECK(JudgeTacticRow(bad.kind, "spread", true) == TacticRowVerdict::Loaded);  // a known valid kind
+        table.Seal();
+        CHECK(table.Size() == 1);
     }
 
     // Row gates: a boss health band and a bot aura. The band is inclusive, and with the master key off a gated row is
@@ -5492,6 +5545,86 @@ int main()
         }
     }
 
+    // T3b threat_free: the subject (target_entry 0 = the row's boss) or an entry, param the vertical gap a non-tank
+    // reads no cap at (the ranged_only bounds, 3-40 yd), no spell, no priority, no gate and no mode word. Read straight
+    // from the table by ThreatValue::Calculate, so the lookup is keyed by the subject entry.
+    CHECK(ParseBossTacticKind("threat_free") == BossTacticKind::ThreatFree); // ParseThreatFreeKind
+    CHECK(static_cast<int>(BossTacticKind::ThreatFree) == 30);
+    {
+        BossTacticRow free = Row(249, 10184, BossTacticKind::ThreatFree, 0, 0, 0, 10.0f);
+        {
+            BossTacticTable table;
+            CHECK(table.Add(free));                       // ThreatFreeLoader_Rows: the Onyxia boss row
+        }
+        {
+            BossTacticRow entryTarget = free;
+            entryTarget.targetEntry = 15934;
+            entryTarget.param = 3.0f;
+            BossTacticTable table;
+            CHECK(table.Add(entryTarget));                // an entry row at the low bound
+        }
+        {
+            BossTacticRow top = free;
+            top.param = 40.0f;
+            BossTacticTable table;
+            CHECK(table.Add(top));                        // the high bound
+        }
+        {
+            BossTacticRow tooLow = free;
+            tooLow.param = 2.9f;
+            BossTacticTable table;
+            CHECK(!table.Add(tooLow));                    // below three yards
+        }
+        {
+            BossTacticRow tooHigh = free;
+            tooHigh.param = 40.5f;
+            BossTacticTable table;
+            CHECK(!table.Add(tooHigh));                   // above forty yards
+        }
+        {
+            BossTacticRow spell = free;
+            spell.spellId = 1;
+            BossTacticTable table;
+            CHECK(!table.Add(spell));                     // a spell on a kind without one
+        }
+        {
+            BossTacticRow priority = free;
+            priority.priority = 1;
+            BossTacticTable table;
+            CHECK(!table.Add(priority));                  // a priority on a kind without one
+        }
+        {
+            BossTacticTable table;
+            CHECK(!table.Add(Gated(free, 10, 100)));      // a health band a fight scan would have to answer
+        }
+        {
+            BossTacticRow mode = free;
+            mode.mode = TacticMode::HoldSpot;
+            BossTacticTable table;
+            CHECK(!table.Add(mode));                      // a mode word the kind does not take
+        }
+        // The gap is looked up by the subject: the row's boss for target_entry 0, the row's target for an entry row,
+        // and nothing before the seal.
+        {
+            BossTacticTable table;
+            CHECK(Near(table.ThreatFreeGap(249, 10184), 0.0f)); // not sealed yet
+            CHECK(table.Add(free));
+            table.Seal();
+            CHECK(Near(table.ThreatFreeGap(249, 10184), 10.0f)); // ThreatFreeGap from the boss row
+            CHECK(Near(table.ThreatFreeGap(249, 50143), 0.0f));  // another entry
+            CHECK(Near(table.ThreatFreeGap(309, 10184), 0.0f));  // another map
+        }
+        {
+            BossTacticTable table;
+            BossTacticRow entryTarget = free;
+            entryTarget.targetEntry = 15934;
+            entryTarget.param = 12.0f;
+            CHECK(table.Add(entryTarget));
+            table.Seal();
+            CHECK(Near(table.ThreatFreeGap(249, 15934), 12.0f)); // ThreatFreeGap from an entry row
+            CHECK(Near(table.ThreatFreeGap(249, 10184), 0.0f));
+        }
+    }
     // T4 threat_successor: the boss itself (target_entry 0), no gate, and no mode word but `strict` (below). The row turns the damage
     // dealers' threat cap into the assigned off-tanks' highest (ThreatCapPolicy.h) and is read straight from the table
     // by ThreatValue::GetTankThreat, so a gate could never be answered.

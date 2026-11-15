@@ -476,7 +476,6 @@ int main()
         CHECK(rebuilt[0].x == owners[0].x && rebuilt[0].y == owners[0].y);
     }
     std::cout << "  [PASS] a crowded min-range circle takes the least-crowded candidate\n";
-
     // The index counts lower guids only, and a bot outside the list has none.
     const std::vector<std::uint64_t> guids = { 50, 10, 30 };
     CHECK(SpreadSlotIndexOf(guids, 10) == 0);

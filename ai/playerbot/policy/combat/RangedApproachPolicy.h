@@ -327,6 +327,64 @@ namespace ai
         return keyOn && rangedDps && targetHovering && inSpellRange && !spreadRowLive && nearestAllyYd >= spreadRadius;
     }
 
+    // AiPlayerbot.HoverCastStackOnly: the hover hold yielded to any group member inside the spread radius (10 yd), so
+    // casters parked on the same hover reach point never stood still (walk 2e: 279 of 402 verdicts yielded, median
+    // nearest member 4.8 yd, each step 11 yd, a new one every 3 s). With the key on the hold yields only to a real
+    // stack, steps just past it, rests kHoverCastRestepMs, and of two bots that would both step only one does.
+    constexpr float kHoverCastStackYd = 4.5f;
+    constexpr std::uint32_t kHoverCastRestepMs = 8000;
+    inline float HoverCastYieldRadius(bool keyOn, float spreadRadius)
+    {
+        return keyOn && spreadRadius > kHoverCastStackYd ? kHoverCastStackYd : spreadRadius;
+    }
+    // What a bot inside the yield radius of its nearest member does this tick: Step, or Rest while its own
+    // kHoverCastRestepMs has not run out, or WaitForAlly while the higher guid of a pair takes the step, or
+    // StepAfterWait once that wait has run a whole rest period (the other bot never stepped, so the pair would
+    // otherwise stand inside 4.5 yd for the rest of the fight).
+    enum class HoverStackStep : std::uint8_t { Step, Rest, WaitForAlly, StepAfterWait };
+
+    // `sinceLastStackStepMs` is UINT32_MAX for a bot that never took one, and comes from the stack step's own clock, so
+    // an anchor-rejected probe (the spread step's 3 s) never widens this rest. `allyAlsoSteps`: the member is a bot and
+    // a ranged damage dealer, so the same rule moves it; then only the higher guid of the two steps, and the lower one
+    // for one rest period only (`waitStarted` false when its wait clock is unset, `waitedMs` its length).
+    inline HoverStackStep HoverCastStepVerdict(bool keyOn, bool allyAlsoSteps, bool botGuidHigher,
+        std::uint32_t sinceLastStackStepMs, bool waitStarted, std::uint32_t waitedMs)
+    {
+        if (!keyOn)
+            return HoverStackStep::Step;
+        if (sinceLastStackStepMs < kHoverCastRestepMs)
+            return HoverStackStep::Rest;
+        if (!allyAlsoSteps || botGuidHigher)
+            return HoverStackStep::Step;
+        return waitStarted && waitedMs >= kHoverCastRestepMs ? HoverStackStep::StepAfterWait
+                                                             : HoverStackStep::WaitForAlly;
+    }
+
+    // A stack step must leave the bot inside the trigger's own range: the hover reach (AiPlayerbot.HoverReachAimsAtAnchor)
+    // keeps a bot as close as 3 yd inside that line, a 5.5 yd step away crosses it, and the reach then walks the bot back
+    // beside its partner every rest. `distanceYd` is the landing point to the target with both combat reaches counted,
+    // `rangeLimitYd` is ai->GetRange("spell") - contactDistance, as the verdict measures the bot's own spot.
+    struct HoverStackLanding
+    {
+        float distance = 0.0f;
+        bool inSight = false;
+    };
+
+    inline bool HoverCastLandingInRange(float distanceYd, float rangeLimitYd, bool inSight)
+    {
+        return inSight && distanceYd <= rangeLimitYd;
+    }
+
+    // The first landing that keeps the bot in range, or -1 when no heading does (then the bot does not step).
+    inline int SelectHoverStackLanding(std::vector<HoverStackLanding> const& landings, float rangeLimitYd)
+    {
+        for (std::size_t i = 0; i < landings.size(); ++i)
+            if (HoverCastLandingInRange(landings[i].distance, rangeLimitYd, landings[i].inSight))
+                return static_cast<int>(i);
+        return -1;
+    }
+
+
     // The trigger ("enemy out of spell range") measures edge to edge with both combat reaches; the path walk measures
     // centre to centre. A hovering boss's reach (Onyxia 22 yd in the air) makes the centre distance the trigger allows
     // that much longer.
@@ -345,6 +403,68 @@ namespace ai
         if (sightRequired)
             return SelectRangedApproachPoint(pathToGround, target, distance, hasLos);
         return SelectRangedApproachPoint(pathToGround, target, distance, [](ApproachPoint const&) { return true; });
+    }
+
+    // AiPlayerbot.HoverReachAimsAtAnchor: the walk under a hovering boss parks the bot at the edge of range on the
+    // boss's side of the room, and her next hop puts it out of range again (walk 2e: 153 reaches in 510 s, one per
+    // caster per 27 s, her hop rate). With a live `anchor` row the walk follows the path to the anchor's centre
+    // instead and stops as soon as the target is in range: `reachDist` is today's stop (HoverReachDistance),
+    // `triggerDist` the centre distance at which "enemy out of spell range" stops firing, `centreToTarget` the
+    // centre's own distance to the target. The stop is never nearer than today's and never outside the trigger line.
+    constexpr float kHoverAnchorSlackYd = 3.0f;
+    // The trigger line less the slack, never inside today's hover stop: the farthest the anchor walk may stop.
+    inline float HoverAnchorReachLimit(float reachDist, float triggerDist)
+    {
+        float const hi = triggerDist - kHoverAnchorSlackYd;
+        return hi < reachDist ? reachDist : hi;
+    }
+
+    inline float HoverAnchorStopDistance(float reachDist, float triggerDist, float centreToTarget)
+    {
+        float const hi = HoverAnchorReachLimit(reachDist, triggerDist);
+        float const want = centreToTarget + kHoverAnchorSlackYd;
+        return want < reachDist ? reachDist : (want > hi ? hi : want);
+    }
+
+    // The anchor centre can itself stand outside the reach (Onyxia's room centre is 51.4 yd 3D from her farthest
+    // hover point, the in-range stop 46.0), and a walk to it would end out of range, which makes a second walk per
+    // hop. The aim is then the in-range point nearest the centre: on the ground segment from the centre toward the
+    // target's ground projection, `limit - 1` yd 3D from the target, so the path's end stands strictly inside the
+    // reach and the point selection can stop on the crossing. A centre already within `limit` is the aim itself
+    // (z stays the centre's; no boss or room constant is read). False for a centre with no ground segment to walk.
+    constexpr float kHoverAnchorAimMarginYd = 1.0f;
+    inline bool HoverAnchorAimPoint(ApproachPoint const& centre, ApproachPoint const& target, float limit,
+        ApproachPoint& out)
+    {
+        float const dx = centre.x - target.x;
+        float const dy = centre.y - target.y;
+        float const dz = centre.z - target.z;
+        float const centreDist = std::sqrt(dx * dx + dy * dy + dz * dz);
+        if (centreDist <= limit)
+        {
+            out = centre;
+            return true;
+        }
+
+        float const want = limit - kHoverAnchorAimMarginYd;
+        float const vx = target.x - centre.x;
+        float const vy = target.y - centre.y;
+        float const a = vx * vx + vy * vy;
+        if (a <= 0.0f)
+            return false;
+        float const b = 2.0f * (dx * vx + dy * vy);
+        float const c = centreDist * centreDist - want * want;
+        float const discriminant = b * b - 4.0f * a * c;
+        if (discriminant < 0.0f)
+            return false;
+        float const t = (-b - std::sqrt(discriminant)) / (2.0f * a);
+        if (t < 0.0f || t > 1.0f)
+            return false;
+
+        out.x = centre.x + t * vx;
+        out.y = centre.y + t * vy;
+        out.z = centre.z;
+        return true;
     }
 
     enum class HoverReachResult : std::uint8_t { NotHover, NoGround, NoPath, NoPoint, Hazard, MoveFailed, Moved, MovedNoLos };

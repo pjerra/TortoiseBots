@@ -3,19 +3,30 @@
 //   /tmp/test_threat_cap_policy
 #include "../ai/playerbot/ThreatCapPolicy.h"
 
+#include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <string>
 #include <vector>
 
+// The case a failing CHECK belongs to, printed with it (set by CASE).
+static const char* g_case = "(unnamed)";
+#define CASE(name) (g_case = (name))
+
 #define CHECK(x) do { \
     if (!(x)) { \
-        std::cerr << "Assertion failed at line " << __LINE__ << ": " #x "\n"; \
+        std::cerr << "Assertion failed at line " << __LINE__ << " in " << g_case << ": " #x "\n"; \
         std::exit(1); \
     } \
 } while (0)
 
 using namespace ai;
+
+// The normal-hit rule (a) alone: a spell crit multiplier with no crit chance, so rule (b) never fires.
+static bool NormalOvershoots(bool key, float botThreat, float castThreat, float tankThreat)
+{
+    return ThreatCapCastOvershoots(key, botThreat, castThreat, tankThreat, 1.5f, kThreatCapCastRangedPullLine, false);
+}
 
 int main()
 {
@@ -144,6 +155,222 @@ int main()
     CHECK(ThreatPctOf(5000.0f, 40.0f, true, true) == 0);    // fleeing target: unchanged
     CHECK(ThreatPctOf(500.0f, 1000.0f, true, false) == 50);
     CHECK(ThreatPctOf(500.0f, 1000.0f, true, false) == ThreatPctSaturated(500.0f, 1000.0f));
+    // ThreatFreeApplies (kind `threat_free`, AiPlayerbot.DungeonRunThreatFree): a subject standing the row's gap above
+    // the bot cannot be reached by any tank, so a non-tank reads no cap on it; a tank keeps its own reading and the
+    // lift needs the key and a row. `descending` comes from the subject's z history.
+    CASE("ThreatFreeApplies_AirborneNonTank");
+    // Onyxia hovering at z -65 over a bot on the floor at -86 with her row's 10 yd gap.
+    CHECK(ThreatFreeApplies(true, false, -65.0f, -86.0f, 10.0f, false));
+    // Exactly the gap is lifted too.
+    CHECK(ThreatFreeApplies(true, false, -76.0f, -86.0f, 10.0f, false));
+    // Each of the rest alone keeps the cap: a tank, the key off, no row (gap 0), and 6 yd up on her ground phase.
+    CHECK(!ThreatFreeApplies(true, true, -65.0f, -86.0f, 10.0f, false));   // a tank keeps its own reading
+    CHECK(!ThreatFreeApplies(false, false, -65.0f, -86.0f, 10.0f, false)); // key off
+    CHECK(!ThreatFreeApplies(true, false, -65.0f, -86.0f, 0.0f, false));   // no row
+    CHECK(!ThreatFreeApplies(true, false, -80.0f, -86.0f, 10.0f, false));  // 6 yd up: on the ground
+    // ThreatFreeApplies_DescentDropsTheLift is the failing case: her threat list is wiped at the START of the landing
+    // descent while she is still ~20 yd up, and a height-only lift let the casters nuke a tankless boss that was already
+    // coming down on them. Hovering between points stays within 1 yd, so the lift holds there; a drop of more than 1 yd
+    // inside 2 s ends it at once.
+    CASE("ThreatFreeApplies_DescentDropsTheLift");
+    {
+        ThreatFreeZHistory hover;
+        CHECK(!hover.Descending(-66.0f, 1000));
+        CHECK(!hover.Descending(-66.0f, 1500));
+        CHECK(ThreatFreeApplies(true, false, -66.0f, -86.0f, 10.0f, hover.Descending(-66.0f, 2000)));
+        // A hover sway under a yard is not a descent.
+        CHECK(!hover.Descending(-66.6f, 2250));
+        CHECK(ThreatFreeApplies(true, false, -66.6f, -86.0f, 10.0f, hover.Descending(-66.6f, 2500)));
+        // The landing flight: z falls 3 yd in the last second, from 20 yd above the bot; no lift.
+        const bool falling = hover.Descending(-69.6f, 3000);
+        CHECK(falling);
+        CHECK(!ThreatFreeApplies(true, false, -69.6f, -86.0f, 10.0f, falling));
+        // The history forgets a sample older than the 2 s window: the lift comes back once the drop is outside it.
+        CHECK(!hover.Descending(-69.6f, 5500));
+        CHECK(ThreatFreeApplies(true, false, -69.6f, -86.0f, 10.0f, hover.Descending(-69.6f, 6000)));
+    }
+    // The unchanged case: the main tank holds, the off-tank (3000) is the successor, key on or off.
+    {
+        const std::vector<ThreatCapTank> mainHolds = {{6000.0f, false, true, true}, {3000.0f, true, true, false}};
+        CHECK(ThreatCapReference(mainHolds, true, true) == 3000.0f);
+        CHECK(ThreatCapPickReference(mainHolds, true, true).offTank);
+        CHECK(ThreatCapReference(mainHolds, true, false) == 3000.0f);
+        CHECK(ThreatCapPickReference(mainHolds, true, true).holder == ThreatCapPick::Holder::Main);
+        CHECK(std::string(ThreatCapHolderWord(ThreatCapPick::Holder::Main)) == "main");
+        CHECK(std::string(ThreatCapHolderWord(ThreatCapPick::Holder::Off)) == "off");
+        CHECK(std::string(ThreatCapHolderWord(ThreatCapPick::Holder::None)) == "none");
+    }
+    // The reference is the non-holder's REAL threat, 0 included (no synthetic floor): a non-holder at 50 behind a 20000
+    // holder reads 50, not 200; a wiped one reads 0 and ThreatPctOf holds the damage dealers on it.
+    CHECK(ThreatCapReference({{50.0f, false, true, false}, {20000.0f, true, true, true}}, true, true) == 50.0f);
+    CHECK(ThreatCapReference({{0.0f, false, true, false}, {20000.0f, true, true, true}}, true, true) == 0.0f);
+    CHECK(ThreatCapPickReference({{0.0f, false, true, false}, {20000.0f, true, true, true}}, true, true).threat == 0.0f);
+    CHECK(ThreatCapReference({{250.0f, false, true, false}, {20000.0f, true, true, true}}, true, true) == 250.0f);
+    // reference_zero_holds_the_damage_dealers: ThreatPctOf reads a 0 reference on an engaged target as 100 (vetoed at
+    // kThreatHighLinePct), never as no cap; a negative reference (no tank) is the only "no cap"; a tiny reference
+    // saturates; out of combat or fleeing keep their old answers. Key off reaches it with the same values as before.
+    CHECK(ThreatPctOf(5000.0f, 0.0f, true, false) == 100);
+    CHECK(ThreatPctOf(5000.0f, 0.0f, true, false) >= kThreatHighLinePct);
+    CHECK(ThreatPctOf(0.0f, 0.0f, true, false) >= kThreatHighLinePct);
+    CHECK(ThreatPctOf(5000.0f, -1.0f, true, false) == 0);
+    CHECK(ThreatPctOf(5000.0f, 0.0f, false, false) == 0);   // not in combat: no veto, as before
+    CHECK(ThreatPctOf(5000.0f, 0.0f, true, true) == 0);     // fleeing target with a 0 reference: unchanged path
+    CHECK(ThreatPctOf(5000.0f, 40.0f, true, false) == 255); // a tiny reference saturates, vetoed
+    CHECK(ThreatPctOf(5000.0f, 40.0f, true, true) == 0);    // fleeing target: unchanged
+    CHECK(ThreatPctOf(500.0f, 1000.0f, true, false) == 50);
+    CHECK(ThreatPctOf(500.0f, 1000.0f, true, false) == ThreatPctSaturated(500.0f, 1000.0f));
+    // hakkar_away_key_on_equals_today (fails with the first version of the key: it gave 2000): the main tank holds with
+    // 40000 and the off-tanks are on Sons (not on the boss) with 2000 left over: with the key on the pick is today's.
+    {
+        const std::vector<ThreatCapTank> away = {{40000.0f, false, true, true}, {2000.0f, true, false, false}};
+        CHECK(ThreatCapReference(away, true, true) == 40000.0f);
+        CHECK(!ThreatCapPickReference(away, true, true).offTank);
+        CHECK(ThreatCapReference(away, true, true) == ThreatCapReference(away, true, false));
+        // Away but above the old 50 % share: today's pick, the off-tank, with the key on too.
+        const std::vector<ThreatCapTank> awayHigh = {{40000.0f, false, true, true}, {25000.0f, true, false, false}};
+        CHECK(ThreatCapReference(awayHigh, true, true) == 25000.0f);
+        CHECK(ThreatCapReference(awayHigh, true, true) == ThreatCapReference(awayHigh, true, false));
+    }
+    // non_holder_not_on_boss_falls_back: the off-tank holds the boss, the main tank is off it (held on a Shade, in the
+    // pit): the main tank is no successor, the pick is today's. A non-holder on the boss next to it still counts.
+    CHECK(ThreatCapReference({{300.0f, false, false, false}, {6000.0f, true, true, true}}, true, true) == 6000.0f);
+    CHECK(ThreatCapReference({{300.0f, false, false, false}, {6000.0f, true, true, true}}, true, true) ==
+          ThreatCapReference({{300.0f, false, false, false}, {6000.0f, true, true, true}}, true, false));
+    CHECK(ThreatCapReference({{9000.0f, false, false, false}, {400.0f, true, true, false}, {6000.0f, true, true, true}},
+                             true, true) == 400.0f);
+    // The wrong-way read the first version had: a higher non-holder that is not on the boss must not be the reference.
+    CHECK(ThreatCapReference({{9000.0f, false, false, false}, {400.0f, true, true, false}, {6000.0f, true, true, true}},
+                             true, true) != 9000.0f);
+    // Two off-tanks and a main tank, the main tank holds: the higher off-tank.
+    CHECK(ThreatCapReference({{9000.0f, false, true, true}, {400.0f, true, true, false}, {700.0f, true, true, false}},
+                             true, true) == 700.0f);
+    // Edge: every tank on the list holds the boss (only the holder is alive, in the world and not charmed): the
+    // old pick stands, the holder's own threat. A dead off-tank, then a charmed main tank (Brain Wash), are left off
+    // the list by the caller: the lone holder is the reference and nothing falls to 0.
+    CHECK(ThreatCapReference({{6000.0f, false, true, true}}, true, true) == 6000.0f);
+    CHECK(!ThreatCapPickReference({{6000.0f, false, true, true}}, true, true).offTank);
+    CHECK(ThreatCapReference({{6000.0f, true, true, true}}, true, true) == 6000.0f);   // the off-tank is the lone holder
+    CHECK(ThreatCapPickReference({{6000.0f, true, true, true}}, true, true).offTank);
+    // A charmed main tank (left off the list): the off-tank not holding is the only reference, and a charmed tank is
+    // never read as the reference even when its stale threat would have been the highest.
+    CHECK(ThreatCapReference({{800.0f, true, true, false}}, true, true) == 800.0f);
+    CHECK(ThreatCapPickReference({{800.0f, true, true, false}}, true, true).offTank);
+    // The boss has no victim (or a damage dealer holds it) and the tanks hit it: nobody holds it, so every tank on the
+    // boss is a non-holder and the reference is the highest tank (MT 6000, OT 4000 -> 4000 today, 6000 with the key on).
+    CHECK(ThreatCapReference({{6000.0f, false, true, false}, {1000.0f, true, true, false}}, true, true) == 6000.0f);
+    CHECK(ThreatCapReference({{6000.0f, false, true, false}, {1000.0f, true, true, false}}, true, false) == 1000.0f);
+    CHECK(ThreatCapReference({{6000.0f, false, true, false}, {4000.0f, true, true, false}}, true, false) == 4000.0f);
+    CHECK(ThreatCapReference({{6000.0f, false, true, false}, {4000.0f, true, true, false}}, true, true) == 6000.0f);
+    CHECK(!ThreatCapPickReference({{6000.0f, false, true, false}, {4000.0f, true, true, false}}, true, true).offTank);
+    CHECK(ThreatCapPickReference({{6000.0f, false, true, false}, {4000.0f, true, true, false}}, true, true).holder ==
+          ThreatCapPick::Holder::None);
+    // Nobody holds it and nobody hits it either (all tanks away): today's pick, the key changes nothing.
+    CHECK(ThreatCapReference({{6000.0f, false, false, false}, {4000.0f, true, false, false}}, true, true) == 4000.0f);
+    CHECK(ThreatCapReference({{6000.0f, false, false, false}, {4000.0f, true, false, false}}, true, true) ==
+          ThreatCapReference({{6000.0f, false, false, false}, {4000.0f, true, false, false}}, true, false));
+    // A damage dealer holds the boss: no tank holds it, so the holder word reads none and the highest tank stands.
+    CHECK(ThreatCapPickReference({{300.0f, false, true, false}, {200.0f, true, true, false}}, true, true).holder ==
+          ThreatCapPick::Holder::None);
+    // A single tank in the raid: it is the reference whether it holds or not (a holder only has itself).
+    CHECK(ThreatCapReference({{1000.0f, false, true, false}}, true, true) == 1000.0f);
+    CHECK(ThreatCapReference({{1000.0f, false, true, true}}, true, true) == 1000.0f);
+    // No tanks at all: still -1, the caller's "no reference".
+    CHECK(ThreatCapReference({}, true, true) == -1.0f);
+
+    // HexSnapshot (BossTacticsHex row): who wore Jin'do's Hex, and one row per Hex.
+    CHECK(kJindoHexSpellId == 17172);
+    CHECK(HexHolderOf(true, 0) == HexHolder::Main);
+    CHECK(HexHolderOf(true, 1) == HexHolder::Off);
+    CHECK(HexHolderOf(true, 2) == HexHolder::Off);
+    CHECK(HexHolderOf(true, -1) == HexHolder::Dps);
+    CHECK(HexHolderOf(false, 0) == HexHolder::None);
+    CHECK(std::string(HexHolderWord(HexHolder::Main)) == "main");
+    CHECK(std::string(HexHolderWord(HexHolder::Off)) == "off");
+    CHECK(std::string(HexHolderWord(HexHolder::Dps)) == "dps");
+    CHECK(std::string(HexHolderWord(HexHolder::None)) == "none");
+    // One row per Hex: the first logs, a re-read 5 s later (the Hex still up) does not, the next Hex 20 s on does.
+    CHECK(HexSnapshotDue(0, 1000));
+    CHECK(!HexSnapshotDue(1000, 1000 + 5000));
+    CHECK(!HexSnapshotDue(1000, 1000 + kHexSnapshotGapMs - 1));
+    CHECK(HexSnapshotDue(1000, 1000 + kHexSnapshotGapMs));
+    CHECK(HexSnapshotDue(1000, 1000 + 20000));
+    CHECK(HexSnapshotDue(0xFFFFFF00u, 0x00004000u)); // clock wrap
+
+    // hexed_main_tank_stays_the_reference (fails when the Hex read is dropped): the off-tank holds Jin'do, the main tank
+    // wears the Hex (polymorphed, not hitting) with its threat wiped to 300. It still counts as on the boss, so the
+    // reference is the main tank's 300, not the new holder's 6000 the damage dealers could climb to 80 % of.
+    CHECK(ThreatCapOnBoss(true, false));
+    CHECK(ThreatCapOnBoss(false, true));
+    CHECK(!ThreatCapOnBoss(false, false));
+    {
+        const std::vector<ThreatCapTank> hexedMain = {{300.0f, false, ThreatCapOnBoss(false, true), false},
+                                                       {6000.0f, true, ThreatCapOnBoss(true, false), true}};
+        CHECK(ThreatCapReference(hexedMain, true, true) == 300.0f);
+        CHECK(!ThreatCapPickReference(hexedMain, true, true).offTank);
+        // The same tank neither hitting nor Hexed (held on a Shade): not on the boss, today's pick.
+        const std::vector<ThreatCapTank> awayMain = {{300.0f, false, ThreatCapOnBoss(false, false), false},
+                                                      {6000.0f, true, ThreatCapOnBoss(true, false), true}};
+        CHECK(ThreatCapReference(awayMain, true, true) == 6000.0f);
+    }
+    // hexed_dps_that_is_no_longer_the_victim_still_logs (fails with the victim-only probe, which finds no wearer): the
+    // scan hands the helper every member that carries the Hex; a DPS (tank index -1) with no earlier row is picked and
+    // reads holder=dps whatever the boss's victim is now (the helper has no victim input at all).
+    {
+        std::vector<HexMember> wearers(1);
+        wearers[0].key = 77;
+        wearers[0].tankIndex = -1;
+        CHECK(HexWearerToLog(wearers, 50000) == 0);
+        CHECK(std::string(HexHolderWord(HexHolderOf(true, wearers[0].tankIndex))) == "dps");
+        // Its row was written 3 s ago: one row per Hex, none now; a second wearer without a row is picked instead.
+        wearers[0].lastLoggedMs = 47000;
+        CHECK(HexWearerToLog(wearers, 50000) == -1);
+        wearers.resize(2);
+        wearers[1].key = 78;
+        wearers[1].tankIndex = 2;
+        CHECK(HexWearerToLog(wearers, 50000) == 1);
+        CHECK(HexWearerToLog({}, 50000) == -1);
+        // The next Hex, 20 s on, logs again.
+        CHECK(HexWearerToLog(wearers, 67000) == 0);
+    }
+    CHECK(HexScanDue(0, 1000));
+    CHECK(!HexScanDue(1000, 1999));
+    CHECK(HexScanDue(1000, 1000 + kHexScanGapMs));
+    CHECK(HexScanDue(0xFFFFFF00u, 0x00000400u)); // clock wrap
+    // hex_on_second_offtank_names_that_tank: ot_threat shows the wearer when an off-tank wore it, else the first off-tank.
+    CHECK(HexOffTankIndex(2) == 2);
+    CHECK(HexOffTankIndex(1) == 1);
+    CHECK(HexOffTankIndex(0) == 1);
+    CHECK(HexOffTankIndex(-1) == 1);
+
+    // ThreatHighLineIsEightyEverywhere: every target vetoes at 80 % of the reference tank, successor bosses included.
+    CHECK(kThreatHighLinePct == 80);
+
+    // ThreatFreeZHistories_TwoInstancesSameGuid is the failing case of the per-instance key: an instanced copy of the
+    // same creature shares its raw guid, and two raids can run the lair at once, so a guid-only history is one ring for
+    // both raids: instance 7's sample makes instance 9 read a descent it never made, and instance 7's fight reset
+    // forgets instance 9's hover.
+    CASE("ThreatFreeZHistories_TwoInstancesSameGuid");
+    {
+        ThreatFreeZHistories histories;
+        const ThreatFreeZKey raidA{7, 0xA1};
+        const ThreatFreeZKey raidB{9, 0xA1};
+        // Both instances hover 6 yd apart, and each sample is its own instance's height, never the other's reference:
+        // a guid-only key would read instance 9's -60 as a 6 yd descent for instance 7 at -66.
+        CHECK(!histories.Descending(raidB, -60.0f, 1000));
+        CHECK(!histories.Descending(raidA, -66.0f, 1000));
+        // Instance 7 lands and drops out of combat: the fight reset clears instance 7's ring only.
+        histories.Reset(raidA);
+        // Instance 9 has come down 6 yd against its own -60 sample, still inside the window: a descent there.
+        // A guid-only key had lost that sample to the reset above, so this read 0.
+        CHECK(histories.Descending(raidB, -66.0f, 1900));
+        // Instance 7's re-pull starts a fresh hover: no descent against the ring its reset dropped.
+        CHECK(!histories.Descending(raidA, -66.0f, 2000));
+        // Both instances are tracked side by side.
+        CHECK(histories.size() == 2);
+        histories.Reset(raidB);
+        CHECK(histories.size() == 1);
+    }
+
     // hakkar_away_key_on_equals_today (fails with the first version of the key: it gave 2000): the main tank holds with
     // 40000 and the off-tanks are on Sons (not on the boss) with 2000 left over: with the key on the pick is today's.
     {
@@ -712,6 +939,125 @@ int main()
     CHECK(ThreatCapPercentOf(3000.0f, 1000.0f) == 300.0f);
     CHECK(ThreatCapPercentOf(50.0f, 0.0f) == 100.0f);
     CHECK(ThreatCapPercentOf(50.0f, -1.0f) == 0.0f);
+
+
+    // AiPlayerbot.ThreatCapCountsCastThreat (ThreatCapCastOvershoots): the cast's own expected threat counts.
+    CASE("fireball_from_79_pct_vetoed");
+    // 79 % now, a cast worth 25 % of the tank's threat: 104 % when it lands. The 80 % high-threat line lets it
+    // through today; the cast cap holds it.
+    CHECK(NormalOvershoots(true, 79.0f, 25.0f, 100.0f));
+    CHECK(NormalOvershoots(true, 790.0f, 450.0f, 1000.0f));
+    CASE("cast_landing_exactly_on_the_tank_vetoed");
+    // 100 % is the line itself (the core's aggro point before the pull margin): equal is held.
+    CHECK(NormalOvershoots(true, 75.0f, 25.0f, 100.0f));
+    CHECK(!NormalOvershoots(true, 74.0f, 25.0f, 100.0f));
+    CASE("cast_under_the_line_passes");
+    CHECK(!NormalOvershoots(true, 50.0f, 25.0f, 100.0f));
+    CHECK(!NormalOvershoots(true, 500.0f, 280.0f, 1000.0f));
+    CASE("key_off_never_vetoes");
+    CHECK(!NormalOvershoots(false, 79.0f, 25.0f, 100.0f));
+    CHECK(!NormalOvershoots(false, 200.0f, 25.0f, 100.0f));
+    CASE("no_tank_threat_left_to_old_veto");
+    CHECK(!NormalOvershoots(true, 79.0f, 25.0f, 0.0f));
+    CHECK(!NormalOvershoots(true, 79.0f, 25.0f, -1.0f));
+    CASE("no_estimate_left_to_old_veto");
+    // A cast without direct damage (no estimate) is the old veto's business, even at or over the tank.
+    CHECK(!NormalOvershoots(true, 120.0f, 0.0f, 100.0f));
+
+    // ThreatCapAverageEffectPoints: the core's CalculateSpellDamage without the roll.
+    CASE("average_points_is_the_middle_of_the_roll");
+    // Fireball-like row: base 392, dice 1, sides 107 -> roll 1..107, average 392 + 54 = 446 (not the max 499).
+    CHECK(ThreatCapAverageEffectPoints(392, 1, 107, 0.0f, 0.0f, 0) == 446.0f);
+    // No roll range (sides 0 or 1): base + dice, as the core's `case 0: case 1:`.
+    CHECK(ThreatCapAverageEffectPoints(99, 1, 1, 0.0f, 0.0f, 0) == 100.0f);
+    CHECK(ThreatCapAverageEffectPoints(99, 1, 0, 0.0f, 0.0f, 0) == 100.0f);
+    // Level growth: 4 levels at 0.5 per level adds 2 to the base and 4 levels at 1 per level widens the roll by 4.
+    CHECK(ThreatCapAverageEffectPoints(100, 1, 9, 0.5f, 1.0f, 4) == 102.0f + (1.0f + 13.0f) / 2.0f);
+
+    // ThreatCapCastThreat: the core's threat for a landed cast (Unit::DealDamage, Spell::HandleThreatSpells, CalcThreat).
+    CASE("mind_blast_threat_multiplier_counts");
+    // Mind Blast-like: 500 damage, spell threat table x2 = 1000 threat; from bot 0 against tank 1000 that is the line.
+    CHECK(ThreatCapCastThreat(500.0f, 2.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f) == 1000.0f);
+    CHECK(NormalOvershoots(true, 0.0f, ThreatCapCastThreat(500.0f, 2.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f), 1000.0f));
+    // Without the multiplier the same cast read 500 and passed.
+    CHECK(!NormalOvershoots(true, 0.0f, ThreatCapCastThreat(500.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f), 1000.0f));
+    CASE("searing_pain_threat_multiplier_counts");
+    // Searing Pain-like: 220 damage x2 = 440; bot 600 + 440 passes tank 1000, x1 (220) would not.
+    CHECK(ThreatCapCastThreat(220.0f, 2.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f) == 440.0f);
+    CHECK(NormalOvershoots(true, 600.0f, ThreatCapCastThreat(220.0f, 2.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f), 1000.0f));
+    CHECK(!NormalOvershoots(true, 600.0f, ThreatCapCastThreat(220.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f), 1000.0f));
+    CASE("flat_threat_entry_counts");
+    // A spell threat table entry with flat threat 180 and AP bonus 0.1 at 1000 AP: 100 damage + 180 + 100 = 380.
+    CHECK(ThreatCapCastThreat(100.0f, 1.0f, 180.0f, 0.1f, 1000.0f, 0.0f, 1.0f) == 380.0f);
+    // A flat-threat-only cast (no damage) still counts.
+    CHECK(ThreatCapCastThreat(0.0f, 1.0f, 300.0f, 0.0f, 0.0f, 0.0f, 1.0f) == 300.0f);
+    CASE("threat_mods_scale_the_whole_cast");
+    // A -30 % SPELLMOD_THREAT talent and a 1.3 total modifier (Defensive Stance-like) scale damage and flat alike.
+    CHECK(std::fabs(ThreatCapCastThreat(100.0f, 2.0f, 100.0f, 0.0f, 0.0f, -30.0f, 1.3f) - 300.0f * 0.7f * 1.3f) < 0.01f);
+    CHECK(ThreatCapCastThreat(0.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f) == 0.0f);
+
+    // ThreatCapChannelDamage: a channel counts every tick; a DoT that is not channeled counts none here.
+    CASE("channel_ticks_reach_the_line_vetoed");
+    // Arcane Missiles-like: 5 s channel, a missile every 1 s at 60 = 300; bot 750 + 300 >= tank 1000.
+    CHECK(ThreatCapChannelDamage(true, 60.0f, 5000, 1000) == 300.0f);
+    CHECK(NormalOvershoots(true, 750.0f, ThreatCapCastThreat(ThreatCapChannelDamage(true, 60.0f, 5000, 1000),
+                                                                    1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f), 1000.0f));
+    // Mind Flay-like: 3 s, 1 s ticks.
+    CHECK(ThreatCapChannelDamage(true, 50.0f, 3000, 1000) == 150.0f);
+    CASE("dot_only_spell_not_vetoed");
+    // A DoT that is not channeled (Corruption-like, 18 s, 3 s ticks) adds nothing here: bot 750 is not vetoed.
+    CHECK(ThreatCapChannelDamage(false, 60.0f, 18000, 3000) == 0.0f);
+    CHECK(!NormalOvershoots(true, 750.0f, ThreatCapCastThreat(ThreatCapChannelDamage(false, 60.0f, 18000, 3000),
+                                                                     1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f), 1000.0f));
+    CHECK(ThreatCapChannelDamage(true, 60.0f, 0, 1000) == 0.0f);
+    CHECK(ThreatCapChannelDamage(true, 60.0f, 5000, 0) == 0.0f);
+
+    // ThreatCapCastReference: the line is the mob's victim, capped by the top tank.
+    CASE("off_tank_above_victim_no_cover");
+    // Victim (main tank) 800, an off-tank on 1200: bot 600 + cast 250 = 850 passes the victim and pulls in the core;
+    // measured against the top tank (1200) it would pass.
+    CHECK(ThreatCapCastReference(800.0f, 1200.0f) == 800.0f);
+    CHECK(NormalOvershoots(true, 600.0f, 250.0f, ThreatCapCastReference(800.0f, 1200.0f)));
+    CHECK(!NormalOvershoots(true, 600.0f, 250.0f, 1200.0f));
+    CASE("cast_reference_falls_back_to_top_tank");
+    CHECK(ThreatCapCastReference(1000.0f, 800.0f) == 800.0f);
+    CHECK(ThreatCapCastReference(0.0f, 800.0f) == 800.0f);
+    CHECK(ThreatCapCastReference(500.0f, 0.0f) == 0.0f);
+    CHECK(ThreatCapCastReference(500.0f, -1.0f) == -1.0f);
+
+    // Rule (b): a crit against the core's real pull line.
+    CASE("crit_past_ranged_pull_line_vetoed");
+    // Bot 0, cast 0.9 of the reference, ranged: the normal hit (90 %) passes (a), a spell crit is 135 % >= 130 %.
+    CHECK(kThreatCapCastMeleePullLine == 1.1f);
+    CHECK(kThreatCapCastRangedPullLine == 1.3f);
+    CHECK(ThreatCapCastPullLine(false) == 1.3f);
+    CHECK(ThreatCapCastPullLine(true) == 1.1f);
+    CHECK(ThreatCapCastOvershoots(true, 0.0f, 900.0f, 1000.0f, 1.5f, ThreatCapCastPullLine(false), true));
+    CASE("crit_without_crit_chance_passes");
+    CHECK(!ThreatCapCastOvershoots(true, 0.0f, 900.0f, 1000.0f, 1.5f, ThreatCapCastPullLine(false), false));
+    CASE("crit_past_melee_pull_line_vetoed");
+    // In melee reach (line 1100): bot 500 + 380 x 1.5 = 1070 passes; 500 + 400 x 1.5 = 1100 is vetoed. The same 400
+    // from range (line 1300) passes.
+    CHECK(!ThreatCapCastOvershoots(true, 500.0f, 380.0f, 1000.0f, 1.5f, ThreatCapCastPullLine(true), true));
+    CHECK(ThreatCapCastOvershoots(true, 500.0f, 400.0f, 1000.0f, 1.5f, ThreatCapCastPullLine(true), true));
+    CHECK(!ThreatCapCastOvershoots(true, 500.0f, 400.0f, 1000.0f, 1.5f, ThreatCapCastPullLine(false), true));
+    // A melee attack spell crit (x2): 500 + 300 x 2 = 1100 at the melee line.
+    CHECK(ThreatCapCastOvershoots(true, 500.0f, 300.0f, 1000.0f, 2.0f, ThreatCapCastPullLine(true), true));
+    CASE("small_cast_crit_under_the_line_passes");
+    // Bot 600 + 200 x 1.5 = 900 < 1300 (and 800 < 1000): passes.
+    CHECK(!ThreatCapCastOvershoots(true, 600.0f, 200.0f, 1000.0f, 1.5f, ThreatCapCastPullLine(false), true));
+    CASE("crit_rule_needs_key_tank_and_estimate");
+    CHECK(!ThreatCapCastOvershoots(false, 0.0f, 900.0f, 1000.0f, 1.5f, 1.3f, true));
+    CHECK(!ThreatCapCastOvershoots(true, 0.0f, 900.0f, 0.0f, 1.5f, 1.3f, true));
+    CHECK(!ThreatCapCastOvershoots(true, 1400.0f, 0.0f, 1000.0f, 1.5f, 1.3f, true));
+
+    // ThreatFreeLiftsAoe_NeedsKey is the failing case of AiPlayerbot.DungeonRunThreatFreeAoe: the AoE veto reads the
+    // worst threat of every possible attack target, so on airborne Onyxia a whelp on the floor kept the veto even
+    // though her own value was lifted. The lift asks the same question for the action's target and needs its key.
+    CASE("ThreatFreeLiftsAoe_NeedsKey");
+    CHECK(ThreatFreeLiftsAoe(true, true));
+    CHECK(!ThreatFreeLiftsAoe(false, true));  // key off: today's veto
+    CHECK(!ThreatFreeLiftsAoe(true, false));  // target not lifted: a tank, no row, or the landing descent
 
     std::cout << "threat cap policy: all tests passed\n";
     return 0;

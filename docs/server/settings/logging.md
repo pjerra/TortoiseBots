@@ -77,7 +77,7 @@ Specifies which structured CSV event log files are written to the server's logs 
 
 Defines the active CSV log streams:
 
-- `bot_events.csv`: Records high-level bot behavioral events, travel destination changes, vendor trips, and unstuck interventions.
+- `bot_events.csv`: Records high-level bot behavioral events, travel destination changes, vendor trips, and unstuck interventions. Threat back-off refusals carry their numbers: `ThreatCapCast` (`ThreatCap cast spell= pct= cast= bot= tank=`, a damage cast held by [`AiPlayerbot.ThreatCapCountsCastThreat`](combat.md#aiplayerbotthreatcapcountscastthreat), at most once every 2 s per bot; the same row goes to the per-bot action log under the tag `THREAT`). Every one of the threat multiplier's five vetoes (reset, successor white stop, cast-threat, keyless AoE, high threat) writes one `ThreatVeto` row per bot and target per 10 s (`target`, `action`, `site=`, threat numbers, taunt immunity, victim role).
 - `deaths.csv`: Records character deaths, death position, killer identity and level, other attackers, and travel destination.
 - `pvp_seek.csv`: Records open-world PvP seek-role grants and new seek engagements (bot, target, level, map, zone).
 - Additional diagnostic logs (such as `travel_route_gate.csv` and `ghost_moves.csv`) can be added to the list as needed.
@@ -480,6 +480,9 @@ wasteful-heal interrupt, the AI's interrupt choke point (a walk with no site
 of its own reads `move_to`) and the encounter actions) writes the bot, `site=`, `slot=` (generic, channeled,
 autorepeat or melee), `spell=`, `cast_pct=` (how far the cast had got, `-1` for
 an instant), `target=` (resolved by guid when the row is written, `none` once the unit left the world) and `moved_yd=` (how far the cancel moved the bot). It
-is observation only and changes no cast. Disable the option after collecting a
-diagnostic capture.
+is observation only and changes no cast. `BossHeal` rows record supported target-session heal packets
+(healer, target, spell, amount, crit and the target's health sample) while an
+engaged boss of that map and instance was seen in the last five seconds; the amount
+is the heal before any overheal cut, and heal-over-time ticks use another packet and
+are not logged. Disable the option after collecting a diagnostic capture.
 See [column definitions and coverage](../../developers/host-api.md#csv-columns-unchanged-nine-column-layout).

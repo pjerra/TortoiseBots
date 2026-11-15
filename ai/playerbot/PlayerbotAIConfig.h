@@ -646,6 +646,11 @@ public:
     // Backstab from the front) before it probes the core's CheckCast, which broadcasts a spell failure on every probe.
     // Off = as before (the probe runs, and a Gouge from behind reads as castable and fails in the real cast).
     bool spellFacingPrecheck = false;
+    // The threat back-off counts a single-target damage cast's own expected threat (average direct damage, threat
+    // modifiers applied): the cast is held while the bot's threat plus it would reach the tank's threat on the target,
+    // so a slow nuke started under the 80 % high-threat line no longer lands past the core's pull line. Read with the
+    // run keys, so `.reload config` applies it. Off = as before (only the threat at cast start is checked).
+    bool threatCapCountsCastThreat = false;
     // Mortal Wound stacks at which an opt-in "fankriss tank" swaps (1-9).
     uint32 fankrissSwapStacks = 5;
     // Seconds the DPS hold Patchwerk once an opt-in "patchwerk main" engages him (0 = off, else 3-5).
@@ -690,6 +695,12 @@ public:
     // the rows are read (its own key on top of the tactics gate). Off, the rows are ignored, so the table behaves
     // exactly as before the kind (default off).
     bool dungeonRunAddCrew = false;
+    // AiPlayerbot.OnyxiaWhelpCrewOnGround: the whelp crew keeps the whelps on the ground too, in Onyxia's last 40 %,
+    // not only while she hovers. On, the whelp phase is the Hover aura or (she is found and her health is at or below
+    // 40 %): the crew's melee and its ranged keep hunting whelps there, the tanks keep their posts or the generic pick
+    // and the other ranged stay on her. Needs AiPlayerbot.OnyxiaWhelpsAndEggs and AiPlayerbot.DungeonRunAddCrew; off,
+    // the hunt is airborne-only as before (default off).
+    bool onyxiaWhelpCrewOnGround = false;
     // The raid guard leaves a unit to the tank a boss-tactic row assigns it to (an until_tank row with a tank slot, or
     // a tank_post row): on, the off-tank pick-ups never send another tank at it; off, the raid's off-tanks take it as
     // before (its own key on top of the raid and boss rules; default off).
@@ -773,6 +784,11 @@ public:
     // or drinks; it needs dungeonRunSeekWalkoutFocus (without it nothing is held); off,
     // the puller may drop to the non-combat engine mid-task as before (default off, recommended on).
     bool dungeonRunSeekWalkoutHoldCombat = false;
+    // The walk-out's kept boss (Hakkar's seek pull): on, the fight scan adds the live, unshot walk-out puller's boss
+    // while that boss is missing from its attackers (a puller more than SightDistance from the raid), so the seek row's
+    // trigger stays open and its own tick keeps running. It needs dungeonRunSeekWalkoutFocus (without it the puller runs
+    // its other actions anyway); off, such a puller loses the scan as before (default off, recommended on).
+    bool dungeonRunSeekPullerKeepsFight = false;
     // The victim relief (Hakkar's Sons): on, a seek source whose victim is the boss's own victim tank for 1 s is taken
     // off it by the other off-tank (within 20 yd, its taunt ready, holding no source, not the boss's victim), at most
     // twice per source and 8 s apart; off, today's takes hold (default off, recommended on).
@@ -876,6 +892,13 @@ public:
     // 0, not the victim), a bot already clear of its lane stays where it stands instead of walking to its seat, and a
     // seated bot does not flee (default off).
     bool bossStandWholeRaid = false;
+    // A melee bot or a tank with a valid boss stand seat keeps it instead of running "reach melee" back toward its
+    // target (default off).
+    bool bossStandHoldsMeleeReach = false;
+    // A window's stand seats are every role's rows of its anchor and window spell that apply to the boss now (the same
+    // aura, signal and radius each row is read by alone), pooled and planned with a 20 yd walk cap; a held window keeps
+    // the rows it opened on. A hold_spot post whose spot stands outside the breath lane keeps its tank there (default off).
+    bool bossStandNearestSeat = false;
     // A boss the raid is fighting stays in every raid bot's fight for 10 s after the last bot saw it in its attacker
     // list (a melee bot that cannot reach an airborne boss gives up on it): within 150 yd and while the bot itself is
     // in combat, so its boss-tactic rows and stand seats stay active (default off).
@@ -900,10 +923,23 @@ public:
     // The ranged_only boss-tactic kind (melee bots leave a subject that stands the row's gap above them: Ayamiss in the
     // air, so the melee take the adds): off, the rows and the held target are ignored (default off).
     bool dungeonRunRangedOnly = false;
+    // The threat_free boss-tactic kind (a non-tank reads no threat cap on a subject that stands the row's gap above it:
+    // no tank can reach airborne Onyxia, so her tanks hold no threat and the casters' nukes were vetoed): off, the rows
+    // are ignored (default off).
+    bool dungeonRunThreatFree = false;
+    // The AoE veto (ActionThreatType::ACTION_THREAT_AOE) reads the worst threat of every possible attack target, so an
+    // airborne subject the `threat_free` lift already uncapped still met the veto through a whelp on the floor with no
+    // tank on it (walk 2f: every `site=aoe` row). On, the AoE veto asks the lift for its own target and lets the AoE
+    // go out when that subject is lifted (needs AiPlayerbot.DungeonRunThreatFree; default off).
+    bool dungeonRunThreatFreeAoe = false;
     // A ranged reach at a hostile that hovers 8 yd or more above the floor under it inside a dungeon (Onyxia in P2)
     // walks to the floor under it and stops at the trigger's own combat-reach distance instead of giving up under the
     // body (default off, recommended on).
     bool rangedReachHoverTarget = false;
+    // A ranged reach under a hovering boss walks the path to the live `anchor` row's centre and stops as soon as
+    // the target is in range, so her next hop does not leave the bot out of range again (needs
+    // AiPlayerbot.RangedReachHoverTarget; default off).
+    bool hoverReachAimsAtAnchor = false;
     // The airborne-boss wand row yields to the class nuke rows for damage-dealing wand casters (Onyxia P2: mage,
     // warlock and non-healer priest; their class rows already wand only when the nuke cannot go out). Hunters,
     // melee, tanks and healers keep the row (default off).
@@ -911,6 +947,9 @@ public:
     // A ranged damage dealer whose hovering target stands in spell range takes no `raid spread` spacing step, unless
     // a live boss `spread` row asks for one (default off).
     bool hoverCastHoldsSpread = false;
+    // That hold yields only to a real stack (4.5 yd) instead of any member inside the spread distance; a bot that does
+    // step rests 8 s, and of two bots that would both step out of a stack only the higher guid steps (default off).
+    bool hoverCastStackOnly = false;
     // The gate_hold boss-tactic kind (damage dealers stop on a boss at or below the row's health gate while its blocker
     // still fights): off, the rows are ignored and nothing reads the gate (default off, recommended on).
     bool dungeonRunGateHold = false;

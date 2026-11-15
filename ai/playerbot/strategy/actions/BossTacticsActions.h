@@ -192,7 +192,6 @@ namespace ai
     // settles, even inside the "trigger active" value's one-second cache.
     // The "loose adds near" trigger calls it too, so both agree on the count.
     bool AoeTauntStillNeeded(PlayerbotAI* ai, Player* bot);
-
     // AiPlayerbot.DungeonRunTankPostOwnsSubject: whether another tank's live `tank_post` on `target` reserves it, so
     // this tank does not taunt it (the post's own slot takes it). False unless the key is on, the bot is a tank and the
     // target a creature; the other tank must be in the bot's instance, able to act, within kTankPostReserveRangeYd of
@@ -208,6 +207,10 @@ namespace ai
     // that unit while it lives, so a renumbering of the raid tank order does not move the post off it.
     std::uint64_t TankPostLatchedUnit(Player* bot);
 
+    // AiPlayerbot.BossStandNearestSeat: the spot of this bot's live `tank_post` in mode `hold_spot` (false when it
+    // holds no post, its record is not current, the post ended, or its row ran in the plain mode). Takes the post lock
+    // alone: the caller never holds the stand lock.
+    bool TankPostLiveSpot(std::uint64_t botGuid, float& x, float& y, float& z);
     // AiPlayerbot.DungeonRunTankPostHealers: the live post this healer is held on. `holder` is the post's tank (the
     // only member this healer may heal) and `unit` the unit the post latched (null before the arrival). Both null when
     // the key is off, the bot is no healer, the map has no post rows, or no live record lists the bot. The record
@@ -768,6 +771,31 @@ namespace ai
     // current victim always on today's rule. Writes the `BossTacticsHealReserve` row once per 5 s while it runs, for
     // healers only.
     bool HealTopUpAllowedFor(PlayerbotAI* ai, Player* bot, Unit* target);
+
+    // A ranged bot's fixed point between the doses (DungeonRunBossSpreadSlots): the slot it owns in the ring order
+    // around the boss anchor, the verdict that decides what it does with it, and the point itself. `slotBot` is false
+    // for every bot the row does not apply to. The read never reads the key for its decision (the caller does); the key
+    // only owns the row it writes, through SpreadLogOwned.
+    struct BossSpreadSlotTask
+    {
+        bool slotBot = false;
+        SpreadSlotVerdict verdict = SpreadSlotVerdict::NoCentre;
+        int slot = -1;
+        // The spare point the walk goes to when the owned slot is unusable; the row still reports `slot` and `slotYd`.
+        int fallback = -1;
+        // The centre the ring order was built around (`anchor`, `spot`, `none`); the row reports it.
+        SpreadCentreKind centreKind = SpreadCentreKind::None;
+        float x = 0.0f, y = 0.0f, z = 0.0f;
+        float slotYd = -1.0f;
+    };
+    BossSpreadSlotTask FindBossSpreadSlot(PlayerbotAI* ai, Player* bot);
+    // One `BossTacticsSpread` row per bot and 5 s: the key, the verdict word, the owned slot, the distance to it, the
+    // fallback point actually used (-1 when none), the centre (`anchor`, `spot` or `none`), the nearest living group
+    // member, how many members stand inside the row's spacing, the seek aura and the clock. A null `centre` derives it
+    // from the live anchor and the seek spot (the legacy writer); `replaceSameTick` lets a failed move correct the row
+    // its own tick's read wrote instead of being swallowed by it.
+    void LogBossSpread(PlayerbotAI* ai, Player* bot, const char* verdict, int slot, float slotYd, int fallback,
+                       const char* centre = nullptr, bool replaceSameTick = false);
 
     // A ranged bot's fixed point between the doses (DungeonRunBossSpreadSlots): the slot it owns in the ring order
     // around the boss anchor, the verdict that decides what it does with it, and the point itself. `slotBot` is false

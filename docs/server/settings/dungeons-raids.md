@@ -92,6 +92,7 @@ These settings configure boss encounter mechanics, environmental hazard evasion,
 | [`AiPlayerbot.DungeonRunSeekMeetNoHeal`](#aiplayerbotdungeonrunseekmeetnoheal) | `0` (recommended `1`) | `1`: while a pulled Son of Hakkar's meet is open, bots that heal members (healers and off-heal hybrids) skip its puller as a heal target unless its health after the next hit is under 40 %, so a heal's threat does not peel the Son onto a healer (needs `DungeonRunSeekSonMeet`). |
 | [`AiPlayerbot.DungeonRunSeekWalkoutFocus`](#aiplayerbotdungeonrunseekwalkoutfocus) | `0` | `1` (recommended): the Hakkar walk-out puller's combat actions are held until its shot lands (not below 40 % health; reaction actions still run), it turns to the Son one tick before it casts, and a hunter opens with Arcane Shot when it can. |
 | [`AiPlayerbot.DungeonRunSeekWalkoutHoldCombat`](#aiplayerbotdungeonrunseekwalkoutholdcombat) | `0` | `1` (recommended, needs `DungeonRunSeekWalkoutFocus`): the live, unshot Hakkar walk-out puller stays on the combat engine while Hakkar fights, and the pick skips a bot off the combat engine or eating or drinking. |
+
 | [`AiPlayerbot.DungeonRunSeekWalkoutFaceCast`](#aiplayerbotdungeonrunseekwalkoutfacecast) | `0` | `1` (recommended): the Hakkar walk-out puller turns to the Son and casts in one tick, its per-update facing no longer turns it back to Hakkar, and the 6 s no-shot clock counts only the time in shot position. |
 | [`AiPlayerbot.DungeonRunSeekWalkoutStandLog`](#aiplayerbotdungeonrunseekwalkoutstandlog) | `0` | `1` (diagnostic, safe on for test walks): one `seek pull: walk-out stand` row a second while the Hakkar walk-out puller walks out, and a `castrefused` row for every refused pull cast. |
 | [`AiPlayerbot.DungeonRunSeekWalkoutStandSight`](#aiplayerbotdungeonrunseekwalkoutstandsight) | `0` | `1` (recommended): the Hakkar walk-out's stand search tests sight the way the bot does, and a refused move on the stand re-plans it instead of aborting. |
@@ -128,6 +129,7 @@ These settings configure boss encounter mechanics, environmental hazard evasion,
 | [`AiPlayerbot.EnableCustomRaidTactics`](#aiplayerbotenablecustomraidtactics) | `1` | Gates scripted encounter tactics and transition strategies for custom raids. |
 | [`AiPlayerbot.HazardEvasionDistance`](#aiplayerbothazardevasiondistance) | `12.0` | Cap in yards on the step bots take when spreading for spacing. |
 | [`AiPlayerbot.OnyxiaWhelpsAndEggs`](#aiplayerbotonyxiawhelpsandeggs) | `1` | Prioritizes whelp clearing and egg avoidance during Onyxia phase two. |
+| [`AiPlayerbot.OnyxiaWhelpCrewOnGround`](#aiplayerbotonyxiawhelpcrewonground) | `0` | `1`: the add crew keeps hunting the whelps in Onyxia's last 40 % on the ground, with the tanks on their posts (needs `AiPlayerbot.OnyxiaWhelpsAndEggs` and `AiPlayerbot.DungeonRunAddCrew`). |
 | [`AiPlayerbot.RaidEntryByCommander`](#aiplayerbotraidentrybycommander) | `1` | Waives a bot's failed entrance condition at a raid entrance with no area-trigger script when its commander is a real player who commands the raid (in the group, or through the binding of a bound raid) and meets it. |
 
 ## Settings
@@ -826,6 +828,7 @@ Whether the boss tactics keep their `ranged_only` rows: melee bots leave a subje
 **Ranged only:** a boss tactic row of the `ranged_only` kind (see [Boss Tactics](../../play/boss-tactics.md#kinds)) names the subject (`target_entry`, `0` = the row's boss) and the vertical gap in yards (`param`, 3 to 40). A melee bot (melee damage or a tank) standing `param` yd or more below the subject skips it in the free-damage and tank picks and drops it if it already holds it, then takes a `kill_first` pick or the nearest attacker that is not held; a ranged bot and a healer are never held. An explicit attack order beats the hold: an ordered bot keeps the subject until the order is cleared (as for `hold_kill`). The heights are the two units' own z, never the navmesh. When the subject lands the gap closes and the hold ends by itself. The `BossTacticsRangedOnly` row (`subject=<entry>, gap=<yd>`) goes to `bot_events.csv` at most once per 5 s per bot. Ayamiss climbs 20 yd for her air phase (boss_ayamiss.cpp:193-205).
 
 </details>
+
 ### `AiPlayerbot.RangedReachHoverTarget`
 Whether a ranged reach at a hostile hovering in a dungeon walks to the floor under it and stops at the spell trigger's own combat-reach distance, instead of standing still out of range.
 **Default:** `0` (recommended on) · **Values:** `0` off (the plain ranged path walk and chase), `1` on · **Restart:** not needed (`.reload config` applies it on the next world tick)
@@ -872,6 +875,7 @@ Whether a bot holding a boss stand seat keeps it through Onyxia's Deep Breath in
 <details>
 <summary>How it works in detail</summary>
 
+**Gate hold:** a boss tactic row of the `gate_hold` kind (see [Boss Tactics](../../play/boss-tactics.md#kinds)) names the spared unit (`boss_entry`), the blocker that must not be left alive (`target_entry`, a different unit from the spared one; the loader skips a row that names the spared boss itself), the health gate in percent (`param`, 1 to 99), how many blockers may still fight (`priority`, 0 = not one more) and the blocker search radius in yards (`window_s`, 0 = 200, else 50 to 250). While the spared unit is at or below the gate and more than `priority` units of the blocker within the radius are alive, in combat and not evading, a free damage dealer leaves it alone: the damage-dealer and area picks, the group tank's victim and the raid mark drop it, and an area cast or a DoT within 10 yd of it is stood down (DoTs already ticking keep ticking). Tanks and healers keep their own pick, and an explicit attack order wins. An evaded, out-of-combat or dead blocker never counts, so a second boss that leaves the encounter cannot stall the spared one's kill. The rows are read by the fight scan; the band columns are refused because the kind's own gate is `param`. The `BossTacticsHoldKill` row records the drop like a `hold_kill` one.
 **Stand over dodge:** the stand seats already stand clear of their breath lane, so the generic dodge only walks a seated bot back into it. With the key on, the Onyxia breath dodge action is not useful while the bot holds a stand seat, the same rule DragonFlank and RaidSpread already follow; the stand action walks the bot to its seat instead.
 
 </details>
@@ -895,6 +899,7 @@ Whether every bot in the fight with the boss takes a stand seat, and whether a b
 **Whole raid:** without the key a bot takes part in an anchor's seats only with threat on the boss or while it is the boss's victim, so a boss that wipes threat (Onyxia's Fireball, -100 %) drops its target out of the seat plan until it gains threat again. With the key on, a member that is in combat while the boss is in combat counts too; nothing else about the plan changes. **Stay:** a bot already on its seat's side of the lane and at least as far from the lane line as the seats next to it along the lane (within 3 yd of its own along-lane spot, every role) stays where it stands; with no such seat it walks. The seat becomes the bot's own position, so the reach, the reactive dodge, the flee gate and the stand action treat it as seated and arrived, while the tank post does not yield to a stay (a stay is not a planned seat). **Flee:** a seated bot's `flee` is not useful (the seat is the escape); the step-out from a ground cloud keeps its own rule and still runs. The `BossStand` row of a stay says `stay=1`.
 
 </details>
+
 ### `AiPlayerbot.BossTacticsKeepsEngagedBoss`
 Whether a boss the raid is fighting stays in every raid bot's fight after that bot's own attacker list lost it.
 **Default:** `0` (recommended on for Onyxia's Lair; not yet tested in other raids) · **Values:** `0` off (a boss is read only from the bot's own attacker list), `1` on (needs a boss with stand rows, or a boss with a `tank_post` row) · **Restart:** not needed (`.reload config` applies it on the next world tick)
@@ -1188,6 +1193,7 @@ Whether the Hakkar walk-out puller stays in combat until its shot lands. Recomme
 - Only the instance's own record is read, so two raids in different instances never hold each other's bots; with no task running the check costs no lock.
 
 </details>
+
 
 ### `AiPlayerbot.DungeonRunSeekWalkoutFaceCast`
 Whether the Hakkar walk-out puller turns to its Son and casts in the same tick. Recommended on.
@@ -1600,7 +1606,6 @@ Whether a Delusions carrier whose attackers list never showed a Shade finds it b
 **Rows:** the `BossTacticsKillFirst` no-switch row names the check that kept every grid hit out of the pick and carries `codes=<word>:<n>...`, `grid=<hits>` and `pickable=<0|1>`; when the scan's Shade replaces an ordinary pick, one row per bot per 5 s says `reason=scan_over`.
 
 </details>
-
 ### `AiPlayerbot.DungeonRunTankPostOwnsSubject`
 Whether a live `tank_post` owns the unit it waits for: while another tank's post is live on it, no tank taunts it, so the post's own slot takes it. It is recommended on for a fight whose second boss lands later.
 **Default:** `0` · **Values:** `0` off (every tank may taunt the subject as before), `1` on (needs `AiPlayerbot.DungeonRunTankPost`; does not need `AiPlayerbot.DungeonRunTauntGate`) · **Restart:** not needed (`.reload config` applies it on the next world tick)
@@ -1687,7 +1692,6 @@ Whether a `taunt_after_cast` row in mode `until_tank` that names an off-tank can
 **Diagnostics:** the `BossTacticsTauntAfter` row's `tank=` is the window's tank; with the key on an off-tank row never writes `tank=0`, and a window that found no usable off-tank writes no row at all.
 
 </details>
-
 ### `AiPlayerbot.DungeonRunTankPostOwnsUnit`
 Whether a live `tank_post` owns the one unit it latched at its arrival: another tank's record then reserves only that unit, not every unit of the row's `target_entry`, so two posts on one entry no longer lock each other's taunts out. Off by default: with two posts on the Hatcher entry 50144, each reserved both Hatchers against the other tank and the post's own update reset the shared loose clock, so the 15 s grace never ended.
 **Default:** `0` · **Values:** `0` off (every post on the entry reserves every unit of it, as before), `1` on (needs `AiPlayerbot.DungeonRunTankPost` and `AiPlayerbot.DungeonRunTankPostOwnsSubject`) · **Restart:** not needed (`.reload config` applies it on the next world tick)
@@ -1747,6 +1751,7 @@ Whether a `hold_spot` post runs before its unit exists: it starts with no subjec
 **The end:** a waiting post that ends for its band (its latched unit died, its window closed) keeps a done record until the band closes: the record does nothing, holds no unit or reservation, and keeps its read time fresh so the idle sweep cannot drop it and reopen the row inside the same band. Without that record the next tick would start a fresh post with a new window for as long as the band stands. The done record goes when the band closes (no second `end` row); a raid tank renumbering moves its row to another slot index but keeps the record, since that row and its boss still stand.
 
 </details>
+
 
 ### `AiPlayerbot.DungeonRunShadeHealerCover`
 Whether the Delusions carriers at Jin'do cover the healers a Shade attacks: a cursed off-tank that does not hold the boss takes a Shade on a healer, and a cursed DPS carrier ranks a Shade on a healer ahead of the other Shades. Recommended on.
@@ -1840,7 +1845,6 @@ Whether a tank refuses to taunt a creature it must not hold. Recommended on.
 **Rows:** a refusal logs `BossTacticsTauntGate` once per bot and reason per 5 s, and the seek take's row says `reason=taunt_gated`.
 
 </details>
-
 ### `AiPlayerbot.DungeonRunUseObject`
 Whether the boss tactics keep their `use_object` rows: one claimed bot clicks the boss's game object at the right moment, and mode `tank_anchor` also walks the boss over to it.
 **Default:** `0` · **Values:** `0` off (the rows are ignored, as before the kind existed), `1` on (needs `AiPlayerbot.DungeonTactics`, or a commander-bound group) · **Restart:** not needed (`.reload config` applies it on the next world tick)
@@ -2011,6 +2015,25 @@ An explicit attack order always takes precedence over automated whelp targeting.
 
 </details>
 
+### `AiPlayerbot.OnyxiaWhelpCrewOnGround`
+Keeps the whelp crew hunting the whelps in Onyxia's last 40 % on the ground, not only while she hovers.
+**Default:** `0` · **Values:** `0` off (the whelps are hunted while she hovers only), `1` on (the hunt runs in her last 40 % on the ground as well) · **Restart:** not needed (`.reload config` applies it with the other `AiPlayerbot.DungeonRun*` keys) · **Needs:** `AiPlayerbot.OnyxiaWhelpsAndEggs = 1` and `AiPlayerbot.DungeonRunAddCrew = 1`
+
+<details>
+<summary>How it works in detail</summary>
+
+The whelp duty (`AiPlayerbot.OnyxiaWhelpsAndEggs`) covers the airborne phase. With this key on, the whelp phase is also her last 40 % on the ground (the boss is found and its health is at or below 40 %), so the add crew keeps the whelps in the phase that kills the raid (walk 2g: 12-16 whelps up in P3, 21 at the peak, 28 P3 deaths to them):
+
+- the crew's melee and its ranged keep hunting the nearest whelp, as while she hovers;
+- while Cindarion still lives (the `add_crew` row still waits), only the crew's own AoE ranged damage dealers take the whelps on the ground: the rest of the raid's AoE ranged stay on her, where today's duty alone would have put every one of them on the whelps;
+- the tanks keep their boss-tactic posts (or the generic pick), so the whelp duty never pulls them off a post;
+- the other ranged damage dealers stay on her: they still leave a whelp for her (the airborne return now runs on the ground too), because the crew's melee is on the whelps there;
+- the phase 1 pull (above 40 %) is untouched.
+
+Only active on map 249 with the `onyxia` fight strategy; an explicit target order from a player always wins. When set to `0`, the hunt is airborne-only and every phase behaves as before.
+
+</details>
+
 ### `AiPlayerbot.RaidEntryByCommander`
 Waives a bot's failed entrance condition at a raid entrance that has no area-trigger script, when the commander who bound it is a real player who commands the bot's raid and meets that condition himself.
 **Default:** `1` · **Values:** `0` off, `1` on · **Restart:** needed
@@ -2059,5 +2082,55 @@ Seconds the DPS hold Patchwerk after an opt-in `patchwerk main` engages him.
 <summary>How it works in detail</summary>
 
 Only acts in a raid where a tank has the `patchwerk main` strategy ([Patchwerk roles](../../play/dungeons-and-raids.md#patchwerk-opt-in-roles)). The clock starts when the main's Patchwerk enters combat and is kept for the whole encounter, so a DPS that joins late is not held again. During an ordered pull the DPS also wait while the main walks in. Heals and buffs are never held. Setting the key does not enable the roles.
+
+</details>
+
+### `AiPlayerbot.OnyxiaWhelpCrewOnGround`
+Whether the add crew keeps the whelps in Onyxia's last 40 % on the ground, not only while she hovers.
+**Default:** `0` · **Values:** `0` off (the whelp phase is the airborne phase alone), `1` on (needs `AiPlayerbot.OnyxiaWhelpsAndEggs` and `AiPlayerbot.DungeonRunAddCrew`) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+The whelp phase becomes her Hover aura, or the boss found and her health at or below 40 %. The crew's melee and its ranged hunt the nearest whelp on the ground too, the tanks keep their boss-tactic posts (or the generic pick), and the ranged damage dealers past the crew stay on her, so phase 3 is not a whelp phase out of the crew's hands (walk 2g: 12-16 whelps up in P3, 21 at the peak, 28 P3 deaths to them). While the `add_crew` row still waits (its switch unit lives) only the crew's own AoE ranged take the whelps on the ground, not every AoE ranged dealer of the raid. Phase 1 runs above 40 % and is untouched.
+
+### `AiPlayerbot.DungeonRunSeekPullerKeepsFight`
+Whether a walk-out puller far from the raid keeps its boss in its own fight scan, so its walk-out keeps running.
+**Default:** `0` · **Values:** `0` off (today's scan), `1` on (recommended on; needs `AiPlayerbot.DungeonRunSeekWalkoutFocus`) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+More than `AiPlayerbot.SightDistance` from the raid the puller's attackers list is empty, so the seek row's boss tactics trigger closed while the walk-out focus held every other action and the puller stood frozen at its stand until the 15 s no-sight cut. With the key on, the fight scan adds the boss of that bot's running, unshot walk-out task to the fight while the boss still fights (alive, in combat, not evading), for that bot only, and writes one `seek pull: walk-out kept boss` row a walk-out. It works for any `seek_aura` boss and needs no boss constants. The focus is what holds the puller's other actions; without it the kept boss saves nothing.
+
+### `AiPlayerbot.DungeonRunThreatFree`
+Whether the boss tactics keep their `threat_free` rows: a non-tank reads no threat cap on a subject that stands the row's gap above it and is not descending.
+**Default:** `0` · **Values:** `0` off (the rows are ignored), `1` on (needs the boss tactics) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+A `threat_free` row names the subject (`target_entry`, `0` = the row's boss) and the vertical gap in yards (`param`, 3 to 40). A non-tank standing `param` yd or more below the subject reads 0 threat on it, so the threat multiplier has nothing to veto (airborne Onyxia: her tanks hold no threat while no tank can reach her, so every nuke was read as 100 %); a tank keeps its own reading. The heights are the two units' own z, never the navmesh, and the lift ends at once when the subject starts descending (its z fell by more than 1 yd within 2 s), because her threat list is wiped at the start of the landing flight. Each lift writes one `BossTacticsThreatFree` row per bot per 10 s.
+
+### `AiPlayerbot.DungeonRunThreatFreeAoe`
+Whether the AoE threat veto asks the `threat_free` lift for its own target, so an AoE on a lifted subject goes out instead of being held through another target's threat.
+**Default:** `0` · **Values:** `0` off (every AoE above 50 % `aoe` threat is vetoed), `1` on (needs `AiPlayerbot.DungeonRunThreatFree`) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+The `aoe` threat value is the worst of every possible attack target, so on airborne Onyxia it read a whelp on the floor with no tank on it (100 %) and the veto held every AoE whose own target the lift had already uncapped (walk 2f a-1: `site=aoe` on 134 of 134 `ThreatVeto` rows, a-2: 125). With the key on, the veto asks the lift for the action's own target and lets the AoE go out with no veto row; a tank, a target without a live `threat_free` row and the landing descent keep today's veto.
+
+### `AiPlayerbot.HoverReachAimsAtAnchor`
+Whether a ranged reach under a hovering boss walks the path to the live `anchor` row's centre and stops as soon as the target is in reach, instead of parking at the edge of range on the boss's side of the room.
+**Default:** `0` · **Values:** `0` off (the walk under the boss's body), `1` on (needs `AiPlayerbot.RangedReachHoverTarget`) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+The plain hover reach stops at the edge of range on the boss's side of the room, so after her next hop (Onyxia moves 30-45 yd every 15-25 s) the bot stands out of range again and walks once more (walk 2e: 153 reaches in 510 s, one per caster per 27 s). With the key on, a bot with a live `anchor` row of its target walks to the in-range point nearest the anchor's centre instead; the centre can itself stand outside the reach, so the aim is the point on the ground segment from the centre toward her, the trigger's own line less 1 yd from her. A hazard, no path or point, no live anchor row, or another boss's anchor row falls back to today's walk. The `BossReachHover` row names the aim (`aim=anchor`, else `aim=target`), and a refused anchor aim writes no row of its own.
+
+### `AiPlayerbot.HoverCastStackOnly`
+Whether the hover hold yields only to a real stack instead of to any group member inside the spread distance.
+**Default:** `0` · **Values:** `0` off (the hold yields to any member inside the spread distance), `1` on (needs `AiPlayerbot.HoverCastHoldsSpread`) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+The hold yielded to any member inside the spread distance, so casters parked on the same hover reach point never stood still: walk 2e yielded in 279 of 402 verdicts (median nearest member 4.8 yd), each step 11 yd and a new one every 3 s. With the key on the hold yields only inside 4.5 yd, the step out is 5.5 yd, a bot steps at most once per 8 s, and of two ranged damage-dealer bots that would both step only the one with the higher guid steps (the other reports `hover_cast_wait`). A real player or a healer as the nearest member never makes the other bot step by this rule. The step lands only on a point still inside the enemy-out-of-spell-range line, else the bot keeps its spot and writes `hover_cast_stack_norange`.
+
+### `AiPlayerbot.BossStandHoldsMeleeReach`
+Whether a melee bot or a tank with a valid boss stand seat keeps it instead of running `reach melee` back toward its target.
+**Default:** `0` · **Values:** `0` off (today's reach), `1` on (needs the boss tactics and the stand rows) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+Once the stand trigger is quiet, "reach melee" walked a seated melee bot or tank off its seat toward its target every tick; with the key on it is not useful while the bot holds a seat, so the seat walk stands.
+
+### `AiPlayerbot.BossStandNearestSeat`
+Whether a breath window's seats are pooled across its roles and planned by the walk, and a `hold_spot` post outside the window's lane keeps its tank at its spot.
+**Default:** `0` · **Values:** `0` off (each role keeps its own seats), `1` on (recommended on; needs the boss tactics and the boss stand rows) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+A window's seats are pooled across the roles of its anchor and window spell and planned by the count beyond 35 yd, then beyond 20 yd, then the total walk, with a 20 yd walk cap; a `hold_spot` tank post whose spot stands outside the window's lane keeps its tank at that spot within 20 yd instead of taking a seat (a seat it already held goes to the next bot). The `assigned` row carries `pool=` and `post=`. Walk 2g-2h: median seat walk 27.4 yd, 65-68 % over 20 yd.
 
 </details>

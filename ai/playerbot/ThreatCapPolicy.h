@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <vector>
 #include <utility>
 
@@ -155,6 +156,114 @@ namespace ai
         if (maxThreat > 0 && fleeing)
             return 0;
         return ThreatPctSaturated(botThreat, maxThreat);
+    }
+
+    // The descent the `threat_free` lift ends on: the subject's z fell by more than kThreatFreeDescentYd against a
+    // sample taken within kThreatFreeDescentWindowMs. A subject hovering between points stays within 1 yd, so the lift
+    // holds there; the landing flight drops it at once instead of waiting for the gap itself to close.
+    constexpr float kThreatFreeDescentYd = 1.0f;
+    constexpr std::uint32_t kThreatFreeDescentWindowMs = 2000;
+    constexpr std::uint32_t kThreatFreeZSampleGapMs = 250;
+    constexpr std::size_t kThreatFreeZSamples = 8;
+
+    // One subject's recent height, sampled at most every kThreatFreeZSampleGapMs so the small ring spans more than a
+    // second whatever the read rate. The caller keeps one per (instance, guid) and drops it with the fight.
+    struct ThreatFreeZHistory
+    {
+        struct Sample
+        {
+            float z = 0.0f;
+            std::uint32_t atMs = 0;
+        };
+
+        Sample samples[kThreatFreeZSamples] = {};
+        std::size_t count = 0;
+        std::size_t next = 0;
+
+        bool Descending(float subjectZ, std::uint32_t nowMs)
+        {
+            bool descending = false;
+            for (std::size_t i = 0; i < count; ++i)
+                if (nowMs - samples[i].atMs <= kThreatFreeDescentWindowMs &&
+                    samples[i].z - subjectZ > kThreatFreeDescentYd)
+                    descending = true;
+            Sample const& last = samples[(next + kThreatFreeZSamples - 1) % kThreatFreeZSamples];
+            if (count == 0 || nowMs - last.atMs >= kThreatFreeZSampleGapMs)
+            {
+                samples[next] = Sample{subjectZ, nowMs};
+                next = (next + 1) % kThreatFreeZSamples;
+                if (count < kThreatFreeZSamples)
+                    ++count;
+            }
+            return descending;
+        }
+    };
+
+    // The history's key: the instance id with the raw guid. An instanced copy of the same creature can hand out the
+    // same raw guid, and two raids can run one lair at once, so a guid-only key shares one ring between them: one
+    // raid's descent ends the other's lift and its fight reset forgets the other's history.
+    struct ThreatFreeZKey
+    {
+        std::uint32_t instanceId = 0;
+        std::uint64_t guid = 0;
+
+        bool operator<(ThreatFreeZKey const& other) const
+        {
+            return instanceId != other.instanceId ? instanceId < other.instanceId : guid < other.guid;
+        }
+    };
+
+    // One ring per (instance, guid). Reset drops only the key it is given, so a fight ending in one instance leaves
+    // every other instance's history standing. The caller holds the lock around the calls.
+    class ThreatFreeZHistories
+    {
+    public:
+        bool Descending(ThreatFreeZKey const& key, float subjectZ, std::uint32_t nowMs)
+        {
+            return histories_[key].Descending(subjectZ, nowMs);
+        }
+
+        void Reset(ThreatFreeZKey const& key)
+        {
+            histories_.erase(key);
+        }
+
+        std::size_t size() const
+        {
+            return histories_.size();
+        }
+
+        void Clear()
+        {
+            histories_.clear();
+        }
+
+    private:
+        std::map<ThreatFreeZKey, ThreatFreeZHistory> histories_;
+    };
+
+    // AiPlayerbot.DungeonRunThreatFree (ai_boss_tactic kind `threat_free`): a subject that stands `gapYd` yd or more
+    // above the bot cannot be reached by any tank, so its tanks hold no threat and every damage dealer read 100 %
+    // ("the tank has no threat: hold", ThreatPctOf). Walk 2e: on airborne Onyxia the threat multiplier vetoed the
+    // casters' nukes (248 reasonless refusals, nukes 19 % of caster frames, 2.5 %/min). A non-tank reads 0 there: no
+    // cap. A tank keeps its own reading. The comparison is the raw z difference, as for ranged_only. `descending`
+    // ends the lift: her threat list is wiped at the start of the landing descent while she is still ~20 yd up, so a
+    // height-only lift would let the casters nuke a tankless boss that is already coming down on them.
+    inline bool ThreatFreeApplies(bool keyOn, bool isTank, float subjectZ, float botZ, float gapYd, bool descending)
+    {
+        return keyOn && !isTank && !descending && gapYd > 0.0f && subjectZ - botZ >= gapYd;
+    }
+
+    // AiPlayerbot.DungeonRunThreatFreeAoe: the AoE veto (ActionThreatType::ACTION_THREAT_AOE) reads the `aoe` threat
+    // value, the worst of every possible attack target. On airborne Onyxia that worst target is a whelp on the floor
+    // with no tank on it (100 %, "the tank has no threat"), so the veto held every AoE whose own target the
+    // threat-free lift had already uncapped (walk 2f: `site=aoe` on 134 of 134 rows of a-1). The lift answers the same
+    // question for the action's own target: when that subject is lifted, the AoE goes out. `targetLifted` is
+    // ThreatFreeLifted, so the key off, a tank, a subject without a live `threat_free` row and the landing descent all
+    // keep today's veto.
+    inline bool ThreatFreeLiftsAoe(bool keyOn, bool targetLifted)
+    {
+        return keyOn && targetLifted;
     }
 
     // One tank on the target as the caller resolved it from the raid's tank order (GetRaidTankRoles): index 0 is the
@@ -532,4 +641,83 @@ namespace ai
             return held;
         }
     };
+
+    // The core's pull lines (ThreatManager::getHostileTarget): a mob turns on an attacker whose threat passes 110 % of
+    // its current victim's while it can reach that attacker with a melee swing, 130 % otherwise.
+    constexpr float kThreatCapCastMeleePullLine = 1.1f;
+    constexpr float kThreatCapCastRangedPullLine = 1.3f;
+
+    inline float ThreatCapCastPullLine(bool meleeReach)
+    {
+        return meleeReach ? kThreatCapCastMeleePullLine : kThreatCapCastRangedPullLine;
+    }
+
+    // AiPlayerbot.ThreatCapCountsCastThreat: whether a single-target damage cast is held because its own expected
+    // threat would carry the bot past the mob's victim. The high-threat veto (HighThreatTrigger, 80 %) reads only the
+    // threat the bot has at cast start, so a Fireball started at 79 % landed about 3 s later as one 400-690 threat hit
+    // and jumped the mage past the core's 130 % ranged pull line (non-fire mages: 48 of 87 aggro onsets came within 5 s
+    // of a Fireball hit). Held when EITHER
+    //  (a) the normal hit reaches the reference: botThreat + castThreat >= tankThreat (100 %, the margin for what the
+    //      estimate leaves out), or
+    //  (b) the bot can crit with the spell and a crit reaches the core's real pull line: botThreat + castThreat *
+    //      critMult >= pullLine * tankThreat (critMult 1.5 for spells, 2 for melee/ranged attack spells, plus crit
+    //      talents; pullLine 1.1 in the mob's melee reach, else 1.3).
+    // False without the key, without tank threat on the target (the old veto keeps that case) and without an estimate.
+    inline bool ThreatCapCastOvershoots(bool key, float botThreat, float castThreat, float tankThreat, float critMult,
+                                        float pullLine, bool canCrit)
+    {
+        if (!key || tankThreat <= 0.0f || castThreat <= 0.0f)
+            return false;
+        if (botThreat + castThreat >= tankThreat)
+            return true;
+        return canCrit && botThreat + castThreat * critMult >= pullLine * tankThreat;
+    }
+
+    // The average of one spell effect's points, the same arithmetic as the core's WorldObject::CalculateSpellDamage
+    // without its dice roll: the base plus the per-level growth, plus the middle of the roll range (irand between the
+    // base dice and the die sides, both grown per level). levelDelta is the caster's level clamped to the spell's
+    // base/max level, minus the spell level, as the core computes it. Spell mods and the level-damage attribute are
+    // the caller's.
+    inline float ThreatCapAverageEffectPoints(int basePoints, int baseDice, int dieSides, float pointsPerLevel,
+                                              float dicePerLevel, int levelDelta)
+    {
+        int points = basePoints + int(levelDelta * pointsPerLevel);
+        int const randomPoints = int(dieSides + levelDelta * dicePerLevel);
+        if (randomPoints == 0 || randomPoints == 1)
+            return float(points + baseDice);
+        return float(points) + (float(baseDice) + float(randomPoints)) / 2.0f;
+    }
+
+    // The threat a cast adds when it lands, the core's arithmetic on plain numbers: the damage times the spell threat
+    // table's multiplier (Unit::DealDamage: damage * GetSpellThreatMultiplier; Mind Blast, Searing Pain, Earth Shock
+    // and Holy Shock are x2 in tw_world_spell_threat), plus the table's flat threat and AP bonus (Spell::
+    // HandleThreatSpells: threat + ap_bonus * attack power), each through the caster's SPELLMOD_THREAT percent and
+    // total threat modifier (ThreatCalcHelper::CalcThreat). Never below 0.
+    inline float ThreatCapCastThreat(float avgDamage, float threatMultiplier, float flatThreat, float apBonus,
+                                     float attackPower, float threatModPct, float totalThreatMod)
+    {
+        float threat = avgDamage > 0.0f ? avgDamage * threatMultiplier : 0.0f;
+        threat += flatThreat + apBonus * attackPower;
+        threat *= (1.0f + threatModPct / 100.0f) * totalThreatMod;
+        return threat > 0.0f ? threat : 0.0f;
+    }
+
+    // A channel's whole damage: one tick's damage times its ticks (duration / amplitude, as the aura ticks). A spell that
+    // is not channeled gives 0: a DoT's threat comes a tick at a time, and every later cast is checked again.
+    inline float ThreatCapChannelDamage(bool channeled, float perTick, int durationMs, int amplitudeMs)
+    {
+        if (!channeled || perTick <= 0.0f || durationMs <= 0 || amplitudeMs <= 0)
+            return 0.0f;
+        return perTick * float(durationMs / amplitudeMs);
+    }
+
+    // The threat the cast is measured against: the mob's victim's threat, capped by the top tank's (ThreatValue::
+    // GetTankThreat). The core turns the mob on whoever passes its current victim, so an off-tank above the victim is
+    // no cover. A victim without threat on the list leaves the top tank's.
+    inline float ThreatCapCastReference(float victimThreat, float tankThreat)
+    {
+        if (tankThreat <= 0.0f || victimThreat <= 0.0f)
+            return tankThreat;
+        return victimThreat < tankThreat ? victimThreat : tankThreat;
+    }
 }

@@ -380,6 +380,257 @@ int main()
     }
 
 
+    // Onyxia in P2: the floor path ends under the hover point, the body 21 yd up.
+    // The trigger allows the centre distance plus both combat reaches (19 + 22 + 1.5),
+    // so the walk stops 42.5 yd centre to centre, about 36.9 yd 2D from the point.
+    {
+        std::vector<ApproachPoint> path = { P(-30, -212, -86), P(-10, -214, -86), P(10, -216, -86), P(22.9, -217.2, -86) };
+        ApproachPoint const target = P(22.9, -217.2, -65);
+        RangedApproachChoice const choice =
+            ai::SelectHoverApproachPoint(path, target, 19.0f, 22.0f, 1.5f, true, seesAll);
+        CHECK(choice.valid);
+        CHECK(std::fabs(Dist(choice.point, target) - 42.5f) <= 0.05f);
+        float const dx = choice.point.x - target.x;
+        float const dy = choice.point.y - target.y;
+        CHECK(std::fabs(std::sqrt(dx * dx + dy * dy) - 36.9f) <= 0.1f);
+        std::cout << "  [PASS] hover: stops at the trigger's own combat-reach distance\n";
+    }
+
+    // Today's shape with the plain distance: the walk runs to the floor point
+    // right under her, 21 yd below the body.
+    {
+        std::vector<ApproachPoint> path = { P(-30, -212, -86), P(-10, -214, -86), P(10, -216, -86), P(22.9, -217.2, -86) };
+        ApproachPoint const target = P(22.9, -217.2, -65);
+        RangedApproachChoice const choice = SelectRangedApproachPoint(path, target, 19.0f, seesAll);
+        CHECK(choice.valid);
+        float const dx = choice.point.x - target.x;
+        float const dy = choice.point.y - target.y;
+        CHECK(std::sqrt(dx * dx + dy * dy) < 1.0f);
+        std::cout << "  [PASS] plain distance: walks under the hover point\n";
+    }
+
+    // Only a hostile 8 yd or more above the floor it stands over, inside a dungeon,
+    // beyond melee reach, with a known floor, needs the hover approach.
+    {
+        CHECK(ai::HoverReachApplies(true, true, true, 40.0f, 5.0f, true, -65.0f, -86.0f));
+        CHECK(!ai::HoverReachApplies(true, true, true, 40.0f, 5.0f, true, -65.0f, -70.0f));  // 5 yd
+        CHECK(!ai::HoverReachApplies(false, true, true, 40.0f, 5.0f, true, -65.0f, -86.0f)); // key off
+        CHECK(!ai::HoverReachApplies(true, false, true, 40.0f, 5.0f, true, -65.0f, -86.0f)); // open world
+        CHECK(!ai::HoverReachApplies(true, true, false, 40.0f, 5.0f, true, -65.0f, -86.0f)); // friendly
+        CHECK(!ai::HoverReachApplies(true, true, true, 5.0f, 5.0f, true, -65.0f, -86.0f));   // melee reach
+        CHECK(!ai::HoverReachApplies(true, true, true, 40.0f, 5.0f, false, -65.0f, -86.0f)); // no floor
+        std::cout << "  [PASS] hover gate: height, key, side, distance, floor\n";
+    }
+
+    // The threshold itself counts ("at least this high").
+    {
+        CHECK(ai::HoverReachApplies(true, true, true, 40.0f, 5.0f, true, -65.0f, -73.0f)); // exactly 8 yd
+        std::cout << "  [PASS] hover gate: exactly 8 yd counts\n";
+    }
+
+    // Only a hostile body is a hover destination, and an attack reach also needs
+    // one the core lets the bot attack. A neutral unit is the case !IsFriendlyTo
+    // let through; a hostile airborne one still walks.
+    {
+        CHECK(!ai::HoverReachTargetEligible(false, false, false)); // neutral, spell reach
+        CHECK(!ai::HoverReachTargetEligible(false, true, true));   // neutral, attack reach
+        CHECK(!ai::HoverReachTargetEligible(true, true, false));   // hostile, not attackable
+        CHECK(ai::HoverReachTargetEligible(true, false, false));   // hostile spell reach
+        CHECK(ai::HoverReachTargetEligible(true, true, true));     // hostile attack reach
+        CHECK(ai::HoverReachTargetEligible(true, false, false) &&
+              ai::HoverReachApplies(true, true, true, 40.0f, 5.0f, true, -65.0f, -86.0f)); // airborne hostile
+        std::cout << "  [PASS] hover target: hostile only, attackable for attack reaches\n";
+    }
+
+    // The walk is for ranged damage dealers only: a healer, a tank and a melee damage
+    // dealer keep today's reach (the reach path is shared with melee, CC and pull
+    // reaches; walking them toward the boss could pull a tank off its post).
+    {
+        bool const hoverApplies = ai::HoverReachApplies(true, true, true, 40.0f, 5.0f, true, -65.0f, -86.0f);
+        CHECK(hoverApplies);
+        CHECK(ai::HoverReachTakerIsRangedDps(false, false, true));   // ranged DPS: the walk
+        CHECK(!ai::HoverReachTakerIsRangedDps(true, false, false));  // tank
+        CHECK(!ai::HoverReachTakerIsRangedDps(true, false, true));   // tank that reads ranged
+        CHECK(!ai::HoverReachTakerIsRangedDps(false, true, false));  // healer
+        CHECK(!ai::HoverReachTakerIsRangedDps(false, true, true));   // healer that reads ranged
+        CHECK(!ai::HoverReachTakerIsRangedDps(false, false, false)); // melee DPS
+        CHECK(hoverApplies && ai::HoverReachTakerIsRangedDps(false, false, true));
+        CHECK(!(hoverApplies && ai::HoverReachTakerIsRangedDps(true, false, true)));
+        std::cout << "  [PASS] hover taker: ranged damage dealers only\n";
+    }
+
+    // No line of sight from the ground side: the second pass keeps the geometry
+    // (standing still is no damage; the next tick's trigger re-judges).
+    {
+        std::vector<ApproachPoint> path = { P(-30, -212, -86), P(-10, -214, -86), P(10, -216, -86), P(22.9, -217.2, -86) };
+        ApproachPoint const target = P(22.9, -217.2, -65);
+        auto const seesNothing = [](ApproachPoint const&) { return false; };
+        CHECK(!ai::SelectHoverApproachPoint(path, target, 19.0f, 22.0f, 1.5f, true, seesNothing).valid);
+        RangedApproachChoice const choice =
+            ai::SelectHoverApproachPoint(path, target, 19.0f, 22.0f, 1.5f, false, seesNothing);
+        CHECK(choice.valid);
+        CHECK(std::fabs(Dist(choice.point, target) - 42.5f) <= 0.05f);
+        std::cout << "  [PASS] hover second pass ignores sight\n";
+    }
+
+    // HoverReachAimsAtAnchor: HoverAnchorAimPoint_CentreOutOfReach is the failing case. The room centre stands
+    // 51.4 yd 3D from the farthest hover point, outside the 46.0 yd in-range stop (the code's own trigger line
+    // 26 - 0.5 + 22 + 1.5 = 49.0 less the 3 yd slack), so a walk to the centre would end out of range. The aim
+    // must be the in-range point nearest the centre: on the ground segment from the centre toward the target's
+    // ground projection, the in-range stop less 1 yd from the target.
+    {
+        ApproachPoint aim;
+        CHECK(ai::HoverAnchorAimPoint(P(0, 0, 0), P(51.4f, 0, 0), 46.0f, aim));
+        CHECK(!Near(aim, P(0, 0, 0)));
+        CHECK(aim.x > 0.0f && aim.x < 51.4f);
+        CHECK(std::fabs(aim.y) < 0.01f && std::fabs(aim.z) < 0.01f);
+        CHECK(std::fabs(Dist(aim, P(51.4f, 0, 0)) - 45.0f) <= 0.01f);
+        std::cout << "  [PASS] hover anchor: a centre outside the line aims at the nearest in-range point\n";
+    }
+
+    // A centre already inside the in-range stop is the aim itself (38.8 yd from the target).
+    {
+        ApproachPoint aim;
+        CHECK(ai::HoverAnchorAimPoint(P(0, 0, 0), P(38.8f, 0, 0), 46.0f, aim));
+        CHECK(Near(aim, P(0, 0, 0)));
+        std::cout << "  [PASS] hover anchor: a centre in reach is the aim\n";
+    }
+
+    // HoverAnchorStopDistance_Bounds, re-pinned on the code's own trigger line (49.0, not 54.2): never nearer
+    // than today's stop (centre 30), never outside the line less the slack (centre 60), and a line inside
+    // today's stop keeps today's stop.
+    {
+        CHECK(std::fabs(ai::HoverAnchorStopDistance(42.5f, 49.0f, 48.0f) - 46.0f) <= 0.01f);
+        CHECK(std::fabs(ai::HoverAnchorStopDistance(42.5f, 49.0f, 30.0f) - 42.5f) <= 0.01f);
+        CHECK(std::fabs(ai::HoverAnchorStopDistance(42.5f, 49.0f, 60.0f) - 46.0f) <= 0.01f);
+        CHECK(std::fabs(ai::HoverAnchorStopDistance(42.5f, 44.0f, 48.0f) - 42.5f) <= 0.01f);
+        std::cout << "  [PASS] hover anchor: bounded by today's stop and the trigger line\n";
+    }
+
+    // HoverAnchorWalk_StopsOnThePath: the walk stops on the path to the aim, in range. Bot (-100,0,0) ->
+    // (-50,0,0) -> aim (6.4,0,0), target (51.4,0,0), stop 46.0; the choice is between the aim and the bot.
+    {
+        ApproachPoint const centre = P(0, 0, 0);
+        ApproachPoint const target = P(51.4f, 0, 0);
+        ApproachPoint aim;
+        CHECK(ai::HoverAnchorAimPoint(centre, target, 46.0f, aim));
+        CHECK(Near(aim, P(6.4f, 0, 0)));
+        std::vector<ApproachPoint> path = { P(-100, 0, 0), P(-50, 0, 0), aim };
+        float const stop = ai::HoverAnchorStopDistance(42.5f, 49.0f, Dist(centre, target));
+        RangedApproachChoice const choice = SelectRangedApproachPoint(path, target, stop, seesAll);
+        CHECK(choice.valid);
+        CHECK(choice.point.x > -100.0f && choice.point.x <= aim.x + 0.01f);
+        CHECK(std::fabs(Dist(choice.point, target) - stop) <= 0.1f);
+        std::cout << "  [PASS] hover anchor: the walk stops on the path to the in-range aim\n";
+    }
+
+    // The row's verdict words, one per step of the walk.
+    {
+        CHECK(std::string(ai::HoverReachWord(ai::HoverReachResult::NoGround)) == "no_ground");
+        CHECK(std::string(ai::HoverReachWord(ai::HoverReachResult::NoPath)) == "no_path");
+        CHECK(std::string(ai::HoverReachWord(ai::HoverReachResult::NoPoint)) == "no_point");
+        CHECK(std::string(ai::HoverReachWord(ai::HoverReachResult::Hazard)) == "hazard");
+        CHECK(std::string(ai::HoverReachWord(ai::HoverReachResult::MoveFailed)) == "move_failed");
+        CHECK(std::string(ai::HoverReachWord(ai::HoverReachResult::Moved)) == "moved");
+        CHECK(std::string(ai::HoverReachWord(ai::HoverReachResult::MovedNoLos)) == "moved_nolos");
+        std::cout << "  [PASS] hover words: all of them\n";
+    }
+
+    // HoverCastHoldsSpread_InRange (the failing case): all true holds the spacing step. Each of these alone
+    // flips it back to stepping: out of range, a live spread row, key off, not ranged dps, not hovering.
+    {
+        float const clear = 40.0f;
+        CHECK(ai::HoverCastHoldsSpread(true, true, true, true, false, clear, ai::kSpreadSettledDistance));
+        CHECK(!ai::HoverCastHoldsSpread(true, true, true, false, false, clear, ai::kSpreadSettledDistance));
+        CHECK(!ai::HoverCastHoldsSpread(true, true, true, true, true, clear, ai::kSpreadSettledDistance));
+        CHECK(!ai::HoverCastHoldsSpread(false, true, true, true, false, clear, ai::kSpreadSettledDistance));
+        CHECK(!ai::HoverCastHoldsSpread(true, false, true, true, false, clear, ai::kSpreadSettledDistance));
+        CHECK(!ai::HoverCastHoldsSpread(true, true, false, true, false, clear, ai::kSpreadSettledDistance));
+        std::cout << "  [PASS] hover cast: holds the spread step in range\n";
+    }
+
+    // HoverCastHoldsSpread_StackedAlly (the failing case): the hold yields to spreading out of a stack. A living
+    // group member inside the spread radius (2 yd of the 10 yd settled distance) means the caster steps out of
+    // the splash first; a caster clear of the nearest ally (20 yd) holds and casts; no hover never holds.
+    {
+        float const radius = ai::kSpreadSettledDistance;
+        CHECK(!ai::HoverCastHoldsSpread(true, true, true, true, false, 2.0f, radius));
+        CHECK(ai::HoverCastHoldsSpread(true, true, true, true, false, 20.0f, radius));
+        CHECK(!ai::HoverCastHoldsSpread(true, true, false, true, false, 20.0f, radius));
+        std::cout << "  [PASS] hover cast: a stacked ally outranks the hold\n";
+    }
+
+    // HoverCastYieldRadius_StackOnly (the failing case): with the key on the hold yields only to a real stack. A member
+    // at the 2e median 4.8 yd (inside the 10 yd spread distance, outside 4.5) no longer breaks the hold; at 4.4 yd it
+    // does. The key off keeps the caller's radius, and the radius never widens past the caller's own.
+    {
+        CHECK(std::fabs(ai::HoverCastYieldRadius(true, 10.0f) - 4.5f) < 0.001f);
+        CHECK(ai::HoverCastHoldsSpread(true, true, true, true, false, 4.8f, ai::HoverCastYieldRadius(true, 10.0f)));
+        CHECK(!ai::HoverCastHoldsSpread(true, true, true, true, false, 4.8f, ai::HoverCastYieldRadius(false, 10.0f)));
+        CHECK(!ai::HoverCastHoldsSpread(true, true, true, true, false, 4.4f, ai::HoverCastYieldRadius(true, 10.0f)));
+        CHECK(std::fabs(ai::HoverCastYieldRadius(true, 3.0f) - 3.0f) < 0.001f);
+        std::cout << "  [PASS] hover cast stack only: yields inside 4.5 yd, never wider than the caller's radius\n";
+    }
+
+    // HoverCastStepVerdict_Rules: one step per 8 s, of two bots that would both step only the higher guid steps, and a
+    // pair where the higher-guid bot never steps does not deadlock: the lower-guid bot steps after one rest period.
+    {
+        CHECK(ai::HoverCastStepVerdict(false, true, false, 0, false, 0) == ai::HoverStackStep::Step);
+        CHECK(ai::HoverCastStepVerdict(true, false, true, 7999, false, 0) == ai::HoverStackStep::Rest);
+        CHECK(ai::HoverCastStepVerdict(true, false, true, 8000, false, 0) == ai::HoverStackStep::Step);
+        CHECK(ai::HoverCastStepVerdict(true, true, true, UINT32_MAX, false, 0) == ai::HoverStackStep::Step);
+        CHECK(ai::HoverCastStepVerdict(true, false, false, UINT32_MAX, false, 0) == ai::HoverStackStep::Step);
+        // The lower guid waits one rest period (8 s) for the higher one, then steps itself.
+        CHECK(ai::HoverCastStepVerdict(true, true, false, UINT32_MAX, false, 0) == ai::HoverStackStep::WaitForAlly);
+        CHECK(ai::HoverCastStepVerdict(true, true, false, UINT32_MAX, true, 7999) == ai::HoverStackStep::WaitForAlly);
+        CHECK(ai::HoverCastStepVerdict(true, true, false, UINT32_MAX, true, 8000) == ai::HoverStackStep::StepAfterWait);
+        // A bot that is still resting does not burn its wait clock on the partner.
+        CHECK(ai::HoverCastStepVerdict(true, true, false, 2000, true, 8000) == ai::HoverStackStep::Rest);
+        std::cout << "  [PASS] hover cast step: restep clock, guid tie-break, wait cap\n";
+    }
+
+    // HoverCastStackLanding_Range: a stack step must land inside the trigger's own range. H2 keeps a bot as close as
+    // 3 yd inside that line and a 5.5 yd step away crosses it, so the reach would walk the bot back beside its partner
+    // every 8 s. With the bot 3 yd inside the line every outward heading of the step loop lands out of range and the
+    // bot does not step; a lateral heading lands inside and is taken; an out-of-sight landing is skipped.
+    {
+        float const limit = 19.0f;                 // ai->GetRange("spell") - contactDistance
+        float const step = 5.5f;                   // the stack step
+        float const inside = limit - 3.0f;         // the bot's distance to the target, combat reach counted
+        std::vector<ai::HoverStackLanding> outward;
+        for (float const d : { 0.0f, 0.6f, -0.6f })
+        {
+            float const landing = std::sqrt(inside * inside + step * step + 2.0f * inside * step * std::cos(d));
+            outward.push_back({ landing, true });
+        }
+        CHECK(!ai::HoverCastLandingInRange(outward[0].distance, limit, outward[0].inSight));
+        CHECK(!ai::HoverCastLandingInRange(outward[1].distance, limit, outward[1].inSight));
+        CHECK(!ai::HoverCastLandingInRange(outward[2].distance, limit, outward[2].inSight));
+        CHECK(ai::SelectHoverStackLanding(outward, limit) == -1);
+        std::vector<ai::HoverStackLanding> withLateral = outward;
+        float const lateral = std::sqrt(inside * inside + step * step + 2.0f * inside * step * std::cos(1.2f));
+        withLateral.push_back({ lateral, true });
+        CHECK(ai::HoverCastLandingInRange(lateral, limit, true));
+        CHECK(ai::SelectHoverStackLanding(withLateral, limit) == 3);
+        // The same landing out of sight is skipped, so an in-range but blind heading is never taken.
+        withLateral[3].inSight = false;
+        CHECK(ai::SelectHoverStackLanding(withLateral, limit) == -1);
+        std::cout << "  [PASS] hover cast stack step: out-of-range and blind landings are skipped\n";
+    }
+
+    // HoverCastRest_Rules: only a real stack step rests 8 s. An anchor-rejected probe keeps the spread step's 3 s
+    // cooldown and writes no stack clock, so it neither blocks the next stack step nor widens the stand-off.
+    {
+        std::uint32_t const now = 100000;
+        CHECK(ai::IsSpreadOnCooldown(now, now - 2999));
+        CHECK(!ai::IsSpreadOnCooldown(now, now - 3000));
+        CHECK(ai::HoverCastStepVerdict(true, false, false, UINT32_MAX, false, 0) == ai::HoverStackStep::Step);
+        CHECK(ai::HoverCastStepVerdict(true, false, false, 2999, false, 0) == ai::HoverStackStep::Rest);
+        CHECK(ai::HoverCastStepVerdict(true, false, false, 3000, false, 0) == ai::HoverStackStep::Rest);
+        CHECK(ai::HoverCastStepVerdict(true, false, false, 8000, false, 0) == ai::HoverStackStep::Step);
+        std::cout << "  [PASS] hover cast rest: 3 s probe cooldown, 8 s stack rest\n";
+    }
+
     std::cout << "Ranged approach policy tests: OK\n";
     return 0;
 }

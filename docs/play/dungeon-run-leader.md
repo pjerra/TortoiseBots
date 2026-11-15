@@ -25,6 +25,7 @@ It sends at most one order per second, with the same checks as the commander's o
 Only a GameMaster can reload the plans (in game, on the console, over remote access, or over SOAP), and it works with the run leader off. The gate is account security `SEC_GAMEMASTER`, which is `SEC_DEVELOPER`, which is **3** on this core (player 0, observer 1, moderator 2, developer 3, administrator 4, console 6).
 It re-reads `ai_dungeon_plan`, `ai_dungeon_leg`, `ai_dungeon_step`, `ai_dungeon_boss`, and `ai_boss_tactic`, and swaps the new set in only when every row passes.
 A refused row, a missing plan, a failed query, or a table that changed while it was read keeps the old set.
+A row of a listed foreign kind (today only `air_target`, written by another line of the server) is skipped by boot and by a reload alike, so it refuses nothing; a typo'd `kind` is a refused row.
 A run in progress keeps the plan it started with.
 
 ## Tables

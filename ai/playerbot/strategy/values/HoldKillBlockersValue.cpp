@@ -188,9 +188,39 @@ std::vector<TankPostUnit> TankPostUnitsValue::Calculate()
     return units;
 }
 
+// AiPlayerbot.DungeonRunAddCrew: the raid's AoE ranged damage dealers through the group's live members and their own
+// AIs, and this bot's place among them (AddCrewRank). The switch unit's life is not read here: the crew's place
+// stands while it lives, so the Onyxia ground phase can apply it before the row's switch dies.
+bool AddCrewKeepsDutyValue::Calculate()
+{
+    if (!sPlayerbotAIConfig.dungeonRunAddCrew)
+        return true;
+    uint32 switchEntry = 0;
+    uint8 crewSize = 0;
+    if (!GetBossTactics().AddCrewOf(bot->GetMapId(), QualifierEntry(qualifier), switchEntry, crewSize))
+        return true;
+    std::vector<AddCrewCandidate> candidates;
+    for (Player* member : LiveGroupMembers(bot->GetGroup()))
+    {
+        if (!member || !sServerFacade.IsAlive(member) || member->GetMapId() != bot->GetMapId() ||
+            member->GetInstanceId() != bot->GetInstanceId())
+            continue;
+        if (PlayerbotAI::IsTank(member) || PlayerbotAI::IsHeal(member))
+            continue;
+        PlayerbotAI* const memberAi = GET_PLAYERBOT_AI(member);
+        if (!memberAi || !memberAi->IsRanged(member))
+            continue;
+        int const order = AddCrewClassOrder(member->GetClass());
+        if (order < 0)
+            continue;
+        candidates.push_back(AddCrewCandidate{member->GetObjectGuid().GetRawValue(), order});
+    }
+    return AddCrewMember(PlayerbotAI::IsTank(bot), PlayerbotAI::IsHeal(bot), ai->IsRanged(bot),
+        AddCrewRank(candidates, bot->GetObjectGuid().GetRawValue()), crewSize);
+}
+
 // AiPlayerbot.DungeonRunAddCrew: this bot's place once the row's switch unit is dead. The switch unit is read through
-// the same grid search as the tank_post (alive or dead; an empty list counts as dead: a corpse that despawned), and
-// the raid's AoE ranged damage dealers through the group's live members and their own AIs.
+// the same grid search as the tank_post (alive or dead; an empty list counts as dead: a corpse that despawned).
 uint8 AddCrewValue::Calculate()
 {
     if (!sPlayerbotAIConfig.dungeonRunAddCrew)
@@ -209,23 +239,6 @@ uint8 AddCrewValue::Calculate()
             break;
         }
     }
-    std::vector<AddCrewCandidate> candidates;
-    for (Player* member : LiveGroupMembers(bot->GetGroup()))
-    {
-        if (!member || !sServerFacade.IsAlive(member) || member->GetMapId() != bot->GetMapId() ||
-            member->GetInstanceId() != bot->GetInstanceId())
-            continue;
-        if (PlayerbotAI::IsTank(member) || PlayerbotAI::IsHeal(member))
-            continue;
-        PlayerbotAI* const memberAi = GET_PLAYERBOT_AI(member);
-        if (!memberAi || !memberAi->IsRanged(member))
-            continue;
-        int const order = AddCrewClassOrder(member->GetClass());
-        if (order < 0)
-            continue;
-        candidates.push_back(AddCrewCandidate{member->GetObjectGuid().GetRawValue(), order});
-    }
-    bool const member = AddCrewMember(PlayerbotAI::IsTank(bot), PlayerbotAI::IsHeal(bot), ai->IsRanged(bot),
-        AddCrewRank(candidates, bot->GetObjectGuid().GetRawValue()), crewSize);
+    bool const member = AI_VALUE2(bool, "add crew keeps duty", qualifier);
     return static_cast<uint8>(AddCrewStateFor(true, true, switchAlive, member));
 }

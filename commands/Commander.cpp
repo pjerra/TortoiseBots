@@ -47,6 +47,7 @@
 #include "../ai/playerbot/strategy/values/LastMovementValue.h"
 #include "../ai/playerbot/strategy/values/PartyMemberToHeal.h"
 #include "../ai/playerbot/MoveFailNotePolicy.h"
+#include "../ai/playerbot/OutcomeReasonPolicy.h"
 #include "../ai/playerbot/strategy/values/ItemUsageValue.h"
 #include "../ai/playerbot/strategy/actions/EquipAction.h"
 #include "../ai/playerbot/strategy/actions/UnequipAction.h"
@@ -1501,6 +1502,31 @@ char const* ViewFailReason(uint32 castFail)
     }
 }
 
+// The party record's reason word for the engine's outcome code: the refuse
+// note first, then the cast-check word, then the unmapped cast results. The
+// core's SPELL_CAST_OK (0xFF) means no cast check failed, so it reads as no
+// reason, never "other".
+char const* ViewOutcomeReason(uint32 code)
+{
+    if (char const* note = ai::RefuseNoteWord(code))
+        return note;
+    if (char const* fail = ViewFailReason(code))
+        return fail;
+    switch (static_cast<SpellCastResult>(code))
+    {
+        case SPELL_FAILED_NOT_KNOWN: return "not-known";
+        case SPELL_FAILED_IMMUNE: return "immune";
+        case SPELL_FAILED_NOT_IN_CONTROL:
+        case SPELL_FAILED_STUNNED:
+        case SPELL_FAILED_SILENCED:
+        case SPELL_FAILED_PACIFIED:
+        case SPELL_FAILED_CONFUSED:
+        case SPELL_FAILED_FLEEING: return "no-control";
+        default: break;
+    }
+    return ai::OutcomeTailWord(code);
+}
+
 // One of the bot's guid-list values, only when it already holds a calculated
 // list; otherwise nothing (the bot calculates it on its own schedule).
 void ReadCachedGuidList(PlayerbotAI* ai, char const* name, std::list<ObjectGuid>& out)
@@ -1672,7 +1698,7 @@ void CollectViewSnapshot(RemoteCommander::Binding const& binding, RemoteCommande
                 // The newest verdict as parts (name, result letter, reason code).
                 member.action = engine->GetLastOutcomeName();
                 member.result = engine->GetLastOutcomeResult();
-                if (char const* reason = ViewFailReason(engine->GetLastOutcomeCastFail()))
+                if (char const* reason = ViewOutcomeReason(engine->GetLastOutcomeCastFail()))
                     member.reason = reason;
             }
     }
@@ -14656,6 +14682,9 @@ static bool HandleReloadPlans(ChatHandler* handler, std::string const& intent)
     handler->PSendSysMessage("%s, reloaded (dungeon bosses %u -> %u, boss tactic rows %u -> %u)", report.summary.c_str(),
         uint32(report.outcome.bossesBefore), uint32(plans.BossCount()), uint32(report.outcome.tacticsBefore),
         report.tacticRows);
+    if (report.tacticForeign)
+        handler->PSendSysMessage("%u boss tactic rows of a listed foreign kind skipped (inert here; the "
+            "startup load skips them too, so they refuse nothing)", uint32(report.tacticForeign));
     if (report.outcome.changes.empty())
         handler->PSendSysMessage("Plans changed: none");
     for (std::string const& change : report.outcome.changes)
