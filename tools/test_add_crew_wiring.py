@@ -42,7 +42,7 @@ def body(text, start, end="\n}\n"):
 class AddCrewWiring(unittest.TestCase):
     def test_kind_is_parsed_and_validated(self):
         self.assertIn('if (text == "add_crew")\n            return BossTacticKind::AddCrew;', POLICY)
-        self.assertIn("AddCrew = 28,", POLICY)
+        self.assertIn("AddCrew = 30,", POLICY)
         loader = body(POLICY, "            // add_crew: the switch unit whose death")
         for needle in ("row.targetEntry == 0", "row.targetEntry == row.bossEntry", "row.spellId != 0",
                        "row.priority > 5", "row.param != 0.0f", "RowGateSet(row)",

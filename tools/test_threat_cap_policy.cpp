@@ -10,9 +10,13 @@
 #include <utility>
 #include <vector>
 
+// The case a failing CHECK belongs to, printed with it (set by CASE).
+static const char* g_case = "(unnamed)";
+#define CASE(name) (g_case = (name))
+
 #define CHECK(x) do { \
     if (!(x)) { \
-        std::cerr << "Assertion failed at line " << __LINE__ << ": " #x "\n"; \
+        std::cerr << "Assertion failed at line " << __LINE__ << " in " << g_case << ": " #x "\n"; \
         std::exit(1); \
     } \
 } while (0)

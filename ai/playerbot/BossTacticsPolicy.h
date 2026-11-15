@@ -70,10 +70,12 @@ namespace ai
         SeekPull = 25,        // the seek walk-out's rules for one source: walk-outs a cycle, the kill lead, the last start
         GateHold = 26,        // DPS spare `boss_entry` at or below `param` % while more than `priority` blockers fight near
         TankPost = 27,        // a named tank waits at a spot for a unit that is not in the fight yet, then attacks it
-        AddCrew = 28,         // once `target_entry` is dead, the boss's add duty goes to a named crew
+        SeekPark = 28,        // the walked source is held under a control, nobody touches it, a tank takes it at the lead
         HealReserve = 29,     // healers keep the row's mana % back from top-ups outside the row's release window
-        SeekPark = 30,        // the walked source is held under a control, nobody touches it, a tank takes it at the lead
         TankFirst = 32, // non-tanks do no damage to target_entry until a tank has been its victim for param seconds
+        // Declared after TankFirst on purpose: the captured decision schema compares this list as a prefix, so a new
+        // kind must extend it, never slot into it.
+        AddCrew = 30,         // once `target_entry` is dead, the boss's add duty goes to a named crew
     };
 
     // The per-kind mode word of a row (`tactic_mode`), or Invalid when the word does not belong to the row's kind. An
