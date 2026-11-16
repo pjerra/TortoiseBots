@@ -169,6 +169,29 @@ namespace ai
     // keep the ranged on her because the melee could not reach a hovering boss).
     inline bool OnyxiaGroundDuty(bool duty, bool isTank, bool bossAirborne) { return duty && (bossAirborne || !isTank); }
 
+    // The early add crew's boss duty aims a ranged damage dealer at her only while she is not its target already. An
+    // attack on the current victim reports success and ends the engine tick before the rotation runs, so re-aiming it
+    // every tick left the bot casting nothing (walk 2o: 48 % of the ranged-on-Onyxia frames were that one action, and
+    // 2m's return only fired off her). An explicit order and a gate_hold row outrank it, and a dead, unreachable or
+    // other-map boss fires nothing.
+    inline bool OnyxiaBossDutyFires(bool bossDuty, bool explicitOrder, bool bossValid, bool gateHeld, bool onBoss)
+    {
+        return bossDuty && !explicitOrder && bossValid && !gateHeld && !onBoss;
+    }
+
+    // AiPlayerbot.OnyxiaWhelpPickTankFirst: the whelp a bot kills first while she stands on the ground. A whelp eating
+    // the raid's tank ranks first (slot 1 already holds them in P3 and dies; the ground crew is what can pull them
+    // off), one eating a healer second, the rest last; the distance breaks a tie inside one rank only.
+    inline int OnyxiaWhelpVictimRank(bool victimTank, bool victimHealer)
+    {
+        return victimTank ? 0 : victimHealer ? 1 : 2;
+    }
+
+    inline bool OnyxiaWhelpPickBetter(int rankA, float distA, int rankB, float distB)
+    {
+        return rankA != rankB ? rankA < rankB : distA < distB;
+    }
+
     // A ranged damage dealer off the crew on a whelp goes back to her (not on an explicit order) while the whelp phase
     // runs: the crew has the whelps, so a bot past it that stays would leave her to the melee (who cannot reach her in
     // the air; on the ground the crew's melee is on the whelps too).

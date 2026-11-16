@@ -195,6 +195,35 @@ int main()
     CHECK(!OnyxiaGroundDuty(false, true, true));
     CHECK(OnyxiaGroundDuty(IsOnyxiaWhelpHunter(kWhelpClassMage, false, false, true), false, false));
 
+    // OnyxiaBossDutyFires_NoRetargetOnHer: the early crew's boss duty aims a bot at her only while she is not its
+    // target already; an attack on the current victim reports success and ends the engine tick before the rotation
+    // runs (walk 2o: 48 % of the ranged-on-Onyxia frames were that one action, 2m's return only fired off her). Every
+    // other gate flips it off too.
+    CHECK(OnyxiaBossDutyFires(true, false, true, false, false));
+    CHECK(!OnyxiaBossDutyFires(true, false, true, false, true));   // already on her: the rotation runs
+    CHECK(!OnyxiaBossDutyFires(false, false, true, false, false)); // not on the boss duty
+    CHECK(!OnyxiaBossDutyFires(true, true, true, false, false));   // an explicit order wins
+    CHECK(!OnyxiaBossDutyFires(true, false, false, false, false)); // no live, valid boss
+    CHECK(!OnyxiaBossDutyFires(true, false, true, true, false));   // a gate_hold row holds her off
+    CHECK(!OnyxiaBossDutyFires(true, true, true, true, true));
+
+    // OnyxiaWhelpVictimRank / PickBetter: the whelp eating a tank outranks one eating a healer, a healer's outranks the
+    // rest, and the distance breaks a tie inside one rank only. The failing case is the tank's whelp 25 yd away beating
+    // a damage dealer's 5 yd away.
+    CHECK(OnyxiaWhelpVictimRank(true, false) == 0);
+    CHECK(OnyxiaWhelpVictimRank(true, true) == 0);   // the tank flag wins on a unit flagged as both
+    CHECK(OnyxiaWhelpVictimRank(false, true) == 1);
+    CHECK(OnyxiaWhelpVictimRank(false, false) == 2);
+    CHECK(OnyxiaWhelpPickBetter(OnyxiaWhelpVictimRank(true, false), 25.0f,
+                                OnyxiaWhelpVictimRank(false, false), 5.0f));
+    CHECK(OnyxiaWhelpPickBetter(OnyxiaWhelpVictimRank(true, false), 25.0f,
+                                OnyxiaWhelpVictimRank(false, true), 5.0f));
+    CHECK(!OnyxiaWhelpPickBetter(OnyxiaWhelpVictimRank(false, false), 5.0f,
+                                 OnyxiaWhelpVictimRank(true, false), 25.0f));
+    CHECK(OnyxiaWhelpPickBetter(1, 4.0f, 1, 6.0f));   // equal rank: the nearer
+    CHECK(!OnyxiaWhelpPickBetter(1, 6.0f, 1, 4.0f));
+    CHECK(!OnyxiaWhelpPickBetter(1, 4.0f, 1, 4.0f));  // an exact tie keeps the first found
+
     std::cout << "onyxia whelp/egg policy: OK\n";
     return 0;
 }

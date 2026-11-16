@@ -145,17 +145,56 @@ class OnyxiaWhelpWiring(unittest.TestCase):
         # The trigger reads the same value: a boss-duty bot goes back to her, whatever its current target, unless a
         # gate_hold row holds her off (then the kill_first pick sends it back to that row's blocker).
         trigger = body(TRIGGERS, "bool OnyxiaBossDutyTrigger::IsActive()")
-        self.assertIn('AI_VALUE2(uint8, "add crew early", static_cast<int32>(kOnyxiaEntry)) ==', trigger)
-        self.assertIn("static_cast<uint8>(AddCrewEarly::Boss) &&", trigger)
+        self.assertIn('const bool bossDuty = AI_VALUE2(uint8, "add crew early", '
+                      "static_cast<int32>(kOnyxiaEntry)) ==", trigger)
+        self.assertIn("static_cast<uint8>(AddCrewEarly::Boss);", trigger)
         self.assertIn("ActiveBossRows gateRows;", trigger)
         self.assertIn("GetBossTactics().Rows(bot->GetMapId(), kOnyxiaEntry)", trigger)
         self.assertIn("row.kind == BossTacticKind::GateHold", trigger)
-        self.assertIn("!GateHoldsUnit(ai, gateRows, boss)", trigger)
-        self.assertIn("!explicitOrder && bossValid &&", trigger)
+        self.assertIn("GateHoldsUnit(ai, gateRows, boss)", trigger)
+        # Walk 2o: the rule is OnyxiaBossDutyFires and it takes her as the current target, so a bot already on her
+        # keeps its rotation (re-aiming it ended the tick).
+        self.assertIn("OnyxiaBossDutyFires(bossDuty, explicitOrder, bossValid, gateHeld, current && current == boss)",
+                      trigger)
         # The early phase does not need a whelp: it fires on her own validity, before the return's whelp clause.
         self.assertLess(trigger.index("AddCrewEarly::Boss"), trigger.index("return ShouldReturnToOnyxia("))
         self.assertNotIn("onWhelp", trigger[trigger.index("AddCrewEarly::Boss"):trigger.index(
             "return ShouldReturnToOnyxia(")])
+
+    def test_early_boss_duty_holds_the_assist(self):
+        # Walk 2o: the assist re-pick is held while she is the bot's target on the early boss duty, so the ranged past
+        # the crew stop dropping her for a whelp. The AoE actions are untouched.
+        hold = body(ACTIONS, "float OnyxiaWhelpHoldMultiplier::GetValue(Action* action)")
+        branch = hold[hold.index("if (dynamic_cast<DpsAssistAction*>(action) != nullptr"):hold.index("const bool duty")]
+        self.assertIn("sPlayerbotAIConfig.dungeonRunAddCrewEarly", branch)
+        self.assertIn('AI_VALUE2(uint8, "add crew early", static_cast<int32>(kOnyxiaEntry))', branch)
+        self.assertIn("static_cast<uint8>(AddCrewEarly::Boss)", branch)
+        self.assertIn('Unit* const boss = ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"));', branch)
+        self.assertIn('AI_VALUE(Unit*, "current target") == boss', branch)
+        self.assertIn('AI_VALUE(ObjectGuid, "explicit attack target").IsEmpty()', branch)
+        self.assertIn("return 0.0f;", branch)
+        self.assertNotIn("DpsAoeAction", branch)
+
+    def test_ground_whelp_pick_reads_the_victim(self):
+        # Walk 2o (AiPlayerbot.OnyxiaWhelpPickTankFirst): on the ground the scan ranks a pickable whelp by its victim
+        # and keeps the better one; the air keeps the nearest pick.
+        scan = body(ACTIONS, "OnyxiaWhelpScan ai::ScanOnyxiaWhelps(PlayerbotAI* ai, Player* bot)")
+        self.assertIn("const bool pickTankFirst = sPlayerbotAIConfig.onyxiaWhelpPickTankFirst && bossFound && "
+                      "!scan.bossAirborne;", scan)
+        self.assertIn("Unit* const victim = unit->GetVictim();", scan)
+        self.assertIn("victim->GetTypeId() == TYPEID_PLAYER", scan)
+        self.assertIn("OnyxiaWhelpVictimRank(victimPlayer && PlayerbotAI::IsTank(victimPlayer),", scan)
+        self.assertIn("victimPlayer && PlayerbotAI::IsHeal(victimPlayer))", scan)
+        self.assertIn("OnyxiaWhelpPickBetter(rank, dist, bestRank, bestDist)", scan)
+        # The range and egg filters stand in front of both picks.
+        self.assertLess(scan.index("IsOnyxiaWhelpPickable(true, dist, nearEgg)"), scan.index("pickTankFirst)"))
+        self.assertIn("inline int OnyxiaWhelpVictimRank(bool victimTank, bool victimHealer)", POLICY)
+        self.assertIn("return victimTank ? 0 : victimHealer ? 1 : 2;", POLICY)
+        self.assertIn("inline bool OnyxiaWhelpPickBetter(int rankA, float distA, int rankB, float distB)", POLICY)
+        self.assertIn("return rankA != rankB ? rankA < rankB : distA < distB;", POLICY)
+        # The kill action's already-on-a-whelp early-out stays: no re-pick churn.
+        action = body(ACTIONS, "bool OnyxiaKillWhelpsAction::Execute(Event& event)")
+        self.assertIn("current->GetEntry() == kOnyxianWhelpEntry)\n        return false;", action)
 
     def test_key_is_read_templated_and_documented(self):
         loader = body(CONFIG_CPP, "void PlayerbotAIConfig::LoadDungeonRunKeys()")
@@ -178,9 +217,24 @@ class OnyxiaWhelpWiring(unittest.TestCase):
         block = TEMPLATE[block_start:TEMPLATE.index("AiPlayerbot.OnyxiaWhelpCrewOnGround = 0", block_start)]
         self.assertNotIn("recommended on", block)
         section = DOCS[DOCS.index("### `AiPlayerbot.OnyxiaWhelpCrewOnGround`"):]
-        section = section[:section.index("### `AiPlayerbot.RaidEntryByCommander`")]
+        section = section[:section.index("### `", 4)]
         self.assertNotIn("recommended on", section)
         self.assertIn("**Default:** `0`", section)
+        # Walk 2o's ground pick: read in the same loader, default 0, recommended on, documented and in the changelog.
+        self.assertIn('onyxiaWhelpPickTankFirst = config.GetBoolDefault("AiPlayerbot.OnyxiaWhelpPickTankFirst", '
+                      "false);", loader)
+        self.assertIn("bool onyxiaWhelpPickTankFirst = false;", CONFIG_H)
+        self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.OnyxiaWhelpPickTankFirst = 0$")
+        block_start = TEMPLATE.index("# Onyxia whelp pick on the ground")
+        block = TEMPLATE[block_start:TEMPLATE.index("AiPlayerbot.OnyxiaWhelpPickTankFirst = 0", block_start)]
+        self.assertIn("recommended on", block)
+        self.assertIn("### `AiPlayerbot.OnyxiaWhelpPickTankFirst`", DOCS)
+        section = DOCS[DOCS.index("### `AiPlayerbot.OnyxiaWhelpPickTankFirst`"):]
+        section = section[:section.index("### `", 4)]
+        self.assertIn("recommended on", section)
+        self.assertIn("**Default:** `0`", section)
+        self.assertIn("AiPlayerbot.OnyxiaWhelpPickTankFirst", BOSS_DOCS)
+        self.assertIn("OnyxiaWhelpPickTankFirst", CHANGELOG)
 
 
 if __name__ == "__main__":

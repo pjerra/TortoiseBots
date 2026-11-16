@@ -4974,11 +4974,12 @@ namespace ai
 
     // --- add_crew, mode `early` -------------------------------------------------------------------------------------
     // AiPlayerbot.DungeonRunAddCrewEarly: while the row's switch unit still lives and the boss flies, the crew's AoE
-    // ranged damage dealers take the boss's adds (`Whelps`) and every other ranged damage dealer stays on the boss
-    // (`Boss`, and the kill_first pick skips it). The tanks, the healers and the melee keep their own duty (`None`, as
-    // with the key or the row off): a tank must hold a flying boss, and the melee cannot reach one. `None` is today's
-    // duty everywhere the early phase does not run: the key or the row off, the switch unit dead (the crew's usual
-    // phase runs then), or the boss on the ground.
+    // ranged damage dealers take the boss's adds (`Whelps`); the ranged damage dealers past the crew keep the boss
+    // (`Boss`, and the kill_first pick skips it) while the switch unit lives only on a rank
+    // AiPlayerbot.DungeonRunAddCrewBossWhileSwitch covers, and every one of them once it dies. The tanks, the
+    // healers and the melee keep their own duty (`None`, as with the key or the row off): a tank must hold a flying
+    // boss, and the melee cannot reach one. `None` is today's duty everywhere the early phase does not run: the key or
+    // the row off or the boss on the ground.
     enum class AddCrewEarly : std::uint8_t { None = 0, Whelps = 1, Boss = 2 };
 
     // This bot's place under an early row, whatever the phase: the ranged damage dealers inside the crew take the adds,
@@ -4991,11 +4992,28 @@ namespace ai
         return aoeRank >= 0 && aoeRank < crewSize ? AddCrewEarly::Whelps : AddCrewEarly::Boss;
     }
 
-    inline AddCrewEarly AddCrewEarlyDuty(bool keyOn, bool early, bool switchAlive, bool airborne, bool tank,
-                                         bool healer, bool ranged, int aoeRank, std::uint8_t crewSize)
+    // AiPlayerbot.DungeonRunAddCrewBossWhileSwitch: how many ranks past the crew keep the boss duty while the switch
+    // unit still lives. 0 leaves every one of them on the switch unit (the crew alone leaves it early, walk 2o's set);
+    // n covers the next n ranks, and 40 covers every ranged damage dealer past the crew (the 2n split, the no-AoE-rank
+    // bots included, which is why the value is not a count of bots).
+    inline bool AddCrewBossWhileSwitch(int aoeRank, std::uint8_t crewSize, std::uint32_t n)
     {
-        if (!keyOn || !early || !switchAlive || !airborne)
+        if (n >= 40)
+            return true;
+        return aoeRank >= crewSize && aoeRank < int(crewSize) + int(n);
+    }
+
+    inline AddCrewEarly AddCrewEarlyDuty(bool keyOn, bool early, bool switchAlive, bool airborne, bool tank,
+                                         bool healer, bool ranged, int aoeRank, std::uint8_t crewSize,
+                                         std::uint32_t bossWhileSwitch)
+    {
+        if (!keyOn || !early || !airborne)
             return AddCrewEarly::None;
-        return AddCrewEarlyPlace(tank, healer, ranged, aoeRank, crewSize);
+        const AddCrewEarly place = AddCrewEarlyPlace(tank, healer, ranged, aoeRank, crewSize);
+        if (!switchAlive)
+            return place;
+        if (place == AddCrewEarly::Boss && !AddCrewBossWhileSwitch(aoeRank, crewSize, bossWhileSwitch))
+            return AddCrewEarly::None;
+        return place;
     }
 }

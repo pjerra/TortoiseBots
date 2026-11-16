@@ -5907,16 +5907,19 @@ Unit* PickBossKillFirst(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fi
     AiObjectContext* context = ai->GetAiObjectContext();
     // The add crew's `early` mode (AiPlayerbot.DungeonRunAddCrewEarly): a ranged damage dealer the row leaves on the
     // boss takes no kill_first pick there. The boss's own trigger aims it at the boss, and while the gate_hold rows hold
-    // the boss off nothing else sends it back to the row's switch unit either. The row's boss is the kill_first row's
-    // own boss_entry, so no boss is named here.
+    // the boss off nothing else sends it back to the row's switch unit either. The kill_first row names its own target,
+    // not the boss, so the add_crew row is found through its switch unit (row->bossEntry would ask for an add_crew row
+    // under the switch unit and always read None).
     if (sPlayerbotAIConfig.dungeonRunAddCrewEarly)
     {
         for (const BossTacticRow* row : fight.rows)
         {
             if (row->kind != BossTacticKind::KillFirst)
                 continue;
-            if (AI_VALUE2(uint8, "add crew early", static_cast<int32>(row->bossEntry)) ==
-                static_cast<uint8>(AddCrewEarly::Boss))
+            std::uint32_t crewBoss = 0;
+            if (GetBossTactics().AddCrewEarlyBossOf(bot->GetMapId(), row->targetEntry, crewBoss) &&
+                AI_VALUE2(uint8, "add crew early", static_cast<int32>(crewBoss)) ==
+                    static_cast<uint8>(AddCrewEarly::Boss))
                 return nullptr;
         }
     }

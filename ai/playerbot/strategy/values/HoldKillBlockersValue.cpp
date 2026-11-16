@@ -290,9 +290,11 @@ Unit* EngagedBossOfEntry(Player* bot, uint32 entry)
 }
 
 // AiPlayerbot.DungeonRunAddCrewEarly: the `early` mode's duty. The row, its mode, the switch unit's life (the "add
-// crew" value's Waiting answer: it reads the same tank-post grid search) and the boss's flight (the core's flight flag
-// on the engaged boss, the same one the hover reach reads) come first; with them the crew's AoE ranged take the adds
-// and the ranged past the crew stay on the boss. The tanks, the healers and the melee keep their own duty there too.
+// crew" value's Waiting answer: it reads the same tank-post grid search), the boss's flight (the core's flight flag
+// on the engaged boss, the same one the hover reach reads) and the split key (how many ranks past the crew leave the
+// switch unit while it lives, AiPlayerbot.DungeonRunAddCrewBossWhileSwitch) come first; with them the crew's AoE ranged
+// take the adds and the ranged past the crew the key covers stay on the boss. The tanks, the healers and the melee keep
+// their own duty there too.
 uint8 AddCrewEarlyValue::Calculate()
 {
     if (!sPlayerbotAIConfig.dungeonRunAddCrewEarly || !sPlayerbotAIConfig.dungeonRunAddCrew)
@@ -308,5 +310,6 @@ uint8 AddCrewEarlyValue::Calculate()
     Unit* const boss = EngagedBossOfEntry(bot, bossEntry);
     bool const airborne = boss && boss->IsFlying();
     return static_cast<uint8>(AddCrewEarlyDuty(true, true, switchAlive, airborne, PlayerbotAI::IsTank(bot),
-        PlayerbotAI::IsHeal(bot), ai->IsRanged(bot), AI_VALUE(std::int32_t, "add crew rank"), crewSize));
+        PlayerbotAI::IsHeal(bot), ai->IsRanged(bot), AI_VALUE(std::int32_t, "add crew rank"), crewSize,
+        sPlayerbotAIConfig.dungeonRunAddCrewBossWhileSwitch));
 }

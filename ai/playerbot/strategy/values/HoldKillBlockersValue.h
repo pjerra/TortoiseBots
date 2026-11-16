@@ -109,9 +109,9 @@ namespace ai
 
     // "add crew early::<boss>": AiPlayerbot.DungeonRunAddCrewEarly's duty for this bot under the map's add_crew row of
     // the qualifier boss (AddCrewEarlyDuty: 0 None, 1 Whelps, 2 Boss). Whelps and Boss only while the row is in mode
-    // `early`, its switch unit still lives and the boss (as the raid fights it) flies; the crew's AoE ranged take the
-    // boss's adds, the ranged past the crew stay on the boss. None everywhere else: with the key or the row off, once
-    // the switch unit is dead (the crew's usual phase runs) or with the boss on the ground.
+    // `early` and the boss (as the raid fights it) flies; the crew's AoE ranged take the boss's adds and the ranged
+    // past the crew the split key covers stay on the boss while the switch unit lives, every one of them once it dies.
+    // None everywhere else: with the key or the row off, or with the boss on the ground.
     class AddCrewEarlyValue : public CalculatedValue<std::uint8_t>, public Qualified
     {
     public:

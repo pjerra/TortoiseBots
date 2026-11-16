@@ -31,6 +31,7 @@ These settings configure boss encounter mechanics, environmental hazard evasion,
 | [`AiPlayerbot.BotLfgMaxGroups`](#aiplayerbotbotlfgmaxgroups) | `5` | The most groups at once. |
 | [`AiPlayerbot.BotLfgOnlyWithPlayersOnline`](#aiplayerbotbotlfgonlywithplayersonline) | `1` | Groups form only while at least one real player is online. |
 | [`AiPlayerbot.DungeonRunAddCrew`](#aiplayerbotdungeonrunaddcrew) | `0` | `1`: the boss tactics keep their `add_crew` rows — once the row's switch unit is dead, the melee, the tanks and the first `priority` AoE ranged bots of the raid take the boss's adds, and the other ranged damage dealers stay on the boss (needs the boss tactics and the rows). |
+| [`AiPlayerbot.DungeonRunAddCrewBossWhileSwitch`](#aiplayerbotdungeonrunaddcrewbosswhileswitch) | `0` | `0`-`40`: how many AoE ranks past the crew leave the switch unit for the boss while it lives under the early add crew (`0`, recommended on: the crew alone leaves it; `40`: every ranged damage dealer past the crew). |
 | [`AiPlayerbot.DungeonRunAddCrewEarly`](#aiplayerbotdungeonrunaddcreweearly) | `0` | `1` (recommended on): an `add_crew` row in mode `early` starts before its switch unit dies — while it lives and the boss flies, the crew's AoE ranged bots take the boss's adds, every other ranged damage dealer stays on the boss, and a `hold_kill` hold on the crew's own add no longer stands its area casts down (needs `AiPlayerbot.DungeonRunAddCrew`). |
 | [`AiPlayerbot.DungeonRunAggroCeiling`](#aiplayerbotdungeonrunaggroceiling) | `6` | Joiners above which the run leader rests the party before a pull (needs the estimate on). |
 | [`AiPlayerbot.DungeonRunAggroEstimate`](#aiplayerbotdungeonrunaggroestimate) | `0` | The run leader estimates how many creatures a pull brings and rests first when it is many. |
@@ -133,6 +134,7 @@ These settings configure boss encounter mechanics, environmental hazard evasion,
 | [`AiPlayerbot.HazardEvasionDistance`](#aiplayerbothazardevasiondistance) | `12.0` | Cap in yards on the step bots take when spreading for spacing. |
 | [`AiPlayerbot.OnyxiaWhelpsAndEggs`](#aiplayerbotonyxiawhelpsandeggs) | `1` | Prioritizes whelp clearing and egg avoidance during Onyxia phase two. |
 | [`AiPlayerbot.OnyxiaWhelpCrewOnGround`](#aiplayerbotonyxiawhelpcrewonground) | `0` | `1`: the add crew keeps hunting the whelps in Onyxia's last 40 % on the ground, with the tanks on their posts (needs `AiPlayerbot.OnyxiaWhelpsAndEggs` and `AiPlayerbot.DungeonRunAddCrew`). |
+| [`AiPlayerbot.OnyxiaWhelpPickTankFirst`](#aiplayerbotonyxiawhelppicktankfirst) | `0` | `1` (recommended on): the ground whelp pick takes the whelp a raid tank is fighting first, then one a healer is, then the nearest of the rest. |
 | [`AiPlayerbot.RaidEntryByCommander`](#aiplayerbotraidentrybycommander) | `1` | Waives a bot's failed entrance condition at a raid entrance with no area-trigger script when its commander is a real player who commands the raid (in the group, or through the binding of a bound raid) and meets it. |
 
 ## Settings
@@ -315,8 +317,23 @@ Whether the boss tactics keep their `add_crew` rows: once the row's switch unit 
 
 </details>
 
+### `AiPlayerbot.DungeonRunAddCrewBossWhileSwitch`
+How many AoE ranks past the crew leave the switch unit for the boss while the switch unit still lives, under an [`early`](#aiplayerbotdungeonrunaddcreweearly) add crew.
+**Default:** `0` · **Values:** `0`-`40` (clamped): `0` (recommended on) leaves every ranged damage dealer past the crew on the switch unit, so only the crew leaves it early; `n` covers the next `n` AoE ranks past the crew; `40` covers every ranged damage dealer past the crew, the bots without an AoE rank included · **Restart:** not needed (`.reload config` applies it with the other `AiPlayerbot.DungeonRun*` keys) · **Needs:** `AiPlayerbot.DungeonRunAddCrew = 1` and `AiPlayerbot.DungeonRunAddCrewEarly = 1`
+
+<details>
+<summary>How it works in detail</summary>
+
+**The split:** under the early key the crew's AoE ranged bots take the boss's adds while the switch unit lives, and the ranged damage dealers past the crew are what this key answers. With `0` they stay on the switch unit — its `kill_first` row keeps them there — so the crew alone leaves it and the switch unit dies first (walk 2o's set). With `n` the next `n` AoE ranks past the crew (the crew order: mage, warlock, hunter, shaman, druid) take the boss's duty early. With `40` every ranged damage dealer past the crew does, the bots without an AoE rank (no AoE spell, or not ranged: rank -1) included; that is walk 2n's split.
+
+**After the switch unit:** once it dies the whole place applies under the early key, whatever this value: the crew on the adds and every ranged damage dealer past the crew on the boss. The crew's usual phase alone would leave those ranged on nothing.
+
+**The consumers:** the `add crew early` value reads it, so the boss duty trigger, the `kill_first` skip, the whelp duty and the assist hold all follow the split. Off, the value stays `0`.
+
+</details>
+
 ### `AiPlayerbot.DungeonRunAddCrewEarly`
-Whether an [`add_crew`](#aiplayerbotdungeonrunaddcrew) row in mode `early` starts its phase before the switch unit dies: while the switch unit still lives and the boss is airborne, the crew's AoE ranged damage dealers take the boss's adds and every other ranged damage dealer stays on the boss.
+Whether an [`add_crew`](#aiplayerbotdungeonrunaddcrew) row in mode `early` starts its phase before the switch unit dies: while the switch unit still lives and the boss is airborne, the crew's AoE ranged damage dealers take the boss's adds and, as far as [`AiPlayerbot.DungeonRunAddCrewBossWhileSwitch`](#aiplayerbotdungeonrunaddcrewbosswhileswitch) covers them, the ranged damage dealers past the crew stay on the boss.
 **Default:** `0` · **Values:** `0` off (a row's mode is ignored, the crew waits for the switch unit), `1` on (recommended on; needs `AiPlayerbot.DungeonRunAddCrew = 1`) · **Restart:** not needed (`.reload config` applies it with the other `AiPlayerbot.DungeonRun*` keys)
 
 <details>
@@ -324,7 +341,7 @@ Whether an [`add_crew`](#aiplayerbotdungeonrunaddcrew) row in mode `early` start
 
 **The row:** the same `add_crew` row, with `tactic_mode` = `early` (the kind's one mode word). `boss_entry` is the boss, `target_entry` the switch unit and `priority` the crew size.
 
-**The phase:** the early duty runs only while the switch unit still lives (the row's usual state is *waiting*), the boss flies (the core's flight flag on the boss as the raid fights it), and the key is on. Then the ranged damage dealers inside the crew take the boss's adds and the ones past the crew are aimed at the boss: they take no `kill_first` pick there, and the boss's own return trigger sends them back to it. The tanks, the healers and the melee keep their own duty — a tank must hold the flying boss and the melee cannot reach it. A `gate_hold` row that holds the boss off outranks the return, so the bot falls back to its ordinary pick (the row's switch unit).
+**The phase:** the early duty runs only while the boss flies (the core's flight flag on the boss as the raid fights it) and the key is on. Then the ranged damage dealers inside the crew take the boss's adds; the ones past the crew are aimed at the boss as far as [`AiPlayerbot.DungeonRunAddCrewBossWhileSwitch`](#aiplayerbotdungeonrunaddcrewbosswhileswitch) covers them while the switch unit still lives, and every one of them once it dies: they take no `kill_first` pick there, the boss's own return trigger sends them back to it only while she is not already their target (an attack on the current victim would end the tick before the rotation runs), and the assist re-pick is held while she is. The tanks, the healers and the melee keep their own duty — a tank must hold the flying boss and the melee cannot reach it. A `gate_hold` row that holds the boss off outranks the return, so the bot falls back to its ordinary pick (the row's switch unit).
 
 **The hold:** a `hold_kill` row that spares an entry because the row's switch unit fights lifts its budget hold for the crew's own AoE: the crew exists to kill that add. The link is the switch unit — the `hold_kill` row's blocker is the `add_crew` row's switch unit — so no boss name is written in the code. The DoT clause and every other hold (`one_at_a_time`, `gate_hold`, `linked_death`, `dps_hold_after`, `seek_aura`) stand.
 
@@ -2085,6 +2102,19 @@ The whelp duty (`AiPlayerbot.OnyxiaWhelpsAndEggs`) covers the airborne phase. Wi
 - the phase 1 pull (above 40 %) is untouched.
 
 Only active on map 249 with the `onyxia` fight strategy; an explicit target order from a player always wins. When set to `0`, the hunt is airborne-only and every phase behaves as before.
+
+</details>
+
+### `AiPlayerbot.OnyxiaWhelpPickTankFirst`
+When a bot on whelp duty picks a whelp while Onyxia stands on the ground, it takes the whelp a raid tank is fighting first, then one a healer is fighting, then the nearest of the rest.
+**Default:** `0` · **Values:** `0` off (the nearest pickable whelp, as before), `1` on (recommended on) · **Restart:** not needed (`.reload config` applies it with the other `AiPlayerbot.DungeonRun*` keys) · **Needs:** `AiPlayerbot.OnyxiaWhelpsAndEggs = 1`
+
+<details>
+<summary>How it works in detail</summary>
+
+The whelp scan walks the bot's attackers on map 249 with the `onyxia` fight strategy. With this key on and her on the ground, each pickable whelp is ranked by its victim (`GetVictim()`): a raid tank's whelp first, a healer's second, the rest last; the distance only breaks a tie inside one rank. Whelps the bot cannot reach within 40 yd and whelps inside an egg's trap circle stay skipped, and in the air the pick stays the nearest.
+
+The P3 whelps eat the raid's tanks (walk 2n: 20 tank deaths in 6 P3 pulls, a whelp among the top hitters in 18 of them) and the pickers took the nearest whelp, which hit damage dealers, healers and tanks alike; nobody was sent to the ones on the tanks. Slot 1 already holds them there and dies, so the ground crew (the melee and the AoE crew) is what can pull them off it. `onyxia kill whelps` keeps its *already on a whelp* early-out, so a better-ranked whelp does not reshuffle the crew every tick.
 
 </details>
 

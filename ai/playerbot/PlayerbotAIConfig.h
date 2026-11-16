@@ -710,12 +710,23 @@ public:
     // unit dies (the crew's usual phase). Needs AiPlayerbot.DungeonRunAddCrew; off, the row's mode is ignored and the
     // crew waits for the switch unit as before (default 0).
     uint32 dungeonRunAddCrewEarly = 0;
+    // AiPlayerbot.DungeonRunAddCrewBossWhileSwitch: how many AoE ranks past the crew keep the boss's duty while the
+    // row's switch unit still lives (0-40). 0 leaves them on the switch unit, so the crew alone leaves it early (the
+    // 2m shape: he dies first, then the ranged join her); 40 is the 2n split, every ranged damage dealer past the crew
+    // on the boss, the no-AoE-rank bots included. Once the switch unit dies every ranged damage dealer past the crew
+    // has the boss's duty under the early key. Needs AiPlayerbot.DungeonRunAddCrewEarly (default 0).
+    uint32 dungeonRunAddCrewBossWhileSwitch = 0;
     // AiPlayerbot.OnyxiaWhelpCrewOnGround: the whelp crew keeps the whelps on the ground too, in Onyxia's last 40 %,
     // not only while she hovers. On, the whelp phase is the Hover aura or (she is found and her health is at or below
     // 40 %): the crew's melee and its ranged keep hunting whelps there, the tanks keep their posts or the generic pick
     // and the other ranged stay on her. Needs AiPlayerbot.OnyxiaWhelpsAndEggs and AiPlayerbot.DungeonRunAddCrew; off,
     // the hunt is airborne-only as before (default off).
     bool onyxiaWhelpCrewOnGround = false;
+    // AiPlayerbot.OnyxiaWhelpPickTankFirst: on the ground the whelp scan takes the whelp a tank is fighting first, then
+    // one a healer is fighting, then the nearest of the rest: the P3 whelps eat the raid's tank (slot 1 already holds
+    // them and dies) and the ground crew is what can pull them off. Off, the nearest pickable whelp as before (default
+    // off).
+    bool onyxiaWhelpPickTankFirst = false;
     // The raid guard leaves a unit to the tank a boss-tactic row assigns it to (an until_tank row with a tank slot, or
     // a tank_post row): on, the off-tank pick-ups never send another tank at it; off, the raid's off-tanks take it as
     // before (its own key on top of the raid and boss rules; default off).

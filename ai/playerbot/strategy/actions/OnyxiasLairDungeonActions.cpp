@@ -137,7 +137,12 @@ OnyxiaWhelpScan ai::ScanOnyxiaWhelps(PlayerbotAI* ai, Player* bot)
     // Cached attackers only: whelps jump the raid, so they are on this
     // list; no grid sweep.
     const std::list<ObjectGuid> attackers = AI_VALUE(std::list<ObjectGuid>, "attackers");
+    // AiPlayerbot.OnyxiaWhelpPickTankFirst: on the ground the whelp eating the raid's tank ranks first (slot 1 already
+    // holds them in P3 and dies), one eating a healer second, and the distance breaks a tie inside one rank. In the
+    // air the pick stays the nearest: a whelp cannot be pulled off a tank there.
+    const bool pickTankFirst = sPlayerbotAIConfig.onyxiaWhelpPickTankFirst && bossFound && !scan.bossAirborne;
     float bestDist = FLT_MAX;
+    int bestRank = OnyxiaWhelpVictimRank(false, false);
     // Egg positions from the bot's cached egg search, fetched at most once
     // and only for a whelp inside the padded egg-field box.
     std::vector<OnyxiaPoint> eggs;
@@ -165,8 +170,23 @@ OnyxiaWhelpScan ai::ScanOnyxiaWhelps(PlayerbotAI* ai, Player* bot)
         }
         if (!IsOnyxiaWhelpPickable(true, dist, nearEgg))
             continue;
-        if (dist < bestDist)
+        if (!pickTankFirst)
         {
+            if (dist < bestDist)
+            {
+                bestDist = dist;
+                scan.whelp = unit;
+            }
+            continue;
+        }
+        Unit* const victim = unit->GetVictim();
+        Player* const victimPlayer = victim && victim->GetTypeId() == TYPEID_PLAYER
+            ? static_cast<Player*>(victim) : nullptr;
+        const int rank = OnyxiaWhelpVictimRank(victimPlayer && PlayerbotAI::IsTank(victimPlayer),
+                                               victimPlayer && PlayerbotAI::IsHeal(victimPlayer));
+        if (!scan.whelp || OnyxiaWhelpPickBetter(rank, dist, bestRank, bestDist))
+        {
+            bestRank = rank;
             bestDist = dist;
             scan.whelp = unit;
         }
@@ -287,6 +307,18 @@ float OnyxiaWhelpHoldMultiplier::GetValue(Action* action)
         return 1.0f;
     if (bot->GetMapId() != kOnyxiaMapId)
         return 1.0f;
+    // The early add crew's boss duty (AiPlayerbot.DungeonRunAddCrewEarly): the assist re-pick would aim the bot at a
+    // whelp every tick and pull it off her, so the assist action is held while she is its target (the boss's own attack
+    // action keeps it there). AoE actions are untouched.
+    if (dynamic_cast<DpsAssistAction*>(action) != nullptr && sPlayerbotAIConfig.dungeonRunAddCrewEarly &&
+        AI_VALUE2(uint8, "add crew early", static_cast<int32>(kOnyxiaEntry)) ==
+            static_cast<uint8>(AddCrewEarly::Boss))
+    {
+        Unit* const boss = ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"));
+        if (boss && AI_VALUE(Unit*, "current target") == boss &&
+            AI_VALUE(ObjectGuid, "explicit attack target").IsEmpty())
+            return 0.0f;
+    }
     const bool duty = IsOnyxiaWhelpDuty(ai, bot);
     if (!duty)
         return 1.0f;

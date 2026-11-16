@@ -1043,6 +1043,16 @@ AiPlayerbot.OnyxiaWhelpsAndEggs = 1
 # 1 - the crew hunts them on the ground as well, in her last 40 %
 AiPlayerbot.OnyxiaWhelpCrewOnGround = 0
 
+# Onyxia whelp pick on the ground (recommended on).
+# With AiPlayerbot.OnyxiaWhelpsAndEggs on, a bot picking a whelp while she stands on the ground takes the whelp a
+# raid tank is fighting first, then one a healer is fighting, then the nearest of the rest (distance breaks a tie
+# inside one rank). The P3 whelps eat the raid's tank first -- the Cindarion post's tank already holds them and dies
+# -- and the ground crew is what can pull them off it; in the air the pick stays the nearest. An explicit target
+# order from a player always wins. Off by default: the nearest pickable whelp, as before.
+# 0 - the nearest pickable whelp (Default)
+# 1 - the whelp on a tank, then on a healer, then the nearest
+AiPlayerbot.OnyxiaWhelpPickTankFirst = 0
+
 # Work in progress. These features are not officially released and not supported yet. Enable them at your own risk.
 # Until the official release, bug reports and feedback about them are not handled through the issue tracker; contact Hypeer directly.
 # Dungeon boss tactics.
@@ -1158,6 +1168,17 @@ AiPlayerbot.DungeonRunAddCrew = 0
 # 0 - off: a row's `early` mode is ignored, the crew waits for the switch unit (Default)
 # 1 - on: the crew's AoE ranged take the adds while the switch unit lives and the boss flies
 AiPlayerbot.DungeonRunAddCrewEarly = 0
+
+# Early add crew: the boss duty past the crew while the switch unit lives (0-40, recommended on at 0).
+# With AiPlayerbot.DungeonRunAddCrewEarly on, this is how many AoE ranks past the crew leave the switch unit for the
+# boss while it still lives: 0 leaves every one of them on the switch unit, so only the crew leaves it early and he
+# dies first (the walk 2o set); n covers the next n ranks; 40 is walk 2n's split, every ranged damage dealer past the
+# crew on the boss, the bots without an AoE rank (no AoE spells, or not ranged) included. Once the switch unit dies
+# every ranged damage dealer past the crew has the boss's duty under the early key, whatever this value. Needs
+# AiPlayerbot.DungeonRunAddCrewEarly; `.reload config` reads it again with the other AiPlayerbot.DungeonRun* keys.
+# 0 - the crew alone leaves the switch unit early (recommended; Default)
+# 1-40 - that many ranks past the crew, 40 = every ranged damage dealer past the crew
+AiPlayerbot.DungeonRunAddCrewBossWhileSwitch = 0
 
 # The raid guard leaves a unit to the tank its boss tactic row assigns it to (only read with
 # AiPlayerbot.DungeonRunRaid = 1 and AiPlayerbot.DungeonRunRaidBossRules = 1): in a raid's boss fight the off-tanks
