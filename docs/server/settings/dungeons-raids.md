@@ -106,6 +106,7 @@ These settings configure boss encounter mechanics, environmental hazard evasion,
 | [`AiPlayerbot.DungeonRunSeekTakenSonThreatCap`](#aiplayerbotdungeonrunseektakensonthreatcap) | `0` | `1` (recommended on with `DungeonRunSeekSonMeet`): a damage dealer at 85 % of the taking tank's threat on the just-taken Son holds its attacks on it (until under 75 %) for up to 15 s, so the burn does not pull it off the tank. |
 | [`AiPlayerbot.DungeonRunSeekSiphonClock`](#aiplayerbotdungeonrunseeksiphonclock) | `0` | `1` (recommended on with `DungeonRunSeekPullCycle` and `DungeonRunSeekWalkoutFaceCast`): a Hakkar walk-out that sent no pull cast and never stood in shot position aborts as `no sight` after 15 s, and the `seek_pull` row's start and retry floors drop to 50 s, so an undosed siphon gets another pull. |
 | [`AiPlayerbot.DungeonRunSeekCycleRoll`](#aiplayerbotdungeonrunseekcycleroll) | `0` | `1` (recommended on with `DungeonRunSeekPullCycle`): a missed Blood Siphon sighting advances the fight's cycle number with the rolled due time, so the walk-out's spent cycle reopens instead of staying shut for the rest of the fight (one `BossTacticsSeekCycleRoll` row per roll). |
+| [`AiPlayerbot.DungeonRunSeekRetryUnspent`](#aiplayerbotdungeonrunseekretryunspent) | `0` | `1` (recommended on with `DungeonRunSeekPullCycle`): a Hakkar walk-out that never shot its Son does not count against the cycle's walk-outs once a cycle, and that cycle's start and retry floors drop to 35 s before the siphon, so one aborted pull does not leave the siphon undosed. |
 | [`AiPlayerbot.DungeonRunThreatResetWindow`](#aiplayerbotdungeonrunthreatresetwindow) | `0` | A/B only, **not recommended**; tested in walk 68, made things worse; keep off (needs `DungeonRunSeekAura`): around Hakkar's expected Cause Insanity, a damage dealer at 95 % of the best tank that does not hold him holds its damage on him (resuming under 90 %), so the reset hands him to a tank. Walk 68: tank-turn share 58 % to 46 % (casts 4+ 68 % to 49 %), target not met. |
 | [`AiPlayerbot.DungeonRunSeekMeetPrePlaceHold`](#aiplayerbotdungeonrunseekmeetpreplacehold) | `0` | `1` (recommended on with `DungeonRunSeekMeetPrePlace`): once its pre-place walk began, the pre-placed third tank's reach actions and warrior gap closer skip the anchored boss, so its own rotation no longer drags it back into Hakkar's melee. |
 | [`AiPlayerbot.DungeonRunCarrierStrike`](#aiplayerbotdungeonruncarrierstrike) | `0` | `1` (recommended on): a cursed healer or off-tank turns on its own Shade of Jin'do for one cast, placed just below a critical heal, while the raid can spare it (needs the boss tactics). |
@@ -1448,6 +1449,21 @@ Whether Hakkar's walk-out gets the siphon clock. Recommended on with `DungeonRun
 **Expected (walk 62 model):** about 19.5 of the 42 standing-raid undosed cycles dose (no-sight 15.4, missed sighting 2.5, aborts 1.6), taking the undosed share from 29 % to about 16 %. The cut's cost is a shot task that would have shot after 15 s with no in-shot read before it: an upper bound of 11 % of shot tasks, which get a retry at due about 59 s instead.
 
 **Rows:** `seek pull: walk-out abort no sight ...` (the no-shot row's fields, `los=` `inrange=` `spell=` `onson=` `front=` `moving=` `dz=`), and the start row gains `floor=<s>` while the key is on.
+
+</details>
+
+### `AiPlayerbot.DungeonRunSeekRetryUnspent`
+Whether Hakkar's walk-out refunds one unshot start a cycle. Recommended on with `DungeonRunSeekPullCycle`.
+**Default:** `0` · **Values:** `0` off (a cycle's walk-outs count as they start, refunded never), `1` on (needs `DungeonRunSeekPullCycle` and a `seek_pull` row; the floors also need the row's own) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+<details>
+<summary>How it works in detail</summary>
+
+**Why (walk 115):** five of the first 22 Hakkar fights had no Son pulled before siphon 1 and 17.4 undosed bot-fights each, while every fight with a cloud was dosed as in walk 103 (1.21 against 1.30): in each of the five the cycle's one walk-out aborted unshot (`no sight`, a threat, a refused move) and the next start came after the siphon, because the `seek_pull` row's `priority 1` lets a single aborted start spend the cycle and the row's floors refuse the late retry. The abort rate itself is noise (first-walk-out unshot aborts: 15 of 268 on walks 93-103, 5 of 22 in walk 115).
+
+**The refund:** an unshot walk-out that ends (an abort, the no-sight cut, a stalled shot, a failed cast) with more than 35 s to the siphon gives its start back, once per cycle: the cycle's walk-out count drops by one, so the row's `priority 1` still lets the retry start, and the cycle's start and retry floors drop to 35 s (never raised above the row's own). A start at due 35 s pulls the Son at about 28 s with the non-tank burn already open. Only one refund a cycle and only an unshot end: a walk-out that shot its Son, and a timeout, keep their start counted, so one Son a siphon is still the row's rule.
+
+**Rows:** the start row gains `refund=1` on the refunded cycle's retry (`refund=0` on any other start), and the late row's `need=` reads the cycle's floor.
 
 </details>
 

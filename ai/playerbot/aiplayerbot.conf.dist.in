@@ -1419,6 +1419,13 @@ AiPlayerbot.DungeonRunSeekTakenSonThreatCap = 0
 # and the row's own floors.
 AiPlayerbot.DungeonRunSeekSiphonClock = 0
 
+# The unspent walk-out's one retry for Hakkar's seek pull (recommended on; needs DungeonRunSeekPullCycle): a walk-out
+# that never shot its Son does not count against the cycle's walk-outs once a cycle, so the seek_pull row's 1 walk-out a
+# siphon does not turn one aborted pull into an undosed siphon; that cycle's start and retry floors also drop to 35 s
+# before the siphon (never raised), enough for a start still to pull the Son through the open burn. A walk-out whose
+# shot landed is never refunded. Off keeps one counted start a cycle and the row's own floors.
+AiPlayerbot.DungeonRunSeekRetryUnspent = 0
+
 # The rolled cycle number for Hakkar's seek pull (recommended on; needs DungeonRunSeekPullCycle): when a due time rolls
 # past a missed Blood Siphon sighting, the fight's cycle number advances with it and the estimated sighting time moves
 # to the rolled cycle's own, so the walk-out's spent cycle reopens instead of staying shut for the rest of the fight.
