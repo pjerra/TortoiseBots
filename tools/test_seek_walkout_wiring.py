@@ -451,8 +451,8 @@ class SeekWalkoutRound2(unittest.TestCase):
 
     def test_a_late_start_returns_before_the_scan(self):
         update = body(ACTIONS, "void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, Unit* boss,")
-        gate = ("if (wanted && sPlayerbotAIConfig.dungeonRunSeekPullCycle && rules.firstStartMinMs != 0 &&\n"
-                "        dueInMs < rules.firstStartMinMs)")
+        gate = ("if (wanted && sPlayerbotAIConfig.dungeonRunSeekPullCycle && startFloorMs != 0 &&\n"
+                "        dueInMs < startFloorMs)")
         self.assertIn(gate, update)
         late = update[update.index(gate):]
         self.assertIn('"seek pull: walk-out late due=%u need=%u"', late)
@@ -550,7 +550,7 @@ class SeekWalkoutRefusalReasons(unittest.TestCase):
         self.assertIn('"seek pull: walk-out no stand sons=%d reach=%.0f hunter_pass=%d"', update)
         self.assertIn("static_cast<int>(sons.size())", update)
         self.assertIn('"seek pull: walk-out late due=%u need=%u"', update)
-        self.assertIn("rules.firstStartMinMs / 1000", update)
+        self.assertIn("startFloorMs / 1000", update)
 
     def test_the_reset_row_names_its_cause(self):
         forget = body(ACTIONS, "void ForgetSeekWalkout(PlayerbotAI* ai, std::uint32_t instanceId, const char* cause)")
@@ -608,6 +608,50 @@ class WalkoutStandSightWiring(unittest.TestCase):
         walk = walkout_branch()
         self.assertIn("lastMove.movePathType ? lastMove.movePathType : probeType, probeYd,\n"
                       "                                bot->GetDistance2d(x, y), task.walkoutGen);", walk)
+
+
+class SeekRetryUnspentWiring(unittest.TestCase):
+    """DungeonRunSeekRetryUnspent: one unshot walk-out a cycle does not spend the cycle's start, and its retry may
+    start down to 35 s before the siphon."""
+
+    def update(self):
+        return body(ACTIONS, "void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, Unit* boss,")
+
+    def test_the_flag_defaults_off(self):
+        config = (ROOT / "ai/playerbot/PlayerbotAIConfig.cpp").read_text()
+        config_h = (ROOT / "ai/playerbot/PlayerbotAIConfig.h").read_text()
+        template = (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text()
+        settings = (ROOT / "docs/server/settings/dungeons-raids.md").read_text()
+        self.assertIn('GetBoolDefault("AiPlayerbot.DungeonRunSeekRetryUnspent", false)', config)
+        self.assertIn("bool dungeonRunSeekRetryUnspent = false;", config_h)
+        self.assertIn("AiPlayerbot.DungeonRunSeekRetryUnspent = 0", template)
+        self.assertIn("### `AiPlayerbot.DungeonRunSeekRetryUnspent`", settings)
+
+    def test_the_rules_are_armed_after_the_siphon_clock(self):
+        update = self.update()
+        self.assertIn("if (sPlayerbotAIConfig.dungeonRunSeekRetryUnspent)", update)
+        self.assertLess(update.index("WalkoutSiphonClockRules("), update.index("WalkoutRetryUnspentRules(rules)"))
+        self.assertLess(update.index("if (sPlayerbotAIConfig.dungeonRunSeekSiphonClock)"),
+                        update.index("if (sPlayerbotAIConfig.dungeonRunSeekRetryUnspent)"))
+        # Inside the seek_pull gate: without the row's rules the old one-walk-out rules run.
+        gate = update[update.index("if (sPlayerbotAIConfig.dungeonRunSeekPullCycle)"):]
+        self.assertLess(gate.index("WalkoutRetryUnspentRules(rules)"), gate.index("\n    }\n"))
+
+    def test_the_late_check_reads_the_cycle_floor_once(self):
+        update = self.update()
+        self.assertIn("const std::uint32_t startFloorMs = WalkoutFirstStartFloorMs(state, cycleNo, rules);", update)
+        late = update[update.index("const std::uint32_t startFloorMs"):]
+        self.assertIn("dueInMs < startFloorMs", late)
+        self.assertIn("startFloorMs / 1000", late)
+        self.assertNotIn("rules.firstStartMinMs != 0", update)
+        self.assertNotIn("dueInMs < rules.firstStartMinMs", update)
+
+    def test_the_start_row_names_the_refund(self):
+        update = self.update()
+        self.assertIn("refund = rules.retryUnspent && record.state.refundCycle == cycleNo;", update)
+        self.assertIn("tr=%.2f floor=%u refund=%d", update)
+        self.assertIn("tr=%.2f refund=%d", update)
+        self.assertIn("refund ? 1 : 0", update)
 
 
 if __name__ == "__main__":

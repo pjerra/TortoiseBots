@@ -2720,6 +2720,8 @@ void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, U
             rules = WalkoutRulesFromRow(pull->priority, pull->windowSec, row.windowSec);
         if (sPlayerbotAIConfig.dungeonRunSeekSiphonClock)
             rules = WalkoutSiphonClockRules(rules);
+        if (sPlayerbotAIConfig.dungeonRunSeekRetryUnspent)
+            rules = WalkoutRetryUnspentRules(rules);
     }
     const bool meetOn = SeekPullRulesOn(bot->GetMapId(), &row) && sPlayerbotAIConfig.dungeonRunSeekSonMeet;
     SeekWalkoutState state;
@@ -3125,9 +3127,10 @@ void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, U
         }
         return;
     }
-    // A seek_pull row's start needs firstStartMinMs left to the siphon; a retry this late is not worth the scan.
-    if (wanted && sPlayerbotAIConfig.dungeonRunSeekPullCycle && rules.firstStartMinMs != 0 &&
-        dueInMs < rules.firstStartMinMs)
+    // A seek_pull row's start needs its start floor left to the siphon; a retry this late is not worth the scan.
+    const std::uint32_t startFloorMs = WalkoutFirstStartFloorMs(state, cycleNo, rules);
+    if (wanted && sPlayerbotAIConfig.dungeonRunSeekPullCycle && startFloorMs != 0 &&
+        dueInMs < startFloorMs)
     {
         // A cycle already spent (its walk-out done, or its starts used) does not log: the row is about a retry it
         // refuses.
@@ -3150,7 +3153,7 @@ void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, U
         {
             char info1[96];
             snprintf(info1, sizeof(info1), "seek pull: walk-out late due=%u need=%u", dueInMs / 1000,
-                     rules.firstStartMinMs / 1000);
+                     startFloorMs / 1000);
             LogSeekWalkout(ai, info1);
         }
         return;
@@ -3320,6 +3323,7 @@ void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, U
                               prePlaceFloorRefused)
         : nullptr;
     int starts = 0;
+    bool refund = false;
     {
         std::lock_guard<std::mutex> lock(g_walkoutMutex);
         WalkoutRecord& record = g_walkouts[instanceId];
@@ -3336,24 +3340,26 @@ void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, U
         WalkoutPrePlaceSet(record.state, prePlaceTank ? prePlaceTank->GetObjectGuid().GetRawValue() : 0, prePlaceX,
                            prePlaceY);
         starts = record.state.cycleStarts;
+        refund = rules.retryUnspent && record.state.refundCycle == cycleNo;
         NoteWalkoutBusy(before, record.state);
         // The new task's generation: the puller's own writes on this start tick match it (WalkoutTaskIs).
         out.walkoutGen = record.state.startGen;
     }
-    char info1[192];
+    char info1[256];
     if (rules.perCycleWalked)
     {
         float const topThreat = LiveTopTankThreat(bot->GetGroup(), boss, nullptr);
         float const tr = topThreat > 0.0f ? boss->GetThreatManager().getThreat(bot) / topThreat : -1.0f;
         if (sPlayerbotAIConfig.dungeonRunSeekSiphonClock)
             snprintf(info1, sizeof(info1),
-                     "seek pull: ranged walk-out %s -> %u due=%u try=%d reach=%.0f ray=%.0f tr=%.2f floor=%u",
+                     "seek pull: ranged walk-out %s -> %u due=%u try=%d reach=%.0f ray=%.0f tr=%.2f floor=%u refund=%d",
                      bot->GetName(), scan.son->GetGUIDLow(), dueInMs / 1000, starts, scan.reachYd, scan.rayDeg, tr,
-                     rules.firstStartMinMs / 1000);
+                     rules.firstStartMinMs / 1000, refund ? 1 : 0);
         else
             snprintf(info1, sizeof(info1),
-                     "seek pull: ranged walk-out %s -> %u due=%u try=%d reach=%.0f ray=%.0f tr=%.2f", bot->GetName(),
-                     scan.son->GetGUIDLow(), dueInMs / 1000, starts, scan.reachYd, scan.rayDeg, tr);
+                     "seek pull: ranged walk-out %s -> %u due=%u try=%d reach=%.0f ray=%.0f tr=%.2f refund=%d",
+                     bot->GetName(), scan.son->GetGUIDLow(), dueInMs / 1000, starts, scan.reachYd, scan.rayDeg, tr,
+                     refund ? 1 : 0);
     }
     else
         snprintf(info1, sizeof(info1), "seek pull: ranged walk-out %s -> %u", bot->GetName(), scan.son->GetGUIDLow());
