@@ -262,6 +262,13 @@ namespace ai
     // with the key off.
     bool HoldKillPeelOwns(PlayerbotAI* ai, Player* bot, Unit* unit);
 
+    // The add crew's `early` mode (AiPlayerbot.DungeonRunAddCrewEarly): whether the hold_kill row holding `held` is
+    // lifted for this bot because it is on that row's crew (Whelps). The lift needs the whole link: the row's blocker
+    // is the switch unit of an add_crew row in mode `early`, and the bot's `add crew early` duty under that row's boss
+    // is the crew's. `rows` are the caller's (the DPS pickers pass the candidate's own entry's rows, the actions the
+    // fight scan's).
+    bool AddCrewEarlyLiftsHoldKill(PlayerbotAI* ai, Player* bot, const ActiveBossRows& rows, Unit* held);
+
     // One claim of this bot's, as the scan hands it to the action: the unit and its entry (the store's), so a claim
     // dropped for a better one or for a lapse can be logged after the unit is gone. `hpPct` is the unit's health when
     // the claim was taken, `ageMs` how long its stamp has stood, and `reason` why the scan refused to keep it.

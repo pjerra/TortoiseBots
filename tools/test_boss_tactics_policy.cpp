@@ -2361,6 +2361,35 @@ static void HoldKillPeelLiftsClaimedHealerAttacker()
     CHECK(DpsLeavesAlone(true, Active(both), 1, 100, countNear, fighters, false));
 }
 
+// DungeonRunAddCrewEarly: a bot on the crew's Whelps duty is not held off the add a hold_kill row spares, so the DPS
+// pickers reach the whelps the actions send it to kill. The lift is the kill hold's alone: gate_hold still holds at its
+// gate, and the duty itself (who is on the crew) is the `add crew early` value's, not this rule's.
+static void EarlyCrewLiftsKillHeld()
+{
+    BossTacticRow whelps = Row(249, 1, BossTacticKind::HoldKill, 2, 0, 0);
+    const std::vector<BossTacticRow> heldRows = { whelps };
+    const ActiveBossRows active = Active(heldRows);
+    const auto countNear = [](std::uint32_t entry) -> std::uint32_t { return entry == 2 ? 1u : 0u; };
+    const auto noFighters = [](const BossTacticRow&) -> std::uint32_t { return 0; };
+    // A bot off the crew (any other bot): the budget holds, as for the peel's non-claimants.
+    CHECK(DpsLeavesAlone(true, active, 1, 100, countNear, noFighters, false, false));
+    // On the crew's Whelps duty: the budget is lifted and the whelp is a target.
+    CHECK(!DpsLeavesAlone(true, active, 1, 100, countNear, noFighters, false, true));
+    // A tank or a healer keeps its own pick either way.
+    CHECK(!DpsLeavesAlone(false, active, 1, 100, countNear, noFighters, false, true));
+    // The crew's lift never lifts a gate_hold row on the same entry.
+    BossTacticRow gate = Row(249, 1, BossTacticKind::GateHold, 3, 0, 0, 100.0f);
+    gate.windowSec = 200.0f;
+    const auto fighters = [](const BossTacticRow&) -> std::uint32_t { return 1; };
+    const std::vector<BossTacticRow> bothRows = { whelps, gate };
+    const ActiveBossRows both = Active(bothRows);
+    CHECK(DpsLeavesAlone(true, both, 1, 100, countNear, fighters, false, true));
+    CHECK(DpsLeavesAlone(true, both, 1, 100, countNear, fighters, false, false));
+    // The lift and the peel's claim are independent: either one frees the kill hold, neither frees the gate.
+    CHECK(!DpsLeavesAlone(true, active, 1, 100, countNear, noFighters, true, false));
+    CHECK(DpsLeavesAlone(true, both, 1, 100, countNear, fighters, true, true));
+}
+
 static PeelCandidate PeelAdd(std::uint64_t guid, float distance, bool healer = true)
 {
     PeelCandidate c;
@@ -2693,6 +2722,7 @@ int main()
     GateHold_AboveGateNotHeld();
     GateHold_RowShape();
     HoldKillPeelLiftsClaimedHealerAttacker();
+    EarlyCrewLiftsKillHeld();
     HealerPeelPick_OneHealerAddPerBot();
     HoldKillPeelKeepsClaimWhenWhelpTurnsOnClaimant();
     HealerPeelClaims_TryClaimIsAtomic();

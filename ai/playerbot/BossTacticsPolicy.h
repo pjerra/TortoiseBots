@@ -1843,15 +1843,17 @@ namespace ai
     // left the bot has no target and waits for the blocker to die instead of feeding the pile. `hpPct` is the
     // candidate's health; `countFighting` counts a gate row's fighting blockers. The role gate is the hold-kill
     // action's: a tank or a healer keeps its own pick (the caller passes false for them), and an explicit attack order
-    // is taken long before this runs.
+    // is taken long before this runs. `peelOwned` is the bot's own live healer-peel claim on the unit; `killLifted` is
+    // the caller's finding that the hold_kill budget is lifted for this bot (the early add crew's own whelp duty): both
+    // lift the kill hold alone, and a gate_hold row still holds.
     inline bool DpsLeavesAlone(bool freeDpsBot, const ActiveBossRows& rows, std::uint32_t entry, int hpPct,
                                const std::function<std::uint32_t(std::uint32_t)>& countNear,
                                const std::function<std::uint32_t(const BossTacticRow&)>& countFighting,
-                               bool peelOwned = false)
+                               bool peelOwned = false, bool killLifted = false)
     {
         if (!freeDpsBot)
             return false;
-        if (KillHeldFor(rows, entry, countNear, peelOwned))
+        if (!killLifted && KillHeldFor(rows, entry, countNear, peelOwned))
             return true;
         return GateHeld(rows, entry, hpPct, countFighting);
     }

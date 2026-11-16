@@ -81,8 +81,9 @@ TACTIC_FIELDS = {
     "comment": ("comment", str),
     "hp_min": ("hpMin", int),
     "hp_max": ("hpMax", int),
+    "healers": ("healers", int),
 }
-TACTIC_DEFAULTS = {"hpMin": 0, "hpMax": 100}
+TACTIC_DEFAULTS = {"hpMin": 0, "hpMax": 100, "healers": 0}
 # The tactic coverage key is (map, boss, kind, target, spell, hp_min, hp_max), the table's primary key since
 # 20261103010000: one boss carries the same kind, target and spell once per health band, and the loader keeps both.
 

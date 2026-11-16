@@ -1147,6 +1147,42 @@ class BossTacticsSql(unittest.TestCase):
         self.assertEqual((50143, 3, 'early'), (row["target_entry"], row["priority"], row["tactic_mode"]))
         self.assertIsNone(new_kind_problem(row), "the loader mirror refuses the early add_crew row")
 
+    def test_onyxia_walk2n_hatcher_post_healers(self):
+        # 20261116120200_world.sql: walk 2n's P3 counted 48 tank deaths, 23 to a Hatcher and 15 to a whelp, 15 of them
+        # at the two Hatcher posts, while only the slot-0 Onyxia post and the slot-1 Cindarion post held healers. Both
+        # Hatcher posts (slots 2 and 3) now hold two healers; the mode stays hold_spot and the spots, the bands, the
+        # radius and the spell do not move.
+        name = "20261116120200_world.sql"
+        path = os.path.join(ROOT, "data/sql/world", name)
+        self.assertTrue(os.path.isfile(path), "the Onyxia walk 2n Hatcher-post healers migration is missing")
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+        # One scoped UPDATE, nothing else. Idempotent: the WHERE names the healers count the rows had before (0).
+        statements = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("--"))
+        self.assertEqual(1, statements.count("UPDATE `ai_boss_tactic`"), "one UPDATE, nothing else")
+        self.assertIn("SET `healers` = 2 WHERE `map` = 249 AND `boss_entry` = 10184 AND `kind` = 'tank_post' AND "
+                      "`target_entry` = 50144 AND `healers` = 0;", statements)
+        self.assertEqual(0, statements.count("INSERT INTO"), "the healers change inserts no row")
+        self.assertEqual(0, statements.count("DELETE FROM"), "the healers change deletes no row")
+        posts = [_payload_dict(row) for row in effective_rows()
+                 if row[1] == 249 and row[2] == 10184 and row[3] == "tank_post"]
+        shape = {(post["target_entry"], post["priority"]): post for post in posts}
+        self.assertEqual([(10184, 0), (50143, 1), (50144, 1), (50144, 2)], sorted(shape),
+                         "the Hatcher-post healers changed the post set")
+        # Slot 2 south (band 0-41) and slot 3 north (band 0-40, its priority moved to 1 in walk 2g).
+        for slot, key, band, spot in ((2, (50144, 2), (0, 41), (-29.0, -245.7, -88.5)),
+                                      (3, (50144, 1), (0, 40), (-29.0, -183.8, -88.4))):
+            post = shape[key]
+            self.assertEqual(2, post["healers"], "the slot-%d Hatcher post holds no healers" % slot)
+            self.assertEqual((0, "hold_spot", 90.0, band[0], band[1], spot),
+                             (post["spell_id"], post["tactic_mode"], post["param"], post["hp_min"], post["hp_max"],
+                              (post["spot_x"], post["spot_y"], post["spot_z"])),
+                             "the slot-%d Hatcher post drifted" % slot)
+            self.assertIsNone(new_kind_problem(post), "the loader mirror refuses the slot-%d Hatcher post" % slot)
+        # Every Onyxia tank_post row now holds two healers: the two older posts already did (walks 2i and 2j).
+        self.assertEqual([2, 2, 2, 2], [shape[key]["healers"] for key in sorted(shape)],
+                         "an Onyxia tank_post row holds a different number of healers")
+
     def test_onyxia_walk2f_threat_free(self):
         # 20261111170000_world.sql: walk 2f, no threat cap on airborne Onyxia. Walk 2e a-1: no tank could reach her,
         # her tanks held no threat, every damage dealer read 100 % ("the tank has no threat: hold") and the threat
@@ -1319,12 +1355,12 @@ class BossTacticsSql(unittest.TestCase):
         self.assertEqual("20261112200000_world.sql", main["file"])
         self.assertIn("UPDATE `ai_boss_tactic` SET `spell_id` = 18431, `healers` = 2,", text)
         self.assertIsNone(new_kind_problem(main), "the loader mirror refuses the slot-0 Onyxia post")
-        # The two Hatcher posts keep both columns at 0. The slot-1 Cindarion post gains `healers` 2 and keeps
-        # `spell_id` 0 in walk 2j (20261114100000_world.sql, pinned in test_onyxia_walk2j_rows).
+        # The two Hatcher posts keep `spell_id` 0. They hold no healer in walk 2i; walk 2n round 2 sets their `healers`
+        # to 2 (20261116120200_world.sql, pinned in test_onyxia_walk2n_hatcher_post_healers). The slot-1 Cindarion post
+        # gains `healers` 2 and keeps `spell_id` 0 in walk 2j (20261114100000_world.sql, pinned in
+        # test_onyxia_walk2j_rows).
         for key in ((50144, 1), (50144, 2)):
-            post = shape[key]
-            self.assertEqual((0, 0), (post["spell_id"], post["healers"]),
-                             "the post on %u gained a spell or healers" % key[0])
+            self.assertEqual(0, shape[key]["spell_id"], "the post on %u gained a spell" % key[0])
         # No stand row and no other 2i row changed.
         self.assertNotIn("ai_boss_stand", text)
 

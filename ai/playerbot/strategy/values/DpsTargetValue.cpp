@@ -105,7 +105,8 @@ namespace
     // Whether a free DPS bot leaves `unit` alone: a hold_kill row of its own entry holds it while the row's blocker lives
     // (KillHeld), a gate_hold row spares it at its health gate while its blocker fights (GateHeld), and a one_at_a_time
     // row of its entry holds every unit that is not the pick. Opt-in like the tank pickup (IsTankHoldPickup): only a bot
-    // that runs "boss tactics" in combat holds.
+    // that runs "boss tactics" in combat holds. A bot on the early add crew's own whelp duty is exempt from its row's
+    // hold_kill budget (AddCrewEarlyLiftsHoldKill): that crew is out to kill the add, so the pick must reach it.
     // Cheapest check first: the candidate's rows (a map without such rows, which is every map but ZG, returns on the
     // first lookup), then the strategy, then the role gate the hold-kill action uses (IsFreeDps: a tank or a healer keeps
     // its own pick, an explicit attack order wins). The blocker counts are the "hold kill blockers" and "fighting
@@ -160,8 +161,12 @@ namespace
         const auto countNear = [ai](std::uint32_t entry) { return HoldKillBlockers(ai, entry); };
         const auto countFighting = [ai](const BossTacticRow& row)
         { return GateHoldFighters(ai, row.targetEntry, GateHoldRadius(row.windowSec)); };
+        // The add crew's `early` mode lifts its own row's budget hold here too (AddCrewEarlyLiftsHoldKill, the link the
+        // actions read): the crew's AoE ranged must be able to target the whelps they are sent to kill, and gate_hold
+        // and one_at_a_time still hold.
+        const bool crewKill = AddCrewEarlyLiftsHoldKill(ai, bot, active, unit);
         return DpsLeavesAlone(true, active, unit->GetEntry(), static_cast<int>(unit->GetHealthPercent()), countNear,
-                              countFighting, HoldKillPeelOwns(ai, bot, unit));
+                              countFighting, HoldKillPeelOwns(ai, bot, unit), crewKill);
     }
 
     // Solnius Call of Nightmare (Emerald Sanctum, 807): while a major add

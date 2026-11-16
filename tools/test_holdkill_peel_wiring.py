@@ -108,7 +108,8 @@ class TheHoldIsLiftedForTheClaimantOnly(unittest.TestCase):
     def test_the_dps_target_filter_passes_the_claim(self):
         fn = body(DPS_TARGET, "bool HeldDpsTarget(", "\n    }\n")
         self.assertIn("DpsLeavesAlone(true, active, unit->GetEntry(), static_cast<int>(unit->GetHealthPercent()), "
-                      "countNear,\n                              countFighting, HoldKillPeelOwns(ai, bot, unit));", fn)
+                      "countNear,\n                              countFighting, HoldKillPeelOwns(ai, bot, unit), "
+                      "crewKill);", fn)
 
     def test_the_multiplier_lifts_only_the_single_target_clauses(self):
         fn = body(ACTIONS, "float BossTacticsHoldMultiplier::GetValue(")

@@ -449,6 +449,18 @@ namespace ai
         return out;
     }
 
+    // Whether the points of an active anchor are a window's (a row that names a window spell): only a window's anchor
+    // may take a bot off a window's hold, a resting anchor's may not.
+    inline bool StandPointsWindowed(const std::vector<const BossStandRow*>& points)
+    {
+        for (const BossStandRow* point : points)
+        {
+            if (point->windowSpell != 0)
+                return true;
+        }
+        return false;
+    }
+
     // The points a bot of `role` stands at now: the open window's (ActiveStandPoints; this arms or refreshes the
     // hold, and a window of another anchor re-seats from that anchor), else the held anchor's while the hold lasts,
     // else none (the hold is cleared). `rows` are the rows of one boss entry.
@@ -460,7 +472,15 @@ namespace ai
     {
         std::vector<const BossStandRow*> points =
             ActiveStandPoints(rows, role, bossX, bossY, castingSpell, hasAura, stoppedNoTarget);
-        if (!points.empty())
+        const bool sameBoss = !rows.empty() && rows[0].bossEntry == hold.bossEntry;
+        const bool releaseReached = StandReleaseAnchorReached(rows, hold.releaseAnchor, bossX, bossY);
+        // A window's seat outlives its cast (the hold), and a resting row's anchor (one of no window spell, e.g. the
+        // healers' stack between breaths) must not take the bot off it while the hold lasts: the breath's links go on
+        // firing along its lane for the hold's whole time, and the seat is the bot's cover. A window's own anchor
+        // still wins at once, so the next breath re-seats from it.
+        const bool seatHeld = !points.empty() && hold.armed && sameBoss && hold.windowSpell != 0 &&
+            StandHoldActive(hold, nowMs, releaseReached) && !StandPointsWindowed(points);
+        if (!points.empty() && !seatHeld)
         {
             StandHoldArm(hold, *points[0], nowMs);
             // AiPlayerbot.BossStandNearestSeat: a window's seats are every role's rows of its anchor and window spell
@@ -478,9 +498,7 @@ namespace ai
         }
         if (!hold.armed)
             return points;
-        const bool sameBoss = !rows.empty() && rows[0].bossEntry == hold.bossEntry;
-        if (!sameBoss ||
-            !StandHoldActive(hold, nowMs, StandReleaseAnchorReached(rows, hold.releaseAnchor, bossX, bossY)))
+        if (!sameBoss || !StandHoldActive(hold, nowMs, releaseReached))
         {
             hold = StandHold();
             return points;

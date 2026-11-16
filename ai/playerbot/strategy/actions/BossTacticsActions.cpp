@@ -547,28 +547,11 @@ HoldReason HeldSubjectAt(PlayerbotAI* ai, Unit* around, const BossTacticsFight& 
     return HeldSubjectWithin(ai, around, fight, countNear, std::numeric_limits<float>::max(), subject);
 }
 
-// The add crew's `early` mode (AiPlayerbot.DungeonRunAddCrewEarly): the crew's AoE ranged damage dealers are out to
-// kill the add a hold_kill row spares, so that row's budget hold does not stand their area casts down. The lift needs
-// the whole link: `held` is a creature of a hold_kill row's spared entry, the row's blocker is the switch unit of an
-// add_crew row in mode `early`, and this bot is on that row's crew (Whelps) right now. Every other hold stands: the
-// one_at_a_time pick, gate_hold, linked_death, dps_hold_after, seek_aura and the DoT clauses.
+// The add crew's `early` mode over the fight scan's rows: the action, the pick and the current-target read hold those.
+// The rule is AddCrewEarlyLiftsHoldKill's, the same lift the DPS pickers ask over their candidate's own rows.
 bool AddCrewEarlyKillsHeldAdd(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fight, Unit* held)
 {
-    if (!sPlayerbotAIConfig.dungeonRunAddCrewEarly || !ai || !bot || !held)
-        return false;
-    AiObjectContext* context = ai->GetAiObjectContext();
-    for (const BossTacticRow* row : fight.rows)
-    {
-        if (row->kind != BossTacticKind::HoldKill || row->bossEntry != held->GetEntry())
-            continue;
-        std::uint32_t bossEntry = 0;
-        if (!GetBossTactics().AddCrewEarlyBossOf(bot->GetMapId(), row->targetEntry, bossEntry))
-            continue;
-        if (AI_VALUE2(uint8, "add crew early", static_cast<int32>(bossEntry)) ==
-            static_cast<uint8>(AddCrewEarly::Whelps))
-            return true;
-    }
-    return false;
+    return AddCrewEarlyLiftsHoldKill(ai, bot, fight.rows, held);
 }
 
 // The held member of a linked_death group within `maxDistance` of `around` (the action's target, or the bot itself),
@@ -857,6 +840,28 @@ std::uint32_t ai::HoldKillBlockers(PlayerbotAI* ai, std::uint32_t entry)
         return 0;
     AiObjectContext* context = ai->GetAiObjectContext();
     return AI_VALUE2(uint32, "hold kill blockers", static_cast<int32>(entry));
+}
+
+// The add crew's `early` mode's hold_kill lift (declared in BossTacticsActions.h): the crew's AoE ranged are out to
+// kill the add a hold_kill row spares, so that row's budget hold yields for them. Only the budget yields: the
+// one_at_a_time pick, gate_hold, linked_death, dps_hold_after, seek_aura and the DoT clauses stand.
+bool ai::AddCrewEarlyLiftsHoldKill(PlayerbotAI* ai, Player* bot, const ActiveBossRows& rows, Unit* held)
+{
+    if (!sPlayerbotAIConfig.dungeonRunAddCrewEarly || !ai || !bot || !held)
+        return false;
+    AiObjectContext* context = ai->GetAiObjectContext();
+    for (const BossTacticRow* row : rows)
+    {
+        if (row->kind != BossTacticKind::HoldKill || row->bossEntry != held->GetEntry())
+            continue;
+        std::uint32_t bossEntry = 0;
+        if (!GetBossTactics().AddCrewEarlyBossOf(bot->GetMapId(), row->targetEntry, bossEntry))
+            continue;
+        if (AI_VALUE2(uint8, "add crew early", static_cast<int32>(bossEntry)) ==
+            static_cast<uint8>(AddCrewEarly::Whelps))
+            return true;
+    }
+    return false;
 }
 
 std::uint32_t ai::GateHoldFighters(PlayerbotAI* ai, std::uint32_t entry, float radius)

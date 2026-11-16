@@ -145,16 +145,27 @@ class AddCrewWiring(unittest.TestCase):
                     "KillFirstPickMode mode,")
         self.assertIn('AI_VALUE2(uint8, "add crew early", static_cast<int32>(row->bossEntry))', pick)
         self.assertIn("static_cast<uint8>(AddCrewEarly::Boss))\n                return nullptr;", pick)
-        lift = body(actions, "bool AddCrewEarlyKillsHeldAdd(PlayerbotAI* ai, Player* bot, const BossTacticsFight& "
-                             "fight, Unit* held)")
+        lift = body(actions, "bool ai::AddCrewEarlyLiftsHoldKill(PlayerbotAI* ai, Player* bot, const ActiveBossRows& "
+                             "rows, Unit* held)")
         self.assertIn("row->kind != BossTacticKind::HoldKill || row->bossEntry != held->GetEntry()", lift)
         self.assertIn("GetBossTactics().AddCrewEarlyBossOf(bot->GetMapId(), row->targetEntry, bossEntry)", lift)
+        self.assertIn('AI_VALUE2(uint8, "add crew early", static_cast<int32>(bossEntry))', lift)
         self.assertIn("static_cast<uint8>(AddCrewEarly::Whelps))", lift)
+        # The fight scan's form hands its rows to the same rule; the action sites keep reading the fight form.
+        fight_form = body(actions, "bool AddCrewEarlyKillsHeldAdd(PlayerbotAI* ai, Player* bot, const "
+                                   "BossTacticsFight& fight, Unit* held)")
+        self.assertIn("return AddCrewEarlyLiftsHoldKill(ai, bot, fight.rows, held);", fight_form)
         self.assertEqual(5, actions.count("AddCrewEarlyKillsHeldAdd(ai, bot, fight,"),
                          "the budget lift is read at the hold-kill action's drop, the area subject, the pick, the "
                          "current target and the AoE pile")
         drop = body(actions[actions.index("Unit* ai::FindBossHoldKill("):], "Unit* ai::FindBossHoldKill(")
         self.assertIn("if (AddCrewEarlyKillsHeldAdd(ai, bot, fight, current))\n        return nullptr;", drop)
+        # The DPS pickers ask the same rule over the candidate's own rows, so the crew can target the whelps it is
+        # sent to kill: the lift reaches DpsLeavesAlone's kill hold and leaves gate_hold standing.
+        dps = (ROOT / "ai/playerbot/strategy/values/DpsTargetValue.cpp").read_text()
+        held_target = body(dps, "bool HeldDpsTarget(", "\n    }\n")
+        self.assertIn("const bool crewKill = AddCrewEarlyLiftsHoldKill(ai, bot, active, unit);", held_target)
+        self.assertIn("HoldKillPeelOwns(ai, bot, unit), crewKill);", held_target)
 
     def test_whelp_duty_reads_the_value_only_under_the_key(self):
         duty = body(ACTIONS, "bool ai::IsOnyxiaWhelpDuty(PlayerbotAI* ai, Player* bot)")

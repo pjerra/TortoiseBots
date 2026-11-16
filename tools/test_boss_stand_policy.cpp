@@ -580,6 +580,45 @@ int main()
         }
     }
 
+    // A resting anchor (a row with no window spell: the healers' stack between breaths) does not take a bot off a
+    // window's seat while that window's hold runs, and the stack applies once the hold is over.
+    {
+        std::vector<BossStandRow> rows;
+        // Anchor 1 at the origin: a healer's breath seat, held 12 s and released at anchor 2, the lane's far end.
+        rows.push_back(Row(1, 0, 0, 8, StandRole::Healer, 777, 0, 0, 40, 0, 0, 0));
+        rows.push_back(Row(2, 100, 0, 8, StandRole::Healer, 888, 0, 0, 140, 0, 0, 0));
+        for (BossStandRow& row : rows)
+        {
+            row.holdMs = 12000;
+            row.releaseAnchor = row.anchor == 1 ? 2 : 1;
+        }
+        // Anchor 9: the resting stack, 60 yd and the Hover aura, as the walk 2n migration writes it.
+        rows.push_back(Row(9, 50, 0, 60, StandRole::Healer, 0, 0, 0, 60, 0, 0, 0, 1, 17131));
+        const auto aura = [](std::uint32_t id) { return id == 17131; };
+
+        StandHold hold;
+        std::vector<const BossStandRow*> now = StandPointsNow(rows, StandRole::Healer, 1, 0, 777, aura, hold, 1000);
+        CHECK(now.size() == 1 && now[0]->anchor == 1 && hold.armed && hold.anchor == 1);
+        // The cast ends, the boss flies its lane and the resting stack is the only anchor left: the seat wins.
+        now = StandPointsNow(rows, StandRole::Healer, 30, 0, 0, aura, hold, 2000);
+        CHECK(now.size() == 1 && now[0]->anchor == 1);
+        CHECK(hold.anchor == 1 && hold.lastOpenMs == 1000);   // the resting row did not re-arm it
+        now = StandPointsNow(rows, StandRole::Healer, 60, 0, 0, aura, hold, 12999);
+        CHECK(now.size() == 1 && now[0]->anchor == 1);
+        // The 12 s are up: the stack applies and arms a hold of its own.
+        now = StandPointsNow(rows, StandRole::Healer, 60, 0, 0, aura, hold, 13000);
+        CHECK(now.size() == 1 && now[0]->anchor == 9 && hold.anchor == 9);
+        // Without a window seat ever taken, the stack is read as before.
+        StandHold fresh;
+        now = StandPointsNow(rows, StandRole::Healer, 30, 0, 0, aura, fresh, 1000);
+        CHECK(now.size() == 1 && now[0]->anchor == 9);
+        // A window's own anchor still wins at once: the next breath re-seats from it.
+        StandHold again;
+        CHECK(StandPointsNow(rows, StandRole::Healer, 1, 0, 777, aura, again, 1000).size() == 1);
+        now = StandPointsNow(rows, StandRole::Healer, 100, 0, 888, aura, again, 2000);
+        CHECK(now.size() == 1 && now[0]->anchor == 2 && again.anchor == 2);
+    }
+
     // The hold time is bounded: a row cannot park bots for days.
     {
         CHECK(kBossStandMinHoldMs == 1000 && kBossStandMaxHoldMs == 15000);
@@ -1827,11 +1866,15 @@ int main()
                                    0.0f, 0.0f, 1, static_cast<std::uint32_t>(hover));
             rows.push_back(row);
         }
-        // Anchor 1: the Deep Breath seats of the north lane, a window row on the cast.
-        rows.push_back(Row(1, 10.2191f, -247.912f, 6.0f, StandRole::Healer, 18617, 0, 0, -50.0f, -238.0f, 0, 0, 1,
-                           static_cast<std::uint32_t>(hover)));
-        rows.push_back(Row(1, 10.2191f, -247.912f, 6.0f, StandRole::Healer, 18617, 0, 1, -44.0f, -244.0f, 0, 0, 1,
-                           static_cast<std::uint32_t>(hover)));
+        // Anchor 1: the Deep Breath seats of the north lane, a window row on the cast, the migration's 12 s hold.
+        for (std::uint8_t seq = 0; seq < 2; ++seq)
+        {
+            BossStandRow row = Row(1, 10.2191f, -247.912f, 6.0f, StandRole::Healer, 18617, 0, seq,
+                                   seq == 0 ? -50.0f : -44.0f, seq == 0 ? -238.0f : -244.0f, 0, 0, 1,
+                                   static_cast<std::uint32_t>(hover));
+            row.holdMs = 12000;
+            rows.push_back(row);
+        }
         // Between breaths (no cast), at her P2 spot over the stack: the ten resting points, the breath seats' windows
         // are closed.
         const std::vector<const BossStandRow*> resting =
@@ -1854,6 +1897,16 @@ int main()
         CHECK(laneIdle.size() == 10);
         for (const BossStandRow* point : laneIdle)
             CHECK(point->anchor == 9);
+        // Through the read the bot lives it: the cast opens the seat's 12 s hold, and the resting stack does not take
+        // the healer back while the hold runs; once it is over the stack applies.
+        StandHold hold;
+        std::vector<const BossStandRow*> now =
+            StandPointsNow(rows, StandRole::Healer, 10.2191f, -247.912f, 18617, AllAuras, hold, 1000);
+        CHECK(now.size() == 2 && now[0]->anchor == 1 && hold.armed && hold.holdMs == 12000);
+        now = StandPointsNow(rows, StandRole::Healer, 0.0f, -230.0f, 0, AllAuras, hold, 12999);
+        CHECK(now.size() == 2 && now[0]->anchor == 1 && now[1]->anchor == 1);
+        now = StandPointsNow(rows, StandRole::Healer, 0.0f, -230.0f, 0, AllAuras, hold, 13000);
+        CHECK(!now.empty() && now[0]->anchor == 9);
         // The stack's bolts are one bot a point: kBossStandSpacing never lines two bots up on one of them.
         for (const BossStandRow& row : rows)
             if (row.anchor == 9)
