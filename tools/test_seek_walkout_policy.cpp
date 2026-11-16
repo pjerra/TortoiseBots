@@ -1351,6 +1351,78 @@ static void TestSiphonClockRulesNeverRaise()
     CHECK(low.noSightCutMs == 15000u);
 }
 
+static void TestRetryUnspentRefundsOneAbort()
+{
+    // Walk 115's 8-2 fight: the cycle's one walk-out aborted unshot with 66 s to the siphon, and the seek_pull row's
+    // one start a cycle left no retry at all. The refund gives that start back, once, and the retry may start at due
+    // 40 s: below the row's 50 s clock floor, above the refund's own 35 s.
+    const WalkoutCycleRules rules =
+        WalkoutRetryUnspentRules(WalkoutSiphonClockRules(WalkoutRulesFromRow(1, 60.0f, 80.0f)));
+    CHECK(rules.retryUnspent && rules.retryUnspentFloorMs == 35000u && rules.maxPerCycle == 1);
+    SeekWalkoutState s;
+    WalkoutStart(s, 7, 100, 1000000, 2, 70000); // due at 1070000
+    WalkoutAbortUnspent(s, 1004000, rules);
+    WalkoutExclude(s, 7, 1004000);
+    WalkoutReturnDone(s);
+    CHECK(WalkoutCycleOpen(s, 2, rules));
+    CHECK(WalkoutMayStartFor(s, 2, 100, 8, 1010000, 60000, rules));
+    CHECK(WalkoutMayStartFor(s, 2, 100, 8, 1030000, 40000, rules));
+    CHECK(!WalkoutMayStartFor(s, 2, 100, 8, 1036000, 34000, rules));
+    CHECK(!WalkoutMayStartFor(s, 2, 100, 7, 1010000, 60000, rules)); // the failed puller sits out its exclusion
+    // One refund a cycle: the retry's own abort keeps the cycle shut.
+    WalkoutStart(s, 8, 100, 1010000, 2, 60000);
+    WalkoutAbortUnspent(s, 1015000, rules);
+    WalkoutReturnDone(s);
+    CHECK(!WalkoutCycleOpen(s, 2, rules));
+    // The next cycle starts as before.
+    CHECK(WalkoutMayStartFor(s, 3, 100, 9, 1100000, 70000, rules));
+}
+
+static void TestRetryUnspentNeverAfterShot()
+{
+    // Only an unshot abort refunds: a walk-out whose shot landed and a timeout keep their start counted, and an abort
+    // too late for a retry (35 s or less to the siphon) refunds nothing.
+    const WalkoutCycleRules rules =
+        WalkoutRetryUnspentRules(WalkoutSiphonClockRules(WalkoutRulesFromRow(1, 60.0f, 80.0f)));
+    SeekWalkoutState shot;
+    WalkoutStart(shot, 7, 100, 1000000, 2, 70000);
+    WalkoutNoteShot(shot);
+    CHECK(!WalkoutFinish(shot, WalkoutEnd::Abort, 1004000, rules));
+    CHECK(shot.cycleStarts == 1 && shot.refundCycle == 0xFFFFFFFFu);
+    CHECK(!WalkoutCycleOpen(shot, 2, rules));
+    SeekWalkoutState timedOut;
+    WalkoutStart(timedOut, 7, 100, 1000000, 2, 70000);
+    CHECK(!WalkoutFinish(timedOut, WalkoutEnd::Timeout, 1004000, rules));
+    CHECK(timedOut.cycleStarts == 1 && timedOut.refundCycle == 0xFFFFFFFFu);
+    CHECK(!WalkoutCycleOpen(timedOut, 2, rules));
+    SeekWalkoutState late;
+    WalkoutStart(late, 7, 100, 1000000, 2, 30000); // due at 1030000
+    WalkoutAbortUnspent(late, 1001000, rules);     // 29 s left
+    WalkoutReturnDone(late);
+    CHECK(late.cycleStarts == 1 && late.refundCycle == 0xFFFFFFFFu);
+    CHECK(!WalkoutCycleOpen(late, 2, rules));
+    CHECK(!WalkoutMayStartFor(late, 2, 100, 8, 1001000, 29000, rules));
+}
+
+static void TestRetryUnspentOffKeepsToday()
+{
+    // The key off: the row's own floors, one counted start a cycle, no refund anywhere.
+    const WalkoutCycleRules rules = WalkoutSiphonClockRules(WalkoutRulesFromRow(1, 60.0f, 80.0f));
+    CHECK(!rules.retryUnspent && rules.retryUnspentFloorMs == 0u);
+    SeekWalkoutState s;
+    WalkoutStart(s, 7, 100, 1000000, 2, 70000);
+    WalkoutAbortUnspent(s, 1004000, rules);
+    WalkoutReturnDone(s);
+    CHECK(s.cycleStarts == 1 && s.refundCycle == 0xFFFFFFFFu);
+    CHECK(!WalkoutCycleOpen(s, 2, rules));
+    CHECK(!WalkoutMayStartFor(s, 2, 100, 8, 1030000, 40000, rules));
+    // The old one-walk-out rules never arm the refund, and the floors stay the rules' own.
+    WalkoutCycleRules const plain = WalkoutRetryUnspentRules(WalkoutCycleRules());
+    CHECK(!plain.retryUnspent && plain.retryUnspentFloorMs == 0u);
+    CHECK(WalkoutFirstStartFloorMs(s, 2, rules) == rules.firstStartMinMs);
+    CHECK(WalkoutRetryFloorMs(s, 2, rules) == rules.retryMinMs);
+}
+
 static void TestNoSightFreesTheSon()
 {
     CHECK(WalkoutEndFreesSon("no sight"));
@@ -2866,6 +2938,9 @@ int main()
     TestRetryRulesFromTheRow();
     TestSiphonClockRetryAfterNoSightCut();
     TestSiphonClockRulesNeverRaise();
+    TestRetryUnspentRefundsOneAbort();
+    TestRetryUnspentNeverAfterShot();
+    TestRetryUnspentOffKeepsToday();
     TestNoSightFreesTheSon();
     TestWalkoutEndFreesSon();
     TestThreatPickUsesTheRunningReference();
