@@ -95,4 +95,27 @@ namespace ai
         AddCrewKeepsDutyValue(PlayerbotAI* ai) : BoolCalculatedValue(ai, "add crew keeps duty", 2), Qualified() {}
         bool Calculate() override;
     };
+
+    // "add crew rank": this bot's place among the raid's living AoE ranged damage dealers (AddCrewRank: the crew class
+    // order, then the guid), or -1 when it is not one of them (a tank, a healer, a melee, a ranged class outside the
+    // order). Read from the group's live members and their own AIs, on this map and instance. The two crew values read
+    // it, so one raid walk serves all of them.
+    class AddCrewRankValue : public CalculatedValue<std::int32_t>
+    {
+    public:
+        AddCrewRankValue(PlayerbotAI* ai) : CalculatedValue<std::int32_t>(ai, "add crew rank", 2) {}
+        std::int32_t Calculate() override;
+    };
+
+    // "add crew early::<boss>": AiPlayerbot.DungeonRunAddCrewEarly's duty for this bot under the map's add_crew row of
+    // the qualifier boss (AddCrewEarlyDuty: 0 None, 1 Whelps, 2 Boss). Whelps and Boss only while the row is in mode
+    // `early`, its switch unit still lives and the boss (as the raid fights it) flies; the crew's AoE ranged take the
+    // boss's adds, the ranged past the crew stay on the boss. None everywhere else: with the key or the row off, once
+    // the switch unit is dead (the crew's usual phase runs) or with the boss on the ground.
+    class AddCrewEarlyValue : public CalculatedValue<std::uint8_t>, public Qualified
+    {
+    public:
+        AddCrewEarlyValue(PlayerbotAI* ai) : CalculatedValue<uint8>(ai, "add crew early", 2), Qualified() {}
+        uint8 Calculate() override;
+    };
 }

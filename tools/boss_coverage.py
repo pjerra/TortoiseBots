@@ -94,13 +94,14 @@ def _tactic_row_key(row):
 STAND_FIELDS = {
     "map": ("map", int),
     "boss_entry": ("boss", int),
+    "anchor": ("anchor", int),
     "window_spell": ("windowSpell", int),
     "aura": ("aura", int),
     "role": ("role", str),
     "window_signal": ("signal", str),
     "slots": ("slots", int),
 }
-STAND_DEFAULTS = {"windowSpell": 0, "aura": 0, "signal": "cast", "slots": 5}
+STAND_DEFAULTS = {"anchor": 0, "windowSpell": 0, "aura": 0, "signal": "cast", "slots": 5}
 PLAN_FIELDS = {"plan": ("plan", str), "map": ("map", int), "kill_first": ("killFirst", str)}
 PLAN_DEFAULTS = {"killFirst": ""}
 # ai_dungeon_step: only the columns the boss steps' kill lists need (kind boss: entry is the boss, entries its adds).

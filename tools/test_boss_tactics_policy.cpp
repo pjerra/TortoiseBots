@@ -2204,6 +2204,88 @@ static void AddCrewLoader_Rows()
     }
 }
 
+// Onyxia walk 2n (AiPlayerbot.DungeonRunAddCrewEarly): the failing case is the phase, not the switch. The row says
+// nothing with the key or the mode off, and nothing once the switch unit is dead (the crew's usual phase runs) or with
+// the boss on the ground; while the switch unit lives and the boss flies, the crew's AoE ranged take the boss's adds
+// and the ranged past the crew stay on the boss, so a kill_first pick is skipped there (today both merely wait).
+static void AddCrewEarlyDuty_PhaseAndRoles()
+{
+    // The whole duty: key, mode, switch unit's life and the boss's flight.
+    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 0, 3) == AddCrewEarly::Whelps);
+    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 2, 3) == AddCrewEarly::Whelps);
+    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 3, 3) == AddCrewEarly::Boss);  // past the crew
+    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, -1, 3) == AddCrewEarly::Boss); // no AoE rank
+    CHECK(AddCrewEarlyDuty(false, true, true, true, false, false, true, 0, 3) == AddCrewEarly::None); // key off
+    CHECK(AddCrewEarlyDuty(true, false, true, true, false, false, true, 0, 3) == AddCrewEarly::None); // plain row
+    CHECK(AddCrewEarlyDuty(true, true, false, true, false, false, true, 0, 3) == AddCrewEarly::None); // switch dead
+    CHECK(AddCrewEarlyDuty(true, true, true, false, false, false, true, 0, 3) == AddCrewEarly::None); // on the ground
+    // The tanks, the healers and the melee keep their own duty: a tank must hold her, the melee cannot reach her.
+    CHECK(AddCrewEarlyDuty(true, true, true, true, true, false, true, 0, 3) == AddCrewEarly::None);
+    CHECK(AddCrewEarlyDuty(true, true, true, true, false, true, true, 0, 3) == AddCrewEarly::None);
+    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, false, -1, 3) == AddCrewEarly::None);
+    // A crew of 0 (the melee and the tanks alone) leaves every ranged damage dealer on the boss.
+    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 0, 0) == AddCrewEarly::Boss);
+    CHECK(static_cast<int>(AddCrewEarly::None) == 0);
+    CHECK(static_cast<int>(AddCrewEarly::Whelps) == 1);
+    CHECK(static_cast<int>(AddCrewEarly::Boss) == 2);
+    // The place alone is the same rule without the phase, which is what the pick and the hold read.
+    CHECK(AddCrewEarlyPlace(false, false, true, 1, 3) == AddCrewEarly::Whelps);
+    CHECK(AddCrewEarlyPlace(false, false, true, 2, 3) == AddCrewEarly::Whelps);
+    CHECK(AddCrewEarlyPlace(false, false, true, 3, 3) == AddCrewEarly::Boss);
+    CHECK(AddCrewEarlyPlace(true, false, true, 0, 3) == AddCrewEarly::None);
+    CHECK(AddCrewEarlyPlace(false, true, true, 0, 3) == AddCrewEarly::None);
+    CHECK(AddCrewEarlyPlace(false, false, false, 0, 3) == AddCrewEarly::None);
+}
+
+// The row's mode: `early` is the add_crew kind's one mode word, the loader keeps it, and the table hands back both the
+// mode and the boss of the row whose switch unit the kill_first and hold_kill rows name.
+static void AddCrewEarlyLoader_Rows()
+{
+    CHECK(ParseTacticMode(BossTacticKind::AddCrew, "early") == TacticMode::Early);
+    CHECK(ParseTacticMode(BossTacticKind::AddCrew, "") == TacticMode::Default);
+    CHECK(ParseTacticMode(BossTacticKind::AddCrew, "hold_spot") == TacticMode::Invalid);
+    CHECK(ParseTacticMode(BossTacticKind::KillFirst, "early") == TacticMode::Invalid);  // not another kind's word
+    BossTacticRow early = Row(249, 10184, BossTacticKind::AddCrew, 50143, 0, 3);
+    early.mode = TacticMode::Early;
+    {
+        BossTacticTable table;
+        CHECK(!table.AddCrewEarlyOf(249, 10184));       // not sealed
+        std::uint32_t unsealed = 1;
+        CHECK(!table.AddCrewEarlyBossOf(249, 50143, unsealed));
+        CHECK(table.Add(early));
+        table.Seal();
+        CHECK(table.AddCrewEarlyOf(249, 10184));
+        CHECK(!table.AddCrewEarlyOf(249, 50143));
+        CHECK(!table.AddCrewEarlyOf(250, 10184));
+        std::uint32_t boss = 0;
+        CHECK(table.AddCrewEarlyBossOf(249, 50143, boss));
+        CHECK(boss == 10184);
+        boss = 7;
+        CHECK(!table.AddCrewEarlyBossOf(249, 10184, boss));  // the switch unit, never the boss, is the key
+        CHECK(!table.AddCrewEarlyBossOf(250, 50143, boss));
+        CHECK(!table.AddCrewEarlyBossOf(249, 0, boss));
+        CHECK(boss == 7);                                   // untouched on false
+        std::uint32_t switchEntry = 0;
+        std::uint8_t crewSize = 0;
+        CHECK(table.AddCrewOf(249, 10184, switchEntry, crewSize));
+        CHECK(switchEntry == 50143 && crewSize == 3);
+    }
+    {
+        // A plain row: the crew's usual phase only, so the early accessors stay false.
+        BossTacticTable table;
+        CHECK(table.Add(Row(249, 10184, BossTacticKind::AddCrew, 50143, 0, 2)));
+        table.Seal();
+        CHECK(!table.AddCrewEarlyOf(249, 10184));
+        std::uint32_t boss = 0;
+        CHECK(!table.AddCrewEarlyBossOf(249, 50143, boss));
+    }
+    // A mode word the kind does not take still refuses the row.
+    BossTacticRow other = early;
+    other.mode = TacticMode::HoldSpot;
+    BossTacticTable table;
+    CHECK(!table.Add(other));
+}
+
 // The crew order: class order first (mage, warlock, hunter, shaman, druid), the lower guid first inside one class.
 static void AddCrewRank_Order()
 {
@@ -2664,6 +2746,8 @@ int main()
     AddCrewLoader_Rows();
     AddCrewRank_Order();
     AddCrewMember_Roles();
+    AddCrewEarlyDuty_PhaseAndRoles();
+    AddCrewEarlyLoader_Rows();
 
     // A boss that vanishes (Arlokk: invisible + not selectable, so it leaves the attackers list while it stays alive and
     // in combat) keeps its rows active while its adds fight on; the rows end with the fight or the grace window.

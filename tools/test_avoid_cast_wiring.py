@@ -310,7 +310,7 @@ class HoldKillWiring(unittest.TestCase):
         # tank's Thunder Clap or Consecration is vetoed as well.
         self.assertIn("linkedDeath && !PlayerbotAI::IsHeal(bot)", fn)
         # The AoE clause: a held creature in the pile the AoE would hit (one AoE killed four Servants together).
-        self.assertIn("HeldUnitNear(ai, current, fight, countNear)", fn)
+        self.assertIn("const HoldReason pileHeld = HeldSubjectNear(ai, current, fight, countNear, &heldNear);", fn)
         # L-a: the pick the row would send the bot to, not only the current target: the dps aoe target for the AoE rows,
         # the dps target for the assist rows.
         self.assertIn('aoe ? AI_VALUE(Unit*, "dps aoe target") : AI_VALUE(Unit*, "dps target")', fn)
@@ -333,7 +333,7 @@ class HoldKillWiring(unittest.TestCase):
         self.assertIn("ScanEntry(bot, QualifierEntry(qualifier), found)", helper)
         self.assertIn("creature->IsAlive()", helper)
         self.assertNotIn('"attackers"', helper)
-        for fn in (body(ACTIONS, "std::uint32_t ai::HoldKillBlockers("), body(ACTIONS, "bool HeldUnitNear("),
+        for fn in (body(ACTIONS, "std::uint32_t ai::HoldKillBlockers("),
                    body(ACTIONS, "Unit* ai::FindBossHoldKill("),
                    body(ACTIONS, "float BossTacticsHoldMultiplier::GetValue("),
                    body(ACTIONS, "bool BossTacticsHoldKillAction::Execute("),
@@ -377,8 +377,7 @@ class HoldKillWiring(unittest.TestCase):
         self.assertIn("HoldKillBlockers(ai, entry)", ACTIONS)
         # The readers added with one_at_a_time follow the same rule: the sole pick reads the value's cached grid search,
         # and nothing but HoldKillBlockersValue.cpp searches the grid.
-        for name in ("HoldReason HeldSubjectWithin(", "bool HeldUnitNear(",
-                     "std::uint64_t ai::SoleKillGuid("):
+        for name in ("HoldReason HeldSubjectWithin(", "std::uint64_t ai::SoleKillGuid("):
             self.assertNotIn("GetCreatureListWithEntryInGrid", body(ACTIONS, name))
         self.assertNotIn("GetCreatureListWithEntryInGrid", body(DPS_TARGET, "bool OrderedOneAtATimeNonPick("))
         self.assertEqual(DPS_TARGET.count("HoldKillBlockers(ai, entry)"), 1)
@@ -571,8 +570,7 @@ class OneAtATimeWiring(unittest.TestCase):
         self.assertIn("HeldSubjectIndex(", POLICY_TEST)
         # Every free helper of the chain takes the bot's ai first and passes it on.
         for name, call in (("HoldReason HeldSubjectNear(", "HeldSubjectWithin(ai, around, fight, countNear, kHoldKillAoeNearYd, subject)"),
-                           ("HoldReason HeldSubjectAt(", "HeldSubjectWithin(ai, around, fight, countNear, std::numeric_limits<float>::max(), subject)"),
-                           ("bool HeldUnitNear(", "HeldSubjectNear(ai, around, fight, countNear, nullptr)")):
+                           ("HoldReason HeldSubjectAt(", "HeldSubjectWithin(ai, around, fight, countNear, std::numeric_limits<float>::max(), subject)")):
             self.assertIn(call, body(ACTIONS, name))
             self.assertIn(name + "PlayerbotAI* ai, Unit* around", ACTIONS)
         veto = body(ACTIONS, "float BossTacticsHoldMultiplier::GetValue(")
@@ -694,8 +692,6 @@ class HeldSubjectVetoWiring(unittest.TestCase):
         self.assertIn("HeldSubjectWithin(ai, around, fight, countNear, kHoldKillAoeNearYd, subject)", near)
         at = body(ACTIONS, "HoldReason HeldSubjectAt(")
         self.assertIn("std::numeric_limits<float>::max()", at)
-        unit_near = body(ACTIONS, "bool HeldUnitNear(")
-        self.assertIn("HeldSubjectNear(ai, around, fight, countNear, nullptr)", unit_near)
         isa = body(ACTIONS, "bool ai::IsBattleDps(")
         self.assertIn("!PlayerbotAI::IsTank(bot) && !PlayerbotAI::IsHeal(bot)", isa)
         free = body(ACTIONS, "bool IsFreeDps(", "\n}\n")

@@ -3,6 +3,8 @@
 #include "OnyxiasLairDungeonTriggers.h"
 #include "playerbot/policy/combat/RangedApproachPolicy.h"
 #include "playerbot/policy/raid/OnyxiaWhelpEggPolicy.h"
+#include "playerbot/BossTacticsMgr.h"
+#include "playerbot/strategy/actions/BossTacticsActions.h"
 #include "playerbot/strategy/actions/OnyxiasLairDungeonActions.h"
 #include "playerbot/strategy/values/PossibleAttackTargetsValue.h"
 
@@ -70,7 +72,22 @@ bool OnyxiaBossDutyTrigger::IsActive()
     Unit* current = AI_VALUE(Unit*, "current target");
     const bool onWhelp = current && sServerFacade.IsAlive(current) && current->GetEntry() == kOnyxianWhelpEntry;
     const OnyxiaWhelpScan scan = ScanOnyxiaWhelps(ai, bot);
+    const bool bossValid = boss && PossibleAttackTargetsValue::IsValid(boss, bot);
+    // The row's `early` mode (AiPlayerbot.DungeonRunAddCrewEarly): a ranged damage dealer past the crew stays on her
+    // whatever its current target. The gate_hold rows outrank it: while they hold her off, the kill_first pick sends
+    // the bot back to their blocker. They come from the table, not from this bot's fight scan: a ranged bot's attacker
+    // list need not hold her at all, and the gate's blocker count is fight-wide anyway.
+    ActiveBossRows gateRows;
+    if (const std::vector<BossTacticRow>* const gate = GetBossTactics().Rows(bot->GetMapId(), kOnyxiaEntry))
+        for (const BossTacticRow& row : *gate)
+            if (row.kind == BossTacticKind::GateHold)
+                gateRows.push_back(&row);
+    if (!explicitOrder && bossValid &&
+        AI_VALUE2(uint8, "add crew early", static_cast<int32>(kOnyxiaEntry)) ==
+            static_cast<uint8>(AddCrewEarly::Boss) &&
+        !GateHoldsUnit(ai, gateRows, boss))
+        return true;
     return ShouldReturnToOnyxia(true, AI_VALUE2(uint8, "add crew", static_cast<int32>(kOnyxiaEntry)),
         HoverReachTakerIsRangedDps(PlayerbotAI::IsTank(bot), PlayerbotAI::IsHeal(bot), ai->IsRanged(bot)),
-        scan.whelpPhase, onWhelp, explicitOrder, boss && PossibleAttackTargetsValue::IsValid(boss, bot));
+        scan.whelpPhase, onWhelp, explicitOrder, bossValid);
 }

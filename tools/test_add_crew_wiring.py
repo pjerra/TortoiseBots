@@ -47,7 +47,7 @@ class AddCrewWiring(unittest.TestCase):
         loader = body(POLICY, "            // add_crew: the switch unit whose death")
         for needle in ("row.targetEntry == 0", "row.targetEntry == row.bossEntry", "row.spellId != 0",
                        "row.priority > 5", "row.param != 0.0f", "RowGateSet(row)",
-                       "row.mode != TacticMode::Default"):
+                       "(row.mode != TacticMode::Default && row.mode != TacticMode::Early)"):
             self.assertIn(needle, loader)
         # Read straight from the table: a gate on it could never be answered, so the loader refuses one.
         self.assertIn("row.kind == BossTacticKind::TankIgnore ||\n                    row.kind == "
@@ -56,7 +56,19 @@ class AddCrewWiring(unittest.TestCase):
     def test_table_keeps_the_switch_unit_and_the_crew_size(self):
         self.assertIn("struct AddCrewRow", POLICY)
         self.assertIn("std::unordered_map<std::uint64_t, AddCrewRow> addCrew_;", POLICY)
-        self.assertIn("addCrew_[Key(row.map, row.bossEntry)] = AddCrewRow{row.targetEntry, row.priority};", POLICY)
+        self.assertIn("addCrew_[Key(row.map, row.bossEntry)] = AddCrewRow{row.targetEntry, row.priority,",
+                      POLICY)
+        self.assertIn("row.mode == TacticMode::Early};", POLICY)
+        self.assertIn("bool early = false;", POLICY)
+        # The early mode's own readers: the row's flag, and the boss of the row a kill_first or hold_kill row names by
+        # its switch unit.
+        self.assertIn("bool AddCrewEarlyOf(std::uint32_t map, std::uint32_t bossEntry) const", POLICY)
+        self.assertIn("bool AddCrewEarlyBossOf(std::uint32_t map, std::uint32_t switchEntry, std::uint32_t& bossEntry) "
+                      "const", POLICY)
+        self.assertIn("enum class AddCrewEarly : std::uint8_t { None = 0, Whelps = 1, Boss = 2 };", POLICY)
+        self.assertIn("inline AddCrewEarly AddCrewEarlyDuty(bool keyOn, bool early, bool switchAlive, bool airborne, "
+                      "bool tank,", POLICY)
+        self.assertIn("inline AddCrewEarly AddCrewEarlyPlace(bool tank, bool healer, bool ranged, int aoeRank,", POLICY)
         accessor = body(POLICY, "        bool AddCrewOf(std::uint32_t map, std::uint32_t bossEntry,")
         self.assertIn("if (!sealed_.load(std::memory_order_acquire) || addCrew_.empty())", accessor)
         self.assertIn("auto const it = addCrew_.find(Key(map, bossEntry));", accessor)
@@ -91,17 +103,58 @@ class AddCrewWiring(unittest.TestCase):
         self.assertIn("return true;", value)
         # The raid's AoE ranged bots: alive group members on this map and instance, not tanks or healers, ranged by
         # their own AI and in the crew's class order.
-        self.assertIn("for (Player* member : LiveGroupMembers(bot->GetGroup()))", value)
-        self.assertIn("member->GetMapId() != bot->GetMapId()", value)
-        self.assertIn("member->GetInstanceId() != bot->GetInstanceId()", value)
-        self.assertIn("PlayerbotAI::IsTank(member) || PlayerbotAI::IsHeal(member)", value)
-        self.assertIn("PlayerbotAI* const memberAi = GET_PLAYERBOT_AI(member);", value)
-        self.assertIn("!memberAi->IsRanged(member)", value)
-        self.assertIn("AddCrewClassOrder(member->GetClass())", value)
-        self.assertIn("AddCrewRank(candidates, bot->GetObjectGuid().GetRawValue())", value)
         self.assertIn("AddCrewMember(PlayerbotAI::IsTank(bot), PlayerbotAI::IsHeal(bot), ai->IsRanged(bot),", value)
+        self.assertIn('AI_VALUE(std::int32_t, "add crew rank")', value)
+        # The rank is the raid walk both crew values share: the AoE ranged bots through their own AIs.
+        rank = body(VALUES_CPP, "std::int32_t AddCrewRankValue::Calculate()")
+        self.assertIn("for (Player* member : LiveGroupMembers(bot->GetGroup()))", rank)
+        self.assertIn("member->GetMapId() != bot->GetMapId()", rank)
+        self.assertIn("member->GetInstanceId() != bot->GetInstanceId()", rank)
+        self.assertIn("PlayerbotAI::IsTank(member) || PlayerbotAI::IsHeal(member)", rank)
+        self.assertIn("PlayerbotAI* const memberAi = GET_PLAYERBOT_AI(member);", rank)
+        self.assertIn("!memberAi->IsRanged(member)", rank)
+        self.assertIn("AddCrewClassOrder(member->GetClass())", rank)
+        self.assertIn("AddCrewRank(candidates, bot->GetObjectGuid().GetRawValue())", rank)
+        self.assertIn('creators["add crew rank"] = [](PlayerbotAI* ai) { return new AddCrewRankValue(ai); };',
+                      VALUE_CONTEXT)
         self.assertIn('creators["add crew keeps duty"] = [](PlayerbotAI* ai) { return new AddCrewKeepsDutyValue(ai); };',
                       VALUE_CONTEXT)
+
+    def test_early_crew_reads_the_key_the_mode_and_the_flight(self):
+        self.assertIn("class AddCrewEarlyValue : public CalculatedValue<std::uint8_t>, public Qualified", VALUES_H)
+        self.assertIn('CalculatedValue<uint8>(ai, "add crew early", 2)', VALUES_H)
+        value = body(VALUES_CPP, "uint8 AddCrewEarlyValue::Calculate()")
+        # Both keys first: a default install reads no table, no value and no boss.
+        self.assertIn("if (!sPlayerbotAIConfig.dungeonRunAddCrewEarly || !sPlayerbotAIConfig.dungeonRunAddCrew)",
+                      value)
+        self.assertLess(value.index("dungeonRunAddCrewEarly"), value.index("AddCrewOf("))
+        self.assertIn("!GetBossTactics().AddCrewEarlyOf(bot->GetMapId(), bossEntry))", value)
+        # The switch unit's life is the crew value's own answer, the flight is the boss's core flag.
+        self.assertIn('AI_VALUE2(uint8, "add crew", qualifier) == static_cast<uint8>(AddCrewState::Waiting)',
+                      value)
+        self.assertIn("boss->IsFlying()", value)
+        self.assertIn("AddCrewEarlyDuty(true, true, switchAlive, airborne, PlayerbotAI::IsTank(bot),", value)
+        self.assertIn('creators["add crew early"] = [](PlayerbotAI* ai) { return new AddCrewEarlyValue(ai); };',
+                      VALUE_CONTEXT)
+        # The generic sites read it: the pick skips a bot the row leaves on the boss, and the hold's budget clause is
+        # lifted for a bot on the crew's whelp duty.
+        actions = (ROOT / "ai/playerbot/strategy/actions/BossTacticsActions.cpp").read_text()
+        pick = body(actions[actions.rindex("Unit* PickBossKillFirst(PlayerbotAI* ai, Player* bot, const "
+                                           "BossTacticsFight& fight, KillFirstPickMode mode,"):], "Unit* "
+                    "PickBossKillFirst(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fight, "
+                    "KillFirstPickMode mode,")
+        self.assertIn('AI_VALUE2(uint8, "add crew early", static_cast<int32>(row->bossEntry))', pick)
+        self.assertIn("static_cast<uint8>(AddCrewEarly::Boss))\n                return nullptr;", pick)
+        lift = body(actions, "bool AddCrewEarlyKillsHeldAdd(PlayerbotAI* ai, Player* bot, const BossTacticsFight& "
+                             "fight, Unit* held)")
+        self.assertIn("row->kind != BossTacticKind::HoldKill || row->bossEntry != held->GetEntry()", lift)
+        self.assertIn("GetBossTactics().AddCrewEarlyBossOf(bot->GetMapId(), row->targetEntry, bossEntry)", lift)
+        self.assertIn("static_cast<uint8>(AddCrewEarly::Whelps))", lift)
+        self.assertEqual(5, actions.count("AddCrewEarlyKillsHeldAdd(ai, bot, fight,"),
+                         "the budget lift is read at the hold-kill action's drop, the area subject, the pick, the "
+                         "current target and the AoE pile")
+        drop = body(actions[actions.index("Unit* ai::FindBossHoldKill("):], "Unit* ai::FindBossHoldKill(")
+        self.assertIn("if (AddCrewEarlyKillsHeldAdd(ai, bot, fight, current))\n        return nullptr;", drop)
 
     def test_whelp_duty_reads_the_value_only_under_the_key(self):
         duty = body(ACTIONS, "bool ai::IsOnyxiaWhelpDuty(PlayerbotAI* ai, Player* bot)")
@@ -170,12 +223,24 @@ class AddCrewWiring(unittest.TestCase):
         self.assertIn("`add_crew`", BOSS_DOCS)
         self.assertIn("DungeonRunAddCrew", BOSS_DOCS)
         self.assertIn("DungeonRunAddCrew", CHANGELOG)
+        self.assertIn("dungeonRunAddCrewEarly =\n        static_cast<uint32>(std::min(1, std::max(0, "
+                      'config.GetIntDefault("AiPlayerbot.DungeonRunAddCrewEarly", 0))));', CONFIG_CPP)
+        self.assertIn('config.GetIntDefault("AiPlayerbot.DungeonRunAddCrewEarly", 0)', CONFIG_CPP)
+        self.assertIn("uint32 dungeonRunAddCrewEarly = 0;", CONFIG_H)
+        self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.DungeonRunAddCrewEarly = 0$")
+        self.assertIn("### `AiPlayerbot.DungeonRunAddCrewEarly`", DOCS)
+        self.assertIn("DungeonRunAddCrewEarly", BOSS_DOCS)
+        self.assertIn("DungeonRunAddCrewEarly", CHANGELOG)
 
     def test_row_ships_with_its_migration(self):
         migration = (ROOT / "data/sql/world/20261111160000_world.sql").read_text()
         self.assertIn("DELETE FROM `ai_boss_tactic` WHERE `map` = 249 AND `boss_entry` = 10184 "
                       "AND `kind` = 'add_crew';", migration)
         self.assertIn("(249, 10184, 'add_crew', 50143, 0, 2, 0, '', 0, 100, 0, '', 0, 0, 0, 0, 0, 0,", migration)
+        # Walk 2n's UPDATE: the same row, mode early and crew 3, scoped to its 2e shape so a re-run is a no-op.
+        update = (ROOT / "data/sql/world/20261116120100_world.sql").read_text()
+        self.assertIn("UPDATE `ai_boss_tactic` SET `tactic_mode` = 'early', `priority` = 3", update)
+        self.assertIn("AND `target_entry` = 50143 AND `priority` = 2;", update)
 
 
 if __name__ == "__main__":

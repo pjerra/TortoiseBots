@@ -1810,6 +1810,56 @@ int main()
         CHECK(!StandHoldsMeleeReach(false, false));
     }
 
+    // Onyxia walk 2n: the healer resting stack (anchor 9) against the Deep Breath seats (anchor 1). The failing case is
+    // the phase: the stack applies only while no breath window is open and she wears the Hover aura, and a breath's own
+    // anchor outranks it because that anchor stands nearer to her (ActiveStandPoints takes the nearest anchor holding
+    // the boss). Walk 2m: the healers had no point of their own and took the seats, so the whelps they pull scattered.
+    {
+        const float hover = 17131.0f;
+        std::vector<BossStandRow> rows;
+        // Anchor 9: the ten resting points, aura 17131, no window spell (never during a breath).
+        const float stack[10][2] = { { -15.0f, -170.0f }, { -9.0f, -170.0f }, { -21.0f, -170.0f },
+            { -12.0f, -175.2f }, { -18.0f, -175.2f }, { -6.0f, -175.2f }, { -24.0f, -175.2f },
+            { -15.0f, -180.4f }, { -21.0f, -181.4f }, { -18.0f, -185.6f } };
+        for (std::uint8_t i = 0; i < 10; ++i)
+        {
+            BossStandRow row = Row(9, -22.0f, -213.5f, 60.0f, StandRole::Healer, 0, 0, i, stack[i][0], stack[i][1],
+                                   0.0f, 0.0f, 1, static_cast<std::uint32_t>(hover));
+            rows.push_back(row);
+        }
+        // Anchor 1: the Deep Breath seats of the north lane, a window row on the cast.
+        rows.push_back(Row(1, 10.2191f, -247.912f, 6.0f, StandRole::Healer, 18617, 0, 0, -50.0f, -238.0f, 0, 0, 1,
+                           static_cast<std::uint32_t>(hover)));
+        rows.push_back(Row(1, 10.2191f, -247.912f, 6.0f, StandRole::Healer, 18617, 0, 1, -44.0f, -244.0f, 0, 0, 1,
+                           static_cast<std::uint32_t>(hover)));
+        // Between breaths (no cast), at her P2 spot over the stack: the ten resting points, the breath seats' windows
+        // are closed.
+        const std::vector<const BossStandRow*> resting =
+            ActiveStandPoints(rows, StandRole::Healer, -15.0f, -170.0f, 0, AllAuras);
+        CHECK(resting.size() == 10);
+        for (const BossStandRow* point : resting)
+            CHECK(point->anchor == 9);
+        // The same spot, but no Hover aura: P1 or the ground, and the stack says nothing.
+        CHECK(ActiveStandPoints(rows, StandRole::Healer, -15.0f, -170.0f, 0, NoAura).empty());
+        // She reaches the north lane's own spot and casts the breath: that anchor stands nearer, so its seats win and
+        // the resting stack is outranked even though she is still within the stack's 60 yd.
+        const std::vector<const BossStandRow*> breath =
+            ActiveStandPoints(rows, StandRole::Healer, 10.2191f, -247.912f, 18617, AllAuras);
+        CHECK(breath.size() == 2);
+        for (const BossStandRow* point : breath)
+            CHECK(point->anchor == 1);
+        // Her at the lane's spot without the cast: the breath rows' windows are closed, so the stack applies again.
+        const std::vector<const BossStandRow*> laneIdle =
+            ActiveStandPoints(rows, StandRole::Healer, 10.2191f, -247.912f, 0, AllAuras);
+        CHECK(laneIdle.size() == 10);
+        for (const BossStandRow* point : laneIdle)
+            CHECK(point->anchor == 9);
+        // The stack's bolts are one bot a point: kBossStandSpacing never lines two bots up on one of them.
+        for (const BossStandRow& row : rows)
+            if (row.anchor == 9)
+                CHECK(row.slots == 1);
+    }
+
 
     std::cout << "All boss stand policy tests passed.\n";
     return 0;

@@ -131,6 +131,32 @@ class OnyxiaWhelpWiring(unittest.TestCase):
         self.assertIn("inline bool OnyxiaGroundDuty(bool duty, bool isTank, bool bossAirborne)", POLICY)
         self.assertIn("constexpr float kOnyxiaGroundCrewPct = 40.0f;", POLICY)
 
+    def test_early_crew_takes_the_whelps_and_the_ranged_stay_on_her(self):
+        # Walk 2n (AiPlayerbot.DungeonRunAddCrewEarly): the row's `early` mode decides the duty before the crew's usual
+        # phase. Whelps: the crew's AoE ranged take the whelps while Cindarion lives and she flies; Boss: the ranged
+        # past the crew are not on whelp duty, and the boss duty trigger aims them at her whatever their target.
+        duty = body(ACTIONS, "bool ai::IsOnyxiaWhelpDuty(PlayerbotAI* ai, Player* bot)")
+        early_at = duty.index('AI_VALUE2(uint8, "add crew early", static_cast<int32>(kOnyxiaEntry))')
+        self.assertGreater(early_at, duty.index('AI_VALUE2(uint8, "add crew", static_cast<int32>(kOnyxiaEntry))'),
+                           "the early duty is the row's phase before the crew's usual one")
+        early = duty[early_at:]
+        self.assertIn("if (early == static_cast<uint8>(AddCrewEarly::Whelps))\n        return true;", early)
+        self.assertIn("if (early == static_cast<uint8>(AddCrewEarly::Boss))\n        return false;", early)
+        # The trigger reads the same value: a boss-duty bot goes back to her, whatever its current target, unless a
+        # gate_hold row holds her off (then the kill_first pick sends it back to that row's blocker).
+        trigger = body(TRIGGERS, "bool OnyxiaBossDutyTrigger::IsActive()")
+        self.assertIn('AI_VALUE2(uint8, "add crew early", static_cast<int32>(kOnyxiaEntry)) ==', trigger)
+        self.assertIn("static_cast<uint8>(AddCrewEarly::Boss) &&", trigger)
+        self.assertIn("ActiveBossRows gateRows;", trigger)
+        self.assertIn("GetBossTactics().Rows(bot->GetMapId(), kOnyxiaEntry)", trigger)
+        self.assertIn("row.kind == BossTacticKind::GateHold", trigger)
+        self.assertIn("!GateHoldsUnit(ai, gateRows, boss)", trigger)
+        self.assertIn("!explicitOrder && bossValid &&", trigger)
+        # The early phase does not need a whelp: it fires on her own validity, before the return's whelp clause.
+        self.assertLess(trigger.index("AddCrewEarly::Boss"), trigger.index("return ShouldReturnToOnyxia("))
+        self.assertNotIn("onWhelp", trigger[trigger.index("AddCrewEarly::Boss"):trigger.index(
+            "return ShouldReturnToOnyxia(")])
+
     def test_key_is_read_templated_and_documented(self):
         loader = body(CONFIG_CPP, "void PlayerbotAIConfig::LoadDungeonRunKeys()")
         self.assertIn('onyxiaWhelpCrewOnGround = config.GetBoolDefault("AiPlayerbot.OnyxiaWhelpCrewOnGround", false);',
@@ -140,6 +166,13 @@ class OnyxiaWhelpWiring(unittest.TestCase):
         self.assertIn("AiPlayerbot.OnyxiaWhelpCrewOnGround", DOCS)
         self.assertIn("AiPlayerbot.OnyxiaWhelpCrewOnGround", BOSS_DOCS)
         self.assertIn("AiPlayerbot.OnyxiaWhelpCrewOnGround", CHANGELOG)
+        # Walk 2n's key: read in the same loader, default 0, recommended on, documented and in the changelog.
+        self.assertIn('config.GetIntDefault("AiPlayerbot.DungeonRunAddCrewEarly", 0)', loader)
+        self.assertIn("uint32 dungeonRunAddCrewEarly = 0;", CONFIG_H)
+        self.assertRegex(TEMPLATE, r"(?m)^AiPlayerbot\.DungeonRunAddCrewEarly = 0$")
+        self.assertIn("AiPlayerbot.DungeonRunAddCrewEarly", DOCS)
+        self.assertIn("DungeonRunAddCrewEarly", BOSS_DOCS)
+        self.assertIn("DungeonRunAddCrewEarly", CHANGELOG)
         # New keys ship default 0 and are documented without "recommended on".
         block_start = TEMPLATE.index("# Onyxia whelp crew on the ground.")
         block = TEMPLATE[block_start:TEMPLATE.index("AiPlayerbot.OnyxiaWhelpCrewOnGround = 0", block_start)]

@@ -117,8 +117,9 @@ class TheHoldIsLiftedForTheClaimantOnly(unittest.TestCase):
         self.assertIn("KillHeldFor(fight.rows, picked->GetEntry(), countNear, peelOwned)", fn)
         self.assertIn("KillHeldFor(fight.rows, current->GetEntry(), countNear, HoldKillPeelOwns(ai, bot, current))", fn)
         # The AoE clause that stays is the pile one, and the area / attacker-debuff vetos still read KillHeld.
-        self.assertIn("HeldUnitNear(ai, current, fight, countNear)", fn)
-        self.assertNotIn("HeldUnitNear(ai, current, fight, countNear, peelOwned)", fn)
+        self.assertIn("const HoldReason pileHeld = HeldSubjectNear(ai, current, fight, countNear, &heldNear);", fn)
+        self.assertNotIn("HoldKillPeelOwns", fn[fn.index("const HoldReason pileHeld = "):],
+                         "the pile clause takes no peel lift")
 
     def test_the_switch_never_lands_on_another_bots_claim(self):
         fn = body(ACTIONS, "bool BossTacticsHoldKillAction::Execute(")

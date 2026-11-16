@@ -31,6 +31,7 @@ These settings configure boss encounter mechanics, environmental hazard evasion,
 | [`AiPlayerbot.BotLfgMaxGroups`](#aiplayerbotbotlfgmaxgroups) | `5` | The most groups at once. |
 | [`AiPlayerbot.BotLfgOnlyWithPlayersOnline`](#aiplayerbotbotlfgonlywithplayersonline) | `1` | Groups form only while at least one real player is online. |
 | [`AiPlayerbot.DungeonRunAddCrew`](#aiplayerbotdungeonrunaddcrew) | `0` | `1`: the boss tactics keep their `add_crew` rows — once the row's switch unit is dead, the melee, the tanks and the first `priority` AoE ranged bots of the raid take the boss's adds, and the other ranged damage dealers stay on the boss (needs the boss tactics and the rows). |
+| [`AiPlayerbot.DungeonRunAddCrewEarly`](#aiplayerbotdungeonrunaddcreweearly) | `0` | `1` (recommended on): an `add_crew` row in mode `early` starts before its switch unit dies — while it lives and the boss flies, the crew's AoE ranged bots take the boss's adds, every other ranged damage dealer stays on the boss, and a `hold_kill` hold on the crew's own add no longer stands its area casts down (needs `AiPlayerbot.DungeonRunAddCrew`). |
 | [`AiPlayerbot.DungeonRunAggroCeiling`](#aiplayerbotdungeonrunaggroceiling) | `6` | Joiners above which the run leader rests the party before a pull (needs the estimate on). |
 | [`AiPlayerbot.DungeonRunAggroEstimate`](#aiplayerbotdungeonrunaggroestimate) | `0` | The run leader estimates how many creatures a pull brings and rests first when it is many. |
 | [`AiPlayerbot.DungeonRunAggroRingYd`](#aiplayerbotdungeonrunaggroringyd) | `20` | How far a call for help carries in the ring estimate. |
@@ -306,11 +307,28 @@ Whether the boss tactics keep their `add_crew` rows: once the row's switch unit 
 <details>
 <summary>How it works in detail</summary>
 
-**The row:** `boss_entry` is the boss whose adds change hands, `target_entry` the switch unit whose death hands them over (never the boss itself), and `priority` the crew size (0-5). No spell, no radius, no health band and no mode word.
+**The row:** `boss_entry` is the boss whose adds change hands, `target_entry` the switch unit whose death hands them over (never the boss itself), and `priority` the crew size (0-5). No spell, no radius and no health band; the one mode word is `early` ([`AiPlayerbot.DungeonRunAddCrewEarly`](#aiplayerbotdungeonrunaddcreweearly)).
 
 **The state:** while the key is off, the boss has no row, or a unit of the switch entry within 200 yd still lives (a grid search; an empty list counts as dead, as for a corpse that despawned), the boss's own add duty stands. Once the switch unit is dead, the melee, the tanks and the first `priority` AoE ranged bots of the raid (class order mage, warlock, hunter, shaman, druid, the lower guid first inside one class) are the crew; a ranged damage dealer past the crew is not, and healers never are.
 
 **The consumers:** the kind is generic. Onyxia's Lair is its first consumer: the whelp duty (the whelp trigger, the kill action and the whelp hold) follows the crew once Cindarion is dead, and every ranged damage dealer past the crew returns from a whelp to Onyxia while she hovers (`onyxia boss duty` → `onyxia attack boss`).
+
+</details>
+
+### `AiPlayerbot.DungeonRunAddCrewEarly`
+Whether an [`add_crew`](#aiplayerbotdungeonrunaddcrew) row in mode `early` starts its phase before the switch unit dies: while the switch unit still lives and the boss is airborne, the crew's AoE ranged damage dealers take the boss's adds and every other ranged damage dealer stays on the boss.
+**Default:** `0` · **Values:** `0` off (a row's mode is ignored, the crew waits for the switch unit), `1` on (recommended on; needs `AiPlayerbot.DungeonRunAddCrew = 1`) · **Restart:** not needed (`.reload config` applies it with the other `AiPlayerbot.DungeonRun*` keys)
+
+<details>
+<summary>How it works in detail</summary>
+
+**The row:** the same `add_crew` row, with `tactic_mode` = `early` (the kind's one mode word). `boss_entry` is the boss, `target_entry` the switch unit and `priority` the crew size.
+
+**The phase:** the early duty runs only while the switch unit still lives (the row's usual state is *waiting*), the boss flies (the core's flight flag on the boss as the raid fights it), and the key is on. Then the ranged damage dealers inside the crew take the boss's adds and the ones past the crew are aimed at the boss: they take no `kill_first` pick there, and the boss's own return trigger sends them back to it. The tanks, the healers and the melee keep their own duty — a tank must hold the flying boss and the melee cannot reach it. A `gate_hold` row that holds the boss off outranks the return, so the bot falls back to its ordinary pick (the row's switch unit).
+
+**The hold:** a `hold_kill` row that spares an entry because the row's switch unit fights lifts its budget hold for the crew's own AoE: the crew exists to kill that add. The link is the switch unit — the `hold_kill` row's blocker is the `add_crew` row's switch unit — so no boss name is written in the code. The DoT clause and every other hold (`one_at_a_time`, `gate_hold`, `linked_death`, `dps_hold_after`, `seek_aura`) stand.
+
+**The consumers:** on Onyxia's Lair the whelp hunt follows the early duty, so the crew's AoE ranged burn the whelps the healers pull while Cindarion still lives; once he dies the row's usual phase runs as if the mode were off.
 
 </details>
 

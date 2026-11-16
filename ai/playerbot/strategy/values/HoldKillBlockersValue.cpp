@@ -192,14 +192,10 @@ std::vector<TankPostUnit> TankPostUnitsValue::Calculate()
 // AiPlayerbot.DungeonRunAddCrew: the raid's AoE ranged damage dealers through the group's live members and their own
 // AIs, and this bot's place among them (AddCrewRank). The switch unit's life is not read here: the crew's place
 // stands while it lives, so the Onyxia ground phase can apply it before the row's switch dies.
-bool AddCrewKeepsDutyValue::Calculate()
+std::int32_t AddCrewRankValue::Calculate()
 {
     if (!sPlayerbotAIConfig.dungeonRunAddCrew)
-        return true;
-    uint32 switchEntry = 0;
-    uint8 crewSize = 0;
-    if (!GetBossTactics().AddCrewOf(bot->GetMapId(), QualifierEntry(qualifier), switchEntry, crewSize))
-        return true;
+        return -1;
     std::vector<AddCrewCandidate> candidates;
     for (Player* member : LiveGroupMembers(bot->GetGroup()))
     {
@@ -216,8 +212,20 @@ bool AddCrewKeepsDutyValue::Calculate()
             continue;
         candidates.push_back(AddCrewCandidate{member->GetObjectGuid().GetRawValue(), order});
     }
+    return AddCrewRank(candidates, bot->GetObjectGuid().GetRawValue());
+}
+
+// The crew's place: the row's own count, or this bot's rank among the raid's AoE ranged (the shared value).
+bool AddCrewKeepsDutyValue::Calculate()
+{
+    if (!sPlayerbotAIConfig.dungeonRunAddCrew)
+        return true;
+    uint32 switchEntry = 0;
+    uint8 crewSize = 0;
+    if (!GetBossTactics().AddCrewOf(bot->GetMapId(), QualifierEntry(qualifier), switchEntry, crewSize))
+        return true;
     return AddCrewMember(PlayerbotAI::IsTank(bot), PlayerbotAI::IsHeal(bot), ai->IsRanged(bot),
-        AddCrewRank(candidates, bot->GetObjectGuid().GetRawValue()), crewSize);
+        AI_VALUE(std::int32_t, "add crew rank"), crewSize);
 }
 
 // AiPlayerbot.DungeonRunAddCrew: this bot's place once the row's switch unit is dead. The switch unit is read through
@@ -242,4 +250,63 @@ uint8 AddCrewValue::Calculate()
     }
     bool const member = AI_VALUE2(bool, "add crew keeps duty", qualifier);
     return static_cast<uint8>(AddCrewStateFor(true, true, switchAlive, member));
+}
+
+namespace
+{
+// The creature of `entry` the raid fights: a victim or an attacker of a live group member on this map and instance
+// (the bot's own lists when it has no group). An add_crew row names the boss's entry, never the unit, so this is how a
+// reader without the fight scan finds the boss it holds a row of. "focus rti targets" collapses the bot's own attacker
+// list to the raid mark, so the group's lists are read as well.
+Unit* EngagedBossOfEntry(Player* bot, uint32 entry)
+{
+    if (!bot || entry == 0)
+        return nullptr;
+    Group* const group = bot->GetGroup();
+    if (!group)
+    {
+        if (Unit* const victim = bot->GetVictim())
+            if (victim->GetEntry() == entry && sServerFacade.IsAlive(victim) && victim->IsInCombat())
+                return victim;
+        for (Unit* attacker : bot->GetAttackers())
+            if (attacker && attacker->GetEntry() == entry && sServerFacade.IsAlive(attacker) && attacker->IsInCombat())
+                return attacker;
+        return nullptr;
+    }
+    for (Player* member : LiveGroupMembers(group))
+    {
+        if (!member || !member->IsInWorld() || member->GetMapId() != bot->GetMapId() ||
+            member->GetInstanceId() != bot->GetInstanceId() || !sServerFacade.IsAlive(member))
+            continue;
+        if (Unit* const victim = member->GetVictim())
+            if (victim->GetEntry() == entry && sServerFacade.IsAlive(victim) && victim->IsInCombat())
+                return victim;
+        for (Unit* attacker : member->GetAttackers())
+            if (attacker && attacker->GetEntry() == entry && sServerFacade.IsAlive(attacker) && attacker->IsInCombat())
+                return attacker;
+    }
+    return nullptr;
+}
+}
+
+// AiPlayerbot.DungeonRunAddCrewEarly: the `early` mode's duty. The row, its mode, the switch unit's life (the "add
+// crew" value's Waiting answer: it reads the same tank-post grid search) and the boss's flight (the core's flight flag
+// on the engaged boss, the same one the hover reach reads) come first; with them the crew's AoE ranged take the adds
+// and the ranged past the crew stay on the boss. The tanks, the healers and the melee keep their own duty there too.
+uint8 AddCrewEarlyValue::Calculate()
+{
+    if (!sPlayerbotAIConfig.dungeonRunAddCrewEarly || !sPlayerbotAIConfig.dungeonRunAddCrew)
+        return static_cast<uint8>(AddCrewEarly::None);
+    const uint32 bossEntry = QualifierEntry(qualifier);
+    uint32 switchEntry = 0;
+    uint8 crewSize = 0;
+    if (!GetBossTactics().AddCrewOf(bot->GetMapId(), bossEntry, switchEntry, crewSize) ||
+        !GetBossTactics().AddCrewEarlyOf(bot->GetMapId(), bossEntry))
+        return static_cast<uint8>(AddCrewEarly::None);
+    bool const switchAlive =
+        AI_VALUE2(uint8, "add crew", qualifier) == static_cast<uint8>(AddCrewState::Waiting);
+    Unit* const boss = EngagedBossOfEntry(bot, bossEntry);
+    bool const airborne = boss && boss->IsFlying();
+    return static_cast<uint8>(AddCrewEarlyDuty(true, true, switchAlive, airborne, PlayerbotAI::IsTank(bot),
+        PlayerbotAI::IsHeal(bot), ai->IsRanged(bot), AI_VALUE(std::int32_t, "add crew rank"), crewSize));
 }

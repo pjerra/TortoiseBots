@@ -38,6 +38,7 @@ MODE_WORDS = {
     "avoid_cast": {"all"},
     "threat_successor": {"strict"},
     "tank_post": {"hold_spot"},
+    "add_crew": {"early"},
 }
 # A row as the replay hands it around: (file,) + the table columns in this order.
 FIELDS = ("file", "map", "boss_entry", "kind", "target_entry", "spell_id", "priority", "param", "burn_order",
@@ -466,7 +467,8 @@ def new_kind_problem(row):
         return None
     if kind == "add_crew":
         # The switch unit whose death hands the boss's adds over (target_entry, never the boss itself) and the crew
-        # size (priority 0-5): no spell, no radius, no gate (see above), no mode word and no cycle or spot columns.
+        # size (priority 0-5): no spell, no radius, no gate (see above), the mode word `early` or none, and no cycle
+        # or spot columns.
         if not row["target_entry"]:
             return "add_crew without its switch unit"
         if row["target_entry"] == row["boss_entry"]:
@@ -477,7 +479,7 @@ def new_kind_problem(row):
             return "add_crew crew size above 5"
         if row["param"] != 0.0:
             return "add_crew with a radius"
-        if row["tactic_mode"]:
+        if row["tactic_mode"] not in ("", "early"):
             return "a mode word on add_crew"
         if row["cycle_spell"] or row["cycle_s"] or has_spot:
             return "cycle or spot columns on another kind"
@@ -1115,11 +1117,35 @@ class BossTacticsSql(unittest.TestCase):
         crew = live.get((249, 10184, "add_crew", 50143, 0))
         self.assertIsNotNone(crew, "the Onyxia add_crew row is missing")
         self.assertEqual(name, crew["file"], "the walk 2e migration owns the add_crew row")
-        self.assertEqual((50143, 0, 2, 0.0, "", 0, 100, 0),
+        # The row itself stays the 2e INSERT; walk 2n sets its mode and crew size, the switch unit and the spell do not
+        # move.
+        self.assertEqual((50143, 0, 3, 0.0, "early", 0, 100, 0),
                          (crew["target_entry"], crew["spell_id"], crew["priority"], crew["param"],
                           crew["tactic_mode"], crew["hp_min"], crew["hp_max"], crew["bot_aura"]),
                          "the Onyxia add_crew row drifted")
         self.assertIsNone(new_kind_problem(crew))
+
+    def test_onyxia_walk2n_add_crew_early(self):
+        # 20261116120100_world.sql: walk 2m found her at 56-60 % until +150 s after take-off with the kill_first row on
+        # Cindarion 50143 sending every free DPS (ranged too) to him. Walk 2n's mode `early` starts the crew while he
+        # lives and the boss flies (AiPlayerbot.DungeonRunAddCrewEarly), and 3 AoE ranged give the pile more area
+        # damage than 2 (the healers' new stack is where the whelps land, 20261116120000).
+        name = "20261116120100_world.sql"
+        path = os.path.join(ROOT, "data/sql/world", name)
+        self.assertTrue(os.path.isfile(path), "the Onyxia walk 2n add_crew migration is missing")
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+        self.assertIn("UPDATE `ai_boss_tactic` SET `tactic_mode` = 'early', `priority` = 3", text)
+        # Idempotent: the WHERE names the crew size the row had before (2), so a second run matches nothing.
+        self.assertIn("AND `target_entry` = 50143 AND `priority` = 2;", text)
+        self.assertEqual(0, text.count("INSERT INTO"), "walk 2n replaces no row")
+        self.assertEqual(0, text.count("DELETE FROM"), "walk 2n deletes no row")
+        crew = [_payload_dict(row) for row in effective_rows()
+                if row[1] == 249 and row[2] == 10184 and row[3] == "add_crew"]
+        self.assertEqual(1, len(crew), "the map keeps exactly one add_crew row")
+        row = crew[0]
+        self.assertEqual((50143, 3, 'early'), (row["target_entry"], row["priority"], row["tactic_mode"]))
+        self.assertIsNone(new_kind_problem(row), "the loader mirror refuses the early add_crew row")
 
     def test_onyxia_walk2f_threat_free(self):
         # 20261111170000_world.sql: walk 2f, no threat cap on airborne Onyxia. Walk 2e a-1: no tank could reach her,
@@ -2336,7 +2362,7 @@ class BossTacticsSql(unittest.TestCase):
         # drop another boss's seats.
         stand_delete = re.compile(
             r"^DELETE FROM `ai_boss_stand` WHERE `map` = (\d+)"
-            r"(?: AND `boss_entry` = (\d+))?;?$"
+            r"(?: AND `boss_entry` = (\d+))?(?: AND `anchor` = (\d+))?;?$"
         )
 
         def stand_key(columns, tuple_text):
@@ -2365,13 +2391,15 @@ class BossTacticsSql(unittest.TestCase):
                 elif line.startswith("DELETE FROM `ai_boss_stand`"):
                     match = stand_delete.match(line)
                     self.assertIsNotNone(match, "unparsable stand DELETE in %s: %s" % (name, line))
-                    deletes.append((int(match.group(1)), int(match.group(2)) if match.group(2) else None))
-            for map_id, boss in deletes:
+                    deletes.append((int(match.group(1)), int(match.group(2)) if match.group(2) else None,
+                                    int(match.group(3)) if match.group(3) else None))
+            for map_id, boss, anchor in deletes:
                 removed = {stand_row for stand_row in live
-                           if stand_row[0] == map_id and (boss is None or stand_row[1] == boss)}
+                           if stand_row[0] == map_id and (boss is None or stand_row[1] == boss) and
+                           (anchor is None or stand_row[2] == anchor)}
                 dropped = removed - own
-                self.assertFalse(dropped, "%s stand DELETE (map %s boss %s) removes seats it does not re-insert: %s"
-                                 % (name, map_id, boss, sorted(dropped)))
+                self.assertFalse(dropped, "%s stand DELETE (map %s boss %s anchor %s) removes seats it does not "
+                                 "re-insert: %s" % (name, map_id, boss, anchor, sorted(dropped)))
                 for stand_row in removed:
                     del live[stand_row]
             for own_row in own:

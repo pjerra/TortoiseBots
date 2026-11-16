@@ -153,6 +153,8 @@ void PlayerbotAIConfig::LoadDungeonRunKeys()
     dungeonRunTankSwap = config.GetBoolDefault("AiPlayerbot.DungeonRunTankSwap", false);
     dungeonRunTankPost = config.GetBoolDefault("AiPlayerbot.DungeonRunTankPost", false);
     dungeonRunAddCrew = config.GetBoolDefault("AiPlayerbot.DungeonRunAddCrew", false);
+    dungeonRunAddCrewEarly =
+        static_cast<uint32>(std::min(1, std::max(0, config.GetIntDefault("AiPlayerbot.DungeonRunAddCrewEarly", 0))));
     onyxiaWhelpCrewOnGround = config.GetBoolDefault("AiPlayerbot.OnyxiaWhelpCrewOnGround", false);
     dungeonRunGuardLeavesAssignedTank =
         config.GetBoolDefault("AiPlayerbot.DungeonRunGuardLeavesAssignedTank", false);

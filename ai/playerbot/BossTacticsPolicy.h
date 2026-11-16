@@ -94,6 +94,7 @@ namespace ai
         All = 12,      // avoid_cast: every bot leaves the blast while the spell is cast, tanks too (F4-A)
         Strict = 13,   // threat_successor: the row opts the boss into AiPlayerbot.DungeonRunThreatSuccessorStrict
         HoldSpot = 14, // tank_post: the post starts during another fight, latches its arrival and drags back
+        Early = 15,    // add_crew: the crew takes the boss's adds a phase before its switch unit dies
     };
 
     inline bool IsAuraTacticKind(BossTacticKind kind)
@@ -147,6 +148,10 @@ namespace ai
             case BossTacticKind::TankPost:
                 if (text == "hold_spot")
                     return TacticMode::HoldSpot;
+                break;
+            case BossTacticKind::AddCrew:
+                if (text == "early")
+                    return TacticMode::Early;
                 break;
             default:
                 break;
@@ -497,11 +502,13 @@ namespace ai
     };
 
     // An add_crew row: the switch unit whose death hands the boss's adds over (`switchEntry`), and how many AoE
-    // ranged bots of the raid join the crew (`crewSize`, 0: melee and tanks only).
+    // ranged bots of the raid join the crew (`crewSize`, 0: melee and tanks only). `early` is the row's mode: the crew
+    // starts a phase before the switch unit dies (AiPlayerbot.DungeonRunAddCrewEarly).
     struct AddCrewRow
     {
         std::uint32_t switchEntry = 0;
         std::uint8_t crewSize = 0;
+        bool early = false;
     };
 
     // A `hold_spot` tank_post row's healers: the most the rule takes (`healers`, 0-4).
@@ -691,10 +698,12 @@ namespace ai
                 return false;
             // add_crew: the switch unit whose death hands the boss's adds over (`target_entry`, never the boss itself)
             // and the crew size (`priority`, 0-5; the first `priority` AoE ranged bots of the crew class order join the
-            // melee and the tanks). No spell, no radius, no gate (see above) and no mode word.
+            // melee and the tanks). No spell, no radius and no gate. The one mode word is `early`: the crew starts a
+            // phase before the switch unit dies (AiPlayerbot.DungeonRunAddCrewEarly).
             if (row.kind == BossTacticKind::AddCrew &&
                 (row.targetEntry == 0 || row.targetEntry == row.bossEntry || row.spellId != 0 ||
-                    row.priority > 5 || row.param != 0.0f || RowGateSet(row) || row.mode != TacticMode::Default))
+                    row.priority > 5 || row.param != 0.0f || RowGateSet(row) ||
+                    (row.mode != TacticMode::Default && row.mode != TacticMode::Early)))
                 return false;
             // threat_free: the subject (`target_entry` 0 = the row's boss) and the vertical gap a non-tank reads no cap
             // at (`param`, the ranged_only bounds). Read straight from the table (ThreatValue::Calculate), so a gate
@@ -767,7 +776,8 @@ namespace ai
             // The value's lookup is one row per boss: a second add_crew row of the same map and boss replaces the
             // first here (the table holds one such row per boss in the data).
             if (row.kind == BossTacticKind::AddCrew)
-                addCrew_[Key(row.map, row.bossEntry)] = AddCrewRow{row.targetEntry, row.priority};
+                addCrew_[Key(row.map, row.bossEntry)] = AddCrewRow{row.targetEntry, row.priority,
+                    row.mode == TacticMode::Early};
             // A row that assigns the unit to a tank slot: the raid guard leaves the unit to that tank, so the table
             // keeps each kind's lowest slot for the unit (the guard uses the kind whose key is on).
             if (row.priority > 0 && row.kind == BossTacticKind::TankPost)
@@ -944,6 +954,35 @@ namespace ai
             switchEntry = it->second.switchEntry;
             crewSize = it->second.crewSize;
             return true;
+        }
+
+        // Whether the map's add_crew row for a boss is in mode `early` (AiPlayerbot.DungeonRunAddCrewEarly): the crew
+        // starts a phase before its switch unit dies. False before the seal, without such a row, or for a plain row.
+        bool AddCrewEarlyOf(std::uint32_t map, std::uint32_t bossEntry) const
+        {
+            if (!sealed_.load(std::memory_order_acquire) || addCrew_.empty())
+                return false;
+            auto const it = addCrew_.find(Key(map, bossEntry));
+            return it != addCrew_.end() && it->second.early;
+        }
+
+        // The boss of the map's `early` add_crew row whose switch unit is `switchEntry`. Both kinds of row the early
+        // duty overrides name the same switch unit as their target (`kill_first` on it, `hold_kill` on the add it
+        // blocks), so this is how a reader that holds such a row finds the crew's boss without knowing it. False
+        // before the seal, for a plain row, or when no early row names that switch unit.
+        bool AddCrewEarlyBossOf(std::uint32_t map, std::uint32_t switchEntry, std::uint32_t& bossEntry) const
+        {
+            if (!sealed_.load(std::memory_order_acquire) || switchEntry == 0)
+                return false;
+            for (auto const& entry : addCrew_)
+            {
+                if (static_cast<std::uint32_t>(entry.first >> 32) != map || !entry.second.early ||
+                    entry.second.switchEntry != switchEntry)
+                    continue;
+                bossEntry = static_cast<std::uint32_t>(entry.first & 0xFFFFFFFFu);
+                return true;
+            }
+            return false;
         }
 
         // The tank slots (1-7) a unit of `entry` is assigned to by rows of its own, one per kind: a taunt_after_cast
@@ -4929,5 +4968,32 @@ namespace ai
         if (!keyOn || !rowFound || switchAlive)
             return AddCrewState::Waiting;
         return member ? AddCrewState::Crew : AddCrewState::NotCrew;
+    }
+
+    // --- add_crew, mode `early` -------------------------------------------------------------------------------------
+    // AiPlayerbot.DungeonRunAddCrewEarly: while the row's switch unit still lives and the boss flies, the crew's AoE
+    // ranged damage dealers take the boss's adds (`Whelps`) and every other ranged damage dealer stays on the boss
+    // (`Boss`, and the kill_first pick skips it). The tanks, the healers and the melee keep their own duty (`None`, as
+    // with the key or the row off): a tank must hold a flying boss, and the melee cannot reach one. `None` is today's
+    // duty everywhere the early phase does not run: the key or the row off, the switch unit dead (the crew's usual
+    // phase runs then), or the boss on the ground.
+    enum class AddCrewEarly : std::uint8_t { None = 0, Whelps = 1, Boss = 2 };
+
+    // This bot's place under an early row, whatever the phase: the ranged damage dealers inside the crew take the adds,
+    // the ones past it stay on the boss, and every other bot (a tank, a healer, a melee) keeps its own duty.
+    inline AddCrewEarly AddCrewEarlyPlace(bool tank, bool healer, bool ranged, int aoeRank,
+                                          std::uint8_t crewSize)
+    {
+        if (tank || healer || !ranged)
+            return AddCrewEarly::None;
+        return aoeRank >= 0 && aoeRank < crewSize ? AddCrewEarly::Whelps : AddCrewEarly::Boss;
+    }
+
+    inline AddCrewEarly AddCrewEarlyDuty(bool keyOn, bool early, bool switchAlive, bool airborne, bool tank,
+                                         bool healer, bool ranged, int aoeRank, std::uint8_t crewSize)
+    {
+        if (!keyOn || !early || !switchAlive || !airborne)
+            return AddCrewEarly::None;
+        return AddCrewEarlyPlace(tank, healer, ranged, aoeRank, crewSize);
     }
 }

@@ -1148,6 +1148,17 @@ AiPlayerbot.DungeonRunTankPost = 0
 # 1 - on
 AiPlayerbot.DungeonRunAddCrew = 0
 
+# Early add crew (recommended on).
+# An `add_crew` row in mode `early` (tactic_mode 'early') starts a phase before its switch unit dies: while the switch
+# unit still lives and the boss flies, the crew's AoE ranged damage dealers take the boss's adds and every other ranged
+# damage dealer stays on the boss (the kill_first pick skips it), and a hold_kill hold on the crew's own add no longer
+# stands the crew's area casts down (its DoT and its other holds stand). Once the switch unit dies, the crew's usual
+# phase runs, mode or not. The tanks, the healers and the melee keep their own duty. Needs AiPlayerbot.DungeonRunAddCrew;
+# `.reload config` reads it again with the other AiPlayerbot.DungeonRun* keys.
+# 0 - off: a row's `early` mode is ignored, the crew waits for the switch unit (Default)
+# 1 - on: the crew's AoE ranged take the adds while the switch unit lives and the boss flies
+AiPlayerbot.DungeonRunAddCrewEarly = 0
+
 # The raid guard leaves a unit to the tank its boss tactic row assigns it to (only read with
 # AiPlayerbot.DungeonRunRaid = 1 and AiPlayerbot.DungeonRunRaidBossRules = 1): in a raid's boss fight the off-tanks
 # never take a unit a `taunt_after_cast` row in mode `until_tank` names with a tank slot (priority 1-7), nor one a

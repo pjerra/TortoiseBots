@@ -251,6 +251,8 @@ namespace ai
             creators["tank post units"] = [](PlayerbotAI* ai) { return new TankPostUnitsValue(ai); };
             creators["add crew"] = [](PlayerbotAI* ai) { return new AddCrewValue(ai); };
             creators["add crew keeps duty"] = [](PlayerbotAI* ai) { return new AddCrewKeepsDutyValue(ai); };
+            creators["add crew rank"] = [](PlayerbotAI* ai) { return new AddCrewRankValue(ai); };
+            creators["add crew early"] = [](PlayerbotAI* ai) { return new AddCrewEarlyValue(ai); };
             creators["sole kill candidates"] = [](PlayerbotAI* ai) { return new SoleKillCandidatesValue(ai); };
             creators["kill first grid units"] = [](PlayerbotAI* ai) { return new KillFirstGridUnitsValue(ai); };
             creators["item for spell"] = [](PlayerbotAI* ai) { return new ItemForSpellValue(ai); };

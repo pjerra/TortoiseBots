@@ -219,7 +219,8 @@ class BossStandOnyxiaSql(unittest.TestCase):
         # melee quota is seated first, nearest T, so a melee bot and the slot-1 tank walk the shortest way out of
         # the lane. Walk 2e b-2: the tank's seat was 30.9 yd from T and he died on the way, and seated rogues ran
         # back in. Anchor 3 has no usable cell nearer than 34.5 yd; 4, 7 and 8 are inside 25 yd.
-        rows = [row for row in migration_rows() if row["map"] == 249 and row["boss"] == 10184]
+        rows = [row for row in migration_rows()
+                if row["map"] == 249 and row["boss"] == 10184 and row["anchor"] <= 8]
         self.assertEqual(601, len(rows), "the walk 2f migration must live with the 601 Deep Breath seats")
         for anchor in range(1, 9):
             seat_rows = [row for row in rows if row["anchor"] == anchor]
@@ -243,6 +244,45 @@ class BossStandOnyxiaSql(unittest.TestCase):
             else:
                 self.assertLessEqual(nearest, 25.0,
                                      "anchor %d's nearest T-side melee seat is %.1f yd from T" % (anchor, nearest))
+
+
+class BossStandOnyxiaStackSql(unittest.TestCase):
+    def test_onyxia_walk2n_healer_stack(self):
+        # 20261116120000_world.sql: walk 2n's resting healer stack (anchor 9). Walk 2m: the healers had no point of
+        # their own, took the Deep Breath seats and scattered the whelps that peel to them. No spot clears every breath
+        # lane (the ticks reach 30 yd), so the stack is a resting spot gated by the Hover aura 17131 (P2 only) and a
+        # breath's own anchor outranks it (BossStandPolicy's ActiveStandPoints takes the nearest anchor holding her).
+        # Ten points 6 yd apart, one bot a point; z from the offline path-check from both walk STARTs.
+        rows = [row for row in migration_rows()
+                if row["map"] == 249 and row["boss"] == 10184 and row["anchor"] == 9]
+        self.assertEqual(10, len(rows), "the walk 2n healer stack is not ten points")
+        places = set((row["ax"], row["ay"], row["ar"]) for row in rows)
+        self.assertEqual({(-22.0, -213.5, 60.0)}, places, "the stack names more than one anchor place")
+        self.assertEqual(list(range(10)), sorted(int(row["seq"]) for row in rows), "the stack's seq is not 0-9")
+        points = []
+        for row in rows:
+            where = "%s anchor 9 seq %d" % (row["file"], row["seq"])
+            self.assertEqual("healer", row["role"], where)
+            # A resting spot: no window spell, the Hover aura alone opens it, and no release anchor to wait for.
+            self.assertEqual(0.0, row["window"], where)
+            self.assertEqual(17131.0, row["aura"], where)
+            self.assertEqual(0.0, row["release"], where)
+            self.assertEqual("cast", row["signal"], where)
+            self.assertEqual(0.0, row["side"], where)
+            # One bot a point: kBossStandSpacing lines up the slots of one point (9 yd), and the ten bots are spread
+            # over ten points 6 yd apart instead.
+            self.assertEqual(1.0, row["slots"], where)
+            self.assertEqual(8000.0, row["hold"], where)
+            self.assertGreaterEqual(row["z"], -93.0, where)
+            self.assertLessEqual(row["z"], -80.0, where)
+            distance = math.hypot(row["x"] - row["ax"], row["y"] - row["ay"])
+            self.assertLessEqual(distance, row["ar"], "%s: %.1f yd from the anchor" % (where, distance))
+            points.append((row["x"], row["y"], where))
+        for i in range(len(points)):
+            for j in range(i + 1, len(points)):
+                distance = math.hypot(points[i][0] - points[j][0], points[i][1] - points[j][1])
+                self.assertGreaterEqual(distance, 5.0,
+                                        "%s and %s are only %.2f yd apart" % (points[i][2], points[j][2], distance))
 
 
 if __name__ == "__main__":

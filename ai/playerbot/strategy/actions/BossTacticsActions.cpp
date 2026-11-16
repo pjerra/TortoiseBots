@@ -547,11 +547,28 @@ HoldReason HeldSubjectAt(PlayerbotAI* ai, Unit* around, const BossTacticsFight& 
     return HeldSubjectWithin(ai, around, fight, countNear, std::numeric_limits<float>::max(), subject);
 }
 
-// The same question for the clauses that only need to know whether the pile is covered.
-bool HeldUnitNear(PlayerbotAI* ai, Unit* around, const BossTacticsFight& fight,
-                  const std::function<std::uint32_t(std::uint32_t)>& countNear)
+// The add crew's `early` mode (AiPlayerbot.DungeonRunAddCrewEarly): the crew's AoE ranged damage dealers are out to
+// kill the add a hold_kill row spares, so that row's budget hold does not stand their area casts down. The lift needs
+// the whole link: `held` is a creature of a hold_kill row's spared entry, the row's blocker is the switch unit of an
+// add_crew row in mode `early`, and this bot is on that row's crew (Whelps) right now. Every other hold stands: the
+// one_at_a_time pick, gate_hold, linked_death, dps_hold_after, seek_aura and the DoT clauses.
+bool AddCrewEarlyKillsHeldAdd(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fight, Unit* held)
 {
-    return HeldSubjectNear(ai, around, fight, countNear, nullptr) != HoldReason::None;
+    if (!sPlayerbotAIConfig.dungeonRunAddCrewEarly || !ai || !bot || !held)
+        return false;
+    AiObjectContext* context = ai->GetAiObjectContext();
+    for (const BossTacticRow* row : fight.rows)
+    {
+        if (row->kind != BossTacticKind::HoldKill || row->bossEntry != held->GetEntry())
+            continue;
+        std::uint32_t bossEntry = 0;
+        if (!GetBossTactics().AddCrewEarlyBossOf(bot->GetMapId(), row->targetEntry, bossEntry))
+            continue;
+        if (AI_VALUE2(uint8, "add crew early", static_cast<int32>(bossEntry)) ==
+            static_cast<uint8>(AddCrewEarly::Whelps))
+            return true;
+    }
+    return false;
 }
 
 // The held member of a linked_death group within `maxDistance` of `around` (the action's target, or the bot itself),
@@ -5883,6 +5900,21 @@ Unit* PickBossKillFirst(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fi
         return nullptr;
 
     AiObjectContext* context = ai->GetAiObjectContext();
+    // The add crew's `early` mode (AiPlayerbot.DungeonRunAddCrewEarly): a ranged damage dealer the row leaves on the
+    // boss takes no kill_first pick there. The boss's own trigger aims it at the boss, and while the gate_hold rows hold
+    // the boss off nothing else sends it back to the row's switch unit either. The row's boss is the kill_first row's
+    // own boss_entry, so no boss is named here.
+    if (sPlayerbotAIConfig.dungeonRunAddCrewEarly)
+    {
+        for (const BossTacticRow* row : fight.rows)
+        {
+            if (row->kind != BossTacticKind::KillFirst)
+                continue;
+            if (AI_VALUE2(uint8, "add crew early", static_cast<int32>(row->bossEntry)) ==
+                static_cast<uint8>(AddCrewEarly::Boss))
+                return nullptr;
+        }
+    }
     std::vector<TacticCandidate> candidates;
     std::vector<Unit*> units;
     candidates.reserve(fight.units.size());
@@ -6022,6 +6054,10 @@ Unit* ai::FindBossHoldKill(PlayerbotAI* ai, Player* bot, const BossTacticsFight&
         return current;
     const auto countNear = [ai](std::uint32_t entry) { return HoldKillBlockers(ai, entry); };
     if (!KillHeld(fight.rows, current->GetEntry(), countNear))
+        return nullptr;
+    // The add crew's early phase: the add the hold spares is the crew's own target, so the drop leaves it alone (a
+    // dropped target would hand the bot back to the row's switch unit every tick and the crew would never kill it).
+    if (AddCrewEarlyKillsHeldAdd(ai, bot, fight, current))
         return nullptr;
     // The healer peel's own claim (DungeonRunHoldKillHealerPeel): the hold is lifted for the claimant on its one add,
     // so the hold-kill action and its trigger leave the bot on it. Any other bot's claim lifts nothing.
@@ -7987,6 +8023,11 @@ float BossTacticsHoldMultiplier::GetValue(Action* action)
             : HeldSubjectNear(ai, action->GetTarget(), fight, countNear, &subject);
         if (held == HoldReason::None && area)
             held = HeldSubjectNear(ai, bot, fight, countNear, &subject);
+        // The crew's own add is not held for the crew (only its budget hold is lifted; a one_at_a_time pick, a gate,
+        // a linked_death partner and a DoT hold stand).
+        if (area && !attackerDebuff && held == HoldReason::Budget &&
+            AddCrewEarlyKillsHeldAdd(ai, bot, fight, subject))
+            held = HoldReason::None;
         if (held != HoldReason::None)
         {
             LogHoldKillVeto(ai, bot, held == HoldReason::Sole ? "sole" : veto, subject);
@@ -8054,8 +8095,9 @@ float BossTacticsHoldMultiplier::GetValue(Action* action)
         // it claimed, and the hold would stand that down every tick. The AoE rows are not lifted (their veto below is
         // about the pile around the add, which the peel does not change).
         const bool peelOwned = !aoe && picked && HoldKillPeelOwns(ai, bot, picked);
-        if (picked && (KillHeldFor(fight.rows, picked->GetEntry(), countNear, peelOwned) ||
-                GateHoldsUnit(ai, fight.rows, picked)))
+        const bool pickedHeld = picked && KillHeldFor(fight.rows, picked->GetEntry(), countNear, peelOwned) &&
+            !AddCrewEarlyKillsHeldAdd(ai, bot, fight, picked);
+        if (picked && (pickedHeld || GateHoldsUnit(ai, fight.rows, picked)))
         {
             LogHoldKillVeto(ai, bot, veto, picked);
             return 0.0f;
@@ -8072,16 +8114,25 @@ float BossTacticsHoldMultiplier::GetValue(Action* action)
         return 1.0f;
     if (!freeDps)
         return 1.0f;
-    if (KillHeldFor(fight.rows, current->GetEntry(), countNear, HoldKillPeelOwns(ai, bot, current)) ||
-        GateHoldsUnit(ai, fight.rows, current))
+    const bool currentHeld = KillHeldFor(fight.rows, current->GetEntry(), countNear, HoldKillPeelOwns(ai, bot, current)) &&
+        !AddCrewEarlyKillsHeldAdd(ai, bot, fight, current);
+    if (currentHeld || GateHoldsUnit(ai, fight.rows, current))
     {
         LogHoldKillVeto(ai, bot, veto, current);
         return 0.0f;
     }
-    if (aoe && HeldUnitNear(ai, current, fight, countNear))
+    if (aoe)
     {
-        LogHoldKillVeto(ai, bot, veto, current);
-        return 0.0f;
+        // An area cast lands on every held unit inside its reach: one the crew's early duty spares is not one of them
+        // (the budget hold alone, like the two clauses above).
+        Unit* heldNear = nullptr;
+        const HoldReason pileHeld = HeldSubjectNear(ai, current, fight, countNear, &heldNear);
+        const bool pileLifted = pileHeld == HoldReason::Budget && AddCrewEarlyKillsHeldAdd(ai, bot, fight, heldNear);
+        if (pileHeld != HoldReason::None && !pileLifted)
+        {
+            LogHoldKillVeto(ai, bot, veto, current);
+            return 0.0f;
+        }
     }
     return 1.0f;
 }

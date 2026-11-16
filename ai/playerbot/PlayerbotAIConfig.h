@@ -703,6 +703,13 @@ public:
     // the rows are read (its own key on top of the tactics gate). Off, the rows are ignored, so the table behaves
     // exactly as before the kind (default off).
     bool dungeonRunAddCrew = false;
+    // AiPlayerbot.DungeonRunAddCrewEarly: an `add_crew` row in mode `early` runs a phase before its switch unit dies.
+    // While the switch unit lives and the boss flies, the crew's AoE ranged damage dealers take the boss's adds and
+    // every other ranged damage dealer stays on the boss (the kill_first pick skips it), a hold_kill hold on the
+    // crew's own add no longer stands the crew's area casts down, and the boss's own add rule stands once the switch
+    // unit dies (the crew's usual phase). Needs AiPlayerbot.DungeonRunAddCrew; off, the row's mode is ignored and the
+    // crew waits for the switch unit as before (default 0).
+    uint32 dungeonRunAddCrewEarly = 0;
     // AiPlayerbot.OnyxiaWhelpCrewOnGround: the whelp crew keeps the whelps on the ground too, in Onyxia's last 40 %,
     // not only while she hovers. On, the whelp phase is the Hover aura or (she is found and her health is at or below
     // 40 %): the crew's melee and its ranged keep hunting whelps there, the tanks keep their posts or the generic pick

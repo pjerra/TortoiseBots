@@ -187,6 +187,14 @@ bool ai::IsOnyxiaWhelpDuty(PlayerbotAI* ai, Player* bot)
     uint8 const crewState = AI_VALUE2(uint8, "add crew", static_cast<int32>(kOnyxiaEntry));
     if (crewState != static_cast<uint8>(AddCrewState::Waiting))
         return OnyxiaWhelpDutyFor(today, crewState);
+    // The row's `early` mode (AiPlayerbot.DungeonRunAddCrewEarly): the crew's AoE ranged take the whelps a phase
+    // before Cindarion dies, and the ranged past the crew stay on her (the boss duty trigger aims them), so those are
+    // not on whelp duty. None (the key or the mode off, Cindarion dead, the ground) falls through to today's duty.
+    uint8 const early = AI_VALUE2(uint8, "add crew early", static_cast<int32>(kOnyxiaEntry));
+    if (early == static_cast<uint8>(AddCrewEarly::Whelps))
+        return true;
+    if (early == static_cast<uint8>(AddCrewEarly::Boss))
+        return false;
     // The row still waits (its switch unit lives): the air keeps today's duty, but the P3 ground keeps only the crew's
     // own bots on the whelps instead of every AoE ranged damage dealer of the raid.
     Unit* const boss = ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"));
