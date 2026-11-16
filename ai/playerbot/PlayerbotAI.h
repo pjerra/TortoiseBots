@@ -370,6 +370,7 @@ public:
     void HandleCommands();
     // Chat commands waiting for the next reaction pass (HandleCommands drains them).
     size_t QueuedChatCommandCount() const { return chatCommands.size(); }
+    void QueueChatCommand(std::string const& command, Player* owner, time_t at) { chatCommands.push(ChatCommandHolder(command, owner, CHAT_MSG_WHISPER, at)); }
 private:
     void UpdateAIInternal(uint32 elapsed, bool minimal = false) override;
 public:
@@ -1154,6 +1155,7 @@ protected:
     CompositeChatFilter chatFilter;
     PlayerbotSecurity security;
     std::map<std::string, time_t> whispers;
+    std::map<std::string, time_t> errorTells;
     std::pair<ChatMsg, time_t> currentChat;
     static std::set<std::string> unsecuredCommands;
     bool allowActive[MAX_ACTIVITY_TYPE];
