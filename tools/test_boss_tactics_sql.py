@@ -1117,9 +1117,9 @@ class BossTacticsSql(unittest.TestCase):
         crew = live.get((249, 10184, "add_crew", 50143, 0))
         self.assertIsNotNone(crew, "the Onyxia add_crew row is missing")
         self.assertEqual(name, crew["file"], "the walk 2e migration owns the add_crew row")
-        # The row itself stays the 2e INSERT; walk 2n sets its mode and crew size, the switch unit and the spell do not
-        # move.
-        self.assertEqual((50143, 0, 3, 0.0, "early", 0, 100, 0),
+        # The row itself stays the 2e INSERT; walk 2n sets its mode and walk 2o its crew size (2, the 2n trio was one
+        # too many), the switch unit and the spell do not move.
+        self.assertEqual((50143, 0, 2, 0.0, "early", 0, 100, 0),
                          (crew["target_entry"], crew["spell_id"], crew["priority"], crew["param"],
                           crew["tactic_mode"], crew["hp_min"], crew["hp_max"], crew["bot_aura"]),
                          "the Onyxia add_crew row drifted")
@@ -1144,8 +1144,35 @@ class BossTacticsSql(unittest.TestCase):
                 if row[1] == 249 and row[2] == 10184 and row[3] == "add_crew"]
         self.assertEqual(1, len(crew), "the map keeps exactly one add_crew row")
         row = crew[0]
-        self.assertEqual((50143, 3, 'early'), (row["target_entry"], row["priority"], row["tactic_mode"]))
+        # Walk 2o takes the crew back to 2 (20261116180000, pinned in test_onyxia_walk2o_add_crew_crew2); the mode and
+        # the switch unit stay 2n's.
+        self.assertEqual((50143, 2, 'early'), (row["target_entry"], row["priority"], row["tactic_mode"]))
         self.assertIsNone(new_kind_problem(row), "the loader mirror refuses the early add_crew row")
+
+    def test_onyxia_walk2o_add_crew_crew2(self):
+        # 20261116180000_world.sql: walk 2o takes the early crew back to two AoE ranged. 2n's third crew mage was about
+        # a quarter of Cindarion's early-phase damage loss (his casting share 36 % -> 24 % while the crew left him), so
+        # only the crew leaves him early now (AiPlayerbot.DungeonRunAddCrewBossWhileSwitch 0: the rest hold his
+        # kill_first pick).
+        name = "20261116180000_world.sql"
+        path = os.path.join(ROOT, "data/sql/world", name)
+        self.assertTrue(os.path.isfile(path), "the Onyxia walk 2o add_crew migration is missing")
+        with open(path, encoding="utf-8") as handle:
+            text = handle.read()
+        statements = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("--"))
+        self.assertEqual(1, statements.count("UPDATE `ai_boss_tactic`"), "one UPDATE, nothing else")
+        self.assertEqual(0, statements.count("INSERT INTO"), "walk 2o inserts no row")
+        self.assertEqual(0, statements.count("DELETE FROM"), "walk 2o deletes no row")
+        self.assertIn("SET `priority` = 2", statements)
+        # Idempotent: the WHERE names the crew size the row had before (3), so a second run matches nothing; the mode
+        # is not in the WHERE (tools/boss_coverage.py's replay tracks only the columns the coverage needs).
+        self.assertIn("AND `target_entry` = 50143 AND `priority` = 3;", statements)
+        crew = [_payload_dict(row) for row in effective_rows()
+                if row[1] == 249 and row[2] == 10184 and row[3] == "add_crew"]
+        self.assertEqual(1, len(crew), "the map keeps exactly one add_crew row")
+        row = crew[0]
+        self.assertEqual((50143, 2, "early"), (row["target_entry"], row["priority"], row["tactic_mode"]))
+        self.assertIsNone(new_kind_problem(row), "the loader mirror refuses the crew-2 early add_crew row")
 
     def test_onyxia_walk2n_hatcher_post_healers(self):
         # 20261116120200_world.sql: walk 2n's P3 counted 48 tank deaths, 23 to a Hatcher and 15 to a whelp, 15 of them
