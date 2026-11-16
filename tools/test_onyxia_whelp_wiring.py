@@ -135,13 +135,15 @@ class OnyxiaWhelpWiring(unittest.TestCase):
         # Walk 2n (AiPlayerbot.DungeonRunAddCrewEarly): the row's `early` mode decides the duty before the crew's usual
         # phase. Whelps: the crew's AoE ranged take the whelps while Cindarion lives and she flies; Boss: the ranged
         # past the crew are not on whelp duty, and the boss duty trigger aims them at her whatever their target.
+        # Switch (walk 2o round 1): the rest of them stay on him, never on today's whelp duty.
         duty = body(ACTIONS, "bool ai::IsOnyxiaWhelpDuty(PlayerbotAI* ai, Player* bot)")
         early_at = duty.index('AI_VALUE2(uint8, "add crew early", static_cast<int32>(kOnyxiaEntry))')
         self.assertGreater(early_at, duty.index('AI_VALUE2(uint8, "add crew", static_cast<int32>(kOnyxiaEntry))'),
                            "the early duty is the row's phase before the crew's usual one")
         early = duty[early_at:]
         self.assertIn("if (early == static_cast<uint8>(AddCrewEarly::Whelps))\n        return true;", early)
-        self.assertIn("if (early == static_cast<uint8>(AddCrewEarly::Boss))\n        return false;", early)
+        self.assertIn("if (early == static_cast<uint8>(AddCrewEarly::Boss) || "
+                      "early == static_cast<uint8>(AddCrewEarly::Switch))\n        return false;", early)
         # The trigger reads the same value: a boss-duty bot goes back to her, whatever its current target, unless a
         # gate_hold row holds her off (then the kill_first pick sends it back to that row's blocker).
         trigger = body(TRIGGERS, "bool OnyxiaBossDutyTrigger::IsActive()")
@@ -163,17 +165,29 @@ class OnyxiaWhelpWiring(unittest.TestCase):
 
     def test_early_boss_duty_holds_the_assist(self):
         # Walk 2o: the assist re-pick is held while she is the bot's target on the early boss duty, so the ranged past
-        # the crew stop dropping her for a whelp. The AoE actions are untouched.
+        # the crew stop dropping her for a whelp. The AoE actions are untouched. Round 1: it runs before the whelp
+        # key's return (its gate is the add-crew key and the map), and a gate_hold row holding her off lifts it so the
+        # assist may move the bot to that row's blocker.
         hold = body(ACTIONS, "float OnyxiaWhelpHoldMultiplier::GetValue(Action* action)")
-        branch = hold[hold.index("if (dynamic_cast<DpsAssistAction*>(action) != nullptr"):hold.index("const bool duty")]
+        self.assertLess(hold.index("sPlayerbotAIConfig.dungeonRunAddCrewEarly"),
+                        hold.index("if (!action || !sPlayerbotAIConfig.onyxiaWhelpsAndEggs)"),
+                        "the boss duty hold does not depend on AiPlayerbot.OnyxiaWhelpsAndEggs")
+        branch = hold[hold.index("if (action && bot->GetMapId() == kOnyxiaMapId")
+                      :hold.index("if (!action || !sPlayerbotAIConfig.onyxiaWhelpsAndEggs)")]
         self.assertIn("sPlayerbotAIConfig.dungeonRunAddCrewEarly", branch)
         self.assertIn('AI_VALUE2(uint8, "add crew early", static_cast<int32>(kOnyxiaEntry))', branch)
         self.assertIn("static_cast<uint8>(AddCrewEarly::Boss)", branch)
         self.assertIn('Unit* const boss = ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"));', branch)
+        self.assertIn("ActiveBossRows gateRows;", branch)
+        self.assertIn("row.kind == BossTacticKind::GateHold", branch)
+        self.assertIn("OnyxiaBossDutyHoldsAssist(bossDuty, GateHoldsUnit(ai, gateRows, boss),", branch)
         self.assertIn('AI_VALUE(Unit*, "current target") == boss', branch)
-        self.assertIn('AI_VALUE(ObjectGuid, "explicit attack target").IsEmpty()', branch)
+        self.assertIn('!AI_VALUE(ObjectGuid, "explicit attack target").IsEmpty())', branch)
         self.assertIn("return 0.0f;", branch)
         self.assertNotIn("DpsAoeAction", branch)
+        self.assertIn("inline bool OnyxiaBossDutyHoldsAssist(bool bossDuty, bool gateHeld, bool onBoss, "
+                      "bool explicitOrder)", POLICY)
+        self.assertIn("return bossDuty && !gateHeld && onBoss && !explicitOrder;", POLICY)
 
     def test_ground_whelp_pick_reads_the_victim(self):
         # Walk 2o (AiPlayerbot.OnyxiaWhelpPickTankFirst): on the ground the scan ranks a pickable whelp by its victim

@@ -55,7 +55,7 @@ class JindoR1Wiring(unittest.TestCase):
                       "        !ordinaryIsCarrierEntry)", body)
         self.assertNotIn("picked < 0)\n    {", body)
         self.assertNotIn("dungeonRunCarrierScan && mode == KillFirstPickMode::Carrier", body)
-        self.assertIn("bool const isCarrier = HasCarrierKillFirstRow(fight.rows);", body)
+        self.assertIn("bool const isCarrier = HasCarrierKillFirstRow(rows);", body)
         self.assertIn("int const scanned = CarrierScanPick(facts, carrierReachYd);", body)
         # The one decision is the policy's, fed the carrier flag, the key, the mode and the scan's result, and the scan's
         # Shade is what returns when it wins; otherwise the ordinary pick is returned last.
@@ -63,7 +63,7 @@ class JindoR1Wiring(unittest.TestCase):
                       "scanUnit != nullptr,\n                ordinaryIsCarrierEntry))", body)
         self.assertIn("return scanUnit;", body)
         self.assertTrue(body.rstrip().endswith("return ordinary;"))
-        self.assertLess(body.index(": PickKillFirst(fight.rows, candidates);"),
+        self.assertLess(body.index(": PickKillFirst(rows, candidates);"),
                         body.index("CarrierScanTakesPrecedence("))
         self.assertLess(body.index("CarrierScanTakesPrecedence("), body.index("return scanUnit;"))
         self.assertLess(body.index("return scanUnit;"), body.rindex("return ordinary;"))
@@ -78,8 +78,8 @@ class JindoR1Wiring(unittest.TestCase):
         # (GridOwnerInFight, which the pass above also uses).
         self.assertIn("CollectCarrierScanHits(ai, bot, fight, facts, scanUnits);", body)
         self.assertIn("GridOwnerInFight(fight, hit.owner)", body)
-        self.assertIn("? PickCarrierOverride(fight.rows, candidates, carrierReachYd,", body)
-        self.assertIn(": PickKillFirst(fight.rows, candidates);", body)
+        self.assertIn("? PickCarrierOverride(rows, candidates, carrierReachYd,", body)
+        self.assertIn(": PickKillFirst(rows, candidates);", body)
 
     def test_the_precedence_policy_is_pure(self):
         self.assertIn("inline bool CarrierScanTakesPrecedence(bool isCarrier, bool keyOn, KillFirstPickMode mode, "

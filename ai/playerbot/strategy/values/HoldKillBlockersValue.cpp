@@ -252,7 +252,7 @@ uint8 AddCrewValue::Calculate()
     return static_cast<uint8>(AddCrewStateFor(true, true, switchAlive, member));
 }
 
-namespace
+namespace ai
 {
 // The creature of `entry` the raid fights: a victim or an attacker of a live group member on this map and instance
 // (the bot's own lists when it has no group). An add_crew row names the boss's entry, never the unit, so this is how a
@@ -293,8 +293,8 @@ Unit* EngagedBossOfEntry(Player* bot, uint32 entry)
 // crew" value's Waiting answer: it reads the same tank-post grid search), the boss's flight (the core's flight flag
 // on the engaged boss, the same one the hover reach reads) and the split key (how many ranks past the crew leave the
 // switch unit while it lives, AiPlayerbot.DungeonRunAddCrewBossWhileSwitch) come first; with them the crew's AoE ranged
-// take the adds and the ranged past the crew the key covers stay on the boss. The tanks, the healers and the melee keep
-// their own duty there too.
+// take the adds, the ranged past the crew the key covers stay on the boss, and the rest of them stay on the switch unit
+// (AddCrewEarly::Switch) until it dies. The tanks, the healers and the melee keep their own duty there too.
 uint8 AddCrewEarlyValue::Calculate()
 {
     if (!sPlayerbotAIConfig.dungeonRunAddCrewEarly || !sPlayerbotAIConfig.dungeonRunAddCrew)

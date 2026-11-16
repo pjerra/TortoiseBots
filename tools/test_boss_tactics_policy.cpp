@@ -2205,22 +2205,23 @@ static void AddCrewLoader_Rows()
 }
 
 // Onyxia walk 2o (AiPlayerbot.DungeonRunAddCrewEarly + DungeonRunAddCrewBossWhileSwitch): the failing case is the
-// split at the switch unit's death. While it lives only the crew leaves it (n = 0, the 2m set); the next n AoE ranks
-// past the crew leave it too, and 40 leaves every ranged damage dealer, the no-AoE-rank bots included (2n's split).
-// Once it dies every ranged damage dealer past the crew has the boss's duty. The key, the mode and the ground still
-// turn it all off, and the tanks, the healers and the melee keep their own duty either way.
+// split at the switch unit's death. While it lives only the crew leaves it (n = 0, the 2m set) and every other ranged
+// damage dealer stays on it (Switch: no whelp duty, no boss duty); the next n AoE ranks past the crew leave it too, and
+// 40 leaves every ranged damage dealer, the no-AoE-rank bots included (2n's split). Once it dies every ranged damage
+// dealer past the crew has the boss's duty. The key, the mode and the ground still turn it all off, and the tanks, the
+// healers and the melee keep their own duty either way.
 static void AddCrewEarlyDuty_PhaseAndRoles()
 {
     // The whole duty: key, mode, switch unit's life, the boss's flight and the split (crew 2, the switch unit alive).
     CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 0, 2, 0) == AddCrewEarly::Whelps);
     CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 1, 2, 0) == AddCrewEarly::Whelps);
-    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 2, 2, 0) == AddCrewEarly::None); // past the crew
-    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 5, 2, 0) == AddCrewEarly::None);
-    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, -1, 2, 0) == AddCrewEarly::None);
+    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 2, 2, 0) == AddCrewEarly::Switch); // past the crew
+    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 5, 2, 0) == AddCrewEarly::Switch);
+    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, -1, 2, 0) == AddCrewEarly::Switch);
     // The next n ranks past the crew keep the boss's duty while the switch unit lives.
     CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 2, 2, 3) == AddCrewEarly::Boss);
     CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 4, 2, 3) == AddCrewEarly::Boss);
-    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 5, 2, 3) == AddCrewEarly::None);
+    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 5, 2, 3) == AddCrewEarly::Switch);
     // 40 is every ranged damage dealer past the crew, the bots without an AoE rank (rank -1) included: the 2n split.
     CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 7, 2, 40) == AddCrewEarly::Boss);
     CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, -1, 2, 40) == AddCrewEarly::Boss);
@@ -2244,12 +2245,13 @@ static void AddCrewEarlyDuty_PhaseAndRoles()
     CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, false, -1, 2, 40) == AddCrewEarly::None);
     CHECK(AddCrewEarlyDuty(true, true, false, true, false, false, false, -1, 2, 40) == AddCrewEarly::None);
     // A crew of 0 (the melee and the tanks alone): every ranged damage dealer is past it.
-    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 0, 0, 0) == AddCrewEarly::None);
+    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 0, 0, 0) == AddCrewEarly::Switch);
     CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 0, 0, 1) == AddCrewEarly::Boss);
     CHECK(AddCrewEarlyDuty(true, true, false, true, false, false, true, 0, 0, 0) == AddCrewEarly::Boss);
     CHECK(static_cast<int>(AddCrewEarly::None) == 0);
     CHECK(static_cast<int>(AddCrewEarly::Whelps) == 1);
     CHECK(static_cast<int>(AddCrewEarly::Boss) == 2);
+    CHECK(static_cast<int>(AddCrewEarly::Switch) == 3);
     // The place alone is the same rule without the phase, which is what the pick and the hold read.
     CHECK(AddCrewEarlyPlace(false, false, true, 1, 3) == AddCrewEarly::Whelps);
     CHECK(AddCrewEarlyPlace(false, false, true, 2, 3) == AddCrewEarly::Whelps);
@@ -2275,6 +2277,51 @@ static void AddCrewEarlyBossOf_SwitchUnitNotTheKillFirstEntry()
     std::uint32_t boss = 0;
     CHECK(table.AddCrewEarlyBossOf(249, 50143, boss));
     CHECK(boss == 10184);
+}
+
+// Walk 2o round 1: the early boss duty drops only the kill_first row on the switch unit, so another kill_first row of
+// the same fight still picks; a gate_hold row holding the boss off lifts even that drop (the boss duty trigger's own
+// order), and a duty other than Boss drops nothing.
+static void AddCrewEarlyKillFirstRows_SkipsOnlyTheSwitchRow()
+{
+    BossTacticRow crew = Row(249, 10184, BossTacticKind::AddCrew, 50143, 0, 2);
+    crew.mode = TacticMode::Early;
+    BossTacticRow onSwitch = Row(249, 50143, BossTacticKind::KillFirst, 50143, 0, 1);
+    BossTacticRow onAdd = Row(249, 50143, BossTacticKind::KillFirst, 11262, 0, 2);
+    BossTacticTable table;
+    CHECK(table.Add(crew));
+    CHECK(table.Add(onSwitch));
+    CHECK(table.Add(onAdd));
+    table.Seal();
+    const ActiveBossRows fight{ &onSwitch, &onAdd };
+    const std::vector<TacticCandidate> candidates = []
+    {
+        std::vector<TacticCandidate> out(2);
+        out[0].entry = 50143;
+        out[0].pickable = true;
+        out[0].distance = 10.0f;
+        out[1].entry = 11262;
+        out[1].pickable = true;
+        out[1].distance = 30.0f;
+        return out;
+    }();
+    // Both rows pick as they are: the switch unit's own row wins on priority.
+    CHECK(PickKillFirst(fight, candidates) == 0);
+    const auto duty = [](std::uint8_t value) { return [value](std::uint32_t) { return value; }; };
+    const auto held = [](bool value) { return [value](std::uint32_t) { return value; }; };
+    // Boss duty with the gate open: the switch unit's row is dropped and the other row picks.
+    const ActiveBossRows kept = AddCrewEarlyKillFirstRows(table, 249, fight,
+        duty(static_cast<std::uint8_t>(AddCrewEarly::Boss)), held(false));
+    CHECK(kept.size() == 1 && kept[0] == &onAdd);
+    CHECK(PickKillFirst(kept, candidates) == 1);
+    // A gate_hold row holding the boss off outranks the duty: nothing is dropped.
+    const ActiveBossRows gated = AddCrewEarlyKillFirstRows(table, 249, fight,
+        duty(static_cast<std::uint8_t>(AddCrewEarly::Boss)), held(true));
+    CHECK(gated.size() == 2 && gated[0] == &onSwitch && gated[1] == &onAdd);
+    // Every other duty leaves both rows: the whelp crew, the switch duty and today.
+    for (const AddCrewEarly other : { AddCrewEarly::None, AddCrewEarly::Whelps, AddCrewEarly::Switch })
+        CHECK(AddCrewEarlyKillFirstRows(table, 249, fight, duty(static_cast<std::uint8_t>(other)), held(false))
+                  .size() == 2);
 }
 
 // The row's mode: `early` is the add_crew kind's one mode word, the loader keeps it, and the table hands back both the
@@ -2818,6 +2865,7 @@ int main()
     AddCrewMember_Roles();
     AddCrewEarlyDuty_PhaseAndRoles();
     AddCrewEarlyBossOf_SwitchUnitNotTheKillFirstEntry();
+    AddCrewEarlyKillFirstRows_SkipsOnlyTheSwitchRow();
     AddCrewEarlyLoader_Rows();
 
     // A boss that vanishes (Arlokk: invisible + not selectable, so it leaves the attackers list while it stays alive and

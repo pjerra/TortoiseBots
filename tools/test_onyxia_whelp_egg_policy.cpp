@@ -207,6 +207,16 @@ int main()
     CHECK(!OnyxiaBossDutyFires(true, false, true, true, false));   // a gate_hold row holds her off
     CHECK(!OnyxiaBossDutyFires(true, true, true, true, true));
 
+    // OnyxiaBossDutyHoldsAssist (walk 2o round 1): the assist re-pick is held while she is the bot's target on the boss
+    // duty, and a gate_hold row holding her off lifts the hold so the assist may move the bot to that row's blocker. The
+    // whelp key is not an input: its call sits ahead of that key's return (pinned in test_onyxia_whelp_wiring.py).
+    CHECK(OnyxiaBossDutyHoldsAssist(true, false, true, false));
+    CHECK(!OnyxiaBossDutyHoldsAssist(true, true, true, false));   // a gate_hold row holds her off
+    CHECK(!OnyxiaBossDutyHoldsAssist(false, false, true, false)); // not on the boss duty
+    CHECK(!OnyxiaBossDutyHoldsAssist(true, false, false, false)); // not on her
+    CHECK(!OnyxiaBossDutyHoldsAssist(true, false, true, true));   // an explicit order wins
+    CHECK(!OnyxiaBossDutyHoldsAssist(true, true, false, true));
+
     // OnyxiaWhelpVictimRank / PickBetter: the whelp eating a tank outranks one eating a healer, a healer's outranks the
     // rest, and the distance breaks a tie inside one rank only. The failing case is the tank's whelp 25 yd away beating
     // a damage dealer's 5 yd away.

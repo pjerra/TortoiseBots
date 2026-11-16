@@ -6,7 +6,9 @@
 using namespace ai;
 #include "playerbot/ServerFacade.h"
 #include "playerbot/GroupMembers.h"
+#include "playerbot/BossTacticsMgr.h"
 #include "playerbot/BossTacticsPolicy.h"
+#include "BossTacticsActions.h"
 #include "playerbot/policy/raid/OnyxiaBreathPolicy.h"
 #include "playerbot/policy/raid/OnyxiaWhelpEggPolicy.h"
 #include "playerbot/BossTacticsStand.h"
@@ -208,12 +210,13 @@ bool ai::IsOnyxiaWhelpDuty(PlayerbotAI* ai, Player* bot)
     if (crewState != static_cast<uint8>(AddCrewState::Waiting))
         return OnyxiaWhelpDutyFor(today, crewState);
     // The row's `early` mode (AiPlayerbot.DungeonRunAddCrewEarly): the crew's AoE ranged take the whelps a phase
-    // before Cindarion dies, and the ranged past the crew stay on her (the boss duty trigger aims them), so those are
-    // not on whelp duty. None (the key or the mode off, Cindarion dead, the ground) falls through to today's duty.
+    // before Cindarion dies, the ranged past the crew stay on her (the boss duty trigger aims them) or, on the split's
+    // rest, on him (the `Switch` duty: his kill_first row holds them), so those are not on whelp duty. None (the key or
+    // the mode off, Cindarion dead, the ground) falls through to today's duty.
     uint8 const early = AI_VALUE2(uint8, "add crew early", static_cast<int32>(kOnyxiaEntry));
     if (early == static_cast<uint8>(AddCrewEarly::Whelps))
         return true;
-    if (early == static_cast<uint8>(AddCrewEarly::Boss))
+    if (early == static_cast<uint8>(AddCrewEarly::Boss) || early == static_cast<uint8>(AddCrewEarly::Switch))
         return false;
     // The row still waits (its switch unit lives): the air keeps today's duty, but the P3 ground keeps only the crew's
     // own bots on the whelps instead of every AoE ranged damage dealer of the raid.
@@ -299,6 +302,32 @@ bool OnyxiaAttackBossAction::Execute(Event& event)
 
 float OnyxiaWhelpHoldMultiplier::GetValue(Action* action)
 {
+    // The early add crew's boss duty (AiPlayerbot.DungeonRunAddCrewEarly): the assist re-pick would aim the bot at a
+    // whelp every tick and pull it off her, so the assist action is held while she is its target (the boss's own attack
+    // action keeps it there). AoE actions are untouched. The add crew's keys and the map are its gate, not
+    // AiPlayerbot.OnyxiaWhelpsAndEggs, and a gate_hold row holding her off outranks it: the assist then moves the bot
+    // to that row's blocker.
+    if (action && bot->GetMapId() == kOnyxiaMapId && sPlayerbotAIConfig.dungeonRunAddCrewEarly &&
+        dynamic_cast<DpsAssistAction*>(action) != nullptr)
+    {
+        AiObjectContext* context = ai->GetAiObjectContext();
+        const bool bossDuty = AI_VALUE2(uint8, "add crew early", static_cast<int32>(kOnyxiaEntry)) ==
+            static_cast<uint8>(AddCrewEarly::Boss);
+        if (bossDuty)
+        {
+            Unit* const boss = ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"));
+            ActiveBossRows gateRows;
+            if (const std::vector<BossTacticRow>* const gate =
+                    GetBossTactics().Rows(bot->GetMapId(), kOnyxiaEntry))
+                for (const BossTacticRow& row : *gate)
+                    if (row.kind == BossTacticKind::GateHold)
+                        gateRows.push_back(&row);
+            if (boss && OnyxiaBossDutyHoldsAssist(bossDuty, GateHoldsUnit(ai, gateRows, boss),
+                    AI_VALUE(Unit*, "current target") == boss,
+                    !AI_VALUE(ObjectGuid, "explicit attack target").IsEmpty()))
+                return 0.0f;
+        }
+    }
     if (!action || !sPlayerbotAIConfig.onyxiaWhelpsAndEggs)
         return 1.0f;
     const bool assist = dynamic_cast<DpsAssistAction*>(action) || dynamic_cast<TankAssistAction*>(action);
@@ -307,18 +336,6 @@ float OnyxiaWhelpHoldMultiplier::GetValue(Action* action)
         return 1.0f;
     if (bot->GetMapId() != kOnyxiaMapId)
         return 1.0f;
-    // The early add crew's boss duty (AiPlayerbot.DungeonRunAddCrewEarly): the assist re-pick would aim the bot at a
-    // whelp every tick and pull it off her, so the assist action is held while she is its target (the boss's own attack
-    // action keeps it there). AoE actions are untouched.
-    if (dynamic_cast<DpsAssistAction*>(action) != nullptr && sPlayerbotAIConfig.dungeonRunAddCrewEarly &&
-        AI_VALUE2(uint8, "add crew early", static_cast<int32>(kOnyxiaEntry)) ==
-            static_cast<uint8>(AddCrewEarly::Boss))
-    {
-        Unit* const boss = ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"));
-        if (boss && AI_VALUE(Unit*, "current target") == boss &&
-            AI_VALUE(ObjectGuid, "explicit attack target").IsEmpty())
-            return 0.0f;
-    }
     const bool duty = IsOnyxiaWhelpDuty(ai, bot);
     if (!duty)
         return 1.0f;

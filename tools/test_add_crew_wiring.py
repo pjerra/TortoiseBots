@@ -65,7 +65,8 @@ class AddCrewWiring(unittest.TestCase):
         self.assertIn("bool AddCrewEarlyOf(std::uint32_t map, std::uint32_t bossEntry) const", POLICY)
         self.assertIn("bool AddCrewEarlyBossOf(std::uint32_t map, std::uint32_t switchEntry, std::uint32_t& bossEntry) "
                       "const", POLICY)
-        self.assertIn("enum class AddCrewEarly : std::uint8_t { None = 0, Whelps = 1, Boss = 2 };", POLICY)
+        self.assertIn("enum class AddCrewEarly : std::uint8_t { None = 0, Whelps = 1, Boss = 2, Switch = 3 };",
+                      POLICY)
         self.assertIn("inline AddCrewEarly AddCrewEarlyDuty(bool keyOn, bool early, bool switchAlive, bool airborne, "
                       "bool tank,", POLICY)
         self.assertIn("inline AddCrewEarly AddCrewEarlyPlace(bool tank, bool healer, bool ranged, int aoeRank,", POLICY)
@@ -77,8 +78,10 @@ class AddCrewWiring(unittest.TestCase):
         duty = POLICY[POLICY.index("inline AddCrewEarly AddCrewEarlyDuty(bool keyOn"):]
         self.assertIn("if (!keyOn || !early || !airborne)\n            return AddCrewEarly::None;", duty)
         self.assertIn("if (!switchAlive)\n            return place;", duty)
-        self.assertIn("if (place == AddCrewEarly::Boss && !AddCrewBossWhileSwitch(aoeRank, crewSize, "
-                      "bossWhileSwitch))\n            return AddCrewEarly::None;", duty)
+        # Walk 2o round 1: a ranged damage dealer past the crew the split does not cover stays on the switch unit
+        # (Switch), never on today's duty that would send it to the boss's adds.
+        self.assertIn("if (place == AddCrewEarly::Boss)\n            return AddCrewBossWhileSwitch(aoeRank, crewSize, "
+                      "bossWhileSwitch) ? place : AddCrewEarly::Switch;", duty)
         accessor = body(POLICY, "        bool AddCrewOf(std::uint32_t map, std::uint32_t bossEntry,")
         self.assertIn("if (!sealed_.load(std::memory_order_acquire) || addCrew_.empty())", accessor)
         self.assertIn("auto const it = addCrew_.find(Key(map, bossEntry));", accessor)
@@ -148,19 +151,28 @@ class AddCrewWiring(unittest.TestCase):
         self.assertIn("sPlayerbotAIConfig.dungeonRunAddCrewBossWhileSwitch", value)
         self.assertIn('creators["add crew early"] = [](PlayerbotAI* ai) { return new AddCrewEarlyValue(ai); };',
                       VALUE_CONTEXT)
-        # The generic sites read it: the pick skips a bot the row leaves on the boss, and the hold's budget clause is
-        # lifted for a bot on the crew's whelp duty.
+        # The generic sites read it: the pick drops the row on the switch unit (a bot the row leaves on the boss takes
+        # no kill_first pick there), and the hold's budget clause is lifted for a bot on the crew's whelp duty.
         actions = (ROOT / "ai/playerbot/strategy/actions/BossTacticsActions.cpp").read_text()
         pick = body(actions[actions.rindex("Unit* PickBossKillFirst(PlayerbotAI* ai, Player* bot, const "
                                            "BossTacticsFight& fight, KillFirstPickMode mode,"):], "Unit* "
                     "PickBossKillFirst(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fight, "
                     "KillFirstPickMode mode,")
-        # Walk 2o's cause B: the add_crew row is found through the kill_first row's switch unit, never the row's own
-        # boss entry (which is the switch unit here and has no add_crew row).
-        self.assertIn("GetBossTactics().AddCrewEarlyBossOf(bot->GetMapId(), row->targetEntry, crewBoss)", pick)
-        self.assertIn('AI_VALUE2(uint8, "add crew early", static_cast<int32>(crewBoss))', pick)
+        # Walk 2o round 1: only the row on the switch unit is dropped, so the fight's other kill_first rows still pick;
+        # a gate_hold row holding the boss off lifts even that (the boss duty trigger's own order). The add_crew row is
+        # found through the kill_first row's switch unit, never the row's own boss entry.
+        self.assertIn("ActiveBossRows rows = fight.rows;", pick)
+        self.assertIn("rows = AddCrewEarlyKillFirstRows(GetBossTactics(), bot->GetMapId(), fight.rows,", pick)
+        self.assertIn('AI_VALUE2(uint8, "add crew early", static_cast<int32>(bossEntry))', pick)
+        self.assertIn("GateHoldsUnit(ai, gateRows, EngagedBossOfEntry(bot, bossEntry))", pick)
+        self.assertIn("PickKillFirst(rows, candidates)", pick)
+        self.assertIn("PickCarrierOverride(rows, candidates", pick)
+        self.assertNotIn("return nullptr;\n", pick[pick.index("AddCrewEarlyKillFirstRows"):])
         self.assertNotIn("row->bossEntry)) ==", pick)
-        self.assertIn("static_cast<uint8>(AddCrewEarly::Boss))\n                return nullptr;", pick)
+        rows_policy = body(POLICY, "    inline ActiveBossRows AddCrewEarlyKillFirstRows(const BossTacticTable& table")
+        self.assertIn("table.AddCrewEarlyBossOf(map, row->targetEntry, bossEntry)", rows_policy)
+        self.assertIn("earlyDutyOf(bossEntry) == static_cast<std::uint8_t>(AddCrewEarly::Boss)", rows_policy)
+        self.assertIn("if (bossDuty && !gateHeldOf(bossEntry))", rows_policy)
         lift = body(actions, "bool ai::AddCrewEarlyLiftsHoldKill(PlayerbotAI* ai, Player* bot, const ActiveBossRows& "
                              "rows, Unit* held)")
         self.assertIn("row->kind != BossTacticKind::HoldKill || row->bossEntry != held->GetEntry()", lift)

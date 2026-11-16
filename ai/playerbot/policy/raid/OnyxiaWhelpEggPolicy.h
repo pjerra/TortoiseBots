@@ -179,6 +179,15 @@ namespace ai
         return bossDuty && !explicitOrder && bossValid && !gateHeld && !onBoss;
     }
 
+    // The early add crew's assist hold: on the boss duty the assist re-pick would aim the bot at a whelp every tick and
+    // pull it off her, so it is held while she is the bot's target already and no explicit order stands. A gate_hold
+    // row holding her off outranks the duty (the boss duty trigger's order), so the hold stands down there and the
+    // assist may move the bot to the row's blocker. The whelp key is not a gate: the hold belongs to the add crew.
+    inline bool OnyxiaBossDutyHoldsAssist(bool bossDuty, bool gateHeld, bool onBoss, bool explicitOrder)
+    {
+        return bossDuty && !gateHeld && onBoss && !explicitOrder;
+    }
+
     // AiPlayerbot.OnyxiaWhelpPickTankFirst: the whelp a bot kills first while she stands on the ground. A whelp eating
     // the raid's tank ranks first (slot 1 already holds them in P3 and dies; the ground crew is what can pull them
     // off), one eating a healer second, the rest last; the distance breaks a tie inside one rank only.

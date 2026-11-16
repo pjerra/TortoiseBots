@@ -28,6 +28,7 @@
 #include "playerbot/SeekWalkoutPolicy.h"
 #include "Maps/PathFinder.h"
 #include "playerbot/strategy/values/LastMovementValue.h"
+#include "playerbot/strategy/values/HoldKillBlockersValue.h"
 #include "Maps/GridNotifiers.h"
 #include "Maps/GridNotifiersImpl.h"
 #include "Maps/CellImpl.h"
@@ -5906,23 +5907,27 @@ Unit* PickBossKillFirst(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fi
 
     AiObjectContext* context = ai->GetAiObjectContext();
     // The add crew's `early` mode (AiPlayerbot.DungeonRunAddCrewEarly): a ranged damage dealer the row leaves on the
-    // boss takes no kill_first pick there. The boss's own trigger aims it at the boss, and while the gate_hold rows hold
-    // the boss off nothing else sends it back to the row's switch unit either. The kill_first row names its own target,
-    // not the boss, so the add_crew row is found through its switch unit (row->bossEntry would ask for an add_crew row
-    // under the switch unit and always read None).
+    // boss takes no kill_first pick on the row's switch unit. The boss's own trigger aims it at the boss, and while the
+    // gate_hold rows hold the boss off nothing else sends it back to the row's switch unit either. Only that row is
+    // dropped: the fight's other kill_first rows stand. The kill_first row names its own target, not the boss, so the
+    // add_crew row is found through its switch unit (row->bossEntry would ask for an add_crew row under the switch unit
+    // and always read None).
+    ActiveBossRows rows = fight.rows;
     if (sPlayerbotAIConfig.dungeonRunAddCrewEarly)
-    {
-        for (const BossTacticRow* row : fight.rows)
-        {
-            if (row->kind != BossTacticKind::KillFirst)
-                continue;
-            std::uint32_t crewBoss = 0;
-            if (GetBossTactics().AddCrewEarlyBossOf(bot->GetMapId(), row->targetEntry, crewBoss) &&
-                AI_VALUE2(uint8, "add crew early", static_cast<int32>(crewBoss)) ==
-                    static_cast<uint8>(AddCrewEarly::Boss))
-                return nullptr;
-        }
-    }
+        rows = AddCrewEarlyKillFirstRows(GetBossTactics(), bot->GetMapId(), fight.rows,
+            [context](std::uint32_t bossEntry)
+            {
+                return AI_VALUE2(uint8, "add crew early", static_cast<int32>(bossEntry));
+            },
+            [ai, bot](std::uint32_t bossEntry)
+            {
+                ActiveBossRows gateRows;
+                if (const std::vector<BossTacticRow>* const gate = GetBossTactics().Rows(bot->GetMapId(), bossEntry))
+                    for (const BossTacticRow& row : *gate)
+                        if (row.kind == BossTacticKind::GateHold)
+                            gateRows.push_back(&row);
+                return GateHoldsUnit(ai, gateRows, EngagedBossOfEntry(bot, bossEntry));
+            });
     std::vector<TacticCandidate> candidates;
     std::vector<Unit*> units;
     candidates.reserve(fight.units.size());
@@ -5952,7 +5957,7 @@ Unit* PickBossKillFirst(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fi
     if (sPlayerbotAIConfig.dungeonRunKillFirstGrid)
     {
         std::unordered_set<std::uint32_t> entries;
-        for (const BossTacticRow* row : fight.rows)
+        for (const BossTacticRow* row : rows)
             if (row->kind == BossTacticKind::KillFirst && row->targetEntry != 0)
                 entries.insert(row->targetEntry);
         for (std::uint32_t const entry : entries)
@@ -5992,7 +5997,7 @@ Unit* PickBossKillFirst(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fi
     {
         uint64 shadeGuids[kShadeSeenMaxPerPass];
         std::size_t shadeCount = 0;
-        if (HasCarrierKillFirstRow(fight.rows))
+        if (HasCarrierKillFirstRow(rows))
             for (std::size_t i = 0; i < units.size() && shadeCount < kShadeSeenMaxPerPass; ++i)
                 if (sServerFacade.IsAlive(units[i]) && IsCarrierRowEntry(fight, candidates[i].entry))
                     shadeGuids[shadeCount++] = units[i]->GetObjectGuid().GetRawValue();
@@ -6001,8 +6006,8 @@ Unit* PickBossKillFirst(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fi
     // The healer cover key ranks a Shade on a healer of ours within 30 yd ahead of a nearer Shade (the free pick,
     // PickKillFirst, already ranks it first).
     const int picked = mode == KillFirstPickMode::Carrier
-        ? PickCarrierOverride(fight.rows, candidates, carrierReachYd, sPlayerbotAIConfig.dungeonRunShadeHealerCover)
-        : PickKillFirst(fight.rows, candidates);
+        ? PickCarrierOverride(rows, candidates, carrierReachYd, sPlayerbotAIConfig.dungeonRunShadeHealerCover)
+        : PickKillFirst(rows, candidates);
     Unit* const ordinary = picked < 0 ? nullptr : units[picked];
     // The carrier scan (walk 53): the carrier row's entry read off the grid, and the nearest hit that passes every
     // check. It runs BEFORE the ordinary pick is accepted, for every mode but None (a player's order is never
@@ -6010,7 +6015,7 @@ Unit* PickBossKillFirst(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fi
     // Shade lives, and a carrier is the only one who can kill that Shade (CarrierScanTakesPrecedence). An ordinary pick
     // that already is a carrier-row Shade stays and the scan is skipped. A second path, never a widened first one:
     // PickCarrierOverride and the grid pass above stay as they are.
-    bool const isCarrier = HasCarrierKillFirstRow(fight.rows);
+    bool const isCarrier = HasCarrierKillFirstRow(rows);
     bool const ordinaryIsCarrierEntry = ordinary && IsCarrierRowEntry(fight, ordinary->GetEntry());
     if (sPlayerbotAIConfig.dungeonRunCarrierScan && isCarrier && mode != KillFirstPickMode::None &&
         !ordinaryIsCarrierEntry)

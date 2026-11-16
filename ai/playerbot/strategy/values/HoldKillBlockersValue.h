@@ -108,14 +108,20 @@ namespace ai
     };
 
     // "add crew early::<boss>": AiPlayerbot.DungeonRunAddCrewEarly's duty for this bot under the map's add_crew row of
-    // the qualifier boss (AddCrewEarlyDuty: 0 None, 1 Whelps, 2 Boss). Whelps and Boss only while the row is in mode
-    // `early` and the boss (as the raid fights it) flies; the crew's AoE ranged take the boss's adds and the ranged
-    // past the crew the split key covers stay on the boss while the switch unit lives, every one of them once it dies.
-    // None everywhere else: with the key or the row off, or with the boss on the ground.
+    // the qualifier boss (AddCrewEarlyDuty: 0 None, 1 Whelps, 2 Boss, 3 Switch). Whelps and Boss only while the row is
+    // in mode `early` and the boss (as the raid fights it) flies; the crew's AoE ranged take the boss's adds, the
+    // ranged past the crew the split key covers stay on the boss while the switch unit lives, and the rest of them stay
+    // on the switch unit (Switch) until it dies, when every one of them takes the boss. None everywhere else: with the
+    // key or the row off, or with the boss on the ground.
     class AddCrewEarlyValue : public CalculatedValue<std::uint8_t>, public Qualified
     {
     public:
         AddCrewEarlyValue(PlayerbotAI* ai) : CalculatedValue<uint8>(ai, "add crew early", 2), Qualified() {}
         uint8 Calculate() override;
     };
+
+    // The creature of `entry` the raid fights, or nullptr: the first live victim or attacker of a live group member on
+    // the bot's map and instance (the bot's own lists when it has no group). An add_crew row names the boss's entry,
+    // never the unit, so this is how a reader without the fight scan finds the boss whose row it holds.
+    Unit* EngagedBossOfEntry(Player* bot, std::uint32_t entry);
 }

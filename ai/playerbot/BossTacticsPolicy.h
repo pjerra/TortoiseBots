@@ -4974,13 +4974,14 @@ namespace ai
 
     // --- add_crew, mode `early` -------------------------------------------------------------------------------------
     // AiPlayerbot.DungeonRunAddCrewEarly: while the row's switch unit still lives and the boss flies, the crew's AoE
-    // ranged damage dealers take the boss's adds (`Whelps`); the ranged damage dealers past the crew keep the boss
-    // (`Boss`, and the kill_first pick skips it) while the switch unit lives only on a rank
-    // AiPlayerbot.DungeonRunAddCrewBossWhileSwitch covers, and every one of them once it dies. The tanks, the
-    // healers and the melee keep their own duty (`None`, as with the key or the row off): a tank must hold a flying
-    // boss, and the melee cannot reach one. `None` is today's duty everywhere the early phase does not run: the key or
-    // the row off or the boss on the ground.
-    enum class AddCrewEarly : std::uint8_t { None = 0, Whelps = 1, Boss = 2 };
+    // ranged damage dealers take the boss's adds (`Whelps`); the ranged damage dealers past the crew stay on the switch
+    // unit (`Switch`: no whelp duty and no boss duty, so the row's own kill_first order keeps them there), except on a
+    // rank AiPlayerbot.DungeonRunAddCrewBossWhileSwitch covers, where they keep the boss (`Boss`, and the kill_first
+    // pick skips that row); once the switch unit dies every one of them has the boss's duty. The tanks, the healers and
+    // the melee keep their own duty (`None`, as with the key or the row off): a tank must hold a flying boss, and the
+    // melee cannot reach one. `None` is today's duty everywhere the early phase does not run: the key or the row off or
+    // the boss on the ground.
+    enum class AddCrewEarly : std::uint8_t { None = 0, Whelps = 1, Boss = 2, Switch = 3 };
 
     // This bot's place under an early row, whatever the phase: the ranged damage dealers inside the crew take the adds,
     // the ones past it stay on the boss, and every other bot (a tank, a healer, a melee) keeps its own duty.
@@ -5012,8 +5013,32 @@ namespace ai
         const AddCrewEarly place = AddCrewEarlyPlace(tank, healer, ranged, aoeRank, crewSize);
         if (!switchAlive)
             return place;
-        if (place == AddCrewEarly::Boss && !AddCrewBossWhileSwitch(aoeRank, crewSize, bossWhileSwitch))
-            return AddCrewEarly::None;
+        if (place == AddCrewEarly::Boss)
+            return AddCrewBossWhileSwitch(aoeRank, crewSize, bossWhileSwitch) ? place : AddCrewEarly::Switch;
         return place;
+    }
+
+    // The kill_first rows a bot picks from under the early boss duty: the row whose target is the switch unit of a
+    // boss this bot holds that duty on is dropped, so the bot stays on the switch unit instead of being sent after the
+    // crew's own add. Only that row is dropped, never the whole pick: the fight's other kill_first rows stand. The
+    // gate_hold rows outrank the duty (the boss duty trigger's order), so while one holds the boss off nothing is
+    // dropped.
+    template <typename EarlyDutyOf, typename GateHeldOf>
+    inline ActiveBossRows AddCrewEarlyKillFirstRows(const BossTacticTable& table, std::uint32_t map,
+        const ActiveBossRows& rows, EarlyDutyOf earlyDutyOf, GateHeldOf gateHeldOf)
+    {
+        ActiveBossRows kept;
+        kept.reserve(rows.size());
+        for (const BossTacticRow* row : rows)
+        {
+            std::uint32_t bossEntry = 0;
+            const bool bossDuty = row->kind == BossTacticKind::KillFirst &&
+                table.AddCrewEarlyBossOf(map, row->targetEntry, bossEntry) &&
+                earlyDutyOf(bossEntry) == static_cast<std::uint8_t>(AddCrewEarly::Boss);
+            if (bossDuty && !gateHeldOf(bossEntry))
+                continue;
+            kept.push_back(row);
+        }
+        return kept;
     }
 }

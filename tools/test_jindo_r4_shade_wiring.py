@@ -113,9 +113,9 @@ class ShadeHealerCover(unittest.TestCase):
     def test_the_carrier_pick_reads_the_key(self):
         pick = member(ACTIONS, "Unit* PickBossKillFirst(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fight, KillFirstPickMode mode,\n    float carrierReachYd)\n{", "\n}\n")
         self.assertIn(
-            "PickCarrierOverride(fight.rows, candidates, carrierReachYd, sPlayerbotAIConfig.dungeonRunShadeHealerCover)",
+            "PickCarrierOverride(rows, candidates, carrierReachYd, sPlayerbotAIConfig.dungeonRunShadeHealerCover)",
             pick)
-        self.assertIn(": PickKillFirst(fight.rows, candidates);", pick)
+        self.assertIn(": PickKillFirst(rows, candidates);", pick)
 
     def test_the_strike_trigger_feeds_the_cover(self):
         trigger = member(TRIGGERS, "bool BossTacticsCarrierStrikeTrigger::IsActive()", "\n}\n")
