@@ -5432,9 +5432,20 @@ class DungeonPlanSql(unittest.TestCase):
         # 20261105100500 (turtle-agent ca6fb6d, the Jin'do export, 2026-11-05): the Jin'do plan before fix 1. Its plan row
         # carries kill_first 15112,14987 (Brain Wash Totem, Powerful Healing Ward) ahead of the old order; 9 legs, 750 steps,
         # 148 pulls. Only leg 6 (jindo_the_hexxer) differs from 20261104160000: 90 -> 87 steps, 19 -> 18 pulls.
+        # 20261117120000 (turtle-agent 0a9dd5f1, fix/zg-route-1117, 2026-11-17): two fixes in one export.
+        # A (walk 113/116 step 581): leg 7 pull group 4, the 15043 four at -11723.0 -1734.6, is a stand pull from its
+        # plateau rim: four approach rows up the west rim the raid climbed (walk 116 st16a-1) to the stand -11742.4
+        # -1735.9 17.53, flag 8192 and "pull group 4; stand pull". The gather anchor was the lake bed (-11774.7 -1776.5
+        # -15.3) and the gather never finished; the plateau has no dry route onto it (server path, LiquidAt every 2 yd:
+        # 52.7 of 75.4 yd wet from group 3's row to the rim's first point; the band ledge -11745 -1720 is 403.3 yd of
+        # server path from the pack). B: leg 5 pull group 17 carries wakes_boss 11382: walk 116 st16a's step 418 pulled
+        # that pack, the Vilebranch Speaker 11391 walked in and died, and Bloodlord Mandokir's encounter started, so his
+        # boss row 425 fired its pre-pull auras inside the fight (same in both walk-113 slots); the pull row's comment is
+        # "pull group 17; wakes boss 11382" and no row moves. Counts: 9 legs, 711 steps, 721 rows, leg 7 117 -> 120 rows
+        # (A's four approach rows less the one plain path row before its pull); every other leg is unchanged.
         name, text = newest_plan_text("zul_gurub")
-        self.assertEqual(name, "20261115120000_world.sql")
-        self.assertIn("('zul_gurub', 309, '14532,14882,14825,11353,11338,11357,11356,11350,14821,11351,11831,11340,11339,11359,15111,15043', '', '14987,15112,14750,15146,11830,14883', 'turtle-agent c043e312 dungeons/zul_gurub.json', 'plan v1, mapped (live-walked in ZG walks 31-34: Jeklik, Venoxis, Mar''li, Thekal and Mandokir killed; Arlokk via the gong step; Hakkar pending)');", text)
+        self.assertEqual(name, "20261117120000_world.sql")
+        self.assertIn("('zul_gurub', 309, '14532,14882,14825,11353,11338,11357,11356,11350,14821,11351,11831,11340,11339,11359,15111,15043', '', '14987,15112,14750,15146,11830,14883', 'turtle-agent 0a9dd5f1 dungeons/zul_gurub.json', 'plan v1, mapped (live-walked in ZG walks 31-34: Jeklik, Venoxis, Mar''li, Thekal and Mandokir killed; Arlokk via the gong step; Hakkar pending)');", text)
         zg_cc = re.search(r"\('zul_gurub', 309, '([^']*)'", text)
         self.assertIsNotNone(zg_cc, "the zul_gurub plan row is missing")
         self.assertEqual(len(zg_cc.group(1).split(",")), 16,
@@ -5444,9 +5455,9 @@ class DungeonPlanSql(unittest.TestCase):
                           "high_priest_thekal", "high_priestess_arlokk", "bloodlord_mandokir",
                           "jindo_the_hexxer", "hakkar_outer", "hakkar"])
         rows = [r for r in self.step_rows(text) if r["plan"] == "zul_gurub"]
-        self.assertEqual(len(rows), 708)
+        self.assertEqual(len(rows), 711)
         self.assertEqual([len(leg_steps(rows, leg)) for leg in range(9)],
-                         [49, 126, 28, 54, 90, 78, 89, 117, 77])
+                         [49, 126, 28, 54, 90, 78, 89, 120, 77])
         self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(9)],
                          [16, 23, 6, 8, 26, 20, 18, 21, 8])
         # t1105c: the Jin'do ward leads kill_first (14987 before 15112) and Jeklik's boss approach is the walked floor point.
@@ -5563,13 +5574,14 @@ class DungeonPlanSql(unittest.TestCase):
                          ("-11862.5", "-1577.57", "3.5", "11357,11359"))
         self.assertEqual(leg7[g20 - 1]["comment"], "approach path")
         # The r2 route's own cut walks the lake past the unowned elite Hooktooth Frenzy spawns 51444 (-11772.8
-        # -1790.94), 49074 (-11795.1 -1754.62), 49730 (-11743.3 -1788.03) and 51443 (-11818.4 -1744.63): in the walk-38
-        # export (20261105190000 and this one carry the same four) its nearest rows are 65.6, 38.2, 57.2 and 22.5 yd
-        # (flat) off: the group-5 and group-6 pulls stand past them at 65.6/57.2 (the walk-37 re-cut's 53.3/47.0 `move`
-        # rows are gone) and the lake's cut is the `move` approach path 38.2/22.5 yd off. Pinned so the next re-cut of
-        # the leg shows here (the walk-25 corridor check it replaces wanted 15 yd of clearance).
-        for gid, sx, sy, want in (("51444", -11772.8, -1790.94, (65.6, "pull")), ("49074", -11795.1, -1754.62, (38.2, "move")),
-                                  ("49730", -11743.3, -1788.03, (57.2, "pull")), ("51443", -11818.4, -1744.63, (22.5, "move"))):
+        # -1790.94), 49074 (-11795.1 -1754.62), 49730 (-11743.3 -1788.03) and 51443 (-11818.4 -1744.63). 20261117120000
+        # brings A's four approach rows up the west rim (leg 7 seq 65-68, the plateau pack's stand pull), which are the
+        # leg's nearest rows to three of them now: 56.2 (`move`, seq 66), 20.7 (`move`, seq 65) and 52.1 (`move`, seq 68)
+        # yd flat; 51443's nearest is the group-4 pull row at 23.9 yd (it was 22.5 before, the row moved one seq). The
+        # walk-38 export's 65.6/38.2/57.2/22.5 pin is superseded by A. Pinned so the next re-cut of the leg shows here
+        # (the walk-25 corridor check it replaces wanted 15 yd of clearance).
+        for gid, sx, sy, want in (("51444", -11772.8, -1790.94, (56.2, "move")), ("49074", -11795.1, -1754.62, (20.7, "move")),
+                                  ("49730", -11743.3, -1788.03, (52.1, "move")), ("51443", -11818.4, -1744.63, (23.9, "pull"))):
             got = min((round(math.hypot(float(r["x"]) - sx, float(r["y"]) - sy), 1), r["kind"]) for r in leg7)
             self.assertEqual(got, want, gid)
         # The Mad Servant spawns of map 309 (core sql/base tw_world_creature.sql): E 49056; C 49059-49061;
@@ -5661,7 +5673,7 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertEqual([r["entry"] for r in rows if r["kind"] == "boss"],
                          ["14517", "14507", "14510", "14599", "14515", "11382", "11380", "14834"])
         self.assertEqual({r["kind"] for r in rows}, {"move", "pull", "boss", "open"})
-        self.assertEqual(len([r for r in rows if r["comment"].endswith("approach")]), 193)  # item 8's approach points (walk 38: 172 -> 186, the split patrol camps and the hall's rows; t1105e: 187, Hakkar's two-point approach; 20261114140000: 185, the Arlokk boss approach's two ramp vias gone)
+        self.assertEqual(len([r for r in rows if r["comment"].endswith("approach")]), 197)  # item 8's approach points (walk 38: 172 -> 186, the split patrol camps and the hall's rows; t1105e: 187, Hakkar's two-point approach; 20261114140000: 185, the Arlokk boss approach's two ramp vias gone; 20261117120000: 197, leg 7's plateau pack takes four approach rows)
         pulls = [r for r in rows if r["kind"] == "pull"]
         self.assertEqual(len(pulls), 146)
         # Every stand pull of the plan runs from the move row right before it, inside the run leader's 60 yd see
@@ -5701,7 +5713,7 @@ class DungeonPlanSql(unittest.TestCase):
         # run already starts on (-11786.999 -1564.2667 20.562721, 58.0 yd from the nearest forward pack spawn), and the first
         # via keeps the connection from leg 7's end. The same map position is why a placed walk is unchanged.
         name, text = newest_plan_text("zul_gurub")
-        self.assertEqual(name, "20261115120000_world.sql")
+        self.assertEqual(name, "20261117120000_world.sql")
         rows = [r for r in self.step_rows(text) if r["plan"] == "zul_gurub"]
         leg8 = leg_steps(rows, 8)
         self.assertEqual(len(leg8), 77)
