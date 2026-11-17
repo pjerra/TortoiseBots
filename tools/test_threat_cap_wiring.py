@@ -242,6 +242,9 @@ class ThreatBackoffMeasuresHolderWiring(unittest.TestCase):
                       "bool victimIsOtherNonTankMember, bool targetExempt, float victimThreat)", flat)
         self.assertIn("return keyOn && victimIsOtherNonTankMember && !targetExempt ? "
                       "std::max(tankThreat, victimThreat) : tankThreat;", flat)
+        # GetTankThreat's -1 "no tank on the mob" survives the reference: folding the holder in would read 0 as the
+        # reference (100 %, all single-target damage held) or cap against a non-tank on a tankless pull.
+        self.assertIn("if (tankThreat < 0.0f) return tankThreat;", flat)
 
     def test_calculate_measures_the_holder_before_the_pct(self):
         values = (ROOT / "ai/playerbot/strategy/values/ThreatValues.cpp").read_text()
@@ -270,20 +273,23 @@ class ThreatBackoffMeasuresHolderWiring(unittest.TestCase):
         flat = re.sub(r"\s+", " ", THREAT_POLICY)
         self.assertIn("constexpr std::uint32_t kThreatSelfHeldGraceMs = 3000;", flat)
         self.assertIn("inline bool ThreatBackoffYieldsOnSelf(bool keyOn, bool victimIsBot, bool targetExempt, "
-                      "std::uint32_t heldMs)", flat)
-        self.assertIn("return keyOn && victimIsBot && !targetExempt && heldMs >= kThreatSelfHeldGraceMs;", flat)
+                      "bool tankThreatOnMob, std::uint32_t heldMs)", flat)
+        # A live tank's threat on the mob is recovery in progress: elapsed time alone does not release the cap.
+        self.assertIn("return keyOn && victimIsBot && !targetExempt && !tankThreatOnMob && "
+                      "heldMs >= kThreatSelfHeldGraceMs;", flat)
         self.assertIn("ai::SelfHeldClock& ThreatSelfHeld() { return threatSelfHeld_; }",
                       (ROOT / "ai/playerbot/PlayerbotAI.h").read_text())
         # The clock update and the line test are one evaluation (ThreatSelfHeldRelease), so a call site cannot feed
         # the clock only at the high line.
         self.assertIn("inline bool ThreatSelfHeldRelease(SelfHeldClock& clock, bool keyOn, std::uint64_t targetGuid, "
-                      "bool victimIsBot, bool targetExempt, bool lineActive, std::uint32_t now)", flat)
+                      "bool victimIsBot, bool targetExempt, bool lineActive, bool tankThreatOnMob, "
+                      "std::uint32_t now)", flat)
         release = re.sub(r"\s+", " ", brace_body(THREAT_POLICY, "inline bool ThreatSelfHeldRelease("))
         self.assertIn("if (!keyOn) return false;", release)
         self.assertIn("std::uint32_t const heldMs = clock.Update(targetGuid, victimIsBot && !targetExempt, now);",
                       release)
-        self.assertIn("return lineActive && ThreatBackoffYieldsOnSelf(keyOn, victimIsBot, targetExempt, heldMs);",
-                      release)
+        self.assertIn("return lineActive && ThreatBackoffYieldsOnSelf(keyOn, victimIsBot, targetExempt, "
+                      "tankThreatOnMob, heldMs);", release)
         self.assertLess(release.index("clock.Update("), release.index("return lineActive &&"))
         # The observation sits ahead of the high-threat branch: r5 fed the clock only inside it, so a target seen
         # below the line was never recorded and a return to it after the grace released at once.
@@ -298,7 +304,9 @@ class ThreatBackoffMeasuresHolderWiring(unittest.TestCase):
         self.assertIn("target->GetVictim() == bot", call)
         self.assertIn("target->IsAlive()", call)
         self.assertIn("TargetTauntImmune(target) || ThreatSuccessorTarget(target)", call)
-        self.assertIn("highThreat, WorldTimer::getMSTime()", call)
+        # The tank's threat on the current mob is the release's other half: 0 or none (GetTankThreat -1) releases.
+        self.assertIn("highThreat, AI_VALUE2(float, \"tank threat\", \"current target\") > 0.0f, "
+                      "WorldTimer::getMSTime()", call)
         # The branch no longer feeds the clock: its only write is the key-off clear, so a reload that turns the key
         # on starts the grace over.
         branch = STRATEGY[branch_start:]
@@ -306,13 +314,34 @@ class ThreatBackoffMeasuresHolderWiring(unittest.TestCase):
         self.assertEqual(STRATEGY.count("ThreatSelfHeld().Update("), 1)
         self.assertIn("if (!measuresHolder)\n            ai->ThreatSelfHeld().Update(0, false, 0);", branch)
 
+    def test_the_wand_nuke_veto_applies_the_same_release(self):
+        # The mage, priest and warlock wand-vs-nuke rows read WandBlocksCastTrigger::ThreatVetoesNuke, which mirrors
+        # the multiplier: past the grace on a mob no tank has threat on, the nuke goes out instead of the wand staying
+        # up; with a tank on the mob, or the key off, the high line alone vetoes as before.
+        veto = re.sub(r"\s+", " ", brace_body(TRIGGERS, "bool WandBlocksCastTrigger::ThreatVetoesNuke()"))
+        self.assertIn("bool const highThreat = AI_VALUE2(bool, \"trigger active\", \"high threat\");", veto)
+        self.assertIn("if (!highThreat) return false;", veto)
+        self.assertIn("bool const measuresHolder = sPlayerbotAIConfig.threatBackoffMeasuresHolder;", veto)
+        self.assertIn("if (measuresHolder && ThreatSelfHeldRelease(", veto)
+        self.assertIn("ai->ThreatSelfHeld()", veto)
+        self.assertIn("target->GetObjectGuid().GetRawValue()", veto)
+        self.assertIn("target->GetVictim() == bot", veto)
+        self.assertIn("TargetTauntImmune(target) || ThreatSuccessorTarget(target)", veto)
+        self.assertIn("AI_VALUE2(float, \"tank threat\", \"current target\") > 0.0f", veto)
+        self.assertLess(veto.index("bool const highThreat"), veto.index("ThreatSelfHeldRelease("))
+        self.assertLess(veto.index("ThreatSelfHeldRelease("), veto.index("return true;"))
+        self.assertGreater(veto.rindex("return false;"), veto.index("ThreatSelfHeldRelease("))
+
     def test_the_key_is_documented(self):
         self.assertIn("### `AiPlayerbot.ThreatBackoffMeasuresHolder`", SETTINGS)
         self.assertIn("Recommended on.", SETTINGS)
         section = SETTINGS[SETTINGS.index("### `AiPlayerbot.ThreatBackoffMeasuresHolder`"):]
         section = section[:section.index("\n### ")]
         self.assertIn("max(tank, holder)", section)
-        self.assertIn("a mob the bot itself has held for 3 s releases the back-off", section)
+        self.assertIn("a mob the bot itself has held for 3 s while no live tank has threat on it releases the back-off",
+                      section)
+        self.assertIn("the mage, priest and warlock wand-vs-nuke rows follow that release", section)
+        self.assertIn("a group with no tank keeps today's no-reference answer", section)
         self.assertIn("after 3 s the back-off releases", CONF)
         self.assertIn("ThreatBackoffMeasuresHolder", CHANGELOG)
 

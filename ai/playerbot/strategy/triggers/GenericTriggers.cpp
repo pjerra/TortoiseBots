@@ -326,7 +326,20 @@ bool WandBlocksCastTrigger::ThreatVetoesNuke()
         return false;
     if (AI_VALUE(bool, "neglect threat") || !AI_VALUE(bool, "group"))
         return false;
-    return AI_VALUE2(bool, "trigger active", "high threat");
+    bool const highThreat = AI_VALUE2(bool, "trigger active", "high threat");
+    if (!highThreat)
+        return false;
+    // The same 3 s self-held release the multiplier applies (ThreatCapPolicy.h ThreatSelfHeldRelease): a mob the bot has
+    // held past the grace while no live tank has threat on it is not coming back, so the wand yields to the nuke too.
+    bool const measuresHolder = sPlayerbotAIConfig.threatBackoffMeasuresHolder;
+    Unit* const target = AI_VALUE(Unit*, "current target");
+    if (measuresHolder && ThreatSelfHeldRelease(
+            ai->ThreatSelfHeld(), measuresHolder, target ? target->GetObjectGuid().GetRawValue() : 0,
+            target && target->IsAlive() && target->GetVictim() == bot,
+            TargetTauntImmune(target) || ThreatSuccessorTarget(target), highThreat,
+            AI_VALUE2(float, "tank threat", "current target") > 0.0f, WorldTimer::getMSTime()))
+        return false;
+    return true;
 }
 
 bool AlmostFullManaTrigger::IsActive()
