@@ -1062,10 +1062,12 @@ namespace ai
         std::uint32_t firstInShotMs = 0; // the task's first in-shot read (the backstop's start; 0: none yet)
         int freeReplans = 0; // refusals at the stand that re-planned instead of counting (DungeonRunSeekWalkoutStandSight)
         int moveFails = 0;
-        // The last refused move: the mover's reason, the path type and length to the stand (the abort row says them).
+        // The last refused move: the mover's reason, the path type and length to the stand (the abort row says them),
+        // and how far the bot stood from its stand then (DungeonRunSeekRetryOtherSon: -1, no refused move yet).
         std::uint32_t failReason = 0;
         std::uint32_t failPathType = 0;
         float failPathYd = 0.0f;
+        float failStandYd = -1.0f;
         bool lastMoveOk = false;
         // Pullers left out of the picks until a time (their moves failed): guid, until.
         std::vector<std::pair<std::uint64_t, std::uint32_t>> excluded;
@@ -1759,6 +1761,7 @@ namespace ai
         s.shotWaitSinceMs = 0;
         s.shotWaitDone = false;
         s.freeReplans = 0;
+        s.failStandYd = -1.0f;
         s.cycleSpent = true;
         s.lastCycle = cycleNo;
         s.walkedSons.push_back(son);
@@ -2176,8 +2179,20 @@ namespace ai
         s.walkedAt.swap(keptAt);
     }
 
+    // DungeonRunSeekRetryOtherSon: an abort at the bot's own stand does not free its Son for the cycle's retry, so the
+    // retry picks the other one. The stand is what failed there, not the puller: the walk had arrived (`walk-out stand
+    // branch=inpos`), the bot's own sight test refused the spot the search had passed, and the refunded retry re-picked
+    // the same nearest Son and the same stand (walk 117: 6 of 6 `abort move failed` rows on one Son's stands, 4 of 8
+    // starts there; the other Son failed 0 of ~40). Only with the per-cycle rules: the old one-walk-out rules have no
+    // retry to send elsewhere.
+    inline bool WalkoutAbortKeepsSon(const WalkoutCycleRules& rules, bool flagOn, bool atStand)
+    {
+        return flagOn && rules.perCycleWalked && atStand;
+    }
+
     // No pull happened (the cast or the moves failed, a stalled shot, or no stand): abort with the Son free again
-    // (`freeSon`; a seek_pull row's "no stand" keeps it walked this cycle), and the cycle too when a retry is allowed
+    // (`freeSon`; a seek_pull row's "no stand" keeps it walked this cycle, and so does an abort at the bot's own stand
+    // with DungeonRunSeekRetryOtherSon, WalkoutAbortKeepsSon), and the cycle too when a retry is allowed
     // (WalkoutRetryAllowed).
     inline void WalkoutAbortUnspent(SeekWalkoutState& s, std::uint32_t nowMs,
                                     const WalkoutCycleRules& rules = WalkoutCycleRules(), bool freeSon = true)

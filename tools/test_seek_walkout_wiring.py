@@ -82,8 +82,8 @@ class SeekWalkoutWiring(unittest.TestCase):
         cut_block = active[:active.index("bool const stallDue")]
         self.assertIn("WalkoutNoSightCutDue(it->second.state, nowMs, rules,", cut_block)
         self.assertLess(cut_block.index("WalkoutSnapshotCurrent(it->second.state, state)"),
-                        cut_block.index("WalkoutAbortUnspent(it->second.state, nowMs, rules);"))
-        self.assertGreater(cut_block.index("if (cut)"), cut_block.index("WalkoutAbortUnspent(it->second.state, nowMs, rules);"))
+                        cut_block.index("WalkoutAbortUnspent(it->second.state, nowMs, rules, !keep);"))
+        self.assertGreater(cut_block.index("if (cut)"), cut_block.index("WalkoutAbortUnspent(it->second.state, nowMs, rules, !keep);"))
 
     def test_the_task_shoots_once_and_walks_back(self):
         self.assertIn("bool walkout = false;", ACTIONS_H)
@@ -224,7 +224,7 @@ class SeekWalkoutLiveFixes(unittest.TestCase):
 class SeekWalkoutRound3(unittest.TestCase):
     def test_a_move_failed_abort_is_unspent_and_excludes_the_puller(self):
         note = body(ACTIONS, "void NoteSeekWalkoutMove(PlayerbotAI* ai, Player* bot, bool moved,")
-        self.assertIn("WalkoutAbortUnspent(it->second.state, nowMs, it->second.rules)", note)
+        self.assertIn("WalkoutAbortUnspent(it->second.state, nowMs, it->second.rules, !keep)", note)
         self.assertIn("WalkoutExclude(it->second.state, bot->GetObjectGuid().GetRawValue(), nowMs)", note)
         self.assertNotIn("WalkoutFinish(", note)
         pick = body(ACTIONS, "Player* FindSeekWalkoutPuller(PlayerbotAI* ai, Player* bot, Unit* boss, Unit* son,")
@@ -355,7 +355,7 @@ class SeekWalkoutSeekPull(unittest.TestCase):
         update = body(ACTIONS, "void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, Unit* boss,")
         self.assertIn("rules.shotStall && WalkoutNoShotAbortDue(stallDue, state.pullCastMs, nowMs)", update)
         stall = update[update.index("rules.shotStall && WalkoutNoShotAbortDue(stallDue"):]
-        self.assertIn("WalkoutAbortUnspent(it->second.state, nowMs, rules)", stall)
+        self.assertIn("WalkoutAbortUnspent(it->second.state, nowMs, rules, !keep)", stall)
         self.assertIn("WalkoutExclude(it->second.state, state.puller, nowMs)", stall)
         self.assertIn('LogSeekWalkoutAbort(ai, "no shot"', stall)
         self.assertIn('"seek pull: walk-out abort %s dist=%.1f stand=%.1f,%.1f,%.1f moved=%d path=%u len=%.1f why=%s%s"',
@@ -518,7 +518,8 @@ class SeekWalkoutWalk52(unittest.TestCase):
 
     def test_the_no_shot_row_says_what_the_puller_was_doing(self):
         self.assertIn(" los=%d inrange=%d spell=%u onson=%d front=%d moving=%d dz=%.1f", ACTIONS)
-        self.assertIn('LogSeekWalkoutAbort(ai, "no shot", puller && son ? puller->GetDistance(son) : -1.0f, state, info2);',
+        self.assertIn('snprintf(extra, sizeof(extra), "%s keep=%d", info2, keep ? 1 : 0);', ACTIONS)
+        self.assertIn('LogSeekWalkoutAbort(ai, "no shot", puller && son ? puller->GetDistance(son) : -1.0f, state, extra);',
                       ACTIONS)
         self.assertIn("char info1[320];", ACTIONS)
 
@@ -652,6 +653,54 @@ class SeekRetryUnspentWiring(unittest.TestCase):
         self.assertIn("tr=%.2f floor=%u refund=%d", update)
         self.assertIn("tr=%.2f refund=%d", update)
         self.assertIn("refund ? 1 : 0", update)
+
+
+class SeekRetryOtherSonWiring(unittest.TestCase):
+    """DungeonRunSeekRetryOtherSon: a stand-bound abort keeps its Son for the cycle, so the retry walks the other."""
+
+    def update(self):
+        return body(ACTIONS, "void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, Unit* boss,")
+
+    def test_the_flag_defaults_off(self):
+        config = (ROOT / "ai/playerbot/PlayerbotAIConfig.cpp").read_text()
+        config_h = (ROOT / "ai/playerbot/PlayerbotAIConfig.h").read_text()
+        template = (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text()
+        settings = (ROOT / "docs/server/settings/dungeons-raids.md").read_text()
+        self.assertIn('GetBoolDefault("AiPlayerbot.DungeonRunSeekRetryOtherSon", false)', config)
+        self.assertIn("bool dungeonRunSeekRetryOtherSon = false;", config_h)
+        self.assertIn("AiPlayerbot.DungeonRunSeekRetryOtherSon = 0", template)
+        self.assertIn("### `AiPlayerbot.DungeonRunSeekRetryOtherSon`", settings)
+
+    def test_the_no_sight_cut_keeps_the_son(self):
+        update = self.update()
+        cut = update[update.index("WalkoutNoSightCutDue(state, nowMs, rules,"):update.index("bool const stallDue")]
+        self.assertIn("bool const keep = WalkoutAbortKeepsSon(rules, "
+                      "sPlayerbotAIConfig.dungeonRunSeekRetryOtherSon, true);", cut)
+        self.assertIn("WalkoutAbortUnspent(it->second.state, nowMs, rules, !keep);", cut)
+        self.assertIn('"%s keep=%d"', cut)
+        self.assertLess(cut.index("WalkoutAbortKeepsSon("), cut.index("WalkoutAbortUnspent(it->second.state"))
+
+    def test_the_no_shot_stall_keeps_the_son(self):
+        update = self.update()
+        stall = update[update.index("rules.shotStall && WalkoutNoShotAbortDue(stallDue"):]
+        stall = stall[:stall.index('LogSeekWalkoutAbort(ai, "no shot"')]
+        self.assertIn("bool const keep = WalkoutAbortKeepsSon(rules, "
+                      "sPlayerbotAIConfig.dungeonRunSeekRetryOtherSon, true);", stall)
+        self.assertIn("WalkoutAbortUnspent(it->second.state, nowMs, rules, !keep);", stall)
+        self.assertLess(stall.index("WalkoutAbortKeepsSon("), stall.index("WalkoutAbortUnspent(it->second.state"))
+
+    def test_a_move_failure_at_the_stand_keeps_the_son(self):
+        note = body(ACTIONS, "void NoteSeekWalkoutMove(PlayerbotAI* ai, Player* bot, bool moved,")
+        # The refused move records how far the bot stood from its stand, and the abort decides atStand from it.
+        self.assertIn("it->second.state.failStandYd = standYd;", note)
+        self.assertIn("bool const atStand =\n"
+                      "                it->second.state.failStandYd >= 0.0f && "
+                      "it->second.state.failStandYd <= kSeekWalkoutStandArriveYd;", note)
+        self.assertIn("keep = WalkoutAbortKeepsSon(it->second.rules, "
+                      "sPlayerbotAIConfig.dungeonRunSeekRetryOtherSon, atStand);", note)
+        self.assertIn("WalkoutAbortUnspent(it->second.state, nowMs, it->second.rules, !keep);", note)
+        self.assertIn('snprintf(extra, sizeof(extra), " keep=%d", keep ? 1 : 0);', note)
+        self.assertIn('LogSeekWalkoutAbort(ai, "move failed", son ? bot->GetDistance(son) : -1.0f, state, extra);', note)
 
 
 if __name__ == "__main__":

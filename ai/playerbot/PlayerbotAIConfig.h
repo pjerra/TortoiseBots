@@ -848,6 +848,11 @@ public:
     // 35 s before the siphon (never raised), so one aborted walk-out no longer costs the siphon its dose. The row keeps
     // one Son a siphon: a walk-out whose shot landed is never refunded (default off, recommended on).
     bool dungeonRunSeekRetryUnspent = false;
+    // The other Son on a stand-bound abort (Hakkar's seek pull; needs dungeonRunSeekPullCycle and
+    // dungeonRunSeekRetryUnspent's retry): a walk-out that aborts with its puller at its own stand (a refused move
+    // there, a no-sight cut or a stalled shot) keeps its Son walked this cycle, so the retry picks the other one instead
+    // of re-walking the stand that failed (default off, recommended on with the unspent retry).
+    bool dungeonRunSeekRetryOtherSon = false;
     // The rolled cycle number (Hakkar's seek pull; needs DungeonRunSeekPullCycle): when a due time rolls past a
     // missed sighting, the record's cycle number advances by the rolls too, so the walk-out's spent cycle reopens and a
     // later Son can still be pulled; the estimated sighting time moves with it (default off, recommended on).
