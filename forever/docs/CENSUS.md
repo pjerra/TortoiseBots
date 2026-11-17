@@ -15,6 +15,8 @@ Run: `forever/tools/vm-census.sh "" 14` (all, about 45 minutes) or with a path p
 | 2026-11-17 | 6517af05 | shim round 1 (a7a640591), no bot code changed | 648 | 11 | 13,496 |
 | 2026-11-17 | 6517af05 | pre-include + first shim, all files (BEFORE shim round 1) | 648 | 0 | 17,530 |
 | 2026-11-17 | 6517af05 | shim round 1 (AFTER) | 648 | 11 | 13,496 |
+| 2026-11-17 | 6517af05 | shim round 2 (BEFORE, = round 1 AFTER at 233e35a0c) | 648 | 11 | 13,496 |
+| 2026-11-17 | 6517af05 | shim round 2 (AFTER, item prototype mirror, 570d22dd4) | 648 | 11 | 12,182 |
 
 The first row is not comparable with later ones: without the pre-include most files stopped early.
 
@@ -27,5 +29,6 @@ differently), update fields (`GetUInt32Value`), `WorldTimer`, `sLog.outString`.
 Shim round 1 notes, the table of mapped names and the "cannot shim" groups: `SHIM-R1-NOTES.md`. Largest groups left:
 item template fields (1,168 places), then spell data, position members, database calls, update fields, `GetProto`.
 
-Open finding from the lead's spot check: the member-name macro `IsMoving -> isMoving` breaks the shim's own rule (the
-core uses `IsMoving` in 11 places). It has to go or be justified in round 2.
+Shim round 2 (the item prototype mirror) notes: `SHIM-R2-NOTES.md`. The lead's round-1 finding on
+`IsMoving -> isMoving` is resolved there: the rename is removed (D6), so the bot's 71 `IsMoving()` calls are now an
+ordinary rename for a later batch.
