@@ -187,16 +187,26 @@ inline std::string IsoUtc(uint64_t unix)
 }
 
 // The plan's bosses for a party of `team` (ai::kPlanFlagAlliance / Horde, 0 =
-// both): the `entry` of every Boss step, each once.
+// both): every boss the plan can spawn, each once: a boss step's `entry` and,
+// on a kPlanFlagBossAnyOf row, its alternatives, so a kill of the one the
+// instance spawned counts; a resolved run's private plan copy has the flag gone
+// and names only the alternative it picked.
 inline std::vector<uint32_t> PlanBossEntries(ai::DungeonPlan const& plan, std::uint32_t team)
 {
     std::vector<uint32_t> out;
+    auto add = [&out](std::uint32_t entry)
+    {
+        if (entry && std::find(out.begin(), out.end(), entry) == out.end() && out.size() < kMaxBosses)
+            out.push_back(entry);
+    };
     for (ai::PlanStep const& step : plan.steps)
     {
         if (step.kind != ai::PlanStepKind::Boss || step.entry == 0 || !ai::StepForTeam(step, team))
             continue;
-        if (std::find(out.begin(), out.end(), step.entry) == out.end() && out.size() < kMaxBosses)
-            out.push_back(step.entry);
+        add(step.entry);
+        if (step.flags & ai::kPlanFlagBossAnyOf)
+            for (std::uint32_t const alternative : step.entries)
+                add(alternative);
     }
     return out;
 }

@@ -9506,10 +9506,11 @@ inline std::uint32_t ScriptChangedEntry(std::uint32_t guidEntry, std::uint32_t c
     return std::find(spawnIds.begin(), spawnIds.end(), current) != spawnIds.end() ? 0 : guidEntry;
 }
 
-// The step's boss: his entry, or the entry a script changed him away from (ScriptChangedEntry).
+// The step's boss: his entry, the entry a script changed him away from (ScriptChangedEntry), or one of a
+// kPlanFlagBossAnyOf row's alternatives before the row resolves (PlanStepBossIs).
 inline bool IsStepBoss(const PlanStep& s, const UnitFact& u)
 {
-    return s.entry != 0 && (u.entry == s.entry || u.formOf == s.entry);
+    return ai::PlanStepBossIs(s, u.entry) || ai::PlanStepBossIs(s, u.formOf);
 }
 
 // The boss step's own spawn, dead: boss down when it reads the step's entry or a script changed it away from it
@@ -20422,7 +20423,7 @@ inline bool PlanBossOrHoldEntry(const Run& r, std::uint32_t entry)
         return false;
     for (const PlanStep& s : r.plan->steps)
     {
-        if (s.kind == PlanStepKind::Boss && s.entry == entry)
+        if (s.kind == PlanStepKind::Boss && ai::PlanStepBossIs(s, entry))
             return true;
         if (s.kind == PlanStepKind::Hold && std::find(s.entries.begin(), s.entries.end(), entry) != s.entries.end())
             return true;
@@ -22580,6 +22581,9 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
                     if (u.attackable && IsStepBoss(later, u))
                     {
                         r.bossFoughtEarly.insert(later.entry);
+                        // A boss any-of row resolves to the alternative he was fought as; his own step then reads it.
+                        if (u.entry)
+                            r.bossFoughtEarly.insert(u.entry);
                         break;
                     }
             }

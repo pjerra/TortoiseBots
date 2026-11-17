@@ -88,6 +88,27 @@ static bool Flag(const MiniJson::Value& value, const char* key)
     return found->b;
 }
 
+static FieldMap ToFields(const MiniJson::Value& object)
+{
+    FieldMap out;
+    if (object.kind == MiniJson::Value::Object)
+        for (const auto& entry : object.obj)
+            out.emplace_back(entry.first, MiniJson::Raw(entry.second));
+    return out;
+}
+
+static MiniJson::Value ValueOf(const FieldMap& fields)
+{
+    MiniJson::Value value;
+    std::string error;
+    if (!MiniJson::Parse(FullObject(fields), value, error))
+    {
+        std::cerr << "bad fields: " << error << "\n";
+        std::exit(1);
+    }
+    return value;
+}
+
 static HeaderInfo Header()
 {
     HeaderInfo header;
@@ -475,6 +496,63 @@ static void TestSameContentPlanDoesNotRotate()
     CHECK(headers == 1);
 }
 
+// A run resolves its boss any-of row inside the tick (DungeonRun::ResolveBossAnyOf swaps Run::plan for a run-private
+// copy): the tick's record stays on the segment's plan, so it still decodes, and the next tick opens a segment whose
+// header carries the resolved copy whole.
+static void TestMidTickBossAnyOfPlanCopy()
+{
+    MemSink sink;
+    Recorder recorder(Header(), Limits{}, sink);
+
+    ai::DungeonPlan base;
+    base.name = "zul_gurub";
+    base.map = 309;
+    ai::PlanStep boss;
+    boss.kind = ai::PlanStepKind::Boss;
+    boss.entry = 15082;
+    boss.entries = {15082, 15083};
+    boss.flags = ai::kPlanFlagBossAnyOf;
+    ai::NormalizePlanStep(boss);
+    base.steps.push_back(boss);
+
+    Run run = TortoiseBots::DungeonRun::Start(&base);
+    Facts facts;
+    recorder.BeforeTick(run, facts, 1000, 2000);
+    TortoiseBots::DungeonRun::ResolveBossAnyOf(run, 15083);
+    CHECK(run.plan != &base && run.resolvedPlan && run.resolvedPlan->steps[0].entry == 15083);
+    recorder.AfterTick(run, "");
+
+    // The tick's run and post decode against the segment's header plan, not the copy's hash.
+    MiniJson::Value const header = ParseLine(sink.lines[0]);
+    CHECK(Str(header, "k") == "hdr");
+    const MiniJson::Value* planValue = header.Find("plan");
+    ai::DungeonPlan headerPlan;
+    std::string error;
+    CHECK(planValue && DecodePlan(*planValue, headerPlan, error));
+    MiniJson::Value const tick = ParseLine(sink.lines[1]);
+    CHECK(Str(tick, "k") == "tick");
+    const MiniJson::Value* runValue = tick.Find("run");
+    const MiniJson::Value* postValue = tick.Find("post");
+    CHECK(runValue && postValue && runValue->kind == MiniJson::Value::Object &&
+          postValue->kind == MiniJson::Value::Object);
+    FieldMap fields = ToFields(*runValue);
+    Run decoded;
+    CHECK(DecodeFields(ValueOf(fields), decoded, &headerPlan, nullptr, error));
+    ApplyDelta(fields, *postValue);
+    CHECK(DecodeFields(ValueOf(fields), decoded, &headerPlan, nullptr, error));
+
+    // The next tick's segment header is the resolved copy: the row names the spawned alternative.
+    recorder.BeforeTick(run, facts, 1000, 2001);
+    CHECK(sink.segments.size() == 1 && sink.segments[0].first == 2);
+    MiniJson::Value const nextHeader = ParseLine(sink.lines[2]);
+    CHECK(Str(nextHeader, "k") == "hdr" && Num(nextHeader, "seg") == 2);
+    const MiniJson::Value* nextPlan = nextHeader.Find("plan");
+    ai::DungeonPlan resolvedPlan;
+    CHECK(nextPlan && DecodePlan(*nextPlan, resolvedPlan, error));
+    CHECK(resolvedPlan.steps.size() == 1 && resolvedPlan.steps[0].entry == 15083);
+    CHECK(resolvedPlan.steps[0].entries.empty() && (resolvedPlan.steps[0].flags & ai::kPlanFlagBossAnyOf) == 0);
+}
+
 static void TestDoneTicksAndSegmentReset()
 {
     MemSink sink;
@@ -629,6 +707,7 @@ int main()
     TestRefusedRotatedHeader();
     TestPlanChangeOpensSegment();
     TestSameContentPlanDoesNotRotate();
+    TestMidTickBossAnyOfPlanCopy();
     TestGlueWriteIsRunDeltaOnly();
     TestDoneTicksAndSegmentReset();
     TestEndLine();

@@ -125,9 +125,22 @@ public:
             return;
         pending_ = false;
         auto const clock = std::chrono::steady_clock::now();
-        FieldMap const postRun = EncodeFields(run);
+        FieldMap postRun = EncodeFields(run);
         AddEncodeMicros(clock);
         stats_.lastCapUs = capUs_;
+
+        // A plan the run resolved inside the tick (DungeonRun::ResolveBossAnyOf swaps Run::plan for a run-private
+        // copy) is not the one this segment's header was built for, and the decoder matches every record's plan
+        // against that header. The record's post therefore stays on the header's plan, and the next tick opens a
+        // segment whose header carries the resolved copy whole.
+        if (CachedPlanHash(run.plan) != headerPlanHash_)
+        {
+            std::string const headerPlan = EncodePlanPointer(pendingPlan_);
+            for (auto& field : postRun)
+                if (field.first == "plan")
+                    field.second = headerPlan;
+            nextKey_ = true;
+        }
 
         // A finished run ticks on; one `Done` record says so and the rest are
         // skipped. A new segment writes its own (its first record is a keyframe).

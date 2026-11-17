@@ -37841,6 +37841,52 @@ static void TestBossAnyOfResolvesTheSpawnedBoss()
     CHECK(fresh.resolvedPlan == nullptr && fresh.plan == sealed);
 }
 
+// Every alternative of a boss any-of row is the boss before the row resolves: the unit test, the early-fought mark,
+// the fight ceiling's check and the boss-or-hold guard read all of them, not only the canonical entry.
+static void TestBossAnyOfAlternativesCountAsTheBoss()
+{
+    PlanStep boss = Step(PlanStepKind::Boss, 30);
+    boss.entry = 15082;
+    boss.entries = {15082, 15083, 15084, 15085};
+    boss.flags = ai::kPlanFlagBossAnyOf;
+    CHECK(ai::NormalizePlanStep(boss) == ai::PlanStepRefusal::None);
+    CHECK(IsStepBoss(boss, Unit(1, 15084, 10)));
+    UnitFact form = Unit(2, 15083, 10);
+    form.formOf = 15084; // a script changed an alternative into a form of itself
+    CHECK(IsStepBoss(boss, form));
+    CHECK(!IsStepBoss(boss, Unit(3, 15086, 10)));
+    // A plain boss step's `entries` are its adds, killed first: never the boss.
+    PlanStep plain = boss;
+    plain.flags = 0;
+    CHECK(IsStepBoss(plain, Unit(4, 15082, 10)));
+    CHECK(!IsStepBoss(plain, Unit(5, 15084, 10)));
+
+    DungeonPlan plan;
+    plan.steps = {boss};
+    Run r = Start(&plan);
+    CHECK(PlanBossOrHoldEntry(r, 15085));
+    CHECK(!PlanBossOrHoldEntry(r, 15086));
+    Facts f = Party(0);
+    UnitFact u = Engaged(Unit(6, 15084, 12));
+    u.hostile = true;
+    u.attackable = true;
+    f.engagedRead = true;
+    f.engagedUnits = {u};
+    CHECK(EngagedPlanBoss(r, f) && EngagedPlanBossOrHold(r, f));
+
+    // A later any-of row fought early marks both its canonical entry and the alternative the party fought, so its own
+    // step starts with him seen alive whichever alternative resolves.
+    DungeonPlan early;
+    early.steps = {Step(PlanStepKind::Move, 50), boss, Step(PlanStepKind::Move, 60)};
+    Run e = Start(&early);
+    Facts fight = Party(50);
+    fight.anyInCombat = true;
+    fight.engagedRead = true;
+    fight.engagedUnits = {Engaged(Unit(7, 15084, 20))};
+    Tick(e, fight);
+    CHECK(e.bossFoughtEarly.count(15082) && e.bossFoughtEarly.count(15084));
+}
+
 static void TestBossStepDoesNotSkipOnFruitlessPullsOrOutOfReach()
 {
     // A boss step without kPlanFlagSkipUnreachable pauses instead of skipping after fruitless pulls.
@@ -38964,6 +39010,7 @@ int main()
     TestRaidTrashSwarmLatchedAfterThreeTries();
     TestHopUnitReachable();
     TestBossAnyOfResolvesTheSpawnedBoss();
+    TestBossAnyOfAlternativesCountAsTheBoss();
     TestBossStepDoesNotSkipOnFruitlessPullsOrOutOfReach();
     std::cout << "test_dungeon_run_policy: ok\n";
     return 0;

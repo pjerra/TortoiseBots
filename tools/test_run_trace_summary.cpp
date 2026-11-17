@@ -379,12 +379,28 @@ static void TestPlanBossEntries()
     step(ai::PlanStepKind::Boss, 7272, ai::kPlanFlagAlliance);
     step(ai::PlanStepKind::Boss, 7273, ai::kPlanFlagHorde);
     step(ai::PlanStepKind::Loot, 5000, 0);
+    // A boss any-of row: every alternative is a boss the instance may spawn, so a kill of any of them counts.
+    ai::PlanStep anyOf;
+    anyOf.kind = ai::PlanStepKind::Boss;
+    anyOf.entry = 15082;
+    anyOf.entries = {15082, 15083, 15084};
+    anyOf.flags = ai::kPlanFlagBossAnyOf | ai::kPlanFlagAlliance;
+    plan.steps.push_back(anyOf);
     std::vector<uint32_t> const both = PlanBossEntries(plan, 0);
-    CHECK(both.size() == 3 && both[0] == 8127 && both[1] == 7272 && both[2] == 7273);
+    CHECK(both.size() == 6 && both[0] == 8127 && both[1] == 7272 && both[2] == 7273 &&
+          both[3] == 15082 && both[4] == 15083 && both[5] == 15084);
     std::vector<uint32_t> const alliance = PlanBossEntries(plan, ai::kPlanFlagAlliance);
-    CHECK(alliance.size() == 2 && alliance[0] == 8127 && alliance[1] == 7272);
+    CHECK(alliance.size() == 5 && alliance[0] == 8127 && alliance[1] == 7272 && alliance[2] == 15082 &&
+          alliance[3] == 15083 && alliance[4] == 15084);
     std::vector<uint32_t> const horde = PlanBossEntries(plan, ai::kPlanFlagHorde);
     CHECK(horde.size() == 2 && horde[0] == 8127 && horde[1] == 7273);
+    // A run's resolved private copy has the flag gone and names the one the instance spawned: the list follows it.
+    ai::DungeonPlan resolved = plan;
+    resolved.steps.back().entry = 15084;
+    resolved.steps.back().entries.clear();
+    resolved.steps.back().flags = ai::kPlanFlagAlliance;
+    std::vector<uint32_t> const picked = PlanBossEntries(resolved, ai::kPlanFlagAlliance);
+    CHECK(picked.size() == 3 && picked[0] == 8127 && picked[1] == 7272 && picked[2] == 15084);
     CHECK(PlanBossEntries(ai::DungeonPlan(), 0).empty());
 }
 
