@@ -779,7 +779,7 @@ Item* PlayerbotAI::FindPoison() const
       {
          const ItemPrototype* const pItemProto = GetItemProtoCompat(pItem);
 
-         if (!pItemProto || bot->CanUseItem(pItemProto) != EQUIP_ERR_OK)
+         if (!pItemProto || bot->CanUseItem(GetItemTemplateCompat(pItemProto)) != EQUIP_ERR_OK)
             continue;
 
          if (pItemProto->Class == ITEM_CLASS_CONSUMABLE && pItemProto->SubClass == 6)
@@ -798,7 +798,7 @@ Item* PlayerbotAI::FindPoison() const
             {
                const ItemPrototype* const pItemProto = GetItemProtoCompat(pItem);
 
-               if (!pItemProto || bot->CanUseItem(pItemProto) != EQUIP_ERR_OK)
+               if (!pItemProto || bot->CanUseItem(GetItemTemplateCompat(pItemProto)) != EQUIP_ERR_OK)
                   continue;
 
                if (pItemProto->Class == ITEM_CLASS_CONSUMABLE && pItemProto->SubClass == 6)
@@ -819,7 +819,7 @@ Item* PlayerbotAI::FindConsumable(uint32 displayId) const
       {
          const ItemPrototype* const pItemProto = GetItemProtoCompat(pItem);
 
-         if (!pItemProto || bot->CanUseItem(pItemProto) != EQUIP_ERR_OK)
+         if (!pItemProto || bot->CanUseItem(GetItemTemplateCompat(pItemProto)) != EQUIP_ERR_OK)
             continue;
 
          if ((pItemProto->Class == ITEM_CLASS_CONSUMABLE || pItemProto->Class == ITEM_CLASS_TRADE_GOODS) && pItemProto->DisplayInfoID == displayId)
@@ -838,7 +838,7 @@ Item* PlayerbotAI::FindConsumable(uint32 displayId) const
             {
                const ItemPrototype* const pItemProto = GetItemProtoCompat(pItem);
 
-               if (!pItemProto || bot->CanUseItem(pItemProto) != EQUIP_ERR_OK)
+               if (!pItemProto || bot->CanUseItem(GetItemTemplateCompat(pItemProto)) != EQUIP_ERR_OK)
                   continue;
 
                if ((pItemProto->Class == ITEM_CLASS_CONSUMABLE || pItemProto->Class == ITEM_CLASS_TRADE_GOODS) && pItemProto->DisplayInfoID == displayId)
@@ -859,7 +859,7 @@ Item* PlayerbotAI::FindBandage() const
       {
          const ItemPrototype* const pItemProto = GetItemProtoCompat(pItem);
 
-         if (!pItemProto || bot->CanUseItem(pItemProto) != EQUIP_ERR_OK)
+         if (!pItemProto || bot->CanUseItem(GetItemTemplateCompat(pItemProto)) != EQUIP_ERR_OK)
             continue;
          if (pItemProto->Class == ITEM_CLASS_CONSUMABLE && pItemProto->SubClass == ITEM_SUBCLASS_FOOD)
             return pItem;
@@ -877,7 +877,7 @@ Item* PlayerbotAI::FindBandage() const
             {
                const ItemPrototype* const pItemProto = GetItemProtoCompat(pItem);
 
-               if (!pItemProto || bot->CanUseItem(pItemProto) != EQUIP_ERR_OK)
+               if (!pItemProto || bot->CanUseItem(GetItemTemplateCompat(pItemProto)) != EQUIP_ERR_OK)
                   continue;
 
                if (pItemProto->Class == ITEM_CLASS_CONSUMABLE && pItemProto->SubClass == ITEM_SUBCLASS_FOOD)

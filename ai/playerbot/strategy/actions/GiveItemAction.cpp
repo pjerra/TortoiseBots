@@ -40,7 +40,7 @@ bool GiveItemAction::Execute(Event& event)
         if (bot->GetGuildId() && GuildOrderConsumesItem(bot, GetItemProtoCompat(item)->ItemId))
             continue;
 
-        if (receiver->CanUseItem(GetItemProtoCompat(item)) != EQUIP_ERR_OK)
+        if (receiver->CanUseItem(GetItemTemplateCompat(item)) != EQUIP_ERR_OK)
             continue;
 
         ItemPosCountVec dest;

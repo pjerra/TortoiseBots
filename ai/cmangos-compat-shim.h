@@ -100,6 +100,11 @@ inline ItemPrototype const* GetItemTemplateCompat(ItemPrototype const* proto)
     return proto;
 }
 
+inline ItemPrototype const* GetItemTemplateCompat(Item const* item)
+{
+    return item ? item->GetProto() : nullptr;
+}
+
 // === Type renames ===
 // Mature strategy code uses GenericTransport for the core's ordinary
 // Transport type. Keep the alias local to the module; it is not a vehicle API.

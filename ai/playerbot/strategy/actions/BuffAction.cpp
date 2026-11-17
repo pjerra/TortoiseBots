@@ -14,7 +14,7 @@ public:
 
     virtual bool Visit(Item* item)
     {
-        if (bot->CanUseItem(GetItemProtoCompat(item)) != EQUIP_ERR_OK)
+        if (bot->CanUseItem(GetItemTemplateCompat(item)) != EQUIP_ERR_OK)
             return true;
 
         const ItemPrototype* proto = GetItemProtoCompat(item);

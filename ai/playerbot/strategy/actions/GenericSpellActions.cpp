@@ -230,7 +230,7 @@ bool CastSpellAction::Execute(Event& event)
             if (!proto)
                 continue;
 
-            if (bot->CanUseItem(proto) != EQUIP_ERR_OK)
+            if (bot->CanUseItem(GetItemTemplateCompat(proto)) != EQUIP_ERR_OK)
                 continue;
 
             if (pSpellInfo->Id > castId)

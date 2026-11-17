@@ -584,7 +584,7 @@ bool UseAction::UseItemInternal(Player* requester, uint32 itemId, Unit* unit, Ga
     }
 
     // Check for item usable
-    InventoryResult invResult = bot->CanUseItem(proto);
+    InventoryResult invResult = bot->CanUseItem(GetItemTemplateCompat(proto));
     if (invResult != EQUIP_ERR_OK)
     {
         if (verbose)
@@ -1272,7 +1272,7 @@ bool UseItemIdAction::isPossible()
     // Level and skill (engineering, first aid) as for a player. Checked here,
     // not only at use: a reaction that is possible but then fails cut the
     // bot's cast on every tick.
-    if (bot->CanUseItem(proto) != EQUIP_ERR_OK)
+    if (bot->CanUseItem(GetItemTemplateCompat(proto)) != EQUIP_ERR_OK)
         return false;
 
 

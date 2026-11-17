@@ -727,7 +727,7 @@ std::vector<ConsumableCandidate> UseConsumableAction::CollectCandidates()
             if (!proto || proto->Class != ITEM_CLASS_CONSUMABLE)
                 continue;
 
-            if (bot->CanUseItem(proto) != EQUIP_ERR_OK)
+            if (bot->CanUseItem(GetItemTemplateCompat(proto)) != EQUIP_ERR_OK)
                 continue;
 
             ConsumableType type;
@@ -754,7 +754,7 @@ std::vector<ConsumableCandidate> UseConsumableAction::CollectCandidates()
         if (!proto || proto->Class != ITEM_CLASS_CONSUMABLE)
             continue;
 
-        if (bot->CanUseItem(proto) != EQUIP_ERR_OK)
+        if (bot->CanUseItem(GetItemTemplateCompat(proto)) != EQUIP_ERR_OK)
             continue;
 
         ConsumableType type;

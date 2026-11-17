@@ -71,7 +71,7 @@ namespace ai
 
         virtual bool Visit(Item* item) override
         {
-            if (bot->CanUseItem(GetItemProtoCompat(item)) == EQUIP_ERR_OK)
+            if (bot->CanUseItem(GetItemTemplateCompat(item)) == EQUIP_ERR_OK)
                 return FindItemVisitor::Visit(item);
 
             return true;

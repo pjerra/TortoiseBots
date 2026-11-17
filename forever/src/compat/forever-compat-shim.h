@@ -256,8 +256,10 @@ inline bool IsPositiveSpell(SpellInfo const* spellInfo) { return spellInfo && sp
 // before and is nullptr now.
 inline ItemPrototype const* GetItemProtoCompat(Item const* item) { return item ? tbcompat::ItemProto(item->GetTemplate()) : nullptr; }
 
-// Back to the core's record for the core functions that want an ItemTemplate const* and are handed a mirror.
+// Back to the core's record for the core functions that want an ItemTemplate const* and are handed a mirror (CanUseItem
+// and friends), and for an item whose template is all that is wanted.
 inline ItemTemplate const* GetItemTemplateCompat(ItemPrototype const* proto) { return tbcompat::ItemTpl(proto); }
+inline ItemTemplate const* GetItemTemplateCompat(Item const* item) { return item ? item->GetTemplate() : nullptr; }
 
 // ---- SQL store objects ----
 // cmangos keeps items, creature templates and game object templates in store objects with LookupEntry/GetMaxEntry;
