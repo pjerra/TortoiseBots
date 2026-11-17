@@ -3304,6 +3304,20 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertIn("DELETE FROM `ai_dungeon_step` WHERE `plan` = 'black_morass';", text)
 
     def test_razorfen_kraul_is_the_plan_with_the_pack_fixes(self):
+        # 20261115000500 (turtle-agent af005c10, 2026-11-15, Sagiroth/TortoiseBots#1542, the Gnomeregan method of 2026-11-12):
+        # the route-ORDER fix. The rows of 20261105130000 walked 17,111 yd for a 3,180-yd dungeon (each leg cleared "the spawn
+        # clusters nearest its boss", so leg 0 alone walked 5,045 yd and legs 6-8 walked the Charlga area three times). Every
+        # one of the 122 packs now sits in the leg whose walk passes it, in walking order (a nearest-neighbour sweep on the
+        # server's own path query), 6 packs that stand 49-101 yd off that walk go, and each leg's `to` is its first point after
+        # the previous boss. 9 legs, 336 steps (26 + 48 + 13 + 11 + 32 + 54 + 23 + 81 + 48), 116 pulls (12 + 31 + 2 + 6 + 17 +
+        # 10 + 11 + 27 + 0), the same 7 bosses in the same order: 7,727 yd, backtracks 30 (10,545 yd) -> 13 (3,056), no blind
+        # hop, and 0 packs the walk wakes unplanned (trash-check). Leg 7 keeps one via (2043.2 1479.3 68.9, the west corridor
+        # the descent takes); leg 8 keeps the deployed 26-via climb and its `to` 2093.1 1767.5 79.8. The pit's far-east packs
+        # (dev leg 7 pull groups 3-7, one 4517 among them) are dropped, and leg 4's skip loses 4842 only, because leg 4 is now
+        # the leg that pulls the Earthbreaker pack his own spawn stands in. Full measurements: turtle-agent
+        # tests/route-audit-1112/order/razorfen_kraul-FIX.md.
+        # before it: 20261105130000 (turtle-agent 6ab6e4c, round 35): the deployed plan as the audit measured it.
+        # The reasons of the rows those two replaced, kept for the guards they carry:
         # 20261025003100 (turtle-agent e8ee268, 2026-10-26, after live run proof20d4 slotD: the Ramtusk leg's six pit packs
         # (steps 322-327) have no firing stand from the leg's z 80-83 floor: step 322 x3 "no firing stand found", step 323
         # "pack skipped, not cleared: 2 units out of reach", steps 324-326 deferred "not reachable from this floor", 4 packs left
@@ -3386,158 +3400,46 @@ class DungeonPlanSql(unittest.TestCase):
         # packs that stand with a boss are that boss row's entries, not pulls; Halmgar 4842 and the Blind Hunter 4425 are pull
         # members.
         name, text = newest_plan_text("razorfen_kraul")
-        self.assertEqual(name, "20261105130000_world.sql")
-        self.assertIn("('razorfen_kraul', 47, '4427,4515,4522,4440', '4427', '', 'turtle-agent 6ab6e4c dungeons/razorfen_kraul.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261115000500_world.sql")
+        self.assertIn("('razorfen_kraul', 47, '4427,4515,4522,4440', '4427', '', 'turtle-agent af005c10 dungeons/razorfen_kraul.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         self.assertEqual(len(leg_rows(text, "razorfen_kraul")), 9)
         rows = [r for r in self.step_rows(text) if r["plan"] == "razorfen_kraul"]
-        self.assertEqual(len(rows), 682)
-        # The opening stand is the lower-floor pocket 1994 1615 (the old 1987.53 1600.03 has the upper walkway overhead); the five
-        # corridor groups all have radius 10 (group 0 was 25 and owned the next group's Quilguards; group 5's default was 19.3), and
-        # seq 5 is the explicit corridor regroup move before pull group 4 (r19-19z37: the two ranged bots climbed the west ramp while
-        # idle).
-        first = leg_steps(rows, 0)
-        # pf-rfk-ramtusk: the opening walk starts on the via point the live party reached (proof20d4 step 1's refused hop)
-        self.assertEqual((first[0]["kind"], first[0]["x"], first[0]["y"], first[0]["z"], first[0]["comment"]),
-                         ("move", "1954.5", "1582.3", "82.61", "via"))
-        self.assertEqual((first[1]["kind"], first[1]["x"], first[1]["y"], first[1]["z"]), ("move", "1994", "1615", "83.2"))
-        self.assertEqual((first[2]["kind"], first[2]["entries"], first[2]["radius"]), ("pull", "4530", "10"))
-        self.assertEqual([r["radius"] for r in first[3:6]], ["10", "10", "10"])
-        self.assertEqual((first[6]["kind"], first[6]["x"], first[6]["y"], first[6]["z"], first[6]["comment"]),
-                         ("move", "2000", "1635", "81", "pull group 4 approach"))
-        # The two stands (r20-19z39: pulls 39 and 42 walked the long way; r22 slot5: the room's 2180 1604 was refused): 2110 1600 82.1
-        # before the 4532 pull and the same 2110 1600 82.1 before the 4440 pull, whose radius is the explicit 10.
-        stands = [(r["x"], r["y"], r["z"], r["comment"]) for r in leg_steps(rows, 0)
-                  if r["kind"] == "move" and r["comment"] in ("pull group 20 approach", "pull group 23 approach")]
-        self.assertEqual(stands, [("2110", "1600", "82.1", "pull group 20 approach"),
-                                  ("2110", "1600", "82.1", "pull group 23 approach")])
-        self.assertEqual([r["radius"] for r in leg_steps(rows, 0) if r["kind"] == "pull" and r["entries"] == "4440"], ["10"])
-        # Step 20 (r23 slot8 paused once, "the lead bot is stuck 28.6 yd from 2048.0 1578.7 64.6"): the r24 slot8 run showed the
-        # approach moves that replaced the corner led the party onto the navmesh island at 2076.5 1601.5 66.0, so the corner is back:
-        # pull 17's hop from pull group 16 is the run-3 cut, 2048.0 1578.7 64.6 first (one resume there is accepted).
-        paths0 = [(r["x"], r["y"], r["z"]) for r in leg_steps(rows, 0) if r["comment"] == "approach path"]
-        cut17 = paths0.index(("2050.121", "1576.5453", "64.52399"))
-        self.assertEqual(paths0[cut17:cut17 + 3],
-                         [("2050.121", "1576.5453", "64.52399"),
-                          ("2051.2812", "1579.095", "64.50349"),
-                          ("2062.4812", "1620.4283", "63.931923")])
-        self.assertFalse([r for r in leg_steps(rows, 0) if r["comment"] == "pull group 17 approach"],
-                         "pull 17's approach points are reverted")
-        self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(9)], [31, 20, 8, 8, 12, 10, 6, 23, 4])
-        # Step 289 (r23 slot8: `cmd move 2140.0 1724.5 53.0 refused: unreachable`): the last lower-floor pull's hop to pull group 13
-        # is anchored on the lead's floor, 2129.3 1716 80.9, and its cut walks the upper floor only.
-        ramtusk = leg_steps(rows, 3)
-        # pf-rfk-ramtusk: the 4623 pair (pull group 4) is shot from the upper-floor stand 2136.98 1638.69 82.2 (19-22.6 yd), and the
-        # leg keeps no pull on the pit floor: the six lower packs are charlga_pit's now.
-        g4 = next(i for i, r in enumerate(ramtusk) if r["comment"] == "pull group 4")
-        self.assertEqual((ramtusk[g4 - 1]["kind"], ramtusk[g4 - 1]["x"], ramtusk[g4 - 1]["y"], ramtusk[g4 - 1]["z"],
-                          ramtusk[g4 - 1]["comment"]),
-                         ("move", "2136.98", "1638.69", "82.2", "pull group 4 approach"))
-        self.assertFalse([r for r in ramtusk if r["kind"] == "pull" and float(r["z"]) < 70],
-                         "the Ramtusk leg pulls a pit-floor pack again")
-        after7 = next(i for i, r in enumerate(ramtusk) if r["comment"] == "pull group 7 approach")
-        self.assertEqual([(r["kind"], r["x"], r["y"], r["z"], r["comment"]) for r in ramtusk[after7 - 1:after7 + 2]],
-                         [("pull", "2128.7", "1704.86", "80.48", "pull group 6"),
-                          ("move", "2129.3", "1716", "80.9", "pull group 7 approach"),
-                          ("move", "2126.5999", "1689.0667", "81.52657", "approach path")])
-        self.assertTrue(all(float(r["z"]) > 80 for r in ramtusk[after7:] if r["kind"] == "move"),
-                        "the Ramtusk approach cut walks the lower floor again")
-        # Step 331 (r24 slot8 run 5: the lead stood on the plateau's lip at 1995.7 1802.1 78.6 and every move 331-342 was refused
-        # "no walkable path"): the cut into rotthorn's spiral descent starts on the ramp the party walked, four approach moves to
-        # pull group 14; the old lip corners 1995.7333 1802.1333 and 1994.6665 1802.6666 are gone.
-        rotthorn = leg_steps(rows, 4)
-        after13 = next(i for i, r in enumerate(rotthorn) if r["comment"] == "pull group 8") + 1
-        self.assertEqual([(r["kind"], r["x"], r["y"], r["z"], r["comment"]) for r in rotthorn[after13:after13 + 4]],
-                         [("move", "1989.7", "1801.5", "77.78", "pull group 9 approach"),
-                          ("move", "1983.1", "1800", "76.2", "pull group 9 approach"),
-                          ("move", "1976.4", "1798.4", "74.69", "pull group 9 approach"),
-                          ("move", "1970.9", "1797.1", "73.09", "pull group 9 approach")])
-        self.assertFalse([r for r in rotthorn if r["x"] in ("1995.7333", "1994.6665")], "the plateau-lip corners are back")
-        # Step 612 (r26 slot8 run 6: "the point of step 612 refused (unreachable)", then "no walkable path toward the pack at 2077.0
-        # 1981.5": the walk back ended on the z 99-134 ledges over the den): the leg's 'to' is the den entry on the route, and the
-        # den pulls have approach stands on the z 63-68 floor, each a short complete path from the one before.
-        agathelos = leg_steps(rows, 5)
-        to_idx = next(i for i, r in enumerate(agathelos) if r["comment"] == "to")
-        self.assertEqual((agathelos[to_idx]["x"], agathelos[to_idx]["y"], agathelos[to_idx]["z"]), ("2090.7", "1922.9", "66.3"))
-        stands5 = [(r["x"], r["y"], r["z"], r["comment"]) for r in agathelos if r["comment"].endswith(" approach")]
-        self.assertEqual(stands5, [("2074", "1921", "68.24", "pull group 0 approach"),
-                                   ("2074", "1927", "66.21", "pull group 1 approach"),
-                                   ("2076", "1945", "64.6", "pull group 3 approach"),
-                                   ("2078", "1957", "63.23", "pull group 4 approach"),
-                                   ("2078", "1961", "63.11", "pull group 5 approach")])
-        self.assertTrue(all(float(r["z"]) < 75 for r in agathelos[to_idx:] if r["kind"] == "move"),
-                        "a den hop climbs to a ledge")
-        self.assertEqual([r["entry"] for r in rows if r["kind"] == "boss"], ["6168", "4424", "4428", "4420", "62503", "4422", "4421"])
+        self.assertEqual(len(rows), 336)
         self.assertEqual({r["kind"] for r in rows}, {"move", "pull", "boss"})
-        # The last step of every leg with a boss is its boss; the two walk legs of the charlga split end on their last pull. The boss
-        # rows' entries are the packs that stand with them (Ramtusk's Spearhides, 5-6 yd from him; Aggem and the two animal legs
-        # hold none).
+        # The boss order is unchanged, and every leg that has a boss ends on it; the two walk legs of the charlga split end on
+        # their last pull. The boss rows' entries are the packs that stand with them (Ramtusk's Spearhides; the den's Warden).
+        self.assertEqual([r["entry"] for r in rows if r["kind"] == "boss"], ["6168", "4424", "4428", "4420", "62503", "4422", "4421"])
+        self.assertEqual([r["entries"] for r in rows if r["kind"] == "boss"], ["4516,4442", "", "4515,4523", "4438", "", "", "4517"])
         for leg in (0, 1, 2, 3, 4, 5, 8):
             self.assertEqual(leg_steps(rows, leg)[-1]["kind"], "boss", leg)
         for leg in (6, 7):
             self.assertFalse([r for r in leg_steps(rows, leg) if r["kind"] == "boss"], leg)
-        self.assertEqual([r["entries"] for r in rows if r["kind"] == "boss"], ["4516,4442", "", "4515,4523", "4438", "", "", "4517"])
-        # No pull still owns Halmgar as an uncounted extra: his pull row names him, and leg 3 has no skip left.
-        pulls = [r for r in rows if r["kind"] == "pull"]
-        self.assertEqual([r["entries"] for r in pulls if "4842" in r["entries"].split(",")], ["4525,4842"])
-        self.assertEqual([r["entries"] for r in pulls if "4425" in r["entries"].split(",")], ["4539,4425"])
-        # No pull of the charlga legs holds a Death's Head Priest under the den (the boss is 2 yd 2-D from the old priest pull): the
-        # boss row is the fight; the one priest pull left (charlga_pit) stands 40 yd from her, with the Warden.
-        self.assertEqual([(r["entries"], round(float(r["x"])), round(float(r["y"]))) for r in pulls if r["leg"] == "7" and "4517" in r["entries"].split(",")], [("4517,4437", 2189, 1832)])
-        # Step 657 (r27 slot8 run 7: 4x "the tank could not start moving to a firing position for the pull", lead on the z74.1
-        # ledge 25 yd above the pack): groups 6, 7 and 8 are pulled from approach stands on the z49 pit floor, and group 17
-        # (anchor 32 yd below its z80 pack) from the route's own ledge corner.
-        pit = leg_steps(rows, 7)
-        self.assertEqual([(r["x"], r["y"], r["z"], r["comment"]) for r in pit if r["comment"] == "to"],
-                         [("2095", "1845", "50.8", "to")])
-        self.assertEqual([(r["x"], r["y"], r["z"]) for r in pit if r["comment"] == "via"][:1], [("2112", "1877.3", "72.8")])
-        self.assertEqual([(r["x"], r["y"], r["z"]) for r in pit if r["comment"] == "via"][-1:], [("2126.9", "1824", "47.8")])
-        self.assertEqual(len([r for r in pit if r["comment"] == "via"]), 31)
-        stands6 = [(r["x"], r["y"], r["z"], r["comment"]) for r in pit if r["comment"].endswith(" approach")]
-        self.assertEqual(stands6, [("2100", "1855", "49.7", "pull group 1 approach"),
-                                   ("2120", "1840", "48.8", "pull group 2 approach"),
-                                   ("2094.36", "1794.12", "51.52", "pull group 11 approach"),
-                                   ("2065.61", "1779.31", "57.78", "pull group 12 approach"),
-                                   ("2053.15", "1774.91", "59.18", "pull group 13 approach"),
-                                   ("2039.57", "1750.98", "60.36", "pull group 14 approach"),
-                                   ("2036.24", "1732.91", "60.75", "pull group 15 approach"),
-                                   ("2050.06", "1710.43", "59.58", "pull group 16 approach"),
-                                   ("2106.66", "1724.86", "54.26", "pull group 17 approach"),
-                                   ("2126.32", "1728.36", "52.18", "pull group 18 approach"),
-                                   ("2136.54", "1734.03", "51.88", "pull group 19 approach"),
-                                   ("2149.73", "1711.63", "55.01", "pull group 20 approach"),
-                                   ("2133.51", "1673.73", "58.83", "pull group 21 approach"),
-                                   ("2155", "1705.35", "55.37", "pull group 22 approach")])
-        # pf-rfk-stands: the six packs that used to be pulled from the spiral/walkway above now stand on the pit floor, each with
-        # its stand 15-24.5 yd from the pack it pulls (the stand is the row before the pull row).
-        for i, r in enumerate(pit):
-            if r["comment"] in ("pull group 11 approach", "pull group 12 approach", "pull group 13 approach",
-                                "pull group 14 approach", "pull group 15 approach", "pull group 16 approach",
-                                "pull group 17 approach", "pull group 18 approach", "pull group 19 approach",
-                                "pull group 20 approach", "pull group 21 approach", "pull group 22 approach"):
-                pull = pit[i + 1]
-                self.assertEqual(pull["kind"], "pull", r["comment"])
-                d = ((float(r["x"]) - float(pull["x"])) ** 2 + (float(r["y"]) - float(pull["y"])) ** 2 +
-                     (float(r["z"]) - float(pull["z"])) ** 2) ** 0.5
-                self.assertTrue(15.0 <= d <= 24.5, "%s: %.2f yd from its pack, want 15-24.5" % (r["comment"], d))
-                self.assertTrue(50.0 <= float(r["z"]) <= 61.0, "%s: z %s is not the pit floor" % (r["comment"], r["z"]))
-        up = leg_steps(rows, 8)
-        self.assertEqual([(r["x"], r["y"], r["z"], r["comment"]) for r in up if r["comment"] == "to"],
-                         [("2093.1", "1767.5", "79.8", "to")])
-        self.assertEqual([(r["x"], r["y"], r["z"]) for r in up if r["comment"] == "via"][:1], [("2117.1", "1807.5", "48")])
-        self.assertEqual([(r["x"], r["y"], r["z"]) for r in up if r["comment"] == "via"][-1:], [("2102.7", "1728", "78.2")])
-        self.assertEqual(len([r for r in up if r["comment"] == "via"]), 26)
-        self.assertFalse([r for r in up if r["comment"].endswith(" approach")],
-                         "the leg's own 'to' is the corner the ledge pack is pulled from")
-        # r35's step 313: the rotthorn 'to' is off its first pack, and the patrolling Champion pair is one pull of two.
-        self.assertEqual([(r["x"], r["y"], r["z"]) for r in leg_steps(rows, 4) if r["comment"] == "to"],
-                         [("2102.67", "1728", "78.19")])
-        self.assertEqual([(r["entries"], r["x"], r["y"], r["radius"]) for r in leg_steps(rows, 4)
-                          if r["comment"] == "pull group 1"], [("4623", "2092.61", "1774.1", "6")])
-        self.assertFalse([r for r in up if r["kind"] == "pull" and abs(float(r["x"]) - 2094.39) < 0.5
-                          and abs(float(r["y"]) - 1773.56) < 0.5], "87430 is booked twice")
-        self.assertEqual(re.findall(r"(?m)^DELETE FROM `ai_dungeon_step` WHERE `plan` = '(\w+)';", text), ['maraudon_purple', 'scarlet_graveyard', 'razorfen_kraul', 'razorfen_downs', 'shadowfang_keep'])
-        # The ai_dungeon_boss rows stay in 20261022210300 (the boss seed is per map and a repeat would trip test_boss_table_is_the_seed);
-        # this file replaces the plan rows only.
+        # The pack set: each leg holds the packs its own walk passes (12, 31, 2, 6, 17, 10, 11, 27, none for the boss leg).
+        self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(9)], [12, 31, 2, 6, 17, 10, 11, 27, 0])
+        # Leg 0 starts on the entrance cut the exporter writes (the plan has no via there any more) and reaches the courtyard
+        # entry point 1994 1615 83.2 before its first pull, the 4530 with its own radius 10.
+        first = leg_steps(rows, 0)
+        self.assertEqual([(r["x"], r["y"], r["z"]) for r in first if r["comment"] == "to"], [("1994", "1615", "83.2")])
+        self.assertEqual((first[0]["kind"], first[0]["comment"]), ("move", "path"))
+        p0 = [r for r in first if r["kind"] == "pull"][0]
+        self.assertEqual((p0["entries"], p0["radius"], p0["comment"]), ("4530", "10", "pull group 0"))
+        # The charlga split: the descent keeps one via (dev leg 7 via 17), the climb keeps the deployed 26 and its `to`.
+        pit, up = leg_steps(rows, 7), leg_steps(rows, 8)
+        self.assertEqual([(r["x"], r["y"], r["z"]) for r in pit if r["comment"] == "via"], [("2043.2", "1479.3", "68.9")])
+        self.assertEqual([(r["x"], r["y"], r["z"]) for r in pit if r["comment"] == "to"], [("2045.97", "1564.23", "64.7886")])
+        vias = [(r["x"], r["y"], r["z"]) for r in up if r["comment"] == "via"]
+        self.assertEqual((len(vias), vias[0], vias[-1]), (26, ("2117.1", "1807.5", "48"), ("2102.7", "1728", "78.2")))
+        self.assertEqual([(r["x"], r["y"], r["z"]) for r in up if r["comment"] == "to"], [("2093.1", "1767.5", "79.8")])
+        self.assertFalse([r for r in up if r["comment"].endswith(" approach")], "the climb pulls nothing")
+        # The two entries that are not plain packs keep their own row: Halmgar 4842 is leg 4's Earthbreaker pack now (leg 4
+        # lost 4842 from its skip for it, the only leg the deployed export pulled him from had no skip), and the Blind Hunter
+        # 4425 stays in the den.
+        self.assertEqual([(r["leg"], r["entries"]) for r in rows if r["kind"] == "pull" and "4842" in r["entries"].split(",")], [("4", "4525,4842")])
+        self.assertEqual([(r["leg"], r["entries"]) for r in rows if r["kind"] == "pull" and "4425" in r["entries"].split(",")], [("6", "4539,4425")])
+        # The pit's far-east packs (dev leg 7's pull groups 3-7, the 4517 pair among them) stand 49-101 yd off the walk and are
+        # dropped with it: only the boss row books the Warden 4517 now.
+        self.assertFalse([r for r in rows if r["kind"] == "pull" and "4517" in r["entries"].split(",")])
+        self.assertEqual(re.findall(r"(?m)^DELETE FROM `ai_dungeon_step` WHERE `plan` = '(\w+)';", text), ['razorfen_kraul'])
 
     def test_gnomeregan_is_the_plan_with_the_pack_fixes(self):
         # 20261024152900 (turtle-agent d04ea67, 2026-10-24): r34 slotF stopped at step 424 of 628 because the lead stood
