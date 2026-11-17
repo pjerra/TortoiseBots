@@ -815,6 +815,14 @@ int main()
     CHECK(!ThreatCapInterruptExempt(true, true, 0.0f, -1.0f, 0.0f, false, false));
     CHECK(ThreatCapInterruptExempt(true, true, 0.0f, 0.0f, 0.0f, false, true));
 
+    // counterspell_on_own_victim_with_no_tank_threat_is_exempt: a fresh refill mob whose first victim is the mage
+    // reads pct=100/bot=0/tank=0: no tank threat yet (0, or -1 with no tank on the mob), and Counterspell's 300 flat
+    // threat would veto at the pull line. A mob already on the bot cannot be pulled from a tank that does not hold
+    // it, so the victim exemption runs before the tankThreat<=0 return. Key off: no exemption.
+    CHECK(ThreatCapInterruptExempt(true, true, 0.0f, 0.0f, 300.0f, true, true));
+    CHECK(ThreatCapInterruptExempt(true, true, 567.0f, -1.0f, 300.0f, true, true));
+    CHECK(!ThreatCapInterruptExempt(true, false, 0.0f, 0.0f, 300.0f, true, true));
+
     // interrupt_uses_interrupt_target_numbers: the caster to kick is not always the current target. The bot sits at
     // 120 % on its current target and at 50 % on the caster: the caster's numbers decide, so the Kick goes.
     CHECK(!ThreatCapInterruptExempt(true, true, 1200.0f, 1000.0f, 0.0f, false, false));
