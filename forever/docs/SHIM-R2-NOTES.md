@@ -92,7 +92,9 @@ of the word (cmangos 0x400 = ignore bag space, ForeverCore 0x400 = uses resource
 
 The old struct's helpers the bot calls are on the struct, with the old answers: `GetMaxStackSize`, `IsWeapon`,
 `IsRangedWeapon`, `IsConjuredConsumable` (from the fields) and `GetProficiencySkill` (forwarded to the core's
-`GetSkill()`, ItemTemplate.cpp:97, which uses the same skill table). `_Spell` stays an alias of `_ItemSpell`.
+`GetSkill()`, ItemTemplate.cpp:97, which uses the same skill table). `_Spell` stays an alias of `_ItemSpell`, and the
+old header's free `ItemSubClassToDurabilityMultiplierId` (a row index into the client's durability cost table) comes
+along: weapons are rows 0..20, armor 21..30, in both cores.
 
 ## Fields left out (D3: no true ForeverCore counterpart, so no guess)
 
