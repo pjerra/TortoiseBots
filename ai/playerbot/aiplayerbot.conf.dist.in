@@ -1153,8 +1153,10 @@ AiPlayerbot.DungeonRunTankPost = 0
 # boss and a ranged damage dealer off the crew on one of the boss's adds returns to the boss while it hovers. The switch
 # unit is read through the same 200 yd grid search as the tank_post, and an empty list is no death: only a unit the bot
 # saw alive and no longer sees alive is dead, so a bot that has not met it yet keeps today's duty (the Onyxia take-off
-# before Cindarion appears). Healers are never crew; before the switch, and with this key off, the boss's own add rule
-# stands. `.reload config` reads it again with the other AiPlayerbot.DungeonRun* keys.
+# before Cindarion appears). The sighting lasts the boss's fight, not the bot's own combat: a Feign Death, a death and
+# battle rez or any other combat drop keeps it, and it starts over only when the boss resets (out of combat at full
+# health), a new pull begins, or the bot changes map or instance. Healers are never crew; before the switch, and with
+# this key off, the boss's own add rule stands. `.reload config` reads it again with the other AiPlayerbot.DungeonRun* keys.
 # 0 - off: add_crew rows are ignored (Default)
 # 1 - on
 AiPlayerbot.DungeonRunAddCrew = 0

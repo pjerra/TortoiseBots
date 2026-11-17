@@ -966,6 +966,23 @@ namespace ai
             return it != addCrew_.end() && it->second.early;
         }
 
+        // The boss of the map's add_crew row whose switch unit is `switchEntry`, plain or early: how a reader that only
+        // holds the switch unit (the "add crew switch" sighting, which tracks the encounter through the boss) finds
+        // the boss whose rows gave it that unit. False before the seal or when no row names that switch unit.
+        bool AddCrewBossOf(std::uint32_t map, std::uint32_t switchEntry, std::uint32_t& bossEntry) const
+        {
+            if (!sealed_.load(std::memory_order_acquire) || switchEntry == 0)
+                return false;
+            for (auto const& entry : addCrew_)
+            {
+                if (static_cast<std::uint32_t>(entry.first >> 32) != map || entry.second.switchEntry != switchEntry)
+                    continue;
+                bossEntry = static_cast<std::uint32_t>(entry.first & 0xFFFFFFFFu);
+                return true;
+            }
+            return false;
+        }
+
         // The boss of the map's `early` add_crew row whose switch unit is `switchEntry`. Both kinds of row the early
         // duty overrides name the same switch unit as their target (`kill_first` on it, `hold_kill` on the add it
         // blocks), so this is how a reader that holds such a row finds the crew's boss without knowing it. False
@@ -4938,6 +4955,22 @@ namespace ai
         if (aliveNow)
             return SwitchUnitState::Alive;
         return seen == SwitchUnitState::Alive ? SwitchUnitState::Dead : seen;
+    }
+
+    // Whether the sighting belongs to an encounter that has ended, so the next read starts it over. The sighting is the
+    // encounter's, not this bot's: a Feign Death, a death and a battle rez, or any other combat drop of the bot leaves
+    // it standing; otherwise a bot that stops fighting mid-fight would forget the switch unit it saw die. It ends only
+    // with the boss: out of combat at full health (a wipe, an evaded pull, the pause before the next pull), or a new
+    // pull (the boss enters combat after a read that saw it out of combat). A dead or unseen boss ends nothing: the
+    // next pull's living switch unit marks itself alive again.
+    inline bool SwitchSightingResets(bool bossKnown, bool bossAlive, bool bossInCombat, bool bossFullHealth,
+                                     bool bossWasInCombat)
+    {
+        if (!bossKnown || !bossAlive)
+            return false;
+        if (!bossInCombat)
+            return bossFullHealth;
+        return !bossWasInCombat;
     }
 
     // AoE ranged classes in crew order (1.12 Classes): mage 0, warlock 1, hunter 2, shaman 3, druid 4; -1 none.

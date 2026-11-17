@@ -189,21 +189,59 @@ std::vector<TankPostUnit> TankPostUnitsValue::Calculate()
     return units;
 }
 
-// AiPlayerbot.DungeonRunAddCrew: how this bot's fight has seen the row's switch unit. The tank-post grid search covers
-// 200 yd and returns nothing both before the unit first appears and after its corpse is gone, so an empty list is no
-// death by itself: the value remembers a sighting, a living unit marks one, and only a unit seen alive and then gone
-// reads dead. A bot that leaves combat or changes map or instance starts the sighting over, so one fight's corpse never
-// opens the next fight's crew (the Onyxia take-off before Cindarion appears).
+// AiPlayerbot.DungeonRunAddCrew: how this bot's raid has seen the row's switch unit in the boss's encounter. The
+// tank-post grid search covers 200 yd and returns nothing both before the unit first appears and after its corpse is
+// gone, so an empty list is no death by itself: the value remembers a sighting, a living unit marks one, and only a
+// unit seen alive and then gone reads dead. The sighting lasts the encounter, not the bot's own combat: a Feign Death,
+// a death and a battle rez, or any other combat drop keeps it, so a bot that saw Cindarion die still has the crew's
+// duty when it comes back. It starts over only with the boss (SwitchSightingResets: out of combat at full health, or a
+// new pull), a map or instance change, or the row's switch entry changing.
 uint8 AddCrewSwitchValue::Calculate()
 {
     const uint32 entry = QualifierEntry(qualifier);
-    if (!sPlayerbotAIConfig.dungeonRunAddCrew || !bot->IsInCombat() || bot->GetMapId() != mapId_ ||
-        bot->GetInstanceId() != instanceId_ || entry != entry_)
+    if (!sPlayerbotAIConfig.dungeonRunAddCrew || bot->GetMapId() != mapId_ || bot->GetInstanceId() != instanceId_ ||
+        entry != entry_)
     {
         seen_ = static_cast<uint8>(SwitchUnitState::NeverSeen);
+        bossInCombat_ = false;
         mapId_ = bot->GetMapId();
         instanceId_ = bot->GetInstanceId();
         entry_ = entry;
+        return seen_;
+    }
+    // The encounter is the boss's, found through the row that gave this switch unit to the bot: its own combat state
+    // says nothing about the sighting's, since the bot leaves combat long before the boss's encounter does.
+    uint32 bossEntry = 0;
+    bool bossKnown = false;
+    bool bossAlive = false;
+    bool bossInCombat = false;
+    bool bossFullHealth = false;
+    if (GetBossTactics().AddCrewBossOf(bot->GetMapId(), entry, bossEntry))
+    {
+        std::list<Creature*> found;
+        ScanEntry(bot, bossEntry, found, kTankPostSearchYd);
+        Creature* boss = nullptr;
+        for (Creature* creature : found)
+        {
+            if (!creature)
+                continue;
+            bossKnown = true;
+            if (!boss || creature->IsAlive())
+                boss = creature;
+        }
+        if (boss)
+        {
+            bossAlive = boss->IsAlive();
+            bossInCombat = boss->IsInCombat();
+            bossFullHealth = bossAlive && boss->GetHealth() >= boss->GetMaxHealth();
+        }
+    }
+    const bool reset = SwitchSightingResets(bossKnown, bossAlive, bossInCombat, bossFullHealth, bossInCombat_);
+    if (bossKnown)
+        bossInCombat_ = bossInCombat;
+    if (reset)
+    {
+        seen_ = static_cast<uint8>(SwitchUnitState::NeverSeen);
         return seen_;
     }
     bool alive = false;

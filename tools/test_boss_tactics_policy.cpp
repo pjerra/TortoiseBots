@@ -2142,6 +2142,54 @@ static void AddCrewState_SwitchesAfterDeath()
     CHECK(SwitchUnitStateNext(SwitchUnitState::Alive, false) == SwitchUnitState::Dead);
     CHECK(SwitchUnitStateNext(SwitchUnitState::Dead, false) == SwitchUnitState::Dead);
     CHECK(SwitchUnitStateNext(SwitchUnitState::Dead, true) == SwitchUnitState::Alive);
+    // Walk 2o round 3: the sighting belongs to the boss's encounter, not to the bot's own combat. A Feign Death, a
+    // death and a battle rez, or any other combat drop of the bot after "seen dead" cannot reset it: the reset reads the
+    // boss, and while the boss fights nothing does, so seen dead stays dead (the state only moves on what is still
+    // visible). A wiped or evaded boss starts it over, as does a new pull (the boss enters combat after a read that saw
+    // it out of it). See also AddCrewSighting_Sequence for the read order.
+    CHECK(!SwitchSightingResets(true, true, true, false, true));      // mid-fight: the bot's drop changes nothing
+    CHECK(!SwitchSightingResets(true, true, true, true, true));       // still fighting, whatever her health
+    CHECK(SwitchSightingResets(true, true, true, false, false));      // a new pull: first in-combat read
+    CHECK(SwitchSightingResets(true, true, false, true, true));       // reset: out of combat at full health
+    CHECK(SwitchSightingResets(true, true, false, true, false));      // the pull never started
+    CHECK(!SwitchSightingResets(true, true, false, false, true));     // an evade running: still hurt, no reset
+    CHECK(!SwitchSightingResets(true, false, false, true, true));     // a dead boss: the sighting stands
+    CHECK(!SwitchSightingResets(false, false, false, true, true));    // no boss in the search: nothing to reset on
+}
+
+// The sighting's reads in one encounter, as AddCrewSwitchValue applies them: boss facts first (a reset starts the next
+// read over), then the switch unit's life. Everything the bot itself does between reads — Feign Death, a death and a
+// battle rez — is absent from both rules, so the seen-dead sighting survives.
+static void AddCrewSighting_Sequence()
+{
+    SwitchUnitState seen = SwitchUnitState::NeverSeen;
+    bool bossInCombat = false;
+    // The bot's read of the fight: boss known, alive, its combat flag and health; then the switch unit's alive flag.
+    const auto read = [&seen, &bossInCombat](bool bossAlive, bool inCombat, bool fullHealth, bool switchAlive)
+    {
+        if (SwitchSightingResets(true, bossAlive, inCombat, fullHealth, bossInCombat))
+            seen = SwitchUnitState::NeverSeen;
+        else
+            seen = SwitchUnitStateNext(seen, switchAlive);
+        bossInCombat = inCombat;
+        return seen;
+    };
+    // The pull starts: a new encounter, the switch unit still away (its empty search is no death).
+    CHECK(read(true, true, true, false) == SwitchUnitState::NeverSeen);
+    // Cindarion appears and the bot sees him alive.
+    CHECK(read(true, true, false, true) == SwitchUnitState::Alive);
+    // He dies and his corpse despawns: seen dead.
+    CHECK(read(true, true, false, false) == SwitchUnitState::Dead);
+    // The bot casts Feign Death and leaves combat; the boss still fights, so seen dead stands.
+    CHECK(read(true, true, false, false) == SwitchUnitState::Dead);
+    // The bot is battle-rezzed after the corpse despawned: still dead.
+    CHECK(read(true, true, false, false) == SwitchUnitState::Dead);
+    // The raid wipes: the boss evades and stands out of combat at full health, so the next pull starts over.
+    CHECK(read(true, false, true, false) == SwitchUnitState::NeverSeen);
+    // A new pull where the bot is already in combat after the reset: never seen, not dead.
+    CHECK(read(true, true, true, false) == SwitchUnitState::NeverSeen);
+    // The next pull's Cindarion is alive again: a fresh sighting, not the old corpse.
+    CHECK(read(true, true, false, true) == SwitchUnitState::Alive);
 }
 
 // The loader's rule for the row: the switch unit (never the boss itself) and the crew size 0-5, nothing else. A gate
@@ -2881,6 +2929,7 @@ int main()
     TestTankPostCooldownPick_RefusedIsPassedOver();
     TestTankPostCooldownAfter_SpentAndCast();
     AddCrewState_SwitchesAfterDeath();
+    AddCrewSighting_Sequence();
     AddCrewLoader_Rows();
     AddCrewRank_Order();
     AddCrewMember_Roles();

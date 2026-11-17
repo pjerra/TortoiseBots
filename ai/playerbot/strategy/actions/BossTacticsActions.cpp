@@ -5915,25 +5915,28 @@ Unit* PickBossKillFirst(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fi
     // and always read None).
     ActiveBossRows rows = fight.rows;
     if (sPlayerbotAIConfig.dungeonRunAddCrewEarly)
+    {
+        // Onyxia's own engagement source, the one the boss-duty trigger's gate reads ("onyxia boss"), so the two
+        // readings cannot disagree on the unit they hold her off with. Read here, not in the gate lambda: AI_VALUE
+        // expands to a lookup on this picker's context, which a lambda would have to capture. Any other boss comes from
+        // the entry scan inside the lambda.
+        Unit* const onyxiaBoss = ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"));
         rows = AddCrewEarlyKillFirstRows(GetBossTactics(), bot->GetMapId(), fight.rows,
             [context](std::uint32_t bossEntry)
             {
                 return AI_VALUE2(uint8, "add crew early", static_cast<int32>(bossEntry));
             },
-            [ai, bot](std::uint32_t bossEntry)
+            [ai, bot, onyxiaBoss](std::uint32_t bossEntry)
             {
                 ActiveBossRows gateRows;
                 if (const std::vector<BossTacticRow>* const gate = GetBossTactics().Rows(bot->GetMapId(), bossEntry))
                     for (const BossTacticRow& row : *gate)
                         if (row.kind == BossTacticKind::GateHold)
                             gateRows.push_back(&row);
-                // Onyxia's own engagement source, the one the boss-duty trigger's gate reads ("onyxia boss"), so the two
-                // readings cannot disagree on the unit they hold her off with. Any other boss comes from the entry scan.
-                Unit* const boss = bossEntry == kOnyxiaEntry
-                    ? ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"))
-                    : EngagedBossOfEntry(bot, bossEntry);
+                Unit* const boss = bossEntry == kOnyxiaEntry ? onyxiaBoss : EngagedBossOfEntry(bot, bossEntry);
                 return GateHoldsUnit(ai, gateRows, boss);
             });
+    }
     std::vector<TacticCandidate> candidates;
     std::vector<Unit*> units;
     candidates.reserve(fight.units.size());

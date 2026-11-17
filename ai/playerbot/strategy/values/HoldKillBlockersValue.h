@@ -70,11 +70,13 @@ namespace ai
         std::vector<TankPostUnit> Calculate() override;
     };
 
-    // "add crew switch::<entry>": the switch unit's life as this bot's fight has seen it (SwitchUnitState: 0 NeverSeen,
-    // 1 Alive, 2 Dead). The read is the tank-post grid search within 200 yd; a unit found alive marks it seen alive,
-    // and once seen alive an empty search is its death, while a unit never seen stays NeverSeen. One sighting serves
-    // both crew values. Reset when the bot leaves combat or changes map or instance, so one fight's sighting never
-    // opens the next fight's duty.
+    // "add crew switch::<entry>": the switch unit's life as this bot's raid has seen it in the boss's encounter
+    // (SwitchUnitState: 0 NeverSeen, 1 Alive, 2 Dead). The read is the tank-post grid search within 200 yd; a unit found
+    // alive marks it seen alive, and once seen alive an empty search is its death, while a unit never seen stays
+    // NeverSeen. One sighting serves both crew values. The sighting lasts the encounter: the boss (found through the
+    // add_crew row that names this switch unit) out of combat at full health or a new pull starts it over, while the
+    // bot's own combat drop (Feign Death, death and battle rez) leaves it standing. A map or instance change starts it
+    // over too, so one fight's sighting never opens the next fight's duty.
     class AddCrewSwitchValue : public CalculatedValue<std::uint8_t>, public Qualified
     {
     public:
@@ -86,6 +88,7 @@ namespace ai
         std::uint32_t mapId_ = 0;
         std::uint32_t instanceId_ = 0;
         std::uint32_t entry_ = 0;
+        bool bossInCombat_ = false;
     };
 
     // "add crew::<boss>": AiPlayerbot.DungeonRunAddCrew's state for this bot, once the map's add_crew row for the

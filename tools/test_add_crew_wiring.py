@@ -3,11 +3,12 @@
 The decision is pure (ai/playerbot/BossTacticsPolicy.h: AddCrewStateFor, AddCrewMember, AddCrewRank, the loader and the
 table) and tested in tools/test_boss_tactics_policy.cpp; the Onyxia glue (OnyxiaWhelpDutyFor, ShouldReturnToOnyxia) is
 in tools/test_onyxia_whelp_egg_policy.cpp and the row shape in tools/test_boss_tactics_sql.py. These pins prove the live
-code calls the rules: the value reads the key first, the switch unit through the tank-post grid search, the crew's own
-place through the separate `add crew keeps duty` value (the raid's AoE ranged bots through their own AIs, whatever the
-switch unit's life); the whelp duty and the return to the boss read the value only under the key; the trigger, the
-action and the values are registered; and the key is read, templated, documented without "recommended on", and shipped
-with its row.
+code calls the rules: the value reads the key first, the switch unit through the tank-post grid search, the sighting's
+encounter through the add_crew row's boss (out of combat at full health or a new pull starts it over; the bot's own
+combat drop does not), the crew's own place through the separate `add crew keeps duty` value (the raid's AoE ranged
+bots through their own AIs, whatever the switch unit's life); the whelp duty and the return to the boss read the value
+only under the key; the trigger, the action and the values are registered; and the key is read, templated, documented
+without "recommended on", and shipped with its row.
 
 Run: python3 -m unittest tools/test_add_crew_wiring.py
 """
@@ -104,10 +105,28 @@ class AddCrewWiring(unittest.TestCase):
         self.assertIn("class AddCrewSwitchValue : public CalculatedValue<std::uint8_t>, public Qualified", VALUES_H)
         self.assertIn('CalculatedValue<uint8>(ai, "add crew switch", 1)', VALUES_H)
         sighting = body(VALUES_CPP, "uint8 AddCrewSwitchValue::Calculate()")
-        self.assertIn("!bot->IsInCombat() || bot->GetMapId() != mapId_ ||", sighting)
+        # The sighting lasts the boss's encounter, not the bot's: a map or instance change starts it over, never the
+        # bot's own combat (a Feign Death, a death and a battle rez keep it), so the boss is found through the add_crew
+        # row's reverse lookup and only its out-of-combat-at-full-health or new-pull reads reset the sighting.
+        self.assertIn("bot->GetMapId() != mapId_ ||", sighting)
+        self.assertNotIn("!bot->IsInCombat()", sighting)
+        self.assertIn("GetBossTactics().AddCrewBossOf(bot->GetMapId(), entry, bossEntry)", sighting)
+        self.assertIn("boss->GetHealth() >= boss->GetMaxHealth()", sighting)
+        self.assertIn("SwitchSightingResets(bossKnown, bossAlive, bossInCombat, bossFullHealth, bossInCombat_)",
+                      sighting)
+        self.assertIn("bossInCombat_ = bossInCombat;", sighting)
         self.assertIn('AI_VALUE2(std::vector<TankPostUnit>, "tank post units", static_cast<int32>(entry))', sighting)
         self.assertIn("if (unit.alive)", sighting)
         self.assertIn("SwitchUnitStateNext(static_cast<SwitchUnitState>(seen_), alive)", sighting)
+        # The rule itself, and the reverse lookup that finds the sighting's encounter: plain and early rows both name it.
+        self.assertIn("inline bool SwitchSightingResets(bool bossKnown, bool bossAlive, bool bossInCombat, "
+                      "bool bossFullHealth,", POLICY)
+        self.assertIn("if (!bossKnown || !bossAlive)\n            return false;", POLICY)
+        self.assertIn("if (!bossInCombat)\n            return bossFullHealth;\n        return !bossWasInCombat;", POLICY)
+        boss_of = body(POLICY, "        bool AddCrewBossOf(std::uint32_t map, std::uint32_t switchEntry, "
+                               "std::uint32_t& bossEntry) const")
+        self.assertIn("entry.second.switchEntry != switchEntry", boss_of)
+        self.assertIn("bossEntry = static_cast<std::uint32_t>(entry.first & 0xFFFFFFFFu);", boss_of)
         self.assertIn('creators["add crew switch"] = [](PlayerbotAI* ai) { return new AddCrewSwitchValue(ai); };',
                       VALUE_CONTEXT)
         # The crew's place is the separate value: it stands whatever the switch unit's life.
@@ -173,9 +192,13 @@ class AddCrewWiring(unittest.TestCase):
         self.assertIn("ActiveBossRows rows = fight.rows;", pick)
         self.assertIn("rows = AddCrewEarlyKillFirstRows(GetBossTactics(), bot->GetMapId(), fight.rows,", pick)
         self.assertIn('AI_VALUE2(uint8, "add crew early", static_cast<int32>(bossEntry))', pick)
-        self.assertIn('Unit* const boss = bossEntry == kOnyxiaEntry\n'
-                      '                    ? ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"))\n'
-                      '                    : EngagedBossOfEntry(bot, bossEntry);', pick)
+        # The gate's boss is read before the lambda: AI_VALUE expands to a lookup on the picker's context, which the
+        # lambda does not capture (the module build refused it inside).
+        self.assertIn('Unit* const onyxiaBoss = ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"));', pick)
+        self.assertIn("Unit* const boss = bossEntry == kOnyxiaEntry ? onyxiaBoss : EngagedBossOfEntry(bot, "
+                      "bossEntry);", pick)
+        gate_lambda = pick[pick.index("[ai, bot, onyxiaBoss]"):]
+        self.assertNotIn("AI_VALUE", gate_lambda[:gate_lambda.index("GateHoldsUnit")])
         self.assertIn("return GateHoldsUnit(ai, gateRows, boss);", pick)
         self.assertIn("PickKillFirst(rows, candidates)", pick)
         self.assertIn("PickCarrierOverride(rows, candidates", pick)

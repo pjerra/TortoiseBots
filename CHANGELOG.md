@@ -1,5 +1,6 @@
 # Changelog
 
+- Fixed: the add crew's sighting of its switch unit now lasts the boss's fight instead of the bot's own combat: a hunter's Feign Death, a bot's death and battle rez or any other combat drop no longer resets it, so a bot that saw Cindarion die keeps the crew's phase when it comes back mid-fight. It starts over only when the boss resets (out of combat at full health), a new pull of the boss begins, or the bot changes map or instance.
 - Fixed: the `early` add crew opens only once the bot has seen the switch unit alive and then dead: an empty 200 yd search (before Cindarion appears after take-off, or for a bot that never had him in range) no longer counts as his death, so no whelp or boss duty starts before he exists and the ranged keep his `kill_first` row.
 - Fixed: the `early` crew's `kill_first` `gate_hold` check reads Onyxia through the same `onyxia boss` value as the boss duty trigger, so the two readings cannot disagree on the unit they hold her off with.
 - Changed: walk 2o's rollback is documented in its walk note and the split key's config comment: the `add_crew` row goes back to priority 3 with 2n's comment (20261116180000, data only), and a config rollback to 2n turns `AiPlayerbot.DungeonRunAddCrewEarly` off.
