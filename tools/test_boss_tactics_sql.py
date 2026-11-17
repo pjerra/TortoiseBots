@@ -54,7 +54,7 @@ DELETE = re.compile(
     r"(?: AND `boss_entry` IN \(([\d, ]+)\)| AND `boss_entry` = (\d+))?"
     r"(?: AND `kind` IN \('([\w', ]+)'\)| AND `kind` = '(\w+)')?"
     r"(?: AND `target_entry` = (\d+)(?: AND `spell_id` = (\d+))?)?"
-    r"(?: AND `hp_min` = (\d+) AND `hp_max` = (\d+))?;?$"
+    r"(?: AND `hp_min` = (\d+) AND `hp_max` = (\d+)| AND `hp_min` = (\d+)| AND `hp_max` = (\d+))?;?$"
 )
 DELETE_LINE = re.compile(r"DELETE\s+FROM\s+`?ai_boss_tactic`?(?=\s|;|$)", re.IGNORECASE)
 INSERT = re.compile(
@@ -236,6 +236,8 @@ def delete_scope(match):
     kinds = None
     if match.group(4):
         kinds = {word.strip().strip("'") for word in match.group(4).split(",")}
+    hp_min = match.group(8) or match.group(10)
+    hp_max = match.group(9) or match.group(11)
     return (
         int(match.group(1)),
         {int(entry) for entry in match.group(2).split(",")} if match.group(2) else None,
@@ -244,8 +246,8 @@ def delete_scope(match):
         match.group(5),
         int(match.group(6)) if match.group(6) else None,
         int(match.group(7)) if match.group(7) else None,
-        int(match.group(8)) if match.group(8) else None,
-        int(match.group(9)) if match.group(9) else None,
+        int(hp_min) if hp_min else None,
+        int(hp_max) if hp_max else None,
     )
 
 
@@ -266,7 +268,9 @@ def delete_covers(scope, key):
         return False
     if spell is not None and key[4] != spell:
         return False
-    if hp_min is not None and (len(key) < 7 or key[5] != hp_min or key[6] != hp_max):
+    if hp_min is not None and (len(key) < 7 or key[5] != hp_min):
+        return False
+    if hp_max is not None and (len(key) < 7 or key[6] != hp_max):
         return False
     return True
 
@@ -1089,8 +1093,10 @@ class BossTacticsSql(unittest.TestCase):
                       "AND `kind` = 'dps_hold_after';", text)
         self.assertEqual(1, text.count("INSERT INTO `ai_boss_tactic`"))
         self.assertEqual(1, text.count("(249, 10184, 'dps_hold_after'"))
-        live = {(row[1], row[2], row[3], row[4], row[5]): _payload_dict(row) for row in effective_rows()}
-        hold = live.get((249, 10184, "dps_hold_after", 0, 0))
+        # The key carries the health band: Onyxia has an opening hold (band 0-100) and the P3 landing hold (band 0-40).
+        live = {(row[1], row[2], row[3], row[4], row[5], row[9], row[10]): _payload_dict(row)
+                for row in effective_rows()}
+        hold = live.get((249, 10184, "dps_hold_after", 0, 0, 0, 100))
         self.assertIsNotNone(hold, "the Onyxia opening dps_hold_after row is missing")
         self.assertEqual(name, hold["file"], "the walk 2d migration owns the opening hold")
         self.assertEqual((0, 8.0, 0, 100, 0, "engage"),
