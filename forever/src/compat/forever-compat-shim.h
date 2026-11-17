@@ -73,19 +73,19 @@ namespace MaNGOS
 // 2. SINGLETONS
 // ---------------------------------------------------------------------------------------------------------------
 #undef sObjectMgr
-#define sObjectMgr (*ObjectMgr::instance())
+#define sObjectMgr (*ObjectMgr::instance())                 // templates, spawn data, quest store
 #undef sWorld
-#define sWorld (*World::instance())
+#define sWorld (*World::instance())                         // server settings and rates
 #undef sSpellMgr
-#define sSpellMgr (*SpellMgr::instance())
+#define sSpellMgr (*SpellMgr::instance())                   // spell chains, target positions, training
 #undef sGuildMgr
-#define sGuildMgr (*GuildMgr::instance())
+#define sGuildMgr (*GuildMgr::instance())                   // guilds by id
 #undef sMapMgr
-#define sMapMgr (*MapManager::instance())
+#define sMapMgr (*MapManager::instance())                   // maps and instances
 #undef sConfig
-#define sConfig (*ConfigMgr::instance())
+#define sConfig (*ConfigMgr::instance())                    // the configuration file store
 #undef sBattleGroundMgr
-#define sBattleGroundMgr (*BattlegroundMgr::instance())
+#define sBattleGroundMgr (*BattlegroundMgr::instance())     // battleground templates, queues, instances
 
 // sObjectAccessor: cmangos's accessor object; ForeverCore has the same lookups as free functions in the
 // `ObjectAccessor` namespace. Each member below is the one call with the same reach:
