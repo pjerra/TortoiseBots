@@ -54,6 +54,20 @@ enum ItemPrototypeFlags : uint32
     ITEM_FLAG_UNIQUE_EQUIPPED = 0x00080000,   // the core calls it ITEM_FLAG_UNIQUE_EQUIPPABLE
 };
 
+// The old header's row index into DurabilityCosts for an item class/subclass pair: weapons are rows 0..20, armor 21..30.
+// The table and the class/subclass numbering are the client's, so the answer is the same on both cores (cmangos
+// ItemPrototype.h:355-365).
+inline uint8 ItemSubClassToDurabilityMultiplierId(uint32 itemClass, uint32 itemSubClass)
+{
+    switch (itemClass)
+    {
+        case ITEM_CLASS_WEAPON: return uint8(itemSubClass);
+        case ITEM_CLASS_ARMOR:  return uint8(itemSubClass + 21);
+        default: break;
+    }
+    return 0;
+}
+
 struct ItemPrototype
 {
     ItemTemplate const* Template;                           // the core record this mirror was filled from

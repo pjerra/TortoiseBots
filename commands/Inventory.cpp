@@ -142,7 +142,7 @@ static std::string InventoryItemFlags(PlayerbotAI* ai, Player* bot, Player* requ
 {
     std::string flags;
     ItemPrototype const* proto = GetItemProtoCompat(item);
-    if (proto && proto->InventoryType != INVTYPE_NON_EQUIP && bot->CanUseItem(proto) == EQUIP_ERR_OK)
+    if (proto && proto->InventoryType != INVTYPE_NON_EQUIP && bot->CanUseItem(GetItemTemplateCompat(proto)) == EQUIP_ERR_OK)
     {
         flags += 'e';
         ai::ItemUsage usage = ai->GetAiObjectContext()->GetValue<ai::ItemUsage>("item usage",
@@ -437,7 +437,7 @@ bool HandleItem(ChatHandler* handler, char const* args)
             }
         }
 
-        if (equipped || proto->InventoryType == INVTYPE_NON_EQUIP || bot->CanUseItem(proto) != EQUIP_ERR_OK)
+        if (equipped || proto->InventoryType == INVTYPE_NON_EQUIP || bot->CanUseItem(GetItemTemplateCompat(proto)) != EQUIP_ERR_OK)
         {
             SendActionError(handler, intent, "cannot-equip", "The bot cannot equip this item.");
             return true;

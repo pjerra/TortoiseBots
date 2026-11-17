@@ -520,7 +520,7 @@ static bool OutOfRations(PlayerbotAI* ai)
     {
         ItemPrototype const* proto = GetItemProtoCompat(item);
 
-        if (!proto || proto->Class != ITEM_CLASS_CONSUMABLE || bot->CanUseItem(proto) != EQUIP_ERR_OK)
+        if (!proto || proto->Class != ITEM_CLASS_CONSUMABLE || bot->CanUseItem(GetItemTemplateCompat(proto)) != EQUIP_ERR_OK)
             continue;
 
         if (ItemUsageValue::IsHpFoodOrDrink(proto))

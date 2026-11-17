@@ -6079,7 +6079,7 @@ static bool CommanderUse(ChatHandler* handler, CommanderOrder const& order, Play
         SendActionError(handler, intent, RemoteCommander::kCodeNoItem, "The bot carries no such item in its bags.");
         return true;
     }
-    if (bot->CanUseItem(proto) != EQUIP_ERR_OK)
+    if (bot->CanUseItem(GetItemTemplateCompat(proto)) != EQUIP_ERR_OK)
     {
         SendActionError(handler, intent, RemoteCommander::kCodeFailed,
             "The bot cannot use that item (level, class or skill).");

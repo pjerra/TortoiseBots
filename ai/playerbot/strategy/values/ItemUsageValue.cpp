@@ -164,7 +164,7 @@ ItemUsage ItemUsageValue::Calculate()
         ItemUsage equip = QueryItemUsageForEquip(itemQualifier, bot);
         if (equip == ItemUsage::ITEM_USAGE_EQUIP || equip == ItemUsage::ITEM_USAGE_BAD_EQUIP || equip == ItemUsage::ITEM_USAGE_BROKEN_EQUIP)
             return equip;
-        if (bot->CanUseItem(proto) == EQUIP_ERR_OK && proto->InventoryType != INVTYPE_NON_EQUIP)
+        if (bot->CanUseItem(GetItemTemplateCompat(proto)) == EQUIP_ERR_OK && proto->InventoryType != INVTYPE_NON_EQUIP)
             return ItemUsage::ITEM_USAGE_EQUIP;
         return ItemUsage::ITEM_USAGE_KEEP;
     }
@@ -268,7 +268,7 @@ ItemUsage ItemUsageValue::Calculate()
                 if (bot->HasSpell(GetRecipeSpell(proto)))
                     needItem = false;
                 else
-                    needItem = bot->CanUseItem(proto) == EQUIP_ERR_OK;
+                    needItem = bot->CanUseItem(GetItemTemplateCompat(proto)) == EQUIP_ERR_OK;
             }
         }
 
@@ -335,7 +335,7 @@ ItemUsage ItemUsageValue::Calculate()
         //then is this lower tier surplus that may be sold.
         float betterStacks = isUsableConsumable ? BetterStacks(proto, foodType) : 0.0f;
 
-        if (isUsableConsumable && betterStacks < 1 && bot->CanUseItem(proto) == EQUIP_ERR_OK)
+        if (isUsableConsumable && betterStacks < 1 && bot->CanUseItem(GetItemTemplateCompat(proto)) == EQUIP_ERR_OK)
         {
             //A consumable the bot can actually use is never vendor trash - with
             //or without the item cheat. The random pool runs with
@@ -374,7 +374,7 @@ ItemUsage ItemUsageValue::Calculate()
 
     //EQUIP (bot-aware speed: dynamic mounts such as the 0-static-speed
     // turtle 30174 score at the rider's real speed).
-    if (MountValue::GetMountSpell(itemId) && bot->CanUseItem(proto) == EQUIP_ERR_OK)
+    if (MountValue::GetMountSpell(itemId) && bot->CanUseItem(GetItemTemplateCompat(proto)) == EQUIP_ERR_OK)
     {
         uint32 newSpell = MountValue::GetMountSpell(itemId);
         uint32 riderSpeed = MountValue::GetRiderMountSpeed(bot);
@@ -463,7 +463,7 @@ ItemUsage ItemUsageValue::Calculate()
     // AMMO
 if ((proto->Class == ITEM_CLASS_PROJECTILE ||
      (proto->Class == ITEM_CLASS_WEAPON && proto->SubClass == ITEM_SUBCLASS_WEAPON_THROWN)) &&
-    bot->CanUseItem(proto) == EQUIP_ERR_OK)
+    bot->CanUseItem(GetItemTemplateCompat(proto)) == EQUIP_ERR_OK)
 {
     if ((bot->GetClass() == CLASS_HUNTER && proto->Class != ITEM_CLASS_WEAPON) ||
         bot->GetClass() == CLASS_ROGUE ||
@@ -797,7 +797,7 @@ ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemQualifier& itemQualifier, P
     ChatHelper* chat = ai->GetChatHelper();
     ItemPrototype const* itemProto = itemQualifier.GetProto();
 
-    if (bot->CanUseItem(itemProto) != EQUIP_ERR_OK)
+    if (bot->CanUseItem(GetItemTemplateCompat(itemProto)) != EQUIP_ERR_OK)
         return ItemUsage::ITEM_USAGE_NONE;
 
     if (itemProto->InventoryType == INVTYPE_NON_EQUIP)
@@ -2371,7 +2371,7 @@ bool ItemUsageValue::IsFutureUpgrade(ItemQualifier& itemQualifier, Player* bot)
     if (!proto || !bot || (proto->Class != ITEM_CLASS_WEAPON && proto->Class != ITEM_CLASS_ARMOR))
         return false;
 
-    if (bot->CanUseItem(proto) != EQUIP_ERR_CANT_EQUIP_LEVEL_I ||
+    if (bot->CanUseItem(GetItemTemplateCompat(proto)) != EQUIP_ERR_CANT_EQUIP_LEVEL_I ||
         !ai::FutureUpgradeLevelOk(bot->GetLevel(), proto->RequiredLevel))
         return false;
 
