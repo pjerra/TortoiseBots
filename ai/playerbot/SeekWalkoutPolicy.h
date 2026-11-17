@@ -57,6 +57,9 @@ namespace ai
     // The siphon clock's start and retry floor: start to dose cloud a median 43 s and p90 54 s, and a start at due 50 s
     // doses 56 % of the time.
     constexpr std::uint32_t kSeekSiphonClockFloorMs = 50000;
+    // An unspent walk-out's one retry starts with this much left: a start at due 35 s pulls the Son at about 28 s,
+    // with the non-tank burn already open (the row's kill lead).
+    constexpr std::uint32_t kSeekRetryUnspentFloorMs = 35000;
 
     // The pulled Son meets a tank (walk 53): the walk back ends where a waiting off-tank stands, not at the circle's
     // edge. The Son that chased the puller lands on that tank instead of on the ranged raid. Taunt and Growl are melee
@@ -90,6 +93,10 @@ namespace ai
         bool hunterReachScan = false;
         bool platformPick = false;
         bool pickCastLater = false;
+        // The one refunded start (DungeonRunSeekRetryUnspent): a walk-out that never shot its Son does not count
+        // against maxPerCycle once a cycle, and its retry may start down to retryUnspentFloorMs before the siphon.
+        bool retryUnspent = false;
+        std::uint32_t retryUnspentFloorMs = 0;
     };
 
     // The rules a seek_pull row arms: `priority` walk-outs a cycle, `windowSec` the last start and the retry floor,
@@ -128,6 +135,18 @@ namespace ai
             rules.retryMinMs = kSeekSiphonClockFloorMs;
         if (rules.perCycleWalked)
             rules.noSightCutMs = kSeekWalkoutNoSightCutMs;
+        return rules;
+    }
+
+    // DungeonRunSeekRetryUnspent: the per-cycle rules also refund one unshot walk-out and lower its retry floors to
+    // kSeekRetryUnspentFloorMs. The old one-walk-out rules never change: no cycle cap to refund against.
+    inline WalkoutCycleRules WalkoutRetryUnspentRules(WalkoutCycleRules rules)
+    {
+        if (rules.perCycleWalked)
+        {
+            rules.retryUnspent = true;
+            rules.retryUnspentFloorMs = std::min(rules.retryMinMs, kSeekRetryUnspentFloorMs);
+        }
         return rules;
     }
 
@@ -1056,6 +1075,8 @@ namespace ai
         // The walk-outs started in cycle `countedCycle`, and when the running task's siphon is due (its start plus the
         // due time then; equal to the start when unknown, which never reopens the cycle).
         std::uint32_t countedCycle = 0xFFFFFFFFu;
+        // The cycle whose one unspent walk-out was refunded: a second abort in the same cycle never refunds again.
+        std::uint32_t refundCycle = 0xFFFFFFFFu;
         int cycleStarts = 0;
         std::uint32_t siphonDueMs = 0;
         // The walk back after a timeout or an abort: that puller, exempt until it is inside or kSeekWalkoutReturnMs.
@@ -1824,6 +1845,40 @@ namespace ai
         return false;
     }
 
+    // The cycle's own retry floor: the rules' floor, lowered while this cycle's unspent walk-out was refunded (its
+    // retry may start down to retryUnspentFloorMs before the siphon).
+    inline std::uint32_t WalkoutRetryFloorMs(const SeekWalkoutState& s, std::uint32_t cycleNo,
+                                             const WalkoutCycleRules& rules)
+    {
+        return rules.retryUnspent && s.refundCycle == cycleNo ? rules.retryUnspentFloorMs : rules.retryMinMs;
+    }
+
+    // The cycle's own first-start floor (0: no deadline), lowered for a refunded cycle the same way.
+    inline std::uint32_t WalkoutFirstStartFloorMs(const SeekWalkoutState& s, std::uint32_t cycleNo,
+                                                  const WalkoutCycleRules& rules)
+    {
+        if (rules.firstStartMinMs == 0)
+            return 0;
+        return rules.retryUnspent && s.refundCycle == cycleNo
+            ? std::min(rules.firstStartMinMs, rules.retryUnspentFloorMs) : rules.firstStartMinMs;
+    }
+
+    // DungeonRunSeekRetryUnspent: an unshot walk-out that ends before the siphon is too close for a retry to pull
+    // anything does not count against the cycle's cap, once per cycle: its one retry fits where the row's cap would
+    // have spent the cycle. Only an unshot abort refunds, and only once (refundCycle); a timeout and a shot walk-out
+    // keep their start counted.
+    inline bool WalkoutRefundUnspent(SeekWalkoutState& s, std::uint32_t nowMs, const WalkoutCycleRules& rules)
+    {
+        if (!rules.retryUnspent || !WalkoutActive(s) || s.shot || s.cycleStarts < 1 ||
+            s.refundCycle == s.countedCycle ||
+            static_cast<std::int32_t>(s.siphonDueMs - nowMs) <=
+                static_cast<std::int32_t>(rules.retryUnspentFloorMs))
+            return false;
+        s.refundCycle = s.countedCycle;
+        --s.cycleStarts;
+        return true;
+    }
+
     // A retry (a second walk-out in the cycle) starts only while the siphon is still more than the rules' retry floor
     // away, read when it starts against the deadline stored by the cycle's first walk-out: the failed puller's walk
     // back (up to kSeekWalkoutReturnMs) runs between the end that reopened the cycle and this start.
@@ -1832,20 +1887,22 @@ namespace ai
     {
         if (s.countedCycle != cycleNo || s.cycleStarts < 1)
             return true;
-        return static_cast<std::int32_t>(s.siphonDueMs - nowMs) > static_cast<std::int32_t>(rules.retryMinMs);
+        return static_cast<std::int32_t>(s.siphonDueMs - nowMs) >
+            static_cast<std::int32_t>(WalkoutRetryFloorMs(s, cycleNo, rules));
     }
 
     // A new task for this puller: WalkoutMayStart, the bot not sitting out its exclusion (a scan cached before the
     // exclusion may still name it), a retry still in time (WalkoutRetryStartInTime), and the next Blood Siphon due in
     // rules.startLeadMs or less (`dueInMs`, 0 once due): the dose window's whole length, so the Son is back
     // and burned before the siphon (the 12 s non-tank burn, SeekAuraPolicy.h kSeekNonTankBurnMs, keeps it off the
-    // healers meanwhile). A seek_pull row's `firstStartMinMs` also refuses any start with less time left.
+    // healers meanwhile). A seek_pull row's `firstStartMinMs` also refuses any start with less time left; a refunded
+    // cycle's floor is the retry's own (WalkoutFirstStartFloorMs).
     inline bool WalkoutMayStartFor(const SeekWalkoutState& s, std::uint32_t cycleNo, std::uint64_t son,
                                    std::uint64_t bot, std::uint32_t nowMs, std::uint32_t dueInMs,
                                    const WalkoutCycleRules& rules = WalkoutCycleRules())
     {
         return dueInMs <= rules.startLeadMs &&
-            (rules.firstStartMinMs == 0 || dueInMs >= rules.firstStartMinMs) &&
+            dueInMs >= WalkoutFirstStartFloorMs(s, cycleNo, rules) &&
             WalkoutMayStart(s, cycleNo, son, rules) &&
             !WalkoutExcluded(s, bot, nowMs) && WalkoutRetryStartInTime(s, cycleNo, nowMs, rules);
     }
@@ -1974,14 +2031,17 @@ namespace ai
     // cast is cut `rules.noSightCutMs` after its start, so the cycle reopens with time for a retry. Only with the
     // in-shot clock on (DungeonRunSeekWalkoutFaceCast): without it firstInShotMs is never written. The cut is worth
     // nothing when the retry floor already refuses any later start, so it waits for the siphon to stay more than
-    // rules.retryMinMs plus the walk-back margin away; otherwise the task runs to its 25 s timeout as before.
+    // rules.retryMinMs plus the walk-back margin away; otherwise the task runs to its 25 s timeout as before. A cycle
+    // with its refund still to spend keeps the retry's own, lower floor (the refund itself waits for it).
     inline bool WalkoutNoSightCutDue(const SeekWalkoutState& s, std::uint32_t nowMs, const WalkoutCycleRules& rules,
                                      bool inShotClockOn)
     {
+        std::uint32_t const floorMs = rules.retryUnspent && s.refundCycle != s.countedCycle
+            ? rules.retryUnspentFloorMs : rules.retryMinMs;
         return inShotClockOn && rules.noSightCutMs != 0 && WalkoutActive(s) && !s.shot && s.pullCastMs == 0 &&
             s.firstInShotMs == 0 && nowMs - s.startMs >= rules.noSightCutMs &&
             static_cast<std::int32_t>(s.siphonDueMs - nowMs) >
-                static_cast<std::int32_t>(rules.retryMinMs + kSeekWalkoutNoSightRetryMarginMs);
+                static_cast<std::int32_t>(floorMs + kSeekWalkoutNoSightRetryMarginMs);
     }
 
     enum class WalkoutEnd : std::uint8_t
@@ -2007,22 +2067,27 @@ namespace ai
     }
 
     // A failed walk-out (a timeout, no stand, a refused cast or move) leaves the cycle open only while the siphon is
-    // more than kSeekWalkoutRetryMinMs away (a later Son is not back and burned before it) and fewer than
-    // kSeekWalkoutMaxPerCycle (the rules') started in the cycle: with one per cycle, never.
+    // more than the cycle's retry floor away (a later Son is not back and burned before it) and fewer than
+    // kSeekWalkoutMaxPerCycle (the rules') started in the cycle: with one per cycle, never. A refunded cycle's floor is
+    // the retry's own (WalkoutRetryFloorMs).
     inline bool WalkoutRetryAllowed(const SeekWalkoutState& s, std::uint32_t nowMs,
                                     const WalkoutCycleRules& rules = WalkoutCycleRules())
     {
         return s.cycleStarts < rules.maxPerCycle &&
-            static_cast<std::int32_t>(s.siphonDueMs - nowMs) > static_cast<std::int32_t>(rules.retryMinMs);
+            static_cast<std::int32_t>(s.siphonDueMs - nowMs) >
+                static_cast<std::int32_t>(WalkoutRetryFloorMs(s, s.countedCycle, rules));
     }
 
     // The task ends: a Back end is inside already; a timeout or an abort leaves the puller outside, so its walk back
     // starts (exempt for kSeekWalkoutReturnMs at most). A timeout undoes the task's cycle mark when a retry is allowed
     // (its Son stays walked, so the retry goes to another one); a seek_pull row reopens on an abort too, but never
-    // after the shot landed (that walk-out did happen). With the defaults that is never. True: the cycle was reopened.
+    // after the shot landed (that walk-out did happen). With the defaults that is never. An unshot abort refunds the
+    // cycle's one unspent start first, so the reopen test sees the refunded count. True: the cycle was reopened.
     inline bool WalkoutFinish(SeekWalkoutState& s, WalkoutEnd end, std::uint32_t nowMs,
                               const WalkoutCycleRules& rules = WalkoutCycleRules())
     {
+        if (end == WalkoutEnd::Abort && rules.reopenOnAbort)
+            WalkoutRefundUnspent(s, nowMs, rules);
         bool reopened = false;
         if ((end == WalkoutEnd::Timeout || (rules.reopenOnAbort && end == WalkoutEnd::Abort)) &&
             WalkoutActive(s) && !s.shot && WalkoutRetryAllowed(s, nowMs, rules))
@@ -2117,6 +2182,7 @@ namespace ai
     {
         if (!WalkoutActive(s))
             return;
+        WalkoutRefundUnspent(s, nowMs, rules);
         if (freeSon)
             WalkoutEraseWalked(s, s.son);
         if (WalkoutRetryAllowed(s, nowMs, rules))

@@ -867,6 +867,11 @@ public:
     // 25 s, and a seek_pull row's start and retry floors are lowered to 50 s (never raised; defaults off, recommended
     // on). Off keeps today's clock: the 25 s timeout and the row's own 60 s floors.
     bool dungeonRunSeekSiphonClock = false;
+    // The unspent walk-out's one retry (Hakkar's seek pull; needs dungeonRunSeekPullCycle): a walk-out that never shot
+    // its Son does not count against the cycle's walk-outs once a cycle, and that cycle's start and retry floors drop to
+    // 35 s before the siphon (never raised), so one aborted walk-out no longer costs the siphon its dose. The row keeps
+    // one Son a siphon: a walk-out whose shot landed is never refunded (default off, recommended on).
+    bool dungeonRunSeekRetryUnspent = false;
     // The rolled cycle number (Hakkar's seek pull; needs DungeonRunSeekPullCycle): when a due time rolls past a
     // missed sighting, the record's cycle number advances by the rolls too, so the walk-out's spent cycle reopens and a
     // later Son can still be pulled; the estimated sighting time moves with it (default off, recommended on).
