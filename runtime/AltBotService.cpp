@@ -58,8 +58,8 @@ uint32_t FreeBagSlots(Player* bot)
     for (uint8 bag = INVENTORY_SLOT_BAG_START; bag < INVENTORY_SLOT_BAG_END; ++bag)
     {
         Bag const* pBag = dynamic_cast<Bag const*>(bot->GetItemByPos(INVENTORY_SLOT_BAG_0, bag));
-        if (pBag && pBag->GetProto()->Class == ITEM_CLASS_CONTAINER &&
-            pBag->GetProto()->SubClass == ITEM_SUBCLASS_CONTAINER)
+        if (pBag && GetItemProtoCompat(pBag)->Class == ITEM_CLASS_CONTAINER &&
+            GetItemProtoCompat(pBag)->SubClass == ITEM_SUBCLASS_CONTAINER)
             free += pBag->GetFreeSlots();
     }
     return free;
@@ -94,7 +94,7 @@ std::vector<std::string> AwayEquippedLinks(Player* bot, AltBotAwayPoint const& f
         if (!to.equipped[slot] || to.equipped[slot] == from.equipped[slot])
             continue;
         Item const* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, static_cast<uint8>(slot));
-        if (!item || !item->GetProto() || item->GetProto()->Quality < ITEM_QUALITY_UNCOMMON)
+        if (!item || !GetItemProtoCompat(item) || GetItemProtoCompat(item)->Quality < ITEM_QUALITY_UNCOMMON)
             continue;
         links.push_back(ai::ChatHelper::formatItem(const_cast<Item*>(item)));
     }

@@ -39,7 +39,7 @@ bool BankAction::ExecuteCommand(Player* requester, const std::string& text, Unit
         for (std::list<Item*>::iterator i = found.begin(); i != found.end(); i++)
         {
             Item* item = *i;
-            result |= Withdraw(requester, item->GetProto()->ItemId);
+            result |= Withdraw(requester, GetItemProtoCompat(item)->ItemId);
         }
     }
     else
@@ -116,8 +116,8 @@ void BankAction::ListItems(Player* requester)
         {
             if (pItem)
             {
-                items[pItem->GetProto()->ItemId] += pItem->GetCount();
-                soulbound[pItem->GetProto()->ItemId] = pItem->IsSoulBound();
+                items[GetItemProtoCompat(pItem)->ItemId] += pItem->GetCount();
+                soulbound[GetItemProtoCompat(pItem)->ItemId] = pItem->IsSoulBound();
             }
         }
     }
@@ -134,8 +134,8 @@ void BankAction::ListItems(Player* requester)
                     {
                         if (pItem)
                         {
-                            items[pItem->GetProto()->ItemId] += pItem->GetCount();
-                            soulbound[pItem->GetProto()->ItemId] = pItem->IsSoulBound();
+                            items[GetItemProtoCompat(pItem)->ItemId] += pItem->GetCount();
+                            soulbound[GetItemProtoCompat(pItem)->ItemId] = pItem->IsSoulBound();
                         }
                     }
                 }
@@ -153,7 +153,7 @@ Item* BankAction::FindItemInBank(uint32 ItemId)
         Item* const pItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
         if (pItem)
         {
-            const ItemPrototype* const pItemProto = pItem->GetProto();
+            const ItemPrototype* const pItemProto = GetItemProtoCompat(pItem);
             if (!pItemProto)
                 continue;
 
@@ -172,7 +172,7 @@ Item* BankAction::FindItemInBank(uint32 ItemId)
                 Item* const pItem = bot->GetItemByPos(bag, slot);
                 if (pItem)
                 {
-                    const ItemPrototype* const pItemProto = pItem->GetProto();
+                    const ItemPrototype* const pItemProto = GetItemProtoCompat(pItem);
                     if (!pItemProto)
                         continue;
 

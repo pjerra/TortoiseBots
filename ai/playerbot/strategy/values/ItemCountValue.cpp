@@ -50,7 +50,7 @@ std::list<Item*> EquipedUsableTrinketValue::Calculate()
 
 	for (Item * item : trinkets)
 	{
-		ItemPrototype const* proto = item->GetProto();
+		ItemPrototype const* proto = GetItemProtoCompat(item);
 
 		for (uint8 i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
 		{

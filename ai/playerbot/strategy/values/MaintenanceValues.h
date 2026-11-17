@@ -226,7 +226,7 @@ namespace ai
             float minDeposit = 0;
             for (auto item : AI_VALUE2(std::list<Item*>, "inventory items", "usage " + std::to_string((uint8)ItemUsage::ITEM_USAGE_AH)))
             {
-                uint32 deposit = ItemUsageValue::GetAhDepositCost(item->GetProto(), item->GetCount());
+                uint32 deposit = ItemUsageValue::GetAhDepositCost(GetItemProtoCompat(item), item->GetCount());
 
                 if (minDeposit == 0 || deposit < minDeposit)
                     minDeposit = deposit;

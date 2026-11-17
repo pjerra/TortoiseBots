@@ -100,7 +100,7 @@ uint32_t UnequipAboveCapWorn(Player* bot, uint32_t cap)
     for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
     {
         Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
-        ItemPrototype const* proto = item ? item->GetProto() : nullptr;
+        ItemPrototype const* proto = item ? GetItemProtoCompat(item) : nullptr;
         if (!proto)
             continue;
         if (proto->Class != BotGear::ITEM_CLASS_WEAPON && proto->Class != BotGear::ITEM_CLASS_ARMOR)
@@ -167,7 +167,7 @@ uint32_t BotGearService::WornMaxIlvl(Player* bot)
         if (slot == EQUIPMENT_SLOT_BODY || slot == EQUIPMENT_SLOT_TABARD)
             continue;
         Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
-        ItemPrototype const* proto = item ? item->GetProto() : nullptr;
+        ItemPrototype const* proto = item ? GetItemProtoCompat(item) : nullptr;
         if (proto && proto->ItemLevel > wornMax)
             wornMax = proto->ItemLevel;
     }
@@ -185,7 +185,7 @@ float BotGearService::AverageWornIlvl(Player* bot)
         if (slot == EQUIPMENT_SLOT_BODY || slot == EQUIPMENT_SLOT_TABARD)
             continue;
         Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
-        ItemPrototype const* proto = item ? item->GetProto() : nullptr;
+        ItemPrototype const* proto = item ? GetItemProtoCompat(item) : nullptr;
         if (!proto)
             continue;
         sum += proto->ItemLevel;
@@ -302,7 +302,7 @@ void BotGearService::Update(uint32_t /*diff*/)
         {
             if (!item)
                 return;
-            ItemPrototype const* proto = item->GetProto();
+            ItemPrototype const* proto = GetItemProtoCompat(item);
             if (!proto)
                 return;
             if (!BotGear::PurgeBagItem(proto->Class, proto->InventoryType, proto->ItemLevel, m_job.args.ilvlCap, wornMax))

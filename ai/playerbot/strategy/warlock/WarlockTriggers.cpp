@@ -70,11 +70,11 @@ bool HasHoldableStoneToEquip(Player* bot, std::list<Item*> const& stones)
     slots.offHandEmpty = !bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
     Item* mainHand = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
     slots.hasMainHand = mainHand != nullptr;
-    slots.mainHandInventoryType = mainHand ? mainHand->GetProto()->InventoryType : 0;
+    slots.mainHandInventoryType = mainHand ? GetItemProtoCompat(mainHand)->InventoryType : 0;
     for (Item* stone : stones)
     {
         if (stone && !stone->IsEquipped() &&
-            TortoiseBots::CanHoldWarlockStone(stone->GetProto()->InventoryType, slots))
+            TortoiseBots::CanHoldWarlockStone(GetItemProtoCompat(stone)->InventoryType, slots))
             return true;
     }
     return false;

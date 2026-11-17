@@ -4655,7 +4655,7 @@ uint32 RandomItemMgr::CalculateBestBotEnchantId(Player* bot, uint32 specId, Item
     if (botEnchantCandidates.empty())
         return 0;
 
-    ItemPrototype const* proto = item->GetProto();
+    ItemPrototype const* proto = GetItemProtoCompat(item);
     if (!proto)
         return 0;
 

@@ -366,7 +366,7 @@ bool PlayerbotAI::GetSpellRange(std::string name, float* maxRange, float* minRan
                 {
                     if (Item* rangedWeapon = bot->GetWeaponForAttack(RANGED_ATTACK))
                     {
-                        spellMaxRange *= rangedWeapon->GetProto()->RangedModRange * 0.01f;
+                        spellMaxRange *= GetItemProtoCompat(rangedWeapon)->RangedModRange * 0.01f;
                     }
                 }
 
@@ -2201,7 +2201,7 @@ bool PlayerbotAI::HasSpellItems(uint32 spellId, const Item* castItem) const
                     // if CastItem is also spell reagent
                     if (castItem && castItem->GetEntry() == itemid)
                     {
-                        const ItemPrototype* proto = castItem->GetProto();
+                        const ItemPrototype* proto = GetItemProtoCompat(castItem);
                         if (!proto)
                         {
                             return false;

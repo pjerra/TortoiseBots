@@ -428,7 +428,7 @@ bool UseConsumableAction::HasAnyCandidateAura(const ConsumableCandidate& candida
     std::vector<uint32> auraIds;
     CollectPossibleAuraIds(candidate.spellId, auraIds);
 
-    const ItemPrototype* proto = candidate.item->GetProto();
+    const ItemPrototype* proto = GetItemProtoCompat(candidate.item);
     if (proto)
     {
         for (int i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
@@ -723,7 +723,7 @@ std::vector<ConsumableCandidate> UseConsumableAction::CollectCandidates()
             if (!item)
                 continue;
 
-            const ItemPrototype* proto = item->GetProto();
+            const ItemPrototype* proto = GetItemProtoCompat(item);
             if (!proto || proto->Class != ITEM_CLASS_CONSUMABLE)
                 continue;
 
@@ -750,7 +750,7 @@ std::vector<ConsumableCandidate> UseConsumableAction::CollectCandidates()
         if (!item)
             continue;
 
-        const ItemPrototype* proto = item->GetProto();
+        const ItemPrototype* proto = GetItemProtoCompat(item);
         if (!proto || proto->Class != ITEM_CLASS_CONSUMABLE)
             continue;
 
@@ -829,17 +829,17 @@ bool UseConsumableAction::Execute(Event& event)
             if (hasFlask)
                 continue;
 
-            selectedItemId = c.item->GetProto()->ItemId;
+            selectedItemId = GetItemProtoCompat(c.item)->ItemId;
             break;
         }
         case ConsumableType::Elixir:
         {
-            selectedItemId = c.item->GetProto()->ItemId;
+            selectedItemId = GetItemProtoCompat(c.item)->ItemId;
             break;
         }
         case ConsumableType::Alcohol:
         {
-            selectedItemId = c.item->GetProto()->ItemId;
+            selectedItemId = GetItemProtoCompat(c.item)->ItemId;
             break;
         }
         case ConsumableType::FoodBuff:
@@ -847,15 +847,15 @@ bool UseConsumableAction::Execute(Event& event)
             if (hasFoodBuff)
                 continue;
 
-            if (IsFoodOrDrink(c.item->GetProto()))
+            if (IsFoodOrDrink(GetItemProtoCompat(c.item)))
                 ai->StopMoving();
 
-            selectedItemId = c.item->GetProto()->ItemId;
+            selectedItemId = GetItemProtoCompat(c.item)->ItemId;
             break;
         }
         case ConsumableType::Scroll:
         {
-            selectedItemId = c.item->GetProto()->ItemId;
+            selectedItemId = GetItemProtoCompat(c.item)->ItemId;
             break;
         }
         default:

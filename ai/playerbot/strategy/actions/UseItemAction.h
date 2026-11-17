@@ -118,7 +118,7 @@ namespace ai
                 return sRandomItemMgr.GetRandomPotion(bot->GetLevel(), effect);
             }
 
-            return items.front()->GetProto()->ItemId;
+            return GetItemProtoCompat(items.front())->ItemId;
         }
 
         bool Execute(Event& event) override
@@ -229,7 +229,7 @@ namespace ai
                 }
             }
 
-            return items.front()->GetProto()->ItemId;
+            return GetItemProtoCompat(items.front())->ItemId;
         }
 
         bool Execute(Event& event) override

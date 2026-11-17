@@ -78,7 +78,7 @@ std::string WhoAction::QueryTrade(std::string text)
     for (std::list<Item*>::iterator i = items.begin(); i != items.end(); ++i)
     {
         Item* sell = *i;
-        int32 sellPrice = ItemUsageValue::GetBotSellPrice(sell->GetProto(), bot) * sell->GetCount();
+        int32 sellPrice = ItemUsageValue::GetBotSellPrice(GetItemProtoCompat(sell), bot) * sell->GetCount();
         if (!sellPrice)
             continue;
 

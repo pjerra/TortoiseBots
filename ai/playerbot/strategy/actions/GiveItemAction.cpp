@@ -37,10 +37,10 @@ bool GiveItemAction::Execute(Event& event)
             continue;
 
         // Never hand over order stock to another bot.
-        if (bot->GetGuildId() && GuildOrderConsumesItem(bot, item->GetProto()->ItemId))
+        if (bot->GetGuildId() && GuildOrderConsumesItem(bot, GetItemProtoCompat(item)->ItemId))
             continue;
 
-        if (receiver->CanUseItem(item->GetProto()) != EQUIP_ERR_OK)
+        if (receiver->CanUseItem(GetItemProtoCompat(item)) != EQUIP_ERR_OK)
             continue;
 
         ItemPosCountVec dest;

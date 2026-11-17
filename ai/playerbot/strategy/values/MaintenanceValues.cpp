@@ -441,7 +441,7 @@ static void CountBagSlots(Player* bot, uint32& used, uint32& total)
         Bag const* pBag = (Bag const*)bot->GetItemByPos(INVENTORY_SLOT_BAG_0, bag);
         if (pBag)
         {
-            ItemPrototype const* pBagProto = pBag->GetProto();
+            ItemPrototype const* pBagProto = GetItemProtoCompat(pBag);
             if (pBagProto && pBagProto->Class == ITEM_CLASS_CONTAINER && pBagProto->SubClass == ITEM_SUBCLASS_CONTAINER)
             {
                 total += pBag->GetBagSize();
@@ -461,7 +461,7 @@ static uint32 SellableVendorSlots(PlayerbotAI* ai)
 
     for (Item* item : AI_VALUE2(std::list<Item*>, "inventory items", "usage " + std::to_string((uint8)ItemUsage::ITEM_USAGE_VENDOR)))
     {
-        ItemPrototype const* proto = item ? item->GetProto() : nullptr;
+        ItemPrototype const* proto = item ? GetItemProtoCompat(item) : nullptr;
 
         if (proto && proto->SellPrice > 0)
             sellable++;
@@ -518,7 +518,7 @@ static bool OutOfRations(PlayerbotAI* ai)
 
     for (Item* item : AI_VALUE2(std::list<Item*>, "inventory items", "inventory"))
     {
-        ItemPrototype const* proto = item->GetProto();
+        ItemPrototype const* proto = GetItemProtoCompat(item);
 
         if (!proto || proto->Class != ITEM_CLASS_CONSUMABLE || bot->CanUseItem(proto) != EQUIP_ERR_OK)
             continue;
@@ -633,7 +633,7 @@ bool ai::SellableStockWorthAVendorTrip(PlayerbotAI* ai)
     uint32 sellableCount = 0;
     for (Item* item : SellAction::VendorSaleStock(ai))
     {
-        ItemPrototype const* proto = item->GetProto();
+        ItemPrototype const* proto = GetItemProtoCompat(item);
 
         sellValue += proto->SellPrice * item->GetCount();
         sellableCount += item->GetCount();

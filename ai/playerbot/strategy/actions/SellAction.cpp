@@ -59,7 +59,7 @@ bool SellAction::Execute(Event& event)
 
     if (event.GetSource() == "rpg action")
     {
-        items.sort([](Item* i, Item* j) {return i->GetProto()->SellPrice * i->GetCount() < j->GetProto()->SellPrice * j->GetCount(); }); //Sell cheapest items first.
+        items.sort([](Item* i, Item* j) {return GetItemProtoCompat(i)->SellPrice * i->GetCount() < GetItemProtoCompat(j)->SellPrice * j->GetCount(); }); //Sell cheapest items first.
     }
 
     uint32 soldItems = 0;
@@ -81,7 +81,7 @@ bool SellAction::Execute(Event& event)
         // Issue #489: Claimed bots never auto-vendor gear at level 60, and never vendor blue/epic items while leveling
         if (isClaimed && event.GetSource() == "rpg action")
         {
-            ItemPrototype const* proto = (*i)->GetProto();
+            ItemPrototype const* proto = GetItemProtoCompat((*i));
             uint32 quality = proto ? proto->Quality : 0;
             if (!TortoiseBots::MayClaimedBotAutoVendor(bot->GetLevel(), quality, true))
                 continue;
@@ -89,7 +89,7 @@ bool SellAction::Execute(Event& event)
         if (isAltBot)
         {
             Item* item = *i;
-            ItemPrototype const* proto = item ? item->GetProto() : nullptr;
+            ItemPrototype const* proto = item ? GetItemProtoCompat(item) : nullptr;
             uint32 quality = proto ? proto->Quality : 0;
             bool equipped = false;
             for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
@@ -120,7 +120,7 @@ bool SellAction::Execute(Event& event)
         uint32 vendorUsage = 0;
         for (Item* item : items)
         {
-            if (item->GetProto()->SellPrice)
+            if (GetItemProtoCompat(item)->SellPrice)
                 sellable++;
             if (AI_VALUE2_LAZY(ItemUsage, "item usage", ItemQualifier(item).GetQualifier()) == ItemUsage::ITEM_USAGE_VENDOR)
                 vendorUsage++;
@@ -218,7 +218,7 @@ std::list<Item*> SellAction::VendorSaleStock(PlayerbotAI* ai, bool includeAH)
     bool const isClaimed = TortoiseBots::ClaimLifecycle::Instance().IsClaimed(bot->GetGUIDLow());
     stock.remove_if([&](Item* item)
     {
-        ItemPrototype const* proto = item ? item->GetProto() : nullptr;
+        ItemPrototype const* proto = item ? GetItemProtoCompat(item) : nullptr;
         if (!proto || !proto->SellPrice)
             return true;
         if (!TortoiseBots::MayClaimedBotAutoVendor(bot->GetLevel(), proto->Quality, isClaimed))
@@ -242,13 +242,13 @@ bool SellAction::Sell(Player* requester, Item* item)
     // A guild order's protected items are never sold: quality and vendor
     // filters bypass usage, so the check repeats the keep set here (order
     // item, supply item, whole known-recipe reagent tree).
-    if (item && ai->GetBot()->GetGuildId() && GuildOrderConsumesItem(ai->GetBot(), item->GetProto()->ItemId))
+    if (item && ai->GetBot()->GetGuildId() && GuildOrderConsumesItem(ai->GetBot(), GetItemProtoCompat(item)->ItemId))
         return false;
     // Same set computed fresh on this map thread: a sale cannot be undone,
     // so a stale or not yet computed stored set must not let one through.
     if (item && ai->GetBot()->GetGuildId())
     {
-        uint32 const itemId = item->GetProto()->ItemId;
+        uint32 const itemId = GetItemProtoCompat(item)->ItemId;
         std::optional<TortoiseBots::GuildOrders::OrderRecord> order =
             TortoiseBots::GuildOrders::Find(ai->GetBot()->GetGUIDLow());
         if (order && !order->cancelled && order->state == TortoiseBots::GuildOrders::OrderState::Working)
@@ -267,7 +267,7 @@ bool SellAction::Sell(Player* requester, Item* item)
                 }, kept);
             if (kept.count(itemId))
             {
-                sPlayerbotAIConfig.logEvent(ai, "OrderKeepMiss", item->GetProto()->Name1, std::to_string(itemId));
+                sPlayerbotAIConfig.logEvent(ai, "OrderKeepMiss", GetItemProtoCompat(item)->Name1, std::to_string(itemId));
                 return false;
             }
         }
@@ -289,7 +289,7 @@ bool SellAction::Sell(Player* requester, Item* item)
         // interacting: quest givers like Palin (quest 60042) are still served via the quest verbs.
         if (!HasVendorStock(pCreature))
             continue;
-        if (!item->GetProto()->SellPrice)
+        if (!GetItemProtoCompat(item)->SellPrice)
         {
             if(ai->HasActivePlayerMaster())
                 out << "Unable to sell " << chat->formatItem(item);
@@ -302,7 +302,7 @@ bool SellAction::Sell(Player* requester, Item* item)
 
         uint32 botMoney = bot->GetMoney();
 
-        sPlayerbotAIConfig.logEvent(ai, "SellAction", item->GetProto()->Name1, std::to_string(item->GetProto()->ItemId));
+        sPlayerbotAIConfig.logEvent(ai, "SellAction", GetItemProtoCompat(item)->Name1, std::to_string(GetItemProtoCompat(item)->ItemId));
 
         WorldPacket p;
         p << vendorguid << itemguid << count;

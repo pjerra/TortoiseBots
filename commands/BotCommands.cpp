@@ -229,7 +229,7 @@ bool HandleAutogear(ChatHandler* handler, char const* args)
     // equipped has none in the bags (auto shot cannot fire), like the tank's
     // "no shield equipped" warning.
     Item const* ranged = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED);
-    ItemPrototype const* rangedProto = ranged ? ranged->GetProto() : nullptr;
+    ItemPrototype const* rangedProto = ranged ? GetItemProtoCompat(ranged) : nullptr;
     if (rangedProto && rangedProto->Class == ITEM_CLASS_WEAPON && !factory.HasAmmoInBagsFor(rangedProto->SubClass))
     {
         bool const gun = rangedProto->SubClass == ITEM_SUBCLASS_WEAPON_GUN;
@@ -475,7 +475,7 @@ static bool HandlePlayerAutogear(ChatHandler* handler, char const* args)
     factory.AutogearPlayer(specId, ilvl.effective, ilvl.effective > defaultCeiling);
 
     Item const* ranged = target->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED);
-    ItemPrototype const* rangedProto = ranged ? ranged->GetProto() : nullptr;
+    ItemPrototype const* rangedProto = ranged ? GetItemProtoCompat(ranged) : nullptr;
 
     // Autogear hands out no ammo: warn when the equipped ranged weapon has
     // none in the bags, like the owned-bot command does.

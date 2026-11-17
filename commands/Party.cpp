@@ -956,7 +956,7 @@ bool HandleRole(ChatHandler* handler, char const* args)
         if (cls == CLASS_WARRIOR || cls == CLASS_PALADIN)
         {
             Item const* offhand = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
-            ItemPrototype const* offProto = offhand ? offhand->GetProto() : nullptr;
+            ItemPrototype const* offProto = offhand ? GetItemProtoCompat(offhand) : nullptr;
             bool hasShield = offProto && offProto->Class == ITEM_CLASS_ARMOR &&
                 offProto->SubClass == ITEM_SUBCLASS_ARMOR_SHIELD;
             if (!hasShield)
@@ -973,7 +973,7 @@ bool HandleRole(ChatHandler* handler, char const* args)
             // (Totemic Alignment / Spirit Armor) backs the role (issue #1125);
             // only ungeared/undetectable shamans get the squishy warning.
             Item const* shamanOffhand = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
-            ItemPrototype const* shamanOffProto = shamanOffhand ? shamanOffhand->GetProto() : nullptr;
+            ItemPrototype const* shamanOffProto = shamanOffhand ? GetItemProtoCompat(shamanOffhand) : nullptr;
             bool shamanShield = shamanOffProto && shamanOffProto->Class == ITEM_CLASS_ARMOR &&
                 shamanOffProto->SubClass == ITEM_SUBCLASS_ARMOR_SHIELD;
             bool shamanTalented = bot->HasSpell(51382) || bot->HasSpell(51381) ||

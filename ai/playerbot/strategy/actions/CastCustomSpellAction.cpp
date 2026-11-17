@@ -882,7 +882,7 @@ bool MailServiceStackBack(Player* bot, uint32_t senderLow, Item* item, std::stri
     if (reason.empty())
         body << "Here are the materials from your disenchant request.\n\n";
     else
-        body << "I could not disenchant this (" << item->GetProto()->Name1 << "): " << reason << ".\n\n";
+        body << "I could not disenchant this (" << GetItemProtoCompat(item)->Name1 << "): " << reason << ".\n\n";
     body << bot->GetName() << '\n';
     bot->MoveItemFromInventory(item->GetBagSlot(), item->GetSlot(), true);
     item->DeleteFromInventoryDB();
@@ -1090,7 +1090,7 @@ bool GuildDisenchantServiceAction::Execute(Event& event)
         queue.erase(queue.begin());
         return false;
     }
-    ItemPrototype const* proto = item->GetProto();
+    ItemPrototype const* proto = GetItemProtoCompat(item);
     if (!proto)
     {
         TortoiseBots::GuildOrders::DeleteDisenchantRow(bot->GetGUIDLow(), queued.itemGuidLow);

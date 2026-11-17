@@ -111,7 +111,7 @@ std::list<Item*> ItemsUsefulToEnchantValue::Calculate()
         if (!item)
             continue;
 
-        if (PHAS_AI_VALUE2("force item usage", item->GetProto()->ItemId))
+        if (PHAS_AI_VALUE2("force item usage", GetItemProtoCompat(item)->ItemId))
             continue;
 
         // Only trade equipped items

@@ -96,7 +96,7 @@ bool SendMailAction::Execute(Event& event)
         {
             Item* item = *i;
             // Never mail away order stock.
-            if (item && bot->GetGuildId() && GuildOrderConsumesItem(bot, item->GetProto()->ItemId))
+            if (item && bot->GetGuildId() && GuildOrderConsumesItem(bot, GetItemProtoCompat(item)->ItemId))
                 continue;
             if (item->IsSoulBound() || item->IsConjuredConsumable())
             {
@@ -106,7 +106,7 @@ bool SendMailAction::Execute(Event& event)
                 continue;
             }
 
-            ItemPrototype const *proto = item->GetProto();
+            ItemPrototype const *proto = GetItemProtoCompat(item);
             bot->MoveItemFromInventory(item->GetBagSlot(), item->GetSlot(), true);
             item->DeleteFromInventoryDB();
             item->SetOwnerGuid(receiver->getObjectGuid());

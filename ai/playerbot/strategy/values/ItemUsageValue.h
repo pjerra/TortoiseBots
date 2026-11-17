@@ -11,7 +11,7 @@ namespace ai
     public:
         ItemQualifier() : itemId(0), enchantId(0), randomPropertyId(0), proto(nullptr) {}
         ItemQualifier(uint32 itemId, int32 randomPropertyId = 0, uint32 enchantId = 0) : itemId(itemId), randomPropertyId(randomPropertyId), enchantId(enchantId), proto(nullptr) {}
-        ItemQualifier(Item* item) : itemId(item->GetProto()->ItemId), enchantId(item->GetEnchantmentId(PERM_ENCHANTMENT_SLOT)), randomPropertyId(item->GetItemRandomPropertyId()), proto(item->GetProto()) {}
+        ItemQualifier(Item* item) : itemId(GetItemProtoCompat(item)->ItemId), enchantId(item->GetEnchantmentId(PERM_ENCHANTMENT_SLOT)), randomPropertyId(item->GetItemRandomPropertyId()), proto(GetItemProtoCompat(item)) {}
         ItemQualifier(LootItem* item) : itemId(item->itemid), enchantId(0), randomPropertyId(item->randomPropertyId), proto(nullptr) {}
         ItemQualifier(AuctionEntry* auction) : itemId(auction->itemTemplate), enchantId(0), randomPropertyId(0), proto(nullptr) {}
         // Penqle AuctionEntry exposes template/guid; item instance carries random properties.

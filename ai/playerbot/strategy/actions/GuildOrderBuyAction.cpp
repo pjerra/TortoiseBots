@@ -187,7 +187,7 @@ uint32_t LowestListingUnitPrice(AuctionHouseObject* auctionHouse, uint32_t itemI
         if (!auction || !auction->buyout)
             continue;
         Item* item = sAuctionMgr.GetAItem(auction->itemGuidLow);
-        if (!item || item->GetProto()->ItemId != itemId || !item->GetCount())
+        if (!item || GetItemProtoCompat(item)->ItemId != itemId || !item->GetCount())
             continue;
         uint32_t const unit = AuctionUnitPrice(auction->buyout, item->GetCount());
         if (unit && (!lowest || unit < lowest))
@@ -387,7 +387,7 @@ bool GuildOrderBuyAction::Execute(Event& event)
                 auction->buyout > maxAffordable)
                 continue;
             Item* item = sAuctionMgr.GetAItem(auction->itemGuidLow);
-            if (!item || item->GetProto()->ItemId != itemId)
+            if (!item || GetItemProtoCompat(item)->ItemId != itemId)
                 continue;
             uint32_t count = item->GetCount();
             if (!count)

@@ -562,7 +562,7 @@ RollVote RollAction::CalculateRollVote(ItemQualifier& itemQualifier, RollVote* f
             bool equipped = false;
             for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
                 if (Item* worn = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
-                    if (worn->GetProto()->ItemId == itemProto->ItemId)
+                    if (GetItemProtoCompat(worn)->ItemId == itemProto->ItemId)
                     {
                         equipped = true;
                         break;

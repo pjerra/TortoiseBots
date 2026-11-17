@@ -788,7 +788,7 @@ bool RpgItemTrigger::IsActive()
 
     for (auto item : questItems)
     {
-        if (AI_VALUE2(bool, "can use item on", Qualified::MultiQualify({ std::to_string(item->GetProto()->ItemId),guidP.to_string() }, ",")))
+        if (AI_VALUE2(bool, "can use item on", Qualified::MultiQualify({ std::to_string(GetItemProtoCompat(item)->ItemId),guidP.to_string() }, ",")))
             return true;
     }
 

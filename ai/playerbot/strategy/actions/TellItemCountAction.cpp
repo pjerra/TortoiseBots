@@ -36,7 +36,7 @@ bool TellItemCountAction::Execute(Event& event)
 
         for (std::list<Item*>::iterator i = found.begin(); i != found.end(); i++)
         {
-            ItemPrototype const* proto = (*i)->GetProto();
+            ItemPrototype const* proto = GetItemProtoCompat((*i));
             itemMap[proto->ItemId] += (*i)->GetCount();
             soulbound[proto->ItemId] = (*i)->IsSoulBound();
             equiped[proto->ItemId] = (*i)->GetBagSlot() == INVENTORY_SLOT_BAG_0 && (*i)->GetSlot() < EQUIPMENT_SLOT_END;

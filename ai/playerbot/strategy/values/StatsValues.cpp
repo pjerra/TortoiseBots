@@ -155,7 +155,7 @@ uint8 BagSpaceValue::Calculate()
         const Bag* const pBag = (Bag*) bot->GetItemByPos(INVENTORY_SLOT_BAG_0, bag);
         if (pBag)
         {
-            ItemPrototype const* pBagProto = pBag->GetProto();
+            ItemPrototype const* pBagProto = GetItemProtoCompat(pBag);
             if (pBagProto->Class == ITEM_CLASS_CONTAINER && pBagProto->SubClass == ITEM_SUBCLASS_CONTAINER)
             {
                 total += pBag->GetBagSize();

@@ -50,9 +50,9 @@ bool ImbueWithStoneAction::Execute(Event& event)
         {
             Item* stone = ai->FindStoneFor(mainWeapon);
             // Do not use Elemental Sharpening Stone outside instances
-            if (stone && stone->GetProto())
+            if (stone && GetItemProtoCompat(stone))
             {
-                if (stone->GetProto()->DisplayInfoID == ELEMENTAL_SHARPENING_DISPLAYID && bot->GetInstanceId() == 0)
+                if (GetItemProtoCompat(stone)->DisplayInfoID == ELEMENTAL_SHARPENING_DISPLAYID && bot->GetInstanceId() == 0)
                     stone = nullptr;
             }
 
@@ -67,9 +67,9 @@ bool ImbueWithStoneAction::Execute(Event& event)
     {
         Item* stone = ai->FindStoneFor(secondaryWeapon);
         // Do not use Elemental Sharpening Stone outside instances
-        if (stone && stone->GetProto())
+        if (stone && GetItemProtoCompat(stone))
         {
-            if (stone->GetProto()->DisplayInfoID == ELEMENTAL_SHARPENING_DISPLAYID && bot->GetInstanceId() == 0)
+            if (GetItemProtoCompat(stone)->DisplayInfoID == ELEMENTAL_SHARPENING_DISPLAYID && bot->GetInstanceId() == 0)
                 stone = nullptr;
         }
 
@@ -109,9 +109,9 @@ bool ImbueWithStoneAction::isUseful()
     if (secondaryWeapon && secondaryWeapon->GetEnchantmentId(TEMP_ENCHANTMENT_SLOT) == 0)
     {
         Item* stone = ai->FindStoneFor(secondaryWeapon);
-        if (stone && stone->GetProto())
+        if (stone && GetItemProtoCompat(stone))
         {
-            if (stone->GetProto()->DisplayInfoID == ELEMENTAL_SHARPENING_DISPLAYID && bot->GetInstanceId() == 0)
+            if (GetItemProtoCompat(stone)->DisplayInfoID == ELEMENTAL_SHARPENING_DISPLAYID && bot->GetInstanceId() == 0)
                 stone = nullptr;
         }
 
@@ -126,9 +126,9 @@ bool ImbueWithStoneAction::isUseful()
         if (mainWeapon && mainWeapon->GetEnchantmentId(TEMP_ENCHANTMENT_SLOT) == 0)
         {
             Item* stone = ai->FindStoneFor(mainWeapon);
-            if (stone && stone->GetProto())
+            if (stone && GetItemProtoCompat(stone))
             {
-                if (stone->GetProto()->DisplayInfoID == ELEMENTAL_SHARPENING_DISPLAYID && bot->GetInstanceId() == 0)
+                if (GetItemProtoCompat(stone)->DisplayInfoID == ELEMENTAL_SHARPENING_DISPLAYID && bot->GetInstanceId() == 0)
                     stone = nullptr;
             }
 

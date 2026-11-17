@@ -62,7 +62,7 @@ char const* kTrainerClassParkKey = "no travel purpose until::trainer class";
 // is never counted and never sold, so probe and sale cannot disagree.
 bool IsDowntimeJunk(Item* item, Player* bot)
 {
-    ItemPrototype const* proto = item ? item->GetProto() : nullptr;
+    ItemPrototype const* proto = item ? GetItemProtoCompat(item) : nullptr;
     if (!proto || proto->Quality != ITEM_QUALITY_POOR || !proto->SellPrice)
         return false;
     if (!item || item->IsSoulBound())
@@ -184,7 +184,7 @@ uint32 SellAllDowntimeJunk(PlayerbotAI* ai, Player* bot, Player* master)
         uint32 sold = 0;
         for (Item* item : junk)
         {
-            if (!item || !item->GetProto() || !item->GetProto()->SellPrice)
+            if (!item || !GetItemProtoCompat(item) || !GetItemProtoCompat(item)->SellPrice)
                 continue;
             WorldPacket p;
             p << vendorguid << item->getObjectGuid() << item->GetCount();

@@ -224,7 +224,7 @@ std::string QueryItemUsageAction::QueryItemPrice(ItemQualifier& qualifier)
         for (std::list<Item*>::iterator i = items.begin(); i != items.end(); ++i)
         {
             Item* sell = *i;
-            sellPrice += sell->GetCount() * ItemUsageValue::GetBotSellPrice(sell->GetProto(), bot);
+            sellPrice += sell->GetCount() * ItemUsageValue::GetBotSellPrice(GetItemProtoCompat(sell), bot);
         }
 
         if(sellPrice)

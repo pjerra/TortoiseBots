@@ -136,11 +136,11 @@ bool TradeStatusAction::Execute(Event& event)
             {
                 Item* item = trader->GetTradeData()->GetItem((TradeSlots)slot);
                 if (item)
-                    givenItemIds[item->GetProto()->ItemId] += item->GetCount();
+                    givenItemIds[GetItemProtoCompat(item)->ItemId] += item->GetCount();
 
                 item = bot->GetTradeData()->GetItem((TradeSlots)slot);
                 if (item)
-                    takenItemIds[item->GetProto()->ItemId] += item->GetCount();
+                    takenItemIds[GetItemProtoCompat(item)->ItemId] += item->GetCount();
             }
 
             bot->GetSession()->HandleAcceptTradeOpcode(p);
@@ -355,7 +355,7 @@ void TradeStatusAction::AutoShareConjured(Player* trader)
     {
         for (uint32 slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; ++slot)
             if (Item* carried = trader->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
-                if (carried->GetProto() && IsHealthstoneItem(carried->GetEntry()))
+                if (GetItemProtoCompat(carried) && IsHealthstoneItem(carried->GetEntry()))
                     return;
         for (uint8 bag = INVENTORY_SLOT_BAG_START; bag < INVENTORY_SLOT_BAG_END; ++bag)
         {
@@ -363,7 +363,7 @@ void TradeStatusAction::AutoShareConjured(Player* trader)
             {
                 for (uint32 slot = 0; slot < pack->GetBagSize(); ++slot)
                     if (Item* carried = pack->GetItemByPos(slot))
-                        if (carried->GetProto() && IsHealthstoneItem(carried->GetEntry()))
+                        if (GetItemProtoCompat(carried) && IsHealthstoneItem(carried->GetEntry()))
                             return;
             }
         }
@@ -379,8 +379,8 @@ namespace
 {
 bool IsFreeServiceItem(Item const* item)
 {
-    return sPlayerbotAIConfig.autoShareConjuredOnTrade && item && item->GetProto() &&
-        ai::IsConjuredServiceItem(item->GetProto()->ItemId);
+    return sPlayerbotAIConfig.autoShareConjuredOnTrade && item && GetItemProtoCompat(item) &&
+        ai::IsConjuredServiceItem(GetItemProtoCompat(item)->ItemId);
 }
 }
 
@@ -479,7 +479,7 @@ bool TradeStatusAction::CheckTrade()
     for (uint32 slot = 0; slot < TRADE_SLOT_TRADED_COUNT; ++slot)
     {
         Item* item = bot->GetTradeData()->GetItem((TradeSlots)slot);
-        if (item && !IsFreeServiceItem(item) && !ItemUsageValue::GetBotSellPrice(item->GetProto(), bot))
+        if (item && !IsFreeServiceItem(item) && !ItemUsageValue::GetBotSellPrice(GetItemProtoCompat(item), bot))
         {
             std::ostringstream out;
             out << chat->formatItem(item) << " - This is not for sale";
@@ -492,7 +492,7 @@ bool TradeStatusAction::CheckTrade()
         if (item)
         {
             ItemUsage usage = AI_VALUE2(ItemUsage, "item usage", ItemQualifier(item).GetQualifier());
-            if ((botMoney && !ItemUsageValue::GetBotBuyPrice(item->GetProto(), bot)) || usage == ItemUsage::ITEM_USAGE_NONE)
+            if ((botMoney && !ItemUsageValue::GetBotBuyPrice(GetItemProtoCompat(item), bot)) || usage == ItemUsage::ITEM_USAGE_NONE)
             {
                 std::ostringstream out;
                 out << chat->formatItem(item) << " - I don't need this";
@@ -576,7 +576,7 @@ int32 TradeStatusAction::CalculateCost(Player* player, bool sell)
         if (!item)
             continue;
 
-        ItemPrototype const* proto = item->GetProto();
+        ItemPrototype const* proto = GetItemProtoCompat(item);
         if (!proto)
             continue;
 
@@ -659,9 +659,9 @@ bool EnchantHookWindowFacts(Player* bot, Player* trader, uint32_t spellId,
             tradeState.traderExtras = true;
     Item* parked = theirs->GetItem(TRADE_SLOT_NONTRADED);
     tradeState.hasItem = parked != nullptr;
-    if (!parked || !parked->GetProto())
+    if (!parked || !GetItemProtoCompat(parked))
         return true;
-    ItemPrototype const* proto = parked->GetProto();
+    ItemPrototype const* proto = GetItemProtoCompat(parked);
     SpellEntry const* spell = sServerFacade.LookupSpellInfo(spellId);
     if (!spell)
         return true;
@@ -834,7 +834,7 @@ bool TradeStatusAction::HandleEnchantOrderTrade(Event& event, Player* trader)
         TradeData* theirs = trader->GetTradeData();
         for (uint32 slot = 0; slot < TRADE_SLOT_TRADED_COUNT; ++slot)
             if (Item* offered = theirs->GetItem(static_cast<TradeSlots>(slot)))
-                materials.offered.push_back(ai::OfferedStack{ offered->GetProto()->ItemId, offered->GetCount() });
+                materials.offered.push_back(ai::OfferedStack{ GetItemProtoCompat(offered)->ItemId, offered->GetCount() });
         materials.traderGold = theirs->GetMoney();
         ai::MaterialsTradeResult checked = ai::CheckMaterialsTrade(materials);
         if (checked.verdict == ai::MaterialsTradeVerdict::NotMaterial)
@@ -1143,7 +1143,7 @@ bool TradeStatusAction::HandleDisenchantDropOffTrade(Event& event, Player* trade
             ++freeSlots;
     for (uint8_t bag = INVENTORY_SLOT_BAG_START; bag < INVENTORY_SLOT_BAG_END; ++bag)
         if (Bag* pack = (Bag*)bot->GetItemByPos(INVENTORY_SLOT_BAG_0, bag))
-            if (pack->GetProto() && pack->GetProto()->SubClass == ITEM_SUBCLASS_CONTAINER)
+            if (GetItemProtoCompat(pack) && GetItemProtoCompat(pack)->SubClass == ITEM_SUBCLASS_CONTAINER)
                 freeSlots += pack->GetFreeSlots();
     uint32_t waiting = 0;
     for (TortoiseBots::GuildOrders::DisenchantQueueEntry const& row :
@@ -1191,7 +1191,7 @@ bool TradeStatusAction::HandleDisenchantDropOffTrade(Event& event, Player* trade
     std::vector<std::pair<uint32_t, uint32_t>> offered;
     for (uint32 slot = 0; slot < TRADE_SLOT_TRADED_COUNT; ++slot)
         if (Item* item = trader->GetTradeData()->GetItem(static_cast<TradeSlots>(slot)))
-            if (item->GetProto())
+            if (GetItemProtoCompat(item))
                 offered.push_back({ item->GetGUIDLow(), item->GetEntry() });
     WorldPacket accept;
     uint32 acceptStatus = TRADE_STATUS_TRADE_ACCEPT;

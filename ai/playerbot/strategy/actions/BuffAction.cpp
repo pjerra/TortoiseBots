@@ -14,10 +14,10 @@ public:
 
     virtual bool Visit(Item* item)
     {
-        if (bot->CanUseItem(item->GetProto()) != EQUIP_ERR_OK)
+        if (bot->CanUseItem(GetItemProtoCompat(item)) != EQUIP_ERR_OK)
             return true;
 
-        const ItemPrototype* proto = item->GetProto();
+        const ItemPrototype* proto = GetItemProtoCompat(item);
 
         if (proto->Class != ITEM_CLASS_CONSUMABLE)
             return true;

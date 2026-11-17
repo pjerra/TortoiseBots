@@ -265,7 +265,7 @@ bool PlayerbotFactory::HasAmmoInBagsFor(uint32 weaponSubClass)
             for (uint8 slot = 0; slot < bagItem->GetBagSize(); ++slot)
                 if (Item* item = bagItem->GetItemByPos(slot))
                 {
-                    ItemPrototype const* proto = item->GetProto();
+                    ItemPrototype const* proto = GetItemProtoCompat(item);
                     if (proto && proto->Class == ITEM_CLASS_PROJECTILE && proto->SubClass == ammoSubClass)
                         return true;
                 }
@@ -273,7 +273,7 @@ bool PlayerbotFactory::HasAmmoInBagsFor(uint32 weaponSubClass)
         for (uint8 slot = INVENTORY_SLOT_ITEM_START; slot < INVENTORY_SLOT_ITEM_END; ++slot)
             if (Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
             {
-                ItemPrototype const* proto = item->GetProto();
+                ItemPrototype const* proto = GetItemProtoCompat(item);
                 if (proto && proto->Class == ITEM_CLASS_PROJECTILE && proto->SubClass == ammoSubClass)
                     return true;
             }
@@ -299,7 +299,7 @@ uint32 PlayerbotFactory::TopUpPoolGear()
     for (uint8 slot = 0; slot < EQUIPMENT_SLOT_END; ++slot)
     {
         Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
-        ItemPrototype const* proto = item ? item->GetProto() : nullptr;
+        ItemPrototype const* proto = item ? GetItemProtoCompat(item) : nullptr;
         before[slot] = proto ? proto->ItemId : 0;
         // Shirt and tabard are cosmetic; the seed rolls them separately.
         if (slot == EQUIPMENT_SLOT_BODY || slot == EQUIPMENT_SLOT_TABARD)
@@ -320,7 +320,7 @@ uint32 PlayerbotFactory::TopUpPoolGear()
     for (uint8 slot = 0; slot < EQUIPMENT_SLOT_END; ++slot)
     {
         Item* item = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
-        uint32 now = (item && item->GetProto()) ? item->GetProto()->ItemId : 0;
+        uint32 now = (item && GetItemProtoCompat(item)) ? GetItemProtoCompat(item)->ItemId : 0;
         if (now != before[slot])
             ++changed;
     }
@@ -988,7 +988,7 @@ public:
 
     virtual bool Visit(Item* item) override
     {
-        uint32 id = item->GetProto()->ItemId;
+        uint32 id = GetItemProtoCompat(item)->ItemId;
         if (CanKeep(id))
         {
             keep.insert(id);
@@ -1468,7 +1468,7 @@ static uint32 CountEquippedSetPieces(Player* player, uint32 setId)
     uint32 count = 0;
     for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
         if (Item* item = player->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
-            if (ItemPrototype const* proto = item->GetProto())
+            if (ItemPrototype const* proto = GetItemProtoCompat(item))
                 if (proto->ItemSet == setId)
                     ++count;
     return count;
@@ -1559,7 +1559,7 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
                 continue;
             }
 
-            ItemPrototype const* proto = oldItem->GetProto();
+            ItemPrototype const* proto = GetItemProtoCompat(oldItem);
             if (proto)
             {
                 if (proto->ItemLevel > sPlayerbotAIConfig.randomGearMaxLevel)
@@ -1665,7 +1665,7 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
         {
             Item* mhItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
             Item* ohItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
-            if (mhItem && mhItem->GetProto() && mhItem->GetProto()->InventoryType == INVTYPE_2HWEAPON && ohItem)
+            if (mhItem && GetItemProtoCompat(mhItem) && GetItemProtoCompat(mhItem)->InventoryType == INVTYPE_2HWEAPON && ohItem)
             {
                 if (bot->CanUseItem(ohItem) == EQUIP_ERR_OK)
                     bot->AutoUnequipItemFromSlot(EQUIPMENT_SLOT_OFFHAND, false);
@@ -1789,7 +1789,7 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
                         continue;
 
                     Item* oldItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
-                    ItemPrototype const* oldProto = oldItem ? oldItem->GetProto() : nullptr;
+                    ItemPrototype const* oldProto = oldItem ? GetItemProtoCompat(oldItem) : nullptr;
 
                     if (oldItem && oldProto->ItemId == newItemId)
                         continue;
@@ -1933,7 +1933,7 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
                 std::vector<uint32> passingIds;
 
                 Item* oldItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
-                ItemPrototype const* oldProto = oldItem ? oldItem->GetProto() : nullptr;
+                ItemPrototype const* oldProto = oldItem ? GetItemProtoCompat(oldItem) : nullptr;
                 uint32 oldStatValue = oldItem ? sRandomItemMgr.GetLiveStatWeight(bot, oldProto->ItemId, specId) : 0;
                 // A pool or hired bot already wearing a forbidden item
                 // re-gears the slot: the worn piece scores nothing, so any
@@ -2107,9 +2107,9 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
                             bool betterDamage = false;
                             bool betterDps = false;
                             Item* mhItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
-                            if (mhItem && mhItem->GetProto())
+                            if (mhItem && GetItemProtoCompat(mhItem))
                             {
-                                ItemPrototype const* mhProto = mhItem->GetProto();
+                                ItemPrototype const* mhProto = GetItemProtoCompat(mhItem);
                                 uint32 mhStatValue = sRandomItemMgr.GetLiveStatWeight(bot, mhProto->ItemId, specId);
                                 if (newStatValue > mhStatValue)
                                     betterValue = true;
@@ -2151,7 +2151,7 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
                     if (playerUpgrade && slot == EQUIPMENT_SLOT_MAINHAND && proto->InventoryType == INVTYPE_2HWEAPON)
                     {
                         if (Item* offItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND))
-                            if (ItemPrototype const* offProto = offItem->GetProto())
+                            if (ItemPrototype const* offProto = GetItemProtoCompat(offItem))
                                 if (newStatValue <= oldStatValue + sRandomItemMgr.GetLiveStatWeight(bot, offProto->ItemId, specId))
                                     continue;
                     }
@@ -2228,7 +2228,7 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
                             ItemPosCountVec offDest;
                             if (bot->CanStoreItem(NULL_BAG, NULL_SLOT, offDest, displacedOff, false) != EQUIP_ERR_OK)
                             {
-                                displacedOldId = displacedOff->GetProto()->ItemId;
+                                displacedOldId = GetItemProtoCompat(displacedOff)->ItemId;
                                 displacedMailed = !StoreReplacedItem(displacedOff);
                                 displacedStored = true;
                                 autogearUpgrades.push_back({EQUIPMENT_SLOT_OFFHAND, displacedOldId, 0, displacedMailed});
@@ -2243,7 +2243,7 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
                             // core's EquipItem does not move it itself.
                             if (!displacedStored)
                             {
-                                displacedOldId = displacedOff->GetProto()->ItemId;
+                                displacedOldId = GetItemProtoCompat(displacedOff)->ItemId;
                                 displacedMailed = !StoreReplacedItem(displacedOff);
                                 displacedStored = true;
                                 autogearUpgrades.push_back({EQUIPMENT_SLOT_OFFHAND, displacedOldId, 0, displacedMailed});
@@ -2330,7 +2330,7 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
         // backstop guard below can see the slot as occupied.
         if (!found && !keepsWornGear)
             if (Item* worn = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
-                if (worn->GetProto() && sRandomItemMgr.IsForbiddenBotGear(worn->GetProto()->ItemId))
+                if (GetItemProtoCompat(worn) && sRandomItemMgr.IsForbiddenBotGear(GetItemProtoCompat(worn)->ItemId))
                     bot->DestroyItem(worn->GetBagSlot(), worn->GetSlot(), true);
         if (!found && !bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot) &&
             slot != EQUIPMENT_SLOT_BODY && slot != EQUIPMENT_SLOT_TABARD)
@@ -2486,7 +2486,7 @@ void PlayerbotFactory::InitStarterBags()
     for (uint8 slot = INVENTORY_SLOT_BAG_START; slot < INVENTORY_SLOT_BAG_END; ++slot)
     {
         Item* bagItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
-        ItemPrototype const* proto = bagItem ? bagItem->GetProto() : nullptr;
+        ItemPrototype const* proto = bagItem ? GetItemProtoCompat(bagItem) : nullptr;
         if (proto && proto->Class == ITEM_CLASS_CONTAINER && proto->SubClass == ITEM_SUBCLASS_CONTAINER)
             ++plainBags;
     }
@@ -2507,8 +2507,8 @@ void PlayerbotFactory::InitStarterBags()
     for (uint8 slot = INVENTORY_SLOT_BAG_START; slot < INVENTORY_SLOT_BAG_END; ++slot)
     {
         Item* bagItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
-        if (bagItem && bagItem->GetProto() && bagItem->GetProto()->Class == ITEM_CLASS_CONTAINER &&
-            bagItem->GetProto()->SubClass == ITEM_SUBCLASS_SOUL_CONTAINER)
+        if (bagItem && GetItemProtoCompat(bagItem) && GetItemProtoCompat(bagItem)->Class == ITEM_CLASS_CONTAINER &&
+            GetItemProtoCompat(bagItem)->SubClass == ITEM_SUBCLASS_SOUL_CONTAINER)
             return;
     }
     uint16 eDest = 0;
@@ -2547,7 +2547,7 @@ void PlayerbotFactory::InitLevelBags()
         Item* bagItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
         if (!bagItem)
             continue;
-        ItemPrototype const* proto = bagItem->GetProto();
+        ItemPrototype const* proto = GetItemProtoCompat(bagItem);
         if (!proto || proto->Class == ITEM_CLASS_QUIVER)
             continue;
         // Specialty containers (soul bags, profession bags) are never plain
@@ -3773,7 +3773,7 @@ void PlayerbotFactory::InitAmmo()
         return;
 
     uint32 subClass = 0;
-    switch (pItem->GetProto()->SubClass)
+    switch (GetItemProtoCompat(pItem)->SubClass)
     {
     case ITEM_SUBCLASS_WEAPON_GUN:
         subClass = ITEM_SUBCLASS_BULLET;
@@ -3821,19 +3821,19 @@ void PlayerbotFactory::InitAmmo()
             for (uint8 bagSlot = INVENTORY_SLOT_BAG_START; bagSlot < INVENTORY_SLOT_BAG_END; ++bagSlot)
             {
                 Item* bagItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, bagSlot);
-                if (!bagItem || !bagItem->GetProto() || bagItem->GetProto()->Class != ITEM_CLASS_QUIVER)
+                if (!bagItem || !GetItemProtoCompat(bagItem) || GetItemProtoCompat(bagItem)->Class != ITEM_CLASS_QUIVER)
                     continue;
                 // A wrong-family container (pouch with a bow, quiver with a
                 // gun) holds no usable ammo: retire it like a too-small one.
                 // Contents are NOT destroyed - the upgrade path below moves
                 // them into backpack space first, same as a tier upgrade.
-                if (bagItem->GetProto()->SubClass != wantContainer)
+                if (GetItemProtoCompat(bagItem)->SubClass != wantContainer)
                 {
                     upgradeTarget = bagItem;
                     upgradeSlot = bagSlot;
                     continue;
                 }
-                if (bagItem->GetEntry() == quiverId || bagItem->GetProto()->RequiredLevel >= bestQuiver->RequiredLevel)
+                if (bagItem->GetEntry() == quiverId || GetItemProtoCompat(bagItem)->RequiredLevel >= bestQuiver->RequiredLevel)
                 {
                     haveGood = true;
                     continue;
@@ -3958,7 +3958,7 @@ void PlayerbotFactory::InitAmmo()
     // trash the bot would otherwise carry forever. Ammo is server-managed
     // and re-seeded, never player property, so retiring it is safe.
     {
-        FindAmmoVisitor ammoVisitor(bot, pItem->GetProto()->SubClass);
+        FindAmmoVisitor ammoVisitor(bot, GetItemProtoCompat(pItem)->SubClass);
         ai->InventoryIterateItems(&ammoVisitor, IterateItemsMask::ITERATE_ITEMS_IN_BAGS);
         for (Item* oldAmmo : ammoVisitor.GetResult())
         {
@@ -4018,8 +4018,8 @@ void PlayerbotFactory::InitThrown()
     // and equip the tier when the slot is empty. Never touch the equipped
     // item - the audit owns upgrades once something is worn.
     Item* ranged = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED);
-    if (ranged && ranged->GetProto() && ranged->GetProto()->Class == ITEM_CLASS_WEAPON &&
-        ranged->GetProto()->SubClass == ITEM_SUBCLASS_WEAPON_THROWN)
+    if (ranged && GetItemProtoCompat(ranged) && GetItemProtoCompat(ranged)->Class == ITEM_CLASS_WEAPON &&
+        GetItemProtoCompat(ranged)->SubClass == ITEM_SUBCLASS_WEAPON_THROWN)
         return;
     uint32 tierLevel = tierProto->RequiredLevel;
     {
@@ -4027,9 +4027,9 @@ void PlayerbotFactory::InitThrown()
         ai->InventoryIterateItems(&visitor, IterateItemsMask::ITERATE_ITEMS_IN_BAGS);
         for (Item* oldThrown : visitor.GetResult())
         {
-            if (!oldThrown || !oldThrown->GetProto() || oldThrown->GetEntry() == entry)
+            if (!oldThrown || !GetItemProtoCompat(oldThrown) || oldThrown->GetEntry() == entry)
                 continue;
-            if (oldThrown->GetProto()->RequiredLevel < tierLevel)
+            if (GetItemProtoCompat(oldThrown)->RequiredLevel < tierLevel)
                 bot->DestroyItem(oldThrown->GetBagSlot(), oldThrown->GetSlot(), true);
         }
     }
@@ -4204,7 +4204,7 @@ void PlayerbotFactory::InitPotions()
         uint32 held = 0;
         for (Item* item : visitor.GetResult())
             held += item->GetCount();
-        if (held && held >= visitor.GetResult().front()->GetProto()->GetMaxStackSize() / 2) continue;
+        if (held && held >= GetItemProtoCompat(visitor.GetResult().front())->GetMaxStackSize() / 2) continue;
 
         uint32 itemId = sRandomItemMgr.GetRandomPotion(level, effect);
         if (!itemId)
@@ -4281,9 +4281,9 @@ void PlayerbotFactory::InitFood()
         bool haveGood = false;
         for (Item* foodItem : visitor.GetResult())
         {
-            if (!foodItem || !foodItem->GetProto())
+            if (!foodItem || !GetItemProtoCompat(foodItem))
                 continue;
-            if (foodItem->GetEntry() == itemId || foodItem->GetProto()->ItemLevel >= proto->ItemLevel)
+            if (foodItem->GetEntry() == itemId || GetItemProtoCompat(foodItem)->ItemLevel >= proto->ItemLevel)
                 haveGood = true;
             else
                 bot->DestroyItem(foodItem->GetBagSlot(), foodItem->GetSlot(), true);
@@ -4322,9 +4322,9 @@ void PlayerbotFactory::InitPoolRations()
         bool haveGood = false;
         for (Item* foodItem : visitor.GetResult())
         {
-            if (!foodItem || !foodItem->GetProto())
+            if (!foodItem || !GetItemProtoCompat(foodItem))
                 continue;
-            if (foodItem->GetEntry() == itemId || foodItem->GetProto()->ItemLevel >= proto->ItemLevel)
+            if (foodItem->GetEntry() == itemId || GetItemProtoCompat(foodItem)->ItemLevel >= proto->ItemLevel)
                 haveGood = true;
             else
                 bot->DestroyItem(foodItem->GetBagSlot(), foodItem->GetSlot(), true);

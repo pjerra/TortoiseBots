@@ -157,7 +157,7 @@ bool BotUseItemSpell::OpenLockCheck()
                     if (item->GetOwner() != m_caster)
                         return false;
 
-                    lockId = item->GetProto()->LockID;
+                    lockId = GetItemProtoCompat(item)->LockID;
 
                     // if already unlocked
                     if (!lockId || item->HasFlag(ITEM_FIELD_FLAGS, ITEM_DYNFLAG_UNLOCKED))
@@ -1083,7 +1083,7 @@ bool UseAction::UseQuestGiverItem(Player* requester, Item* item)
     if (!item)
         return false;
 
-    const ItemPrototype* proto = item->GetProto();
+    const ItemPrototype* proto = GetItemProtoCompat(item);
     if (!proto || !proto->StartQuest)
         return false;
 
@@ -1132,9 +1132,9 @@ bool UseAction::OpenItem(Player* requester, Item* item)
     uint32 spellId = 0;
     for (uint8 i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
     {
-        if (item->GetProto()->Spells[i].SpellId > 0)
+        if (GetItemProtoCompat(item)->Spells[i].SpellId > 0)
         {
-            spellId = item->GetProto()->Spells[i].SpellId;
+            spellId = GetItemProtoCompat(item)->Spells[i].SpellId;
             break;
         }
     }
@@ -1142,7 +1142,7 @@ bool UseAction::OpenItem(Player* requester, Item* item)
     if (spellId)
         return false;
 
-    if (!(item->GetProto()->Flags & ITEM_FLAG_HAS_LOOT))
+    if (!(GetItemProtoCompat(item)->Flags & ITEM_FLAG_HAS_LOOT))
         return false;
 
         // Open quest item in inventory, containing related items (e.g Gnarlpine necklace, containing Tallonkai's Jewel)
@@ -1508,7 +1508,7 @@ bool UseRandomRecipeAction::Execute(Event& event)
     std::string recipeName = "";
     for (auto& recipe : recipes)
     {
-        if (bot->HasSpell(ItemUsageValue::GetRecipeSpell(recipe->GetProto())))
+        if (bot->HasSpell(ItemUsageValue::GetRecipeSpell(GetItemProtoCompat(recipe))))
             continue;
 
         recipeName = chat->formatItem(recipe);
@@ -1595,7 +1595,7 @@ bool UseRandomQuestItemAction::Execute(Event& event)
         std::advance(itr, urand(0, questItems.size()- 1));
         Item* questItem = *itr;
 
-        const ItemPrototype* proto = questItem->GetProto();
+        const ItemPrototype* proto = GetItemProtoCompat(questItem);
         if (proto->StartQuest)
         {
             Quest const* qInfo = sObjectMgr.GetQuestTemplate(proto->StartQuest);

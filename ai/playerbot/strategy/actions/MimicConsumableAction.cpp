@@ -155,7 +155,7 @@ bool MimicConsumableAction::ApplyWeaponImbue(uint32_t stoneItemId)
     }
     // Blunt weapons take weightstones, edged weapons sharpening stones:
     // swap to the same-tier stone of the matching family.
-    uint32_t subClass = mainWeapon->GetProto() ? mainWeapon->GetProto()->SubClass : 0;
+    uint32_t subClass = GetItemProtoCompat(mainWeapon) ? GetItemProtoCompat(mainWeapon)->SubClass : 0;
     bool blunt = subClass == ITEM_SUBCLASS_WEAPON_MACE || subClass == ITEM_SUBCLASS_WEAPON_MACE2 ||
                  subClass == ITEM_SUBCLASS_WEAPON_AXE || subClass == ITEM_SUBCLASS_WEAPON_AXE2;
     bool isWeight = false;
@@ -208,8 +208,8 @@ bool MimicConsumableAction::ApplyWeaponImbue(uint32_t stoneItemId)
     if (bot->GetClass() == CLASS_WARRIOR)
     {
         Item* offWeapon = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
-        if (offWeapon && offWeapon->GetProto() &&
-            offWeapon->GetProto()->Class == ITEM_CLASS_WEAPON)
+        if (offWeapon && GetItemProtoCompat(offWeapon) &&
+            GetItemProtoCompat(offWeapon)->Class == ITEM_CLASS_WEAPON)
             ok = imbueOne(offWeapon) || ok;
     }
     if (ok)
@@ -314,7 +314,7 @@ bool MimicConsumableAction::Execute(Event& event)
     Item* masterItem = master->GetItemByPos(bagIndex, slot);
     if (!masterItem)
         return false;
-    ItemPrototype const* masterProto = masterItem->GetProto();
+    ItemPrototype const* masterProto = GetItemProtoCompat(masterItem);
     if (!masterProto || !masterProto->Spells[0].SpellId)
         return false;
     uint32_t masterItemId = masterItem->GetEntry();

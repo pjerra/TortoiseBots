@@ -23,7 +23,7 @@ bool ai::HunterHasLoadedRangedWeapon(PlayerbotAI* playerbotAi)
     if (!ranged)
         return false;
 
-    if (ranged->GetProto()->SubClass == ITEM_SUBCLASS_WEAPON_THROWN)
+    if (GetItemProtoCompat(ranged)->SubClass == ITEM_SUBCLASS_WEAPON_THROWN)
         return true;
 
     return HunterHasRangedAmmo(playerbotAi);
@@ -183,7 +183,7 @@ bool HunterEquipAmmoAction::Execute(Event& event)
     uint32 ammoClass = ITEM_CLASS_PROJECTILE;
     uint32 subClass = 0;
 
-    switch (ranged->GetProto()->SubClass)
+    switch (GetItemProtoCompat(ranged)->SubClass)
     {
     case ITEM_SUBCLASS_WEAPON_GUN:
         subClass = ITEM_SUBCLASS_BULLET;
@@ -204,7 +204,7 @@ bool HunterEquipAmmoAction::Execute(Event& event)
     {
         if (!item)
             return;
-        const ItemPrototype* proto = item->GetProto();
+        const ItemPrototype* proto = GetItemProtoCompat(item);
         if (!proto)
             return;
         if (proto->Class == ammoClass && proto->SubClass == subClass)

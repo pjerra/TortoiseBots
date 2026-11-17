@@ -24,7 +24,7 @@ namespace ai
     {
     public:
         InventoryItemIdValue(PlayerbotAI* ai, std::string name = "inventory item ids") : CalculatedValue<std::list<uint32> >(ai, name), Qualified() {}
-        virtual std::list<uint32> Calculate() override { std::list<uint32> retVal;  for (auto& item : AI_VALUE2(std::list<Item*>, "inventory items", getQualifier())) { ItemPrototype const* proto = item->GetProto();  retVal.push_back(proto->ItemId);} return retVal;};
+        virtual std::list<uint32> Calculate() override { std::list<uint32> retVal;  for (auto& item : AI_VALUE2(std::list<Item*>, "inventory items", getQualifier())) { ItemPrototype const* proto = GetItemProtoCompat(item);  retVal.push_back(proto->ItemId);} return retVal;};
     };
 
     class EquipedUsableTrinketValue : public CalculatedValue<std::list<Item*> >, public Qualified

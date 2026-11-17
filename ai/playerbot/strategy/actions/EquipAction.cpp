@@ -25,11 +25,11 @@ namespace
 {
 bool IsItemCurrentlyEquipped(Player* bot, Item* item)
 {
-    if (!bot || !item || !item->GetProto())
+    if (!bot || !item || !GetItemProtoCompat(item))
         return false;
-    if (item->GetProto()->InventoryType == INVTYPE_AMMO)
-        return bot->GetUInt32Value(PLAYER_AMMO_ID) == item->GetProto()->ItemId;
-    if (item->GetProto()->Class == ITEM_CLASS_CONTAINER || item->GetProto()->Class == ITEM_CLASS_QUIVER)
+    if (GetItemProtoCompat(item)->InventoryType == INVTYPE_AMMO)
+        return bot->GetUInt32Value(PLAYER_AMMO_ID) == GetItemProtoCompat(item)->ItemId;
+    if (GetItemProtoCompat(item)->Class == ITEM_CLASS_CONTAINER || GetItemProtoCompat(item)->Class == ITEM_CLASS_QUIVER)
         return item->GetBagSlot() == INVENTORY_SLOT_BAG_0 &&
             item->GetSlot() >= INVENTORY_SLOT_BAG_START && item->GetSlot() < INVENTORY_SLOT_BAG_END;
     return item->GetBagSlot() == INVENTORY_SLOT_BAG_0 && item->GetSlot() < INVENTORY_SLOT_ITEM_START;
@@ -37,12 +37,12 @@ bool IsItemCurrentlyEquipped(Player* bot, Item* item)
 
 bool SetForceItemUsageIfChanged(PlayerbotAI* ai, Item* item, ForceItemUsage usage, bool onlyIfNone)
 {
-    if (!ai || !item || !item->GetProto())
+    if (!ai || !item || !GetItemProtoCompat(item))
         return false;
     AiObjectContext* context = ai->GetAiObjectContext();
     if (!context)
         return false;
-    uint32 const itemId = item->GetProto()->ItemId;
+    uint32 const itemId = GetItemProtoCompat(item)->ItemId;
     ForceItemUsage const current = AI_VALUE2_EXISTS(ForceItemUsage, "force item usage", itemId, ForceItemUsage::FORCE_USAGE_NONE);
     if (onlyIfNone && current != ForceItemUsage::FORCE_USAGE_NONE)
         return false;
@@ -56,7 +56,7 @@ bool SetForceItemUsageIfChanged(PlayerbotAI* ai, Item* item, ForceItemUsage usag
 
 bool EquipAction::PinPlayerEquippedItemIfClaimed(PlayerbotAI* ai, Player* requester, Item* item)
 {
-    if (!ai || !requester || !item || !item->GetProto())
+    if (!ai || !requester || !item || !GetItemProtoCompat(item))
         return false;
     Player* bot = ai->GetBot();
     if (!bot || !IsItemCurrentlyEquipped(bot, item))
@@ -104,12 +104,12 @@ bool EquipAction::Execute(Event& event)
         std::list<Item*> found = ai->InventoryParseItems(text, IterateItemsMask::ITERATE_ITEMS_IN_BAGS);
 
         //Sort items on itemLevel descending.
-        found.sort([](Item* i, Item* j) {return i->GetProto()->ItemLevel > j->GetProto()->ItemLevel; });
+        found.sort([](Item* i, Item* j) {return GetItemProtoCompat(i)->ItemLevel > GetItemProtoCompat(j)->ItemLevel; });
 
         std::vector< uint16> dests;
         for (auto& item : found)
         {
-            uint32 itemId = item->GetProto()->ItemId;
+            uint32 itemId = GetItemProtoCompat(item)->ItemId;
             if (std::find(ids.begin(), ids.end(), itemId) != ids.end())
             {
                 continue;
@@ -156,7 +156,7 @@ void EquipAction::ListItems(Player* requester)
         {
             if (pItem)
             {
-                items[pItem->GetProto()->ItemId] += pItem->GetCount();
+                items[GetItemProtoCompat(pItem)->ItemId] += pItem->GetCount();
             }
         }
     }
@@ -225,7 +225,7 @@ uint8 EquipAction::GetSmallestBagSlot(Player* bot, uint32 newClass, uint32 newSu
     for (uint8 bag = INVENTORY_SLOT_BAG_START; bag < INVENTORY_SLOT_BAG_END && !haveSoulBag; ++bag)
     {
         Item* equipped = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, bag);
-        ItemPrototype const* proto = equipped ? equipped->GetProto() : nullptr;
+        ItemPrototype const* proto = equipped ? GetItemProtoCompat(equipped) : nullptr;
         if (proto && proto->Class == ITEM_CLASS_CONTAINER && proto->SubClass == ITEM_SUBCLASS_SOUL_CONTAINER)
             haveSoulBag = true;
     }
@@ -237,7 +237,7 @@ uint8 EquipAction::GetSmallestBagSlot(Player* bot, uint32 newClass, uint32 newSu
         const Bag* const pBag = (Bag*)bagItem;
         if (pBag)
         {
-            ItemPrototype const* oldProto = bagItem ? bagItem->GetProto() : nullptr;
+            ItemPrototype const* oldProto = bagItem ? GetItemProtoCompat(bagItem) : nullptr;
             bool const oldIsQuiver = oldProto && oldProto->Class == ITEM_CLASS_QUIVER;
             bool const oldIsSoulBag = oldProto && oldProto->Class == ITEM_CLASS_CONTAINER &&
                 oldProto->SubClass == ITEM_SUBCLASS_SOUL_CONTAINER;
@@ -275,7 +275,7 @@ uint8 EquipAction::GetSmallestBagSlot(Player* bot, uint32 newClass, uint32 newSu
                 for (uint8 other = INVENTORY_SLOT_BAG_START; other < INVENTORY_SLOT_BAG_END; ++other)
                 {
                     Item* otherItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, other);
-                    if (otherItem && otherItem->GetProto() && otherItem->GetProto()->Class == ITEM_CLASS_QUIVER)
+                    if (otherItem && GetItemProtoCompat(otherItem) && GetItemProtoCompat(otherItem)->Class == ITEM_CLASS_QUIVER)
                     {
                         haveQuiver = true;
                         break;
@@ -295,7 +295,7 @@ void EquipAction::EquipItemToSlot(Player* requester, Item* item, uint8 targetSlo
 {
     uint8 bagIndex = item->GetBagSlot();
     uint8 slot = item->GetSlot();
-    uint32 itemId = item->GetProto()->ItemId;
+    uint32 itemId = GetItemProtoCompat(item)->ItemId;
 
     uint16 dest;
     InventoryResult msg = bot->CanEquipItem(targetSlot, dest, item, true);
@@ -314,7 +314,7 @@ void EquipAction::EquipItemToSlot(Player* requester, Item* item, uint8 targetSlo
 
     Item* oldItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, targetSlot);
     Item* oldOffhand = nullptr;
-    if (destSlot == EQUIPMENT_SLOT_MAINHAND && item->GetProto()->InventoryType == INVTYPE_2HWEAPON)
+    if (destSlot == EQUIPMENT_SLOT_MAINHAND && GetItemProtoCompat(item)->InventoryType == INVTYPE_2HWEAPON)
         oldOffhand = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
 
     uint16 src = ((bagIndex << 8) | slot);
@@ -329,7 +329,7 @@ void EquipAction::EquipItemToSlot(Player* requester, Item* item, uint8 targetSlo
     if (oldOffhand)
         RESET_AI_VALUE2(ItemUsage, "item usage", ItemQualifier(oldOffhand).GetQualifier());
 
-    sPlayerbotAIConfig.logEvent(ai, "EquipAction", item->GetProto()->Name1, std::to_string(item->GetProto()->ItemId));
+    sPlayerbotAIConfig.logEvent(ai, "EquipAction", GetItemProtoCompat(item)->Name1, std::to_string(GetItemProtoCompat(item)->ItemId));
 
     std::map<std::string, std::string> args;
     args["%item"] = chat->formatItem(item);
@@ -340,14 +340,14 @@ void EquipAction::EquipItem(PlayerbotAI* ai, Player* requester, Item* item, bool
     Player* bot = ai->GetBot();
     // Never equip order stock: the order item and its reagent tree stay in
     // the bags until the order (or its branch) finishes.
-    if (bot && bot->GetGuildId() && GuildOrderConsumesItem(bot, item ? item->GetProto()->ItemId : 0))
+    if (bot && bot->GetGuildId() && GuildOrderConsumesItem(bot, item ? GetItemProtoCompat(item)->ItemId : 0))
         return;
     AiObjectContext* context = ai->GetAiObjectContext();
 
     uint8 bagIndex = item->GetBagSlot();
     uint8 slot = item->GetSlot();
-    uint32 itemId = item->GetProto()->ItemId;
-    ItemPrototype const* newProto = item->GetProto();
+    uint32 itemId = GetItemProtoCompat(item)->ItemId;
+    ItemPrototype const* newProto = GetItemProtoCompat(item);
 
     uint16 dest;
     InventoryResult result = bot->CanEquipItem(NULL_SLOT, dest, item, !item->IsBag());
@@ -358,21 +358,21 @@ void EquipAction::EquipItem(PlayerbotAI* ai, Player* requester, Item* item, bool
     {
         oldItem = bot->GetItemByPos(dest);
 
-        if (oldItem && oldItem->GetSlot() == EQUIPMENT_SLOT_MAINHAND && item->GetProto()->InventoryType == INVTYPE_2HWEAPON)
+        if (oldItem && oldItem->GetSlot() == EQUIPMENT_SLOT_MAINHAND && GetItemProtoCompat(item)->InventoryType == INVTYPE_2HWEAPON)
             oldOffhand = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
     }
 
-    if (item->GetProto()->InventoryType == INVTYPE_AMMO)
+    if (GetItemProtoCompat(item)->InventoryType == INVTYPE_AMMO)
     {
         bot->SetAmmo(itemId);
     }
     else
     {
         bool equipedBag = false;
-        bool isBag = item->GetProto()->Class == ITEM_CLASS_CONTAINER || item->GetProto()->Class == ITEM_CLASS_QUIVER;
+        bool isBag = GetItemProtoCompat(item)->Class == ITEM_CLASS_CONTAINER || GetItemProtoCompat(item)->Class == ITEM_CLASS_QUIVER;
         if (isBag)
         {
-            uint8 newBagSlot = GetSmallestBagSlot(bot, item->GetProto()->Class, item->GetProto()->SubClass);
+            uint8 newBagSlot = GetSmallestBagSlot(bot, GetItemProtoCompat(item)->Class, GetItemProtoCompat(item)->SubClass);
 
             // Only replace the smallest equipped bag when it is empty. The
             // core rejects moving a non-empty bag from a specific slot, and
@@ -420,8 +420,8 @@ void EquipAction::EquipItem(PlayerbotAI* ai, Player* requester, Item* item, bool
                         ItemPosCountVec back;
                         if (bot->CanStoreItem(oldBagBag->GetSlot(), i, back, content, false) == EQUIP_ERR_OK)
                             bot->StoreItem(back, content, true);
-                        if (oldBagBag->GetProto() && oldBagBag->GetProto()->Class == ITEM_CLASS_QUIVER &&
-                            content->GetProto() && content->GetProto()->Class == ITEM_CLASS_PROJECTILE)
+                        if (GetItemProtoCompat(oldBagBag) && GetItemProtoCompat(oldBagBag)->Class == ITEM_CLASS_QUIVER &&
+                            GetItemProtoCompat(content) && GetItemProtoCompat(content)->Class == ITEM_CLASS_PROJECTILE)
                         {
                             bot->DestroyItem(oldBagBag->GetSlot(), i, true);
                             continue;
@@ -483,7 +483,7 @@ void EquipAction::EquipItem(PlayerbotAI* ai, Player* requester, Item* item, bool
             (bot->GetClass() == CLASS_HUNTER || bot->GetClass() == CLASS_ROGUE || bot->GetClass() == CLASS_WARRIOR))
         {
             Item* ranged = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED);
-            if (ranged && ranged->GetProto() && ranged->GetProto()->ItemId == itemId)
+            if (ranged && GetItemProtoCompat(ranged) && GetItemProtoCompat(ranged)->ItemId == itemId)
                 ai->DoSpecificAction("equip ammo", Event(), true);
         }
     }
@@ -495,7 +495,7 @@ void EquipAction::EquipItem(PlayerbotAI* ai, Player* requester, Item* item, bool
     if (oldOffhand)
         RESET_AI_VALUE2(ItemUsage, "item usage", ItemQualifier(oldOffhand).GetQualifier());
 
-    sPlayerbotAIConfig.logEvent(ai, "EquipAction", item->GetProto()->Name1, std::to_string(item->GetProto()->ItemId));
+    sPlayerbotAIConfig.logEvent(ai, "EquipAction", GetItemProtoCompat(item)->Name1, std::to_string(GetItemProtoCompat(item)->ItemId));
 
     if (!silent)
     {
@@ -630,16 +630,16 @@ bool EquipUpgradesAction::Execute(Event& event)
         if (iWeight != jWeight)
             return iWeight > jWeight;
 
-        bool iMain = i->GetProto()->InventoryType == INVTYPE_WEAPONMAINHAND;
-        bool jMain = j->GetProto()->InventoryType == INVTYPE_WEAPONMAINHAND;
+        bool iMain = GetItemProtoCompat(i)->InventoryType == INVTYPE_WEAPONMAINHAND;
+        bool jMain = GetItemProtoCompat(j)->InventoryType == INVTYPE_WEAPONMAINHAND;
 
         if (iMain != jMain)
             return iMain; // mainhand comes first
 
-        if (i->GetProto()->ItemLevel != j->GetProto()->ItemLevel)
-            return i->GetProto()->ItemLevel > j->GetProto()->ItemLevel;
+        if (GetItemProtoCompat(i)->ItemLevel != GetItemProtoCompat(j)->ItemLevel)
+            return GetItemProtoCompat(i)->ItemLevel > GetItemProtoCompat(j)->ItemLevel;
 
-        return i->GetProto()->ItemId < j->GetProto()->ItemId; });
+        return GetItemProtoCompat(i)->ItemId < GetItemProtoCompat(j)->ItemId; });
 
     bool didEquip = false;
     bool equippedBags = false;
@@ -670,7 +670,7 @@ bool EquipUpgradesAction::Execute(Event& event)
         // equip` / master trade still work. Pool bots keep the organic
         // behaviour (earned PvP is wearable).
         if (!TortoiseBots::MayHireAutoTakeSource(
-                sRandomItemMgr.GetSourceFlags(item->GetProto()->ItemId),
+                sRandomItemMgr.GetSourceFlags(GetItemProtoCompat(item)->ItemId),
                 TortoiseBots::HireLifecycle::Instance().IsHired(bot->GetObjectGuid()),
                 sPlayerbotAIConfig.randomGearAllowPvP, sPlayerbotAIConfig.randomGearAllowReputation))
             continue;
@@ -680,8 +680,8 @@ bool EquipUpgradesAction::Execute(Event& event)
         // must not put an above-cap piece back on. Explicit `.bot equip` /
         // master trade still apply: those are orders, not automation.
         if (uint32_t cap = TortoiseBots::BotGearService::Instance().PinnedCap(bot->GetGUIDLow()))
-            if (item->GetProto() && item->GetProto()->ItemLevel > cap &&
-                (item->GetProto()->Class == ITEM_CLASS_WEAPON || item->GetProto()->Class == ITEM_CLASS_ARMOR))
+            if (GetItemProtoCompat(item) && GetItemProtoCompat(item)->ItemLevel > cap &&
+                (GetItemProtoCompat(item)->Class == ITEM_CLASS_WEAPON || GetItemProtoCompat(item)->Class == ITEM_CLASS_ARMOR))
                 continue;
 
         // Bags and quivers never go through slot resolution below: core's
@@ -691,7 +691,7 @@ bool EquipUpgradesAction::Execute(Event& event)
         // for exactly the quiver upgrades the audit exists for. EquipItem
         // owns the bag path: GetSmallestBagSlot picks the slot to replace and
         // moves the old bag's contents (ammo, shards, items) out first.
-        ItemPrototype const* proto = item->GetProto();
+        ItemPrototype const* proto = GetItemProtoCompat(item);
         if (proto->Class == ITEM_CLASS_CONTAINER || proto->Class == ITEM_CLASS_QUIVER)
         {
             EquipItem(ai, GetMaster(), item);
@@ -705,7 +705,7 @@ bool EquipUpgradesAction::Execute(Event& event)
         // equipping one item moves the slot the next candidate would land in
         // (a 2H weapon frees the off hand, the first of two rings takes the
         // other finger slot).
-        uint8 slot = ItemUsageValue::GetPreferredEquipSlot(bot, item, item->GetProto());
+        uint8 slot = ItemUsageValue::GetPreferredEquipSlot(bot, item, GetItemProtoCompat(item));
         if (slot == NULL_SLOT || filledSlots.count(slot))
         {
             continue; // no eligible slot, or one item per target slot per run
@@ -750,7 +750,7 @@ bool EquipUpgradesAction::Execute(Event& event)
         filledSlots.insert(slot);
         didEquip = true;
 
-        sLog.outDetail("Bot #%d <%s> auto equips item %d (%s)", bot->GetGUIDLow(), bot->GetName(), item->GetProto()->ItemId, usage == ItemUsage::ITEM_USAGE_EQUIP ? "better than current" : "wrong item but empty slot");
+        sLog.outDetail("Bot #%d <%s> auto equips item %d (%s)", bot->GetGUIDLow(), bot->GetName(), GetItemProtoCompat(item)->ItemId, usage == ItemUsage::ITEM_USAGE_EQUIP ? "better than current" : "wrong item but empty slot");
         ai->TellDebug(ai->GetMaster(), "Equipping: " + chat->formatItem(item) + " - " + ItemUsageValue::ReasonForNeed(usage, item, 1, bot), "debug equip");
 
         Item* displacedPrimary = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
@@ -802,7 +802,7 @@ bool EquipUpgradesAction::Execute(Event& event)
         // run so a later candidate cannot overwrite it on a stale usage.
         if (displacedMH && bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND) != displacedMH)
         {
-            ItemPrototype const* displacedProto = displacedMH->GetProto();
+            ItemPrototype const* displacedProto = GetItemProtoCompat(displacedMH);
             bool fitsOffHand = displacedProto->InventoryType == INVTYPE_WEAPON ||
                 displacedProto->InventoryType == INVTYPE_WEAPONOFFHAND;
             if (fitsOffHand)
@@ -812,7 +812,7 @@ bool EquipUpgradesAction::Execute(Event& event)
                 // never bounced for it (normal path refuses both).
                 bool displacedKeepInBag = AI_VALUE2_EXISTS(ForceItemUsage, "force item usage", displacedProto->ItemId, ForceItemUsage::FORCE_USAGE_NONE) == ForceItemUsage::FORCE_USAGE_BAG;
                 Item* curOH = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
-                bool curOHForced = curOH && AI_VALUE2_EXISTS(ForceItemUsage, "force item usage", curOH->GetProto()->ItemId, ForceItemUsage::FORCE_USAGE_NONE) == ForceItemUsage::FORCE_USAGE_EQUIP;
+                bool curOHForced = curOH && AI_VALUE2_EXISTS(ForceItemUsage, "force item usage", GetItemProtoCompat(curOH)->ItemId, ForceItemUsage::FORCE_USAGE_NONE) == ForceItemUsage::FORCE_USAGE_EQUIP;
                 // Broken-over-working never auto-equips elsewhere either: a
                 // broken displaced hand only fills an empty off hand.
                 bool displacedBroken = displacedMH->GetUInt32Value(ITEM_FIELD_DURABILITY) == 0 && displacedMH->GetUInt32Value(ITEM_FIELD_MAXDURABILITY) > 0;
@@ -868,21 +868,21 @@ bool EquipUpgradesAction::Execute(Event& event)
         Item* oh = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
 
         if (mh && oh
-            && mh->GetProto()->Class == ITEM_CLASS_WEAPON
-            && oh->GetProto()->Class == ITEM_CLASS_WEAPON
-            && mh->GetProto()->InventoryType != INVTYPE_2HWEAPON
-            && mh->GetProto()->InventoryType != INVTYPE_WEAPONMAINHAND
-            && oh->GetProto()->InventoryType != INVTYPE_WEAPONOFFHAND
-            && AI_VALUE2_EXISTS(ForceItemUsage, "force item usage", mh->GetProto()->ItemId, ForceItemUsage::FORCE_USAGE_NONE) != ForceItemUsage::FORCE_USAGE_EQUIP
-            && AI_VALUE2_EXISTS(ForceItemUsage, "force item usage", oh->GetProto()->ItemId, ForceItemUsage::FORCE_USAGE_NONE) != ForceItemUsage::FORCE_USAGE_EQUIP)
+            && GetItemProtoCompat(mh)->Class == ITEM_CLASS_WEAPON
+            && GetItemProtoCompat(oh)->Class == ITEM_CLASS_WEAPON
+            && GetItemProtoCompat(mh)->InventoryType != INVTYPE_2HWEAPON
+            && GetItemProtoCompat(mh)->InventoryType != INVTYPE_WEAPONMAINHAND
+            && GetItemProtoCompat(oh)->InventoryType != INVTYPE_WEAPONOFFHAND
+            && AI_VALUE2_EXISTS(ForceItemUsage, "force item usage", GetItemProtoCompat(mh)->ItemId, ForceItemUsage::FORCE_USAGE_NONE) != ForceItemUsage::FORCE_USAGE_EQUIP
+            && AI_VALUE2_EXISTS(ForceItemUsage, "force item usage", GetItemProtoCompat(oh)->ItemId, ForceItemUsage::FORCE_USAGE_NONE) != ForceItemUsage::FORCE_USAGE_EQUIP)
         {
             uint32 specId = sRandomItemMgr.GetPlayerSpecId(bot);
 
-            if (sRandomItemMgr.ShouldEquipWeaponForSlot(bot, bot->GetClass(), specId, mh->GetProto(), EQUIPMENT_SLOT_MAINHAND, bot->CanDualWield())
-                && sRandomItemMgr.ShouldEquipWeaponForSlot(bot, bot->GetClass(), specId, oh->GetProto(), EQUIPMENT_SLOT_OFFHAND, bot->CanDualWield()))
+            if (sRandomItemMgr.ShouldEquipWeaponForSlot(bot, bot->GetClass(), specId, GetItemProtoCompat(mh), EQUIPMENT_SLOT_MAINHAND, bot->CanDualWield())
+                && sRandomItemMgr.ShouldEquipWeaponForSlot(bot, bot->GetClass(), specId, GetItemProtoCompat(oh), EQUIPMENT_SLOT_OFFHAND, bot->CanDualWield()))
             {
-                float mhMaxDmg = mh->GetProto()->Damage[0].DamageMax;
-                float ohMaxDmg = oh->GetProto()->Damage[0].DamageMax;
+                float mhMaxDmg = GetItemProtoCompat(mh)->Damage[0].DamageMax;
+                float ohMaxDmg = GetItemProtoCompat(oh)->Damage[0].DamageMax;
 
                 if (ohMaxDmg > mhMaxDmg)
                 {

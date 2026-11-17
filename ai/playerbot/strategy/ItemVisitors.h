@@ -38,7 +38,7 @@ namespace ai
 
         virtual bool Visit(Item* item) override
         {
-            if (!Accept(item->GetProto()) && !Accept(item))
+            if (!Accept(GetItemProtoCompat(item)) && !Accept(item))
                 return true;
 
             result.push_back(item);
@@ -71,7 +71,7 @@ namespace ai
 
         virtual bool Visit(Item* item) override
         {
-            if (bot->CanUseItem(item->GetProto()) == EQUIP_ERR_OK)
+            if (bot->CanUseItem(GetItemProtoCompat(item)) == EQUIP_ERR_OK)
                 return FindItemVisitor::Visit(item);
 
             return true;
@@ -93,7 +93,7 @@ namespace ai
 
         virtual bool Visit(Item* item) override
         {
-            if (item->GetProto()->Quality != quality)
+            if (GetItemProtoCompat(item)->Quality != quality)
                 return true;
 
             if (result.size() >= (size_t)count)
@@ -136,7 +136,7 @@ namespace ai
 
         virtual bool Visit(Item* item) override
         {
-            if (item->GetProto()->Class != itemClass || item->GetProto()->SubClass != itemSubClass)
+            if (GetItemProtoCompat(item)->Class != itemClass || GetItemProtoCompat(item)->SubClass != itemSubClass)
                 return true;
 
             result.push_back(item);
@@ -165,7 +165,7 @@ namespace ai
             if (item->IsSoulBound())
                 return true;
 
-            if (item->GetProto()->Class != itemClass || item->GetProto()->SubClass != itemSubClass)
+            if (GetItemProtoCompat(item)->Class != itemClass || GetItemProtoCompat(item)->SubClass != itemSubClass)
                 return true;
 
             if (result.size() >= (size_t)count)
@@ -198,7 +198,7 @@ namespace ai
 
         virtual bool Visit(Item* item) override
         {
-            if (item->GetProto()->ItemId == itemId)
+            if (GetItemProtoCompat(item)->ItemId == itemId)
                 count += item->GetCount();
 
             return true;
@@ -222,7 +222,7 @@ namespace ai
 
         virtual bool Visit(Item* item) override
         {
-            const ItemPrototype* proto = item->GetProto();
+            const ItemPrototype* proto = GetItemProtoCompat(item);
             if (proto && proto->Name1.empty() && strstri(proto->Name1, name.c_str()))
                 count += item->GetCount();
 
@@ -310,7 +310,7 @@ namespace ai
 
         virtual bool Visit(Item* item) override
         {
-            uint32 id = item->GetProto()->ItemId;
+            uint32 id = GetItemProtoCompat(item)->ItemId;
 
             if (items.find(id) == items.end())
                 items[id] = 0;
@@ -332,7 +332,7 @@ namespace ai
 
         virtual bool Visit(Item* item) override
         {
-            count[item->GetProto()->Quality]++;
+            count[GetItemProtoCompat(item)->Quality]++;
             return true;
         }
 
@@ -543,7 +543,7 @@ namespace ai
 
         virtual bool Accept(Item* item) override
         {
-            const ItemPrototype* proto = item->GetProto();
+            const ItemPrototype* proto = GetItemProtoCompat(item);
 
             if(!(proto->Flags& ITEM_FLAG_HAS_LOOT))
                 return false;
@@ -641,7 +641,7 @@ namespace ai
             if (includeAH && (usage == ItemUsage::ITEM_USAGE_AH || usage == ItemUsage::ITEM_USAGE_BROKEN_AH))
                 return true;
 
-            if (usage == ItemUsage::ITEM_USAGE_NONE && item->GetProto()->SellPrice)
+            if (usage == ItemUsage::ITEM_USAGE_NONE && GetItemProtoCompat(item)->SellPrice)
                 return true;
 
             return false;

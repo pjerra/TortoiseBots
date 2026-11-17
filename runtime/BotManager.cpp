@@ -1526,8 +1526,8 @@ void BotManager::OnPlayerLogin(::Player* player)
         for (uint8 slot = EQUIPMENT_SLOT_START; slot < EQUIPMENT_SLOT_END; ++slot)
         {
             Item* worn = player->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
-            if (worn && worn->GetProto() &&
-                TortoiseBots::GearBlacklistBlocks(sPlayerbotAIConfig.randomGearBlacklist, worn->GetProto()->ItemId))
+            if (worn && GetItemProtoCompat(worn) &&
+                TortoiseBots::GearBlacklistBlocks(sPlayerbotAIConfig.randomGearBlacklist, GetItemProtoCompat(worn)->ItemId))
             {
                 player->DestroyItem(INVENTORY_SLOT_BAG_0, slot, true);
                 stripped = true;

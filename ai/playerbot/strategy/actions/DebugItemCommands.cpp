@@ -53,7 +53,7 @@ bool DebugAction::HandleItem(Event& event, Player* requester, const std::string&
     if (item)
     {
         qualifier = ItemQualifier(item);
-        proto = item->GetProto();
+        proto = GetItemProtoCompat(item);
     }
     else
     {

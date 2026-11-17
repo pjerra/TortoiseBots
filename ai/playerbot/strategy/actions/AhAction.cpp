@@ -89,7 +89,7 @@ bool AhAction::ExecuteCommand(Player* requester, std::string text, Unit* auction
                 continue;
 
             auto pmo = sPerformanceMonitor.start(PERF_MON_VALUE, "IsMoreProfitableToSellToAHThanToVendor", ai);
-            bool isMoreProfitableToSellToAHThanToVendor = ItemUsageValue::IsMoreProfitableToSellToAHThanToVendor(item->GetProto(), bot);
+            bool isMoreProfitableToSellToAHThanToVendor = ItemUsageValue::IsMoreProfitableToSellToAHThanToVendor(GetItemProtoCompat(item), bot);
             pmo.reset();
 
             if (!isMoreProfitableToSellToAHThanToVendor)
@@ -103,7 +103,7 @@ bool AhAction::ExecuteCommand(Player* requester, std::string text, Unit* auction
             if (deposit > freeMoney)
                 return false;
 
-            const ItemPrototype* proto = item->GetProto();
+            const ItemPrototype* proto = GetItemProtoCompat(item);
 
             if (!pricePerItemCache[proto->ItemId])
             {
@@ -153,10 +153,10 @@ bool AhAction::PostItem(Player* requester, Item* item, uint32 price, Unit* aucti
 {
     // The order protected set bypasses usage lists on explicit posts: never
     // hand over the order item, the supply item or a known-recipe reagent.
-    if (item && bot->GetGuildId() && GuildOrderConsumesItem(bot, item->GetProto()->ItemId))
+    if (item && bot->GetGuildId() && GuildOrderConsumesItem(bot, GetItemProtoCompat(item)->ItemId))
         return false;
     ObjectGuid itemGuid = item->getObjectGuid();
-    ItemPrototype const* proto = item->GetProto();
+    ItemPrototype const* proto = GetItemProtoCompat(item);
 
     ItemQualifier itemQualifier(item);
 

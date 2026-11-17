@@ -32,7 +32,7 @@ void DestroyItemAction::DestroyItem(FindItemVisitor* visitor, Player* requester)
     {
 		Item* item = *i;
         // Never destroy order stock on an explicit id call.
-        if (item && bot->GetGuildId() && GuildOrderConsumesItem(bot, item->GetProto()->ItemId))
+        if (item && bot->GetGuildId() && GuildOrderConsumesItem(bot, GetItemProtoCompat(item)->ItemId))
             continue;
         std::ostringstream out; out << chat->formatItem(item) << " destroyed";
         bot->DestroyItem(item->GetBagSlot(),item->GetSlot(), true);
@@ -50,7 +50,7 @@ bool SmartDestroyItemAction::DestroyGreyJunk(Player* requester)
     std::map<uint32, uint32> valueById;
     for (Item* item : AI_VALUE2(std::list<Item*>, "inventory items", "usage " + std::to_string((uint8)ItemUsage::ITEM_USAGE_VENDOR)))
     {
-        ItemPrototype const* proto = item->GetProto();
+        ItemPrototype const* proto = GetItemProtoCompat(item);
 
         if (proto && proto->Quality == ITEM_QUALITY_POOR)
             valueById[proto->ItemId] += proto->SellPrice * item->GetCount();
@@ -151,7 +151,7 @@ bool SmartDestroyItemAction::Execute(Event& event)
         FindItemsToTradeByQualityVisitor visitor(ITEM_QUALITY_POOR, 5);
         ai->InventoryIterateItems(&visitor, IterateItemsMask::ITERATE_ITEMS_IN_BAGS);
         for (Item* item : visitor.GetResult())
-            itemIds.insert(item->GetProto()->ItemId);
+            itemIds.insert(GetItemProtoCompat(item)->ItemId);
 
         for (auto& itemId : itemIds)
         {
@@ -219,11 +219,11 @@ bool DestroyAllGrayItemsAction::Execute(Event& event)
             {
                 if (Item* pItem = pBag->GetItemByPos(j))
                 {
-                    if (const ItemPrototype* proto = pItem->GetProto())
+                    if (const ItemPrototype* proto = GetItemProtoCompat(pItem))
                     {
                         if (proto->Quality == ITEM_QUALITY_POOR)
                         {
-                            std::ostringstream out; out << ai->GetChatHelper()->formatItem(pItem->GetProto()) << " destroyed";
+                            std::ostringstream out; out << ai->GetChatHelper()->formatItem(GetItemProtoCompat(pItem)) << " destroyed";
                             sLog.outDetail("%s via DestroyAllGrayItemsAction", out.str().c_str());
                             bot->DestroyItem(pItem->GetBagSlot(), pItem->GetSlot(), true);
                             ai->TellPlayer(requester, out, PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
@@ -240,11 +240,11 @@ bool DestroyAllGrayItemsAction::Execute(Event& event)
     {
         if (Item* pItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
         {
-            if (const ItemPrototype* proto = pItem->GetProto())
+            if (const ItemPrototype* proto = GetItemProtoCompat(pItem))
             {
                 if (proto->Quality == ITEM_QUALITY_POOR)
                 {
-                    std::ostringstream out; out << ai->GetChatHelper()->formatItem(pItem->GetProto()) << " destroyed";
+                    std::ostringstream out; out << ai->GetChatHelper()->formatItem(GetItemProtoCompat(pItem)) << " destroyed";
                     sLog.outDetail("%s via DestroyAllGrayItemsAction", out.str().c_str());
                     bot->DestroyItem(pItem->GetBagSlot(), pItem->GetSlot(), true);
                     ai->TellPlayer(requester, out, PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);

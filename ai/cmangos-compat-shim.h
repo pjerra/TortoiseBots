@@ -86,6 +86,20 @@ inline Item* FindItemByEntryCompat(Player* player, uint32 itemEntry)
     return nullptr;
 }
 
+// The item's template, in the spelling the shared bot code uses on both cores (the ForeverCore half is in
+// forever-compat-shim.h). On this core that is exactly what the old call sites said, plus a null check: a null item
+// crashed there.
+inline ItemPrototype const* GetItemProtoCompat(Item const* item)
+{
+    return item ? item->GetProto() : nullptr;
+}
+
+// The core's item template record from the bot's ItemPrototype. This core's ItemPrototype IS the core record.
+inline ItemPrototype const* GetItemTemplateCompat(ItemPrototype const* proto)
+{
+    return proto;
+}
+
 // === Type renames ===
 // Mature strategy code uses GenericTransport for the core's ordinary
 // Transport type. Keep the alias local to the module; it is not a vehicle API.

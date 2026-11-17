@@ -120,7 +120,7 @@ PullRangedBlocker PullStrategy::GetRangedBlocker(float distance) const
     if (!rangedWeapon)
         return PullRangedBlocker::NoWeapon;
 
-    const ItemPrototype* proto = rangedWeapon->GetProto();
+    const ItemPrototype* proto = GetItemProtoCompat(rangedWeapon);
     if (proto)
     {
         // Untrained weapon skill: the shoot cast would fail CanCastSpell
@@ -223,7 +223,7 @@ std::string PullStrategy::GetSpellName() const
         const Item* equippedWeapon = ai->GetBot()->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED);
         if (equippedWeapon)
         {
-            const ItemPrototype* itemPrototype = equippedWeapon->GetProto();
+            const ItemPrototype* itemPrototype = GetItemProtoCompat(equippedWeapon);
             if (itemPrototype)
             {
                 switch (itemPrototype->SubClass)
@@ -538,7 +538,7 @@ void PullStrategy::DecideOpening(Unit* target)
     if (spell == "shoot")
     {
         const Item* weapon = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED);
-        spell = ShootSpellOf(weapon ? weapon->GetProto() : nullptr);
+        spell = ShootSpellOf(weapon ? GetItemProtoCompat(weapon) : nullptr);
     }
     float maxRange = 0.0f;
     if (!spell.empty() && ai->GetSpellRange(spell, &maxRange))

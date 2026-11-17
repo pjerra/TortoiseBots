@@ -96,7 +96,7 @@ bool DoneFishingValue::Calculate()
     Item* mhItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND);
 
     //Does not have fishing pole equiped.
-    if (!mhItem || mhItem->GetProto()->Class != ITEM_CLASS_WEAPON || mhItem->GetProto()->SubClass != ITEM_SUBCLASS_WEAPON_FISHING_POLE)
+    if (!mhItem || GetItemProtoCompat(mhItem)->Class != ITEM_CLASS_WEAPON || GetItemProtoCompat(mhItem)->SubClass != ITEM_SUBCLASS_WEAPON_FISHING_POLE)
         return false;
 
     // Between two casts the bot holds the pole and channels nothing - that is not "done":

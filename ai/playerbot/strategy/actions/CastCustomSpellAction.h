@@ -108,7 +108,7 @@ namespace ai
             if (!castCount)
                 return 0;
 
-            ItemPrototype const* proto = item->GetProto();
+            ItemPrototype const* proto = GetItemProtoCompat(item);
 
             //Upgrade current equiped item enchantment.
             if (item->GetBagSlot() == INVENTORY_SLOT_BAG_0)

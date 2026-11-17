@@ -315,9 +315,9 @@ AhMarketService::PostResult AhMarketService::TryPostForBot(Player* bot, bool all
     bool hasProfitable = false;
     for (Item* item : items)
     {
-        if (!item || !item->GetProto())
+        if (!item || !GetItemProtoCompat(item))
             continue;
-        ItemPrototype const* proto = item->GetProto();
+        ItemPrototype const* proto = GetItemProtoCompat(item);
         std::string qualifier = ai::ItemQualifier(item).GetQualifier();
         ai->GetAiObjectContext()->GetValue<ai::ItemUsage>("item usage", qualifier)->Reset();
         ai::ItemUsage usage = ai->GetAiObjectContext()->GetValue<ai::ItemUsage>("item usage", qualifier)->Get();
@@ -376,10 +376,10 @@ AhMarketService::PostResult AhMarketService::TryPostForBot(Player* bot, bool all
     // existing cache. Break early on first profitable post to keep tick cheap.
     for (Item* item : items)
     {
-        if (!item || !item->GetProto())
+        if (!item || !GetItemProtoCompat(item))
             continue;
 
-        ItemPrototype const* proto = item->GetProto();
+        ItemPrototype const* proto = GetItemProtoCompat(item);
 
         // The order keep set bypasses usage lists: never hand over the order
         // item, the supply item or a known-recipe reagent.

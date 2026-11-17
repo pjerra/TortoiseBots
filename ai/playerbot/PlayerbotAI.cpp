@@ -558,7 +558,7 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
                     isCasting = bot->IsNonMeleeSpellCasted(true);
                 }
             if (Item* mainHand = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_MAINHAND))
-                if (mainHand->GetProto()->Class == ITEM_CLASS_WEAPON && mainHand->GetProto()->SubClass == ITEM_SUBCLASS_WEAPON_FISHING_POLE)
+                if (GetItemProtoCompat(mainHand)->Class == ITEM_CLASS_WEAPON && GetItemProtoCompat(mainHand)->SubClass == ITEM_SUBCLASS_WEAPON_FISHING_POLE)
                     DoSpecificAction("equip upgrades", Event("fishing pole recovery"), true);
             // Combat ends any open-water fishing session at once: the spot is
             // dropped (no walk-back after the fight) and the hourly cooldown
@@ -785,7 +785,7 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
             if (Item* ranged = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_RANGED))
             {
                 uint32 wantSub = 0;
-                switch (ranged->GetProto()->SubClass)
+                switch (GetItemProtoCompat(ranged)->SubClass)
                 {
                 case ITEM_SUBCLASS_WEAPON_GUN:
                     wantSub = ITEM_SUBCLASS_BULLET;
@@ -818,10 +818,10 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
 
                 for (auto item : items)
                 {
-                    if (bot->GetClass() == CLASS_HUNTER && item->GetProto()->SubClass == ITEM_SUBCLASS_WEAPON_THROWN) //Do not replenish thrown weapons for hunters.
+                    if (bot->GetClass() == CLASS_HUNTER && GetItemProtoCompat(item)->SubClass == ITEM_SUBCLASS_WEAPON_THROWN) //Do not replenish thrown weapons for hunters.
                         break;
 
-                    item->SetCount(item->GetProto()->GetMaxStackSize());
+                    item->SetCount(GetItemProtoCompat(item)->GetMaxStackSize());
                     break;
                 }
             }
@@ -1704,9 +1704,9 @@ void PlayerbotAI::RefillPoolRations()
         InventoryIterateItems(&visitor, IterateItemsMask::ITERATE_ITEMS_IN_BAGS);
         for (Item* foodItem : visitor.GetResult())
         {
-            if (!foodItem || !foodItem->GetProto() || foodItem->GetEntry() == wantId)
+            if (!foodItem || !GetItemProtoCompat(foodItem) || foodItem->GetEntry() == wantId)
                 continue;
-            if (foodItem->GetProto()->ItemLevel < wantProto->ItemLevel)
+            if (GetItemProtoCompat(foodItem)->ItemLevel < wantProto->ItemLevel)
                 bot->DestroyItem(foodItem->GetBagSlot(), foodItem->GetSlot(), true);
         }
         uint32 have = bot->GetItemCount(wantId);
@@ -5004,7 +5004,7 @@ uint32 PlayerbotAI::GetEquipStatsValue(Player* player)
     for (uint8 i = EQUIPMENT_SLOT_START; i < EQUIPMENT_SLOT_END; ++i)
     {
         if (Item* item = player->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
-            statsValue += sRandomItemMgr.GetStatWeight(item->GetProto()->ItemId, specId);
+            statsValue += sRandomItemMgr.GetStatWeight(GetItemProtoCompat(item)->ItemId, specId);
     }
 
     return statsValue;
@@ -5015,11 +5015,11 @@ void PlayerbotAI::_fillGearScoreData(Player *player, Item* item, std::vector<uin
     if (!item)
         return;
 
-    if (player->CanUseItem(item->GetProto()) != EQUIP_ERR_OK)
+    if (player->CanUseItem(GetItemProtoCompat(item)) != EQUIP_ERR_OK)
         return;
 
-    uint8 type   = item->GetProto()->InventoryType;
-    uint32 level = item->GetProto()->ItemLevel;
+    uint8 type   = GetItemProtoCompat(item)->InventoryType;
+    uint32 level = GetItemProtoCompat(item)->ItemLevel;
 
     switch (type)
     {

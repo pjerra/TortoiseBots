@@ -345,7 +345,7 @@ static BotRoles GetTalentRoles(const Player* player)
 static bool HasShieldEquipped(const Player* player)
 {
     Item const* offhand = player->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND);
-    ItemPrototype const* prototype = offhand ? offhand->GetProto() : nullptr;
+    ItemPrototype const* prototype = offhand ? GetItemProtoCompat(offhand) : nullptr;
     return prototype && prototype->Class == ITEM_CLASS_ARMOR &&
         prototype->SubClass == ITEM_SUBCLASS_ARMOR_SHIELD;
 }

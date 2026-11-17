@@ -38,7 +38,7 @@ uint32 GuildCraftOrderAction::CountFreeBagSlots()
         Bag* bag = (Bag*)bot->GetItemByPos(INVENTORY_SLOT_BAG_0, i);
         if (!bag)
             continue;
-        ItemPrototype const* bagProto = bag->GetProto();
+        ItemPrototype const* bagProto = GetItemProtoCompat(bag);
         if (bagProto && bagProto->Class == ITEM_CLASS_CONTAINER && bagProto->SubClass == ITEM_SUBCLASS_CONTAINER)
             bags.push_back(bag);
     }

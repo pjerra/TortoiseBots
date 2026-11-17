@@ -51,11 +51,11 @@ Item* ItemForSpellValue::Calculate()
             !strcmpi(spellInfo->SpellName[0].c_str(), "windfury weapon"))
     {
         itemForSpell = GetItemFitsToSpellRequirements(EQUIPMENT_SLOT_MAINHAND, spellInfo);
-        if (itemForSpell && itemForSpell->GetProto()->Class == ITEM_CLASS_WEAPON)
+        if (itemForSpell && GetItemProtoCompat(itemForSpell)->Class == ITEM_CLASS_WEAPON)
             return itemForSpell;
 
         itemForSpell = GetItemFitsToSpellRequirements(EQUIPMENT_SLOT_OFFHAND, spellInfo);
-        if (itemForSpell && itemForSpell->GetProto()->Class == ITEM_CLASS_WEAPON)
+        if (itemForSpell && GetItemProtoCompat(itemForSpell)->Class == ITEM_CLASS_WEAPON)
             return itemForSpell;
 
         return NULL;

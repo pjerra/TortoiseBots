@@ -1121,7 +1121,7 @@ void CastShootAction::UpdateWeaponInfo()
 
             needsAmmo = true;
 
-            const ItemPrototype* itemPrototype = equippedWeapon->GetProto();
+            const ItemPrototype* itemPrototype = GetItemProtoCompat(equippedWeapon);
             switch (itemPrototype->SubClass)
             {
                 case ITEM_SUBCLASS_WEAPON_GUN:

@@ -187,7 +187,7 @@ ItemUsage ItemUsageValue::Calculate()
             return ItemUsage::ITEM_USAGE_NONE;
         std::list<Item*> poles = AI_VALUE2(std::list<Item*>, "inventory items", "fishing pole");
         for (Item* pole : poles)
-            if (pole->GetProto()->ItemLevel > proto->ItemLevel)
+            if (GetItemProtoCompat(pole)->ItemLevel > proto->ItemLevel)
                 return ItemUsage::ITEM_USAGE_NONE;
         return ItemUsage::ITEM_USAGE_KEEP;
     }
@@ -475,7 +475,7 @@ if ((proto->Class == ITEM_CLASS_PROJECTILE ||
             uint32 ammoClass = ITEM_CLASS_PROJECTILE;
             uint32 subClass = 0;
 
-            switch (pItem->GetProto()->SubClass)
+            switch (GetItemProtoCompat(pItem)->SubClass)
             {
                 case ITEM_SUBCLASS_WEAPON_GUN:
                     subClass = ITEM_SUBCLASS_BULLET;
@@ -498,7 +498,7 @@ if ((proto->Class == ITEM_CLASS_PROJECTILE ||
                 // came back as "equip", equipping it swapped the two stacks and the next tick
                 // swapped them back (28,000 swaps in half an hour for one rogue). The stack in
                 // the ranged slot counts as the equipped ammo.
-                if (pItem->GetProto()->SubClass == ITEM_SUBCLASS_WEAPON_THROWN)
+                if (GetItemProtoCompat(pItem)->SubClass == ITEM_SUBCLASS_WEAPON_THROWN)
                     currentAmmoId = pItem->GetEntry();
                 const ItemPrototype* currentAmmoProto = nullptr;
                 if (currentAmmoId)
@@ -712,8 +712,8 @@ uint8 ItemUsageValue::GetPreferredEquipSlot(Player* bot, Item* item, ItemPrototy
             continue;
         }
 
-        if (newWeaponForSpec && equipped->GetProto()->Class == ITEM_CLASS_WEAPON &&
-            !sRandomItemMgr.ShouldEquipWeaponForSpec(bot, bot->GetClass(), specId, equipped->GetProto(), canDualWield) &&
+        if (newWeaponForSpec && GetItemProtoCompat(equipped)->Class == ITEM_CLASS_WEAPON &&
+            !sRandomItemMgr.ShouldEquipWeaponForSpec(bot, bot->GetClass(), specId, GetItemProtoCompat(equipped), canDualWield) &&
             sRandomItemMgr.ShouldEquipWeaponForSlot(bot, bot->GetClass(), specId, proto, slot, canDualWield))
         {
             // An empty main hand is worse than an off-spec off hand: without a
@@ -761,7 +761,7 @@ static bool IsBestOwnedShield(Player* bot, Item* myself, ItemPrototype const* pr
         if (!item || item == myself)
             return;
 
-        ItemPrototype const* other = item->GetProto();
+        ItemPrototype const* other = GetItemProtoCompat(item);
         if (!other || other->Class != ITEM_CLASS_ARMOR || other->SubClass != ITEM_SUBCLASS_ARMOR_SHIELD)
             return;
 
@@ -854,7 +854,7 @@ ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemQualifier& itemQualifier, P
     if (itemProto->Class == ITEM_CLASS_QUIVER)
     {
         Item* equippedRangedWeapon = bot->GetWeaponForAttack(WeaponAttackType::RANGED_ATTACK, false, false);
-        ItemPrototype const* rangedProto = equippedRangedWeapon ? equippedRangedWeapon->GetProto() : nullptr;
+        ItemPrototype const* rangedProto = equippedRangedWeapon ? GetItemProtoCompat(equippedRangedWeapon) : nullptr;
 
         auto bagKindFromSubClass = [](uint32 subClass) -> AmmoBagKind {
             if (subClass == ITEM_SUBCLASS_QUIVER)
@@ -887,7 +887,7 @@ ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemQualifier& itemQualifier, P
         if (hasEquipped)
         {
             Bag* quiver = equippedQuivers.front();
-            ItemPrototype const* quiverProto = quiver->GetProto();
+            ItemPrototype const* quiverProto = GetItemProtoCompat(quiver);
             equipped = {
                 bagKindFromSubClass(quiverProto ? quiverProto->SubClass : 0),
                 quiver->GetBagSize(),
@@ -920,8 +920,8 @@ ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemQualifier& itemQualifier, P
                 for (uint8 bag = INVENTORY_SLOT_BAG_START; bag < INVENTORY_SLOT_BAG_END; ++bag)
                 {
                     Item* bagItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, bag);
-                    if (bagItem && bagItem->GetProto() && bagItem->GetProto()->Class == ITEM_CLASS_CONTAINER &&
-                        bagItem->GetProto()->SubClass == ITEM_SUBCLASS_SOUL_CONTAINER)
+                    if (bagItem && GetItemProtoCompat(bagItem) && GetItemProtoCompat(bagItem)->Class == ITEM_CLASS_CONTAINER &&
+                        GetItemProtoCompat(bagItem)->SubClass == ITEM_SUBCLASS_SOUL_CONTAINER)
                     {
                         haveSoulBag = true;
                         uint32 slots = ((Bag*)bagItem)->GetBagSize();
@@ -968,7 +968,7 @@ ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemQualifier& itemQualifier, P
 
     Item* oldItem = bot->GetItemByPos(dest);
 
-    ai->TellDebug(ai->GetMaster(), "Checking equip: " + chat->formatItem(itemProto) + " to " + chat->formatSlot(slot) + " vs " + (oldItem ? chat->formatItem(oldItem->GetProto()) : "empty"), "debug equip");
+    ai->TellDebug(ai->GetMaster(), "Checking equip: " + chat->formatItem(itemProto) + " to " + chat->formatSlot(slot) + " vs " + (oldItem ? chat->formatItem(GetItemProtoCompat(oldItem)) : "empty"), "debug equip");
 
     if (itemProto->Class == ITEM_CLASS_WEAPON &&
         !sRandomItemMgr.ShouldEquipWeaponForSlot(bot, bot->GetClass(), specId, itemProto, slot, canDualWield))
@@ -1015,7 +1015,7 @@ ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemQualifier& itemQualifier, P
             return ItemUsage::ITEM_USAGE_BAD_EQUIP;
     }
 
-    const ItemPrototype* oldItemProto = oldItem->GetProto();
+    const ItemPrototype* oldItemProto = GetItemProtoCompat(oldItem);
 
     if (itemProto->Class == ITEM_CLASS_ARMOR && itemProto->InventoryType == INVTYPE_TABARD)
     {
@@ -1201,7 +1201,7 @@ uint32 ItemUsageValue::GetSmallestBagSize(Player* bot)
         const Bag* const pBag = (Bag*)bagItem;
         if (pBag)
         {
-            ItemPrototype const* proto = bagItem->GetProto();
+            ItemPrototype const* proto = GetItemProtoCompat(bagItem);
             if (!proto || proto->Class != ITEM_CLASS_CONTAINER || proto->SubClass != ITEM_SUBCLASS_CONTAINER)
                 continue;
 
@@ -1573,7 +1573,7 @@ float ItemUsageValue::BetterStacks(ItemPrototype const* proto, std::string itemT
 
     for (auto& otherItem : items)
     {
-        const ItemPrototype* otherProto = otherItem->GetProto();
+        const ItemPrototype* otherProto = GetItemProtoCompat(otherItem);
 
         if (otherProto->Class != proto->Class || otherProto->SubClass != proto->SubClass)
             continue;
@@ -2408,7 +2408,7 @@ bool ItemUsageValue::IsFutureUpgrade(ItemQualifier& itemQualifier, Player* bot)
     if (!worn)
         return true;
 
-    ItemQualifier wornQualifier(worn->GetProto()->ItemId, worn->GetItemRandomPropertyId());
+    ItemQualifier wornQualifier(GetItemProtoCompat(worn)->ItemId, worn->GetItemRandomPropertyId());
     return ai::EquipUpgradeBetter(statWeight, sRandomItemMgr.ItemStatWeight(bot, wornQualifier),
         sPlayerbotAIConfig.equipUpgradeThreshold);
 }

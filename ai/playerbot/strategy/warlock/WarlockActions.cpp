@@ -55,7 +55,7 @@ bool EquipFirestoneAction::Execute(Event& /*event*/)
         // Only a holdable stone: Turtle's bag-consumable Spellstone and
         // Firestone share the names but cannot be equipped.
         if (stone && !stone->IsEquipped() &&
-            TortoiseBots::IsEquippableWarlockStone(stone->GetProto()->InventoryType))
+            TortoiseBots::IsEquippableWarlockStone(GetItemProtoCompat(stone)->InventoryType))
         {
             EquipAction::EquipItem(ai, nullptr, stone, true);
             return bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND) == stone;
@@ -77,7 +77,7 @@ bool EquipSpellstoneAction::Execute(Event& /*event*/)
         // Only a holdable stone: Turtle's bag-consumable Spellstone and
         // Firestone share the names but cannot be equipped.
         if (stone && !stone->IsEquipped() &&
-            TortoiseBots::IsEquippableWarlockStone(stone->GetProto()->InventoryType))
+            TortoiseBots::IsEquippableWarlockStone(GetItemProtoCompat(stone)->InventoryType))
         {
             EquipAction::EquipItem(ai, nullptr, stone, true);
             return bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND) == stone;

@@ -378,7 +378,7 @@ bool BuyBackAction::Execute(Event& event)
     std::list<Item*> found = ai->InventoryParseItems(text, IterateItemsMask::ITERATE_ITEMS_IN_BUYBACK);
 
     //Sort items on itemLevel descending.
-    found.sort([](Item* i, Item* j) {return i->GetProto()->ItemLevel > j->GetProto()->ItemLevel; });
+    found.sort([](Item* i, Item* j) {return GetItemProtoCompat(i)->ItemLevel > GetItemProtoCompat(j)->ItemLevel; });
 
     if (found.empty())
     {
