@@ -8,7 +8,8 @@ Measured 2026-11-17: turtle-agent `dev` e461eb42 (about 207k lines of Go, 1,060 
 
 ## Owner decisions (2026-11-17)
 
-1. **No GitHub repository yet.** `forever-agent` is a local repository (`~/forever-agent`) until the owner says otherwise.
+1. **Public repository `pjerra/forever-agent`.** Its public text describes a client for ForeverCore servers and does
+   not mention the TortoiseBots port, which stays private (head start note).
 2. **Same as turtle-agent: a real network client.** The agent logs in over the wire like a game client. No
    player-inside-the-server shortcut.
 3. **Trials is rewritten in Go**, as a tool inside the agent. No bundled Python.
@@ -37,7 +38,8 @@ and a round-trip test feeds it bytes captured from a real session.
 
 ## Repository
 
-- Local repository `~/forever-agent`, made from turtle-agent's history, Go module `forever-agent`, binary `forever-agent`.
+- `pjerra/forever-agent` (public), checkout `~/forever-agent`, made from turtle-agent's history, Go module
+  `github.com/pjerra/forever-agent`, binary `forever-agent`, default branch `main`.
 - turtle-agent and tortoise-trials stay as they are for the Turtle server.
 - AGPL-3.0 and both NOTICE files are kept.
 
@@ -55,7 +57,7 @@ and a round-trip test feeds it bytes captured from a real session.
 | # | Phase | Result | Agent time | Needs |
 |---|---|---|---|---|
 | 0 | Seam audit | Every place above the protocol layer that touches `packet`, `opcode`, `objects`; the `game.Client` interface written down | 2-3 days | nothing |
-| 1 | Local repository | `~/forever-agent` with turtle-agent's history, renamed module and binary, tests green for the parts that need no server | 2-3 days | nothing |
+| 1 | Repository | `pjerra/forever-agent` with turtle-agent's history, renamed module and binary, tests green for the parts that need no server | 2-3 days | nothing |
 | 2 | Login | bnetserver login in Go (TLS, REST, protobuf services, realm join) until the world server accepts the session | 2-3 weeks | a running ForeverCore server |
 | 3 | World socket and core packets | Encrypted and compressed socket, character list, enter world, time sync, movement, chat, addon messages | 2-3 weeks | phase 2 |
 | 4 | Objects | Modern update fields: units, players, items, game objects, auras, for the fields the agent reads | 2-3 weeks | phase 3, a packet capture from a real client for the tests |
