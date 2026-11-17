@@ -1472,27 +1472,28 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertEqual(re.findall(r"(?m)^DELETE FROM `ai_dungeon_step` WHERE `plan` = '(\w+)';", text), ['maraudon_purple', 'scarlet_graveyard', 'razorfen_kraul', 'razorfen_downs', 'shadowfang_keep'])
         self.assertIn("DELETE FROM `ai_dungeon_boss` WHERE `map` IN (129) AND `entry` IN (7357, 8567, 62679, 7358);", migrations_text())
 
-    def test_maraudon_purple_is_the_split_and_stood_wipe_leg(self):
-        # 20261024060500 (turtle-agent mp-fix1 6f182afa1ed5ea3c4639f0f3cf397eeb821989db, the r28b wipe-leg fix on top of
-        # the 20261024010000 census fixes of PREP-MARAUDON-PURPLE-2026-10-24.md): leg 0 groups 35-39 (the 2-slimer patrol
-        # pair, the 2 Sisters, the 4-sludge pack, the lone lurker and the 5-unit satyr mix the run fought as one 6-8 unit
-        # pack on the approach walk around steps 70-74) are 4 pulls in route order, radius 5, one approach stand each on
-        # the pack's floor (the run leader's party stands there to pull). 6 legs, 1660 steps (71 + 15 + 17 + 21 + 7 + 10
-        # pulls), bosses in leg order, no boss.first. The plan row carries the humanoid casters and kill_first; Meshlok
-        # the Harvester 12237 (rank 2) is in the skip list, not a pull.
+    def test_maraudon_purple_is_the_route_ordered_plan(self):
+        # The route order of 2026-11-14, round 3 (turtle-agent b058b987, branch fix/route-order-maraudon_purple, issue
+        # #1542, the Gnomeregan method): each of the 106 packs sits on the leg whose walk passes it, in the order along
+        # that walk, and the 35 packs no leg passes within aggro reach are dropped (round 3 plans the ledge under the
+        # ring, which the deck above wakes). 6 legs, 280 rows (34 + 25 + 23 + 7 + 12 + 5 pulls), bosses in leg order, no
+        # boss.first. The plan row carries the humanoid casters and kill_first; Meshlok the Harvester 12237 (rank 2) is
+        # in the skip list, the critters 2914/4076/6145/13321 and Celebras' 13743 are in no pull. The measured order
+        # (9,371 yd against the deployed 36,333, 10 backtracks against 57) is in TortoiseBots-audit
+        # tests/route-audit-1112/order/maraudon_purple-FIX.md.
         name, text = newest_plan_text("maraudon_purple")
-        self.assertEqual(name, "20261105130000_world.sql")
-        self.assertIn("('maraudon_purple', 349, '11793,11794', '', '12224,13142,12220,12217', 'turtle-agent 6ab6e4c dungeons/maraudon_purple.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+        self.assertEqual(name, "20261115003000_world.sql")
+        self.assertIn("('maraudon_purple', 349, '11793,11794', '', '12224,13142,12220,12217', 'turtle-agent b058b987 dungeons/maraudon_purple.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         self.assertEqual(leg_rows(text, "maraudon_purple"),
                          {0: ("lord_vyletongue", ""), 1: ("celebras_the_cursed", ""), 2: ("landslide", ""),
                           3: ("tinkerer_gizlock", ""), 4: ("rotgrip", ""), 5: ("princess_theradras", "")})
         rows = [r for r in self.step_rows(text) if r["plan"] == "maraudon_purple"]
-        self.assertEqual(len(rows), 1273)
+        self.assertEqual(len(rows), 280)
         self.assertEqual([r["entry"] for r in rows if r["kind"] == "boss"],
                          ["12236", "12225", "12203", "13601", "13596", "12201"])
         self.assertEqual({r["kind"] for r in rows}, {"move", "pull", "boss"})
         self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(6)],
-                         [71, 15, 17, 21, 7, 10])
+                         [34, 25, 23, 7, 12, 5])
         for leg in range(6):
             self.assertEqual(leg_steps(rows, leg)[-1]["kind"], "boss", leg)
         pulls = [r for r in rows if r["kind"] == "pull"]
@@ -1501,26 +1502,22 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertFalse([r["entries"] for r in pulls if "12237" in r["entries"].split(",")])
         self.assertFalse([r["entries"] for r in pulls if "13743" in r["entries"].split(",")])
         self.assertLessEqual(max(float(r["radius"]) for r in pulls), 8.0)
-        # The two Cavern Lurkers 9.1 yd apart are one pull (leg 0 group 39), the rare Meshlok's spawn point among them.
-        self.assertEqual([(float(r["x"]), float(r["y"]), float(r["radius"])) for r in pulls
-                          if r["entries"] == "12223" and abs(float(r["x"]) - 735.68) < 0.1],
-                         [(735.68, -79.53, 5.0)])
-        # The wipe leg: the slime pair, the Sisters, the sludge and the lurker folded into the satyr mix, each with
-        # its approach stand (the run leader's party stands there to pull).
-        by_comment = {r["comment"]: r for r in rows}
-        self.assertEqual([(by_comment["pull group %d approach" % g]["x"],
-                           by_comment["pull group %d approach" % g]["y"],
-                           by_comment["pull group %d approach" % g]["z"]) for g in (35, 36, 37, 38)],
-                         [("775", "-170", "-56.6"), ("812.5", "-152.5", "-74.9"),
-                          ("775", "-162.5", "-56.3"), ("765", "-135", "-56.3")])
-        self.assertEqual([by_comment["pull group %d" % g]["entries"] for g in (35, 36, 37, 38)],
-                         ["12221", "11794", "12222", "12216,11791,12217,12223"])
-        for g in (35, 36, 37, 38):
-            self.assertEqual(by_comment["pull group %d" % g]["radius"], "5", g)
-        # Leg 3 group 6: two linked packs interleaved within 8 yd, one 10-unit pull; the exporter lists each entry once.
+        # The 10-unit pack of two linked groups stays one pull, now leg 4's first (pulled on the way in to Rotgrip).
         ten = [r for r in pulls if r["entries"] == "11789,11783,11784"]
         self.assertEqual(len(ten), 1)
+        self.assertEqual(ten[0]["leg"], "4")
         self.assertEqual(float(ten[0]["radius"]), 5.0)
+        # Three of the round-28b stand pulls are kept, in leg 1 at their deployed points: the slime pair 12221, the
+        # sludge 12222 and the satyr mix with the lurker. The Sisters' 11794 pack at 793 -161 stands 18 yd below the
+        # walk and is dropped with the layer under it.
+        def near(row, x, y):
+            return abs(float(row["x"]) - x) < 0.2 and abs(float(row["y"]) - y) < 0.2
+
+        leg1 = [r for r in leg_steps(rows, 1) if r["kind"] == "pull"]
+        self.assertEqual([r["entries"] for r in leg1 if near(r, 764.49, -185.89)], ["12221"])
+        self.assertEqual([r["entries"] for r in leg1 if near(r, 777.81, -140.79)], ["12222"])
+        self.assertEqual([r["entries"] for r in leg1 if near(r, 747.13, -121.43)], ["12216,11791,12217,12223"])
+        self.assertFalse([r for r in pulls if near(r, 793.1, -160.9)])
         self.assertIn("DELETE FROM `ai_dungeon_boss` WHERE `map` IN (349) AND `entry` IN (12236,12225,12203,13601,13596,12201);", migrations_text())
 
     def test_dire_maul_east_is_the_plan_with_the_census_fixes(self):
