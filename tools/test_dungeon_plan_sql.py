@@ -2593,25 +2593,25 @@ class DungeonPlanSql(unittest.TestCase):
                              "the water point %s %s is still a row" % (x, y))
 
     def test_lower_blackrock_spire_is_the_reordered_plan(self):
-        # 20261114220000 (turtle-agent f6737359, issue #1542 route order fix; the method and the measurements are in the
-        # route-order audit of 2026-11-12): the same seven bosses in the same order and the same 113 packs, ordered along
-        # the seven boss-to-boss walks. 79 packs move to the leg whose walk passes them, the seven leg `to` rows move onto
-        # that walk, Omokk's boss approach 10 -576.2 29.7 (the far end of the pit corridor) goes and every pack approach
-        # chain goes with the order that walked it. 183 steps (191 rows with the seven leg rows and the plan row): 113 pulls (22 + 12 + 8 + 28 + 20 + 1 + 22), 63
-        # moves, 7 bosses. The walk is 4,830 yd against the straight 2,994 yd (the deployed rows: 16,204 yd), measured in
-        # the audit; the draft's 11 UBRS-level packs (z 106-111) are still out and the four static rares are pack members.
+        # 20261117130000 (turtle-agent 42e03534, issue #1542 route order fix round 2 from dungeon-round-41 steps
+        # 42/60/121; the method and the measurements are in the route-order audit of 2026-11-12): the same seven bosses
+        # in the same order along the seven boss-to-boss walks. Round 2 drops leg 0 pg 20 (the z 43 upper-ledge pack off
+        # Omokk's walk, which pulled Omokk and pg 21), moves the 6-spider 10374/10375 pack from leg 4 to the end of leg 3
+        # before Mother Smolderweb, and round 3 folds Vosh'gajin's two back platform pairs into leg 1.boss. 182 steps
+        # (190 rows with the seven leg rows and the plan row): 112 pulls (21 + 12 + 8 + 29 + 19 + 1 + 22), 63 moves,
+        # 7 bosses. The draft's UBRS-level packs are still out and the remaining static rares are pack members.
         name, text = newest_plan_text("lower_blackrock_spire")
-        self.assertEqual(name, "20261114220000_world.sql")
+        self.assertEqual(name, "20261117130000_world.sql")
         self.assertIn("('lower_blackrock_spire', 229, '9240,9257,9261,9262,9269', '', '9217,9045,9198,9239,9717,9266', "
-                      "'turtle-agent f6737359 dungeons/lower_blackrock_spire.json', 'plan v1, draft (not mapped, not live-checked)');", text)
+                      "'turtle-agent 42e03534 dungeons/lower_blackrock_spire.json', 'plan v1, draft (not mapped, not live-checked)');", text)
         legs = leg_rows(text, "lower_blackrock_spire")
         self.assertEqual([legs[i][0] for i in range(7)],
                          ["highlord_omokk", "shadow_hunter_vosh'gajin", "war_master_voone", "mother_smolderweb",
                           "quartermaster_zigris", "halycon", "overlord_wyrmthalak"])
         rows = [r for r in self.step_rows(text) if r["plan"] == "lower_blackrock_spire"]
-        self.assertEqual(len(rows), 183)
+        self.assertEqual(len(rows), 182)
         self.assertEqual([len([r for r in leg_steps(rows, leg) if r["kind"] == "pull"]) for leg in range(7)],
-                         [22, 12, 8, 28, 20, 1, 22])
+                         [21, 12, 8, 29, 19, 1, 22])
         self.assertEqual([r["entry"] for r in rows if r["kind"] == "boss"],
                          ["9196", "9236", "9237", "10596", "9736", "10220", "9568"])
         self.assertEqual({r["kind"] for r in rows}, {"move", "pull", "boss"})
@@ -2621,7 +2621,7 @@ class DungeonPlanSql(unittest.TestCase):
         self.assertLessEqual(max(len([e for e in r["entries"].split(",") if e]) for r in pulls), 6)
         self.assertLessEqual(max(float(r["radius"]) for r in pulls), 16.0)
         self.assertLessEqual(max(float(r["z"]) for r in rows if r["kind"] == "pull"), 91.0)
-        for rare in ("9217", "9218", "9718", "10376"):
+        for rare in ("9217", "9718", "10376"):
             self.assertEqual(len([r for r in pulls if rare in r["entries"].split(",")]), 1, rare)
         for out in ("16080", "16044"):
             self.assertFalse([r for r in pulls if out in r["entries"].split(",")], out)
@@ -2638,19 +2638,22 @@ class DungeonPlanSql(unittest.TestCase):
         # boss here). Omokk's boss approach is gone with them.
         self.assertEqual({r["comment"] for r in rows if r["kind"] == "move"}, {"to", "approach path"})
         self.assertFalse([r for r in rows if r["comment"].endswith(" approach")])
-        # Vosh'gajin's two linked 9240 guards are the boss row's `first` entries and no pull of leg 1 is a 9240 pack, as
-        # in the census fix: they cannot be pulled 20 yd from him.
+        # Vosh'gajin's two back platform pairs sit inside his reach plus raid-spread margin, so they are the boss row's
+        # `first` entries (radius 24) and are pulled with him on purpose; no pull stands on the linked 9240 guards.
         boss1 = [r for r in leg_steps(rows, 1) if r["kind"] == "boss"][0]
         self.assertEqual(boss1["entry"], "9236")
-        self.assertEqual(boss1["entries"], "9240")
+        self.assertEqual(boss1["entries"], "9240,9239,9265,9269")
+        self.assertEqual(boss1["radius"], "24")
         for guard in ((-125.54, -472.94), (-125.34, -489.88)):
             self.assertFalse([r for r in pulls if math.dist(guard, (float(r["x"]), float(r["y"]))) < 5.0],
                              "a pull stands on the linked 9240 guard %s" % (guard,))
-        # The 6-unit 9239/9240 shelf pack is leg 1's last pull, on the z 24 shelf it stands on (-99.1 -481.68 24.43), and
-        # the two 10374 patroller pulls are in leg 3 and leg 4 (the spider floor, after Mother Smolderweb), not leg 1.
+        # The front pair [9240, 9239] keeps leg 1's last pull, on the z 24 shelf it stands on (-93.23 -480.52 24.42)
+        # outside the boss reach, and the two 10374 patroller pulls are in leg 3 and leg 4 (the spider floor, after
+        # Mother Smolderweb), not leg 1.
         shelf = leg_steps(rows, 1)[-2]
         self.assertEqual(shelf["kind"], "pull")
-        self.assertAlmostEqual(math.dist((-99.1, -481.68, 24.43), tuple(float(shelf[k]) for k in "xyz")), 0.0, delta=1)
+        self.assertEqual(shelf["entries"], "9240,9239")
+        self.assertAlmostEqual(math.dist((-93.23, -480.52, 24.42), tuple(float(shelf[k]) for k in "xyz")), 0.0, delta=1)
         patrol = [r for r in pulls if "10374" in r["entries"].split(",")]
         self.assertEqual(sorted({r["leg"] for r in patrol}), ["3", "4"])
         self.assertFalse([r for r in pulls if r["leg"] == "1" and "10374" in r["entries"].split(",")])
