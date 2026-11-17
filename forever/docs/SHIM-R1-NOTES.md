@@ -82,3 +82,6 @@ Grouped; count = error places in the BEFORE census. Fill after the census.
 |---|---|---|
 | BEFORE | `ai/playerbot/strategy/values` | 2,717 (CENSUS.md row 2) |
 | batch 1 | `ai/playerbot/strategy/values` | 1,748 |
+| batch 3 | `ai/playerbot/strategy/values` | 1,682 |
+| first run | `ai/playerbot/strategy/triggers` | 688 |
+| after the spell helpers | `ai/playerbot/strategy/triggers` | 687 |

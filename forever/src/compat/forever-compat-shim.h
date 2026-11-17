@@ -17,14 +17,14 @@
 // 1. TYPE NAMES
 // ---------------------------------------------------------------------------------------------------------------
 using BattleGroundTypeId = BattlegroundTypeId;   // the battleground id enum; AV/WS/AB are 1/2/3 in both cores
+using CellPair = CellCoord;                      // CoordPair<TOTAL_NUMBER_OF_CELLS_PER_MAP>, x_coord/y_coord fields
 using Config = ConfigMgr;                        // the config store; cmangos names the class Config
-using CreatureInfo = CreatureTemplate;
-using GameObjectInfo = GameObjectTemplate;
-using GenericTransport = Transport;
-using GridPair = GridCoord;                      // CoordPair<MAX_NUMBER_OF_GRIDS>, same layout with x_coord/y_coord
-using CellPair = CellCoord;                      // CoordPair<TOTAL_NUMBER_OF_CELLS_PER_MAP>
-using GuidVector = std::vector<ObjectGuid>;
-using ObjectGuidSet = GuidSet;
+using CreatureInfo = CreatureTemplate;           // the creature template record
+using GameObjectInfo = GameObjectTemplate;       // the game object template record
+using GenericTransport = Transport;              // a ship/zeppelin the player can stand on
+using GridPair = GridCoord;                      // CoordPair<MAX_NUMBER_OF_GRIDS>, x_coord/y_coord fields
+using GuidVector = std::vector<ObjectGuid>;      // a list of guids
+using ObjectGuidSet = GuidSet;                   // a set of guids
 using Movement::PointsArray;                     // the polyline of a path (std::vector<Vector3> in both cores)
 using Movement::Vector3;                         // G3D::Vector3, the point type cmangos exposes unqualified
 
@@ -105,50 +105,52 @@ struct CmangosObjectAccessorProxy
 // ---------------------------------------------------------------------------------------------------------------
 // 3. MEMBER NAMES
 // ---------------------------------------------------------------------------------------------------------------
-#define GetCharmerGuid GetCharmerGUID
-#define GetCreatureInfo GetCreatureTemplate
-#define GetDeathState getDeathState
-#define GetGameObjectInfo GetGameObjectTemplate
-#define GetGOData GetGameObjectData
-#define GetHealthPercent GetHealthPct
-#define GetItemPrototype GetItemTemplate
-#define GetLeaderGuid GetLeaderGUID
-#define GetObjectBoundingRadius GetBoundingRadius
-#define GetObjectGuid GetGUID
-#define GetOwnerGuid GetOwnerGUID
-#define GetSelectionGuid GetTarget
-#define GetSpellProto GetSpellInfo
-#define InBattleGround InBattleground
-#define IsDead isDead
-#define IsMoving isMoving
-#define IsNonMeleeSpellCasted IsNonMeleeSpellCast
-#define SetSelectionGuid SetSelection
+#define GetCharmerGuid GetCharmerGUID                // guid of the unit that charmed this one
+#define GetCreatureInfo GetCreatureTemplate          // ObjectMgr's creature template by entry
+#define GetDeathState getDeathState                  // ALIVE/DEAD/CORPSE state
+#define GetGameObjectInfo GetGameObjectTemplate      // ObjectMgr's game object template by entry
+#define GetGOData GetGameObjectData                  // ObjectMgr's spawn record by spawn id
+#define GetHealthPercent GetHealthPct                // health as a percentage of max, 0..100
+#define GetItemPrototype GetItemTemplate             // ObjectMgr's item template by entry
+#define GetLeaderGuid GetLeaderGUID                   // the group's leader
+#define GetObjectBoundingRadius GetBoundingRadius    // the unit's size, added to reach computations
+#define GetObjectGuid GetGUID                        // the object's guid
+#define GetOwnerGuid GetOwnerGUID                    // guid of the summoner/owner
+#define GetSelectionGuid GetTarget                   // the selected target guid (UF::UnitData::Target)
+#define GetSpellProto GetSpellInfo                   // the spell an aura or a cast belongs to
+#define GetTargetGuid GetTarget                      // the selected target guid (same field)
+#define InBattleGround InBattleground                // player is inside a battleground instance
+#define IsDead isDead                                // dead or a corpse
+#define IsMoving isMoving                            // movement flags say the unit is moving
+#define IsNonMeleeSpellCasted IsNonMeleeSpellCast    // a non-melee spell is being cast/channelled
+#define IsSittingDown IsSitState                     // the five sitting stand states
+#define SetSelectionGuid SetSelection                // set the selected target guid (Player only)
 
 // Lower-case spellings the bot brain uses for core members (the same members, renamed by ForeverCore).
 // (getName is not here: bot classes define both getName() and a GetName() forwarder, so a global rename would
 // redeclare those members.)
-#define getDistance2d GetDistance2d
-#define getLevel GetLevel
-#define getOpcode GetOpcode
-#define getThreat GetThreat
-#define getObjectGuid GetGUID
-#define getOrientation GetOrientation
-#define getPositionX GetPositionX
-#define getPositionY GetPositionY
-#define getPositionZ GetPositionZ
+#define getDistance2d GetDistance2d   // distance in the xy plane
+#define getLevel GetLevel             // unit level
+#define getObjectGuid GetGUID         // the object's guid
+#define getOpcode GetOpcode           // a packet's opcode
+#define getOrientation GetOrientation // facing, radians
+#define getPositionX GetPositionX     // x coordinate
+#define getPositionY GetPositionY     // y coordinate
+#define getPositionZ GetPositionZ     // z coordinate
+#define getThreat GetThreat           // a unit's threat on this target
 
 // cmangos asked a unit for its database id; ForeverCore's guid keeps it in the counter. GetCounter() is 64 bit
 // (ObjectGuid::LowType), the old value was 32 bit, so the number is the same but wider.
 #define GetGUIDLow() GetGUID().GetCounter()
 
 // TempSummonType: the same values under ForeverCore's TEMPSUMMON_ names (ObjectDefines.h:60-72).
-#define TEMPSPAWN_CORPSE_DESPAWN TEMPSUMMON_CORPSE_DESPAWN
-#define TEMPSPAWN_CORPSE_TIMED_DESPAWN TEMPSUMMON_CORPSE_TIMED_DESPAWN
-#define TEMPSPAWN_DEAD_DESPAWN TEMPSUMMON_DEAD_DESPAWN
-#define TEMPSPAWN_MANUAL_DESPAWN TEMPSUMMON_MANUAL_DESPAWN
-#define TEMPSPAWN_TIMED_DESPAWN TEMPSUMMON_TIMED_DESPAWN
-#define TEMPSPAWN_TIMED_OR_CORPSE_DESPAWN TEMPSUMMON_TIMED_OR_CORPSE_DESPAWN
-#define TEMPSPAWN_TIMED_OR_DEAD_DESPAWN TEMPSUMMON_TIMED_OR_DEAD_DESPAWN
+#define TEMPSPAWN_CORPSE_DESPAWN TEMPSUMMON_CORPSE_DESPAWN                         // despawn right on death
+#define TEMPSPAWN_CORPSE_TIMED_DESPAWN TEMPSUMMON_CORPSE_TIMED_DESPAWN             // despawn a while after death
+#define TEMPSPAWN_DEAD_DESPAWN TEMPSUMMON_DEAD_DESPAWN                             // despawn when the corpse goes
+#define TEMPSPAWN_MANUAL_DESPAWN TEMPSUMMON_MANUAL_DESPAWN                         // despawn on UnSummon()
+#define TEMPSPAWN_TIMED_DESPAWN TEMPSUMMON_TIMED_DESPAWN                           // despawn after the given time
+#define TEMPSPAWN_TIMED_OR_CORPSE_DESPAWN TEMPSUMMON_TIMED_OR_CORPSE_DESPAWN       // ...or on death
+#define TEMPSPAWN_TIMED_OR_DEAD_DESPAWN TEMPSUMMON_TIMED_OR_DEAD_DESPAWN           // ...or when it disappears
 
 // AreaTable flags: the same DBC bits, named by ForeverCore's AreaFlags enum. Values are the client's.
 #define AREA_FLAG_CAPITAL AreaFlags::LinkedChat              // 0x00000100, the capital-city bit
@@ -158,8 +160,10 @@ struct CmangosObjectAccessorProxy
 // SpellMgr::GetSpellInfo needs the difficulty; cmangos asked for one spell id and got the single entry.
 #define GetSpellEntry(spellId) GetSpellInfo((spellId), DIFFICULTY_NONE)
 
-// The cooldown moved to SpellHistory on ForeverCore; the question (is this spell cooling down) is the same.
+// The cooldown moved to SpellHistory on ForeverCore; the questions (is this spell cooling down / clear it now) are the
+// same and take the same arguments.
 #define HasSpellCooldown(spellId) GetSpellHistory()->HasCooldown(spellId)
+#define RemoveSpellCooldown(...) GetSpellHistory()->ResetCooldown(__VA_ARGS__)
 
 // ---------------------------------------------------------------------------------------------------------------
 // 4. FREE FUNCTIONS AND PROXIES
@@ -172,13 +176,13 @@ struct CmangosObjectAccessorProxy
 // ---- constants ----
 // Guid type tags. ForeverCore's HighGuid has its own numbering, so these are the tags themselves, not numbers: every
 // bot use compares them with ObjectGuid::GetHigh(), which returns HighGuid.
-#define HIGHGUID_CORPSE HighGuid::Corpse
-#define HIGHGUID_DYNAMICOBJECT HighGuid::DynamicObject
-#define HIGHGUID_GAMEOBJECT HighGuid::GameObject
-#define HIGHGUID_ITEM HighGuid::Item
-#define HIGHGUID_PET HighGuid::Pet
-#define HIGHGUID_PLAYER HighGuid::Player
-#define HIGHGUID_UNIT HighGuid::Creature
+#define HIGHGUID_CORPSE HighGuid::Corpse                  // corpse guid tag
+#define HIGHGUID_DYNAMICOBJECT HighGuid::DynamicObject    // dynamic object guid tag
+#define HIGHGUID_GAMEOBJECT HighGuid::GameObject          // game object guid tag
+#define HIGHGUID_ITEM HighGuid::Item                      // item guid tag
+#define HIGHGUID_PET HighGuid::Pet                        // pet guid tag
+#define HIGHGUID_PLAYER HighGuid::Player                  // player guid tag
+#define HIGHGUID_UNIT HighGuid::Creature                  // creature guid tag
 
 // Item classes and subclasses: the same client values, ForeverCore spells "miscellaneous" out.
 #define ITEM_CLASS_MISC ITEM_CLASS_MISCELLANEOUS                    // 15
@@ -220,6 +224,25 @@ struct CmangosObjectAccessorProxy
 // ---- free functions ----
 // The area record by id; ForeverCore keeps it in the area table store.
 inline AreaTableEntry const* GetAreaEntryByAreaID(uint32 id) { return sAreaTableStore.LookupEntry(id); }
+
+// cmangos had these as free functions over a SpellEntry; ForeverCore has the same answers as SpellInfo members.
+inline uint32 GetSpellCastTime(SpellInfo const* spellInfo, Spell const* spell = nullptr)
+{
+    return spellInfo ? spellInfo->CalcCastTime(const_cast<Spell*>(spell)) : 0;
+}
+inline int32 GetSpellDuration(SpellInfo const* spellInfo) { return spellInfo ? spellInfo->GetDuration() : 0; }
+inline uint32 GetSpellRecoveryTime(SpellInfo const* spellInfo) { return spellInfo ? spellInfo->GetRecoveryTime() : 0; }
+inline SpellSchoolMask GetSpellSchoolMask(SpellInfo const* spellInfo)
+{
+    return spellInfo ? spellInfo->GetSchoolMask() : SPELL_SCHOOL_MASK_NONE;
+}
+inline bool IsChanneledSpell(SpellInfo const* spellInfo) { return spellInfo && spellInfo->IsChanneled(); }
+inline bool IsPassiveSpell(SpellInfo const* spellInfo) { return spellInfo && spellInfo->IsPassive(); }
+inline bool IsPositiveEffect(SpellInfo const* spellInfo, uint8 effIndex)
+{
+    return spellInfo && spellInfo->IsPositiveEffect(effIndex);
+}
+inline bool IsPositiveSpell(SpellInfo const* spellInfo) { return spellInfo && spellInfo->IsPositive(); }
 
 // ---- SQL store objects ----
 // cmangos keeps items, creature templates and game object templates in store objects with LookupEntry/GetMaxEntry;
