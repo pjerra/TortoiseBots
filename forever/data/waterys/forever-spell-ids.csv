@@ -1,0 +1,260 @@
+class,tb_spell_name,status,forever_rank1_id,forever_all_rank_ids,source,forever_replacement,note
+druid,abolish poison,OK,2893,2893;2897;14253,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+druid,aquatic form,OK,1066,1066;1446,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const AQUATIC_FORM
+druid,barkskin,OK,22812,6361;20655;22812;22826,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const BARKSKIN
+druid,bash,OK,5211,5211;5212;6798;6799;8983;8984;25515,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const BASH
+druid,bear form,OK,5487,5487;5488;7090;18309;19030;19179;27543,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const BEAR_FORM
+druid,berserk,MISSING,,43;23397;26068;26615;26629;26662;27680;28498;45708;45709;45710,Turtle/Astra (no Forever equivalent found),none,"TB feral/tank action = Feral Berserk (WotLK 50334), Turtle backport; Forever 106951 is talent-taught retail Berserk"
+druid,caster form,PSEUDO,,,Turtle/Astra (no Forever equivalent found),,"TB pseudo-action, not a spell"
+druid,cat form,OK,768,499;768;5759;27545,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const CAT_FORM
+druid,challenging roar,OK,5209,5209;5210,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const CHALLENGING_ROAR
+druid,claw,OK,1082,1082;1448;2975;2976;2977;2980;2981;2982;3009;3010;3029;3030;3666;3667;5201;5203;5204;9849;9850;9851;16827;16828;16829;16830;16831;16832;24187,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const CLAW
+druid,cower,OK,1742,1742;1747;1748;1749;1750;1751;1753;1754;1755;1756;8998;8999;9000;9001;9892;9893;16697;16698,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+druid,cure poison,OK,526,526;536;1315;3212;3213;3738;8946;8947;26677,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+druid,dash,OK,1151,1151;1850;9821;9822;23099;23100;23109;23110;23111;23112,"Astra locales_spell (vanilla ref, id list); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+druid,demoralizing roar,OK,99,99;1735;1736;1737;9490;9491;9747;9748;9898;9899;10968;15727;15971;20753;27551,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const DEMORALIZING_ROAR
+druid,dire bear form,OK,9634,9634;11594,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const DIRE_BEAR_FORM
+druid,enrage,OK,5229,1635;1640;3019;5228;5229;8269;8599;12317;12686;12795;12880;13045;13046;13047;13048;14201;14202;14203;14204;15061;15097;15716;18501;19516;19953;23537;24318;25503;26527;27897;28131;28468;28747;28798,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const ENRAGE
+druid,entangling roots,OK,339,339;790;1062;1063;1435;1436;2919;2920;5195;5196;5309;5312;9852;9853;9854;9855;11922;12747;19970;19971;19972;19973;19974;19975;20654;20699;21331;22127;22415;22800;24648;26071;28858,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+druid,faerie fire,OK,770,770;778;784;793;1069;1070;1414;1415;1416;2887;2888;2889;6950;9749;9907;13424;13752;16498;20656;21670,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const FAERIE_FIRE
+druid,faerie fire (feral),OK,16857,3739;16857;17390;17391;17392;17396;17397;47329,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const FAERIE_FIRE_FERAL
+druid,ferocious bite,OK,22568,22568;22569;22827;22828;22829;22830;22831;22832;22851;22853;22861;22862;27557;31018,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const FEROCIOUS_BITE
+druid,frenzied regeneration,OK,22842,22842;22845;22894;22895;22896;22897;22898,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+druid,growl,OK,6795,1853;2649;6795;6796;8974;8975;8976;8977;8978;8979;9870;9871;9872;9873;14916;14917;14918;14919;14920;14921;14922;14923;14924;14925;14926;14927;15147;15148;15149;15150;15151,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const GROWL
+druid,healing touch,OK,5185,3735;5185;5186;5187;5188;5189;5190;5191;5192;5193;5194;5294;5295;5296;5297;6659;6778;6779;8903;8904;9758;9759;9888;9889;9890;9891;11431;20790;23381;25297;25407;25970;27527;28719;28742;28848,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const HEALING_TOUCH
+druid,hibernate,OK,2637,2637;5299;18657;18658;18659;18660,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const HIBERNATE
+druid,hurricane,OK,16914,16914;16915;17401;17402;17406;24922;27530,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const HURRICANE
+druid,insect swarm,OK,5570,5570;24974;24975;24976;24977;24978;24979;24980;24981;47313,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const INSECT_SWARM
+druid,mangle (bear),MISSING,,,"Astra locales_spell (vanilla ref, id list); TDB",none,TBC spell; no vanilla/Forever equivalent
+druid,maul,OK,6807,6807;6808;6809;6810;6811;6812;7092;8972;8973;9745;9746;9880;9881;9882;9883;12161;15793;17156;20751;27553,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const MAUL
+druid,moonfire,OK,8921,521;539;563;573;880;962;5307;8921;8922;8924;8925;8926;8927;8928;8929;8930;8931;8932;8933;8934;8935;9833;9834;9835;9836;9837;9838;15798;20690;21669;22206;23380;24957;27737,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const MOONFIRE
+druid,moonkin form,OK,24858,24858,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const MOONKIN_FORM
+druid,nature's grasp,OK,5230,5230;16689;16810;16811;16812;16813;17329;17373;17374;17375;17376;17612,"Astra locales_spell (vanilla ref, id list); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+druid,nature's swiftness,OK,16188,16188;17116;29274,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const NATURES_SWIFTNESS
+druid,omen of clarity,OK,16864,16864,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell)",,vanilla ranks verified in Forever data
+druid,pounce,OK,9005,9005;9006;9823;9825;9827;9828,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+druid,prowl,OK,5215,5215;5216;6783;6784;8152;9913;9914;24450;24451;24452;24453;24454;24455,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+druid,rake,OK,1822,1822;1823;1824;1827;1828;1829;9904;9905;24331;24332;27556;27638,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const RAKE
+druid,ravage,OK,3242,3242;3446;6785;6786;6787;6790;8391;9866;9867;9868;9869;24213;24333,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+druid,regrowth,OK,8936,3734;8936;8937;8938;8939;8940;8941;8942;8943;8944;8945;9750;9751;9856;9857;9858;9859;9860;9861;16561;20665;22373;22695;27637;28744,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const REGROWTH
+druid,rejuvenation,OK,774,774;788;1058;1059;1428;1429;1430;1431;2090;2091;2092;2093;3062;3063;3627;3628;3740;8070;8910;8911;9839;9840;9841;9842;9843;9844;12160;15981;20664;20701;25299;25409;25972;27532;28716;28722;28723;28724,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const REJUVENATION
+druid,rip,OK,1079,1079;1445;9492;9493;9494;9495;9752;9753;9894;9895;9896;9897,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const RIP
+druid,savage bite,MISSING,,,"Astra locales_spell (vanilla ref, id list); TDB",none,Turtle custom (Astra 45736/47325); absent from Forever data
+druid,shred,OK,5221,3252;5221;5222;6800;6801;8992;8993;9829;9830;9831;9832;27555;45969;47308,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const SHRED
+druid,starfire,OK,2912,2912;2914;8949;8950;8951;8952;8953;8954;9875;9876;9877;9878;21668;25298;25408;25971,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const STARFIRE
+druid,swiftmend,OK,18562,18562;29142,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const SWIFTMEND
+druid,swipe,OK,779,769;779;780;1432;1433;3139;9754;9755;9908;9909;27554;46287;46288;46289;46290;46291;46305,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const SWIPE
+druid,thorns,OK,467,467;782;786;795;1075;1076;1420;1421;1422;8914;8915;9756;9757;9910;10343;15438;16877;21335;21337;22128;22351;22696;25640;25777,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+druid,tiger's fury,OK,5217,5217;5218;6793;6794;9845;9846;9847;9848,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const TIGERS_FURY
+druid,tranquility,OK,740,740;792;1439;8918;8920;9862;9863;9864;9865;21791;25817,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const TRANQUILITY
+druid,travel form,OK,783,783;1441,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+druid,tree of life form,MISSING,,45705,Turtle/Astra (no Forever equivalent found),none,TB resolves to Turtle custom 45705; vanilla ToL is WotLK talent 33891
+druid,wrath,OK,5176,3737;5176;5177;5178;5179;5180;5181;5182;5183;5184;5289;5290;5291;5292;6780;6781;6806;8905;8906;9739;9911;9912;17144;18104;20698;21667;21807;45967;47306,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const WRATH
+hunter,aspect of the beast,MISSING,,13161;13162,Turtle/Astra (no Forever equivalent found),none,"TBC spell; Turtle DB has it, Forever classic data TBD"
+hunter,aspect of the cheetah,OK,5118,5118;5131,ForeverBots code (OwnerPicks.h),,vanilla id via OwnerPicks table
+hunter,aspect of the hawk,OK,13165,6385;13165;14318;14319;14320;14321;14322;14374;14375;14376;14377;14378;25296;25406;25969,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const ASPECT_OF_THE_HAWK
+hunter,aspect of the monkey,OK,13163,13163;13164,ForeverBots code (OwnerPicks.h),,vanilla id via OwnerPicks table
+hunter,aspect of the pack,OK,13159,13159;13160,ForeverBots code (OwnerPicks.h),,vanilla id via OwnerPicks table
+hunter,aspect of the viper,MISSING,,,Turtle/Astra (no Forever equivalent found),none,"TBC spell; Turtle DB has it, Forever classic data TBD"
+hunter,aspect of the wild,OK,20043,20043;20044;20190;20191,ForeverBots code (OwnerPicks.h),,vanilla id via OwnerPicks table
+hunter,aspect of the wolf,MISSING,,45650;47296,Turtle/Astra (no Forever equivalent found),none,Turtle custom; no vanilla/Forever equivalent
+hunter,auto shot,OK,75,75;1583,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const AUTO_SHOT
+hunter,bestial wrath,OK,19574,19574;24395;24396;24397;26592,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const BESTIAL_WRATH
+hunter,call pet,OK,883,883;23498;27639,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const CALL_PET
+hunter,choice aspect,PSEUDO,,,Turtle/Astra (no Forever equivalent found),,"TB pseudo-action, not a spell"
+hunter,choice sting,PSEUDO,,,Turtle/Astra (no Forever equivalent found),,"TB pseudo-action, not a spell"
+hunter,cower,OK,1742,1742;1747;1748;1749;1750;1751;1753;1754;1755;1756;8998;8999;9000;9001;9892;9893;16697;16698,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+hunter,disengage,OK,781,781;6791;14272;14273;14344;14345,ForeverBots code (ClassTables.cpp),,vanilla id via ClassTables (disengage — 13y back-flip)
+hunter,dismiss pet,OK,2641,2641,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+hunter,feign death,OK,5384,5384;5385,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const FEIGN_DEATH
+hunter,flare,OK,1543,1543;1603;10113,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+hunter,mend pet,OK,136,136;796;1117;3111;3661;3662;3663;3664;13542;13543;13544;13545;13546;13547,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const MEND_PET
+hunter,rapid fire,OK,3045,3045;3049;28755,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const RAPID_FIRE
+hunter,revive pet,OK,982,982;1236;23499,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const REVIVE_PET
+hunter,scare beast,OK,1513,1513;1567;14326;14327;14445;14446,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+hunter,scatter shot,OK,1963,1963;1988;19503;23601,"Astra locales_spell (vanilla ref, id list); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+hunter,tame beast,OK,1515,1515;1579;13481;13535,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+hunter,trueshot aura,OK,19506,1563;19506;20905;20906;20938,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const TRUESHOT_AURA
+mage,arcane intellect,OK,1459,1459;1460;1461;1472;1473;1474;1475;3065;3066;10156;10157;10158;13326;16876,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const ARCANE_INTELLECT
+mage,arcane missiles,OK,5143,5143;5144;5145;5146;5147;5148;6631;6632;6637;7269;7270;8416;8417;8418;8419;8420;8421;10211;10212;10213;10214;10273;10274;15735;15736;15790;15791;22272;22273;25345;25346;25416;25979;31751,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const ARCANE_MISSILES
+mage,arcane power,OK,12042,12042,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const ARCANE_POWER
+mage,arcane rupture,MISSING,,,Turtle/Astra (no Forever equivalent found),none,Turtle mage spell (51949); no Forever equivalent
+mage,blink,OK,1953,517;894;1953;5499;6139;6140;10232;10233;14514;21655;28391;28401;29208;29209;29210;29211,ForeverBots code (ClassTables.cpp),,vanilla id kept (ClassTables:344)
+mage,blizzard,OK,10,10;1196;3067;3068;6141;6142;8364;8427;8428;10185;10186;10187;10188;10189;10190;15783;19099;20680;21096;21367;25019;26607;27618;30093,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const BLIZZARD
+mage,cold snap,OK,12472,12472,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const COLD_SNAP
+mage,combustion,OK,11129,11129;28682,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const COMBUSTION
+mage,conjure food,OK,587,587;597;608;619;990;991;1249;1250;1251;6129;6130;6641;8736;10144;10145;10146;10147;28612;28613,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+mage,conjure water,OK,3696,3696;5504;5505;5506;5507;5565;5566;6127;6128;6635;6638;6639;10138;10139;10140;10141;10142;10143,"Astra locales_spell (vanilla ref, id list); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+mage,evocation,OK,12051,12051;28403;28763,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const EVOCATION
+mage,fire blast,OK,2136,2136;2137;2138;2141;2142;2143;3073;3074;3075;8412;8413;8414;8415;10197;10198;10199;10200;13339;13340;13341;13342;13374;14145;15573;15574;16144;20623;20679;20795;20832;25028;29633;29644,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const FIRE_BLAST
+mage,fireball,OK,133,133;143;145;483;502;854;1173;1198;3140;3142;3688;8400;8401;8402;8403;8404;8405;9053;9487;9488;10148;10149;10150;10151;10152;10153;10154;10155;10578;11839;11921;11985;12466;13140;13375;13438;14034;15228;15242;15536;15662;15665;16101;16412;16413;16415;16788;17290;18082;18105;18108;18199;18392;18796;19391;19816;20420;20678;20692;20714;20793;20797;20808;20811;20815;20823;21072;21159;21162;21402;21549;22088;23024;23411;24374;24611;25306;25415;25978,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const FIREBALL
+mage,flamestrike,OK,846,846;872;2120;2121;2124;2125;8422;8423;8425;8426;10215;10216;10217;10218;11829;12468;16102;16419;18399;18816;18818;20296;20794;20813;20827;22275;24612;30091,"Astra locales_spell (vanilla ref, id list); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+mage,frost armor,OK,168,168;484;1174;1200;6116;6643;7300;7301;12544;12556;15784;18100,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const FROST_ARMOR
+mage,frostbolt,OK,116,116;205;478;494;837;838;1142;1191;1211;7322;7323;7324;8406;8407;8408;8409;8410;8411;9672;10179;10180;10181;10182;10183;10184;11538;12675;12737;13322;13439;15043;15497;15530;16249;16799;17503;20297;20792;20806;20819;20822;21369;23102;23412;24942;25304;25414;25940;25977;28478;28479;48005,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const FROSTBOLT
+mage,ice armor,OK,7302,506;844;1214;1228;7302;7320;10219;10220;10221;10222,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const ICE_ARMOR
+mage,ice block,OK,11958,11958;27619,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const ICE_BLOCK
+mage,icicles,MISSING,,,Turtle/Astra (no Forever equivalent found),none,"TB mage action; Turtle-side spell, verify id"
+mage,mage armor,OK,6117,6117;6118;6121;22782;22783;22784;22785,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const MAGE_ARMOR
+mage,polymorph,OK,118,118;1168;1192;1219;12824;12825;12826;12827;12828;12829;13323;14621;15534;27760;29124;29848,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const POLYMORPH
+mage,presence of mind,OK,12043,12043,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const PRESENCE_OF_MIND
+mage,pyroblast,OK,11366,1830;11366;12505;12522;12523;12524;12525;12526;12527;13011;13012;13014;13015;13016;13017;17273;17274;18809;20228;24995,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const PYROBLAST
+mage,remove curse,OK,486,486;2782;2783;2786;2788;3364;3750;15729;30281,"Astra locales_spell (vanilla ref, id list); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+mage,remove lesser curse,OK,475,475;1176,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+mage,scorch,OK,2948,1811;2948;8444;8445;8446;8447;8448;8449;10205;10206;10207;10208;10209;10210;12871;13878;15241;17195,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const SCORCH
+paladin,blessing of kings,OK,20217,20217,ForeverBots code (OwnerPicks.h),,vanilla id via OwnerPicks table
+paladin,blessing of light,OK,19977,19977;19978;19979;19995;19996;19997;26650,ForeverBots code (OwnerPicks.h),,vanilla id via OwnerPicks table
+paladin,blessing of might,OK,19740,19740;19741;19834;19835;19836;19837;19838;19839;19840;19841;19842;19843;25291;25399;25962,ForeverBots code (OwnerPicks.h),,vanilla id via OwnerPicks table
+paladin,blessing of salvation,OK,1038,1038;1912,ForeverBots code (OwnerPicks.h),,vanilla id via OwnerPicks table
+paladin,blessing of sanctuary,OK,20911,20204;20911;20912;20913;20914;20948;20949;20950;20951,ForeverBots code (OwnerPicks.h),,vanilla id via OwnerPicks table
+paladin,blessing of wisdom,OK,19742,19742;19743;19850;19852;19853;19854;19855;19856;19857;19858;25290;25398;25961,ForeverBots code (OwnerPicks.h),,vanilla id via OwnerPicks table
+paladin,bulwark of the righteous,MISSING,,,Turtle/Astra (no Forever equivalent found),none,Tortoise 51346/51565; no Forever equivalent
+paladin,choice aura,PSEUDO,,,Turtle/Astra (no Forever equivalent found),,"TB pseudo-action, not a spell"
+paladin,cleanse,OK,4987,4987;4990;4993;28787;28788,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+paladin,concentration aura,OK,19746,19746;19747,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const CONCENTRATION_AURA
+paladin,consecration,OK,26573,20116;20922;20923;20924;20952;20953;20954;26573;26574;47327,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const CONSECRATION
+paladin,crusader aura,MISSING,,,Turtle/Astra (no Forever equivalent found),none,TBC spell (32223); Forever classic data TBD
+paladin,crusader strike,MISSING,,2537;7297;8823;8824;8825;8826;10336;10337;10338;10339;14517;14518;17281;45409;45410;45411;45412;45413;47314;47315;47316;47317;47318,Turtle/Astra (no Forever equivalent found),none,TBC spell; Forever classic data TBD
+paladin,devotion aura,OK,465,465;643;1032;1875;1876;1877;8258;10290;10291;10292;10293;10294;10295;10296;10297;17232,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const DEVOTION_AURA
+paladin,divine protection,OK,498,498;735;3697;5572;5573;5574;13007;27778;27779,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const DIVINE_PROTECTION
+paladin,divine shield,OK,642,642;659;1020;1021;1897;1898;13874,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const DIVINE_SHIELD
+paladin,fire resistance aura,OK,19891,19891;19894;19899;19900;19908;19909,ForeverBots code (OwnerPicks.h),,vanilla id via OwnerPicks table
+paladin,flash of light,OK,19750,19750;19751;19939;19940;19941;19942;19943;19944;19945;19946;19947;19948;19993;25514,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const FLASH_OF_LIGHT
+paladin,frost resistance aura,OK,19888,19888;19893;19897;19898;19906;19907,ForeverBots code (OwnerPicks.h),,vanilla id via OwnerPicks table
+paladin,greater blessing of kings,OK,25898,25898;25946,ForeverBots code (ClassicUpkeep.cpp),,greater rank via ClassicUpkeep kBlessings
+paladin,greater blessing of light,OK,25890,25890;25948,ForeverBots code (ClassicUpkeep.cpp),,greater rank via ClassicUpkeep kBlessings
+paladin,greater blessing of might,OK,25782,25782;25915;25916;25917,ForeverBots code (ClassicUpkeep.cpp),,greater rank via ClassicUpkeep kBlessings
+paladin,greater blessing of salvation,OK,25895,25895;25939,ForeverBots code (ClassicUpkeep.cpp),,greater rank via ClassicUpkeep kBlessings
+paladin,greater blessing of sanctuary,OK,25899,25899;25951,ForeverBots code (ClassicUpkeep.cpp),,greater rank via ClassicUpkeep kBlessings
+paladin,greater blessing of wisdom,OK,25894,25894;25918;25919;25920,ForeverBots code (ClassicUpkeep.cpp),,greater rank via ClassicUpkeep kBlessings
+paladin,hammer of justice,OK,853,853;5584;5588;5589;5590;5591;10308;10309;13005,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const HAMMER_OF_JUSTICE
+paladin,hand of freedom,MISSING,,,"Astra locales_spell (vanilla ref, id list); TDB",none,TBC spell; no vanilla/Forever equivalent
+paladin,hand of protection,OK,66,66,ForeverBots code (ClassTables.cpp),,vanilla id via ClassTables (protection)
+paladin,hand of reckoning,MISSING,,45806;45991,Turtle/Astra (no Forever equivalent found),none,WotLK spell; Forever classic data TBD
+paladin,holy light,OK,635,635;639;647;656;664;1026;1027;1042;1043;1872;1873;1874;1913;1914;3472;3473;3474;10328;10329;10330;10331;13952;15493;19968;19980;19981;19982;25263;25292;25400;25963,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const HOLY_LIGHT
+paladin,holy shield,OK,20925,9800;9801;20169;20925;20927;20928;20955;20956;20957,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const HOLY_SHIELD
+paladin,holy strike,CHANGED,678,678;679;680;1866;1888;1889;1890;1891;2495;2496;5569;5571;10332;10333;10334;10335;13953;17143;17284,ForeverBots code (Apl_Classic_Paladin),678,"Forever Retribution strike rank 1, resolves highest rank (Apl_Classic_Paladin)"
+paladin,holy wrath,OK,257,685;2812;10318;10320;23979;28883,ForeverBots code (ClassTables.cpp),,vanilla id via ClassTables (holy)
+paladin,judgement,OK,20271,3684;10319;10321;20271;23590;23591;27731,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const JUDGEMENT
+paladin,lay on hands,OK,633,633;1878;2800;2804;9257;10310;10311;17233;20233;20236,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const LAY_ON_HANDS
+paladin,paladin aura,PSEUDO,,,Turtle/Astra (no Forever equivalent found),,"TB pseudo-action, not a spell"
+paladin,purify,OK,1152,1152;1937;3725,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+paladin,repentance,OK,20066,20066,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2)",,vanilla ranks verified in Forever data
+paladin,retribution aura,OK,7294,7294;7296;8990;10298;10299;10300;10301;10302;10303;10304;10305;13008;19998;19999,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const RETRIBUTION_AURA
+paladin,righteous defense,MISSING,,,Turtle/Astra (no Forever equivalent found),none,TBC spell (31789); Forever classic data TBD
+paladin,sanctity aura,OK,20218,20218,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const SANCTITY_AURA
+paladin,shadow resistance aura,OK,19876,19876;19892;19895;19896;19904;19905,ForeverBots code (OwnerPicks.h),,vanilla id via OwnerPicks table
+paladin,turn undead,OK,713,713;1011;2878;5253;5627;5629;10326;10327;19725,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+priest,flash heal,OK,2061,2061;2066;9472;9473;9474;9475;9476;9477;10915;10916;10917;10918;10919;10920;17137;17138;17843;27608,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const FLASH_HEAL
+priest,greater heal,OK,2060,2060;2065;2067;2068;2069;3085;10963;10964;10965;22009;25314;25350;25983;28809,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const GREATER_HEAL
+priest,heal,OK,2054,964;983;1153;2054;2055;2058;2059;3810;6063;6064;6071;6072;8812;10577;11642;12039;14053;15586;22167;22883;24947,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const HEAL
+priest,lesser heal,OK,2050,613;622;2050;2051;2052;2053;2056;2057,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const LESSER_HEAL
+priest,power word: shield,OK,17,17;592;600;1277;1278;1298;2851;3747;6065;6066;6067;6068;10898;10899;10900;10901;10902;10903;10904;10905;11647;11835;11974;17139;20697;22187;27607,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const POWER_WORD_SHIELD
+priest,psychic scream,OK,8122,8122;8123;8124;8125;10888;10889;10890;10891;13704;15398;22884;26042;27610,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const PSYCHIC_SCREAM
+priest,renew,OK,139,139;860;870;890;3070;3071;3072;6073;6074;6075;6076;6077;6078;6079;6080;6081;6082;6083;8362;10927;10928;10929;10930;10931;10932;11640;22168;23895;25058;25315;25352;25984;27606;28807,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const RENEW
+priest,shadowguard,OK,18137,18137;19308;19309;19310;19311;19312;19331;19332;19333;19334;19335;19336;28376;28377;28378;28379;28380;28381;28382,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2)",,vanilla ranks verified in Forever data
+priest,touch of weakness,OK,2652,2652;2943;19249;19251;19252;19253;19254;19261;19262;19264;19265;19266;19318;19320;19321;19322;19323;19324;28598;42002,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+rogue,adrenaline rush,OK,13750,13750;28752;28753,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const ADRENALINE_RUSH
+rogue,ambush,OK,8676,8676;8678;8724;8725;8727;8728;11267;11268;11269;11270;11271;11272;24337,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const AMBUSH
+rogue,blade flurry,OK,13877,13877;22482,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const BLADE_FLURRY
+rogue,cheap shot,OK,1833,1833;1838;1839;6409;14902,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const CHEAP_SHOT
+rogue,distract,OK,1725,1725;1728,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+rogue,envenom,MISSING,,,"Astra locales_spell (vanilla ref, id list); TDB",none,TBC spell; no vanilla/Forever equivalent
+rogue,evasion,OK,5277,4086;5277;5278;15087,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const EVASION
+rogue,eviscerate,OK,2098,2098;6712;6760;6761;6762;6763;6764;6765;8623;8624;8625;8626;11299;11300;11301;11302;15691;15692;27611;31016;31017,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const EVISCERATE
+rogue,expose armor,OK,8647,8647;8648;8649;8650;8651;8652;11197;11198;11199;11200;30965;30996,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const EXPOSE_ARMOR
+rogue,feint,OK,1966,1966;6734;6768;6769;8637;8638;11303;11304;25302;25413;25976,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const FEINT
+rogue,garrote,OK,703,703;6737;8631;8632;8633;8634;8635;8636;8818;11289;11290;11291;11292,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const GARROTE
+rogue,kick,OK,1766,1766;1767;1768;1769;1770;1771;1772;1773;1774;1775;3466;3467;11978;15610;15614;27613;27814,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const KICK
+rogue,kidney shot,OK,408,408;6735;8643;8644;27615,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const KIDNEY_SHOT
+rogue,mark for death,MISSING,,,Turtle/Astra (no Forever equivalent found),none,TB rogue action; verify Turtle/Forever id
+rogue,rupture,OK,1943,1943;6736;8639;8640;8641;8642;11273;11274;11275;11276;11277;11278;14874;14903;15583,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+rogue,sap,OK,6770,652;2070;6770;6771;11297;11298,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const SAP
+rogue,shadow of death,MISSING,,,Turtle/Astra (no Forever equivalent found),none,TB rogue action; no vanilla/Forever spell by this name
+rogue,slice and dice,OK,5171,5171;5175;6434;6774;6775,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const SLICE_AND_DICE
+rogue,smoke bomb,MISSING,,7964;8817;57096,Turtle/Astra (no Forever equivalent found),none,TB rogue action; verify Turtle/Forever id
+rogue,sprint,OK,2983,2983;2984;8696;8697;11305;11318;26542;26543,ForeverBots code (ClassTables.cpp),,vanilla id via ClassTables (sprint — 70% ms 8s)
+rogue,stealth,OK,1784,1784;1785;1786;1787;1789;1790;1791;1792;8216;8822,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const STEALTH
+rogue,vanish,OK,1856,1856;1857;1858;1859;11327;11329;24223;24228;24229;24230;24231;24232;24233;24699;24700;27617,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+shaman,ancestral swiftness,MISSING,,,"Astra locales_spell (vanilla ref, id list); TDB",none,TBC resto talent; no vanilla/Forever equivalent
+shaman,bloodlust,OK,2825,379;1328;6742;16170;21049;23951;24185;27689;45509;45510;45511;45512;47264,ForeverBots code (ClassTables.cpp),,vanilla id kept; game routes to Heroism for Alliance (ClassTables:431)
+shaman,chain heal,OK,1064,1064;1444;10622;10623;10624;10625;14900;15799;16367,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const CHAIN_HEAL
+shaman,chain lightning,OK,421,421;920;930;1339;1340;2860;2862;2863;10605;12058;15117;15305;15659;16006;16033;16921;20831;21179;22355;23106;23206;24680;25021;27567;28167;28293,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const CHAIN_LIGHTNING
+shaman,cure disease,OK,528,528;1268;2870;2874;28133,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+shaman,cure poison,OK,526,526;536;1315;3212;3213;3738;8946;8947;26677,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+shaman,earth shield,MISSING,,45525;45526;47266,Turtle/Astra (no Forever equivalent found),none,TBC spell (974); Forever classic data TBD
+shaman,earth shock,OK,8042,8042;8043;8044;8045;8046;8047;8048;8049;10412;10413;10414;10415;10416;10417;13281;13728;15501;22885;23114;24685;25025;26194,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const EARTH_SHOCK
+shaman,earthquake,MISSING,,424;1348;19798;45506,Turtle/Astra (no Forever equivalent found),none,TB shaman action; verify Turtle/Forever id
+shaman,earthshaker slam,MISSING,,,Turtle/Astra (no Forever equivalent found),none,Tortoise shaman (51387); no Forever equivalent
+shaman,fire nova totem,CHANGED,408341,1535;8086;8498;8499;8500;8501;11314;11315;11316;11317;27623,ForeverBots code (Apl_Classic_Shaman),408341,"Forever replaced Fire Nova Totem 1535 with 408341-408345; needs live fire totem (Apl_Classic_Shaman) DISAGREEMENT: OwnerPicks.h still lists 1535, APL casts 408341. ForeverCore wins: use 408341. DISAGREEMENT: OwnerPicks.h still lists 1535, APL casts 408341. ForeverCore wins: use 408341."
+shaman,flame shock,OK,8050,8050;8051;8052;8053;8054;8055;10447;10448;10449;10450;13729;15039;15096;15616;16804;22423;23038;29228;29229,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const FLAME_SHOCK
+shaman,frost shock,OK,8056,8056;8057;8058;8059;10472;10473;10474;10475;12548;15089;15499;19133;21030;21401;22582;23115,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const FROST_SHOCK
+shaman,lightning bolt,OK,403,403;529;531;548;566;915;916;943;944;1324;1325;1357;1358;3089;6041;6043;8246;9532;10391;10392;10393;10394;12167;13482;13527;14109;14119;15207;15208;15209;15210;15234;15801;16782;18081;18089;19874;20295;20802;20805;20824;22414;23592;26098,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const LIGHTNING_BOLT
+shaman,lightning shield,OK,324,324;325;532;557;905;906;945;946;1303;1304;1305;1363;8134;8135;8788;10431;10432;10433;10434;12550;13585;15507;19514;20545;23551;23552;25020;26363;26364;26365;26366;26367;26369;26370;26545;27635;28820;28821,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const LIGHTNING_SHIELD
+shaman,lightning strike,MISSING,,16614;23686;23687,Turtle/Astra (no Forever equivalent found),none,TB shaman action; verify Turtle/Forever id
+shaman,magma totem,OK,8190,8187;8189;8190;10579;10580;10581;10585;10586;10587;10588;10589;10590,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const MAGMA_TOTEM
+shaman,purge,OK,370,370;558;1333;8012;8013;25756;27625;27626,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const PURGE
+shaman,stormstrike,OK,17364,17364;45521;47265,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const STORMSTRIKE
+shaman,totemic recall,MISSING,,,"Astra locales_spell (vanilla ref, id list); TDB",none,Turtle custom (Astra 45513/47340); absent from Forever data
+shaman,water breathing,OK,131,131;488;5386;7178;11789;16881,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+shaman,water shield,MISSING,,45527;45528;47267;47358,Turtle/Astra (no Forever equivalent found),none,TBC spell; Forever classic data TBD
+shaman,water walking,OK,546,546;562;1338;11319,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+warlock,amplify curse,OK,18288,18288,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2)",,vanilla ranks verified in Forever data
+warlock,banish,OK,710,710;7664;8994;18647;18648;24466;27565,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const BANISH
+warlock,blood pact,OK,250,6307;7804;7805;7871;7872;7873;11766;11767;11768;11769;20318;20319;20320;20321;20397,ForeverBots code (ClassTables.cpp),,vanilla id via ClassTables (blood)
+warlock,choice pet,PSEUDO,,,Turtle/Astra (no Forever equivalent found),,"TB pseudo-action, not a spell"
+warlock,conflagrate,OK,17962,17962;18930;18931;18932;18933;18934;18935,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const CONFLAGRATE
+warlock,consume shadows,OK,258,17767;17776;17850;17851;17852;17853;17854;17855;17856;17857;17859;17860;20387;20388;20389;20390;20391;20392,ForeverBots code (ClassTables.cpp),,vanilla id via ClassTables (shadow)
+warlock,corruption,OK,172,172;979;1025;1107;6221;6222;6223;6224;6225;7648;7649;11671;11672;11673;11674;13530;16402;16985;17510;18088;18376;18656;21068;23439;23642;25311;25419;25982;28829,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const CORRUPTION
+warlock,create firestone,OK,63,607;17951,ForeverBots code (ClassTables.cpp),,vanilla id via ClassTables (fire)
+warlock,create healthstone,OK,6201,1049;5699;5700;23813;23814;23815;28023,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const CREATE_HEALTHSTONE
+warlock,create soul shard,OK,23464,23464;24827,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2)",,vanilla ranks verified in Forever data
+warlock,create soulstone,OK,719,719;20022;20755;20767,"Astra locales_spell (vanilla ref, id list); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+warlock,create spellstone,OK,918,918;2362;6485,"Astra locales_spell (vanilla ref, id list); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+warlock,dark harvest,MISSING,,,Turtle/Astra (no Forever equivalent found),none,TB warlock action; no vanilla/Forever spell by this name
+warlock,death coil,OK,6789,1572;6789;17925;17926;18161;18162;28412,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const DEATH_COIL
+warlock,demon armor,OK,706,706;733;1086;1087;1384;1404;11733;11734;11735;11736;11737;11738;12956;13787,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const DEMON_ARMOR
+warlock,demon skin,OK,687,687;696;722;1383;20798,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const DEMON_SKIN
+warlock,demonic sacrifice,OK,18788,18788,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const DEMONIC_SACRIFICE
+warlock,devour magic,OK,17012,17012;19505;19731;19734;19736;19737;19738;19739;20426;20427;20428,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2)",,vanilla ranks verified in Forever data
+warlock,drain life,OK,689,689;699;709;714;725;736;1367;1368;1369;7651;7652;7653;11699;11700;11701;11702;12693;16375;16414;16608;17173;17238;17620;18084;18557;18815;18817;20743;21170;24300;24435;24585;24618;26693;27994;29155,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const DRAIN_LIFE
+warlock,drain mana,OK,496,496;862;5138;5139;6226;6227;11703;11704;11705;11706;17008;17243;17682;18394;25671;25676;25754;25755;26457;26559;26639,"Astra locales_spell (vanilla ref, id list); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+warlock,drain soul,OK,1120,1120;7662;8288;8289;8290;8291;11675;11676,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const DRAIN_SOUL
+warlock,fear,OK,5782,654;663;1045;1397;5782;5783;6213;6214;6215;6216;12096;12542;22678;26070;26580;27641;27990;29168;30002,ForeverBots code (ClassTables.cpp),,vanilla id via ClassTables (fear)
+warlock,fel domination,OK,18708,18708,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2)",,vanilla ranks verified in Forever data
+warlock,firebolt,OK,63,701;1370;3110;7799;7800;7801;7802;7832;7833;7834;7835;7886;9057;9233;11762;11763;11764;11765;13441;13442;14103;15592;15598;15599;18083;18086;18112;18186;18187;18833;20270;20312;20313;20314;20315;20316;20801;23267,ForeverBots code (ClassTables.cpp),,vanilla id via ClassTables (fire)
+warlock,health funnel,OK,730,730;755;3698;3699;3700;3701;3702;3703;3704;3705;3706;3707;11693;11694;11695;11696;11697;11698;16569,"Astra locales_spell (vanilla ref, id list); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+warlock,immolate,OK,348,348;707;718;734;1094;1095;1374;1375;1376;2941;2942;3686;8981;9034;9275;9276;11665;11666;11667;11668;11669;11670;11962;11984;12742;15505;15506;15570;15661;15732;15733;17883;18542;20294;20787;20800;20826;25309;25418;25981,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const IMMOLATE
+warlock,inferno,OK,1122,1122;1413;19695;19698;20799;22699;24670;50034,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+warlock,life tap,OK,1454,1454;1455;1456;1476;1477;1478;3095;3096;3097;4090;11687;11688;11689;11690;11691;11692;28830;31818,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const LIFE_TAP
+warlock,power overwhelming,MISSING,,,Turtle/Astra (no Forever equivalent found),none,TB warlock action; no vanilla/Forever spell by this name
+warlock,rain of fire,OK,5740,3354;3751;4629;5740;5741;6219;6220;11677;11678;11679;11680;11990;16005;19474;19475;19717;20754;24669;28794,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const RAIN_OF_FIRE
+warlock,sacrifice,OK,1050,1050;7812;7885;19438;19439;19440;19441;19442;19443;19444;19445;19446;19447;20381;20382;20383;20384;20385;20386;22651,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+warlock,seduction,OK,6358,6358;6359;20407,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+warlock,shadowburn,OK,17877,17877;18867;18868;18869;18870;18871;18872;18875;18876;18877;18878;26385,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const SHADOWBURN
+warlock,siphon life,OK,18265,18265;18879;18880;18881;18927;18928;18929,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const SIPHON_LIFE
+warlock,soul fire,OK,63,1571;6353;17924;18160,ForeverBots code (ClassTables.cpp),,vanilla id via ClassTables (fire)
+warlock,soul link,OK,19028,19028;25228,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2)",,vanilla ranks verified in Forever data
+warlock,spell lock,OK,19244,19244;19647;19648;19650;20433;20434;24259,ForeverBots code (ClassTables.cpp),,vanilla id via ClassTables (spell lock)
+warlock,suffering,OK,17735,17735;17736;17750;17751;17752;17753;17754;17755;20393;20394;20395;20396,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+warlock,summon felhunter,OK,691,691;8176;8712;8717;23500,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const SUMMON_FELHUNTER
+warlock,summon imp,OK,688,688;1366;11939;23503,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const SUMMON_IMP
+warlock,summon succubus,OK,712,712;1403;7729;8674;8722;9223;9224;23502,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const SUMMON_SUCCUBUS
+warlock,summon voidwalker,OK,697,697;1385;7728;9221;9222;12746;23501;25112,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const SUMMON_VOIDWALKER
+warlock,torment,OK,3716,3716;7809;7810;7811;7881;7882;7883;7884;11774;11775;11776;11777;20317;20377;20378;20379;20380;46317,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+warlock,unending breath,OK,5697,5697;5698,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+warrior,battle shout,OK,6673,5242;5243;6192;6193;6543;6673;6674;9128;11549;11550;11551;11552;11553;24438;25101;25289;25356;25959;26043;26099;27578,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const BATTLE_SHOUT
+warrior,battle stance,OK,2457,2457;2467;7165,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const BATTLE_STANCE
+warrior,berserker stance,OK,2458,2458;2468;7366,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const BERSERKER_STANCE
+warrior,challenging shout,OK,1161,798;1161,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const CHALLENGING_SHOUT
+warrior,intercept,OK,20252,20252;20611;20616;20617;20621;20622;27577;27826;46316,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+warrior,intimidating shout,OK,5246,5246;5247;12730;19134;20511;29544,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell); DB2 (SkillLineAbility.db2)",,vanilla ranks verified in Forever data
+warrior,master strike,MISSING,,,Turtle/Astra (no Forever equivalent found),none,TB warrior action; no vanilla/Forever spell by this name
+warrior,mocking blow,OK,694,694;7382;7400;7401;7402;7403;20559;20560;20561;20562;21008,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const MOCKING_BLOW
+warrior,piercing howl,OK,10576,10576;12323;23600,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2)",,vanilla ranks verified in Forever data
+warrior,rend,OK,772,772;1423;6546;6547;6548;6549;6550;6551;11572;11573;11574;11575;11576;11577;11977;12054;13318;13443;13445;13738;14087;14118;16393;16403;16406;16509;17153;17504;18075;18078;18106;18200;18202;21949,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const REND
+warrior,retaliation,OK,20230,20230;20240;20724;22857;22858,"Astra locales_spell (vanilla ref, id list); DB2 (SpellName.db2); world DB (trainer_spell)",,vanilla ranks verified in Forever data
+warrior,sunder armor,OK,7386,7386;7404;7405;7406;8380;8381;11596;11597;11598;11599;11971;13444;15502;15572;16145;21081;24317;25051;27991,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const SUNDER_ARMOR
+warrior,sweeping strikes,OK,12292,12292;12723;18765;26654,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const SWEEPING_STRIKES
+warrior,taunt,OK,355,355;3196;7390;7391;8133;11588;11589;11590;26281;28140;29060,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const TAUNT
+warrior,thunder clap,OK,6343,949;1343;1344;3726;6343;8198;8204;8205;8206;8207;11580;11581;11582;11583;13532,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const THUNDER_CLAP
+warrior,whirlwind,OK,1680,1680;1685;8989;9633;13736;15576;15577;15578;15589;17207;24236;26038;26083;26084;26686;28334;28335;29851;29852,ForeverBots code (Apl_Classic_*),,same vanilla id in FB const WHIRLWIND
