@@ -71,6 +71,26 @@ and a round-trip test feeds it bytes captured from a real session.
 First login to first fight (phases 2-5) is about 9 to 13 weeks of agent time. Phases 0, 1 and 7 need no Forever
 server and can start at once.
 
+## Seam audit result (2026-11-17, `docs/forever/SEAM-AUDIT.md` in forever-agent)
+
+Phase 0 is done. It changes two things in this plan:
+
+- **The seam is `*session.Session`, not `internal/game`.** The session has 116 exported methods; `cmd` calls 108 of
+  them. `brain` and `dungeon` already sit behind their own small interfaces (`brain.Game`, `dungeon.Game`) that four
+  adapters in `cmd` implement. So phase 5 is "a new session with the same method set" (`game.Client`, 108 methods in
+  16 areas), not a rewrite of the layers above.
+- **What leaks upward is value types:** `packet.GUID` (530 uses in 95 files) and the `objects` structs (285 uses in
+  64 files). The refactor order starts with Go type aliases, so the 1.12 side keeps its behaviour and tests.
+
+**A creature GUID no longer names its spawn.** turtle-agent takes the low 24 bits of a GUID as the database spawn id
+(9 places), and plan files store spawn ids. On ForeverCore the GUID counter is a number the map hands out when the
+creature is created (`Creature::LoadFromDB`: `Create(map->GenerateLowGuid<HighGuid::Creature>(), ...)`); the spawn id
+is kept server-side only (`m_spawnId`). The GUID does carry the creature entry and the map. So plans need another way
+to find "this spawn": entry plus spawn position, or a lookup the TortoiseBots module answers. To decide in phase 4.
+
+The server-specific text protocols are larger than the wire seam (TBM addon messages 694 uses, GM dot-commands on 143
+lines, `.bot` on 82): they follow the TortoiseBots module port, not the client protocol.
+
 ## What is dropped or replaced
 
 - Dropped: Turtle LFT (`internal/lft`), the realmd hour-start login hold, Turtle-only dungeons (Crescent Grove,
