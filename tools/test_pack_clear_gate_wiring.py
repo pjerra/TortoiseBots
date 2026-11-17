@@ -29,8 +29,10 @@ class PackClearGateWiringTest(unittest.TestCase):
         facts = body(COMMANDS, "void ReadRunFacts(", "\n}\n")
         pull = body(facts, "case ai::PlanStepKind::Pull:", "case ai::PlanStepKind::Move:")
         self.assertIn("ClassifyPullRead(read, step->radius, f.packClearMarginYd, patrolSeeYd)", pull)
-        # One grid search per listed entry, as before: the classification reads the creatures it found.
-        self.assertEqual(pull.count("GetCreatureListWithEntryInGrid("), 1)
+        # One grid search per listed entry, as before: the classification reads the creatures it found. (The case's
+        # other grid read is a boss any-of row's pre-scan, before the scan.)
+        scan = body(pull, "for (uint32 entry : entries)", "for (Creature* creature : found)")
+        self.assertEqual(scan.count("GetCreatureListWithEntryInGrid("), 1)
 
     def test_spawn_is_the_db_row_not_the_home_position(self):
         facts = body(COMMANDS, "void ReadRunFacts(", "\n}\n")

@@ -53,7 +53,7 @@ class TeleportReturnWiringTest(unittest.TestCase):
         self.assertIn('order.compare(0, 6, "fetch ") == 0', refused)
 
     def test_facts_carry_the_keys_the_cancels_and_the_ground_read(self):
-        facts = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot const& slot", "\n}\n")
+        facts = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot& slot", "\n}\n")
         self.assertIn("f.teleportReturnYd = sPlayerbotAIConfig.runTeleportReturnYd;", facts)
         self.assertIn("f.reviveHoldYd = sPlayerbotAIConfig.dungeonReviveHoldYd;", facts)
         self.assertIn("if (slot.run.fetchReadWanted && lead->IsAlive() && lead->IsInWorld())\n        ReadFetchFacts(lead, bots, f);",

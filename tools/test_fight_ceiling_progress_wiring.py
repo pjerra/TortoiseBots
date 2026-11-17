@@ -31,7 +31,7 @@ RULES = strip_comments(POLICY)
 
 class FightCeilingProgressWiringTest(unittest.TestCase):
     def test_the_glue_reads_every_engaged_units_hp_in_combat(self):
-        facts = body(CODE, "void ReadRunFacts(DungeonRunSlot const& slot, Player* lead,")
+        facts = body(CODE, "void ReadRunFacts(DungeonRunSlot& slot, Player* lead,")
         self.assertIn("if (f.anyInCombat)\n    {\n        ReadEngagedUnits(lead, bots, f);", facts)
         units = body(CODE, "void ReadEngagedUnits(Player* lead, std::vector<Player*> const& bots,")
         self.assertIn("ReadEngagedWith(lead, judge, factLead, bot, seen, f.engagedUnits, &ep);", units)
@@ -50,7 +50,7 @@ class FightCeilingProgressWiringTest(unittest.TestCase):
     def test_the_glue_proves_the_fights_own_units_gone(self):
         # The own-fight step end takes positive evidence: the glue resolves each remembered own guid on the run's
         # map, and only a dead or despawned unit erases it (a unit that left the reads alone proves nothing).
-        facts = body(CODE, "void ReadRunFacts(DungeonRunSlot const& slot, Player* lead,")
+        facts = body(CODE, "void ReadRunFacts(DungeonRunSlot& slot, Player* lead,")
         self.assertIn("ReadOwnFightFacts(slot, lead, f);", facts)
         read = body(CODE, "void ReadOwnFightFacts(DungeonRunSlot const& slot, Player* lead,")
         self.assertIn("map->GetUnit(::ObjectGuid(guid))", read)

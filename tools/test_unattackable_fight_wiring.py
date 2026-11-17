@@ -56,11 +56,11 @@ class UnattackableFightWiringTest(unittest.TestCase):
         self.assertIn("ReadEngagedWith(lead, judge, factLead, bot, seen, f.engagedUnits, &ep);", party)
         self.assertIn("ReadEngagedWith(lead, judge, factLead, pet, seen, f.engagedUnits, &ep);", party)
         self.assertIn("sServerFacade.IsFriendlyTo(other, factLead)", read)
-        facts = body(CODE, "void ReadRunFacts(DungeonRunSlot const& slot, Player* lead,")
+        facts = body(CODE, "void ReadRunFacts(DungeonRunSlot& slot, Player* lead,")
         self.assertIn("ReadEngagedUnits(lead, bots, f);\n        f.staleCombat = f.engagedUnits.empty();", facts)
 
     def test_every_picked_unit_carries_attackable(self):
-        facts = body(CODE, "void ReadRunFacts(DungeonRunSlot const& slot, Player* lead,")
+        facts = body(CODE, "void ReadRunFacts(DungeonRunSlot& slot, Player* lead,")
         self.assertIn("Player* const judge = RunJudge(lead, bots);", facts)
         # The step's units (pull/boss, and a hold's), the hop units, and a stand-pull pull row's patrollers.
         self.assertEqual(facts.count("unit.attackable = GroupCanAttack(judge, creature);"), 3)
@@ -89,7 +89,7 @@ class UnattackableFightWiringTest(unittest.TestCase):
         self.assertIn("sServerFacade.GetHostileRefManager(unit).getFirst(); ref; ref = ref->next()", read)
         self.assertIn("add(source->getOwner());", read)
         self.assertIn("fact.attackable = GroupCanAttack(judge, other);", read)
-        facts = body(CODE, "void ReadRunFacts(DungeonRunSlot const& slot, Player* lead,")
+        facts = body(CODE, "void ReadRunFacts(DungeonRunSlot& slot, Player* lead,")
         self.assertIn("member.inCombat = fighting;\n\n        ReadMemberEngaged(lead, judge, bot, member);", facts)
         # The party-wide fight read keeps attackers and victims only.
         party = body(CODE, "void ReadEngagedUnits(Player* lead, std::vector<Player*> const& bots,")
@@ -123,7 +123,7 @@ class UnattackableFightWiringTest(unittest.TestCase):
     def test_a_pet_in_combat_keeps_its_bot_in_combat(self):
         shared = body(CODE, "bool MemberInCombat(Player* bot)")
         self.assertIn("bot->IsInCombat() || (pet && pet->IsAlive() && pet->IsInWorld() && pet->IsInCombat())", shared)
-        facts = body(CODE, "void ReadRunFacts(DungeonRunSlot const& slot, Player* lead,")
+        facts = body(CODE, "void ReadRunFacts(DungeonRunSlot& slot, Player* lead,")
         self.assertIn("bool const fighting = MemberInCombat(bot);\n        if (fighting)\n            f.anyInCombat = true;", facts)
         self.assertIn("member.inCombat = fighting;", facts)
         self.assertIn("for (Unit* attacker : pet->GetAttackers())", facts)
@@ -156,7 +156,7 @@ class UnattackableFightWiringTest(unittest.TestCase):
         # read still takes it.
         self.assertIn("std::map<std::pair<uint64, uint64>, WedgeReachRead>& WedgeReachReads()", CODE)
         self.assertIn("WedgeReachReads()[std::make_pair(bot->GetObjectGuid().GetRawValue(), lead->GetObjectGuid().GetRawValue())];", reach)
-        facts = body(CODE, "void ReadRunFacts(DungeonRunSlot const& slot, Player* lead,")
+        facts = body(CODE, "void ReadRunFacts(DungeonRunSlot& slot, Player* lead,")
         self.assertIn("ReadMemberReach(lead, bot, member);", facts)
         self.assertIn("TortoiseBots::DungeonRun::MemberParticipates(now), now.losLead, now.pathToLead, now.pathLenYd);",
                       drop)

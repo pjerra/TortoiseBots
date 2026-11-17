@@ -767,7 +767,7 @@ class RunLeaderWiringTest(unittest.TestCase):
         # and formation, and the other patrols near the lead bot, out of combat only.
         stand = body(COMMANDS, "inline bool StandThisStep(DungeonRunSlot const& slot)", "\n}\n")
         self.assertIn("(s.kind != ai::PlanStepKind::Boss && s.kind != ai::PlanStepKind::Pull)", stand)
-        read = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot const& slot,", "\n}\n")
+        read = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot& slot,", "\n}\n")
         self.assertIn("bool const standPull = pullStep && StandThisStep(slot) && step == &slot.run.plan->steps[slot.run.step];", read)
         self.assertIn("float const patrolSeeYd = standPull ? kStandPullSeeYd : kPatrolSeeYd;", read)
         self.assertIn("step->kind == ai::PlanStepKind::Pull &&\n"
@@ -819,7 +819,7 @@ class RunLeaderWiringTest(unittest.TestCase):
         # DungeonRun::ClassifyPullRead and WaitForPatroller: the policy decides the radius, the residue band and the
         # movement (a waypoint mover, a follower of one, a spawn-owned unit of any movement); the glue lists what it
         # said. The grid search of a pull step reaches as far as a spawn-owned patroller may be listed.
-        read = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot const& slot,", "\n}\n")
+        read = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot& slot,", "\n}\n")
         add = read[read.index("auto addPatroller"):read.index("f.patrollers.push_back(unit);")]
         self.assertIn("bool const pullStep = step->kind == ai::PlanStepKind::Pull;", read)
         self.assertIn("PullReadIn const& read", add)
@@ -839,7 +839,7 @@ class RunLeaderWiringTest(unittest.TestCase):
 
     def test_aggro_estimate_is_a_read_side_fact_behind_its_key(self):
         # AiPlayerbot.DungeonRunAggroEstimate (default 0): the glue reads the estimate, the policy decides.
-        read = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot const& slot,", "\n}\n")
+        read = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot& slot,", "\n}\n")
         self.assertIn("f.joinerCeiling = sPlayerbotAIConfig.dungeonRunAggroEstimate ? "
                       "sPlayerbotAIConfig.dungeonRunAggroCeiling : 0;", read)
         self.assertIn("if (step->kind == ai::PlanStepKind::Pull)\n"
@@ -914,7 +914,7 @@ class RunLeaderWiringTest(unittest.TestCase):
     def test_pull_stand_is_wired_behind_its_key(self):
         # AiPlayerbot.DungeonRunPullStand (default 0): the glue reads sight, the shot range and the stand only with
         # the key on; the policy holds the pullback for them only when the facts say the key is on.
-        read = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot const& slot,", "\n}\n")
+        read = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot& slot,", "\n}\n")
         self.assertIn("f.pullStand = sPlayerbotAIConfig.dungeonRunPullStand;", read)
         # The clearance key owns an authored stand-pull step's stand rule (PullStandRuleOn).
         self.assertIn("f.standClearance = sPlayerbotAIConfig.dungeonRunStandClearance;", read)
@@ -1084,7 +1084,7 @@ class RunLeaderWiringTest(unittest.TestCase):
         self.assertIn("sWaypointMgr.GetDefaultPath(walker->GetEntry(), walker->GetGUIDLow())", clearance)
         self.assertIn("other.marginYd = kStandClearUnreadPathYd;", clearance)
         # The pack's formation is read for every unit of a stand-pull row's own read (Facts::units).
-        facts_read = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot const& slot,", "\n}\n")
+        facts_read = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot& slot,", "\n}\n")
         self.assertIn("unit.formation = RunFormationOf(creature);", facts_read)
         # The policy: the first clear candidate is taken; a patrolling blocker is waited for up to 20 s, else the
         # default stand goes out with the advisory note. The run never pauses for the clearance.
@@ -1150,7 +1150,7 @@ class RunLeaderWiringTest(unittest.TestCase):
         # reads the next row's pack and the last point of the walk to the plan's approach that stands outside its
         # wake reach; the policy ends that row there, the pull's CC orders go out and only then the walk to the
         # approach (category: the marks before the walk in).
-        read = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot const& slot,", "\n}\n")
+        read = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot& slot,", "\n}\n")
         self.assertIn("f.standPullPreCc = sPlayerbotAIConfig.dungeonRunStandPullPreCc;", read)
         # Read after the stand's own read, which stays the lead bot's position (no stand is precomputed).
         self.assertLess(read.index("ReadPullStand(slot, lead, bots, f);"),
@@ -1593,7 +1593,7 @@ class RunHoldsItsDeadWiringTest(unittest.TestCase):
                       "                            TortoiseBots::DungeonRun::LiveFrom(slot.run, true), whole, f.team,", COMMANDS)
     def test_a_bot_outside_the_instance_is_no_part_of_the_fight(self):
         facts = body(strip_comments(COMMANDS),
-                     "void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*> const& bots,", "\n}\n")
+                     "void ReadRunFacts(DungeonRunSlot& slot, Player* lead, std::vector<Player*> const& bots,", "\n}\n")
         line = "member.offPlanMap = bot->GetMapId() != slot.run.plan->map;"
         self.assertIn(line, facts)
         self.assertLess(facts.index("member.yd = yd;"), facts.index(line))
@@ -1624,7 +1624,7 @@ class RunHoldsItsDeadWiringTest(unittest.TestCase):
         self.assertLess(fn.index("bot->CombatStop();"), fn.index("bot->TeleportTo(lead->GetMapId(),"))
         # round 1: the glue reads the returnable fact beside the off-map flag
         facts = body(strip_comments(COMMANDS),
-                     "void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*> const& bots,", "\n}\n")
+                     "void ReadRunFacts(DungeonRunSlot& slot, Player* lead, std::vector<Player*> const& bots,", "\n}\n")
         self.assertIn("member.offPlanMap = bot->GetMapId() != slot.run.plan->map;", facts)
         self.assertIn("member.offMapReturnable = !bot->InBattleGround()", facts)
         self.assertIn("!bot->GetMap()->Instanceable()", facts)
@@ -1726,7 +1726,7 @@ class RunHoldsItsDeadWiringTest(unittest.TestCase):
         update = body(code, "static void UpdateDungeonRuns(uint32 diff)\n{", "\n}\n")
         self.assertIn("if (!PendingRejoins().empty())\n        SettleInstanceRejoins();", update)
         self.assertLess(update.index("SettleInstanceRejoins();"), update.index("if (DungeonRuns().empty())"))
-        facts = body(code, "void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*> const& bots,", "\n}\n")
+        facts = body(code, "void ReadRunFacts(DungeonRunSlot& slot, Player* lead, std::vector<Player*> const& bots,", "\n}\n")
         self.assertIn("bool otherCopy = false;", (ROOT / "runtime/DungeonRunPolicy.h").read_text())
         self.assertIn("member.otherCopy = bot->IsInWorld() && bot->GetMapId() == lead->GetMapId() &&\n"
                       "            bot->GetInstanceId() != lead->GetInstanceId();", facts)

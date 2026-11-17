@@ -48,7 +48,8 @@ class TotemFocusWiringTest(unittest.TestCase):
         self.assertIn("TortoiseBots::DungeonRun::KillFirstGridTotemOf(", visitor)
         # The plan's boss, by entry or by the entry its spawn row first had.
         self.assertIn("TortoiseBots::DungeonRun::ScriptChangedFrom(c)", fn)
-        self.assertIn("step.kind == ai::PlanStepKind::Boss", fn)
+        self.assertIn("ai::PlanStepBossIs(step, entry)", fn)
+        self.assertIn("ai::PlanStepBossIs(step, formOf)", fn)
 
     def test_the_totem_focus_is_first_in_the_fight_branch(self):
         tick = body(POLICY, "inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const RestLines& lines)\n{")

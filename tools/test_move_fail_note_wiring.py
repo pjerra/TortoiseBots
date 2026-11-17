@@ -90,7 +90,7 @@ class MoveFailNoteWiringTest(unittest.TestCase):
         self.assertIn("if (accepted && captured.movePathRead)\n            TortoiseBots::DungeonRun::NoteMovePathType(it->second.run, order, captured.movePathType);", COMMANDS)
 
     def test_run_facts_read_the_lead_bots_water_and_move(self):
-        fn = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot const& slot, Player* lead,", "\n}\n")
+        fn = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot& slot, Player* lead,", "\n}\n")
         self.assertIn("f.leadInWater = lead->IsInWater() || lead->IsUnderwater();", fn)
         self.assertIn("f.leadMoveFailed = ai::PositionMoveFailing(lastMove.positionMoveFailMs, WorldTimer::getMSTime()) || f.leadStayWalkResting;", fn)
         self.assertIn("f.leadMoveFailReason = ai::MoveFailReasonName(lastMove.moveFailReason);", fn)

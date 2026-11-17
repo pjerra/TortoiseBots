@@ -30,7 +30,7 @@ class PullPackAggroTogetherWiringTest(unittest.TestCase):
         self.assertIn("if (group->HasGroupFlag(OPTION_AGGRO_TOGETHER))", block)
 
     def test_the_pack_is_read_only_on_pull_ticks_and_in_the_window(self):
-        facts = self.text[self.text.index("void ReadRunFacts(DungeonRunSlot const& slot, Player* lead,"):]
+        facts = self.text[self.text.index("void ReadRunFacts(DungeonRunSlot& slot, Player* lead,"):]
         call = facts.index("ReadPullPacks(map, f.units, f.patrollers, f.packResidue, f.hopUnits);")
         gate = facts.rindex("if (slot.run.joinerWindow ||", 0, call)
         block = facts[gate:call]

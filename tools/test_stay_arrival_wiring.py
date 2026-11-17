@@ -116,7 +116,7 @@ class StayArrivalWiringTest(unittest.TestCase):
         self.assertNotIn("GetDistance(", fn)
 
     def test_run_leader_sees_a_resting_walk(self):
-        fn = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot const& slot, Player* lead,")
+        fn = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot& slot, Player* lead,")
         self.assertIn("f.leadStayWalkResting = TortoiseBots::StayWalkBackingOff(lastMove.stayWalk, WorldTimer::getMSTime());", fn)
         self.assertIn("f.leadStayWalkFails = lastMove.stayWalk.fails;", fn)
         self.assertIn("f.leadMoveFailed = ai::PositionMoveFailing(lastMove.positionMoveFailMs, WorldTimer::getMSTime()) || f.leadStayWalkResting;", fn)

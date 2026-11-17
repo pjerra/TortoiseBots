@@ -66,7 +66,7 @@ class StallFallbackWiringTest(unittest.TestCase):
         # Codex review 2026-10-23: the server's direct step checks the end's floor and sight only.
         fn = body(POLICY, "inline bool StallFallback(", "\n}\n")
         self.assertIn("if (f.leadInWater && f.stallDirectRead && f.stallDirectClear && StallDirectFits(f, x, y, z))", fn)
-        facts = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot const& slot, Player* lead,", "\n}\n")
+        facts = body(COMMANDS, "void ReadRunFacts(DungeonRunSlot& slot, Player* lead,", "\n}\n")
         self.assertIn("if (StallDirectProbeWanted(slot.run) && f.leadInWater && f.leadMoveFailed && StallPathFailure(f.leadMoveFailReason) &&\n"
                       "        lead->IsAlive() && !lead->GetTransport())", facts)
         self.assertIn("bool const swimLine = ai::WorldPosition::IsSwimLine(line, lead);", facts)

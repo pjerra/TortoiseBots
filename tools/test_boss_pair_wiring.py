@@ -59,10 +59,12 @@ class BossPairWiringTest(unittest.TestCase):
         self.assertIn("fact.evading = other->IsCreature() && static_cast<Creature*>(other)->IsInEvadeMode();", read)
 
     def test_boss_search_reads_the_instance_when_asked(self):
-        facts = body(CODE, "void ReadRunFacts(DungeonRunSlot const& slot, Player* lead,")
-        self.assertIn("if (step->kind == ai::PlanStepKind::Boss && slot.run.bossSearchWanted && "
-                      "slot.run.step < slot.run.plan->steps.size() &&\n                step == &slot.run.plan->steps[slot.run.step])\n"
-                      "                ReadBossInInstance(*step, lead, f);", facts)
+        facts = body(CODE, "void ReadRunFacts(DungeonRunSlot& slot, Player* lead,")
+        # The search runs on the run's own step only (never a walk back's replayed point), and only when asked; a boss
+        # any-of row searches per alternative until one resolves it (BossAnyOfWiringTest).
+        self.assertIn("bool const ownStep = step == &slot.run.plan->steps[slot.run.step];", facts)
+        self.assertIn("if (step->kind == ai::PlanStepKind::Boss && slot.run.bossSearchWanted && ownStep)", facts)
+        self.assertIn("if (!anyOfUnresolved)\n                    ReadBossInInstance(*step, lead, f);", facts)
         search = body(CODE, "void ReadBossInInstance(ai::PlanStep const& step, Player* lead,")
         self.assertIn("f.bossSearchRead = true;", search)
         self.assertIn("std::vector<uint32> const& spawns = BossSpawnLowGuids(lead->GetMapId(), step.entry);", search)

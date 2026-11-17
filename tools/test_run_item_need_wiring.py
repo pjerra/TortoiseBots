@@ -135,7 +135,7 @@ class DoorAndLegFactsWiringTest(unittest.TestCase):
         self.assertIn("RunItemNeed::LegNeedItems(slot.run)", read)
         self.assertIn("RunItemNeed::FillLegNeedFacts(slot.run, RunItemNeedMembers(RunNeedParty(lead, items)), f)", read)
         self.assertNotIn("legNeedHolders", read)  # holders are decided in the pure fill only
-        self.assertIn("ReadRunNeedFacts(slot, lead, f);", body(COMMANDS, "void ReadRunFacts(DungeonRunSlot const& slot,"))
+        self.assertIn("ReadRunNeedFacts(slot, lead, f);", body(COMMANDS, "void ReadRunFacts(DungeonRunSlot& slot,"))
 
     def test_door_is_looked_for_near_the_lead_and_not_found_is_not_closed(self):
         read = self.read()
