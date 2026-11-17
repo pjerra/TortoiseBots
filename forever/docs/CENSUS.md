@@ -1,0 +1,22 @@
+# Port census
+
+`forever/tools/port_census.py` compiles every `.cpp` of the bot brain syntax-only against ForeverCore, with
+`forever/src/compat/botpch_forever.h` in front (as `ai/botpch.h` is on the Turtle core), and counts distinct error
+places. A place is one file, line and message; a mistake in a header counts once however many files include it.
+The compiler stops looking in a function after some errors, so the number is a floor, not the whole distance.
+
+Run: `forever/tools/vm-census.sh "" 14` (all, about 45 minutes) or with a path part for a subset.
+
+| Date | Core pin | State | Files | Compile clean | Error places |
+|---|---|---|---|---|---|
+| 2026-11-17 | 6517af05 | no pre-include, include paths only | 648 | 8 | 30,167 |
+| 2026-11-17 | 6517af05 | pre-include + first shim, `ai/playerbot/strategy/values` only | 104 | 0 | 2,717 |
+| 2026-11-17 | 6517af05 | pre-include + first shim, all files (BEFORE shim round 1) | 648 | 0 | 17,530 |
+
+The first row is not comparable with later ones: without the pre-include most files stopped early.
+
+What the first run named most (distinct places): the cmangos singleton spelling (`MaNGOS::Singleton<>::Instance()`,
+`sObjectMgr.`), `Player` / `Item` / `Unit` members with other names (`GetObjectGuid`, `GetGUIDLow`, `GetProto`,
+`getPositionX`), `ItemPrototype` fields (`Class`, `SubClass`, `Quality`, `ItemId`), `SpellEntry` fields (`Effect[i]`),
+`WorldPosition`'s `x` / `y` / `z` / `mapId` (it derives from the core's `WorldLocation`, whose fields are named
+differently), update fields (`GetUInt32Value`), `WorldTimer`, `sLog.outString`.
