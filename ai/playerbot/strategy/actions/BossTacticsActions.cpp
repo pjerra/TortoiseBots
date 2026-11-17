@@ -2262,8 +2262,7 @@ void NoteSeekWalkoutMove(PlayerbotAI* ai, Player* bot, bool moved, std::uint32_t
             // at the stand itself (DungeonRunSeekRetryOtherSon) keeps the Son walked and sends the retry to the other.
             std::uint32_t const nowMs = WorldTimer::getMSTime();
             WalkoutBusyMarks const before = WalkoutMarksOf(it->second.state);
-            bool const atStand =
-                it->second.state.failStandYd >= 0.0f && it->second.state.failStandYd <= kSeekWalkoutStandArriveYd;
+            bool const atStand = WalkoutAtStand(it->second.state.failStandYd);
             keep = WalkoutAbortKeepsSon(it->second.rules, sPlayerbotAIConfig.dungeonRunSeekRetryOtherSon, atStand);
             WalkoutAbortUnspent(it->second.state, nowMs, it->second.rules, !keep);
             WalkoutExclude(it->second.state, bot->GetObjectGuid().GetRawValue(), nowMs);
@@ -2860,9 +2859,7 @@ void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, U
             WalkoutNoSightCutDue(state, nowMs, rules, sPlayerbotAIConfig.dungeonRunSeekWalkoutFaceCast))
         {
             bool cut = false;
-            // The cut is stand-bound for DungeonRunSeekRetryOtherSon: the task had its 15 s, so the retry goes to the
-            // other Son instead of the same stand again.
-            bool const keep = WalkoutAbortKeepsSon(rules, sPlayerbotAIConfig.dungeonRunSeekRetryOtherSon, true);
+            bool keep = false;
             {
                 std::lock_guard<std::mutex> lock(g_walkoutMutex);
                 auto const it = g_walkouts.find(instanceId);
@@ -2873,6 +2870,11 @@ void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, U
                 if (WalkoutNoSightCutDue(it->second.state, nowMs, rules,
                                          sPlayerbotAIConfig.dungeonRunSeekWalkoutFaceCast))
                 {
+                    // Stand-bound only when the puller has reached its stand: a cut while it is still walking its
+                    // path frees the Son, so the retry may take the same one (DungeonRunSeekRetryOtherSon).
+                    bool const atStand = puller &&
+                        WalkoutAtStand(puller->GetDistance2d(it->second.state.standX, it->second.state.standY));
+                    keep = WalkoutAbortKeepsSon(rules, sPlayerbotAIConfig.dungeonRunSeekRetryOtherSon, atStand);
                     WalkoutBusyMarks const before = WalkoutMarksOf(it->second.state);
                     WalkoutAbortUnspent(it->second.state, nowMs, rules, !keep);
                     WalkoutExclude(it->second.state, state.puller, nowMs);
@@ -2901,8 +2903,11 @@ void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, U
             !WalkoutStallHeldByShotWait(state, nowMs);
         if (rules.shotStall && WalkoutNoShotAbortDue(stallDue, state.pullCastMs, nowMs))
         {
-            // The stall fired at the stand: DungeonRunSeekRetryOtherSon keeps the Son for the other one's retry.
-            bool const keep = WalkoutAbortKeepsSon(rules, sPlayerbotAIConfig.dungeonRunSeekRetryOtherSon, true);
+            // Stand-bound only for a puller that can still pull and a live Son: a stall that falls due on the tick the
+            // puller dies, is charmed, goes insane, loses the threat gate or vanishes is that end's own abort, which
+            // frees the Son (DungeonRunSeekRetryOtherSon).
+            bool const keep = pullerOk && sonOk &&
+                WalkoutAbortKeepsSon(rules, sPlayerbotAIConfig.dungeonRunSeekRetryOtherSon, true);
             {
                 std::lock_guard<std::mutex> lock(g_walkoutMutex);
                 auto const it = g_walkouts.find(instanceId);

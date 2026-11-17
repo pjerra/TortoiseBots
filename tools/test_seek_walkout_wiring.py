@@ -671,20 +671,30 @@ class SeekRetryOtherSonWiring(unittest.TestCase):
         self.assertIn("AiPlayerbot.DungeonRunSeekRetryOtherSon = 0", template)
         self.assertIn("### `AiPlayerbot.DungeonRunSeekRetryOtherSon`", settings)
 
-    def test_the_no_sight_cut_keeps_the_son(self):
+    def test_the_no_sight_cut_keeps_the_son_only_at_the_stand(self):
         update = self.update()
         cut = update[update.index("WalkoutNoSightCutDue(state, nowMs, rules,"):update.index("bool const stallDue")]
-        self.assertIn("bool const keep = WalkoutAbortKeepsSon(rules, "
-                      "sPlayerbotAIConfig.dungeonRunSeekRetryOtherSon, true);", cut)
+        # The cut's atStand is the puller's own 2D distance to the stored stand, read under the state's lock: a puller
+        # still walking its path frees the Son, one that arrived keeps it.
+        self.assertIn("bool const atStand = puller &&\n"
+                      "                        WalkoutAtStand(puller->GetDistance2d(it->second.state.standX, "
+                      "it->second.state.standY));", cut)
+        self.assertIn("keep = WalkoutAbortKeepsSon(rules, "
+                      "sPlayerbotAIConfig.dungeonRunSeekRetryOtherSon, atStand);", cut)
+        self.assertNotIn("WalkoutAbortKeepsSon(rules, sPlayerbotAIConfig.dungeonRunSeekRetryOtherSon, true);", cut)
         self.assertIn("WalkoutAbortUnspent(it->second.state, nowMs, rules, !keep);", cut)
         self.assertIn('"%s keep=%d"', cut)
+        self.assertLess(cut.index("WalkoutAtStand("), cut.index("WalkoutAbortUnspent(it->second.state"))
         self.assertLess(cut.index("WalkoutAbortKeepsSon("), cut.index("WalkoutAbortUnspent(it->second.state"))
 
     def test_the_no_shot_stall_keeps_the_son(self):
         update = self.update()
         stall = update[update.index("rules.shotStall && WalkoutNoShotAbortDue(stallDue"):]
         stall = stall[:stall.index('LogSeekWalkoutAbort(ai, "no shot"')]
-        self.assertIn("bool const keep = WalkoutAbortKeepsSon(rules, "
+        # The stall runs before the puller problem's own abort, so its keep is gated on a puller and Son that can still
+        # act: a stall due on the tick the puller dies or is charmed frees the Son.
+        self.assertIn("bool const keep = pullerOk && sonOk &&\n"
+                      "                WalkoutAbortKeepsSon(rules, "
                       "sPlayerbotAIConfig.dungeonRunSeekRetryOtherSon, true);", stall)
         self.assertIn("WalkoutAbortUnspent(it->second.state, nowMs, rules, !keep);", stall)
         self.assertLess(stall.index("WalkoutAbortKeepsSon("), stall.index("WalkoutAbortUnspent(it->second.state"))
@@ -693,9 +703,7 @@ class SeekRetryOtherSonWiring(unittest.TestCase):
         note = body(ACTIONS, "void NoteSeekWalkoutMove(PlayerbotAI* ai, Player* bot, bool moved,")
         # The refused move records how far the bot stood from its stand, and the abort decides atStand from it.
         self.assertIn("it->second.state.failStandYd = standYd;", note)
-        self.assertIn("bool const atStand =\n"
-                      "                it->second.state.failStandYd >= 0.0f && "
-                      "it->second.state.failStandYd <= kSeekWalkoutStandArriveYd;", note)
+        self.assertIn("bool const atStand = WalkoutAtStand(it->second.state.failStandYd);", note)
         self.assertIn("keep = WalkoutAbortKeepsSon(it->second.rules, "
                       "sPlayerbotAIConfig.dungeonRunSeekRetryOtherSon, atStand);", note)
         self.assertIn("WalkoutAbortUnspent(it->second.state, nowMs, it->second.rules, !keep);", note)

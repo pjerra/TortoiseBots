@@ -1428,8 +1428,8 @@ AiPlayerbot.DungeonRunSeekRetryUnspent = 0
 
 # The other Son on a stand-bound abort for Hakkar's seek pull (recommended on with DungeonRunSeekRetryUnspent; needs
 # DungeonRunSeekPullCycle): a walk-out that aborts with its puller at its own stand (a move refused within 3 yd of the
-# stand, the no-sight cut, the 6 s stalled shot) keeps that Son walked for the cycle, so the refunded retry goes to the
-# other Son instead of re-walking the stand the bot's own sight test refused. Walk 117: 6 of 6 `abort move failed` rows
+# stand, the no-sight cut or the 6 s stalled shot with the puller there) keeps that Son walked for the cycle, so the
+# refunded retry goes to the other Son instead of re-walking the stand the bot's own sight test refused. Walk 117: 6 of 6 `abort move failed` rows
 # stood on their stand, 12-17 yd from one Son, and the retry re-picked that same Son and stand. A move refused en route
 # still frees the Son, and a walk-out whose shot landed is unaffected. Off frees the Son on every unshot abort.
 AiPlayerbot.DungeonRunSeekRetryOtherSon = 0

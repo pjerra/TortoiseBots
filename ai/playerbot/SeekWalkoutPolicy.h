@@ -2179,6 +2179,13 @@ namespace ai
         s.walkedAt.swap(keptAt);
     }
 
+    // Whether the bot stands at the task's stand: its 2D distance to the stand is within kSeekWalkoutStandArriveYd
+    // (-1: none known, never at the stand). The stand-bound aborts read it (DungeonRunSeekRetryOtherSon).
+    inline bool WalkoutAtStand(float standYd)
+    {
+        return standYd >= 0.0f && standYd <= kSeekWalkoutStandArriveYd;
+    }
+
     // DungeonRunSeekRetryOtherSon: an abort at the bot's own stand does not free its Son for the cycle's retry, so the
     // retry picks the other one. The stand is what failed there, not the puller: the walk had arrived (`walk-out stand
     // branch=inpos`), the bot's own sight test refused the spot the search had passed, and the refunded retry re-picked

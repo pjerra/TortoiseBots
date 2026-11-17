@@ -1520,6 +1520,17 @@ static void TestRetryOtherSonKeepsSonAtStand()
     WalkoutAbortUnspent(off, 1004000, rules, !WalkoutAbortKeepsSon(rules, false, true));
     CHECK(std::find(off.walkedSons.begin(), off.walkedSons.end(), sonA) == off.walkedSons.end());
 
+    // The at-stand test the glue reads: within 3 yd of the stored stand is at it, a puller still walking its path
+    // (12 yd out) is not, and a task with no stand read (-1) is never at it. At the stand the Son is kept; still
+    // walking, it is freed for the retry.
+    CHECK(WalkoutAtStand(0.0f));
+    CHECK(WalkoutAtStand(kSeekWalkoutStandArriveYd));
+    CHECK(!WalkoutAtStand(kSeekWalkoutStandArriveYd + 0.1f));
+    CHECK(!WalkoutAtStand(12.0f));
+    CHECK(!WalkoutAtStand(-1.0f));
+    CHECK(WalkoutAbortKeepsSon(rules, true, WalkoutAtStand(0.4f)));
+    CHECK(!WalkoutAbortKeepsSon(rules, true, WalkoutAtStand(12.0f)));
+
     // The old one-walk-out rules have no retry to send elsewhere: their "no stand" keep stays the only one.
     CHECK(!WalkoutAbortKeepsSon(WalkoutCycleRules(), true, true));
 
