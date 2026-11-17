@@ -129,7 +129,7 @@ The server also writes the fields the dashboard's Dungeon runs tab reads:
 | `plan` | The plan name the bosses come from, when known. |
 | `dungeon` | `{"map": <id>}` once the party stood on an instance map. |
 | `furthest` | `{"leg", "pull_group"}`: the highest plan step the run leader reached. Run leader runs only. |
-| `bosses` | `[{"entry", "name", "killed_at_s"}]`, seconds from the run start, `null` for a boss not killed. |
+| `bosses` | `[{"entry", "entries", "name", "killed_at_s"}]`, seconds from the run start, `null` for a boss not killed. `entries` is present only on an unresolved boss any-of row: the entries the instance may have spawned, all one boss. |
 | `outcome`, `stop_reason` | See below; `stop_reason` is the end reason (`stop`, `scope_lost`, `size_cap`, `shutdown`, `disabled`, `write_failed`). |
 | `clear_s` | Seconds from the run start to the last boss kill; only when `outcome` is `cleared`. |
 | `wipes` | One entry per wipe: every traced bot dead at once (at least two bots in scope; one wipe until somebody is up again), with position, the role of the first to fall, and the run leader's step. |
@@ -141,6 +141,7 @@ The server also writes the fields the dashboard's Dungeon runs tab reads:
 - Run leader running: its own plan. Otherwise the one plan on the party's map, if exactly one.
 - Several plans and none chosen: no list. The bosses of all of them are still watched, and the bosses met are reported.
 - A boss counts as killed when a unit the bots saw alive is found dead on the map of a bot in its instance.
+- A boss any-of row is one boss in the list: while unresolved it is one pending boss with its `entries` (the alternatives the instance may have spawned), and a kill of whichever alternative spawned marks that one boss. The alternatives are never separate bosses, so a run that killed the one that spawned can still be `cleared`.
 - A boss killed before the trace started was never seen alive, so such a run cannot be `cleared`: start the trace before the first pull.
 
 **Outcome rule** (first match wins).

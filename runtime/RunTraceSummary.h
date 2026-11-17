@@ -124,9 +124,19 @@ inline std::string EffectiveDriver(std::string const& given, RunMode mode)
 struct BossProgress
 {
     uint32_t entry = 0;
+    // A boss any-of row's other entries while it is unresolved: the instance spawns one of them, so the row is one
+    // boss and the alternatives are never separate bosses. Empty for a plain boss, and for a resolved row.
+    std::vector<uint32_t> alternatives;
     std::string name;
     int64_t killedMs = -1;  // ms since the run started; -1 = not killed (yet)
 };
+
+// Whether `entry` is this required boss: its own entry or one of an unresolved any-of row's alternatives.
+inline bool BossProgressHas(BossProgress const& boss, uint32_t entry)
+{
+    return boss.entry == entry || std::find(boss.alternatives.begin(), boss.alternatives.end(), entry) !=
+                                      boss.alternatives.end();
+}
 
 struct Spot
 {
@@ -149,12 +159,30 @@ struct PartyEntry
     uint32_t level = 0;
 };
 
+// One required boss of a plan: a plain boss step, or one kPlanFlagBossAnyOf row whose `alternatives` are the other
+// entries the instance may spawn. The alternatives are one boss's possible spawns, never separate bosses: the row is
+// pending until whichever of them spawned dies.
+struct RequiredBoss
+{
+    uint32_t entry = 0;                 // the row's entry (a resolved run's private copy names the spawned one)
+    std::vector<uint32_t> alternatives; // the row's other alternatives while unresolved; empty for a plain boss
+};
+
+// Whether `entry` is this required boss: its own entry or one of its alternatives.
+inline bool RequiredBossHas(RequiredBoss const& boss, uint32_t entry)
+{
+    return boss.entry == entry || std::find(boss.alternatives.begin(), boss.alternatives.end(), entry) !=
+                                      boss.alternatives.end();
+}
+
 // What the glue knows about the run besides what the recorder sees.
 struct Context
 {
     RunMode mode = RunMode::Observe;
     std::string planName;
-    std::vector<uint32_t> bossEntries;  // the plan's boss steps, in plan order
+    // The plan's required bosses, in plan order: one per boss step, and an any-of row is one boss with its
+    // alternatives (they are never separate requirements).
+    std::vector<RequiredBoss> requiredBosses;
     // No single plan to judge against: every boss entry of the plans on the
     // party's map, so a kill is still seen (the outcome never says cleared).
     std::vector<uint32_t> knownBosses;
@@ -186,27 +214,46 @@ inline std::string IsoUtc(uint64_t unix)
     return buf;
 }
 
-// The plan's bosses for a party of `team` (ai::kPlanFlagAlliance / Horde, 0 =
-// both): every boss the plan can spawn, each once: a boss step's `entry` and,
-// on a kPlanFlagBossAnyOf row, its alternatives, so a kill of the one the
-// instance spawned counts; a resolved run's private plan copy has the flag gone
-// and names only the alternative it picked.
+// The plan's required bosses for a party of `team` (ai::kPlanFlagAlliance / Horde, 0 = both), in plan order, each
+// boss once. An any-of row is one requirement: its own `entry` plus the row's other alternatives in `alternatives`.
+inline std::vector<RequiredBoss> PlanRequiredBosses(ai::DungeonPlan const& plan, std::uint32_t team)
+{
+    std::vector<RequiredBoss> out;
+    for (ai::PlanStep const& step : plan.steps)
+    {
+        if (step.kind != ai::PlanStepKind::Boss || step.entry == 0 || !ai::StepForTeam(step, team) ||
+            out.size() >= kMaxBosses)
+            continue;
+        bool listed = false;
+        for (RequiredBoss const& boss : out)
+            listed = listed || RequiredBossHas(boss, step.entry);
+        if (listed)
+            continue;
+        RequiredBoss boss;
+        boss.entry = step.entry;
+        if (step.flags & ai::kPlanFlagBossAnyOf)
+            for (uint32_t const alternative : step.entries)
+                if (alternative && alternative != step.entry &&
+                    std::find(boss.alternatives.begin(), boss.alternatives.end(), alternative) ==
+                        boss.alternatives.end())
+                    boss.alternatives.push_back(alternative);
+        out.push_back(std::move(boss));
+    }
+    return out;
+}
+
+// The same bosses as one flat entry list (every alternative included), for kill tracking without an outcome list:
+// a boss of a plan on the party's map is seen whatever alternative the instance spawned.
 inline std::vector<uint32_t> PlanBossEntries(ai::DungeonPlan const& plan, std::uint32_t team)
 {
     std::vector<uint32_t> out;
-    auto add = [&out](std::uint32_t entry)
+    for (RequiredBoss const& boss : PlanRequiredBosses(plan, team))
     {
-        if (entry && std::find(out.begin(), out.end(), entry) == out.end() && out.size() < kMaxBosses)
-            out.push_back(entry);
-    };
-    for (ai::PlanStep const& step : plan.steps)
-    {
-        if (step.kind != ai::PlanStepKind::Boss || step.entry == 0 || !ai::StepForTeam(step, team))
-            continue;
-        add(step.entry);
-        if (step.flags & ai::kPlanFlagBossAnyOf)
-            for (std::uint32_t const alternative : step.entries)
-                add(alternative);
+        if (out.size() < kMaxBosses)
+            out.push_back(boss.entry);
+        for (uint32_t const alternative : boss.alternatives)
+            if (out.size() < kMaxBosses)
+                out.push_back(alternative);
     }
     return out;
 }
@@ -320,15 +367,16 @@ public:
     }
 
     bool HasPlan() const { return hasPlan_; }
-    // Adopts a plan's boss list once (the first one wins), merging any boss the
-    // recorder saw before the plan was known.
+    // Adopts a plan's boss list once (the first one wins), merging any boss the recorder saw before the plan was
+    // known. An unresolved any-of row keeps its alternatives in one BossProgress: a later resolve is not a new
+    // requirement, and a kill of whichever alternative spawned marks the row.
     void NotePlan(std::string const& name, std::vector<BossProgress> bosses)
     {
         if (hasPlan_ || bosses.empty())
             return;
         for (BossProgress const& seen : bosses_)
             for (BossProgress& planned : bosses)
-                if (planned.entry == seen.entry && planned.killedMs < 0)
+                if (BossProgressHas(planned, seen.entry) && planned.killedMs < 0)
                     planned.killedMs = seen.killedMs;
         hasPlan_ = true;
         plan_ = name;
@@ -553,7 +601,16 @@ public:
                 BossProgress const& b = bosses_[i];
                 if (i)
                     bosses += ',';
-                bosses += "{\"entry\":" + std::to_string(b.entry) + ",\"name\":\"" + JsonEscape(b.name) +
+                bosses += "{\"entry\":" + std::to_string(b.entry);
+                if (!b.alternatives.empty())
+                {
+                    // One pending boss, listed with every entry the instance may have spawned.
+                    bosses += ",\"entries\":[" + std::to_string(b.entry);
+                    for (uint32_t const alternative : b.alternatives)
+                        bosses += "," + std::to_string(alternative);
+                    bosses += ']';
+                }
+                bosses += ",\"name\":\"" + JsonEscape(b.name) +
                     "\",\"killed_at_s\":" + (b.killedMs >= 0 ? FixedStr(static_cast<double>(b.killedMs) / 1000.0, 1) : "null") + "}";
                 lastKill = std::max(lastKill, b.killedMs);
             }
@@ -581,14 +638,14 @@ private:
     BossProgress* Find(uint32_t entry)
     {
         for (BossProgress& b : bosses_)
-            if (b.entry == entry)
+            if (BossProgressHas(b, entry))
                 return &b;
         return nullptr;
     }
     BossProgress const* Find(uint32_t entry) const
     {
         for (BossProgress const& b : bosses_)
-            if (b.entry == entry)
+            if (BossProgressHas(b, entry))
                 return &b;
         return nullptr;
     }

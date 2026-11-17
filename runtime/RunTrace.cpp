@@ -597,15 +597,16 @@ void RunTraceService::RefreshContext()
     if (ctx.hasStep)
         digest_.NoteStep(ctx.leg, ctx.seq);
     digest_.NoteKnownBosses(ctx.knownBosses);
-    if (digest_.HasPlan() || ctx.bossEntries.empty())
+    if (digest_.HasPlan() || ctx.requiredBosses.empty())
         return;
     std::vector<RunTrace::BossProgress> bosses;
-    for (uint32_t entry : ctx.bossEntries)
+    for (RunTrace::RequiredBoss const& required : ctx.requiredBosses)
     {
         RunTrace::BossProgress boss;
-        boss.entry = entry;
-        CreatureInfo const* info = sObjectMgr.GetCreatureTemplate(entry);
-        boss.name = info && !info->name.empty() ? info->name : "Boss " + std::to_string(entry);
+        boss.entry = required.entry;
+        boss.alternatives = required.alternatives;
+        CreatureInfo const* info = sObjectMgr.GetCreatureTemplate(required.entry);
+        boss.name = info && !info->name.empty() ? info->name : "Boss " + std::to_string(required.entry);
         bosses.push_back(std::move(boss));
     }
     digest_.NotePlan(ctx.planName, std::move(bosses));

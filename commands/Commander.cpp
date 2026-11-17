@@ -17593,7 +17593,7 @@ static bool TraceContext(uint64_t requesterGuid, Player* anchor, bool wantPlan, 
     if (plan)
     {
         out.planName = plan->name;
-        out.bossEntries = RunTrace::PlanBossEntries(*plan, team);
+        out.requiredBosses = RunTrace::PlanRequiredBosses(*plan, team);
     }
     return true;
 }

@@ -402,6 +402,18 @@ static void TestPlanBossEntries()
     std::vector<uint32_t> const picked = PlanBossEntries(resolved, ai::kPlanFlagAlliance);
     CHECK(picked.size() == 3 && picked[0] == 8127 && picked[1] == 7272 && picked[2] == 15084);
     CHECK(PlanBossEntries(ai::DungeonPlan(), 0).empty());
+
+    // The same plan as required bosses: the any-of row is ONE boss with its other alternatives.
+    std::vector<RequiredBoss> const rows = PlanRequiredBosses(plan, 0);
+    CHECK(rows.size() == 4 && rows[3].entry == 15082 && rows[3].alternatives.size() == 2 &&
+          rows[3].alternatives[0] == 15083 && rows[3].alternatives[1] == 15084);
+    std::vector<RequiredBoss> const allianceRows = PlanRequiredBosses(plan, ai::kPlanFlagAlliance);
+    CHECK(allianceRows.size() == 3 && allianceRows[2].entry == 15082);
+    std::vector<RequiredBoss> const hordeRows = PlanRequiredBosses(plan, ai::kPlanFlagHorde);
+    CHECK(hordeRows.size() == 2 && hordeRows[0].entry == 8127 && hordeRows[1].entry == 7273);
+    // A resolved run's private copy names the spawned one and has no alternatives left: still one boss.
+    std::vector<RequiredBoss> const resolvedRows = PlanRequiredBosses(resolved, ai::kPlanFlagAlliance);
+    CHECK(resolvedRows.size() == 3 && resolvedRows[2].entry == 15084 && resolvedRows[2].alternatives.empty());
 }
 
 static void TestSummaryMembers()
@@ -441,6 +453,78 @@ static void TestSummaryMembers()
     // Members of an error summary come after the error, still before oracles.
     std::string const err = b.BuildSummary(h, "failed", "stop", 160, 60000, c, "run-9.jsonl", "disk full", d.Render(Final()));
     CHECK(err.find("\"error\"") < err.find("\"mode\""));
+}
+
+// An any-of row is one required boss in the outcome: adopted unresolved, it is a single pending boss listing every
+// alternative; the alternative the instance spawned dying makes it 1/1 and the run cleared; the plan resolving later
+// (the run's private copy) adds no second requirement.
+static void TestAnyOfRowIsOneRequiredBoss()
+{
+    ai::DungeonPlan plan;
+    ai::PlanStep step;
+    step.kind = ai::PlanStepKind::Boss;
+    step.entry = 15082;
+    step.entries = {15082, 15083, 15084, 15085};
+    step.flags = ai::kPlanFlagBossAnyOf;
+    plan.steps = {step};
+    std::vector<RequiredBoss> const rows = PlanRequiredBosses(plan, 0);
+    CHECK(rows.size() == 1 && rows[0].entry == 15082 && rows[0].alternatives.size() == 3);
+
+    // Before the resolve: one pending boss, the four ids listed in one object.
+    RunDigest d;
+    d.NoteDungeon(309);
+    BossProgress pending;
+    pending.entry = rows[0].entry;
+    pending.alternatives = rows[0].alternatives;
+    pending.name = "Edge of Madness";
+    d.NotePlan("zul_gurub", {pending});
+    CHECK(d.BossCount() == 1 && d.BossesKilled() == 0);
+    std::string s = d.Render(Final());
+    CHECK(Has(s, "\"outcome\":\"stopped\""));
+    CHECK(!Has(s, "clear_s"));
+    CHECK(Has(s, "{\"entry\":15082,\"entries\":[15082,15083,15084,15085],\"name\":\"Edge of Madness\",\"killed_at_s\":null}"));
+
+    // The instance spawned 15084: its kill marks the one requirement, 1/1 and cleared.
+    CHECK(d.IsTrackedBoss(15084, false));
+    CHECK(d.NoteBossKill(15084, 125000));
+    CHECK(!d.NoteBossKill(15084, 126000));   // one kill for the row
+    CHECK(d.BossCount() == 1 && d.BossesKilled() == 1);
+    s = d.Render(Final());
+    CHECK(Has(s, "\"outcome\":\"cleared\""));
+    CHECK(Has(s, "\"clear_s\":125.0"));
+    CHECK(Has(s, "\"killed_at_s\":125.0"));
+
+    // The plan resolving later is not a second requirement: the digest keeps its first list, still 1/1.
+    ai::DungeonPlan resolved = plan;
+    resolved.steps[0].entry = 15084;
+    resolved.steps[0].entries.clear();
+    resolved.steps[0].flags = 0;
+    std::vector<RequiredBoss> const after = PlanRequiredBosses(resolved, 0);
+    CHECK(after.size() == 1 && after[0].entry == 15084 && after[0].alternatives.empty());
+    BossProgress picked;
+    picked.entry = after[0].entry;
+    picked.name = "Hazza'rah";
+    d.NotePlan("zul_gurub", {picked});
+    CHECK(d.BossCount() == 1 && d.BossesKilled() == 1);
+    CHECK(Has(d.Render(Final()), "\"outcome\":\"cleared\""));
+
+    // A trace started after the resolve: one boss with no alternatives, its kill 1/1.
+    RunDigest fresh;
+    fresh.NoteDungeon(309);
+    fresh.NotePlan("zul_gurub", {picked});
+    CHECK(fresh.BossCount() == 1 && fresh.NoteBossKill(15084, 90000));
+    std::string const f = fresh.Render(Final());
+    CHECK(Has(f, "\"outcome\":\"cleared\""));
+    CHECK(!Has(f, "\"entries\""));
+
+    // A boss seen and killed before the plan was adopted merges into the row by any of its alternatives.
+    RunDigest early;
+    early.NoteDungeon(309);
+    CHECK(early.NoteSeenBoss(15084, "Hazza'rah"));
+    CHECK(early.NoteBossKill(15084, 5000));
+    early.NotePlan("zul_gurub", {pending});
+    CHECK(early.BossCount() == 1 && early.BossesKilled() == 1);
+    CHECK(Has(early.Render(Final()), "\"outcome\":\"cleared\""));
 }
 
 static void TestEndedInWipe()
@@ -495,7 +579,7 @@ static void TestPartyAndKnownBosses()
     CHECK(d.IsTrackedBoss(2749, false));
     CHECK(!d.IsTrackedBoss(1, false));
     // With a plan only its own list counts.
-    d.NotePlan("uld", std::vector<BossProgress>(1, BossProgress{ 2749, "Other", -1 }));
+    d.NotePlan("uld", std::vector<BossProgress>(1, BossProgress{ 2749, {}, "Other", -1 }));
     CHECK(d.IsTrackedBoss(2749, false));
     CHECK(!d.IsTrackedBoss(2748, true));
 }
@@ -516,6 +600,7 @@ int main()
     TestSummaryCountsAWindowWipe();
     TestSummaryWindowWipeThenAllDeadIsOne();
     TestPlanBossEntries();
+    TestAnyOfRowIsOneRequiredBoss();
     TestEndedInWipe();
     TestRunLeaderStep();
     TestPartyAndKnownBosses();
