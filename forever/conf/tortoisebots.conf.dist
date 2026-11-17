@@ -1,0 +1,17 @@
+[tortoisebots]
+
+#
+#    TortoiseBots.Enable
+#        Description: Master switch. 0 = the module loads but does nothing and its commands refuse.
+#        Default:     0
+#
+
+TortoiseBots.Enable = 0
+
+#
+#    TortoiseBots.Spike.FollowDistance
+#        Description: How far behind its master a bot stands, in yards.
+#        Default:     3
+#
+
+TortoiseBots.Spike.FollowDistance = 3
