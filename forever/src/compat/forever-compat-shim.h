@@ -261,6 +261,14 @@ inline ItemPrototype const* GetItemProtoCompat(Item const* item) { return item ?
 inline ItemTemplate const* GetItemTemplateCompat(ItemPrototype const* proto) { return tbcompat::ItemTpl(proto); }
 inline ItemTemplate const* GetItemTemplateCompat(Item const* item) { return item ? item->GetTemplate() : nullptr; }
 
+// The item template by entry, in the spelling the shared bot code uses on both cores; here the entry is answered by the
+// mirror table (TbItemPrototype.h). Same as the Turtle shim's helper.
+inline ItemPrototype const* GetItemProtoByIdCompat(uint32 entry) { return tbcompat::ItemProto(entry); }
+
+// A unit's movement state, in the spelling the shared bot code uses on both cores; ForeverCore names the member isMoving().
+// The same helper exists in ai/cmangos-compat-shim.h. A null unit crashed before and is false now.
+inline bool IsMovingCompat(Unit const* unit) { return unit && unit->isMoving(); }
+
 // ---- SQL store objects ----
 // cmangos keeps items, creature templates and game object templates in store objects with LookupEntry/GetMaxEntry;
 // ForeverCore asks ObjectMgr for the same records. GetMaxEntry is "one past the largest id used as a loop bound"

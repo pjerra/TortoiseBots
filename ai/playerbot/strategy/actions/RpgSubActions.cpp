@@ -67,7 +67,7 @@ void RpgHelper::setFacing(GuidPosition guidPosition)
 
     Unit* unit = guidPosition.GetUnit(bot->GetInstanceId());
 
-    if (unit->IsMoving())
+    if (IsMovingCompat(unit))
         return;
 
     MotionMaster& mm = *unit->GetMotionMaster();
@@ -85,7 +85,7 @@ void RpgHelper::resetFacing(GuidPosition guidPosition)
 
     Creature* unit = guidPosition.GetCreature(bot->GetInstanceId());
 
-    if (unit->IsMoving())
+    if (IsMovingCompat(unit))
         return;
 
     CreatureData const* data = guidPosition.GetCreatureData();

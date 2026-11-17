@@ -76,7 +76,7 @@ bool BuyAction::Execute(Event& event)
                 m_items_sorted.insert(m_items_sorted.begin(), vItems->m_items.begin(), vItems->m_items.end());
 
 
-            m_items_sorted.erase(std::remove_if(m_items_sorted.begin(), m_items_sorted.end(), [](VendorItem* i) {ItemPrototype const* proto = sObjectMgr.GetItemPrototype(i->item); return !proto; }), m_items_sorted.end());
+            m_items_sorted.erase(std::remove_if(m_items_sorted.begin(), m_items_sorted.end(), [](VendorItem* i) {ItemPrototype const* proto = GetItemProtoByIdCompat(i->item); return !proto; }), m_items_sorted.end());
 
             if (m_items_sorted.empty())
                 continue;
@@ -97,8 +97,8 @@ bool BuyAction::Execute(Event& event)
                 vendorScores[scored->item] = sRandomItemMgr.GetLiveStatWeight(bot, scored->item);
             std::sort(m_items_sorted.begin(), m_items_sorted.end(), [&vendorScores, buyShieldNeed](VendorItem* i, VendorItem* j)
             {
-                ItemPrototype const* pi = sObjectMgr.GetItemPrototype(i->item);
-                ItemPrototype const* pj = sObjectMgr.GetItemPrototype(j->item);
+                ItemPrototype const* pi = GetItemProtoByIdCompat(i->item);
+                ItemPrototype const* pj = GetItemProtoByIdCompat(j->item);
                 if (!pi || !pj)
                     return false;
                 uint32 const ri = ai::VendorShieldRank(buyShieldNeed, pi->Class, pi->SubClass);
@@ -110,7 +110,7 @@ bool BuyAction::Execute(Event& event)
 
             for (auto& tItem : m_items_sorted)
             {
-                ItemPrototype const* proto = sObjectMgr.GetItemPrototype(tItem->item);
+                ItemPrototype const* proto = GetItemProtoByIdCompat(tItem->item);
                 if (!proto)
                     continue;
 
@@ -270,7 +270,7 @@ bool BuyAction::Execute(Event& event)
             for (ItemIds::iterator i = itemIds.begin(); i != itemIds.end(); i++)
             {
                 uint32 itemId = *i;
-                const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemId);
+                const ItemPrototype* proto = GetItemProtoByIdCompat(itemId);
                 if (!proto)
                     continue;
 

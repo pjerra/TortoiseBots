@@ -83,7 +83,7 @@ ItemPrototype const* FindFirstCreatedItem(SpellEntry const* spell)
     {
         if (spell->Effect[eff] == SPELL_EFFECT_CREATE_ITEM && spell->EffectItemType[eff] > 0)
         {
-            if (ItemPrototype const* produced = sObjectMgr.GetItemPrototype(spell->EffectItemType[eff]))
+            if (ItemPrototype const* produced = GetItemProtoByIdCompat(spell->EffectItemType[eff]))
                 return produced;
         }
     }

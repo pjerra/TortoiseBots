@@ -132,7 +132,7 @@ namespace ai
             else
             {
                 // Force potion cooldown to prevent spamming this action
-                const ItemPrototype* proto = sObjectMgr.GetItemPrototype(GetItemId());
+                const ItemPrototype* proto = GetItemProtoByIdCompat(GetItemId());
                 if (proto)
                 {
                     for (int i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
@@ -243,7 +243,7 @@ namespace ai
             else
             {
                 // Force potion cooldown to prevent spamming this action
-                const ItemPrototype* proto = sObjectMgr.GetItemPrototype(GetItemId());
+                const ItemPrototype* proto = GetItemProtoByIdCompat(GetItemId());
                 if (proto)
                 {
                     for (int i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)

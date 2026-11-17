@@ -1109,7 +1109,7 @@ bool MoveToTravelTargetAction::Execute(Event& event)
             if (!member->IsAlive())
                 continue;
 
-            if (!member->IsMoving())
+            if (!IsMovingCompat(member))
                 continue;
 
             if (PlayerbotAIStorage::Instance().GetAI(member) &&
@@ -1261,7 +1261,7 @@ bool MoveToTravelTargetAction::Execute(Event& event)
 
     // A step toward the target (TryStepTowardTarget) is still walking: let it finish
     // instead of clearing it with a move that already found no route.
-    if (bot->IsMoving() && AI_VALUE2(time_t, "manual time", "travel step until") > time(0))
+    if (IsMovingCompat(bot) && AI_VALUE2(time_t, "manual time", "travel step until") > time(0))
         return true;
 
     TravelNodeMap::LastRouteFail().clear();
@@ -1507,9 +1507,9 @@ bool MoveToTravelTargetAction::isUseful()
     // same turn instead of waiting for the leg to end (~3 s still on a busy
     // realm). Pure walk legs only: the helper refuses combat, flight paths,
     // mounts, swimming, transports, dungeon and group-wait moves.
-    bool const legChainDue = bot->IsMoving() && TravelLegChainDue(ai, bot);
+    bool const legChainDue = IsMovingCompat(bot) && TravelLegChainDue(ai, bot);
     if (MEM_AI_VALUE(WorldPosition, "current position")->LastChangeDelay() < 10)
-        if (bot->IsMoving() && !legChainDue)
+        if (IsMovingCompat(bot) && !legChainDue)
             return false;
 
     if (!AI_VALUE(bool, "can move around"))

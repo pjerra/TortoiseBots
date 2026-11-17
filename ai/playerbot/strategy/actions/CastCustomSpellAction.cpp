@@ -172,7 +172,7 @@ bool CastCustomSpellAction::Execute(Event& event)
         return true;
     }
 
-    if (bot->IsMoving())
+    if (IsMovingCompat(bot))
     {
         ai->StopMoving();
     }
@@ -206,7 +206,7 @@ bool CastCustomSpellAction::Execute(Event& event)
         else
         {
 
-            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(newItemId);
+            ItemPrototype const* proto = GetItemProtoByIdCompat(newItemId);
             replyArgs["%spell"] = ChatHelper::formatItem(proto);
         }
     }
@@ -738,7 +738,7 @@ bool CraftRandomItemAction::Execute(Event& event)
         if (!newItemId)
             continue;
 
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(newItemId);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(newItemId);
 
         if (!proto)
             continue;
@@ -772,7 +772,7 @@ bool DisenchantRandomItemAction::Execute(Event& event)
 
     items.reverse();
 
-    if (bot->IsMoving())
+    if (IsMovingCompat(bot))
     {
         ai->StopMoving();
     }
@@ -784,7 +784,7 @@ bool DisenchantRandomItemAction::Execute(Event& event)
 
     for (auto& item: items)
     {
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(item);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(item);
 
         if (!proto)
             continue;
@@ -1140,7 +1140,7 @@ bool GuildDisenchantServiceAction::Execute(Event& event)
     ItemQualifier itemQualifier(queued.itemId);
     // Cast on the exact queued stack, not by a chat link: a link with a
     // space in the item name never parsed to a bag item.
-    if (bot->IsMoving())
+    if (IsMovingCompat(bot))
         ai->StopMoving();
     if (bot->IsMounted())
         ai->Unmount();

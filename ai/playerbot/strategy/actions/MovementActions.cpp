@@ -1229,7 +1229,7 @@ bool MovementAction::HandleSpecialMovement(TravelPath& path)
 
             // Cast directly: the "cast" chat command read the spell id as a repeat
             // count after the bot link and never found the spell.
-            if (bot->IsMoving())
+            if (IsMovingCompat(bot))
                 ai->StopMoving();
 
             if (ai->CastSpell(nextPoint.entry, bot))
@@ -5236,7 +5236,7 @@ bool SetBehindTargetAction::isUseful()
 
     // Mirror isPossible/Execute (donor): while the mob attacks the bot or is
     // moving, set-behind cannot act, so do not count the streak either.
-    if ((target->GetVictim() && target->GetVictim()->getObjectGuid() == bot->getObjectGuid()) || target->IsMoving())
+    if ((target->GetVictim() && target->GetVictim()->getObjectGuid() == bot->getObjectGuid()) || IsMovingCompat(target))
         return false;
 
     // Issue #911: position only once in melee reach (donor shape); closing in
@@ -5509,7 +5509,7 @@ bool IdleWanderAction::isUseful()
         return false;
     // A bot already walking to its held prey is not standing still: never
     // turn that approach into a drift.
-    if (bot->IsMoving() && AI_VALUE(Unit*, "grind target"))
+    if (IsMovingCompat(bot) && AI_VALUE(Unit*, "grind target"))
         return false;
     return true;
 }

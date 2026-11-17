@@ -85,7 +85,7 @@ uint32 HasReagentsForValue::Calculate()
     {
         if (pSpellInfo->ReagentCount[i] > 0 && pSpellInfo->Reagent[i])
         {
-            const ItemPrototype* reqProto = sObjectMgr.GetItemPrototype(pSpellInfo->Reagent[i]);
+            const ItemPrototype* reqProto = GetItemProtoByIdCompat(pSpellInfo->Reagent[i]);
 
             uint32 count = AI_VALUE2(uint32, "item count", ChatHelper::formatItem(reqProto));
 

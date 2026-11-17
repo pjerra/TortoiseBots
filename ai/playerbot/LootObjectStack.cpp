@@ -136,7 +136,7 @@ static bool CollectCommonChestLoot(LootTemplateAccess const* access, std::vector
         }
         if (!row.itemid)
             return true;
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(row.itemid);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(row.itemid);
         if (!proto || proto->Quality > ITEM_QUALITY_NORMAL)
             return false;
         items.push_back(row.itemid);

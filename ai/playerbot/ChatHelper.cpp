@@ -389,7 +389,7 @@ std::vector<uint32> ChatHelper::parseItemsUnordered(const std::string& text, boo
         if (isNumeric(itemStr))
         {
             const uint32 itemID = std::stoi(itemStr);
-            if (!validate || sObjectMgr.GetItemPrototype(itemID) != nullptr)
+            if (!validate || GetItemProtoByIdCompat(itemID) != nullptr)
             {
                 itemIds.push_back(std::stoi(itemStr));
             }

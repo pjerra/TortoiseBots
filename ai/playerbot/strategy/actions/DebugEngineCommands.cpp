@@ -201,7 +201,7 @@ bool DebugAction::HandleStuck(Event& event, Player* requester, const std::string
     posOut << "Pos: " << botPos.getX() << "," << botPos.getY() << "," << botPos.getZ() << " (" << botPos.GetAreaName() << ")";
     ai->TellPlayer(requester, posOut.str());
 
-    bool isMoving = bot->IsMoving();
+    bool isMoving = IsMovingCompat(bot);
     ai->TellPlayer(requester, std::string("IsMoving: ") + (isMoving ? "yes" : "no"));
 
     bool isMounted = bot->IsMounted();

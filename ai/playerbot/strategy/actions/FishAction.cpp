@@ -511,7 +511,7 @@ bool FishAction::Execute(Event& event)
             return false;
     }
 
-    if (bot->IsMoving())
+    if (IsMovingCompat(bot))
     {
         ai->StopMoving();
         SetDuration(100);

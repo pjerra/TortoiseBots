@@ -28,7 +28,7 @@ namespace ai
     {
     public:
         CastCustomNcSpellAction(PlayerbotAI* ai, std::string name = "cast custom nc spell") : CastCustomSpellAction(ai, name) {}
-        virtual bool isUseful() override { return !bot->IsMoving(); }
+        virtual bool isUseful() override { return !IsMovingCompat(bot); }
         virtual std::string castString(WorldObject* target) override { return "castnc" +(target ? " "+ chat->formatWorldobject(target):""); }
     };
 

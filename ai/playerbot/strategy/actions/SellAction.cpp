@@ -261,7 +261,7 @@ bool SellAction::Sell(Player* requester, Item* item)
                 [owner](uint32_t parent) { return ai::KnownReagentsFor(owner, parent); },
                 [](uint32_t vendorItemId)
                 {
-                    ItemPrototype const* vendorProto = sObjectMgr.GetItemPrototype(vendorItemId);
+                    ItemPrototype const* vendorProto = GetItemProtoByIdCompat(vendorItemId);
                     return vendorProto && ItemUsageValue::IsItemSoldByAnyVendor(vendorProto) &&
                         !ItemUsageValue::IsItemSoldByAnyVendorButHasLimitedMaxCount(vendorProto);
                 }, kept);

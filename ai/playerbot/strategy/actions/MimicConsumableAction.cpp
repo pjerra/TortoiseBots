@@ -67,7 +67,7 @@ uint32_t MimicConsumableAction::ResolveBotItem(MimicPurpose purpose, uint32_t ma
 
 void MimicConsumableAction::RemoveConflictingAura(MimicPurpose purpose, uint32_t botItemId)
 {
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(botItemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(botItemId);
     if (!proto || !proto->Spells[0].SpellId)
         return;
     uint32_t mySpell = proto->Spells[0].SpellId;
@@ -79,7 +79,7 @@ void MimicConsumableAction::RemoveConflictingAura(MimicPurpose purpose, uint32_t
     {
         for (size_t i = 0; i < count; ++i)
         {
-            ItemPrototype const* other = sObjectMgr.GetItemPrototype(ladder[i].itemId);
+            ItemPrototype const* other = GetItemProtoByIdCompat(ladder[i].itemId);
             if (!other || !other->Spells[0].SpellId || other->Spells[0].SpellId == mySpell)
                 continue;
             if (bot->HasAura(other->Spells[0].SpellId))
@@ -134,7 +134,7 @@ void MimicConsumableAction::RemoveConflictingAura(MimicPurpose purpose, uint32_t
 
 bool MimicConsumableAction::ApplyWeaponImbue(uint32_t stoneItemId)
 {
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(stoneItemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(stoneItemId);
     if (!proto || !proto->Spells[0].SpellId)
         return false;
 
@@ -165,7 +165,7 @@ bool MimicConsumableAction::ApplyWeaponImbue(uint32_t stoneItemId)
     if (blunt != isWeight)
     {
         uint32_t level = bot->GetLevel();
-        proto = sObjectMgr.GetItemPrototype(blunt ? BestTierForLevel(WEIGHTSTONE_LADDER, level)
+        proto = GetItemProtoByIdCompat(blunt ? BestTierForLevel(WEIGHTSTONE_LADDER, level)
                                                  : BestTierForLevel(SHARPENING_LADDER, level));
         if (!proto || !proto->Spells[0].SpellId)
             return false;
@@ -238,7 +238,7 @@ static bool HasUseSpell(ItemPrototype const* proto)
 
 bool MimicConsumableAction::CastMimicItem(uint32_t botItemId, bool withEatEmote)
 {
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(botItemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(botItemId);
     // Broken custom items (no spell on the prototype) are skipped.
     if (!HasUseSpell(proto))
         return false;
@@ -346,7 +346,7 @@ bool MimicConsumableAction::Execute(Event& event)
             // daggers/swords like everyone else.
             if (resolution.singleItemId)
             {
-                ItemPrototype const* stoneProto = sObjectMgr.GetItemPrototype(resolution.singleItemId);
+                ItemPrototype const* stoneProto = GetItemProtoByIdCompat(resolution.singleItemId);
                 if (!stoneProto)
                     return false;
                 if (!ApplyWeaponImbue(resolution.singleItemId))
@@ -365,7 +365,7 @@ bool MimicConsumableAction::Execute(Event& event)
         }
         if (!resolution.singleItemId)
             return false;
-        ItemPrototype const* stoneProto = sObjectMgr.GetItemPrototype(resolution.singleItemId);
+        ItemPrototype const* stoneProto = GetItemProtoByIdCompat(resolution.singleItemId);
         if (!stoneProto)
             return false;
         if (TortoiseBots::IsOilEntry(resolution.singleItemId))
@@ -394,7 +394,7 @@ bool MimicConsumableAction::Execute(Event& event)
     if (!CastMimicItem(botItemId, eatEmote))
         return false;
 
-    ItemPrototype const* botProto = sObjectMgr.GetItemPrototype(botItemId);
+    ItemPrototype const* botProto = GetItemProtoByIdCompat(botItemId);
     Feedback(botProto ? botProto->Name1.c_str() : nullptr, silent);
     return true;
 }

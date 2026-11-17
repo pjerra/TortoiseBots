@@ -243,7 +243,7 @@ void AhBotService::EnsureVendorPricesLoaded()
     do
     {
         uint32_t itemId = res->Fetch()[0].GetUInt32();
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
         if (!proto || proto->Class == ITEM_CLASS_TRADE_GOODS || !proto->SellPrice)
             continue;
         m_vendorSellPrices[itemId] = proto->SellPrice;
@@ -491,7 +491,7 @@ bool AhBotService::StepSellOne()
         return false;
     }
 
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
     if (!proto)
         return true;
 
@@ -598,7 +598,7 @@ bool AhBotService::StepBuyOne()
     if (!pItem || pItem->GetCount() == 0)
         return true;
 
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(auction->itemTemplate);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(auction->itemTemplate);
     if (!proto)
         return true;
 

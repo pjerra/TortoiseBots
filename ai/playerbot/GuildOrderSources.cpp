@@ -626,7 +626,7 @@ SourcePlan PlanGuildOrderSources(Player* bot, uint32_t itemId, OrderType type, b
             for (uint32 e = 0; e < MAX_EFFECT_INDEX && !inputs.createsItem; ++e)
                 inputs.createsItem = craftSpell->Effect[e] == SPELL_EFFECT_CREATE_ITEM &&
                     craftSpell->EffectItemType[e] == itemId;
-            if (ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId))
+            if (ItemPrototype const* proto = GetItemProtoByIdCompat(itemId))
             {
                 inputs.itemOrderable = TortoiseBots::GuildOrders::IsOrderableItem(proto);
                 inputs.itemNeedsProfession = proto->RequiredSkill != 0;

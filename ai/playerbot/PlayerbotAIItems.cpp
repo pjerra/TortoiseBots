@@ -412,7 +412,7 @@ void PlayerbotAI::InventoryTellItems(Player* player, std::map<uint32, int> itemM
     std::list<ItemPrototype const*> items;
     for (std::map<uint32, int>::iterator i = itemMap.begin(); i != itemMap.end(); i++)
     {
-        items.push_back(sObjectMgr.GetItemPrototype(i->first));
+        items.push_back(GetItemProtoByIdCompat(i->first));
     }
 
     items.sort(compare_items);

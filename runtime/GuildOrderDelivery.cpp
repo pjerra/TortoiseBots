@@ -397,7 +397,7 @@ std::string OrderDisplayName(OrderRecord const& order)
 {
     if (order.type != OrderType::Enchant)
     {
-        if (ItemPrototype const* proto = sObjectMgr.GetItemPrototype(order.itemId))
+        if (ItemPrototype const* proto = GetItemProtoByIdCompat(order.itemId))
             return proto->Name1;
         return "?";
     }
@@ -803,7 +803,7 @@ private:
         uint32_t remaining = order->supplyCount;
         bool withdrawAttempted = false;
         bool emptyThisVisit = false;
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(order->supplyItemId);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(order->supplyItemId);
         uint32_t stackSize = proto ? proto->GetMaxStackSize() : 0;
         if (stackSize)
         {

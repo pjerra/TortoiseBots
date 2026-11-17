@@ -444,7 +444,7 @@ bool HandleOrderEnchantGive(ChatHandler* handler, Player* requester, std::string
     if (spell && (!catalogue.spellId || !reqSkill))
     {
         uint32_t recipeItem = ai::GuildOrderRecipeItemFor(spellId);
-        ItemPrototype const* recipeProto = recipeItem ? sObjectMgr.GetItemPrototype(recipeItem) : nullptr;
+        ItemPrototype const* recipeProto = recipeItem ? GetItemProtoByIdCompat(recipeItem) : nullptr;
         reqSkill = GuildOrders::EnchantReqSkillCombine(false, 0, recipeProto != nullptr,
             recipeProto ? recipeProto->RequiredSkillRank : 0);
     }
@@ -696,7 +696,7 @@ bool HandleOrderGive(ChatHandler* handler, Player* requester, std::string const&
         }
     }
 
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
     if (!proto)
     {
         OrderError(handler, "invalid", "Unknown item.");

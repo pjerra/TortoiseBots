@@ -162,7 +162,7 @@ uint32 MountValue::GetMountSpell(uint32 itemId)
     if (std::optional<uint32> collectionSpell = sMountMgr.GetMountSpellId(itemId))
         return *collectionSpell;
 
-    const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemId);
+    const ItemPrototype* proto = GetItemProtoByIdCompat(itemId);
 
     if (!proto)
         return 0;
@@ -278,7 +278,7 @@ bool MountValue::IsAllowedFor(Player* bot) const
     {
         auto itr = CollectionItemBySpell().find(spellId);
         if (itr != CollectionItemBySpell().end())
-            itemProto = sObjectMgr.GetItemPrototype(itr->second);
+            itemProto = GetItemProtoByIdCompat(itr->second);
     }
 
     // Spell-only mounts (class mounts, forms, donor spells) have no item to classify.

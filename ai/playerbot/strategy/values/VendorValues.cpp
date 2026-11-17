@@ -98,7 +98,7 @@ bool VendorHasUsefulItemValue::Calculate()
 
     for (auto vendorItem : vendorItems)
     {
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(vendorItem->item);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(vendorItem->item);
 
         ItemUsage usage = AI_VALUE2_LAZY(ItemUsage, "item usage", vendorItem->item);
 

@@ -310,7 +310,7 @@ namespace ai
         const bool cheat = ai->HasCheat(BotCheatMask::item);
         for (const uint32 itemId : itemIds)
         {
-            const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemId);
+            const ItemPrototype* proto = GetItemProtoByIdCompat(itemId);
             if (proto && (bot->GetLevel() >= proto->RequiredLevel))
             {
                 if (cheat || bot->HasItemCount(itemId, 1))

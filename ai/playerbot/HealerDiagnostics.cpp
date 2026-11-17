@@ -47,7 +47,7 @@ void State(std::ostringstream& out, PlayerbotAI* ai, Unit* target)
     out << std::fixed << std::setprecision(1)
         << "map=" << bot->GetMapId() << " instance=" << bot->GetInstanceId()
         << " mana=" << bot->GetPower(POWER_MANA) << "/" << bot->GetMaxPower(POWER_MANA)
-        << " moving=" << bot->IsMoving() << " combat=" << bot->IsInCombat()
+        << " moving=" << IsMovingCompat(bot) << " combat=" << bot->IsInCombat()
         << " casting=" << bot->IsNonMeleeSpellCasted(false)
         << " target=" << (target ? target->GetObjectGuid().GetCounter() : 0);
     MotionMaster* motion = bot->GetMotionMaster();

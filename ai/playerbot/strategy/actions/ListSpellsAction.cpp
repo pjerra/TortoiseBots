@@ -155,7 +155,7 @@ std::list<std::pair<uint32, std::string> > ListSpellsAction::GetSpellList(std::s
             uint32 reagentsRequired = pSpellInfo->ReagentCount[x];
             if (itemid)
             {
-                ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemid);
+                ItemPrototype const* proto = GetItemProtoByIdCompat(itemid);
                 if (proto)
                 {
                     if (first) { materials << ": "; first = false; }
@@ -190,7 +190,7 @@ std::list<std::pair<uint32, std::string> > ListSpellsAction::GetSpellList(std::s
             {
                 if (pSpellInfo->Effect[i] == SPELL_EFFECT_CREATE_ITEM)
                 {
-                    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(pSpellInfo->EffectItemType[i]);
+                    ItemPrototype const* proto = GetItemProtoByIdCompat(pSpellInfo->EffectItemType[i]);
                     if (proto)
                     {
                         if (craftCount)

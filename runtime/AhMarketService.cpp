@@ -510,7 +510,7 @@ bool AhMarketService::BuyAuctionCandidate(AuctionEntry* auction, AuctionHouseObj
     if (sRandomItemMgr.IsTransmogClone(auction->itemTemplate))
         return false;
 
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(auction->itemTemplate);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(auction->itemTemplate);
     if (!proto)
         return false;
 

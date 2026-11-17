@@ -105,6 +105,19 @@ inline ItemPrototype const* GetItemTemplateCompat(Item const* item)
     return item ? item->GetProto() : nullptr;
 }
 
+// The item template by entry, in the spelling the shared bot code uses on both cores (the ForeverCore half is in
+// forever-compat-shim.h). This is the core's own lookup.
+inline ItemPrototype const* GetItemProtoByIdCompat(uint32 entry)
+{
+    return entry ? sObjectMgr.GetItemPrototype(entry) : nullptr;
+}
+
+// A unit's movement state, in the spelling the shared bot code uses on both cores. On this core it is the member.
+inline bool IsMovingCompat(Unit const* unit)
+{
+    return unit && unit->IsMoving();
+}
+
 // === Type renames ===
 // Mature strategy code uses GenericTransport for the core's ordinary
 // Transport type. Keep the alias local to the module; it is not a vehicle API.

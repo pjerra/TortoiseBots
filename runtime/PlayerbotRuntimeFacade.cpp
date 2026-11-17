@@ -481,7 +481,7 @@ InventoryResult RandomBotFacade::CanEquipUnseenItem(Player* player, uint8 slot, 
     if (!player)
         return EQUIP_ERR_ITEM_NOT_FOUND;
 
-    ItemPrototype const* prototype = sObjectMgr.GetItemPrototype(item);
+    ItemPrototype const* prototype = GetItemProtoByIdCompat(item);
     // swap=true: the caller compares old-vs-new itself and replaces in place; with
     // swap=false CanEquipItem rejects an occupied slot (e.g. starter MH weapon)
     // and every upgrade candidate dies there.

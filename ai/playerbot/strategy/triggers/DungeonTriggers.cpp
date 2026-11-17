@@ -316,7 +316,7 @@ bool ItemReadyTrigger::IsActive()
     // Check if the bot has the item or if it has cheats enabled
     if (bot->HasItemCount(itemID, 1) || ai->HasCheat(BotCheatMask::item))
     {
-        const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemID);
+        const ItemPrototype* proto = GetItemProtoByIdCompat(itemID);
         if (proto)
         {
             // Check if the item is in cooldown

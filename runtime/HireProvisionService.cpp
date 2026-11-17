@@ -1913,7 +1913,7 @@ bool HireProvisionService::EquipHireGearSet(Player* bot, PlayerbotAI* ai, uint8_
             continue;
         if (ilvlCap)
         {
-            ItemPrototype const* rowProto = sObjectMgr.GetItemPrototype(row->itemId);
+            ItemPrototype const* rowProto = GetItemProtoByIdCompat(row->itemId);
             if (rowProto && !BotGear::RowAllowed(rowProto->ItemLevel, ilvlCap))
             {
                 if (cappedSlots)
@@ -1938,7 +1938,7 @@ bool HireProvisionService::EquipHireGearSet(Player* bot, PlayerbotAI* ai, uint8_
             if (sRandomItemMgr.IsTransmogClone(row->itemId))
                 continue;
             // A 2H main hand cannot be equipped while the offhand is held.
-            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(row->itemId);
+            ItemPrototype const* proto = GetItemProtoByIdCompat(row->itemId);
             if (slot == EQUIPMENT_SLOT_MAINHAND && proto && proto->InventoryType == INVTYPE_2HWEAPON)
                 if (Item* offhand = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, EQUIPMENT_SLOT_OFFHAND))
                     bot->DestroyItem(offhand->GetBagSlot(), offhand->GetSlot(), true);

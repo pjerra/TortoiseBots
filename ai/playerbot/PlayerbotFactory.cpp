@@ -445,7 +445,7 @@ void PlayerbotFactory::InitBandages()
     else if (firstAid >= 75) itemId = 3531;
     else if (firstAid >= 50) itemId = 3530;
     else if (firstAid >= 20) itemId = 2581;
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
     if (!proto)
         return;
     uint32 have = bot->GetItemCount(itemId);
@@ -555,7 +555,7 @@ void PlayerbotFactory::AddConsumables()
          std::vector<uint32> const& family = wantWizard ? wizardFamily : manaFamily;
          uint32 target = 0;
          for (uint32 oilId : family)
-            if (ItemPrototype const* proto = sObjectMgr.GetItemPrototype(oilId))
+            if (ItemPrototype const* proto = GetItemProtoByIdCompat(oilId))
                if (proto->RequiredLevel <= level)
                   target = oilId;
          if (target)
@@ -1363,7 +1363,7 @@ void PlayerbotFactory::QuerySeedCandidates(Player* bot, uint32 specId, uint8 slo
             ids.insert(ids.begin(), newItems.begin(), newItems.end());
         for (auto id : ids)
         {
-            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(id);
+            ItemPrototype const* proto = GetItemProtoByIdCompat(id);
             if (!proto)
                 continue;
             if (proto->ItemLevel > maxItemLevel)
@@ -1572,8 +1572,8 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
 
         std::sort(itemIds.begin(), itemIds.end(), [specId](int a, int b)
             {
-                ItemPrototype const* proto1 = sObjectMgr.GetItemPrototype(a);
-                ItemPrototype const* proto2 = sObjectMgr.GetItemPrototype(b);
+                ItemPrototype const* proto1 = GetItemProtoByIdCompat(a);
+                ItemPrototype const* proto2 = GetItemProtoByIdCompat(b);
                 return proto1->Quality * proto1->ItemLevel <= proto2->Quality * proto2->ItemLevel;
             });
 
@@ -1760,7 +1760,7 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
                     uint32 newItemId = ids[index];
 
                     // filter item level
-                    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(newItemId);
+                    ItemPrototype const* proto = GetItemProtoByIdCompat(newItemId);
                     if (!proto)
                         continue;
                     if (sRandomItemMgr.IsForbiddenBotGear(newItemId))
@@ -1916,8 +1916,8 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
                             if (baseCompareA != baseCompareB)
                                 return baseCompareA > baseCompareB;
 
-                            ItemPrototype const* proto1 = sObjectMgr.GetItemPrototype(a);
-                            ItemPrototype const* proto2 = sObjectMgr.GetItemPrototype(b);
+                            ItemPrototype const* proto1 = GetItemProtoByIdCompat(a);
+                            ItemPrototype const* proto2 = GetItemProtoByIdCompat(b);
 
                             baseCompareA += proto1->Quality * proto1->ItemLevel;
                             baseCompareB += proto2->Quality * proto2->ItemLevel;
@@ -1989,7 +1989,7 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
                         if (pairItem && pairItem->GetEntry() == newItemId)
                             continue;
                     }
-                    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(newItemId);
+                    ItemPrototype const* proto = GetItemProtoByIdCompat(newItemId);
                     if (!proto)
                         continue;
                     // QuerySeedCandidates only stops its level descent once one
@@ -2203,7 +2203,7 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
                 for (uint32 attempt = 0; attempt < passingIds.size() && !found; ++attempt)
                 {
                     uint32 newItemId = passingIds[attempt];
-                    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(newItemId);
+                    ItemPrototype const* proto = GetItemProtoByIdCompat(newItemId);
                     if (proto)
                     {
                         uint32 newStatValue = sRandomItemMgr.GetLiveStatWeight(bot, newItemId, specId);
@@ -2361,7 +2361,7 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
             {
                 for (uint32 fallbackId : ids)
                 {
-                    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(fallbackId);
+                    ItemPrototype const* proto = GetItemProtoByIdCompat(fallbackId);
                     if (!proto)
                         continue;
                     if (sRandomItemMgr.IsForbiddenBotGear(fallbackId))
@@ -2408,7 +2408,7 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
                 for (size_t idx : RankEmptySlotCandidates(gates, cands))
                 {
                     uint32 const itemId = cands[idx].itemId;
-                    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+                    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
                     uint16 eDest = 0;
                     if (RandomBotFacade::CanEquipUnseenItem(bot, slot, eDest, itemId) != EQUIP_ERR_OK)
                         continue;
@@ -2501,7 +2501,7 @@ void PlayerbotFactory::InitStarterBags()
     }
     if (bot->GetClass() != CLASS_WARLOCK)
         return;
-    ItemPrototype const* soulProto = sObjectMgr.GetItemPrototype(STARTER_SOUL_BAG);
+    ItemPrototype const* soulProto = GetItemProtoByIdCompat(STARTER_SOUL_BAG);
     if (!soulProto)
         return;
     for (uint8 slot = INVENTORY_SLOT_BAG_START; slot < INVENTORY_SLOT_BAG_END; ++slot)
@@ -2539,7 +2539,7 @@ void PlayerbotFactory::InitLevelBags()
     else if (level >= 30) { tierBag = 10050; tierSlots = 12; }
     else if (level >= 20) { tierBag = 4497; tierSlots = 10; }
     else if (level >= 10) { tierBag = 4498; tierSlots = 8; }
-    ItemPrototype const* tierProto = sObjectMgr.GetItemPrototype(tierBag);
+    ItemPrototype const* tierProto = GetItemProtoByIdCompat(tierBag);
     if (!tierProto)
         return;
     for (uint8 slot = INVENTORY_SLOT_BAG_START; slot < INVENTORY_SLOT_BAG_END; ++slot)
@@ -3812,7 +3812,7 @@ void PlayerbotFactory::InitAmmo()
             ? ItemSubclassQuiver::ITEM_SUBCLASS_AMMO_POUCH
             : ItemSubclassQuiver::ITEM_SUBCLASS_QUIVER;
         uint32 quiverId = sRandomItemMgr.GetQuiver(level, wantContainer);
-        ItemPrototype const* bestQuiver = quiverId ? sObjectMgr.GetItemPrototype(quiverId) : nullptr;
+        ItemPrototype const* bestQuiver = quiverId ? GetItemProtoByIdCompat(quiverId) : nullptr;
         if (bestQuiver)
         {
             bool haveGood = false;
@@ -3931,7 +3931,7 @@ void PlayerbotFactory::InitAmmo()
     // (Issue #219). Verify against the equipped weapon and resync.
     if (entry)
     {
-        ItemPrototype const* ammoProto = sObjectMgr.GetItemPrototype(entry);
+        ItemPrototype const* ammoProto = GetItemProtoByIdCompat(entry);
         if (!ammoProto || ammoProto->Class != ITEM_CLASS_PROJECTILE || ammoProto->SubClass != subClass)
             entry = 0;
     }
@@ -4010,7 +4010,7 @@ void PlayerbotFactory::InitThrown()
     uint32 entry = sRandomItemMgr.GetAmmo(level, ITEM_SUBCLASS_THROWN);
     if (!entry)
         return;
-    ItemPrototype const* tierProto = sObjectMgr.GetItemPrototype(entry);
+    ItemPrototype const* tierProto = GetItemProtoByIdCompat(entry);
     if (!tierProto)
         return;
     // The ranged slot is the weapon: retire strictly worse spares from the
@@ -4128,7 +4128,7 @@ void PlayerbotFactory::InitMounts()
     {
         for (auto const& [itemId, spellId] : CollectionMounts())
         {
-            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+            ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
             SpellEntry const* spellInfo = sServerFacade.LookupSpellInfo(spellId);
 
             if (!proto || !spellInfo || MountValue::GetSpeed(spellId) == 0)
@@ -4213,7 +4213,7 @@ void PlayerbotFactory::InitPotions()
             continue;
         }
 
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
         if (!proto) continue;
 
         uint32 maxCount = proto->GetMaxStackSize();
@@ -4232,7 +4232,7 @@ void PlayerbotFactory::InitPotions()
         static uint32 const DARK_RUNE_ITEM = 20520;
         if (bot->GetItemCount(DARK_RUNE_ITEM) == 0)
         {
-            if (ItemPrototype const* runeProto = sObjectMgr.GetItemPrototype(DARK_RUNE_ITEM))
+            if (ItemPrototype const* runeProto = GetItemProtoByIdCompat(DARK_RUNE_ITEM))
                 bot->StoreNewItemInInventorySlot(DARK_RUNE_ITEM, runeProto->GetMaxStackSize() / 2);
         }
     }
@@ -4270,7 +4270,7 @@ void PlayerbotFactory::InitFood()
             sLog.outDetail("No food (category %d) available for bot %s (%d level)", category, bot->GetName(), bot->GetLevel());
             continue;
         }
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
         if (!proto) continue;
 
         // Fresh seeds carry level-1 starter food; the old keep-if-any rule
@@ -4311,7 +4311,7 @@ void PlayerbotFactory::InitPoolRations()
             sLog.outDetail("No food (category %d) available for bot %s (%d level)", category, bot->GetName(), bot->GetLevel());
             continue;
         }
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
         if (!proto) continue;
 
         // Same tier rule as the companion path, but a full stack: the
@@ -4420,7 +4420,7 @@ void PlayerbotFactory::InitReagents()
 
     for (std::list<uint32>::iterator i = items.begin(); i != items.end(); ++i)
     {
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(*i);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(*i);
         if (!proto)
         {
             sLog.outError("No reagent (ItemId %d) found for bot %d (Class:%d)", *i, bot->GetGUIDLow(), bot->GetClass());
@@ -4466,7 +4466,7 @@ void PlayerbotFactory::InitReagents()
         {
             if (totem && !bot->HasItemCount(totem, 1))
             {
-                ItemPrototype const* proto = sObjectMgr.GetItemPrototype(totem);
+                ItemPrototype const* proto = GetItemProtoByIdCompat(totem);
                 if (!proto)
                 {
                     sLog.outError("No totem (ItemId %d) found for bot %d (Class:%d)", totem, bot->GetGUIDLow(), bot->GetClass());
@@ -4520,7 +4520,7 @@ Item* PlayerbotFactory::StoreItem(uint32 itemId, uint32 count, bool ignoreCount)
             return nullptr;
     }
 
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
     ItemPosCountVec sDest;
     InventoryResult msg = bot->CanStoreNewItem(INVENTORY_SLOT_BAG_0, NULL_SLOT, sDest, itemId, count);
     if (msg != EQUIP_ERR_OK)

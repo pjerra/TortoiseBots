@@ -3692,7 +3692,7 @@ bool HandleScout(ChatHandler* handler, char const* args)
     {
         handler->PSendSysMessage("%s", RemoteCommander::ScoutPosLine(request.id,
             caller->GetPositionX(), caller->GetPositionY(), caller->GetPositionZ(),
-            caller->IsMoving(), caller->IsInWater(), caller->IsSwimming()).c_str());
+            IsMovingCompat(caller), caller->IsInWater(), caller->IsSwimming()).c_str());
         return true;
     }
 
@@ -6068,7 +6068,7 @@ static bool CommanderUse(ChatHandler* handler, CommanderOrder const& order, Play
     PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot);
     if (!CommanderTaskGuard(handler, intent, bot, ai, false))
         return true;
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(request.itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(request.itemId);
     if (!proto)
     {
         SendActionError(handler, intent, RemoteCommander::kCodeInvalid, "No item with that id exists.");
@@ -9810,7 +9810,7 @@ void ReadGuardFacts(Player* lead, std::vector<Player*> const& bots, TortoiseBots
             fact.fleeRoomYd = FearRoomFor(attacker, fact.creatureType, fact.ccImmune, f);
             fact.engaged = true;
             bool const melee = attacker->CanReachWithMeleeAutoAttack(victim);
-            fact.hitting = melee || (!attacker->IsMoving() && attacker->IsNonMeleeSpellCasted(false));
+            fact.hitting = melee || (!IsMovingCompat(attacker) && attacker->IsNonMeleeSpellCasted(false));
             fact.castingAtRange = fact.hitting && !melee;
             if (fact.castingAtRange && fact.distLead > TortoiseBots::DungeonRun::kGuardNoWalkYd)
                 fact.campIdle = IdleHostilesNear(anchor, attacker, TortoiseBots::DungeonRun::kGuardCampYd);
@@ -11815,7 +11815,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
             GridMapLiquidStatus const status = map->GetTerrain()->getLiquidStatus(x, y, z, MAP_ALL_LIQUIDS, nullptr);
             return status == LIQUID_MAP_IN_WATER || status == LIQUID_MAP_UNDER_WATER;
         };
-    f.leadMoving = lead->IsMoving(); // an exact waypoint's stand-still proof (DungeonRunPolicy.h ExactWalkTo)
+    f.leadMoving = IsMovingCompat(lead); // an exact waypoint's stand-still proof (DungeonRunPolicy.h ExactWalkTo)
     // The walk after a rest (DungeonRun::RestWalkResendDue): a rest state confirms the stall, a cast defers it.
     f.leadResting = HasMealAura(lead) || lead->GetStandState() != UNIT_STAND_STATE_STAND;
     f.leadCasting = lead->IsNonMeleeSpellCasted(true, false, true);
@@ -13329,7 +13329,7 @@ void AddPlayerAttackers(Player* lead, std::vector<Player*> const& bots, std::vec
             fact.fleeRoomYd = FearRoomFor(attacker, fact.creatureType, fact.ccImmune, f);
             fact.engaged = true;
             bool const melee = attacker->CanReachWithMeleeAutoAttack(player);
-            fact.hitting = melee || (!attacker->IsMoving() && attacker->IsNonMeleeSpellCasted(false));
+            fact.hitting = melee || (!IsMovingCompat(attacker) && attacker->IsNonMeleeSpellCasted(false));
             fact.castingAtRange = fact.hitting && !melee;
             if (fact.castingAtRange && fact.distLead > TortoiseBots::DungeonRun::kGuardNoWalkYd)
                 fact.campIdle = IdleHostilesNear(anchor, attacker, TortoiseBots::DungeonRun::kGuardCampYd);
@@ -13445,7 +13445,7 @@ TortoiseBots::PlayerLed::Anchor ReadPlayerLedAnchor(Player* commander, std::vect
     a.alive = commander->IsAlive();
     a.ghost = commander->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST);
     bool const moved = TortoiseBots::PlayerLed::MovedSince(pl, a.x, a.y, a.z);
-    a.moving = moved || commander->IsMoving();
+    a.moving = moved || IsMovingCompat(commander);
     a.partyInCombat = a.alive && commander->IsInCombat();
     for (Player* bot : bots)
     {
@@ -16337,7 +16337,7 @@ static void FillCommanderMapData(RemoteCommander::Binding const& binding, Player
             extra.cast = SpellNameOf(member.casting);
         extra.cc = CommanderTelemetry::CcKind(bot->HasUnitState(UNIT_STAT_STUNNED), bot->HasUnitState(UNIT_STAT_CONFUSED),
             bot->HasUnitState(UNIT_STAT_FLEEING), bot->HasUnitState(UNIT_STAT_ROOT));
-        extra.moving = bot->IsMoving();
+        extra.moving = IsMovingCompat(bot);
         if (member.casting)
             extra.castTarget = CurrentSpellTargetGuid(bot);
         if (bot->IsAlive() && !bot->IsInCombat())
@@ -17778,7 +17778,7 @@ std::string FormatUseLockError(Player* bot, GameObject* go)
     RemoteCommander::LockFacts const facts = GoLockFacts(bot, go);
     if (facts.keyItem > 0 && !facts.hasKey)
     {
-        if (ItemPrototype const* proto = sObjectMgr.GetItemPrototype(facts.keyItem))
+        if (ItemPrototype const* proto = GetItemProtoByIdCompat(facts.keyItem))
             return std::string("Locked: needs ") + proto->Name1;
         return "Locked: needs key";
     }

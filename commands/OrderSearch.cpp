@@ -320,7 +320,7 @@ bool HandleOrderSearch(ChatHandler* handler, Player* requester, Player* bot, std
     results.reserve(scored.size());
     for (ScoredRow const& scoredRow : scored)
     {
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(scoredRow.row->itemId);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(scoredRow.row->itemId);
         if (!proto)
             continue;
         ResultRow result;
@@ -351,7 +351,7 @@ bool HandleOrderSearch(ChatHandler* handler, Player* requester, Player* bot, std
     handler->PSendSysMessage("TBM:ORDER_ITEMS_BEGIN|%u", static_cast<uint32_t>(results.size()));
     for (ResultRow const& result : results)
     {
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(result.row->itemId);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(result.row->itemId);
         if (!proto)
             continue;
         TortoiseBots::GuildOrders::SourcePlan const& plan = result.plan;

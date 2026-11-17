@@ -226,7 +226,7 @@ bool CastSpellAction::Execute(Event& event)
                 continue;
 
             uint32 itemId = pSpellInfo->EffectItemType[0];
-            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+            ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
             if (!proto)
                 continue;
 
@@ -664,7 +664,7 @@ bool CastBuffSpellAction::isUseful()
         // down and the follow row owns the tick. Instant buffs still fire
         // (cast on the run, movement untouched); combat rows are untouched.
         Player* master = ai->GetMaster();
-        if (master && master->IsMoving() && bot->GetGroup() &&
+        if (master && IsMovingCompat(master) && bot->GetGroup() &&
             (ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) ||
                 ai->HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT)))
         {
@@ -1286,7 +1286,7 @@ bool CastItemTargetAction::IsTargetValid(Unit* target)
         if (itemAuraCheck)
         {
             const uint32 itemId = GetItemId();
-            const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemId);
+            const ItemPrototype* proto = GetItemProtoByIdCompat(itemId);
             if (proto)
             {
                 for (uint8 i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
@@ -1314,7 +1314,7 @@ bool CastItemTargetAction::IsTargetValid(Unit* target)
 
 bool CastItemTargetAction::isUseful()
 {
-    const ItemPrototype* proto = sObjectMgr.GetItemPrototype(GetItemId());
+    const ItemPrototype* proto = GetItemProtoByIdCompat(GetItemId());
     if (proto)
     {
         std::set<uint32>& skipSpells = AI_VALUE(std::set<uint32>&, "skip spells list");
@@ -1345,7 +1345,7 @@ bool CastItemTargetAction::isPossible()
     if (!itemId)
         return false;
 
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
 
     if (!proto)
         return false;
@@ -1386,7 +1386,7 @@ bool CastItemTargetAction::Execute(Event& event)
 {
     uint32 itemId = GetItemId();
     Unit* target = GetTarget();
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
 
     if (!proto)
         return false;
@@ -1464,7 +1464,7 @@ bool CastItemTargetAction::Execute(Event& event)
 
 bool CastItemTargetAction::HasSpellCooldown(uint32 itemId)
 {
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
 
     if (!proto)
         return false;

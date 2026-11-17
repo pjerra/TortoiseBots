@@ -239,7 +239,7 @@ bool PatchwerkSoakStageAction::Execute(Event& event)
         return ai->DoSpecificAction(stance, event, true);
     if (bot->GetDistance(mainTank) <= 1.0f && bot->IsWithinLOSInMap(mainTank, true))
     {
-        if (bot->IsMoving()) ai->StopMoving();
+        if (IsMovingCompat(bot)) ai->StopMoving();
         return true;
     }
     // A friendly rendezvous, never an Attack/Chase of an idle boss. Use the

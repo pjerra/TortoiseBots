@@ -183,7 +183,7 @@ inline uint32_t SnapshotCraftSpell(Player* bot, SupplySnapshot& snapshot, uint32
 
 bool IsUnlimitedVendorItem(uint32_t itemId)
 {
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
     return proto && ItemUsageValue::IsItemSoldByAnyVendor(proto) &&
         !ItemUsageValue::IsItemSoldByAnyVendorButHasLimitedMaxCount(proto);
 }
@@ -1162,7 +1162,7 @@ GuildOrder GuildOrderValue::Calculate()
     }
     order.itemId = stored->itemId;
     order.amount = stored->amount;
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(stored->itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(stored->itemId);
     order.target = proto ? proto->Name1 : std::to_string(stored->itemId);
     return order;
 }
@@ -1438,7 +1438,7 @@ uint32 ai::GuildOrderCraftReagentFor(PlayerbotAI* ai, Player* bot, uint32 itemId
         },
         [&](uint32 reagentId)
         {
-            ItemPrototype const* reagentProto = sObjectMgr.GetItemPrototype(reagentId);
+            ItemPrototype const* reagentProto = GetItemProtoByIdCompat(reagentId);
             return reagentProto && ItemUsageValue::IsItemSoldByAnyVendor(reagentProto) &&
                 !ItemUsageValue::IsItemSoldByAnyVendorButHasLimitedMaxCount(reagentProto);
         },
@@ -1478,7 +1478,7 @@ double ai::GuildOrderCraftHardestReagentKills(PlayerbotAI* ai, Player* bot, uint
         uint32 have = ai->GetInventoryItemsCountWithId(reagentId);
         if (have >= need)
             continue;
-        ItemPrototype const* reagentProto = sObjectMgr.GetItemPrototype(reagentId);
+        ItemPrototype const* reagentProto = GetItemProtoByIdCompat(reagentId);
         if (reagentProto && ItemUsageValue::IsItemSoldByAnyVendor(reagentProto) &&
             !ItemUsageValue::IsItemSoldByAnyVendorButHasLimitedMaxCount(reagentProto))
             continue;

@@ -614,7 +614,7 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
         // combat wake-up above: cheap checks first, fires once (standing
         // drops the aura), the follow row owns the next tick.
         if (aiInternalUpdateDelay > 0 && !isWaiting && bot->IsSittingDown() &&
-            HasSeatedAura(bot) && master && master->IsInWorld() && master->IsMoving() &&
+            HasSeatedAura(bot) && master && master->IsInWorld() && IsMovingCompat(master) &&
             (HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) ||
                 HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT)) &&
             ai::FollowOverridesDowntime(sServerFacade.getDistance2d(bot, master), GetRange("follow")))
@@ -798,7 +798,7 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
                     break;
                 }
                 uint32 ammoId = bot->GetUInt32Value(PLAYER_AMMO_ID);
-                ItemPrototype const* ammoProto = ammoId ? sObjectMgr.GetItemPrototype(ammoId) : nullptr;
+                ItemPrototype const* ammoProto = ammoId ? GetItemProtoByIdCompat(ammoId) : nullptr;
                 if (wantSub && (!ammoProto || ammoProto->Class != ITEM_CLASS_PROJECTILE || ammoProto->SubClass != wantSub))
                     ammoMismatch = true;
             }
@@ -1194,7 +1194,7 @@ void PlayerbotAI::UpdateFaceTarget(uint32 elapsed, bool minimal)
         if (IsStateActive(BotState::BOT_STATE_COMBAT))
         {
             // Don't update facing if bot is moving
-            if (!sServerFacade.isMoving(bot) && !bot->IsMoving())
+            if (!sServerFacade.isMoving(bot) && !IsMovingCompat(bot))
             {
                 AiObjectContext* context = GetAiObjectContext();
                 Unit* target = AI_VALUE(Unit*, "current target");
@@ -1693,7 +1693,7 @@ void PlayerbotAI::RefillPoolRations()
         uint32 wantId = sRandomItemMgr.GetFood(bot->GetLevel(), category, bot->GetGUIDLow());
         if (!wantId)
             continue;
-        ItemPrototype const* wantProto = sObjectMgr.GetItemPrototype(wantId);
+        ItemPrototype const* wantProto = GetItemProtoByIdCompat(wantId);
         if (!wantProto)
             continue;
         // Stale lower tier in the bags: drop it so the current tier is the
@@ -1732,7 +1732,7 @@ bool PlayerbotAI::EnsureCheatItem(uint32 itemId, uint32 count, bool requireCheat
         return true;
     if (requireCheat && !HasCheat(BotCheatMask::item))
         return false;
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
     if (!proto)
         return false;
     uint32 have = bot->GetItemCount(itemId);
@@ -4031,7 +4031,7 @@ void PlayerbotAI::UpdatePartyFlight(Player* master, Group* group)
                         }
                     }
 
-                    if (!bot->IsMoving() || nowMs - m_partyFlightMoveMs >= 1000)
+                    if (!IsMovingCompat(bot) || nowMs - m_partyFlightMoveMs >= 1000)
                     {
                         m_partyFlightMoveMs = nowMs;
                         // The flight-master walk, checked like the portal walk

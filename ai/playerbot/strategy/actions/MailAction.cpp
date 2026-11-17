@@ -126,7 +126,7 @@ public:
             {
                 Item* item = mailOwner->GetMItem(i->item_guid);
                 int count = item ? item->GetCount() : 1;
-                ItemPrototype const *proto = sObjectMgr.GetItemPrototype(i->item_template);
+                ItemPrototype const *proto = GetItemProtoByIdCompat(i->item_template);
                 if (proto)
                 {
                     sPlayerbotAIConfig.logEvent(ai, "MailAction", proto->Name1, std::to_string(proto->ItemId));
@@ -207,7 +207,7 @@ public:
             std::list<uint32> guids;
             for (MailItemInfoVec::iterator i = mail->items.begin(); i != mail->items.end(); ++i)
             {
-                ItemPrototype const* proto = sObjectMgr.GetItemPrototype(i->item_template);
+                ItemPrototype const* proto = GetItemProtoByIdCompat(i->item_template);
                 if (proto)
                     guids.push_back(i->item_guid);
             }

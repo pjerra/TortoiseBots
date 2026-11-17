@@ -330,7 +330,7 @@ static void WanderOnEmptyPick(PlayerbotAI* ai, Player* bot)
 {
     AiObjectContext* context = ai->GetAiObjectContext();
     if (ai->HasRealPlayerMaster() || !sRandomBotFacade.IsFreeBot(bot) || bot->InBattleGround() ||
-        bot->IsInCombat() || !bot->IsAlive() || bot->IsTaxiFlying() || bot->GetTransport() || bot->IsMoving() ||
+        bot->IsInCombat() || !bot->IsAlive() || bot->IsTaxiFlying() || bot->GetTransport() || IsMovingCompat(bot) ||
         AI_VALUE2(time_t, "manual time", "empty pick wander at") + 20 > time(0))
         return;
 
@@ -2717,12 +2717,12 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
         std::string orderTarget = order.target;
         if (mailRecord->supplyItemId)
         {
-            if (ItemPrototype const* supplyProto = sObjectMgr.GetItemPrototype(mailRecord->supplyItemId))
+            if (ItemPrototype const* supplyProto = GetItemProtoByIdCompat(mailRecord->supplyItemId))
                 orderTarget = supplyProto->Name1;
         }
         else if (order.IsCraftOrder() && orderFarmItem)
         {
-            if (ItemPrototype const* farmProto = sObjectMgr.GetItemPrototype(orderFarmItem))
+            if (ItemPrototype const* farmProto = GetItemProtoByIdCompat(orderFarmItem))
                 orderTarget = farmProto->Name1;
         }
 
@@ -2857,7 +2857,7 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
                 SetFarmZone(bot->GetGUIDLow(), farmZoneId, plan.zones[pick].chance, uint32_t(pick), itemId);
             }
 
-            if (ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId))
+            if (ItemPrototype const* proto = GetItemProtoByIdCompat(itemId))
                 orderTarget = proto->Name1;
 
             // Only entries the planner accepts for this bot in the planned

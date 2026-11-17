@@ -68,7 +68,7 @@ namespace ai
             facts.isMage = bot->GetClass() == CLASS_MAGE;
             facts.requesterGrouped = requester && requester->IsInSameRaidWith(bot);
             ai::PortalCastDecision decision = ai::DecidePortalCast(facts, spellId, bot->HasSpell(spellId),
-                bot->HasItemCount(ai::PortalRuneItemId(), 1), bot->IsMoving());
+                bot->HasItemCount(ai::PortalRuneItemId(), 1), IsMovingCompat(bot));
             if (decision.refusal != ai::PortalRefusal::None)
             {
                 ai->TellPlayer(requester, std::string(ai::PortalRefusalText(decision.refusal)));

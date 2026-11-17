@@ -677,7 +677,7 @@ bool StoreLootAction::Execute(Event& event)
         {
             if (!TortoiseBots::RemoteCommander::LootItemWanted(orderedItem, itemid))
                 continue;
-            ItemPrototype const* orderedProto = sObjectMgr.GetItemPrototype(itemid);
+            ItemPrototype const* orderedProto = GetItemProtoByIdCompat(itemid);
             if (!orderedProto || (orderedProto->MaxCount > 0 && bot->HasItemCount(itemid, orderedProto->MaxCount, true)))
                 continue;
         }
@@ -814,7 +814,7 @@ bool StoreLootAction::IsLootAllowed(ItemQualifier& itemQualifier, PlayerbotAI *a
 {
     AiObjectContext *context = ai->GetAiObjectContext();
 
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemQualifier.GetId());
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemQualifier.GetId());
     if (!proto)
         return false;
 
@@ -938,7 +938,7 @@ namespace
         if (entry.mincountOrRef <= 0 || entry.chance <= 0.0f || entry.needs_quest)
             return;
 
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(entry.itemid);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(entry.itemid);
         if (!proto || (proto->Quality != ITEM_QUALITY_UNCOMMON && proto->Quality != ITEM_QUALITY_RARE))
             return;
 

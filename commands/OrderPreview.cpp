@@ -157,7 +157,7 @@ bool PreviewAhListed(Player* bot, uint32_t itemId)
 
 bool PreviewVendorUnlimited(uint32_t itemId)
 {
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
     return proto && ::ai::ItemUsageValue::IsItemSoldByAnyVendor(proto) &&
         !::ai::ItemUsageValue::IsItemSoldByAnyVendorButHasLimitedMaxCount(proto);
 }
@@ -308,7 +308,7 @@ bool HandleOrderPreview(ChatHandler* handler, Player* requester, std::string con
         SendActionError(handler, "order", "forbidden", "Your guild rank may not give orders.");
         return true;
     }
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
     if (!proto)
     {
         SendActionError(handler, "order", "invalid", "Unknown item.");

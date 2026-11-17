@@ -59,7 +59,7 @@ EntryQuestRelationMap EntryQuestRelationMapValue::Calculate()
 				uint32 itemId = quest->ReqItemId[objective];
 				while (itemId)
 				{
-					ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+					ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
 
 					if (proto)
 					{
@@ -573,7 +573,7 @@ bool NeedQuestObjectiveValue::CanGetItemSomewhere(const uint32 itemId, const uin
     if (GAI_VALUE2(std::list<int32>, "item vendor list", itemId).empty()) //Can not get it from vendor.
         return true;
 
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
 
     if (!proto)
         return true;
@@ -654,7 +654,7 @@ bool CanUseItemOn::Calculate()
 	else if (guidP.IsGameObject())
 		gameObject = guidP.GetGameObject(bot->GetInstanceId());
 
-	ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+	ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
 
 	if (!proto)
 		return false;

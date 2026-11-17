@@ -157,7 +157,7 @@ uint32_t GuildOrderEnchantReqSkill(uint32_t spellId, uint32_t recipeItem)
 {
     uint32_t trainerSkill = 0;
     bool const fromTrainer = GuildOrderTaughtByAnyTrainer(spellId, trainerSkill);
-    ItemPrototype const* recipeProto = recipeItem ? sObjectMgr.GetItemPrototype(recipeItem) : nullptr;
+    ItemPrototype const* recipeProto = recipeItem ? GetItemProtoByIdCompat(recipeItem) : nullptr;
     uint32_t const itemSkill = recipeProto ? recipeProto->RequiredSkillRank : 0;
     if (fromTrainer && recipeProto)
         return std::min(trainerSkill, itemSkill);

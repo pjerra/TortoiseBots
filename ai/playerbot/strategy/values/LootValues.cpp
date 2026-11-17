@@ -193,7 +193,7 @@ LootTemplateAccess const* DropMapValue::GetLootTemplate(ObjectGuid guid, LootTyp
 	}
 	else if (guid.IsItem())
 	{
-		ItemPrototype const* proto = sObjectMgr.GetItemPrototype(guid.GetEntry());
+		ItemPrototype const* proto = GetItemProtoByIdCompat(guid.GetEntry());
 
 		if (proto)
 		{

@@ -3182,7 +3182,7 @@ bool NeedVendorAffordable(Player* bot, bool online, NeedItem const& need)
 {
     if (!online || !bot || !need.itemId || !need.count)
         return false;
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(need.itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(need.itemId);
     if (!proto || !::ai::ItemUsageValue::IsItemSoldByAnyVendorWithoutLimit(proto))
         return false;
     uint32_t buyCount = proto->BuyCount ? proto->BuyCount : 1;
@@ -3510,7 +3510,7 @@ void SendNeedWhisper(OrderRecord const& order)
     if (!botAi)
         return;
 
-    ItemPrototype const* output = sObjectMgr.GetItemPrototype(order.itemId);
+    ItemPrototype const* output = GetItemProtoByIdCompat(order.itemId);
     std::string outputName = output ? output->Name1 : std::to_string(order.itemId);
     if (order.type == OrderType::Enchant)
         if (SpellEntry const* enchant = sServerFacade.LookupSpellInfo(order.itemId))
@@ -3520,7 +3520,7 @@ void SendNeedWhisper(OrderRecord const& order)
     {
         if (message.back() != ' ')
             message += ", ";
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(need.itemId);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(need.itemId);
         message += std::to_string(need.count) + " " + (proto ? proto->Name1 : std::to_string(need.itemId));
     }
     message += "; trade it, mail it or put it in the guild bank";
@@ -4176,7 +4176,7 @@ uint32_t Carry(Player* bot, OrderRecord const& order)
 std::string FormatOrderLine(uint32_t guildId, OrderRecord const& order, uint32_t have, uint32_t carry)
 {
     (void)guildId;
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(order.itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(order.itemId);
     std::string itemName = proto ? proto->Name1 : "?";
     // An enchant row carries the spell id: the addon shows the enchant name.
     if (order.type == OrderType::Enchant)

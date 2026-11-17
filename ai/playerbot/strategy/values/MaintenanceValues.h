@@ -332,7 +332,7 @@ namespace ai
             // for a tight leash) with the master on the move, no new drink
             // starts - the catch-up follow (ACTION_HIGH) owns the tick
             // instead.
-            if (!master->IsMoving())
+            if (!IsMovingCompat(master))
                 return true;
 
             float const botToMaster = sServerFacade.getDistance2d(bot, master);
@@ -388,7 +388,7 @@ namespace ai
 
             // Follow-first, same as drink above: no new meal starts while
             // the bot should be catching up to its moving master.
-            if (!master->IsMoving())
+            if (!IsMovingCompat(master))
                 return true;
 
             float const botToMaster = sServerFacade.getDistance2d(bot, master);
@@ -439,7 +439,7 @@ namespace ai
             if (bot->GetGroup()->isRaidGroup())
                 minDistance = sPlayerbotAIConfig.raidFollowDistance;
 
-            if (!master->IsMoving())
+            if (!IsMovingCompat(master))
                 minDistance += sPlayerbotAIConfig.EatDrinkMinDistance;
 
             if (bot->IsWithinDist(master, minDistance))
@@ -484,7 +484,7 @@ namespace ai
             if (bot->GetGroup()->isRaidGroup())
                 minDistance = sPlayerbotAIConfig.raidFollowDistance;
 
-            if (!master->IsMoving())
+            if (!IsMovingCompat(master))
                 minDistance += sPlayerbotAIConfig.EatDrinkMinDistance;
 
             if (bot->IsWithinDist(master, minDistance))

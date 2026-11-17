@@ -274,7 +274,7 @@ uint8 BaseMacroState(Player* bot, PlayerbotAI* ai)
     if (sServerFacade.IsInCombat(bot) || (ai && ai->GetState() == BotState::BOT_STATE_COMBAT))
         return STATE_COMBAT;
 
-    if (bot->IsMoving() ||
+    if (IsMovingCompat(bot) ||
         (bot->GetMotionMaster() &&
          (bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE ||
           bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == FOLLOW_MOTION_TYPE ||
@@ -954,7 +954,7 @@ void ObservabilityEmitter::EmitBotActivity(std::string const& event,
     if (IsItemEvent(event))
     {
         uint32 itemId = ParseItemId(info2);
-        ItemPrototype const* proto = itemId ? sObjectMgr.GetItemPrototype(itemId) : nullptr;
+        ItemPrototype const* proto = itemId ? GetItemProtoByIdCompat(itemId) : nullptr;
         if (proto)
         {
             ss << ",\"item_id\":" << itemId

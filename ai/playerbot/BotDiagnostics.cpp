@@ -196,7 +196,7 @@ void PlayerbotAI::UpdateEvadeProbe()
         out << " los=" << (int)bot->IsWithinLOSInMap(creature, true);
         out << " botcombat=" << (int)bot->IsInCombat();
         out << " victim=" << (int)victim;
-        out << " botmove=" << (int)bot->IsMoving();
+        out << " botmove=" << (int)IsMovingCompat(bot);
         out << " botcast=" << (int)bot->IsNonMeleeSpellCasted(false);
         out << " evade=" << (int)evading;
         out << " notreach=" << (int)notReachable;

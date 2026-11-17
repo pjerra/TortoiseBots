@@ -376,7 +376,7 @@ bool QuestUpdateAddItemAction::Execute(Event& event)
 
     Player* requester = event.GetOwner() ? event.GetOwner() : GetMaster();
 
-    ItemPrototype const* itemPrototype = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* itemPrototype = GetItemProtoByIdCompat(itemId);
 
     if (itemPrototype)
     {

@@ -113,7 +113,7 @@ ItemUsage ItemUsageValue::Calculate()
     if (!itemId)
         return ItemUsage::ITEM_USAGE_NONE;
 
-    const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemId);
+    const ItemPrototype* proto = GetItemProtoByIdCompat(itemId);
     if (!proto)
         return ItemUsage::ITEM_USAGE_NONE;
 
@@ -502,7 +502,7 @@ if ((proto->Class == ITEM_CLASS_PROJECTILE ||
                     currentAmmoId = pItem->GetEntry();
                 const ItemPrototype* currentAmmoProto = nullptr;
                 if (currentAmmoId)
-                    currentAmmoProto = sObjectMgr.GetItemPrototype(currentAmmoId);
+                    currentAmmoProto = GetItemProtoByIdCompat(currentAmmoId);
 
                 // Pool item cheat: the per-tick refill tops the equipped stack
                 // back up, so firing never consumes anything and vendor ammo
@@ -1346,7 +1346,7 @@ bool ItemUsageValue::IsNeededForQuest(Player* player, uint32 itemId, bool ignore
             if (ignoreInventory)
                 return true;
 
-            ItemPrototype const* sourceProto = sObjectMgr.GetItemPrototype(itemId);
+            ItemPrototype const* sourceProto = GetItemProtoByIdCompat(itemId);
             if (!sourceProto)
                 continue;
 
@@ -1490,7 +1490,7 @@ bool ItemUsageValue::IsItemNeededForUsefullCraft(ItemPrototype const* proto, boo
             }
             else if (checkAllReagents)
             {
-                const ItemPrototype* reqProto = sObjectMgr.GetItemPrototype(pSpellInfo->Reagent[i]);
+                const ItemPrototype* reqProto = GetItemProtoByIdCompat(pSpellInfo->Reagent[i]);
 
                 uint32 count = AI_VALUE2(uint32, "item count", reqProto->Name1);
 
@@ -1831,7 +1831,7 @@ void ItemUsageValue::PopulateReagentItemIdsForCraftableItemIds()
 
                             uint32 reagentItemId = spellInfo->Reagent[x];
                             uint32 reagentsRequiredCount = spellInfo->ReagentCount[x];
-                            if (reagentItemId && sObjectMgr.GetItemPrototype(reagentItemId))
+                            if (reagentItemId && GetItemProtoByIdCompat(reagentItemId))
                             {
                                 m_craftingReagentItemIdsForCraftableItem[craftedItemId].push_back({ reagentItemId , reagentsRequiredCount });
                             }
@@ -1856,7 +1856,7 @@ void ItemUsageValue::PopulateSoldByVendorItemIds()
             if (!entry)
                 continue;
 
-            if (!sObjectMgr.GetItemPrototype(entry))
+            if (!GetItemProtoByIdCompat(entry))
                 continue;
 
             m_allItemIdsSoldByAnyVendors.insert(fields[0].GetUInt32());
@@ -1874,7 +1874,7 @@ void ItemUsageValue::PopulateSoldByVendorItemIds()
             if (!entry)
                 continue;
 
-            if (!sObjectMgr.GetItemPrototype(entry))
+            if (!GetItemProtoByIdCompat(entry))
                 continue;
 
             m_itemIdsSoldByAnyVendorsWithLimitedMaxCount.insert(fields[0].GetUInt32());
@@ -1892,7 +1892,7 @@ void ItemUsageValue::PopulateSoldByVendorItemIds()
             if (!entry)
                 continue;
 
-            if (!sObjectMgr.GetItemPrototype(entry))
+            if (!GetItemProtoByIdCompat(entry))
                 continue;
 
             m_itemIdsSoldByAnyVendorsWithoutLimit.insert(fields[0].GetUInt32());
@@ -2276,7 +2276,7 @@ uint32 ItemUsageValue::GetItemBaseValue(ItemPrototype const* proto, uint8 maxRea
 
         for (auto idCountPair : GetAllReagentItemIdsForCraftingItem(proto))
         {
-            ItemPrototype const* reagentProto = sObjectMgr.GetItemPrototype(idCountPair.first);
+            ItemPrototype const* reagentProto = GetItemProtoByIdCompat(idCountPair.first);
             totalReagentsValue += GetItemBaseValue(reagentProto, maxReagentLevel) * idCountPair.second;
         }
 

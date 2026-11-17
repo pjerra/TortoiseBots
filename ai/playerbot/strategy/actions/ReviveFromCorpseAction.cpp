@@ -663,7 +663,7 @@ bool FindCorpseAction::Execute(Event& event)
     }
     else
     {
-        if (bot->IsMoving())
+        if (IsMovingCompat(bot))
             moved = true;
         if (moved)
         {
@@ -699,7 +699,7 @@ bool FindCorpseAction::Execute(Event& event)
             moved = MoveTo(moveToPos.GetMapId(), moveToPos.getX(), moveToPos.getY(), moveToPos.getZ(),
                 false, false, false, false, "move_revive");
             int32 movegenAfter = bot->GetMotionMaster() ? (int32)bot->GetMotionMaster()->GetCurrentMovementGeneratorType() : -1;
-            bool started = bot->IsMoving() || (bot->GetMotionMaster() && !bot->GetMotionMaster()->empty() && movegenAfter != (int32)IDLE_MOTION_TYPE);
+            bool started = IsMovingCompat(bot) || (bot->GetMotionMaster() && !bot->GetMotionMaster()->empty() && movegenAfter != (int32)IDLE_MOTION_TYPE);
             float ghostDistAfter = WorldPosition(bot).distance(moveToPos);
             uint32 posUnchangedSec = AI_VALUE2(uint32, "time since last change", "current position");
             // Per-tick during a stall; failures drive the spirit-healer retry

@@ -133,7 +133,7 @@ bool ServerFacade::IsSpellReady(Player* bot, uint32 spell, uint32 itemId)
     if (bot->HasSpellCooldown(spell))
         return false;
     uint32 category = 0;
-    if (const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemId))
+    if (const ItemPrototype* proto = GetItemProtoByIdCompat(itemId))
     {
         for (const auto& spellData : proto->Spells)
         {

@@ -1526,7 +1526,7 @@ namespace ai
             Unit* master = ai->GetMaster();
             if (ai->HasAura("shadowmeld", bot))
                 return false;
-            return ((!master || (master && master->HasStealthAura() && !master->IsMoving())) && !bot->IsMoving());
+            return ((!master || (master && master->HasStealthAura() && !IsMovingCompat(master))) && !IsMovingCompat(bot));
         }
     };
 

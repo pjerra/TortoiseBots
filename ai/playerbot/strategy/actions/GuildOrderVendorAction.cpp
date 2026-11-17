@@ -13,7 +13,7 @@ using namespace TortoiseBots::GuildOrders;
 
 bool GuildOrderVendorAction::isUseful()
 {
-    if (!bot->GetGuildId() || bot->IsMoving())
+    if (!bot->GetGuildId() || IsMovingCompat(bot))
         return false;
 
     if (AI_VALUE(TravelTarget*, "travel target")->GetStatus() == TravelStatus::TRAVEL_STATUS_TRAVEL)
@@ -70,7 +70,7 @@ bool GuildOrderVendorAction::Execute(Event& event)
         record->supplyItemId != reagentId || !record->supplyCount)
         return false;
 
-    ItemPrototype const* reagentProto = sObjectMgr.GetItemPrototype(reagentId);
+    ItemPrototype const* reagentProto = GetItemProtoByIdCompat(reagentId);
     if (!reagentProto)
         return false;
     if (record->supplyItemId != reagentId || !record->supplyCount)

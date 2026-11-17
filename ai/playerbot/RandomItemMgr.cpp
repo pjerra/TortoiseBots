@@ -121,7 +121,7 @@ bool RandomItemMgr::IsTransmogClone(ItemPrototype const* proto) const
 
 bool RandomItemMgr::IsTransmogClone(uint32 itemId) const
 {
-    return IsTransmogClone(sObjectMgr.GetItemPrototype(itemId));
+    return IsTransmogClone(GetItemProtoByIdCompat(itemId));
 }
 
 void RandomItemMgr::Init()
@@ -167,7 +167,7 @@ RandomItemList RandomItemMgr::Query(uint32 level, RandomItemType type, RandomIte
     for (RandomItemList::iterator i = list.begin(); i != list.end(); ++i)
     {
         uint32 itemId = *i;
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
         if (!proto)
             continue;
 
@@ -242,7 +242,7 @@ void RandomItemMgr::BuildRandomItemCache()
 
         for (uint32 itemId = 0; itemId < sItemStorage.GetMaxEntry(); ++itemId)
         {
-            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+            ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
             if (!proto)
                 continue;
 
@@ -297,7 +297,7 @@ void RandomItemMgr::BuildRandomItemCache()
                 for (RandomItemList::iterator i = list.begin(); i != list.end(); ++i)
                 {
                     uint32 itemId = *i;
-                    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+                    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
                     if (!proto)
                         continue;
 
@@ -968,7 +968,7 @@ void RandomItemMgr::BuildItemInfoCache()
     {
         bar.step();
 
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
         if (!proto)
             continue;
 
@@ -1960,7 +1960,7 @@ uint32 RandomItemMgr::CalculateBestRandomEnchantId(uint8 playerclass, uint8 spec
     if (!itemId)
         return 0;
 
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
     if (!proto)
         return 0;
 
@@ -2586,7 +2586,7 @@ void RandomItemMgr::BuildSourceTierIndex()
                 // Recipe source tier: rep-gated recipe excludes (REP flag is
                 // set separately); raid / end-game-dungeon loot recipe takes
                 // the loot tier; trainer / vendor / world loot stays base.
-                ItemPrototype const* recipeProto = sObjectMgr.GetItemPrototype(recipeItem);
+                ItemPrototype const* recipeProto = GetItemProtoByIdCompat(recipeItem);
                 ItemSourceTier tier = ITEM_SOURCE_TIER_BASE;
                 if (recipeProto && (recipeProto->RequiredReputationFaction || recipeProto->RequiredReputationRank))
                 {
@@ -2621,7 +2621,7 @@ void RandomItemMgr::BuildSourceTierIndex()
     pvpItemSets.clear();
     for (uint32 itemId = 0; itemId < sItemStorage.GetMaxEntry(); ++itemId)
     {
-        ItemPrototype const* setProto = sObjectMgr.GetItemPrototype(itemId);
+        ItemPrototype const* setProto = GetItemProtoByIdCompat(itemId);
         if (!setProto || !setProto->ItemSet)
             continue;
         if ((setProto->Flags & ITEM_FLAG_NO_DISENCHANT) || setProto->RequiredHonorRank)
@@ -2735,7 +2735,7 @@ bool RandomItemMgr::IsForbiddenBotGear(uint32 itemId)
     facts.blacklisted = TortoiseBots::GearBlacklistBlocks(sPlayerbotAIConfig.randomGearBlacklist, itemId);
     if (facts.blacklisted)
         return true;
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
     if (!proto)
         return true;
     std::list<uint32> const& whitelist = sPlayerbotAIConfig.randomGearWhitelist;
@@ -3506,7 +3506,7 @@ bool RandomItemMgr::CanBuyFromVendor(Player *player, uint32 itemId, uint32 creat
 
         if (crItem && crItem->item == itemId)
         {
-            ItemPrototype const* pProto = sObjectMgr.GetItemPrototype(itemId);
+            ItemPrototype const* pProto = GetItemProtoByIdCompat(itemId);
             if (pProto)
             {
                 // when no faction required but rank > 0 will be used faction id from the vendor faction template to compare the rank
@@ -3739,7 +3739,7 @@ uint32 RandomItemMgr::GetLiveStatWeight(Player* player, uint32 itemId, uint32 sp
     // skip non pvp items for some specs
     if (info->pvpRank < 16 && player->GetHonorMgr().GetHighestRank().rank == 18)
     {
-        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+        ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
         if (proto && !(
             info->slot == EQUIPMENT_SLOT_WAIST ||
             info->slot == EQUIPMENT_SLOT_WRISTS ||
@@ -3767,7 +3767,7 @@ uint32 RandomItemMgr::GetLiveStatWeight(Player* player, uint32 itemId, uint32 sp
     // but gets its value from the suffix the caller picks per spec, so it is
     // exempt: zeroing it here left hired companions at 30+ without a neck
     // or rings, since most green jewellery is random-suffix.
-    ItemPrototype const* clampProto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* clampProto = GetItemProtoByIdCompat(itemId);
     if (info->weights[specId] == 1 && player->GetLevel() >= 30 &&
         !(clampProto && clampProto->RandomProperty) && (
         info->slot == EQUIPMENT_SLOT_NECK ||
@@ -3917,7 +3917,7 @@ void RandomItemMgr::BuildEquipCache()
 
         for (uint32 itemId = 0; itemId < sItemStorage.GetMaxEntry(); ++itemId)
         {
-            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+            ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
             if (!proto)
                 continue;
 
@@ -4240,7 +4240,7 @@ void RandomItemMgr::BuildPotionCache()
 
             for (uint32 itemId = 0; itemId < sItemStorage.GetMaxEntry(); ++itemId)
             {
-                ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+                ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
                 if (!proto)
                     continue;
 
@@ -4322,7 +4322,7 @@ void RandomItemMgr::BuildFoodCache()
 
             for (uint32 itemId = 0; itemId < sItemStorage.GetMaxEntry(); ++itemId)
             {
-                ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+                ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
                 if (!proto)
                     continue;
 
@@ -4439,7 +4439,7 @@ void RandomItemMgr::BuildTradeCache()
     {
         for (uint32 itemId = 0; itemId < sItemStorage.GetMaxEntry(); ++itemId)
         {
-            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+            ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
             if (!proto)
                 continue;
 

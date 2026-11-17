@@ -312,7 +312,7 @@ bool GuildEnchantOrderAction::Execute(Event& event)
                         giver->GetPositionZ(), giver->GetOrientation());
                     return true;
                 }
-                if (bot->IsMoving())
+                if (IsMovingCompat(bot))
                     return true;
                 MoveTo(giver, 3.0f);
                 return true;

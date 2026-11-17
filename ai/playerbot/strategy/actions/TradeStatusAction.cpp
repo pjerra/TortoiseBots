@@ -257,7 +257,7 @@ void TradeStatusAction::ConjureAndPlace(uint32 itemId, uint32 count)
 {
     if (!itemId || !count || !bot->GetTradeData() || !bot->GetTrader())
         return;
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
     if (!proto)
         return;
     uint32 stack = proto->GetMaxStackSize();
@@ -339,14 +339,14 @@ void TradeStatusAction::AutoShareConjured(Player* trader)
         auto hasSpell = [&](uint32 spellId) { return bot->HasSpell(spellId); };
         if (ConjuredRankRow const* food = PickConjuredRank(kConjureFoodRanks, 7, hasSpell, traderLevel))
         {
-            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(food->itemId);
+            ItemPrototype const* proto = GetItemProtoByIdCompat(food->itemId);
             ConjureAndPlace(food->itemId, proto ? proto->GetMaxStackSize() : 20);
         }
         if (trader->GetPowerType() == POWER_MANA)
         {
             if (ConjuredRankRow const* water = PickConjuredRank(kConjureWaterRanks, 7, hasSpell, traderLevel))
             {
-                ItemPrototype const* proto = sObjectMgr.GetItemPrototype(water->itemId);
+                ItemPrototype const* proto = GetItemProtoByIdCompat(water->itemId);
                 ConjureAndPlace(water->itemId, proto ? proto->GetMaxStackSize() : 20);
             }
         }

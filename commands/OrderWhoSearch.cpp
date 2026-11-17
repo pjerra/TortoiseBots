@@ -212,7 +212,7 @@ bool HandleOrderWhoSearch(ChatHandler* handler, Player* requester, std::string c
         {
             if (!recipe.itemId)
                 continue;
-            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(recipe.itemId);
+            ItemPrototype const* proto = GetItemProtoByIdCompat(recipe.itemId);
             if (!proto)
                 continue;
             // Prefiltered by OrderableCraftRecipes: the name already matches.

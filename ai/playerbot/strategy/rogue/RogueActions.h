@@ -544,7 +544,7 @@ namespace ai
             for (const uint32 itemId : poisonItemIds)
             {
                 // Check if bot can use the poison
-                const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemId);
+                const ItemPrototype* proto = GetItemProtoByIdCompat(itemId);
                 if (proto && (bot->GetLevel() >= proto->RequiredLevel) && (poisonLevel < proto->RequiredLevel))
                 {
                     // Check if the bot has the poison in the bag
@@ -620,7 +620,7 @@ namespace ai
             // Check if poison item is in bag
             for (const uint32 itemId : poisonItemIds)
             {
-                const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemId);
+                const ItemPrototype* proto = GetItemProtoByIdCompat(itemId);
                 if (proto && (bot->GetLevel() >= proto->RequiredLevel))
                 {
                     if (ai->HasCheat(BotCheatMask::item) || bot->HasItemCount(itemId, 1))

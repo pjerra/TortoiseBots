@@ -392,7 +392,7 @@ bool QuestObjectiveTravelDestination::IsPossible(const PlayerTravelInfo& info) c
 
         if (cInfo->npc_flags & UNIT_NPC_FLAG_VENDOR && GetQuestTemplate()->ReqItemId[GetObjective()])
         {
-            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(GetQuestTemplate()->ReqItemId[GetObjective()]);
+            ItemPrototype const* proto = GetItemProtoByIdCompat(GetQuestTemplate()->ReqItemId[GetObjective()]);
             if (GetQuestTemplate()->ReqItemCount[GetObjective()] * proto->BuyPrice > info.GetMoney()) //Need more money.
                 return false;
 
@@ -517,7 +517,7 @@ std::string QuestObjectiveTravelDestination::GetTitle() const {
     std::ostringstream out;
 
     if (GetQuestTemplate()->ReqItemCount[GetObjective()] > 0)
-        out << "loot " << ChatHelper::formatItem(sObjectMgr.GetItemPrototype(GetQuestTemplate()->ReqItemId[GetObjective()]), 0, 0) << " from";
+        out << "loot " << ChatHelper::formatItem(GetItemProtoByIdCompat(GetQuestTemplate()->ReqItemId[GetObjective()]), 0, 0) << " from";
     else if (GetEntry() > 0)
         out << "kill";
     else

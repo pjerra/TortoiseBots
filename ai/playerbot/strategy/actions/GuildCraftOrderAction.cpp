@@ -157,7 +157,7 @@ bool GuildCraftOrderAction::Execute(Event& event)
             continue;
 
         uint32 reagentId = pSpellInfo->Reagent[i];
-        ItemPrototype const* reagentProto = sObjectMgr.GetItemPrototype(reagentId);
+        ItemPrototype const* reagentProto = GetItemProtoByIdCompat(reagentId);
         if (!reagentProto || !ItemUsageValue::IsItemSoldByAnyVendor(reagentProto) ||
             ItemUsageValue::IsItemSoldByAnyVendorButHasLimitedMaxCount(reagentProto))
             continue;
@@ -252,7 +252,7 @@ bool GuildCraftOrderAction::Execute(Event& event)
 
     // Craft from what is in the bags: the limiting reagent caps the batch,
     // so a full bag of partial reagents still crafts instead of stalling.
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
     uint32 stackSize = proto ? proto->GetMaxStackSize() : 1;
     if (!stackSize)
         stackSize = 1;
@@ -281,7 +281,7 @@ bool GuildCraftOrderAction::Execute(Event& event)
         ai->Unmount();
         return true;
     }
-    if (bot->IsMoving())
+    if (IsMovingCompat(bot))
     {
         ai->StopMoving();
         return true;

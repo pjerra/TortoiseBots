@@ -519,7 +519,7 @@ bool UseAction::UseItem(Player* requester, uint32 itemId, Item* target)
 bool UseAction::UseItemInternal(Player* requester, uint32 itemId, Unit* unit, GameObject* gameObject, Item* item)
 {
     // Check for valid item ID
-    const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemId);
+    const ItemPrototype* proto = GetItemProtoByIdCompat(itemId);
     if (!proto)
     {
         if (verbose)
@@ -1156,7 +1156,7 @@ bool UseAction::OpenItem(Player* requester, Item* item)
 
 bool UseAction::HasItemCooldown(uint32 itemId) const
 {
-    const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemId);
+    const ItemPrototype* proto = GetItemProtoByIdCompat(itemId);
     if (proto)
     {
         if (CheatItemCooldownRunning(context, false, itemId))
@@ -1259,7 +1259,7 @@ bool UseItemIdAction::isPossible()
     if (!itemId)
         return false;
 
-    ItemPrototype const* proto = sObjectMgr.GetItemPrototype(itemId);
+    ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
     if (!proto)
         return false;
 
@@ -1314,7 +1314,7 @@ bool UseItemIdAction::isUseful()
         return false;
     }
 
-    const ItemPrototype* proto = sObjectMgr.GetItemPrototype(GetItemId());
+    const ItemPrototype* proto = GetItemProtoByIdCompat(GetItemId());
     if (proto)
     {
         std::set<uint32>& skipSpells = AI_VALUE(std::set<uint32>&, "skip spells list");
@@ -1423,7 +1423,7 @@ bool UseSpellItemAction::isUseful()
 
 bool UseHearthStoneAction::Execute(Event& event)
 {
-    if (bot->IsMoving())
+    if (IsMovingCompat(bot))
     {
         ai->StopMoving();
     }
@@ -1519,7 +1519,7 @@ bool UseRandomRecipeAction::Execute(Event& event)
     if (recipeName.empty())
         return false;
 
-    if (bot->IsMoving())
+    if (IsMovingCompat(bot))
     {
         ai->StopMoving();
     }
@@ -1557,7 +1557,7 @@ bool OpenRandomItemAction::Execute(Event& event)
     if (itemName.empty())
         return false;
 
-    if (bot->IsMoving())
+    if (IsMovingCompat(bot))
     {
         ai->StopMoving();
     }

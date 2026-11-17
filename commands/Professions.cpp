@@ -153,7 +153,7 @@ std::string CraftOrderField(AbilityRow const& row)
     GuildOrders::CraftOrderableInputs inputs;
     inputs.known = row.known;
     inputs.createsItem = row.createsItem;
-    if (ItemPrototype const* proto = sObjectMgr.GetItemPrototype(row.createdItemId))
+    if (ItemPrototype const* proto = GetItemProtoByIdCompat(row.createdItemId))
     {
         inputs.itemOrderable = GuildOrders::IsOrderableItem(proto);
         inputs.itemNeedsProfession = proto->RequiredSkill != 0;
@@ -209,7 +209,7 @@ void SendProfessionSnapshot(ChatHandler* handler, Player* bot)
             recipeItem = cached->second;
             uint32_t trainerSkill = 0;
             bool const fromTrainer = ai::GuildOrderTaughtByAnyTrainer(row.spellId, trainerSkill);
-            ItemPrototype const* recipeProto = recipeItem ? sObjectMgr.GetItemPrototype(recipeItem) : nullptr;
+            ItemPrototype const* recipeProto = recipeItem ? GetItemProtoByIdCompat(recipeItem) : nullptr;
             uint32_t const itemSkill = recipeProto ? recipeProto->RequiredSkillRank : 0;
             row.reqSkillValue = GuildOrders::EnchantReqSkillCombine(fromTrainer, trainerSkill,
                 recipeProto != nullptr, itemSkill);
@@ -273,7 +273,7 @@ std::vector<CraftRecipeSnapshot> OrderableCraftRecipes(Player* bot, std::vector<
             }
             if (!createdItemId)
                 continue;
-            ItemPrototype const* proto = sObjectMgr.GetItemPrototype(createdItemId);
+            ItemPrototype const* proto = GetItemProtoByIdCompat(createdItemId);
             if (!proto)
                 continue;
             std::string lower = proto->Name1;

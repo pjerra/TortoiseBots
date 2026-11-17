@@ -1408,7 +1408,7 @@ bool TankFaceNeededTrigger::IsActive()
     // stepping to the far side of the mob points its front at the tank.
     if (!target->GetVictim() || target->GetVictim()->getObjectGuid() != bot->getObjectGuid())
         return false;
-    if (!bot->CanReachWithMeleeAutoAttack(target) || target->IsMoving())
+    if (!bot->CanReachWithMeleeAutoAttack(target) || IsMovingCompat(target))
         return false;
     Group* group = bot->GetGroup();
     if (!group)
@@ -2004,7 +2004,7 @@ bool ItemTargetTrigger::IsTargetValid(Unit* target)
         if (itemAuraCheck)
         {
             const uint32 itemId = GetItemId();
-            const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemId);
+            const ItemPrototype* proto = GetItemProtoByIdCompat(itemId);
             if (proto)
             {
                 for (uint8 i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
@@ -2036,7 +2036,7 @@ bool ItemTargetTrigger::IsSpellReady()
     if (!ai->HasCheat(BotCheatMask::item) && !bot->HasItemCount(itemId, 1))
         return false;
 
-    const ItemPrototype* proto = sObjectMgr.GetItemPrototype(itemId);
+    const ItemPrototype* proto = GetItemProtoByIdCompat(itemId);
     if (proto)
     {
         for (uint8 i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)

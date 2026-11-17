@@ -565,7 +565,7 @@ bool StopFollowAction::isUseful()
     if (bot->GetMotionMaster()->GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE)
         return false;
 
-    if (sServerFacade.GetChaseTarget(bot) && !sServerFacade.GetChaseTarget(bot)->IsPlayer() && sServerFacade.GetChaseTarget(bot)->IsMoving())
+    if (sServerFacade.GetChaseTarget(bot) && !sServerFacade.GetChaseTarget(bot)->IsPlayer() && IsMovingCompat(sServerFacade.GetChaseTarget(bot)))
         return false;
 
     return true;
