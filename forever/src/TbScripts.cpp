@@ -1,5 +1,6 @@
 // Script registration for the module: the world tick, the config load and the `.tb` chat commands.
 #include "TbBotMgr.h"
+#include "compat/TbItemPrototype.h"
 #include "AccountMgr.h"
 #include "Map.h"
 #include "ObjectAccessor.h"
@@ -94,6 +95,7 @@ public:
             { "attack", HandleAttack, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "where",  HandleWhere,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "status", HandleStatus, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "item",   HandleItem,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
         {
@@ -240,6 +242,38 @@ public:
     {
         handler->PSendSysMessage("TortoiseBots: %s, %u bot session(s).", BotMgr::Instance().Enabled() ? "enabled" : "disabled",
             uint32(BotMgr::Instance().Count()));
+        return true;
+    }
+
+    // .tb item <entry>: what the item mirror (TbItemPrototype.h) holds for one item, for comparing it with the database.
+    static bool HandleItem(ChatHandler* handler, uint32 entry)
+    {
+        ItemPrototype const* proto = tbcompat::ItemProto(entry);
+        if (!proto)
+            return Fail(handler, "item " + std::to_string(entry) + " does not exist.");
+
+        handler->PSendSysMessage("TortoiseBots: item %u \"%s\": class %u/%u, quality %u, inventory %u, item level %u, required level %u, buy %u sell %u.",
+            proto->ItemId, proto->Name1.c_str(), proto->Class, proto->SubClass, proto->Quality, proto->InventoryType,
+            proto->ItemLevel, proto->RequiredLevel, proto->BuyPrice, proto->SellPrice);
+        handler->PSendSysMessage("TortoiseBots: armor %u, block %u, damage %.1f-%.1f type %u, delay %u, bonding %u, max stack %u, durability %u.",
+            uint32(proto->Armor), proto->Block, proto->Damage[0].DamageMin, proto->Damage[0].DamageMax,
+            proto->Damage[0].DamageType, proto->Delay, proto->Bonding, proto->Stackable, proto->MaxDurability);
+
+        std::string stats;
+        for (uint32 i = 0; i < MAX_ITEM_PROTO_STATS; ++i)
+            if (proto->ItemStat[i].ItemStatValue)
+                stats += (stats.empty() ? "" : ", ") + std::to_string(proto->ItemStat[i].ItemStatType) + ":" + std::to_string(proto->ItemStat[i].ItemStatValue);
+
+        std::string spells;
+        for (uint32 i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
+            if (proto->Spells[i].SpellId)
+                spells += (spells.empty() ? "" : ", ") + std::to_string(proto->Spells[i].SpellId) +
+                    " (trigger " + std::to_string(proto->Spells[i].SpellTrigger) + ", charges " + std::to_string(proto->Spells[i].SpellCharges) + ")";
+
+        handler->PSendSysMessage("TortoiseBots: stats %s; spells %s; resistances %u/%u/%u/%u/%u/%u.",
+            stats.empty() ? "none" : stats.c_str(), spells.empty() ? "none" : spells.c_str(),
+            uint32(proto->HolyRes), uint32(proto->FireRes), uint32(proto->NatureRes), uint32(proto->FrostRes),
+            uint32(proto->ShadowRes), uint32(proto->ArcaneRes));
         return true;
     }
 };
