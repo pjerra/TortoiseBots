@@ -44,6 +44,33 @@ One header (`forever/src/compat/forever-compat-shim.h`) filled in; no bot code c
 | `MaNGOS::ComputeGridPair/CellPair` | `Trinity::ComputeGridCoord/CellCoord` | 4 | F `Grids/GridDefines.h:174,186` (same formula) |
 | `WorldTimer` | inline struct over `getMSTime` | 4 | F `Timer.h` |
 
+| `GridPair` / `CellPair` | `GridCoord` / `CellCoord`; `MaNGOS::ComputeGridPair`/`ComputeCellPair` -> `Trinity::ComputeGridCoord`/`ComputeCellCoord` | 1/4 | as above |
+| `MANGOS_OBJECT_GUID_H`, `MANGOS_OBJECTACCESSOR_H` | set, so the bot's Lens stand-in classes stay out | 4 | `runtime/BotManager.h:14`, `commands/BotCommands.cpp:140`; real headers from botpch |
+| `HIGHGUID_PLAYER/UNIT/GAMEOBJECT/ITEM/PET/CORPSE/DYNAMICOBJECT` | `HighGuid::Player/Creature/GameObject/...` | 4 | T `Objects/ObjectGuid.h`; F `Entities/Object/ObjectGuid.h:108-129` (tag, not number: F numbers differ; every use compares with `GetHigh()`) |
+| `ITEM_CLASS_MISC` | `ITEM_CLASS_MISCELLANEOUS` (15) | 4 | F `Entities/Item/ItemTemplate.h:489` |
+| `ITEM_SUBCLASS_ARMOR_MISC` | `ITEM_SUBCLASS_ARMOR_MISCELLANEOUS` (0) | 4 | F `ItemTemplate.h:586` |
+| `ITEM_SUBCLASS_FOOD` | `ITEM_SUBCLASS_FOOD_DRINK` (5) | 4 | T `ItemPrototype.h:173`; F `ItemTemplate.h:506` |
+| `ITEM_SUBCLASS_WEAPON_FIST` | `ITEM_SUBCLASS_WEAPON_FIST_WEAPON` (13) | 4 | F `ItemTemplate.h:550` |
+| `ITEM_SUBCLASS_WEAPON_MISC` | `ITEM_SUBCLASS_WEAPON_MISCELLANEOUS` (14) | 4 | F `ItemTemplate.h:551` |
+| `UNIT_FLAG_NOT_SELECTABLE` | `UNIT_FLAG_UNINTERACTIBLE` (both 0x02000000) | 4 | F `Entities/Unit/UnitDefines.h:192` |
+| `RACE_UNDEAD` | `RACE_UNDEAD_PLAYER` (5) | 4 | F `Miscellaneous/RaceMask.h:34` |
+| `MAX_ITEM_PROTO_SPELLS` | `MAX_ITEM_SPELLS` (5) | 4 | T `ItemPrototype.h:421`; F `Entities/Item/Item.h:52` |
+| `MAX_LOCALE` | `OLD_TOTAL_LOCALES` (9) | 4 | T `shared/Common.h:238`; F `common/Common.h:68` |
+| `CONFIG_*` (18 keys) | `CONFIG_*` without the type token | 4 | F `World/World.h` enum, e.g. `CONFIG_MAX_PLAYER_LEVEL:286` |
+| `sItemStorage` / `sCreatureStorage` / `sGOStorage` (LookupEntry, GetMaxEntry) | proxies over `ObjectMgr::GetItemTemplate` / `GetCreatureTemplate` / `GetGameObjectTemplate` + cached max id | 4 | T `ObjectMgr.h`: SQL stores; F `Globals/ObjectMgr.h:1086-1122` |
+| `GetCharmerGuid` | `GetCharmerGUID` | 3 | F `Unit.h:1232` |
+| `GetCreatureInfo` | `GetCreatureTemplate` | 3 | F `Globals/ObjectMgr.h` |
+| `GetLeaderGuid` | `GetLeaderGUID` | 3 | F `Groups/Group.h:311` |
+| `GetObjectBoundingRadius` | `GetBoundingRadius` | 3 | F `Unit.h:724` (same client field; units only) |
+| `GetOwnerGuid` | `GetOwnerGUID` | 3 | F `Unit.h:1213` |
+| `GetSpellProto` | `GetSpellInfo` (aura/spell's own spell) | 3 | F `User.h`/`SpellAuras.h:217` area |
+| `SetSelectionGuid` | `SetSelection` | 3 | F `Player.h:1979` writes `UF::UnitData::Target`; `SetTarget` is a no-op for players |
+| `IsMoving` | `isMoving` | 3 | F `Unit.h:1829` |
+| `getThreat` | `GetThreat` | 3 | F `Combat/ThreatManager.h:131` |
+| `getOpcode` | `GetOpcode` | 3 | F `Server/WorldPacket.h:62` |
+| `HasSpellCooldown(id)` | `GetSpellHistory()->HasCooldown(id)` | 3 (function-like) | F `Spells/SpellHistory.h:172`, `Unit.h:1528` |
+| `GetAreaEntryByAreaID` | `sAreaTableStore.LookupEntry` | 4 | F `DataStores/DB2Stores.h:40` |
+
 ## CANNOT SHIM
 
 Grouped; count = error places in the BEFORE census. Fill after the census.

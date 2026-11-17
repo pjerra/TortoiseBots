@@ -105,22 +105,32 @@ struct CmangosObjectAccessorProxy
 // ---------------------------------------------------------------------------------------------------------------
 // 3. MEMBER NAMES
 // ---------------------------------------------------------------------------------------------------------------
+#define GetCharmerGuid GetCharmerGUID
+#define GetCreatureInfo GetCreatureTemplate
 #define GetDeathState getDeathState
 #define GetGameObjectInfo GetGameObjectTemplate
 #define GetGOData GetGameObjectData
 #define GetHealthPercent GetHealthPct
 #define GetItemPrototype GetItemTemplate
+#define GetLeaderGuid GetLeaderGUID
+#define GetObjectBoundingRadius GetBoundingRadius
 #define GetObjectGuid GetGUID
+#define GetOwnerGuid GetOwnerGUID
 #define GetSelectionGuid GetTarget
+#define GetSpellProto GetSpellInfo
 #define InBattleGround InBattleground
 #define IsDead isDead
+#define IsMoving isMoving
 #define IsNonMeleeSpellCasted IsNonMeleeSpellCast
+#define SetSelectionGuid SetSelection
 
 // Lower-case spellings the bot brain uses for core members (the same members, renamed by ForeverCore).
 // (getName is not here: bot classes define both getName() and a GetName() forwarder, so a global rename would
 // redeclare those members.)
 #define getDistance2d GetDistance2d
 #define getLevel GetLevel
+#define getOpcode GetOpcode
+#define getThreat GetThreat
 #define getObjectGuid GetGUID
 #define getOrientation GetOrientation
 #define getPositionX GetPositionX
@@ -148,6 +158,9 @@ struct CmangosObjectAccessorProxy
 // SpellMgr::GetSpellInfo needs the difficulty; cmangos asked for one spell id and got the single entry.
 #define GetSpellEntry(spellId) GetSpellInfo((spellId), DIFFICULTY_NONE)
 
+// The cooldown moved to SpellHistory on ForeverCore; the question (is this spell cooling down) is the same.
+#define HasSpellCooldown(spellId) GetSpellHistory()->HasCooldown(spellId)
+
 // ---------------------------------------------------------------------------------------------------------------
 // 4. FREE FUNCTIONS AND PROXIES
 // ---------------------------------------------------------------------------------------------------------------
@@ -155,6 +168,118 @@ struct CmangosObjectAccessorProxy
 // real headers are in front of every file here, so the guard is set and the stand-ins stay out.
 #define MANGOS_OBJECT_GUID_H 1
 #define MANGOS_OBJECTACCESSOR_H 1
+
+// ---- constants ----
+// Guid type tags. ForeverCore's HighGuid has its own numbering, so these are the tags themselves, not numbers: every
+// bot use compares them with ObjectGuid::GetHigh(), which returns HighGuid.
+#define HIGHGUID_CORPSE HighGuid::Corpse
+#define HIGHGUID_DYNAMICOBJECT HighGuid::DynamicObject
+#define HIGHGUID_GAMEOBJECT HighGuid::GameObject
+#define HIGHGUID_ITEM HighGuid::Item
+#define HIGHGUID_PET HighGuid::Pet
+#define HIGHGUID_PLAYER HighGuid::Player
+#define HIGHGUID_UNIT HighGuid::Creature
+
+// Item classes and subclasses: the same client values, ForeverCore spells "miscellaneous" out.
+#define ITEM_CLASS_MISC ITEM_CLASS_MISCELLANEOUS                    // 15
+#define ITEM_SUBCLASS_ARMOR_MISC ITEM_SUBCLASS_ARMOR_MISCELLANEOUS  // 0
+#define ITEM_SUBCLASS_FOOD ITEM_SUBCLASS_FOOD_DRINK                 // 5
+#define ITEM_SUBCLASS_WEAPON_FIST ITEM_SUBCLASS_WEAPON_FIST_WEAPON  // 13
+#define ITEM_SUBCLASS_WEAPON_MISC ITEM_SUBCLASS_WEAPON_MISCELLANEOUS // 14
+
+// Unit flag: cmangos's NOT_SELECTABLE is ForeverCore's UNINTERACTIBLE, both 0x02000000.
+#define UNIT_FLAG_NOT_SELECTABLE UNIT_FLAG_UNINTERACTIBLE
+
+// Race: the same race id 5.
+#define RACE_UNDEAD RACE_UNDEAD_PLAYER
+
+// Sizes: 5 item spell slots in both; the nine classic locales.
+#define MAX_ITEM_PROTO_SPELLS MAX_ITEM_SPELLS
+#define MAX_LOCALE OLD_TOTAL_LOCALES
+
+// Config keys: ForeverCore's enum drops the type token from cmangos's name (same key, same value type).
+#define CONFIG_BOOL_ADDON_CHANNEL CONFIG_ADDON_CHANNEL
+#define CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_AUCTION CONFIG_ALLOW_TWO_SIDE_INTERACTION_AUCTION
+#define CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_GROUP CONFIG_ALLOW_TWO_SIDE_INTERACTION_GROUP
+#define CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_GUILD CONFIG_ALLOW_TWO_SIDE_INTERACTION_GUILD
+#define CONFIG_BOOL_INSTANCE_IGNORE_LEVEL CONFIG_INSTANCE_IGNORE_LEVEL
+#define CONFIG_BOOL_INSTANCE_IGNORE_RAID CONFIG_INSTANCE_IGNORE_RAID
+#define CONFIG_FLOAT_CREATURE_FAMILY_ASSISTANCE_RADIUS CONFIG_CREATURE_FAMILY_ASSISTANCE_RADIUS
+#define CONFIG_FLOAT_LISTEN_RANGE_YELL CONFIG_LISTEN_RANGE_YELL
+#define CONFIG_INT32_QUEST_LOW_LEVEL_HIDE_DIFF CONFIG_QUEST_LOW_LEVEL_HIDE_DIFF
+#define CONFIG_UINT32_CHARACTERS_PER_ACCOUNT CONFIG_CHARACTERS_PER_ACCOUNT
+#define CONFIG_UINT32_CHARACTERS_PER_REALM CONFIG_CHARACTERS_PER_REALM
+#define CONFIG_UINT32_MAX_PLAYER_LEVEL CONFIG_MAX_PLAYER_LEVEL
+#define CONFIG_UINT32_MIN_PETITION_SIGNS CONFIG_MIN_PETITION_SIGNS
+#define CONFIG_UINT32_SKILL_CHANCE_GREEN CONFIG_SKILL_CHANCE_GREEN
+#define CONFIG_UINT32_SKILL_CHANCE_GREY CONFIG_SKILL_CHANCE_GREY
+#define CONFIG_UINT32_SKILL_CHANCE_ORANGE CONFIG_SKILL_CHANCE_ORANGE
+#define CONFIG_UINT32_SKILL_CHANCE_YELLOW CONFIG_SKILL_CHANCE_YELLOW
+#define CONFIG_UINT32_SKILL_GAIN_CRAFTING CONFIG_SKILL_GAIN_CRAFTING
+
+// ---- free functions ----
+// The area record by id; ForeverCore keeps it in the area table store.
+inline AreaTableEntry const* GetAreaEntryByAreaID(uint32 id) { return sAreaTableStore.LookupEntry(id); }
+
+// ---- SQL store objects ----
+// cmangos keeps items, creature templates and game object templates in store objects with LookupEntry/GetMaxEntry;
+// ForeverCore asks ObjectMgr for the same records. GetMaxEntry is "one past the largest id used as a loop bound"
+// (every bot caller loops `id < GetMaxEntry()` and takes nullptr for a hole); the bound is cached for the loaded
+// store and refreshed when the number of records changes.
+template <typename Container>
+class CmangosMaxEntryCache
+{
+public:
+    uint32 Get(Container const& store) const
+    {
+        if (store.size() != _size)
+        {
+            uint32 upper = 0;
+            for (auto const& entry : store)
+                upper = std::max(upper, entry.first + 1);
+            _size = store.size();
+            _upper = upper;
+        }
+        return _upper;
+    }
+
+private:
+    mutable size_t _size = std::numeric_limits<size_t>::max();
+    mutable uint32 _upper = 0;
+};
+
+struct CmangosItemStorageProxy
+{
+    template <typename T = ItemTemplate>
+    T const* LookupEntry(uint32 id) const { return sObjectMgr.GetItemTemplate(id); }
+    uint32 GetMaxEntry() const { return _max.Get(sObjectMgr.GetItemTemplateStore()); }
+
+private:
+    mutable CmangosMaxEntryCache<ItemTemplateContainer> _max;
+};
+inline CmangosItemStorageProxy sItemStorage;
+
+struct CmangosCreatureStorageProxy
+{
+    template <typename T = CreatureTemplate>
+    T const* LookupEntry(uint32 id) const { return sObjectMgr.GetCreatureTemplate(id); }
+    uint32 GetMaxEntry() const { return _max.Get(sObjectMgr.GetCreatureTemplates()); }
+
+private:
+    mutable CmangosMaxEntryCache<CreatureTemplateContainer> _max;
+};
+inline CmangosCreatureStorageProxy sCreatureStorage;
+
+struct CmangosGOStorageProxy
+{
+    template <typename T = GameObjectTemplate>
+    T const* LookupEntry(uint32 id) const { return sObjectMgr.GetGameObjectTemplate(id); }
+    uint32 GetMaxEntry() const { return _max.Get(sObjectMgr.GetGameObjectTemplates()); }
+
+private:
+    mutable CmangosMaxEntryCache<GameObjectTemplateContainer> _max;
+};
+inline CmangosGOStorageProxy sGOStorage;
 
 #ifndef M_PI_F
 #define M_PI_F float(M_PI)
