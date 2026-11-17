@@ -44,6 +44,9 @@ public:
     void OnWorldInitialized() override
     {
         BotMgr::Instance().LoadConfig();
+        // The item store is loaded by now (World.cpp:1608, and item_classic_block at :1631); fill every mirror once so the
+        // bot brain looks items up without a lock (TbItemPrototype.cpp).
+        tbcompat::FillAll();
         TC_LOG_INFO("server.loading", "TortoiseBots (ForeverCore port, spike): {}", BotMgr::Instance().Enabled() ? "enabled" : "disabled");
     }
 
@@ -252,11 +255,11 @@ public:
         if (!proto)
             return Fail(handler, "item " + std::to_string(entry) + " does not exist.");
 
-        handler->PSendSysMessage("TortoiseBots: item %u \"%s\": class %u/%u, quality %u, inventory %u, item level %u, required level %u, buy %u sell %u.",
+        handler->PSendSysMessage("TortoiseBots: item %u \"%s\": class %u/%u, quality %u, inventory %u, item level %u, required level %u, buy %u sell %u, bag family %u (mask 0x%X).",
             proto->ItemId, proto->Name1.c_str(), proto->Class, proto->SubClass, proto->Quality, proto->InventoryType,
-            proto->ItemLevel, proto->RequiredLevel, proto->BuyPrice, proto->SellPrice);
-        handler->PSendSysMessage("TortoiseBots: armor %u, block %u, damage %.1f-%.1f type %u, delay %u, bonding %u, max stack %u, durability %u.",
-            uint32(proto->Armor), proto->Block, proto->Damage[0].DamageMin, proto->Damage[0].DamageMax,
+            proto->ItemLevel, proto->RequiredLevel, proto->BuyPrice, proto->SellPrice, proto->BagFamily, proto->BagFamilyMask);
+        handler->PSendSysMessage("TortoiseBots: armor %u, block %u (base %u + stat %u, not added), damage %.1f-%.1f type %u, delay %u, bonding %u, max stack %u, durability %u.",
+            uint32(proto->Armor), proto->Block, proto->BlockBase, proto->BlockStat, proto->Damage[0].DamageMin, proto->Damage[0].DamageMax,
             proto->Damage[0].DamageType, proto->Delay, proto->Bonding, proto->Stackable, proto->MaxDurability);
 
         std::string stats;

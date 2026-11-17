@@ -5,21 +5,27 @@
 #include "TbItemPrototype.h"
 #include "Item.h"
 #include "ItemEnchantmentMgr.h"
+#include "Log.h"
 #include "ObjectMgr.h"
+#include "Timer.h"
 #include "World.h"
 
 #include <algorithm>
+#include <atomic>
 #include <deque>
+#include <limits>
 #include <mutex>
 #include <unordered_map>
 
 namespace
 {
 // The mirrors live for the life of the process and never move: a deque keeps its nodes, so the pointers the bot code holds
-// stay valid. Bot code runs on the map threads, so the table and the filling are behind one mutex.
+// stay valid. They are all filled once from the module's WorldScript::OnWorldInitialized (FillAll), after which the table is
+// only read; a lookup that arrives before that fill takes the locked lazy path below, which never runs again.
 std::mutex g_mirrorLock;
 std::deque<ItemPrototype> g_mirrors;
 std::unordered_map<uint32, ItemPrototype const*> g_mirrorByEntry;
+std::atomic<bool> g_filled{false};
 
 // The stat value the core computes for an item at its base item level: Item::GetItemStatValue (Item.cpp:2432) is
 // StatPercentEditor * GetRandomPropertyPoints(itemLevel, quality, inventoryType, subClass) * 0.0001. Per-item scaling and
@@ -60,6 +66,56 @@ uint32 Flags(ItemTemplate const* tpl)
     if (tpl->HasFlag(ITEM_FLAG_NO_DISENCHANT))       flags |= ITEM_FLAG_NO_DISENCHANT;      // 0x8000
     if (tpl->HasFlag(ITEM_FLAG_UNIQUE_EQUIPPABLE))   flags |= ITEM_FLAG_UNIQUE_EQUIPPED;    // 0x80000, cmangos's name for it
     return flags;
+}
+
+// ForeverCore's bag family is a mask (ItemTemplate.h:356-375); the old core has one number per family (cmangos
+// ItemPrototype.h:97-108: NONE 0, ARROWS 1, BULLETS 2, SOUL_SHARDS 3, HERBS 6, ENCHANTING_SUPP 7, ENGINEERING_SUPP 8,
+// KEYS 9). A mask that is exactly one of those bits becomes the old number. The AhBot pricing groups trade goods by bag
+// family (runtime/AhBotPricing.cpp:23 -> runtime/policy/ah/AhBotPricingPolicy.h:97-101, switch at :415-421), and its
+// herb/enchanting/leather/meat/mining groups are the numbers those categories carry on the old core's data. A trade good
+// whose mask names exactly one of those categories gets its number (0x8->12, 0x10000->10, 0x400->13); a mask with several
+// categories, or a later-expansion family, becomes NONE - no single old family is true for it, and the switch reads NONE
+// as "no group". SHIM-R2-NOTES.md lists the masks affected and their items.
+uint32 BagFamilyNumber(uint32 mask, uint32 itemClass)
+{
+    switch (mask)
+    {
+        case BAG_FAMILY_MASK_ARROWS:            return 1;
+        case BAG_FAMILY_MASK_BULLETS:           return 2;
+        case BAG_FAMILY_MASK_SOUL_SHARDS:       return 3;
+        case BAG_FAMILY_MASK_HERBS:             return 6;
+        case BAG_FAMILY_MASK_ENCHANTING_SUPP:   return 7;
+        case BAG_FAMILY_MASK_ENGINEERING_SUPP:  return 8;
+        case BAG_FAMILY_MASK_KEYS:              return 9;
+        default:                                break;
+    }
+
+    if (itemClass == ITEM_CLASS_TRADE_GOODS)
+    {
+        struct Category { uint32 Mask; uint32 Number; };
+        static constexpr Category TradeGoodCategories[] =
+        {
+            { BAG_FAMILY_MASK_HERBS,             6 },   // the AhBot herb group
+            { BAG_FAMILY_MASK_ENCHANTING_SUPP,   7 },   // enchanting
+            { BAG_FAMILY_MASK_LEATHERWORKING_SUPP, 12 },// leather
+            { BAG_FAMILY_MASK_COOKING_SUPP,      10 },  // meat
+            { BAG_FAMILY_MASK_MINING_SUPP,       13 },  // metal/stone
+        };
+
+        uint32 number = 0;
+        uint32 categories = 0;
+        for (Category const& category : TradeGoodCategories)
+        {
+            if (mask & category.Mask)
+            {
+                number = category.Number;
+                ++categories;
+            }
+        }
+        if (categories == 1)
+            return number;
+    }
+    return 0;
 }
 
 void Fill(ItemPrototype& mirror, ItemTemplate const* tpl)
@@ -107,12 +163,18 @@ void Fill(ItemPrototype& mirror, ItemTemplate const* tpl)
     mirror.Damage[0].DamageMax = maxDamage;
     mirror.Damage[0].DamageType = tpl->GetDamageType();
 
-    // Block and the resistances are item stats on ForeverCore where cmangos had a column each: the value the item grants
-    // is the sum of that stat mod's computed value.
-    mirror.Block = uint32(StatTotal(tpl, ITEM_MOD_BLOCK_VALUE));
+    // The shield's own block value is the classic column: ForeverCore keeps it in item_classic_block and adds it to the
+    // shield's block (ObjectMgr.cpp:808-833, Player.cpp:8972-8984), the same place the old core's item_template.block went
+    // (ObjectMgr.cpp:2301, Player.cpp:8478-8479). The ITEM_MOD_BLOCK_VALUE stat is a separate bonus on this core
+    // (Player.cpp:8871-8873) and was an equip spell on the old core - never part of its Block column - so it is not added;
+    // BlockStat keeps it for the live check. The resistances are item stats on ForeverCore where cmangos had a column each.
+    mirror.BlockBase = sObjectMgr->GetItemClassicBlock(tpl->GetId());
+    mirror.BlockStat = uint32(std::max<int32>(0, StatTotal(tpl, ITEM_MOD_BLOCK_VALUE)));
+    mirror.Block = mirror.BlockBase;
     mirror.Armor = int32(tpl->GetArmor(itemLevel));
     int32 const allSchools = StatTotal(tpl, ITEM_MOD_CLASSIC_RESISTANCE_ALL_SCHOOLS);
-    mirror.HolyRes = StatTotal(tpl, ITEM_MOD_HOLY_RESISTANCE) + allSchools;
+    // "+X to all resistances" reaches fire, nature, frost, shadow and arcane, but not holy (Player.cpp:8930-8932).
+    mirror.HolyRes = StatTotal(tpl, ITEM_MOD_HOLY_RESISTANCE);
     mirror.FireRes = StatTotal(tpl, ITEM_MOD_FIRE_RESISTANCE) + allSchools;
     mirror.NatureRes = StatTotal(tpl, ITEM_MOD_NATURE_RESISTANCE) + allSchools;
     mirror.FrostRes = StatTotal(tpl, ITEM_MOD_FROST_RESISTANCE) + allSchools;
@@ -144,7 +206,8 @@ void Fill(ItemPrototype& mirror, ItemTemplate const* tpl)
     mirror.Area = tpl->GetArea(0);
     mirror.Map = tpl->GetMap();
     mirror.Duration = tpl->GetDuration();
-    mirror.BagFamily = tpl->GetBagFamily();
+    mirror.BagFamilyMask = tpl->GetBagFamily();
+    mirror.BagFamily = BagFamilyNumber(mirror.BagFamilyMask, tpl->GetClass());
 }
 }  // namespace
 
@@ -178,15 +241,72 @@ uint32 ItemPrototype::GetProficiencySkill() const
 
 namespace tbcompat
 {
+namespace
+{
+ItemPrototype const* Find(uint32 entry)
+{
+    auto known = g_mirrorByEntry.find(entry);
+    return known != g_mirrorByEntry.end() ? known->second : nullptr;
+}
+}  // namespace
+
+// Filled once, from the item store that World::SetInitialWorldSettings has loaded (World.cpp:1608; item_classic_block at
+// World.cpp:1631) just before the world goes online (Main.cpp:372). The container is not modified again, so the lookups
+// read it without the lock; the release store publishes the fill to the map threads.
+void FillAll()
+{
+    uint32 const start = getMSTime();
+    std::lock_guard<std::mutex> lock(g_mirrorLock);
+    if (g_filled.load(std::memory_order_relaxed))
+        return;
+
+    ItemTemplateContainer const& store = sObjectMgr->GetItemTemplateStore();
+    if (store.empty())
+    {
+        TC_LOG_WARN("server.loading", "TortoiseBots: item mirror fill found an empty item store; keeping the lazy path.");
+        return;
+    }
+
+    uint32 stackableAnomalies = 0;
+    g_mirrorByEntry.reserve(store.size());
+
+    for (auto const& entry : store)
+    {
+        ItemTemplate const& tpl = entry.second;
+        int32 const stackable = tpl.ExtendedData->Stackable;
+        if (stackable <= 0 || stackable == std::numeric_limits<int32>::max())
+            ++stackableAnomalies;
+
+        // Keep a mirror a pre-fill lazy lookup already handed out: its address must not move or die.
+        if (g_mirrorByEntry.find(entry.first) != g_mirrorByEntry.end())
+            continue;
+
+        ItemPrototype& mirror = g_mirrors.emplace_back();
+        Fill(mirror, &tpl);
+        g_mirrorByEntry[entry.first] = &mirror;
+    }
+
+    g_filled.store(true, std::memory_order_release);
+    TC_LOG_INFO("server.loading", "TortoiseBots: item mirrors filled: {} items in {} ms, {} with a Stackable column <= 0 or INT_MAX.",
+        uint32(store.size()), GetMSTimeDiffToNow(start), stackableAnomalies);
+}
+
 ItemPrototype const* ItemProto(uint32 entry)
 {
     if (!entry)
         return nullptr;
 
+    // Steady state: the table was filled at startup and is never written again.
+    if (g_filled.load(std::memory_order_acquire))
+        return Find(entry);
+
+    // A lookup before the fill (not expected: the fill runs before the world is online) builds one mirror under the lock.
     std::lock_guard<std::mutex> lock(g_mirrorLock);
-    auto known = g_mirrorByEntry.find(entry);
-    if (known != g_mirrorByEntry.end())
-        return known->second;
+    if (g_filled.load(std::memory_order_relaxed))
+        return Find(entry);
+
+    if (ItemPrototype const* known = Find(entry))
+        return known;
 
     ItemTemplate const* tpl = sObjectMgr->GetItemTemplate(entry);
     if (!tpl)

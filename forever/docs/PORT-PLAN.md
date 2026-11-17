@@ -7,7 +7,10 @@ Read `SPIKE.md` first. This file says how the rest of the module gets onto Forev
 1. No change to the core. A need for one is written down and asked, never patched.
 2. One repository, two cores. The Turtle build (`TortoiseBots.cmake`) and the ForeverCore build (`CMakeLists.txt`)
    both stay green on this branch. A change that breaks the Turtle build is not finished.
-3. The core pin (`forever/PINNED_CORE`) moves on purpose, in its own commit, with the gates re-run.
+3. The core pin (`forever/PINNED_CORE`) moves on purpose, in its own commit, with the gates re-run. The item mirror
+   (`forever/src/compat/TbItemPrototype.*`) is filled once, from `WorldScript::OnWorldInitialized`: the core has no item
+   template reload at the pin (`LoadItemTemplates` is called once, `World.cpp:1608`), so a moved pin must re-check that
+   the store is still loaded there and still not reloaded.
 4. Game data is not ported blindly. Spell ids, talents, races, zones, travel nodes and boss data are re-derived from
    ForeverCore's DB2 and world database, feature by feature.
 

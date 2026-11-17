@@ -98,7 +98,9 @@ struct ItemPrototype
     uint32 Delay;                                           // T :453 milliseconds                   F GetDelay()              :902
     float  RangedModRange;                                  // T :454 percent, ranged attack range   F GetRangedModRange()     :903
     _ItemDamage Damage[MAX_ITEM_PROTO_DAMAGES];             // T :456 per-school damage lines        F GetDamage()/:994, GetDamageType()/:901
-    uint32 Block;                                           // T :457 shield block value             F ITEM_MOD_BLOCK_VALUE stat value
+    uint32 Block;                                           // T :457 shield block value             F GetItemClassicBlock(entry) ObjectMgr.h:1106
+    uint32 BlockBase;                                       // diagnostic: Block before any other part (the classic column)
+    uint32 BlockStat;                                       // diagnostic: the item's ITEM_MOD_BLOCK_VALUE stat, NOT added to Block
     int32 Armor;                                            // T :458 armor from item_template       F GetArmor(itemLevel)     :992
     int32 HolyRes;                                          // T :459 holy resistance granted        F ITEM_MOD_HOLY_RESISTANCE stat value
     int32 FireRes;                                          // T :460                               F ITEM_MOD_FIRE_RESISTANCE
@@ -115,7 +117,8 @@ struct ItemPrototype
     uint32 Area;                                            // T :477 zone bound (first zone)        F GetArea(0)              :910
     uint32 Map;                                             // T :478 instance bound                 F GetMap()                :911
     uint32 Duration;                                        // T :479 seconds                        F GetDuration()           :918
-    uint32 BagFamily;                                       // T :480 BAG_FAMILY_*                   F GetBagFamily()          :912
+    uint32 BagFamily;                                       // T :480 BAG_FAMILY_* number            F the core mask, converted (TbItemPrototype.cpp)
+    uint32 BagFamilyMask;                                   // diagnostic: the core's mask before the conversion
 
     // The old struct's helpers, same answers from the fields above (cmangos ItemPrototype.h:497-545).
     bool CanChangeEquipStateInCombat() const;
@@ -131,8 +134,11 @@ struct ItemPrototype
 
 namespace tbcompat
 {
-    // The mirror of an item, built on first use and kept for the life of the process; nullptr when the core has no such item.
-    // Safe from any thread (the bot brain runs on map threads).
+    // Fills every mirror from the item store, once, after the store is loaded (the module's WorldScript::OnWorldInitialized).
+    // After that the table is read without a lock from any thread. A lookup before the fill takes the locked lazy path.
+    void FillAll();
+
+    // The mirror of an item; nullptr when the core has no such item. Safe from any thread (the bot brain runs on map threads).
     ItemPrototype const* ItemProto(uint32 entry);
     ItemPrototype const* ItemProto(ItemTemplate const* tpl);    // nullptr for nullptr
     ItemTemplate const* ItemTpl(ItemPrototype const* proto);   // back to the core's record
