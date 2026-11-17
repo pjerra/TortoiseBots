@@ -70,11 +70,29 @@ namespace ai
         std::vector<TankPostUnit> Calculate() override;
     };
 
+    // "add crew switch::<entry>": the switch unit's life as this bot's fight has seen it (SwitchUnitState: 0 NeverSeen,
+    // 1 Alive, 2 Dead). The read is the tank-post grid search within 200 yd; a unit found alive marks it seen alive,
+    // and once seen alive an empty search is its death, while a unit never seen stays NeverSeen. One sighting serves
+    // both crew values. Reset when the bot leaves combat or changes map or instance, so one fight's sighting never
+    // opens the next fight's duty.
+    class AddCrewSwitchValue : public CalculatedValue<std::uint8_t>, public Qualified
+    {
+    public:
+        AddCrewSwitchValue(PlayerbotAI* ai) : CalculatedValue<uint8>(ai, "add crew switch", 1), Qualified() {}
+        uint8 Calculate() override;
+
+    private:
+        std::uint8_t seen_ = static_cast<std::uint8_t>(SwitchUnitState::NeverSeen);
+        std::uint32_t mapId_ = 0;
+        std::uint32_t instanceId_ = 0;
+        std::uint32_t entry_ = 0;
+    };
+
     // "add crew::<boss>": AiPlayerbot.DungeonRunAddCrew's state for this bot, once the map's add_crew row for the
-    // qualifier boss exists and its switch unit (`target_entry`) no longer stands alive: Waiting (the key or the row is
-    // off, or the switch unit still lives: today's add duty stands), Crew (melee, tanks, and the first `priority` AoE
-    // ranged bots of the raid) or NotCrew (a ranged damage dealer past the crew: it stays on the boss). The switch unit
-    // is read through the cached "tank post units" search (an empty list counts as dead: a corpse that despawned).
+    // qualifier boss exists and its switch unit (`target_entry`) has been seen dead: Waiting (the key or the row is
+    // off, or the switch unit still lives or was never seen: today's add duty stands), Crew (melee, tanks, and the
+    // first `priority` AoE ranged bots of the raid) or NotCrew (a ranged damage dealer past the crew: it stays on the
+    // boss). The switch unit's life is the "add crew switch" value's sighting, from the same grid search.
     // Written for the uint8 enum (AddCrewState): 0 Waiting, 1 Crew, 2 NotCrew.
     class AddCrewValue : public CalculatedValue<std::uint8_t>, public Qualified
     {
@@ -112,7 +130,8 @@ namespace ai
     // in mode `early` and the boss (as the raid fights it) flies; the crew's AoE ranged take the boss's adds, the
     // ranged past the crew the split key covers stay on the boss while the switch unit lives, and the rest of them stay
     // on the switch unit (Switch) until it dies, when every one of them takes the boss. None everywhere else: with the
-    // key or the row off, or with the boss on the ground.
+    // key or the row off, with the boss on the ground, or with the switch unit never seen (the sighting is the
+    // "add crew switch" value's).
     class AddCrewEarlyValue : public CalculatedValue<std::uint8_t>, public Qualified
     {
     public:

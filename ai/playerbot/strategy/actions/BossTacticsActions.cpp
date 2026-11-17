@@ -38,6 +38,7 @@
 #include "playerbot/policy/combat/AoeTauntPolicy.h"
 #include "playerbot/policy/combat/TauntHeldTargetPolicy.h"
 #include "playerbot/policy/raid/UseObjectPolicy.h"
+#include "playerbot/policy/raid/OnyxiaBreathPolicy.h"
 #include "playerbot/policy/raid/TankSwapPolicy.h"
 #include "playerbot/policy/raid/BurnManaPolicy.h"
 #include "playerbot/policy/raid/RangedOnlyPolicy.h"
@@ -5926,7 +5927,12 @@ Unit* PickBossKillFirst(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fi
                     for (const BossTacticRow& row : *gate)
                         if (row.kind == BossTacticKind::GateHold)
                             gateRows.push_back(&row);
-                return GateHoldsUnit(ai, gateRows, EngagedBossOfEntry(bot, bossEntry));
+                // Onyxia's own engagement source, the one the boss-duty trigger's gate reads ("onyxia boss"), so the two
+                // readings cannot disagree on the unit they hold her off with. Any other boss comes from the entry scan.
+                Unit* const boss = bossEntry == kOnyxiaEntry
+                    ? ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"))
+                    : EngagedBossOfEntry(bot, bossEntry);
+                return GateHoldsUnit(ai, gateRows, boss);
             });
     std::vector<TacticCandidate> candidates;
     std::vector<Unit*> units;

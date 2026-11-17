@@ -249,6 +249,7 @@ namespace ai
             creators["hold kill blockers"] = [](PlayerbotAI* ai) { return new HoldKillBlockersValue(ai); };
             creators["fighting blockers"] = [](PlayerbotAI* ai) { return new GateHoldFightingBlockersValue(ai); };
             creators["tank post units"] = [](PlayerbotAI* ai) { return new TankPostUnitsValue(ai); };
+            creators["add crew switch"] = [](PlayerbotAI* ai) { return new AddCrewSwitchValue(ai); };
             creators["add crew"] = [](PlayerbotAI* ai) { return new AddCrewValue(ai); };
             creators["add crew keeps duty"] = [](PlayerbotAI* ai) { return new AddCrewKeepsDutyValue(ai); };
             creators["add crew rank"] = [](PlayerbotAI* ai) { return new AddCrewRankValue(ai); };

@@ -2115,19 +2115,33 @@ static CastDangerZone Zone(float x, float y, float z, float radius)
 }
 
 // Onyxia walk 2e (AiPlayerbot.DungeonRunAddCrew): the failing case is the switch itself. The kind says nothing while
-// the key or the row is off, or while the row's switch unit still lives; once it is dead, the crew takes the boss's
-// adds and every bot past the crew does not.
+// the key or the row is off, while the row's switch unit still lives, or while this bot has never seen it (an empty
+// 200 yd search is no death: the Onyxia take-off before Cindarion appears); once it is seen dead, the crew takes the
+// boss's adds and every bot past the crew does not.
 static void AddCrewState_SwitchesAfterDeath()
 {
-    CHECK(AddCrewStateFor(true, true, false, true) == AddCrewState::Crew);
-    CHECK(AddCrewStateFor(true, true, false, false) == AddCrewState::NotCrew);
-    CHECK(AddCrewStateFor(true, true, true, true) == AddCrewState::Waiting);   // the switch unit still lives
-    CHECK(AddCrewStateFor(true, true, true, false) == AddCrewState::Waiting);
-    CHECK(AddCrewStateFor(false, true, false, true) == AddCrewState::Waiting);  // key off: today's duty
-    CHECK(AddCrewStateFor(true, false, false, true) == AddCrewState::Waiting);  // no row on the map
+    CHECK(AddCrewStateFor(true, true, SwitchUnitState::Dead, true) == AddCrewState::Crew);
+    CHECK(AddCrewStateFor(true, true, SwitchUnitState::Dead, false) == AddCrewState::NotCrew);
+    CHECK(AddCrewStateFor(true, true, SwitchUnitState::Alive, true) == AddCrewState::Waiting);   // the switch unit lives
+    CHECK(AddCrewStateFor(true, true, SwitchUnitState::Alive, false) == AddCrewState::Waiting);
+    CHECK(AddCrewStateFor(true, true, SwitchUnitState::NeverSeen, true) == AddCrewState::Waiting);  // not met yet
+    CHECK(AddCrewStateFor(true, true, SwitchUnitState::NeverSeen, false) == AddCrewState::Waiting);
+    CHECK(AddCrewStateFor(false, true, SwitchUnitState::Dead, true) == AddCrewState::Waiting);   // key off: today's duty
+    CHECK(AddCrewStateFor(true, false, SwitchUnitState::Dead, true) == AddCrewState::Waiting);   // no row on the map
     CHECK(static_cast<int>(AddCrewState::Waiting) == 0);
     CHECK(static_cast<int>(AddCrewState::Crew) == 1);
     CHECK(static_cast<int>(AddCrewState::NotCrew) == 2);
+    CHECK(static_cast<int>(SwitchUnitState::NeverSeen) == 0);
+    CHECK(static_cast<int>(SwitchUnitState::Alive) == 1);
+    CHECK(static_cast<int>(SwitchUnitState::Dead) == 2);
+    // The sighting moves one way and only on what the bot saw: an empty search keeps NeverSeen until the unit stands
+    // alive, a sighting turns dead when nothing lives, and a respawn (a later pull) is alive again.
+    CHECK(SwitchUnitStateNext(SwitchUnitState::NeverSeen, false) == SwitchUnitState::NeverSeen);
+    CHECK(SwitchUnitStateNext(SwitchUnitState::NeverSeen, true) == SwitchUnitState::Alive);
+    CHECK(SwitchUnitStateNext(SwitchUnitState::Alive, true) == SwitchUnitState::Alive);
+    CHECK(SwitchUnitStateNext(SwitchUnitState::Alive, false) == SwitchUnitState::Dead);
+    CHECK(SwitchUnitStateNext(SwitchUnitState::Dead, false) == SwitchUnitState::Dead);
+    CHECK(SwitchUnitStateNext(SwitchUnitState::Dead, true) == SwitchUnitState::Alive);
 }
 
 // The loader's rule for the row: the switch unit (never the boss itself) and the crew size 0-5, nothing else. A gate
@@ -2208,46 +2222,53 @@ static void AddCrewLoader_Rows()
 // split at the switch unit's death. While it lives only the crew leaves it (n = 0, the 2m set) and every other ranged
 // damage dealer stays on it (Switch: no whelp duty, no boss duty); the next n AoE ranks past the crew leave it too, and
 // 40 leaves every ranged damage dealer, the no-AoE-rank bots included (2n's split). Once it dies every ranged damage
-// dealer past the crew has the boss's duty. The key, the mode and the ground still turn it all off, and the tanks, the
-// healers and the melee keep their own duty either way.
+// dealer past the crew has the boss's duty. A switch unit this bot has never seen (the Onyxia take-off before
+// Cindarion appears) keeps today's duty, never the crew's phase. The key, the mode and the ground still turn it all
+// off, and the tanks, the healers and the melee keep their own duty either way.
 static void AddCrewEarlyDuty_PhaseAndRoles()
 {
-    // The whole duty: key, mode, switch unit's life, the boss's flight and the split (crew 2, the switch unit alive).
-    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 0, 2, 0) == AddCrewEarly::Whelps);
-    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 1, 2, 0) == AddCrewEarly::Whelps);
-    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 2, 2, 0) == AddCrewEarly::Switch); // past the crew
-    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 5, 2, 0) == AddCrewEarly::Switch);
-    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, -1, 2, 0) == AddCrewEarly::Switch);
+    // The whole duty: key, mode, the switch unit's sighting, the boss's flight and the split (crew 2, seen alive).
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::Alive, true, false, false, true, 0, 2, 0) == AddCrewEarly::Whelps);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::Alive, true, false, false, true, 1, 2, 0) == AddCrewEarly::Whelps);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::Alive, true, false, false, true, 2, 2, 0) == AddCrewEarly::Switch);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::Alive, true, false, false, true, 5, 2, 0) == AddCrewEarly::Switch);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::Alive, true, false, false, true, -1, 2, 0) == AddCrewEarly::Switch);
     // The next n ranks past the crew keep the boss's duty while the switch unit lives.
-    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 2, 2, 3) == AddCrewEarly::Boss);
-    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 4, 2, 3) == AddCrewEarly::Boss);
-    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 5, 2, 3) == AddCrewEarly::Switch);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::Alive, true, false, false, true, 2, 2, 3) == AddCrewEarly::Boss);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::Alive, true, false, false, true, 4, 2, 3) == AddCrewEarly::Boss);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::Alive, true, false, false, true, 5, 2, 3) == AddCrewEarly::Switch);
     // 40 is every ranged damage dealer past the crew, the bots without an AoE rank (rank -1) included: the 2n split.
-    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 7, 2, 40) == AddCrewEarly::Boss);
-    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, -1, 2, 40) == AddCrewEarly::Boss);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::Alive, true, false, false, true, 7, 2, 40) == AddCrewEarly::Boss);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::Alive, true, false, false, true, -1, 2, 40) == AddCrewEarly::Boss);
     CHECK(!AddCrewBossWhileSwitch(-1, 2, 39)); // 39 is a count of ranks, not "every"
     CHECK(AddCrewBossWhileSwitch(-1, 2, 40));
+    // A switch unit this bot has never seen keeps today's duty, whatever the roles and the split: the take-off before
+    // Cindarion appears reads None, never Whelps or Boss (an empty 200 yd search is no death).
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::NeverSeen, true, false, false, true, 0, 2, 0) == AddCrewEarly::None);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::NeverSeen, true, false, false, true, 1, 2, 0) == AddCrewEarly::None);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::NeverSeen, true, false, false, true, -1, 2, 40) == AddCrewEarly::None);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::NeverSeen, true, true, false, true, 0, 2, 0) == AddCrewEarly::None);
     // Once the switch unit dies the whole place applies whatever the split: the crew on the whelps, every other ranged
     // damage dealer on the boss.
-    CHECK(AddCrewEarlyDuty(true, true, false, true, false, false, true, 0, 2, 0) == AddCrewEarly::Whelps);
-    CHECK(AddCrewEarlyDuty(true, true, false, true, false, false, true, 7, 2, 0) == AddCrewEarly::Boss);
-    CHECK(AddCrewEarlyDuty(true, true, false, true, false, false, true, -1, 2, 0) == AddCrewEarly::Boss);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::Dead, true, false, false, true, 0, 2, 0) == AddCrewEarly::Whelps);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::Dead, true, false, false, true, 7, 2, 0) == AddCrewEarly::Boss);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::Dead, true, false, false, true, -1, 2, 0) == AddCrewEarly::Boss);
     // Key off, plain row, the ground: nothing, whatever the split.
-    CHECK(AddCrewEarlyDuty(false, true, true, true, false, false, true, 0, 2, 0) == AddCrewEarly::None);
-    CHECK(AddCrewEarlyDuty(false, true, false, true, false, false, true, 7, 2, 40) == AddCrewEarly::None);
-    CHECK(AddCrewEarlyDuty(true, false, true, true, false, false, true, 0, 2, 0) == AddCrewEarly::None);
-    CHECK(AddCrewEarlyDuty(true, true, true, false, false, false, true, 7, 2, 40) == AddCrewEarly::None);
+    CHECK(AddCrewEarlyDuty(false, true, SwitchUnitState::Alive, true, false, false, true, 0, 2, 0) == AddCrewEarly::None);
+    CHECK(AddCrewEarlyDuty(false, true, SwitchUnitState::Dead, true, false, false, true, 7, 2, 40) == AddCrewEarly::None);
+    CHECK(AddCrewEarlyDuty(true, false, SwitchUnitState::Alive, true, false, false, true, 0, 2, 0) == AddCrewEarly::None);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::Alive, false, false, false, true, 7, 2, 40) == AddCrewEarly::None);
     // The tanks, the healers and the melee keep their own duty: a tank must hold her, the melee cannot reach her.
-    CHECK(AddCrewEarlyDuty(true, true, true, true, true, false, true, 0, 2, 40) == AddCrewEarly::None);
-    CHECK(AddCrewEarlyDuty(true, true, false, true, true, false, true, 0, 2, 40) == AddCrewEarly::None);
-    CHECK(AddCrewEarlyDuty(true, true, true, true, false, true, true, 0, 2, 40) == AddCrewEarly::None);
-    CHECK(AddCrewEarlyDuty(true, true, false, true, false, true, true, 0, 2, 40) == AddCrewEarly::None);
-    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, false, -1, 2, 40) == AddCrewEarly::None);
-    CHECK(AddCrewEarlyDuty(true, true, false, true, false, false, false, -1, 2, 40) == AddCrewEarly::None);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::Alive, true, true, false, true, 0, 2, 40) == AddCrewEarly::None);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::Dead, true, true, false, true, 0, 2, 40) == AddCrewEarly::None);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::Alive, true, false, true, true, 0, 2, 40) == AddCrewEarly::None);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::Dead, true, false, true, true, 0, 2, 40) == AddCrewEarly::None);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::Alive, true, false, false, false, -1, 2, 40) == AddCrewEarly::None);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::Dead, true, false, false, false, -1, 2, 40) == AddCrewEarly::None);
     // A crew of 0 (the melee and the tanks alone): every ranged damage dealer is past it.
-    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 0, 0, 0) == AddCrewEarly::Switch);
-    CHECK(AddCrewEarlyDuty(true, true, true, true, false, false, true, 0, 0, 1) == AddCrewEarly::Boss);
-    CHECK(AddCrewEarlyDuty(true, true, false, true, false, false, true, 0, 0, 0) == AddCrewEarly::Boss);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::Alive, true, false, false, true, 0, 0, 0) == AddCrewEarly::Switch);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::Alive, true, false, false, true, 0, 0, 1) == AddCrewEarly::Boss);
+    CHECK(AddCrewEarlyDuty(true, true, SwitchUnitState::Dead, true, false, false, true, 0, 0, 0) == AddCrewEarly::Boss);
     CHECK(static_cast<int>(AddCrewEarly::None) == 0);
     CHECK(static_cast<int>(AddCrewEarly::Whelps) == 1);
     CHECK(static_cast<int>(AddCrewEarly::Boss) == 2);

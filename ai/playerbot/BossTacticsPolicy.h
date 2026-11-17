@@ -4925,6 +4925,21 @@ namespace ai
     // its own classes). The kind is generic: the caller supplies the roles and the raid order.
     enum class AddCrewState : std::uint8_t { Waiting = 0, Crew = 1, NotCrew = 2 };
 
+    // The switch unit's life as one bot's fight has seen it. The grid search that reads the unit covers 200 yd and
+    // returns nothing both before the unit first appears and after its corpse has despawned, so an empty list alone is
+    // no death: only a unit seen alive and then gone is dead, and one never seen leaves today's duty standing (a bot
+    // that has not met the switch unit yet must not take the crew's phase on).
+    enum class SwitchUnitState : std::uint8_t { NeverSeen = 0, Alive = 1, Dead = 2 };
+
+    // One read of the switch unit moves its state: a living unit is seen alive, and a sighting once made stays dead
+    // while nothing lives; a unit that stands alive again after that is a later pull's, so it is seen alive again.
+    inline SwitchUnitState SwitchUnitStateNext(SwitchUnitState seen, bool aliveNow)
+    {
+        if (aliveNow)
+            return SwitchUnitState::Alive;
+        return seen == SwitchUnitState::Alive ? SwitchUnitState::Dead : seen;
+    }
+
     // AoE ranged classes in crew order (1.12 Classes): mage 0, warlock 1, hunter 2, shaman 3, druid 4; -1 none.
     inline int AddCrewClassOrder(std::uint8_t classId)
     {
@@ -4965,9 +4980,12 @@ namespace ai
         return aoeRank >= 0 && aoeRank < crewSize;
     }
 
-    inline AddCrewState AddCrewStateFor(bool keyOn, bool rowFound, bool switchAlive, bool member)
+    // The post-death crew opens on a switch unit seen dead alone: an empty search reads as Waiting until the bot has
+    // seen the unit alive, so the take-off before Cindarion appears does not open the crew on every bot that never
+    // had him in its 200 yd search.
+    inline AddCrewState AddCrewStateFor(bool keyOn, bool rowFound, SwitchUnitState switchState, bool member)
     {
-        if (!keyOn || !rowFound || switchAlive)
+        if (!keyOn || !rowFound || switchState != SwitchUnitState::Dead)
             return AddCrewState::Waiting;
         return member ? AddCrewState::Crew : AddCrewState::NotCrew;
     }
@@ -4979,8 +4997,9 @@ namespace ai
     // rank AiPlayerbot.DungeonRunAddCrewBossWhileSwitch covers, where they keep the boss (`Boss`, and the kill_first
     // pick skips that row); once the switch unit dies every one of them has the boss's duty. The tanks, the healers and
     // the melee keep their own duty (`None`, as with the key or the row off): a tank must hold a flying boss, and the
-    // melee cannot reach one. `None` is today's duty everywhere the early phase does not run: the key or the row off or
-    // the boss on the ground.
+    // melee cannot reach one. `None` is today's duty everywhere the early phase does not run: the key or the row off, the
+    // boss on the ground, or a switch unit this bot has never seen (SwitchUnitState: only a sighting opens the duty, and
+    // only a sighting that died turns the whole place over, so the take-off before the unit appears changes nothing).
     enum class AddCrewEarly : std::uint8_t { None = 0, Whelps = 1, Boss = 2, Switch = 3 };
 
     // This bot's place under an early row, whatever the phase: the ranged damage dealers inside the crew take the adds,
@@ -5004,14 +5023,14 @@ namespace ai
         return aoeRank >= crewSize && aoeRank < int(crewSize) + int(n);
     }
 
-    inline AddCrewEarly AddCrewEarlyDuty(bool keyOn, bool early, bool switchAlive, bool airborne, bool tank,
+    inline AddCrewEarly AddCrewEarlyDuty(bool keyOn, bool early, SwitchUnitState switchState, bool airborne, bool tank,
                                          bool healer, bool ranged, int aoeRank, std::uint8_t crewSize,
                                          std::uint32_t bossWhileSwitch)
     {
-        if (!keyOn || !early || !airborne)
+        if (!keyOn || !early || !airborne || switchState == SwitchUnitState::NeverSeen)
             return AddCrewEarly::None;
         const AddCrewEarly place = AddCrewEarlyPlace(tank, healer, ranged, aoeRank, crewSize);
-        if (!switchAlive)
+        if (switchState == SwitchUnitState::Dead)
             return place;
         if (place == AddCrewEarly::Boss)
             return AddCrewBossWhileSwitch(aoeRank, crewSize, bossWhileSwitch) ? place : AddCrewEarly::Switch;

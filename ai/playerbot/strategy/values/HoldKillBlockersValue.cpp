@@ -189,6 +189,37 @@ std::vector<TankPostUnit> TankPostUnitsValue::Calculate()
     return units;
 }
 
+// AiPlayerbot.DungeonRunAddCrew: how this bot's fight has seen the row's switch unit. The tank-post grid search covers
+// 200 yd and returns nothing both before the unit first appears and after its corpse is gone, so an empty list is no
+// death by itself: the value remembers a sighting, a living unit marks one, and only a unit seen alive and then gone
+// reads dead. A bot that leaves combat or changes map or instance starts the sighting over, so one fight's corpse never
+// opens the next fight's crew (the Onyxia take-off before Cindarion appears).
+uint8 AddCrewSwitchValue::Calculate()
+{
+    const uint32 entry = QualifierEntry(qualifier);
+    if (!sPlayerbotAIConfig.dungeonRunAddCrew || !bot->IsInCombat() || bot->GetMapId() != mapId_ ||
+        bot->GetInstanceId() != instanceId_ || entry != entry_)
+    {
+        seen_ = static_cast<uint8>(SwitchUnitState::NeverSeen);
+        mapId_ = bot->GetMapId();
+        instanceId_ = bot->GetInstanceId();
+        entry_ = entry;
+        return seen_;
+    }
+    bool alive = false;
+    for (const TankPostUnit& unit :
+        AI_VALUE2(std::vector<TankPostUnit>, "tank post units", static_cast<int32>(entry)))
+    {
+        if (unit.alive)
+        {
+            alive = true;
+            break;
+        }
+    }
+    seen_ = static_cast<uint8>(SwitchUnitStateNext(static_cast<SwitchUnitState>(seen_), alive));
+    return seen_;
+}
+
 // AiPlayerbot.DungeonRunAddCrew: the raid's AoE ranged damage dealers through the group's live members and their own
 // AIs, and this bot's place among them (AddCrewRank). The switch unit's life is not read here: the crew's place
 // stands while it lives, so the Onyxia ground phase can apply it before the row's switch dies.
@@ -228,8 +259,9 @@ bool AddCrewKeepsDutyValue::Calculate()
         AI_VALUE(std::int32_t, "add crew rank"), crewSize);
 }
 
-// AiPlayerbot.DungeonRunAddCrew: this bot's place once the row's switch unit is dead. The switch unit is read through
-// the same grid search as the tank_post (alive or dead; an empty list counts as dead: a corpse that despawned).
+// AiPlayerbot.DungeonRunAddCrew: this bot's place once the row's switch unit is dead. The unit's life is the "add crew
+// switch" value's sighting over the tank-post grid search: dead only after this bot saw it alive, so the take-off
+// before the unit appears leaves the row waiting.
 uint8 AddCrewValue::Calculate()
 {
     if (!sPlayerbotAIConfig.dungeonRunAddCrew)
@@ -238,18 +270,9 @@ uint8 AddCrewValue::Calculate()
     uint8 crewSize = 0;
     if (!GetBossTactics().AddCrewOf(bot->GetMapId(), QualifierEntry(qualifier), switchEntry, crewSize))
         return static_cast<uint8>(AddCrewState::Waiting);
-    bool switchAlive = false;
-    for (const TankPostUnit& unit :
-        AI_VALUE2(std::vector<TankPostUnit>, "tank post units", static_cast<int32>(switchEntry)))
-    {
-        if (unit.alive)
-        {
-            switchAlive = true;
-            break;
-        }
-    }
+    const uint8 switchState = AI_VALUE2(uint8, "add crew switch", static_cast<int32>(switchEntry));
     bool const member = AI_VALUE2(bool, "add crew keeps duty", qualifier);
-    return static_cast<uint8>(AddCrewStateFor(true, true, switchAlive, member));
+    return static_cast<uint8>(AddCrewStateFor(true, true, static_cast<SwitchUnitState>(switchState), member));
 }
 
 namespace ai
@@ -289,12 +312,13 @@ Unit* EngagedBossOfEntry(Player* bot, uint32 entry)
 }
 }
 
-// AiPlayerbot.DungeonRunAddCrewEarly: the `early` mode's duty. The row, its mode, the switch unit's life (the "add
-// crew" value's Waiting answer: it reads the same tank-post grid search), the boss's flight (the core's flight flag
-// on the engaged boss, the same one the hover reach reads) and the split key (how many ranks past the crew leave the
-// switch unit while it lives, AiPlayerbot.DungeonRunAddCrewBossWhileSwitch) come first; with them the crew's AoE ranged
-// take the adds, the ranged past the crew the key covers stay on the boss, and the rest of them stay on the switch unit
-// (AddCrewEarly::Switch) until it dies. The tanks, the healers and the melee keep their own duty there too.
+// AiPlayerbot.DungeonRunAddCrewEarly: the `early` mode's duty. The row, its mode, the switch unit's sighting (the
+// "add crew switch" value: a unit this bot has not met yet reads NeverSeen and leaves today's duty standing), the
+// boss's flight (the core's flight flag on the engaged boss, the same one the hover reach reads) and the split key
+// (how many ranks past the crew leave the switch unit while it lives, AiPlayerbot.DungeonRunAddCrewBossWhileSwitch)
+// come first; with them the crew's AoE ranged take the adds, the ranged past the crew the key covers stay on the boss,
+// and the rest of them stay on the switch unit (AddCrewEarly::Switch) until it dies. The tanks, the healers and the
+// melee keep their own duty there too.
 uint8 AddCrewEarlyValue::Calculate()
 {
     if (!sPlayerbotAIConfig.dungeonRunAddCrewEarly || !sPlayerbotAIConfig.dungeonRunAddCrew)
@@ -305,11 +329,10 @@ uint8 AddCrewEarlyValue::Calculate()
     if (!GetBossTactics().AddCrewOf(bot->GetMapId(), bossEntry, switchEntry, crewSize) ||
         !GetBossTactics().AddCrewEarlyOf(bot->GetMapId(), bossEntry))
         return static_cast<uint8>(AddCrewEarly::None);
-    bool const switchAlive =
-        AI_VALUE2(uint8, "add crew", qualifier) == static_cast<uint8>(AddCrewState::Waiting);
+    const uint8 switchState = AI_VALUE2(uint8, "add crew switch", static_cast<int32>(switchEntry));
     Unit* const boss = EngagedBossOfEntry(bot, bossEntry);
     bool const airborne = boss && boss->IsFlying();
-    return static_cast<uint8>(AddCrewEarlyDuty(true, true, switchAlive, airborne, PlayerbotAI::IsTank(bot),
-        PlayerbotAI::IsHeal(bot), ai->IsRanged(bot), AI_VALUE(std::int32_t, "add crew rank"), crewSize,
-        sPlayerbotAIConfig.dungeonRunAddCrewBossWhileSwitch));
+    return static_cast<uint8>(AddCrewEarlyDuty(true, true, static_cast<SwitchUnitState>(switchState), airborne,
+        PlayerbotAI::IsTank(bot), PlayerbotAI::IsHeal(bot), ai->IsRanged(bot), AI_VALUE(std::int32_t, "add crew rank"),
+        crewSize, sPlayerbotAIConfig.dungeonRunAddCrewBossWhileSwitch));
 }

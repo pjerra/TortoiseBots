@@ -67,8 +67,8 @@ class AddCrewWiring(unittest.TestCase):
                       "const", POLICY)
         self.assertIn("enum class AddCrewEarly : std::uint8_t { None = 0, Whelps = 1, Boss = 2, Switch = 3 };",
                       POLICY)
-        self.assertIn("inline AddCrewEarly AddCrewEarlyDuty(bool keyOn, bool early, bool switchAlive, bool airborne, "
-                      "bool tank,", POLICY)
+        self.assertIn("inline AddCrewEarly AddCrewEarlyDuty(bool keyOn, bool early, SwitchUnitState switchState, "
+                      "bool airborne, bool tank,", POLICY)
         self.assertIn("inline AddCrewEarly AddCrewEarlyPlace(bool tank, bool healer, bool ranged, int aoeRank,", POLICY)
         # Walk 2o's split: how many ranks past the crew leave the switch unit for the boss while it lives.
         self.assertIn("inline bool AddCrewBossWhileSwitch(int aoeRank, std::uint8_t crewSize, std::uint32_t n)",
@@ -76,8 +76,9 @@ class AddCrewWiring(unittest.TestCase):
         self.assertIn("if (n >= 40)\n            return true;", POLICY)
         self.assertIn("return aoeRank >= crewSize && aoeRank < int(crewSize) + int(n);", POLICY)
         duty = POLICY[POLICY.index("inline AddCrewEarly AddCrewEarlyDuty(bool keyOn"):]
-        self.assertIn("if (!keyOn || !early || !airborne)\n            return AddCrewEarly::None;", duty)
-        self.assertIn("if (!switchAlive)\n            return place;", duty)
+        self.assertIn("if (!keyOn || !early || !airborne || switchState == SwitchUnitState::NeverSeen)\n"
+                      "            return AddCrewEarly::None;", duty)
+        self.assertIn("if (switchState == SwitchUnitState::Dead)\n            return place;", duty)
         # Walk 2o round 1: a ranged damage dealer past the crew the split does not cover stays on the switch unit
         # (Switch), never on today's duty that would send it to the boss's adds.
         self.assertIn("if (place == AddCrewEarly::Boss)\n            return AddCrewBossWhileSwitch(aoeRank, crewSize, "
@@ -98,13 +99,21 @@ class AddCrewWiring(unittest.TestCase):
                         value.index("AddCrewOf("))
         self.assertIn("if (!GetBossTactics().AddCrewOf(bot->GetMapId(), QualifierEntry(qualifier), switchEntry, "
                       "crewSize))", value)
-        # The switch unit is the tank-post grid search: alive or dead, an empty list counts as dead.
-        self.assertIn('AI_VALUE2(std::vector<TankPostUnit>, "tank post units", static_cast<int32>(switchEntry))',
-                      value)
-        self.assertIn("if (unit.alive)", value)
+        # The switch unit's sighting is the separate value: the tank-post grid search remembers a unit seen alive, and
+        # only a sighting that died opens the crew (an empty search before the unit appears reads NeverSeen).
+        self.assertIn("class AddCrewSwitchValue : public CalculatedValue<std::uint8_t>, public Qualified", VALUES_H)
+        self.assertIn('CalculatedValue<uint8>(ai, "add crew switch", 1)', VALUES_H)
+        sighting = body(VALUES_CPP, "uint8 AddCrewSwitchValue::Calculate()")
+        self.assertIn("!bot->IsInCombat() || bot->GetMapId() != mapId_ ||", sighting)
+        self.assertIn('AI_VALUE2(std::vector<TankPostUnit>, "tank post units", static_cast<int32>(entry))', sighting)
+        self.assertIn("if (unit.alive)", sighting)
+        self.assertIn("SwitchUnitStateNext(static_cast<SwitchUnitState>(seen_), alive)", sighting)
+        self.assertIn('creators["add crew switch"] = [](PlayerbotAI* ai) { return new AddCrewSwitchValue(ai); };',
+                      VALUE_CONTEXT)
         # The crew's place is the separate value: it stands whatever the switch unit's life.
         self.assertIn('AI_VALUE2(bool, "add crew keeps duty", qualifier)', value)
-        self.assertIn("AddCrewStateFor(true, true, switchAlive, member)", value)
+        self.assertIn('AI_VALUE2(uint8, "add crew switch", static_cast<int32>(switchEntry))', value)
+        self.assertIn("AddCrewStateFor(true, true, static_cast<SwitchUnitState>(switchState), member)", value)
         self.assertIn('creators["add crew"] = [](PlayerbotAI* ai) { return new AddCrewValue(ai); };', VALUE_CONTEXT)
 
     def test_crew_place_reads_the_raid_whatever_the_switch(self):
@@ -142,11 +151,11 @@ class AddCrewWiring(unittest.TestCase):
                       value)
         self.assertLess(value.index("dungeonRunAddCrewEarly"), value.index("AddCrewOf("))
         self.assertIn("!GetBossTactics().AddCrewEarlyOf(bot->GetMapId(), bossEntry))", value)
-        # The switch unit's life is the crew value's own answer, the flight is the boss's core flag.
-        self.assertIn('AI_VALUE2(uint8, "add crew", qualifier) == static_cast<uint8>(AddCrewState::Waiting)',
-                      value)
+        # The switch unit's sighting is the shared value (NeverSeen leaves today's duty), the flight is the boss's core
+        # flag.
+        self.assertIn('AI_VALUE2(uint8, "add crew switch", static_cast<int32>(switchEntry))', value)
         self.assertIn("boss->IsFlying()", value)
-        self.assertIn("AddCrewEarlyDuty(true, true, switchAlive, airborne, PlayerbotAI::IsTank(bot),", value)
+        self.assertIn("AddCrewEarlyDuty(true, true, static_cast<SwitchUnitState>(switchState), airborne,", value)
         # Walk 2o's split key: the duty's last input.
         self.assertIn("sPlayerbotAIConfig.dungeonRunAddCrewBossWhileSwitch", value)
         self.assertIn('creators["add crew early"] = [](PlayerbotAI* ai) { return new AddCrewEarlyValue(ai); };',
@@ -164,7 +173,10 @@ class AddCrewWiring(unittest.TestCase):
         self.assertIn("ActiveBossRows rows = fight.rows;", pick)
         self.assertIn("rows = AddCrewEarlyKillFirstRows(GetBossTactics(), bot->GetMapId(), fight.rows,", pick)
         self.assertIn('AI_VALUE2(uint8, "add crew early", static_cast<int32>(bossEntry))', pick)
-        self.assertIn("GateHoldsUnit(ai, gateRows, EngagedBossOfEntry(bot, bossEntry))", pick)
+        self.assertIn('Unit* const boss = bossEntry == kOnyxiaEntry\n'
+                      '                    ? ai->GetUnit(AI_VALUE(ObjectGuid, "onyxia boss"))\n'
+                      '                    : EngagedBossOfEntry(bot, bossEntry);', pick)
+        self.assertIn("return GateHoldsUnit(ai, gateRows, boss);", pick)
         self.assertIn("PickKillFirst(rows, candidates)", pick)
         self.assertIn("PickCarrierOverride(rows, candidates", pick)
         self.assertNotIn("return nullptr;\n", pick[pick.index("AddCrewEarlyKillFirstRows"):])
