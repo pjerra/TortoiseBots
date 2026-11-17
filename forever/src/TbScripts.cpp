@@ -1,5 +1,10 @@
 // Script registration for the module: the world tick, the config load and the `.tb` chat commands.
 #include "TbBotMgr.h"
+#include "AccountMgr.h"
+#include "Map.h"
+#include "ObjectAccessor.h"
+#include "Unit.h"
+#include "WorldSession.h"
 #include "CharacterCache.h"
 #include "Chat.h"
 #include "ChatCommand.h"
@@ -79,9 +84,13 @@ public:
     {
         static ChatCommandTable tbTable =
         {
-            { "login",  HandleLogin,  rbac::RBAC_PERM_COMMAND_GM, Console::No },
+            { "create", HandleCreate, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "login",  HandleLogin,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "logout", HandleLogout, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
-            { "cast",   HandleCast,   rbac::RBAC_PERM_COMMAND_GM, Console::No },
+            { "cast",   HandleCast,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "go",     HandleGo,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "attack", HandleAttack, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "where",  HandleWhere,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "status", HandleStatus, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
@@ -91,17 +100,79 @@ public:
         return commandTable;
     }
 
-    // .tb login <character>: the character joins the world as a bot and follows the caller.
-    static bool HandleLogin(ChatHandler* handler, std::string name)
+    static Player* Caller(ChatHandler* handler)
     {
-        std::string const error = BotMgr::Instance().Login(GuidByName(name), handler->GetPlayer());
+        return handler->GetSession() ? handler->GetSession()->GetPlayer() : nullptr;
+    }
+
+    static bool Fail(ChatHandler* handler, std::string const& text)
+    {
+        handler->PSendSysMessage("TortoiseBots: %s", text.c_str());
+        handler->SetSentErrorMessage(true);
+        return false;
+    }
+
+    // .tb create <account> <name> <race id> <class id> [gender 0|1]: a new level 1 character for a bot.
+    static bool HandleCreate(ChatHandler* handler, std::string account, std::string name, uint8 race, uint8 playerClass, Optional<uint8> gender)
+    {
+        if (!normalizePlayerName(name))
+            return Fail(handler, "that name is not allowed.");
+        std::string const error = BotMgr::Instance().CreateCharacter(AccountMgr::GetId(account), name, race, playerClass, gender.value_or(0));
         if (!error.empty())
+            return Fail(handler, name + " not created: " + error + ".");
+        handler->PSendSysMessage("TortoiseBots: %s created.", name.c_str());
+        return true;
+    }
+
+    // .tb login <character> [master]: the character joins the world as a bot. It follows <master>, or the caller when
+    // no master is named and the command comes from a player. From the console without a master it stands still.
+    static bool HandleLogin(ChatHandler* handler, std::string name, Optional<std::string> masterName)
+    {
+        ObjectGuid master;
+        if (masterName)
         {
-            handler->PSendSysMessage("TortoiseBots: %s not logged in: %s.", name.c_str(), error.c_str());
-            handler->SetSentErrorMessage(true);
-            return false;
+            master = GuidByName(*masterName);
+            if (master.IsEmpty())
+                return Fail(handler, "no character named " + *masterName + ".");
         }
+        else if (Player* caller = Caller(handler))
+            master = caller->GetGUID();
+
+        std::string const error = BotMgr::Instance().Login(GuidByName(name), master);
+        if (!error.empty())
+            return Fail(handler, name + " not logged in: " + error + ".");
         handler->PSendSysMessage("TortoiseBots: %s is logging in.", name.c_str());
+        return true;
+    }
+
+    // .tb go <character> <dx> <dy>: the bot walks that many yards east/north of where it stands (no master only).
+    static bool HandleGo(ChatHandler* handler, std::string name, float dx, float dy)
+    {
+        if (!BotMgr::Instance().WalkBy(GuidByName(name), dx, dy))
+            return Fail(handler, name + " is not a logged-in bot.");
+        handler->PSendSysMessage("TortoiseBots: %s walks.", name.c_str());
+        return true;
+    }
+
+    // .tb attack <character>: the bot attacks the nearest thing it may attack within 40 yards.
+    static bool HandleAttack(ChatHandler* handler, std::string name)
+    {
+        std::string const result = BotMgr::Instance().AttackNearest(GuidByName(name), 40.0f);
+        handler->PSendSysMessage("TortoiseBots: %s: %s.", name.c_str(), result.c_str());
+        return true;
+    }
+
+    // .tb where <character>: where the bot is and what it is doing.
+    static bool HandleWhere(ChatHandler* handler, std::string name)
+    {
+        Player* bot = BotMgr::Instance().FindBot(GuidByName(name));
+        if (!bot)
+            return Fail(handler, name + " is not a logged-in bot.");
+        Unit* victim = bot->GetVictim();
+        handler->PSendSysMessage("TortoiseBots: %s level %u map %u at %.1f %.1f %.1f, health %u/%u, %s, victim %s (health %u).",
+            name.c_str(), uint32(bot->GetLevel()), bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(),
+            uint32(bot->GetHealth()), uint32(bot->GetMaxHealth()), bot->IsInCombat() ? "in combat" : "out of combat",
+            victim ? victim->GetName().c_str() : "none", victim ? uint32(victim->GetHealth()) : 0u);
         return true;
     }
 
@@ -123,11 +194,7 @@ public:
     {
         Player* bot = BotMgr::Instance().FindBot(GuidByName(name));
         if (!bot)
-        {
-            handler->PSendSysMessage("TortoiseBots: %s is not a logged-in bot.", name.c_str());
-            handler->SetSentErrorMessage(true);
-            return false;
-        }
+            return Fail(handler, name + " is not a logged-in bot.");
         if (!sSpellMgr->GetSpellInfo(spellId, DIFFICULTY_NONE))
         {
             handler->PSendSysMessage("TortoiseBots: spell %u does not exist.", spellId);
@@ -135,10 +202,12 @@ public:
             return false;
         }
 
-        Player* caller = handler->GetPlayer();
-        Unit* target = caller->GetSelectedUnit();
-        if (!target)
-            target = caller;
+        // Target: the caller's selection; from the console the bot's own victim; otherwise the bot itself.
+        Unit* target = nullptr;
+        if (Player* caller = Caller(handler))
+            target = caller->GetSelectedUnit() ? caller->GetSelectedUnit() : caller;
+        else
+            target = bot->GetVictim() ? bot->GetVictim() : bot;
 
         SpellCastResult const result = bot->CastSpell(target, spellId);
         handler->PSendSysMessage("TortoiseBots: %s casts %u on %s: result %u (0 = ok).", name.c_str(), spellId,

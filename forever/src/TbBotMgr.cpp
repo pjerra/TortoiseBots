@@ -1,6 +1,12 @@
 #include "TbBotMgr.h"
 #include "TbBotSession.h"
 #include "AccountMgr.h"
+#include "CellImpl.h"
+#include "CharacterPackets.h"
+#include "DatabaseEnv.h"
+#include "GridNotifiers.h"
+#include "GridNotifiersImpl.h"
+#include "ObjectMgr.h"
 #include "CharacterCache.h"
 #include "Config.h"
 #include "Log.h"
@@ -9,6 +15,7 @@
 #include "ObjectAccessor.h"
 #include "Player.h"
 #include "World.h"
+#include <memory>
 #include <vector>
 
 namespace TortoiseBots
@@ -33,7 +40,7 @@ void BotMgr::LoadConfig()
     _followDistance = sConfigMgr->GetFloatDefault("TortoiseBots.Spike.FollowDistance", 3.0f);
 }
 
-std::string BotMgr::Login(ObjectGuid characterGuid, Player* master)
+std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master)
 {
     if (!_enabled)
         return "TortoiseBots.Enable is 0";
@@ -54,7 +61,7 @@ std::string BotMgr::Login(ObjectGuid characterGuid, Player* master)
 
     Bot bot;
     bot.session = std::make_shared<BotSession>(accountId, std::move(accountName));
-    bot.master = master ? master->GetGUID() : ObjectGuid::Empty;
+    bot.master = master;
     if (!bot.session->BeginLogin(characterGuid))
         return "the login could not be started (see the server log)";
 
@@ -76,6 +83,89 @@ void BotMgr::LogoutAll(char const* reason)
 {
     for (auto& [guid, bot] : _bots)
         bot.session->RequestLogout(reason);
+}
+
+std::string BotMgr::CreateCharacter(uint32 accountId, std::string const& name, uint8 race, uint8 playerClass, uint8 gender)
+{
+    if (!_enabled)
+        return "TortoiseBots.Enable is 0";
+    if (!accountId)
+        return "no such account";
+    if (!sObjectMgr->GetPlayerInfo(race, playerClass))
+        return "that race and class do not go together";
+    if (ObjectMgr::CheckPlayerName(name, LOCALE_enUS, true) != CHAR_NAME_SUCCESS)
+        return "that name is not allowed";
+    if (!sCharacterCache->GetCharacterGuidByName(name).IsEmpty())
+        return "that name is taken";
+
+    std::string accountName;
+    if (!AccountMgr::GetName(accountId, accountName))
+        return "no such account";
+
+    // A Player needs a session. This one lives only for the creation; nothing is logged in through it.
+    BotSession session(accountId, std::move(accountName));
+
+    WorldPackets::Character::CharacterCreateInfo info;
+    info.Race = race;
+    info.Class = playerClass;
+    info.Sex = gender;
+    info.Name = name;
+
+    // Made and destroyed the way the core's own character creation does it.
+    std::unique_ptr<Player, void (*)(Player*)> player(new Player(&session), [](Player* p)
+    {
+        p->CleanupsBeforeDelete();
+        delete p;
+    });
+    player->GetMotionMaster()->Initialize();
+    if (!player->Create(sObjectMgr->GetGenerator<HighGuid::Player>().Generate(), &info))
+        return "the core refused to create it";
+
+    player->setCinematic(1);
+    player->SetAtLoginFlag(AT_LOGIN_FIRST);
+
+    LoginDatabaseTransaction loginTransaction = LoginDatabase.BeginTransaction();
+    CharacterDatabaseTransaction characterTransaction = CharacterDatabase.BeginTransaction();
+    player->SaveToDB(loginTransaction, characterTransaction, true);
+    CharacterDatabase.DirectCommitTransaction(characterTransaction);
+    LoginDatabase.DirectCommitTransaction(loginTransaction);
+
+    sCharacterCache->AddCharacterCacheEntry(player->GetGUID(), accountId, player->GetName(), player->GetNativeGender(), player->GetRace(),
+        player->GetClass(), player->GetLevel(), false);
+    TC_LOG_INFO("tortoisebots", "BotMgr: created {} ({}) on account {}", player->GetName(), player->GetGUID().ToString(), accountId);
+    return {};
+}
+
+bool BotMgr::WalkBy(ObjectGuid characterGuid, float dx, float dy)
+{
+    Player* me = FindBot(characterGuid);
+    if (!me)
+        return false;
+    float x = me->GetPositionX() + dx;
+    float y = me->GetPositionY() + dy;
+    float z = me->GetPositionZ();
+    me->UpdateAllowedPositionZ(x, y, z);
+    me->GetMotionMaster()->MovePoint(0, x, y, z);
+    return true;
+}
+
+std::string BotMgr::AttackNearest(ObjectGuid characterGuid, float range)
+{
+    Player* me = FindBot(characterGuid);
+    if (!me)
+        return "not a logged-in bot";
+
+    Unit* target = nullptr;
+    Trinity::NearestAttackableUnitInObjectRangeCheck check(me, me, range);
+    Trinity::UnitLastSearcher<Trinity::NearestAttackableUnitInObjectRangeCheck> searcher(me, target, check);
+    Cell::VisitAllObjects(me, searcher, range);
+    if (!target)
+        return "nothing to attack in range";
+
+    me->SetSelection(target->GetGUID());
+    me->Attack(target, true);
+    me->GetMotionMaster()->MoveChase(target);
+    return "attacking " + target->GetName();
 }
 
 Player* BotMgr::FindBot(ObjectGuid characterGuid) const
@@ -130,6 +220,10 @@ void BotMgr::Update(uint32 diff)
 
 void BotMgr::Think(Bot& bot, Player* me)
 {
+    // No master: the bot only does what the console tells it (WalkBy, AttackNearest).
+    if (bot.master.IsEmpty())
+        return;
+
     Player* master = ObjectAccessor::FindPlayer(bot.master);
     if (!master)
     {

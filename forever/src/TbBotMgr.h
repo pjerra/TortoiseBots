@@ -23,8 +23,15 @@ public:
     void LoadConfig();
     bool Enabled() const { return _enabled; }
 
-    // Empty string = started. Otherwise the reason it was refused.
-    std::string Login(ObjectGuid characterGuid, Player* master);
+    // Empty string = started. Otherwise the reason it was refused. An empty master = the bot stands where it is.
+    std::string Login(ObjectGuid characterGuid, ObjectGuid master);
+
+    // Makes a new level 1 character on the account and saves it. Empty string = done.
+    std::string CreateCharacter(uint32 accountId, std::string const& name, uint8 race, uint8 playerClass, uint8 gender);
+
+    // Console test helpers for a bot without a master.
+    bool WalkBy(ObjectGuid characterGuid, float dx, float dy);
+    std::string AttackNearest(ObjectGuid characterGuid, float range);
     bool Logout(ObjectGuid characterGuid, char const* reason);
     void LogoutAll(char const* reason);
 
