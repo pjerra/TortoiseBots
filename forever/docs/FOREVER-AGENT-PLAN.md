@@ -6,95 +6,83 @@ Ports `pjerra/turtle-agent` (Go, headless game client, raid and dungeon autopilo
 Measured 2026-11-17: turtle-agent `dev` e461eb42 (about 207k lines of Go, 1,060 files), tortoise-trials `main`
 5fcf700 (about 30k lines of Python, 65 test files). Both AGPL-3.0.
 
-## The one hard fact
+## Owner decisions (2026-11-17)
 
-turtle-agent speaks the 1.12 wire protocol (realmd SRP6, RC4-style header crypt, 1.12 opcodes and update fields).
-ForeverCore speaks the modern one:
+1. **No GitHub repository yet.** `forever-agent` is a local repository (`~/forever-agent`) until the owner says otherwise.
+2. **Same as turtle-agent: a real network client.** The agent logs in over the wire like a game client. No
+   player-inside-the-server shortcut.
+3. **Trials is rewritten in Go**, as a tool inside the agent. No bundled Python.
+
+## The hard fact
+
+turtle-agent speaks the 1.12 wire protocol. ForeverCore speaks the modern one:
 
 | Layer | Turtle (today) | ForeverCore |
 |---|---|---|
 | Login | realmd, SRP6 | bnetserver: TLS, REST login, protobuf RPC services, then a join ticket |
 | World socket | header crypt | encrypted mode handshake, compressed packets |
-| Packets | about 150 hand-built 1.12 packets | 2,457 opcodes, bit-packed structs, build 70938 |
+| Packets | about 150 hand-built 1.12 packets | 2,457 opcodes, bit-packed structs, build 70938 (70888 also accepted) |
 | Objects | 1.12 update fields | modern update fields with change masks |
 | Client files | MPQ | CASC |
 | Server test toolkit | Eluna scripts | no Lua in ForeverCore |
 
 Everything under `internal/session`, `auth`, `worldconn`, `packet`, `opcode`, `objects` and most of `game`
-(about 20k lines) is protocol and cannot be carried over. And the layers above are not cleanly cut off from it:
-`internal/packet` is imported by 17 packages, including `brain`, `dungeon` and `raidwalk`.
+(about 20k lines) is written new. The layers above are not cleanly cut off from it: `internal/packet` is imported
+by 17 packages, including `brain`, `dungeon` and `raidwalk`.
 
-## Decision: how the agent is "a player"
-
-| | A. Real network client | B. Player inside the server |
-|---|---|---|
-| What | Write the modern protocol in Go | The TortoiseBots module logs a character in without a client (the spike's session) and offers a local control port; the agent drives that |
-| Tests the real client path | yes | no (handlers are called directly) |
-| Work before the first trial runs | 6 to 10 weeks | 1 to 2 weeks |
-| Breaks when the core pin moves | often (packet layouts) | rarely (module compiles against the core) |
-| Needs | every packet layout from the core's own `WorldPackets` code | the module on the server (it is there anyway) |
-
-**Plan: B first, A later, behind one interface.** Trials measure what a bot does next to a player. A player
-that is in the world through the module is a real `Player` to the bots, so the rules stay valid. The agent's upper
-layers talk to a `game.Client` interface; B is the first implementation, A can be added as a second one when the
-client path itself needs testing. The control port and the test commands it needs also replace the Eluna toolkit,
-which has to be replaced in any case.
+The source of truth for every packet is the core itself (`src/server/game/Server/Packets/*`, `WorldSocket.cpp`,
+`src/server/bnetserver`, `src/server/proto`) at the pinned commit. Only the packets the agent uses are written
+(about 150 to 200 of 2,457). A packet layout is never guessed: each one cites the core file and line it follows,
+and a round-trip test feeds it bytes captured from a real session.
 
 ## Repository
 
-- New repository `forever-agent`, made from turtle-agent's history (not a GitHub fork, so it is not tied to the
-  public network), Go module `github.com/pjerra/forever-agent`, binary `forever-agent`.
-- tortoise-trials is merged in with its history under `trials/` (`git subtree add`).
-- Private until the TortoiseBots port is public. AGPL-3.0 and both NOTICE files are kept.
-- turtle-agent and tortoise-trials stay as they are for the Turtle server. Fixes that apply to both are
-  cherry-picked while the trees are still close.
+- Local repository `~/forever-agent`, made from turtle-agent's history, Go module `forever-agent`, binary `forever-agent`.
+- turtle-agent and tortoise-trials stay as they are for the Turtle server.
+- AGPL-3.0 and both NOTICE files are kept.
 
-## Trials as a tool inside the agent
+## Trials in Go
 
-Stage 1 (with the move): the Python bench lives in `trials/` and runs as `forever-agent trials <run|score|report|...>`,
-a subcommand that starts the bundled Python. It no longer looks for a separate binary, a slot table or a lease
-through the command line: it calls the agent it is part of.
-
-Stage 2 (only if it pays): the runner (leases, slots, setup, recording) moves into Go (`internal/trials`), because
-that half is all agent calls. The rules and the scorer (12k lines, 65 test files) stay in Python until there is a
-reason to rewrite them; rewriting them changes no behaviour and risks the scores.
+- `internal/trials` (scenario, runner, recorder, rules, scorer, report) and `forever-agent trials <run|score|report|...>`.
+- The runner half (leases, slots, setup, recording) is agent calls already and becomes direct Go calls.
+- The rules and the scorer are translated one file at a time **with their tests** (65 test files become Go tests).
+- Proof that the rewrite scores the same: the Python scorer and the Go scorer both score the same recorded Turtle
+  runs (the run folders we already have), and the report cards must be equal. Only after that are rules changed for
+  ForeverCore. The Python bench stays in tortoise-trials as the reference until then.
 
 ## Phases
 
 | # | Phase | Result | Agent time | Needs |
 |---|---|---|---|---|
-| 0 | Seam audit | List of every place above the protocol layer that touches `packet`, `opcode`, `objects`; the `game.Client` interface written down | 2-3 days | nothing |
-| 1 | Repository | `forever-agent` with both histories, renamed module and binary, CI green on the parts that do not need a server | 2-3 days | your OK to create the repository |
-| 2 | Control port in the module | `forever/src`: local JSON-RPC (login a player character, move, target, cast, chat and commands, read units, auras, combat log, positions) plus test commands (spawn a mob, set level and gear, reset) | 1-2 weeks | TortoiseBots spike run live |
-| 3 | Agent on the control port | `game.Client` implementation B; `login`, `status`, movement, combat log, chat work against a Forever server | 1-2 weeks | phase 2 |
-| 4 | Trials move in | `forever-agent trials run` plays one trial end to end with a hired bot | 1 week | phase 3, and the bot brain far enough for one class (TortoiseBots PORT-PLAN step 4-5) |
-| 5 | Trials data pass | Spell ids, talents, gear sets, mob entries and rule citations (`file:line`) re-derived for ForeverCore; class sweep, tanks first | 2-3 weeks, with the class ports | phase 4 |
-| 6 | Navmesh and maps | Navmesh from ForeverCore's `mmaps`, map and minimap views from extracted data instead of MPQ | 1-2 weeks | extracted client data |
-| 7 | Dungeon and raid autopilot | `dungeons/*.json` for the vanilla instances checked against the Forever world database (entries, spawns, doors); Turtle-only instances dropped; raid-walk | 3-5 weeks | TortoiseBots PORT-PLAN step 10 |
-| 8 | Real client (option A) | Login through bnetserver and the world socket in Go, as a second `game.Client` | 6-10 weeks | only when wanted |
+| 0 | Seam audit | Every place above the protocol layer that touches `packet`, `opcode`, `objects`; the `game.Client` interface written down | 2-3 days | nothing |
+| 1 | Local repository | `~/forever-agent` with turtle-agent's history, renamed module and binary, tests green for the parts that need no server | 2-3 days | nothing |
+| 2 | Login | bnetserver login in Go (TLS, REST, protobuf services, realm join) until the world server accepts the session | 2-3 weeks | a running ForeverCore server |
+| 3 | World socket and core packets | Encrypted and compressed socket, character list, enter world, time sync, movement, chat, addon messages | 2-3 weeks | phase 2 |
+| 4 | Objects | Modern update fields: units, players, items, game objects, auras, for the fields the agent reads | 2-3 weeks | phase 3, a packet capture from a real client for the tests |
+| 5 | `game` layer | Combat, casting, group and raid, loot, gossip, quests, trade, pets on the new packets; `forever-agent login/status/...` work as on Turtle | 3-4 weeks | phase 4 |
+| 6 | Test toolkit | What Eluna did on Turtle (spawn a mob, read exact positions and health, set gear and level) as GM commands and TortoiseBots module test commands | 1 week | TortoiseBots module on the server |
+| 7 | Trials in Go | `internal/trials`, equal scores to the Python bench on recorded runs | 3-4 weeks | can start after phase 1, in parallel with 2-5 |
+| 8 | Trials on ForeverCore | One trial end to end, then the data pass (spell ids, talents, gear, mob entries, rule citations) and the class sweep | 3-4 weeks | phases 5-7, and the bot brain ported for the class |
+| 9 | Navmesh and maps | Navmesh from ForeverCore `mmaps`, map and minimap views from extracted data instead of MPQ | 1-2 weeks | extracted client data |
+| 10 | Dungeon and raid autopilot | `dungeons/*.json` for the vanilla instances checked against the Forever world database; raid-walk | 3-5 weeks | TortoiseBots dungeons and raids ported |
 
-Phases 0 and 1 can start now. Phases 2 and 3 are the first that need the server running.
+First login to first fight (phases 2-5) is about 9 to 13 weeks of agent time. Phases 0, 1 and 7 need no Forever
+server and can start at once.
 
 ## What is dropped or replaced
 
-- Dropped: Turtle LFT (`internal/lft`), the realmd hour-start login hold, Turtle-only dungeons
-  (Crescent Grove, Karazhan Crypt, Gilneas City, Hateforge Quarry, Stormwind Vault and the like), MPQ reading.
-- Replaced: Eluna toolkit by module test commands; TBM addon messages by the module's addon channel on ForeverCore;
-  the dashboard feeds by whatever the ported module emits.
+- Dropped: Turtle LFT (`internal/lft`), the realmd hour-start login hold, Turtle-only dungeons (Crescent Grove,
+  Karazhan Crypt, Gilneas City, Hateforge Quarry, Stormwind Vault and the like), MPQ reading.
+- Replaced: Eluna toolkit by GM and module test commands; TBM addon messages by the modern addon channel.
 - Re-checked, never copied blindly: every spell id, talent build, creature entry, door and route point.
 
 ## Risks
 
-1. **Depends on the TortoiseBots port.** Trials score bot behaviour. Before the bot brain runs on ForeverCore
-   there is nothing to score except the spike.
-2. **Option B does not test packets.** A bot bug that only shows through a real client's packet order stays hidden
-   until phase 8.
-3. **Upper layers leak the protocol.** If the seam audit finds `brain` or `dungeon` reading raw packets in many
-   places, phase 3 grows.
-4. **Two trees drift.** turtle-agent keeps changing daily. The longer the fork lives, the less a cherry-pick applies.
-
-## Open decisions (yours)
-
-1. Create the repository `pjerra/forever-agent`, private: yes or no.
-2. B first (recommended) or the real client from the start.
-3. Trials stage 1 as bundled Python (recommended) or a Go rewrite at once.
+1. **The protocol is the long pole.** Nothing above it can be tried on ForeverCore before phases 2-4 work.
+2. **The core pin moves almost daily.** A packet layout can change with it. Each packet cites its core source, and a
+   pin move re-runs a check that those cited lines did not change.
+3. **Depends on the TortoiseBots port.** Trials score bot behaviour; before the bot brain runs on ForeverCore there
+   is nothing to score except the spike.
+4. **Login needs the client's certificate setup.** The server certificate is for `trinity.actual.battle.net`; the
+   agent has to be told which root to trust, as a client PC is.
+5. **Two trees drift.** turtle-agent keeps changing daily; cherry-picks stop applying over time.
