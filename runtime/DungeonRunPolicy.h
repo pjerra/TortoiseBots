@@ -22582,7 +22582,9 @@ inline std::string TickBody(Run& r, const Facts& f, std::uint32_t dt, const Rest
                     {
                         r.bossFoughtEarly.insert(later.entry);
                         // A boss any-of row resolves to the alternative he was fought as; his own step then reads it.
-                        if (u.entry)
+                        // A plain row's formOf match is a script's phase of the same boss: his form's entry is no boss
+                        // of any step, and marking it would change a plain plan's reads.
+                        if ((later.flags & ai::kPlanFlagBossAnyOf) && u.entry)
                             r.bossFoughtEarly.insert(u.entry);
                         break;
                     }

@@ -12886,14 +12886,26 @@ void ReadRunFacts(DungeonRunSlot& slot, Player* lead, std::vector<Player*> const
                     f.objectReacted = slot.taskObjectReacted;
                 }
                 // The boss the use summons (the boss row right after it): any unit of its entry around the lead bot,
-                // alive or dead (a second summon dies at once and lies at the pit; DungeonRun::UseOnStep never uses again).
+                // alive or dead (a second summon dies at once and lies at the pit; DungeonRun::UseOnStep never uses
+                // again). An any-of row lists its alternatives: the instance summoned whichever one it spawned, and
+                // the canonical `entry` is only one of them.
                 std::size_t const nextIdx = slot.run.step + 1;
                 if (slot.run.plan && nextIdx < slot.run.plan->steps.size() &&
                     slot.run.plan->steps[nextIdx].kind == ai::PlanStepKind::Boss && slot.run.plan->steps[nextIdx].entry)
                 {
+                    ai::PlanStep const& summoned = slot.run.plan->steps[nextIdx];
                     std::list<Creature*> found;
-                    lead->GetCreatureListWithEntryInGrid(found, slot.run.plan->steps[nextIdx].entry,
-                        TortoiseBots::DungeonRun::kUseOnSummonYd);
+                    lead->GetCreatureListWithEntryInGrid(found, summoned.entry, TortoiseBots::DungeonRun::kUseOnSummonYd);
+                    if (found.empty() && (summoned.flags & ai::kPlanFlagBossAnyOf))
+                        for (uint32 const alternative : summoned.entries)
+                        {
+                            if (alternative == summoned.entry)
+                                continue;
+                            lead->GetCreatureListWithEntryInGrid(found, alternative,
+                                TortoiseBots::DungeonRun::kUseOnSummonYd);
+                            if (!found.empty())
+                                break;
+                        }
                     f.summonSeen = !found.empty();
                 }
             }

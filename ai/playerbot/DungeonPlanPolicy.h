@@ -182,7 +182,9 @@ namespace ai
     // boss only: `entries` are the ALTERNATIVES one of which the instance spawns and `entry` is the canonical one among
     // them (turtle-agent's plan-export --boss-anyof: Zul'Gurub's Edge of Madness, one of 15082-15085 per instance).
     // The run leader resolves the row to the one in sight (runtime/DungeonRunPolicy.h ResolveBossAnyOf), so every later
-    // read of the row sees the spawned boss. Another kind, or a boss row carrying it with fewer than two alternatives, a
+    // read of the row sees the spawned boss. Known limit: only an alternative standing within the row's radius + kSeeYd
+    // of the plan point resolves (PickBossAnyOf); a boss of the group engaged further away leaves the row unresolved.
+    // Another kind, or a boss row carrying it with fewer than two alternatives, a
     // duplicated one, or without `entry` among them, is refused (BadParam): a module without this flag reads such a row
     // as a plain boss step, so the export carries it only when asked (plan-export --boss-anyof).
     constexpr std::uint32_t kPlanFlagBossAnyOf = 65536;

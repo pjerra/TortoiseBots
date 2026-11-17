@@ -414,6 +414,35 @@ static void TestPlanBossEntries()
     // A resolved run's private copy names the spawned one and has no alternatives left: still one boss.
     std::vector<RequiredBoss> const resolvedRows = PlanRequiredBosses(resolved, ai::kPlanFlagAlliance);
     CHECK(resolvedRows.size() == 3 && resolvedRows[2].entry == 15084 && resolvedRows[2].alternatives.empty());
+
+    // The cap counts the any-of row once: a row at the cap keeps every alternative, so the boss the instance
+    // spawned is still tracked (a list cut short would never see it and the run would never clear).
+    ai::DungeonPlan wide;
+    for (size_t i = 0; i + 1 < kMaxBosses; ++i)
+    {
+        ai::PlanStep boss;
+        boss.kind = ai::PlanStepKind::Boss;
+        boss.entry = static_cast<uint32_t>(1000 + i);
+        wide.steps.push_back(boss);
+    }
+    ai::PlanStep wideAnyOf;
+    wideAnyOf.kind = ai::PlanStepKind::Boss;
+    wideAnyOf.entry = 5000;
+    wideAnyOf.entries = {5000, 5001, 5002, 5003};
+    wideAnyOf.flags = ai::kPlanFlagBossAnyOf;
+    wide.steps.push_back(wideAnyOf);
+    std::vector<uint32_t> const wideEntries = PlanBossEntries(wide, 0);
+    CHECK(wideEntries.size() == kMaxBosses + 3);
+    CHECK(wideEntries[kMaxBosses - 1] == 5000 && wideEntries[kMaxBosses] == 5001 &&
+          wideEntries[kMaxBosses + 1] == 5002 && wideEntries[kMaxBosses + 2] == 5003);
+    // And a row past the cap is dropped whole, alternatives included: the cap is the row count.
+    ai::PlanStep extra;
+    extra.kind = ai::PlanStepKind::Boss;
+    extra.entry = 6000;
+    wide.steps.push_back(extra);
+    std::vector<uint32_t> const capped = PlanBossEntries(wide, 0);
+    CHECK(capped.size() == kMaxBosses + 3 &&
+          std::find(capped.begin(), capped.end(), 6000) == capped.end());
 }
 
 static void TestSummaryMembers()

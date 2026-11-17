@@ -243,17 +243,16 @@ inline std::vector<RequiredBoss> PlanRequiredBosses(ai::DungeonPlan const& plan,
 }
 
 // The same bosses as one flat entry list (every alternative included), for kill tracking without an outcome list:
-// a boss of a plan on the party's map is seen whatever alternative the instance spawned.
+// a boss of a plan on the party's map is seen whatever alternative the instance spawned. The cap counts rows
+// (PlanRequiredBosses), never entries: cutting a row's alternatives short would hide the boss the instance spawned
+// and the run could never be cleared.
 inline std::vector<uint32_t> PlanBossEntries(ai::DungeonPlan const& plan, std::uint32_t team)
 {
     std::vector<uint32_t> out;
     for (RequiredBoss const& boss : PlanRequiredBosses(plan, team))
     {
-        if (out.size() < kMaxBosses)
-            out.push_back(boss.entry);
-        for (uint32_t const alternative : boss.alternatives)
-            if (out.size() < kMaxBosses)
-                out.push_back(alternative);
+        out.push_back(boss.entry);
+        out.insert(out.end(), boss.alternatives.begin(), boss.alternatives.end());
     }
     return out;
 }

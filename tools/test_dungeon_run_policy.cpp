@@ -7439,6 +7439,18 @@ static void TestBossFoughtEarlyCorpseNearLead()
     CHECK(p.step == 1 && !p.bossSeenAlive);
     Tick(p, dead);
     CHECK(p.step == 1 && p.note.find("not at his spot") != std::string::npos);
+    // A plain row matched through a script-changed form marks its own entry only: the form's entry is no boss of a
+    // plain step, and marking it would make a later step naming that entry start as fought.
+    Run q = Start(&plan);
+    Facts phasedFight = Party(50);
+    phasedFight.anyInCombat = true;
+    phasedFight.engagedRead = true;
+    UnitFact phased = Engaged(Unit(6, 14509, 20));
+    phased.formOf = 14599;
+    phasedFight.engagedUnits = {phased};
+    Tick(q, phasedFight);
+    CHECK(q.bossFoughtEarly.count(14599));
+    CHECK(!q.bossFoughtEarly.count(14509));
 }
 
 // #1453 D1: the entry a creature was spawned as when a script changed its entry (a boss that phases keeps his

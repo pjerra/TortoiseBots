@@ -64,7 +64,7 @@ Two extra opt-ins:
 
 - `ai_boss_tactic` is also re-read by `.bot run reloadplans` (no restart needed for it).
 - `ai_boss_stand` is startup-only (restart needed).
-- A boss step whose row names alternatives (flag 65536, one boss out of its `entries`) joins the tactic rows of every alternative, so whichever one the instance spawned has its rows for the fight.
+- A boss step whose row names alternatives (flag 65536, one boss out of its `entries`) joins the tactic rows of every alternative, so whichever one the instance spawned has its rows for the fight. The row resolves only to an alternative the run leader sees standing within the row's radius plus 60 yd of the plan point (a living one before a corpse): a boss of the group engaged further away than that leaves the row unresolved, so it is read as a boss not at his spot and no alternative's tactic rows fire.
 
 | Column | Meaning |
 | :--- | :--- |

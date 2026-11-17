@@ -2226,6 +2226,22 @@ class BossAnyOfWiringTest(unittest.TestCase):
         self.assertIn("planSteps[plan->map].emplace_back(entry, &step);", cache)
         self.assertIn("for (auto const& [entry, step] : steps)", cache)
 
+    def test_the_use_on_summon_check_searches_every_alternative(self):
+        # The boss row after a use_on names the boss the use summons. An any-of row is summoned as whichever
+        # alternative the instance spawned (the Edge of Madness braziers), so the glue searches every alternative and
+        # not only the canonical entry: summonSeen stays "any of them is around the lead bot, alive or dead".
+        commands = strip_comments(COMMANDS)
+        facts = body(commands, "void ReadRunFacts(", "\n}\n")
+        block = body(facts, "std::size_t const nextIdx = slot.run.step + 1;", "f.summonSeen = !found.empty();")
+        self.assertIn("ai::PlanStep const& summoned = slot.run.plan->steps[nextIdx];", block)
+        self.assertIn("lead->GetCreatureListWithEntryInGrid(found, summoned.entry, "
+                      "TortoiseBots::DungeonRun::kUseOnSummonYd);", block)
+        self.assertIn("if (found.empty() && (summoned.flags & ai::kPlanFlagBossAnyOf))", block)
+        self.assertIn("for (uint32 const alternative : summoned.entries)", block)
+        self.assertIn("if (alternative == summoned.entry)", block)
+        self.assertNotIn("slot.run.plan->steps[nextIdx].entry, TortoiseBots::DungeonRun::kUseOnSummonYd", commands)
+        self.assertIn("f.summonSeen = !found.empty();", facts)
+
     def test_the_flag_and_the_helper_are_pure_policy(self):
         self.assertIn("constexpr std::uint32_t kPlanFlagBossAnyOf = 65536;", self.PLAN)
         self.assertIn("(step.flags & ~kPlanKnownFlags) != 0", strip_comments(self.PLAN))
