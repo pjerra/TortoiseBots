@@ -1,4 +1,4 @@
-<img width="2752" height="1536" alt="Gemini_Generated_Image_wvulffwvulffwvul" src="https://github.com/user-attachments/assets/a9a7f76d-b8ac-46f0-a058-30836559fe54" />
+<img width="2752" height="1536" alt="701170217-a9a7f76d-b8ac-46f0-a058-30836559fe54" src="https://github.com/user-attachments/assets/399d8bdc-d0dd-4191-b2bb-46c23bc9a4b3" />
 
 [![Latest release](https://img.shields.io/github/v/release/Sagiroth/TortoiseBots?label=release&logo=github)](https://github.com/Sagiroth/TortoiseBots/releases/latest)
 [![Linux + Windows build](https://img.shields.io/github/actions/workflow/status/Sagiroth/TortoiseBots/build.yml?branch=main&event=push&label=Linux%20%2B%20Windows%20build&logo=github)](https://github.com/Sagiroth/TortoiseBots/actions/workflows/build.yml?query=branch%3Amain)
