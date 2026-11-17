@@ -10,17 +10,22 @@ A small module (`forever/src`) that proves the seams the whole port stands on:
 | Step | How | State |
 |---|---|---|
 | Module is found and linked | root `CMakeLists.txt` + `trinity_add_module` | done: `worldserver` and `bnetserver` link with the module, core untouched |
-| Bot session without a client | `TortoiseBots::BotSession : WorldSession`, `isBot = true`, null socket | compiles |
-| Log one existing character in | `LoginQueryHolder` + `AddQueryHolderCallback` + `HandlePlayerLogin` | compiles, not yet run |
-| Stand in the world, follow the master | `MotionMaster::MoveFollow`, plus the shared `FollowTrailPolicy.h` when far behind | compiles, not yet run |
-| Help the master fight | `Unit::Attack` + `MoveChase` on the master's victim | compiles, not yet run |
-| Cast one spell | `.tb cast <bot> <spell>` -> `CastSpell` | compiles, not yet run |
-| Log out cleanly | `LogoutPlayer(true)` from the session tick | compiles, not yet run |
+| Bot session without a client | `TortoiseBots::BotSession : WorldSession`, `isBot = true`, null socket | run live |
+| Log one existing character in | `LoginQueryHolder` + `AddQueryHolderCallback` + `HandlePlayerLogin` | run live 2026-11-17 |
+| Stand in the world, follow the master | `MotionMaster::MoveFollow`, plus the shared `FollowTrailPolicy.h` when far behind | run live 2026-11-17 |
+| Help the master fight | `Unit::Attack` + `MoveChase` on the master's victim | run live 2026-11-17 |
+| Cast one spell | `.tb cast <bot> <spell>` -> `CastSpell` | run live 2026-11-17 |
+| Log out cleanly | `LogoutPlayer(true)` from the session tick | run live 2026-11-17 |
 
-"Not yet run" needs a running ForeverCore server, which needs the game data extracted from a WoW Forever client
-(`dbc`, `gt`, `maps`, `vmaps`, `cameras`). See "Open" below.
+Live run 2026-11-17 on a ForeverCore server at the pinned commit, no client connected, everything from the server
+console: two characters created (`.tb create`), both logged in, the priest followed the warrior through two walks
+(about 6 yd behind), the warrior attacked a Young Wolf, the priest took the same target by itself and cast Smite
+(result 0), the wolf died, both left combat; logout saved position and state, and a login after a server restart
+brought both back where they stood.
 
-Commands (GM): `.tb login <character>`, `.tb logout <character>`, `.tb cast <character> <spell id>`, `.tb status`.
+Commands (GM or console): `.tb create <account> <name> <race> <class> [gender]`, `.tb login <character> [master]`,
+`.tb logout <character>`, `.tb cast <character> <spell id>`, `.tb go <character> <dx> <dy>`, `.tb attack <character>`,
+`.tb where <character>`, `.tb status`.
 Config: `TortoiseBots.Enable = 1` in `worldserver.conf.d/tortoisebots.conf`.
 
 ## Private members: none needed
@@ -58,6 +63,15 @@ request for Karrz, not something we patch.
 - Teleports need the client's answer. The session gives it: `HandleMoveTeleportAck` (same map) and
   `HandleMoveWorldportAck()` (other map).
 
+- **A bot sees nothing until its "client" reports its clock.** `Player::CanNeverSee` hides every object from a player
+  until `PLAYER_LOCAL_FLAG_OVERRIDE_TRANSPORT_SERVER_TIME` is set, which the core does when the client sends
+  `CMSG_MOVE_INIT_ACTIVE_MOVER_COMPLETE`. A headless bot was in the world, with 23 creatures around it, and could
+  attack none ("may attack: no"). The session sets the flag itself once the player is in the world.
+- **New characters are saved through the asynchronous connection.** The character statements are not prepared on the
+  synchronous one; `DirectCommitTransaction` there stops the server with an assertion.
+- The module's config file is only read when worldserver is started with `--config-dir <folder>` or from the folder
+  that holds `worldserver.conf.d`.
+
 ## Shared code
 
 Measured on `main` 284395a84 by following every `#include` to the end:
@@ -84,9 +98,8 @@ cmake --build build --target worldserver
 
 ## Open
 
-1. **Game data.** The server does not start without `dbc`, `gt`, `maps`, `vmaps`, `cameras` from a WoW Forever client
-   (Classic 1.60.1, build 70938). Until then the spike is compile-proven only.
-2. The live run of the table above, then the same steps with five bots in a party.
+1. The same steps with five bots in a party, and a master who is a real player on a game client.
+2. Pathfinding: the run used `mmap.enablePathFinding = 0` (no `mmaps` extracted yet), so bots walk straight lines.
 
 ## Licence
 

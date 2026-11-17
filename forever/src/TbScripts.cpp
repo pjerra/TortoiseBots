@@ -7,6 +7,8 @@
 #include "WorldSession.h"
 #include "CharacterCache.h"
 #include "Chat.h"
+#include "Creature.h"
+#include <list>
 #include "ChatCommand.h"
 #include "Log.h"
 #include "ObjectMgr.h"
@@ -173,6 +175,25 @@ public:
             name.c_str(), uint32(bot->GetLevel()), bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(),
             uint32(bot->GetHealth()), uint32(bot->GetMaxHealth()), bot->IsInCombat() ? "in combat" : "out of combat",
             victim ? victim->GetName().c_str() : "none", victim ? uint32(victim->GetHealth()) : 0u);
+
+        // What the bot has around it: proves its part of the map is loaded and populated.
+        std::list<Creature*> creatures;
+        bot->GetCreatureListWithEntryInGrid(creatures, 0, 60.0f);
+        Creature* nearest = nullptr;
+        for (Creature* creature : creatures)
+            if (creature->IsAlive() && (!nearest || bot->GetDistance(creature) < bot->GetDistance(nearest)))
+                nearest = creature;
+        if (nearest)
+        {
+            handler->PSendSysMessage("TortoiseBots: %u creature(s) within 60 yd, nearest alive %s at %.1f yd (may attack: %s, friendly: %s).",
+                uint32(creatures.size()), nearest->GetName().c_str(), bot->GetDistance(nearest),
+                bot->IsValidAttackTarget(nearest) ? "yes" : "no", bot->IsFriendlyTo(nearest) ? "yes" : "no");
+            handler->PSendSysMessage("TortoiseBots: sees it: %s, bot unit flags 0x%X player flags 0x%X, target unit flags 0x%X, target faction %u, uninteractible: %s.",
+                bot->CanSeeOrDetect(nearest) ? "yes" : "no", uint32(*bot->m_unitData->Flags), uint32(*bot->m_playerData->PlayerFlags),
+                uint32(*nearest->m_unitData->Flags), nearest->GetFaction(), nearest->IsUninteractible() ? "yes" : "no");
+        }
+        else
+            handler->PSendSysMessage("TortoiseBots: %u creature(s) within 60 yd, none alive.", uint32(creatures.size()));
         return true;
     }
 

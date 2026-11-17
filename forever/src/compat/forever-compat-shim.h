@@ -32,9 +32,10 @@ using Movement::PointsArray;                     // the polyline of a path (std:
 using Movement::Vector3;                         // G3D::Vector3, the point type cmangos exposes unqualified
 
 // The value type of the spawn stores: cmangos iterates `CreatureDataPair`/`GameObjectDataPair`, ForeverCore's
-// GetAllCreatureData()/GetAllGameObjectData() hold the same pair keyed by the spawn id (ObjectGuid::LowType, 32 bit).
-using CreatureDataPair = std::pair<uint32 const, CreatureData>;
-using GameObjectDataPair = std::pair<uint32 const, GameObjectData>;
+// GetAllCreatureData()/GetAllGameObjectData() hold the same pair keyed by the spawn id. The key is wider than
+// cmangos's 32-bit one: it is ObjectGuid::LowType, 64 bit, the spawn id of the guid-based data model.
+using CreatureDataPair = std::pair<ObjectGuid::LowType const, CreatureData>;
+using GameObjectDataPair = std::pair<ObjectGuid::LowType const, GameObjectData>;
 
 // A macro, not `using`: bot headers forward-declare `struct ItemPrototype;` / `struct SpellEntry;`, and a type alias
 // cannot be redeclared as a class. The macro renames the forward declaration with the rest (a class-keyed

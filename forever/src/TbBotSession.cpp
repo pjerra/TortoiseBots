@@ -97,8 +97,20 @@ bool BotSession::Tick(uint32 diff)
     WorldSessionFilter filter(this);
     WorldSession::Update(diff, filter);
 
-    if (GetPlayer())
+    if (Player* player = GetPlayer())
+    {
         _sawPlayer = true;
+
+        // The core shows a player nothing (Player::CanNeverSee) until its client has reported its clock after the
+        // loading screen (CMSG_MOVE_INIT_ACTIVE_MOVER_COMPLETE -> time sync). Without this a bot is in the world but
+        // can see, and so attack or target, nothing. A bot has no client clock: the server's own time is its time.
+        if (player->IsInWorld() && !player->HasPlayerLocalFlag(PLAYER_LOCAL_FLAG_OVERRIDE_TRANSPORT_SERVER_TIME))
+        {
+            player->SetPlayerLocalFlag(PLAYER_LOCAL_FLAG_OVERRIDE_TRANSPORT_SERVER_TIME);
+            player->SetTransportServerTime(0);
+            player->UpdateObjectVisibility(false);
+        }
+    }
 
     AcknowledgeTeleports();
 

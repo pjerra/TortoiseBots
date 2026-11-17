@@ -127,8 +127,9 @@ std::string BotMgr::CreateCharacter(uint32 accountId, std::string const& name, u
     LoginDatabaseTransaction loginTransaction = LoginDatabase.BeginTransaction();
     CharacterDatabaseTransaction characterTransaction = CharacterDatabase.BeginTransaction();
     player->SaveToDB(loginTransaction, characterTransaction, true);
-    CharacterDatabase.DirectCommitTransaction(characterTransaction);
-    LoginDatabase.DirectCommitTransaction(loginTransaction);
+    // The character statements are prepared for the asynchronous connections only, so the commit is queued, as in the core.
+    CharacterDatabase.CommitTransaction(characterTransaction);
+    LoginDatabase.CommitTransaction(loginTransaction);
 
     sCharacterCache->AddCharacterCacheEntry(player->GetGUID(), accountId, player->GetName(), player->GetNativeGender(), player->GetRace(),
         player->GetClass(), player->GetLevel(), false);
@@ -155,10 +156,17 @@ std::string BotMgr::AttackNearest(ObjectGuid characterGuid, float range)
     if (!me)
         return "not a logged-in bot";
 
-    Unit* target = nullptr;
-    Trinity::NearestAttackableUnitInObjectRangeCheck check(me, me, range);
-    Trinity::UnitLastSearcher<Trinity::NearestAttackableUnitInObjectRangeCheck> searcher(me, target, check);
+    // Nearest living creature the bot is allowed to attack. Neutral ones count (a level 1 wolf is neutral), so this
+    // is "may attack", not "is hostile".
+    std::vector<Unit*> units;
+    Trinity::AnyUnfriendlyUnitInObjectRangeCheck check(me, me, range);
+    Trinity::UnitListSearcher<Trinity::AnyUnfriendlyUnitInObjectRangeCheck> searcher(me, units, check);
     Cell::VisitAllObjects(me, searcher, range);
+
+    Unit* target = nullptr;
+    for (Unit* unit : units)
+        if (unit->IsCreature() && unit->IsAlive() && me->IsValidAttackTarget(unit) && (!target || me->GetDistance(unit) < me->GetDistance(target)))
+            target = unit;
     if (!target)
         return "nothing to attack in range";
 
