@@ -212,6 +212,7 @@ void PlayerbotAIConfig::LoadDungeonRunKeys()
     bossStandWholeRaid = config.GetBoolDefault("AiPlayerbot.BossStandWholeRaid", false);
     bossStandHoldsMeleeReach = config.GetBoolDefault("AiPlayerbot.BossStandHoldsMeleeReach", false);
     bossStandNearestSeat = config.GetBoolDefault("AiPlayerbot.BossStandNearestSeat", false);
+    bossStandHpGate = config.GetBoolDefault("AiPlayerbot.BossStandHpGate", false);
     bossTacticsKeepsEngagedBoss = config.GetBoolDefault("AiPlayerbot.BossTacticsKeepsEngagedBoss", false);
     dungeonRunRangedOnly = config.GetBoolDefault("AiPlayerbot.DungeonRunRangedOnly", false);
     dungeonRunThreatFree = config.GetBoolDefault("AiPlayerbot.DungeonRunThreatFree", false);

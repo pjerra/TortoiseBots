@@ -61,6 +61,12 @@ class BossStandWiring(unittest.TestCase):
         create = body(stand_migration(), "CREATE TABLE IF NOT EXISTS `ai_boss_stand`", end="\n) ENGINE")
         columns = re.findall(r"^  `(\w+)`", create, re.M)
         columns.remove("comment")  # documentation only
+        # A column a later migration adds through information_schema belongs to the table too: the loader reads the
+        # whole row, so a missed column is a silently defaulted stand row.
+        for path in MIGRATIONS:
+            for name, after in re.findall(
+                    r"ALTER TABLE `ai_boss_stand` ADD COLUMN `(\w+)`.*? AFTER `(\w+)`", path.read_text(), re.S):
+                columns.insert(columns.index(after) + 1, name)
         select = body(MGR_CPP, "std::uint32_t ai::ReadBossStandRows(", end="FROM `ai_boss_stand`")
         self.assertEqual(re.findall(r"`(\w+)`", select), columns)
         for index in range(len(columns)):
@@ -503,8 +509,8 @@ class BossStandWiring(unittest.TestCase):
         self.assertIn("AiPlayerbot.BossStandNearestSeat", POLICY)
         fn = body(ACTIONS, "BossStandTarget ai::FindBossStand(")
         # The policy gets the key on every read, so the window's own points are the pooled ones.
-        self.assertIn("sPlayerbotAIConfig.bossStandNearestSeat);", fn)
-        self.assertLess(fn.index("StandPointsNow(*rows, role,"), fn.index("sPlayerbotAIConfig.bossStandNearestSeat);"))
+        self.assertLess(fn.index("StandPointsNow(*rows, role,"),
+                        fn.index("sPlayerbotAIConfig.bossStandNearestSeat"))
         # A pooled window seats every role together and files its plan under the role Any.
         self.assertIn("const bool pooledNow = sPlayerbotAIConfig.bossStandNearestSeat && !points.empty() && "
                       "points[0]->windowSpell != 0;", fn)
@@ -569,6 +575,38 @@ class BossStandWiring(unittest.TestCase):
         self.assertIn("WorldTimer::getMSTime() - it->second.lastReadMs >= kTankPostLiveMs", spot)
         self.assertIn("record.holdSpot = holdSpot;", post)
         self.assertIn("bool post = false;", STAND_H)
+
+    def test_the_hp_gate_is_wired(self):
+        # AiPlayerbot.BossStandHpGate (Fix B, P3 healer stack): a row with boss_hp_max below 100 applies only while
+        # the boss is at or below that health. The loader reads the column, the caller hands it the boss's health and
+        # the key, and the key is read with the run keys so `.reload config` applies it.
+        self.assertIn('bossStandHpGate = config.GetBoolDefault("AiPlayerbot.BossStandHpGate", false);', CONFIG)
+        self.assertIn("bool bossStandHpGate = false;", (AI / "PlayerbotAIConfig.h").read_text())
+        self.assertIn("void LoadDungeonRunKeys();", (AI / "PlayerbotAIConfig.h").read_text())
+        self.assertLess(CONFIG.index("void PlayerbotAIConfig::LoadDungeonRunKeys()"),
+                        CONFIG.index('bossStandHpGate = config.GetBoolDefault('))
+        self.assertIn("AiPlayerbot.BossStandHpGate", (ROOT / "ai/playerbot/aiplayerbot.conf.dist.in").read_text())
+        self.assertIn("bool bossStandHpGate = false;",
+                      (ROOT / "tools/tsan_stubs/playerbot/PlayerbotAIConfig.h").read_text())
+        # The loader reads the column the migration adds and refuses a value the policy cannot use.
+        select = body(MGR_CPP, "std::uint32_t ai::ReadBossStandRows(", end="FROM `ai_boss_stand`")
+        self.assertIn("`boss_hp_max`", select)
+        self.assertIn("row.bossHpMax = fields[20].GetUInt8();", MGR_CPP)
+        # BossStandTable::Add refuses a band the policy cannot read.
+        self.assertIn("if (row.bossHpMax == 0 || row.bossHpMax > 100)", POLICY)
+        self.assertIn("a boss_hp_max of 0 or above 100", MGR_CPP)
+        # The caller passes the boss's own health (rounded down) and the key on every read.
+        fn = body(ACTIONS, "BossStandTarget ai::FindBossStand(")
+        self.assertIn("static_cast<int>(unit->GetHealthPercent()),", fn)
+        self.assertIn("sPlayerbotAIConfig.bossStandHpGate);", fn)
+        self.assertLess(fn.index("sPlayerbotAIConfig.bossStandNearestSeat"),
+                        fn.index("sPlayerbotAIConfig.bossStandHpGate);"))
+        # The policy's rule is the one the key reads.
+        active = body(POLICY, "inline bool StandRowActive(")
+        rule = ('if (row.bossHpMax < 100 && (!hpGateOn || bossHpPct > row.bossHpMax))\n            return false;')
+        self.assertIn(rule, active)
+        self.assertLess(active.index(rule), active.index("if (row.aura != 0 && !bossHasAura)"))
+        self.assertIn("std::uint8_t bossHpMax = 100;", POLICY)
 
     def test_generic_code_names_no_boss(self):
         for name, text in (("BossStandPolicy.h", POLICY), ("BossTacticsStand.h", STAND_H)):

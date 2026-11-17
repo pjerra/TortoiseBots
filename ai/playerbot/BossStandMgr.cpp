@@ -18,7 +18,8 @@ std::uint32_t ai::ReadBossStandRows(BossStandTable& table)
     // The core's Query hands over a raw QueryResult* the caller frees (src/shared/Database/Database.h).
     std::unique_ptr<QueryResult> result(WorldDatabase.Query(
         "SELECT `map`, `boss_entry`, `anchor`, `anchor_x`, `anchor_y`, `anchor_r`, `role`, `window_spell`, `aura`, `side`, "
-        "`seq`, `x`, `y`, `z`, `dx`, `dy`, `slots`, `hold_ms`, `release_anchor`, `window_signal` FROM `ai_boss_stand`"));
+        "`seq`, `x`, `y`, `z`, `dx`, `dy`, `slots`, `hold_ms`, `release_anchor`, `window_signal`, `boss_hp_max` "
+        "FROM `ai_boss_stand`"));
     if (result)
     {
         do
@@ -45,11 +46,12 @@ std::uint32_t ai::ReadBossStandRows(BossStandTable& table)
             row.holdMs = fields[17].GetUInt32();
             row.releaseAnchor = fields[18].GetUInt32();
             row.windowSignal = ParseStandSignal(fields[19].GetCppString());
+            row.bossHpMax = fields[20].GetUInt8();
             if (!table.Add(row))
             {
                 ++skipped;
                 sLog.outError("ai_boss_stand: map %u boss %u anchor %u role '%s' side %u seq %u skipped (unknown role, a zero "
-                    "map or boss, no anchor radius, a side above 1, slots outside 1-%u, a release anchor equal to the anchor, a hold_ms outside 1000-15000, an unknown window_signal or a stopped_no_target one without an aura and a window spell, an anchor id with two places, or a "
+                    "map or boss, no anchor radius, a side above 1, slots outside 1-%u, a release anchor equal to the anchor, a hold_ms outside 1000-15000, a boss_hp_max of 0 or above 100, an unknown window_signal or a stopped_no_target one without an aura and a window spell, an anchor id with two places, or a "
                     "second row of the key)", row.map, row.bossEntry, row.anchor, fields[6].GetCppString().c_str(),
                     uint32(row.side), uint32(row.seq), uint32(kBossStandMaxSlots));
             }

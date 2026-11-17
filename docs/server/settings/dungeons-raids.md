@@ -2211,6 +2211,12 @@ Whether a melee bot or a tank with a valid boss stand seat keeps it instead of r
 
 Once the stand trigger is quiet, "reach melee" walked a seated melee bot or tank off its seat toward its target every tick; with the key on it is not useful while the bot holds a seat, so the seat walk stands.
 
+### `AiPlayerbot.BossStandHpGate`
+Whether a boss stand row with a `boss_hp_max` below 100 applies only while the boss is at or below that health percent.
+**Default:** `0` · **Values:** `0` off (such a row never applies), `1` on (recommended on; needs the boss tactics and the boss stand rows) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+A stand row is opened by its anchor, its aura and its window spell, so a phase that has no aura of its own cannot be told from the others (Onyxia's P3 has no Hover aura to gate on). With the key on, a row's `boss_hp_max` becomes a fourth condition: the row applies only while the boss is at or below that health, so one anchor can be a phase's own stack. A row of `100` (the column's default) is ungated either way. The loader refuses a `boss_hp_max` of `0` or above `100`.
+
 ### `AiPlayerbot.BossStandNearestSeat`
 Whether a breath window's seats are pooled across its roles and planned by the walk, and a `hold_spot` post outside the window's lane keeps its tank at its spot.
 **Default:** `0` · **Values:** `0` off (each role keeps its own seats), `1` on (recommended on; needs the boss tactics and the boss stand rows) · **Restart:** not needed (`.reload config` applies it on the next world tick)

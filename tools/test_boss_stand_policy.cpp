@@ -142,6 +142,66 @@ int main()
         CHECK(!StandRowActive(plain, 40, 20, false, 0));
     }
 
+    // hp-gated stand row closed above its band: a row with boss_hp_max below 100 applies only while the boss is at or
+    // below that health, and only with AiPlayerbot.BossStandHpGate on. With the key off a gated row is CLOSED (the
+    // same choice RowGateOpen makes for a gated tactic row), so an old binary or the key at 0 never seats it.
+    {
+        BossStandRow gated = Row(1, 10, 20, 8, StandRole::Healer, 0, 0, 0, 0, 32, 1, 0);
+        gated.bossHpMax = 40;
+        CHECK(!StandRowActive(gated, 10, 20, true, 0, false, 41, true));   // above the band
+        CHECK(StandRowActive(gated, 10, 20, true, 0, false, 40, true));    // on the band's edge
+        CHECK(StandRowActive(gated, 10, 20, true, 0, false, 30, true));
+        CHECK(!StandRowActive(gated, 10, 20, true, 0, false, 30, false));  // key off: the row is closed
+        CHECK(!StandRowActive(gated, 10, 20, true, 0, false, 100, false));
+        // A row with no band (100) is ungated: it applies with the key either way and at any health.
+        BossStandRow plain = Row(1, 10, 20, 8, StandRole::Healer, 0, 0, 0, 0, 32, 1, 0);
+        CHECK(StandRowActive(plain, 10, 20, true, 0, false, 100, false));
+        CHECK(StandRowActive(plain, 10, 20, true, 0, false, 30, true));
+        CHECK(!StandRowActive(plain, 40, 20, true, 0, false, 30, true));
+    }
+
+    // The hp gate through the whole chain: an anchor-10 stack (healers, gated 40, no aura) and the anchor-9 resting
+    // stack (healers, the Hover aura 17131) of the same boss. At 35 % with the key on and no Hover aura the read is
+    // the anchor-10 seats and not anchor 9's; above the band it is neither.
+    {
+        std::vector<BossStandRow> rows;
+        for (std::uint8_t seq = 0; seq < 8; ++seq)
+        {
+            BossStandRow row = Row(10, -22.0f, -213.5f, 60.0f, StandRole::Healer, 0, 0, seq, 5.0f, -188.0f, 0, 0, 1, 0);
+            row.bossHpMax = 40;
+            rows.push_back(row);
+        }
+        for (std::uint8_t seq = 0; seq < 10; ++seq)
+            rows.push_back(Row(9, -22.0f, -213.5f, 60.0f, StandRole::Healer, 0, 0, seq, -15.0f, -170.0f, 0, 0, 1, 17131));
+        const std::vector<const BossStandRow*> gated =
+            ActiveStandPoints(rows, StandRole::Healer, 5.0f, -200.0f, 0, NoAura, false, 35, true);
+        CHECK(gated.size() == 8);
+        for (const BossStandRow* point : gated)
+            CHECK(point->anchor == 10);
+        // Above the band the gated anchor is closed; the Hover stack still needs its aura.
+        CHECK(ActiveStandPoints(rows, StandRole::Healer, 5.0f, -200.0f, 0, NoAura, false, 60, true).empty());
+        // With the key off the gated anchor never applies, whatever the health says.
+        CHECK(ActiveStandPoints(rows, StandRole::Healer, 5.0f, -200.0f, 0, NoAura, false, 35, false).empty());
+        // The same rule on another anchor's rows of the same boss: a gated stack elsewhere opens at its own band.
+        BossStandRow elsewhere = Row(11, -60.0f, -170.0f, 60.0f, StandRole::Healer, 0, 0, 0, -58.0f, -170.0f, 0, 0, 1, 0);
+        elsewhere.bossHpMax = 40;
+        rows.push_back(elsewhere);
+        CHECK(ActiveStandPoints(rows, StandRole::Healer, -58.0f, -170.0f, 0, NoAura, false, 35, true).size() == 1);
+        CHECK(ActiveStandPoints(rows, StandRole::Healer, -58.0f, -170.0f, 0, NoAura, false, 35, false).empty());
+        // The pooled read keeps the band too (a window anchor's rows of every role).
+        BossStandRow pooled = Row(10, -22.0f, -213.5f, 60.0f, StandRole::Ranged, 9, 0, 0, 5.0f, -188.0f, 0, 0, 1, 0);
+        pooled.bossHpMax = 40;
+        rows.push_back(pooled);
+        CHECK(PooledStandPoints(rows, 10, 9, 5.0f, -200.0f, 9, NoAura, false, 35, true).size() == 1);
+        CHECK(PooledStandPoints(rows, 10, 9, 5.0f, -200.0f, 9, NoAura, false, 60, false).empty());
+        StandHold hold;
+        CHECK(StandPointsNow(rows, StandRole::Healer, 5.0f, -200.0f, 0, NoAura, hold, 1000, false, false, 35, true)
+                  .size() == 8);
+        StandHold closed;
+        CHECK(StandPointsNow(rows, StandRole::Healer, 5.0f, -200.0f, 0, NoAura, closed, 1000, false, false, 50, true)
+                  .empty());
+    }
+
     // The points a bot of a role stands at: none without a match (nothing changes).
     {
         std::vector<BossStandRow> rows = LaneRows();

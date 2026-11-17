@@ -20,11 +20,12 @@ MAX_SLOTS = 8
 SPACING = 9.0
 ROW = re.compile(
     r"^\((\d+), (\d+), (\d+), (-?[\d.]+), (-?[\d.]+), ([\d.]+), '(\w+)', (\d+), (\d+), (\d+), (\d+), "
-    r"(-?[\d.]+), (-?[\d.]+), (-?[\d.]+), (-?[\d.]+), (-?[\d.]+), (\d+), (\d+), (\d+), '(\w+)', '(?:[^']|'')*'\)[,;]$"
+    r"(-?[\d.]+), (-?[\d.]+), (-?[\d.]+), (-?[\d.]+), (-?[\d.]+), (\d+), (\d+), (\d+), '(\w+)'(?:, (\d+))?, "
+    r"'(?:[^']|'')*'\)[,;]$"
 )
 DELETE = re.compile(r"^DELETE FROM `ai_boss_stand` WHERE `map` = (\d+)(?: AND `boss_entry` = (\d+))?;?$")
 FIELDS = ("map", "boss", "anchor", "ax", "ay", "ar", "role", "window", "aura", "side", "seq",
-          "x", "y", "z", "dx", "dy", "slots", "hold", "release", "signal")
+          "x", "y", "z", "dx", "dy", "slots", "hold", "release", "signal", "hp_max")
 
 VENOXIS_MAP = 309
 VENOXIS = 14507
@@ -73,7 +74,10 @@ def migration_rows():
             match = ROW.match(line)
             if not match:
                 raise AssertionError("unparsable ai_boss_stand row in %s: %s" % (name, line))
-            values = match.groups()
+            values = list(match.groups())
+            # boss_hp_max arrived after the older rows: an INSERT without it loads the column's 100 default.
+            if values[-1] is None:
+                values[-1] = "100"
             row = {"file": name}
             for field, value in zip(FIELDS, values):
                 row[field] = value if field in ("role", "signal") else float(value)
@@ -127,6 +131,9 @@ class BossStandSql(unittest.TestCase):
             # BossStandTable::Add bounds the hold: a longer one parks bots for as long as it lasts.
             self.assertGreaterEqual(row["hold"], 1000, where)
             self.assertLessEqual(row["hold"], 15000, where)
+            # BossStandMgr rejects a boss_hp_max of 0 or above 100.
+            self.assertGreaterEqual(row["hp_max"], 1, where)
+            self.assertLessEqual(row["hp_max"], 100, where)
 
     def test_release_anchors_name_an_anchor_of_the_same_boss(self):
         # BossStandTable::Seal refuses a boss's whole stand set when one does not.
@@ -283,6 +290,128 @@ class BossStandOnyxiaStackSql(unittest.TestCase):
                 distance = math.hypot(points[i][0] - points[j][0], points[i][1] - points[j][1])
                 self.assertGreaterEqual(distance, 5.0,
                                         "%s and %s are only %.2f yd apart" % (points[i][2], points[j][2], distance))
+
+
+class BossStandOnyxiaP3StackSql(unittest.TestCase):
+    """20261117210100_world.sql: the P3 healer stack (anchor 10) on her two flanks."""
+
+    MT = (20.0, -218.0)        # spot E, the main tank's P3 spot
+    HER = (0.5, -212.8)        # her P3 landing point / raid centre
+    NORTH = (5.0, -188.0)
+    SOUTH = (5.0, -246.0)
+    # The east edge of the 95-row 176511 egg field (tw_world_gameobject.sql, map 249: the largest x any egg row
+    # carries), with the two cave-mouth pairs nearest the east seats. Every seat here stands east of x 2, so the
+    # 14 yd bound holds against every egg row, not only these.
+    EGGS = ((-33.0413, -266.323), (-32.5829, -162.944), (-38.458, -262.433), (-37.5972, -167.346))
+
+    def seats(self):
+        return [row for row in migration_rows()
+                if row["map"] == 249 and row["boss"] == 10184 and row["anchor"] == 10]
+
+    def test_eight_healer_rows_behind_the_hp_gate(self):
+        rows = self.seats()
+        self.assertEqual(8, len(rows), "the P3 healer stack is not eight seats")
+        self.assertEqual({(-22.0, -213.5, 60.0)}, set((row["ax"], row["ay"], row["ar"]) for row in rows),
+                         "the stack names more than one anchor place")
+        self.assertEqual(list(range(8)), sorted(int(row["seq"]) for row in rows), "the stack's seq is not 0-7")
+        north = [row for row in rows if row["y"] > self.HER[1]]
+        self.assertEqual(4, len(north), "the stack is not four north and four south seats")
+        self.assertEqual(4, len(rows) - len(north))
+        for row in rows:
+            where = "%s anchor 10 seq %d" % (row["file"], row["seq"])
+            self.assertEqual("healer", row["role"], where)
+            # A resting spot: no window spell, no aura, no side and no release anchor; the hp gate opens it.
+            self.assertEqual(0.0, row["window"], where)
+            self.assertEqual(0.0, row["aura"], where)
+            self.assertEqual(0.0, row["release"], where)
+            self.assertEqual("cast", row["signal"], where)
+            self.assertEqual(0.0, row["side"], where)
+            self.assertEqual(1.0, row["slots"], where)
+            self.assertEqual(8000.0, row["hold"], where)
+            self.assertEqual(40.0, row["hp_max"], where)
+            self.assertGreaterEqual(row["z"], -93.0, where)
+            self.assertLessEqual(row["z"], -80.0, where)
+            self.assertLessEqual(math.hypot(row["x"] - row["ax"], row["y"] - row["ay"]), row["ar"], where)
+        # Alternating north/south by seq, so any healer count splits evenly.
+        for seq, row in enumerate(sorted(rows, key=lambda r: r["seq"])):
+            self.assertEqual(seq % 2 == 0, row["y"] > self.HER[1],
+                             "seq %d is not on its alternating side" % seq)
+
+    def test_the_seats_stand_clear_of_the_breath_and_the_egg_field(self):
+        seats = [(row["x"], row["y"]) for row in self.seats()]
+        self.assertEqual(len(seats), len(set(seats)), "a seat is named twice")
+        for x, y in seats:
+            # The spec's own centre bounds (the anchor is the stack, not one seat): 36 yd of the main tank's spot,
+            # 25 yd off her landing point. The seats keep a slightly wider envelope: the farthest is 36.9 yd from
+            # spot E and the nearest 22.4 yd from her landing point (the spec's per-seat numbers were the centres').
+            self.assertLessEqual(math.hypot(x - self.MT[0], y - self.MT[1]), 37.0,
+                                 "seat (%.1f, %.1f) is %.1f yd from spot E" % (
+                                     x, y, math.hypot(x - self.MT[0], y - self.MT[1])))
+            self.assertGreaterEqual(math.hypot(x - self.HER[0], y - self.HER[1]), 22.0,
+                                    "seat (%.1f, %.1f) is %.1f yd from her landing point" % (
+                                        x, y, math.hypot(x - self.HER[0], y - self.HER[1])))
+            # The flank: 60-120 deg off the east axis seen from her landing point, out of the front cone and the tail.
+            angle = abs(math.degrees(math.atan2(y - self.HER[1], x - self.HER[0])))
+            angle = min(angle, 360.0 - angle)
+            self.assertGreaterEqual(angle, 60.0, "seat (%.1f, %.1f) is %.0f deg off her east axis" % (x, y, angle))
+            self.assertLessEqual(angle, 120.0, "seat (%.1f, %.1f) is %.0f deg off her east axis" % (x, y, angle))
+            # East of the egg field, and clear of the cave-mouth eggs by 14 yd anyway.
+            self.assertGreaterEqual(x, 2.0, "seat (%.1f, %.1f) is inside the egg field" % (x, y))
+            for egg in self.EGGS:
+                self.assertGreaterEqual(math.hypot(x - egg[0], y - egg[1]), 14.0,
+                                        "seat (%.1f, %.1f) is %.1f yd from egg %s" % (
+                                            x, y, math.hypot(x - egg[0], y - egg[1]), egg))
+        for centre in (self.NORTH, self.SOUTH):
+            self.assertLessEqual(math.hypot(centre[0] - self.MT[0], centre[1] - self.MT[1]), 36.0)
+            self.assertGreaterEqual(math.hypot(centre[0] - self.HER[0], centre[1] - self.HER[1]), 25.0)
+
+
+class BossTacticOnyxiaP3Sql(unittest.TestCase):
+    """20261117210000_world.sql: Fix A, the Hatcher burn off the P3 damage crew."""
+
+    STAMP = "20261117210000_world.sql"
+    KILLED = ("`boss_entry` = 50144 AND `kind` IN ('kill_first', 'hold_kill')")
+
+    def migration(self):
+        path = os.path.join(ROOT, "data/sql/world", self.STAMP)
+        self.assertTrue(os.path.exists(path), "the P3 Hatcher migration is missing")
+        with open(path, encoding="utf-8") as handle:
+            return handle.read()
+
+    def later_files(self):
+        return [path for path in sorted(glob.glob(os.path.join(ROOT, "data/sql/world/*_world.sql")))
+                if os.path.basename(path) > self.STAMP]
+
+    def test_the_hatcher_burn_rows_are_gone(self):
+        text = self.migration()
+        self.assertIn("DELETE FROM `ai_boss_tactic` WHERE `map` = 249 AND `boss_entry` = 10184 AND "
+                      "`kind` = 'hold_kill' AND `target_entry` = 50144;", text)
+        self.assertIn("DELETE FROM `ai_boss_tactic` WHERE `map` = 249 AND " + self.KILLED + ";", text)
+        # Nothing re-inserts a kill_first on 50144 or a hold off her while a Hatcher fights.
+        for path in [os.path.join(ROOT, "data/sql/world", self.STAMP)] + self.later_files():
+            with open(path, encoding="utf-8") as handle:
+                live = "\n".join(line for line in handle.read().splitlines()
+                                 if line.startswith("(") or line.startswith("INSERT"))
+            self.assertNotIn("(249, 50144, 'kill_first'", live,
+                             "%s re-inserts a Hatcher kill_first" % os.path.basename(path))
+            self.assertNotIn("(249, 10184, 'hold_kill', 50144", live,
+                             "%s re-inserts the hold off Onyxia" % os.path.basename(path))
+        # No later migration brings either back.
+        for path in self.later_files():
+            with open(path, encoding="utf-8") as handle:
+                text_later = handle.read()
+            self.assertNotIn("50144, 'kill_first'", text_later, os.path.basename(path))
+            self.assertNotIn("10184, 'hold_kill', 50144", text_later, os.path.basename(path))
+
+    def test_the_dps_leave_the_hatchers_to_their_posts(self):
+        text = self.migration()
+        self.assertIn(
+            "(249, 50144, 'hold_kill', 10184, 0, 0, 0, '', 0, 100, 0, '', 0, 0, 0, 0, 0, 0, '", text)
+        # The P3 landing row: band 0-40, until_tank, 5 s (a spell-less row holds from the band's edge).
+        self.assertIn(
+            "(249, 10184, 'dps_hold_after', 0, 0, 0, 5, '', 0, 40, 0, 'until_tank', 0, 0, 0, 0, 0, 0, '", text)
+        self.assertIn("DELETE FROM `ai_boss_tactic` WHERE `map` = 249 AND `boss_entry` = 10184 AND "
+                      "`kind` = 'dps_hold_after' AND `hp_max` = 40;", text)
 
 
 if __name__ == "__main__":

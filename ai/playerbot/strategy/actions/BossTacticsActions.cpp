@@ -8961,7 +8961,8 @@ BossStandTarget ai::FindBossStand(PlayerbotAI* ai, Player* bot, const BossStandP
             episodeBoss = unit;
         points = StandPointsNow(*rows, role, unit->GetPositionX(), unit->GetPositionY(), casting,
                                 [unit](uint32 aura) { return unit->HasAura(aura); }, hold, nowMs, stoppedNoTarget,
-                                sPlayerbotAIConfig.bossStandNearestSeat);
+                                sPlayerbotAIConfig.bossStandNearestSeat, static_cast<int>(unit->GetHealthPercent()),
+                                sPlayerbotAIConfig.bossStandHpGate);
         if (!points.empty())
         {
             boss = unit;

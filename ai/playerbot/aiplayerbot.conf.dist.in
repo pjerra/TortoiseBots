@@ -1827,6 +1827,13 @@ AiPlayerbot.BossStandHoldsMeleeReach = 0
 # 0 - off: every role is seated on its own cells and the plan walks the least (Default)
 # 1 - on
 AiPlayerbot.BossStandNearestSeat = 0
+# The health gate of a boss stand row: a row whose boss_hp_max is below 100 applies only while the boss is at or below
+# that health percent, so one anchor can be a phase's own (Onyxia's P3 healer stack on her flanks, the P2 stack's aura
+# only reaching P2). With 0 such a row never applies; a row of 100 is ungated either way. Needs the boss stand rows
+# and the boss tactics.
+# 0 - off: no gated stand row applies (Default)
+# 1 - on: a gated row applies at or below its health, as its own phase opens (recommended on)
+AiPlayerbot.BossStandHpGate = 0
 # A boss the raid is fighting stays in every raid bot's fight for 10 s after the last bot saw it in its attacker list
 # (a melee bot that cannot reach an airborne Onyxia gives up on her, so she vanishes from that bot's attacker list and
 # every row and seat for her goes dark for it). The bots that see the boss note it in one registry; a bot that lost it

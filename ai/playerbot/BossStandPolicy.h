@@ -135,6 +135,9 @@ namespace ai
         std::uint32_t holdMs = kBossStandDefaultHoldMs;
         std::uint32_t releaseAnchor = 0;
         StandSignal windowSignal = StandSignal::Cast;
+        // A row with a value below 100 applies only while the boss is at or below that health percent, and only with
+        // AiPlayerbot.BossStandHpGate on; 100 (the column's default) is ungated, as every older row is.
+        std::uint8_t bossHpMax = 100;
     };
 
     // A boss whose whole stand set the seal refused.
@@ -164,6 +167,8 @@ namespace ai
             if (row.releaseAnchor != 0 && row.releaseAnchor == row.anchor)
                 return false;
             if (row.holdMs < kBossStandMinHoldMs || row.holdMs > kBossStandMaxHoldMs)
+                return false;
+            if (row.bossHpMax == 0 || row.bossHpMax > 100)
                 return false;
             // A signal that opens the window has a window to open and an aura to read it by.
             if (row.windowSignal == StandSignal::None)
@@ -275,12 +280,19 @@ namespace ai
     // and its window is open when the row names a window spell: the boss is
     // casting it, or (a row whose signal is StoppedNoTarget) it stands still
     // with no target. `stoppedNoTarget` is that state, read by the caller.
+    // `bossHpPct` is the boss's health (rounded down) and `hpGateOn` the
+    // AiPlayerbot.BossStandHpGate key: a row with bossHpMax below 100 applies
+    // only at or below that health with the key on, and never with it off (the
+    // closed side, as RowGateOpen takes a gated tactic row for the key off).
     inline bool StandRowActive(const BossStandRow& row, float bossX, float bossY, bool bossHasAura,
-                               std::uint32_t castingSpell, bool stoppedNoTarget = false)
+                               std::uint32_t castingSpell, bool stoppedNoTarget = false,
+                               int bossHpPct = 100, bool hpGateOn = false)
     {
         const float dx = bossX - row.anchorX;
         const float dy = bossY - row.anchorY;
         if (dx * dx + dy * dy > row.anchorR * row.anchorR)
+            return false;
+        if (row.bossHpMax < 100 && (!hpGateOn || bossHpPct > row.bossHpMax))
             return false;
         if (row.aura != 0 && !bossHasAura)
             return false;
@@ -298,7 +310,8 @@ namespace ai
     template <typename HasAura>
     std::vector<const BossStandRow*> ActiveStandPoints(const std::vector<BossStandRow>& rows, StandRole role,
                                                        float bossX, float bossY, std::uint32_t castingSpell,
-                                                       HasAura hasAura, bool stoppedNoTarget = false)
+                                                       HasAura hasAura, bool stoppedNoTarget = false,
+                                                       int bossHpPct = 100, bool hpGateOn = false)
     {
         std::vector<const BossStandRow*> out;
         bool found = false;
@@ -307,7 +320,8 @@ namespace ai
         for (const BossStandRow& row : rows)
         {
             if (row.role != role ||
-                !StandRowActive(row, bossX, bossY, row.aura != 0 && hasAura(row.aura), castingSpell, stoppedNoTarget))
+                !StandRowActive(row, bossX, bossY, row.aura != 0 && hasAura(row.aura), castingSpell, stoppedNoTarget,
+                                bossHpPct, hpGateOn))
                 continue;
             const float dx = bossX - row.anchorX;
             const float dy = bossY - row.anchorY;
@@ -324,7 +338,8 @@ namespace ai
         for (const BossStandRow& row : rows)
         {
             if (row.anchor == anchor && row.role == role &&
-                StandRowActive(row, bossX, bossY, row.aura != 0 && hasAura(row.aura), castingSpell, stoppedNoTarget))
+                StandRowActive(row, bossX, bossY, row.aura != 0 && hasAura(row.aura), castingSpell, stoppedNoTarget,
+                               bossHpPct, hpGateOn))
                 out.push_back(&row);
         }
         return out;
@@ -350,13 +365,15 @@ namespace ai
     std::vector<const BossStandRow*> PooledStandPoints(const std::vector<BossStandRow>& rows, std::uint32_t anchor,
                                                        std::uint32_t windowSpell, float bossX, float bossY,
                                                        std::uint32_t castingSpell, HasAura hasAura,
-                                                       bool stoppedNoTarget = false)
+                                                       bool stoppedNoTarget = false, int bossHpPct = 100,
+                                                       bool hpGateOn = false)
     {
         std::vector<const BossStandRow*> out;
         for (const BossStandRow& row : rows)
         {
             if (row.anchor != anchor || row.windowSpell != windowSpell ||
-                !StandRowActive(row, bossX, bossY, row.aura != 0 && hasAura(row.aura), castingSpell, stoppedNoTarget))
+                !StandRowActive(row, bossX, bossY, row.aura != 0 && hasAura(row.aura), castingSpell, stoppedNoTarget,
+                                bossHpPct, hpGateOn))
                 continue;
             out.push_back(&row);
         }
@@ -468,10 +485,10 @@ namespace ai
     std::vector<const BossStandRow*> StandPointsNow(const std::vector<BossStandRow>& rows, StandRole role, float bossX,
                                                     float bossY, std::uint32_t castingSpell, HasAura hasAura,
                                                     StandHold& hold, std::uint32_t nowMs, bool stoppedNoTarget = false,
-                                                    bool pooled = false)
+                                                    bool pooled = false, int bossHpPct = 100, bool hpGateOn = false)
     {
         std::vector<const BossStandRow*> points =
-            ActiveStandPoints(rows, role, bossX, bossY, castingSpell, hasAura, stoppedNoTarget);
+            ActiveStandPoints(rows, role, bossX, bossY, castingSpell, hasAura, stoppedNoTarget, bossHpPct, hpGateOn);
         const bool sameBoss = !rows.empty() && rows[0].bossEntry == hold.bossEntry;
         const bool releaseReached = StandReleaseAnchorReached(rows, hold.releaseAnchor, bossX, bossY);
         // A window's seat outlives its cast (the hold), and a resting row's anchor (one of no window spell, e.g. the
@@ -489,7 +506,7 @@ namespace ai
             if (pooled && points[0]->windowSpell != 0)
             {
                 points = PooledStandPoints(rows, points[0]->anchor, points[0]->windowSpell, bossX, bossY, castingSpell,
-                                           hasAura, stoppedNoTarget);
+                                           hasAura, stoppedNoTarget, bossHpPct, hpGateOn);
                 StandHoldSeal(hold, rows, points);
                 return points;
             }

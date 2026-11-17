@@ -927,6 +927,10 @@ public:
     // aura, signal and radius each row is read by alone), pooled and planned with a 20 yd walk cap; a held window keeps
     // the rows it opened on. A hold_spot post whose spot stands outside the breath lane keeps its tank there (default off).
     bool bossStandNearestSeat = false;
+    // A boss stand row whose boss_hp_max is below 100 applies only while the boss is at or below that health percent
+    // (the P3 healer stack: a stand row cannot tell one phase from another by aura alone). Off, such a row never
+    // applies; a row of 100 is ungated either way (default off).
+    bool bossStandHpGate = false;
     // A boss the raid is fighting stays in every raid bot's fight for 10 s after the last bot saw it in its attacker
     // list (a melee bot that cannot reach an airborne boss gives up on it): within 150 yd and while the bot itself is
     // in combat, so its boss-tactic rows and stand seats stay active (default off).

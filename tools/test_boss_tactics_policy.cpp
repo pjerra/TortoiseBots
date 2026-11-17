@@ -4902,6 +4902,43 @@ int main()
         CHECK(!DpsHoldTick(band, in, 7000, nullptr));
     }
 
+    // A gated, spell-less until_tank row must start its hold at the band's edge, not at the first sighting: a row
+    // with hp_max 40 is shut through P1/P2 (she is above 40 %), so its engage edge must not be spent on the P1 pull
+    // and the hold must begin on the landing. If the trigger fired at the first sighting, the P3 landing would hold
+    // nothing (the row's one engage edge would be long spent).
+    {
+        DpsHoldState landing;
+        DpsHoldInputs in;
+        in.engaged = true;
+        in.engageEnabled = true;      // a spell-less until_tank row
+        in.gateEnabled = true;        // hp_min 0, hp_max 40
+        in.gateOpen = false;          // the boss at 100 %: the row's band is closed
+        in.untilTank = true;
+        in.victimIsTank = false;
+        in.holdSec = 5.0f;
+        DpsHoldTrigger fired = DpsHoldTrigger::None;
+        CHECK(!DpsHoldTick(landing, in, 1000, &fired));
+        CHECK(fired == DpsHoldTrigger::None);
+        CHECK(!landing.engageSeen);                        // the P1 sighting consumed nothing
+        in.gateOpen = true;                                // the landing: she is at the band's edge
+        CHECK(DpsHoldTick(landing, in, 60000, &fired));
+        CHECK(fired == DpsHoldTrigger::Engage);
+        CHECK(landing.startMs == 60000);                   // held from the landing, not from the P1 sighting
+        CHECK(DpsHoldTick(landing, in, 64999, nullptr));
+        CHECK(DpsHoldTick(landing, in, 65000, nullptr));   // until_tank: not on a tank, up to 3 * param
+        CHECK(!DpsHoldTick(landing, in, 75000, nullptr));  // the cap: 5 + 10 s
+        // She reaches a tank inside the cap: the hold ends at param with no cap.
+        DpsHoldState taken;
+        DpsHoldInputs t = in;
+        t.gateOpen = false;
+        t.holdSec = 3.0f;
+        CHECK(!DpsHoldTick(taken, t, 0, nullptr));
+        t.gateOpen = true;
+        CHECK(DpsHoldTick(taken, t, 1000, nullptr));
+        t.victimIsTank = true;
+        CHECK(!DpsHoldTick(taken, t, 4000, nullptr));
+    }
+
     // A spell or aura is a rising edge only: a value that stays true (an aura that lasts the whole hold) must not
     // restart the hold on every read, or the hold would never end.
     {
