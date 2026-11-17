@@ -76,7 +76,8 @@ namespace ai
     // NeverSeen. One sighting serves both crew values. The sighting lasts the encounter: the boss (found through the
     // add_crew row that names this switch unit) out of combat at full health or a new pull starts it over, while the
     // bot's own combat drop (Feign Death, death and battle rez) leaves it standing. A map or instance change starts it
-    // over too, so one fight's sighting never opens the next fight's duty.
+    // over too, so one fight's sighting never opens the next fight's duty. The boss's encounter state is read once for
+    // the instance and at most once a second, shared by every bot of the raid, never one 200 yd scan per bot.
     class AddCrewSwitchValue : public CalculatedValue<std::uint8_t>, public Qualified
     {
     public:

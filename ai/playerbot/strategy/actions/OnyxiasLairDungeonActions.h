@@ -73,10 +73,20 @@ namespace ai
         // The pick's victim rank (OnyxiaWhelpVictimRank) when the ground tank-first key ranked it, else -1: the kill
         // action's switch reads it, and -1 there means "not a ranked pick" (airborne or key off).
         int whelpRank = -1;
-        // The pick is the lowest-HP whelp eating a tank: the one crowded pick a bot may still switch to.
+        // The pick is the lowest-HP whelp eating a tank (the tank rank's first key, then its fewest crew hitters):
+        // the one crowded pick a bot may still switch to.
         bool whelpLowestHp = false;
     };
     OnyxiaWhelpScan ScanOnyxiaWhelps(PlayerbotAI* ai, Player* bot);
+    // The whelp a bot fights, ranked by its victim (OnyxiaWhelpVictimRank: a raid tank 0, a healer 1, the rest 2). The
+    // scan and the switch read one helper, so their rankings cannot disagree.
+    int OnyxiaWhelpRankOf(Unit* whelp);
+    // The living group members on a whelp's attacker list that are neither tanks nor healers (a pet counts for its
+    // owner): the crew bots already on it. The scan's tank rank and the switch's crowded clause read one count.
+    int OnyxiaWhelpHitters(Player* bot, Unit* whelp);
+    // AiPlayerbot.OnyxiaWhelpPickTankFirst: the kill action's switch would fire for this bot now. The whelp trigger
+    // fires for a bot already on a whelp only when it would, so the trigger and the action agree by construction.
+    bool OnyxiaWhelpSwitchWanted(PlayerbotAI* ai, Player* bot, Unit* current, const OnyxiaWhelpScan& scan);
     // True when this bot is on whelp duty (AoE-capable ranged DPS).
     bool IsOnyxiaWhelpDuty(PlayerbotAI* ai, Player* bot);
     // Spawned Onyxia Eggs from the cached game object search.

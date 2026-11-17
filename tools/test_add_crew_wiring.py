@@ -111,7 +111,18 @@ class AddCrewWiring(unittest.TestCase):
         self.assertIn("bot->GetMapId() != mapId_ ||", sighting)
         self.assertNotIn("!bot->IsInCombat()", sighting)
         self.assertIn("GetBossTactics().AddCrewBossOf(bot->GetMapId(), entry, bossEntry)", sighting)
-        self.assertIn("boss->GetHealth() >= boss->GetMaxHealth()", sighting)
+        # Walk 2o round 5: the boss's encounter state is shared per map/instance/entry and refreshed at most once a
+        # second, so a raid pays one 200 yd sweep a second for it instead of one per bot per second.
+        self.assertIn("ReadAddCrewEncounterSighting(bot, bossEntry)", sighting)
+        self.assertNotIn("ScanEntry(bot, bossEntry", sighting)
+        cache = body(VALUES_CPP, "AddCrewEncounterSighting& ReadAddCrewEncounterSighting(")
+        self.assertIn("static std::vector<AddCrewEncounterSighting> sightings;", cache)
+        self.assertIn("entry.mapId == mapId && entry.instanceId == instanceId && entry.bossEntry == bossEntry",
+                      cache)
+        self.assertIn("WorldTimer::getMSTimeDiff(sighting->readAtMs, nowMs) < kAddCrewSightingRefreshMs", cache)
+        self.assertIn("ScanEntry(bot, bossEntry, found, kTankPostSearchYd);", cache)
+        self.assertIn("sighting->fullHealth = sighting->alive && boss->GetHealth() >= boss->GetMaxHealth();", cache)
+        self.assertIn("constexpr uint32 kAddCrewSightingRefreshMs = 1000;", VALUES_CPP)
         self.assertIn("SwitchSightingResets(bossKnown, bossAlive, bossInCombat, bossFullHealth, bossInCombat_)",
                       sighting)
         self.assertIn("bossInCombat_ = bossInCombat;", sighting)

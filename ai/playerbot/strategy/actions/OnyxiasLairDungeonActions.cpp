@@ -125,7 +125,7 @@ ObjectGuid OnyxiaBossValue::Calculate()
 
 // A whelp's victim rank (OnyxiaWhelpVictimRank): a raid tank it eats first, then a healer, the rest last. The ground
 // pick and the kill action's switch both read it, so the two rank the same whelp the same way.
-static int OnyxiaWhelpRankOf(Unit* whelp)
+int ai::OnyxiaWhelpRankOf(Unit* whelp)
 {
     Unit* const victim = whelp ? whelp->GetVictim() : nullptr;
     Player* const victimPlayer = victim && victim->GetTypeId() == TYPEID_PLAYER ? static_cast<Player*>(victim) : nullptr;
@@ -136,7 +136,7 @@ static int OnyxiaWhelpRankOf(Unit* whelp)
 // The crew bots already hitting a whelp: the living group members on its attacker list that are neither tanks nor
 // healers (the crew's own, by their own roles: no AI value walks, since the kill action reads this every tick of a
 // ground fight). A pet counts for its owner.
-static int OnyxiaWhelpHitters(Player* bot, Unit* whelp)
+int ai::OnyxiaWhelpHitters(Player* bot, Unit* whelp)
 {
     Group* const group = bot->GetGroup();
     std::set<uint64> counted;
@@ -155,6 +155,23 @@ static int OnyxiaWhelpHitters(Player* bot, Unit* whelp)
         ++hitters;
     }
     return hitters;
+}
+
+bool ai::OnyxiaWhelpSwitchWanted(PlayerbotAI* ai, Player* bot, Unit* current, const OnyxiaWhelpScan& scan)
+{
+    // The cheap gates first: the key, the phase and the scan's pick, so the key-off path reads no AI value at all.
+    if (!scan.whelpPhase || !sPlayerbotAIConfig.onyxiaWhelpPickTankFirst || !scan.whelp)
+        return false;
+    if (!current || !sServerFacade.IsAlive(current) || current->GetEntry() != kOnyxianWhelpEntry)
+        return false;
+    AiObjectContext* context = ai->GetAiObjectContext();
+    const bool explicitOrder = !AI_VALUE(ObjectGuid, "explicit attack target").IsEmpty();
+    const uint32 nowMs = WorldTimer::getMSTime();
+    const uint32 lastMs = AI_VALUE(uint32, "onyxia whelp switch");
+    const uint32 sinceMs = lastMs == 0 ? kOnyxiaWhelpSwitchMs : WorldTimer::getMSTimeDiff(lastMs, nowMs);
+    return ShouldSwitchOnyxiaWhelp(scan.whelpPhase, sPlayerbotAIConfig.onyxiaWhelpPickTankFirst, explicitOrder,
+        OnyxiaWhelpRankOf(current), scan.whelpRank, sinceMs, OnyxiaWhelpHitters(bot, scan.whelp),
+        scan.whelpLowestHp);
 }
 
 OnyxiaWhelpScan ai::ScanOnyxiaWhelps(PlayerbotAI* ai, Player* bot)
@@ -176,15 +193,15 @@ OnyxiaWhelpScan ai::ScanOnyxiaWhelps(PlayerbotAI* ai, Player* bot)
     // list; no grid sweep.
     const std::list<ObjectGuid> attackers = AI_VALUE(std::list<ObjectGuid>, "attackers");
     // AiPlayerbot.OnyxiaWhelpPickTankFirst: on the ground the whelp eating the raid's tank ranks first (slot 1 already
-    // holds them in P3 and dies), one eating a healer second, and the distance breaks a tie inside one rank. In the
-    // air the pick stays the nearest: a whelp cannot be pulled off a tank there.
+    // holds them in P3 and dies), one eating a healer second, the rest last. Among the tank whelps the lowest health
+    // comes first, then the fewest crew hitters, then the distance; the other ranks keep the distance. In the air the
+    // pick stays the nearest: a whelp cannot be pulled off a tank there.
     const bool pickTankFirst = sPlayerbotAIConfig.onyxiaWhelpPickTankFirst && bossFound && !scan.bossAirborne;
     float bestDist = FLT_MAX;
+    float bestPct = FLT_MAX;
+    int bestHitters = 0;
     int bestRank = OnyxiaWhelpVictimRank(false, false);
     int pickedRank = -1;
-    // The lowest-HP whelp eating a tank: the one crowded pick the kill action may still switch to.
-    float lowestTankPct = FLT_MAX;
-    Unit* lowestTankWhelp = nullptr;
     // Egg positions from the bot's cached egg search, fetched at most once
     // and only for a whelp inside the padded egg-field box.
     std::vector<OnyxiaPoint> eggs;
@@ -222,21 +239,24 @@ OnyxiaWhelpScan ai::ScanOnyxiaWhelps(PlayerbotAI* ai, Player* bot)
             continue;
         }
         const int rank = OnyxiaWhelpRankOf(unit);
-        if (rank == 0 && unit->GetHealthPercent() < lowestTankPct)
-        {
-            lowestTankPct = unit->GetHealthPercent();
-            lowestTankWhelp = unit;
-        }
-        if (!scan.whelp || OnyxiaWhelpPickBetter(rank, dist, bestRank, bestDist))
+        const float healthPct = unit->GetHealthPercent();
+        // The crowd count only orders the tank rank, and only a whelp of that rank pays for it.
+        const int hitters = rank == 0 ? OnyxiaWhelpHitters(bot, unit) : 0;
+        if (!scan.whelp || OnyxiaWhelpPickBetter(rank, healthPct, hitters, dist, bestRank, bestPct, bestHitters,
+                bestDist))
         {
             bestRank = rank;
+            bestPct = healthPct;
+            bestHitters = hitters;
             bestDist = dist;
             pickedRank = rank;
             scan.whelp = unit;
         }
     }
     scan.whelpRank = pickedRank;
-    scan.whelpLowestHp = scan.whelp && scan.whelp == lowestTankWhelp;
+    // The pick of the tank rank is that rank's lowest health (then its fewest hitters, the pick order's), the one
+    // crowded pick the kill action may still switch to.
+    scan.whelpLowestHp = scan.whelp && pickedRank == 0;
     // The ground crew changes the add_crew's work, so it needs both keys; the whelp key itself is the action's own gate.
     const bool crewOnGround = sPlayerbotAIConfig.onyxiaWhelpCrewOnGround && sPlayerbotAIConfig.onyxiaWhelpsAndEggs &&
         sPlayerbotAIConfig.dungeonRunAddCrew;
@@ -327,21 +347,20 @@ bool OnyxiaKillWhelpsAction::Execute(Event& event)
     {
         // AiPlayerbot.OnyxiaWhelpPickTankFirst, grounded: the donor early-out would keep a whelp eating neither a tank
         // nor a healer while another one eats the tank, so that one gives way to the scan's pick (a tank's, then a
-        // healer's). OnyxiaWhelpSwitch holds the hysteresis: one switch per 4 s, never off a whelp on a tank or a
-        // healer, and a crowded pick only when it is the tank's lowest. Airborne or key off, scan.whelpRank is -1 and
+        // healer's). OnyxiaWhelpSwitchWanted holds the hysteresis: one switch per 4 s, never off a whelp on a tank or
+        // a healer, and a crowded pick only when it is the tank's lowest. The whelp trigger reads the same rule and
+        // fires only when it allows the switch, so this branch is reachable; airborne or key off it answers false and
         // the early-out stands exactly as before.
-        const uint32 nowMs = WorldTimer::getMSTime();
-        const uint32 lastMs = AI_VALUE(uint32, "onyxia whelp switch");
-        const uint32 sinceMs = lastMs == 0 ? kOnyxiaWhelpSwitchMs : WorldTimer::getMSTimeDiff(lastMs, nowMs);
-        if (scan.whelpRank < 0 ||
-            !OnyxiaWhelpSwitch(OnyxiaWhelpRankOf(current), scan.whelpRank, sinceMs,
-                OnyxiaWhelpHitters(bot, scan.whelp), scan.whelpLowestHp))
+        if (!OnyxiaWhelpSwitchWanted(ai, bot, current, scan))
             return false;
         if (!PossibleAttackTargetsValue::IsValid(scan.whelp, bot))
             return false;
         const bool switched = Attack(bot, scan.whelp);
         if (switched)
-            SET_AI_VALUE(uint32, "onyxia whelp switch", nowMs);
+        {
+            AiObjectContext* context = ai->GetAiObjectContext();
+            SET_AI_VALUE(uint32, "onyxia whelp switch", WorldTimer::getMSTime());
+        }
         return switched;
     }
     if (!PossibleAttackTargetsValue::IsValid(scan.whelp, bot))

@@ -40,7 +40,12 @@ bool OnyxiaWhelpsTrigger::IsActive()
     // P3: the crew's melee and its ranged keep the whelps; a tank follows its post or the generic pick.
     if (!OnyxiaGroundDuty(duty, PlayerbotAI::IsTank(bot), scan.bossAirborne))
         return false;
-    return ShouldHuntOnyxiaWhelps(true, true, scan.whelpPhase, true, explicitOrder, onWhelp, scan.whelp != nullptr);
+    if (ShouldHuntOnyxiaWhelps(true, true, scan.whelpPhase, true, explicitOrder, onWhelp, scan.whelp != nullptr))
+        return true;
+    // AiPlayerbot.OnyxiaWhelpPickTankFirst: a bot already on a whelp hunts again when the kill action would switch it,
+    // because the already-on-a-whelp gate above kept the action from running at all. The action's switch and this path
+    // read one rule; with the key off it answers false, so this trigger is today's exactly.
+    return OnyxiaWhelpSwitchWanted(ai, bot, current, scan);
 }
 
 bool OnyxiaEggsNearTrigger::IsActive()

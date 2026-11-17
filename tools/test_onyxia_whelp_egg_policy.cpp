@@ -224,15 +224,24 @@ int main()
     CHECK(OnyxiaWhelpVictimRank(true, true) == 0);   // the tank flag wins on a unit flagged as both
     CHECK(OnyxiaWhelpVictimRank(false, true) == 1);
     CHECK(OnyxiaWhelpVictimRank(false, false) == 2);
-    CHECK(OnyxiaWhelpPickBetter(OnyxiaWhelpVictimRank(true, false), 25.0f,
-                                OnyxiaWhelpVictimRank(false, false), 5.0f));
-    CHECK(OnyxiaWhelpPickBetter(OnyxiaWhelpVictimRank(true, false), 25.0f,
-                                OnyxiaWhelpVictimRank(false, true), 5.0f));
-    CHECK(!OnyxiaWhelpPickBetter(OnyxiaWhelpVictimRank(false, false), 5.0f,
-                                 OnyxiaWhelpVictimRank(true, false), 25.0f));
-    CHECK(OnyxiaWhelpPickBetter(1, 4.0f, 1, 6.0f));   // equal rank: the nearer
-    CHECK(!OnyxiaWhelpPickBetter(1, 6.0f, 1, 4.0f));
-    CHECK(!OnyxiaWhelpPickBetter(1, 4.0f, 1, 4.0f));  // an exact tie keeps the first found
+    CHECK(OnyxiaWhelpPickBetter(OnyxiaWhelpVictimRank(true, false), 60.0f, 0, 25.0f,
+                                OnyxiaWhelpVictimRank(false, false), 10.0f, 0, 5.0f));
+    CHECK(OnyxiaWhelpPickBetter(OnyxiaWhelpVictimRank(true, false), 60.0f, 0, 25.0f,
+                                OnyxiaWhelpVictimRank(false, true), 10.0f, 0, 5.0f));
+    CHECK(!OnyxiaWhelpPickBetter(OnyxiaWhelpVictimRank(false, false), 10.0f, 0, 5.0f,
+                                 OnyxiaWhelpVictimRank(true, false), 60.0f, 0, 25.0f));
+    CHECK(OnyxiaWhelpPickBetter(1, 10.0f, 0, 4.0f, 1, 30.0f, 0, 6.0f));  // equal rank: the nearer
+    CHECK(!OnyxiaWhelpPickBetter(1, 10.0f, 0, 6.0f, 1, 30.0f, 0, 4.0f));
+    CHECK(!OnyxiaWhelpPickBetter(1, 10.0f, 0, 4.0f, 1, 30.0f, 0, 4.0f)); // an exact tie keeps the first found
+    // Among the whelps on a tank (walk 2o round 5): the lowest health first, then the fewest crew hitters, then the
+    // distance, so the tank's lowest is the one finished first instead of whichever stands closer.
+    CHECK(OnyxiaWhelpPickBetter(0, 60.0f, 0, 30.0f, 0, 80.0f, 0, 5.0f));  // lower health beats the distance
+    CHECK(!OnyxiaWhelpPickBetter(0, 80.0f, 0, 5.0f, 0, 60.0f, 0, 30.0f));
+    CHECK(OnyxiaWhelpPickBetter(0, 60.0f, 0, 30.0f, 0, 60.0f, 2, 5.0f));  // equal health: the fewer hitters
+    CHECK(!OnyxiaWhelpPickBetter(0, 60.0f, 2, 30.0f, 0, 60.0f, 0, 5.0f));
+    CHECK(OnyxiaWhelpPickBetter(0, 60.0f, 1, 5.0f, 0, 60.0f, 1, 30.0f));  // equal health and hitters: the nearer
+    CHECK(!OnyxiaWhelpPickBetter(0, 60.0f, 1, 30.0f, 0, 60.0f, 1, 5.0f));
+    CHECK(!OnyxiaWhelpPickBetter(0, 60.0f, 0, 5.0f, 0, 60.0f, 0, 5.0f));
 
     // OnyxiaWhelpSwitch (walk 2o round 4): a bot already on a whelp eating neither a tank nor a healer switches to the
     // scan's pick, one eating a tank (rank 0) then a healer (rank 1), at most once per 4 s. Every gate flips it off,
@@ -253,6 +262,21 @@ int main()
     CHECK(OnyxiaWhelpSwitch(2, 1, kOnyxiaWhelpSwitchMs, 1, false));      // one hitter: not crowded
     CHECK(kOnyxiaWhelpSwitchMs == 4000);
     CHECK(kOnyxiaWhelpSwitchHitters == 2);
+
+    // ShouldSwitchOnyxiaWhelp (walk 2o round 5): the whelp trigger's second path and the kill action's switch. A bot on
+    // a harmless whelp with a whelp on a tank fires with the key on; on the tank's own whelp it does not fire; the key
+    // off, the phase off and an explicit order keep today's trigger. Everything else is OnyxiaWhelpSwitch's verdict.
+    CHECK(ShouldSwitchOnyxiaWhelp(true, true, false, 2, 0, kOnyxiaWhelpSwitchMs, 0, false));  // harmless -> tank
+    CHECK(ShouldSwitchOnyxiaWhelp(true, true, false, 2, 1, kOnyxiaWhelpSwitchMs, 0, false));  // harmless -> healer
+    CHECK(!ShouldSwitchOnyxiaWhelp(true, true, false, 0, 0, kOnyxiaWhelpSwitchMs, 0, false)); // already on the tank's
+    CHECK(!ShouldSwitchOnyxiaWhelp(true, true, false, 0, 1, kOnyxiaWhelpSwitchMs, 0, true));
+    CHECK(!ShouldSwitchOnyxiaWhelp(true, true, false, 1, 0, kOnyxiaWhelpSwitchMs, 0, false)); // on a healer's
+    CHECK(!ShouldSwitchOnyxiaWhelp(false, true, false, 2, 0, kOnyxiaWhelpSwitchMs, 0, false)); // phase off
+    CHECK(!ShouldSwitchOnyxiaWhelp(true, false, false, 2, 0, kOnyxiaWhelpSwitchMs, 0, false)); // key off
+    CHECK(!ShouldSwitchOnyxiaWhelp(true, true, true, 2, 0, kOnyxiaWhelpSwitchMs, 0, false));  // explicit order
+    CHECK(!ShouldSwitchOnyxiaWhelp(true, true, false, 2, -1, kOnyxiaWhelpSwitchMs, 0, false)); // unranked pick
+    CHECK(!ShouldSwitchOnyxiaWhelp(true, true, false, 2, 0, kOnyxiaWhelpSwitchMs - 1, 0, false));
+    CHECK(ShouldSwitchOnyxiaWhelp(true, true, false, 2, 0, kOnyxiaWhelpSwitchMs, 2, true));
 
     std::cout << "onyxia whelp/egg policy: OK\n";
     return 0;

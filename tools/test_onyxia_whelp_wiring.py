@@ -89,6 +89,33 @@ class OnyxiaWhelpWiring(unittest.TestCase):
                       "scan.whelp != nullptr)", trigger)
         self.assertNotIn("ShouldHuntOnyxiaWhelps(true, true, scan.bossAirborne", trigger)
 
+    def test_whelp_trigger_fires_for_the_switch(self):
+        # Walk 2o round 5: the already-on-a-whelp gate kept OnyxiaKillWhelpsAction from ever running for a bot on a
+        # whelp, so the ground switch was unreachable. The trigger now has a second path, read by the same rule the
+        # action's switch reads; with the key off that rule answers false, so the trigger is today's exactly.
+        trigger = body(TRIGGERS, "bool OnyxiaWhelpsTrigger::IsActive()")
+        self.assertIn("if (ShouldHuntOnyxiaWhelps(true, true, scan.whelpPhase, true, explicitOrder, onWhelp, "
+                      "scan.whelp != nullptr))\n        return true;", trigger)
+        self.assertIn("return OnyxiaWhelpSwitchWanted(ai, bot, current, scan);", trigger)
+        self.assertLess(trigger.index("ShouldHuntOnyxiaWhelps("),
+                        trigger.index("OnyxiaWhelpSwitchWanted("))
+        # The rule the trigger and the action share: the phase, the key and the order gate the switch, then
+        # OnyxiaWhelpSwitch's verdict (a harmless whelp and a whelp on a tank fires, the tank's own whelp does not).
+        self.assertIn("inline bool ShouldSwitchOnyxiaWhelp(bool whelpPhase, bool keyOn, bool explicitOrder, "
+                      "int currentRank,", POLICY)
+        self.assertIn("return whelpPhase && keyOn && !explicitOrder &&\n            OnyxiaWhelpSwitch(", POLICY)
+        adapter = body(ACTIONS, "bool ai::OnyxiaWhelpSwitchWanted(")
+        self.assertIn("if (!scan.whelpPhase || !sPlayerbotAIConfig.onyxiaWhelpPickTankFirst || !scan.whelp)", adapter)
+        self.assertIn("current->GetEntry() != kOnyxianWhelpEntry", adapter)
+        self.assertIn('AI_VALUE(uint32, "onyxia whelp switch")', adapter)
+        self.assertIn("kOnyxiaWhelpSwitchMs : WorldTimer::getMSTimeDiff(lastMs, nowMs)", adapter)
+        self.assertIn("ShouldSwitchOnyxiaWhelp(scan.whelpPhase, sPlayerbotAIConfig.onyxiaWhelpPickTankFirst, "
+                      "explicitOrder,", adapter)
+        self.assertIn("OnyxiaWhelpRankOf(current), scan.whelpRank, sinceMs, OnyxiaWhelpHitters(bot, scan.whelp),",
+                      adapter)
+        self.assertIn("bool OnyxiaWhelpSwitchWanted(PlayerbotAI* ai, Player* bot, Unit* current, "
+                      "const OnyxiaWhelpScan& scan);", ACTIONS_H)
+
     def test_kill_action_reads_the_phase_and_the_ground_duty(self):
         action = body(ACTIONS, "bool OnyxiaKillWhelpsAction::Execute(Event& event)")
         self.assertIn("const bool duty = IsOnyxiaWhelpDuty(ai, bot);", action)
@@ -196,39 +223,47 @@ class OnyxiaWhelpWiring(unittest.TestCase):
         self.assertIn("const bool pickTankFirst = sPlayerbotAIConfig.onyxiaWhelpPickTankFirst && bossFound && "
                       "!scan.bossAirborne;", scan)
         self.assertIn("const int rank = OnyxiaWhelpRankOf(unit);", scan)
-        self.assertIn("OnyxiaWhelpPickBetter(rank, dist, bestRank, bestDist)", scan)
+        # Walk 2o round 5: among the whelps on a tank the lowest health comes first, then the fewest crew hitters,
+        # then the distance; the other ranks keep the distance. The crowd read is paid only by the tank rank.
+        self.assertIn("const int hitters = rank == 0 ? OnyxiaWhelpHitters(bot, unit) : 0;", scan)
+        self.assertIn("OnyxiaWhelpPickBetter(rank, healthPct, hitters, dist, bestRank, bestPct, bestHitters,\n"
+                      "                bestDist)", scan)
+        self.assertIn("bestHitters = hitters;", scan)
         self.assertIn("pickedRank = rank;", scan)
         self.assertIn("scan.whelpRank = pickedRank;", scan)
-        # The lowest-HP whelp eating a tank, the one crowded pick a switch may still take.
-        self.assertIn("float lowestTankPct = FLT_MAX;", scan)
-        self.assertIn("if (rank == 0 && unit->GetHealthPercent() < lowestTankPct)", scan)
-        self.assertIn("scan.whelpLowestHp = scan.whelp && scan.whelp == lowestTankWhelp;", scan)
+        # The tank rank's pick is its lowest health (then its fewest hitters): the one crowded pick a switch may take.
+        self.assertIn("scan.whelpLowestHp = scan.whelp && pickedRank == 0;", scan)
+        pick = body(POLICY, "inline bool OnyxiaWhelpPickBetter(")
+        self.assertIn("if (rankA != rankB)\n            return rankA < rankB;", pick)
+        self.assertIn("if (rankA == 0)", pick)
+        self.assertIn("if (healthPctA < healthPctB)", pick)
+        self.assertIn("if (hittersA != hittersB)", pick)
+        self.assertIn("return distA < distB;", pick)
         # The range and egg filters stand in front of both picks.
         self.assertLess(scan.index("IsOnyxiaWhelpPickable(true, dist, nearEgg)"), scan.index("pickTankFirst)"))
         # The rank read is one helper so the pick and the switch's current-whelp read cannot disagree.
-        rank_of = body(ACTIONS, "static int OnyxiaWhelpRankOf(Unit* whelp)")
+        rank_of = body(ACTIONS, "int ai::OnyxiaWhelpRankOf(Unit* whelp)")
         self.assertIn("Unit* const victim = whelp ? whelp->GetVictim() : nullptr;", rank_of)
         self.assertIn("victim->GetTypeId() == TYPEID_PLAYER", rank_of)
         self.assertIn("OnyxiaWhelpVictimRank(victimPlayer && PlayerbotAI::IsTank(victimPlayer),", rank_of)
         self.assertIn("victimPlayer && PlayerbotAI::IsHeal(victimPlayer))", rank_of)
         self.assertIn("inline int OnyxiaWhelpVictimRank(bool victimTank, bool victimHealer)", POLICY)
         self.assertIn("return victimTank ? 0 : victimHealer ? 1 : 2;", POLICY)
-        self.assertIn("inline bool OnyxiaWhelpPickBetter(int rankA, float distA, int rankB, float distB)", POLICY)
-        self.assertIn("return rankA != rankB ? rankA < rankB : distA < distB;", POLICY)
+        self.assertIn("inline bool OnyxiaWhelpPickBetter(int rankA, float healthPctA, int hittersA, float distA,",
+                      POLICY)
         # Walk 2o round 4: the kill action no longer keeps any whelp. Behind the same key, on the ground, a whelp
         # eating neither a tank nor a healer gives way to the scan's ranked pick; the key off or airborne path is the
         # old early-out (scan.whelpRank is -1 there), so the module behaves exactly as before.
         action = body(ACTIONS, "bool OnyxiaKillWhelpsAction::Execute(Event& event)")
         self.assertIn("if (current && sServerFacade.IsAlive(current) && current->GetEntry() == "
                       "kOnyxianWhelpEntry)\n    {", action)
-        self.assertIn('AI_VALUE(uint32, "onyxia whelp switch")', action)
-        self.assertIn("kOnyxiaWhelpSwitchMs : WorldTimer::getMSTimeDiff(lastMs, nowMs)", action)
-        self.assertIn("if (scan.whelpRank < 0 ||\n            !OnyxiaWhelpSwitch(OnyxiaWhelpRankOf(current), "
-                      "scan.whelpRank, sinceMs,\n                OnyxiaWhelpHitters(bot, scan.whelp), "
-                      "scan.whelpLowestHp))", action)
+        self.assertIn("if (!OnyxiaWhelpSwitchWanted(ai, bot, current, scan))\n            return false;", action)
         self.assertIn("const bool switched = Attack(bot, scan.whelp);", action)
-        self.assertIn('SET_AI_VALUE(uint32, "onyxia whelp switch", nowMs);', action)
+        self.assertIn('SET_AI_VALUE(uint32, "onyxia whelp switch", WorldTimer::getMSTime());', action)
         self.assertIn("return switched;", action)
+        self.assertIn("bool OnyxiaWhelpSwitchWanted(", ACTIONS_H)
+        self.assertIn("int OnyxiaWhelpRankOf(Unit* whelp);", ACTIONS_H)
+        self.assertIn("int OnyxiaWhelpHitters(Player* bot, Unit* whelp);", ACTIONS_H)
         # The switch rule and its hysteresis constants, as the truth table in tools/test_onyxia_whelp_egg_policy.cpp
         # reads them.
         self.assertIn("inline bool OnyxiaWhelpSwitch(int currentRank, int candidateRank, "
@@ -242,7 +277,7 @@ class OnyxiaWhelpWiring(unittest.TestCase):
         self.assertIn("constexpr std::uint32_t kOnyxiaWhelpSwitchMs = 4000;", POLICY)
         self.assertIn("constexpr int kOnyxiaWhelpSwitchHitters = 2;", POLICY)
         # The crowd read: the group's crew bots on the candidate (no tanks, no healers), deduped by owner.
-        hitters = body(ACTIONS, "static int OnyxiaWhelpHitters(Player* bot, Unit* whelp)")
+        hitters = body(ACTIONS, "int ai::OnyxiaWhelpHitters(Player* bot, Unit* whelp)")
         self.assertIn("for (Unit* attacker : whelp->GetAttackers())", hitters)
         self.assertIn("group->IsMember(player->GetObjectGuid())", hitters)
         self.assertIn("counted.insert(player->GetObjectGuid().GetRawValue()).second", hitters)

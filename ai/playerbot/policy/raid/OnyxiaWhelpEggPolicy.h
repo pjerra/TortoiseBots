@@ -196,9 +196,25 @@ namespace ai
         return victimTank ? 0 : victimHealer ? 1 : 2;
     }
 
-    inline bool OnyxiaWhelpPickBetter(int rankA, float distA, int rankB, float distB)
+    // The better ground pick: the tank rank first, then a healer's, then the rest. Among the whelps eating a tank the
+    // lowest health comes first (it dies soonest), then the fewest crew hitters (a whelp already crowded adds nothing
+    // new), and the distance only breaks what is left. The switch's crowded clause is about the tank rank, so the pick
+    // and that clause rank the same whelp; the other ranks keep the distance as their tie-break.
+    inline bool OnyxiaWhelpPickBetter(int rankA, float healthPctA, int hittersA, float distA,
+                                      int rankB, float healthPctB, int hittersB, float distB)
     {
-        return rankA != rankB ? rankA < rankB : distA < distB;
+        if (rankA != rankB)
+            return rankA < rankB;
+        if (rankA == 0)
+        {
+            if (healthPctA < healthPctB)
+                return true;
+            if (healthPctB < healthPctA)
+                return false;
+            if (hittersA != hittersB)
+                return hittersA < hittersB;
+        }
+        return distA < distB;
     }
 
     // The switch's hysteresis (AiPlayerbot.OnyxiaWhelpPickTankFirst): at most one switch per this interval, so a bot
@@ -226,6 +242,20 @@ namespace ai
         if (hittersOnCandidate >= kOnyxiaWhelpSwitchHitters && !(candidateRank == 0 && candidateLowestHp))
             return false;
         return true;
+    }
+
+    // The whelp hunt for a bot already on a whelp (the trigger's second path) and the kill action's switch read this
+    // one rule: with AiPlayerbot.OnyxiaWhelpPickTankFirst on, the whelp phase running and no explicit order, the hunt
+    // fires (so the action runs at all) exactly when OnyxiaWhelpSwitch lets the bot leave. The trigger's own
+    // already-on-a-whelp gate kept the action from ever running for such a bot, so the switch was unreachable; with
+    // the key off, the phase off or a whelp that cannot be left this answers false and the trigger is today's.
+    inline bool ShouldSwitchOnyxiaWhelp(bool whelpPhase, bool keyOn, bool explicitOrder, int currentRank,
+                                        int candidateRank, std::uint32_t msSinceLastSwitch, int hittersOnCandidate,
+                                        bool candidateLowestHp)
+    {
+        return whelpPhase && keyOn && !explicitOrder &&
+            OnyxiaWhelpSwitch(currentRank, candidateRank, msSinceLastSwitch, hittersOnCandidate,
+                candidateLowestHp);
     }
 
     // A ranged damage dealer off the crew on a whelp goes back to her (not on an explicit order) while the whelp phase

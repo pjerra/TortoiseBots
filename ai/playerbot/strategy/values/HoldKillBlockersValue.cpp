@@ -25,6 +25,68 @@ void ScanEntry(Player* bot, uint32 entry, std::list<Creature*>& found, float ran
         bot->GetCreatureListWithEntryInGrid(found, entry, range);
 }
 
+// The switch unit's encounter, as one bot's 200 yd scan found it: the boss known, alive, in combat and at full health.
+// The answer is the instance's, not the bot's, and every crew value of the raid needs the same one, so the first bot
+// to read it in a second scans and the rest read the entry: a 40-bot raid spends one boss grid search a second
+// instead of forty. Read on the world thread only (bot AI updates run in BotManager's world-thread pass), like the
+// keep-out snapshot cache.
+struct AddCrewEncounterSighting
+{
+    uint32 mapId = 0;
+    uint32 instanceId = 0;
+    uint32 bossEntry = 0;
+    uint32 readAtMs = 0;
+    bool scanned = false;
+    bool known = false;
+    bool alive = false;
+    bool inCombat = false;
+    bool fullHealth = false;
+};
+
+constexpr uint32 kAddCrewSightingRefreshMs = 1000;
+
+AddCrewEncounterSighting& ReadAddCrewEncounterSighting(Player* bot, uint32 bossEntry)
+{
+    static std::vector<AddCrewEncounterSighting> sightings;
+    const uint32 mapId = bot->GetMapId();
+    const uint32 instanceId = bot->GetInstanceId();
+    const uint32 nowMs = WorldTimer::getMSTime();
+    AddCrewEncounterSighting* sighting = nullptr;
+    for (AddCrewEncounterSighting& entry : sightings)
+        if (entry.mapId == mapId && entry.instanceId == instanceId && entry.bossEntry == bossEntry)
+        {
+            sighting = &entry;
+            break;
+        }
+    if (!sighting)
+    {
+        // A handful of live encounters at most; the oldest entry gives way when a realm runs more.
+        if (sightings.size() >= 16)
+            sightings.erase(sightings.begin());
+        AddCrewEncounterSighting entry;
+        entry.mapId = mapId;
+        entry.instanceId = instanceId;
+        entry.bossEntry = bossEntry;
+        sightings.push_back(entry);
+        sighting = &sightings.back();
+    }
+    if (sighting->scanned && WorldTimer::getMSTimeDiff(sighting->readAtMs, nowMs) < kAddCrewSightingRefreshMs)
+        return *sighting;
+    std::list<Creature*> found;
+    ScanEntry(bot, bossEntry, found, kTankPostSearchYd);
+    Creature* boss = nullptr;
+    for (Creature* creature : found)
+        if (creature && (!boss || creature->IsAlive()))
+            boss = creature;
+    sighting->scanned = true;
+    sighting->readAtMs = nowMs;
+    sighting->known = boss != nullptr;
+    sighting->alive = boss && boss->IsAlive();
+    sighting->inCombat = boss && boss->IsInCombat();
+    sighting->fullHealth = sighting->alive && boss->GetHealth() >= boss->GetMaxHealth();
+    return *sighting;
+}
+
 // Whether `unit` is one of the bot's group: a member, or a pet or guardian whose owner is one. The bot alone counts
 // when it runs without a group.
 bool IsGroupUnit(Unit* unit, Player* bot, Group* group)
@@ -210,7 +272,9 @@ uint8 AddCrewSwitchValue::Calculate()
         return seen_;
     }
     // The encounter is the boss's, found through the row that gave this switch unit to the bot: its own combat state
-    // says nothing about the sighting's, since the bot leaves combat long before the boss's encounter does.
+    // says nothing about the sighting's, since the bot leaves combat long before the boss's encounter does. The boss
+    // read is shared per instance and refreshed at most once a second, so the raid pays one grid search, not one per
+    // bot.
     uint32 bossEntry = 0;
     bool bossKnown = false;
     bool bossAlive = false;
@@ -218,23 +282,11 @@ uint8 AddCrewSwitchValue::Calculate()
     bool bossFullHealth = false;
     if (GetBossTactics().AddCrewBossOf(bot->GetMapId(), entry, bossEntry))
     {
-        std::list<Creature*> found;
-        ScanEntry(bot, bossEntry, found, kTankPostSearchYd);
-        Creature* boss = nullptr;
-        for (Creature* creature : found)
-        {
-            if (!creature)
-                continue;
-            bossKnown = true;
-            if (!boss || creature->IsAlive())
-                boss = creature;
-        }
-        if (boss)
-        {
-            bossAlive = boss->IsAlive();
-            bossInCombat = boss->IsInCombat();
-            bossFullHealth = bossAlive && boss->GetHealth() >= boss->GetMaxHealth();
-        }
+        const AddCrewEncounterSighting& sighting = ReadAddCrewEncounterSighting(bot, bossEntry);
+        bossKnown = sighting.known;
+        bossAlive = sighting.alive;
+        bossInCombat = sighting.inCombat;
+        bossFullHealth = sighting.fullHealth;
     }
     const bool reset = SwitchSightingResets(bossKnown, bossAlive, bossInCombat, bossFullHealth, bossInCombat_);
     if (bossKnown)
