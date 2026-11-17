@@ -261,14 +261,16 @@ float ThreatMultiplier::GetValue(Action* action)
     // coming back by backing off, so the veto releases (ThreatCapPolicy.h ThreatBackoffYieldsOnSelf). The hold runs
     // per target: switching from one mob to another starts the new mob's own grace, and a dead or exempt target
     // (taunt-immune, `threat_successor`) neither accrues nor passes its time on. The clock is fed on every evaluation,
-    // not only at the high line, so a switch below it resets the previous target's hold too. While a live tank has
-    // threat on the mob the release waits: that tank is recovering it, and the ordinary cap applies. Key off: no clock
-    // work here; the branch below clears the clock so a reload that turns the key on starts its grace over.
+    // not only at the high line, so a switch below it resets the previous target's hold too. While a tank is fighting
+    // the mob the release waits: that tank is recovering it, and the ordinary cap applies. The gate reads the tank's
+    // victim, not its threat: a frozen entry on a tank that left the mob would keep the release off forever
+    // (ThreatValue::TankHoldsMob). Key off: no clock work here; the branch below clears the clock so a reload that
+    // turns the key on starts its grace over.
     if (measuresHolder && ThreatSelfHeldRelease(
             ai->ThreatSelfHeld(), measuresHolder, target ? target->GetObjectGuid().GetRawValue() : 0,
             target && target->IsAlive() && target->GetVictim() == bot,
             TargetTauntImmune(target) || ThreatSuccessorTarget(target), highThreat,
-            AI_VALUE2(float, "tank threat", "current target") > 0.0f, WorldTimer::getMSTime()))
+            ThreatValue::TankHoldsMob(ai, target), WorldTimer::getMSTime()))
         return 1.0f;
 
     if (highThreat)

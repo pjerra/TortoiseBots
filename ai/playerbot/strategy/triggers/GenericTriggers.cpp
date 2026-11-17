@@ -330,14 +330,15 @@ bool WandBlocksCastTrigger::ThreatVetoesNuke()
     if (!highThreat)
         return false;
     // The same 3 s self-held release the multiplier applies (ThreatCapPolicy.h ThreatSelfHeldRelease): a mob the bot has
-    // held past the grace while no live tank has threat on it is not coming back, so the wand yields to the nuke too.
+    // held past the grace while no tank is fighting it is not coming back, so the wand yields to the nuke too. The gate
+    // reads the tank's victim, not a threat number that can freeze (ThreatValue::TankHoldsMob).
     bool const measuresHolder = sPlayerbotAIConfig.threatBackoffMeasuresHolder;
     Unit* const target = AI_VALUE(Unit*, "current target");
     if (measuresHolder && ThreatSelfHeldRelease(
             ai->ThreatSelfHeld(), measuresHolder, target ? target->GetObjectGuid().GetRawValue() : 0,
             target && target->IsAlive() && target->GetVictim() == bot,
             TargetTauntImmune(target) || ThreatSuccessorTarget(target), highThreat,
-            AI_VALUE2(float, "tank threat", "current target") > 0.0f, WorldTimer::getMSTime()))
+            ThreatValue::TankHoldsMob(ai, target), WorldTimer::getMSTime()))
         return false;
     return true;
 }

@@ -80,6 +80,7 @@ struct ConfigStub { bool dungeonRunThreatSuccessorNotHolder = false; bool dungeo
 struct ThreatValue {
     static float GetThreat(Player*, Unit*);
     static float GetTankThreat(PlayerbotAI*, Unit*);
+    static bool TankHoldsMob(PlayerbotAI*, Unit*);
     static float GetResetSuccessorThreat(PlayerbotAI*, Unit*);
 };
 #include "ThreatCapPolicy.h"
@@ -123,6 +124,45 @@ int main() {
     enemy.guid.player = true;
     assert(ThreatValue::GetThreat(&bot, &enemy) == 0);
     assert(ThreatValue::GetTankThreat(&ai, &enemy) == 0);
+}
+""")
+
+    @unittest.skipUnless(shutil.which("g++"), "g++ unavailable")
+    def test_tank_holds_mob_reads_the_victim_not_a_frozen_threat_entry(self):
+        # t1114b rep 5: the tank's threat entry stayed at 157 after the mob left it. The release gate must read the
+        # tank's victim (is it fighting the mob or not), never the frozen number: with the tank elsewhere there is no
+        # tank on the mob, so the release fires after the 3 s grace; with the tank on this mob the cap stands however
+        # long the bot held it. The clock keeps running throughout, so a tank that dies mid-hold releases at once.
+        self._compile_and_run(r"""
+int main() {
+    Player bot, tank;
+    tank.tank = true; tank.threat = 157;
+    Group group{{&bot, &tank}}; bot.group = &group;
+    PlayerbotAI ai{&bot};
+    Unit mob, elsewhere;
+    mob.victim = &bot;
+    tank.victim = &elsewhere; // the frozen 157 belongs to a fight that is over
+    assert(!ThreatValue::TankHoldsMob(&ai, &mob));
+    ai::SelfHeldClock clock;
+    assert(!ai::ThreatSelfHeldRelease(clock, true, 0x1001, true, false, true,
+                                      ThreatValue::TankHoldsMob(&ai, &mob), 1000));
+    assert(ai::ThreatSelfHeldRelease(clock, true, 0x1001, true, false, true,
+                                     ThreatValue::TankHoldsMob(&ai, &mob), 4000));
+    tank.victim = &mob; // the tank is fighting the mob: the ordinary cap stands
+    assert(ThreatValue::TankHoldsMob(&ai, &mob));
+    assert(!ai::ThreatSelfHeldRelease(clock, true, 0x1001, true, false, true,
+                                      ThreatValue::TankHoldsMob(&ai, &mob), 60000));
+    tank.alive = false; // a dead tank is no recovery, even with the stale victim pointer
+    assert(!ThreatValue::TankHoldsMob(&ai, &mob));
+    assert(ai::ThreatSelfHeldRelease(clock, true, 0x1001, true, false, true,
+                                     ThreatValue::TankHoldsMob(&ai, &mob), 60001));
+    // The bot is never its own tank, and a friendly target redirects to its victim as in GetTankThreat.
+    bot.tank = true; bot.victim = &mob;
+    assert(!ThreatValue::TankHoldsMob(&ai, &mob));
+    Unit friendly; friendly.friendly = true; friendly.victim = &mob;
+    tank.alive = true; tank.victim = &mob;
+    assert(ThreatValue::TankHoldsMob(&ai, &friendly));
+    assert(!ThreatValue::TankHoldsMob(&ai, nullptr));
 }
 """)
 

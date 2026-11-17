@@ -30,6 +30,10 @@ namespace ai
 	virtual uint8 Calculate() override;
         static float GetThreat(Player* player, Unit* target);
         static float GetTankThreat(PlayerbotAI* ai, Unit* target);
+        // Whether a live, safe group tank (not this bot) is fighting `target` (its victim is the mob): the self-held
+        // threat release's gate (ThreatCapPolicy.h TankHoldsMobOf). A tank's threat entry alone cannot say this: it
+        // outlives the tank's fight with the mob, so a frozen entry would keep the release off forever.
+        static bool TankHoldsMob(PlayerbotAI* ai, Unit* target);
         // The reset successor's threat (DungeonRunThreatResetWindow): the highest threat among the assigned tanks that
         // do NOT hold the target, on it or away (a tank on a Son keeps its boss threat and is who the boss turns to on a
         // reset). The cap's own successor pick requires `onBoss` and would drop that away tank. -1 when the target has

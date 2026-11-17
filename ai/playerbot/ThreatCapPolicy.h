@@ -201,32 +201,50 @@ namespace ai
 
     // The self-victim release in ThreatMultiplier's high-threat branch, behind the same key as ThreatBackoffReference:
     // the bot has held the mob for the grace period, so the damage goes out instead of waiting for a tank that has
-    // lost it. The release waits while a live tank has threat on the mob (`tankThreatOnMob`, ThreatValue's tank threat
-    // above 0): that tank is recovering it, and resuming damage raises the bot's threat against the 110/130 % pull
-    // line and can keep the mob on the bot, where backing off let the tank cross it. Only a mob no tank has threat on
-    // is out of reach. Taunt-immune targets and `threat_successor` rows keep their own logic, and with the key off the
-    // branch is untouched.
-    inline bool ThreatBackoffYieldsOnSelf(bool keyOn, bool victimIsBot, bool targetExempt, bool tankThreatOnMob,
+    // lost it. The release waits while a tank is fighting the mob (`tankHoldsMob`, TankHoldsMobOf): that tank is
+    // recovering it, and resuming damage raises the bot's threat against the 110/130 % pull line and can keep the mob
+    // on the bot, where backing off let the tank cross it. Only a mob no tank is on is out of reach. Taunt-immune
+    // targets and `threat_successor` rows keep their own logic, and with the key off the branch is untouched.
+    inline bool ThreatBackoffYieldsOnSelf(bool keyOn, bool victimIsBot, bool targetExempt, bool tankHoldsMob,
                                           std::uint32_t heldMs)
     {
-        return keyOn && victimIsBot && !targetExempt && !tankThreatOnMob && heldMs >= kThreatSelfHeldGraceMs;
+        return keyOn && victimIsBot && !targetExempt && !tankHoldsMob && heldMs >= kThreatSelfHeldGraceMs;
+    }
+
+    // One group tank as the release reads it (ThreatValue::TankHoldsMob): `available` is a live, safe tank that is not
+    // this bot, `victimIsMob` whether that tank is fighting the mob (its victim is the target). The tank's threat entry
+    // is deliberately not a fact here: a number alone cannot tell a tank that is pulling the mob from one whose entry
+    // froze when the mob left it (t1114b rep 5: 157 on a tank that was on something else, which held the release off
+    // forever). Victim facts keep the decision pure and the caller free to resolve the group its own way.
+    struct TankOnMobFact
+    {
+        bool available = false;
+        bool victimIsMob = false;
+    };
+
+    inline bool TankHoldsMobOf(const std::vector<TankOnMobFact>& tanks)
+    {
+        for (const TankOnMobFact& tank : tanks)
+            if (tank.available && tank.victimIsMob)
+                return true;
+        return false;
     }
 
     // One evaluation of that release (AiPlayerbot.ThreatBackoffMeasuresHolder): the caller runs it on every combat
     // evaluation, ahead of its own `high threat` test, and says with `lineActive` whether the veto is being applied at
     // all. The clock is observed either way, so a target seen only below the line still starts or resets the hold:
     // fed only inside the high-threat branch, a return to a mob after its grace inherited the time it spent on
-    // another target and released at once. It keeps running while a tank has threat, so a tank that dies mid-hold
-    // releases at once instead of starting a second grace. Key off: no clock work at all.
+    // another target and released at once. It keeps running while a tank is on the mob, so a tank that dies or drops
+    // the mob mid-hold releases at once instead of starting a second grace. Key off: no clock work at all.
     inline bool ThreatSelfHeldRelease(SelfHeldClock& clock, bool keyOn, std::uint64_t targetGuid, bool victimIsBot,
-                                      bool targetExempt, bool lineActive, bool tankThreatOnMob, std::uint32_t now)
+                                      bool targetExempt, bool lineActive, bool tankHoldsMob, std::uint32_t now)
     {
         if (!keyOn)
             return false;
         // The update must run before `lineActive` is tested: folding it into that condition skips the clock on
         // every target below the line, and a later return to an old one inherits its time.
         std::uint32_t const heldMs = clock.Update(targetGuid, victimIsBot && !targetExempt, now);
-        return lineActive && ThreatBackoffYieldsOnSelf(keyOn, victimIsBot, targetExempt, tankThreatOnMob, heldMs);
+        return lineActive && ThreatBackoffYieldsOnSelf(keyOn, victimIsBot, targetExempt, tankHoldsMob, heldMs);
     }
 
     // The relative threat a damage dealer reads against `maxThreat` (ThreatValue::Calculate after its friendly/player/group

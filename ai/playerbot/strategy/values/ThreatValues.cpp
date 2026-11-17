@@ -282,6 +282,38 @@ std::vector<ThreatCapTank> ThreatCapTanksOf(PlayerbotAI* ai, Unit* target, const
 }
 }
 
+// Whether a live, safe group tank (not this bot) is fighting `target`: the tank's victim is the mob. The self-held
+// release reads this instead of a tank's threat number, because a threat entry outlives the fight it belongs to
+// (t1114b rep 5: 157 frozen on a tank that was on another mob) and on its own would keep the release off forever.
+// The victim pointer is the evidence, so no state is added.
+bool ThreatValue::TankHoldsMob(PlayerbotAI* ai, Unit* target)
+{
+    Player* bot = ai->GetBot();
+    if (!target)
+        return false;
+
+    if (sServerFacade.IsFriendlyTo(target, bot))
+        target = target->GetVictim();
+
+    if (!target || target->getObjectGuid().IsPlayer())
+        return false;
+
+    Group* group = bot->GetGroup();
+    if (!group)
+        return false;
+
+    std::vector<TankOnMobFact> tanks;
+    for (Player* player : LiveGroupMembers(group))
+    {
+        if (!player || !sServerFacade.IsAlive(player) || !ai->IsSafe(player) || player == bot)
+            continue;
+        if (!ai->IsTank(player))
+            continue;
+        tanks.push_back({true, player->GetVictim() == target});
+    }
+    return TankHoldsMobOf(tanks);
+}
+
 float ThreatValue::GetTankThreat(PlayerbotAI* ai, Unit* target)
 {
     if (!target)

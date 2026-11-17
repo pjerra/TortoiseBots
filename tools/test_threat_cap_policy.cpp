@@ -254,11 +254,34 @@ int main()
         CHECK(!ThreatSelfHeldRelease(reset, true, mobA, true, false, true, false, 5099));
         CHECK(ThreatSelfHeldRelease(reset, true, mobA, true, false, true, false, 5100));
         // A tank still building threat on the mob keeps the ordinary cap however long the bot has held it: the clock
-        // keeps running (no second grace), and the release only comes once no live tank has threat on the mob.
+        // keeps running (no second grace), and the release only comes once no tank is on the mob.
         SelfHeldClock tanked;
         CHECK(!ThreatSelfHeldRelease(tanked, true, mobA, true, false, true, true, 1000));
         CHECK(!ThreatSelfHeldRelease(tanked, true, mobA, true, false, true, true, 60000));
         CHECK(ThreatSelfHeldRelease(tanked, true, mobA, true, false, true, false, 60001));
+        // backoff_release_reads_the_tank_s_victim: the gate is "a tank is fighting the mob" (its victim is the mob),
+        // never a threat number. t1114b rep 5's frozen 157 sat on a tank that was on another mob: as a threat gate it
+        // held the release off forever, and with the victim facts the release fires after the grace.
+        {
+            const std::vector<TankOnMobFact> frozen = {{true, false}};
+            const std::vector<TankOnMobFact> fighting = {{true, true}};
+            const std::vector<TankOnMobFact> deadFighting = {{false, true}};
+            CHECK(!TankHoldsMobOf(frozen));
+            CHECK(ThreatBackoffYieldsOnSelf(true, true, false, TankHoldsMobOf(frozen), 3000));
+            CHECK(TankHoldsMobOf(fighting));
+            CHECK(!ThreatBackoffYieldsOnSelf(true, true, false, TankHoldsMobOf(fighting), 3000));
+            CHECK(!ThreatBackoffYieldsOnSelf(true, true, false, TankHoldsMobOf(fighting), 60000));
+            // A dead or unsafe tank accrues nothing even with a stale victim pointer; a live one not on the mob does
+            // not count either; one live tank on the mob is enough however many others are listed.
+            CHECK(!TankHoldsMobOf(deadFighting));
+            CHECK(TankHoldsMobOf({{false, true}, {true, true}}));
+            CHECK(!TankHoldsMobOf({{false, true}, {true, false}}));
+            CHECK(!TankHoldsMobOf({}));
+            SelfHeldClock stale;
+            CHECK(!ThreatSelfHeldRelease(stale, true, mobA, true, false, true, TankHoldsMobOf(frozen), 1000));
+            CHECK(!ThreatSelfHeldRelease(stale, true, mobA, true, false, true, TankHoldsMobOf(frozen), 3999));
+            CHECK(ThreatSelfHeldRelease(stale, true, mobA, true, false, true, TankHoldsMobOf(frozen), 4000));
+        }
         // Key off: no clock work at all, and no release.
         SelfHeldClock off;
         CHECK(!ThreatSelfHeldRelease(off, false, mobA, true, false, true, false, 1000));
