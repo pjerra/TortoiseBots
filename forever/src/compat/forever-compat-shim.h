@@ -13,6 +13,9 @@
 // Every entry says what it stands for. Keep each section sorted by name.
 #pragma once
 
+#include <cstdio>
+#include <tuple>
+
 // ---------------------------------------------------------------------------------------------------------------
 // 1. TYPE NAMES
 // ---------------------------------------------------------------------------------------------------------------
@@ -334,19 +337,19 @@ struct CmangosSpellTemplateProxy
 struct CmangosLogProxy
 {
     void outBasic() const { LogAt(LOG_LEVEL_INFO, "server", ""); }
-    template <typename... Args> void outBasic(char const* fmt, Args... args) const { LogAt(LOG_LEVEL_INFO, "server", Format(fmt, args...)); }
+    template <typename... Args> void outBasic(char const* fmt, Args const&... args) const { LogAt(LOG_LEVEL_INFO, "server", Format(fmt, args...)); }
     void outDebug() const { LogAt(LOG_LEVEL_DEBUG, "server", ""); }
-    template <typename... Args> void outDebug(char const* fmt, Args... args) const { LogAt(LOG_LEVEL_DEBUG, "server", Format(fmt, args...)); }
+    template <typename... Args> void outDebug(char const* fmt, Args const&... args) const { LogAt(LOG_LEVEL_DEBUG, "server", Format(fmt, args...)); }
     void outDetail() const { LogAt(LOG_LEVEL_DEBUG, "server", ""); }
-    template <typename... Args> void outDetail(char const* fmt, Args... args) const { LogAt(LOG_LEVEL_DEBUG, "server", Format(fmt, args...)); }
+    template <typename... Args> void outDetail(char const* fmt, Args const&... args) const { LogAt(LOG_LEVEL_DEBUG, "server", Format(fmt, args...)); }
     void outError() const { LogAt(LOG_LEVEL_ERROR, "server", ""); }
-    template <typename... Args> void outError(char const* fmt, Args... args) const { LogAt(LOG_LEVEL_ERROR, "server", Format(fmt, args...)); }
+    template <typename... Args> void outError(char const* fmt, Args const&... args) const { LogAt(LOG_LEVEL_ERROR, "server", Format(fmt, args...)); }
     void outErrorDb() const { LogAt(LOG_LEVEL_ERROR, "sql.sql", ""); }
-    template <typename... Args> void outErrorDb(char const* fmt, Args... args) const { LogAt(LOG_LEVEL_ERROR, "sql.sql", Format(fmt, args...)); }
+    template <typename... Args> void outErrorDb(char const* fmt, Args const&... args) const { LogAt(LOG_LEVEL_ERROR, "sql.sql", Format(fmt, args...)); }
     void outInfo() const { LogAt(LOG_LEVEL_INFO, "server", ""); }
-    template <typename... Args> void outInfo(char const* fmt, Args... args) const { LogAt(LOG_LEVEL_INFO, "server", Format(fmt, args...)); }
+    template <typename... Args> void outInfo(char const* fmt, Args const&... args) const { LogAt(LOG_LEVEL_INFO, "server", Format(fmt, args...)); }
     void outString() const { LogAt(LOG_LEVEL_INFO, "server", ""); }
-    template <typename... Args> void outString(char const* fmt, Args... args) const { LogAt(LOG_LEVEL_INFO, "server", Format(fmt, args...)); }
+    template <typename... Args> void outString(char const* fmt, Args const&... args) const { LogAt(LOG_LEVEL_INFO, "server", Format(fmt, args...)); }
 
 private:
     static void LogAt(LogLevel level, char const* logger, std::string const& message)
@@ -354,28 +357,46 @@ private:
         Log::instance()->OutMessage(logger, level, "{}", message);
     }
 
-    // printf formatting of the old line. A std::string argument would read as garbage through %s, so it is refused
-    // at compile time instead of logging nonsense: those call sites pass .c_str().
+    // printf formatting of the old line. A std::string argument reaches %s as its characters: ForeverCore returns
+    // std::string where cmangos returned char const*. The copies in the tuple keep them alive for both passes.
     template <typename... Args>
-    static std::string Format(char const* fmt, Args... args)
+    static std::string Format(char const* fmt, Args const&... args)
     {
         if constexpr (sizeof...(Args) == 0)
             return fmt;
         else
         {
-            static_assert((!IsStringArg<Args> && ...), "a log argument must not be a std::string: pass .c_str()");
-            int len = std::snprintf(nullptr, 0, fmt, args...);
+            auto values = std::make_tuple(LogArgument(args)...);
+            int len = std::apply([&](auto const&... v) { return std::snprintf(nullptr, 0, fmt, AsCString(v)...); }, values);
             if (len <= 0)
                 return fmt;
             std::string out(static_cast<size_t>(len), '\0');
-            std::snprintf(out.data(), out.size() + 1, fmt, args...);
+            std::apply([&](auto const&... v) { std::snprintf(out.data(), out.size() + 1, fmt, AsCString(v)...); }, values);
             return out;
         }
     }
 
     template <typename T>
-    static constexpr bool IsStringArg = std::is_same_v<std::decay_t<T>, std::string> ||
-                                        std::is_same_v<std::decay_t<T>, std::string_view>;
+    static auto LogArgument(T const& value)
+    {
+        if constexpr (IsString<T>)
+            return std::string(value);
+        else
+            return value;
+    }
+
+    template <typename T>
+    static auto AsCString(T const& value)
+    {
+        if constexpr (std::is_same_v<T, std::string>)
+            return value.c_str();
+        else
+            return value;
+    }
+
+    template <typename T>
+    static constexpr bool IsString = std::is_same_v<std::decay_t<T>, std::string> ||
+                                     std::is_same_v<std::decay_t<T>, std::string_view>;
 };
 #undef sLog
 #define sLog (CmangosLogProxy())

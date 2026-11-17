@@ -81,6 +81,7 @@
 #include "SpellAuras.h"
 #include "SpellDefines.h"
 #include "SpellInfo.h"
+#include "SpellHistory.h"
 #include "SpellMgr.h"
 #include "TemporarySummon.h"
 #include "ThreatManager.h"
