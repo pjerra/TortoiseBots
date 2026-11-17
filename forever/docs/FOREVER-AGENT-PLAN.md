@@ -8,7 +8,7 @@ Measured 2026-11-17: turtle-agent `dev` e461eb42 (about 207k lines of Go, 1,060 
 
 ## Owner decisions (2026-11-17)
 
-1. **Public repository `pjerra/forever-agent`.** Its public text describes a client for ForeverCore servers and does
+1. **Private repository `pjerra/forever-agent`** (owner 2026-11-17, after it was public for about 40 minutes). Its text describes a client for ForeverCore servers and does
    not mention the TortoiseBots port, which stays private (head start note).
 2. **Same as turtle-agent: a real network client.** The agent logs in over the wire like a game client. No
    player-inside-the-server shortcut.
@@ -38,7 +38,7 @@ and a round-trip test feeds it bytes captured from a real session.
 
 ## Repository
 
-- `pjerra/forever-agent` (public), checkout `~/forever-agent`, made from turtle-agent's history, Go module
+- `pjerra/forever-agent` (private), checkout `~/forever-agent`, made from turtle-agent's history, Go module
   `github.com/pjerra/forever-agent`, binary `forever-agent`, default branch `main`.
 - turtle-agent and tortoise-trials stay as they are for the Turtle server.
 - AGPL-3.0 and both NOTICE files are kept.
