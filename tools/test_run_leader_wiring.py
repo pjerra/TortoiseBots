@@ -44,7 +44,7 @@ class RunLeaderWiringTest(unittest.TestCase):
     def test_exact_waypoint_facts_and_kind(self):
         # The exact waypoint's stand-still proof reads the lead bot's moving state (DungeonRunPolicy.h ExactWalkTo), and the
         # loader reads a move_hop_exact row as a MoveDirect with exactLaunch (DungeonPlanPolicy.h ParsePlanStepRowKind).
-        self.assertIn("f.leadMoving = lead->IsMoving();", body(COMMANDS, "void ReadRunFacts(", "\n}\n"))
+        self.assertIn("f.leadMoving = IsMovingCompat(lead);", body(COMMANDS, "void ReadRunFacts(", "\n}\n"))
         loader = (ROOT / "ai/playerbot/DungeonPlanMgr.cpp").read_text()
         self.assertIn("ParsePlanStepRowKind(fields[3].GetCppString(), step.kind, step.exactLaunch, step.openProof);", loader)
         self.assertNotIn("step.kind = ParsePlanStepKind(", loader)

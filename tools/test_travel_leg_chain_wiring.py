@@ -36,7 +36,7 @@ class LegChainTravelWiringTest(unittest.TestCase):
 
     def test_chains_only_while_moving(self):
         fn = TRAVEL[TRAVEL.index("bool MoveToTravelTargetAction::isUseful()"):]
-        self.assertIn("bot->IsMoving() && TravelLegChainDue(ai, bot)", fn)
+        self.assertIn("IsMovingCompat(bot) && TravelLegChainDue(ai, bot)", fn)
 
     def test_pure_walk_only(self):
         helper = TRAVEL[TRAVEL.index("bool MoveToTravelTargetAction::TravelLegChainDue("):]

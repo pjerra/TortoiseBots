@@ -214,6 +214,9 @@ struct ObjectMgr
 };
 inline ObjectMgr sObjectMgr;
 
+// The shim's entry lookup (ai/cmangos-compat-shim.h); the code under test calls it instead of the member directly.
+inline ItemPrototype const* GetItemProtoByIdCompat(uint32 id) { return sObjectMgr.GetItemPrototype(id); }
+
 struct LootStoreItem { int32 mincountOrRef = 0; uint32 itemid = 0; };
 struct LootLootGroupAccess
 {

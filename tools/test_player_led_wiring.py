@@ -132,7 +132,7 @@ class PlayerLedGlueWiringTest(unittest.TestCase):
     def test_anchor_reads_the_player_only(self):
         read = strip_comments(body(COMMANDS, "TortoiseBots::PlayerLed::Anchor ReadPlayerLedAnchor(", "\n}\n"))
         self.assertIn("TortoiseBots::PlayerLed::MovedSince(pl, a.x, a.y, a.z)", read)
-        self.assertIn("a.moving = moved || commander->IsMoving();", read)
+        self.assertIn("a.moving = moved || IsMovingCompat(commander);", read)
         self.assertIn("a.botsMaxYd = yd;", read)
         self.assertIn("bot->GetDistance(commander)", read)
         # Read only: nothing is ordered to the player.
