@@ -107,6 +107,7 @@ These settings configure boss encounter mechanics, environmental hazard evasion,
 | [`AiPlayerbot.DungeonRunSeekSiphonClock`](#aiplayerbotdungeonrunseeksiphonclock) | `0` | `1` (recommended on with `DungeonRunSeekPullCycle` and `DungeonRunSeekWalkoutFaceCast`): a Hakkar walk-out that sent no pull cast and never stood in shot position aborts as `no sight` after 15 s, and the `seek_pull` row's start and retry floors drop to 50 s, so an undosed siphon gets another pull. |
 | [`AiPlayerbot.DungeonRunSeekCycleRoll`](#aiplayerbotdungeonrunseekcycleroll) | `0` | `1` (recommended on with `DungeonRunSeekPullCycle`): a missed Blood Siphon sighting advances the fight's cycle number with the rolled due time, so the walk-out's spent cycle reopens instead of staying shut for the rest of the fight (one `BossTacticsSeekCycleRoll` row per roll). |
 | [`AiPlayerbot.DungeonRunSeekRetryUnspent`](#aiplayerbotdungeonrunseekretryunspent) | `0` | `1` (recommended on with `DungeonRunSeekPullCycle`): a Hakkar walk-out that never shot its Son does not count against the cycle's walk-outs once a cycle, and that cycle's start and retry floors drop to 35 s before the siphon, so one aborted pull does not leave the siphon undosed. |
+| [`AiPlayerbot.DungeonRunSeekRetryOtherSon`](#aiplayerbotdungeonrunseekretryotherson) | `0` | `1` (recommended on with `DungeonRunSeekRetryUnspent`): a Hakkar walk-out that aborts with its puller at its own stand keeps that Son walked for the cycle, so the refunded retry goes to the other Son instead of re-walking the stand that failed. |
 | [`AiPlayerbot.DungeonRunThreatResetWindow`](#aiplayerbotdungeonrunthreatresetwindow) | `0` | A/B only, **not recommended**; tested in walk 68, made things worse; keep off (needs `DungeonRunSeekAura`): around Hakkar's expected Cause Insanity, a damage dealer at 95 % of the best tank that does not hold him holds its damage on him (resuming under 90 %), so the reset hands him to a tank. Walk 68: tank-turn share 58 % to 46 % (casts 4+ 68 % to 49 %), target not met. |
 | [`AiPlayerbot.DungeonRunSeekMeetPrePlaceHold`](#aiplayerbotdungeonrunseekmeetpreplacehold) | `0` | `1` (recommended on with `DungeonRunSeekMeetPrePlace`): once its pre-place walk began, the pre-placed third tank's reach actions and warrior gap closer skip the anchored boss, so its own rotation no longer drags it back into Hakkar's melee. |
 | [`AiPlayerbot.DungeonRunCarrierStrike`](#aiplayerbotdungeonruncarrierstrike) | `0` | `1` (recommended on): a cursed healer or off-tank turns on its own Shade of Jin'do for one cast, placed just below a critical heal, while the raid can spare it (needs the boss tactics). |
@@ -1464,6 +1465,21 @@ Whether Hakkar's walk-out refunds one unshot start a cycle. Recommended on with 
 **The refund:** an unshot walk-out that ends (an abort, the no-sight cut, a stalled shot, a failed cast) with at least 40 s to the siphon (the 35 s floor plus the 5 s the puller's walk back needs) gives its start back, once per cycle: the cycle's walk-out count drops by one, so the row's `priority 1` still lets the retry start, and the cycle's start and retry floors drop to 35 s (never raised above the row's own). A start at due 35 s pulls the Son at about 28 s with the non-tank burn already open. Only one refund a cycle and only an unshot end: a walk-out that shot its Son, and a timeout, keep their start counted, so one Son a siphon is still the row's rule.
 
 **Rows:** the start row gains `refund=1` on the refunded cycle's retry (`refund=0` on any other start), and the late row's `need=` reads the cycle's floor.
+
+</details>
+
+### `AiPlayerbot.DungeonRunSeekRetryOtherSon`
+Whether a stand-bound Hakkar walk-out abort keeps its Son for the cycle's retry. Recommended on with `DungeonRunSeekRetryUnspent`.
+**Default:** `0` · **Values:** `0` off (an unshot abort frees its Son, the retry may re-pick the same one), `1` on (needs `DungeonRunSeekPullCycle` and a `seek_pull` row; the retry itself needs `DungeonRunSeekRetryUnspent`'s refund) · **Restart:** not needed (`.reload config` applies it on the next world tick)
+
+<details>
+<summary>How it works in detail</summary>
+
+**Why (walk 117):** all six `walk-out abort move failed` rows stood with the puller at its stand (`walk-out stand branch=inpos`, `inrange=1`, `los=0`), 12-17 yd from one Son, and the next move to that stand failed at under 1 yd three times (a dispatch-short path, `path=8`) into the abort. Five pullers of three classes failed the same way on the same two stand spots of one Son (4 of 8 starts there; the other Son failed 0 of ~40), so the Son's stand is the cause: the stand search's sight line passes where the bot's own `IsWithinLOSInMap` fails. With `DungeonRunSeekRetryUnspent` the refunded retry re-picked that same nearest Son and the same stand, and the retry aborted the same way (fight 19: Darkseeker to the same Son at +33 s, aborted at +43 s).
+
+**The keep:** an abort with the puller at its own stand (a move refused within 3 yd of the stand, the `no sight` cut, the 6 s stalled shot) leaves the Son in the cycle's walked list, as the `no stand` abort already does, so the cycle's retry picks the other Son. A move refused en route (more than 3 yd from the stand) still frees the Son: that is a path failure, not the stand. The refund, the 60 s puller exclusion and the retry floors are unchanged; without the refund the kept Son still spends the cycle as before. If the other Son has no stand or was already walked, the cycle has no retry, the same as a `no stand` abort today.
+
+**Rows:** the `move failed`, `no sight` and `no shot` abort rows end with ` keep=1` when the Son was kept and `keep=0` when it was freed.
 
 </details>
 
