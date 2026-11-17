@@ -11,6 +11,8 @@ Run: `forever/tools/vm-census.sh "" 14` (all, about 45 minutes) or with a path p
 |---|---|---|---|---|---|
 | 2026-11-17 | 6517af05 | no pre-include, include paths only | 648 | 8 | 30,167 |
 | 2026-11-17 | 6517af05 | pre-include + first shim, `ai/playerbot/strategy/values` only | 104 | 0 | 2,717 |
+| 2026-11-17 | 6517af05 | pre-include + first shim (7808b02ae): the real baseline | 648 | 0 | 17,530 |
+| 2026-11-17 | 6517af05 | shim round 1 (a7a640591), no bot code changed | 648 | 11 | 13,496 |
 | 2026-11-17 | 6517af05 | pre-include + first shim, all files (BEFORE shim round 1) | 648 | 0 | 17,530 |
 | 2026-11-17 | 6517af05 | shim round 1 (AFTER) | 648 | 11 | 13,496 |
 
@@ -21,3 +23,9 @@ What the first run named most (distinct places): the cmangos singleton spelling 
 `getPositionX`), `ItemPrototype` fields (`Class`, `SubClass`, `Quality`, `ItemId`), `SpellEntry` fields (`Effect[i]`),
 `WorldPosition`'s `x` / `y` / `z` / `mapId` (it derives from the core's `WorldLocation`, whose fields are named
 differently), update fields (`GetUInt32Value`), `WorldTimer`, `sLog.outString`.
+
+Shim round 1 notes, the table of mapped names and the "cannot shim" groups: `SHIM-R1-NOTES.md`. Largest groups left:
+item template fields (1,168 places), then spell data, position members, database calls, update fields, `GetProto`.
+
+Open finding from the lead's spot check: the member-name macro `IsMoving -> isMoving` breaks the shim's own rule (the
+core uses `IsMoving` in 11 places). It has to go or be justified in round 2.
