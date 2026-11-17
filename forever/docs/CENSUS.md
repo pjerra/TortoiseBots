@@ -17,6 +17,7 @@ Run: `forever/tools/vm-census.sh "" 14` (all, about 45 minutes) or with a path p
 | 2026-11-17 | 6517af05 | shim round 1 (AFTER) | 648 | 11 | 13,496 |
 | 2026-11-17 | 6517af05 | shim round 2 (BEFORE, = round 1 AFTER at 233e35a0c) | 648 | 11 | 13,496 |
 | 2026-11-17 | 6517af05 | shim round 2 (AFTER, item prototype mirror, 570d22dd4) | 648 | 11 | 12,182 |
+| 2026-11-18 | 6517af05 | shim round 2 fix round 1 (review: block/holy/bag family/one fill; entry + IsMoving helpers, b7d20355a) | 648 | 11 | 11,938 |
 
 The first row is not comparable with later ones: without the pre-include most files stopped early.
 
@@ -30,5 +31,8 @@ Shim round 1 notes, the table of mapped names and the "cannot shim" groups: `SHI
 item template fields (1,168 places), then spell data, position members, database calls, update fields, `GetProto`.
 
 Shim round 2 (the item prototype mirror) notes: `SHIM-R2-NOTES.md`. The lead's round-1 finding on
-`IsMoving -> isMoving` is resolved there: the rename is removed (D6), so the bot's 71 `IsMoving()` calls are now an
-ordinary rename for a later batch.
+`IsMoving -> isMoving` is resolved there: the rename is removed (D6), and the bot's 59 `IsMoving()` calls now go through
+`IsMovingCompat` (fix round B2). The review fix round 1 also corrected `Block` (the classic column, not the item stat),
+kept holy out of "+all resistances", converted `BagFamily` from the core mask to the old number, filled the mirror once at
+`OnWorldInitialized` (lock-free lookups afterwards) and moved the 180 entry lookups to `GetItemProtoByIdCompat`: census
+12,182 -> 11,938 places, with `GetItemPrototype` and `IsMoving` gone from the name table.
