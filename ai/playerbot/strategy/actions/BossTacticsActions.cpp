@@ -3324,6 +3324,7 @@ void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, U
         : nullptr;
     int starts = 0;
     bool refund = false;
+    std::uint32_t startFloorLogMs = 0;
     {
         std::lock_guard<std::mutex> lock(g_walkoutMutex);
         WalkoutRecord& record = g_walkouts[instanceId];
@@ -3341,6 +3342,7 @@ void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, U
                            prePlaceY);
         starts = record.state.cycleStarts;
         refund = rules.retryUnspent && record.state.refundCycle == cycleNo;
+        startFloorLogMs = WalkoutFirstStartFloorMs(record.state, cycleNo, rules);
         NoteWalkoutBusy(before, record.state);
         // The new task's generation: the puller's own writes on this start tick match it (WalkoutTaskIs).
         out.walkoutGen = record.state.startGen;
@@ -3354,7 +3356,7 @@ void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, U
             snprintf(info1, sizeof(info1),
                      "seek pull: ranged walk-out %s -> %u due=%u try=%d reach=%.0f ray=%.0f tr=%.2f floor=%u refund=%d",
                      bot->GetName(), scan.son->GetGUIDLow(), dueInMs / 1000, starts, scan.reachYd, scan.rayDeg, tr,
-                     rules.firstStartMinMs / 1000, refund ? 1 : 0);
+                     startFloorLogMs / 1000, refund ? 1 : 0);
         else
             snprintf(info1, sizeof(info1),
                      "seek pull: ranged walk-out %s -> %u due=%u try=%d reach=%.0f ray=%.0f tr=%.2f refund=%d",

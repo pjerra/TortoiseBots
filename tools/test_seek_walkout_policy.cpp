@@ -1404,6 +1404,51 @@ static void TestRetryUnspentNeverAfterShot()
     CHECK(!WalkoutMayStartFor(late, 2, 100, 8, 1001000, 29000, rules));
 }
 
+static void TestRetryUnspentRefundsThroughFinishAbort()
+{
+    // The glue's puller-side aborts (threat, dead, insanity, the Son gone) end in WalkoutFinish, not
+    // WalkoutAbortUnspent: the refund there reopens the cycle too, so the retry may start at due 40 s.
+    const WalkoutCycleRules rules =
+        WalkoutRetryUnspentRules(WalkoutSiphonClockRules(WalkoutRulesFromRow(1, 60.0f, 80.0f)));
+    SeekWalkoutState s;
+    WalkoutStart(s, 7, 100, 1000000, 2, 70000); // due at 1070000
+    CHECK(!WalkoutCycleOpen(s, 2, rules));
+    CHECK(WalkoutFinish(s, WalkoutEnd::Abort, 1004000, rules));
+    CHECK(s.cycleStarts == 0 && s.refundCycle == 2);
+    CHECK(WalkoutCycleOpen(s, 2, rules));
+    WalkoutReturnDone(s);
+    CHECK(WalkoutMayStartFor(s, 2, 200, 8, 1030000, 40000, rules));
+    CHECK(!WalkoutMayStartFor(s, 2, 200, 8, 1036000, 34000, rules));
+    // The walk-back margin: 39 s left is too little for the refund, so the finish keeps the cycle shut.
+    SeekWalkoutState late;
+    WalkoutStart(late, 7, 100, 1000000, 2, 70000);
+    CHECK(!WalkoutFinish(late, WalkoutEnd::Abort, 1031000, rules));
+    CHECK(late.cycleStarts == 1 && late.refundCycle == 0xFFFFFFFFu);
+    CHECK(!WalkoutCycleOpen(late, 2, rules));
+}
+
+static void TestRetryUnspentNoSightCutFloor()
+{
+    // The no-sight cut keeps the refund's lower floor while the cycle's refund is still to spend: a start at due 59 s
+    // is cut 15 s in with 44 s left (35 s floor plus the 5 s walk-back margin), where the siphon clock's own 50 s
+    // floor plus the margin runs to the timeout. A refunded cycle is back on the row's floor.
+    const WalkoutCycleRules rules =
+        WalkoutRetryUnspentRules(WalkoutSiphonClockRules(WalkoutRulesFromRow(1, 60.0f, 80.0f)));
+    const WalkoutCycleRules siphon = WalkoutSiphonClockRules(WalkoutRulesFromRow(1, 60.0f, 80.0f));
+    SeekWalkoutState s;
+    WalkoutStart(s, 7, 100, 1000000, 2, 59000);
+    CHECK(WalkoutNoSightCutDue(s, 1000000 + 15000, rules, true));
+    CHECK(!WalkoutNoSightCutDue(s, 1000000 + 15000, siphon, true));
+    // The margin: due 54 s leaves 39 s 15 s in, under the 35 s floor plus 5 s, so the cut waits.
+    SeekWalkoutState tight;
+    WalkoutStart(tight, 7, 100, 1000000, 2, 54000);
+    CHECK(!WalkoutNoSightCutDue(tight, 1000000 + 15000, rules, true));
+    SeekWalkoutState spent;
+    WalkoutStart(spent, 7, 100, 1000000, 2, 59000);
+    spent.refundCycle = 2;
+    CHECK(!WalkoutNoSightCutDue(spent, 1000000 + 15000, rules, true));
+}
+
 static void TestRetryUnspentOffKeepsToday()
 {
     // The key off: the row's own floors, one counted start a cycle, no refund anywhere.
@@ -2940,6 +2985,8 @@ int main()
     TestSiphonClockRulesNeverRaise();
     TestRetryUnspentRefundsOneAbort();
     TestRetryUnspentNeverAfterShot();
+    TestRetryUnspentRefundsThroughFinishAbort();
+    TestRetryUnspentNoSightCutFloor();
     TestRetryUnspentOffKeepsToday();
     TestNoSightFreesTheSon();
     TestWalkoutEndFreesSon();

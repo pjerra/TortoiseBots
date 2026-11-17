@@ -1865,14 +1865,16 @@ namespace ai
 
     // DungeonRunSeekRetryUnspent: an unshot walk-out that ends before the siphon is too close for a retry to pull
     // anything does not count against the cycle's cap, once per cycle: its one retry fits where the row's cap would
-    // have spent the cycle. Only an unshot abort refunds, and only once (refundCycle); a timeout and a shot walk-out
+    // have spent the cycle. The puller's walk back after the end (up to kSeekWalkoutReturnMs, WalkoutBusy) runs first,
+    // so the refund keeps the same kSeekWalkoutNoSightRetryMarginMs the no-sight cut does: at least the retry's floor
+    // plus that margin left. Only an unshot abort refunds, and only once (refundCycle); a timeout and a shot walk-out
     // keep their start counted.
     inline bool WalkoutRefundUnspent(SeekWalkoutState& s, std::uint32_t nowMs, const WalkoutCycleRules& rules)
     {
         if (!rules.retryUnspent || !WalkoutActive(s) || s.shot || s.cycleStarts < 1 ||
             s.refundCycle == s.countedCycle ||
-            static_cast<std::int32_t>(s.siphonDueMs - nowMs) <=
-                static_cast<std::int32_t>(rules.retryUnspentFloorMs))
+            static_cast<std::int32_t>(s.siphonDueMs - nowMs) <
+                static_cast<std::int32_t>(rules.retryUnspentFloorMs + kSeekWalkoutNoSightRetryMarginMs))
             return false;
         s.refundCycle = s.countedCycle;
         --s.cycleStarts;
