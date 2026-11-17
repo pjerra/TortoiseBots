@@ -37,11 +37,15 @@ using Movement::Vector3;                         // G3D::Vector3, the point type
 using CreatureDataPair = std::pair<ObjectGuid::LowType const, CreatureData>;
 using GameObjectDataPair = std::pair<ObjectGuid::LowType const, GameObjectData>;
 
-// A macro, not `using`: bot headers forward-declare `struct ItemPrototype;` / `struct SpellEntry;`, and a type alias
-// cannot be redeclared as a class. The macro renames the forward declaration with the rest (a class-keyed
-// redeclaration of a defined class is legal). ForeverCore never uses either old name.
-#define ItemPrototype ItemTemplate
+// A macro, not `using`: bot headers forward-declare `struct SpellEntry;`, and a type alias cannot be redeclared as a
+// class. The macro renames the forward declaration with the rest (a class-keyed redeclaration of a defined class is
+// legal). ForeverCore never uses the old name.
 #define SpellEntry SpellInfo
+
+// ItemPrototype is not an alias: the bot brain reads item data as public fields (`proto->Class`, `proto->ItemStat[i]`),
+// which ItemTemplate hides behind accessors. It is our own struct with the old field names, filled from ItemTemplate once
+// per item (TbItemPrototype.h/.cpp). Everything that FETCHES an item template hands back the mirror.
+#include "TbItemPrototype.h"
 
 // cmangos keeps its grid searchers and its singleton template in `MaNGOS`. The searchers are TrinityCore's
 // (`Trinity::`), the singleton template is ours: one instance per type, made on first use.
@@ -115,7 +119,6 @@ struct CmangosObjectAccessorProxy
 #define GetGameObjectInfo GetGameObjectTemplate      // ObjectMgr's game object template by entry
 #define GetGOData GetGameObjectData                  // ObjectMgr's spawn record by spawn id
 #define GetHealthPercent GetHealthPct                // health as a percentage of max, 0..100
-#define GetItemPrototype GetItemTemplate             // ObjectMgr's item template by entry
 #define GetLeaderGuid GetLeaderGUID                   // the group's leader
 #define GetObjectBoundingRadius GetBoundingRadius    // the unit's size, added to reach computations
 #define GetObjectGuid GetGUID                        // the object's guid
@@ -125,7 +128,6 @@ struct CmangosObjectAccessorProxy
 #define GetTargetGuid GetTarget                      // the selected target guid (same field)
 #define InBattleGround InBattleground                // player is inside a battleground instance
 #define IsDead isDead                                // dead or a corpse
-#define IsMoving isMoving                            // movement flags say the unit is moving
 #define IsNonMeleeSpellCasted IsNonMeleeSpellCast    // a non-melee spell is being cast/channelled
 #define IsSittingDown IsSitState                     // the five sitting stand states
 #define SetSelectionGuid SetSelection                // set the selected target guid (Player only)
@@ -201,8 +203,8 @@ struct CmangosObjectAccessorProxy
 // Race: the same race id 5.
 #define RACE_UNDEAD RACE_UNDEAD_PLAYER
 
-// Sizes: 5 item spell slots in both; the nine classic locales.
-#define MAX_ITEM_PROTO_SPELLS MAX_ITEM_SPELLS
+// Sizes: the nine classic locales. (MAX_ITEM_PROTO_SPELLS and MAX_ITEM_PROTO_DAMAGES are the mirror's array sizes,
+// defined in TbItemPrototype.h: 5 slots in both cores.)
 #define MAX_LOCALE OLD_TOTAL_LOCALES
 
 // Config keys: ForeverCore's enum drops the type token from cmangos's name (same key, same value type).
@@ -248,6 +250,15 @@ inline bool IsPositiveEffect(SpellInfo const* spellInfo, uint8 effIndex)
 }
 inline bool IsPositiveSpell(SpellInfo const* spellInfo) { return spellInfo && spellInfo->IsPositive(); }
 
+// The item's template. cmangos asked the item (`item->GetProto()`); ForeverCore names the fetch after the template, and
+// the bot brain then reads the old fields, so here the template is turned into the mirror (TbItemPrototype.h). The same
+// spelling exists in ai/cmangos-compat-shim.h, so the call sites read the same on both cores. A null item was a crash
+// before and is nullptr now.
+inline ItemPrototype const* GetItemProtoCompat(Item const* item) { return item ? tbcompat::ItemProto(item->GetTemplate()) : nullptr; }
+
+// Back to the core's record for the core functions that want an ItemTemplate const* and are handed a mirror.
+inline ItemTemplate const* GetItemTemplateCompat(ItemPrototype const* proto) { return tbcompat::ItemTpl(proto); }
+
 // ---- SQL store objects ----
 // cmangos keeps items, creature templates and game object templates in store objects with LookupEntry/GetMaxEntry;
 // ForeverCore asks ObjectMgr for the same records. GetMaxEntry is "one past the largest id used as a loop bound"
@@ -277,8 +288,9 @@ private:
 
 struct CmangosItemStorageProxy
 {
-    template <typename T = ItemTemplate>
-    T const* LookupEntry(uint32 id) const { return sObjectMgr.GetItemTemplate(id); }
+    // cmangos returned its own ItemPrototype; the bot brain reads the old fields, so the proxy hands back our mirror.
+    template <typename T = ItemPrototype>
+    T const* LookupEntry(uint32 id) const { return tbcompat::ItemProto(id); }
     uint32 GetMaxEntry() const { return _max.Get(sObjectMgr.GetItemTemplateStore()); }
 
 private:
