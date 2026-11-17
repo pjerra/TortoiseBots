@@ -82,6 +82,7 @@ struct ItemPrototype
     uint32 ContainerSlots;                                  // T :451                               F GetContainerSlots()     :892
     _ItemStat ItemStat[MAX_ITEM_PROTO_STATS];               // T :452 stat type + value              F GetStatModifierBonusStat()/:893, GetItemStatValue (Item.cpp:2432)
     uint32 Delay;                                           // T :453 milliseconds                   F GetDelay()              :902
+    float  RangedModRange;                                  // T :454 percent, ranged attack range   F GetRangedModRange()     :903
     _ItemDamage Damage[MAX_ITEM_PROTO_DAMAGES];             // T :456 per-school damage lines        F GetDamage()/:994, GetDamageType()/:901
     uint32 Block;                                           // T :457 shield block value             F ITEM_MOD_BLOCK_VALUE stat value
     int32 Armor;                                            // T :458 armor from item_template       F GetArmor(itemLevel)     :992

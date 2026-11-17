@@ -97,6 +97,7 @@ void Fill(ItemPrototype& mirror, ItemTemplate const* tpl)
     }
 
     mirror.Delay = tpl->GetDelay();
+    mirror.RangedModRange = tpl->GetRangedModRange();
 
     uint32 const itemLevel = tpl->GetBaseItemLevel();
     float minDamage = 0.0f;
