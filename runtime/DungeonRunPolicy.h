@@ -2131,6 +2131,14 @@ struct BossAnyOfSeen
     bool alive = false;
 };
 
+// Whether `unit` beats the pick so far in a boss any-of row's choice: a living one before a corpse, then the nearer to
+// the point, then the lower entry. `pick` 0: nothing picked yet.
+inline bool BossAnyOfBetter(const BossAnyOfSeen& unit, std::uint32_t pick, bool pickAlive, float pickYd)
+{
+    return !pick || (unit.alive && !pickAlive) ||
+        (unit.alive == pickAlive && (unit.distSpot < pickYd || (unit.distSpot == pickYd && unit.entry < pick)));
+}
+
 // Which alternative of a boss any-of row the run resolves the row to: only one of the row's `entries`, and only within
 // the radius the rest of the boss read uses (`radius` + kSeeYd of the point); a living one before a dead one (a corpse
 // of another alternative is no boss), then the nearest to the point, a tie to the lower entry. 0: none is there.
@@ -2145,15 +2153,31 @@ inline std::uint32_t PickBossAnyOf(const PlanStep& s, const std::vector<BossAnyO
             continue;
         if (!(unit.distSpot <= s.radius + kSeeYd))
             continue;
-        bool const better = !pick || (unit.alive && !pickAlive) ||
-            (unit.alive == pickAlive && (unit.distSpot < pickYd || (unit.distSpot == pickYd && unit.entry < pick)));
-        if (better)
+        if (BossAnyOfBetter(unit, pick, pickAlive, pickYd))
         {
             pick = unit.entry;
             pickAlive = unit.alive;
             pickYd = unit.distSpot;
         }
     }
+    return pick;
+}
+
+// The alternative the instance-wide search resolves the row to, from what it found for each alternative (the living
+// boss or the nearest corpse, its distance from the point): the order of PickBossAnyOf without the sight range, which
+// the search exists to reach past. A dead alternative nearer than a living one loses. 0: none was found.
+inline std::uint32_t PickBossAnyOfSearch(const std::vector<BossAnyOfSeen>& found)
+{
+    std::uint32_t pick = 0;
+    bool pickAlive = false;
+    float pickYd = 0.0f;
+    for (const BossAnyOfSeen& unit : found)
+        if (BossAnyOfBetter(unit, pick, pickAlive, pickYd))
+        {
+            pick = unit.entry;
+            pickAlive = unit.alive;
+            pickYd = unit.distSpot;
+        }
     return pick;
 }
 

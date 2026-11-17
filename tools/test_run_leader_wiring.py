@@ -2208,15 +2208,25 @@ class BossAnyOfWiringTest(unittest.TestCase):
         # The grid read names every alternative of the row and the pick is the policy's.
         self.assertIn("for (uint32 const alternative : step->entries)", facts)
         self.assertIn("PickBossAnyOf(*step, seen)", facts)
-        # Still unresolved: one instance search per alternative, on a step copy with the flag cleared.
+        # Still unresolved: one instance search per alternative, on a step copy with the flag cleared. The candidates go
+        # to PickBossAnyOfSearch (the in-sight pick's order, a living one before a corpse), and the picked one's read
+        # becomes the tick's facts; the copy helper that kept the first found read is gone.
         loop = body(facts, "bool everyNoSpawn = true;", "std::vector<uint32> entries = anyOfUnresolved")
         self.assertIn("probe.entry = alternative;", loop)
         self.assertIn("probe.entries.clear();", loop)
         self.assertIn("probe.flags &= ~ai::kPlanFlagBossAnyOf;", loop)
         self.assertIn("ReadBossInInstance(probe, lead, read);", loop)
-        self.assertIn("CopyBossSearchFacts(read, f);", loop)
+        self.assertIn("if (read.bossSearchAlive)\n                            found.push_back({alternative, "
+                      "ai::PlanDistance(read.bossAliveX", loop)
+        self.assertIn("else if (read.bossSearchDead)", loop)
+        self.assertIn("TortoiseBots::DungeonRun::PickBossAnyOfSearch(found)", loop)
+        self.assertIn("ReadBossInInstance(*step, lead, f);", loop)
+        self.assertNotIn("CopyBossSearchFacts", commands)
         self.assertIn("f.bossSearchNoSpawn = everyNoSpawn;", loop)
         self.assertIn("f.bossSearchUnloaded = anyUnloaded;", loop)
+        # Both picks order a living alternative before a corpse through one comparator.
+        self.assertEqual(self.POLICY.count("BossAnyOfBetter(unit, pick, pickAlive, pickYd)"), 2)
+        self.assertIn("inline std::uint32_t PickBossAnyOfSearch(", self.POLICY)
         # Both boss-name readers use the pure helper.
         plan_boss = body(commands, "auto const planBoss = [&plan](Creature* c)", "};")
         self.assertIn("ai::PlanStepBossIs(step, entry) || (formOf && ai::PlanStepBossIs(step, formOf))", plan_boss)

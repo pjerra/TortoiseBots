@@ -10167,29 +10167,6 @@ void ReadBossInInstance(ai::PlanStep const& step, Player* lead, TortoiseBots::Du
     }
 }
 
-// The search facts ReadBossInInstance wrote for one alternative of a boss any-of row into the tick's facts, when that
-// alternative was found alive or dead: its search is the resolved row's search, kept for the tick that resolves it.
-void CopyBossSearchFacts(TortoiseBots::DungeonRun::Facts const& read, TortoiseBots::DungeonRun::Facts& f)
-{
-    f.bossSearchRead = read.bossSearchRead;
-    f.bossSearchAlive = read.bossSearchAlive;
-    f.bossSearchAliveEntry = read.bossSearchAliveEntry;
-    f.bossAliveX = read.bossAliveX;
-    f.bossAliveY = read.bossAliveY;
-    f.bossAliveZ = read.bossAliveZ;
-    f.bossSearchDead = read.bossSearchDead;
-    f.bossSearchOwnDead = read.bossSearchOwnDead;
-    f.bossSearchCorpseGuid = read.bossSearchCorpseGuid;
-    f.bossSearchCorpseX = read.bossSearchCorpseX;
-    f.bossSearchCorpseY = read.bossSearchCorpseY;
-    f.bossSearchCorpseZ = read.bossSearchCorpseZ;
-    f.bossSearchEventOff = read.bossSearchEventOff;
-    f.bossSearchEventId = read.bossSearchEventId;
-    f.bossSearchEventName = read.bossSearchEventName;
-    f.bossSearchNoSpawn = read.bossSearchNoSpawn;
-    f.bossSearchUnloaded = read.bossSearchUnloaded;
-}
-
 // A hold's done condition (DungeonRun::HoldDoneNote): the instance script's
 // own data (InstanceData::GetData, the value its encounter state is kept in;
 // map-wide, no world scan), or the state of its object when the object is
@@ -12240,12 +12217,14 @@ void ReadRunFacts(DungeonRunSlot& slot, Player* lead, std::vector<Player*> const
                     ReadBossInInstance(*step, lead, f);
                 else
                 {
-                    // One search per alternative, on a step copy (its spawn rows wherever they stand): the first one
-                    // found alive or dead resolves the row and its search facts are this tick's; none found reports
+                    // One search per alternative, on a step copy (its spawn rows wherever they stand): the alternative
+                    // found alive, or else the nearest corpse of one, resolves the row (PickBossAnyOfSearch: the in-sight
+                    // pick's order, a living one before a corpse), and its search is this tick's. None found reports
                     // every alternative's read (no spawn row at all, or a grid nobody loaded).
                     bool everyNoSpawn = true;
                     bool anyUnloaded = false;
                     std::vector<uint32> const alternatives = step->entries; // the row's plan is replaced on a resolve
+                    std::vector<TortoiseBots::DungeonRun::BossAnyOfSeen> found;
                     for (uint32 const alternative : alternatives)
                     {
                         ai::PlanStep probe = *step;
@@ -12256,14 +12235,19 @@ void ReadRunFacts(DungeonRunSlot& slot, Player* lead, std::vector<Player*> const
                         ReadBossInInstance(probe, lead, read);
                         everyNoSpawn = everyNoSpawn && read.bossSearchNoSpawn;
                         anyUnloaded = anyUnloaded || read.bossSearchUnloaded;
-                        if (read.bossSearchAlive || read.bossSearchDead)
-                        {
-                            TortoiseBots::DungeonRun::ResolveBossAnyOf(slot.run, alternative);
-                            step = &slot.run.plan->steps[slot.run.step];
-                            anyOfUnresolved = false;
-                            CopyBossSearchFacts(read, f);
-                            break;
-                        }
+                        if (read.bossSearchAlive)
+                            found.push_back({alternative, ai::PlanDistance(read.bossAliveX, read.bossAliveY,
+                                read.bossAliveZ, step->x, step->y, step->z), true});
+                        else if (read.bossSearchDead)
+                            found.push_back({alternative, ai::PlanDistance(read.bossSearchCorpseX,
+                                read.bossSearchCorpseY, read.bossSearchCorpseZ, step->x, step->y, step->z), false});
+                    }
+                    if (uint32 const chosen = TortoiseBots::DungeonRun::PickBossAnyOfSearch(found))
+                    {
+                        TortoiseBots::DungeonRun::ResolveBossAnyOf(slot.run, chosen);
+                        step = &slot.run.plan->steps[slot.run.step];
+                        ReadBossInInstance(*step, lead, f);
+                        anyOfUnresolved = false;
                     }
                     if (anyOfUnresolved)
                     {

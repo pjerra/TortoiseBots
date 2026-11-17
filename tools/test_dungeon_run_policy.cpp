@@ -37853,6 +37853,33 @@ static void TestBossAnyOfResolvesTheSpawnedBoss()
     CHECK(fresh.resolvedPlan == nullptr && fresh.plan == sealed);
 }
 
+// The instance-wide search resolves an any-of row in the in-sight pick's order: a living alternative before a corpse,
+// then the nearest to the plan point, then the lower entry. A corpse nearer than a living alternative never wins.
+static void TestBossAnyOfSearchPicks()
+{
+    CHECK(PickBossAnyOfSearch({}) == 0);
+    // The r3 review's case: a dead alternative nearer than a living one, in the row's order.
+    std::vector<BossAnyOfSeen> nearestCorpseFirst = {{15083, 3.0f, false}, {15084, 40.0f, true}};
+    CHECK(PickBossAnyOfSearch(nearestCorpseFirst) == 15084);
+    std::vector<BossAnyOfSeen> nearestCorpseLast = {{15084, 40.0f, true}, {15083, 3.0f, false}};
+    CHECK(PickBossAnyOfSearch(nearestCorpseLast) == 15084);
+    // Living: the nearest, a tie to the lower entry; dead: the same order.
+    CHECK(PickBossAnyOfSearch({{15083, 20.0f, true}, {15084, 8.0f, true}}) == 15084);
+    CHECK(PickBossAnyOfSearch({{15085, 8.0f, true}, {15084, 8.0f, true}}) == 15084);
+    CHECK(PickBossAnyOfSearch({{15085, 30.0f, false}, {15082, 12.0f, false}}) == 15082);
+    CHECK(PickBossAnyOfSearch({{15085, 5.0f, false}}) == 15085);
+    // A boss found beyond the sight range still resolves: the search exists for exactly that.
+    CHECK(PickBossAnyOfSearch({{15084, 400.0f, true}}) == 15084);
+    // Both picks share the comparator.
+    PlanStep boss = Step(PlanStepKind::Boss, -11873.4f, -1683.9f, 45.1f);
+    boss.entry = 15082;
+    boss.entries = {15082, 15083, 15084, 15085};
+    boss.flags = ai::kPlanFlagBossAnyOf;
+    CHECK(ai::NormalizePlanStep(boss) == ai::PlanStepRefusal::None);
+    CHECK(PickBossAnyOf(boss, nearestCorpseFirst) == 15084);
+    CHECK(PickBossAnyOf(boss, nearestCorpseLast) == 15084);
+}
+
 // Every alternative of a boss any-of row is the boss before the row resolves: the unit test, the early-fought mark,
 // the fight ceiling's check and the boss-or-hold guard read all of them, not only the canonical entry.
 static void TestBossAnyOfAlternativesCountAsTheBoss()
@@ -39022,6 +39049,7 @@ int main()
     TestRaidTrashSwarmLatchedAfterThreeTries();
     TestHopUnitReachable();
     TestBossAnyOfResolvesTheSpawnedBoss();
+    TestBossAnyOfSearchPicks();
     TestBossAnyOfAlternativesCountAsTheBoss();
     TestBossStepDoesNotSkipOnFruitlessPullsOrOutOfReach();
     std::cout << "test_dungeon_run_policy: ok\n";
