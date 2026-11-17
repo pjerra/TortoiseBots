@@ -7,8 +7,9 @@ Run it where the core was configured (the build VM, inside the builder image). I
 module's own TbScripts.cpp from `ninja -t compdb`, swaps the source file, adds forever/compat and the old include
 folders, and runs syntax-only with no error limit. Nothing is linked and no file is changed.
 
-Output in <out dir>: files.tsv (errors per file), kinds.tsv (errors by message with names removed),
-names.tsv (the identifiers named most), summary.txt.
+Output in <out dir>: files.tsv (errors seen when compiling each .cpp), where.tsv (error places per file that holds
+them, each place counted once), kinds.tsv (by message, names removed), names.tsv (identifiers named most),
+fatal.tsv (headers ForeverCore does not have), clean.txt, summary.txt.
 """
 import collections, concurrent.futures, json, os, re, shlex, subprocess, sys
 
@@ -66,8 +67,10 @@ QUOTED = re.compile(r"'([^']*)'")
 
 def check(args):
     command, cwd, src, stubs = args
+    # The Turtle build puts ai/botpch.h in front of every file; here it is the ForeverCore counterpart.
     extra = ["-fsyntax-only", "-ferror-limit=0", "-w", "-DMANGOSBOT_ZERO=1", "-DCMANGOS=1",
-             "-I" + os.path.join(ROOT, "forever", "compat")]
+             "-I" + os.path.join(ROOT, "forever", "compat"), "-I" + os.path.join(ROOT, "forever", "src", "compat"),
+             "-include", os.path.join(ROOT, "forever", "src", "compat", "botpch_forever.h")]
     if stubs:
         extra += ["-idirafter", stubs]
     for d in OLD_INCLUDE_DIRS:
@@ -77,7 +80,8 @@ def check(args):
     for line in run.stderr.splitlines():
         m = ERROR.match(line)
         if m:
-            errors.append((m.group("sev"), m.group("msg"), os.path.relpath(m.group("file"), ROOT) if m.group("file").startswith(ROOT) else m.group("file")))
+            where = os.path.relpath(m.group("file"), ROOT) if m.group("file").startswith(ROOT) else m.group("file")
+            errors.append((m.group("sev"), m.group("msg"), where + ":" + m.group("line")))
     return src, run.returncode, errors
 
 
@@ -113,10 +117,16 @@ def main():
                 if new_stub:
                     again.append(src)
         todo = again
-    kinds, names = collections.Counter(), collections.Counter()
+    # A mistake in a header is reported once for every file that includes it. `seen` keeps each place once, so the
+    # totals are places in the source, and where.tsv shows which files (mostly headers) hold them.
+    kinds, names, where_count, seen = collections.Counter(), collections.Counter(), collections.Counter(), set()
     for src, (rc, errors) in results.items():
         per_file[src] = (rc, len(errors))
-        for sev, msg, _ in errors:
+        for sev, msg, where in errors:
+            if (where, msg) in seen:
+                continue
+            seen.add((where, msg))
+            where_count[where.rsplit(":", 1)[0]] += 1
             kinds[QUOTED.sub("'_'", msg)] += 1
             for name in QUOTED.findall(msg)[:1]:
                 names[name] += 1
@@ -124,13 +134,13 @@ def main():
     with open(os.path.join(out, "files.tsv"), "w") as f:
         for s, (rc, n) in sorted(per_file.items(), key=lambda kv: (kv[1][1], kv[0])):
             f.write(f"{n}\t{rc}\t{s}\n")
-    for name, counter in (("kinds.tsv", kinds), ("names.tsv", names), ("fatal.tsv", fatal)):
+    for name, counter in (("kinds.tsv", kinds), ("names.tsv", names), ("fatal.tsv", fatal), ("where.tsv", where_count)):
         with open(os.path.join(out, name), "w") as f:
             for key, n in counter.most_common():
                 f.write(f"{n}\t{key}\n")
-    total = sum(n for _, n in per_file.values())
+    total = len(seen)
     summary = (f"files {len(per_file)}  compile clean {len(clean)}  with errors {len(per_file) - len(clean)}  "
-               f"errors {total}  includes of a header ForeverCore does not have {sum(fatal.values())}\n")
+               f"error places {total} (in {len(where_count)} files)  includes of a header ForeverCore does not have {sum(fatal.values())}\n")
     open(os.path.join(out, "summary.txt"), "w").write(summary)
     open(os.path.join(out, "clean.txt"), "w").write("\n".join(clean) + "\n")
     print(summary, end="")
