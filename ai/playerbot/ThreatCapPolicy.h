@@ -427,10 +427,18 @@ namespace ai
     // the mob can reach the bot in melee, 130 % from range. Strictly under: at the line itself it is vetoed. With no
     // tank threat on the mob (0 or below) the veto stays as it is. Earth Shock and Death Coil interrupt rows stay
     // gated: they are real nukes. Heals are exempt at the call site.
+    // A mob already on this bot is exempt whatever its threat reads: it cannot be pulled from the tank because the
+    // tank does not hold it. The pull line still let a caster on the bot go uninterrupted (Tortoise Trials
+    // dps-mage-counterspell-caster: 6 of 20 misses were Counterspell vetoed at 170 % while the mob attacked the mage),
+    // and no back-off can hand a mob back to a tank that is not its victim.
     inline bool ThreatCapInterruptExempt(bool interrupt, bool interruptIgnoresThreat, float botThreat, float tankThreat,
-                                         float flatThreat, bool ranged)
+                                         float flatThreat, bool ranged, bool victimIsBot)
     {
-        if (!interrupt || !interruptIgnoresThreat || tankThreat <= 0.0f)
+        if (!interrupt || !interruptIgnoresThreat)
+            return false;
+        if (victimIsBot)
+            return true;
+        if (tankThreat <= 0.0f)
             return false;
         return botThreat + flatThreat < AggroPullFactor(ranged) * tankThreat;
     }
