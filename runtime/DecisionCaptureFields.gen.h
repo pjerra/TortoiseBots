@@ -3,6 +3,7 @@
 // X-macro field lists (declaration order), the schema text and hash of the
 // captured structs, and one sample value per field for the codec test.
 // Not captured (a std::function callback; a replay sees it empty): TortoiseBots::DungeonRun::Facts.pointLiquid
+// Not captured (a run-owned plan copy; a replay sees it empty): TortoiseBots::DungeonRun::Run.resolvedPlan
 #pragma once
 
 namespace TortoiseBots {

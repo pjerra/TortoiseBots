@@ -9304,7 +9304,8 @@ void ReadKillFirst(ai::DungeonPlan const& plan, Player* lead, std::vector<Player
                 return true;
         return false;
     };
-    // A plan boss (a boss step's entry, or the entry the spawn row first had when a script changed it).
+    // A plan boss (a boss step's entry or one of a boss any-of row's alternatives, or the entry the spawn row first
+    // had when a script changed it).
     auto const planBoss = [&plan](Creature* c)
     {
         if (!c)
@@ -9312,8 +9313,7 @@ void ReadKillFirst(ai::DungeonPlan const& plan, Player* lead, std::vector<Player
         std::uint32_t const entry = c->GetEntry();
         std::uint32_t const formOf = TortoiseBots::DungeonRun::ScriptChangedFrom(c);
         for (ai::PlanStep const& step : plan.steps)
-            if (step.kind == ai::PlanStepKind::Boss && step.entry &&
-                (step.entry == entry || step.entry == formOf))
+            if (ai::PlanStepBossIs(step, entry) || (formOf && ai::PlanStepBossIs(step, formOf)))
                 return true;
         return false;
     };
@@ -10165,6 +10165,29 @@ void ReadBossInInstance(ai::PlanStep const& step, Player* lead, TortoiseBots::Du
                 f.bossSearchEventName = events[gate.eventId].description;
         }
     }
+}
+
+// The search facts ReadBossInInstance wrote for one alternative of a boss any-of row into the tick's facts, when that
+// alternative was found alive or dead: its search is the resolved row's search, kept for the tick that resolves it.
+void CopyBossSearchFacts(TortoiseBots::DungeonRun::Facts const& read, TortoiseBots::DungeonRun::Facts& f)
+{
+    f.bossSearchRead = read.bossSearchRead;
+    f.bossSearchAlive = read.bossSearchAlive;
+    f.bossSearchAliveEntry = read.bossSearchAliveEntry;
+    f.bossAliveX = read.bossAliveX;
+    f.bossAliveY = read.bossAliveY;
+    f.bossAliveZ = read.bossAliveZ;
+    f.bossSearchDead = read.bossSearchDead;
+    f.bossSearchOwnDead = read.bossSearchOwnDead;
+    f.bossSearchCorpseGuid = read.bossSearchCorpseGuid;
+    f.bossSearchCorpseX = read.bossSearchCorpseX;
+    f.bossSearchCorpseY = read.bossSearchCorpseY;
+    f.bossSearchCorpseZ = read.bossSearchCorpseZ;
+    f.bossSearchEventOff = read.bossSearchEventOff;
+    f.bossSearchEventId = read.bossSearchEventId;
+    f.bossSearchEventName = read.bossSearchEventName;
+    f.bossSearchNoSpawn = read.bossSearchNoSpawn;
+    f.bossSearchUnloaded = read.bossSearchUnloaded;
 }
 
 // A hold's done condition (DungeonRun::HoldDoneNote): the instance script's
@@ -11667,7 +11690,7 @@ void ReadPatrolLoop(Creature* creature, TortoiseBots::DungeonRun::UnitFact& unit
         unit.cycleMs = static_cast<std::uint32_t>(loopYd / speed * 1000.0f + 0.5f);
 }
 
-void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*> const& bots,
+void ReadRunFacts(DungeonRunSlot& slot, Player* lead, std::vector<Player*> const& bots,
     TortoiseBots::DungeonRun::Facts& f, bool raid)
 {
     using namespace TortoiseBots::DungeonRun;
@@ -12183,11 +12206,73 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
         case ai::PlanStepKind::Pull:
         case ai::PlanStepKind::Boss:
         {
+            // A boss any-of row (kPlanFlagBossAnyOf) is one boss whose group spawns one of its alternatives per
+            // instance: the row resolves to the one in sight (a living one before a corpse), into a run-private copy of
+            // the plan, so the scan below and every later read see the spawned boss. The run's own step only: a walk
+            // back's replayed point never resolves.
+            bool const ownStep = step == &slot.run.plan->steps[slot.run.step];
+            if (step->kind == ai::PlanStepKind::Boss && (step->flags & ai::kPlanFlagBossAnyOf) && ownStep)
+            {
+                float const anyOfRange = std::min(toPoint + step->radius + kSeeYd, 2.0f * kSeeYd);
+                std::vector<TortoiseBots::DungeonRun::BossAnyOfSeen> seen;
+                for (uint32 const alternative : step->entries)
+                {
+                    std::list<Creature*> found;
+                    lead->GetCreatureListWithEntryInGrid(found, alternative, anyOfRange);
+                    for (Creature* creature : found)
+                        seen.push_back({creature->GetEntry(), DistanceTo(creature, step->x, step->y, step->z),
+                            creature->IsAlive()});
+                }
+                if (uint32 const chosen = TortoiseBots::DungeonRun::PickBossAnyOf(*step, seen))
+                {
+                    TortoiseBots::DungeonRun::ResolveBossAnyOf(slot.run, chosen);
+                    step = &slot.run.plan->steps[slot.run.step];
+                }
+            }
+            // Still unresolved: no alternative of the row is in sight. None of them is an add of this row, so nothing of
+            // them is scanned; the row behaves as a boss not at his spot (the search below, then the existing pause).
+            bool anyOfUnresolved = step->kind == ai::PlanStepKind::Boss && (step->flags & ai::kPlanFlagBossAnyOf);
             // The boss step asked for its instance search (60 s at his spot with him neither alive nor dead in sight).
             // The run's own step only (not a walk back's replayed point).
-            if (step->kind == ai::PlanStepKind::Boss && slot.run.bossSearchWanted && slot.run.step < slot.run.plan->steps.size() &&
-                step == &slot.run.plan->steps[slot.run.step])
-                ReadBossInInstance(*step, lead, f);
+            if (step->kind == ai::PlanStepKind::Boss && slot.run.bossSearchWanted && ownStep)
+            {
+                if (!anyOfUnresolved)
+                    ReadBossInInstance(*step, lead, f);
+                else
+                {
+                    // One search per alternative, on a step copy (its spawn rows wherever they stand): the first one
+                    // found alive or dead resolves the row and its search facts are this tick's; none found reports
+                    // every alternative's read (no spawn row at all, or a grid nobody loaded).
+                    bool everyNoSpawn = true;
+                    bool anyUnloaded = false;
+                    std::vector<uint32> const alternatives = step->entries; // the row's plan is replaced on a resolve
+                    for (uint32 const alternative : alternatives)
+                    {
+                        ai::PlanStep probe = *step;
+                        probe.entry = alternative;
+                        probe.entries.clear();
+                        probe.flags &= ~ai::kPlanFlagBossAnyOf;
+                        TortoiseBots::DungeonRun::Facts read;
+                        ReadBossInInstance(probe, lead, read);
+                        everyNoSpawn = everyNoSpawn && read.bossSearchNoSpawn;
+                        anyUnloaded = anyUnloaded || read.bossSearchUnloaded;
+                        if (read.bossSearchAlive || read.bossSearchDead)
+                        {
+                            TortoiseBots::DungeonRun::ResolveBossAnyOf(slot.run, alternative);
+                            step = &slot.run.plan->steps[slot.run.step];
+                            anyOfUnresolved = false;
+                            CopyBossSearchFacts(read, f);
+                            break;
+                        }
+                    }
+                    if (anyOfUnresolved)
+                    {
+                        f.bossSearchRead = true;
+                        f.bossSearchNoSpawn = everyNoSpawn;
+                        f.bossSearchUnloaded = anyUnloaded;
+                    }
+                }
+            }
             if (!f.seen)
             {
                 if (wantsApproach)
@@ -12195,16 +12280,17 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
                         nullptr, &f, nullptr, f.dryWalk);
                 break;
             }
-            std::vector<uint32> entries = step->entries;
-            if (step->entry)
+            std::vector<uint32> entries = anyOfUnresolved ? std::vector<uint32>() : step->entries;
+            if (step->entry && !anyOfUnresolved)
                 entries.push_back(step->entry);
             float const range = std::min(toPoint + step->radius, 2.0f * kSeeYd);
             float bossCorpseFromSpot = 0.0f;
             // The step's own spawn, looked up by guid whatever entry it reads now: the entries above never list a
             // boss a script changed (Thekal's 14599 -> 14509), so his own corpse would go unseen and his step would
             // wait for him. Dead: boss down at once, wherever he lies, and the corpse fields below are his. Alive
-            // under a changed entry: the entry it reads now joins the read, so he is listed with the rest.
-            if (step->kind == ai::PlanStepKind::Boss)
+            // under a changed entry: the entry it reads now joins the read, so he is listed with the rest. An
+            // unresolved any-of row has no own spawn to read: the alternative that spawns is not known yet.
+            if (step->kind == ai::PlanStepKind::Boss && !anyOfUnresolved)
             {
                 if (Creature* own = OwnBossSpawnCreature(lead, *step))
                 {
@@ -15860,17 +15946,25 @@ void BuildBossSpawnCache()
     if (cache.built || !plans.Sealed())
         return;
     auto const started = std::chrono::steady_clock::now();
-    // the plan boss steps per map, in plan order (an entry's first step decides its place in the list)
-    std::unordered_map<uint32, std::vector<ai::PlanStep const*>> planSteps;
+    // the plan boss steps per map, in plan order (an entry's first step decides its place in the list); a boss any-of
+    // row enters once per alternative, so each of them reads as a plan boss
+    std::unordered_map<uint32, std::vector<std::pair<uint32, ai::PlanStep const*>>> planSteps;
     std::unordered_map<uint64, size_t> planOrder; // (map, entry) -> position in its map's plan boss steps
     for (ai::DungeonPlan const* plan : plans.All())
         for (ai::PlanStep const& step : plan->steps)
-            if (step.kind == ai::PlanStepKind::Boss && step.entry)
+        {
+            if (step.kind != ai::PlanStepKind::Boss || !step.entry)
+                continue;
+            std::vector<uint32> entries = {step.entry};
+            if (step.flags & ai::kPlanFlagBossAnyOf)
+                entries = step.entries;
+            for (uint32 const entry : entries)
             {
-                uint64 const key = (static_cast<uint64>(plan->map) << 32) | step.entry;
+                uint64 const key = (static_cast<uint64>(plan->map) << 32) | entry;
                 if (planOrder.emplace(key, planSteps[plan->map].size()).second)
-                    planSteps[plan->map].push_back(&step);
+                    planSteps[plan->map].emplace_back(entry, &step);
             }
+        }
     std::unordered_map<uint32, std::vector<CommanderTelemetry::BossSpawnRow>> rowsByMap;
     std::unordered_set<uint64> spawned; // (map, entry) with at least one spawn row
     auto worker = [&](CreatureDataPair const& pair) -> bool
@@ -15900,13 +15994,13 @@ void BuildBossSpawnCache()
     for (auto& [map, steps] : planSteps)
     {
         std::vector<CommanderTelemetry::BossSpawnRow>& rows = rowsByMap[map];
-        for (ai::PlanStep const* step : steps)
+        for (auto const& [entry, step] : steps)
         {
-            if (spawned.count((static_cast<uint64>(map) << 32) | step->entry))
+            if (spawned.count((static_cast<uint64>(map) << 32) | entry))
                 continue;
-            CreatureInfo const* info = sObjectMgr.GetCreatureTemplate(step->entry);
+            CreatureInfo const* info = sObjectMgr.GetCreatureTemplate(entry);
             CommanderTelemetry::BossSpawnRow row;
-            row.info.entry = step->entry;
+            row.info.entry = entry;
             row.info.name = info ? info->name : std::string();
             row.info.x = step->x;
             row.info.y = step->y;

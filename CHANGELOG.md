@@ -1,5 +1,7 @@
 # Changelog
 
+- New: a dungeon plan's boss step can name a group of alternatives when the instance spawns one of them (Zul'Gurub's Edge of Madness), and the run leader then reads, fights and finishes that step against whichever one is actually there instead of waiting for a fixed boss that never spawned; a row with a flag bit the installed module does not know is refused at load rather than read as a plain row.
+
 - New: behind `AiPlayerbot.DungeonRunPackFocusSparesTacticUnits` (default 0, recommended on), the run leader's fallback skull for a pulled pack never lands on a unit the boss tactics own, on every step kind — a unit whose entry has its own `ai_boss_tactic` rows (a boss engaged before his boss step, a held whelp) or one a live row names as its target (a `seek_aura`'s or `seek_pull`'s source, a `tank_post`'s unit, a `hold_kill`'s blocker); Zul'Gurub walk 112 skulled Hakkar on the move step before his boss row and the focus order left no damage dealer for the Son the seek's row needs dosed (7/10 fights fully undosed against 17/22 without the focus code), and the fallback skulled Onyxia's held whelps ~85 times a fight.
 
 - Fixed: a commander's loot order on a chest that holds only common loot (a key or event item, e.g. the Deadmines gunpowder) is no longer refused, and a player's own `loot` order reaches the same chest (the order survives the loot queue's selection); bots still skip such chests on their own.

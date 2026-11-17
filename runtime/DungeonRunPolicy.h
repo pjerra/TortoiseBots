@@ -77,6 +77,7 @@
 #include <functional>
 #include <limits>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <unordered_map>
@@ -2121,9 +2122,49 @@ struct WaitSight
 constexpr float kWaitSightYd = 10.0f;               // two waits on one entry within this of each other are one target
 constexpr std::uint32_t kGoneConfirmMs = 3000;      // a gone object must read not found, readably, this long without a break
 
+// One alternative of a boss any-of row as the glue read it around the step's point (the spawn of a group such as
+// Zul'Gurub's Edge of Madness, one of 15082-15085 per instance).
+struct BossAnyOfSeen
+{
+    std::uint32_t entry = 0;
+    float distSpot = 0.0f;
+    bool alive = false;
+};
+
+// Which alternative of a boss any-of row the run resolves the row to: only one of the row's `entries`, and only within
+// the radius the rest of the boss read uses (`radius` + kSeeYd of the point); a living one before a dead one (a corpse
+// of another alternative is no boss), then the nearest to the point, a tie to the lower entry. 0: none is there.
+inline std::uint32_t PickBossAnyOf(const PlanStep& s, const std::vector<BossAnyOfSeen>& seen)
+{
+    std::uint32_t pick = 0;
+    bool pickAlive = false;
+    float pickYd = 0.0f;
+    for (const BossAnyOfSeen& unit : seen)
+    {
+        if (std::find(s.entries.begin(), s.entries.end(), unit.entry) == s.entries.end())
+            continue;
+        if (!(unit.distSpot <= s.radius + kSeeYd))
+            continue;
+        bool const better = !pick || (unit.alive && !pickAlive) ||
+            (unit.alive == pickAlive && (unit.distSpot < pickYd || (unit.distSpot == pickYd && unit.entry < pick)));
+        if (better)
+        {
+            pick = unit.entry;
+            pickAlive = unit.alive;
+            pickYd = unit.distSpot;
+        }
+    }
+    return pick;
+}
+
 struct Run
 {
     const DungeonPlan* plan = nullptr;
+    // A run-private copy of the plan a boss any-of row was resolved in (ResolveBossAnyOf): `plan` then points into it,
+    // so every later read of the row sees the spawned alternative and `step` still indexes the same row. Kept for the
+    // rest of the run, walk backs and resets included; a started run has none. Not a captured field (the run leader's
+    // decision capture writes `plan`, whose name and hash the copy shares).
+    std::shared_ptr<const DungeonPlan> resolvedPlan;
     std::size_t step = 0;
     // How many times the run entered the current step (ResetStep counts one): a walk back that
     // revisits a row is a new pass, and the reads cached for the old one are stale.
@@ -3349,6 +3390,29 @@ struct PullEstimateCache
 inline const PlanStep* Current(const Run& r)
 {
     return r.plan && r.step < r.plan->steps.size() ? &r.plan->steps[r.step] : nullptr;
+}
+
+// Resolves the current step when it is a boss any-of row and `entry` is one of its alternatives: a run-private copy of
+// the plan with that row's `entry` set to `entry`, its `entries` cleared and the flag cleared (the label and the tactic
+// entries stay), which the run keeps for the rest of the run. Every later read of the row (the fight's end, the boss
+// unit test, the tactic lookups, the notes, the decision capture's boss entry) then sees the spawned boss. The plan
+// generation moves so the decision capture's address-keyed plan hash drops its entry for the new object. A no-op for
+// any other row, for an entry not among its alternatives, and for a run without a plan.
+inline void ResolveBossAnyOf(Run& r, std::uint32_t entry)
+{
+    const PlanStep* s = Current(r);
+    if (!s || s->kind != PlanStepKind::Boss || !(s->flags & ai::kPlanFlagBossAnyOf) || !entry)
+        return;
+    if (std::find(s->entries.begin(), s->entries.end(), entry) == s->entries.end())
+        return;
+    std::shared_ptr<ai::DungeonPlan> copy = std::make_shared<ai::DungeonPlan>(*r.plan);
+    PlanStep& row = copy->steps[r.step];
+    row.entry = entry;
+    row.entries.clear();
+    row.flags &= ~ai::kPlanFlagBossAnyOf;
+    r.resolvedPlan = std::move(copy);
+    r.plan = r.resolvedPlan.get();
+    ai::DungeonPlanTableGeneration().fetch_add(1, std::memory_order_acq_rel);
 }
 
 // The hold a start step leads into: the current step is a ritual, open,
@@ -5751,6 +5815,7 @@ inline Run Start(const DungeonPlan* plan, std::size_t fromStep = 0)
 {
     Run r;
     r.plan = plan;
+    r.resolvedPlan.reset();
     r.step = fromStep;
     r.triggerScan = fromStep; // a run started past a move never arms its trigger
     ResetStep(r);
@@ -17900,7 +17965,7 @@ inline bool PlanBossEntry(const Run& r, std::uint32_t entry)
     if (!r.plan || !entry)
         return false;
     for (const PlanStep& s : r.plan->steps)
-        if (s.kind == PlanStepKind::Boss && s.entry && s.entry == entry)
+        if (ai::PlanStepBossIs(s, entry))
             return true;
     return false;
 }

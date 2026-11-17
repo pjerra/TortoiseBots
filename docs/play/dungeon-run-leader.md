@@ -67,7 +67,7 @@ One row is one thing to do, run in `(leg, seq)` order with primary key `(plan, l
 | `radius` | Yards, by kind, at most 100. |
 | `item` | Item entry, by kind, `0` for none. |
 | `param` | By kind: `wait_object` state to wait for, `ritual` bot count (`0` = 3), `gossip` menu option (1-15), `hold` done value. |
-| `flags` | `1` ambush, `2` Alliance, `4` Horde; `64` exact waypoint on `move`; `256` gone-is-done on `loot`, `open`, and `wait_object`; `512` dead-is-done on `gossip`; `8` data, `16` object state, `32` encounter state, `16384` reset-to-gossip, and `32768` dead-gossip-ok on `hold`; `2048` living-creature proof on `open_proof`; `1024` on `pull` never defers unreachable but pauses instead; `4096` on `boss` ends skipped not paused when out of reach; `8192` pulls from the prior move stand. |
+| `flags` | `1` ambush, `2` Alliance, `4` Horde; `64` exact waypoint on `move`; `256` gone-is-done on `loot`, `open`, and `wait_object`; `512` dead-is-done on `gossip`; `8` data, `16` object state, `32` encounter state, `16384` reset-to-gossip, and `32768` dead-gossip-ok on `hold`; `2048` living-creature proof on `open_proof`; `1024` on `pull` never defers unreachable but pauses instead; `4096` on `boss` ends skipped not paused when out of reach; `8192` pulls from the prior move stand; `65536` one boss out of the step's `entries` (see `boss`). |
 | `timeout_s` | `0` means 60, at most 600 s, and hold steps up to 1800 s. |
 | `entries` | Comma creature entry list, at most 16, by kind. |
 | `comment` | Free text. |
@@ -78,7 +78,7 @@ Defaults by kind: pull radius `0` means 15, boss radius `0` means 30, hold radiu
 `open_proof` needs a proof radius over 0 and at most 20.
 `use_on` reads no flag or param.
 
-The loader skips rows it cannot use and names them in the server log: an unknown kind, a `pull` without entries, a `boss`, `loot`, `open`, `use_item`, `wait_object`, `ritual`, `gossip`, or `use_on` without `entry`, a `gossip` with `param` outside 1-15 or any flag but 512, a `use_on` with any flag or param, a `use_on` without `item` or without a point, a negative or over-100 radius, a `wait_clear` without a radius, a timeout over the cap, a `wait_object` state above 2, a stand pull with `param` over 60, a pull with `item` over 80, an `open_proof` with proof equal to entry, with `param` or timeout set, or with 2048 misused, or the exact flag on a non-`move` step.
+The loader skips rows it cannot use and names them in the server log: an unknown kind, a `pull` without entries, a `boss`, `loot`, `open`, `use_item`, `wait_object`, `ritual`, `gossip`, or `use_on` without `entry`, a `gossip` with `param` outside 1-15 or any flag but 512, a `use_on` with any flag or param, a `use_on` without `item` or without a point, a negative or over-100 radius, a `wait_clear` without a radius, a timeout over the cap, a `wait_object` state above 2, a stand pull with `param` over 60, a pull with `item` over 80, an `open_proof` with proof equal to entry, with `param` or timeout set, or with 2048 misused, or the exact flag on a non-`move` step, a boss row with flag 65536 and fewer than two alternatives, a duplicated one, or `entry` not among them, or any flag bit the module does not know (128 stays reserved).
 
 ### Step kinds
 
@@ -88,7 +88,7 @@ The loader skips rows it cannot use and names them in the server log: an unknown
 | `move_direct` | Point, entry | Walks a straight line over a navmesh gap, `entry` fires that area trigger once. |
 | `move_hop_exact` | Point | Direct hop launched from the exact point before it, only on proof. |
 | `pull` | Centre, radius, entries, param, item | Every living unit of `entries` within `radius` of the centre, with flag 1 for a stealthed pack, flag 8192 pulls from the prior move stand with `param` as patrol-clear yards and `item` as body-count ceiling. |
-| `boss` | Entries first, then boss entry | Kills `entries` in order, then the boss entry, with flag 4096 ending skipped not paused when out of reach. |
+| `boss` | Entries first, then boss entry | Kills `entries` in order, then the boss entry, with flag 4096 ending skipped not paused when out of reach. With flag 65536 the `entries` are ALTERNATIVES one of which the instance spawns and `entry` is the canonical one among them (Zul'Gurub's Edge of Madness, one of 15082-15085 per instance): the run leader resolves the row to the one in sight (a living one before a corpse) and the whole step then reads that boss. |
 | `loot` | Entry, near point, item | Loots and the item must be in the bags after, with flag 256 counting gone as done. |
 | `open` | Entry, near point, item, param | Uses the object with the item its lock needs, `param` is a second item in the same bags, with flag 256 counting gone as done. |
 | `open_proof` | Object plus separate proof entry and radius | Uses the object and finishes when the proof stands near the point, with flag 2048 for a living-creature proof. |

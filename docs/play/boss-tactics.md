@@ -64,6 +64,7 @@ Two extra opt-ins:
 
 - `ai_boss_tactic` is also re-read by `.bot run reloadplans` (no restart needed for it).
 - `ai_boss_stand` is startup-only (restart needed).
+- A boss step whose row names alternatives (flag 65536, one boss out of its `entries`) joins the tactic rows of every alternative, so whichever one the instance spawned has its rows for the fight.
 
 | Column | Meaning |
 | :--- | :--- |

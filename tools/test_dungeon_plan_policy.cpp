@@ -952,8 +952,69 @@ static void TestPullRowItemIsTheBodiesCeiling()
     CHECK(NormalizePlanStep(move) == PlanStepRefusal::None);
 }
 
+// A boss any-of row (kPlanFlagBossAnyOf, 65536) names the alternatives one of which spawns, `entry` among them: the
+// loader refuses the flag on another kind, a row with fewer than two alternatives, a duplicated one, or `entry` outside
+// them, and refuses any bit this module does not know (128 stays reserved, 131072 is the next free one).
+static void TestBossAnyOfLoadRules()
+{
+    CHECK(kPlanFlagBossAnyOf == 65536);
+    CHECK(kPlanKnownFlags == 130943);  // every known bit: 1..32768 and 65536, without the reserved 128
+    PlanStep boss = Step(0, 1, PlanStepKind::Boss, -11873.4f, -1683.9f, 45.1f);
+    boss.entry = 15082;
+    boss.entries = {15082, 15083, 15084, 15085};
+    boss.flags = kPlanFlagBossAnyOf;
+    CHECK(NormalizePlanStep(boss) == PlanStepRefusal::None);
+    CHECK(boss.radius == kPlanDefaultBossRadius);
+    CHECK(PlanStepBossIs(boss, 15082) && PlanStepBossIs(boss, 15085));
+    CHECK(!PlanStepBossIs(boss, 15086) && !PlanStepBossIs(boss, 0));
+    // Without the flag the entries are the adds killed first, not bosses.
+    PlanStep adds = boss;
+    adds.flags = 0;
+    CHECK(NormalizePlanStep(adds) == PlanStepRefusal::None);
+    CHECK(PlanStepBossIs(adds, 15082) && !PlanStepBossIs(adds, 15083));
+    // Another kind with the flag is refused.
+    PlanStep pull = Step(0, 2, PlanStepKind::Pull);
+    pull.entries = {15082, 15083};
+    pull.flags = kPlanFlagBossAnyOf;
+    CHECK(NormalizePlanStep(pull) == PlanStepRefusal::BadParam);
+    // A boss row with fewer than two alternatives, or with entry outside them, or a duplicate.
+    PlanStep one = boss;
+    one.entries = {15082};
+    CHECK(NormalizePlanStep(one) == PlanStepRefusal::BadParam);
+    PlanStep none = boss;
+    none.entries.clear();
+    CHECK(NormalizePlanStep(none) == PlanStepRefusal::BadParam);
+    PlanStep outside = boss;
+    outside.entries = {15083, 15084, 15085};
+    CHECK(NormalizePlanStep(outside) == PlanStepRefusal::BadParam);
+    PlanStep twice = boss;
+    twice.entries = {15082, 15083, 15084, 15084, 15085};
+    CHECK(NormalizePlanStep(twice) == PlanStepRefusal::BadParam);
+    // Unknown bits: the next free 131072 and the reserved 128 are both refused, on any kind.
+    PlanStep newer = boss;
+    newer.flags = kPlanFlagBossAnyOf | 131072;
+    CHECK(NormalizePlanStep(newer) == PlanStepRefusal::BadParam);
+    PlanStep reserved = boss;
+    reserved.flags = kPlanFlagBossAnyOf | 128;
+    CHECK(NormalizePlanStep(reserved) == PlanStepRefusal::BadParam);
+    PlanStep newerPull = Step(0, 3, PlanStepKind::Pull);
+    newerPull.entries = {4851};
+    newerPull.flags = 131072;
+    CHECK(NormalizePlanStep(newerPull) == PlanStepRefusal::BadParam);
+
+    // The seal: every alternative is a boss entry of the map (the dashboard and the strategies read it).
+    DungeonPlanTable table;
+    CHECK(table.AddPlan("zul_gurub", 309));
+    CHECK(table.AddStep("zul_gurub", boss) == PlanStepRefusal::None);
+    table.Seal();
+    CHECK(table.IsBossEntry(309, 15082) && table.IsBossEntry(309, 15084) && table.IsBossEntry(309, 15085));
+    CHECK(!table.IsBossEntry(309, 15086) && !table.IsBossEntry(70, 15084));
+    CHECK(table.BossCount() == 4);
+}
+
 int main()
 {
+    TestBossAnyOfLoadRules();
     TestPullRowItemIsTheBodiesCeiling();
     TestLegNeedRowsRefused();
     TestNeedsOfLegSorted();

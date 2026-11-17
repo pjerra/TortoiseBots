@@ -101,6 +101,7 @@ class Struct:
         self.scope = scope  # tuple of parts
         self.fields = []
         self.skipped = []  # std::function members: named, not captured (see build_field_type)
+        self.owned = []  # a run-owned shared_ptr copy: named, not captured (see build_field_type)
 
 
 class Enum:
@@ -619,6 +620,9 @@ class Parser:
             if node[0] == "function":
                 struct.skipped.append(name)
                 continue
+            if node[0] == "owner":
+                struct.owned.append(name)
+                continue
             struct.fields.append(Field(name, node, compact_type(node)))
 
     def build_field_type(self, type_text, postfix, struct, name):
@@ -631,6 +635,10 @@ class Parser:
         compact = re.sub(r"\s+", "", type_text)
         if compact.startswith("std::function<") and compact.endswith(">") and not postfix.strip():
             return ("function", compact)
+        # An owned copy of a plan (a boss any-of row resolved into a run-private plan) is a lifetime handle, not data:
+        # the captured `plan` pointer names the same plan, by name and hash.
+        if compact.startswith("std::shared_ptr<") and compact.endswith(">") and not postfix.strip():
+            return ("owner", compact)
         if compact.endswith("*") or "(" in compact or "&" in compact:
             if postfix.strip():
                 return ("raw", compact + postfix.strip())
@@ -1123,6 +1131,9 @@ def generate_header(model, roots=ROOTS):
     for struct, _fields in structs:
         for name in struct.skipped:
             out.append("// Not captured (a std::function callback; a replay sees it empty): %s.%s"
+                       % (struct.qualified, name))
+        for name in struct.owned:
+            out.append("// Not captured (a run-owned plan copy; a replay sees it empty): %s.%s"
                        % (struct.qualified, name))
     out.append("#pragma once")
     out.append("")

@@ -34,7 +34,8 @@ namespace ai
         Move,        // walk (navmesh) to x,y,z; `entry` (0 = none): the area trigger it walks into, armed from here until fired (DungeonRun::ArmReachedTriggers)
         MoveDirect,  // straight walk to x,y,z (a gap the navmesh does not bridge); `entry` as for Move
         Pull,        // pull and kill the pack of `entries` within `radius` of x,y,z
-        Boss,        // kill `entries` in order, then `entry`, near x,y,z
+        Boss,        // kill `entries` in order, then `entry`, near x,y,z; a kPlanFlagBossAnyOf row's `entries` are
+                     // the alternatives one of which spawns, and the run leader resolves the row to it (PlanStepBossIs)
         Loot,        // loot chest or corpse `entry` near x,y,z; `item` must end in the bags
         Open,        // use game object `entry` near x,y,z; `item` is what its lock needs
         UseItem,     // use item `entry` from the bags; `item` is what it must make
@@ -150,8 +151,8 @@ namespace ai
     // otherwise deferred when nothing later in the plan needs it gone (runtime/DungeonRunPolicy.h PullMayBeDeferred,
     // DeferUnreachablePack); with this flag it pauses the run as before. Any other kind with this flag is refused (BadParam).
     constexpr std::uint32_t kPlanFlagNoDefer = 1024;
-    // open_proof only: the proof entry is a creature (alive). The next free bit: 65536 (8192 is kPlanFlagStandPull, a boss or a
-    // pull; 16384 is kPlanFlagResetToGossip and 32768 kPlanFlagDeadGossipOk, both a units hold).
+    // open_proof only: the proof entry is a creature (alive). The next free bit: 131072 (8192 is kPlanFlagStandPull, a boss or a
+    // pull; 16384 is kPlanFlagResetToGossip and 32768 kPlanFlagDeadGossipOk, both a units hold; 65536 is kPlanFlagBossAnyOf).
     constexpr std::uint32_t kPlanFlagProofCreature = 2048;
     // boss only: the boss may stand out of the party's reach by design (Stormwrought Ruins' Eldermaw 62661 swims a
     // pool whose bed is the only navmesh, cut off from the shore; specs/sw-eldermaw.md). Where the step would pause on
@@ -178,6 +179,20 @@ namespace ai
     // Run::startNpcDeadStep); a run resumed at the hold itself waits for a hostile unit as before. Any other kind, a hold with
     // a done flag, and a hold with kPlanFlagResetToGossip are refused (BadParam).
     constexpr std::uint32_t kPlanFlagDeadGossipOk = 32768;
+    // boss only: `entries` are the ALTERNATIVES one of which the instance spawns and `entry` is the canonical one among
+    // them (turtle-agent's plan-export --boss-anyof: Zul'Gurub's Edge of Madness, one of 15082-15085 per instance).
+    // The run leader resolves the row to the one in sight (runtime/DungeonRunPolicy.h ResolveBossAnyOf), so every later
+    // read of the row sees the spawned boss. Another kind, or a boss row carrying it with fewer than two alternatives, a
+    // duplicated one, or without `entry` among them, is refused (BadParam): a module without this flag reads such a row
+    // as a plain boss step, so the export carries it only when asked (plan-export --boss-anyof).
+    constexpr std::uint32_t kPlanFlagBossAnyOf = 65536;
+    // Every flag this module knows. A row with a bit outside it is refused (BadParam) rather than loaded and read as a
+    // row without that flag: the newest export's flag on an older module would otherwise be silently ignored. 128 stays
+    // reserved.
+    constexpr std::uint32_t kPlanKnownFlags = kPlanFlagAmbush | kPlanFlagAlliance | kPlanFlagHorde | kPlanFlagDoneData |
+        kPlanFlagDoneObject | kPlanFlagEncounter | kPlanFlagExact | kPlanFlagGoneIsDone | kPlanFlagDeadNpcIsDone |
+        kPlanFlagNoDefer | kPlanFlagProofCreature | kPlanFlagSkipUnreachable | kPlanFlagStandPull |
+        kPlanFlagResetToGossip | kPlanFlagDeadGossipOk | kPlanFlagBossAnyOf;
     constexpr std::uint32_t kPlanEncounterNotStarted = 0;
     constexpr std::uint32_t kPlanEncounterFail = 2;
     constexpr std::uint32_t kPlanEncounterMax = 4;
@@ -490,14 +505,16 @@ namespace ai
                           // hold done by object without entry, by its units without entries
         BadRadius,        // negative, over kPlanMaxRadius (over kPlanMaxProofRadius on an open_proof), or a wait_clear without one
         BadTimeout,       // over kPlanMaxTimeoutS (a hold: kPlanMaxHoldTimeoutS); any timeout_s on an open_proof (the proof wait is kOpenProofWaitMs)
-        BadParam,         // wait_object state other than 0-2; hold with both done flags, an encounter
+        BadParam,         // a set flag bit this module does not know; wait_object state other than 0-2; hold with both done flags, an encounter
                           // flag without the data flag or a state above 4, an object state above 2;
                           // the exact flag on a step that is not a move; gossip with an option
                           // outside 1-15 or with any flag; use_on with any flag or param;
                           // a stand_pull pull with param above kPlanMaxStandPullClear;
                           // a pull row whose item (the bodies ceiling) is above kPlanMaxPullBodies;
                           // an open_proof whose proof equals its entry (no 2048), with param, a flag but 2048,
-                          // or 2048 on any row that is not open_proof
+                          // or 2048 on any row that is not open_proof;
+                          // the boss any-of flag on a row that is not a boss, or a boss row with it and
+                          // fewer than two alternatives, a duplicated one, or entry not among them
         BadPoint,         // not a finite point; a use_on or an open_proof without a point (0,0,0)
         BadEntries,       // `entries` is not a comma list of non-zero creature entries; an open_proof names exactly one
     };
@@ -527,6 +544,8 @@ namespace ai
     {
         if (step.kind == PlanStepKind::None)
             return PlanStepRefusal::UnknownKind;
+        if ((step.flags & ~kPlanKnownFlags) != 0)
+            return PlanStepRefusal::BadParam;
         if (!std::isfinite(step.x) || !std::isfinite(step.y) || !std::isfinite(step.z) || !std::isfinite(step.radius))
             return PlanStepRefusal::BadPoint;
         if (step.radius < 0.0f || step.radius > kPlanMaxRadius)
@@ -555,6 +574,8 @@ namespace ai
             return PlanStepRefusal::BadParam;
         if ((step.flags & kPlanFlagDeadGossipOk) && step.kind != PlanStepKind::Hold)
             return PlanStepRefusal::BadParam;
+        if ((step.flags & kPlanFlagBossAnyOf) && step.kind != PlanStepKind::Boss)
+            return PlanStepRefusal::BadParam;
         if (step.exactLaunch && step.kind != PlanStepKind::MoveDirect)
             return PlanStepRefusal::BadParam;
         if (step.openProof && step.kind != PlanStepKind::Open)
@@ -568,6 +589,20 @@ namespace ai
                     return PlanStepRefusal::MissingEntry;
                 break;
             case PlanStepKind::Boss:
+                if (step.entry == 0)
+                    return PlanStepRefusal::MissingEntry;
+                if (step.flags & kPlanFlagBossAnyOf)
+                {
+                    if (step.entries.size() < 2)
+                        return PlanStepRefusal::BadParam;
+                    if (std::find(step.entries.begin(), step.entries.end(), step.entry) == step.entries.end())
+                        return PlanStepRefusal::BadParam;
+                    std::vector<std::uint32_t> alternatives = step.entries;
+                    std::sort(alternatives.begin(), alternatives.end());
+                    if (std::adjacent_find(alternatives.begin(), alternatives.end()) != alternatives.end())
+                        return PlanStepRefusal::BadParam;
+                }
+                break;
             case PlanStepKind::Loot:
             case PlanStepKind::UseItem:
             case PlanStepKind::Ritual:
@@ -661,6 +696,19 @@ namespace ai
             step.timeoutS = kPlanDefaultTimeoutS;
         step.label = PlanStepLabel(step.label);
         return PlanStepRefusal::None;
+    }
+
+    // Whether `entry` is the boss of that step: its own `entry` (the boss a script changed away from counts too, through
+    // the caller's form check) or, on a kPlanFlagBossAnyOf row, one of its alternatives. The adds of a plain boss step's
+    // `entries` are not bosses, so `flags` decides that.
+    inline bool PlanStepBossIs(const PlanStep& s, std::uint32_t entry)
+    {
+        if (s.kind != PlanStepKind::Boss || !entry)
+            return false;
+        if (entry == s.entry)
+            return true;
+        return (s.flags & kPlanFlagBossAnyOf) != 0 &&
+            std::find(s.entries.begin(), s.entries.end(), entry) != s.entries.end();
     }
 
     // Count of plan tables destroyed so far. A destroyed table's plan objects give their addresses to the next table's,
@@ -862,7 +910,12 @@ namespace ai
                     });
                 for (const PlanStep& step : steps)
                     if (step.kind == PlanStepKind::Boss && step.entry)
+                    {
                         bossEntries_.insert(BossKey(entry.second.map, step.entry));
+                        if (step.flags & kPlanFlagBossAnyOf)
+                            for (std::uint32_t const alternative : step.entries)
+                                bossEntries_.insert(BossKey(entry.second.map, alternative));
+                    }
             }
             // Steps were sorted in place: a plan hash cached before the seal (unsorted) must not be served after it.
             DungeonPlanTableGeneration().fetch_add(1, std::memory_order_acq_rel);
@@ -937,8 +990,9 @@ namespace ai
         std::size_t BossCount() const { return bossEntries_.size(); }
 
         // Whether a creature of `entry` on `map` is a boss: an `ai_dungeon_boss`
-        // row, or the boss of a plan's boss step (its `entry`, not the adds of
-        // its `entries`). The steps join at the seal; false before it.
+        // row, or the boss of a plan's boss step (its `entry`, or every alternative of a
+        // kPlanFlagBossAnyOf row; not the adds of a plain boss step's `entries`). The steps
+        // join at the seal; false before it.
         bool IsBossEntry(std::uint32_t map, std::uint32_t entry) const
         {
             if (!Sealed() || !entry)

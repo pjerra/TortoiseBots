@@ -2188,5 +2188,55 @@ class RunFactKeyWiringTest(unittest.TestCase):
         self.assertIn("return pick.estBodiesElite;", bodies_fn)
 
 
+class BossAnyOfWiringTest(unittest.TestCase):
+    """A boss row whose entries are alternatives (kPlanFlagBossAnyOf, 65536) is resolved in the facts read, before the
+    step's own scan, into a run-private copy of the plan (DungeonRunPolicy.h ResolveBossAnyOf): the scan must list no
+    unit of the alternatives while the row is unresolved, the instance search runs per alternative on a step copy, and
+    both boss-name readers (the fight's planBoss and the dashboard's spawn cache) know every alternative."""
+
+    PLAN = (ROOT / "ai/playerbot/DungeonPlanPolicy.h").read_text()
+    POLICY = (ROOT / "runtime/DungeonRunPolicy.h").read_text()
+
+    def test_boss_anyof_glue(self):
+        commands = strip_comments(COMMANDS)
+        facts = body(commands, "void ReadRunFacts(", "\n}\n")
+        resolve = facts.index("TortoiseBots::DungeonRun::ResolveBossAnyOf(slot.run, chosen);")
+        refetch = facts.index("step = &slot.run.plan->steps[slot.run.step];", resolve)
+        entries = facts.index("std::vector<uint32> entries = anyOfUnresolved ? std::vector<uint32>() : step->entries;")
+        self.assertLess(resolve, entries, "the row is resolved before the step's own scan")
+        self.assertLess(refetch, entries, "the step is re-fetched from the resolved plan")
+        # The grid read names every alternative of the row and the pick is the policy's.
+        self.assertIn("for (uint32 const alternative : step->entries)", facts)
+        self.assertIn("PickBossAnyOf(*step, seen)", facts)
+        # Still unresolved: one instance search per alternative, on a step copy with the flag cleared.
+        loop = body(facts, "bool everyNoSpawn = true;", "std::vector<uint32> entries = anyOfUnresolved")
+        self.assertIn("probe.entry = alternative;", loop)
+        self.assertIn("probe.entries.clear();", loop)
+        self.assertIn("probe.flags &= ~ai::kPlanFlagBossAnyOf;", loop)
+        self.assertIn("ReadBossInInstance(probe, lead, read);", loop)
+        self.assertIn("CopyBossSearchFacts(read, f);", loop)
+        self.assertIn("f.bossSearchNoSpawn = everyNoSpawn;", loop)
+        self.assertIn("f.bossSearchUnloaded = anyUnloaded;", loop)
+        # Both boss-name readers use the pure helper.
+        plan_boss = body(commands, "auto const planBoss = [&plan](Creature* c)", "};")
+        self.assertIn("ai::PlanStepBossIs(step, entry) || (formOf && ai::PlanStepBossIs(step, formOf))", plan_boss)
+        cache = body(commands, "void BuildBossSpawnCache()", "\n}\n")
+        self.assertIn("if (step.flags & ai::kPlanFlagBossAnyOf)", cache)
+        self.assertIn("entries = step.entries;", cache)
+        self.assertIn("planSteps[plan->map].emplace_back(entry, &step);", cache)
+        self.assertIn("for (auto const& [entry, step] : steps)", cache)
+
+    def test_the_flag_and_the_helper_are_pure_policy(self):
+        self.assertIn("constexpr std::uint32_t kPlanFlagBossAnyOf = 65536;", self.PLAN)
+        self.assertIn("(step.flags & ~kPlanKnownFlags) != 0", strip_comments(self.PLAN))
+        helper = body(strip_comments(self.PLAN), "inline bool PlanStepBossIs(", "\n    }\n")
+        self.assertIn("s.flags & kPlanFlagBossAnyOf", helper)
+        resolve = body(strip_comments(self.POLICY), "inline void ResolveBossAnyOf(", "\n}\n")
+        self.assertIn("std::make_shared<ai::DungeonPlan>(*r.plan)", resolve)
+        self.assertIn("row.entries.clear();", resolve)
+        self.assertIn("row.flags &= ~ai::kPlanFlagBossAnyOf;", resolve)
+        self.assertIn("ai::DungeonPlanTableGeneration().fetch_add(1", resolve)
+
+
 if __name__ == "__main__":
     unittest.main()

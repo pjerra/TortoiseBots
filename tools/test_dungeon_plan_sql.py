@@ -449,6 +449,29 @@ class DungeonPlanSql(unittest.TestCase):
                                 "%s: the leg DELETE for %s comes after the INSERT" % (name, plan))
 
 
+    def test_step_flags_known(self):
+        # DungeonPlanPolicy.h's NormalizePlanStep refuses any flag bit the module does not know (kPlanKnownFlags), so a
+        # step row's flags must stay inside the kPlanFlag* constants, and the boss any-of flag (65536) belongs to a boss
+        # row only (its `entries` are the alternatives, Zul'Gurub's Edge of Madness 15082-15085).
+        policy = (pathlib.Path(ROOT) / "ai/playerbot/DungeonPlanPolicy.h").read_text(encoding="utf-8")
+        flags = {int(value): name
+                 for name, value in re.findall(r"constexpr std::uint32_t (kPlanFlag\w+) = (\d+);", policy)}
+        self.assertEqual(flags.get(65536), "kPlanFlagBossAnyOf")
+        known = 0
+        for value in flags:
+            known |= value
+        sources = list(migrations()) + [(OPT_IN.name, OPT_IN.read_text(encoding="utf-8"))]
+        checked = 0
+        for name, text in sources:
+            for row in DungeonPlanSql.step_rows(None, text):
+                value = int(row["flags"])
+                where = "%s: %s leg %s seq %s" % (name, row["plan"], row["leg"], row["seq"])
+                self.assertEqual(value & ~known, 0, where + ": flags %s carry a bit no kPlanFlag constant names" % row["flags"])
+                if value & 65536:
+                    self.assertEqual(row["kind"], "boss", where + ": the boss any-of flag off a boss row")
+                checked += 1
+        self.assertGreater(checked, 0)
+
     def test_zulfarrak_keeps_its_crowd_control(self):
         # The Zul'Farrak plan row after all migrations (its newest INSERT, then the UPDATEs after it)
         # carries hand-set cc_always and kill_first (pending pjerra/turtle-agent#190); a re-export from

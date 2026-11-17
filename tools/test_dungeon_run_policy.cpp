@@ -37761,6 +37761,86 @@ static void TestHopUnitReachable()
     CHECK(HopUnitReachable(true, false, false, false, false, 45, 0, 0, 45, 0, 0, 55, 45));
 }
 
+// A boss row whose entries are ALTERNATIVES (kPlanFlagBossAnyOf, 65536: Zul'Gurub's Edge of Madness, one of 15082-15085
+// per instance) resolves to the one in sight into a run-private copy of the plan, so the row's own read, the fight's end
+// and the boss unit test all see the spawned alternative; the table's plan is never changed.
+static void TestBossAnyOfResolvesTheSpawnedBoss()
+{
+    ai::DungeonPlanTable table;
+    CHECK(table.AddPlan("zul_gurub", 309));
+    PlanStep boss = Step(PlanStepKind::Boss, -11873.4f, -1683.9f, 45.1f);
+    boss.entry = 15082; // the canonical one
+    boss.entries = {15082, 15083, 15084, 15085};
+    boss.flags = ai::kPlanFlagBossAnyOf;
+    CHECK(ai::NormalizePlanStep(boss) == ai::PlanStepRefusal::None);
+    CHECK(table.AddStep("zul_gurub", boss) == ai::PlanStepRefusal::None);
+    table.Seal();
+    ai::DungeonPlan const* sealed = table.Find("zul_gurub");
+    CHECK(sealed && sealed->steps.size() == 1);
+    Run r = Start(sealed);
+    CHECK(r.plan == sealed && r.resolvedPlan == nullptr);
+    CHECK(PlanBossEntry(r, 15085)); // every alternative is a plan boss before the resolve
+
+    // The pick: a living alternative before a corpse, then the nearest to the spot, then the lower entry; never one
+    // outside the row, nor one beyond radius + kSeeYd (the range the boss read judges by).
+    std::vector<BossAnyOfSeen> seen = {
+        {15083, 3.0f, false},
+        {15084, 5.0f, true},
+        {15085, boss.radius + kSeeYd + 1.0f, true},
+    };
+    CHECK(PickBossAnyOf(*Current(r), seen) == 15084);
+    std::vector<BossAnyOfSeen> tie = {{15083, 8.0f, true}, {15082, 8.0f, true}};
+    CHECK(PickBossAnyOf(*Current(r), tie) == 15082);
+    std::vector<BossAnyOfSeen> corpses = {{15084, 20.0f, false}, {15083, 3.0f, false}};
+    CHECK(PickBossAnyOf(*Current(r), corpses) == 15083);
+    std::vector<BossAnyOfSeen> stranger = {{99999, 1.0f, true}};
+    CHECK(PickBossAnyOf(*Current(r), stranger) == 0);
+    CHECK(PickBossAnyOf(*Current(r), {}) == 0);
+    // An entry that is not one of the row's alternatives is a no-op.
+    ResolveBossAnyOf(r, 99999);
+    CHECK(r.plan == sealed && r.resolvedPlan == nullptr);
+    // A plain boss row's entries are the adds killed first: never an alternative, so never resolved.
+    {
+        ai::DungeonPlanTable plainTable;
+        CHECK(plainTable.AddPlan("plain", 309));
+        PlanStep plainBoss = boss;
+        plainBoss.flags = 0;
+        plainBoss.entries = {15083, 15084};
+        CHECK(ai::NormalizePlanStep(plainBoss) == ai::PlanStepRefusal::None);
+        CHECK(plainTable.AddStep("plain", plainBoss) == ai::PlanStepRefusal::None);
+        plainTable.Seal();
+        ai::DungeonPlan const* plainPlan = plainTable.Find("plain");
+        Run p = Start(plainPlan);
+        ResolveBossAnyOf(p, 15083);
+        CHECK(p.plan == plainPlan && p.resolvedPlan == nullptr);
+        CHECK(Current(p)->entries.size() == 2 && Current(p)->entry == 15082);
+    }
+
+    ResolveBossAnyOf(r, 15084);
+    CHECK(Current(r) && Current(r)->entry == 15084);
+    CHECK(Current(r)->entries.empty());
+    CHECK((Current(r)->flags & ai::kPlanFlagBossAnyOf) == 0);
+    CHECK(r.plan != sealed && r.resolvedPlan.get() == r.plan);
+    CHECK(r.resolvedPlan->name == sealed->name && r.resolvedPlan->map == sealed->map);
+    CHECK(r.step == 0 && r.resolvedPlan->steps.size() == 1);
+    // The table's own plan is untouched: the next run resolves its own alternative.
+    CHECK(table.Find("zul_gurub") == sealed);
+    CHECK(sealed->steps[0].entry == 15082 && sealed->steps[0].entries.size() == 4);
+    CHECK(PlanBossEntry(r, 15084) && !PlanBossEntry(r, 15085));
+
+    // The resolved row's boss is the spawned one, so his corpse ends the step.
+    Facts down = Party(0);
+    down.bossDeadNearSpot = true;
+    CHECK(FightStepEnd(r, down, *Current(r)) == FightEnd::BossDown);
+
+    // A second resolve is a no-op on the resolved row (the flag is gone), and a started run has no copy.
+    ai::DungeonPlan const* resolved = r.plan;
+    ResolveBossAnyOf(r, 15085);
+    CHECK(r.plan == resolved && Current(r)->entry == 15084);
+    Run fresh = Start(sealed);
+    CHECK(fresh.resolvedPlan == nullptr && fresh.plan == sealed);
+}
+
 static void TestBossStepDoesNotSkipOnFruitlessPullsOrOutOfReach()
 {
     // A boss step without kPlanFlagSkipUnreachable pauses instead of skipping after fruitless pulls.
@@ -38883,6 +38963,7 @@ int main()
     TestRaidTrashSwarmLatchedOnceTheTankMoves();
     TestRaidTrashSwarmLatchedAfterThreeTries();
     TestHopUnitReachable();
+    TestBossAnyOfResolvesTheSpawnedBoss();
     TestBossStepDoesNotSkipOnFruitlessPullsOrOutOfReach();
     std::cout << "test_dungeon_run_policy: ok\n";
     return 0;
