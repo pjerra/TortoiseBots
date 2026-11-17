@@ -8,7 +8,7 @@ One header (`forever/src/compat/forever-compat-shim.h`) filled in; no bot code c
 | Run | What | Error places |
 |---|---|---|
 | BEFORE | full census, the shim as committed at 7808b02ae | 17,530 in 570 files, 0 clean files |
-| AFTER | full census, the shim as committed at c13a205a4 | FINAL_LINE |
+| AFTER | full census, the shim as committed at a7a640591 | 13,496 in 538 files, 11 clean files |
 
 ## Entries
 
@@ -108,7 +108,7 @@ way: `Unit::HasUnitFlag(UnitFlags)` (`Entities/Unit/Unit.h:862`), `Player::HasPl
 (`Entities/Player/Player.h:1306`), values through the typed `UF::` structures — `Entities/Object/Updates/`.
 
 ### 4. ObjectGuid model
-count: 556
+count: 596
 examples: `ai/playerbot/PlayerbotAIChat.cpp:135` `ObjectGuid(HIGHGUID_PLAYER, player.first)`,
 `ai/playerbot/GuidPosition.h:78` `getRawGuid() == other.getRawGuid()`
 why: the guid is 128 bit in ForeverCore (`std::array<uint64,2>`, `GetRawValue()` returns a 16-byte span), no
@@ -153,7 +153,7 @@ way: `sBattlegroundMgr->GetBattleground(instanceId, queueId)` (`Battlegrounds/Ba
 `BattlegroundQueueTypeId::FromPacked` (`Miscellaneous/SharedDefines.h:7200`).
 
 ### 9. Positions (WorldLocation / Position fields)
-count: 767
+count: 795
 examples: `ai/playerbot/WorldPosition.h:46` `WorldLocation(mapId, x, y, z, o)`,
 `ai/playerbot/WorldPosition.cpp:493` `area->ZoneId`
 why: ForeverCore keeps `Position` coordinates private behind `GetPositionX()`...; DBC position records use
@@ -189,7 +189,7 @@ way: `Player::GetTalentMap(spec)`, `Player::LearnTalent`, `sTalentStore` — `En
 `DataStores/DB2Stores.h:278`. There is no "bonus talent points" on ForeverCore; that number is Turtle's own system.
 
 ### 13. Guild ranks, reputation and trainers
-count: 146
+count: 177
 examples: `ai/playerbot/PlayerbotAIChat.cpp:159` `guild->HasRankRight(bot->GetRank(), GR_RIGHT_GCHATSPEAK)`,
 `ai/playerbot/GuildOrderEnchants.cpp:120` `co->trainer_type != TRAINER_TYPE_TRADESKILLS`
 why: guild ranks are `GuildRankId` on `Guild::m_ranks` and the right test is private
@@ -276,7 +276,7 @@ string to `%s` is a compile error (`-Wnon-pod-varargs`); the same holds for `Cha
 way: pass `.c_str()` (a bot-code change), or keep a local `char const* name = bot->GetName().c_str();`.
 
 ### 22. Headless session tests
-count: 114 (`HasNetworkTransport` 48, `IsHeadless` 66)
+count: 152 (`HasNetworkTransport` 48, `IsHeadless` 66, `HeadlessSessionState` 38)
 examples: `ai/playerbot/...` `session->HasNetworkTransport()`, `runtime/BotManager.cpp` `IsHeadless()`
 why: Tortoise marks a bot session as "no socket"; ForeverCore has one flag for that on the session.
 way: `WorldSession::IsBot()` — `Server/WorldSession.h:1078` (this core is the bot-capable fork).
@@ -311,7 +311,7 @@ way: `Quest::Objectives` / `QuestObjective` (`Quests/QuestDef.h:477`), `Quest::H
 `Player::GetQuestLevel(Quest const*)`.
 
 ### 26. Trade and auction
-count: 215
+count: 249
 examples: `ai/playerbot/RandomBotFacade.h:79` `std::vector<AuctionEntry> GetAhPrices(uint32 itemId)`,
 `ai/playerbot/strategy/actions/TradeStatusAction.cpp` `TradeData`/`TRADE_SLOT_*`
 why: there is no `AuctionEntry` in ForeverCore at all (`grep AuctionEntry src` finds nothing): auctions are the
@@ -319,3 +319,22 @@ bucket/search model in `AuctionHouse/AuctionHouseMgr.h` (results as `AuctionList
 records), and trade state is the `TradeData` class with its own slot enum.
 way: `AuctionHouseObject::AuctionItem` and the search results in `AuctionHouse/AuctionHouseMgr.h:42-48`,
 `WorldPackets::AuctionHouse::*`; `TradeData` is `Entities/Player/TradeData.h:34`.
+
+### 27. AreaTable flags are an array now
+count: 21 (`AREA_FLAG_*` tests written as `area->Flags & AREA_FLAG_X`)
+examples: `ai/playerbot/PlayerbotAI.cpp:4653` `return current_area->Flags & AREA_FLAG_CAPITAL;`,
+`ai/playerbot/TravelMgr.cpp:611` `if (!destZone || !(destZone->Flags & AREA_FLAG_CAPITAL))`
+why: `AreaTableEntry` keeps `std::array<int32, 2> Flags` (two flag words) and offers typed accessors; `Flags` is no
+longer a `uint32` bitmask, so `&` cannot work whatever the constant is. The shim still provides `AREA_FLAG_*` as
+`AreaFlags` values for the `HasAreaFlag(AreaFlags)` parameter the bot already declares.
+way: `AreaTableEntry::HasFlag(AreaFlags::LinkedChat)`, `GetFlags()` / `GetFlags2()` —
+`DataStores/DB2Structure.h:144-150`.
+
+### 28. Summon duration is a chrono type
+count: 45
+examples: `ai/playerbot/strategy/actions/DebugPositionCommands.cpp:409`
+`bot->SummonCreature(2334, x, y, z, 0, TEMPSPAWN_TIMED_DESPAWN, 20000.0f)`
+why: same arguments in the same order, but ForeverCore's despawn time is `Milliseconds` (std::chrono) where cmangos
+took a float/int; the enum already matches.
+way: `SummonCreature(entry, x, y, z, o, TempSummonType, Milliseconds(20000))` —
+`Entities/Object/Object.h:421-422`.

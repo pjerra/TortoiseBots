@@ -12,7 +12,7 @@ Run: `forever/tools/vm-census.sh "" 14` (all, about 45 minutes) or with a path p
 | 2026-11-17 | 6517af05 | no pre-include, include paths only | 648 | 8 | 30,167 |
 | 2026-11-17 | 6517af05 | pre-include + first shim, `ai/playerbot/strategy/values` only | 104 | 0 | 2,717 |
 | 2026-11-17 | 6517af05 | pre-include + first shim, all files (BEFORE shim round 1) | 648 | 0 | 17,530 |
-| 2026-11-17 | 6517af05 | shim round 1 (AFTER) | 648 | AFTER_CLEAN | AFTER_PLACES |
+| 2026-11-17 | 6517af05 | shim round 1 (AFTER) | 648 | 11 | 13,496 |
 
 The first row is not comparable with later ones: without the pre-include most files stopped early.
 
