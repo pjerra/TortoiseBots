@@ -190,6 +190,7 @@ void PlayerbotAIConfig::LoadDungeonRunKeys()
     dungeonRunSeekTakenSonThreatCap = config.GetBoolDefault("AiPlayerbot.DungeonRunSeekTakenSonThreatCap", false);
     dungeonRunSeekSiphonClock = config.GetBoolDefault("AiPlayerbot.DungeonRunSeekSiphonClock", false);
     dungeonRunSeekRetryUnspent = config.GetBoolDefault("AiPlayerbot.DungeonRunSeekRetryUnspent", false);
+    dungeonRunSeekRetryOtherSon = config.GetBoolDefault("AiPlayerbot.DungeonRunSeekRetryOtherSon", false);
     dungeonRunSeekCycleRoll = config.GetBoolDefault("AiPlayerbot.DungeonRunSeekCycleRoll", false);
     dungeonRunThreatResetWindow = config.GetBoolDefault("AiPlayerbot.DungeonRunThreatResetWindow", false);
     dungeonRunThreatResetStanding = config.GetBoolDefault("AiPlayerbot.DungeonRunThreatResetStanding", false);

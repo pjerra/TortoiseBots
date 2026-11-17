@@ -1404,6 +1404,51 @@ static void TestRetryUnspentNeverAfterShot()
     CHECK(!WalkoutMayStartFor(late, 2, 100, 8, 1001000, 29000, rules));
 }
 
+static void TestRetryUnspentRefundsThroughFinishAbort()
+{
+    // The glue's puller-side aborts (threat, dead, insanity, the Son gone) end in WalkoutFinish, not
+    // WalkoutAbortUnspent: the refund there reopens the cycle too, so the retry may start at due 40 s.
+    const WalkoutCycleRules rules =
+        WalkoutRetryUnspentRules(WalkoutSiphonClockRules(WalkoutRulesFromRow(1, 60.0f, 80.0f)));
+    SeekWalkoutState s;
+    WalkoutStart(s, 7, 100, 1000000, 2, 70000); // due at 1070000
+    CHECK(!WalkoutCycleOpen(s, 2, rules));
+    CHECK(WalkoutFinish(s, WalkoutEnd::Abort, 1004000, rules));
+    CHECK(s.cycleStarts == 0 && s.refundCycle == 2);
+    CHECK(WalkoutCycleOpen(s, 2, rules));
+    WalkoutReturnDone(s);
+    CHECK(WalkoutMayStartFor(s, 2, 200, 8, 1030000, 40000, rules));
+    CHECK(!WalkoutMayStartFor(s, 2, 200, 8, 1036000, 34000, rules));
+    // The walk-back margin: 39 s left is too little for the refund, so the finish keeps the cycle shut.
+    SeekWalkoutState late;
+    WalkoutStart(late, 7, 100, 1000000, 2, 70000);
+    CHECK(!WalkoutFinish(late, WalkoutEnd::Abort, 1031000, rules));
+    CHECK(late.cycleStarts == 1 && late.refundCycle == 0xFFFFFFFFu);
+    CHECK(!WalkoutCycleOpen(late, 2, rules));
+}
+
+static void TestRetryUnspentNoSightCutFloor()
+{
+    // The no-sight cut keeps the refund's lower floor while the cycle's refund is still to spend: a start at due 59 s
+    // is cut 15 s in with 44 s left (35 s floor plus the 5 s walk-back margin), where the siphon clock's own 50 s
+    // floor plus the margin runs to the timeout. A refunded cycle is back on the row's floor.
+    const WalkoutCycleRules rules =
+        WalkoutRetryUnspentRules(WalkoutSiphonClockRules(WalkoutRulesFromRow(1, 60.0f, 80.0f)));
+    const WalkoutCycleRules siphon = WalkoutSiphonClockRules(WalkoutRulesFromRow(1, 60.0f, 80.0f));
+    SeekWalkoutState s;
+    WalkoutStart(s, 7, 100, 1000000, 2, 59000);
+    CHECK(WalkoutNoSightCutDue(s, 1000000 + 15000, rules, true));
+    CHECK(!WalkoutNoSightCutDue(s, 1000000 + 15000, siphon, true));
+    // The margin: due 54 s leaves 39 s 15 s in, under the 35 s floor plus 5 s, so the cut waits.
+    SeekWalkoutState tight;
+    WalkoutStart(tight, 7, 100, 1000000, 2, 54000);
+    CHECK(!WalkoutNoSightCutDue(tight, 1000000 + 15000, rules, true));
+    SeekWalkoutState spent;
+    WalkoutStart(spent, 7, 100, 1000000, 2, 59000);
+    spent.refundCycle = 2;
+    CHECK(!WalkoutNoSightCutDue(spent, 1000000 + 15000, rules, true));
+}
+
 static void TestRetryUnspentOffKeepsToday()
 {
     // The key off: the row's own floors, one counted start a cycle, no refund anywhere.
@@ -1421,6 +1466,79 @@ static void TestRetryUnspentOffKeepsToday()
     CHECK(!plain.retryUnspent && plain.retryUnspentFloorMs == 0u);
     CHECK(WalkoutFirstStartFloorMs(s, 2, rules) == rules.firstStartMinMs);
     CHECK(WalkoutRetryFloorMs(s, 2, rules) == rules.retryMinMs);
+}
+
+static void TestRetryOtherSonKeepsSonAtStand()
+{
+    // Walk 117: 6 of 6 `abort move failed` rows stood at their stand 12-17 yd from one Son, and the refunded retry
+    // re-picked that same Son and stand. A stand-bound abort keeps the Son for the cycle, so the retry walks the other.
+    const WalkoutCycleRules rules =
+        WalkoutRetryUnspentRules(WalkoutSiphonClockRules(WalkoutRulesFromRow(1, 60.0f, 80.0f)));
+    const std::uint64_t sonA = 100; // the nearest, on the stand that fails
+    const std::uint64_t sonB = 200;
+    SeekWalkoutState s;
+    WalkoutStart(s, 7, sonA, 1000000, 2, 70000); // due at 1070000
+    WalkoutNoteMove(s, false);
+    WalkoutNoteMove(s, false);
+    CHECK(WalkoutNoteMove(s, false)); // three refused moves: the abort
+    s.failStandYd = 0.4f;            // the last refusal stood at the stand
+    CHECK(WalkoutAbortKeepsSon(rules, true, true));
+    WalkoutAbortUnspent(s, 1004000, rules, !WalkoutAbortKeepsSon(rules, true, true));
+    WalkoutExclude(s, 7, 1004000);
+    WalkoutReturnDone(s);
+    CHECK(std::find(s.walkedSons.begin(), s.walkedSons.end(), sonA) != s.walkedSons.end());
+    CHECK(s.refundCycle == s.countedCycle && s.countedCycle == 2);
+    // The retry's pick: the scan drops the walked Son before it ranks the rest, so B is the one left.
+    const std::vector<std::uint64_t> sonGuids = {sonA, sonB};
+    const std::vector<float> sonYd = {12.0f, 30.0f};
+    std::vector<std::uint64_t> open;
+    std::vector<float> yd;
+    for (std::size_t i = 0; i < sonGuids.size(); ++i)
+    {
+        if (std::find(s.walkedSons.begin(), s.walkedSons.end(), sonGuids[i]) != s.walkedSons.end())
+            continue;
+        open.push_back(sonGuids[i]);
+        yd.push_back(sonYd[i]);
+    }
+    int const pick = PickWalkoutSon(yd, [](int) { return true; });
+    CHECK(pick >= 0 && open[static_cast<std::size_t>(pick)] == sonB);
+    CHECK(WalkoutCycleOpen(s, 2, rules));
+    CHECK(!WalkoutMayStartFor(s, 2, sonA, 8, 1030000, 40000, rules));
+    CHECK(WalkoutMayStartFor(s, 2, sonB, 8, 1030000, 40000, rules));
+
+    // A move refused en route is a path failure, not the stand: today's behaviour, the Son is free again.
+    SeekWalkoutState enRoute;
+    WalkoutStart(enRoute, 7, sonA, 1000000, 2, 70000);
+    CHECK(!WalkoutAbortKeepsSon(rules, true, false));
+    WalkoutAbortUnspent(enRoute, 1004000, rules, !WalkoutAbortKeepsSon(rules, true, false));
+    CHECK(std::find(enRoute.walkedSons.begin(), enRoute.walkedSons.end(), sonA) == enRoute.walkedSons.end());
+
+    // The key off: every unshot abort frees the Son, at the stand or not.
+    SeekWalkoutState off;
+    WalkoutStart(off, 7, sonA, 1000000, 2, 70000);
+    CHECK(!WalkoutAbortKeepsSon(rules, false, true));
+    WalkoutAbortUnspent(off, 1004000, rules, !WalkoutAbortKeepsSon(rules, false, true));
+    CHECK(std::find(off.walkedSons.begin(), off.walkedSons.end(), sonA) == off.walkedSons.end());
+
+    // The at-stand test the glue reads: within 3 yd of the stored stand is at it, a puller still walking its path
+    // (12 yd out) is not, and a task with no stand read (-1) is never at it. At the stand the Son is kept; still
+    // walking, it is freed for the retry.
+    CHECK(WalkoutAtStand(0.0f));
+    CHECK(WalkoutAtStand(kSeekWalkoutStandArriveYd));
+    CHECK(!WalkoutAtStand(kSeekWalkoutStandArriveYd + 0.1f));
+    CHECK(!WalkoutAtStand(12.0f));
+    CHECK(!WalkoutAtStand(-1.0f));
+    CHECK(WalkoutAbortKeepsSon(rules, true, WalkoutAtStand(0.4f)));
+    CHECK(!WalkoutAbortKeepsSon(rules, true, WalkoutAtStand(12.0f)));
+
+    // The old one-walk-out rules have no retry to send elsewhere: their "no stand" keep stays the only one.
+    CHECK(!WalkoutAbortKeepsSon(WalkoutCycleRules(), true, true));
+
+    // The next task's stand refusal starts clean.
+    SeekWalkoutState reset;
+    reset.failStandYd = 2.0f;
+    WalkoutStart(reset, 7, sonA, 1000, 2, 60000);
+    CHECK(reset.failStandYd < 0.0f);
 }
 
 static void TestNoSightFreesTheSon()
@@ -2940,7 +3058,10 @@ int main()
     TestSiphonClockRulesNeverRaise();
     TestRetryUnspentRefundsOneAbort();
     TestRetryUnspentNeverAfterShot();
+    TestRetryUnspentRefundsThroughFinishAbort();
+    TestRetryUnspentNoSightCutFloor();
     TestRetryUnspentOffKeepsToday();
+    TestRetryOtherSonKeepsSonAtStand();
     TestNoSightFreesTheSon();
     TestWalkoutEndFreesSon();
     TestThreatPickUsesTheRunningReference();
