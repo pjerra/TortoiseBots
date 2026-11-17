@@ -723,9 +723,11 @@ public:
     // the hunt is airborne-only as before (default off).
     bool onyxiaWhelpCrewOnGround = false;
     // AiPlayerbot.OnyxiaWhelpPickTankFirst: on the ground the whelp scan takes the whelp a tank is fighting first, then
-    // one a healer is fighting, then the nearest of the rest: the P3 whelps eat the raid's tank (slot 1 already holds
-    // them and dies) and the ground crew is what can pull them off. Off, the nearest pickable whelp as before (default
-    // off).
+    // one a healer is fighting, then the nearest of the rest, and a bot already on a whelp switches to that pick while
+    // its own eats neither a tank nor a healer (at most once per 4 s, never off a whelp eating a tank or a healer, and
+    // a whelp two crew bots already hit only while it is the tank's lowest): the P3 whelps eat the raid's tank (slot 1
+    // already holds them and dies) and the ground crew is what can pull them off. Off, the nearest pickable whelp as
+    // before, with the kill action's already-on-a-whelp early-out (default off).
     bool onyxiaWhelpPickTankFirst = false;
     // The raid guard leaves a unit to the tank a boss-tactic row assigns it to (an until_tank row with a tank slot, or
     // a tank_post row): on, the off-tank pick-ups never send another tank at it; off, the raid's off-tanks take it as

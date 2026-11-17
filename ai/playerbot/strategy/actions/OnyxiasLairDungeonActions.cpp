@@ -3,6 +3,8 @@
 #include "OnyxiasLairDungeonActions.h"
 #include "playerbot/CastCancelLog.h"
 
+#include <set>
+
 using namespace ai;
 #include "playerbot/ServerFacade.h"
 #include "playerbot/GroupMembers.h"
@@ -121,6 +123,40 @@ ObjectGuid OnyxiaBossValue::Calculate()
     return ObjectGuid();
 }
 
+// A whelp's victim rank (OnyxiaWhelpVictimRank): a raid tank it eats first, then a healer, the rest last. The ground
+// pick and the kill action's switch both read it, so the two rank the same whelp the same way.
+static int OnyxiaWhelpRankOf(Unit* whelp)
+{
+    Unit* const victim = whelp ? whelp->GetVictim() : nullptr;
+    Player* const victimPlayer = victim && victim->GetTypeId() == TYPEID_PLAYER ? static_cast<Player*>(victim) : nullptr;
+    return OnyxiaWhelpVictimRank(victimPlayer && PlayerbotAI::IsTank(victimPlayer),
+                                 victimPlayer && PlayerbotAI::IsHeal(victimPlayer));
+}
+
+// The crew bots already hitting a whelp: the living group members on its attacker list that are neither tanks nor
+// healers (the crew's own, by their own roles: no AI value walks, since the kill action reads this every tick of a
+// ground fight). A pet counts for its owner.
+static int OnyxiaWhelpHitters(Player* bot, Unit* whelp)
+{
+    Group* const group = bot->GetGroup();
+    std::set<uint64> counted;
+    int hitters = 0;
+    for (Unit* attacker : whelp->GetAttackers())
+    {
+        Player* const player = attacker ? attacker->GetCharmerOrOwnerPlayerOrPlayerItself() : nullptr;
+        if (!player || player == bot || !sServerFacade.IsAlive(player))
+            continue;
+        if (!group || !group->IsMember(player->GetObjectGuid()))
+            continue;
+        if (!counted.insert(player->GetObjectGuid().GetRawValue()).second)
+            continue;
+        if (PlayerbotAI::IsTank(player) || PlayerbotAI::IsHeal(player))
+            continue;
+        ++hitters;
+    }
+    return hitters;
+}
+
 OnyxiaWhelpScan ai::ScanOnyxiaWhelps(PlayerbotAI* ai, Player* bot)
 {
     OnyxiaWhelpScan scan;
@@ -145,6 +181,10 @@ OnyxiaWhelpScan ai::ScanOnyxiaWhelps(PlayerbotAI* ai, Player* bot)
     const bool pickTankFirst = sPlayerbotAIConfig.onyxiaWhelpPickTankFirst && bossFound && !scan.bossAirborne;
     float bestDist = FLT_MAX;
     int bestRank = OnyxiaWhelpVictimRank(false, false);
+    int pickedRank = -1;
+    // The lowest-HP whelp eating a tank: the one crowded pick the kill action may still switch to.
+    float lowestTankPct = FLT_MAX;
+    Unit* lowestTankWhelp = nullptr;
     // Egg positions from the bot's cached egg search, fetched at most once
     // and only for a whelp inside the padded egg-field box.
     std::vector<OnyxiaPoint> eggs;
@@ -181,18 +221,22 @@ OnyxiaWhelpScan ai::ScanOnyxiaWhelps(PlayerbotAI* ai, Player* bot)
             }
             continue;
         }
-        Unit* const victim = unit->GetVictim();
-        Player* const victimPlayer = victim && victim->GetTypeId() == TYPEID_PLAYER
-            ? static_cast<Player*>(victim) : nullptr;
-        const int rank = OnyxiaWhelpVictimRank(victimPlayer && PlayerbotAI::IsTank(victimPlayer),
-                                               victimPlayer && PlayerbotAI::IsHeal(victimPlayer));
+        const int rank = OnyxiaWhelpRankOf(unit);
+        if (rank == 0 && unit->GetHealthPercent() < lowestTankPct)
+        {
+            lowestTankPct = unit->GetHealthPercent();
+            lowestTankWhelp = unit;
+        }
         if (!scan.whelp || OnyxiaWhelpPickBetter(rank, dist, bestRank, bestDist))
         {
             bestRank = rank;
             bestDist = dist;
+            pickedRank = rank;
             scan.whelp = unit;
         }
     }
+    scan.whelpRank = pickedRank;
+    scan.whelpLowestHp = scan.whelp && scan.whelp == lowestTankWhelp;
     // The ground crew changes the add_crew's work, so it needs both keys; the whelp key itself is the action's own gate.
     const bool crewOnGround = sPlayerbotAIConfig.onyxiaWhelpCrewOnGround && sPlayerbotAIConfig.onyxiaWhelpsAndEggs &&
         sPlayerbotAIConfig.dungeonRunAddCrew;
@@ -278,10 +322,28 @@ bool OnyxiaKillWhelpsAction::Execute(Event& event)
     // On the ground the crew is the melee and its ranged; a tank keeps its post or the generic pick.
     if (!OnyxiaGroundDuty(duty, PlayerbotAI::IsTank(bot), scan.bossAirborne) || !scan.whelpPhase || !scan.whelp)
         return false;
-    // Already on a whelp: keep it (donor early-out).
     Unit* current = AI_VALUE(Unit*, "current target");
     if (current && sServerFacade.IsAlive(current) && current->GetEntry() == kOnyxianWhelpEntry)
-        return false;
+    {
+        // AiPlayerbot.OnyxiaWhelpPickTankFirst, grounded: the donor early-out would keep a whelp eating neither a tank
+        // nor a healer while another one eats the tank, so that one gives way to the scan's pick (a tank's, then a
+        // healer's). OnyxiaWhelpSwitch holds the hysteresis: one switch per 4 s, never off a whelp on a tank or a
+        // healer, and a crowded pick only when it is the tank's lowest. Airborne or key off, scan.whelpRank is -1 and
+        // the early-out stands exactly as before.
+        const uint32 nowMs = WorldTimer::getMSTime();
+        const uint32 lastMs = AI_VALUE(uint32, "onyxia whelp switch");
+        const uint32 sinceMs = lastMs == 0 ? kOnyxiaWhelpSwitchMs : WorldTimer::getMSTimeDiff(lastMs, nowMs);
+        if (scan.whelpRank < 0 ||
+            !OnyxiaWhelpSwitch(OnyxiaWhelpRankOf(current), scan.whelpRank, sinceMs,
+                OnyxiaWhelpHitters(bot, scan.whelp), scan.whelpLowestHp))
+            return false;
+        if (!PossibleAttackTargetsValue::IsValid(scan.whelp, bot))
+            return false;
+        const bool switched = Attack(bot, scan.whelp);
+        if (switched)
+            SET_AI_VALUE(uint32, "onyxia whelp switch", nowMs);
+        return switched;
+    }
     if (!PossibleAttackTargetsValue::IsValid(scan.whelp, bot))
         return false;
     return Attack(bot, scan.whelp);

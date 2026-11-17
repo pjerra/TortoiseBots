@@ -53,6 +53,14 @@ namespace ai
         ObjectGuid Calculate() override;
     };
 
+    // When this bot last switched whelps for AiPlayerbot.OnyxiaWhelpPickTankFirst (WorldTimer ms, 0 never): the kill
+    // action's own hysteresis, one switch per kOnyxiaWhelpSwitchMs. A per-bot manual value, so it costs no scan.
+    class OnyxiaWhelpSwitchValue : public ManualSetValue<uint32>
+    {
+    public:
+        OnyxiaWhelpSwitchValue(PlayerbotAI* ai) : ManualSetValue<uint32>(ai, 0, "onyxia whelp switch") {}
+    };
+
     // Optional whelp and egg tactics (AiPlayerbot.OnyxiaWhelpsAndEggs, on
     // by default). Shared helpers: one pass over the cached attackers list.
     struct OnyxiaWhelpScan
@@ -62,6 +70,11 @@ namespace ai
         // own key on top of AiPlayerbot.OnyxiaWhelpsAndEggs and AiPlayerbot.DungeonRunAddCrew, the crew it changes).
         bool whelpPhase = false;
         Unit* whelp = nullptr; // nearest pickable live whelp (not within an egg's trap circle)
+        // The pick's victim rank (OnyxiaWhelpVictimRank) when the ground tank-first key ranked it, else -1: the kill
+        // action's switch reads it, and -1 there means "not a ranked pick" (airborne or key off).
+        int whelpRank = -1;
+        // The pick is the lowest-HP whelp eating a tank: the one crowded pick a bot may still switch to.
+        bool whelpLowestHp = false;
     };
     OnyxiaWhelpScan ScanOnyxiaWhelps(PlayerbotAI* ai, Player* bot);
     // True when this bot is on whelp duty (AoE-capable ranged DPS).

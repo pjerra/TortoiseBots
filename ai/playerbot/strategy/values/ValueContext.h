@@ -124,6 +124,7 @@ namespace ai
         {
             creators["fankriss active boss"] = [](PlayerbotAI* ai) { return new FankrissActiveBossValue(ai); };
             creators["onyxia boss"] = [](PlayerbotAI* ai) { return new OnyxiaBossValue(ai); };
+            creators["onyxia whelp switch"] = [](PlayerbotAI* ai) { return new OnyxiaWhelpSwitchValue(ai); };
             creators["raid tank needs healing"] = [](PlayerbotAI* ai) { return new RaidTankHealingValue(ai); };
             creators["patchwerk soaker to shield"] = [](PlayerbotAI* ai) { return new PatchwerkSoakerShieldValue(ai); };
             creators["patchwerk soak boss"] = [](PlayerbotAI* ai) { return new PatchwerkSoakBossValue(ai); };

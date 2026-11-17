@@ -134,7 +134,7 @@ These settings configure boss encounter mechanics, environmental hazard evasion,
 | [`AiPlayerbot.HazardEvasionDistance`](#aiplayerbothazardevasiondistance) | `12.0` | Cap in yards on the step bots take when spreading for spacing. |
 | [`AiPlayerbot.OnyxiaWhelpsAndEggs`](#aiplayerbotonyxiawhelpsandeggs) | `1` | Prioritizes whelp clearing and egg avoidance during Onyxia phase two. |
 | [`AiPlayerbot.OnyxiaWhelpCrewOnGround`](#aiplayerbotonyxiawhelpcrewonground) | `0` | `1`: the add crew keeps hunting the whelps in Onyxia's last 40 % on the ground, with the tanks on their posts (needs `AiPlayerbot.OnyxiaWhelpsAndEggs` and `AiPlayerbot.DungeonRunAddCrew`). |
-| [`AiPlayerbot.OnyxiaWhelpPickTankFirst`](#aiplayerbotonyxiawhelppicktankfirst) | `0` | `1` (recommended on): the ground whelp pick takes the whelp a raid tank is fighting first, then one a healer is, then the nearest of the rest. |
+| [`AiPlayerbot.OnyxiaWhelpPickTankFirst`](#aiplayerbotonyxiawhelppicktankfirst) | `0` | `1` (recommended on): the ground whelp pick takes the whelp a raid tank is fighting first, then one a healer is, then the nearest of the rest, and a bot already on a whelp switches to that pick while its own eats neither. |
 | [`AiPlayerbot.RaidEntryByCommander`](#aiplayerbotraidentrybycommander) | `1` | Waives a bot's failed entrance condition at a raid entrance with no area-trigger script when its commander is a real player who commands the raid (in the group, or through the binding of a bound raid) and meets it. |
 
 ## Settings
@@ -2114,7 +2114,7 @@ When a bot on whelp duty picks a whelp while Onyxia stands on the ground, it tak
 
 The whelp scan walks the bot's attackers on map 249 with the `onyxia` fight strategy. With this key on and her on the ground, each pickable whelp is ranked by its victim (`GetVictim()`): a raid tank's whelp first, a healer's second, the rest last; the distance only breaks a tie inside one rank. Whelps the bot cannot reach within 40 yd and whelps inside an egg's trap circle stay skipped, and in the air the pick stays the nearest.
 
-The P3 whelps eat the raid's tanks (walk 2n: 20 tank deaths in 6 P3 pulls, a whelp among the top hitters in 18 of them) and the pickers took the nearest whelp, which hit damage dealers, healers and tanks alike; nobody was sent to the ones on the tanks. Slot 1 already holds them there and dies, so the ground crew (the melee and the AoE crew) is what can pull them off it. `onyxia kill whelps` keeps its *already on a whelp* early-out, so a better-ranked whelp does not reshuffle the crew every tick.
+The P3 whelps eat the raid's tanks (walk 2n: 20 tank deaths in 6 P3 pulls, a whelp among the top hitters in 18 of them) and the pickers took the nearest whelp, which hit damage dealers, healers and tanks alike; nobody was sent to the ones on the tanks. Slot 1 already holds them there and dies, so the ground crew (the melee and the AoE crew) is what can pull them off it. A bot already on a whelp switches to the ranked pick when its own whelp eats neither a tank nor a healer: at most one switch per 4 s, never away from a whelp eating a tank or a healer (so one on a tank is never abandoned), and a whelp two crew bots already hit is left alone unless it is the tank's lowest (that one is finished first). Airborne or with the key off the old *already on a whelp* early-out stands, so nothing is reshuffled outside the ground pick.
 
 </details>
 

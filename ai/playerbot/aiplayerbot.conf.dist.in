@@ -1046,9 +1046,11 @@ AiPlayerbot.OnyxiaWhelpCrewOnGround = 0
 # Onyxia whelp pick on the ground (recommended on).
 # With AiPlayerbot.OnyxiaWhelpsAndEggs on, a bot picking a whelp while she stands on the ground takes the whelp a
 # raid tank is fighting first, then one a healer is fighting, then the nearest of the rest (distance breaks a tie
-# inside one rank). The P3 whelps eat the raid's tank first -- the Cindarion post's tank already holds them and dies
-# -- and the ground crew is what can pull them off it; in the air the pick stays the nearest. An explicit target
-# order from a player always wins. Off by default: the nearest pickable whelp, as before.
+# inside one rank). A bot already on a whelp switches to that pick when its own eats neither a tank nor a healer: at
+# most one switch per 4 s, never away from a whelp eating a tank or a healer, and a whelp two crew bots already hit
+# only while it is the tank's lowest. The P3 whelps eat the raid's tank first -- the Cindarion post's tank already
+# holds them and dies -- and the ground crew is what can pull them off it; in the air the pick stays the nearest. An
+# explicit target order from a player always wins. Off by default: the nearest pickable whelp, as before.
 # 0 - the nearest pickable whelp (Default)
 # 1 - the whelp on a tank, then on a healer, then the nearest
 AiPlayerbot.OnyxiaWhelpPickTankFirst = 0

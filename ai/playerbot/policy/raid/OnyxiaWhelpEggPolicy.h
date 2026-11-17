@@ -201,6 +201,33 @@ namespace ai
         return rankA != rankB ? rankA < rankB : distA < distB;
     }
 
+    // The switch's hysteresis (AiPlayerbot.OnyxiaWhelpPickTankFirst): at most one switch per this interval, so a bot
+    // whose harmless whelp dies and a better one appears does not dance between two picks, and the crowded-pick count
+    // the last rule reads.
+    constexpr std::uint32_t kOnyxiaWhelpSwitchMs = 4000;
+    constexpr int kOnyxiaWhelpSwitchHitters = 2;
+
+    // Whether a bot already on a whelp switches to the scan's pick on the ground (AiPlayerbot.OnyxiaWhelpPickTankFirst).
+    // The bot leaves only a whelp that eats neither a tank nor a healer (ranks 0 and 1 of OnyxiaWhelpVictimRank), so a
+    // whelp on a tank is never abandoned, and only for one eating a tank (rank 0) or a healer (rank 1): the pick the
+    // scan ranked first, distance breaking a tie inside a rank. Hysteresis: one switch per kOnyxiaWhelpSwitchMs, and a
+    // whelp two crew bots already hit stays alone unless it is the tank's lowest one (that one is finished first).
+    // `msSinceLastSwitch` is capped by the caller for a bot that never switched; a negative candidate rank (the scan
+    // did not rank: airborne, key off) switches nothing.
+    inline bool OnyxiaWhelpSwitch(int currentRank, int candidateRank, std::uint32_t msSinceLastSwitch,
+                                  int hittersOnCandidate, bool candidateLowestHp)
+    {
+        if (currentRank < 2)  // never away from a whelp eating a tank or a healer
+            return false;
+        if (candidateRank < 0 || candidateRank > 1)  // only a whelp on a tank, then a healer, is worth a switch
+            return false;
+        if (msSinceLastSwitch < kOnyxiaWhelpSwitchMs)
+            return false;
+        if (hittersOnCandidate >= kOnyxiaWhelpSwitchHitters && !(candidateRank == 0 && candidateLowestHp))
+            return false;
+        return true;
+    }
+
     // A ranged damage dealer off the crew on a whelp goes back to her (not on an explicit order) while the whelp phase
     // runs: the crew has the whelps, so a bot past it that stays would leave her to the melee (who cannot reach her in
     // the air; on the ground the crew's melee is on the whelps too).

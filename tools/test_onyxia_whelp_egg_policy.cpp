@@ -234,6 +234,26 @@ int main()
     CHECK(!OnyxiaWhelpPickBetter(1, 6.0f, 1, 4.0f));
     CHECK(!OnyxiaWhelpPickBetter(1, 4.0f, 1, 4.0f));  // an exact tie keeps the first found
 
+    // OnyxiaWhelpSwitch (walk 2o round 4): a bot already on a whelp eating neither a tank nor a healer switches to the
+    // scan's pick, one eating a tank (rank 0) then a healer (rank 1), at most once per 4 s. Every gate flips it off,
+    // and the listed red is the case the old early-out left alone: a bot on a harmless whelp while one eats a tank.
+    CHECK(OnyxiaWhelpSwitch(2, 0, kOnyxiaWhelpSwitchMs, 0, false));      // the fail: harmless -> on a tank
+    CHECK(OnyxiaWhelpSwitch(2, 1, kOnyxiaWhelpSwitchMs, 0, false));      // harmless -> on a healer
+    CHECK(!OnyxiaWhelpSwitch(0, 0, kOnyxiaWhelpSwitchMs, 0, false));     // never away from a tank's whelp
+    CHECK(!OnyxiaWhelpSwitch(0, 1, kOnyxiaWhelpSwitchMs, 0, false));     // ... not even for a healer's
+    CHECK(!OnyxiaWhelpSwitch(1, 0, kOnyxiaWhelpSwitchMs, 0, false));     // nor from a healer's whelp
+    CHECK(!OnyxiaWhelpSwitch(2, 2, kOnyxiaWhelpSwitchMs, 0, false));     // the pick eats neither: no churn
+    CHECK(!OnyxiaWhelpSwitch(2, -1, kOnyxiaWhelpSwitchMs, 0, false));    // unranked (airborne or key off)
+    CHECK(!OnyxiaWhelpSwitch(2, 0, kOnyxiaWhelpSwitchMs - 1, 0, false)); // inside the 4 s window
+    CHECK(!OnyxiaWhelpSwitch(2, 0, kOnyxiaWhelpSwitchMs - 1, 2, true)); // the 4 s cap holds even for the lowest
+    CHECK(!OnyxiaWhelpSwitch(2, 0, kOnyxiaWhelpSwitchMs, 2, false));     // crowded tank whelp, not the lowest
+    CHECK(OnyxiaWhelpSwitch(2, 0, kOnyxiaWhelpSwitchMs, 2, true));       // crowded, the tank's lowest: finish it
+    CHECK(!OnyxiaWhelpSwitch(2, 1, kOnyxiaWhelpSwitchMs, 2, true));      // the lowest clause is the tank's alone
+    CHECK(!OnyxiaWhelpSwitch(2, 1, kOnyxiaWhelpSwitchMs, 3, false));
+    CHECK(OnyxiaWhelpSwitch(2, 1, kOnyxiaWhelpSwitchMs, 1, false));      // one hitter: not crowded
+    CHECK(kOnyxiaWhelpSwitchMs == 4000);
+    CHECK(kOnyxiaWhelpSwitchHitters == 2);
+
     std::cout << "onyxia whelp/egg policy: OK\n";
     return 0;
 }
