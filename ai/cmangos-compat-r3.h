@@ -117,3 +117,17 @@ inline bool GetLosHitPositionCompat(Map* map, float srcX, float srcY, float srcZ
     return map->GetLosHitPosition(srcX, srcY, srcZ, destX, destY, destZ, modifyDist);
 }
 inline uint16 AreaKeyAtCompat(uint32 mapId, float x, float y, float z) { return sTerrainMgr.GetAreaFlag(mapId, x, y, z); }
+
+inline FactionTemplateEntry const* GetFactionTemplateEntryCompat(uint32 id) { return sObjectMgr.GetFactionTemplateEntry(id); }
+inline std::string AreaNameCompat(AreaTableEntry const* area) { return area->Name; }
+inline int32 AreaLevelCompat(AreaTableEntry const* area) { return area->AreaLevel; }
+inline WorldObject* GetWorldObjectCompat(Map* map, ObjectGuid const& guid) { return map->GetWorldObject(guid); }
+
+inline uint32 CreatureEntryOfCompat(CreatureData const& data) { return data.creature_id[0]; }
+inline std::string const& CreatureNameCompat(CreatureTemplate const* tpl) { return tpl->name; }
+template <class Check>
+struct UnitListSearcherCompat : MaNGOS::UnitListSearcher<Check>
+{
+    UnitListSearcherCompat(WorldObject const* /*searcher*/, std::list<Unit*>& objects, Check& check)
+        : MaNGOS::UnitListSearcher<Check>(objects, check) { }
+};

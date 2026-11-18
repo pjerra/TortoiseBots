@@ -105,3 +105,32 @@ enum TbLegacyUnitState : uint32
 // The terrain manager: T `sTerrainMgr` (a singleton by reference), F TerrainMgr::Instance() (TerrainMgr.h:142). The calls on it
 // differ (a phase shift, the map id first); the bot's own uses go through the helpers in TbCompat_Unit.h.
 #define sTerrainMgr (TerrainMgr::Instance())
+
+// "How long does this aura still last, in ms" (-1 = no end). T Spells/SpellAuras.h:188,475 (Aura asks its holder, the holder's
+// duration), F Aura::GetDuration (the remaining duration, -1 when it never ends). No bot class defines a member of this name.
+#define GetAuraDuration GetDuration
+
+// Assertion: T `MANGOS_ASSERT(x)` aborts when x is false (shared/Errors.h:62); F's ASSERT(x) does the same.
+#define MANGOS_ASSERT(...) ASSERT(__VA_ARGS__)
+
+// The mask of a dispel type: T SpellEntry.h:417 (DISPEL_ALL gives DISPEL_ALL_MASK, any other 1 << type), F SpellInfo.h:561.
+#define GetDispellMask SpellInfo::GetDispelMask
+
+// The creature template's NPC flag word: T `npc_flags` (uint32), F `npcflag` (uint64, CreatureData.h). The classic bits the
+// bot tests (gossip, quest giver, trainer, vendor, ...) are the same low bits on both. No bot class has a member of this name.
+#define npc_flags npcflag
+
+// The list of loot items: T LootMgr.h:156 a vector of LootItem values.
+using LootItemList = std::vector<LootItem>;
+
+// cmangos's console progress bar. The Turtle shim has it as a class that does nothing (ai/cmangos-compat-shim.h:175-185,
+// there is no bar on that core either); same here.
+class BarGoLink
+{
+public:
+    BarGoLink() {}
+    template<typename T> BarGoLink(T /*total*/) {}
+    void step() {}
+    void Step() {}
+    static void SetOutputState(bool /*state*/) {}
+};

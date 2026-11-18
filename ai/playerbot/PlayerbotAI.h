@@ -617,11 +617,11 @@ public:
     float GetRange(std::string type);
 
     static ReputationRank GetFactionReaction(FactionTemplateEntry const* thisTemplate, FactionTemplateEntry const* otherTemplate);
-    // cmangos uses sFactionTemplateStore.LookupEntry(N); Penqle uses sObjectMgr.GetFactionTemplateEntry(N).
-    static bool friendToAlliance(FactionTemplateEntry const* templateEntry) { return GetFactionReaction(templateEntry, sObjectMgr.GetFactionTemplateEntry(1)) >= REP_NEUTRAL; }
-    static bool friendToHorde(FactionTemplateEntry const* templateEntry) { return GetFactionReaction(templateEntry, sObjectMgr.GetFactionTemplateEntry(2)) >= REP_NEUTRAL; }
+    // cmangos uses sFactionTemplateStore.LookupEntry(N); Penqle uses GetFactionTemplateEntryCompat(N).
+    static bool friendToAlliance(FactionTemplateEntry const* templateEntry) { return GetFactionReaction(templateEntry, GetFactionTemplateEntryCompat(1)) >= REP_NEUTRAL; }
+    static bool friendToHorde(FactionTemplateEntry const* templateEntry) { return GetFactionReaction(templateEntry, GetFactionTemplateEntryCompat(2)) >= REP_NEUTRAL; }
     bool IsFriendlyTo(FactionTemplateEntry const* templateEntry) { return GetFactionReaction(bot->GetFactionTemplateEntry(), templateEntry) >= REP_NEUTRAL; }
-    bool IsFriendlyTo(uint32 faction) { return GetFactionReaction(bot->GetFactionTemplateEntry(), sObjectMgr.GetFactionTemplateEntry(faction)) >= REP_NEUTRAL; }
+    bool IsFriendlyTo(uint32 faction) { return GetFactionReaction(bot->GetFactionTemplateEntry(), GetFactionTemplateEntryCompat(faction)) >= REP_NEUTRAL; }
     static bool AddAura(Unit* unit, uint32 spellId);
     ReputationRank getReaction(FactionTemplateEntry const* factionTemplate) { return GetFactionReaction(bot->GetFactionTemplateEntry(), factionTemplate);}
 

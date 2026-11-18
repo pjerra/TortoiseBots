@@ -299,7 +299,7 @@ namespace ai
 	{
 	public:
 		ZoneTravelDestination(TravelDestinationPurpose purpose, uint32 /*id*/, int32 entry) : EntryTravelDestination(purpose, entry) {
-			SetExpireFast(); SetCooldownShort(); if (auto area = GetArea()) { title = area->Name; level = area->AreaLevel; }
+			SetExpireFast(); SetCooldownShort(); if (auto area = GetArea()) { title = AreaNameCompat(area); level = AreaLevelCompat(area); }
 		}
 	protected:
 		virtual std::string getZoneName() const { return title; }

@@ -8,7 +8,7 @@ namespace ai
     public:
         GuidPosition() : ObjectGuid(), WorldPosition() {}
         GuidPosition(ObjectGuid guid, WorldPosition pos) : ObjectGuid(guid), WorldPosition(pos) {};
-        GuidPosition(ObjectGuid guid, const uint32 mapId, const uint32 instanceId) : ObjectGuid(guid) { WorldPosition::set(guid, mapId, instanceId); if (getX() == 0 && getY() == 0 && getZ() == 0) Set(0); }
+        GuidPosition(ObjectGuid guid, const uint32 mapId, const uint32 instanceId) : ObjectGuid(guid) { WorldPosition::set(guid, mapId, instanceId); if (getX() == 0 && getY() == 0 && getZ() == 0) ObjectGuid::Clear(); }
         GuidPosition(ObjectGuid guid, const WorldObject* wo) : ObjectGuid(guid), WorldPosition(wo) {}
         GuidPosition(uint64 const& guid, WorldPosition const& pos) : ObjectGuid(guid), WorldPosition(pos) {};
         //template<class T>
@@ -16,7 +16,7 @@ namespace ai
         // cmangos has CreatureData::id; Penqle has CreatureData::creature_id (array, MAX_CREATURE_IDS_PER_SPAWN entries). Use first.
         GuidPosition(CreatureDataPair const* dataPair) : ObjectGuid(HIGHGUID_UNIT, dataPair->second.creature_id[0], dataPair->first), WorldPosition(dataPair) {};
         GuidPosition(GameObjectDataPair const* dataPair) : ObjectGuid(HIGHGUID_GAMEOBJECT, dataPair->second.id, dataPair->first), WorldPosition(dataPair) {};
-        GuidPosition(const WorldObject* wo) : WorldPosition(wo) { ObjectGuid::Set(wo->GetObjectGuid()); };
+        GuidPosition(const WorldObject* wo) : WorldPosition(wo) { ObjectGuid::operator=(wo->GetObjectGuid()); };
         GuidPosition(HighGuid hi, uint32 entry, uint32 counter = 1, WorldPosition pos = WorldPosition()) : ObjectGuid(hi, entry, counter), WorldPosition(pos) {};
         GuidPosition(std::string qualifier);
 
@@ -41,7 +41,7 @@ namespace ai
         GameObjectData const* GetGameObjectData() const { return IsGameObject() ? sObjectMgr.GetGOData(GetCounter()) : nullptr; }
         GameObjectInfo const* GetGameObjectInfo() const { return IsGameObject() ? sObjectMgr.GetGameObjectInfo(GetEntry()) : nullptr; };
 
-        WorldObject* GetWorldObject(uint32 m_instanceId) const { return getMap(m_instanceId) ? getMap(m_instanceId)->GetWorldObject(*this) : nullptr; }
+        WorldObject* GetWorldObject(uint32 m_instanceId) const { return getMap(m_instanceId) ? GetWorldObjectCompat(getMap(m_instanceId), *this) : nullptr; }
         Creature* GetCreature(uint32 instanceId) const;
         Unit* GetUnit(uint32 instanceId) const;
         GameObject* GetGameObject(uint32 instanceId) const;
@@ -75,9 +75,9 @@ namespace ai
         // Bot intent here is to check the ObjectGuid is empty (not the WorldLocation), so qualify explicitly.
         operator bool() const { return getX() != 0 || getY() != 0 || getZ() != 0 || !ObjectGuid::IsEmpty(); }
         bool operator!() const { return getX() == 0 && getY() == 0 && getZ() == 0 && ObjectGuid::IsEmpty(); }
-        bool operator== (ObjectGuid const& guid) const { return GetRawValue() == guid.GetRawValue(); }
-        bool operator!= (ObjectGuid const& guid) const { return GetRawValue() != guid.GetRawValue(); }
-        bool operator< (ObjectGuid const& guid) const { return GetRawValue() < guid.GetRawValue(); }
+        bool operator== (ObjectGuid const& guid) const { return static_cast<ObjectGuid const&>(*this) == guid; }
+        bool operator!= (ObjectGuid const& guid) const { return static_cast<ObjectGuid const&>(*this) != guid; }
+        bool operator< (ObjectGuid const& guid) const { return static_cast<ObjectGuid const&>(*this) < guid; }
     };
 
     inline ByteBuffer& operator<<(ByteBuffer& b, GuidPosition& guidP)

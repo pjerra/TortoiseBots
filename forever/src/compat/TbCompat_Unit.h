@@ -152,7 +152,7 @@ inline Item* GetWeaponForAttackCompat(Player const* player, WeaponAttackType att
 inline bool CreatureHasWeaponCompat(Creature const* creature)
 {
     uint32 const itemId = creature->GetVirtualItemId(0);
-    ItemTemplate const* tpl = itemId ? sObjectMgr->GetItemTemplate(itemId) : nullptr;
+    ItemTemplate const* tpl = itemId ? sObjectMgr.GetItemTemplate(itemId) : nullptr;
     return tpl && tpl->GetClass() == ITEM_CLASS_WEAPON;
 }
 
@@ -218,12 +218,13 @@ inline uint32 FirstInstanceIdCompat(uint32 mapId)
 }
 
 // How far a client sees on this map: T `Map::GetVisibilityDistance()` (with `World::GetMaxVisibleDistance*` when the map is
-// not loaded), F `Map::GetVisibilityRange()` (Map.h:257) and the world's configured ranges.
+// not loaded: the continent or the instance range), F `Map::GetVisibilityRange()` (Map.h:257) and the same two configured ranges
+// (World.h:248-249).
 inline float VisibilityDistanceCompat(Map const* map, bool overworld)
 {
     if (map)
         return map->GetVisibilityRange();
-    return overworld ? World::GetMaxVisibleDistanceOnContinents() : World::GetMaxVisibleDistanceInInstances();
+    return sWorld.getFloatConfig(overworld ? CONFIG_MAX_VISIBILITY_DISTANCE_CONTINENT : CONFIG_MAX_VISIBILITY_DISTANCE_INSTANCE);
 }
 
 // Whether the area carries any of the flags. T AreaTableEntry::Flags is one word; F keeps two (AreaTableEntry::Flags[0] is
@@ -259,3 +260,80 @@ inline uint16 AreaKeyAtCompat(uint32 mapId, float x, float y, float z)
 {
     return uint16(TerrainMgr::Instance().GetAreaId(PhasingHandler::GetEmptyPhaseShift(), mapId, x, y, z));
 }
+
+// The two numbers of a spell range row: the hostile (first) minimum and maximum. T SpellRangeEntry minRange/maxRange, F
+// RangeMin[0]/RangeMax[0] (DB2Structure.h:4158-4159; index 0 is the hostile range, 1 the friendly one). Same names as
+// ai/cmangos-compat-shim.h:904-905.
+inline float SpellRangeMin(SpellRangeEntry const* entry) { return entry ? entry->RangeMin[0] : 0.0f; }
+inline float SpellRangeMax(SpellRangeEntry const* entry) { return entry ? entry->RangeMax[0] : 0.0f; }
+
+// The core's string splitter on both cores: T shared/Util.cpp:173 splits on every character of `sep` and drops empty pieces.
+using Tokens = std::vector<std::string>;
+inline Tokens StrSplit(std::string const& src, std::string const& sep)
+{
+    Tokens r;
+    std::string s;
+    for (char const c : src)
+    {
+        if (sep.find(c) != std::string::npos)
+        {
+            if (!s.empty())
+                r.push_back(s);
+            s.clear();
+        }
+        else
+            s += c;
+    }
+    if (!s.empty())
+        r.push_back(s);
+    return r;
+}
+
+// The bot's own case-insensitive substring search (Helpers.cpp:69), declared for every file as the Turtle shim does
+// (ai/cmangos-compat-shim.h:385); the definition is the bot's, not the core's.
+char* strstri(std::string const& s1, std::string const& s2);
+
+// The faction template row by id. T `sObjectMgr.GetFactionTemplateEntry(id)`, F the DB2 store (DB2Stores.h).
+inline FactionTemplateEntry const* GetFactionTemplateEntryCompat(uint32 id) { return sFactionTemplateStore.LookupEntry(id); }
+
+// The name and level of an area. T AreaTableEntry::Name (a string) and AreaLevel; F AreaName (localized; the bot reads the
+// first locale, enUS) and ExplorationLevel (DB2Structure.h AreaTableEntry).
+inline std::string AreaNameCompat(AreaTableEntry const* area) { return area->AreaName[LOCALE_enUS]; }
+inline int32 AreaLevelCompat(AreaTableEntry const* area) { return area->ExplorationLevel; }
+
+// The object a guid names, looked up in one map. T `map->GetWorldObject(guid)`; F has the lookups per type.
+inline WorldObject* GetWorldObjectCompat(Map* map, ObjectGuid const& guid)
+{
+    switch (guid.GetHigh())
+    {
+        case HighGuid::Creature:
+        case HighGuid::Vehicle:
+            return map->GetCreature(guid);
+        case HighGuid::GameObject:
+            return map->GetGameObject(guid);
+        case HighGuid::Pet:
+            return map->GetPet(guid);
+        case HighGuid::DynamicObject:
+            return map->GetDynamicObject(guid);
+        case HighGuid::Corpse:
+            return map->GetCorpse(guid);
+        case HighGuid::Player:
+            return ObjectAccessor::GetPlayer(map, guid);
+        default:
+            return nullptr;
+    }
+}
+
+// The creature a spawn record is for, and the template's name. T CreatureData::creature_id is an array of ids per spawn (the bot
+// reads the first), F CreatureData::id one id (SpawnData); T CreatureInfo::name / F CreatureTemplate::Name.
+inline uint32 CreatureEntryOfCompat(CreatureData const& data) { return data.id; }
+inline std::string const& CreatureNameCompat(CreatureTemplate const* tpl) { return tpl->Name; }
+
+// A grid search for units around an object. T's UnitListSearcher takes (list, check), F's (the searching object, list,
+// check): the object gives the phase the search sees in. The wrapper has the F shape on both cores.
+template <class Check>
+struct UnitListSearcherCompat : Trinity::UnitListSearcher<Check>
+{
+    UnitListSearcherCompat(WorldObject const* searcher, std::list<Unit*>& objects, Check& check)
+        : Trinity::UnitListSearcher<Check>(searcher, objects, check) { }
+};
