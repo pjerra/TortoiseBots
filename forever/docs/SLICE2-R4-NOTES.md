@@ -62,3 +62,38 @@ master hp 74 -> 133 between samples 3 and 4 (the heal landed at about 21:24:47.4
 ### h. Master 35 yd away and hurt: PASS
 `htest 35 0`: `tb hop Tbbeta 35 0` 21:25:04.721, `tb hurt Tbbeta 30` 21:25:04.937; `[ACTION] A:reach party member to heal - OK src=party member to heal out of spell range` at 21:25:05.733 (0.8 s), the priest walks (36.9 -> 4.8 yd in 4.5 s), while it moves the cast is refused by the core's own check
 (`[CAST_REFUSED] spell=lesser heal result=75` = SPELL_FAILED_MOVING, once a second), then `[CAST_START] spell=Lesser Heal(2050)` at 21:25:11.360 (6.4 s after the hurt) when it stood.
+
+### i. Refused casts (NOT_KNOWN) per 90 s: recorded
+The priest's `Heal` (level 16) and `Greater Heal` are in its chain at every heal tick and are refused by the engine's own pre-check: `[CAST_REFUSED] spell=heal result=87` and `spell=greater heal result=87` (SPELL_FAILED_NOT_KNOWN), then `A:heal on party - IMPOSSIBLE`, and the chain falls to `lesser heal`. Count in boot 1: 371 of each in the first 6 minutes of the log
+(one pair per tick of a heal chain, i.e. only while somebody is hurt; none while everybody is above 90 %: the 20-minute idle run logged nothing). Same code path and same counts on Turtle (the engine's back-off is out of combat for unowned bots only, spec section 5 row 3): not a bug.
+
+### j. Drinking through the engine: PASS
+`.tb additem Tbhealer 159 5` (Refreshing Spring Water), `.tb power Tbhealer mana 10` (VM 21:26:06.526): `[ACTION] A:drink - OK src=high mana` at 21:26:07.120 (0.6 s later); mana 48 -> 57 -> 71 -> 85 -> 99 -> 114 -> 127 in 0.7 s steps (about 20 per second: the drink; the normal regeneration is about 2). Master ordered 25 yd away at 21:26:10.177: the follow
+action started at 21:26:11.387 (1.2 s later), the priest left its seat (a seated bot cannot walk; the mana rate fell to about 11 per 0.7 s, regeneration while moving) and was 10.3 yd from the master at the farthest, back at 5.8 yd by 21:26:14; the drink started again by itself (`A:drink - OK` 21:26:15.012) and mana rose again at 20 per second. The sit itself was read in boot 2
+(`.tb where` now prints `stand state`, boot 2 section).
+
+### k. Money loot: PASS, and the rule on this core
+Three characters, before and after kills (`kfight`: `.tb where` money before, `tb attack Tbbeta`, 12-14 s, money after; Tbbeta has NO engine, Tbalpha and Tbhealer have):
+| Kill (target) | Tbbeta (master) | Tbalpha (warrior) | Tbhealer (priest) |
+|---|---|---|---|
+| 1 Kobold Vermin (warrior engine off) | 0 -> 0 | 8 -> 8 | 3 -> 5 |
+| 2 Kobold Worker | 0 -> 0 | 8 -> 8 | 26 -> 26 (looted with the next) |
+| 3 Kobold Vermin | 0 -> 0 | 8 -> 41 | 26 -> 32 |
+| 4 Kobold Vermin | 0 -> 0 | 41 -> 43 | 32 -> 34 |
+| 5-9 (five single kills, engines on) | 0 -> 0 each | +4, +5, +2, +4, +4 | +1, +5, +2, +4, +1 |
+Each bot's own amount differs for the same corpse (4 and 1, 5 and 5, 2 and 2...), the master never gets anything, nobody's share is halved. Rows 2 and 3 show loot of an earlier corpse landing in the next window (the bots loot when the fight is over, one corpse at a time).
+Reading of the core: open world, no instance: `Unit::Kill` hands every TAPPER its own `Loot` with its own `generateMoneyLoot` roll (Unit.cpp:11930-11940, `creature->m_personalLoot[tapper]`; the shared corpse of Unit.cpp:11890-11918 is only taken in a dungeon (or an encounter) with a grouped tapper:
+`CONFIG_LOOT_SHARED_ENCOUNTER_LOOT`, default 1). `HandleLootMoneyOpcode` (LootHandler.cpp:142-179) splits `loot->gold` among the group members within reward distance that are ALLOWED LOOTERS OF THAT LOOT; a personal loot allows only its owner, so the "split" is by one. So: in the open world every tapper rolls and keeps its own copper (priest and warrior both tapped, each opened its own window: `A:open loot - OK`, `A:store loot - OK`);
+a master that is a bot session with no engine is a tapper too (it attacked) but never opens its window: no share, nothing lost for the others. In a dungeon with a grouped tapper the corpse is shared and the copper is split among the members near the opener (the Ragefire observation at the end).
+Kobold Vermin gold: `creature_template_difficulty` 1-4 copper, Kobold Worker 1-5. Items are not looted (decision D2: `ItemUsage` answers "not looted").
+
+### l. Slice 1 b and d for the warrior with a priest in the party: PASS (3 fights)
+`ltest` (attack, 2.2 s, `tb where Tbalpha`; 11 s later again): fight 1 Kobold Worker: `state: Combat`, `target reach: distance 2.17 yd, melee range 5.0, in melee range: yes`; afterwards `state: Non Combat`, `follow target: Tbbeta ... motion type: 14`. Fights 2 and 3 (Kobold Worker, Kobold Laborer) the same (0.50 and 1.04 yd).
+
+### m. Logout orders with the priest mid-cast: PASS
+`midcast` sends the command 23 ms after the priest's `[CAST_START] spell=Lesser Heal`: `tb engine Tbhealer off` (cast running), `tb logout Tbhealer` twice (bot first; relogin each time with `tb login Tbhealer Tbbeta` + engine on), `tb logout Tbbeta` (master first: `BotMgr: the master of ... is away: the bot stays and waits 300 s`, `brain: none (detached)`, `master away, 291 s left`; `tb login Tbbeta` 14 s later:
+`the master ... is back: the bot follows again` for both bots, `joined the party of Tbbeta`), engine off for both bots 2 s into a fight and on again. No `ASSERT`, `Segmentation` or `SIGSEGV`, `Inferior 1 exited normally`.
+
+### n. 20 minutes idle with three engines: PASS (boot 1)
+Tbalpha, Tbhealer, Tbpriest on the engine, master Tbbeta (4 bot sessions), one `tb perf` + three `tb where` per minute for 20 minutes (`nrun.sh`, 21:32:28-21:52): `perf: ~52,000 ticks a minute; world update time avg 1.11-1.13 ms, worst 6-171 ms (a server-wide worst, mostly 6-10);
+module (sessions + engines) avg 36-38 us (81 us in the first minute: the config load), worst 1-5.9 ms`; every minute all three `brain: engine`, `state: Non Combat`; errors (`ERROR`, `BOT PATH BUG`, `ASSERT`, `Segmentation`) 0; new `slice: missing` lines 0 (the 61 of the first minutes stay the same set). Limit: avg under 50 us: met (37 us).
