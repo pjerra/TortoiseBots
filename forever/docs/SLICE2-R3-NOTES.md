@@ -59,10 +59,10 @@ No behaviour change on Turtle (every T side is the original expression).
 
 `forever/tools/slice_gen_context.py` gains `SLICE2_KEYS` (the 69 keys of `SLICE2-KEYS.md`: 5 strategies, 12 actions, 26 triggers, 26 values) on top of slice 1's lists; three more full-build context
 classes (`ChatActionContext` for `use`, `WorldPacketActionContext` for `store loot`, `WorldPacketTriggerContext` for `loot response`) have a local twin. Result: `slice: registered 8/23/56/166`
-(slice 1 was 3/10/27/139: the new keys add 5/12/26/26 and one key had been counted twice nowhere: 3+5, 10+12+1, 27+26+3, 139+26+1 are the generator's own counts; the generator prints them). `--check`: up to date.
+(slice 1 was 3/10/27/139; the generator's own count: 8 strategies, 23 actions, 56 triggers, 166 values = the 69 new keys plus the slice-1 lists, slice 1's lists already holding `formation station`, `master target active`, `out of free move range` and `move style` from R8). `--check`: up to date.
 `slice_registry_check.py`: (a) = 0; it now reads `SLICE2.txt` and counts the priest context as registered; (b) lists 234 unregistered keys, of which no value is read as a type the stand-in lacks.
 
-`default` (WorldPacketHandlerStrategy) is registered; of its triggers only `often` (slice 1 had it), `timer`... and the two this slice needs, `loot response` -> `store loot`, resolve. Every other trigger/action it
+`default` (WorldPacketHandlerStrategy) is registered; of what it names only `often` (slice 1 had it) and the pair this slice needs, trigger `loot response` -> action `store loot`, resolve. Every other trigger/action it
 names (`group invite`, `accept invitation`, `trade status`, `taxi`, `levelup`, `xpgain`, `summon request`, ..., 59 names, the first package's list) is left unregistered: the engine skips a missing trigger or action and
 the guard logs `slice: missing ...` once per name. Reason for all of them: a packet-driven feature that is not in this slice (party invitations, trade, taxi, ready check, petitions, area triggers, XP and honor, resurrection, mount state, mail, guild).
 Not registered either, by reason: loot rolls (`loot roll`, `auto loot roll`, `log roll won`, `loot roll won`: rolls time out on F), gathering and destroying (`add gathering loot`, `reveal gathering item`, `smart destroy item`, `destroy all gray`),
@@ -78,3 +78,41 @@ reaction `discipline`; `GetPlayerRoles`: healer for a priest (the slice reads no
 ## 6. CMake
 
 The option keeps its name `TORTOISEBOTS_SLICE1` (also the macro of the host code and the build scripts) and reads `forever/SLICE2.txt` (160 files: `SLICE1.txt` plus the 27 files plus the generated registry's slot).
+
+## 7. Link (option ON, slot 1)
+
+Build: `FOREVER_SLOT=1 FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1 ~/forever-build/build.sh 12 worldserver`. One optional variable was added to the VM's `build.sh` (backup `build.sh.bak-r3-20261118`): `FOREVER_NINJA_EXTRA` (extra ninja arguments; `-k 0` keeps compiling after the first error, so one pass lists every failure).
+
+| Pass | Result |
+|---|---|
+| 1 (after the merge, A2, registry, host commands) | compile: 1 file failed, the generated registry: `MaintenanceValues.h` (header-only value classes: nothing in the census includes a header that has no `.cpp`, so these four places were invisible to it): `SPELL_ID_PASSIVE_RESURRECTION_SICKNESS`, `Player::GetPowerPercent`, `Player::GetAngle` x2. Fixed: `GetPowerPercent` joins the name macros of the shim (`GetPowerPct`), `GetAngle` -> `GetAngleCompat(master, bot)` (existing pair), the spell id constant 15007 in `TbCompat_Names.h` (T: SharedDefines.h:1342; the number is read back by `.tb spell 15007` in the boot, section 10) |
+| 2 | every object compiled; **link: 25 undefined functions and 10 vtables** |
+| 3 | `worldserver` linked, `MAKE_RC=0` |
+
+### 7.1 The 10 vtables: routed (rule a), 8 call sites in 3 files
+
+`LootObjectStack.cpp:276,519`, `LootAction.cpp:312`, `LootValues.cpp:157,184,205,259,269` read the global value context (`GAI_VALUE`, `GAI_VALUE2`), whose singleton builds `SharedValueContext`, whose creators name the vendor, travel, trainer, quest,
+mount and PvP value classes (not in the slice): ten vtables. The sites now use `GAI_VALUE_COMPAT` / `GAI_VALUE2_COMPAT` (`ai/cmangos-compat-s2v.h`: the same macros, expanded at the site; `TbCompat_V2.h`: `SharedValueUnportedCompat<T>` counted under `loot tables (drop maps)`).
+Absent answer: the shared value does not exist. Value: `T{}` (nullptr for a `DropMap*`, an empty list). Effect: every caller already tests for null or iterates a list (V2's notes section 3): no drop is known, no upgrade chased, the game object paths are not reached (LESS).
+
+### 7.2 The 15 stand-ins added (rule c, "answers the value the caller already treats as not there"; each is counted; polarity per row), and the 7 removed
+
+Added in `forever/src/slice/SliceLinkStubs.cpp`, each with the three statements the review rule asks for in its comment:
+
+| Symbol | Absent answer | Value | Effect at the callers | Polarity |
+|---|---|---|---|---|
+| `ScanBossTactics` | a fight with no boss row | empty fight | `PartyMemberToDispel`: `rows` empty, plain tier search | neutral (no boss rule) |
+| `CollectDispelAuras` | no dispellable aura | `out` left empty | only reached with rows: never | LESS |
+| `NearestGroupMemberYd` | "a large value when the unit has none" (header) | `float max` | only reached with rows: never; if reached a `clear` row would release the dispel | unreachable (the one value that would be MORE) |
+| `LogDispelPick`, `LogDispelExcluded` | nothing to log | no-op | one events row not written | neutral |
+| `BossRowProtectionPotion` | no spread row names a potion | `kNoProtectionPotion` (item 0) | UseItemAction.cpp:1171: no potion chosen | LESS |
+| `WorldBuffAction::NeedWorldBuffs` | the unit needs no world buff | empty list | `need world buff` trigger never active (key not registered either) | LESS |
+| `TellLosAction::ParseLosModifiers`, `GoGuidListToObjList`, `FilterGameObjects` | no game object matches | empty vector / lists | `use gos ...` finds no target; game object use is refused on F anyway | LESS |
+| `ItemUsageValue::IsNeededForQuest` | no quest needs the item | false | corpse-refusal debug facts; game object branch unreachable | LESS |
+| `ItemUsageValue::IsFutureUpgrade` | not an upgrade | false | `LootStrategyValue::CanLoot` does not wait for an upgrade | LESS |
+| `ItemUsageValue::QueryItemUsageForEquip` | no equip use | `ITEM_USAGE_NONE` | `HasUpgradeValue` (not registered): no upgrade | LESS |
+| `ItemUsageValue::GetRecipeSpell` | teaches no recipe | 0 | `UseRandomRecipe` finds nothing | LESS |
+| `GuildOrderSkinMobFor` | no guild order wants a skin from this mob | false | a corpse with nothing else to take is not kept in the stack | LESS |
+
+Host services (rule c, `forever/src/host/`): none needed. Files added to the slice (rule b): none. New unported row: `item usage` (the four `ItemUsageValue` stand-ins).
+Removed: the seven `LootObject` / `LootObjectStack` stand-ins of slice 1 (`SliceLinkStubs.cpp`, former lines 310-317) and their row `loot object stack`, because `LootObjectStack.cpp` is real now.
