@@ -132,6 +132,13 @@ talent spec tables 15, quest packets 11, group packets 9, trade 8, travel 3, oth
 * The AhBot fix touches a shared file; the values are identical on T (16 / 7). The Turtle gates below prove it compiles and the tests pass, not that nothing else reads those tables on F.
 * Other core constants used to size tables (`MAX_RACES`, `MAX_CLASSES` ...) were checked for the same trap only by grep: the arrays are sized by the same macros as their loops.
 
-## 8. Gates (final commit)
+## 8. Gates
 
-See the report: the OFF build, the ON build, the census (131 files, 0), `policy-tests.sh`, Turtle `vm-build` and `vm-test tb`.
+| Gate | Result |
+|---|---|
+| Option OFF module build: `FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=OFF ~/forever-build/build.sh 12 tortoisebots` | `CMAKE_RC=0 MAKE_RC=0`; the build graph has 9 module objects, none from `ai/`, `host/TbHost*` or `slice/` (`grep -c` on `build.ninja` = 0); cache left at OFF |
+| Option ON `worldserver` (final code) | `CMAKE_RC=0 MAKE_RC=0` |
+| Slice census `FOREVER_CENSUS_LIST=forever/SLICE1.txt forever/tools/vm-census.sh "" 14` | `files 131  compile clean 131  with errors 0  error places 0` |
+| Turtle `vm-build ~/wt-slice-integ --wait` at `2c11845b2` (later commits: notes only) | `COMPILE_SECONDS=2198 CMAKE_RC=0 MAKE_RC=0`, `QUEUE_RC=0` |
+| Turtle `vm-test tb ~/wt-slice-integ` | `VM-TEST-EXIT 0` |
+| `policy-tests.sh` (tree synced to `forever-build/tb`) | 472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL: the same set as the baseline in SHIM-R3-NOTES.md (`test_combat_monitor_service`, `_race`, `test_decision_capture_files`, `test_run_trace_writer`, `test_decision_capture_codec`, `test_log_file_rotation`) |
