@@ -45,6 +45,7 @@ For the third kind, the differences between the cores are closed in this order, 
 | Server links | `forever-build/build.sh 12 "worldserver bnetserver"` | ~8 min warm |
 | Core-free tests on the ForeverCore toolchain | `forever-build/policy-tests.sh` | ~3 min |
 | Turtle build still compiles | `vm-build <worktree> --wait` | as today |
+| Live boot | `rsync -aL --delete --exclude .git --exclude 'src/modules/TortoiseBots/.git' ~/ForeverCore/ yulon-ubuntu2:forever-build/src/`, `forever-build/build.sh 12 worldserver`, `forever-run/setup.sh && world.sh start`, then poll `logs/world.out` (15 s, 3 min) for `ready...`, no `ASSERTION FAILED` and the item mirrors line, and drive `world.sh cmd "tb item <entry>"`; stop with `world.sh stop`. A build gate does not prove the module starts. | ~5 min |
 | What is left | `forever/tools/port_census.py` | ~1 h |
 
 A ported file is added to `forever/PORTED.txt`; the root `CMakeLists.txt` compiles the files in that list. The census

@@ -120,6 +120,9 @@ struct ItemPrototype
     uint32 BagFamily;                                       // T :480 BAG_FAMILY_* number            F the core mask, converted (TbItemPrototype.cpp)
     uint32 BagFamilyMask;                                   // diagnostic: the core's mask before the conversion
 
+    bool        Incomplete;                                 // true when a client table the core reads had no row for this item
+    std::string IncompleteReason;                           // which table and key are missing; the field it feeds stays 0
+
     // The old struct's helpers, same answers from the fields above (cmangos ItemPrototype.h:497-545).
     bool CanChangeEquipStateInCombat() const;
     uint32 GetMaxStackSize() const { return Stackable; }

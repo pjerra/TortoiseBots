@@ -293,15 +293,90 @@ held, a mirror is only as fresh as the item store it was filled from.
 `.tb item <entry>` (console) prints the mirror's filled fields for one item in three lines: name, class/subclass,
 quality, inventory type, item level, required level, buy/sell price, bag family (converted number and the core mask),
 armor, block as `Block (base + stat, not added)`, damage min-max and delay, the stat mods, the spell slots, bonding, max
-stack and durability. Read-only, no config change.
+stack and durability; an item whose damage or armor row this client's data does not have gets a fourth line,
+`INCOMPLETE: <table and key>`. Read-only, no config change.
+
+## Live boot: a damage table row the fill must not ask for (FOREVER-SHIM-R2-FIX2)
+
+The round-2 eager fill aborted the first live boot: `DB2Store.h:85 AssertEntry ... LookupEntry(298)` after "World
+initialized in 0 minutes 41 seconds". `ItemTemplate::GetDamage` (ItemTemplate.cpp:260) goes through `GetDPS`
+(:207-257), which indexes the client's damage table for the item level with `AssertEntry`; this client's
+`ItemDamageOneHand`/`OneHandCaster`/`TwoHand`/`TwoHandCaster` rows stop at ID 100 (`ItemDamageAmmo` at 1000) while the
+item store goes to item level 298. The lazy path only ever met levels that had rows; the one-time fill meets every
+item. An assertion cannot be caught, so every accessor the fill calls was read for asserts, aborts, unchecked pointers
+and unbounded indexes, and the ones that depend on item data are pre-checked with the same lookup the core does:
+
+| core call the fill makes | what it can do | pre-check in `Fill` |
+|---|---|---|
+| `sItemDamageAmmoStore.AssertEntry(itemLevel)` (ItemTemplate.cpp:217) | abort when the row is missing | all five stores (`Ammo` :217, `TwoHandCaster` :221/:237, `TwoHand` :223/:239, `OneHandCaster` :231/:249, `OneHand` :251) are checked with `LookupEntry(itemLevel)` before `GetDamage`, and only for an item `GetDPS` would index (weapon, quality not past artifact with heirloom read as rare, handled inventory type). Checking all five instead of copying `GetDPS`'s choice of store is stricter, never looser |
+| `GetArmor` (`ItemArmorQuality`/`ItemArmorTotal` :156-157, `ArmorLocation` :165, `ItemArmorShield` :200) | no abort (`LookupEntry`), but a missing row is a silent 0 that reads as the item's armor | the same rows are looked up first: shield subclass -> `ItemArmorShield`; cloth..plate -> `ItemArmorQuality`, `ItemArmorTotal`, `ArmorLocation` (robe maps to chest as the core does). A missing row leaves `Armor` 0 and marks the mirror incomplete |
+| `GetStatModifierBonusStat` / `GetStatPercentEditor`, `ASSERT(index < MAX_ITEM_PROTO_STATS)` (ItemTemplate.h:893-894) | abort on an index >= 10 | the loop bound is `MAX_ITEM_PROTO_STATS` (10, DBCEnums.h:1215) |
+| `GetArea(0)`, `ASSERT(index < MAX_ITEM_PROTO_ZONES)` (ItemTemplate.h:910) | abort on an index >= 2 | the literal 0 |
+| `GetRandomPropertyPoints` (ItemEnchantmentMgr.cpp:107-180) | none: `sRandPropPointsStore.LookupEntry` is null-checked, the quality and slot switches are enumerated, the `[5]` arrays are indexed by an enumerated 0..4 | none needed; a missing row returns 0, exactly what `Item::GetItemStatValue` returns |
+| `BasicData` / `ExtendedData` (ItemTemplate.h:870-913) | null pointer if an item row had no sparse row | the store is built only from `ItemSparse` rows whose `Item` row exists (ObjectMgr.cpp:3650-3663) |
+| `Effects` + `LegacySlotIndex` | null pointer, slot out of range | the existing `!effect` and `< MAX_ITEM_PROTO_SPELLS` checks |
+
+An item that fails a pre-check is not skipped and no value is invented: every field that can be read is filled (item
+284846 keeps its item level, delay, durability and stat mods), `Damage`/`Armor` stay 0, and `Incomplete` +
+`IncompleteReason` on the mirror say which table and key are missing. `FillAll` counts them and logs one line with the
+first ten; `.tb item <entry>` prints `INCOMPLETE: <reason>`. The lazy pre-fill path calls the same `Fill`, so the checks
+cover both.
+
+Live evidence (gate G5 below): `26054 items in 35 ms, 0 with a Stackable column <= 0 or INT_MAX, 379 incomplete`, the
+first ten being weapons at item level 298 (and 277951 at 259) with no `ItemDamage*` row for the level. The armor side
+fires too: a level-298 plate pauldron (270816) is incomplete with no `ItemArmorQuality`/`ItemArmorTotal` row and keeps
+its stats, while a level-90 shield (23043) is complete and prints `block 66 (base 66 + stat 21, not added)`. The five
+command outputs and the fill line are quoted below.
+
+### Live output (G5)
+
+```
+TortoiseBots: item mirrors filled: 26054 items in 35 ms, 0 with a Stackable column <= 0 or INT_MAX, 379 incomplete: 284846 (no row for item level 298 in ItemDamageOneHand, ItemDamageOneHandCaster, ItemDamageTwoHand, ItemDamageTwoHandCaster); 277951 (no row for item level 259 in ItemDamageOneHand, ItemDamageOneHandCaster, ItemDamageTwoHand, ItemDamageTwoHandCaster); 270839 (no row for item level 298 in ItemDamageOneHand, ItemDamageOneHandCaster, ItemDamageTwoHand, ItemDamageTwoHandCaster); 270838 (no row for item level 298 in ItemDamageOneHand, ItemDamageOneHandCaster, ItemDamageTwoHand, ItemDamageTwoHandCaster); 270837 (no row for item level 298 in ItemDamageOneHand, ItemDamageOneHandCaster, ItemDamageTwoHand, ItemDamageTwoHandCaster); 270836 (no row for item level 298 in ItemDamageOneHand, ItemDamageOneHandCaster, ItemDamageTwoHand, ItemDamageTwoHandCaster); 270835 (no row for item level 298 in ItemDamageOneHand, ItemDamageOneHandCaster, ItemDamageTwoHand, ItemDamageTwoHandCaster); 270834 (no row for item level 298 in ItemDamageOneHand, ItemDamageOneHandCaster, ItemDamageTwoHand, ItemDamageTwoHandCaster); 270833 (no row for item level 298 in ItemDamageOneHand, ItemDamageOneHandCaster, ItemDamageTwoHand, ItemDamageTwoHandCaster); 270832 (no row for item level 298 in ItemDamageOneHand, ItemDamageOneHandCaster, ItemDamageTwoHand, ItemDamageTwoHandCaster).
+TortoiseBots (ForeverCore port, spike): enabled
+TrinityCore rev. unknown 1970-01-01 00:00:00 +0000 (Archived branch) (Linux, x86_64, Release, Static) (worldserver-daemon) ready...
+```
+
+```
+tc> tb item 19019
+TortoiseBots: item 19019 "Thunderfury, Blessed Blade of the Windseeker": class 2/7, quality 5, inventory 13, item level 80, required level 60, buy 1276777 sell 255355, bag family 0 (mask 0x0).
+TortoiseBots: armor 0, block 0 (base 0 + stat 0, not added), damage 82.3-153.0 type 0, delay 1900, bonding 1, max stack 1, durability 125.
+TortoiseBots: stats 3:5, 7:8, 51:8, 55:9; spells 21992 (trigger 2, charges 0); resistances 0/8/9/0/0/0.
+
+tc> tb item 25
+TortoiseBots: item 25 "Worn Shortsword": class 2/7, quality 1, inventory 21, item level 2, required level 1, buy 35 sell 7, bag family 0 (mask 0x0).
+TortoiseBots: armor 0, block 0 (base 0 + stat 0, not added), damage 1.4-3.0 type 0, delay 1900, bonding 0, max stack 1, durability 20.
+TortoiseBots: stats none; spells none; resistances 0/0/0/0/0/0.
+
+tc> tb item 12940
+TortoiseBots: item 12940 "Dal'Rend's Sacred Charge": class 2/7, quality 3, inventory 21, item level 63, required level 58, buy 274063 sell 54812, bag family 0 (mask 0x0).
+TortoiseBots: armor 0, block 0 (base 0 + stat 0, not added), damage 81.3-151.0 type 0, delay 2800, bonding 1, max stack 1, durability 90.
+TortoiseBots: stats 4:4, 32:14; spells none; resistances 0/0/0/0/0/0.
+
+tc> tb item 284846
+TortoiseBots: INCOMPLETE: no row for item level 298 in ItemDamageOneHand, ItemDamageOneHandCaster, ItemDamageTwoHand, ItemDamageTwoHandCaster
+TortoiseBots: item 284846 "Venomous Gladiator's Smasher": class 2/5, quality 4, inventory 17, item level 298, required level 90, buy 5466014 sell 1093202, bag family 0 (mask 0x0).
+TortoiseBots: armor 0, block 0 (base 0 + stat 0, not added), damage 0.0-0.0 type 0, delay 3600, bonding 1, max stack 1, durability 120.
+TortoiseBots: stats 4:217, 7:325, 40:187, 32:101; spells none; resistances 0/0/0/0/0/0.
+
+tc> tb item 23043
+TortoiseBots: item 23043 "The Face of Death": class 4/6, quality 4, inventory 14, item level 90, required level 60, buy 874054 sell 174810, bag family 0 (mask 0x0).
+TortoiseBots: armor 3354, block 66 (base 66 + stat 21, not added), damage 0.0-0.0 type 0, delay 0, bonding 1, max stack 1, durability 120.
+TortoiseBots: stats 7:21, 50:140, 15:15, 48:21; spells none; resistances 0/0/0/0/0/0.
+
+tc> tb item 270816
+TortoiseBots: INCOMPLETE: no ItemArmorQuality row for item level 298; no ItemArmorTotal row for item level 298
+TortoiseBots: item 270816 "Venomous Gladiator's Plate Pauldrons": class 4/4, quality 4, inventory 3, item level 298, required level 90, buy 2295106 sell 459021, bag family 0 (mask 0x0).
+TortoiseBots: armor 0, block 0 (base 0 + stat 0, not added), damage 0.0-0.0 type 0, delay 0, bonding 1, max stack 1, durability 100.
+TortoiseBots: stats 74:166, 7:249, 40:147, 36:74; spells none; resistances 0/0/0/0/0/0.
+```
+
 
 ## Gates
 
 | Gate | Command | Result |
 |---|---|---|
-| G1 module compiles on ForeverCore | `forever-build/build.sh 12 worldserver` | `MAKE_RC=0`: `TbItemPrototype.cpp` and `TbScripts.cpp` compiled, `libtortoisebots.a` and `bin/Release/bin/worldserver` linked (17 s, warm ccache; the script then exits 1 because its closing `grep for error:` finds nothing) |
-| G2 Turtle build | `vm-build ~/wt-forever-port --wait` | `MAKE_RC=0`, rc=0 at `27031a26c-dirty` (compile 8 s, 6 module files changed against the run at `b7d20355a`; the 98-file run that first carried the rewrite was also `MAKE_RC=0`) |
-| G3 Turtle unit tests | `vm-test tb ~/wt-forever-port` (the whole `tools/verify_all.sh`: OKF, surface, wiring, unit tests, standalone policy tests, decision trail) | `RESULT: PASS`, rc=0, 875 s at `27031a26c` (dirty=2: these docs). The first run failed the four wiring assertions that pinned the old `IsMoving()`/`GetItemPrototype()` spelling; after the harness and assertion updates above, 2,656 tests pass (61 skipped) |
-| subset census `ai/playerbot/strategy` | `vm-census.sh ai/playerbot/strategy 14` | fix round: 6,609 places in 396 files, 2 clean (was 6,778 in 398); `GetItemPrototype` and `IsMoving` are gone from `names.tsv`, and no error names either new helper |
-| full census | `vm-census.sh "" 14` | fix round: 11,938 places in 531 files, 11 clean (was 12,182 in 533) |
-| G4 core-free tests, ForeverCore toolchain | `policy-tests.sh` | fix round: 472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL in 175 s - the same set as the BEFORE commit 233e35a0c (checked out to `tb2` and run the same way in round 2). COMPILE_FAIL: `test_combat_monitor_service`, `test_combat_monitor_service_race`, `test_decision_capture_files`, `test_run_trace_writer`; RUN_FAIL: `test_decision_capture_codec` (its `perTick < 2000 us` budget on this VM; the suite's wrapper sets `TB_RELAX_TIMING=1` for that reason) and `test_log_file_rotation` (no argument). Nothing got worse |
+| G1 module compiles on ForeverCore | `forever-build/build.sh 12 worldserver` | `CMAKE_RC=0`, `MAKE_RC=0`, `TOTAL_SECONDS=9` on the final tree: the module object for `TbItemPrototype.cpp` and the relinked `worldserver` were written (01:16 run: `worldserver` 55,377,688 bytes at 01:16:31); the `TbItemPrototype.cpp`/`TbScripts.cpp` changes are in it |
+| G5 live boot | rsync core + module to `forever-build/src`, `build.sh 12 worldserver`, `forever-run/setup.sh && world.sh start`, poll `world.out` 15 s up to 3 min for `ready...`, `ASSERTION FAILED` = 0 and the mirrors line, then `tb item` on the console; `world.sh stop` | PASS: `ready...` at poll 5 (76 s), `grep -c "ASSERTION FAILED"` = 0, `grep -c "ready\.\.\."` = 1, `grep -c "mirrors filled"` = 1; the 379-incomplete line and the `tb item` outputs above; server stopped and `forever-world` removed |
+| G2 Turtle build | `vm-build ~/wt-forever-port --wait` | `MAKE_RC=0`, `QUEUE_RC=0`, `COMPILE_SECONDS=11`, `TOTAL_SECONDS=13`, module files changed/added/removed: 5, job `1-1794961287780864682-1365186` rc=0 slot 0 |
+| G3 Turtle unit tests | `vm-test tb ~/wt-forever-port` (the whole `tools/verify_all.sh`: OKF, surface, wiring, unit tests, standalone policy tests, decision trail) | `RESULT: PASS`, rc=0, `vm_duration=875s`, `sha=553e3be72 dirty=5 files=3529`; `Ran 2656 tests in 309.342s`, `OK (skipped=61)`, engine unit tests passed |
+| G4 core-free tests, ForeverCore toolchain | `policy-tests.sh` on the tree under test (worktree synced to `~/forever-build/tb`) | 472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL in 113 s - the same set as the BEFORE commit and fix round 1: `test_combat_monitor_service`, `test_combat_monitor_service_race`, `test_decision_capture_files`, `test_run_trace_writer`; `test_decision_capture_codec` and `test_log_file_rotation`. Nothing got worse |

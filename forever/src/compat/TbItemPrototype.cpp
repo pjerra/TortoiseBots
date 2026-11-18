@@ -3,6 +3,7 @@
 // Every value is the core's own answer for the same fact; nothing is defaulted to make a field look present. Where an old
 // column has no core counterpart the field is not in the struct at all (SHIM-R2-NOTES.md lists those and their uses).
 #include "TbItemPrototype.h"
+#include "DB2Stores.h"
 #include "Item.h"
 #include "ItemEnchantmentMgr.h"
 #include "Log.h"
@@ -118,6 +119,106 @@ uint32 BagFamilyNumber(uint32 mask, uint32 itemClass)
     return 0;
 }
 
+// ItemTemplate::GetDPS (ItemTemplate.cpp:207-257) indexes one of five client damage tables with AssertEntry(itemLevel): a
+// row the client data does not have aborts the server, and the eager fill would meet it for every weapon in the store.
+// This is GetDPS's own early return (not a weapon, quality past artifact with heirloom read as rare, an inventory type it
+// does not handle), so the fill only checks the tables where the core would actually read one.
+bool DamageUsesStores(ItemTemplate const* tpl)
+{
+    uint32 quality = tpl->GetQuality();
+    if (quality == ITEM_QUALITY_HEIRLOOM)
+        quality = ITEM_QUALITY_RARE;
+    if (tpl->GetClass() != ITEM_CLASS_WEAPON || quality > ITEM_QUALITY_ARTIFACT)
+        return false;
+
+    switch (tpl->GetInventoryType())
+    {
+        case INVTYPE_AMMO:
+        case INVTYPE_2HWEAPON:
+        case INVTYPE_RANGED:
+        case INVTYPE_THROWN:
+        case INVTYPE_RANGEDRIGHT:
+        case INVTYPE_WEAPON:
+        case INVTYPE_WEAPONMAINHAND:
+        case INVTYPE_WEAPONOFFHAND:
+            return true;
+        default:
+            return false;
+    }
+}
+
+// GetDPS picks one of the five stores by inventory type and caster flag. Checking all five keeps that branch out of the
+// mirror; a missing row anywhere means this client cannot answer for the item level, and it is stricter, never looser.
+std::string MissingDamageReason(uint32 itemLevel)
+{
+    struct Store { char const* Name; bool Present; };
+    Store const stores[] =
+    {
+        { "ItemDamageAmmo",            sItemDamageAmmoStore.LookupEntry(itemLevel) != nullptr },
+        { "ItemDamageOneHand",         sItemDamageOneHandStore.LookupEntry(itemLevel) != nullptr },
+        { "ItemDamageOneHandCaster",   sItemDamageOneHandCasterStore.LookupEntry(itemLevel) != nullptr },
+        { "ItemDamageTwoHand",         sItemDamageTwoHandStore.LookupEntry(itemLevel) != nullptr },
+        { "ItemDamageTwoHandCaster",   sItemDamageTwoHandCasterStore.LookupEntry(itemLevel) != nullptr },
+    };
+
+    std::string missing;
+    for (Store const& store : stores)
+    {
+        if (store.Present)
+            continue;
+        if (!missing.empty())
+            missing += ", ";
+        missing += store.Name;
+    }
+    return missing.empty() ? std::string() : "no row for item level " + std::to_string(itemLevel) + " in " + missing;
+}
+
+// ItemTemplate::GetArmor (ItemTemplate.cpp:147-204) reads ItemArmorQuality + ItemArmorTotal + ArmorLocation for armor with
+// a cloth..plate subclass, and ItemArmorShield for shields. Those are LookupEntry calls, so a missing row is a silent 0,
+// not an abort; the mirror marks the item so 0 is not read as the item's armor. GetArmor returns before any table for a
+// quality past artifact, and for a non-armor item or an armor subclass outside cloth..plate (not a shield) its answer is 0
+// with no table that could have answered otherwise.
+bool ArmorUsesStores(ItemTemplate const* tpl, bool& shield)
+{
+    shield = false;
+    if (tpl->GetQuality() > ITEM_QUALITY_ARTIFACT || tpl->GetClass() != ITEM_CLASS_ARMOR)
+        return false;
+
+    uint32 const subClass = tpl->GetSubClass();
+    if (subClass == ITEM_SUBCLASS_ARMOR_SHIELD)
+    {
+        shield = true;
+        return true;
+    }
+    return subClass >= ITEM_SUBCLASS_ARMOR_CLOTH && subClass <= ITEM_SUBCLASS_ARMOR_PLATE;
+}
+
+std::string MissingArmorReason(ItemTemplate const* tpl, uint32 itemLevel, bool shield)
+{
+    if (shield)
+        return sItemArmorShieldStore.LookupEntry(itemLevel) ? std::string()
+            : "no ItemArmorShield row for item level " + std::to_string(itemLevel);
+
+    std::string reason;
+    if (!sItemArmorQualityStore.LookupEntry(itemLevel))
+        reason = "no ItemArmorQuality row for item level " + std::to_string(itemLevel);
+    if (!sItemArmorTotalStore.LookupEntry(itemLevel))
+        reason += (reason.empty() ? "" : "; ") + std::string("no ItemArmorTotal row for item level ") + std::to_string(itemLevel);
+
+    // The third lookup is keyed by inventory type, not item level (GetArmor maps INVTYPE_ROBE to INVTYPE_CHEST).
+    uint32 const inventoryType = tpl->GetInventoryType();
+    if (!sArmorLocationStore.LookupEntry(inventoryType == INVTYPE_ROBE ? INVTYPE_CHEST : inventoryType))
+        reason += (reason.empty() ? "" : "; ") + std::string("no ArmorLocation row for inventory type ") + std::to_string(inventoryType);
+    return reason;
+}
+
+void AddIncomplete(ItemPrototype& mirror, std::string const& reason)
+{
+    if (!mirror.IncompleteReason.empty())
+        mirror.IncompleteReason += "; ";
+    mirror.IncompleteReason += reason;
+}
+
 void Fill(ItemPrototype& mirror, ItemTemplate const* tpl)
 {
     mirror.Template = tpl;
@@ -156,11 +257,26 @@ void Fill(ItemPrototype& mirror, ItemTemplate const* tpl)
     mirror.RangedModRange = tpl->GetRangedModRange();
 
     uint32 const itemLevel = tpl->GetBaseItemLevel();
-    float minDamage = 0.0f;
-    float maxDamage = 0.0f;
-    tpl->GetDamage(itemLevel, minDamage, maxDamage);
-    mirror.Damage[0].DamageMin = minDamage;
-    mirror.Damage[0].DamageMax = maxDamage;
+    mirror.Incomplete = false;
+    mirror.IncompleteReason.clear();
+
+    if (DamageUsesStores(tpl))
+    {
+        std::string const missing = MissingDamageReason(itemLevel);
+        if (missing.empty())
+        {
+            float minDamage = 0.0f;
+            float maxDamage = 0.0f;
+            tpl->GetDamage(itemLevel, minDamage, maxDamage);
+            mirror.Damage[0].DamageMin = minDamage;
+            mirror.Damage[0].DamageMax = maxDamage;
+        }
+        else
+        {
+            mirror.Incomplete = true;
+            AddIncomplete(mirror, missing);
+        }
+    }
     mirror.Damage[0].DamageType = tpl->GetDamageType();
 
     // The shield's own block value is the classic column: ForeverCore keeps it in item_classic_block and adds it to the
@@ -171,7 +287,18 @@ void Fill(ItemPrototype& mirror, ItemTemplate const* tpl)
     mirror.BlockBase = sObjectMgr->GetItemClassicBlock(tpl->GetId());
     mirror.BlockStat = uint32(std::max<int32>(0, StatTotal(tpl, ITEM_MOD_BLOCK_VALUE)));
     mirror.Block = mirror.BlockBase;
-    mirror.Armor = int32(tpl->GetArmor(itemLevel));
+
+    bool shieldSubclass = false;
+    std::string armorMissing;
+    if (ArmorUsesStores(tpl, shieldSubclass))
+        armorMissing = MissingArmorReason(tpl, itemLevel, shieldSubclass);
+    if (armorMissing.empty())
+        mirror.Armor = int32(tpl->GetArmor(itemLevel));
+    else
+    {
+        mirror.Incomplete = true;
+        AddIncomplete(mirror, armorMissing);
+    }
     int32 const allSchools = StatTotal(tpl, ITEM_MOD_CLASSIC_RESISTANCE_ALL_SCHOOLS);
     // "+X to all resistances" reaches fire, nature, frost, shadow and arcane, but not holy (Player.cpp:8930-8932).
     mirror.HolyRes = StatTotal(tpl, ITEM_MOD_HOLY_RESISTANCE);
@@ -287,8 +414,28 @@ void FillAll()
     }
 
     g_filled.store(true, std::memory_order_release);
-    TC_LOG_INFO("server.loading", "TortoiseBots: item mirrors filled: {} items in {} ms, {} with a Stackable column <= 0 or INT_MAX.",
-        uint32(store.size()), GetMSTimeDiffToNow(start), stackableAnomalies);
+
+    // One line, whether or not anything is missing, so the log always says how the fill went. The first ten mirrors with a
+    // field no client table could answer are named by entry, in the store's own order.
+    uint32 incomplete = 0;
+    std::string firstIncomplete;
+    for (auto const& entry : store)
+    {
+        ItemPrototype const* mirror = Find(entry.first);
+        if (!mirror || !mirror->Incomplete)
+            continue;
+        ++incomplete;
+        if (incomplete <= 10)
+        {
+            if (!firstIncomplete.empty())
+                firstIncomplete += "; ";
+            firstIncomplete += std::to_string(mirror->ItemId) + " (" + mirror->IncompleteReason + ")";
+        }
+    }
+
+    TC_LOG_INFO("server.loading", "TortoiseBots: item mirrors filled: {} items in {} ms, {} with a Stackable column <= 0 or INT_MAX, {} incomplete: {}.",
+        uint32(store.size()), GetMSTimeDiffToNow(start), stackableAnomalies, incomplete,
+        firstIncomplete.empty() ? std::string("none") : firstIncomplete);
 }
 
 ItemPrototype const* ItemProto(uint32 entry)
