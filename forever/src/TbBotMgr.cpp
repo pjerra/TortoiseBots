@@ -281,7 +281,8 @@ void BotMgr::OnPlayerLogout(Player* player)
         DropBrain(bot);
         bot.master = ObjectGuid::Empty;
         bot.wantParty = false;
-        bot.session->RequestLogout("the master left the game");
+        if (!bot.session->LogoutRequested())   // a bot that is already on its way out (server shutdown) is not asked twice
+            bot.session->RequestLogout("the master left the game");
     }
 
     auto itr = _bots.find(leaving);
