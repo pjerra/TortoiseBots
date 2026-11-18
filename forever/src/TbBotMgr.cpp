@@ -5,11 +5,14 @@
 #include "CharacterPackets.h"
 #include "DatabaseEnv.h"
 #include "GridNotifiers.h"
+#include "Group.h"
+#include "GroupMgr.h"
 #include "GridNotifiersImpl.h"
 #include "ObjectMgr.h"
 #include "CharacterCache.h"
 #include "Config.h"
 #include "Log.h"
+#include "StringFormat.h"
 #include "Map.h"
 #include "MotionMaster.h"
 #include "ObjectAccessor.h"
@@ -68,7 +71,22 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master)
     Bot bot;
     bot.session = std::make_shared<BotSession>(accountId, std::move(accountName));
     bot.master = master;
+    bot.wantParty = !master.IsEmpty();
     bot.useEngine = _engineByDefault;
+    if (bot.wantParty)
+    {
+        // A party holds 5: the master and four bots. Count the bots that are on their way into the party as well, so five
+        // logins in a row are not all accepted just because none has joined yet.
+        uint32 members = 1;
+        if (Player* leader = ObjectAccessor::FindPlayer(master))
+            if (Group* group = leader->GetGroup())
+                members = group->GetMembersCount();
+        for (auto const& [guid, other] : _bots)
+            if (other.wantParty && other.master == master)
+                ++members;
+        if (members >= MAX_GROUP_SIZE)
+            return Trinity::StringFormat("the party of that master is full ({} members at most, raids are not in this slice)", uint32(MAX_GROUP_SIZE));
+    }
     if (!bot.session->BeginLogin(characterGuid))
         return "the login could not be started (see the server log)";
 
@@ -90,6 +108,96 @@ void BotMgr::LogoutAll(char const* reason)
 {
     for (auto& [guid, bot] : _bots)
         bot.session->RequestLogout(reason);
+}
+
+std::string BotMgr::JoinParty(Player* bot, Player* master)
+{
+    if (bot == master)
+        return "a bot cannot be its own master";
+    if (!bot->IsInWorld() || !master->IsInWorld())
+        return "both characters must be in the world";
+
+    Group* group = master->GetGroup();
+    if (group && bot->GetGroup() == group)
+        return {};                                   // already in it
+    if (bot->GetGroup() || bot->GetGroupInvite())
+        return "the bot is already in another party (use .tb ungroup first)";
+    if (master->GetGroupInvite())
+        return "the master has a pending party invite";
+    if (group)
+    {
+        if (!group->IsLeader(master->GetGUID()))
+            return "the master is not the leader of its party";
+        if (group->IsFull())
+            return Trinity::StringFormat("the party is full ({} members at most, raids are not in this slice)", uint32(MAX_GROUP_SIZE));
+    }
+
+    // The invite, as HandlePartyInviteOpcode makes it: a new group is not created or saved until the first accept.
+    if (!group)
+    {
+        group = new Group();
+        if (!group->AddLeaderInvite(master))
+        {
+            delete group;
+            return "the core refused the leader's invite";
+        }
+        if (!group->AddInvite(bot))
+        {
+            group->RemoveAllInvites();
+            delete group;
+            return "the core refused the invite";
+        }
+    }
+    else if (!group->AddInvite(bot))
+        return "the core refused the invite";
+
+    // The accept, as HandlePartyInviteResponseOpcode (Accept = true) does it.
+    group->RemoveInvite(bot);
+    if (!group->IsCreated())
+    {
+        group->RemoveInvite(master);
+        group->Create(master);
+        sGroupMgr->AddGroup(group);
+    }
+    if (!group->AddMember(bot))
+        return "the core refused to add the bot to the party";
+    group->BroadcastGroupUpdate();
+    return {};
+}
+
+std::string BotMgr::GroupWith(ObjectGuid botGuid, ObjectGuid masterGuid)
+{
+    auto itr = _bots.find(botGuid);
+    if (itr == _bots.end())
+        return "not a logged-in bot";
+    Player* bot = FindBot(botGuid);
+    Player* master = ObjectAccessor::FindPlayer(masterGuid);
+    if (!bot)
+        return "the bot is not in the world yet";
+    if (!master)
+        return "the master is not in the world";
+    std::string const error = JoinParty(bot, master);
+    if (!error.empty())
+        return error;
+    itr->second.master = masterGuid;
+    itr->second.wantParty = false;
+    return {};
+}
+
+std::string BotMgr::Ungroup(ObjectGuid botGuid)
+{
+    auto itr = _bots.find(botGuid);
+    if (itr == _bots.end())
+        return "not a logged-in bot";
+    Player* bot = FindBot(botGuid);
+    if (!bot)
+        return "the bot is not in the world";
+    if (!bot->GetGroup())
+        return "the bot is not in a party";
+    bot->RemoveFromGroup();
+    itr->second.master = ObjectGuid::Empty;
+    itr->second.wantParty = false;
+    return {};
 }
 
 std::string BotMgr::SetEngine(ObjectGuid characterGuid, bool on)
@@ -357,6 +465,22 @@ void BotMgr::Think(Bot& bot, Player* me)
         if (!ObjectAccessor::FindConnectedPlayer(bot.master))
             bot.session->RequestLogout("the master left the game");
         return;
+    }
+
+    // The hire flow's party (findings item 21): the master leads a party of its bots, so the engine's "remove bot masters not in
+    // our group" rule keeps the master of a console-driven (bot session) master. One try; a refusal logs the bot out again.
+    if (bot.wantParty)
+    {
+        bot.wantParty = false;
+        std::string const error = JoinParty(me, master);
+        if (!error.empty())
+        {
+            TC_LOG_ERROR("tortoisebots", "BotMgr: {} could not join the party of {}: {}", me->GetName(), master->GetName(), error);
+            bot.session->RequestLogout("it could not join its master's party");
+            return;
+        }
+        TC_LOG_INFO("tortoisebots", "BotMgr: {} joined the party of {} ({} member(s))", me->GetName(), master->GetName(),
+            me->GetGroup() ? me->GetGroup()->GetMembersCount() : 0u);
     }
 
     // Stand next to the master once after login, and again whenever it is on another map or far away.

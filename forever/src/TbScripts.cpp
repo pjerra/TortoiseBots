@@ -111,6 +111,8 @@ public:
         {
             { "create", HandleCreate, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "login",  HandleLogin,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "group",  HandleGroup,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "ungroup", HandleUngroup, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "logout", HandleLogout, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "cast",   HandleCast,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "go",     HandleGo,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
@@ -172,6 +174,29 @@ public:
         if (!error.empty())
             return Fail(handler, name + " not logged in: " + error + ".");
         handler->PSendSysMessage("TortoiseBots: %s is logging in.", name.c_str());
+        return true;
+    }
+
+    // .tb group <bot> <master>: two logged-in characters: the bot joins the master's party (the master leads) and takes it as its master.
+    static bool HandleGroup(ChatHandler* handler, std::string name, std::string masterName)
+    {
+        ObjectGuid const master = GuidByName(masterName);
+        if (master.IsEmpty())
+            return Fail(handler, "no character named " + masterName + ".");
+        std::string const error = BotMgr::Instance().GroupWith(GuidByName(name), master);
+        if (!error.empty())
+            return Fail(handler, name + " not grouped: " + error + ".");
+        handler->PSendSysMessage("TortoiseBots: %s joined the party of %s.", name.c_str(), masterName.c_str());
+        return true;
+    }
+
+    // .tb ungroup <bot>: the bot leaves its party and has no master afterwards.
+    static bool HandleUngroup(ChatHandler* handler, std::string name)
+    {
+        std::string const error = BotMgr::Instance().Ungroup(GuidByName(name));
+        if (!error.empty())
+            return Fail(handler, name + " not ungrouped: " + error + ".");
+        handler->PSendSysMessage("TortoiseBots: %s left its party.", name.c_str());
         return true;
     }
 

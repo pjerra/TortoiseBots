@@ -125,7 +125,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (10 of its keys)
+    // the registry of ActionContext (11 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -141,10 +141,11 @@ namespace slice
             creators["set non combat state"] = [](PlayerbotAI* ai) { return new SetNonCombatStateAction(ai); };
             creators["set dead state"] = [](PlayerbotAI* ai) { return new SetDeadStateAction(ai); };
             creators["interrupt current spell"] = [](PlayerbotAI* ai) { return new InterruptCurrentSpellAction(ai); };
+            creators["formation station"] = [](PlayerbotAI* ai) { return new FormationStationAction(ai); };
         }
     };
 
-    // the registry of TriggerContext (27 of its keys)
+    // the registry of TriggerContext (30 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -177,6 +178,9 @@ namespace slice
             creators["not dps target active"] = [](PlayerbotAI* ai) { return new NotDpsTargetActiveTrigger(ai); };
             creators["update follow"] = [](PlayerbotAI* ai) { return new UpdateFollowTrigger(ai); };
             creators["stop follow"] = [](PlayerbotAI* ai) { return new StopFollowTrigger(ai); };
+            creators["master target active"] = [](PlayerbotAI* ai) { return new MasterTargetActiveTrigger(ai); };
+            creators["out of free move range"] = [](PlayerbotAI* ai) { return new OutOfFreeMoveRangeTrigger(ai); };
+            creators["formation station"] = [](PlayerbotAI* ai) { return new FormationStationTrigger(ai); };
         }
     };
 
@@ -329,7 +333,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 3, kActions = 10, kTriggers = 27, kValues = 139;
+    constexpr unsigned kStrategies = 3, kActions = 11, kTriggers = 30, kValues = 139;
 }
 }
 

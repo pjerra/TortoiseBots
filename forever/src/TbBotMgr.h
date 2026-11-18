@@ -38,6 +38,14 @@ public:
     bool Logout(ObjectGuid characterGuid, char const* reason);
     void LogoutAll(char const* reason);
 
+    // `.tb group <bot> <master>` for two logged-in characters, and the step `Login` does with a master: puts the bot into the
+    // master's party, the master as leader, through the core's Group API (what an invite and its accept do, Handlers/GroupHandler.cpp
+    // HandlePartyInviteOpcode / HandlePartyInviteResponseOpcode, without the packets). The bot's host master becomes `master`.
+    // Empty string = done, else the reason it was refused. A party holds MAX_GROUP_SIZE (5) members, the master among them.
+    std::string GroupWith(ObjectGuid botGuid, ObjectGuid masterGuid);
+    // `.tb ungroup <bot>`: the bot leaves its party and has no master afterwards. Empty string = done, else the reason.
+    std::string Ungroup(ObjectGuid botGuid);
+
     // `.tb engine <character> on|off`: Empty string = done, else the reason it was refused.
     std::string SetEngine(ObjectGuid characterGuid, bool on);
     // Lines for `.tb where`: the first is `brain: engine` or `brain: spike`, then (engine only) state, strategies, target.
@@ -64,6 +72,7 @@ private:
         ObjectGuid chasing;          // the unit the bot was last sent after
         bool following = false;
         bool placed = false;         // moved next to the master after login
+        bool wantParty = false;      // joins the master's party once both are in the world (Login with a master)
         uint32 ownerLoadingMs = 0;   // how long the account's real session has been loading a character
         uint32 thinkMs = 0;
         bool useEngine = false;      // marked "engine": runs the real PlayerbotAI instead of the spike's follow/assist
@@ -74,6 +83,7 @@ private:
     };
 
     void Think(Bot& bot, Player* me);
+    static std::string JoinParty(Player* bot, Player* master);
     void DropBrain(Bot& bot);
 
     std::unordered_map<ObjectGuid, Bot> _bots;

@@ -24,12 +24,12 @@ OUT = chk.SLICE_CTX
 SLICE_KEYS = {
     "strategy": "dps assist, close, follow",
     "action": "melee, reach melee, follow, stop follow, dps assist, select new target, set combat state, "
-              "set non combat state, set dead state, interrupt current spell",
+              "set non combat state, set dead state, interrupt current spell, formation station",
     "trigger": "combat start, combat end, death, enemy out of melee, invalid target, in pve, in pvp, in raid fight, "
                "often, very often, random, critical health, almost full health, low health, target critical health, "
                "light rage available, medium rage available, high rage available, melee light aoe, melee medium aoe, "
                "melee high aoe, melee very high aoe, ranged light aoe, ranged medium aoe, not dps target active, "
-               "update follow, stop follow",
+               "update follow, stop follow, master target active, out of free move range, formation station",
     "value": "action useful, add hazard, and, aoe count, aoe heal, aoe position, attack target, "
              "attacker of non-tank target, attackers, attackers count, attackers targeting me, automated attack target, "
              "bag space, balance, behind, can free move, cc target, closest attacker targeting me, collision, combat, "
