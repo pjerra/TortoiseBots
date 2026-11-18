@@ -9,7 +9,7 @@ VM's clock (UTC) on 2026-11-18, taken in the same script that sent the command, 
 Cast: master **Tbbeta** (level 10 priest, a spike bot, NO engine), warrior **Tbalpha** (level 10, `.tb level` + `.tb train`: Heroic Strike, Rend, Execute, Bloodrage,
 Battle Shout), priest **Tbhealer** (level 10, `.tb level` + `.tb train`: Lesser Heal 2050/2052/2053, Smite 585, Power Word: Shield, Renew, Mind Blast, Shadow Word: Pain), all in
 one party led by Tbbeta (`.tb login <bot> Tbbeta`), engines on for both bots; for the perf and idle runs a second priest **Tbpriest** was the third engine. The place: the
-kobolds of Northshire (map 0, about -8700 -120). Boot 1 only so far (see the end).
+kobolds of Northshire (map 0, about -8700 -120). Boots used: 4 of 14 (1: the merge binary, all observations; 2: the rank and heal-estimate fixes; 3: the engine step, 20-minute run; 4: Ragefire Chasm with a temporary row).
 
 ## Step 0: slice1/integ merged
 
@@ -37,7 +37,7 @@ action log that must start the next step, sample every 0.4 s), `nrun.sh` (the 20
 
 ### b. Follow: PASS (recorded)
 `tb go Tbbeta 15 0` then 6 s: Tbhealer 3.0 yd and Tbalpha 2.7 yd from the master (`motion type: 14`); second walk (-8 -12): priest 3.9 yd, warrior 3.9 yd. A ranged kit stands where the follow rule puts it: after the long walks
-of g and j it stopped 5.8 to 5.9 yd away (the follow trigger's own range, the same value the shared code uses on Turtle).
+of g and j it stopped 5.8 to 5.9 yd away (the follow trigger's range of the shared ranged kit; not compared with a Turtle run).
 
 ### c. Heal out of combat: PASS
 `tb hurt Tbbeta 40` (VM 21:11:28): `PUSH:lesser heal on party ... src=party member medium health`, `[CAST_START] spell=Lesser Heal(2050) ... castTime=1500ms`, `[CAST_OK] result=0` at 21:11:31.559; `tb where Tbbeta` at +5 s: 224/227.
@@ -123,3 +123,71 @@ After (boot 3, same test): the reach action's lines come every 50 ms (20 a secon
 * `[CAST_FAILED_ASYNC] spell=2053 reason=71` (SPELL_FAILED_LINE_OF_SIGHT, boot 2): the heal's end-of-bar check found the master behind the hill of the kobold mine (the walk of g was run in that corner); the same check on Turtle; the test moved to open ground (-8790 -135) and g passed.
 * `.tb level` on a character that was killed by the Defias at login time left it dead (`health 0/187`): the character was already dead (two Thugs at the Vineyards spot); `revive` then `.tb hurt <c> 100`. No bug in the commands.
 * A fresh `.tb train` priest also knows retail-era spells (Mind Spike, Shadowfiend, Circle of Healing: R3 section 9.1): the core's own trainer data.
+
+## Boot 2 and 3: the same observations on the fixed binaries (evidence that the verdicts hold, and what the fixes changed)
+
+Boot 2 = binary with P1 and P2, boot 3 = with P3 as well (the final one). Priest casts are now rank 3 heals (2.5 s bar) and rank 2 Smite (2.0 s).
+
+* **c** (boot 2, `healtest`): hurt 22:13:19.179 (40 %), Power Word: Shield 19.545, `Lesser Heal(2053) castTime=2500ms` 21.047 (1.9 s after the hurt, `CAST_OK`), master 90 -> 96 -> 103 -> 227 (above 90 % at about 4.5 s); hurt to 15 %: heal start 34.364 (0.75 s), full in 3.2 s (one rank-3 heal).
+* **d** (boot 2, `dtest`): `tb attack` 22:14:54.561, `tb hurt Tbalpha 30` 22:14:55.805 (81/271): Power Word: Shield 56.170, `Lesser Heal(2053)` 57.671 (1.87 s after the hurt, inside 3 s), warrior 260/271 at the end of the bar; no heal cast in the fights where nobody was below 90 %.
+* **f** (boot 2: Smite 591 at 22:15:30.660 -> `[CAST_FAILED_ASYNC] reason=13` 32.660, next action 33.563; 22:15:41.384 -> `[SPELL_FAILURE] reason=63` 43.387, next action 43.391; 22:16:18.035 -> `reason=63` 20.037, next action 20.040. Boot 3: failures at 22:29:32.770 (13), 22:30:32.416 (13), 22:30:41.781 (63), 22:30:54.358 (13), next actions 0.90, 0.90, 0.95, 0.90 s later.
+  `.tb where Tbhealer` right after the last failure: `last spell cast: id 0, seconds since n/a` (the engine value `SpellInterrupted` cleared), after a completed cast it shows `id 2053, seconds since 9`.
+* **g** (boot 2, open ground): `[CAST_START] Lesser Heal(2053) castTime=2500ms` 22:17:42.467, `tb go Tbbeta 15 0` 22:17:42.500 (33 ms into the bar); the priest stood for the bar, the heal landed (master hp 82 -> 227 between the 0.4-s samples around 22:17:44.9), no failure line; it moved from the next sample and was 6.3 yd from the master (the follow stop distance) about 2.4 s after the bar ended: PASS (limit 6 s).
+* **h** (boots 2 and 3): hop 35 yd + hurt 30 %: `A:reach party member to heal - OK` 0.03 s after the hurt, the priest walks 35 yd, `CAST_REFUSED result=75` while it moves, `Lesser Heal(2053)` started at 22:27:36.369 (8.9 s after the hurt, after it arrived). With P3 the reach lines come every 50 ms instead of every millisecond.
+* **j** (boot 3, `jtest3`): `A:drink - OK src=high mana` at 22:28:43.036 (0.14 s after `.tb power Tbhealer mana 10`); `stand state: 1` (sitting) from the next sample, mana +14 per 0.7 s; master ordered 25 yd away 22:28:47.365: `A:follow - OK` 22:28:48.873 (1.5 s), `stand state: 0` and the priest 8.2 yd away at that sample, 6.2 yd at the end; `A:drink - OK` again 22:28:51.628 and `stand state: 1`, mana rising again. (Without water the action is `A:drink - FAILED` every second: boot 3 started with an empty bag; `.tb additem Tbhealer 159 5` fixed it.)
+* **k** (boot 3, ten more kills): Tbalpha +4 +5 +2 +3 +1 0 +5 +1 +2 +4, Tbhealer +5 +5 +5 +1 0 +3 +1 +5 +3 +3 for the same corpses, Tbbeta 0 every time (rule in the k section above).
+* **l, m**: not repeated on the final binary beyond the fights above (every fight of boots 2 and 3 had the warrior in `Combat` and back to `Non Combat`); logout orders were run in boot 1 (m), and engine off/on and the Ragefire exit in boot 4 went without a crash.
+* **n** (boot 3, 22:33:53-22:53, `nrun.sh`, 3 engines + master): module avg 8 to 11 us a minute (11 in the first minute), `perf` 52,000 world updates a minute; module worst tick 1.5-4.3 ms in 18 minutes and one 31 ms outlier; world update worst 6-23 ms (58, 113 and 681 ms in three minutes: server-wide, mostly the host's I/O); every minute all three bots `brain: engine`, `state: Non Combat`; errors 0 ('ERROR', 'BOT PATH BUG', ASSERT, Segmentation); new `slice: missing` lines 0; 61 distinct lines in total, the same 61 as in boot 1 (`diff` empty).
+* **perf** (`.tb perf`, 4 sessions, 3 engines): boot 1 binary: idle 1 min avg 36 us worst 1.3 ms, fighting 1 min avg 427 us worst 5.9 ms. Boot 3 binary: idle avg 8 us worst 2.0 ms, fighting avg 20 us worst 12.3 ms.
+
+## `slice: missing` at the end: 61 lines, a reason for each (unchanged since R3 section 9.5; the same set in boots 1 and 3)
+* 28 trigger nodes of `default` itself (packet features outside this slice, decision D6): `activate taxi`, `area trigger`, `within area trigger`, `cannot equip`, `check mount state`, `force rebuff pending`, `gossip hello`, `group invite`, `group set leader`, `guild accept`, `honorgain`, `item push result`, `levelup`, `loot roll won`, `not enough money`, `not enough reputation`, `petition offer`, `ready check finished`, `release spirit`, `revive from corpse`, `summon request`, `taxi done`, `trade status`, `trade status extended`, `uninvite`, `uninvite guid`, `use game object`, `xpgain`.
+* 7 quest triggers (`confirm quest`, `quest details`, `quest update add item`, `add kill`, `complete`, `failed`, `failed timer`: quests are not in the slice) and 7 more packet names (`loot start roll`, `loot vote`: rolls time out on this core; `party command`, `ready check`, `bg status`, `random bot update`, `inventory change failure`).
+* 6 state triggers of strategies the kit pulls in: `combat stuck`, `combat long stuck`, `feared`, `mounted`, `party member dead`, `resurrect` (stuck and fear handling, mounts and resurrection are outside the slice).
+* 5 actions: `apply oil`, `check mail`, `check mount state`, `check values`, `use lightwell` (oils, mail, mounts, a lightwell).
+* 8 values: `enemy player target`, `has enemy player targets`, `keepout set aside`, `outfit list`, `runners let go`, `unreachable entries`, `unreachable targets` (PvP, equip and dungeon-run values, none used by the kit) and `incoming heals` (an empty map = nobody else is healing this member: neutral for one healer; register `IncomingHealsValue` first when two healers play together).
+
+## `.tb unported` at the end of boot 3 (74 features; calls since start, about 35 minutes with 3 engines)
+`chat link parsing` 5,128; `boss and raid tactics` 1,602; `loot objects` 747 (58,548 before P3); `navmesh and path internals` 368; `summon-object slots` 101; `transports` 73; `bank and keyring slots` 64; `incoming: quest` 33; `incoming: group and party` 27; `incoming: trade and item errors` 24; `heal estimate` 0 (84 before P2); the rest 0 to 12. The first four are per-tick checks that reach a stand-in whose answer ("none") is the polarity the R3 table gives them; P3 cut every per-tick counter by about 50.
+
+## Observation order and verdicts (a to n)
+| | Verdict | One line |
+|---|---|---|
+| a | PASS | `slice: registered 8/23/56/167`, 0 ASSERT; `.tb spells` lists Lesser Heal 2050/2052/2053 and Smite 585/591 |
+| b | PASS (recorded) | follow 3.0 and 2.7 yd; ranged kit stops at the follow distance (5.8-6.3 yd after long walks) |
+| c | PASS | hurt 40 % -> `CAST_START Lesser Heal` in 1.9 s (first try 3 s), above 90 % within 4.5-6.5 s |
+| d | PASS | warrior hurt in a fight -> heal start 1.87 s; no heals while all above 90 % |
+| e | PASS | `Shadow Word: Pain` then `Smite` (`CAST_OK`) on the master's target in every fight |
+| f | PASS | 3 of 3 in boot 1 and 3 + 4 more later; failure at the end of the bar, next action 0.004-0.95 s, `last spell cast` id 0 |
+| g | PASS | the cast is not cancelled; the move waits for the bar; priest 6.3 yd (follow distance) 2.4 s after the cast ended |
+| h | PASS | `reach party member to heal - OK` 0.03-0.8 s after the hurt, heal when it stood (6.4-8.9 s) |
+| i | recorded | NOT_KNOWN refusals: `heal`/`greater heal` once per tick of a heal chain (371 each in 6 min of fights), none idle |
+| j | PASS | `A:drink - OK`, `stand state: 1`, mana +20/s; the master leaves: `stand state: 0` and follow in 1.5 s, drinks again |
+| k | PASS | each tapper its own copper (personal loot), the engine-less master never gets any (rule above) |
+| l | PASS | warrior assists (`Combat`, in melee) and returns to `Non Combat` + follow in every fight with the priest in the party |
+| m | PASS | bot first, master first, engine off mid-cast and mid-fight: no crash |
+| n | PASS | 20 min x 2 (boots 1 and 3), no crash, 0 errors, module avg 37 us (boot 1) and 8-11 us (boot 3, after P3) |
+
+## Ragefire Chasm (boot 4, not a gate; the three bots follow their master into a dungeon)
+Before: `tb enter Tbbeta 389` -> the core refuses (R11): `Map::PlayerCannotEnter` -> `TRANSFER_ABORT_DIFFICULTY` because `GetDownscaledMapDifficultyData(389, 1)` finds no row. Temporary row (server stopped, `docker exec forever-db mysql`): 
+`INSERT INTO hotfixes.map_difficulty (Message, ID, DifficultyID, LockID, ResetInterval, MaxPlayers, ItemContext, ItemContextPickerID, Flags, ContentTuningID, WorldStateExpressionID, MapID, VerifiedBuild) VALUES ('R4-TEST', 90000389, 1, 0, 0, 5, 0, 0, 0, 0, 0, 389, 0);` (one row; R11 needed two because it also tried Shadowfang). Then `tb enter` for Tbbeta and Tbalpha: `allowed: Map::PlayerCannotEnter has no objection`, `map 389: dungeon yes, raid no`.
+* `tele name Tbbeta RFC` (22:55:41): the master at map 389 (3.8 -14.8 -17.8); both engine bots in the same instance within 12 s, same spot, `brain: engine`, strategies switched to the instance set (`arms raid`, `discipline raid`, `offdps raid`, `buff ... raid`), `follow target: Tbbeta ... motion type: 14`. The bots do path inside the instance: after `tb attack Tbbeta` (an Earthborer 39 yd in) the warrior walked 28 yd along the corridor (`motion type: 5` chase), in melee at (-8.4 -38.7 -21.0); the priest stood at (-0.9 -23.6 -20.2), 7-16 yd behind, casting.
+* ONE trash pack (Earthborers, health 773+ each, above level 10): all three died. 22:56:04 priest `Shadow Word: Pain(594)`, 06.2 `Fade(586)`, 07.7 `Power Word: Shield(17)` on the warrior, 09.2 `Smite(591)`, 11.7 `Lesser Heal(2053)` on the warrior, five heals in all (two ended `CAST_FAILED_ASYNC reason=13` / `SPELL_FAILURE reason=63`: the target had died) and three shields; the warrior fell at 22:56:26 (271 -> 217 -> 51 -> dead in 12 s), the master (a spike bot with no engine, 227 hp, no healer cover) at about 22:56:30, the priest at 22:56:38 (`health 1/227`, last cast `SPELL_FAILURE 63`). Deaths: 3 of 3; healing done: about five rank-3 heals, which the mobs out-damaged; no crash (`0` ASSERT), no error flood. A level-10 trio is simply too weak for the first pack; the observation is that the engine works in the instance, not a balance result.
+* After: `revive`, `tele name <c> NorthshireVineyards`, `tb hop 285 210`, logout of the three, server stopped; ROW REMOVED (`delete from map_difficulty where Message='R4-TEST'`, table back at 11 rows); `groups`, `instance`, `corpse` tables 0 rows; characters' saved positions back at Northshire (-8791 -135).
+* What a real fix needs (for the data collaborator): rows in **`hotfixes.map_difficulty`** (the DB2 `MapDifficulty` data this core loads from the hotfixes database) for every 5-man dungeon map the server should open, e.g. Ragefire Chasm (`MapID` 389), Deadmines (36), Wailing Caverns (43), Shadowfang Keep (33), Stockade (34): one row each with `DifficultyID` 1 (Normal dungeon), `MaxPlayers` 5, `ResetInterval` 1 (daily; the era's own value), `LockID` (the era's `lock` row of the map; 0 = no lock was enough for the test), `ItemContext`/`ContentTuningID` as the era's data has them (0 in the test), `Flags` 0, a unique `ID` (this DB2 has IDs such as 3822, 3999, 4978, 5066 for the retail dungeons present) and a `VerifiedBuild` the server accepts (0 worked). Without the row `GetDownscaledMapDifficultyData(mapId, 1)` is null and `Map::PlayerCannotEnter` returns `TRANSFER_ABORT_DIFFICULTY` for EVERY player, bots or not (Map.cpp:1841-1843).
+
+## Gates (final commit)
+| Gate | Result |
+|---|---|
+| Option ON `worldserver` build (slot 1, `FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1 build.sh 12 worldserver`) | merge commit: `CMAKE_RC=0 MAKE_RC=0` (454 s); with P1+P2: `MAKE_RC=0`; with P3 (the final source): `CMAKE_RC=0 MAKE_RC=0 TOTAL_SECONDS=51` |
+| Option OFF module build (`-DTORTOISEBOTS_SLICE1=OFF build.sh 12 tortoisebots`) | `CMAKE_RC=0 MAKE_RC=0`; 6 objects: `TbBotMgr`, `TbBotSession`, `TbScripts`, `compat/TbItemPrototype`, `compat/TbSpellEntry`, `host/TbEngineBrain`; 0 `build.ninja` entries for `forever/src/slice`, `host/TbHost`, `ai/playerbot` |
+| Census `FOREVER_CENSUS_LIST=forever/SLICE2.txt` / `forever/SLICE1.txt` | `files 160 ... error places 0 ... headers ForeverCore does not have 0` / `files 133 ... error places 0 ... 0` (run on the final source) |
+| `slice_gen_context.py --check`, `slice_registry_check.py` | `SliceAiObjectContext.cpp is up to date`; `(a)=0  (b)=233` |
+| Turtle `vm-build` / `vm-test tb` | not run: since 97718266d the only file outside `forever/` that changed is the root `CMakeLists.txt` (6 lines, the slice-1 merge: `-DTORTOISEBOTS_DEBUG_INFO`), a ForeverCore-only file ("The Turtle build does not read it", its own header); none of the three R4 fixes touches a file the Turtle build reads (`forever/src/compat/TbSpellEntry.*`, `TbCompat_Unported.h`, `host/TbEngineBrain.cpp`, docs) |
+| The server on the build VM | stopped after every boot (`Inferior 1 exited normally`, `docker ps`: no `forever-world`); `forever-test1` not touched; the temporary Ragefire row removed; `~/forever-run/logs/bots` emptied; disk free 8 GB (never under 6.8 GB) |
+
+## What is still wrong / next
+1. The one-pack Ragefire result says nothing about balance; a real run needs the data rows above and a level-appropriate party (the next milestone). The priest stands 7-16 yd back and casts one heal at a time; with two healers `incoming heals` must be registered.
+2. The engine step of 50 ms (P3) is a host-side stand-in for Turtle's world cadence; the shared early return in `MovementAction::ChaseTo` (no delay) is still there. It costs nothing now; if the step is ever lowered, that return needs `WaitForReach`.
+3. Rank derivation (P1) is by name, family and spell level: two spells of the same name and family that are not ranks of one another (a retail-era variant at a higher level, like `Renew 425268`) are treated as ranks; the core's own `spell_ranks` chain data (the DB2 `SkillLineAbility.SupercedesSpell`) should replace it when the data collaborator has it.
+4. Not tested: a real network client as master (decision D4), `.tb` money split in a dungeon with a grouped tapper (the core's shared corpse path, read but not run), two healers in one party.
