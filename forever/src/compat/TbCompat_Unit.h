@@ -455,6 +455,11 @@ inline bool ForEachAuraOfTypeCompat(Unit const* unit, AuraType type, Fn&& fn)
     {
         if (!effect)
             continue;
+        // The mirror's per-effect arrays hold MAX_EFFECT_INDEX (3) slots and callers index them with effIndex (PossibleTargetsValue.cpp:175,
+        // MovementActions.cpp:4738); F spells can carry more effects, which the mirror does not hold (spells with more than 3 effects are
+        // counted, not mirrored: TbSpellEntry.cpp:309), so such an effect is not visited.
+        if (effect->GetEffIndex() >= MAX_EFFECT_INDEX)
+            continue;
         AuraOfTypeCompat const view{ GetSpellEntryCompat(effect->GetSpellInfo()), effect->GetEffIndex(), effect->GetCaster() };
         if (fn(view))
             return true;

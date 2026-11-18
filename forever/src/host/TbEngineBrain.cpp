@@ -147,8 +147,12 @@ Brain* Create(Player* bot, Player* master, std::string& error)
         pai->SetMaster(master);
         // The engines were built before the master was known, so saved strategies and values are applied now (:41-44).
         pai->ResetStrategies();
-        // Re-applies the movement default ("follow" for a player master) (:45-49).
-        pai->EnsureDefaultMovementStrategy();
+        // The movement mode. The adapter re-applies the default (:45-49): "follow" for a master with a network session,
+        // "wander" otherwise (GetDefaultMovementStrategy). A host master is whoever the console or the hire flow named; it is
+        // a bot session when no client drives it, and the default would then pick "wander" (a free-roaming mode the slice does
+        // not register). The host bound this master on purpose, so the bot follows it: the same strategy change the chat
+        // order "follow" makes (SetMovementStrategy("follow")).
+        pai->SetMovementStrategy("follow");
     }
     catch (std::exception const& e)
     {

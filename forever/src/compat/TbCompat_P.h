@@ -115,6 +115,10 @@ inline bool IsImmuneToSpellCompat(Unit const* target, SpellEntry const* spell, b
 inline bool IsImmuneToSpellEffectCompat(Unit const* target, SpellEntry const* spell, uint32 effectIndex, bool castOnSelf, WorldObject const* caster)
 {
     SpellInfo const* info = GetSpellInfoCompat(spell);
+    // SpellInfo::GetEffect ASSERTs index < effect count (SpellInfo.h:599) and the core's ASSERT aborts a release build; the bot asks
+    // for effects 0..2 of every spell, so a spell with fewer effects answers "not immune" (it has no such effect to be immune to).
+    if (!info || effectIndex >= info->GetEffects().size())
+        return false;
     return target->IsImmunedToSpellEffect(info, info->GetEffect(SpellEffIndex(effectIndex)), castOnSelf ? target : caster);
 }
 inline bool IsImmuneToDamageCompat(Unit const* target, SpellEntry const* spell, WorldObject const* caster)
