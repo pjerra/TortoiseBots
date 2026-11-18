@@ -186,9 +186,11 @@ inline ObjectGuid UnitTargetGuidCompat(Unit const* unit) { return unit->GetTarge
 // ---------------------------------------------------------------------------------------------------------------------
 // Threat and hostility: who threatens me, who do I threaten.
 // ---------------------------------------------------------------------------------------------------------------------
-// The unit the creature's threat list picks as its target now (null when the list has none). T ThreatManager.h:206 returns a
-// HostileReference (getTarget() is the unit), F ThreatManager.h GetCurrentVictim returns the unit.
-inline Unit* CurrentThreatVictimCompat(Unit* unit) { return unit->GetThreatManager().GetCurrentVictim(); }
+// The unit the creature's threat list has picked as its target (null when the list has none). T ThreatManager.h:206 returns the
+// stored HostileReference (getTarget() is the unit), a plain read. F's GetCurrentVictim (ThreatManager.cpp:245) re-selects the
+// victim when the stored one is gone, which writes to the creature's threat list from the engine's thread; GetLastVictim
+// (ThreatManager.cpp:253) is the same stored reference read without that write (null when it should be offline).
+inline Unit* CurrentThreatVictimCompat(Unit* unit) { return unit->GetThreatManager().GetLastVictim(); }
 // Calls fn(Unit* attacker) for each unit that has `me` on its threat list; fn returns true to stop. Returns true when there was at
 // least one such unit (T: the first HostileReference is not null; F: ThreatManager::IsThreateningAnyone counts offline entries
 // when asked, as T's reference list does).
