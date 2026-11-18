@@ -112,3 +112,7 @@ diffed file-by-file, so any row where a 70888-vs-70938 delta would matter must b
 - `core-howto/*.md` (7 files): LFG, loot and rolls, auction house, BG queue, flight paths, trainers,
   talents. Client steps and the core CMSG/SMSG handlers with `path:line` in the pinned core clone
   (`6517af05`); 1.60-specific behaviour is called out (two talent storages, classic AH runtimes, etc.).
+
+## RFC (Ragefire Chasm, level 18)
+
+`rfc/` holds the level 1-18 spell lists (warrior/priest/mage/rogue), `warrior-notes.md` (Defensive Stance 71 / Taunt 355 / Sunder Armor 7386 have no learn path as-shipped - see notes), dungeon/gear/food/bandage/trials files. Spell ids verified in the kept 70938 DB2 extraction (`~/tbots-dev/forever/db2-70938/`, `.client-build` = 70938, 1133 files); `client_build` = `70938 (db2-70938 extraction 2026-11-18)`. Gear names that ItemSparse.db2 does not carry come from TDB `armory_item` (noted per row); spell 5019 keeps its CSV annotation `Shoot (wand)` vs DB2 `Shoot`.
