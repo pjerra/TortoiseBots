@@ -181,6 +181,9 @@ def main():
     with open(os.path.join(out, "files.tsv"), "w") as f:
         for s, (rc, n) in sorted(per_file.items(), key=lambda kv: (kv[1][1], kv[0])):
             f.write(f"{n}\t{rc}\t{s}\n")
+    with open(os.path.join(out, "errors.tsv"), "w") as f:   # every place once: where, message (to read the exact errors of one file)
+        for where, msg in sorted(seen):
+            f.write(f"{where}\t{msg}\n")
     for name, counter in (("kinds.tsv", kinds), ("names.tsv", names), ("fatal.tsv", fatal), ("where.tsv", where_count)):
         with open(os.path.join(out, name), "w") as f:
             for key, n in counter.most_common():

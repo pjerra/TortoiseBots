@@ -12,12 +12,12 @@
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
 // The ForeverCore counterpart of ai/botpch.h, first, as for every legacy source (idempotent: #pragma once, and the
-// build may already have pre-included it).
+// build may already have pre-included it). It also defines the legacy `sLog`, which replaces the core's: TC_LOG_* does
+// not compile after it, so this file logs with sLog.outString/outError, as the legacy code does.
 #include "compat/botpch_forever.h"
 
 #include <memory>
 #include "ByteBuffer.h"
-#include "Log.h"
 #include "Player.h"
 #include "Unit.h"
 
@@ -139,8 +139,8 @@ Brain* Create(Player* bot, Player* master, std::string& error)
         return nullptr;
     }
 
-    TC_LOG_INFO("tortoisebots", "engine: PlayerbotAI attached for {} ({}) master {}", bot->GetName(), bot->GetGUID().ToString(),
-        master->GetName());
+    sLog.outString("TortoiseBots engine: PlayerbotAI attached for %s (%s) master %s", bot->GetName().c_str(),
+        bot->GetGUID().ToString().c_str(), master->GetName().c_str());
     return brain.release();
 }
 
@@ -158,7 +158,7 @@ void Tick(Brain* brain, uint32 diff)
     {
         // Packet actions parse opcode-specific payloads; a bad one must drop this tick, not unwind through the world
         // update (the Turtle adapter does the same, runtime/PlayerbotAIAdapter.cpp:68-76).
-        TC_LOG_ERROR("tortoisebots", "engine: dropped a malformed packet while updating bot {}", brain->bot->GetName());
+        sLog.outError("TortoiseBots engine: dropped a malformed packet while updating bot %s", brain->bot->GetName().c_str());
     }
 }
 
