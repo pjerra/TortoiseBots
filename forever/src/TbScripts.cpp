@@ -399,14 +399,18 @@ public:
         return true;
     }
 
-    // .tb train <bot>: teaches the bot, free and without an NPC, every spell its class's trainers offer at its level. The data is the core's
-    // own trainer table (ObjectMgr::GetTrainers, ObjectMgr.h:1628, loaded from its trainer and trainer_spell tables) and the core's own
-    // per-trainer rule Trainer::TeachAvailableSpellsFree (Trainer.h:94: class, race, level and prerequisite checks as at the trainer). A
-    // trainer is used when its type is a class trainer and its class mask (Trainer::GetClassMask, the classes of its spells' skill lines) holds
-    // the bot's class. The type of a class trainer in this core's data is `Trainer::Type::None` (trainer.Type 0 in the world database: all 254 class
-    // trainers incl. the priests' trainers 7 and 8); `Trainer::Type::Talent` (Type 1) is a different set of 8 trainers whose spells all need a skill line
-    // (the first boot of R3 taught nothing from them: the spec's "Talent" was a misreading of the enum). Passes repeat while one teaches something (a spell can be the prerequisite of the next).
-    // No spell id is written in this module.
+    // .tb train <bot>: teaches the bot, free and without an NPC, the class spells it may know at its level, from the core's own data, in two passes
+    // (no spell id is written in this module):
+    //  1. the class trainers: ObjectMgr::GetTrainers (ObjectMgr.h:1628, the world database's trainer and trainer_spell tables) and the core's own
+    //     per-trainer rule Trainer::TeachAvailableSpellsFree (Trainer.h:94: class, race, level and prerequisite checks as at the trainer). A trainer is
+    //     used when its type is a class trainer and its class mask (Trainer::GetClassMask) holds the bot's class. The type of a class trainer in this
+    //     core's data is `Trainer::Type::None` (trainer.Type 0: 254 of 716 trainers, the priests' trainers 7 and 8 among them); `Trainer::Type::Talent` (1)
+    //     is another set of 8 whose spells all need a skill line (the first boot of R3 taught nothing from them: the spec's "Talent" was a misreading).
+    //  2. the class skill-line abilities (sSkillLineAbilityStore, the DB2 data the core's own `.learn my trainer` reads, cs_learn.cpp:144-181): a spell of
+    //     the class's spell family (ChrClasses SpellClassSet) that fits the class and race (Player::IsSpellFitByClassAndRace), whose spell level the bot
+    //     has reached, and that is valid (SpellMgr::IsSpellValid). This gives what no trainer teaches: the spells a new character of the class starts with
+    //     (a priest's Smite and Lesser Heal are in no trainer table). The core's command has no level test; this one has (SpellInfo::SpellLevel <= level).
+    // Passes repeat while one teaches something (a spell can be the prerequisite of the next). Prints the counts and the tally of the trainer pass.
     static bool HandleTrain(ChatHandler* handler, std::string name)
     {
         if (!RequireEngine(handler))
@@ -415,7 +419,8 @@ public:
         if (!bot)
             return Fail(handler, name + " is not a logged-in bot.");
         uint32 const classMask = 1u << (bot->GetClass() - 1);
-        uint32 taught = 0, trainers = 0, passes = 0;
+        ChrClassesEntry const* classEntry = sChrClassesStore.LookupEntry(bot->GetClass());
+        uint32 trainerTaught = 0, lineTaught = 0, trainers = 0, passes = 0;
         Trainer::Trainer::FreeTeachTally tally;
         for (; passes < 8; ++passes)
         {
@@ -428,12 +433,29 @@ public:
                 ++trainers;
                 passTaught += trainer.TeachAvailableSpellsFree(bot, &tally);
             }
-            taught += passTaught;
-            if (!passTaught)
+            trainerTaught += passTaught;
+
+            uint32 lineThisPass = 0;
+            if (classEntry)
+                for (uint32 row = 0; row < sSkillLineAbilityStore.GetNumRows(); ++row)
+                {
+                    SkillLineAbilityEntry const* entry = sSkillLineAbilityStore.LookupEntry(row);
+                    if (!entry || bot->HasSpell(entry->Spell))
+                        continue;
+                    SpellInfo const* info = sSpellMgr->GetSpellInfo(entry->Spell, DIFFICULTY_NONE);
+                    if (!info || info->SpellLevel == 0 || info->SpellLevel > bot->GetLevel() || info->SpellFamilyName != classEntry->SpellClassSet)
+                        continue;
+                    if (!bot->IsSpellFitByClassAndRace(info->Id) || !SpellMgr::IsSpellValid(info, bot, false))
+                        continue;
+                    bot->LearnSpell(info->Id, false);
+                    ++lineThisPass;
+                }
+            lineTaught += lineThisPass;
+            if (!passTaught && !lineThisPass)
                 break;
         }
-        handler->PSendSysMessage("TortoiseBots: %s learned %u spell(s) from %u class trainer(s) in %u pass(es); not taught: %u known, %u other class/race, %u level, %u ability, %u skill line, %u other.",
-            name.c_str(), taught, trainers, passes + 1, tally.known, tally.class_race, tally.level, tally.ability, tally.skill_line, tally.other);
+        handler->PSendSysMessage("TortoiseBots: %s learned %u spell(s) from %u class trainer(s) and %u from the class skill lines, in %u pass(es); trainer pass not taught: %u known, %u other class/race, %u level, %u ability, %u skill line, %u other.",
+            name.c_str(), trainerTaught, trainers, lineTaught, passes + 1, tally.known, tally.class_race, tally.level, tally.ability, tally.skill_line, tally.other);
         return true;
     }
 
