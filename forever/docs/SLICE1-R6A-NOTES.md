@@ -78,10 +78,10 @@ The strategy store transactions (`ChangeStrategyAction.cpp` x3, `BeginTransactio
 `PlayerbotAIConfig.cpp:1776` keeps the Turtle behaviour of never freeing the raw result on T (the helper returns the raw pointer there; F's result is a shared pointer).
 
 ## 4. Packet tables (78 places)
-The tables and the switch of `HandleBotOutgoingPacket` are written with 1.12 opcode names. The 41 names ForeverCore does not have are numbers of a reserved block
+The tables and the switch of `HandleBotOutgoingPacket` are written with 1.12 opcode names. The 49 names ForeverCore does not have (the packet tables and cases plus the packet names of the jump, stop and ping blocks) are numbers of a reserved block
 (`0xF000 + n`, above F's `MAX_OPCODE` 0x3FFF; `LegacyOpcodeCompat` in `TbCompat_Unported.h`), so the tables and every `case` compile and can never match a real packet
 (the names F also has keep F's values: those rows are never registered either). `RegisterPacketHandlers` goes through `RegisterPacketHandlersCompat`: T registers each row; F registers
-nothing and counts each row under the group of what its handler does (13 `incoming: ...` features: loot, quest, taxi, group and party, trade and item errors, battleground status,
+nothing and counts each row under the group of what its handler does (16 `incoming: ...` features in all, 13 of them table groups: loot, quest, taxi, group and party, trade and item errors, battleground status,
 guild and petition, experience and honor, emotes, gossip/game object/area trigger, release spirit and resurrect, **cast failed**, forced speed change). `RegisterDirectPacketCasesCompat` (called once beside the three registrations) counts the four cases handled
 directly (chat message, spell failure and delay, forced speed change, knock back). The 1.12 layout reads (`ReadAsPacked`) go through `PackedGuidReadCompat` (F: false, the guid stays empty: every caller
 compares it with the bot's guid, and speed change and knock back return early). `static_assert`s comparing policy opcodes with core opcodes go through `OpcodesAgreeCompat` (F: true: no wire value to compare).
