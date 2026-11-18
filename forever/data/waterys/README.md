@@ -70,7 +70,12 @@ it with the repack extractor into a throw-away folder (same 1,133 files, same la
 70888 extraction). The extracted files carry the client's own static header `WOWSTATIC_1_60_1_70399` (the
 DB2 static-data version embedded in the 1.60 client); they were extracted from the installed 1.60.1.70938
 client, whose `.build.info` and the extractor both report 70938. `client_build` names the client, not that
-embedded string. The world/hotfixes data is the TDB release 2026-10-14, which is not tied to a client build.
+Two DB2 extractions are in play: repack `server/data/dbc` = 70888 (`70888 (repack server/data/dbc, 2026-11-11)`,
+`.client-build` marker, keys 2026-11-07) and a fresh throw-away extraction from the installed 1.60.1.70938
+client (2026-11-17, since deleted). Both are 1,133 files with the same layout hashes and the same static
+header `WOWSTATIC_1_60_1_70399`. `client_build` always names the extraction actually read
+(`70888 (repack server/data/dbc, 2026-11-11)` vs `client DB2 70938 (2026-11-17)`); the two were never
+diffed file-by-file, so any row where a 70888-vs-70938 delta would matter must be re-verified on live 70938.
 
 - Service points: NPC categories from `creature_template.npcflag` and coordinates from the first
   `creature` spawn per entry (`spawns` column has the count); flight masters matched to the nearest

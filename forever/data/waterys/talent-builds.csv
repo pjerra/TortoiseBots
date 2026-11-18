@@ -1,620 +1,620 @@
 client_build,class,spec,order,talent_id,rank,why
-70888,druid,balance,1,762,5,TB Balance 301 rank 5 -> Forever 762 (matched by spell)
-70888,druid,balance,2,763,2,TB Balance 306 rank 2 -> Forever 763 (matched by spell)
-70888,druid,balance,3,791,3,TB Balance 307 rank 3 -> Forever 791 (matched by position-custom)
-70888,druid,balance,4,790,3,TB Balance 309 rank 3 -> Forever 790 (matched by spell)
-70888,druid,balance,5,788,1,TB Balance 310 rank 1 -> Forever 788 (matched by spell)
-70888,druid,balance,6,764,2,TB Balance 311 rank 2 -> Forever 764 (matched by spell)
-70888,druid,balance,7,792,5,TB Balance 312 rank 5 -> Forever 792 (matched by spell)
-70888,druid,balance,8,783,3,TB Balance 313 rank 3 -> Forever 783 (matched by spell)
-70888,druid,balance,9,,0,"OVERLAP: TB Balance 314 shares Forever 783 (capped at 3, 3 pts freed)"
-70888,druid,balance,10,793,1,TB Balance 315 rank 1 -> Forever 793 (matched by spell)
-70888,druid,balance,11,789,1,TB Balance 316 rank 1 -> Forever 789 (matched by spell)
-70888,druid,balance,12,784,3,TB Balance 317 rank 3 -> Forever 784 (matched by spell)
-70888,druid,balance,13,,0,"OVERLAP: TB Balance 318 shares Forever 790 (capped at 5, 1 pts freed)"
-70888,druid,balance,14,790,2,TB Balance 318 rank 3 -> Forever 790 (matched by position-custom)
-70888,druid,balance,15,,0,"OVERLAP: TB Balance 319 shares Forever 790 (capped at 5, 2 pts freed)"
-70888,druid,balance,16,,0,"OVERLAP: TB Balance 320 shares Forever 793 (capped at 1, 1 pts freed)"
-70888,druid,balance,17,821,5,TB Restoration 285 rank 5 -> Forever 821 (matched by spell)
-70888,druid,balance,18,824,3,TB Restoration 287 rank 3 -> Forever 824 (matched by spell)
-70888,druid,balance,19,841,5,TB Restoration 289 rank 5 -> Forever 841 (matched by spell)
-70888,druid,balance,20,763,1,"TOP-UP +1: freed Turtle-custom points -> Forever 763 (Balance, spell)"
-70888,druid,balance,21,784,1,"TOP-UP +1: freed Turtle-custom points -> Forever 784 (Balance, spell)"
-70888,druid,balance,22,824,1,"TOP-UP +1: freed Turtle-custom points -> Forever 824 (Restoration, spell)"
-70888,druid,balance,23,791,1,"TOP-UP +1: freed Turtle-custom points -> Forever 791 (Balance, position-custom)"
-70888,druid,balance,24,763,1,"TOP-UP +1: freed Turtle-custom points -> Forever 763 (Balance, spell)"
-70888,druid,balance,25,784,1,"TOP-UP +1: freed Turtle-custom points -> Forever 784 (Balance, spell)"
-70888,druid,balance,26,824,1,"TOP-UP +1: freed Turtle-custom points -> Forever 824 (Restoration, spell)"
-70888,druid,feral,1,761,1,TB Balance 302 rank 1 -> Forever 761 (matched by spell)
-70888,druid,feral,2,921,4,TB Balance 303 rank 4 -> Forever 921 (matched by spell)
-70888,druid,feral,3,791,3,TB Balance 307 rank 3 -> Forever 791 (matched by position-custom)
-70888,druid,feral,4,781,2,TB Balance 308 rank 2 -> Forever 781 (matched by spell)
-70888,druid,feral,5,788,1,TB Balance 310 rank 1 -> Forever 788 (matched by spell)
-70888,druid,feral,6,796,5,TB Feral Combat 267 rank 5 -> Forever 796 (matched by spell)
-70888,druid,feral,7,795,5,TB Feral Combat 268 rank 5 -> Forever 795 (matched by spell)
-70888,druid,feral,8,799,3,TB Feral Combat 269 rank 3 -> Forever 799 (matched by spell)
-70888,druid,feral,9,794,3,TB Feral Combat 271 rank 3 -> Forever 794 (matched by spell)
-70888,druid,feral,10,807,2,TB Feral Combat 273 rank 2 -> Forever 807 (matched by spell)
-70888,druid,feral,11,804,1,TB Feral Combat 274 rank 1 -> Forever 804 (matched by spell)
-70888,druid,feral,12,798,3,TB Feral Combat 275 rank 3 -> Forever 798 (matched by spell)
-70888,druid,feral,13,,0,"DROP Turtle talent 276 (Feral Combat, 2 pts): no Forever counterpart (custom)"
-70888,druid,feral,14,803,3,TB Feral Combat 277 rank 3 -> Forever 803 (matched by spell)
-70888,druid,feral,15,800,2,TB Feral Combat 278 rank 2 -> Forever 800 (matched by position-custom)
-70888,druid,feral,16,805,2,TB Feral Combat 280 rank 2 -> Forever 805 (matched by position-custom)
-70888,druid,feral,17,1162,1,TB Feral Combat 281 rank 1 -> Forever 1162 (matched by position-custom)
-70888,druid,feral,18,808,5,TB Feral Combat 282 rank 5 -> Forever 808 (matched by spell)
-70888,druid,feral,19,,0,"OVERLAP: TB Feral Combat 283 shares Forever 805 (capped at 2, 2 pts freed)"
-70888,druid,feral,20,809,1,TB Feral Combat 284 rank 1 -> Forever 809 (matched by spell)
-70888,druid,feral,21,781,1,"TOP-UP +1: freed Turtle-custom points -> Forever 781 (Balance, spell)"
-70888,druid,feral,22,799,1,"TOP-UP +1: freed Turtle-custom points -> Forever 799 (Feral Combat, spell)"
-70888,druid,feral,23,794,1,"TOP-UP +1: freed Turtle-custom points -> Forever 794 (Feral Combat, spell)"
-70888,druid,feral,24,791,1,"TOP-UP +1: freed Turtle-custom points -> Forever 791 (Balance, position-custom)"
-70888,druid,restoration,1,762,5,TB Balance 301 rank 5 -> Forever 762 (matched by spell)
-70888,druid,restoration,2,,0,"DROP Turtle talent 304 (Balance, 2 pts): no Forever counterpart (custom)"
-70888,druid,restoration,3,763,1,TB Balance 306 rank 1 -> Forever 763 (matched by spell)
-70888,druid,restoration,4,791,2,TB Balance 307 rank 2 -> Forever 791 (matched by position-custom)
-70888,druid,restoration,5,821,5,TB Restoration 285 rank 5 -> Forever 821 (matched by spell)
-70888,druid,restoration,6,824,5,TB Restoration 287 rank 5 -> Forever 824 (matched by spell)
-70888,druid,restoration,7,844,1,TB Restoration 290 rank 1 -> Forever 844 (matched by spell)
-70888,druid,restoration,8,830,3,TB Restoration 291 rank 3 -> Forever 830 (matched by spell)
-70888,druid,restoration,9,829,3,TB Restoration 292 rank 3 -> Forever 829 (matched by spell)
-70888,druid,restoration,10,828,5,TB Restoration 293 rank 5 -> Forever 828 (matched by spell)
-70888,druid,restoration,11,843,5,TB Restoration 294 rank 5 -> Forever 843 (matched by spell)
-70888,druid,restoration,12,,0,"DROP Turtle talent 295 (Restoration, 2 pts): no Forever counterpart (custom)"
-70888,druid,restoration,13,831,1,TB Restoration 296 rank 1 -> Forever 831 (matched by spell)
-70888,druid,restoration,14,,0,"OVERLAP: TB Restoration 297 shares Forever 828 (capped at 5, 3 pts freed)"
-70888,druid,restoration,15,825,5,TB Restoration 298 rank 5 -> Forever 825 (matched by spell)
-70888,druid,restoration,16,842,2,TB Restoration 299 rank 2 -> Forever 842 (matched by spell)
-70888,druid,restoration,17,,0,"OVERLAP: TB Restoration 300 shares Forever 844 (capped at 1, 1 pts freed)"
-70888,druid,restoration,18,763,1,"TOP-UP +1: freed Turtle-custom points -> Forever 763 (Balance, spell)"
-70888,druid,restoration,19,791,1,"TOP-UP +1: freed Turtle-custom points -> Forever 791 (Balance, position-custom)"
-70888,druid,restoration,20,763,1,"TOP-UP +1: freed Turtle-custom points -> Forever 763 (Balance, spell)"
-70888,druid,restoration,21,791,1,"TOP-UP +1: freed Turtle-custom points -> Forever 791 (Balance, position-custom)"
-70888,druid,restoration,22,763,1,"TOP-UP +1: freed Turtle-custom points -> Forever 763 (Balance, spell)"
-70888,druid,restoration,23,791,1,"TOP-UP +1: freed Turtle-custom points -> Forever 791 (Balance, position-custom)"
-70888,druid,restoration,24,763,1,"TOP-UP +1: freed Turtle-custom points -> Forever 763 (Balance, spell)"
-70888,druid,restoration,25,,0,SHORT 1 pts: no headroom left in mapped talents
-70888,hunter,beastmastery,1,1382,5,TB Beast Mastery 373 rank 5 -> Forever 1382 (matched by spell)
-70888,hunter,beastmastery,2,1389,5,TB Beast Mastery 374 rank 5 -> Forever 1389 (matched by spell)
-70888,hunter,beastmastery,3,1395,3,TB Beast Mastery 377 rank 3 -> Forever 1395 (matched by spell)
-70888,hunter,beastmastery,4,1625,2,TB Beast Mastery 378 rank 2 -> Forever 1625 (matched by spell)
-70888,hunter,beastmastery,5,1391,1,TB Beast Mastery 380 rank 1 -> Forever 1391 (matched by position-custom)
-70888,hunter,beastmastery,6,1396,5,TB Beast Mastery 381 rank 5 -> Forever 1396 (matched by spell)
-70888,hunter,beastmastery,7,1390,2,TB Beast Mastery 382 rank 2 -> Forever 1390 (matched by spell)
-70888,hunter,beastmastery,8,1385,2,TB Beast Mastery 383 rank 2 -> Forever 1385 (matched by spell)
-70888,hunter,beastmastery,9,1393,5,TB Beast Mastery 384 rank 5 -> Forever 1393 (matched by spell)
-70888,hunter,beastmastery,10,,0,"DROP Turtle talent 385 (Beast Mastery, 3 pts): no Forever counterpart (custom)"
-70888,hunter,beastmastery,11,1386,1,TB Beast Mastery 386 rank 1 -> Forever 1386 (matched by spell)
-70888,hunter,beastmastery,12,1387,1,TB Beast Mastery 387 rank 1 -> Forever 1387 (matched by spell)
-70888,hunter,beastmastery,13,1397,2,TB Beast Mastery 388 rank 2 -> Forever 1397 (matched by row-custom)
-70888,hunter,beastmastery,14,1388,2,TB Beast Mastery 389 rank 2 -> Forever 1388 (matched by spell)
-70888,hunter,beastmastery,15,,0,"OVERLAP: TB Beast Mastery 390 shares Forever 1397 (capped at 5, 2 pts freed)"
-70888,hunter,beastmastery,16,1397,3,TB Beast Mastery 390 rank 5 -> Forever 1397 (matched by spell)
-70888,hunter,beastmastery,17,,0,"OVERLAP: TB Beast Mastery 391 shares Forever 1386 (capped at 1, 1 pts freed)"
-70888,hunter,beastmastery,18,1342,5,TB Marksmanship 413 rank 5 -> Forever 1342 (matched by spell)
-70888,hunter,beastmastery,19,1348,1,TB Marksmanship 414 rank 1 -> Forever 1348 (matched by spell)
-70888,hunter,beastmastery,20,1348,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1348 (Marksmanship, spell)"
-70888,hunter,beastmastery,21,1348,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1348 (Marksmanship, spell)"
-70888,hunter,beastmastery,22,1348,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1348 (Marksmanship, spell)"
-70888,hunter,beastmastery,23,1348,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1348 (Marksmanship, spell)"
-70888,hunter,beastmastery,24,,0,SHORT 2 pts: no headroom left in mapped talents
-70888,hunter,marksmanship,1,1382,5,TB Beast Mastery 373 rank 5 -> Forever 1382 (matched by spell)
-70888,hunter,marksmanship,2,1624,2,TB Beast Mastery 375 rank 2 -> Forever 1624 (matched by spell)
-70888,hunter,marksmanship,3,1381,2,TB Beast Mastery 376 rank 2 -> Forever 1381 (matched by spell)
-70888,hunter,marksmanship,4,1342,5,TB Marksmanship 413 rank 5 -> Forever 1342 (matched by spell)
-70888,hunter,marksmanship,5,1348,5,TB Marksmanship 414 rank 5 -> Forever 1348 (matched by spell)
-70888,hunter,marksmanship,6,1344,5,TB Marksmanship 415 rank 5 -> Forever 1344 (matched by spell)
-70888,hunter,marksmanship,7,1352,2,TB Marksmanship 416 rank 2 -> Forever 1352 (matched by spell)
-70888,hunter,marksmanship,8,1345,1,TB Marksmanship 417 rank 1 -> Forever 1345 (matched by spell)
-70888,hunter,marksmanship,9,1346,3,TB Marksmanship 418 rank 3 -> Forever 1346 (matched by spell)
-70888,hunter,marksmanship,10,,0,"DROP Turtle talent 419 (Marksmanship, 2 pts): no Forever counterpart (custom)"
-70888,hunter,marksmanship,11,1349,5,TB Marksmanship 420 rank 5 -> Forever 1349 (matched by spell)
-70888,hunter,marksmanship,12,1347,1,TB Marksmanship 422 rank 1 -> Forever 1347 (matched by position-custom)
-70888,hunter,marksmanship,13,1351,2,TB Marksmanship 423 rank 2 -> Forever 1351 (matched by position-custom)
-70888,hunter,marksmanship,14,,0,"OVERLAP: TB Marksmanship 424 shares Forever 1347 (capped at 3, 1 pts freed)"
-70888,hunter,marksmanship,15,1347,2,TB Marksmanship 424 rank 3 -> Forever 1347 (matched by spell)
-70888,hunter,marksmanship,16,1362,2,TB Marksmanship 425 rank 2 -> Forever 1362 (matched by row-custom)
-70888,hunter,marksmanship,17,,0,"OVERLAP: TB Marksmanship 426 shares Forever 1362 (capped at 5, 2 pts freed)"
-70888,hunter,marksmanship,18,1362,3,TB Marksmanship 426 rank 5 -> Forever 1362 (matched by spell)
-70888,hunter,marksmanship,19,1361,1,TB Marksmanship 427 rank 1 -> Forever 1361 (matched by position-custom)
-70888,hunter,marksmanship,20,1381,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1381 (Beast Mastery, spell)"
-70888,hunter,marksmanship,21,1352,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1352 (Marksmanship, spell)"
-70888,hunter,marksmanship,22,1346,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1346 (Marksmanship, spell)"
-70888,hunter,marksmanship,23,1351,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1351 (Marksmanship, position-custom)"
-70888,hunter,marksmanship,24,1381,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1381 (Beast Mastery, spell)"
-70888,hunter,survival,1,1389,5,TB Beast Mastery 374 rank 5 -> Forever 1389 (matched by spell)
-70888,hunter,survival,2,1395,3,TB Beast Mastery 377 rank 3 -> Forever 1395 (matched by spell)
-70888,hunter,survival,3,1623,3,TB Survival 392 rank 3 -> Forever 1623 (matched by position-custom)
-70888,hunter,survival,4,1311,5,TB Survival 393 rank 5 -> Forever 1311 (matched by row-custom)
-70888,hunter,survival,5,1304,3,TB Survival 395 rank 3 -> Forever 1304 (matched by spell)
-70888,hunter,survival,6,1621,2,TB Survival 396 rank 2 -> Forever 1621 (matched by spell)
-70888,hunter,survival,7,1305,3,TB Survival 397 rank 3 -> Forever 1305 (matched by spell)
-70888,hunter,survival,8,1306,2,TB Survival 399 rank 2 -> Forever 1306 (matched by position-custom)
-70888,hunter,survival,9,1622,5,TB Survival 400 rank 5 -> Forever 1622 (matched by spell)
-70888,hunter,survival,10,1308,1,TB Survival 401 rank 1 -> Forever 1308 (matched by position-custom)
-70888,hunter,survival,11,,0,"OVERLAP: TB Survival 402 shares Forever 1308 (capped at 1, 1 pts freed)"
-70888,hunter,survival,12,1322,2,TB Survival 403 rank 2 -> Forever 1322 (matched by position-custom)
-70888,hunter,survival,13,1310,3,TB Survival 404 rank 3 -> Forever 1310 (matched by spell)
-70888,hunter,survival,14,1321,3,TB Survival 406 rank 3 -> Forever 1321 (matched by spell)
-70888,hunter,survival,15,,0,"OVERLAP: TB Survival 407 shares Forever 1322 (capped at 2, 2 pts freed)"
-70888,hunter,survival,16,1312,1,TB Survival 408 rank 1 -> Forever 1312 (matched by position-custom)
-70888,hunter,survival,17,1303,5,TB Survival 410 rank 5 -> Forever 1303 (matched by spell)
-70888,hunter,survival,18,1325,1,TB Survival 411 rank 1 -> Forever 1325 (matched by position-custom)
-70888,hunter,survival,19,1304,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1304 (Survival, spell)"
-70888,hunter,survival,20,1305,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1305 (Survival, spell)"
-70888,hunter,survival,21,1304,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1304 (Survival, spell)"
-70888,hunter,survival,22,1305,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1305 (Survival, spell)"
-70888,mage,arcane,1,74,2,TB Arcane 37 rank 2 -> Forever 74 (matched by spell)
-70888,mage,arcane,2,1650,3,TB Arcane 38 rank 3 -> Forever 1650 (matched by spell)
-70888,mage,arcane,3,80,5,TB Arcane 39 rank 5 -> Forever 80 (matched by spell)
-70888,mage,arcane,4,75,5,TB Arcane 42 rank 5 -> Forever 75 (matched by spell)
-70888,mage,arcane,5,81,3,TB Arcane 44 rank 3 -> Forever 81 (matched by spell)
-70888,mage,arcane,6,85,1,TB Arcane 45 rank 1 -> Forever 85 (matched by position-custom)
-70888,mage,arcane,7,88,2,TB Arcane 47 rank 2 -> Forever 88 (matched by spell)
-70888,mage,arcane,8,1142,3,TB Arcane 48 rank 3 -> Forever 1142 (matched by row-custom)
-70888,mage,arcane,9,,0,"OVERLAP: TB Arcane 49 shares Forever 1142 (capped at 3, 3 pts freed)"
-70888,mage,arcane,10,421,3,TB Arcane 50 rank 3 -> Forever 421 (matched by spell)
-70888,mage,arcane,11,86,1,TB Arcane 51 rank 1 -> Forever 86 (matched by spell)
-70888,mage,arcane,12,77,1,TB Arcane 52 rank 1 -> Forever 77 (matched by position-custom)
-70888,mage,arcane,13,77,2,TB Arcane 53 rank 2 -> Forever 77 (matched by row-custom)
-70888,mage,arcane,14,,0,"DROP Turtle talent 54 (Arcane, 5 pts): no Forever counterpart (custom)"
-70888,mage,arcane,15,87,1,TB Arcane 55 rank 1 -> Forever 87 (matched by spell)
-70888,mage,arcane,16,37,5,TB Frost 19 rank 5 -> Forever 37 (matched by spell)
-70888,mage,arcane,17,1649,3,TB Frost 20 rank 3 -> Forever 1649 (matched by spell)
-70888,mage,arcane,18,61,3,TB Frost 21 rank 3 -> Forever 61 (matched by spell)
-70888,mage,arcane,19,1650,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1650 (Arcane, spell)"
-70888,mage,arcane,20,77,1,"TOP-UP +1: freed Turtle-custom points -> Forever 77 (Arcane, position-custom)"
-70888,mage,arcane,21,77,1,"TOP-UP +1: freed Turtle-custom points -> Forever 77 (Arcane, row-custom)"
-70888,mage,arcane,22,1650,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1650 (Arcane, spell)"
-70888,mage,arcane,23,,0,SHORT 4 pts: no headroom left in mapped talents
-70888,mage,fire,1,74,2,TB Arcane 37 rank 2 -> Forever 74 (matched by spell)
-70888,mage,fire,2,1650,3,TB Arcane 38 rank 3 -> Forever 1650 (matched by spell)
-70888,mage,fire,3,75,5,TB Arcane 42 rank 5 -> Forever 75 (matched by spell)
-70888,mage,fire,4,26,5,TB Fire 1 rank 5 -> Forever 26 (matched by spell)
-70888,mage,fire,5,34,5,TB Fire 3 rank 5 -> Forever 34 (matched by spell)
-70888,mage,fire,6,28,2,TB Fire 4 rank 2 -> Forever 28 (matched by spell)
-70888,mage,fire,7,27,3,TB Fire 5 rank 3 -> Forever 27 (matched by spell)
-70888,mage,fire,8,1141,2,TB Fire 6 rank 2 -> Forever 1141 (matched by spell)
-70888,mage,fire,9,31,3,TB Fire 7 rank 3 -> Forever 31 (matched by spell)
-70888,mage,fire,10,29,1,TB Fire 8 rank 1 -> Forever 29 (matched by spell)
-70888,mage,fire,11,23,2,TB Fire 9 rank 2 -> Forever 23 (matched by spell)
-70888,mage,fire,12,25,3,TB Fire 10 rank 3 -> Forever 25 (matched by spell)
-70888,mage,fire,13,1639,3,TB Fire 12 rank 3 -> Forever 1639 (matched by spell)
-70888,mage,fire,14,32,1,TB Fire 13 rank 1 -> Forever 32 (matched by spell)
-70888,mage,fire,15,33,3,TB Fire 14 rank 3 -> Forever 33 (matched by spell)
-70888,mage,fire,16,,0,"OVERLAP: TB Fire 15 shares Forever 33 (capped at 3, 2 pts freed)"
-70888,mage,fire,17,35,5,TB Fire 16 rank 5 -> Forever 35 (matched by spell)
-70888,mage,fire,18,36,1,TB Fire 17 rank 1 -> Forever 36 (matched by spell)
-70888,mage,fire,19,1650,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1650 (Arcane, spell)"
-70888,mage,fire,20,1650,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1650 (Arcane, spell)"
-70888,mage,frost,1,74,2,TB Arcane 37 rank 2 -> Forever 74 (matched by spell)
-70888,mage,frost,2,1650,3,TB Arcane 38 rank 3 -> Forever 1650 (matched by spell)
-70888,mage,frost,3,75,5,TB Arcane 42 rank 5 -> Forever 75 (matched by spell)
-70888,mage,frost,4,37,5,TB Frost 19 rank 5 -> Forever 37 (matched by spell)
-70888,mage,frost,5,1649,3,TB Frost 20 rank 3 -> Forever 1649 (matched by spell)
-70888,mage,frost,6,61,3,TB Frost 21 rank 3 -> Forever 61 (matched by spell)
-70888,mage,frost,7,62,2,TB Frost 23 rank 2 -> Forever 62 (matched by spell)
-70888,mage,frost,8,73,5,TB Frost 25 rank 5 -> Forever 73 (matched by spell)
-70888,mage,frost,9,69,1,TB Frost 26 rank 1 -> Forever 69 (matched by spell)
-70888,mage,frost,10,741,2,TB Frost 28 rank 2 -> Forever 741 (matched by spell)
-70888,mage,frost,11,66,3,TB Frost 29 rank 3 -> Forever 66 (matched by spell)
-70888,mage,frost,12,67,5,TB Frost 30 rank 5 -> Forever 67 (matched by spell)
-70888,mage,frost,13,72,1,TB Frost 31 rank 1 -> Forever 72 (matched by spell)
-70888,mage,frost,14,64,1,TB Frost 32 rank 1 -> Forever 64 (matched by position-custom)
-70888,mage,frost,15,64,2,TB Frost 33 rank 2 -> Forever 64 (matched by spell)
-70888,mage,frost,16,68,5,TB Frost 34 rank 5 -> Forever 68 (matched by spell)
-70888,mage,frost,17,,0,"OVERLAP: TB Frost 35 shares Forever 68 (capped at 5, 2 pts freed)"
-70888,mage,frost,18,71,1,TB Frost 36 rank 1 -> Forever 71 (matched by spell)
-70888,mage,frost,19,1650,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1650 (Arcane, spell)"
-70888,mage,frost,20,1650,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1650 (Arcane, spell)"
-70888,paladin,holy,1,1449,5,TB Holy 445 rank 5 -> Forever 1449 (matched by spell)
-70888,paladin,holy,2,,0,"DROP Turtle talent 446 (Holy, 3 pts): no Forever counterpart (custom)"
-70888,paladin,holy,3,1432,2,TB Holy 447 rank 2 -> Forever 1432 (matched by spell)
-70888,paladin,holy,4,1444,3,TB Holy 449 rank 3 -> Forever 1444 (matched by spell)
-70888,paladin,holy,5,1443,2,TB Holy 451 rank 2 -> Forever 1443 (matched by spell)
-70888,paladin,holy,6,1461,3,TB Holy 453 rank 3 -> Forever 1461 (matched by row)
-70888,paladin,holy,7,,0,"OVERLAP: TB Holy 454 shares Forever 1461 (capped at 5, 3 pts freed)"
-70888,paladin,holy,8,1461,2,TB Holy 454 rank 5 -> Forever 1461 (matched by spell)
-70888,paladin,holy,9,1446,2,TB Holy 455 rank 2 -> Forever 1446 (matched by position-custom)
-70888,paladin,holy,10,,0,"DROP Turtle talent 456 (Holy, 5 pts): no Forever counterpart (custom)"
-70888,paladin,holy,11,1502,1,TB Holy 457 rank 1 -> Forever 1502 (matched by spell)
-70888,paladin,holy,12,1627,3,TB Holy 458 rank 3 -> Forever 1627 (matched by spell)
-70888,paladin,holy,13,,0,"OVERLAP: TB Holy 459 shares Forever 1627 (capped at 5, 3 pts freed)"
-70888,paladin,holy,14,1627,2,TB Holy 459 rank 5 -> Forever 1627 (matched by position-custom)
-70888,paladin,holy,15,,0,"OVERLAP: TB Holy 460 shares Forever 1502 (capped at 1, 1 pts freed)"
-70888,paladin,holy,16,1422,5,TB Protection 461 rank 5 -> Forever 1422 (matched by spell)
-70888,paladin,holy,17,1425,2,TB Protection 464 rank 2 -> Forever 1425 (matched by spell)
-70888,paladin,holy,18,1423,4,TB Protection 465 rank 4 -> Forever 1423 (matched by spell)
-70888,paladin,holy,19,1432,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1432 (Holy, spell)"
-70888,paladin,holy,20,1423,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1423 (Protection, spell)"
-70888,paladin,holy,21,1432,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1432 (Holy, spell)"
-70888,paladin,holy,22,1432,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1432 (Holy, spell)"
-70888,paladin,holy,23,,0,SHORT 11 pts: no headroom left in mapped talents
-70888,paladin,protection,1,1450,5,TB Holy 444 rank 5 -> Forever 1450 (matched by spell)
-70888,paladin,protection,2,1421,5,TB Protection 462 rank 5 -> Forever 1421 (matched by position-custom)
-70888,paladin,protection,3,1630,3,TB Protection 463 rank 3 -> Forever 1630 (matched by spell)
-70888,paladin,protection,4,1425,1,TB Protection 464 rank 1 -> Forever 1425 (matched by spell)
-70888,paladin,protection,5,1423,2,TB Protection 465 rank 2 -> Forever 1423 (matched by spell)
-70888,paladin,protection,6,1501,3,TB Protection 466 rank 3 -> Forever 1501 (matched by spell)
-70888,paladin,protection,7,1431,1,TB Protection 467 rank 1 -> Forever 1431 (matched by spell)
-70888,paladin,protection,8,1424,3,TB Protection 468 rank 3 -> Forever 1424 (matched by spell)
-70888,paladin,protection,9,1629,3,TB Protection 469 rank 3 -> Forever 1629 (matched by spell)
-70888,paladin,protection,10,1521,2,TB Protection 470 rank 2 -> Forever 1521 (matched by position-custom)
-70888,paladin,protection,11,1426,3,TB Protection 472 rank 3 -> Forever 1426 (matched by row-custom)
-70888,paladin,protection,12,1430,1,TB Protection 473 rank 1 -> Forever 1430 (matched by spell)
-70888,paladin,protection,13,,0,"OVERLAP: TB Protection 474 shares Forever 1426 (capped at 5, 3 pts freed)"
-70888,paladin,protection,14,1426,2,TB Protection 474 rank 5 -> Forever 1426 (matched by position-custom)
-70888,paladin,protection,15,1429,5,TB Protection 475 rank 5 -> Forever 1429 (matched by position-custom)
-70888,paladin,protection,16,,0,"OVERLAP: TB Protection 476 shares Forever 1430 (capped at 1, 1 pts freed)"
-70888,paladin,protection,17,1407,5,TB Retribution 429 rank 5 -> Forever 1407 (matched by spell)
-70888,paladin,protection,18,1631,2,TB Retribution 430 rank 2 -> Forever 1631 (matched by spell)
-70888,paladin,protection,19,1403,1,TB Retribution 432 rank 1 -> Forever 1403 (matched by spell)
-70888,paladin,protection,20,1425,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1425 (Protection, spell)"
-70888,paladin,protection,21,1423,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1423 (Protection, spell)"
-70888,paladin,protection,22,1629,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1629 (Protection, spell)"
-70888,paladin,protection,23,1403,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1403 (Retribution, spell)"
-70888,paladin,retribution,1,1450,5,TB Holy 444 rank 5 -> Forever 1450 (matched by spell)
-70888,paladin,retribution,2,1449,5,TB Holy 445 rank 5 -> Forever 1449 (matched by spell)
-70888,paladin,retribution,3,1435,1,TB Holy 450 rank 1 -> Forever 1435 (matched by position)
-70888,paladin,retribution,4,1407,5,TB Retribution 429 rank 5 -> Forever 1407 (matched by spell)
-70888,paladin,retribution,5,1631,2,TB Retribution 430 rank 2 -> Forever 1631 (matched by spell)
-70888,paladin,retribution,6,1464,3,TB Retribution 431 rank 3 -> Forever 1464 (matched by spell)
-70888,paladin,retribution,7,1403,5,TB Retribution 432 rank 5 -> Forever 1403 (matched by spell)
-70888,paladin,retribution,8,1411,5,TB Retribution 434 rank 5 -> Forever 1411 (matched by spell)
-70888,paladin,retribution,9,1481,1,TB Retribution 435 rank 1 -> Forever 1481 (matched by position)
-70888,paladin,retribution,10,1634,2,TB Retribution 436 rank 2 -> Forever 1634 (matched by spell)
-70888,paladin,retribution,11,1410,3,TB Retribution 437 rank 3 -> Forever 1410 (matched by spell)
-70888,paladin,retribution,12,1632,2,TB Retribution 439 rank 2 -> Forever 1632 (matched by spell)
-70888,paladin,retribution,13,1402,5,TB Retribution 440 rank 5 -> Forever 1402 (matched by spell)
-70888,paladin,retribution,14,,0,"OVERLAP: TB Retribution 441 shares Forever 1481 (capped at 1, 1 pts freed)"
-70888,paladin,retribution,15,,0,"OVERLAP: TB Retribution 442 shares Forever 1402 (capped at 5, 5 pts freed)"
-70888,paladin,retribution,16,1441,1,TB Retribution 443 rank 1 -> Forever 1441 (matched by spell)
-70888,paladin,retribution,17,,0,SHORT 6 pts: no headroom left in mapped talents
-70888,priest,discipline,1,345,2,TB Discipline 166 rank 2 -> Forever 345 (matched by spell)
-70888,priest,discipline,2,342,3,TB Discipline 167 rank 3 -> Forever 342 (matched by position-custom)
-70888,priest,discipline,3,352,5,TB Discipline 169 rank 5 -> Forever 352 (matched by spell)
-70888,priest,discipline,4,,0,"OVERLAP: TB Discipline 170 shares Forever 342 (capped at 5, 3 pts freed)"
-70888,priest,discipline,5,342,2,TB Discipline 170 rank 5 -> Forever 342 (matched by spell)
-70888,priest,discipline,6,344,2,TB Discipline 172 rank 2 -> Forever 344 (matched by spell)
-70888,priest,discipline,7,346,2,TB Discipline 173 rank 2 -> Forever 346 (matched by spell)
-70888,priest,discipline,8,348,1,TB Discipline 174 rank 1 -> Forever 348 (matched by spell)
-70888,priest,discipline,9,343,3,TB Discipline 175 rank 3 -> Forever 343 (matched by spell)
-70888,priest,discipline,10,347,3,TB Discipline 176 rank 3 -> Forever 347 (matched by spell)
-70888,priest,discipline,11,,0,"OVERLAP: TB Discipline 177 shares Forever 346 (capped at 3, 2 pts freed)"
-70888,priest,discipline,12,346,1,TB Discipline 177 rank 3 -> Forever 346 (matched by position-custom)
-70888,priest,discipline,13,1201,3,TB Discipline 179 rank 3 -> Forever 1201 (matched by spell)
-70888,priest,discipline,14,1201,1,TB Discipline 180 rank 1 -> Forever 1201 (matched by position-custom)
-70888,priest,discipline,15,351,1,TB Discipline 181 rank 1 -> Forever 351 (matched by position-custom)
-70888,priest,discipline,16,1202,5,TB Discipline 182 rank 5 -> Forever 1202 (matched by spell)
-70888,priest,discipline,17,322,1,TB Discipline 183 rank 1 -> Forever 322 (matched by position-custom)
-70888,priest,discipline,18,406,3,TB Holy 184 rank 3 -> Forever 406 (matched by spell)
-70888,priest,discipline,19,410,2,TB Holy 185 rank 2 -> Forever 410 (matched by spell)
-70888,priest,discipline,20,401,5,TB Holy 186 rank 5 -> Forever 401 (matched by spell)
-70888,priest,discipline,21,1181,1,TB Holy 187 rank 1 -> Forever 1181 (matched by spell)
-70888,priest,discipline,22,345,1,"TOP-UP +1: freed Turtle-custom points -> Forever 345 (Discipline, spell)"
-70888,priest,discipline,23,1201,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1201 (Discipline, spell)"
-70888,priest,discipline,24,1181,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1181 (Holy, spell)"
-70888,priest,discipline,25,345,1,"TOP-UP +1: freed Turtle-custom points -> Forever 345 (Discipline, spell)"
-70888,priest,discipline,26,1181,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1181 (Holy, spell)"
-70888,priest,holy,1,345,2,TB Discipline 166 rank 2 -> Forever 345 (matched by spell)
-70888,priest,holy,2,341,5,TB Discipline 168 rank 5 -> Forever 341 (matched by spell)
-70888,priest,holy,3,352,2,TB Discipline 169 rank 2 -> Forever 352 (matched by spell)
-70888,priest,holy,4,321,2,TB Discipline 171 rank 2 -> Forever 321 (matched by spell)
-70888,priest,holy,5,344,2,TB Discipline 172 rank 2 -> Forever 344 (matched by spell)
-70888,priest,holy,6,348,1,TB Discipline 174 rank 1 -> Forever 348 (matched by spell)
-70888,priest,holy,7,406,3,TB Holy 184 rank 3 -> Forever 406 (matched by spell)
-70888,priest,holy,8,410,2,TB Holy 185 rank 2 -> Forever 410 (matched by spell)
-70888,priest,holy,9,1181,5,TB Holy 187 rank 5 -> Forever 1181 (matched by spell)
-70888,priest,holy,10,1635,2,TB Holy 189 rank 2 -> Forever 1635 (matched by spell)
-70888,priest,holy,11,361,3,TB Holy 191 rank 3 -> Forever 361 (matched by spell)
-70888,priest,holy,12,,0,"OVERLAP: TB Holy 193 shares Forever 1635 (capped at 2, 2 pts freed)"
-70888,priest,holy,13,408,3,TB Holy 194 rank 3 -> Forever 408 (matched by spell)
-70888,priest,holy,14,402,5,TB Holy 195 rank 5 -> Forever 402 (matched by spell)
-70888,priest,holy,15,413,2,TB Holy 196 rank 2 -> Forever 413 (matched by position-custom)
-70888,priest,holy,16,1561,1,TB Holy 197 rank 1 -> Forever 1561 (matched by spell)
-70888,priest,holy,17,,0,"OVERLAP: TB Holy 198 shares Forever 402 (capped at 5, 3 pts freed)"
-70888,priest,holy,18,404,5,TB Holy 199 rank 5 -> Forever 404 (matched by spell)
-70888,priest,holy,19,1637,1,TB Holy 200 rank 1 -> Forever 1637 (matched by position-custom)
-70888,priest,holy,20,345,1,"TOP-UP +1: freed Turtle-custom points -> Forever 345 (Discipline, spell)"
-70888,priest,holy,21,352,1,"TOP-UP +1: freed Turtle-custom points -> Forever 352 (Discipline, spell)"
-70888,priest,holy,22,345,1,"TOP-UP +1: freed Turtle-custom points -> Forever 345 (Discipline, spell)"
-70888,priest,holy,23,352,1,"TOP-UP +1: freed Turtle-custom points -> Forever 352 (Discipline, spell)"
-70888,priest,holy,24,345,1,"TOP-UP +1: freed Turtle-custom points -> Forever 345 (Discipline, spell)"
-70888,priest,shadow,1,345,2,TB Discipline 166 rank 2 -> Forever 345 (matched by spell)
-70888,priest,shadow,2,341,5,TB Discipline 168 rank 5 -> Forever 341 (matched by spell)
-70888,priest,shadow,3,342,4,TB Discipline 170 rank 4 -> Forever 342 (matched by spell)
-70888,priest,shadow,4,344,2,TB Discipline 172 rank 2 -> Forever 344 (matched by spell)
-70888,priest,shadow,5,348,1,TB Discipline 174 rank 1 -> Forever 348 (matched by spell)
-70888,priest,shadow,6,343,3,TB Discipline 175 rank 3 -> Forever 343 (matched by spell)
-70888,priest,shadow,7,347,3,TB Discipline 176 rank 3 -> Forever 347 (matched by spell)
-70888,priest,shadow,8,481,5,TB Shadow 202 rank 5 -> Forever 481 (matched by spell)
-70888,priest,shadow,9,466,2,TB Shadow 203 rank 2 -> Forever 466 (matched by spell)
-70888,priest,shadow,10,482,2,TB Shadow 204 rank 2 -> Forever 482 (matched by spell)
-70888,priest,shadow,11,463,5,TB Shadow 205 rank 5 -> Forever 463 (matched by spell)
-70888,priest,shadow,12,501,1,TB Shadow 209 rank 1 -> Forever 501 (matched by spell)
-70888,priest,shadow,13,881,2,TB Shadow 211 rank 2 -> Forever 881 (matched by spell)
-70888,priest,shadow,14,461,5,TB Shadow 212 rank 5 -> Forever 461 (matched by spell)
-70888,priest,shadow,15,484,1,TB Shadow 214 rank 1 -> Forever 484 (matched by spell)
-70888,priest,shadow,16,1638,2,TB Shadow 215 rank 2 -> Forever 1638 (matched by position-custom)
-70888,priest,shadow,17,462,5,TB Shadow 216 rank 5 -> Forever 462 (matched by spell)
-70888,priest,shadow,18,521,1,TB Shadow 217 rank 1 -> Forever 521 (matched by spell)
-70888,rogue,assassination,1,270,5,TB Assassination 130 rank 5 -> Forever 270 (matched by spell)
-70888,rogue,assassination,2,273,3,TB Assassination 131 rank 3 -> Forever 273 (matched by spell)
-70888,rogue,assassination,3,274,2,TB Assassination 132 rank 2 -> Forever 274 (matched by spell)
-70888,rogue,assassination,4,277,3,TB Assassination 133 rank 3 -> Forever 277 (matched by spell)
-70888,rogue,assassination,5,281,1,TB Assassination 134 rank 1 -> Forever 281 (matched by spell)
-70888,rogue,assassination,6,269,5,TB Assassination 136 rank 5 -> Forever 269 (matched by spell)
-70888,rogue,assassination,7,279,2,TB Assassination 137 rank 2 -> Forever 279 (matched by spell)
-70888,rogue,assassination,8,682,3,TB Assassination 138 rank 3 -> Forever 682 (matched by spell)
-70888,rogue,assassination,9,268,3,TB Assassination 139 rank 3 -> Forever 268 (matched by spell)
-70888,rogue,assassination,10,,0,"OVERLAP: TB Assassination 140 shares Forever 279 (capped at 3, 2 pts freed)"
-70888,rogue,assassination,11,279,1,TB Assassination 140 rank 3 -> Forever 279 (matched by row-custom)
-70888,rogue,assassination,12,280,1,TB Assassination 141 rank 1 -> Forever 280 (matched by position-custom)
-70888,rogue,assassination,13,,0,"OVERLAP: TB Assassination 142 shares Forever 280 (capped at 1, 1 pts freed)"
-70888,rogue,assassination,14,382,1,TB Assassination 143 rank 2 -> Forever 382 (matched by spell)
-70888,rogue,assassination,15,283,5,TB Assassination 144 rank 5 -> Forever 283 (matched by spell)
-70888,rogue,assassination,16,,0,"OVERLAP: TB Assassination 145 shares Forever 382 (capped at 1, 1 pts freed)"
-70888,rogue,assassination,17,186,5,TB Combat 110 rank 5 -> Forever 186 (matched by row)
-70888,rogue,assassination,18,202,3,TB Combat 113 rank 3 -> Forever 202 (matched by spell)
-70888,rogue,assassination,19,181,3,TB Combat 114 rank 3 -> Forever 181 (matched by spell)
-70888,rogue,assassination,20,682,1,"TOP-UP +1: freed Turtle-custom points -> Forever 682 (Assassination, spell)"
-70888,rogue,assassination,21,268,1,"TOP-UP +1: freed Turtle-custom points -> Forever 268 (Assassination, spell)"
-70888,rogue,assassination,22,181,1,"TOP-UP +1: freed Turtle-custom points -> Forever 181 (Combat, spell)"
-70888,rogue,assassination,23,682,1,"TOP-UP +1: freed Turtle-custom points -> Forever 682 (Assassination, spell)"
-70888,rogue,assassination,24,268,1,"TOP-UP +1: freed Turtle-custom points -> Forever 268 (Assassination, spell)"
-70888,rogue,combat,1,270,5,TB Assassination 130 rank 5 -> Forever 270 (matched by spell)
-70888,rogue,combat,2,273,3,TB Assassination 131 rank 3 -> Forever 273 (matched by spell)
-70888,rogue,combat,3,274,2,TB Assassination 132 rank 2 -> Forever 274 (matched by spell)
-70888,rogue,combat,4,277,3,TB Assassination 133 rank 3 -> Forever 277 (matched by spell)
-70888,rogue,combat,5,281,1,TB Assassination 134 rank 1 -> Forever 281 (matched by spell)
-70888,rogue,combat,6,269,5,TB Assassination 136 rank 5 -> Forever 269 (matched by spell)
-70888,rogue,combat,7,279,1,TB Assassination 137 rank 1 -> Forever 279 (matched by spell)
-70888,rogue,combat,8,186,5,TB Combat 110 rank 5 -> Forever 186 (matched by row)
-70888,rogue,combat,9,202,3,TB Combat 113 rank 3 -> Forever 202 (matched by spell)
-70888,rogue,combat,10,181,5,TB Combat 114 rank 5 -> Forever 181 (matched by spell)
-70888,rogue,combat,11,222,2,TB Combat 116 rank 2 -> Forever 222 (matched by spell)
-70888,rogue,combat,12,221,5,TB Combat 120 rank 5 -> Forever 221 (matched by spell)
-70888,rogue,combat,13,223,1,TB Combat 122 rank 1 -> Forever 223 (matched by position-custom)
-70888,rogue,combat,14,242,2,TB Combat 123 rank 2 -> Forever 242 (matched by spell)
-70888,rogue,combat,15,1703,2,TB Combat 124 rank 2 -> Forever 1703 (matched by spell)
-70888,rogue,combat,16,,0,"OVERLAP: TB Combat 125 shares Forever 1703 (capped at 2, 2 pts freed)"
-70888,rogue,combat,17,1122,3,TB Combat 126 rank 3 -> Forever 1122 (matched by spell)
-70888,rogue,combat,18,205,1,TB Combat 127 rank 1 -> Forever 205 (matched by spell)
-70888,rogue,combat,19,279,1,"TOP-UP +1: freed Turtle-custom points -> Forever 279 (Assassination, spell)"
-70888,rogue,combat,20,242,1,"TOP-UP +1: freed Turtle-custom points -> Forever 242 (Combat, spell)"
-70888,rogue,subtlety,1,270,5,TB Assassination 130 rank 5 -> Forever 270 (matched by spell)
-70888,rogue,subtlety,2,273,3,TB Assassination 131 rank 3 -> Forever 273 (matched by spell)
-70888,rogue,subtlety,3,274,2,TB Assassination 132 rank 2 -> Forever 274 (matched by spell)
-70888,rogue,subtlety,4,244,5,TB Subtlety 146 rank 5 -> Forever 244 (matched by spell)
-70888,rogue,subtlety,5,261,2,TB Subtlety 147 rank 2 -> Forever 261 (matched by position)
-70888,rogue,subtlety,6,,0,"DROP Turtle talent 148 (Subtlety, 3 pts): no Forever counterpart (none)"
-70888,rogue,subtlety,7,263,3,TB Subtlety 149 rank 3 -> Forever 263 (matched by spell)
-70888,rogue,subtlety,8,247,2,TB Subtlety 150 rank 2 -> Forever 247 (matched by spell)
-70888,rogue,subtlety,9,1123,3,TB Subtlety 151 rank 3 -> Forever 1123 (matched by spell)
-70888,rogue,subtlety,10,245,3,TB Subtlety 152 rank 3 -> Forever 245 (matched by spell)
-70888,rogue,subtlety,11,,0,"DROP Turtle talent 153 (Subtlety, 3 pts): no Forever counterpart (custom)"
-70888,rogue,subtlety,12,,0,"OVERLAP: TB Subtlety 154 shares Forever 263 (capped at 3, 1 pts freed)"
-70888,rogue,subtlety,13,681,1,TB Subtlety 155 rank 1 -> Forever 681 (matched by spell)
-70888,rogue,subtlety,14,246,2,TB Subtlety 156 rank 2 -> Forever 246 (matched by position-custom)
-70888,rogue,subtlety,15,262,2,TB Subtlety 157 rank 2 -> Forever 262 (matched by spell)
-70888,rogue,subtlety,16,265,2,TB Subtlety 159 rank 2 -> Forever 265 (matched by spell)
-70888,rogue,subtlety,17,284,1,TB Subtlety 160 rank 1 -> Forever 284 (matched by spell)
-70888,rogue,subtlety,18,,0,"OVERLAP: TB Subtlety 161 shares Forever 265 (capped at 2, 1 pts freed)"
-70888,rogue,subtlety,19,,0,"DROP Turtle talent 162 (Subtlety, 2 pts): no Forever counterpart (custom)"
-70888,rogue,subtlety,20,1702,2,TB Subtlety 163 rank 2 -> Forever 1702 (matched by row-custom)
-70888,rogue,subtlety,21,1702,2,TB Subtlety 164 rank 2 -> Forever 1702 (matched by position-custom)
-70888,rogue,subtlety,22,381,1,TB Subtlety 165 rank 1 -> Forever 381 (matched by position-custom)
-70888,rogue,subtlety,23,262,1,"TOP-UP +1: freed Turtle-custom points -> Forever 262 (Subtlety, spell)"
-70888,rogue,subtlety,24,261,1,"TOP-UP +1: freed Turtle-custom points -> Forever 261 (Subtlety, position)"
-70888,rogue,subtlety,25,246,1,"TOP-UP +1: freed Turtle-custom points -> Forever 246 (Subtlety, position-custom)"
-70888,rogue,subtlety,26,1702,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1702 (Subtlety, row-custom)"
-70888,rogue,subtlety,27,261,1,"TOP-UP +1: freed Turtle-custom points -> Forever 261 (Subtlety, position)"
-70888,rogue,subtlety,28,261,1,"TOP-UP +1: freed Turtle-custom points -> Forever 261 (Subtlety, position)"
-70888,rogue,subtlety,29,,0,SHORT 4 pts: no headroom left in mapped talents
-70888,shaman,elemental,1,564,5,TB Elemental 218 rank 5 -> Forever 564 (matched by spell)
-70888,shaman,elemental,2,563,5,TB Elemental 219 rank 5 -> Forever 563 (matched by spell)
-70888,shaman,elemental,3,572,1,TB Elemental 220 rank 1 -> Forever 572 (matched by spell)
-70888,shaman,elemental,4,1640,3,TB Elemental 221 rank 3 -> Forever 1640 (matched by spell)
-70888,shaman,elemental,5,1645,3,TB Elemental 222 rank 3 -> Forever 1645 (matched by spell)
-70888,shaman,elemental,6,574,1,TB Elemental 223 rank 1 -> Forever 574 (matched by position-custom)
-70888,shaman,elemental,7,575,3,TB Elemental 224 rank 3 -> Forever 575 (matched by spell)
-70888,shaman,elemental,8,562,5,TB Elemental 225 rank 5 -> Forever 562 (matched by spell)
-70888,shaman,elemental,9,567,2,TB Elemental 227 rank 2 -> Forever 567 (matched by spell)
-70888,shaman,elemental,10,561,3,TB Elemental 229 rank 3 -> Forever 561 (matched by spell)
-70888,shaman,elemental,11,1641,2,TB Elemental 230 rank 2 -> Forever 1641 (matched by spell)
-70888,shaman,elemental,12,573,1,TB Elemental 231 rank 1 -> Forever 573 (matched by spell)
-70888,shaman,elemental,13,,0,"OVERLAP: TB Elemental 232 shares Forever 1641 (capped at 2, 2 pts freed)"
-70888,shaman,elemental,14,721,5,TB Elemental 233 rank 5 -> Forever 721 (matched by spell)
-70888,shaman,elemental,15,,0,"OVERLAP: TB Elemental 234 shares Forever 573 (capped at 1, 1 pts freed)"
-70888,shaman,elemental,16,586,5,TB Restoration 235 rank 5 -> Forever 586 (matched by spell)
-70888,shaman,elemental,17,593,4,TB Restoration 236 rank 4 -> Forever 593 (matched by spell)
-70888,shaman,elemental,18,572,1,"TOP-UP +1: freed Turtle-custom points -> Forever 572 (Elemental, spell)"
-70888,shaman,elemental,19,575,1,"TOP-UP +1: freed Turtle-custom points -> Forever 575 (Elemental, spell)"
-70888,shaman,elemental,20,593,1,"TOP-UP +1: freed Turtle-custom points -> Forever 593 (Restoration, spell)"
-70888,shaman,enhancement,1,564,5,TB Elemental 218 rank 5 -> Forever 564 (matched by spell)
-70888,shaman,enhancement,2,563,5,TB Elemental 219 rank 5 -> Forever 563 (matched by spell)
-70888,shaman,enhancement,3,1640,3,TB Elemental 221 rank 3 -> Forever 1640 (matched by spell)
-70888,shaman,enhancement,4,1645,3,TB Elemental 222 rank 3 -> Forever 1645 (matched by spell)
-70888,shaman,enhancement,5,574,1,TB Elemental 223 rank 1 -> Forever 574 (matched by position-custom)
-70888,shaman,enhancement,6,614,5,TB Enhancement 251 rank 5 -> Forever 614 (matched by spell)
-70888,shaman,enhancement,7,613,5,TB Enhancement 254 rank 5 -> Forever 613 (matched by spell)
-70888,shaman,enhancement,8,607,3,TB Enhancement 255 rank 3 -> Forever 607 (matched by spell)
-70888,shaman,enhancement,9,601,3,TB Enhancement 257 rank 3 -> Forever 601 (matched by row-custom)
-70888,shaman,enhancement,10,617,1,TB Enhancement 258 rank 1 -> Forever 617 (matched by position-custom)
-70888,shaman,enhancement,11,602,5,TB Enhancement 260 rank 5 -> Forever 602 (matched by spell)
-70888,shaman,enhancement,12,610,2,TB Enhancement 262 rank 2 -> Forever 610 (matched by spell)
-70888,shaman,enhancement,13,611,3,TB Enhancement 263 rank 3 -> Forever 611 (matched by spell)
-70888,shaman,enhancement,14,901,1,TB Enhancement 264 rank 1 -> Forever 901 (matched by spell)
-70888,shaman,enhancement,15,1643,5,TB Enhancement 265 rank 5 -> Forever 1643 (matched by spell)
-70888,shaman,enhancement,16,,0,"OVERLAP: TB Enhancement 266 shares Forever 901 (capped at 1, 1 pts freed)"
-70888,shaman,enhancement,17,601,1,"TOP-UP +1: freed Turtle-custom points -> Forever 601 (Enhancement, row-custom)"
-70888,shaman,restoration,1,564,5,TB Elemental 218 rank 5 -> Forever 564 (matched by spell)
-70888,shaman,restoration,2,572,2,TB Elemental 220 rank 2 -> Forever 572 (matched by spell)
-70888,shaman,restoration,3,1645,3,TB Elemental 222 rank 3 -> Forever 1645 (matched by spell)
-70888,shaman,restoration,4,574,1,TB Elemental 223 rank 1 -> Forever 574 (matched by position-custom)
-70888,shaman,restoration,5,562,2,TB Elemental 225 rank 2 -> Forever 562 (matched by spell)
-70888,shaman,restoration,6,586,5,TB Restoration 235 rank 5 -> Forever 586 (matched by spell)
-70888,shaman,restoration,7,593,5,TB Restoration 236 rank 5 -> Forever 593 (matched by spell)
-70888,shaman,restoration,8,581,3,TB Restoration 238 rank 3 -> Forever 581 (matched by spell)
-70888,shaman,restoration,9,1648,3,TB Restoration 240 rank 3 -> Forever 1648 (matched by spell)
-70888,shaman,restoration,10,587,2,TB Restoration 241 rank 2 -> Forever 587 (matched by spell)
-70888,shaman,restoration,11,582,1,TB Restoration 242 rank 1 -> Forever 582 (matched by spell)
-70888,shaman,restoration,12,588,5,TB Restoration 244 rank 5 -> Forever 588 (matched by spell)
-70888,shaman,restoration,13,594,3,TB Restoration 245 rank 3 -> Forever 594 (matched by position-custom)
-70888,shaman,restoration,14,,0,"OVERLAP: TB Restoration 246 shares Forever 1648 (capped at 3, 2 pts freed)"
-70888,shaman,restoration,15,591,1,TB Restoration 247 rank 1 -> Forever 591 (matched by spell)
-70888,shaman,restoration,16,,0,"OVERLAP: TB Restoration 248 shares Forever 1648 (capped at 3, 2 pts freed)"
-70888,shaman,restoration,17,592,5,TB Restoration 249 rank 5 -> Forever 592 (matched by row-custom)
-70888,shaman,restoration,18,590,1,TB Restoration 250 rank 1 -> Forever 590 (matched by position-custom)
-70888,shaman,restoration,19,562,1,"TOP-UP +1: freed Turtle-custom points -> Forever 562 (Elemental, spell)"
-70888,shaman,restoration,20,587,1,"TOP-UP +1: freed Turtle-custom points -> Forever 587 (Restoration, spell)"
-70888,shaman,restoration,21,594,1,"TOP-UP +1: freed Turtle-custom points -> Forever 594 (Restoration, position-custom)"
-70888,shaman,restoration,22,562,1,"TOP-UP +1: freed Turtle-custom points -> Forever 562 (Elemental, spell)"
-70888,shaman,tank,1,564,5,TB Elemental 218 rank 5 -> Forever 564 (matched by spell)
-70888,shaman,tank,2,1640,3,TB Elemental 221 rank 3 -> Forever 1640 (matched by spell)
-70888,shaman,tank,3,1645,3,TB Elemental 222 rank 3 -> Forever 1645 (matched by spell)
-70888,shaman,tank,4,574,1,TB Elemental 223 rank 1 -> Forever 574 (matched by position-custom)
-70888,shaman,tank,5,575,3,TB Elemental 224 rank 3 -> Forever 575 (matched by spell)
-70888,shaman,tank,6,614,5,TB Enhancement 251 rank 5 -> Forever 614 (matched by spell)
-70888,shaman,tank,7,609,2,TB Enhancement 253 rank 2 -> Forever 609 (matched by position-custom)
-70888,shaman,tank,8,613,5,TB Enhancement 254 rank 5 -> Forever 613 (matched by spell)
-70888,shaman,tank,9,607,3,TB Enhancement 255 rank 3 -> Forever 607 (matched by spell)
-70888,shaman,tank,10,617,1,TB Enhancement 258 rank 1 -> Forever 617 (matched by position-custom)
-70888,shaman,tank,11,601,3,TB Enhancement 259 rank 3 -> Forever 601 (matched by position-custom)
-70888,shaman,tank,12,602,5,TB Enhancement 260 rank 5 -> Forever 602 (matched by spell)
-70888,shaman,tank,13,615,2,TB Enhancement 261 rank 2 -> Forever 615 (matched by position-custom)
-70888,shaman,tank,14,611,3,TB Enhancement 263 rank 3 -> Forever 611 (matched by spell)
-70888,shaman,tank,15,901,1,TB Enhancement 264 rank 1 -> Forever 901 (matched by spell)
-70888,shaman,tank,16,1643,5,TB Enhancement 265 rank 5 -> Forever 1643 (matched by spell)
-70888,shaman,tank,17,,0,"OVERLAP: TB Enhancement 266 shares Forever 901 (capped at 1, 1 pts freed)"
-70888,shaman,tank,18,575,1,"TOP-UP +1: freed Turtle-custom points -> Forever 575 (Elemental, spell)"
-70888,warlock,affliction,1,1005,5,TB Affliction 337 rank 5 -> Forever 1005 (matched by spell)
-70888,warlock,affliction,2,1003,5,TB Affliction 338 rank 5 -> Forever 1003 (matched by spell)
-70888,warlock,affliction,3,,0,"DROP Turtle talent 340 (Affliction, 3 pts): no Forever counterpart (custom)"
-70888,warlock,affliction,4,1007,2,TB Affliction 341 rank 2 -> Forever 1007 (matched by spell)
-70888,warlock,affliction,5,1004,2,TB Affliction 342 rank 2 -> Forever 1004 (matched by position-custom)
-70888,warlock,affliction,6,1284,3,TB Affliction 343 rank 3 -> Forever 1284 (matched by spell)
-70888,warlock,affliction,7,1001,2,TB Affliction 344 rank 2 -> Forever 1001 (matched by spell)
-70888,warlock,affliction,8,1081,1,TB Affliction 345 rank 1 -> Forever 1081 (matched by spell)
-70888,warlock,affliction,9,1021,2,TB Affliction 346 rank 2 -> Forever 1021 (matched by spell)
-70888,warlock,affliction,10,1002,2,TB Affliction 347 rank 2 -> Forever 1002 (matched by spell)
-70888,warlock,affliction,11,,0,"DROP Turtle talent 348 (Affliction, 3 pts): no Forever counterpart (custom)"
-70888,warlock,affliction,12,1082,2,TB Affliction 349 rank 2 -> Forever 1082 (matched by row-custom)
-70888,warlock,affliction,13,1041,1,TB Affliction 350 rank 1 -> Forever 1041 (matched by spell)
-70888,warlock,affliction,14,1082,1,TB Affliction 352 rank 1 -> Forever 1082 (matched by position-custom)
-70888,warlock,affliction,15,1042,5,TB Affliction 353 rank 5 -> Forever 1042 (matched by spell)
-70888,warlock,affliction,16,1022,1,TB Affliction 354 rank 1 -> Forever 1022 (matched by position-custom)
-70888,warlock,affliction,17,941,5,TB Destruction 322 rank 5 -> Forever 941 (matched by spell)
-70888,warlock,affliction,18,943,5,TB Destruction 324 rank 5 -> Forever 943 (matched by spell)
-70888,warlock,affliction,19,963,1,TB Destruction 327 rank 1 -> Forever 963 (matched by spell)
-70888,warlock,affliction,20,1001,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1001 (Affliction, spell)"
-70888,warlock,affliction,21,1004,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1004 (Affliction, position-custom)"
-70888,warlock,affliction,22,1082,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1082 (Affliction, row-custom)"
-70888,warlock,affliction,23,1001,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1001 (Affliction, spell)"
-70888,warlock,affliction,24,1004,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1004 (Affliction, position-custom)"
-70888,warlock,affliction,25,1001,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1001 (Affliction, spell)"
-70888,warlock,demonology,1,1003,5,TB Affliction 338 rank 5 -> Forever 1003 (matched by spell)
-70888,warlock,demonology,2,1007,2,TB Affliction 341 rank 2 -> Forever 1007 (matched by spell)
-70888,warlock,demonology,3,1222,2,TB Demonology 355 rank 2 -> Forever 1222 (matched by position-custom)
-70888,warlock,demonology,4,1223,5,TB Demonology 356 rank 5 -> Forever 1223 (matched by spell)
-70888,warlock,demonology,5,1224,2,TB Demonology 358 rank 2 -> Forever 1224 (matched by spell)
-70888,warlock,demonology,6,1225,3,TB Demonology 359 rank 3 -> Forever 1225 (matched by position-custom)
-70888,warlock,demonology,7,1242,3,TB Demonology 360 rank 3 -> Forever 1242 (matched by spell)
-70888,warlock,demonology,8,1226,1,TB Demonology 361 rank 1 -> Forever 1226 (matched by spell)
-70888,warlock,demonology,9,1241,5,TB Demonology 362 rank 5 -> Forever 1241 (matched by spell)
-70888,warlock,demonology,10,,0,"DROP Turtle talent 364 (Demonology, 2 pts): no Forever counterpart (custom)"
-70888,warlock,demonology,11,1227,2,TB Demonology 365 rank 2 -> Forever 1227 (matched by spell)
-70888,warlock,demonology,12,1262,3,TB Demonology 366 rank 3 -> Forever 1262 (matched by position-custom)
-70888,warlock,demonology,13,,0,"OVERLAP: TB Demonology 367 shares Forever 1262 (capped at 5, 1 pts freed)"
-70888,warlock,demonology,14,1262,2,TB Demonology 367 rank 3 -> Forever 1262 (matched by spell)
-70888,warlock,demonology,15,1281,1,TB Demonology 368 rank 1 -> Forever 1281 (matched by position-custom)
-70888,warlock,demonology,16,1283,3,TB Demonology 369 rank 3 -> Forever 1283 (matched by row-custom)
-70888,warlock,demonology,17,1244,5,TB Demonology 370 rank 5 -> Forever 1244 (matched by spell)
-70888,warlock,demonology,18,,0,"OVERLAP: TB Demonology 371 shares Forever 1244 (capped at 5, 3 pts freed)"
-70888,warlock,demonology,19,1282,1,TB Demonology 372 rank 1 -> Forever 1282 (matched by spell)
-70888,warlock,demonology,20,1242,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1242 (Demonology, spell)"
-70888,warlock,demonology,21,1222,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1222 (Demonology, position-custom)"
-70888,warlock,demonology,22,1283,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1283 (Demonology, row-custom)"
-70888,warlock,demonology,23,1242,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1242 (Demonology, spell)"
-70888,warlock,demonology,24,1283,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1283 (Demonology, row-custom)"
-70888,warlock,demonology,25,,0,SHORT 1 pts: no headroom left in mapped talents
-70888,warlock,destruction,1,1003,5,TB Affliction 338 rank 5 -> Forever 1003 (matched by spell)
-70888,warlock,destruction,2,1007,2,TB Affliction 341 rank 2 -> Forever 1007 (matched by spell)
-70888,warlock,destruction,3,944,5,TB Destruction 321 rank 5 -> Forever 944 (matched by spell)
-70888,warlock,destruction,4,941,5,TB Destruction 322 rank 5 -> Forever 941 (matched by spell)
-70888,warlock,destruction,5,,0,"DROP Turtle talent 323 (Destruction, 2 pts): no Forever counterpart (custom)"
-70888,warlock,destruction,6,943,5,TB Destruction 324 rank 5 -> Forever 943 (matched by spell)
-70888,warlock,destruction,7,982,1,TB Destruction 325 rank 1 -> Forever 982 (matched by spell)
-70888,warlock,destruction,8,985,2,TB Destruction 326 rank 2 -> Forever 985 (matched by spell)
-70888,warlock,destruction,9,963,1,TB Destruction 327 rank 1 -> Forever 963 (matched by spell)
-70888,warlock,destruction,10,981,5,TB Destruction 328 rank 5 -> Forever 981 (matched by spell)
-70888,warlock,destruction,11,986,2,TB Destruction 329 rank 2 -> Forever 986 (matched by spell)
-70888,warlock,destruction,12,964,2,TB Destruction 330 rank 2 -> Forever 964 (matched by spell)
-70888,warlock,destruction,13,,0,"OVERLAP: TB Destruction 332 shares Forever 986 (capped at 2, 2 pts freed)"
-70888,warlock,destruction,14,961,5,TB Destruction 333 rank 5 -> Forever 961 (matched by spell)
-70888,warlock,destruction,15,967,1,TB Destruction 334 rank 1 -> Forever 967 (matched by spell)
-70888,warlock,destruction,16,966,5,TB Destruction 335 rank 5 -> Forever 966 (matched by spell)
-70888,warlock,destruction,17,968,1,TB Destruction 336 rank 1 -> Forever 968 (matched by spell)
-70888,warlock,destruction,18,982,1,"TOP-UP +1: freed Turtle-custom points -> Forever 982 (Destruction, spell)"
-70888,warlock,destruction,19,982,1,"TOP-UP +1: freed Turtle-custom points -> Forever 982 (Destruction, spell)"
-70888,warlock,destruction,20,982,1,"TOP-UP +1: freed Turtle-custom points -> Forever 982 (Destruction, spell)"
-70888,warlock,destruction,21,982,1,"TOP-UP +1: freed Turtle-custom points -> Forever 982 (Destruction, spell)"
-70888,warrior,arms,1,641,5,TB Arms 57 rank 5 -> Forever 641 (matched by spell)
-70888,warrior,arms,2,127,2,TB Arms 58 rank 2 -> Forever 127 (matched by spell)
-70888,warrior,arms,3,126,2,TB Arms 59 rank 2 -> Forever 126 (matched by spell)
-70888,warrior,arms,4,130,5,TB Arms 60 rank 5 -> Forever 130 (matched by spell)
-70888,warrior,arms,5,128,3,TB Arms 61 rank 3 -> Forever 128 (matched by spell)
-70888,warrior,arms,6,131,1,TB Arms 62 rank 1 -> Forever 131 (matched by position-custom)
-70888,warrior,arms,7,,0,"OVERLAP: TB Arms 63 shares Forever 131 (capped at 2, 1 pts freed)"
-70888,warrior,arms,8,131,1,TB Arms 63 rank 2 -> Forever 131 (matched by spell)
-70888,warrior,arms,9,121,3,TB Arms 64 rank 3 -> Forever 121 (matched by spell)
-70888,warrior,arms,10,136,3,TB Arms 65 rank 3 -> Forever 136 (matched by spell)
-70888,warrior,arms,11,662,2,TB Arms 66 rank 2 -> Forever 662 (matched by spell)
-70888,warrior,arms,12,132,5,TB Arms 67 rank 5 -> Forever 132 (matched by position-custom)
-70888,warrior,arms,13,133,1,TB Arms 68 rank 1 -> Forever 133 (matched by spell)
-70888,warrior,arms,14,125,3,TB Arms 69 rank 3 -> Forever 125 (matched by position-custom)
-70888,warrior,arms,15,134,2,TB Arms 71 rank 2 -> Forever 134 (matched by position)
-70888,warrior,arms,16,135,1,TB Arms 73 rank 1 -> Forever 135 (matched by spell)
-70888,warrior,arms,17,157,5,TB Fury 94 rank 5 -> Forever 157 (matched by spell)
-70888,warrior,arms,18,159,5,TB Fury 96 rank 5 -> Forever 159 (matched by spell)
-70888,warrior,arms,19,160,1,TB Fury 98 rank 1 -> Forever 160 (matched by spell)
-70888,warrior,arms,20,127,1,"TOP-UP +1: freed Turtle-custom points -> Forever 127 (Arms, spell)"
-70888,warrior,fury,1,641,5,TB Arms 57 rank 5 -> Forever 641 (matched by spell)
-70888,warrior,fury,2,127,2,TB Arms 58 rank 2 -> Forever 127 (matched by spell)
-70888,warrior,fury,3,130,3,TB Arms 60 rank 3 -> Forever 130 (matched by spell)
-70888,warrior,fury,4,131,2,TB Arms 63 rank 2 -> Forever 131 (matched by spell)
-70888,warrior,fury,5,121,3,TB Arms 64 rank 3 -> Forever 121 (matched by spell)
-70888,warrior,fury,6,662,2,TB Arms 66 rank 2 -> Forever 662 (matched by spell)
-70888,warrior,fury,7,157,5,TB Fury 94 rank 5 -> Forever 157 (matched by spell)
-70888,warrior,fury,8,1581,5,TB Fury 95 rank 5 -> Forever 1581 (matched by spell)
-70888,warrior,fury,9,159,5,TB Fury 96 rank 5 -> Forever 159 (matched by spell)
-70888,warrior,fury,10,154,4,TB Fury 97 rank 4 -> Forever 154 (matched by row-custom)
-70888,warrior,fury,11,160,1,TB Fury 98 rank 1 -> Forever 160 (matched by spell)
-70888,warrior,fury,12,661,2,TB Fury 99 rank 2 -> Forever 661 (matched by spell)
-70888,warrior,fury,13,168,3,TB Fury 103 rank 3 -> Forever 168 (matched by position-custom)
-70888,warrior,fury,14,165,1,TB Fury 104 rank 1 -> Forever 165 (matched by spell)
-70888,warrior,fury,15,1542,2,TB Fury 105 rank 2 -> Forever 1542 (matched by spell)
-70888,warrior,fury,16,156,5,TB Fury 107 rank 5 -> Forever 156 (matched by spell)
-70888,warrior,fury,17,167,1,TB Fury 109 rank 1 -> Forever 167 (matched by spell)
-70888,warrior,protection,1,124,3,TB Arms 56 rank 3 -> Forever 124 (matched by spell)
-70888,warrior,protection,2,641,4,TB Arms 57 rank 4 -> Forever 641 (matched by spell)
-70888,warrior,protection,3,142,2,TB Protection 74 rank 2 -> Forever 142 (matched by spell)
-70888,warrior,protection,4,1601,5,TB Protection 75 rank 5 -> Forever 1601 (matched by spell)
-70888,warrior,protection,5,138,3,TB Protection 76 rank 3 -> Forever 138 (matched by spell)
-70888,warrior,protection,6,140,5,TB Protection 78 rank 5 -> Forever 140 (matched by spell)
-70888,warrior,protection,7,153,1,TB Protection 79 rank 1 -> Forever 153 (matched by spell)
-70888,warrior,protection,8,143,2,TB Protection 81 rank 2 -> Forever 143 (matched by spell)
-70888,warrior,protection,9,147,3,TB Protection 82 rank 3 -> Forever 147 (matched by spell)
-70888,warrior,protection,10,149,2,TB Protection 83 rank 2 -> Forever 149 (matched by spell)
-70888,warrior,protection,11,144,5,TB Protection 85 rank 5 -> Forever 144 (matched by spell)
-70888,warrior,protection,12,702,5,TB Protection 86 rank 5 -> Forever 702 (matched by spell)
-70888,warrior,protection,13,148,1,TB Protection 87 rank 1 -> Forever 148 (matched by spell)
-70888,warrior,protection,14,,0,"OVERLAP: TB Protection 88 shares Forever 149 (capped at 2, 2 pts freed)"
-70888,warrior,protection,15,,0,"DROP Turtle talent 89 (Protection, 2 pts): no Forever counterpart (custom)"
-70888,warrior,protection,16,150,2,TB Protection 90 rank 2 -> Forever 150 (matched by spell)
-70888,warrior,protection,17,,0,"OVERLAP: TB Protection 91 shares Forever 702 (capped at 5, 3 pts freed)"
-70888,warrior,protection,18,152,1,TB Protection 92 rank 1 -> Forever 152 (matched by spell)
-70888,warrior,protection,19,641,1,"TOP-UP +1: freed Turtle-custom points -> Forever 641 (Arms, spell)"
-70888,warrior,protection,20,138,1,"TOP-UP +1: freed Turtle-custom points -> Forever 138 (Protection, spell)"
-70888,warrior,protection,21,138,1,"TOP-UP +1: freed Turtle-custom points -> Forever 138 (Protection, spell)"
-70888,warrior,protection,22,,0,SHORT 4 pts: no headroom left in mapped talents
+70888 (repack server/data/dbc 2026-11-11),druid,balance,1,762,5,TB Balance 301 rank 5 -> Forever 762 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,balance,2,763,2,TB Balance 306 rank 2 -> Forever 763 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,balance,3,791,3,TB Balance 307 rank 3 -> Forever 791 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),druid,balance,4,790,3,TB Balance 309 rank 3 -> Forever 790 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,balance,5,788,1,TB Balance 310 rank 1 -> Forever 788 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,balance,6,764,2,TB Balance 311 rank 2 -> Forever 764 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,balance,7,792,5,TB Balance 312 rank 5 -> Forever 792 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,balance,8,783,3,TB Balance 313 rank 3 -> Forever 783 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,balance,9,,0,"OVERLAP: TB Balance 314 shares Forever 783 (capped at 3, 3 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),druid,balance,10,793,1,TB Balance 315 rank 1 -> Forever 793 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,balance,11,789,1,TB Balance 316 rank 1 -> Forever 789 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,balance,12,784,3,TB Balance 317 rank 3 -> Forever 784 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,balance,13,,0,"OVERLAP: TB Balance 318 shares Forever 790 (capped at 5, 1 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),druid,balance,14,790,2,TB Balance 318 rank 3 -> Forever 790 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),druid,balance,15,,0,"OVERLAP: TB Balance 319 shares Forever 790 (capped at 5, 2 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),druid,balance,16,,0,"OVERLAP: TB Balance 320 shares Forever 793 (capped at 1, 1 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),druid,balance,17,821,5,TB Restoration 285 rank 5 -> Forever 821 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,balance,18,824,3,TB Restoration 287 rank 3 -> Forever 824 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,balance,19,841,5,TB Restoration 289 rank 5 -> Forever 841 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,balance,20,763,1,"TOP-UP +1: freed Turtle-custom points -> Forever 763 (Balance, spell)"
+70888 (repack server/data/dbc 2026-11-11),druid,balance,21,784,1,"TOP-UP +1: freed Turtle-custom points -> Forever 784 (Balance, spell)"
+70888 (repack server/data/dbc 2026-11-11),druid,balance,22,824,1,"TOP-UP +1: freed Turtle-custom points -> Forever 824 (Restoration, spell)"
+70888 (repack server/data/dbc 2026-11-11),druid,balance,23,791,1,"TOP-UP +1: freed Turtle-custom points -> Forever 791 (Balance, position-custom)"
+70888 (repack server/data/dbc 2026-11-11),druid,balance,24,763,1,"TOP-UP +1: freed Turtle-custom points -> Forever 763 (Balance, spell)"
+70888 (repack server/data/dbc 2026-11-11),druid,balance,25,784,1,"TOP-UP +1: freed Turtle-custom points -> Forever 784 (Balance, spell)"
+70888 (repack server/data/dbc 2026-11-11),druid,balance,26,824,1,"TOP-UP +1: freed Turtle-custom points -> Forever 824 (Restoration, spell)"
+70888 (repack server/data/dbc 2026-11-11),druid,feral,1,761,1,TB Balance 302 rank 1 -> Forever 761 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,feral,2,921,4,TB Balance 303 rank 4 -> Forever 921 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,feral,3,791,3,TB Balance 307 rank 3 -> Forever 791 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),druid,feral,4,781,2,TB Balance 308 rank 2 -> Forever 781 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,feral,5,788,1,TB Balance 310 rank 1 -> Forever 788 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,feral,6,796,5,TB Feral Combat 267 rank 5 -> Forever 796 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,feral,7,795,5,TB Feral Combat 268 rank 5 -> Forever 795 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,feral,8,799,3,TB Feral Combat 269 rank 3 -> Forever 799 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,feral,9,794,3,TB Feral Combat 271 rank 3 -> Forever 794 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,feral,10,807,2,TB Feral Combat 273 rank 2 -> Forever 807 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,feral,11,804,1,TB Feral Combat 274 rank 1 -> Forever 804 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,feral,12,798,3,TB Feral Combat 275 rank 3 -> Forever 798 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,feral,13,,0,"DROP Turtle talent 276 (Feral Combat, 2 pts): no Forever counterpart (custom)"
+70888 (repack server/data/dbc 2026-11-11),druid,feral,14,803,3,TB Feral Combat 277 rank 3 -> Forever 803 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,feral,15,800,2,TB Feral Combat 278 rank 2 -> Forever 800 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),druid,feral,16,805,2,TB Feral Combat 280 rank 2 -> Forever 805 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),druid,feral,17,1162,1,TB Feral Combat 281 rank 1 -> Forever 1162 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),druid,feral,18,808,5,TB Feral Combat 282 rank 5 -> Forever 808 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,feral,19,,0,"OVERLAP: TB Feral Combat 283 shares Forever 805 (capped at 2, 2 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),druid,feral,20,809,1,TB Feral Combat 284 rank 1 -> Forever 809 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,feral,21,781,1,"TOP-UP +1: freed Turtle-custom points -> Forever 781 (Balance, spell)"
+70888 (repack server/data/dbc 2026-11-11),druid,feral,22,799,1,"TOP-UP +1: freed Turtle-custom points -> Forever 799 (Feral Combat, spell)"
+70888 (repack server/data/dbc 2026-11-11),druid,feral,23,794,1,"TOP-UP +1: freed Turtle-custom points -> Forever 794 (Feral Combat, spell)"
+70888 (repack server/data/dbc 2026-11-11),druid,feral,24,791,1,"TOP-UP +1: freed Turtle-custom points -> Forever 791 (Balance, position-custom)"
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,1,762,5,TB Balance 301 rank 5 -> Forever 762 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,2,,0,"DROP Turtle talent 304 (Balance, 2 pts): no Forever counterpart (custom)"
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,3,763,1,TB Balance 306 rank 1 -> Forever 763 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,4,791,2,TB Balance 307 rank 2 -> Forever 791 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,5,821,5,TB Restoration 285 rank 5 -> Forever 821 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,6,824,5,TB Restoration 287 rank 5 -> Forever 824 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,7,844,1,TB Restoration 290 rank 1 -> Forever 844 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,8,830,3,TB Restoration 291 rank 3 -> Forever 830 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,9,829,3,TB Restoration 292 rank 3 -> Forever 829 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,10,828,5,TB Restoration 293 rank 5 -> Forever 828 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,11,843,5,TB Restoration 294 rank 5 -> Forever 843 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,12,,0,"DROP Turtle talent 295 (Restoration, 2 pts): no Forever counterpart (custom)"
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,13,831,1,TB Restoration 296 rank 1 -> Forever 831 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,14,,0,"OVERLAP: TB Restoration 297 shares Forever 828 (capped at 5, 3 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,15,825,5,TB Restoration 298 rank 5 -> Forever 825 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,16,842,2,TB Restoration 299 rank 2 -> Forever 842 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,17,,0,"OVERLAP: TB Restoration 300 shares Forever 844 (capped at 1, 1 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,18,763,1,"TOP-UP +1: freed Turtle-custom points -> Forever 763 (Balance, spell)"
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,19,791,1,"TOP-UP +1: freed Turtle-custom points -> Forever 791 (Balance, position-custom)"
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,20,763,1,"TOP-UP +1: freed Turtle-custom points -> Forever 763 (Balance, spell)"
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,21,791,1,"TOP-UP +1: freed Turtle-custom points -> Forever 791 (Balance, position-custom)"
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,22,763,1,"TOP-UP +1: freed Turtle-custom points -> Forever 763 (Balance, spell)"
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,23,791,1,"TOP-UP +1: freed Turtle-custom points -> Forever 791 (Balance, position-custom)"
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,24,763,1,"TOP-UP +1: freed Turtle-custom points -> Forever 763 (Balance, spell)"
+70888 (repack server/data/dbc 2026-11-11),druid,restoration,25,,0,SHORT 1 pts: no headroom left in mapped talents
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,1,1382,5,TB Beast Mastery 373 rank 5 -> Forever 1382 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,2,1389,5,TB Beast Mastery 374 rank 5 -> Forever 1389 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,3,1395,3,TB Beast Mastery 377 rank 3 -> Forever 1395 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,4,1625,2,TB Beast Mastery 378 rank 2 -> Forever 1625 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,5,1391,1,TB Beast Mastery 380 rank 1 -> Forever 1391 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,6,1396,5,TB Beast Mastery 381 rank 5 -> Forever 1396 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,7,1390,2,TB Beast Mastery 382 rank 2 -> Forever 1390 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,8,1385,2,TB Beast Mastery 383 rank 2 -> Forever 1385 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,9,1393,5,TB Beast Mastery 384 rank 5 -> Forever 1393 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,10,,0,"DROP Turtle talent 385 (Beast Mastery, 3 pts): no Forever counterpart (custom)"
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,11,1386,1,TB Beast Mastery 386 rank 1 -> Forever 1386 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,12,1387,1,TB Beast Mastery 387 rank 1 -> Forever 1387 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,13,1397,2,TB Beast Mastery 388 rank 2 -> Forever 1397 (matched by row-custom)
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,14,1388,2,TB Beast Mastery 389 rank 2 -> Forever 1388 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,15,,0,"OVERLAP: TB Beast Mastery 390 shares Forever 1397 (capped at 5, 2 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,16,1397,3,TB Beast Mastery 390 rank 5 -> Forever 1397 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,17,,0,"OVERLAP: TB Beast Mastery 391 shares Forever 1386 (capped at 1, 1 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,18,1342,5,TB Marksmanship 413 rank 5 -> Forever 1342 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,19,1348,1,TB Marksmanship 414 rank 1 -> Forever 1348 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,20,1348,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1348 (Marksmanship, spell)"
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,21,1348,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1348 (Marksmanship, spell)"
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,22,1348,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1348 (Marksmanship, spell)"
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,23,1348,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1348 (Marksmanship, spell)"
+70888 (repack server/data/dbc 2026-11-11),hunter,beastmastery,24,,0,SHORT 2 pts: no headroom left in mapped talents
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,1,1382,5,TB Beast Mastery 373 rank 5 -> Forever 1382 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,2,1624,2,TB Beast Mastery 375 rank 2 -> Forever 1624 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,3,1381,2,TB Beast Mastery 376 rank 2 -> Forever 1381 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,4,1342,5,TB Marksmanship 413 rank 5 -> Forever 1342 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,5,1348,5,TB Marksmanship 414 rank 5 -> Forever 1348 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,6,1344,5,TB Marksmanship 415 rank 5 -> Forever 1344 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,7,1352,2,TB Marksmanship 416 rank 2 -> Forever 1352 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,8,1345,1,TB Marksmanship 417 rank 1 -> Forever 1345 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,9,1346,3,TB Marksmanship 418 rank 3 -> Forever 1346 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,10,,0,"DROP Turtle talent 419 (Marksmanship, 2 pts): no Forever counterpart (custom)"
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,11,1349,5,TB Marksmanship 420 rank 5 -> Forever 1349 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,12,1347,1,TB Marksmanship 422 rank 1 -> Forever 1347 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,13,1351,2,TB Marksmanship 423 rank 2 -> Forever 1351 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,14,,0,"OVERLAP: TB Marksmanship 424 shares Forever 1347 (capped at 3, 1 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,15,1347,2,TB Marksmanship 424 rank 3 -> Forever 1347 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,16,1362,2,TB Marksmanship 425 rank 2 -> Forever 1362 (matched by row-custom)
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,17,,0,"OVERLAP: TB Marksmanship 426 shares Forever 1362 (capped at 5, 2 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,18,1362,3,TB Marksmanship 426 rank 5 -> Forever 1362 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,19,1361,1,TB Marksmanship 427 rank 1 -> Forever 1361 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,20,1381,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1381 (Beast Mastery, spell)"
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,21,1352,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1352 (Marksmanship, spell)"
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,22,1346,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1346 (Marksmanship, spell)"
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,23,1351,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1351 (Marksmanship, position-custom)"
+70888 (repack server/data/dbc 2026-11-11),hunter,marksmanship,24,1381,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1381 (Beast Mastery, spell)"
+70888 (repack server/data/dbc 2026-11-11),hunter,survival,1,1389,5,TB Beast Mastery 374 rank 5 -> Forever 1389 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,survival,2,1395,3,TB Beast Mastery 377 rank 3 -> Forever 1395 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,survival,3,1623,3,TB Survival 392 rank 3 -> Forever 1623 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),hunter,survival,4,1311,5,TB Survival 393 rank 5 -> Forever 1311 (matched by row-custom)
+70888 (repack server/data/dbc 2026-11-11),hunter,survival,5,1304,3,TB Survival 395 rank 3 -> Forever 1304 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,survival,6,1621,2,TB Survival 396 rank 2 -> Forever 1621 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,survival,7,1305,3,TB Survival 397 rank 3 -> Forever 1305 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,survival,8,1306,2,TB Survival 399 rank 2 -> Forever 1306 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),hunter,survival,9,1622,5,TB Survival 400 rank 5 -> Forever 1622 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,survival,10,1308,1,TB Survival 401 rank 1 -> Forever 1308 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),hunter,survival,11,,0,"OVERLAP: TB Survival 402 shares Forever 1308 (capped at 1, 1 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),hunter,survival,12,1322,2,TB Survival 403 rank 2 -> Forever 1322 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),hunter,survival,13,1310,3,TB Survival 404 rank 3 -> Forever 1310 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,survival,14,1321,3,TB Survival 406 rank 3 -> Forever 1321 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,survival,15,,0,"OVERLAP: TB Survival 407 shares Forever 1322 (capped at 2, 2 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),hunter,survival,16,1312,1,TB Survival 408 rank 1 -> Forever 1312 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),hunter,survival,17,1303,5,TB Survival 410 rank 5 -> Forever 1303 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),hunter,survival,18,1325,1,TB Survival 411 rank 1 -> Forever 1325 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),hunter,survival,19,1304,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1304 (Survival, spell)"
+70888 (repack server/data/dbc 2026-11-11),hunter,survival,20,1305,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1305 (Survival, spell)"
+70888 (repack server/data/dbc 2026-11-11),hunter,survival,21,1304,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1304 (Survival, spell)"
+70888 (repack server/data/dbc 2026-11-11),hunter,survival,22,1305,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1305 (Survival, spell)"
+70888 (repack server/data/dbc 2026-11-11),mage,arcane,1,74,2,TB Arcane 37 rank 2 -> Forever 74 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,arcane,2,1650,3,TB Arcane 38 rank 3 -> Forever 1650 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,arcane,3,80,5,TB Arcane 39 rank 5 -> Forever 80 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,arcane,4,75,5,TB Arcane 42 rank 5 -> Forever 75 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,arcane,5,81,3,TB Arcane 44 rank 3 -> Forever 81 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,arcane,6,85,1,TB Arcane 45 rank 1 -> Forever 85 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),mage,arcane,7,88,2,TB Arcane 47 rank 2 -> Forever 88 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,arcane,8,1142,3,TB Arcane 48 rank 3 -> Forever 1142 (matched by row-custom)
+70888 (repack server/data/dbc 2026-11-11),mage,arcane,9,,0,"OVERLAP: TB Arcane 49 shares Forever 1142 (capped at 3, 3 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),mage,arcane,10,421,3,TB Arcane 50 rank 3 -> Forever 421 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,arcane,11,86,1,TB Arcane 51 rank 1 -> Forever 86 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,arcane,12,77,1,TB Arcane 52 rank 1 -> Forever 77 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),mage,arcane,13,77,2,TB Arcane 53 rank 2 -> Forever 77 (matched by row-custom)
+70888 (repack server/data/dbc 2026-11-11),mage,arcane,14,,0,"DROP Turtle talent 54 (Arcane, 5 pts): no Forever counterpart (custom)"
+70888 (repack server/data/dbc 2026-11-11),mage,arcane,15,87,1,TB Arcane 55 rank 1 -> Forever 87 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,arcane,16,37,5,TB Frost 19 rank 5 -> Forever 37 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,arcane,17,1649,3,TB Frost 20 rank 3 -> Forever 1649 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,arcane,18,61,3,TB Frost 21 rank 3 -> Forever 61 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,arcane,19,1650,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1650 (Arcane, spell)"
+70888 (repack server/data/dbc 2026-11-11),mage,arcane,20,77,1,"TOP-UP +1: freed Turtle-custom points -> Forever 77 (Arcane, position-custom)"
+70888 (repack server/data/dbc 2026-11-11),mage,arcane,21,77,1,"TOP-UP +1: freed Turtle-custom points -> Forever 77 (Arcane, row-custom)"
+70888 (repack server/data/dbc 2026-11-11),mage,arcane,22,1650,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1650 (Arcane, spell)"
+70888 (repack server/data/dbc 2026-11-11),mage,arcane,23,,0,SHORT 4 pts: no headroom left in mapped talents
+70888 (repack server/data/dbc 2026-11-11),mage,fire,1,74,2,TB Arcane 37 rank 2 -> Forever 74 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,fire,2,1650,3,TB Arcane 38 rank 3 -> Forever 1650 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,fire,3,75,5,TB Arcane 42 rank 5 -> Forever 75 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,fire,4,26,5,TB Fire 1 rank 5 -> Forever 26 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,fire,5,34,5,TB Fire 3 rank 5 -> Forever 34 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,fire,6,28,2,TB Fire 4 rank 2 -> Forever 28 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,fire,7,27,3,TB Fire 5 rank 3 -> Forever 27 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,fire,8,1141,2,TB Fire 6 rank 2 -> Forever 1141 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,fire,9,31,3,TB Fire 7 rank 3 -> Forever 31 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,fire,10,29,1,TB Fire 8 rank 1 -> Forever 29 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,fire,11,23,2,TB Fire 9 rank 2 -> Forever 23 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,fire,12,25,3,TB Fire 10 rank 3 -> Forever 25 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,fire,13,1639,3,TB Fire 12 rank 3 -> Forever 1639 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,fire,14,32,1,TB Fire 13 rank 1 -> Forever 32 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,fire,15,33,3,TB Fire 14 rank 3 -> Forever 33 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,fire,16,,0,"OVERLAP: TB Fire 15 shares Forever 33 (capped at 3, 2 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),mage,fire,17,35,5,TB Fire 16 rank 5 -> Forever 35 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,fire,18,36,1,TB Fire 17 rank 1 -> Forever 36 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,fire,19,1650,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1650 (Arcane, spell)"
+70888 (repack server/data/dbc 2026-11-11),mage,fire,20,1650,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1650 (Arcane, spell)"
+70888 (repack server/data/dbc 2026-11-11),mage,frost,1,74,2,TB Arcane 37 rank 2 -> Forever 74 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,frost,2,1650,3,TB Arcane 38 rank 3 -> Forever 1650 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,frost,3,75,5,TB Arcane 42 rank 5 -> Forever 75 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,frost,4,37,5,TB Frost 19 rank 5 -> Forever 37 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,frost,5,1649,3,TB Frost 20 rank 3 -> Forever 1649 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,frost,6,61,3,TB Frost 21 rank 3 -> Forever 61 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,frost,7,62,2,TB Frost 23 rank 2 -> Forever 62 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,frost,8,73,5,TB Frost 25 rank 5 -> Forever 73 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,frost,9,69,1,TB Frost 26 rank 1 -> Forever 69 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,frost,10,741,2,TB Frost 28 rank 2 -> Forever 741 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,frost,11,66,3,TB Frost 29 rank 3 -> Forever 66 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,frost,12,67,5,TB Frost 30 rank 5 -> Forever 67 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,frost,13,72,1,TB Frost 31 rank 1 -> Forever 72 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,frost,14,64,1,TB Frost 32 rank 1 -> Forever 64 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),mage,frost,15,64,2,TB Frost 33 rank 2 -> Forever 64 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,frost,16,68,5,TB Frost 34 rank 5 -> Forever 68 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,frost,17,,0,"OVERLAP: TB Frost 35 shares Forever 68 (capped at 5, 2 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),mage,frost,18,71,1,TB Frost 36 rank 1 -> Forever 71 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),mage,frost,19,1650,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1650 (Arcane, spell)"
+70888 (repack server/data/dbc 2026-11-11),mage,frost,20,1650,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1650 (Arcane, spell)"
+70888 (repack server/data/dbc 2026-11-11),paladin,holy,1,1449,5,TB Holy 445 rank 5 -> Forever 1449 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,holy,2,,0,"DROP Turtle talent 446 (Holy, 3 pts): no Forever counterpart (custom)"
+70888 (repack server/data/dbc 2026-11-11),paladin,holy,3,1432,2,TB Holy 447 rank 2 -> Forever 1432 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,holy,4,1444,3,TB Holy 449 rank 3 -> Forever 1444 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,holy,5,1443,2,TB Holy 451 rank 2 -> Forever 1443 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,holy,6,1461,3,TB Holy 453 rank 3 -> Forever 1461 (matched by row)
+70888 (repack server/data/dbc 2026-11-11),paladin,holy,7,,0,"OVERLAP: TB Holy 454 shares Forever 1461 (capped at 5, 3 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),paladin,holy,8,1461,2,TB Holy 454 rank 5 -> Forever 1461 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,holy,9,1446,2,TB Holy 455 rank 2 -> Forever 1446 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),paladin,holy,10,,0,"DROP Turtle talent 456 (Holy, 5 pts): no Forever counterpart (custom)"
+70888 (repack server/data/dbc 2026-11-11),paladin,holy,11,1502,1,TB Holy 457 rank 1 -> Forever 1502 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,holy,12,1627,3,TB Holy 458 rank 3 -> Forever 1627 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,holy,13,,0,"OVERLAP: TB Holy 459 shares Forever 1627 (capped at 5, 3 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),paladin,holy,14,1627,2,TB Holy 459 rank 5 -> Forever 1627 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),paladin,holy,15,,0,"OVERLAP: TB Holy 460 shares Forever 1502 (capped at 1, 1 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),paladin,holy,16,1422,5,TB Protection 461 rank 5 -> Forever 1422 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,holy,17,1425,2,TB Protection 464 rank 2 -> Forever 1425 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,holy,18,1423,4,TB Protection 465 rank 4 -> Forever 1423 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,holy,19,1432,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1432 (Holy, spell)"
+70888 (repack server/data/dbc 2026-11-11),paladin,holy,20,1423,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1423 (Protection, spell)"
+70888 (repack server/data/dbc 2026-11-11),paladin,holy,21,1432,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1432 (Holy, spell)"
+70888 (repack server/data/dbc 2026-11-11),paladin,holy,22,1432,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1432 (Holy, spell)"
+70888 (repack server/data/dbc 2026-11-11),paladin,holy,23,,0,SHORT 11 pts: no headroom left in mapped talents
+70888 (repack server/data/dbc 2026-11-11),paladin,protection,1,1450,5,TB Holy 444 rank 5 -> Forever 1450 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,protection,2,1421,5,TB Protection 462 rank 5 -> Forever 1421 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),paladin,protection,3,1630,3,TB Protection 463 rank 3 -> Forever 1630 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,protection,4,1425,1,TB Protection 464 rank 1 -> Forever 1425 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,protection,5,1423,2,TB Protection 465 rank 2 -> Forever 1423 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,protection,6,1501,3,TB Protection 466 rank 3 -> Forever 1501 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,protection,7,1431,1,TB Protection 467 rank 1 -> Forever 1431 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,protection,8,1424,3,TB Protection 468 rank 3 -> Forever 1424 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,protection,9,1629,3,TB Protection 469 rank 3 -> Forever 1629 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,protection,10,1521,2,TB Protection 470 rank 2 -> Forever 1521 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),paladin,protection,11,1426,3,TB Protection 472 rank 3 -> Forever 1426 (matched by row-custom)
+70888 (repack server/data/dbc 2026-11-11),paladin,protection,12,1430,1,TB Protection 473 rank 1 -> Forever 1430 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,protection,13,,0,"OVERLAP: TB Protection 474 shares Forever 1426 (capped at 5, 3 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),paladin,protection,14,1426,2,TB Protection 474 rank 5 -> Forever 1426 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),paladin,protection,15,1429,5,TB Protection 475 rank 5 -> Forever 1429 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),paladin,protection,16,,0,"OVERLAP: TB Protection 476 shares Forever 1430 (capped at 1, 1 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),paladin,protection,17,1407,5,TB Retribution 429 rank 5 -> Forever 1407 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,protection,18,1631,2,TB Retribution 430 rank 2 -> Forever 1631 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,protection,19,1403,1,TB Retribution 432 rank 1 -> Forever 1403 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,protection,20,1425,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1425 (Protection, spell)"
+70888 (repack server/data/dbc 2026-11-11),paladin,protection,21,1423,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1423 (Protection, spell)"
+70888 (repack server/data/dbc 2026-11-11),paladin,protection,22,1629,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1629 (Protection, spell)"
+70888 (repack server/data/dbc 2026-11-11),paladin,protection,23,1403,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1403 (Retribution, spell)"
+70888 (repack server/data/dbc 2026-11-11),paladin,retribution,1,1450,5,TB Holy 444 rank 5 -> Forever 1450 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,retribution,2,1449,5,TB Holy 445 rank 5 -> Forever 1449 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,retribution,3,1435,1,TB Holy 450 rank 1 -> Forever 1435 (matched by position)
+70888 (repack server/data/dbc 2026-11-11),paladin,retribution,4,1407,5,TB Retribution 429 rank 5 -> Forever 1407 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,retribution,5,1631,2,TB Retribution 430 rank 2 -> Forever 1631 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,retribution,6,1464,3,TB Retribution 431 rank 3 -> Forever 1464 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,retribution,7,1403,5,TB Retribution 432 rank 5 -> Forever 1403 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,retribution,8,1411,5,TB Retribution 434 rank 5 -> Forever 1411 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,retribution,9,1481,1,TB Retribution 435 rank 1 -> Forever 1481 (matched by position)
+70888 (repack server/data/dbc 2026-11-11),paladin,retribution,10,1634,2,TB Retribution 436 rank 2 -> Forever 1634 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,retribution,11,1410,3,TB Retribution 437 rank 3 -> Forever 1410 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,retribution,12,1632,2,TB Retribution 439 rank 2 -> Forever 1632 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,retribution,13,1402,5,TB Retribution 440 rank 5 -> Forever 1402 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,retribution,14,,0,"OVERLAP: TB Retribution 441 shares Forever 1481 (capped at 1, 1 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),paladin,retribution,15,,0,"OVERLAP: TB Retribution 442 shares Forever 1402 (capped at 5, 5 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),paladin,retribution,16,1441,1,TB Retribution 443 rank 1 -> Forever 1441 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),paladin,retribution,17,,0,SHORT 6 pts: no headroom left in mapped talents
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,1,345,2,TB Discipline 166 rank 2 -> Forever 345 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,2,342,3,TB Discipline 167 rank 3 -> Forever 342 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,3,352,5,TB Discipline 169 rank 5 -> Forever 352 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,4,,0,"OVERLAP: TB Discipline 170 shares Forever 342 (capped at 5, 3 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,5,342,2,TB Discipline 170 rank 5 -> Forever 342 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,6,344,2,TB Discipline 172 rank 2 -> Forever 344 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,7,346,2,TB Discipline 173 rank 2 -> Forever 346 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,8,348,1,TB Discipline 174 rank 1 -> Forever 348 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,9,343,3,TB Discipline 175 rank 3 -> Forever 343 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,10,347,3,TB Discipline 176 rank 3 -> Forever 347 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,11,,0,"OVERLAP: TB Discipline 177 shares Forever 346 (capped at 3, 2 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,12,346,1,TB Discipline 177 rank 3 -> Forever 346 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,13,1201,3,TB Discipline 179 rank 3 -> Forever 1201 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,14,1201,1,TB Discipline 180 rank 1 -> Forever 1201 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,15,351,1,TB Discipline 181 rank 1 -> Forever 351 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,16,1202,5,TB Discipline 182 rank 5 -> Forever 1202 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,17,322,1,TB Discipline 183 rank 1 -> Forever 322 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,18,406,3,TB Holy 184 rank 3 -> Forever 406 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,19,410,2,TB Holy 185 rank 2 -> Forever 410 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,20,401,5,TB Holy 186 rank 5 -> Forever 401 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,21,1181,1,TB Holy 187 rank 1 -> Forever 1181 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,22,345,1,"TOP-UP +1: freed Turtle-custom points -> Forever 345 (Discipline, spell)"
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,23,1201,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1201 (Discipline, spell)"
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,24,1181,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1181 (Holy, spell)"
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,25,345,1,"TOP-UP +1: freed Turtle-custom points -> Forever 345 (Discipline, spell)"
+70888 (repack server/data/dbc 2026-11-11),priest,discipline,26,1181,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1181 (Holy, spell)"
+70888 (repack server/data/dbc 2026-11-11),priest,holy,1,345,2,TB Discipline 166 rank 2 -> Forever 345 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,holy,2,341,5,TB Discipline 168 rank 5 -> Forever 341 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,holy,3,352,2,TB Discipline 169 rank 2 -> Forever 352 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,holy,4,321,2,TB Discipline 171 rank 2 -> Forever 321 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,holy,5,344,2,TB Discipline 172 rank 2 -> Forever 344 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,holy,6,348,1,TB Discipline 174 rank 1 -> Forever 348 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,holy,7,406,3,TB Holy 184 rank 3 -> Forever 406 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,holy,8,410,2,TB Holy 185 rank 2 -> Forever 410 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,holy,9,1181,5,TB Holy 187 rank 5 -> Forever 1181 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,holy,10,1635,2,TB Holy 189 rank 2 -> Forever 1635 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,holy,11,361,3,TB Holy 191 rank 3 -> Forever 361 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,holy,12,,0,"OVERLAP: TB Holy 193 shares Forever 1635 (capped at 2, 2 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),priest,holy,13,408,3,TB Holy 194 rank 3 -> Forever 408 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,holy,14,402,5,TB Holy 195 rank 5 -> Forever 402 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,holy,15,413,2,TB Holy 196 rank 2 -> Forever 413 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),priest,holy,16,1561,1,TB Holy 197 rank 1 -> Forever 1561 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,holy,17,,0,"OVERLAP: TB Holy 198 shares Forever 402 (capped at 5, 3 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),priest,holy,18,404,5,TB Holy 199 rank 5 -> Forever 404 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,holy,19,1637,1,TB Holy 200 rank 1 -> Forever 1637 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),priest,holy,20,345,1,"TOP-UP +1: freed Turtle-custom points -> Forever 345 (Discipline, spell)"
+70888 (repack server/data/dbc 2026-11-11),priest,holy,21,352,1,"TOP-UP +1: freed Turtle-custom points -> Forever 352 (Discipline, spell)"
+70888 (repack server/data/dbc 2026-11-11),priest,holy,22,345,1,"TOP-UP +1: freed Turtle-custom points -> Forever 345 (Discipline, spell)"
+70888 (repack server/data/dbc 2026-11-11),priest,holy,23,352,1,"TOP-UP +1: freed Turtle-custom points -> Forever 352 (Discipline, spell)"
+70888 (repack server/data/dbc 2026-11-11),priest,holy,24,345,1,"TOP-UP +1: freed Turtle-custom points -> Forever 345 (Discipline, spell)"
+70888 (repack server/data/dbc 2026-11-11),priest,shadow,1,345,2,TB Discipline 166 rank 2 -> Forever 345 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,shadow,2,341,5,TB Discipline 168 rank 5 -> Forever 341 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,shadow,3,342,4,TB Discipline 170 rank 4 -> Forever 342 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,shadow,4,344,2,TB Discipline 172 rank 2 -> Forever 344 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,shadow,5,348,1,TB Discipline 174 rank 1 -> Forever 348 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,shadow,6,343,3,TB Discipline 175 rank 3 -> Forever 343 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,shadow,7,347,3,TB Discipline 176 rank 3 -> Forever 347 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,shadow,8,481,5,TB Shadow 202 rank 5 -> Forever 481 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,shadow,9,466,2,TB Shadow 203 rank 2 -> Forever 466 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,shadow,10,482,2,TB Shadow 204 rank 2 -> Forever 482 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,shadow,11,463,5,TB Shadow 205 rank 5 -> Forever 463 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,shadow,12,501,1,TB Shadow 209 rank 1 -> Forever 501 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,shadow,13,881,2,TB Shadow 211 rank 2 -> Forever 881 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,shadow,14,461,5,TB Shadow 212 rank 5 -> Forever 461 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,shadow,15,484,1,TB Shadow 214 rank 1 -> Forever 484 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,shadow,16,1638,2,TB Shadow 215 rank 2 -> Forever 1638 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),priest,shadow,17,462,5,TB Shadow 216 rank 5 -> Forever 462 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),priest,shadow,18,521,1,TB Shadow 217 rank 1 -> Forever 521 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,1,270,5,TB Assassination 130 rank 5 -> Forever 270 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,2,273,3,TB Assassination 131 rank 3 -> Forever 273 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,3,274,2,TB Assassination 132 rank 2 -> Forever 274 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,4,277,3,TB Assassination 133 rank 3 -> Forever 277 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,5,281,1,TB Assassination 134 rank 1 -> Forever 281 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,6,269,5,TB Assassination 136 rank 5 -> Forever 269 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,7,279,2,TB Assassination 137 rank 2 -> Forever 279 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,8,682,3,TB Assassination 138 rank 3 -> Forever 682 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,9,268,3,TB Assassination 139 rank 3 -> Forever 268 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,10,,0,"OVERLAP: TB Assassination 140 shares Forever 279 (capped at 3, 2 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,11,279,1,TB Assassination 140 rank 3 -> Forever 279 (matched by row-custom)
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,12,280,1,TB Assassination 141 rank 1 -> Forever 280 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,13,,0,"OVERLAP: TB Assassination 142 shares Forever 280 (capped at 1, 1 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,14,382,1,TB Assassination 143 rank 2 -> Forever 382 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,15,283,5,TB Assassination 144 rank 5 -> Forever 283 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,16,,0,"OVERLAP: TB Assassination 145 shares Forever 382 (capped at 1, 1 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,17,186,5,TB Combat 110 rank 5 -> Forever 186 (matched by row)
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,18,202,3,TB Combat 113 rank 3 -> Forever 202 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,19,181,3,TB Combat 114 rank 3 -> Forever 181 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,20,682,1,"TOP-UP +1: freed Turtle-custom points -> Forever 682 (Assassination, spell)"
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,21,268,1,"TOP-UP +1: freed Turtle-custom points -> Forever 268 (Assassination, spell)"
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,22,181,1,"TOP-UP +1: freed Turtle-custom points -> Forever 181 (Combat, spell)"
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,23,682,1,"TOP-UP +1: freed Turtle-custom points -> Forever 682 (Assassination, spell)"
+70888 (repack server/data/dbc 2026-11-11),rogue,assassination,24,268,1,"TOP-UP +1: freed Turtle-custom points -> Forever 268 (Assassination, spell)"
+70888 (repack server/data/dbc 2026-11-11),rogue,combat,1,270,5,TB Assassination 130 rank 5 -> Forever 270 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,combat,2,273,3,TB Assassination 131 rank 3 -> Forever 273 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,combat,3,274,2,TB Assassination 132 rank 2 -> Forever 274 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,combat,4,277,3,TB Assassination 133 rank 3 -> Forever 277 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,combat,5,281,1,TB Assassination 134 rank 1 -> Forever 281 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,combat,6,269,5,TB Assassination 136 rank 5 -> Forever 269 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,combat,7,279,1,TB Assassination 137 rank 1 -> Forever 279 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,combat,8,186,5,TB Combat 110 rank 5 -> Forever 186 (matched by row)
+70888 (repack server/data/dbc 2026-11-11),rogue,combat,9,202,3,TB Combat 113 rank 3 -> Forever 202 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,combat,10,181,5,TB Combat 114 rank 5 -> Forever 181 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,combat,11,222,2,TB Combat 116 rank 2 -> Forever 222 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,combat,12,221,5,TB Combat 120 rank 5 -> Forever 221 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,combat,13,223,1,TB Combat 122 rank 1 -> Forever 223 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),rogue,combat,14,242,2,TB Combat 123 rank 2 -> Forever 242 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,combat,15,1703,2,TB Combat 124 rank 2 -> Forever 1703 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,combat,16,,0,"OVERLAP: TB Combat 125 shares Forever 1703 (capped at 2, 2 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),rogue,combat,17,1122,3,TB Combat 126 rank 3 -> Forever 1122 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,combat,18,205,1,TB Combat 127 rank 1 -> Forever 205 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,combat,19,279,1,"TOP-UP +1: freed Turtle-custom points -> Forever 279 (Assassination, spell)"
+70888 (repack server/data/dbc 2026-11-11),rogue,combat,20,242,1,"TOP-UP +1: freed Turtle-custom points -> Forever 242 (Combat, spell)"
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,1,270,5,TB Assassination 130 rank 5 -> Forever 270 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,2,273,3,TB Assassination 131 rank 3 -> Forever 273 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,3,274,2,TB Assassination 132 rank 2 -> Forever 274 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,4,244,5,TB Subtlety 146 rank 5 -> Forever 244 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,5,261,2,TB Subtlety 147 rank 2 -> Forever 261 (matched by position)
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,6,,0,"DROP Turtle talent 148 (Subtlety, 3 pts): no Forever counterpart (none)"
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,7,263,3,TB Subtlety 149 rank 3 -> Forever 263 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,8,247,2,TB Subtlety 150 rank 2 -> Forever 247 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,9,1123,3,TB Subtlety 151 rank 3 -> Forever 1123 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,10,245,3,TB Subtlety 152 rank 3 -> Forever 245 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,11,,0,"DROP Turtle talent 153 (Subtlety, 3 pts): no Forever counterpart (custom)"
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,12,,0,"OVERLAP: TB Subtlety 154 shares Forever 263 (capped at 3, 1 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,13,681,1,TB Subtlety 155 rank 1 -> Forever 681 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,14,246,2,TB Subtlety 156 rank 2 -> Forever 246 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,15,262,2,TB Subtlety 157 rank 2 -> Forever 262 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,16,265,2,TB Subtlety 159 rank 2 -> Forever 265 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,17,284,1,TB Subtlety 160 rank 1 -> Forever 284 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,18,,0,"OVERLAP: TB Subtlety 161 shares Forever 265 (capped at 2, 1 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,19,,0,"DROP Turtle talent 162 (Subtlety, 2 pts): no Forever counterpart (custom)"
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,20,1702,2,TB Subtlety 163 rank 2 -> Forever 1702 (matched by row-custom)
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,21,1702,2,TB Subtlety 164 rank 2 -> Forever 1702 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,22,381,1,TB Subtlety 165 rank 1 -> Forever 381 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,23,262,1,"TOP-UP +1: freed Turtle-custom points -> Forever 262 (Subtlety, spell)"
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,24,261,1,"TOP-UP +1: freed Turtle-custom points -> Forever 261 (Subtlety, position)"
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,25,246,1,"TOP-UP +1: freed Turtle-custom points -> Forever 246 (Subtlety, position-custom)"
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,26,1702,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1702 (Subtlety, row-custom)"
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,27,261,1,"TOP-UP +1: freed Turtle-custom points -> Forever 261 (Subtlety, position)"
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,28,261,1,"TOP-UP +1: freed Turtle-custom points -> Forever 261 (Subtlety, position)"
+70888 (repack server/data/dbc 2026-11-11),rogue,subtlety,29,,0,SHORT 4 pts: no headroom left in mapped talents
+70888 (repack server/data/dbc 2026-11-11),shaman,elemental,1,564,5,TB Elemental 218 rank 5 -> Forever 564 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,elemental,2,563,5,TB Elemental 219 rank 5 -> Forever 563 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,elemental,3,572,1,TB Elemental 220 rank 1 -> Forever 572 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,elemental,4,1640,3,TB Elemental 221 rank 3 -> Forever 1640 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,elemental,5,1645,3,TB Elemental 222 rank 3 -> Forever 1645 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,elemental,6,574,1,TB Elemental 223 rank 1 -> Forever 574 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),shaman,elemental,7,575,3,TB Elemental 224 rank 3 -> Forever 575 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,elemental,8,562,5,TB Elemental 225 rank 5 -> Forever 562 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,elemental,9,567,2,TB Elemental 227 rank 2 -> Forever 567 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,elemental,10,561,3,TB Elemental 229 rank 3 -> Forever 561 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,elemental,11,1641,2,TB Elemental 230 rank 2 -> Forever 1641 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,elemental,12,573,1,TB Elemental 231 rank 1 -> Forever 573 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,elemental,13,,0,"OVERLAP: TB Elemental 232 shares Forever 1641 (capped at 2, 2 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),shaman,elemental,14,721,5,TB Elemental 233 rank 5 -> Forever 721 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,elemental,15,,0,"OVERLAP: TB Elemental 234 shares Forever 573 (capped at 1, 1 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),shaman,elemental,16,586,5,TB Restoration 235 rank 5 -> Forever 586 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,elemental,17,593,4,TB Restoration 236 rank 4 -> Forever 593 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,elemental,18,572,1,"TOP-UP +1: freed Turtle-custom points -> Forever 572 (Elemental, spell)"
+70888 (repack server/data/dbc 2026-11-11),shaman,elemental,19,575,1,"TOP-UP +1: freed Turtle-custom points -> Forever 575 (Elemental, spell)"
+70888 (repack server/data/dbc 2026-11-11),shaman,elemental,20,593,1,"TOP-UP +1: freed Turtle-custom points -> Forever 593 (Restoration, spell)"
+70888 (repack server/data/dbc 2026-11-11),shaman,enhancement,1,564,5,TB Elemental 218 rank 5 -> Forever 564 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,enhancement,2,563,5,TB Elemental 219 rank 5 -> Forever 563 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,enhancement,3,1640,3,TB Elemental 221 rank 3 -> Forever 1640 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,enhancement,4,1645,3,TB Elemental 222 rank 3 -> Forever 1645 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,enhancement,5,574,1,TB Elemental 223 rank 1 -> Forever 574 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),shaman,enhancement,6,614,5,TB Enhancement 251 rank 5 -> Forever 614 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,enhancement,7,613,5,TB Enhancement 254 rank 5 -> Forever 613 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,enhancement,8,607,3,TB Enhancement 255 rank 3 -> Forever 607 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,enhancement,9,601,3,TB Enhancement 257 rank 3 -> Forever 601 (matched by row-custom)
+70888 (repack server/data/dbc 2026-11-11),shaman,enhancement,10,617,1,TB Enhancement 258 rank 1 -> Forever 617 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),shaman,enhancement,11,602,5,TB Enhancement 260 rank 5 -> Forever 602 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,enhancement,12,610,2,TB Enhancement 262 rank 2 -> Forever 610 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,enhancement,13,611,3,TB Enhancement 263 rank 3 -> Forever 611 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,enhancement,14,901,1,TB Enhancement 264 rank 1 -> Forever 901 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,enhancement,15,1643,5,TB Enhancement 265 rank 5 -> Forever 1643 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,enhancement,16,,0,"OVERLAP: TB Enhancement 266 shares Forever 901 (capped at 1, 1 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),shaman,enhancement,17,601,1,"TOP-UP +1: freed Turtle-custom points -> Forever 601 (Enhancement, row-custom)"
+70888 (repack server/data/dbc 2026-11-11),shaman,restoration,1,564,5,TB Elemental 218 rank 5 -> Forever 564 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,restoration,2,572,2,TB Elemental 220 rank 2 -> Forever 572 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,restoration,3,1645,3,TB Elemental 222 rank 3 -> Forever 1645 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,restoration,4,574,1,TB Elemental 223 rank 1 -> Forever 574 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),shaman,restoration,5,562,2,TB Elemental 225 rank 2 -> Forever 562 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,restoration,6,586,5,TB Restoration 235 rank 5 -> Forever 586 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,restoration,7,593,5,TB Restoration 236 rank 5 -> Forever 593 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,restoration,8,581,3,TB Restoration 238 rank 3 -> Forever 581 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,restoration,9,1648,3,TB Restoration 240 rank 3 -> Forever 1648 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,restoration,10,587,2,TB Restoration 241 rank 2 -> Forever 587 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,restoration,11,582,1,TB Restoration 242 rank 1 -> Forever 582 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,restoration,12,588,5,TB Restoration 244 rank 5 -> Forever 588 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,restoration,13,594,3,TB Restoration 245 rank 3 -> Forever 594 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),shaman,restoration,14,,0,"OVERLAP: TB Restoration 246 shares Forever 1648 (capped at 3, 2 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),shaman,restoration,15,591,1,TB Restoration 247 rank 1 -> Forever 591 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,restoration,16,,0,"OVERLAP: TB Restoration 248 shares Forever 1648 (capped at 3, 2 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),shaman,restoration,17,592,5,TB Restoration 249 rank 5 -> Forever 592 (matched by row-custom)
+70888 (repack server/data/dbc 2026-11-11),shaman,restoration,18,590,1,TB Restoration 250 rank 1 -> Forever 590 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),shaman,restoration,19,562,1,"TOP-UP +1: freed Turtle-custom points -> Forever 562 (Elemental, spell)"
+70888 (repack server/data/dbc 2026-11-11),shaman,restoration,20,587,1,"TOP-UP +1: freed Turtle-custom points -> Forever 587 (Restoration, spell)"
+70888 (repack server/data/dbc 2026-11-11),shaman,restoration,21,594,1,"TOP-UP +1: freed Turtle-custom points -> Forever 594 (Restoration, position-custom)"
+70888 (repack server/data/dbc 2026-11-11),shaman,restoration,22,562,1,"TOP-UP +1: freed Turtle-custom points -> Forever 562 (Elemental, spell)"
+70888 (repack server/data/dbc 2026-11-11),shaman,tank,1,564,5,TB Elemental 218 rank 5 -> Forever 564 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,tank,2,1640,3,TB Elemental 221 rank 3 -> Forever 1640 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,tank,3,1645,3,TB Elemental 222 rank 3 -> Forever 1645 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,tank,4,574,1,TB Elemental 223 rank 1 -> Forever 574 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),shaman,tank,5,575,3,TB Elemental 224 rank 3 -> Forever 575 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,tank,6,614,5,TB Enhancement 251 rank 5 -> Forever 614 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,tank,7,609,2,TB Enhancement 253 rank 2 -> Forever 609 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),shaman,tank,8,613,5,TB Enhancement 254 rank 5 -> Forever 613 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,tank,9,607,3,TB Enhancement 255 rank 3 -> Forever 607 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,tank,10,617,1,TB Enhancement 258 rank 1 -> Forever 617 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),shaman,tank,11,601,3,TB Enhancement 259 rank 3 -> Forever 601 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),shaman,tank,12,602,5,TB Enhancement 260 rank 5 -> Forever 602 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,tank,13,615,2,TB Enhancement 261 rank 2 -> Forever 615 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),shaman,tank,14,611,3,TB Enhancement 263 rank 3 -> Forever 611 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,tank,15,901,1,TB Enhancement 264 rank 1 -> Forever 901 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,tank,16,1643,5,TB Enhancement 265 rank 5 -> Forever 1643 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),shaman,tank,17,,0,"OVERLAP: TB Enhancement 266 shares Forever 901 (capped at 1, 1 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),shaman,tank,18,575,1,"TOP-UP +1: freed Turtle-custom points -> Forever 575 (Elemental, spell)"
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,1,1005,5,TB Affliction 337 rank 5 -> Forever 1005 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,2,1003,5,TB Affliction 338 rank 5 -> Forever 1003 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,3,,0,"DROP Turtle talent 340 (Affliction, 3 pts): no Forever counterpart (custom)"
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,4,1007,2,TB Affliction 341 rank 2 -> Forever 1007 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,5,1004,2,TB Affliction 342 rank 2 -> Forever 1004 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,6,1284,3,TB Affliction 343 rank 3 -> Forever 1284 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,7,1001,2,TB Affliction 344 rank 2 -> Forever 1001 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,8,1081,1,TB Affliction 345 rank 1 -> Forever 1081 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,9,1021,2,TB Affliction 346 rank 2 -> Forever 1021 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,10,1002,2,TB Affliction 347 rank 2 -> Forever 1002 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,11,,0,"DROP Turtle talent 348 (Affliction, 3 pts): no Forever counterpart (custom)"
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,12,1082,2,TB Affliction 349 rank 2 -> Forever 1082 (matched by row-custom)
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,13,1041,1,TB Affliction 350 rank 1 -> Forever 1041 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,14,1082,1,TB Affliction 352 rank 1 -> Forever 1082 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,15,1042,5,TB Affliction 353 rank 5 -> Forever 1042 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,16,1022,1,TB Affliction 354 rank 1 -> Forever 1022 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,17,941,5,TB Destruction 322 rank 5 -> Forever 941 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,18,943,5,TB Destruction 324 rank 5 -> Forever 943 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,19,963,1,TB Destruction 327 rank 1 -> Forever 963 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,20,1001,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1001 (Affliction, spell)"
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,21,1004,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1004 (Affliction, position-custom)"
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,22,1082,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1082 (Affliction, row-custom)"
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,23,1001,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1001 (Affliction, spell)"
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,24,1004,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1004 (Affliction, position-custom)"
+70888 (repack server/data/dbc 2026-11-11),warlock,affliction,25,1001,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1001 (Affliction, spell)"
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,1,1003,5,TB Affliction 338 rank 5 -> Forever 1003 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,2,1007,2,TB Affliction 341 rank 2 -> Forever 1007 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,3,1222,2,TB Demonology 355 rank 2 -> Forever 1222 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,4,1223,5,TB Demonology 356 rank 5 -> Forever 1223 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,5,1224,2,TB Demonology 358 rank 2 -> Forever 1224 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,6,1225,3,TB Demonology 359 rank 3 -> Forever 1225 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,7,1242,3,TB Demonology 360 rank 3 -> Forever 1242 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,8,1226,1,TB Demonology 361 rank 1 -> Forever 1226 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,9,1241,5,TB Demonology 362 rank 5 -> Forever 1241 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,10,,0,"DROP Turtle talent 364 (Demonology, 2 pts): no Forever counterpart (custom)"
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,11,1227,2,TB Demonology 365 rank 2 -> Forever 1227 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,12,1262,3,TB Demonology 366 rank 3 -> Forever 1262 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,13,,0,"OVERLAP: TB Demonology 367 shares Forever 1262 (capped at 5, 1 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,14,1262,2,TB Demonology 367 rank 3 -> Forever 1262 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,15,1281,1,TB Demonology 368 rank 1 -> Forever 1281 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,16,1283,3,TB Demonology 369 rank 3 -> Forever 1283 (matched by row-custom)
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,17,1244,5,TB Demonology 370 rank 5 -> Forever 1244 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,18,,0,"OVERLAP: TB Demonology 371 shares Forever 1244 (capped at 5, 3 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,19,1282,1,TB Demonology 372 rank 1 -> Forever 1282 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,20,1242,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1242 (Demonology, spell)"
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,21,1222,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1222 (Demonology, position-custom)"
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,22,1283,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1283 (Demonology, row-custom)"
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,23,1242,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1242 (Demonology, spell)"
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,24,1283,1,"TOP-UP +1: freed Turtle-custom points -> Forever 1283 (Demonology, row-custom)"
+70888 (repack server/data/dbc 2026-11-11),warlock,demonology,25,,0,SHORT 1 pts: no headroom left in mapped talents
+70888 (repack server/data/dbc 2026-11-11),warlock,destruction,1,1003,5,TB Affliction 338 rank 5 -> Forever 1003 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,destruction,2,1007,2,TB Affliction 341 rank 2 -> Forever 1007 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,destruction,3,944,5,TB Destruction 321 rank 5 -> Forever 944 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,destruction,4,941,5,TB Destruction 322 rank 5 -> Forever 941 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,destruction,5,,0,"DROP Turtle talent 323 (Destruction, 2 pts): no Forever counterpart (custom)"
+70888 (repack server/data/dbc 2026-11-11),warlock,destruction,6,943,5,TB Destruction 324 rank 5 -> Forever 943 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,destruction,7,982,1,TB Destruction 325 rank 1 -> Forever 982 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,destruction,8,985,2,TB Destruction 326 rank 2 -> Forever 985 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,destruction,9,963,1,TB Destruction 327 rank 1 -> Forever 963 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,destruction,10,981,5,TB Destruction 328 rank 5 -> Forever 981 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,destruction,11,986,2,TB Destruction 329 rank 2 -> Forever 986 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,destruction,12,964,2,TB Destruction 330 rank 2 -> Forever 964 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,destruction,13,,0,"OVERLAP: TB Destruction 332 shares Forever 986 (capped at 2, 2 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),warlock,destruction,14,961,5,TB Destruction 333 rank 5 -> Forever 961 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,destruction,15,967,1,TB Destruction 334 rank 1 -> Forever 967 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,destruction,16,966,5,TB Destruction 335 rank 5 -> Forever 966 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,destruction,17,968,1,TB Destruction 336 rank 1 -> Forever 968 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warlock,destruction,18,982,1,"TOP-UP +1: freed Turtle-custom points -> Forever 982 (Destruction, spell)"
+70888 (repack server/data/dbc 2026-11-11),warlock,destruction,19,982,1,"TOP-UP +1: freed Turtle-custom points -> Forever 982 (Destruction, spell)"
+70888 (repack server/data/dbc 2026-11-11),warlock,destruction,20,982,1,"TOP-UP +1: freed Turtle-custom points -> Forever 982 (Destruction, spell)"
+70888 (repack server/data/dbc 2026-11-11),warlock,destruction,21,982,1,"TOP-UP +1: freed Turtle-custom points -> Forever 982 (Destruction, spell)"
+70888 (repack server/data/dbc 2026-11-11),warrior,arms,1,641,5,TB Arms 57 rank 5 -> Forever 641 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,arms,2,127,2,TB Arms 58 rank 2 -> Forever 127 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,arms,3,126,2,TB Arms 59 rank 2 -> Forever 126 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,arms,4,130,5,TB Arms 60 rank 5 -> Forever 130 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,arms,5,128,3,TB Arms 61 rank 3 -> Forever 128 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,arms,6,131,1,TB Arms 62 rank 1 -> Forever 131 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),warrior,arms,7,,0,"OVERLAP: TB Arms 63 shares Forever 131 (capped at 2, 1 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),warrior,arms,8,131,1,TB Arms 63 rank 2 -> Forever 131 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,arms,9,121,3,TB Arms 64 rank 3 -> Forever 121 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,arms,10,136,3,TB Arms 65 rank 3 -> Forever 136 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,arms,11,662,2,TB Arms 66 rank 2 -> Forever 662 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,arms,12,132,5,TB Arms 67 rank 5 -> Forever 132 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),warrior,arms,13,133,1,TB Arms 68 rank 1 -> Forever 133 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,arms,14,125,3,TB Arms 69 rank 3 -> Forever 125 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),warrior,arms,15,134,2,TB Arms 71 rank 2 -> Forever 134 (matched by position)
+70888 (repack server/data/dbc 2026-11-11),warrior,arms,16,135,1,TB Arms 73 rank 1 -> Forever 135 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,arms,17,157,5,TB Fury 94 rank 5 -> Forever 157 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,arms,18,159,5,TB Fury 96 rank 5 -> Forever 159 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,arms,19,160,1,TB Fury 98 rank 1 -> Forever 160 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,arms,20,127,1,"TOP-UP +1: freed Turtle-custom points -> Forever 127 (Arms, spell)"
+70888 (repack server/data/dbc 2026-11-11),warrior,fury,1,641,5,TB Arms 57 rank 5 -> Forever 641 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,fury,2,127,2,TB Arms 58 rank 2 -> Forever 127 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,fury,3,130,3,TB Arms 60 rank 3 -> Forever 130 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,fury,4,131,2,TB Arms 63 rank 2 -> Forever 131 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,fury,5,121,3,TB Arms 64 rank 3 -> Forever 121 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,fury,6,662,2,TB Arms 66 rank 2 -> Forever 662 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,fury,7,157,5,TB Fury 94 rank 5 -> Forever 157 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,fury,8,1581,5,TB Fury 95 rank 5 -> Forever 1581 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,fury,9,159,5,TB Fury 96 rank 5 -> Forever 159 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,fury,10,154,4,TB Fury 97 rank 4 -> Forever 154 (matched by row-custom)
+70888 (repack server/data/dbc 2026-11-11),warrior,fury,11,160,1,TB Fury 98 rank 1 -> Forever 160 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,fury,12,661,2,TB Fury 99 rank 2 -> Forever 661 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,fury,13,168,3,TB Fury 103 rank 3 -> Forever 168 (matched by position-custom)
+70888 (repack server/data/dbc 2026-11-11),warrior,fury,14,165,1,TB Fury 104 rank 1 -> Forever 165 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,fury,15,1542,2,TB Fury 105 rank 2 -> Forever 1542 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,fury,16,156,5,TB Fury 107 rank 5 -> Forever 156 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,fury,17,167,1,TB Fury 109 rank 1 -> Forever 167 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,protection,1,124,3,TB Arms 56 rank 3 -> Forever 124 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,protection,2,641,4,TB Arms 57 rank 4 -> Forever 641 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,protection,3,142,2,TB Protection 74 rank 2 -> Forever 142 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,protection,4,1601,5,TB Protection 75 rank 5 -> Forever 1601 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,protection,5,138,3,TB Protection 76 rank 3 -> Forever 138 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,protection,6,140,5,TB Protection 78 rank 5 -> Forever 140 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,protection,7,153,1,TB Protection 79 rank 1 -> Forever 153 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,protection,8,143,2,TB Protection 81 rank 2 -> Forever 143 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,protection,9,147,3,TB Protection 82 rank 3 -> Forever 147 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,protection,10,149,2,TB Protection 83 rank 2 -> Forever 149 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,protection,11,144,5,TB Protection 85 rank 5 -> Forever 144 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,protection,12,702,5,TB Protection 86 rank 5 -> Forever 702 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,protection,13,148,1,TB Protection 87 rank 1 -> Forever 148 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,protection,14,,0,"OVERLAP: TB Protection 88 shares Forever 149 (capped at 2, 2 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),warrior,protection,15,,0,"DROP Turtle talent 89 (Protection, 2 pts): no Forever counterpart (custom)"
+70888 (repack server/data/dbc 2026-11-11),warrior,protection,16,150,2,TB Protection 90 rank 2 -> Forever 150 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,protection,17,,0,"OVERLAP: TB Protection 91 shares Forever 702 (capped at 5, 3 pts freed)"
+70888 (repack server/data/dbc 2026-11-11),warrior,protection,18,152,1,TB Protection 92 rank 1 -> Forever 152 (matched by spell)
+70888 (repack server/data/dbc 2026-11-11),warrior,protection,19,641,1,"TOP-UP +1: freed Turtle-custom points -> Forever 641 (Arms, spell)"
+70888 (repack server/data/dbc 2026-11-11),warrior,protection,20,138,1,"TOP-UP +1: freed Turtle-custom points -> Forever 138 (Protection, spell)"
+70888 (repack server/data/dbc 2026-11-11),warrior,protection,21,138,1,"TOP-UP +1: freed Turtle-custom points -> Forever 138 (Protection, spell)"
+70888 (repack server/data/dbc 2026-11-11),warrior,protection,22,,0,SHORT 4 pts: no headroom left in mapped talents
