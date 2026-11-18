@@ -6,6 +6,13 @@
 
 #include "playerbot/UnportedFeatures.h"
 
+// Headers of the core features the moved bodies below use that ai/botpch.h includes later (or only the legacy files do).
+#include "GameEventMgr.h"
+#include "Chat/Channel.h"
+#include "Chat/ChannelMgr.h"
+#include "Maps/Pool/PoolManager.h"
+#include "Battlegrounds/BattleGroundMgr.h"
+
 
 // ===============================================================================================================
 // ITEMS (PlayerbotAIItems.cpp, ChatHelper.cpp, ItemVisitors.h, UseItemAction.h, ItemUsageValue.h)
@@ -735,7 +742,7 @@ template <class Facade>
 inline void SendChatPacketCompat(Facade& facade, Player* from, Player* to, uint32 chatType, std::string const& text, uint32 language)
 {
     WorldPacket data;
-    ChatHandler::BuildChatPacket(data, chatType, text.c_str(), language, CHAT_TAG_NONE, from->getObjectGuid(), from->GetName());
+    ChatHandler::BuildChatPacket(data, static_cast<ChatMsg>(chatType), text.c_str(), static_cast<Language>(language), CHAT_TAG_NONE, from->getObjectGuid(), from->GetName());
     facade.SendPacket(to, data);
 }
 
