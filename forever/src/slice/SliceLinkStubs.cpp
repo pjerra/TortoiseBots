@@ -78,7 +78,6 @@ inline void NoteBoss()
         tbcompat::Unported(tbcompat::Feature::BossTactics);
 }
 inline void NoteTravel()    { tbcompat::Unported(tbcompat::Feature::TravelMgr); }
-inline void NoteLoot()      { tbcompat::Unported(tbcompat::Feature::LootStack); }
 inline void NoteItems()     { tbcompat::Unported(tbcompat::Feature::RandomItems); }
 inline void NoteTexts()     { tbcompat::Unported(tbcompat::Feature::BotTexts); }
 inline void NoteSpecs()     { tbcompat::Unported(tbcompat::Feature::TalentSpecs); }
@@ -307,14 +306,7 @@ bool IdleMobVeto::Wakes(float, float) const { NoteFlee(); return false; }
 bool FleeManager::CalculateDestination(float*, float*, float*, FleeFailureMemory const*, uint32) { NoteFlee(); return false; }
 bool FleeManager::isUseful() { NoteFlee(); return false; }
 
-// LootObjectStack.cpp: an empty stack that never loots.
-LootObject::LootObject(const LootObject&) = default;
-bool LootObject::IsLootPossible(Player*) { NoteLoot(); return false; }
-WorldObject* LootObject::GetWorldObject(Player*) { NoteLoot(); return nullptr; }
-bool LootObjectStack::Add(ObjectGuid, bool) { NoteLoot(); return false; }
-void LootObjectStack::Remove(ObjectGuid) { NoteLoot(); }
-void LootObjectStack::NoteApproachFailure(ObjectGuid) { NoteLoot(); }
-bool LootObjectStack::IsAbandoned(ObjectGuid) { NoteLoot(); return false; }
+// LootObjectStack.cpp (slice 2): the real file is in the slice now; its seven stand-ins and the `loot object stack` row are gone (R3).
 }
 
 // =====================================================================================================================

@@ -120,6 +120,7 @@ struct CmangosObjectAccessorProxy
 #define GetGameObjectInfo GetGameObjectTemplate      // ObjectMgr's game object template by entry
 #define GetGOData GetGameObjectData                  // ObjectMgr's spawn record by spawn id
 #define GetHealthPercent GetHealthPct                // health as a percentage of max, 0..100
+#define GetPowerPercent GetPowerPct                  // a power (mana, rage, energy) as a percentage of its max, 0..100 (slice 2, R3: MaintenanceValues.h)
 #define GetLeaderGuid GetLeaderGUID                   // the group's leader
 #define GetObjectBoundingRadius GetBoundingRadius    // the unit's size, added to reach computations
 #define GetObjectGuid GetGUID                        // the object's guid

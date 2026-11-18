@@ -446,7 +446,7 @@ namespace ai
                 return drinkDuration;
 
             float masterOrientation = master->GetOrientation();
-            float angleToBot = master->GetAngle(bot);
+            float angleToBot = GetAngleCompat(master, bot);
             float angleDiff = fabs(masterOrientation - angleToBot);
 
             if (angleDiff > M_PI / 2 && angleDiff < 3 * M_PI / 2)
@@ -491,7 +491,7 @@ namespace ai
                 return eatDuration;
 
             float masterOrientation = master->GetOrientation();
-            float angleToBot = master->GetAngle(bot);
+            float angleToBot = GetAngleCompat(master, bot);
             float angleDiff = fabs(masterOrientation - angleToBot);
 
             if (angleDiff > M_PI / 2 && angleDiff < 3 * M_PI / 2)
