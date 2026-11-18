@@ -10,7 +10,7 @@
 
 // Guid as a qualifier (see TbCompat_V2.h): T writes the raw 64-bit guid as a decimal number and reads it back with stoull.
 inline std::string GuidQualifierCompat(ObjectGuid const& guid) { return std::to_string(guid.GetRawValue()); }
-inline ObjectGuid GuidFromQualifierCompat(std::string const& text) { return ObjectGuid(std::stoull(text)); }
+inline ObjectGuid GuidFromQualifierCompat(std::string const& text) { return ObjectGuid(uint64(std::stoull(text))); }
 
 // Whose corpse is it (LootObjectStack.cpp MayLootCorpse).
 inline bool CorpseAllowedToLootCompat(Player* bot, Creature* creature) { return bot->IsAllowedToLoot(creature); }
