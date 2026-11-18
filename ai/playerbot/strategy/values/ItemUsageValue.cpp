@@ -117,7 +117,8 @@ ItemUsage ItemUsageValue::Calculate()
     if (!proto)
         return ItemUsage::ITEM_USAGE_NONE;
 
-    // A mirror whose fill found a missing client table is never a choice: sell it rather than equip, need or buy it.
+    // A mirror whose fill found a missing client table is never a choice: no equip, need or buy; NONE leaves it to the
+    // sell/destroy/auction paths.
     if (!IsItemProtoUsableCompat(proto))
         return ItemUsage::ITEM_USAGE_NONE;
 
