@@ -1,0 +1,32 @@
+entry,name,map,x,y,z,faction,taxi_node,spawns,zone_id,client_build,source,class
+4606,Aelthalyste,0,1760.67,403.12,-57.13,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+5142,Braenna Flintcrag,0,-4617.63,-906.67,501.16,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+837,Branstock Khalder,0,-6056.74,393.55,392.84,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+5484,Brother Benjamin,0,-8547.72,814.66,106.53,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+5489,Brother Joshua,0,-8519.56,862.83,109.91,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+2129,Dark Cleric Beryl,0,2265.2,251.05,41.2,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+2123,Dark Cleric Duesten,0,1848.32,1627.63,97.02,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+4607,Father Lankester,0,1776.28,399.61,-57.13,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+4608,Father Lazarus,0,1756.95,416.86,-57.13,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+11406,High Priest Rohan,0,-4612.27,-909.1,501.15,122,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+376,High Priestess Laurena,0,-8512.4,862.36,109.93,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+1226,Maxan Anvol,0,-5590.56,-529.66,399.74,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+11397,Nara Meideros,0,-8727.69,1102.96,92.6,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+375,Priestess Anetta,0,-8853.59,-193.34,82.12,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+377,Priestess Josetta,0,-9460.75,33.13,63.9,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+5141,Theodrus Frostbeard,0,-4613.63,-903.98,524.78,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+5143,Toldren Deepiron,0,-4625.99,-912.88,501.15,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+4090,Astarii Starseeker,1,9667.02,2532.66,1360.08,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+3046,Father Cobb,1,-994.01,249.06,102.29,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+4091,Jandria,1,9654.43,2537.32,1331.6,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+3707,Ken'jai,1,-617.39,-4202.4,38.3,126,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+4092,Lariia,1,9612.45,2511.37,1331.6,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+3600,Laurna Morninglight,1,9905.44,985.43,1313.92,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+3045,Malakai Cross,1,-1007.06,260.34,112.11,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+3044,Miles Welsh,1,-956.24,252.42,97.88,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+11401,Priestess Alathea,1,9665.28,2520.08,1360.08,1076,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+3595,Shanda,1,10458.8,801.62,1346.84,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+3706,Tai'jin,1,294.88,-4831.49,10.61,126,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+6018,Ur'kyo,1,1452.43,-4179.82,44.13,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+6014,X'yera,1,1453.24,-4185.65,61.42,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest
+5994,Zayus,1,1461.02,-4181.68,61.42,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),priest

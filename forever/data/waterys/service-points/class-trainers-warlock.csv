@@ -1,0 +1,22 @@
+entry,name,map,x,y,z,faction,taxi_node,spawns,zone_id,client_build,source,class
+460,Alamar Grimm,0,-6048.79,391.08,398.96,875,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warlock
+5173,Alexander Calder,0,-4608.55,-1109.55,511.69,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warlock
+5172,Briarthorn,0,-4599.08,-1111.67,505.02,875,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warlock
+461,Demisette Cloyce,0,-8980.02,1041.09,101.49,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warlock
+459,Drusilla La Salle,0,-8926.74,-195.59,80.77,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warlock
+5612,Gimrizz Shadowcog,0,-5640.0,-528.8,404.38,875,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warlock
+4563,Kaal Soulreaper,0,1775.98,46.13,-61.41,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warlock
+988,Kartosh,0,-10471.6,-3338.83,25.55,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warlock
+4564,Luther Pickman,0,1780.31,44.04,-61.41,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warlock
+906,Maximillian Crowe,0,-9472.8,-5.33,49.88,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warlock
+2126,Maximillion,0,1839.03,1636.54,97.02,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warlock
+4565,Richard Kerwin,0,1776.4,20.25,-47.3,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warlock
+2127,Rupert Boch,0,2259.05,250.32,41.2,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warlock
+5496,Sandahl,0,-8988.79,1033.89,101.49,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warlock
+5171,Thistleheart,0,-4604.14,-1117.51,505.02,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warlock
+5495,Ursula Deline,0,-8971.05,1029.9,101.49,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warlock
+3172,Dhugru Gorelust,1,356.19,-4837.95,11.17,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warlock
+3324,Grol'dar,1,1844.21,-4353.61,-14.8,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warlock
+3325,Mirket,1,1834.66,-4362.52,-14.78,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warlock
+3156,Nartok,1,-606.87,-4111.87,43.03,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warlock
+3326,Zevrost,1,1848.96,-4360.43,-14.8,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warlock

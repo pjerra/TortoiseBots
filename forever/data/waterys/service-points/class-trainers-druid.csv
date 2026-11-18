@@ -1,0 +1,18 @@
+entry,name,map,x,y,z,faction,taxi_node,spawns,zone_id,client_build,source,class
+5506,Maldryn,0,-8750.83,1124.52,92.63,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),druid
+5504,Sheldras Moontree,0,-8776.3,1100.09,92.63,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),druid
+5505,Theridran,0,-8741.68,1095.5,93.8,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),druid
+4218,Denatharion,1,10186.3,2570.38,1326.05,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),druid
+4219,Fylerian Nightwing,1,10179.4,2583.69,1326.05,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),druid
+3060,Gart Mistrunner,1,-2873.57,-268.59,54.05,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),druid
+3064,Gennia Runetotem,1,-2315.75,-442.63,-5.36,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),druid
+9465,Golhine the Hooded,1,6192.75,-1919.04,569.57,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),druid
+8142,Jannos Lighthoof,1,-4325.8,160.51,34.2,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),druid
+3602,Kal,1,9741.91,966.0,1293.78,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),druid
+3036,Kym Wildmane,1,-1057.47,-288.54,159.11,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),druid
+12042,Loganaar,1,7867.13,-2593.73,486.92,994,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),druid
+3597,Mardant Strongoak,1,10464.0,829.54,1381.02,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),druid
+4217,Mathrengyl Bearwalker,1,10179.0,2563.98,1340.13,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),druid
+3034,Sheal Runetotem,1,-1037.98,-288.51,159.11,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),druid
+3033,Turak Runetotem,1,-1039.41,-281.56,159.11,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),druid
+251373,Xyton Silverwind,2991,4090.84,1914.15,980.89,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),druid

@@ -2,6 +2,9 @@
 
 | File | What |
 |---|---|
+| `service-points/*.csv` | 19 files: flight masters (61, with taxi node), innkeepers (47), repair vendors (322), reagent/ammo vendors (380), class trainers (9 per-class files), profession trainers (289), stable masters (44), bankers (27), auctioneers (29), mailboxes (111), graveyards + spirit healers (1,251). |
+| `tactic-spells.csv` | 1,451 boss spell ids from TB's tactics (`ai_boss_tactic`, `boss_abilities.csv`) over 40 raids/dungeons and 389 bosses: existence in client 70938 spell data and static cast evidence on Forever. |
+| `quests.csv` | The 23 quest ids TB names (world-buff quests 90000-90013, hire unlocks 90100-90106, Turtle mount 40302, one help-text example): 17 MISSING, 5 id-reuse CHANGED, 1 OK. |
 | `sql-inventory.csv` | 360 migrations (319 world, 37 character, 4 rollback, 1 optional plan), 934 file/table rows: 48 CREATE tables (all module-owned), core tables/columns touched, MySQL 8 and Trinity 1.60 schema risks. 19 rows would fail on Trinity's schema; 0 on MySQL 8. |
 | `config-knobs.csv` | All 4,283 active `AiPlayerbot.*` knobs: 3,493 NEW_DEFAULT_NEEDED (3,192 autogear item ids, 297 talent links, 4 id lists), 14 TURTLE_ONLY (Turtle mount + shaman tank build), 776 CARRY_OVER, with suggested Forever defaults. |
 | `items.csv` | Every item id TortoiseBots names in code, SQL or config (2,398 ids: autogear templates, hire-gear tiers, consumables/poisons/ammo-adjacent items, world-buff items, quest/camp tools). Status against Forever: 1,143 OK, 64 CHANGED, 1,191 MISSING. `replacement` is a same-name Forever id when one exists; `note` says why. |
@@ -58,3 +61,24 @@ default embeds data that does not carry over (Turtle item ids in the autogear te
 AhBot id lists); CARRY_OVER means generic behaviour; TURTLE_ONLY means the feature only exists on Turtle
 (Swift Riding Turtle quest 40302 and the custom shaman "tank" tree). Suggested Forever values are in the
 last column; empty/no-value suggestions mean "fill from the Forever data files when the port has them".
+
+## Round 6: service points, tactic spells, quests
+
+Client build is checked in every data row (`client_build`): the client is now 1.60.1.70938
+(2026-11-17 `.build.info`), so the DB2 used for taxi/skill/spell names and ids was extracted fresh from
+it with the repack extractor into a throw-away folder (same 1,133 files, same layout hashes as the earlier
+70888 extraction). The world/hotfixes data is the TDB release 2026-10-14, which is not tied to a client build.
+
+- Service points: NPC categories from `creature_template.npcflag` and coordinates from the first
+  `creature` spawn per entry (`spawns` column has the count); flight masters matched to the nearest
+  `TaxiNodes` node (client DB2 70938 + the two custom hotfix nodes) within 80 yd. Mailboxes are
+  gameobjects of type 19. Graveyards are `graveyard_zone` + `world_safe_locs`; spirit healers are all
+  spawns of the spirit-healer templates. Profession names come from `trainer_spell.ReqSkillLine` resolved
+  through client `SkillLine.db2`; 28 profession trainers have no trainer rows or a Turtle custom line.
+- Tactic spells: every spell named by `ai_boss_tactic` (interrupt/dispel/avoid/move-out and the other
+  kinds) and by `boss_abilities.csv` (column `key`) for the seven raids and the dungeons in
+  `dungeons.csv`, mapped Turtle→Forever entries through `bosses.csv`/`dungeons.csv`. Existence is against
+  client `SpellName`/`Spell` DB2 70938 plus hotfix `spell_name`; cast evidence is a SmartAI cast row by the
+  Forever boss entry, a boss `ScriptName` (cast not statically verifiable), or none.
+- Quests: ids from `quest_template` SQL, quest constants in code (`WorldBuffPolicy`, `HireUnlockPolicy`),
+  and the Turtle mount comment in the config.

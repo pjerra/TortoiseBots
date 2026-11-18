@@ -1,0 +1,381 @@
+entry,name,map,x,y,z,faction,taxi_node,spawns,zone_id,client_build,source,provides
+4604,Abigail Sawyer,0,1629.87,348.38,-62.07,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+2118,Abigail Shiel,0,2259.73,275.57,36.07,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1316,Adair Gilroy,0,-8865.55,822.29,98.4,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+829,Adlin Pridedrift,0,-6226.67,320.06,383.14,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+1347,Alexandra Bolero,0,-8942.84,799.54,91.03,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4610,Algernon,0,1399.98,377.06,-65.94,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+777,Amy Davenport,0,-9260.21,-2203.09,64.06,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3556,Andrew Hilbert,0,528.07,1634.62,104.71,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2816,Androd Fadran,0,-1257.2,-2489.44,22.12,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+844,Antonio Perelli,0,-9628.33,-1176.14,39.98,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+228,Avette Fellwood,0,-10516.2,-1138.54,26.32,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+989,Banalash,0,-10486.8,-3249.89,27.56,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4602,Benijah Fenner,0,1667.85,308.89,-62.07,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+1302,Bernard Gump,0,-8827.97,519.83,98.87,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+5519,Billibub Cogspinner,0,-8342.25,638.32,95.42,875,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2846,Blixrez Goodstitch,0,-14467.5,418.34,25.49,120,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2481,Bliztik,0,-10695.1,346.26,44.57,120,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+5128,Bombus Finespindle,0,-4751.19,-1026.82,504.51,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+5123,Bretta Goldfury,0,-4913.43,-1284.47,505.38,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+2480,Bro'kin,0,774.47,-287.35,153.27,120,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+151,Brog Hamfist,0,-9465.29,9.63,57.15,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+5514,Brooke Stonebraid,0,-8430.18,695.14,96.4,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+152,Brother Danil,0,-8901.59,-112.72,82.03,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+5101,Bryllia Ironbrand,0,-4962.1,-1023.77,503.95,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+5163,Burbik Gearspanner,0,-4711.06,-1080.45,502.85,875,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3096,Captured Servant of Azora,0,-9726.25,-3187.31,58.69,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+11038,Caretaker Alen,0,2151.72,-5264.51,95.87,794,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+2393,Christoph Jeffcoat,0,-6.25,-926.64,57.17,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+8934,Christopher Hewen,0,-10632.6,1188.78,35.31,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1687,Cliff Hadin,0,-5645.74,-4283.84,407.81,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+2697,Clyde Ranthal,0,-9601.07,-3503.22,122.04,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+734,Corporal Bluth,0,-11295.8,-201.34,75.79,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+2672,Cowardly Crosby,0,-14677.5,497.89,1.76,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+16376,Craftsman Wilhelm,0,2261.17,-5321.3,81.95,794,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3578,Dalaran Miner,0,-87.54,824.11,63.98,76,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4561,Daniel Bartlett,0,1638.71,258.74,-43.02,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2668,Danielle Zipstitch,0,-10536.7,-1215.21,32.97,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+958,Dawn Brightstar,0,-9541.13,-716.47,99.3,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2397,Derak Nightfall,0,-14.0,-952.2,56.27,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1453,Dewin Shimmerdawn,0,-3700.87,-718.83,11.23,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1465,Drac Roughcut,0,-5391.73,-2974.88,325.95,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1250,Drake Lindgren,0,-9483.1,-1356.25,47.04,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+2812,Drovnar Strongbrew,0,-1262.41,-2534.12,21.85,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1286,Edna Mullby,0,-8821.22,598.25,95.66,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2140,Edwin Harly,0,549.58,1602.99,128.56,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+1462,Edwina Monzor,0,-3755.34,-849.35,10.02,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+5503,Eldraeith,0,-8983.79,753.76,98.41,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4555,Eleanor Rusk,0,1564.76,209.6,-43.02,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+4587,Elizabeth Van Talen,0,1402.06,149.05,-62.37,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+5160,Emrul Riknussun,0,-4766.43,-1187.03,502.81,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+5483,Erika Tate,0,-8608.36,358.5,99.71,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4585,Ezekiel Graves,0,1550.34,151.73,-62.09,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4775,Felicia Doan,0,1554.3,257.97,-43.02,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+5100,Fillius Fizzlespinner,0,-4958.07,-1015.15,503.95,875,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2682,Fradd Swiftgear,0,-2857.93,-1481.26,10.17,875,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3091,Franklin Hamar,0,-9234.38,-2160.86,71.21,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1298,Frederick Stover,0,-8795.48,709.11,102.37,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+5175,Gearcutter Cogspinner,0,-4793.47,-1249.97,502.09,875,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2698,George Candarte,0,-415.49,-1877.95,73.26,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3090,Gerald Crawley,0,-9170.68,-2115.43,88.95,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+8176,Gharash,0,-10407.0,-3265.75,22.03,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+12958,Gigget Zipcoil,0,476.27,-2901.61,165.23,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+843,Gina MacGregor,0,-10661.2,999.36,32.96,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3085,Gloria Femmel,0,-9204.5,-2149.08,64.34,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2848,Glyx Brewright,0,-14491.6,425.18,34.68,120,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2687,Gnaz Blunderflame,0,-12666.6,-1032.14,97.96,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4256,Golnir Bouldertoe,0,-4708.06,-1120.93,504.53,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1692,Golorn Frostbeard,0,-5640.83,-501.39,396.79,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2820,Graud,0,-910.29,-3534.85,72.82,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+2908,Grawl,0,-6651.26,-2156.89,245.43,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+1452,Gruham Rumdnul,0,-3746.03,-888.59,11.02,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+960,Gunder Thornbush,0,-10528.5,-1159.34,34.96,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+5138,Gwina Stonebranch,0,-4883.2,-1149.06,505.85,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2810,Hammon Karwn,0,-1271.28,-2540.19,21.71,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2839,Haren Kanmae,0,-14340.6,414.6,6.71,120,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+8161,Harggan,0,333.7,-2091.51,131.65,694,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1243,Hegnar Rumbleshot,0,-6015.51,-201.51,407.44,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+3088,Henry Chapal,0,-9173.33,-2088.29,89.03,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+3133,Herble Baubbletump,0,-10586.6,-1272.46,37.06,875,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2844,Hurklor,0,-14361.9,372.23,24.45,120,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1686,Irene Sureshot,0,-5654.18,-4287.37,407.81,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+2847,Jansen Underwood,0,-14380.0,365.55,24.04,120,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+12941,Jase Farlane,0,2313.88,-5305.0,82.08,794,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1325,Jasper Fel,0,-8807.56,328.19,102.34,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3542,Jaysin Lanyda,0,-859.13,-559.59,18.63,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+9179,Jazzrik,0,-6760.19,-3135.55,241.25,120,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+13219,Jekyll Flandring,0,393.57,-976.09,110.22,1335,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+1454,Jennabink Powerseam,0,-3687.1,-725.4,16.08,875,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1318,Jessara Cordell,0,-8855.9,805.48,96.52,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+5565,Jillian Tanner,0,-8722.87,479.32,98.7,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4589,Joseph Moore,0,1503.84,201.0,-62.06,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2115,Joshua Kien,0,1866.02,1574.45,94.4,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+6574,Jun'ha,0,-1008.15,-3483.49,62.77,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+5512,Kaita Deepforge,0,-8433.0,623.71,95.42,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+790,Karen Taylor,0,-9260.76,-2219.88,64.02,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+372,Karm Ironquill,0,-5355.0,-3017.81,318.81,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4615,Katrina Alliestar,0,1564.79,348.16,-62.07,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2401,Kayren Soothallow,0,-24.79,-935.18,55.31,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+2821,Keena,0,-918.91,-3533.79,72.78,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1257,Keldric Boucher,0,-8865.02,631.84,96.17,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2664,Kelsey Yance,0,-14331.2,419.3,6.71,120,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1456,Kersok Prond,0,-3818.65,-818.82,9.55,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+789,Kimberly Hiett,0,-9234.49,-2158.75,64.44,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+8305,Kixxle,0,-3188.03,-2465.57,9.67,120,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+8679,Knaz Blunderflame,0,-12667.6,-1037.03,97.7,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1691,Kreg Bilmn,0,-5597.66,-521.85,399.74,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+5758,Leo Sarn,0,-635.25,1186.65,77.78,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+12942,Leonard Porter,0,949.88,-1435.65,62.67,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+5757,Lilly,0,243.8,1643.27,142.36,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1297,Lina Stover,0,-8791.82,702.67,102.37,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+791,Lindsay Ashlock,0,-9260.25,-2195.37,64.02,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+1672,Lohgan Eva,0,-10518.8,-1210.91,28.12,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1694,Loslor Rudge,0,-5499.7,-664.58,395.39,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+227,Mabel Solaj,0,-10531.8,-1155.08,28.1,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+3135,Malissa,0,-10514.6,-1311.46,40.34,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2394,Mallen Swain,0,-47.59,-914.22,55.77,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1287,Marda Weller,0,-8787.69,609.63,96.86,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+267324,Margaret Weaver,0,1855.03,1560.01,99.16,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1313,Maria Lumere,0,-8987.74,751.76,98.41,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3550,Martine Tramblay,0,2040.91,57.46,33.95,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+11874,Masat T'andr,0,-10102.1,-2829.84,22.4,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+14624,Master Smith Burninate,0,-6524.04,-1188.72,309.34,1475,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+2685,Mazk Snipeshot,0,-14364.5,402.07,6.71,120,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2381,Micha Yance,0,-773.92,-499.29,18.93,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4577,Millie Gregorian,0,1684.99,196.0,-62.08,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2134,Mrs. Winters,0,2253.34,270.22,34.88,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+9555,Mu'uta,0,-933.85,-3477.47,51.39,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+1461,Murndan Derth,0,-3790.24,-857.93,11.6,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+9553,Nadia Vernon,0,566.31,1559.6,132.6,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+1459,Naela Trance,0,-3758.33,-855.73,10.02,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+2683,Namdo Bizzfizzle,0,-4923.46,725.47,253.18,875,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2380,Nandar Branson,0,-818.23,-563.16,16.49,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1448,Neal Allen,0,-3712.16,-834.07,11.48,11,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+1148,Nerrist,0,-12412.3,134.01,3.94,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4603,Nicholas Atwood,0,1706.63,271.48,-62.07,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+8178,Nina Lightbrew,0,-10974.0,-3481.8,103.22,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+8160,Nioma,0,353.5,-2086.86,113.87,694,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+14738,Otho Moji'ko,0,-563.16,-4631.15,13.31,1494,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+8681,Outfitter Eric,0,-4723.88,-1056.45,510.95,875,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3551,Patrice Dwyer,0,496.0,1647.86,125.66,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+5154,Poranna Snowbraid,0,-4718.58,-1053.08,504.28,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+491,Quartermaster Lewis,0,-10500.6,1021.59,60.61,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+1198,Rallic Finn,0,-9469.28,-1355.24,47.43,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+1474,Rann Flamespinner,0,-5331.39,-2985.24,325.26,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+8177,Rartar,0,-10490.5,-3264.03,27.82,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+17598,Renn'az,0,-622.67,-4533.81,11.86,1494,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+2699,Rikqiz,0,-14404.0,402.9,23.14,120,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2684,Rizz Loosebolt,0,843.62,-541.1,139.87,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4553,Ronald Burch,0,1602.12,275.44,-55.26,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2688,Ruppo Zipcoil,0,497.45,-2896.63,165.91,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4581,Salazar Bloch,0,1626.63,130.47,-62.07,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1457,Samor Festivus,0,-3807.19,-823.61,17.16,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4597,Samuel Van Brunt,0,1685.39,284.04,-62.06,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4599,Sarah Killian,0,1641.5,329.05,-62.1,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3541,Sarah Raycroft,0,-774.52,-505.75,23.71,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+3548,Selina Weston,0,2330.4,242.5,28.47,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2669,Sheri Zipstitch,0,-10536.9,-1209.95,32.97,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+5122,Skolmin Goldfury,0,-4921.13,-1280.97,512.04,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+1326,Sloan McCoy,0,-8816.57,356.73,100.67,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2622,Sly Garrett,0,-14437.3,408.21,15.11,120,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+14737,Smith Slagtree,0,-595.75,-4559.67,9.16,1494,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+6779,Smudge Thunderwood,0,14.52,-1628.05,189.58,471,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+5178,Soolie Berryfizz,0,-4856.88,-1237.26,501.81,875,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1650,Terry Palin,0,-9404.85,-1343.52,50.11,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4617,Thaddeus Webb,0,1487.59,274.73,-62.07,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+7976,Thalgus Thunderfist,0,-5041.1,-1200.23,502.32,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+13217,Thanthaldis Snowgleam,0,-24.19,-321.18,131.24,1334,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+66,Tharynn Bouden,0,-9494.13,83.91,56.66,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1690,Thrawn Boltar,0,-5568.99,-429.11,397.41,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+5510,Thulman Flintcrag,0,-8419.3,646.6,97.53,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+983,Thultazor,0,-10428.6,-3272.99,20.53,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4259,Thurgrum Deepforge,0,-4794.96,-1122.64,498.89,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1285,Thurman Mullby,0,-8831.75,596.36,95.76,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+5158,Tilli Thistlefuzz,0,-4801.37,-1196.13,505.9,875,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2819,Tunkk,0,-963.54,-3560.84,58.79,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+5169,Tynnus Venomsprout,0,-4641.6,-1132.24,507.24,875,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1149,Uthok,0,-12358.0,207.35,4.23,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+2808,Vikki Lonsav,0,-1275.75,-2538.73,21.63,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+1469,Vrok Blunderblast,0,-5286.92,-2981.99,341.79,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+12943,Werg Thickblade,0,1737.1,-730.88,59.74,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1668,William MacGregor,0,-10658.5,996.85,32.96,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+1685,Xandar Goodbeard,0,-5652.9,-4268.63,407.76,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+2670,Xizk Goodstitch,0,-14439.6,388.91,32.4,120,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+1682,Yanni Stoutheart,0,-5381.88,-2952.48,322.15,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+9544,Yuka Screwspigot,0,-7459.77,-2201.64,165.37,120,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+6777,Zan Shivsproket,0,7.32,-1623.33,189.58,471,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+5594,Alchemist Pestlezugg,1,-7115.3,-3729.93,8.86,474,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3608,Aldia,1,9891.88,988.31,1327.65,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+4203,Ariyell Skyshadow,1,9924.3,2316.45,1330.87,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+3350,Asoran,1,1891.6,-4326.75,23.25,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+248198,Aza'bek,1,-370.63,-2417.91,96.14,3388,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2806,Bale,1,5092.96,-356.46,357.4,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+3481,Barg,1,-410.84,-2612.91,95.82,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+3951,Bhaldaran Ravenshade,1,2087.08,-1199.17,101.79,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+12957,Blimo Gadgetspring,1,2269.97,-5569.55,21.23,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+8131,Blizrik Buckshot,1,-7141.49,-3719.69,8.58,474,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+9549,Borand,1,992.18,1030.96,105.68,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+3364,Borya,1,1792.65,-4565.39,22.86,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+6576,Brienna Starglow,1,-4495.82,-740.71,-25.41,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+14301,Brinna Valanaar,1,2691.34,-3885.63,109.25,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+8158,Bronk,1,-4372.12,155.68,25.35,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+15174,Calandrath,1,-6868.04,729.91,45.75,994,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+9548,Cawind Trueaim,1,-4484.55,233.53,48.48,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+4216,Chardryn,1,9751.43,2424.84,1333.92,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4896,Charity Mipsy,1,-3843.46,-4516.15,9.85,894,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+12960,Christi Galvanis,1,243.02,1238.59,192.24,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+4084,Chylina,1,2715.86,1512.97,236.9,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+12021,Daeolyn Summerleaf,1,7956.8,-2424.43,489.03,994,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+4182,Dalmond,1,6564.99,488.89,8.34,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+3954,Dalria,1,2669.6,-325.29,109.99,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+7940,Darnall,1,7979.74,-2569.33,493.12,994,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3158,Duokna,1,-565.43,-4214.2,41.67,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+6300,Elisa Steelhand,1,6538.29,443.3,7.22,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4170,Ellandrieth,1,9864.51,2253.27,1332.05,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+4168,Elynna,1,10086.0,2254.92,1333.08,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+11188,Evie Whirlbrew,1,6745.13,-4630.21,721.67,855,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3969,Fahran Silentblade,1,2771.84,-404.3,111.54,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+7942,Faralorn,1,-4379.03,3311.83,13.63,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+3367,Felika,1,1816.21,-4530.52,19.98,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3168,Flakk,1,328.73,-4763.78,12.63,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4223,Fyldan,1,10085.9,2424.72,1321.74,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3495,Gagsprocket,1,-837.8,-3724.94,26.37,69,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+6567,Ghok'kah,1,-3112.53,-2820.13,34.32,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3165,Ghrawt,1,362.11,-4763.84,12.55,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+6301,Gorbold Steelhand,1,6535.77,445.55,7.13,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3358,Gorina,1,2025.08,-4708.91,26.89,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+11555,Gorn One Eye,1,7030.72,-2106.32,587.52,414,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+4082,Grawnal,1,1006.41,1005.47,104.99,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+3962,Haljan Oakheart,1,2717.7,-309.66,110.81,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+3956,Harklan Moongrove,1,2097.78,-1231.84,101.88,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+6731,Harlown Darkweave,1,2365.0,648.99,152.89,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4897,Helenia Olden,1,-3834.53,-4462.94,12.56,894,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3018,Hogor Thunderhoof,1,-1247.13,-63.11,162.97,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+3477,Hraq,1,-343.92,-2558.13,97.94,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3490,Hula'mahi,1,-428.15,-2584.92,95.88,126,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+8139,Jabbey,1,-6886.48,-4842.28,8.62,474,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+4877,Jandia,1,-5477.48,-2466.44,89.37,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+7854,Jangdor Swiftstrider,1,-4354.65,268.76,26.4,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3164,Jark,1,321.55,-4838.4,10.61,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+4876,Jawn Highmesa,1,-5476.7,-2453.51,89.37,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+3498,Jazzik,1,-1008.67,-3651.95,20.15,69,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+4083,Jeeda,1,911.09,920.65,114.57,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3610,Jeena Featherbow,1,9821.98,968.83,1308.86,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+4892,Jensen Farran,1,-3779.61,-4542.27,11.48,894,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+3410,Jin'sora,1,1914.16,-4775.87,36.34,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+6730,Jinky Twizzlefixxit,1,-6251.75,-3851.1,-58.67,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+8678,Jubie Gadgetspring,1,2266.45,-5573.0,21.73,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2997,Jyn Stonehoof,1,-1283.92,84.36,128.87,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+3186,K'waii,1,-779.03,-4938.93,22.33,126,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+3322,Kaja,1,1692.69,-4412.03,21.7,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+5783,Kalldan Felmoon,1,-799.15,-2027.68,97.32,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+15419,Kania,1,-6880.52,727.23,55.13,994,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3072,Kawnie Softbreeze,1,-2893.72,-279.33,54.0,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+3589,Keina,1,10436.7,794.84,1322.79,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+3078,Kennah Hawkseye,1,-2275.53,-289.26,-9.26,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+15175,Khur Hornstriker,1,-6817.88,842.28,49.49,994,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3497,Kilxx,1,-971.11,-3737.66,5.9,69,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+9636,Kireena,1,-1153.31,1941.54,88.95,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3346,Kithas,1,1918.26,-4436.26,24.63,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3348,Kor'geld,1,1954.75,-4466.79,25.79,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+5411,Krinkle Goodsteel,1,-7200.43,-3769.82,8.76,474,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+12043,Kulwia,1,984.6,1029.31,105.56,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3015,Kuna Thunderhorn,1,-1168.01,26.13,145.81,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+3002,Kurm Stonehoof,1,-1243.53,158.16,133.63,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+8362,Kuruk,1,-1300.17,110.54,131.45,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+3561,Kyrai,1,10099.1,2594.01,1337.1,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+12028,Lah'Mawhani,1,-1694.69,3195.35,8.04,126,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4173,Landria,1,9770.63,2268.83,1332.02,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+3958,Lardan,1,2757.27,-306.51,120.58,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+8157,Logannas,1,-4406.66,3171.05,17.67,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+12022,Lorelae Wintersong,1,7873.69,-2494.83,489.36,994,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+11186,Lunnix Sprocketslip,1,6706.53,-4703.55,721.68,855,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3587,Lyrai,1,10442.9,783.99,1337.37,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+3005,Mahu,1,-1163.94,59.49,145.88,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2803,Malygen,1,6150.43,-1941.85,574.65,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+3010,Mani Winterhoof,1,-1084.8,21.81,140.91,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+11557,Meilosh,1,7025.63,-2135.69,586.49,414,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+15179,Mishta,1,-6802.31,800.04,51.56,994,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4878,Montarr,1,-5456.41,-2419.88,89.59,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3076,Moorat Longstride,1,-2247.81,-308.16,-9.31,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+4241,Mydrannul,1,9918.06,2190.34,1328.27,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+4229,Mythrin'dir,1,10113.6,2293.21,1332.05,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3027,Naal Mistrunner,1,-1214.99,-15.53,166.05,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+12029,Narianna,1,7834.28,-2612.62,489.38,994,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+3614,Narret Shadowgrove,1,9891.66,1000.31,1328.03,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3012,Nata Dawnstrider,1,-1119.67,47.1,141.53,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2084,Natheril Raincaller,1,7073.94,-3969.67,745.71,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+267330,Nawka Wildsong,1,-2879.13,-259.1,54.0,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+12959,Nergal,1,-6157.44,-1067.73,-194.86,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+3014,Nida Winterhoof,1,-1125.35,-0.69,143.78,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4265,Nyoma,1,9752.11,902.7,1295.6,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+7852,Pratt McGrubben,1,-4345.38,3312.75,10.1,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+11189,Qia,1,6772.05,-4662.02,723.98,855,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3499,Ranik,1,-1002.08,-3652.37,20.12,69,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3334,Rekkul,1,1811.04,-4270.9,7.17,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4225,Saenorion,1,10081.1,2264.3,1343.39,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3029,Sewa Mistrunner,1,-1177.19,-65.62,162.31,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+8363,Shadi Mistrunner,1,-1295.3,92.46,129.81,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3955,Shandrina,1,2094.19,-1153.36,101.88,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3333,Shankys,1,1995.41,-4662.32,26.89,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+8145,Sheendra Tallgrass,1,-4346.28,264.61,26.4,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+5817,Shimra,1,1522.3,-4352.53,18.9,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3413,Sovik,1,2036.63,-4739.49,29.24,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+9551,Starn,1,-5453.35,-2408.38,89.36,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+3356,Sumi,1,2049.79,-4839.13,24.43,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+12246,Super-Seller 680,1,-1926.6,2412.79,60.7,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+3053,Synge,1,-6225.51,-3970.78,-58.67,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+3779,Syurana,1,7122.51,-3977.65,745.7,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3187,Tai'tasi,1,-792.59,-4945.02,22.33,126,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3366,Tamar,1,1848.01,-4564.89,24.84,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+8307,Tarban Hearthgrain,1,-555.07,-2966.62,91.79,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3482,Tari'qa,1,-416.92,-2614.44,95.76,126,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2999,Taur Stonehoof,1,-1237.21,101.07,129.16,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+6298,Thelgrum Stonehammer,1,6534.42,437.94,7.36,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4889,Torq Ironblast,1,-3712.46,-4519.1,11.99,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+3313,Trak'gen,1,1520.54,-4355.58,18.85,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+10369,Trayexir,1,-769.15,-4948.53,22.93,126,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+12027,Tukk,1,-1701.76,3112.57,32.76,126,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+4194,Ullanna,1,4998.98,72.87,52.79,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4226,Ulthir,1,10065.6,2347.35,1321.65,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4899,Uma Bartulm,1,-3701.78,-4338.76,11.5,894,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3488,Uthrok,1,-351.18,-2556.51,95.87,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+4228,Vaean,1,10134.4,2318.46,1333.08,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4189,Valdaron,1,6560.45,442.67,9.14,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+15176,Vargus,1,-6860.93,753.04,42.56,994,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+12245,Vendor-Tron 1000,1,-692.74,1522.2,90.36,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+16015,Vi'el,1,4822.68,-4496.45,892.36,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+7947,Vivianna,1,-4380.15,3266.08,13.63,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+6568,Vizzklick,1,-7133.52,-3738.63,8.44,474,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+11184,Wixxrak,1,6733.39,-4699.04,721.45,855,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+3485,Wrahk,1,-528.84,-2671.6,95.87,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3167,Wuark,1,358.13,-4706.73,14.48,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+12033,Wulan,1,-1635.92,3056.89,51.75,126,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3081,Wunna Darkmane,1,-2265.6,-324.43,-9.3,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3400,Xen'to,1,1779.08,-4488.08,45.5,126,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+11185,Xizzer Fizzbolt,1,6706.15,-4633.79,721.87,855,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+5944,Yonada,1,-2396.19,-1937.91,96.83,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+9552,Zanara,1,-3086.6,-2838.95,34.51,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+12956,Zannok Hidepiercer,1,-6370.38,-318.96,-1.45,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3405,Zeal'aya,1,1904.86,-4451.63,53.28,126,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3409,Zendo'jian,1,2099.23,-4818.85,24.16,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+3572,Zizzek,1,-1031.99,-3659.05,22.86,69,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+14637,Zorbin Fandazzle,1,-4378.62,2327.33,1.55,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+12097,Frostwolf Quartermaster,30,-1293.79,-194.41,72.44,1215,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+13216,Gaelden Hammersmith,30,569.98,-95.0,38.03,1217,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+3343,Grelkor,30,-1244.02,-323.8,61.0,1215,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+13218,Grunnda Wolfheart,30,-1244.92,-308.92,63.25,1215,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+5134,Jonivera Farmountain,30,591.46,-44.45,37.62,1217,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+5139,Kurdrum Barleybeard,30,617.66,-32.07,42.72,1217,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+4257,Lana Thunderbrew,30,643.63,-58.4,41.74,1217,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+3625,Rarck,30,-1235.16,-332.3,60.28,1215,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+12096,Stormpike Quartermaster,30,587.63,-45.98,37.54,1217,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+5135,Svalbrad Farmountain,30,608.51,-33.39,42.0,1217,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+10364,Yaelika Farclaw,30,-1183.76,-268.3,72.82,1215,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+2225,Zora Guthrek,30,-1235.31,-340.78,60.51,1215,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+9676,Tink Sprocketwhistle,90,-559.51,195.83,-193.65,875,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+14337,Field Repair Bot 74A,451,16397.2,-16136.0,41.09,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+251913,Aedi Thriceforged,2991,3311.45,1734.53,823.17,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+252390,Antelariaa Cloudgaze,2991,2070.98,725.79,667.95,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+257008,Baelann Swiftcurrent,2991,2148.17,711.72,662.45,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+254360,Belandiel Farflight,2991,3285.71,1740.81,827.3,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+252479,Daeann Steelwind,2991,1983.83,594.14,648.18,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+257004,Eaysaa Brightgust,2991,2123.21,938.62,668.72,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+252376,Emerii Tallgust,2991,1964.19,686.46,648.58,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+253004,Iaadaria Bitterwind,2991,2007.89,540.91,658.78,3600,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+252449,Iallion Featherfall,2991,2154.52,951.35,666.75,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+251993,Indari Sunseam,2991,3305.17,1745.95,823.42,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+257003,Ishlee Breezewhisper,2991,2135.53,914.23,668.73,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+257024,Mendalass Tattermend,2991,3348.0,1823.19,829.36,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+257022,Messana Crestwind,2991,3304.15,1740.99,823.16,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+257020,Nasalanna Windsinger,2991,3355.61,1826.1,829.36,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+257006,Nyalah Brightfire,2991,2261.84,858.13,672.03,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+257019,Nyassa Swiftdraught,2991,3346.12,1801.14,828.11,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+252380,Othesia Evengale,2991,1946.02,648.57,648.19,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+251991,Taleen Shimmerthread,2991,3317.73,1734.96,823.17,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+257421,Tephri Thriceforged,2991,3318.36,1739.67,823.18,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+251537,Uualia Suncrest,2991,4048.01,1853.15,977.7,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo
+257005,Valiena Swiftgale,2991,2125.89,935.73,668.73,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
+254358,Veena Vericloud,2991,3269.76,1744.29,827.3,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),ammo+reagent
+251905,Zerril Softbreeze,2991,3330.49,1791.89,827.75,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),reagent
