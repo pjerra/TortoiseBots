@@ -70,7 +70,8 @@ public:
     uint32 extractSpellId(std::string str)
     {
         char* source = (char*)str.c_str();
-        return ExtractSpellIdFromLinkCompat(&source);
+        return UnportedBlockResultCompat(tbcompat::Feature::ChatLinks, uint32(0),
+            [&](auto* self) -> uint32 { return self->ExtractSpellIdFromLink(&source); }, this);
     }
 };
 

@@ -124,24 +124,21 @@ inline uint32 TotalTalentPointsCompat(Player* bot)
     return uint32(pts * sWorld.getConfig(CONFIG_FLOAT_RATE_TALENT));
 }
 inline uint32 FreeTalentPointsCompat(Player* bot) { return bot->GetFreeTalentPoints(); }
-inline int TalentTabPageCompat(TalentTabEntry const* tab) { return tab->tabpage; }
+template <class Tab>
+inline int TalentTabPageCompat(Tab const* tab) { return tab->tabpage; }
 
 template <class DataPair>
 inline ObjectGuid GuidOfCreatureDataCompat(DataPair const* dataPair) { return ObjectGuid(HIGHGUID_UNIT, dataPair->second.creature_id[0], dataPair->first); }
 template <class DataPair>
 inline ObjectGuid GuidOfGameObjectDataCompat(DataPair const* dataPair) { return ObjectGuid(HIGHGUID_GAMEOBJECT, dataPair->second.id, dataPair->first); }
 
-template <class GuidPos>
+template <class Pos, class GuidPos>
 inline void GuidPositionWriteCompat(ByteBuffer& b, GuidPos& guidP)
 {
     b << (ObjectGuid)guidP;
-    b << (WorldPosition)guidP;
+    b << (Pos)guidP;
 }
 
-inline BattleGroundTypeId BgTemplateIdCompat(BattleGroundQueueTypeId queueTypeId) { return sBattleGroundMgr.BGTemplateId(queueTypeId); }
-
-inline char* ExtractKeyFromLinkCompat(char** text, char const* linkType) { return ExtractKeyFromLink(text, linkType); }
-inline uint32 ExtractSpellIdFromLinkCompat(char** text) { return ExtractSpellIdFromLink(text); }
 
 
 // ===============================================================================================================
@@ -289,5 +286,124 @@ template <class... Args>
 inline auto CharacterPQueryCompat(char const* format, Args... args) { return CharacterDatabase.PQuery(format, args...); }
 inline std::unique_ptr<QueryResult> QueryGuardCompat(QueryResult* result) { return std::unique_ptr<QueryResult>(result); }
 inline void EscapeStringCompat(std::string& text) { CharacterDatabase.escape_string(text); }
+
+
+// ===============================================================================================================
+// QUEST INTERNALS
+// ===============================================================================================================
+struct QuestTriageViewCompat
+{
+    struct Item { uint32 id = 0; uint32 count = 0; };
+    bool inactive = false;
+    bool hasItemObjective = false;
+    bool deliver = false;
+    uint32 level = 0;
+    uint32 levelForPlayer = 0;
+    uint32 type = 0;
+    uint32 suggestedPlayers = 0;
+    int32 rewardOrRequiredMoney = 0;
+    std::vector<Item> items;
+};
+// The reads QuestLogNearlyFullTrigger::HasDroppableQuest made, in the same terms (all pure getters).
+inline QuestTriageViewCompat QuestTriageViewOfCompat(Player* bot, Quest const* quest)
+{
+    QuestTriageViewCompat view;
+    view.inactive = !quest->IsActive();
+    bool hasItemObjective = false;
+    for (uint8 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
+        if (quest->ReqItemId[i] && quest->ReqItemCount[i])
+            hasItemObjective = true;
+    for (uint8 i = 0; i < QUEST_SOURCE_ITEM_IDS_COUNT; ++i)
+        if (quest->ReqSourceId[i] && quest->ReqSourceCount[i])
+            hasItemObjective = true;
+    view.hasItemObjective = hasItemObjective;
+    view.deliver = quest->HasSpecialFlag(QUEST_SPECIAL_FLAG_DELIVER);
+    view.level = quest->GetQuestLevel();
+    view.levelForPlayer = bot->GetQuestLevelForPlayer(quest);
+    view.type = quest->GetType();
+    view.suggestedPlayers = quest->GetSuggestedPlayers();
+    view.rewardOrRequiredMoney = quest->GetRewOrReqMoney();
+    for (uint8 i = 0; i < QUEST_ITEM_OBJECTIVES_COUNT; ++i)
+        if (quest->ReqItemCount[i])
+            view.items.push_back({ quest->ReqItemId[i], quest->ReqItemCount[i] });
+    return view;
+}
+
+inline std::string QuestTitleCompat(Quest const* quest) { return quest->GetTitle(); }
+inline void RemoveQuestFromLogCompat(Player* bot, uint32 questId) { bot->RemoveQuest(questId); }
+inline std::vector<std::pair<uint32, uint32>> QuestRequiredItemsCompat(Quest const* quest)
+{
+    std::vector<std::pair<uint32, uint32>> items;
+    for (uint8 i = 0; i < std::size(quest->ReqItemId); ++i)
+        items.push_back({ quest->ReqItemId[i], quest->ReqItemCount[i] });
+    return items;
+}
+
+
+// ===============================================================================================================
+// TAXI
+// ===============================================================================================================
+// TaxiRouteGuard.h's BotInstantFlightFinish after the destination node is known, moved word for word.
+inline bool TaxiInstantFinishCompat(Player* bot, uint32 destNode)
+{
+    TaxiNodesEntry const* dest = sObjectMgr.GetTaxiNodeEntry(destNode);
+    if (!dest)
+        return false;
+    bot->GetTaxi().ClearTaxiDestinations();
+    bot->CleanupFlagsOnTaxiPathFinished();
+    bot->GetMotionMaster()->MovementExpired();
+    return bot->TeleportTo(dest->map_id, dest->x, dest->y, dest->z, bot->GetOrientation());
+}
+
+
+// ===============================================================================================================
+// TRANSPORTS, GAME OBJECT PORTALS, NAVMESH PROBE
+// ===============================================================================================================
+template <class Init>
+inline void SplineSetTransportCompat(Init& init, GenericTransport* transport) { init.SetTransport(transport->GetGUIDLow()); }
+inline void SplinePointToTransportCompat(GenericTransport* transport, float& x, float& y, float& z) { transport->CalculatePassengerOffset(x, y, z); }
+
+inline bool PortalSpellOfGameObjectCompat(uint32 entry, uint32& spellId)
+{
+    GameObjectInfo const* goInfo = sGOStorage.LookupEntry<GameObjectInfo>(entry);
+    if (!goInfo || goInfo->type != GAMEOBJECT_TYPE_SPELLCASTER)
+        return false;
+    spellId = goInfo->spellcaster.spellId;
+    return true;
+}
+inline bool UsePortalObjectCompat(Player* bot, GameObject* go)
+{
+    if (!bot->GetGameObjectIfCanInteractWith(go->getObjectGuid(), MAX_GAMEOBJECT_TYPE))
+        return false;
+    std::unique_ptr<WorldPacket> packet(new WorldPacket(CMSG_GAMEOBJ_USE));
+    *packet << go->getObjectGuid();
+    bot->GetSession()->QueuePacket(packet.release());
+    return true;
+}
+
+inline bool TaxiDestinationCompat(Player* player, uint32& mapId, float& x, float& y, float& z)
+{
+    const Taxi::Map tMap(player->GetTaxi().GetTaxiPath());
+    if (tMap.empty())
+        return false;
+    auto tEnd = tMap.back();
+    if (!tEnd)
+        return false;
+    mapId = tEnd->mapId;
+    x = tEnd->x;
+    y = tEnd->y;
+    z = tEnd->z;
+    return true;
+}
+
+inline dtNavMeshQuery const* NavMeshQueryCompat(uint32 mapId)
+{
+    MMAP::MMapManager* const mmap = MMAP::MMapFactory::createOrGetMMapManager();
+    if (!mmap)
+        return nullptr;
+    return mmap->GetNavMeshQuery(mapId);
+}
+template <class... Args>
+inline dtPolyRef NavMeshFindWalkPolyCompat(Args&&... args) { return PathInfo::FindWalkPoly(std::forward<Args>(args)...); }
 
 // @@END@@

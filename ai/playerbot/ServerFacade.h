@@ -271,7 +271,8 @@ class ServerFacade
 
         BattleGroundTypeId BgTemplateId(BattleGroundQueueTypeId queueTypeId)
         {
-            return BgTemplateIdCompat(queueTypeId);
+            return UnportedBlockResultCompat(tbcompat::Feature::BattlegroundQueue, BattleGroundTypeId(),
+                [](auto& mgr, auto queueType) { return mgr.BGTemplateId(queueType); }, sBattleGroundMgr, queueTypeId);
         }
 
         BattleGroundTypeId BGTemplateId(BattleGroundQueueTypeId queueTypeId)

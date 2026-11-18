@@ -23,9 +23,9 @@ void PlayerbotAI::DropQuest(uint32 questIdToDrop)
         if (questId == questIdToDrop)
         {
             if (Quest const* q = sObjectMgr.GetQuestTemplate(questIdToDrop))
-                sPlayerbotAIConfig.logEvent(this, "QuestDropped", q->GetTitle(), std::to_string(questIdToDrop));
+                sPlayerbotAIConfig.logEvent(this, "QuestDropped", QuestTitleCompat(q), std::to_string(questIdToDrop));
 
-            bot->RemoveQuest(questId);
+            RemoveQuestFromLogCompat(bot, questId);
 
 
             return;
@@ -165,11 +165,11 @@ std::vector<std::pair<const Quest*, uint32>> PlayerbotAI::GetCurrentQuestsRequir
 
         QuestStatus status = bot->GetQuestStatus(questId);
         const Quest* quest = sObjectMgr.GetQuestTemplate(questId);
-        for (uint8 i = 0; i < std::size(quest->ReqItemId); ++i)
+        for (auto const& required : QuestRequiredItemsCompat(quest))
         {
-            if (quest->ReqItemId[i] == itemId)
+            if (required.first == itemId)
             {
-                result.push_back(std::pair(quest, quest->ReqItemCount[i]));
+                result.push_back(std::pair(quest, required.second));
                 break;
             }
         }

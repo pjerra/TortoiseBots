@@ -137,7 +137,8 @@ std::set<std::string> PlayerbotAI::unsecuredCommands;
 uint32 PlayerbotChatHandler::extractQuestId(std::string str)
 {
     char* source = (char*)str.c_str();
-    char* cId = ExtractKeyFromLinkCompat(&source,"Hquest");
+    char* cId = UnportedBlockResultCompat(tbcompat::Feature::ChatLinks, static_cast<char*>(nullptr),
+        [&](auto* self) -> char* { return self->ExtractKeyFromLink(&source, "Hquest"); }, this);
     return cId ? atol(cId) : 0;
 }
 

@@ -82,7 +82,7 @@ namespace ai
 
     inline ByteBuffer& operator<<(ByteBuffer& b, GuidPosition& guidP)
     {
-        GuidPositionWriteCompat(b, guidP);
+        GuidPositionWriteCompat<WorldPosition>(b, guidP);
 
         return b;
     }

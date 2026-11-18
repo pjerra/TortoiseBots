@@ -178,6 +178,14 @@ enum LegacyOpcodeCompat : uint16
     SMSG_QUESTUPDATE_FAILED = kLegacyOpcodeBaseCompat + 39,
     SMSG_QUESTUPDATE_FAILEDTIMER = kLegacyOpcodeBaseCompat + 40,
     SMSG_TRADE_STATUS_EXTENDED = kLegacyOpcodeBaseCompat + 41,
+    MSG_MOVE_STOP = kLegacyOpcodeBaseCompat + 42,
+    MSG_MOVE_FALL_LAND = kLegacyOpcodeBaseCompat + 43,
+    MSG_MOVE_SET_FACING = kLegacyOpcodeBaseCompat + 44,
+    MSG_MOVE_START_BACKWARD = kLegacyOpcodeBaseCompat + 45,
+    MSG_MOVE_START_FORWARD = kLegacyOpcodeBaseCompat + 46,
+    MSG_MOVE_KNOCK_BACK = kLegacyOpcodeBaseCompat + 47,
+    MSG_MOVE_JUMP = kLegacyOpcodeBaseCompat + 48,
+    MSG_MINIMAP_PING = kLegacyOpcodeBaseCompat + 49,
 };
 
 // A static check that a core-free constant of the legacy policy files equals the core's opcode of the same name. T: the check.
@@ -237,7 +245,8 @@ inline void SetFallInformationCompat(Player* /*player*/, float /*z*/) { tbcompat
 inline uint32 TotalTalentPointsCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::Talents); return 0; }
 inline uint32 FreeTalentPointsCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::Talents); return 0; }
 // The tab page of a talent tab row (T `tabpage`). The row type is only declared here. Failure value: page 0.
-inline int TalentTabPageCompat(TalentTabEntry const* /*tab*/) { tbcompat::Unported(tbcompat::Feature::Talents); return 0; }
+template <class Tab>
+inline int TalentTabPageCompat(Tab const* /*tab*/) { tbcompat::Unported(tbcompat::Feature::Talents); return 0; }
 
 // An object guid from a creature or game object spawn record (T `ObjectGuid(HIGHGUID_UNIT, creature entry, spawn counter)`). Failure
 // value: the empty guid ("no such object"); the record's position is still read by the caller's WorldPosition part.
@@ -247,18 +256,13 @@ template <class DataPair>
 inline ObjectGuid GuidOfGameObjectDataCompat(DataPair const* /*dataPair*/) { tbcompat::Unported(tbcompat::Feature::SpawnGuid); return ObjectGuid::Empty; }
 
 // Writes a GuidPosition (guid then position) into a packet buffer. Failure value: nothing is written.
-template <class GuidPos>
+template <class Pos, class GuidPos>
 inline void GuidPositionWriteCompat(ByteBuffer& /*buffer*/, GuidPos& /*guidPosition*/) { tbcompat::Unported(tbcompat::Feature::GuidPositionWire); }
 
 // The queue type id of the pre-included battleground code under its Turtle spelling.
 using BattleGroundQueueTypeId = BattlegroundQueueTypeId;
-// The battleground type of a queue type id. Failure value: BATTLEGROUND_TYPE_NONE ("no such battleground").
-inline BattleGroundTypeId BgTemplateIdCompat(BattleGroundQueueTypeId /*queueTypeId*/) { tbcompat::Unported(tbcompat::Feature::BattlegroundQueue); return BATTLEGROUND_TYPE_NONE; }
-
-// Chat links: `ExtractKeyFromLink(&text, "Hquest")` and `ExtractSpellIdFromLink(&text)` of the 1.12 chat handler. Failure values:
-// nullptr ("no such link") and 0 ("no spell id"); both callers treat them so.
-inline char* ExtractKeyFromLinkCompat(char** /*text*/, char const* /*linkType*/) { tbcompat::Unported(tbcompat::Feature::ChatLinks); return nullptr; }
-inline uint32 ExtractSpellIdFromLinkCompat(char** /*text*/) { tbcompat::Unported(tbcompat::Feature::ChatLinks); return 0; }
+// (The battleground type of a queue type id, and the chat link extractors of ChatHandler, are blocks: ServerFacade.h and
+// PlayerbotAI.h call them through UnportedBlockResultCompat with Feature::BattlegroundQueue / Feature::ChatLinks.)
 
 
 // ===============================================================================================================
@@ -356,6 +360,78 @@ inline QueryResult CharacterPQueryCompat(char const* format, Args... args)
 inline QueryResult QueryGuardCompat(QueryResult result) { return result; }
 // Escapes a string for a query (T `CharacterDatabase.escape_string(s)`, F `EscapeString(s)`).
 inline void EscapeStringCompat(std::string& text) { CharacterDatabase.EscapeString(text); }
+
+
+// ===============================================================================================================
+// QUEST INTERNALS (PlayerbotAIQuests.cpp, GenericTriggers.h QuestLogNearlyFullTrigger)
+// ===============================================================================================================
+// What the quest triage reads of a quest template. T fills it from the 1.12 fields; F's Quest keeps objectives and a classic level
+// range, and the view is not ported: it is EMPTY (level 0 = "scaling quest, never grey", no item objectives, not inactive, no
+// money cost, no deliver flag). The trigger that uses it (quest log nearly full) is not registered in the slice.
+struct QuestTriageViewCompat
+{
+    struct Item { uint32 id = 0; uint32 count = 0; };
+    bool inactive = false;               // T: !quest->IsActive()
+    bool hasItemObjective = false;       // an item objective or a source item with a count
+    bool deliver = false;                // T: HasSpecialFlag(QUEST_SPECIAL_FLAG_DELIVER)
+    uint32 level = 0;                     // T: GetQuestLevel()
+    uint32 levelForPlayer = 0;            // T: bot->GetQuestLevelForPlayer(quest)
+    uint32 type = 0;                     // T: GetType()
+    uint32 suggestedPlayers = 0;         // T: GetSuggestedPlayers()
+    int32 rewardOrRequiredMoney = 0;     // T: GetRewOrReqMoney() (negative = the quest costs money)
+    std::vector<Item> items;             // the required items with a count
+};
+inline QuestTriageViewCompat QuestTriageViewOfCompat(Player* /*bot*/, Quest const* /*quest*/)
+{
+    tbcompat::Unported(tbcompat::Feature::QuestInternals);
+    return QuestTriageViewCompat();
+}
+
+// Quest log bookkeeping of PlayerbotAI. Failure values: no title (empty), nothing dropped, no required items.
+inline std::string QuestTitleCompat(Quest const* /*quest*/) { tbcompat::Unported(tbcompat::Feature::QuestInternals); return std::string(); }
+inline void RemoveQuestFromLogCompat(Player* /*bot*/, uint32 /*questId*/) { tbcompat::Unported(tbcompat::Feature::QuestInternals); }
+inline std::vector<std::pair<uint32, uint32>> QuestRequiredItemsCompat(Quest const* /*quest*/)
+{
+    tbcompat::Unported(tbcompat::Feature::QuestInternals);
+    return {};
+}
+
+
+// ===============================================================================================================
+// TAXI (TaxiRouteGuard.h, MovementActions.cpp UseTaxi, PlayerbotAI.cpp)
+// ===============================================================================================================
+// Finish a started bot flight at once at the destination node (the test shortcut AiPlayerbot.BotInstantFlight). Failure value:
+// false ("the bot did not land"; the flight keeps flying as normal).
+inline bool TaxiInstantFinishCompat(Player* /*bot*/, uint32 /*destNode*/) { tbcompat::Unported(tbcompat::Feature::Taxi); return false; }
+
+
+// ===============================================================================================================
+// TRANSPORTS, GAME OBJECT PORTALS, NAVMESH PROBE (MovementActions.cpp)
+// ===============================================================================================================
+// The spline of a bot standing on a transport. T: points are transport-local offsets and the spline is told which transport
+// (`SetTransport(guidLow)`), so the dispatch turns its world points into offsets just before launching. F: the spline turns
+// WORLD points into transport-local ones itself when the unit is on a transport (MoveSplineInit.cpp:310, TransformForTransport), so
+// both calls do nothing: the points stay world points. PROPER both-core helpers (the answer is the same: the bot walks the path).
+template <class Init>
+inline void SplineSetTransportCompat(Init& /*init*/, GenericTransport* /*transport*/) {}
+inline void SplinePointToTransportCompat(GenericTransport* /*transport*/, float& /*x*/, float& /*y*/, float& /*z*/) {}
+
+// The game object portal of a travel path node: the spell id of a spellcaster game object entry (T: `spellcaster.spellId`, only for
+// GAMEOBJECT_TYPE_SPELLCASTER). Failure value: false ("not a portal object").
+inline bool PortalSpellOfGameObjectCompat(uint32 /*entry*/, uint32& /*spellId*/) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return false; }
+// Use the portal object if the bot can interact with it (T: GetGameObjectIfCanInteractWith, then the use packet). Failure value: false.
+inline bool UsePortalObjectCompat(Player* /*bot*/, GameObject* /*object*/) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return false; }
+
+// Where the flight the player is on ends (T: the last point of Taxi::Map of the player's taxi path). Failure value: false ("no known
+// destination").
+inline bool TaxiDestinationCompat(Player* /*player*/, uint32& /*mapId*/, float& /*x*/, float& /*y*/, float& /*z*/) { tbcompat::Unported(tbcompat::Feature::Taxi); return false; }
+
+// The navmesh query object of a map and the core's walkable-poly pick (the navmesh-island probe, WorldPosition's path walks). T: the
+// MMapManager singleton and `PathInfo::FindWalkPoly`. F's MMapManager is keyed by map, instance and phase and has no such pick.
+// Failure values: nullptr ("no navmesh for that map": every caller then answers false) and the invalid poly ref 0.
+inline dtNavMeshQuery const* NavMeshQueryCompat(uint32 /*mapId*/) { tbcompat::Unported(tbcompat::Feature::NavmeshProbe); return nullptr; }
+template <class... Args>
+inline dtPolyRef NavMeshFindWalkPolyCompat(Args&&...) { tbcompat::Unported(tbcompat::Feature::NavmeshProbe); return 0; }
 
 // @@END@@
 #endif // TB_UNPORTED_TABLE_ONLY

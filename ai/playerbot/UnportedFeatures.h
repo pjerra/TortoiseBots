@@ -49,7 +49,11 @@
     X(HealEstimate, "heal estimate (spell damage bonus)", "Player::CalculateSpellDamage and SpellHealingBonusDone on a SpellEntry; the mirror entry is not a SpellInfo") \
     X(CustomStrategyStore, "custom strategy store", "reading custom strategy lines from ai_playerbot_custom_strategy; that table does not exist in ForeverCore characters schema") \
     X(StrategyStoreTransactions, "strategy store transactions", "BeginTransaction(serial) / CommitTransaction() around saving strategies; ForeverCore transactions are objects and the ai_playerbot tables do not exist") \
-    X(Skills, "skills", "skill lines ForeverCore does not name (thrown) and skill writes (SetSkill with the 1.12 argument list)")
+    X(Skills, "skills", "skill lines ForeverCore does not name (thrown) and skill writes (SetSkill with the 1.12 argument list)") \
+    X(QuestInternals, "quest internals", "the 1.12 quest template fields (ReqItemId/ReqItemCount, ReqSource*, GetQuestLevel, GetRewOrReqMoney, IsActive) and Player::RemoveQuest; ForeverCore has quest objectives and a classic level range instead") \
+    X(Taxi, "taxi", "flight masters and taxi paths (Player::GetTaxi, TaxiPathEntry/TaxiNodesEntry fields, ActivateTaxiPathTo, CleanupFlagsOnTaxiPathFinished); ForeverCore's taxi model is different") \
+    X(TransportBoarding, "transports", "boarding, leaving and riding transports (MoveOnTransport, MoveOffTransport, UseTransport, FollowOnTransport, AddPassenger, RemovePassenger, transport movement info); ForeverCore's passenger model and spline transform differ") \
+    X(NavmeshProbe, "navmesh and path internals", "the navmesh-island unstick probe over MMapFactory / PathInfo::FindWalkPoly, and the 1.12 path type and nav flag bits (PATHFIND_*, NAV_*); ForeverCore's MMapManager and path flags differ")
 
 namespace tbcompat
 {

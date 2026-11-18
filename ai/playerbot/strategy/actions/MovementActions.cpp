@@ -552,255 +552,267 @@ bool MovementAction::FlyDirect(const WorldPosition &startPosition, const WorldPo
 
 bool MovementAction::UseTaxi(PlayerbotAI* ai, uint32 entry, bool needNpc)
 {
-    AiObjectContext* context = ai->GetAiObjectContext();
-    Player* bot = ai->GetBot();
-
-    TaxiPathEntry const* tEntry = sTaxiPathStore.LookupEntry(entry);
-
-    if (!tEntry)
-        return false;
-
-    Creature* unit = nullptr;
-
-    if (needNpc)
+    return UnportedBlockResultCompat(tbcompat::Feature::Taxi, false, [&](auto* ai, auto& taxiPathStore) -> bool
     {
-        std::list<ObjectGuid> npcs = AI_VALUE(std::list<ObjectGuid>, "nearest npcs");
-        for (std::list<ObjectGuid>::iterator i = npcs.begin(); i != npcs.end(); i++)
-        {
-            unit = bot->GetNPCIfCanInteractWith(*i, UNIT_NPC_FLAG_FLIGHTMASTER);
-            if (unit)
-                break;
-        }
+        AiObjectContext* context = ai->GetAiObjectContext();
+        auto* bot = ai->GetBot();
 
-        if (!unit)
-        {
+        auto tEntry = taxiPathStore.LookupEntry(entry);
+
+        if (!tEntry)
             return false;
-        }
 
-        if (unit && !bot->GetTaxi().IsTaximaskNodeKnown(tEntry->from))
+        Creature* unit = nullptr;
+
+        if (needNpc)
         {
-            bot->GetSession()->SendLearnNewTaxiNode(unit);
+            std::list<ObjectGuid> npcs = AI_VALUE(std::list<ObjectGuid>, "nearest npcs");
+            for (std::list<ObjectGuid>::iterator i = npcs.begin(); i != npcs.end(); i++)
+            {
+                unit = bot->GetNPCIfCanInteractWith(*i, UNIT_NPC_FLAG_FLIGHTMASTER);
+                if (unit)
+                    break;
+            }
 
-            unit->SetFacingTo(GetAngleCompat(unit, bot));
+            if (!unit)
+            {
+                return false;
+            }
+
+            if (unit && !bot->GetTaxi().IsTaximaskNodeKnown(tEntry->from))
+            {
+                bot->GetSession()->SendLearnNewTaxiNode(unit);
+
+                unit->SetFacingTo(GetAngleCompat(unit, bot));
+            }
         }
-    }
 
-    uint32 botMoney = bot->GetMoney();
-    if (ai->HasCheat(BotCheatMask::gold) || ai->HasCheat(BotCheatMask::taxi))
-    {
-        bot->SetMoney(botMoney + tEntry->price);
-    }
+        uint32 botMoney = bot->GetMoney();
+        if (ai->HasCheat(BotCheatMask::gold) || ai->HasCheat(BotCheatMask::taxi))
+        {
+            bot->SetMoney(botMoney + tEntry->price);
+        }
 
-    bot->CleanupFlagsOnTaxiPathFinished();
+        bot->CleanupFlagsOnTaxiPathFinished();
 
-    ai->Unmount();
+        ai->Unmount();
 
-    bool goTaxi = ai::BotTaxiRouteAllowed({ tEntry->from, tEntry->to }) && bot->ActivateTaxiPathTo({tEntry->from, tEntry->to}, unit, 1);
+        bool goTaxi = ai::BotTaxiRouteAllowed({ tEntry->from, tEntry->to }) && bot->ActivateTaxiPathTo({tEntry->from, tEntry->to}, unit, 1);
 
-    if (goTaxi)
-        ai::BotInstantFlightFinish(bot, {tEntry->from, tEntry->to});
-    else
-        bot->SetMoney(botMoney);
+        if (goTaxi)
+            ai::BotInstantFlightFinish(bot, {tEntry->from, tEntry->to});
+        else
+            bot->SetMoney(botMoney);
 
-    return goTaxi;
+        return goTaxi;
+    }, ai, sTaxiPathStore);
 }
 
 bool MovementAction::MoveOnTransport(PlayerbotAI* ai, GenericTransport* transport, bool doTeleport)
 {
-    AiObjectContext* context = ai->GetAiObjectContext();
-    Player* bot = ai->GetBot();
-    WorldPosition botPos(bot);
-
-    uint32 radius = 20;
-
-    GenericTransport* botTrans = bot->GetTransport();
-
-    std::vector<WorldPosition> path;
-
-    WorldPosition transPos = botPos.RandomPointOnTrans(transport, 20.0f, doTeleport ? nullptr : bot, path);
-
-    if (!transPos)
-        return false;
-
-    if (doTeleport)
+    return UnportedBlockResultCompat(tbcompat::Feature::TransportBoarding, false, [&](auto* ai, auto* transport) -> bool
     {
-        bot->GetMap()->PlayerRelocation(bot, transPos.getX(), transPos.getY(), transPos.getZ(), bot->getOrientation());
-        transport->AddPassenger(bot);
-        // Boarding is the one leg of travel nothing recorded. setNewTarget writes an
-        // event for every destination a bot picks - taker, giver, objective - but the
-        // vessel it needs to get there was invisible in the log, so "do bots use boats
-        // at all" could only be argued, never counted. It fires once per boarding, so
-        // it costs nothing next to the rest of bot_events.csv.
-        sPlayerbotAIConfig.logEvent(ai, "BoardTransport", transport->GetName(), std::to_string(transport->GetEntry()));
-        bot->SendHeartBeat();
-        return true;
-    }
+        AiObjectContext* context = ai->GetAiObjectContext();
+        auto* bot = ai->GetBot();
+        WorldPosition botPos(bot);
 
-    bot->SetTransport(botTrans);
+        uint32 radius = 20;
 
-    if (path.empty())
-    {
-        path = WorldPosition(transport).GetPathStepFrom(botPos, bot);
+        auto* botTrans = bot->GetTransport();
+
+        std::vector<WorldPosition> path;
+
+        WorldPosition transPos = botPos.RandomPointOnTrans(transport, 20.0f, doTeleport ? nullptr : bot, path);
+
+        if (!transPos)
+            return false;
+
+        if (doTeleport)
+        {
+            bot->GetMap()->PlayerRelocation(bot, transPos.getX(), transPos.getY(), transPos.getZ(), bot->getOrientation());
+            transport->AddPassenger(bot);
+            // Boarding is the one leg of travel nothing recorded. setNewTarget writes an
+            // event for every destination a bot picks - taker, giver, objective - but the
+            // vessel it needs to get there was invisible in the log, so "do bots use boats
+            // at all" could only be argued, never counted. It fires once per boarding, so
+            // it costs nothing next to the rest of bot_events.csv.
+            sPlayerbotAIConfig.logEvent(ai, "BoardTransport", transport->GetName(), std::to_string(transport->GetEntry()));
+            bot->SendHeartBeat();
+            return true;
+        }
+
+        bot->SetTransport(botTrans);
 
         if (path.empty())
-            return false;
-    }
-    else
-    {
-        transport->AddPassenger(bot);
-        sPlayerbotAIConfig.logEvent(ai, "BoardTransport", transport->GetName(), std::to_string(transport->GetEntry()));
-
-        ai->StopMoving();
-
-        if (!bot->GetMotionMaster()->empty())
-            if (MovementGenerator* movgen = bot->GetMotionMaster()->top())
-                movgen->Interrupt(*bot);
-
-        bot->SendHeartBeat();
-
-        if (!bot->GetMotionMaster()->empty())
-            if (MovementGenerator* movgen = bot->GetMotionMaster()->top())
-                movgen->Reset(*bot);
-    }
-
-    if (ai->HasStrategy("debug move", BotState::BOT_STATE_NON_COMBAT))
-    {
-        for (auto& p : path)
         {
-            Creature* wpCreature = SummonCreatureCompat(bot, 2334, p.getX(), p.getY(), p.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
-            if (!wpCreature)
-                continue;
+            path = WorldPosition(transport).GetPathStepFrom(botPos, bot);
 
-            transport->AddPassenger(wpCreature);
-
-            wpCreature->NearTeleportTo(p.getX(), p.getY(), p.getZ(), wpCreature->getOrientation());
-
-            ai->AddAura(wpCreature, 246);
-
-            if (p == path.back())
-                ai->AddAura(wpCreature, 1130);
+            if (path.empty())
+                return false;
         }
-    }
+        else
+        {
+            transport->AddPassenger(bot);
+            sPlayerbotAIConfig.logEvent(ai, "BoardTransport", transport->GetName(), std::to_string(transport->GetEntry()));
 
-    bot->GetMotionMaster()->Clear();
+            ai->StopMoving();
 
-    std::vector<G3D::Vector3> pointPath = transPos.toPointsArray(path);
-    MoveSplineInitCompat init(*bot, "MoveOnTransport");
-    init.MovebyPath(pointPath);
-    init.SetTransport(transport->GetGUIDLow());
-    init.Launch();
+            if (!bot->GetMotionMaster()->empty())
+                if (MovementGenerator* movgen = bot->GetMotionMaster()->top())
+                    movgen->Interrupt(*bot);
 
-    return true;
+            bot->SendHeartBeat();
+
+            if (!bot->GetMotionMaster()->empty())
+                if (MovementGenerator* movgen = bot->GetMotionMaster()->top())
+                    movgen->Reset(*bot);
+        }
+
+        if (ai->HasStrategy("debug move", BotState::BOT_STATE_NON_COMBAT))
+        {
+            for (auto& p : path)
+            {
+                Creature* wpCreature = SummonCreatureCompat(bot, 2334, p.getX(), p.getY(), p.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
+                if (!wpCreature)
+                    continue;
+
+                transport->AddPassenger(wpCreature);
+
+                wpCreature->NearTeleportTo(p.getX(), p.getY(), p.getZ(), wpCreature->getOrientation());
+
+                ai->AddAura(wpCreature, 246);
+
+                if (p == path.back())
+                    ai->AddAura(wpCreature, 1130);
+            }
+        }
+
+        bot->GetMotionMaster()->Clear();
+
+        std::vector<G3D::Vector3> pointPath = transPos.toPointsArray(path);
+        MoveSplineInitCompat init(*bot, "MoveOnTransport");
+        init.MovebyPath(pointPath);
+        SplineSetTransportCompat(init, transport);
+        init.Launch();
+
+        return true;
+    }, ai, transport);
 }
 
 bool MovementAction::MoveOffTransport(PlayerbotAI* ai, WorldPosition exitPos, bool doTeleport)
 {
-    AiObjectContext* context = ai->GetAiObjectContext();
-    Player* bot = ai->GetBot();
-    WorldPosition botPos(bot);
-
-    if (!bot->GetTransport())
+    return UnportedBlockResultCompat(tbcompat::Feature::TransportBoarding, false, [&](auto* ai) -> bool
     {
-        return false;
-    }
+        AiObjectContext* context = ai->GetAiObjectContext();
+        auto* bot = ai->GetBot();
+        WorldPosition botPos(bot);
 
-    GenericTransport* transport = bot->GetTransport();
+        if (!bot->GetTransport())
+        {
+            return false;
+        }
 
-    transport->RemovePassenger(bot);
+        auto* transport = bot->GetTransport();
 
-    if (doTeleport)
-    {
-        TeleportToCompat(bot, exitPos.GetMapId(), exitPos.getX(), exitPos.getY(), exitPos.getZ(), exitPos.getO(), 0);
+        transport->RemovePassenger(bot);
+
+        if (doTeleport)
+        {
+            TeleportToCompat(bot, exitPos.GetMapId(), exitPos.getX(), exitPos.getY(), exitPos.getZ(), exitPos.getO(), 0);
+            return true;
+        }
+
+        bot->NearTeleportTo(bot->m_movementInfo.pos.x, bot->m_movementInfo.pos.y, bot->m_movementInfo.pos.z, bot->m_movementInfo.pos.o);
+
+        std::vector<WorldPosition> path = WorldPosition(bot).GetPathStepFrom(exitPos, bot, false);
+
+        if (path.empty())
+        {
+            return false;
+        }
+
+        if (exitPos.sqDistance(path.back()) > 5.0f)
+        {
+            return false;
+        }
+
+        bot->GetMotionMaster()->Clear();
+
+        std::vector<G3D::Vector3> pointPath = exitPos.toPointsArray(path);
+        MoveSplineInitCompat init(*bot, "MoveOffTransport");
+        init.MovebyPath(pointPath);
+        init.Launch();
+
         return true;
-    }
-
-    bot->NearTeleportTo(bot->m_movementInfo.pos.x, bot->m_movementInfo.pos.y, bot->m_movementInfo.pos.z, bot->m_movementInfo.pos.o);
-
-    std::vector<WorldPosition> path = WorldPosition(bot).GetPathStepFrom(exitPos, bot, false);
-
-    if (path.empty())
-    {
-        return false;
-    }
-
-    if (exitPos.sqDistance(path.back()) > 5.0f)
-    {
-        return false;
-    }
-
-    bot->GetMotionMaster()->Clear();
-
-    std::vector<G3D::Vector3> pointPath = exitPos.toPointsArray(path);
-    MoveSplineInitCompat init(*bot, "MoveOffTransport");
-    init.MovebyPath(pointPath);
-    init.Launch();
-
-    return true;
+    }, ai);
 }
 
 bool MovementAction::UseTransport(PlayerbotAI* ai, uint32 entry, WorldPosition dockPosition, WorldPosition exitPosition, bool doTeleport)
 {
-    AiObjectContext* context = ai->GetAiObjectContext();
-    Player* bot = ai->GetBot();
-    WorldPosition botPos(bot);
-
-    GenericTransport* transport = bot->GetTransport();
-
-    if (transport)
+    return UnportedBlockResultCompat(tbcompat::Feature::TransportBoarding, false, [&](auto* ai) -> bool
     {
-        GameObjectInfo const* data = sGOStorage.LookupEntry<GameObjectInfo>(transport->GetEntry());
-        std::string transportName = transport->GetName();
-        if (transportName.empty())
-            transportName = data->name;
+        AiObjectContext* context = ai->GetAiObjectContext();
+        auto* bot = ai->GetBot();
+        WorldPosition botPos(bot);
 
-        if (dockPosition.mapId == bot->GetMapId() && dockPosition.sqDistance2d(transport) < INTERACTION_DISTANCE * INTERACTION_DISTANCE)
+        auto* transport = bot->GetTransport();
+
+        if (transport)
         {
-            MoveOffTransport(ai, exitPosition, doTeleport);
-            ai->TellDebug(ai->GetMaster(), "Leaving transport " + transportName, "debug move");
+            GameObjectInfo const* data = sGOStorage.LookupEntry<GameObjectInfo>(transport->GetEntry());
+            std::string transportName = transport->GetName();
+            if (transportName.empty())
+                transportName = data->name;
+
+            if (dockPosition.mapId == bot->GetMapId() && dockPosition.sqDistance2d(transport) < INTERACTION_DISTANCE * INTERACTION_DISTANCE)
+            {
+                MoveOffTransport(ai, exitPosition, doTeleport);
+                ai->TellDebug(ai->GetMaster(), "Leaving transport " + transportName, "debug move");
+                return true;
+            }
+
+            if (urand(0, 50))
+                MoveOnTransport(ai, transport, doTeleport);
+
+            ai->TellDebug(ai->GetMaster(), "Waiting ontop of transport " + transportName + " at " + std::to_string((uint32)dockPosition.fDist(transport)) + "y from docking.", "debug move");
+
+            return false;
+        }
+
+        float minDist = 0;
+
+        std::string transportName;
+
+        for (auto& trans : dockPosition.GetTransports(entry))
+        {
+            float distance = dockPosition.sqDistance2d(trans);
+
+            if (minDist && distance > minDist)
+                continue;
+
+            transport = trans;
+            minDist = distance;
+
+            GameObjectInfo const* data = sGOStorage.LookupEntry<GameObjectInfo>(transport->GetEntry());
+            transportName = transport->GetName();
+            if (transportName.empty())
+                transportName = data->name;
+        }
+
+        if (transport && dockPosition.mapId == bot->GetMapId() && dockPosition.sqDistance2d(transport) < INTERACTION_DISTANCE * INTERACTION_DISTANCE)
+        {
+            MoveOnTransport(ai, transport, doTeleport);
+
             return true;
         }
 
-        if (urand(0, 50))
-            MoveOnTransport(ai, transport, doTeleport);
-
-        ai->TellDebug(ai->GetMaster(), "Waiting ontop of transport " + transportName + " at " + std::to_string((uint32)dockPosition.fDist(transport)) + "y from docking.", "debug move");
+        if (transportName.empty())
+            ai->TellDebug(ai->GetMaster(), "Waiting for transport on different map.", "debug move");
+        else
+            ai->TellDebug(ai->GetMaster(), "Waiting for transport " + std::string(transportName) + " at " + std::to_string((uint32)sqrt(minDist)) + "y from docking.", "debug move");
 
         return false;
-    }
-
-    float minDist = 0;
-
-    std::string transportName;
-
-    for (auto& trans : dockPosition.GetTransports(entry))
-    {
-        float distance = dockPosition.sqDistance2d(trans);
-
-        if (minDist && distance > minDist)
-            continue;
-
-        transport = trans;
-        minDist = distance;
-
-        GameObjectInfo const* data = sGOStorage.LookupEntry<GameObjectInfo>(transport->GetEntry());
-        transportName = transport->GetName();
-        if (transportName.empty())
-            transportName = data->name;
-    }
-
-    if (transport && dockPosition.mapId == bot->GetMapId() && dockPosition.sqDistance2d(transport) < INTERACTION_DISTANCE * INTERACTION_DISTANCE)
-    {
-        MoveOnTransport(ai, transport, doTeleport);
-
-        return true;
-    }
-
-    if (transportName.empty())
-        ai->TellDebug(ai->GetMaster(), "Waiting for transport on different map.", "debug move");
-    else
-        ai->TellDebug(ai->GetMaster(), "Waiting for transport " + std::string(transportName) + " at " + std::to_string((uint32)sqrt(minDist)) + "y from docking.", "debug move");
-
-    return false;
+    }, ai);
 }
 
 bool MovementAction::MinimalMove(PlayerbotAI* ai)
@@ -978,7 +990,7 @@ bool MovementAction::WaitForTransport()
     if (!lastMove.lastTransportEntry)
         return false;
 
-    GenericTransport* transport = bot->GetTransport();
+    GenericTransport* transport = TransportOfCompat(bot);
 
     if (!transport || transport->GetEntry() != lastMove.lastTransportEntry || lastMove.lastPath.GetPath().front().type != PathNodeType::NODE_TRANSPORT || lastMove.lastPath.GetPath().front().entry != lastMove.lastTransportEntry)
     {
@@ -988,7 +1000,7 @@ bool MovementAction::WaitForTransport()
 
     TravelPath path = lastMove.lastPath;
 
-    if(!path.UpcommingSpecialMovement(bot, 0.0f, bot->GetTransport()))
+    if(!path.UpcommingSpecialMovement(bot, 0.0f, TransportOfCompat(bot)))
         return false;
 
     PathNodePoint dockPoint = path.GetPath().front();
@@ -1111,11 +1123,10 @@ bool MovementAction::HandleSpecialMovement(TravelPath& path)
     //Game object portals
     if (currentPoint.type == PathNodeType::NODE_STATIC_PORTAL && currentPoint.entry)
     {
-        GameObjectInfo const* goInfo = sGOStorage.LookupEntry<GameObjectInfo>(currentPoint.entry);
-        if (!goInfo || goInfo->type != GAMEOBJECT_TYPE_SPELLCASTER)
+        uint32 spellId = 0;
+        if (!PortalSpellOfGameObjectCompat(currentPoint.entry, spellId))
             return false;
 
-        uint32 spellId = goInfo->spellcaster.spellId;
         const SpellEntry* pSpellInfo = sServerFacade.LookupSpellInfo(spellId);
 
         if (pSpellInfo->EffectTriggerSpell[0])
@@ -1139,13 +1150,8 @@ bool MovementAction::HandleSpecialMovement(TravelPath& path)
             if (!go || go->GetEntry() != currentPoint.entry)
                 continue;
 
-            if (!bot->GetGameObjectIfCanInteractWith(go->getObjectGuid(), MAX_GAMEOBJECT_TYPE))
-                continue;
-
-            std::unique_ptr<WorldPacket> packet(new WorldPacket(CMSG_GAMEOBJ_USE));
-            *packet << *i;
-            bot->GetSession()->QueuePacket(packet.release());
-            return true;
+            if (UsePortalObjectCompat(bot, go))
+                return true;
         }
 
         return false;
@@ -1404,8 +1410,8 @@ bool MovementAction::DispatchMovement(TravelPath movePath, bool generatePath, bo
 
     for (auto& p : pointPath)
     {
-        if (bot->GetTransport())
-            bot->GetTransport()->CalculatePassengerPosition(p.x, p.y, p.z);
+        if (GenericTransport* botTransport = TransportOfCompat(bot))
+            PassengerPositionCompat(botTransport, p.x, p.y, p.z);
         float const navmeshZ = p.z;
         bot->UpdateAllowedPositionZ(p.x, p.y, p.z);
         // ORIGINAL clamp, before either restore path below: the magma/slime
@@ -1533,8 +1539,8 @@ bool MovementAction::DispatchMovement(TravelPath movePath, bool generatePath, bo
                 }
             }
         }
-        if (bot->GetTransport())
-            bot->GetTransport()->CalculatePassengerOffset(p.x, p.y, p.z);
+        if (GenericTransport* botTransport = TransportOfCompat(bot))
+            SplinePointToTransportCompat(botTransport, p.x, p.y, p.z);
     }
 
     // The spline below is what moves the bot. The point generator stays under
@@ -1549,8 +1555,8 @@ bool MovementAction::DispatchMovement(TravelPath movePath, bool generatePath, bo
     MoveSplineInitCompat init(*bot, "DispatchMovement");
     init.MovebyPath(pointPath);
     init.SetWalk(moveMode == FORCED_MOVEMENT_WALK);
-    if (bot->GetTransport())
-        init.SetTransport(bot->GetTransport()->GetGUIDLow());
+    if (GenericTransport* botTransport = TransportOfCompat(bot))
+        SplineSetTransportCompat(init, botTransport);
     init.Launch();
     // The spline keeps walking server-side; wake the next turn a margin
     // BEFORE this leg ends so the travel action can chain the next leg in
@@ -2319,10 +2325,7 @@ static bool PlaceUnstickRegionAround(dtNavMeshQuery const* query, dtQueryFilter 
 // not beside the island, for the bot's pet.
 static bool ProbePlaceUnstickIsolated(uint32 mapId, float fx, float fy, float fz, Player* master)
 {
-    MMAP::MMapManager* const mmap = MMAP::MMapFactory::createOrGetMMapManager();
-    if (!mmap)
-        return false;
-    dtNavMeshQuery const* const query = mmap->GetNavMeshQuery(mapId);
+    dtNavMeshQuery const* const query = NavMeshQueryCompat(mapId);
     if (!query || !query->getAttachedNavMesh())
         return false;
     dtQueryFilter filter;
@@ -2333,10 +2336,10 @@ static bool ProbePlaceUnstickIsolated(uint32 mapId, float fx, float fy, float fz
     float end[VERTEX_SIZE] = {master->GetPositionY(), master->GetPositionZ(), master->GetPositionX()};
     float startNearest[VERTEX_SIZE] = {0.0f, 0.0f, 0.0f};
     float endNearest[VERTEX_SIZE] = {0.0f, 0.0f, 0.0f};
-    dtPolyRef const startRef = PathInfo::FindWalkPoly(query, start, filter, startNearest);
+    dtPolyRef const startRef = NavMeshFindWalkPolyCompat(query, start, filter, startNearest);
     if (startRef == INVALID_POLYREF)
         return ai::PlaceUnstickStartIsolated(true, false, false, false, 0.0f, false);
-    dtPolyRef const endRef = PathInfo::FindWalkPoly(query, end, filter, endNearest);
+    dtPolyRef const endRef = NavMeshFindWalkPolyCompat(query, end, filter, endNearest);
     if (endRef == INVALID_POLYREF)
         return ai::PlaceUnstickStartIsolated(true, true, false, false, 0.0f, false);
     dtPolyRef polys[256];
@@ -2677,14 +2680,10 @@ bool MovementAction::Follow(Unit* target, float distance, float angle)
 
             if (player->IsTaxiFlying()) //Move to where the player is flying to.
             {
-                const Taxi::Map tMap(player->GetTaxi().GetTaxiPath());
-                if (!tMap.empty())
-                {
-                    auto tEnd = tMap.back();
-
-                    if (tEnd)
-                        return MoveTo(tEnd->mapId, tEnd->x, tEnd->y, tEnd->z);
-                }
+                uint32 tEndMapId = 0;
+                float tEndX = 0.0f, tEndY = 0.0f, tEndZ = 0.0f;
+                if (TaxiDestinationCompat(player, tEndMapId, tEndX, tEndY, tEndZ))
+                    return MoveTo(tEndMapId, tEndX, tEndY, tEndZ);
             }
         }
         if (!target->IsTaxiFlying()/* || bot->GetTransport()*/)
@@ -3615,8 +3614,8 @@ bool MovementAction::ChaseTo(WorldObject* obj, float distance, float angle)
             std::vector<G3D::Vector3> pointsArray = WorldPosition().toPointsArray(path);
             MoveSplineInitCompat init(*bot, "ChaseTo");
             init.MovebyPath(pointsArray);
-            if (bot->GetTransport())
-                init.SetTransport(bot->GetTransport()->GetGUIDLow());
+            if (GenericTransport* botTransport = TransportOfCompat(bot))
+                SplineSetTransportCompat(init, botTransport);
             init.Launch();
             sLog.outDetail("[BOT CHASE] %s -> %s: dist=%.1f target=%.1f pts=%u wait=%.2f (MovePath)",
                 CStrCompat(bot->GetName()), CStrCompat(obj->GetName()), distanceToTarget, distance, (uint32)path.size(), distance / bot->GetSpeed(MOVE_RUN));
@@ -3683,53 +3682,56 @@ float MovementAction::MoveDelay(float distance)
 
 bool MovementAction::FollowOnTransport(Unit* target)
 {
-    bool const onDifferentTransports = bot->m_movementInfo.t_guid != target->m_movementInfo.t_guid;
-    if (!onDifferentTransports || !sServerFacade.IsDistanceLessOrEqualThan(sServerFacade.getDistance2d(bot, target), sPlayerbotAIConfig.sightDistance))
-        return false;
-
-    ai->StopMoving();
-
-    // Leaving a transport must also clear the on-transport move flag: core
-    // Transport::RemovePassenger unregisters the passenger but leaves
-    // MOVEFLAG_ONTRANSPORT set, and a stale flag without a transport freezes
-    // every later movement until relog (issue #216).
-    if (GenericTransport* pMyTransport = bot->GetTransport())
+    return UnportedBlockResultCompat(tbcompat::Feature::TransportBoarding, false, [&](auto* target, auto* bot) -> bool
     {
-        pMyTransport->RemovePassenger(bot);
-        // RemovePassenger only clears the transport state when the passenger
-        // was actually in the set; zero it unconditionally so no t_guid /
-        // t_pos survive, and drop the on-transport move flag the core leaves
-        // behind - a stale flag without a transport freezes every later
-        // movement until relog (issue #216).
-        bot->m_movementInfo.ClearTransportData();
-        bot->m_movementInfo.RemoveMovementFlag(MOVEFLAG_ONTRANSPORT);
-    }
+        bool const onDifferentTransports = bot->m_movementInfo.t_guid != target->m_movementInfo.t_guid;
+        if (!onDifferentTransports || !sServerFacade.IsDistanceLessOrEqualThan(sServerFacade.getDistance2d(bot, target), sPlayerbotAIConfig.sightDistance))
+            return false;
 
-    if (GenericTransport* pHisTransport = target->GetTransport())
-    {
-        // Boarding: the static navmesh has no tiles on a moving MO_TRANSPORT, so
-        // pathfinding to a master on an elevator returns PATHFIND_NOPATH and the
-        // bot stops at the shaft edge (issue #216). When the master is close
-        // enough - in 3D, so the bot never snaps onto a platform far above or
-        // below it - step onto the platform directly. PlayerRelocation (not
-        // Relocate) keeps grid, visibility and the passenger position
-        // consistent; AddPassenger then sets t_guid, the local t_pos and
-        // MOVEFLAG_ONTRANSPORT.
-        if (!sServerFacade.IsDistanceLessOrEqualThan(bot->GetDistance(target), kTransportBoardDistance))
-            return false; // wait for the platform to come down instead of snapping across the shaft
+        ai->StopMoving();
 
-        bot->GetMap()->PlayerRelocation(bot, target->getPositionX(), target->getPositionY(), target->getPositionZ(), target->getOrientation());
-        pHisTransport->AddPassenger(bot);
-    }
-    else
-    {
-        // The master stepped off onto solid ground: snap out of the shaft to
-        // the master's position so ordinary ground follow resumes (issue #216).
-        bot->GetMap()->PlayerRelocation(bot, target->getPositionX(), target->getPositionY(), target->getPositionZ(), target->getOrientation());
-    }
+        // Leaving a transport must also clear the on-transport move flag: core
+        // Transport::RemovePassenger unregisters the passenger but leaves
+        // MOVEFLAG_ONTRANSPORT set, and a stale flag without a transport freezes
+        // every later movement until relog (issue #216).
+        if (auto* pMyTransport = bot->GetTransport())
+        {
+            pMyTransport->RemovePassenger(bot);
+            // RemovePassenger only clears the transport state when the passenger
+            // was actually in the set; zero it unconditionally so no t_guid /
+            // t_pos survive, and drop the on-transport move flag the core leaves
+            // behind - a stale flag without a transport freezes every later
+            // movement until relog (issue #216).
+            bot->m_movementInfo.ClearTransportData();
+            bot->m_movementInfo.RemoveMovementFlag(MOVEFLAG_ONTRANSPORT);
+        }
 
-    bot->SendHeartBeat();
-    return true;
+        if (auto* pHisTransport = target->GetTransport())
+        {
+            // Boarding: the static navmesh has no tiles on a moving MO_TRANSPORT, so
+            // pathfinding to a master on an elevator returns PATHFIND_NOPATH and the
+            // bot stops at the shaft edge (issue #216). When the master is close
+            // enough - in 3D, so the bot never snaps onto a platform far above or
+            // below it - step onto the platform directly. PlayerRelocation (not
+            // Relocate) keeps grid, visibility and the passenger position
+            // consistent; AddPassenger then sets t_guid, the local t_pos and
+            // MOVEFLAG_ONTRANSPORT.
+            if (!sServerFacade.IsDistanceLessOrEqualThan(bot->GetDistance(target), kTransportBoardDistance))
+                return false; // wait for the platform to come down instead of snapping across the shaft
+
+            bot->GetMap()->PlayerRelocation(bot, target->getPositionX(), target->getPositionY(), target->getPositionZ(), target->getOrientation());
+            pHisTransport->AddPassenger(bot);
+        }
+        else
+        {
+            // The master stepped off onto solid ground: snap out of the shaft to
+            // the master's position so ordinary ground follow resumes (issue #216).
+            bot->GetMap()->PlayerRelocation(bot, target->getPositionX(), target->getPositionY(), target->getPositionZ(), target->getOrientation());
+        }
+
+        bot->SendHeartBeat();
+        return true;
+    }, target, bot);
 }
 
 
@@ -6232,86 +6234,88 @@ bool JumpAction::DoJump(const WorldPosition &dest, const WorldPosition& highestP
         landing = WorldPosition(dest.GetMapId(), ox, oy, oz);
     }
 
-    if (!goodLanding)
-        ai->SetFallAfterJump();
-
-    ai->InterruptSpell(false, "jump");
-    ai->StopMoving();
-    ai->SetJumpDestination(landing);
-    bot->SetFallInformation(maxHeight);
-
-    bool slowJump = false;// !jumpBackward && hSpeed == bot->GetSpeed(MOVE_WALK);
-    // TODO calculate slow jump (jump + move forward)
-
-    // send move packet before jump
-    if (!jumpInPlace && !slowJump)
+    return UnportedBlockResultCompat(tbcompat::Feature::JumpFall, false, [&](auto* bot) -> bool
     {
-        bot->m_movementInfo.AddMovementFlag(jumpBackward ? MOVEFLAG_BACKWARD : MOVEFLAG_FORWARD);
-        WorldPacket move(jumpBackward ? MSG_MOVE_START_BACKWARD : MSG_MOVE_START_FORWARD);
-// write packet info
-        move << bot->m_movementInfo;
-        ai->QueuePacket(move);
-    }
+        if (!goodLanding)
+            ai->SetFallAfterJump();
 
-    float vsin = jumpInPlace ? 0 : sin(angle);
-    float vcos = jumpInPlace ? 1 : cos(angle);
+        ai->InterruptSpell(false, "jump");
+        ai->StopMoving();
+        ai->SetJumpDestination(landing);
+        bot->SetFallInformation(maxHeight);
 
-    // write jump info
-    uint32 curTime = WorldTimer::getMSTime();
-    uint32 jumpTime = curTime + WorldAverageDiffCompat() * 2 + uint32(timeToLand * static_cast<float>(IN_MILLISECONDS));
-    ai->SetJumpTime(jumpTime);
-    bot->m_movementInfo.jump.zspeed = -vSpeed;
-    bot->m_movementInfo.jump.cosAngle = vcos;
-    bot->m_movementInfo.jump.sinAngle = vsin;
-    bot->m_movementInfo.jump.xyspeed = slowJump ? 0.f : hSpeed;
+        bool slowJump = false;// !jumpBackward && hSpeed == bot->GetSpeed(MOVE_WALK);
+        // TODO calculate slow jump (jump + move forward)
 
-    sLog.outDetail("%s: Jump x: %f, y: %f, z: %f, time: %f, dist: %f, inPlace: %u, landTime: %u, curTime: %u", CStrCompat(bot->GetName()), landing.getX(), landing.getY(), landing.getZ(), timeToLand, distanceToLand, jumpInPlace, jumpTime, curTime);
+        // send move packet before jump
+        if (!jumpInPlace && !slowJump)
+        {
+            bot->m_movementInfo.AddMovementFlag(jumpBackward ? MOVEFLAG_BACKWARD : MOVEFLAG_FORWARD);
+            WorldPacket move(jumpBackward ? MSG_MOVE_START_BACKWARD : MSG_MOVE_START_FORWARD);
+    // write packet info
+            move << bot->m_movementInfo;
+            ai->QueuePacket(move);
+        }
 
-    // send jump packet
-    bot->m_movementInfo.AddMovementFlag(MOVEFLAG_JUMPING);
+        float vsin = jumpInPlace ? 0 : sin(angle);
+        float vcos = jumpInPlace ? 1 : cos(angle);
 
-    // client doesn't seem to show proper bigger jump with faster than real speeds
-    if (vSpeed > (7.96f * 1.3f) || hSpeed > (bot->GetSpeed(MOVE_RUN) * 1.3f))
-    {
-        WorldPacket data(MSG_MOVE_KNOCK_BACK);
-        data << bot->GetMover()->GetPackGUID();
-        data << bot->m_movementInfo;
-        data << bot->m_movementInfo.jump.cosAngle;
-        data << bot->m_movementInfo.jump.sinAngle;
-        data << bot->m_movementInfo.jump.xyspeed;
-        data << bot->m_movementInfo.jump.zspeed;
-        bot->GetMover()->SendMessageToSetExcept(&data, bot);
-    }
-    else
-    {
-        WorldPacket jump(MSG_MOVE_JUMP);
-        // write packet info
-        jump << bot->m_movementInfo;
-        ai->QueuePacket(jump);
-    }
+        // write jump info
+        uint32 curTime = WorldTimer::getMSTime();
+        uint32 jumpTime = curTime + WorldAverageDiffCompat() * 2 + uint32(timeToLand * static_cast<float>(IN_MILLISECONDS));
+        ai->SetJumpTime(jumpTime);
+        bot->m_movementInfo.jump.zspeed = -vSpeed;
+        bot->m_movementInfo.jump.cosAngle = vcos;
+        bot->m_movementInfo.jump.sinAngle = vsin;
+        bot->m_movementInfo.jump.xyspeed = slowJump ? 0.f : hSpeed;
 
-    // send move packet after jump
-    if (!jumpInPlace && slowJump)
-    {
-        bot->m_movementInfo.AddMovementFlag(jumpBackward ? MOVEFLAG_BACKWARD : MOVEFLAG_FORWARD);
-        bot->m_movementInfo.jump.xyspeed = hSpeed;
-        WorldPacket move(jumpBackward ? MSG_MOVE_START_BACKWARD : MSG_MOVE_START_FORWARD);
-        // write packet info
-        move << bot->m_movementInfo;
-        ai->QueuePacket(move);
-    }
+        sLog.outDetail("%s: Jump x: %f, y: %f, z: %f, time: %f, dist: %f, inPlace: %u, landTime: %u, curTime: %u", CStrCompat(bot->GetName()), landing.getX(), landing.getY(), landing.getZ(), timeToLand, distanceToLand, jumpInPlace, jumpTime, curTime);
 
-    // change position to highest position
-    // todo add in between points to avoid mobs instant aggro before landing
-    bot->Relocate(highestPoint.getX(), highestPoint.getY(), highestPoint.getZ());
+        // send jump packet
+        bot->m_movementInfo.AddMovementFlag(MOVEFLAG_JUMPING);
 
-    if (ai->HasStrategy("debug", BotState::BOT_STATE_NON_COMBAT))
-    {
-        std::string text = "Jump: cos: " + std::to_string(vcos) + " sin: " + std::to_string(vsin) + " distance: " + std::to_string(distanceToLand) + " speed: " + std::to_string(hSpeed);
-        bot->Say(text, (bot->GetTeam() == ALLIANCE ? LANG_COMMON : LANG_ORCISH));
-    }
+        // client doesn't seem to show proper bigger jump with faster than real speeds
+        if (vSpeed > (7.96f * 1.3f) || hSpeed > (bot->GetSpeed(MOVE_RUN) * 1.3f))
+        {
+            WorldPacket data(MSG_MOVE_KNOCK_BACK);
+            data << bot->GetMover()->GetPackGUID();
+            data << bot->m_movementInfo;
+            data << bot->m_movementInfo.jump.cosAngle;
+            data << bot->m_movementInfo.jump.sinAngle;
+            data << bot->m_movementInfo.jump.xyspeed;
+            data << bot->m_movementInfo.jump.zspeed;
+            bot->GetMover()->SendMessageToSetExcept(&data, bot);
+        }
+        else
+        {
+            WorldPacket jump(MSG_MOVE_JUMP);
+            // write packet info
+            jump << bot->m_movementInfo;
+            ai->QueuePacket(jump);
+        }
 
-    return true;
+        // send move packet after jump
+        if (!jumpInPlace && slowJump)
+        {
+            bot->m_movementInfo.AddMovementFlag(jumpBackward ? MOVEFLAG_BACKWARD : MOVEFLAG_FORWARD);
+            bot->m_movementInfo.jump.xyspeed = hSpeed;
+            WorldPacket move(jumpBackward ? MSG_MOVE_START_BACKWARD : MSG_MOVE_START_FORWARD);
+            // write packet info
+            move << bot->m_movementInfo;
+            ai->QueuePacket(move);
+        }
+
+        // change position to highest position
+        // todo add in between points to avoid mobs instant aggro before landing
+        bot->Relocate(highestPoint.getX(), highestPoint.getY(), highestPoint.getZ());
+
+        if (ai->HasStrategy("debug", BotState::BOT_STATE_NON_COMBAT))
+        {
+            std::string text = "Jump: cos: " + std::to_string(vcos) + " sin: " + std::to_string(vsin) + " distance: " + std::to_string(distanceToLand) + " speed: " + std::to_string(hSpeed);
+            bot->Say(text, (bot->GetTeam() == ALLIANCE ? LANG_COMMON : LANG_ORCISH));
+        }
+
+        return true;    }, bot);
 }
 
 WorldPosition JumpAction::GetPossibleJumpStartFor(const WorldPosition& src, const WorldPosition& dest, WorldPosition& possibleLanding, Unit* jumper, float &requiredSpeed, float distanceTo, float distanceFrom)
