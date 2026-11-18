@@ -326,7 +326,7 @@ Live evidence (gate G5 below): `26054 items in 35 ms, 0 with a Stackable column 
 first ten being weapons at item level 298 (and 277951 at 259) with no `ItemDamage*` row for the level. The armor side
 fires too: a level-298 plate pauldron (270816) is incomplete with no `ItemArmorQuality`/`ItemArmorTotal` row and keeps
 its stats, while a level-90 shield (23043) is complete and prints `block 66 (base 66 + stat 21, not added)`. The five
-command outputs and the fill line are quoted below.
+required command outputs, the armor-side example and the fill line are quoted below.
 
 ### Live output (G5)
 
@@ -375,8 +375,8 @@ TortoiseBots: stats 74:166, 7:249, 40:147, 36:74; spells none; resistances 0/0/0
 
 | Gate | Command | Result |
 |---|---|---|
-| G1 module compiles on ForeverCore | `forever-build/build.sh 12 worldserver` | `CMAKE_RC=0`, `MAKE_RC=0`, `TOTAL_SECONDS=9` on the final tree: the module object for `TbItemPrototype.cpp` and the relinked `worldserver` were written (01:16 run: `worldserver` 55,377,688 bytes at 01:16:31); the `TbItemPrototype.cpp`/`TbScripts.cpp` changes are in it |
+| G1 module compiles on ForeverCore | `forever-build/build.sh 12 worldserver` | `CMAKE_RC=0`, `MAKE_RC=0`: 9 s when `TbItemPrototype.cpp`/`TbScripts.cpp` changed (module object and relinked `worldserver` written, 01:16 run: 55,377,688 bytes at 01:16:31), 3 s at the code commit with nothing left to rebuild |
 | G5 live boot | rsync core + module to `forever-build/src`, `build.sh 12 worldserver`, `forever-run/setup.sh && world.sh start`, poll `world.out` 15 s up to 3 min for `ready...`, `ASSERTION FAILED` = 0 and the mirrors line, then `tb item` on the console; `world.sh stop` | PASS: `ready...` at poll 5 (76 s), `grep -c "ASSERTION FAILED"` = 0, `grep -c "ready\.\.\."` = 1, `grep -c "mirrors filled"` = 1; the 379-incomplete line and the `tb item` outputs above; server stopped and `forever-world` removed |
-| G2 Turtle build | `vm-build ~/wt-forever-port --wait` | `MAKE_RC=0`, `QUEUE_RC=0`, `COMPILE_SECONDS=11`, `TOTAL_SECONDS=13`, module files changed/added/removed: 5, job `1-1794961287780864682-1365186` rc=0 slot 0 |
-| G3 Turtle unit tests | `vm-test tb ~/wt-forever-port` (the whole `tools/verify_all.sh`: OKF, surface, wiring, unit tests, standalone policy tests, decision trail) | `RESULT: PASS`, rc=0, `vm_duration=875s`, `sha=553e3be72 dirty=5 files=3529`; `Ran 2656 tests in 309.342s`, `OK (skipped=61)`, engine unit tests passed |
-| G4 core-free tests, ForeverCore toolchain | `policy-tests.sh` on the tree under test (worktree synced to `~/forever-build/tb`) | 472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL in 113 s - the same set as the BEFORE commit and fix round 1: `test_combat_monitor_service`, `test_combat_monitor_service_race`, `test_decision_capture_files`, `test_run_trace_writer`; `test_decision_capture_codec` and `test_log_file_rotation`. Nothing got worse |
+| G2 Turtle build | `vm-build <worktree> --wait`, then `vm-build bd17aad7e --wait` | `MAKE_RC=0`, `QUEUE_RC=0` both times: worktree run `COMPILE_SECONDS=11`/`TOTAL_SECONDS=13`, 5 module files, job `1-1794961287780864682-1365186`; code-commit run `COMPILE_SECONDS=9`/`TOTAL_SECONDS=10`, 2 module files, job `1-1794963404060790845-1408401`, rc=0 slot 0 |
+| G3 Turtle unit tests | `vm-test tb ~/wt-forever-port` (the whole `tools/verify_all.sh`: OKF, surface, wiring, unit tests, standalone policy tests, decision trail) | `RESULT: PASS`, rc=0, `sha=bd17aad7e dirty=0 files=3529`, `vm_duration=860s`; `Ran 2656 tests in 309.342s`, `OK (skipped=61)`, engine unit tests passed. (An earlier run on the same code with these notes uncommitted was `dirty=5`, 875 s, PASS) |
+| G4 core-free tests, ForeverCore toolchain | `policy-tests.sh` on the tree under test (worktree synced to `~/forever-build/tb`) | 472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL in 112 s at `bd17aad7e` - the same set as the BEFORE commit and fix round 1: `test_combat_monitor_service`, `test_combat_monitor_service_race`, `test_decision_capture_files`, `test_run_trace_writer`; `test_decision_capture_codec` and `test_log_file_rotation`. Nothing got worse |
