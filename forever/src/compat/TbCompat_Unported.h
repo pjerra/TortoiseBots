@@ -341,12 +341,21 @@ inline uint32 CreatureMechanicImmuneMaskCompat(CreatureInfo const* info)
 // PLAYER_EXTRA_GM_INVISIBLE, which `isGMVisible()` reads (Player.h:1340).
 inline bool PlayerHiddenGmCompat(Player* player) { return !player->isGMVisible(); }
 
-// The heal one effect of a spell would do for the bot (T: CalculateSpellDamage then SpellHealingBonusDone, 0 when the base is not
-// positive). Failure value: 0 ("this effect heals nothing"); the caller skips a spell that heals nothing.
-inline int32 EstimateHealOfEffectCompat(Player* /*bot*/, Unit* /*target*/, SpellEntry const* /*info*/, uint32 /*effect*/)
+// PROPER (slice 2, R4): the heal one effect of a spell would do for the bot. T: CalculateSpellDamage then SpellHealingBonusDone, 0 when the base is
+// not positive. F: the cast's own two steps, as Spell::EffectHeal does them: SpellEffectInfo::CalcValue (base points, level scaling) and
+// Unit::SpellHealingBonusDone (Unit.h:1704, the +healing bonus; no Spell object, so no spell mods of a cast in flight). A spell the mirror
+// has no core record for heals nothing (0: the downrank rule skips it and keeps the top rank, as before). The row `heal estimate` of the
+// unported table is no longer counted; it stays in ai/playerbot/UnportedFeatures.h (outside forever/) until that file is next changed.
+inline int32 EstimateHealOfEffectCompat(Player* bot, Unit* target, SpellEntry const* info, uint32 effect)
 {
-    tbcompat::Unported(tbcompat::Feature::HealEstimate);
-    return 0;
+    SpellInfo const* spellInfo = GetSpellInfoCompat(info);
+    if (!bot || !target || !spellInfo || effect >= spellInfo->GetEffects().size())
+        return 0;
+    SpellEffectInfo const& effectInfo = spellInfo->GetEffect(SpellEffIndex(effect));
+    int32 const base = int32(effectInfo.CalcValue(bot, nullptr, target));
+    if (base <= 0)
+        return 0;
+    return bot->SpellHealingBonusDone(target, spellInfo, base, HEAL, effectInfo);
 }
 
 // An item cast with a hand-built Spell: the loop of CastItemTargetAction::Execute. Failure value: false (the cast did not start).

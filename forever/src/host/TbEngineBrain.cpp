@@ -406,6 +406,15 @@ std::vector<std::string> Describe(Brain const* brain)
         (followTarget && pai->IsSafe(followTarget) ? "yes" : "no") + ", distance to master target: " + std::to_string(masterDistance) +
         ", motion type: " + std::to_string(int(pai->GetBot()->GetMotionMaster()->GetCurrentMovementGeneratorType())));
 
+    // R4 (observations f and j): the engine's "last spell cast" (cleared by SpellInterrupted when the core reports a failed cast, so a
+    // bot that heard it shows id 0 here) and the core's stand state of the bot (a drinking bot sits: 1 = sit, 0 = stand).
+    if (ai::Value<ai::LastSpellCast&>* value = context->GetValue<ai::LastSpellCast&>("last spell cast"))
+    {
+        ai::LastSpellCast const& last = value->Get();
+        lines.push_back("last spell cast: id " + std::to_string(last.id) + ", seconds since " + (last.id ? std::to_string(long(time(nullptr) - last.time)) : std::string("n/a")));
+    }
+    lines.push_back("stand state: " + std::to_string(int(pai->GetBot()->GetStandState())));
+
     // The cast-result queue (TbBotSession.h): what the core told the bot about its own casts since the engine started.
     if (brain->session)
     {

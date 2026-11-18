@@ -29,6 +29,9 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <string>
+#include <tuple>
+#include <unordered_map>
 #include <vector>
 
 namespace
@@ -54,6 +57,15 @@ std::atomic<bool> g_notReadyLookupLogged{false};
 std::atomic<uint32> g_nonNoneOnly{0};
 std::atomic<bool> g_nonNoneLogged{false};
 std::atomic<bool> g_disabledLogged{false};
+
+// R4 (slice 2): the rank number of a spell the core's own rank chain does not cover. The chain (SpellMgr::LoadSpellRanks) is built from the
+// SkillLineAbility rows' SupercedesSpell, and this server's data has none for the 1.12 class spells (Smite 585/591, Lesser Heal
+// 2050/2052/2053, Shadow Word: Pain 589/594, ...: `.tb spell 591` shows an empty rank). The engine picks the rank of a cast by reading that text
+// (SpellIdValue.cpp: the highest "Rank N" of the spells the bot knows); with every rank empty it kept the LAST id of its loop, the LOWEST rank, so a
+// level 10 priest cast rank 1 of everything (seen live in R4: Smite 585 with 591 known). The rank derived here is the position of the spell among
+// the spells of the same name and spell family that have no chain, ordered by spell level then id: the same order the ranks have in the data.
+// Built once with the index (published before it), immutable afterwards; a spell that is alone in its group keeps no rank text (as on Turtle).
+std::atomic<std::unordered_map<uint32, uint32> const*> g_derivedRanks{nullptr};
 
 // The single bit of a school mask as the old field's school id (0 normal, 1 holy, ... 6 arcane). A spell with several
 // schools keeps the first; `.tb spellscan` counts those.
@@ -143,13 +155,21 @@ void InitSpellTable()
 
     std::vector<uint32> ids;
     uint32 maxId = 0;
+    // (name + family, spell level, id) of every spell without a core rank chain that could be a rank of a class spell.
+    std::vector<std::tuple<std::string, uint32, uint32>> unchained;
     sSpellMgr->ForEachSpellInfo([&](SpellInfo const* info)
     {
         if (!info)
             return;
         maxId = std::max(maxId, info->Id);
         if (info->Difficulty == DIFFICULTY_NONE)
+        {
             ids.push_back(info->Id);
+            if (!info->ChainEntry && info->SpellFamilyName != 0 && info->SpellLevel > 0 && info->SpellName)
+                if (char const* name = (*info->SpellName)[LOCALE_enUS])
+                    if (*name)
+                        unchained.emplace_back(std::string(name) + '\x1f' + std::to_string(info->SpellFamilyName), uint32(info->SpellLevel), info->Id);
+        }
     });
 
     // The store is loaded by the time the flag is set, so this pass is never empty on a live server. With no spells at
@@ -165,6 +185,22 @@ void InitSpellTable()
     index->ids = new uint32[index->count];
     std::copy(ids.begin(), ids.end(), index->ids);
     index->slots = new std::atomic<SpellEntry*>[index->count]();
+
+    {
+        std::sort(unchained.begin(), unchained.end());
+        auto* ranks = new std::unordered_map<uint32, uint32>();
+        for (size_t begin = 0; begin < unchained.size();)
+        {
+            size_t end = begin;
+            while (end < unchained.size() && std::get<0>(unchained[end]) == std::get<0>(unchained[begin]))
+                ++end;
+            if (end - begin >= 2)
+                for (size_t i = begin; i < end; ++i)
+                    (*ranks)[std::get<2>(unchained[i])] = uint32(i - begin + 1);
+            begin = end;
+        }
+        g_derivedRanks.store(ranks, std::memory_order_release);
+    }
 
     g_bound.store(maxId + 1, std::memory_order_release);
     g_index.store(index, std::memory_order_release);
@@ -273,6 +309,16 @@ SpellEntry* BuildSpellEntry(SpellInfo const* info)
     {
         std::string const rank = "Rank " + std::to_string(uint32(info->ChainEntry->rank));
         entry->Rank.fill(rank);
+    }
+    else if (!info->ChainEntry)
+    {
+        // No chain in this server's data: the derived position (g_derivedRanks above).
+        if (auto const* derived = g_derivedRanks.load(std::memory_order_acquire))
+        {
+            auto const found = derived->find(info->Id);
+            if (found != derived->end())
+                entry->Rank.fill("Rank " + std::to_string(found->second));
+        }
     }
 
     // Range: the old field is the SpellRange id the bot code looks up in the store; the core keeps the row itself, whose

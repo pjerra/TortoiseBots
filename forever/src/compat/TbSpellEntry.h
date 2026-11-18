@@ -91,7 +91,7 @@ struct SpellEntry
     uint32    EffectTriggerSpell[MAX_EFFECT_INDEX] = {};  // T :611  triggered spell id          F TriggerSpell                SpellInfo.h:260
     float     EffectPointsPerComboPoint[MAX_EFFECT_INDEX] = {}; // T :614  T :614 F classic row points_per_combo (else PointsPerResource)
     std::array<std::string, MAX_DBC_LOCALE> SpellName{};  // T :630  the name, per locale        F SpellName->Str[locale]      SpellInfo.h:420
-    std::array<std::string, MAX_DBC_LOCALE> Rank{};       // T :633  "Rank N"                    F derived from ChainEntry->rank (see Fill)
+    std::array<std::string, MAX_DBC_LOCALE> Rank{};       // T :633  "Rank N"                    F ChainEntry->rank, else derived by name, family and level (R4, see g_derivedRanks)
     uint32    ManaCostPercentage = 0;                     // T :666  percent of the caster's base mana  F see Fill (classic cost row, else PowerCosts[0]->PowerCostPct)
     uint32    StartRecoveryCategory = 0;                  // T :667  GCD category                F StartRecoveryCategory       SpellInfo.h:418
     uint32    StartRecoveryTime = 0;                      // T :668  GCD in ms                  F StartRecoveryTime           SpellInfo.h:419
