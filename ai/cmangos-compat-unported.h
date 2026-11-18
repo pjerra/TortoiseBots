@@ -406,4 +406,259 @@ inline dtNavMeshQuery const* NavMeshQueryCompat(uint32 mapId)
 template <class... Args>
 inline dtPolyRef NavMeshFindWalkPolyCompat(Args&&... args) { return PathInfo::FindWalkPoly(std::forward<Args>(args)...); }
 
+
+// ===============================================================================================================
+// PLAYERBOTAI.CPP
+// ===============================================================================================================
+inline void EndCinematicIfWatchingCompat(Player* bot)
+{
+    if (bot->watching_cinematic_entry)
+        bot->CinematicEnd();
+}
+
+inline ObjectGuid LootGuidCompat(Player* bot) { return bot->GetLootGuid(); }
+// The loot-window release check of PlayerbotAI::UpdateAIInternal (inside `if (lootObject)`), moved word for word.
+template <class GuidPos>
+inline void ReleaseLootIfFarCompat(Player* bot, GuidPos& lootObject, bool shouldRelease)
+{
+    if (Loot* loot = sLootMgr.GetLoot(bot, bot->GetLootGuid()))
+    {
+        if (lootObject.IsUnit())
+        {
+            Unit* unitTarget = (Unit*)loot->GetLootTarget();
+            Loot const* utLoot = (unitTarget && unitTarget->GetTypeId() == TYPEID_UNIT) ? &static_cast<Creature const*>(unitTarget)->loot : nullptr;
+            if (utLoot && utLoot->GetLootingPlayers().count(bot->getObjectGuid()) == 0)
+            {
+                // You shouldn't release if you aren't looting already
+                shouldRelease = false;
+            }
+        }
+        else if (lootObject.IsGameObject())
+        {
+            GameObject* gameobjectTarget = (GameObject*)loot->GetLootTarget();
+            Loot const* goLoot = gameobjectTarget ? &gameobjectTarget->loot : nullptr;
+            if (goLoot && !goLoot->GetLootingPlayers().count(bot->getObjectGuid()))
+            {
+                // You shouldn't release if you aren't looting already
+                shouldRelease = false;
+            }
+        }
+        else
+        {
+            // If it's not a unit or GO, what looting would this be?
+            // safe to assume you probably shouldn't release
+            shouldRelease = false;
+        }
+        // release loot if moving and far from object.
+        if (shouldRelease)
+        {
+            bot->GetSession()->DoLootRelease(bot->GetLootGuid());
+        }
+    }
+}
+
+inline void BroadcastFacingCompat(Player* bot)
+{
+    WorldPacket data(MSG_MOVE_SET_FACING);
+    data << bot->GetPackGUID();
+    data << bot->m_movementInfo;
+    bot->GetMover()->SendMessageToSetExcept(&data, bot);
+}
+
+// PlayerbotAI::CanEnterArea's random-bot branch, moved word for word (Area is the AreaTrigger).
+template <class Area>
+inline bool CanEnterAreaCompat(Player* bot, Area const* area)
+{
+    DungeonPersistentState* state = bot->GetBoundInstanceSaveForSelfOrGroup(area->mapid);
+    Map* map = sMapMgr.FindMap(area->mapid, state ? state->GetInstanceId() : 0);
+    const MapEntry* mapEntry = sMapStore.LookupEntry(area->mapid);
+
+    // check if this account try to abuse reseting instance
+    if (mapEntry->IsNonRaidDungeon())
+    {
+        // Tortoise performs the instance admission check in the normal
+        // teleport/login path; no separate bot-only check is needed here.
+    }
+
+    // Map's state check
+    if (map && map->IsDungeon())
+    {
+        // cannot enter if the instance is full (player cap), GMs don't count, must not check when teleporting around the same map
+        if (bot->GetMapId() != area->mapid)
+        {
+            if (((DungeonMap*)map)->GetPlayersCountExceptGMs() >= ((DungeonMap*)map)->GetMaxPlayers())
+            {
+                return false;
+            }
+
+            // In Combat check
+            if (map && map->GetInstanceData() && map->GetInstanceData()->IsEncounterInProgress())
+            {
+                return false;
+            }
+
+            // Bind Checks
+            InstancePlayerBind* pBind = bot->GetBoundInstance(area->mapid);
+            if (pBind && pBind->perm && pBind->state != state)
+            {
+                return false;
+            }
+
+            if (pBind && pBind->perm && pBind->state != map->GetPersistentState())
+            {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+inline void DismountCompat(Player* bot)
+{
+    bot->RemoveSpellsCausingAura(SPELL_AURA_MOUNTED);
+    bot->Unmount();
+
+    bot->UpdateSpeed(MOVE_RUN, true);
+    bot->UpdateSpeed(MOVE_RUN, false);
+}
+
+inline void EnsureLockpickSkillCompat(Player* bot, uint32 lockpickMax)
+{
+    if (bot->GetSkillValuePure(SKILL_LOCKPICKING) < lockpickMax)
+        bot->SetSkill(SKILL_LOCKPICKING, lockpickMax, lockpickMax);
+}
+inline void EnsureCampSurvivalSkillCompat(Player* bot, uint32 cap)
+{
+    if (bot->GetSkillValuePure(SKILL_SURVIVAL2) < cap)
+        bot->SetSkill(SKILL_SURVIVAL2, cap, cap);
+}
+inline void SetRestBonusCompat(Player* bot, float bonus) { bot->SetRestBonus(bonus); }
+inline void ClearWaterBreathingCompat(Player* bot) { bot->SetWaterBreathingIntervalMultiplier(0); }
+inline uint32 FishingZoneOfAreaCompat(uint32 areaId)
+{
+    AreaTableEntry const* fishArea = AreaEntry::GetById(areaId);
+    return (fishArea && fishArea->ZoneId) ? fishArea->ZoneId : 0;
+}
+inline void SpeedCheatCompat(Player* bot)
+{
+    bot->UpdateSpeed(MOVE_WALK, true, 10);
+    bot->UpdateSpeed(MOVE_RUN, true, 10);
+    bot->UpdateSpeed(MOVE_SWIM, true, 10);
+}
+
+inline bool SessionHasInstantLogoutCompat(WorldSession* session) { return session->GetSecurity() >= (AccountTypes)sWorld.getConfig(CONFIG_UINT32_INSTANT_LOGOUT); }
+
+inline void InterruptCurrentMovementCompat(Player* bot)
+{
+    if (!bot->GetMotionMaster()->empty())
+        if (MovementGenerator* movgen = bot->GetMotionMaster()->top())
+            movgen->Interrupt(*bot);
+}
+inline void SendHeartBeatCompat(Player* bot) { bot->SendHeartBeat(); }
+
+inline void ClearStaleTransportStateCompat(Player* bot)
+{
+    if (!bot->GetTransport() && bot->m_movementInfo.HasMovementFlag(MOVEFLAG_ONTRANSPORT))
+    {
+        bot->m_movementInfo.RemoveMovementFlag(MOVEFLAG_ONTRANSPORT);
+        bot->m_movementInfo.ClearTransportData();
+    }
+}
+
+// PlayerbotAI::StopMoving's body after the early returns, moved word for word.
+inline void StopMovingCompat(Player* bot)
+{
+    if (bot->GetTransport())
+        bot->m_movementInfo.SetMovementFlags(MOVEFLAG_ONTRANSPORT);
+    else
+        bot->m_movementInfo.SetMovementFlags(MOVEFLAG_NONE);
+
+    bot->StopMoving();
+    MovementInfo mInfo = bot->m_movementInfo;
+    float x, y, z;
+    bot->GetPosition(x, y, z);
+    float o = bot->GetOrientation();
+    mInfo.ChangePosition(x, y, z, o);
+    WorldPacket data(MSG_MOVE_STOP);
+    data << mInfo;
+    bot->GetSession()->HandleMovementOpcodes(data);
+
+    if (bot->GetMotionMaster()->GetCurrentMovementGeneratorType())
+    {
+        bot->GetMotionMaster()->Clear(false, true);
+        bot->GetMotionMaster()->MoveIdle();
+    }
+}
+
+inline void SendAddonMessageCompat(Player& to, char const* prefix, std::string const& message) { to.SendAddonMessage(prefix, message); }
+template <class Facade>
+inline void SendAddonChatCompat(Facade& facade, Player* from, Player* to, std::string const& response)
+{
+    WorldPacket data;
+    ChatHandler::BuildChatPacket(data, CHAT_MSG_ADDON, response.c_str(), LANG_ADDON,
+            CHAT_TAG_NONE, from->getObjectGuid(), from->GetName());
+    facade.SendPacket(to, data);
+}
+
+inline bool PartyPortalSpellOfObjectCompat(GameObject* go, uint32& spellId)
+{
+    GameObjectInfo const* goInfo = go->GetGOInfo();
+    if (!goInfo || goInfo->type != GAMEOBJECT_TYPE_SPELLCASTER || !goInfo->spellcaster.partyOnly)
+        return false;
+    spellId = goInfo->spellcaster.spellId;
+    return true;
+}
+inline bool GameObjectNoInteractCompat(GameObject* go) { return go->HasFlag(GAMEOBJECT_FLAGS, GO_FLAG_NO_INTERACT); }
+inline bool GameObjectCanInteractCompat(Player* bot, GameObject* go) { return bot->GetGameObjectIfCanInteractWith(go->getObjectGuid(), MAX_GAMEOBJECT_TYPE) != nullptr; }
+inline void SendGameObjectUseCompat(Player* bot, GameObject* go)
+{
+    std::unique_ptr<WorldPacket> packet(new WorldPacket(CMSG_GAMEOBJ_USE));
+    *packet << go->getObjectGuid();
+    bot->GetSession()->QueuePacket(packet.release());
+}
+
+inline bool TaxiSourceDestinationCompat(Player* player, uint32& src, uint32& dst)
+{
+    src = player->GetTaxi().GetTaxiSource();
+    dst = player->GetTaxi().GetTaxiDestination();
+    return true;
+}
+inline bool TaxiNodePositionCompat(uint32 node, uint32& mapId, float& x, float& y, float& z)
+{
+    TaxiNodesEntry const* entry = sObjectMgr.GetTaxiNodeEntry(node);
+    if (!entry)
+        return false;
+    mapId = entry->map_id;
+    x = entry->x;
+    y = entry->y;
+    z = entry->z;
+    return true;
+}
+inline Creature* FlightMasterIfCanInteractCompat(Player* bot, ObjectGuid const& guid) { return bot->GetNPCIfCanInteractWith(guid, UNIT_NPC_FLAG_FLIGHTMASTER); }
+
+inline void PlayTextEmoteCompat(Player* bot, uint32 emote, uint32 variant, ObjectGuid const& target)
+{
+    WorldPacket data(SMSG_TEXT_EMOTE);
+    data << (TextEmotes)emote;
+    data << variant;
+    data << target;
+    bot->GetSession()->HandleTextEmoteOpcode(data);
+}
+
+inline Unit* UnitInMapCompat(Map* map, ObjectGuid const& guid) { return map->GetUnit(guid); }
+inline Creature* AnyTypeCreatureInMapCompat(Map* map, ObjectGuid const& guid) { return map->GetAnyTypeCreature(guid); }
+inline WorldObject* WorldObjectInMapCompat(Map* map, ObjectGuid const& guid) { return map->GetWorldObject(guid); }
+
+template <class GuildType>
+inline bool GuildRanksOfBotCompat(GuildType* guild, ObjectGuid const& botGuid, uint32& maxRank, uint32& botRank)
+{
+    maxRank = guild->GetRanksSize();
+    MemberSlot* botMember = guild->GetMemberSlot(botGuid);
+    botRank = botMember->RankId;
+    return true;
+}
+
+inline WorldObject* PlayerViewObjectCompat(Player* player) { return player->GetCamera().GetBody(); }
+
 // @@END@@

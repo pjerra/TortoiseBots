@@ -433,6 +433,138 @@ inline dtNavMeshQuery const* NavMeshQueryCompat(uint32 /*mapId*/) { tbcompat::Un
 template <class... Args>
 inline dtPolyRef NavMeshFindWalkPolyCompat(Args&&...) { tbcompat::Unported(tbcompat::Feature::NavmeshProbe); return 0; }
 
+
+// ===============================================================================================================
+// PLAYERBOTAI.CPP (cinematics, loot window, facing, instance bind, mounts, camp, speed cheat, logout, movement stop, addon chat,
+// portals, taxi follow, text emotes, spawn lookups, guild rank, camera)
+// ===============================================================================================================
+// Cinematic: T ends a cinematic the bot is watching (a headless bot cannot finish it). Failure value: nothing is ended.
+inline void EndCinematicIfWatchingCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::CinematicCamera); }
+
+// The loot window of a player (T: `GetLootGuid()` and the loot manager). Failure value: the empty guid ("no loot window open") and
+// nothing released.
+inline ObjectGuid LootGuidCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::LootObjects); return ObjectGuid::Empty; }
+template <class GuidPos>
+inline void ReleaseLootIfFarCompat(Player* /*bot*/, GuidPos& /*lootObject*/, bool /*shouldRelease*/) { tbcompat::Unported(tbcompat::Feature::LootObjects); }
+
+// PROPER: the clients are told about a new facing by F's SetFacingTo itself (a facing spline), so the extra facing broadcast of T
+// (MSG_MOVE_SET_FACING from the mover) has nothing left to do.
+inline void BroadcastFacingCompat(Player* /*bot*/) {}
+
+// Whether a bot may enter an area trigger's map (instance full, encounter in progress, bound to another save). Failure value: true
+// ("no restriction known": the dungeon is treated as unbound, ForeverCore's own teleport checks still apply).
+template <class Area>
+inline bool CanEnterAreaCompat(Player* /*bot*/, Area const* /*area*/) { tbcompat::Unported(tbcompat::Feature::InstanceBind); return true; }
+
+// PROPER: take the bot off its mount. T removes the mount auras, unmounts and recomputes the run speed (forced and not); F's
+// Dismount() and a speed update do the same.
+inline void DismountCompat(Player* player)
+{
+    player->RemoveAurasByType(SPELL_AURA_MOUNTED);
+    player->Dismount();
+    player->UpdateSpeed(MOVE_RUN);
+}
+
+// Skill writes of the auto tools kit and the camp kit (T SetSkill(skill, value, max)); the lockpicking and survival lines.
+inline void EnsureLockpickSkillCompat(Player* /*bot*/, uint32 /*lockpickMax*/) { tbcompat::Unported(tbcompat::Feature::Skills); }
+inline void EnsureCampSurvivalSkillCompat(Player* /*bot*/, uint32 /*cap*/) { tbcompat::Unported(tbcompat::Feature::Camp); }
+inline void SetRestBonusCompat(Player* /*bot*/, float /*bonus*/) { tbcompat::Unported(tbcompat::Feature::Camp); }
+inline void ClearWaterBreathingCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::Camp); }
+// The zone of a fishing area (T `AreaEntry::GetById(id)->ZoneId`). Failure value: 0 ("no zone found": the caller keeps the area id).
+inline uint32 FishingZoneOfAreaCompat(uint32 /*areaId*/) { tbcompat::Unported(tbcompat::Feature::Camp); return 0; }
+// The movespeed cheat (T `UpdateSpeed(type, true, 10)` for walk, run and swim). Failure value: no change.
+inline void SpeedCheatCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::SpeedCheat); }
+
+// PROPER: whether the session's account logs out at once. T compares its security level with the InstantLogout setting; F has the
+// permission RBAC_PERM_INSTANT_LOGOUT for exactly that (MiscHandler.cpp:251).
+inline bool SessionHasInstantLogoutCompat(WorldSession* session) { return session->HasPermission(rbac::RBAC_PERM_INSTANT_LOGOUT); }
+
+// The movement generator interrupt and the movement heartbeat of T. Failure value: nothing is sent or interrupted.
+inline void InterruptCurrentMovementCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::MovementInterrupt); }
+inline void SendHeartBeatCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::MovementInterrupt); }
+
+// PROPER: drop stale transport state. T: no transport but MOVEFLAG_ONTRANSPORT still set -> clear the flag and the transport data.
+// F keeps the transport in the movement info (transport.guid), with no such flag.
+inline void ClearStaleTransportStateCompat(Player* bot)
+{
+    if (!bot->GetTransport() && !bot->m_movementInfo.transport.guid.IsEmpty())
+        bot->m_movementInfo.transport.Reset();
+}
+
+// PROPER: stop the bot where it stands. T sets the movement flags, stops, synthesizes MSG_MOVE_STOP through the movement handler and
+// puts the idle generator in; F's Unit::StopMoving() stops the spline and tells the clients, then the generators are cleared.
+inline void StopMovingCompat(Player* bot)
+{
+    bot->StopMoving();
+    if (bot->GetMotionMaster()->GetCurrentMovementGeneratorType())
+    {
+        MotionClearCompat(*bot->GetMotionMaster(), false, true);
+        bot->GetMotionMaster()->MoveIdle();
+    }
+}
+
+// Addon messages to a player and the addon chat packet (T SendAddonMessage, BuildChatPacket with CHAT_MSG_ADDON). Failure value: the
+// message is not sent.
+inline void SendAddonMessageCompat(Player& /*to*/, char const* /*prefix*/, std::string const& /*message*/) { tbcompat::Unported(tbcompat::Feature::AddonChat); }
+template <class Facade>
+inline void SendAddonChatCompat(Facade& /*facade*/, Player* /*from*/, Player* /*to*/, std::string const& /*text*/) { tbcompat::Unported(tbcompat::Feature::AddonChat); }
+
+// Party portal game objects (the mage portal the bot follows). Failure values: not a portal object / not blocked / cannot interact.
+inline bool PartyPortalSpellOfObjectCompat(GameObject* /*go*/, uint32& /*spellId*/) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return false; }
+inline bool GameObjectNoInteractCompat(GameObject* /*go*/) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return false; }
+inline bool GameObjectCanInteractCompat(Player* /*bot*/, GameObject* /*go*/) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return false; }
+inline void SendGameObjectUseCompat(Player* /*bot*/, GameObject* /*go*/) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); }
+
+// Taxi follow. Failure values: no endpoints / no node position.
+inline bool TaxiSourceDestinationCompat(Player* /*player*/, uint32& /*src*/, uint32& /*dst*/) { tbcompat::Unported(tbcompat::Feature::Taxi); return false; }
+inline bool TaxiNodePositionCompat(uint32 /*node*/, uint32& /*mapId*/, float& /*x*/, float& /*y*/, float& /*z*/) { tbcompat::Unported(tbcompat::Feature::Taxi); return false; }
+// PROPER: the flight master the bot can talk to (T takes the NPC flag only, F also the second flag word).
+inline Creature* FlightMasterIfCanInteractCompat(Player* bot, ObjectGuid const& guid) { return bot->GetNPCIfCanInteractWith(guid, UNIT_NPC_FLAG_FLIGHTMASTER, UNIT_NPC_FLAG_2_NONE); }
+
+// PROPER: play a text emote as the bot (T builds the CMSG text emote packet by hand and feeds the handler; F's handler takes a typed
+// packet). F has no donor sound table, so the sound index is "none" (-1), as the legacy comment says of the pinned core.
+inline void PlayTextEmoteCompat(Player* bot, uint32 emote, uint32 /*variant*/, ObjectGuid const& target)
+{
+    WorldPackets::Chat::CTextEmote packet{ WorldPacket(CMSG_SEND_TEXT_EMOTE) };
+    packet.Target = target;
+    packet.EmoteID = int32(emote);
+    packet.SoundIndex = -1;
+    bot->GetSession()->HandleTextEmoteOpcode(packet);
+}
+
+// Unit and object lookups in a map by guid (T Map::GetUnit / GetAnyTypeCreature / GetWorldObject). PROPER: F's Map finds creatures,
+// game objects and players by guid; the type switch is the guid's own.
+inline Unit* UnitInMapCompat(Map* map, ObjectGuid const& guid)
+{
+    if (guid.IsPlayer())
+        return map->GetPlayer(guid);
+    if (guid.IsPet())
+        return map->GetPet(guid);
+    return map->GetCreature(guid);
+}
+inline Creature* AnyTypeCreatureInMapCompat(Map* map, ObjectGuid const& guid) { return map->GetCreature(guid); }
+inline WorldObject* WorldObjectInMapCompat(Map* map, ObjectGuid const& guid)
+{
+    if (guid.IsGameObject() || guid.IsMOTransport())
+        return map->GetGameObject(guid);
+    if (guid.IsPlayer())
+        return map->GetPlayer(guid);
+    if (guid.IsPet())
+        return map->GetPet(guid);
+    if (guid.IsCorpse())
+        return map->GetCorpse(guid);
+    return map->GetCreature(guid);
+}
+
+// The bot's rank in its guild and the number of ranks (T Guild::GetRanksSize, GetMemberSlot()->RankId). Failure value: false ("no
+// rank data": the caller answers with the unscaled size).
+template <class GuildType>
+inline bool GuildRanksOfBotCompat(GuildType* /*guild*/, ObjectGuid const& /*botGuid*/, uint32& /*maxRank*/, uint32& /*botRank*/) { tbcompat::Unported(tbcompat::Feature::GuildRanks); return false; }
+
+// PROPER: the object a player's client looks through (a farsight or cinematic camera body). T `GetCamera().GetBody()`, F
+// `GetViewpoint()` (nullptr without a farsight; the caller ignores the player itself and objects not in the world).
+inline WorldObject* PlayerViewObjectCompat(Player* player) { return player->GetViewpoint(); }
+
 // @@END@@
 #endif // TB_UNPORTED_TABLE_ONLY
 

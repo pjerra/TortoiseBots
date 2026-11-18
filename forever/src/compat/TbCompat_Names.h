@@ -167,3 +167,9 @@ public:
 // First Aid, the skill line 129 on both cores (T SharedDefines.h; F has no name for it in its SkillType enum, but its own
 // Player.cpp:6478 says "First Aid 129" for the same line).
 inline constexpr uint32 SKILL_FIRST_AID = 129;
+
+// Text emotes by their Turtle names. Both cores name the same emotes, but the ids differ (T nod 78, no 77, open fire 101; F
+// TEXT_EMOTE_NOD 67, TEXT_EMOTE_NO 66, TEXT_EMOTE_OPENFIRE 327, SharedDefines.h:3366): the F name of the same emote.
+#define TEXTEMOTE_NOD TEXT_EMOTE_NOD
+#define TEXTEMOTE_NO TEXT_EMOTE_NO
+#define TEXTEMOTE_OPENFIRE TEXT_EMOTE_OPENFIRE
