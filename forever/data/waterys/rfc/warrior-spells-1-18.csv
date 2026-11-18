@@ -1,0 +1,3 @@
+spell_id,name,rank,level_learned,how_learned,trainer_or_quest,source,client_build
+78,Heroic Strike,1,1,starting+auto,-,world DB (playercreateinfo_action) + DB2 (SkillLineAbility acquire 2); DB2 70888 (repack server/data/dbc 2026-11-11); TDB 2026-10-14,70888 (repack server/data/dbc 2026-11-11)
+2457,Battle Stance,1,1,starting-auto,-,world DB (playercreateinfo_action) + DB2 (SkillLineAbility acquire 2); DB2 70888 (repack server/data/dbc 2026-11-11); TDB 2026-10-14,70888 (repack server/data/dbc 2026-11-11)
