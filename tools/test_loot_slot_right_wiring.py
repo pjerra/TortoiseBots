@@ -42,7 +42,7 @@ class LootSlotRightWiringTest(unittest.TestCase):
 
     def test_bad_lock_is_said_only_for_a_game_object(self):
         fn = body(STACK, "void LootObject::Refresh(", "\n}\n")
-        self.assertIn("if (debug && guid && !this->guid && guid.IsGameObject())", fn)
+        self.assertIn("if (debug && !guid.IsEmpty() && this->guid.IsEmpty() && guid.IsGameObject())", fn)
         self.assertIn('"Go has bad lock."', fn)
 
 
