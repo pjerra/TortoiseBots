@@ -78,7 +78,7 @@ Total 45.
 
 `should pull`, `pull nearest target` (autonomous pulls: batch4-party-dungeon.md row 7), `chat` and every ChatTriggerContext key (the order path is the host queue and
 `DoSpecificAction`, lead decision D1), `pull back`, `loose adds near`, `possible ads`; also `sit` (strategy, trigger and action of StayStrategy.cpp: nothing asks for a bot to sit in
-this slice). `slice_registry_check.py` lists them under (b) with the file that names them: the engine skips a missing key and the guard logs `slice: missing ...` once per name.
+this slice) and `debug threat` (a debug aid; its two visuals are the unported row `debug spell visuals`). `slice_registry_check.py` lists them under (b) with the file that names them: the engine skips a missing key and the guard logs `slice: missing ...` once per name.
 
 Already registered by `WarriorAiObjectContext.cpp` (compiled as it is): `protection` / `tank`, `protection pve`, `pull`, `taunt`, `taunt on attacker`, `mocking blow taunt` and the warrior triggers.
 

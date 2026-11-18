@@ -90,7 +90,7 @@ has no unbind: the strategy is still given. With the host's constant `IsInComman
 ## 7. Unported rows
 
 New: **`debug spell visuals`** (`Feature::DebugVisuals`, UnportedFeatures.h, last row; UNPORTED.md): the `debug threat` strategy's two colour cues. Failure value: nothing is shown. "Less" value: the
-bot does the same fight, only without a debug marker (it never feeds a decision). One call site (ThreatStrategy.cpp, two lines). No other row.
+bot does the same fight, only without a debug marker (it never feeds a decision). One call site (ThreatStrategy.cpp, two lines), reachable only while the strategy `debug threat` is on, and that key is not registered in the slice (checker list (b): `debug threat`, `pull back`, `sit` are the only keys the ten files name that the slice does not register), so the counter stays 0 unless the key is added later. No other row.
 
 ## 8. Link stand-ins (forever/src/slice/SliceLinkStubs.cpp)
 
@@ -128,6 +128,16 @@ the Fankriss/Patchwerk/Viscidus files, the travel manager, the loot stack, the i
 3. Order queue (host): the actions run through `DoSpecificAction(key, Event("tb order", ...), true)`: keys `follow chat shortcut`, `stay chat shortcut`, `follow target`, `attack rti target`, `attack my target`,
    `pull my target`, `end pull`, `tank assist`: all registered now (SLICE3-KEYS.md). Of the order surface the keys `come` (position["stay"] write + `SetMovementStrategy("stay")`), `hold`, `free`, `assist`
    stay host code as the spec says.
+
+4. `NoteHoldOrder` (PlayerConvenience): see section 8; delete my definition in SliceLinkStubs.cpp if you define it beside the other PlayerConvenience answers.
+
+For the merge package (files this worker does not own):
+
+- `BOT_TEXT("staying")`, `BOT_TEXT("guarding")` ... answer an EMPTY string on F (the slice 1 stand-in `PlayerbotTextMgr::GetBotText`, R9), and `PlayerbotAI::TellPlayerNoFacing`
+  (PlayerbotAIChat.cpp:280) does not skip an empty text: a network commander would get an empty whisper after `stay` / `free`. Skip an empty text there (or give those few keys a text);
+  harmless for a console commander (a bot session).
+- The two-line `GetMaster()` fallbacks of the chat shortcuts (`event.GetOwner() ? event.GetOwner() : GetMaster()`) need the host to pass the commander as `Event` owner (spec section 2), else the shortcut
+  uses the bot's master, which is the commander anyway (D2).
 
 ## 10. Gates
 
