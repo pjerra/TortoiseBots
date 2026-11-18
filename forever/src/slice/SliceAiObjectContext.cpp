@@ -14,27 +14,40 @@
 #include "playerbot/RaidTankHealing.h"
 #include "playerbot/strategy/Value.h"
 #include "playerbot/strategy/actions/AddLootAction.h"
+#include "playerbot/strategy/actions/AttackAction.h"
 #include "playerbot/strategy/actions/BotStateActions.h"
+#include "playerbot/strategy/actions/ChatShortcutActions.h"
 #include "playerbot/strategy/actions/ChooseTargetActions.h"
 #include "playerbot/strategy/actions/FollowActions.h"
 #include "playerbot/strategy/actions/GenericActions.h"
 #include "playerbot/strategy/actions/GenericSpellActions.h"
 #include "playerbot/strategy/actions/LootAction.h"
 #include "playerbot/strategy/actions/MovementActions.h"
+#include "playerbot/strategy/actions/PositionAction.h"
+#include "playerbot/strategy/actions/PullActions.h"
 #include "playerbot/strategy/actions/ReachTargetActions.h"
+#include "playerbot/strategy/actions/StayActions.h"
 #include "playerbot/strategy/actions/UseItemAction.h"
+#include "playerbot/strategy/actions/ValueActions.h"
+#include "playerbot/strategy/actions/WaitForAttackAction.h"
 #include "playerbot/strategy/generic/CastTimeStrategy.h"
+#include "playerbot/strategy/generic/CombatStrategy.h"
 #include "playerbot/strategy/generic/DpsAssistStrategy.h"
 #include "playerbot/strategy/generic/FollowMasterStrategy.h"
 #include "playerbot/strategy/generic/LootNonCombatStrategy.h"
 #include "playerbot/strategy/generic/MeleeCombatStrategy.h"
+#include "playerbot/strategy/generic/PassiveStrategy.h"
 #include "playerbot/strategy/generic/RangedCombatStrategy.h"
+#include "playerbot/strategy/generic/StayStrategy.h"
+#include "playerbot/strategy/generic/TankAssistStrategy.h"
+#include "playerbot/strategy/generic/ThreatStrategy.h"
 #include "playerbot/strategy/generic/UseFoodStrategy.h"
 #include "playerbot/strategy/generic/WorldPacketHandlerStrategy.h"
 #include "playerbot/strategy/triggers/BotStateTriggers.h"
 #include "playerbot/strategy/triggers/GenericTriggers.h"
 #include "playerbot/strategy/triggers/HealthTriggers.h"
 #include "playerbot/strategy/triggers/LootTriggers.h"
+#include "playerbot/strategy/triggers/PullTriggers.h"
 #include "playerbot/strategy/triggers/RangeTriggers.h"
 #include "playerbot/strategy/triggers/WorldPacketTrigger.h"
 #include "playerbot/strategy/values/AlwaysLootListValue.h"
@@ -119,7 +132,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (6 of its keys)
+    // the registry of StrategyContext (10 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -131,30 +144,37 @@ namespace slice
             creators["loot"] = [](PlayerbotAI* ai) { return new LootNonCombatStrategy(ai); };
             creators["cast time"] = [](PlayerbotAI* ai) { return new CastTimeStrategy(ai); };
             creators["default"] = [](PlayerbotAI* ai) { return new WorldPacketHandlerStrategy(ai); };
+            creators["threat"] = [](PlayerbotAI* ai) { return new ThreatStrategy(ai); };
+            creators["passive"] = [](PlayerbotAI* ai) { return new PassiveStrategy(ai); };
+            creators["tank face"] = [](PlayerbotAI* ai) { return new TankFaceStrategy(ai); };
+            creators["wait for attack"] = [](PlayerbotAI* ai) { return new WaitForAttackStrategy(ai); };
         }
     };
 
-    // the registry of MovementStrategyContext (1 of its keys)
+    // the registry of MovementStrategyContext (3 of its keys)
     class SliceMovementStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
         SliceMovementStrategyContext() : NamedObjectContext<Strategy>(false, true)
         {
             creators["follow"] = [](PlayerbotAI* ai) { return new FollowMasterStrategy(ai); };
+            creators["stay"] = [](PlayerbotAI* ai) { return new StayStrategy(ai); };
+            creators["free"] = [](PlayerbotAI* ai) { return new FreeStrategy(ai); };
         }
     };
 
-    // the registry of AssistStrategyContext (1 of its keys)
+    // the registry of AssistStrategyContext (2 of its keys)
     class SliceAssistStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
         SliceAssistStrategyContext() : NamedObjectContext<Strategy>(false, true)
         {
             creators["dps assist"] = [](PlayerbotAI* ai) { return new DpsAssistStrategy(ai); };
+            creators["tank assist"] = [](PlayerbotAI* ai) { return new TankAssistStrategy(ai); };
         }
     };
 
-    // the registry of ActionContext (21 of its keys)
+    // the registry of ActionContext (38 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -181,16 +201,37 @@ namespace slice
             creators["open loot"] = [](PlayerbotAI* ai) { return new OpenLootAction(ai); };
             creators["move to loot"] = [](PlayerbotAI* ai) { return new MoveToLootAction(ai); };
             creators["add all loot"] = [](PlayerbotAI* ai) { return new AddAllLootAction(ai); };
+            creators["tank assist"] = [](PlayerbotAI* ai) { return new TankAssistAction(ai); };
+            creators["stay"] = [](PlayerbotAI* ai) { return new StayAction(ai); };
+            creators["return to stay position"] = [](PlayerbotAI* ai) { return new ReturnToStayPositionAction(ai); };
+            creators["pull my target"] = [](PlayerbotAI* ai) { return new PullMyTargetAction(ai); };
+            creators["end pull"] = [](PlayerbotAI* ai) { return new EndPullAction(ai); };
+            creators["pull start"] = [](PlayerbotAI* ai) { return new PullStartAction(ai); };
+            creators["pull action"] = [](PlayerbotAI* ai) { return new PullAction(ai); };
+            creators["pull end"] = [](PlayerbotAI* ai) { return new PullEndAction(ai); };
+            creators["reach pull"] = [](PlayerbotAI* ai) { return new ReachPullAction(ai); };
+            creators["release pull hold"] = [](PlayerbotAI* ai) { return new ReleasePullHoldAction(ai); };
+            creators["return to pull position"] = [](PlayerbotAI* ai) { return new ReturnToPullPositionAction(ai); };
+            creators["wait for attack keep safe distance"] = [](PlayerbotAI* ai) { return new WaitForAttackKeepSafeDistanceAction(ai); };
+            creators["tank face away"] = [](PlayerbotAI* ai) { return new TankFaceAwayAction(ai); };
+            creators["set facing"] = [](PlayerbotAI* ai) { return new SetFacingTargetAction(ai); };
+            creators["successor white cap noop"] = [](PlayerbotAI* ai) { return new SuccessorWhiteCapNoopAction(ai); };
+            creators["threat reset white stop noop"] = [](PlayerbotAI* ai) { return new ThreatResetWhiteStopNoopAction(ai); };
+            creators["attack rti target"] = [](PlayerbotAI* ai) { return new AttackRTITargetAction(ai); };
         }
     };
 
-    // the registry of ChatActionContext (1 of its keys)
+    // the registry of ChatActionContext (5 of its keys)
     class SliceChatActionContext : public NamedObjectContext<Action>
     {
     public:
         SliceChatActionContext()
         {
             creators["use"] = [](PlayerbotAI* ai) { return new UseAction(ai); };
+            creators["attack my target"] = [](PlayerbotAI* ai) { return new AttackMyTargetAction(ai); };
+            creators["follow chat shortcut"] = [](PlayerbotAI* ai) { return new FollowChatShortcutAction(ai); };
+            creators["stay chat shortcut"] = [](PlayerbotAI* ai) { return new StayChatShortcutAction(ai); };
+            creators["follow target"] = [](PlayerbotAI* ai) { return new SetFollowTargetAction(ai); };
         }
     };
 
@@ -204,7 +245,7 @@ namespace slice
         }
     };
 
-    // the registry of TriggerContext (55 of its keys)
+    // the registry of TriggerContext (71 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -265,6 +306,22 @@ namespace slice
             creators["can loot"] = [](PlayerbotAI* ai) { return new CanLootTrigger(ai); };
             creators["far from loot target"] = [](PlayerbotAI* ai) { return new FarFromCurrentLootTrigger(ai); };
             creators["timer"] = [](PlayerbotAI* ai) { return new TimerTrigger(ai); };
+            creators["tank assist"] = [](PlayerbotAI* ai) { return new TankAssistTrigger(ai); };
+            creators["lose aggro"] = [](PlayerbotAI* ai) { return new LoseAggroTrigger(ai); };
+            creators["has aggro"] = [](PlayerbotAI* ai) { return new HasAggroTrigger(ai); };
+            creators["party member attacked"] = [](PlayerbotAI* ai) { return new PartyMemberAttackedTrigger(ai); };
+            creators["protect party member"] = [](PlayerbotAI* ai) { return new ProtectPartyMemberTrigger(ai); };
+            creators["tank face needed"] = [](PlayerbotAI* ai) { return new TankFaceNeededTrigger(ai); };
+            creators["high threat"] = [](PlayerbotAI* ai) { return new HighThreatTrigger(ai); };
+            creators["return to stay position"] = [](PlayerbotAI* ai) { return new ReturnToStayPositionTrigger(ai); };
+            creators["pull start"] = [](PlayerbotAI* ai) { return new PullStartTrigger(ai); };
+            creators["pull end"] = [](PlayerbotAI* ai) { return new PullEndTrigger(ai); };
+            creators["pull hold expired"] = [](PlayerbotAI* ai) { return new PullHoldExpiredTrigger(ai); };
+            creators["pull anchor done"] = [](PlayerbotAI* ai) { return new PullAnchorDoneTrigger(ai); };
+            creators["return to pull position"] = [](PlayerbotAI* ai) { return new ReturnToPullPositionTrigger(ai); };
+            creators["wait for attack safe distance"] = [](PlayerbotAI* ai) { return new WaitForAttackSafeDistanceTrigger(ai); };
+            creators["successor white cap"] = [](PlayerbotAI* ai) { return new SuccessorWhiteCapTrigger(ai); };
+            creators["threat reset white stop"] = [](PlayerbotAI* ai) { return new ThreatResetWhiteStopTrigger(ai); };
         }
     };
 
@@ -278,7 +335,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (167 of its keys)
+    // the registry of ValueContext (168 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -451,11 +508,12 @@ namespace slice
             creators["loot strategy"] = [](PlayerbotAI* ai) { return new LootStrategyValue(ai); };
             creators["should get money"] = [](PlayerbotAI* ai) { return new ShouldGetMoneyValue(ai); };
             creators["inventory item ids"] = [](PlayerbotAI* ai) { return new InventoryItemIdValue(ai); };
+            creators["master position"] = [](PlayerbotAI* ai) { return new MasterPositionValue(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 8, kActions = 23, kTriggers = 56, kValues = 167;
+    constexpr unsigned kStrategies = 15, kActions = 44, kTriggers = 72, kValues = 168;
 }
 }
 
