@@ -439,7 +439,7 @@ void CollectObtainableAndPhases(
     // 8. Craft spells (SPELL_EFFECT_CREATE_ITEM) and fixpoint propagation over reagents/recipes.
     std::vector<CraftSpellInfo> craftSpells;
     std::unordered_set<uint32_t> craftedItemIds;
-    uint32 const maxSpellId = sSpellMgr.GetMaxSpellId();
+    uint32 const maxSpellId = GetMaxSpellIdCompat();
     for (uint32 spellId = 1; spellId < maxSpellId; ++spellId)
     {
         SpellEntry const* spell = GetSpellEntryCompat(spellId);
