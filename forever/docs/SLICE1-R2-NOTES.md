@@ -226,4 +226,110 @@ strategy contexts, then actions, triggers, values. The warrior entries are added
 
 ## Differences from the spec
 
-TBD
+The key lists are the spec's, unchanged: all 179 keys exist in the full build's contexts with the class the spec's header
+names (checked by `slice_registry_check.py`, which compares the creator text and the context flags, not only the key).
+Nothing in the spec's lists needed correcting. What differs in the design:
+
+1. **Six local contexts, not four.** One per full-build context class that holds a slice key (`StrategyContext`,
+   `MovementStrategyContext`, `AssistStrategyContext`, `ActionContext`, `TriggerContext`, `ValueContext`), so the
+   `(shared, supportsSiblings)` flags of each stay what they are in the full build. A single strategy context would lose the
+   siblings behaviour of `follow` and `dps assist` (`NamedObjectContextList::GetSiblings`).
+2. **The guard is a template, in a header.** Spec: `SliceWarriorAiObjectContext` in `SliceAiFactory.cpp`. It is
+   `GuardedContext<WarriorAiObjectContext>` in `SliceMissingKeyGuard.h` (the factory instantiates it); same effect, and
+   another class context could be wrapped the same way later. The guard also covers strategy, trigger and action lookups
+   (the spec named values only), and a missing value gets a stand-in, not only a log line.
+3. **Two extra small files.** `SliceLog.h/.cpp`: `playerbot/playerbot.h` redefines `sLog` as `BotLog::Instance()`, which breaks
+   the core's `TC_LOG_*` macros in any file that includes it (the first census run of this package showed it: "no viable
+   conversion from 'BotLog' to 'Log *'"), so the slice's log lines go through two functions defined in a file that includes
+   the core's `Log.h` only. Also `forever/tools/slice_gen_context.py`, the generator of `SliceAiObjectContext.cpp` (so the
+   creator text is copied by a program, not by hand, and a change of the lists is one edit).
+4. **The slice files include `compat/botpch_forever.h` themselves.** The CMake pre-include is forced on the legacy files only
+   (the brief); the two slice sources that include legacy headers therefore name it in their first line.
+5. **AiFactory defaults follow the spec, not the full kit.** The full `AddDefaultCombatStrategies` also adds `dungeon`, `mount`,
+   `racials`, `default`, `duel`, `pvp`, `cast time` and, for a warrior, `behind`, `aoe`, `cc`, `boost`; the non-combat kit adds
+   `buff`, `boost`, `wbuff`, `dungeon` and the config strings. The slice adds exactly the spec's names. `GetPlayerRoles` returns
+   dps for a warrior and none for any other class (the full one also reads the forced role, stance and gear).
+6. **`enemy is out of melee`** (a trigger named by `WarriorAiObjectContext.cpp:174`) is registered nowhere, as the spec says
+   (risk 9); the check script lists it in (b) as "NOT IN FULL BUILD".
+
+## The missing-key guard (`SliceMissingKeyGuard.h`)
+
+`AiObjectContext::GetStrategy / GetTrigger / GetAction / GetUntypedValue` are virtual, so no shared header changes.
+`GuardedContext<Base>` overrides the four:
+
+- a miss is logged once per process and name: `slice: missing strategy|trigger|action|value <name>` (category `tortoisebots`,
+  warning level). The qualifier is not part of the once-key: `distance::self target` and `distance::x` count as `distance`;
+  the first full name seen is printed.
+- a missing strategy, trigger or action stays null: `Engine.cpp` skips those (843-857, 945-949, 1051-1060).
+- a missing value returns an inert stand-in. `GetValue<T>` is a non-virtual template, `dynamic_cast<Value<T>*>(GetUntypedValue())`,
+  and the override cannot know T. The stand-in is one object, `InertValues<Ts...> : UntypedValue, InertValue<Ts>...`, with a
+  `Value<T>` base for each of 16 types (`SliceInertValue` in the header); the cast is a cross-cast and finds the base. A read
+  returns `T{}`, `Set` does nothing. One stand-in per full name lives in the context and dies with it.
+
+**What it cannot catch:**
+- a missing value read as a type that is not in the list: the cast gives null and `->Get()` crashes (the log line comes first, so
+  the crash names its key). The check script flags those (`[stand-in lacks: ...]`); today there are none.
+- a caller of `GetAction`, `GetTrigger` or `GetStrategy` that does not test for null.
+- values reached without the context: `HasValue` / `HAS_AI_VALUE` answer from the created-set and never touch the guard (the full
+  build behaves the same; note `NamedObjectContext::Create` stores a null for a missing key, so `HasValue` of a key that missed
+  once reads true).
+- values that exist but whose class is not linked (R6) or whose class compiles against a stub (R8's problem).
+- the shared context (`sSharedObjectContext`, `GAI_VALUE`): no slice source uses it (grep, 0 files).
+- a stand-in answers `T{}`: bools false, numbers 0, pointers null. A branch that needs another neutral answer is a value to register.
+
+## CMake (`TORTOISEBOTS_SLICE1`, default OFF)
+
+OFF: the only change is `list(FILTER ... "/forever/src/slice/*.cpp")` on the glob, so the new files are not compiled; the build
+graph is the same as before (checked: `build.ninja` of the OFF build has no `slice` target, `CMAKE_RC=0`, `MAKE_RC=0`).
+ON adds, in `CMakeLists.txt`:
+- the legacy files of `forever/SLICE1.txt` (read with `file(STRINGS)` at configure time, `#` lines and blanks skipped, the
+  list is a configure dependency; a listed file that does not exist is a `FATAL_ERROR`), minus `ai/playerbot/AiFactory.cpp` and
+  `ai/playerbot/strategy/AiObjectContextRegistry.cpp` (excluded by name, so it does not matter whether R1's file exists or is listed);
+- `forever/src/slice/*.cpp`;
+- the pre-include `forever/src/compat/botpch_forever.h` as a `COMPILE_OPTIONS` source property of the legacy files only (`-include`,
+  `/FI` on MSVC); not on `forever/src` files;
+- `-I forever/compat -I forever/src/compat`, and the eight old include folders (`OLD_INCLUDE_DIRS` of `port_census.py` = the folders
+  of `TortoiseBots.cmake`) as `-idirafter`, so a legacy header never shadows a core header of the same name (the census does the
+  same);
+- `-DMANGOSBOT_ZERO=1 -DCMANGOS=1` (private) and `-DTORTOISEBOTS_SLICE1=1` (public: R5's host code tests it).
+Checked: configure with the option ON succeeds (`cmake ... -DTORTOISEBOTS_SLICE1=ON`, `CMAKE_RC=0`); the generated compile lines
+carry the pre-include for `strategy/Engine.cpp` and not for `TbBotMgr.cpp` or the slice files, and `ai/playerbot/AiFactory.cpp`
+is not a target.
+
+## Syntax census of the slice files (`FOREVER_CENSUS_LIST=forever/tools/slice_sources_check.txt`)
+
+Method: `FOREVER_SLOT=3 FOREVER_CENSUS_LIST=forever/tools/slice_sources_check.txt forever/tools/vm-census.sh "" 14` (clang
+`-fsyntax-only`, the precompiled `botpch_forever.h`, the same flags as the full census).
+
+| Run | Result |
+|---|---|
+| first | `files 2 ... error places 414 (in 36 files)`: 3 of them in my own files (below) |
+| after the fix | `files 2 ... error places 411 (in 33 files)`: **0 places in `forever/src/slice/`**; `rc 1` of both files comes only from legacy headers |
+
+**Caused by my code (fixed):** `TC_LOG_INFO` / `TC_LOG_WARN` after `playerbot/playerbot.h` ("no viable conversion from 'BotLog' to
+'Log *'", 3 places: `SliceAiObjectContext.cpp`, `SliceAiFactory.cpp`, `SliceMissingKeyGuard.h`). `playerbot.h` redefines
+`sLog` as `BotLog::Instance()`. Now the log goes through `SliceLog.h/.cpp`.
+
+**Caused by legacy headers that do not compile on ForeverCore yet (the next packages' work), 411 places in 33 headers:**
+
+| Family | Places | Where | Package |
+|---|---|---|---|
+| `Position` members `x y z mapId o`, `sTerrainMgr`, `const TerrainInfo`, `PathFinder` | ~250 | `WorldPosition.h` 225, `GuidPosition.h` 12, `PositionValue.h` 8, `WorldSquare.h` 4, `TravelMgr.h` 7, `TravelNode.h` 2 | R3 (compat headers) |
+| inline code of action / trigger / value headers (`LineOfSightChecks`, `CanReachWithMeleeAutoAttack`, `IsRooted`, `GetAngle`, `HasNetworkTransport`, ...) | ~110 | `ReachTargetActions.h` 31, `RangeTriggers.h` 26, `GenericTriggers.h` 25, `MovementActions.h` 4, `GenericSpellActions.h` 3, `GenericActions.h` 2, `AttackAction.h` 1, `DistanceValue.h` 4, `AttackerCountValues.h` 3, `StatsValues.h` 4, a few single places | R4A, R4V |
+| `PlayerbotAI.h`, `PlayerbotAIConfig.h`, `RandomBotFacade.h`, `Talentspec.h`, `ServerFacade.h` | ~31 | the PlayerbotAI class and helper headers | R4P, R4C |
+| `ItemUsageValue.h`, `ItemVisitors.h`, `AuctionEntry`, `GuildValues.h` | ~9 | headers of removed-or-item files that the slice's headers still pull in | R3 / R6 |
+| `Config/Config.h` does not exist on ForeverCore (the census gives it an empty stand-in, 2 includes) | 2 | `PlayerbotAIConfig.h` | R4C (`ConfigMgr` adaptor) |
+
+Not one of them is in the two slice sources or in `SliceMissingKeyGuard.h`; the guard's extra includes (`LootObjectStack.h`,
+`PatchwerkOpeningPolicy.h`, `RunnerFinishPolicy.h`, `GuildValues.h`, `TravelValues.h`) bring `GuildValues.h` (1) and `TravelMgr.h`
+(7, also reached through the generic contexts' own headers) and nothing that is not already in the slice.
+
+## Gates
+
+- Option OFF: `ssh yulon-ubuntu2 'FOREVER_SLOT=3 ~/forever-build/build.sh 12 tortoisebots'` -> `CMAKE_RC=0`, `MAKE_RC=0`.
+- Option ON configures: `CMAKE_RC=0`; 135 objects in `tortoisebots`, the three slice `.cpp` among them. It does not build yet (legacy headers).
+- `python3 forever/tools/slice_registry_check.py`: `(a)=0  (b)=166`: strategies 46, actions 52, triggers 35, values 33 referenced by the
+  slice's sources and not registered. Of those, 7 strategies, 4 actions and 2 triggers do not exist in the full build either
+  (dead references or dynamic names), and every one of the 33 values exists in the full build. The 33 values are the to-do for R6/R8:
+  `can move around`, `grind target`, `loot target`, `travel target active`, `enemy player target` and the like, each read as one of the
+  16 types the stand-in covers.
