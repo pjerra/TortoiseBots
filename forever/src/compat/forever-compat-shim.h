@@ -186,6 +186,7 @@ struct CmangosObjectAccessorProxy
 #define SPELL_ATTR_CANT_CANCEL                 SPELL_ATTR0_NO_AURA_CANCEL
 #define SPELL_ATTR_EX_DISPEL_AURAS_ON_IMMUNITY SPELL_ATTR1_IMMUNITY_PURGES_EFFECT
 #define SPELL_ATTR_EX2_IGNORE_LOS              SPELL_ATTR2_IGNORE_LINE_OF_SIGHT
+#define SPELL_ATTR_EX2_TAME_BEAST              SPELL_ATTR2_NO_ACTIVE_PETS
 
 // Interrupt flag bits: the classic client's numbers, which is what the core's InterruptFlags/ChannelInterruptFlags columns
 // carry (ForeverCore labels the same bits differently: 0x4 is Stun there, 0x8 Combat). SpellInterrupts.db2 column.
@@ -198,8 +199,13 @@ struct CmangosObjectAccessorProxy
 // Aura interrupt flag the bot tests: 0x00040000, "standing up", the classic bit (ForeverCore: SpellAuraInterruptFlags::Standing).
 #define AURA_INTERRUPT_FLAG_NOT_SEATED 0x00040000
 
-// The target flags: the same numbers on both cores; ForeverCore has no name for the self flag because it is 0 (TARGET_FLAG_NONE).
+// The target flags: the same numbers on both cores; ForeverCore has no name for the self flag because it is 0 (TARGET_FLAG_NONE),
+// and calls the classic "opening a lock" flag TARGET_FLAG_GAMEOBJECT_ITEM (0x4000).
 #define TARGET_FLAG_SELF TARGET_FLAG_NONE
+#define TARGET_FLAG_LOCKED TARGET_FLAG_GAMEOBJECT_ITEM
+#ifndef TARGET_FLAG_UNK1
+#define TARGET_FLAG_UNK1 TARGET_FLAG_GAMEOBJECT_ITEM
+#endif
 
 // SpellRange ids the bot compares a spell's range index with (the client's SpellRange.dbc ids on both cores).
 #define SPELL_RANGE_IDX_SELF_ONLY 1
@@ -299,6 +305,7 @@ inline SpellSchoolMask GetSpellSchoolMask(SpellEntry const* spellInfo)
 }
 inline bool IsChanneledSpell(SpellEntry const* spellInfo) { return spellInfo && spellInfo->IsChanneledSpell(); }
 inline bool IsPassiveSpell(SpellEntry const* spellInfo) { return spellInfo && spellInfo->IsPassiveSpell(); }
+inline bool IsPassiveSpell(uint32 spellId) { return IsPassiveSpell(GetSpellEntryCompat(spellId)); }
 inline bool IsPositiveEffect(SpellEntry const* spellInfo, uint8 effIndex)
 {
     return spellInfo && effIndex < MAX_EFFECT_INDEX && spellInfo->IsPositiveEffect(SpellEffectIndex(effIndex));
@@ -443,6 +450,13 @@ struct CmangosSpellTemplateProxy
 };
 #undef sSpellTemplate
 #define sSpellTemplate (CmangosSpellTemplateProxy())
+
+// cmangos also exposed the store as a pointer (GetSpellStore()); the bot iterates every spell through it.
+inline CmangosSpellTemplateProxy* GetSpellStore()
+{
+    static CmangosSpellTemplateProxy store;
+    return &store;
+}
 
 // sLog: cmangos logged with printf formats through `sLog.outX(...)`. ForeverCore logs through `sLog->OutMessage`
 // with a named logger and std::format placeholders: "server" is the server log and "sql.sql" the DB-error log, the
