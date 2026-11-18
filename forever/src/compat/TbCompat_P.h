@@ -7,6 +7,13 @@
 // and the notes (forever/docs/SLICE1-R4P-NOTES.md, "Different answers") repeat it.
 #pragma once
 
+// The typed packet classes and the trade data the helpers below use (the slice census compiles with these on the include path, as
+// forever/src/TbBotSession.cpp includes them).
+#include "CharacterPackets.h"
+#include "ChatPackets.h"
+#include "MovementPackets.h"
+#include "TradeData.h"
+
 // ---------------------------------------------------------------------------------------------------------------
 // Guids. T ObjectGuid::GetRawValue() is the one 64-bit word (high type | entry | counter); F's guid is 128 bit and
 // GetRawValue() is a byte span (ObjectGuid.h:325-326). GetRawValue(0) is the low word: the counter (40 bits) with the
@@ -274,3 +281,98 @@ inline bool IsHeadlessCompat(WorldSession* session) { return session->IsBot(); }
 #define MOVEFLAG_WALK_MODE MOVEMENTFLAG_WALKING
 #define MOVEFLAG_FALLINGFAR MOVEMENTFLAG_FALLING_FAR
 #define MOVEFLAG_JUMPING MOVEMENTFLAG_FALLING
+
+// The reaction of one faction template to another: the algorithm of PlayerbotAI::GetFactionReaction (a copy of the old core's
+// reputation logic, ai/cmangos-compat-r4p.h keeps it word for word) over F's field names (DB2Structure.h:1712-1721): ourMask is
+// FactionGroup, friendlyMask FriendGroup, hostileMask EnemyGroup, enemyFaction Enemies, friendFaction Friend, faction Faction.
+// Different answer from the core's own IsHostileTo / IsFriendlyTo (DB2Structure.h:1726-1752): the same tests in another order
+// (the mask test first here), kept as the bot always read them.
+inline ReputationRank FactionReactionCompat(FactionTemplateEntry const* thisTemplate, FactionTemplateEntry const* otherTemplate)
+{
+    ASSERT(thisTemplate);
+    ASSERT(otherTemplate);
+
+    if (otherTemplate->FactionGroup & thisTemplate->EnemyGroup)
+        return REP_HOSTILE;
+
+    if (thisTemplate->Enemies[0] && otherTemplate->Faction)
+    {
+        for (unsigned int i : thisTemplate->Enemies)
+        {
+            if (i == otherTemplate->Faction)
+                return REP_HOSTILE;
+        }
+    }
+
+    if (otherTemplate->FactionGroup & thisTemplate->FriendGroup)
+        return REP_FRIENDLY;
+
+    if (thisTemplate->Friend[0] && otherTemplate->Faction)
+    {
+        for (unsigned int i : thisTemplate->Friend)
+        {
+            if (i == otherTemplate->Faction)
+                return REP_FRIENDLY;
+        }
+    }
+
+    if (thisTemplate->FactionGroup & otherTemplate->FriendGroup)
+        return REP_FRIENDLY;
+
+    if (otherTemplate->Friend[0] && thisTemplate->Faction)
+    {
+        for (unsigned int i : otherTemplate->Friend)
+        {
+            if (i == thisTemplate->Faction)
+                return REP_FRIENDLY;
+        }
+    }
+    return REP_NEUTRAL;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Other names. T Common.h:292 `countof(array)`; ForeverCore has none. T Unit.h SPELL_AURA_OBS_MOD_MANA = 21 (SpellAuraDefines.h:134),
+// F SPELL_AURA_OBS_MOD_POWER = 21 (SpellAuraDefines.h:108): the periodic percent mana regeneration of drinks. T InBattleGroundQueue,
+// F InBattlegroundQueue (casing only; used as `x->InBattleGroundQueue()`).
+// ---------------------------------------------------------------------------------------------------------------
+#ifndef countof
+#define countof(array) (sizeof(array) / sizeof((array)[0]))
+#endif
+#define SPELL_AURA_OBS_MOD_MANA SPELL_AURA_OBS_MOD_POWER
+#define InBattleGroundQueue InBattlegroundQueue
+
+// A player by guid, also when it is connected but not in the world yet. T ObjectAccessor::FindPlayerNotInWorld; F FindConnectedPlayer
+// (ObjectAccessor.h:87, the call the shim's own FindPlayerNotInWorld member makes).
+inline Player* FindPlayerNotInWorldCompat(ObjectGuid guid) { return ObjectAccessor::FindConnectedPlayer(guid); }
+
+// The speed multiplier of the unit's casting: T update field UNIT_MOD_CAST_SPEED (1.0 normal, haste below it: Unit.cpp:10395-10397), F
+// UnitData::ModCastingSpeed (UpdateFields.h:387). The bot scales the 1-1.5 s global cooldown with it.
+inline float UnitCastSpeedModCompat(Unit const* unit) { return *unit->m_unitData->ModCastingSpeed; }
+
+// The generator on top of the unit's motion stack, or null when there is none. T MotionMaster::empty()/top(), F Empty() and
+// GetCurrentMovementGenerator() (MotionMaster.h:125-129).
+inline MovementGenerator* MotionMasterTopCompat(MotionMaster* master)
+{
+    return master->Empty() ? nullptr : master->GetCurrentMovementGenerator();
+}
+
+// The auras applied to a unit, as (spell id, aura) pairs. T Player::GetSpellAuraHolderMap is a map of SpellAuraHolder (the holder of one
+// spell); F keeps AuraApplication per applied aura (Unit.h:1319), whose GetBase() is the Aura (SpellAuras.h:134: GetAura() of the
+// application). The aura answers what the bot asks the holder (GetSpellProto, caster, stacks, duration).
+inline std::vector<std::pair<uint32, Aura*>> AuraHolderMapCompat(Unit const* unit)
+{
+    std::vector<std::pair<uint32, Aura*>> result;
+    for (auto const& entry : unit->GetAppliedAuras())
+        result.emplace_back(entry.first, entry.second->GetBase());
+    return result;
+}
+
+// The zone id of an area and its name. T AreaTableEntry::ZoneId (0 for a zone itself) and Name (a plain string, null-checked by the
+// callers); F ParentAreaID (DB2Structure.h:131) and AreaName (the enUS text, as AreaNameCompat reads it). The name of a null entry is empty.
+inline uint32 AreaZoneIdCompat(AreaTableEntry const* area) { return area->ParentAreaID; }
+inline std::string AreaNameOrEmptyCompat(AreaTableEntry const* area) { return area ? std::string(area->AreaName[LOCALE_enUS]) : std::string(); }
+// The zone at a point. T sTerrainMgr.getZoneId(map, x, y, z), F TerrainMgr::GetZoneId with the empty phase shift (TerrainMgr.h:151).
+inline uint32 ZoneIdAtCompat(uint32 mapId, float x, float y, float z)
+{
+    return sTerrainMgr.GetZoneId(PhasingHandler::GetEmptyPhaseShift(), mapId, x, y, z);
+}

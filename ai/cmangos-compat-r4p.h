@@ -110,3 +110,64 @@ inline ObjectGuid PlayerGuidByNameCompat(std::string const& name) { return sObje
 inline Player* PlayerByGuidCompat(ObjectGuid guid) { return sObjectMgr.GetPlayer(guid); }
 inline ObjectGuid PlayerGuidCompat(uint64 low) { return ObjectGuid(HIGHGUID_PLAYER, low); }
 inline bool IsHeadlessCompat(WorldSession* session) { return session->IsHeadless(); }
+
+// The reaction of one faction template to another, the body PlayerbotAI::GetFactionReaction held before the port (a copy of the
+// core's reputation logic), moved here word for word.
+inline ReputationRank FactionReactionCompat(FactionTemplateEntry const* thisTemplate, FactionTemplateEntry const* otherTemplate)
+{
+    MANGOS_ASSERT(thisTemplate)
+        MANGOS_ASSERT(otherTemplate)
+
+        // Original logic begins
+
+        if (otherTemplate->ourMask & thisTemplate->hostileMask)
+            return REP_HOSTILE;
+
+    if (thisTemplate->enemyFaction[0] && otherTemplate->faction)
+    {
+        for (unsigned int i : thisTemplate->enemyFaction)
+        {
+            if (i == otherTemplate->faction)
+                return REP_HOSTILE;
+        }
+    }
+
+    if (otherTemplate->ourMask & thisTemplate->friendlyMask)
+        return REP_FRIENDLY;
+
+    if (thisTemplate->friendFaction[0] && otherTemplate->faction)
+    {
+        for (unsigned int i : thisTemplate->friendFaction)
+        {
+            if (i == otherTemplate->faction)
+                return REP_FRIENDLY;
+        }
+    }
+
+    if (thisTemplate->ourMask & otherTemplate->friendlyMask)
+        return REP_FRIENDLY;
+
+    if (otherTemplate->friendFaction[0] && thisTemplate->faction)
+    {
+        for (unsigned int i : otherTemplate->friendFaction)
+        {
+            if (i == thisTemplate->faction)
+                return REP_FRIENDLY;
+        }
+    }
+    return REP_NEUTRAL;
+}
+
+inline Player* FindPlayerNotInWorldCompat(ObjectGuid guid) { return ObjectAccessor::FindPlayerNotInWorld(guid); }
+inline float UnitCastSpeedModCompat(Unit const* unit) { return unit->GetFloatValue(UNIT_MOD_CAST_SPEED); }
+inline MovementGenerator* MotionMasterTopCompat(MotionMaster* master)
+{
+    if (!master->empty())
+        if (MovementGenerator* movgen = master->top())
+            return movgen;
+    return nullptr;
+}
+inline Unit::SpellAuraHolderMap const& AuraHolderMapCompat(Unit const* unit) { return unit->GetSpellAuraHolderMap(); }
+inline uint32 AreaZoneIdCompat(AreaTableEntry const* area) { return area->ZoneId; }
+inline std::string AreaNameOrEmptyCompat(AreaTableEntry const* area) { return area && area->Name ? std::string(area->Name) : std::string(); }
+inline uint32 ZoneIdAtCompat(uint32 mapId, float x, float y, float z) { return sTerrainMgr.getZoneId(mapId, x, y, z); }

@@ -7,7 +7,7 @@ namespace
 {
 static uint32 GetQuestSlotQuestId(Player* player, uint16 slot)
 {
-    return player->GetUInt32Value(PLAYER_QUEST_LOG_1_1 + slot * MAX_QUEST_OFFSET + QUEST_ID_OFFSET);
+    return GetQuestSlotIdCompat(player, slot);
 }
 
 } // namespace

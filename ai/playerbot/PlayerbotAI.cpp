@@ -312,7 +312,7 @@ Player* PlayerbotAI::GetGroupMaster()
             return liveMaster;
 
         // 2. If the group leader is a real player, that leader takes authority.
-        Player* leader = sObjectMgr.GetPlayer(group->GetLeaderGuid());
+        Player* leader = PlayerByGuidCompat(group->GetLeaderGuid());
         if (leader && leader->IsInWorld() && IsRealPlayer(leader))
             return leader;
 
@@ -343,7 +343,7 @@ Player* PlayerbotAI::GetGroupMaster()
 // items (433/430 and their kin, aura types 84/85) alike.
 static bool HasSeatedAura(Player* bot)
 {
-    for (auto const& entry : bot->GetSpellAuraHolderMap())
+    for (auto const& entry : AuraHolderMapCompat(bot))
     {
         SpellEntry const* spell = entry.second ? GetSpellEntryCompat(entry.second->GetSpellProto()) : nullptr;
         if (spell && (spell->AuraInterruptFlags & AURA_INTERRUPT_FLAG_NOT_SEATED))
@@ -357,7 +357,7 @@ static bool HasSeatedAura(Player* bot)
 // the by-name aura lookup misses some meal auras.
 bool PlayerbotAI::HasSeatedMeal(bool drink) const
 {
-    for (auto const& entry : bot->GetSpellAuraHolderMap())
+    for (auto const& entry : AuraHolderMapCompat(bot))
     {
         SpellEntry const* spell = entry.second ? GetSpellEntryCompat(entry.second->GetSpellProto()) : nullptr;
         if (!spell || !(spell->AuraInterruptFlags & AURA_INTERRUPT_FLAG_NOT_SEATED))
@@ -473,9 +473,8 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
     bool botMoving = false;
     if (!bot->IsStopped() || bot->GetMotionMaster()->GetCurrentMovementGeneratorType() != IDLE_MOTION_TYPE)
         botMoving = true;
-    if (!bot->GetMotionMaster()->empty())
-        if (MovementGenerator* movgen = bot->GetMotionMaster()->top())
-            botMoving = true;
+    if (MotionMasterTopCompat(bot->GetMotionMaster()))
+        botMoving = true;
 
 
     if (botMoving && !bot->IsBeingTeleported() && bot->IsInWorld())
@@ -3122,7 +3121,7 @@ void PlayerbotAI::HandleCommand(uint32 type, const std::string& text, Player& fr
     // commands from other bots (headless sessions, e.g. a bot group leader
     // ordering its members) bypass it; the existing security level below
     // still applies to them.
-    WorldSession const* fromSession = fromPlayer.GetSession();
+    WorldSession* fromSession = fromPlayer.GetSession();
     if (&fromPlayer != bot && fromSession && !IsHeadlessCompat(fromSession))
     {
         bool silentDeny = type != CHAT_MSG_WHISPER;
@@ -3290,7 +3289,7 @@ void PlayerbotAI::NoteSpellGlobalCooldown(SpellEntry const* spellInfo)
         return;
     int32 gcd = spellInfo->StartRecoveryTime;
     if (gcd >= 1000 && gcd <= 1500)
-        gcd = std::min(1500, std::max(1000, int32(float(gcd) * bot->GetFloatValue(UNIT_MOD_CAST_SPEED))));
+        gcd = std::min(1500, std::max(1000, int32(float(gcd) * UnitCastSpeedModCompat(bot))));
     spellGcdStartMs_ = WorldTimer::getMSTime();
     spellGcdDurationMs_ = uint32(gcd);
 }
@@ -3462,7 +3461,7 @@ void PlayerbotAI::DoNextAction(bool min, bool forceActivity)
     // pointer comes back once the hirer is in the world again. Non-hires skip it.
     bool const hired = TortoiseBots::HireLifecycle::Instance().IsHired(bot->GetObjectGuid());
     ObjectGuid const hirerGuid = hired ? TortoiseBots::HireLifecycle::Instance().GetMaster(bot->GetObjectGuid()) : ObjectGuid();
-    Player* const hirer = hirerGuid.IsEmpty() ? nullptr : ObjectAccessor::FindPlayerNotInWorld(hirerGuid);
+    Player* const hirer = hirerGuid.IsEmpty() ? nullptr : FindPlayerNotInWorldCompat(hirerGuid);
     bool const hirerBetweenMaps = hirer && !hirer->IsInWorld();
     if (hired && !dungeonCrew)
     {
@@ -4624,7 +4623,7 @@ const AreaTableEntry* PlayerbotAI::GetCurrentArea()
 
 const AreaTableEntry* PlayerbotAI::GetCurrentZone()
 {
-    return GetAreaEntryByAreaID(sTerrainMgr.getZoneId(bot->GetMapId(), bot->getPositionX(), bot->getPositionY(), bot->getPositionZ()));
+    return GetAreaEntryByAreaID(ZoneIdAtCompat(bot->GetMapId(), bot->getPositionX(), bot->getPositionY(), bot->getPositionZ()));
 }
 
 /*
@@ -4633,7 +4632,7 @@ const AreaTableEntry* PlayerbotAI::GetCurrentZone()
 std::string PlayerbotAI::GetLocalizedAreaName(const AreaTableEntry* entry)
 {
     // Penqle's area_name is single char* (no locale array).
-    return entry && entry->Name ? std::string(entry->Name) : std::string();
+    return AreaNameOrEmptyCompat(entry);
 }
 
 bool PlayerbotAI::IsInCapitalCity()
@@ -4643,7 +4642,7 @@ bool PlayerbotAI::IsInCapitalCity()
     {
         return false;
     }
-    return current_area->Flags & AREA_FLAG_CAPITAL;
+    return AreaHasFlagsCompat(current_area, AREA_FLAG_CAPITAL);
 }
 
 void PlayerbotAI::DurabilityLoss(Item* item, double percent)
@@ -5547,8 +5546,8 @@ std::string PlayerbotAI::HandleRemoteCommand(std::string command)
         uint32 area = sServerFacade.GetAreaId(bot);
         if (const AreaTableEntry* areaEntry = GetAreaEntryByAreaID(area))
         {
-            if (AreaTableEntry const* zoneEntry = areaEntry->ZoneId ? GetAreaEntryByAreaID(areaEntry->ZoneId) : areaEntry)
-                out << " |" << zoneEntry->Name << "|";
+            if (AreaTableEntry const* zoneEntry = AreaZoneIdCompat(areaEntry) ? GetAreaEntryByAreaID(AreaZoneIdCompat(areaEntry)) : areaEntry)
+                out << " |" << AreaNameOrEmptyCompat(zoneEntry) << "|";
         }
         return out.str();
     }
@@ -5824,47 +5823,7 @@ float PlayerbotAI::GetRange(std::string type)
 //Copy from reputation GetFactionReaction
 ReputationRank PlayerbotAI::GetFactionReaction(FactionTemplateEntry const* thisTemplate, FactionTemplateEntry const* otherTemplate)
 {
-    MANGOS_ASSERT(thisTemplate)
-        MANGOS_ASSERT(otherTemplate)
-
-        // Original logic begins
-
-        if (otherTemplate->ourMask & thisTemplate->hostileMask)
-            return REP_HOSTILE;
-
-    if (thisTemplate->enemyFaction[0] && otherTemplate->faction)
-    {
-        for (unsigned int i : thisTemplate->enemyFaction)
-        {
-            if (i == otherTemplate->faction)
-                return REP_HOSTILE;
-        }
-    }
-
-    if (otherTemplate->ourMask & thisTemplate->friendlyMask)
-        return REP_FRIENDLY;
-
-    if (thisTemplate->friendFaction[0] && otherTemplate->faction)
-    {
-        for (unsigned int i : thisTemplate->friendFaction)
-        {
-            if (i == otherTemplate->faction)
-                return REP_FRIENDLY;
-        }
-    }
-
-    if (thisTemplate->ourMask & otherTemplate->friendlyMask)
-        return REP_FRIENDLY;
-
-    if (otherTemplate->friendFaction[0] && thisTemplate->faction)
-    {
-        for (unsigned int i : otherTemplate->friendFaction)
-        {
-            if (i == thisTemplate->faction)
-                return REP_FRIENDLY;
-        }
-    }
-    return REP_NEUTRAL;
+    return FactionReactionCompat(thisTemplate, otherTemplate);
 }
 
 bool PlayerbotAI::AddAura(Unit* unit, uint32 spellId)
