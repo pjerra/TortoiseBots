@@ -132,10 +132,16 @@ struct SpellEntry
 
 namespace tbcompat
 {
-    // Builds the index of DIFFICULTY_NONE spell ids and the dense slot array for their mirrors. Called once from the
-    // module's WorldScript::OnWorldInitialized (the spell store is loaded by then: World.cpp:1471); a lookup of the id
-    // bound calls it too, so a static cache of the bound cannot keep a zero. Nothing is allocated when
-    // TortoiseBots.Enable = 0, and a call while the spell store is still empty builds nothing.
+    // Sets the readiness flag. ONLY the module's WorldScript::OnWorldInitialized calls it, after World::
+    // SetInitialWorldSettings has returned (Main.cpp:372), before it calls InitSpellTable. Until it runs, no lookup
+    // reads the spell store and nothing allocates.
+    void MarkSpellStoreReady();
+
+    // Builds the index of DIFFICULTY_NONE spell ids and the dense slot array for their mirrors. Called from the module's
+    // WorldScript::OnWorldInitialized after MarkSpellStoreReady (the spell store is loaded by then: World.cpp:1471), and
+    // lazily from a lookup of the id bound or a first spell lookup after that flag. One builder at a time: the store scan
+    // is inside the builder's lock. Returns without touching the store while the flag is unset, and builds nothing when
+    // TortoiseBots.Enable = 0.
     void InitSpellTable();
 
     // One fill for both paths: the lazy path and `.tb spellscan` use the same function, so the same pre-checks apply.
@@ -143,14 +149,15 @@ namespace tbcompat
 
     // The mirror of a DIFFICULTY_NONE spell. A SpellInfo of another difficulty resolves to the same id's
     // DIFFICULTY_NONE mirror when one exists, and to nullptr (counted, logged once) when it does not. nullptr too when
-    // the core has no such spell or the module is off. Safe from any thread (the bot brain runs on map threads).
+    // the core has no such spell, the module is off, or the store is not ready yet (before MarkSpellStoreReady; logged
+    // once). Safe from any thread (the bot brain runs on map threads).
     SpellEntry const* SpellProto(uint32 id);
     SpellEntry const* SpellProto(SpellInfo const* info);   // nullptr for nullptr
     SpellInfo const* SpellCore(SpellEntry const* entry);   // back to the core's object
 
     // The old core's GetMaxSpellId(): one past the highest spell id the core has, so a `id < bound` loop covers the
-    // last id. Builds the index itself when the spell store is loaded and the index is not; 0 while the store is empty
-    // or the module is off.
+    // last id. Builds the index itself once the store is ready; 0 before MarkSpellStoreReady (logged once) and while
+    // the module is off.
     uint32 MaxSpellId();
 
     // Bytes held by the immutable id index and by the mirror slot array; 0 when not built.

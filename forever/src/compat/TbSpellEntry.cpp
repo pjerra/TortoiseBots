@@ -1,11 +1,16 @@
 // The spell mirror (TbSpellEntry.h): one SpellEntry per DIFFICULTY_NONE spell id the core has, built on first use.
 //
 // Storage is proportional to the number of spells, not to the highest id: InitSpellTable (from the module's
-// WorldScript::OnWorldInitialized, or from the first lookup of the id bound) collects the DIFFICULTY_NONE ids into a
-// sorted, immutable array and allocates one atomic mirror slot per id. The first reader of an id binary-searches the
-// array, builds the mirror and publishes it with a compare-exchange; a racing builder frees its own copy. A lookup
-// before the index exists takes a mutex-protected fallback map, so no caller can see a half-built mirror and no path
-// is left without an answer. Nothing is allocated while the module is disabled.
+// WorldScript::OnWorldInitialized, or from the first lookup of the id bound after that hook) collects the DIFFICULTY_NONE
+// ids into a sorted, immutable array and allocates one atomic mirror slot per id. The first reader of an id
+// binary-searches the array, builds the mirror and publishes it with a compare-exchange; a racing builder frees its own
+// copy. The index is built once, by one thread at a time (the store scan is inside the builder's lock), so a lookup that
+// arrives during the build waits for it and every later reader binary-searches immutable data without a lock.
+//
+// Nothing here touches the spell store before the readiness flag is set, and only the module's WorldScript::
+// OnWorldInitialized sets it (after World::SetInitialWorldSettings has filled the store and returned): until then the
+// bound lookup answers 0 and every spell lookup nullptr, each logged once. A lazy build after the flag uses the same
+// code as the hook's. Nothing is allocated while the module is disabled.
 //
 // The spell slot holds only the DIFFICULTY_NONE record: SpellMgr's map is keyed on (Id, Difficulty) (SpellMgr.cpp:53-67)
 // and ForEachSpellInfo walks every variant, so publishing whichever variant reached the slot first would let a raid
@@ -24,7 +29,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
-#include <unordered_map>
 #include <vector>
 
 namespace
@@ -41,8 +45,12 @@ struct SpellIndex
 std::atomic<SpellIndex*> g_index{nullptr};
 std::atomic<uint32> g_bound{0};                  // one past the highest spell id the core has
 std::mutex g_initMutex;                          // one index builder at a time
-std::mutex g_fallbackMutex;
-std::unordered_map<uint32, SpellEntry const*> g_fallback;   // only used before the index exists
+// Set only by the module's WorldScript::OnWorldInitialized, after World::SetInitialWorldSettings has returned (no spell
+// reload exists at the pin). Nothing reads SpellMgr or publishes a mirror while it is false: the store is being filled
+// then, and an index built from it would keep the partial result for the process lifetime.
+std::atomic<bool> g_storeReady{false};
+std::atomic<bool> g_notReadyBoundLogged{false};
+std::atomic<bool> g_notReadyLookupLogged{false};
 std::atomic<uint32> g_nonNoneOnly{0};
 std::atomic<bool> g_nonNoneLogged{false};
 std::atomic<bool> g_disabledLogged{false};
@@ -84,6 +92,15 @@ void NoteNonNoneOnly(SpellInfo const* info)
             info->Id, uint32(info->Difficulty));
 }
 
+bool SpellLookupReady()
+{
+    if (g_storeReady.load(std::memory_order_acquire))
+        return true;
+    if (!g_notReadyLookupLogged.exchange(true, std::memory_order_relaxed))
+        TC_LOG_INFO("server.loading", "TortoiseBots: a spell lookup ran before the spell store was ready (module WorldScript::OnWorldInitialized); returning null until it is (logged once).");
+    return false;
+}
+
 uint32 IndexPosition(SpellIndex const* index, uint32 id)
 {
     uint32 low = 0, high = index->count;
@@ -101,33 +118,43 @@ uint32 IndexPosition(SpellIndex const* index, uint32 id)
 
 namespace tbcompat
 {
+void MarkSpellStoreReady()
+{
+    g_storeReady.store(true, std::memory_order_release);
+}
+
 void InitSpellTable()
 {
+    // Only the hook that runs after World::SetInitialWorldSettings (Main.cpp:372) may start this: before it the store is
+    // still being filled, and an index built from it would keep its partial contents for the process lifetime.
+    if (!g_storeReady.load(std::memory_order_acquire))
+        return;
+
     if (g_index.load(std::memory_order_acquire))
         return;
     if (!MirrorEnabled())
         return;
 
+    // The scan is inside the lock: the hook and a lazy caller (the id bound, a first spell lookup) cannot walk the whole
+    // store at the same time, and a caller that arrives during a build waits here and then finds the published index.
+    std::lock_guard lock(g_initMutex);
+    if (g_index.load(std::memory_order_relaxed))
+        return;
+
     std::vector<uint32> ids;
     uint32 maxId = 0;
-    bool any = false;
     sSpellMgr->ForEachSpellInfo([&](SpellInfo const* info)
     {
         if (!info)
             return;
-        any = true;
         maxId = std::max(maxId, info->Id);
         if (info->Difficulty == DIFFICULTY_NONE)
             ids.push_back(info->Id);
     });
 
-    // The store is loaded by OnWorldInitialized before this runs. An empty pass means a caller got here earlier; build
-    // nothing now (a zero-sized index would stick) and let that caller's next lookup try again.
-    if (!any)
-        return;
-
-    std::lock_guard lock(g_initMutex);
-    if (g_index.load(std::memory_order_relaxed))
+    // The store is loaded by the time the flag is set, so this pass is never empty on a live server. With no spells at
+    // all, build nothing (a zero-sized index would stick) and let the next lookup try again.
+    if (ids.empty())
         return;
 
     std::sort(ids.begin(), ids.end());
@@ -139,24 +166,18 @@ void InitSpellTable()
     std::copy(ids.begin(), ids.end(), index->ids);
     index->slots = new std::atomic<SpellEntry*>[index->count]();
 
-    // Move any mirror the lazy path built before this call into its slot, then drop the map.
-    {
-        std::lock_guard fallbackLock(g_fallbackMutex);
-        for (auto const& [id, entry] : g_fallback)
-        {
-            uint32 const position = IndexPosition(index, id);
-            if (position < index->count && index->ids[position] == id)
-                index->slots[position].store(const_cast<SpellEntry*>(entry), std::memory_order_relaxed);
-        }
-        g_fallback.clear();
-    }
-
     g_bound.store(maxId + 1, std::memory_order_release);
     g_index.store(index, std::memory_order_release);
 }
 
 uint32 MaxSpellId()
 {
+    if (!g_storeReady.load(std::memory_order_acquire))
+    {
+        if (!g_notReadyBoundLogged.exchange(true, std::memory_order_relaxed))
+            TC_LOG_INFO("server.loading", "TortoiseBots: the spell id bound was asked for before the spell store was ready (module WorldScript::OnWorldInitialized); returning 0 until it is (logged once).");
+        return 0;
+    }
     if (!g_index.load(std::memory_order_acquire))
         InitSpellTable();
     return g_bound.load(std::memory_order_acquire);
@@ -347,7 +368,7 @@ SpellEntry* BuildSpellEntry(SpellInfo const* info)
 
 SpellEntry const* SpellProto(SpellInfo const* info)
 {
-    if (!info || !MirrorEnabled())
+    if (!info || !MirrorEnabled() || !SpellLookupReady())
         return nullptr;
 
     // A slot holds only the DIFFICULTY_NONE record. Another variant answers for the same id through the NONE sibling
@@ -391,17 +412,15 @@ SpellEntry const* SpellProto(SpellInfo const* info)
         }
     }
 
-    // The store was not loaded when InitSpellTable ran (no index), or an id the index does not hold: one lock, one map.
-    std::lock_guard lock(g_fallbackMutex);
-    auto [it, inserted] = g_fallback.try_emplace(id, nullptr);
-    if (inserted)
-        it->second = BuildSpellEntry(info);
-    return it->second;
+    // The index holds every DIFFICULTY_NONE id of the store it was built from, every SpellInfo the bot can hold comes
+    // from that store, and the core has no reload, so a miss is an id with no NONE record: nullptr, no second table.
+    return nullptr;
 }
 
 SpellEntry const* SpellProto(uint32 id)
 {
-    if (!MirrorEnabled())
+    // The readiness check comes before the store lookup: before the hook the store's map is still being filled.
+    if (!MirrorEnabled() || !SpellLookupReady())
         return nullptr;
     return SpellProto(sSpellMgr->GetSpellInfo(id, DIFFICULTY_NONE));
 }

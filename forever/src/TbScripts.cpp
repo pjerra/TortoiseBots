@@ -54,7 +54,10 @@ public:
         // The item store is loaded by now (World.cpp:1608, and item_classic_block at :1631); fill every mirror once so the
         // bot brain looks items up without a lock (TbItemPrototype.cpp).
         tbcompat::FillAll();
-        // The spell store is loaded too (World.cpp:1471); size the mirror table now so every later lookup is one atomic read.
+        // The spell store is loaded too (World.cpp:1471). This hook is what tells the mirror so: it answers 0 and null
+        // without touching the store until the flag is set, so a lookup from any earlier hook cannot index a half-loaded
+        // store into a table that is never rebuilt.
+        tbcompat::MarkSpellStoreReady();
         tbcompat::InitSpellTable();
         TC_LOG_INFO("server.loading", "TortoiseBots (ForeverCore port, spike): {}", BotMgr::Instance().Enabled() ? "enabled" : "disabled");
     }
