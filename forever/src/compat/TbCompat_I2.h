@@ -169,7 +169,7 @@ inline bool QuestRequiredItemCompat(Quest const* /*quest*/, int /*index*/, uint3
 inline float LootDistanceCompat(Player* /*bot*/, Creature* /*creature*/) { return 30.0f; }
 
 // The group's id as a key: F's group guid through the one guid key (GuidKeyCompat, TbCompat_Unit.h).
-inline uint64 GroupIdKeyCompat(Group const* group) { return GuidKeyCompat(group->GetGUID()); }
+inline uint64 GroupIdKeyCompat(Group* group) { return GuidKeyCompat(group->GetGUID()); }
 
 // Loot-boost helpers (ApplyBotLootBonus: the bot-only extra roll of green and blue drops reads T's loot templates; part of the item
 // feature, never reached on F). Failure values: no extra rate, the roll never succeeds.

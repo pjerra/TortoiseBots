@@ -108,7 +108,7 @@ inline bool QuestRequiredItemCompat(Quest const* quest, int index, uint32& itemI
 inline float LootDistanceCompat(Player* bot, Creature* creature) { return bot->GetMaxLootDistance(creature); }
 
 // The group's id as a key (Group::GetId).
-inline uint64 GroupIdKeyCompat(Group const* group) { return uint64(group->GetId()); }
+inline uint64 GroupIdKeyCompat(Group* group) { return uint64(group->GetId()); }
 
 // Loot-boost helpers (ApplyBotLootBonus): the server's own quality rate of an item drop, and the percent roll.
 template <class LootStoreType>

@@ -119,7 +119,7 @@ struct Group;
 inline uint64_t GuidKeyCompat(ObjectGuid const& guid) { return guid.GetRawValue(); }
 inline char const* CStrCompat(char const* text) { return text; }
 inline char const* CStrCompat(std::string const& text) { return text.c_str(); }
-inline uint64_t GroupIdKeyCompat(Group const*) { return 0; }
+inline uint64_t GroupIdKeyCompat(Group*) { return 0; }
 struct Unit { std::string GetName() const { return "unit"; } uint32 GetLevel() const { return 1; } };
 
 struct WorldObject
