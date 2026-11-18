@@ -126,7 +126,7 @@ class KeepoutSetAsideWiringTest(unittest.TestCase):
         # prerequisite (gating on it would switch stance, then veto).
         ready = body(values, "bool PossibleTriggersValue::GapCloserCouldFire(", "\n}\n")
         for probe in ('"spell id", spell', "UNIT_STAT_CAN_NOT_REACT_OR_LOST_CONTROL", "sServerFacade.IsSpellReady(bot, spellId)",
-                      "Spell::CalculatePowerCost(spellInfo, bot, nullptr, nullptr)", "IsNonCombatSpell()",
+                      "SpellPowerCostCompat(spellInfo, bot)", "IsNonCombatSpell()",
                       "IsInCombat()", "ai->GetSpellRange(spell, &maxRange, &minRange)",
                       "CreatureAuraGapCloserCouldFire(r)"):
             self.assertIn(probe, ready)
@@ -153,8 +153,11 @@ class KeepoutSetAsideWiringTest(unittest.TestCase):
         self.assertIn('"possible triggers"', snap)  # live-list creatures are skipped
         self.assertLess(snap.index("if (maxHazard <= 0.0f)"), snap.index("CreatureAuraSnapshotRinged("))
         # The one grid visit: inside the snapshot refresh, never loading a grid.
-        self.assertIn("Cell::VisitAllObjects(px, py, map, searcher, radius, true)", snap)
-        self.assertEqual(snap.count("Cell::VisitAllObjects("), 1)
+        self.assertIn("VisitUnitsAtCompat(px, py, map, nearby, check, radius)", snap)
+        self.assertEqual(snap.count("VisitUnitsAtCompat("), 1)
+        # ... and the helper keeps it bounded: Turtle passes dont_load = true to the visit, as this call did.
+        turtle = (ROOT / "ai/cmangos-compat-r4v.h").read_text()
+        self.assertIn("Cell::VisitAllObjects(x, y, map, searcher, range, true);", turtle[turtle.index("inline void VisitUnitsAtCompat("):])
         # A gap-closer landing never fails open: without a usable snapshot it
         # gets #882's bounded lookup (CreatureAuraLandingRinged).
         self.assertIn("if (landingLookup)", snap)

@@ -60,7 +60,7 @@ class ChannelCancelWiring(unittest.TestCase):
     def test_the_area_guard_reads_the_spell_data_and_the_nearby_targets(self):
         area = body(TARGET_VALUE, "bool CcGuard::CcInRunningArea(")
         self.assertIn("EnemyAreaOf(GetSpellEntryCompat(spell->m_spellInfo), atTarget, radius)", area)
-        self.assertIn("spell->m_targets.getDestination(x, y, z)", area)
+        self.assertIn("SpellDestinationCompat(spell, x, y, z)", area)
         self.assertIn("BreakableCcNear(x, y, z, mapId, radius)", area)
         # A crowd-controlled unit attacks nobody: the attackers list the other
         # guards read cannot see it, so this one reads the sight list. The

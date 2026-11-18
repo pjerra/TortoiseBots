@@ -110,7 +110,7 @@ class MeetNoHealWiring(unittest.TestCase):
     def test_the_hold_uses_the_helpers_and_the_incoming_damage(self):
         fn = candidates()
         held = fn[fn.index("auto const meetHealHeld = "):fn.index("std::vector<HealingCandidate> candidates;")]
-        self.assertIn("SeekMeetHealWalker(target->GetObjectGuid().GetRawValue(), meetPuller)", held)
+        self.assertIn("SeekMeetHealWalker(GuidKeyCompat(target->GetObjectGuid()), meetPuller)", held)
         self.assertIn("return SeekMeetHealHeld(sPlayerbotAIConfig.dungeonRunSeekMeetNoHeal, true, true,", held)
         self.assertIn("SeekMeetHealHpAfterIncoming(target->GetHealthPercent(), getIncomingdamage(target),", held)
         self.assertIn("target->GetMaxHealth())", held)

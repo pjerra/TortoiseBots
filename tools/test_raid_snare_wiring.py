@@ -26,7 +26,7 @@ class RaidSnareWiringTest(unittest.TestCase):
         self.assertIn("SnareAllowedInRaid", chase)
         self.assertIn("inRaidGroup", chase)
         self.assertIn("victimOnTank", chase)
-        self.assertIn("GetMainTankGuid", code)
+        self.assertIn("GroupMainTankGuidCompat", code)
 
 
 class DungeonChaseVetoTest(unittest.TestCase):
