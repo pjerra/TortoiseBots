@@ -63,7 +63,7 @@ void RunTraceService::NoteSpellInterrupted(PlayerbotAI* /*ai*/, uint32_t /*spell
 // there is nothing to flush (runtime/RunTraceWriter.cpp).
 namespace RunTrace
 {
-RunTraceWriter::WriterStats RunTraceWriter::Close()
+WriterStats RunTraceWriter::Close()
 {
     return WriterStats{};
 }
