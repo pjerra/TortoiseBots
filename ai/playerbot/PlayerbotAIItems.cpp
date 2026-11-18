@@ -1100,7 +1100,7 @@ void PlayerbotAI::EnchantItemT(uint32 spellid, uint8 slot, Item* item)
    uint32 enchantid = spellInfo->EffectMiscValue[0];
    if (!enchantid)
    {
-      sLog.outError("%u: Invalid enchantid %s %s" , enchantid , " report to devs", bot->GetName());
+      sLog.outError("%u: Invalid enchantid %s %s" , enchantid , " report to devs", CStrCompat(bot->GetName()));
       return;
    }
 
@@ -1108,7 +1108,7 @@ void PlayerbotAI::EnchantItemT(uint32 spellid, uint8 slot, Item* item)
       !((1 << GetItemProtoCompat(pItem)->InventoryType) & spellInfo->EquippedItemInventoryTypeMask))
    {
 
-      sLog.outError("%s: items could not be enchanted, wrong item type equipped", bot->GetName());
+      sLog.outError("%s: items could not be enchanted, wrong item type equipped", CStrCompat(bot->GetName()));
 
       return;
    }
@@ -1119,5 +1119,5 @@ void PlayerbotAI::EnchantItemT(uint32 spellid, uint8 slot, Item* item)
    pItem->SetEnchantment(enchantSlot, enchantid, 0, 0);
    bot->ApplyEnchantment(pItem, enchantSlot, true);
 
-   sLog.outDetail("%s: items was enchanted successfully!", bot->GetName());
+   sLog.outDetail("%s: items was enchanted successfully!", CStrCompat(bot->GetName()));
 }

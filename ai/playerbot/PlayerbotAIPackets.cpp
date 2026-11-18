@@ -282,7 +282,7 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
                 std::string recievedMessage = message;
 
                 std::string senderName;
-                if(!sObjectMgr.GetPlayerNameByGUID(guid1, senderName))
+                if(!PlayerNameByGuidCompat(guid1, senderName))
                     senderName = "unknown";
 
                 std::string recievedChatType;
@@ -337,7 +337,7 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
                             TortoiseBots::GuildOrders::GetEnchantTrade(bot->GetGUIDLow());
                         if (enchantRow && enchantRow->type == TortoiseBots::GuildOrders::OrderType::Enchant &&
                             enchantRow->state == TortoiseBots::GuildOrders::OrderState::Enchanting &&
-                            sender->getObjectGuid() == ObjectGuid(HIGHGUID_PLAYER, enchantRow->giverGuidLow) &&
+                            sender->getObjectGuid() == PlayerGuidCompat(enchantRow->giverGuidLow) &&
                             enchantSession.replaceAskedMs != 0 && !enchantSession.replaceConfirmed)
                         {
                             if (ai::ReplaceAnswerIsYes(message))
@@ -401,7 +401,7 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
     {
         TortoiseBots::SpeedChangeAck::Move move;
         if (!TortoiseBots::SpeedChangeAck::MoveForServerOpcode(packet.getOpcode(), move) ||
-            !bot->GetSession() || !bot->GetSession()->IsHeadless() || !bot->FindMap())
+            !bot->GetSession() || !IsHeadlessCompat(bot->GetSession()) || !bot->FindMap())
         {
             // A real player's client sends this ack itself.
             botOutgoingPacketHandlers.AddPacket(packet);
@@ -534,7 +534,7 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
 
         bot->Relocate(highestPoint.getX(), highestPoint.getY(), highestPoint.getZ());
         //bot->m_movementInfo.ChangePosition(dest_calculated.getX(), dest_calculated.getY(), dest_calculated.getZ(), bot->getOrientation());
-        sLog.outDetail("%s: KNOCKBACK x: %f, y: %f, z: %f, time: %f, dist: %f, maxHeight: %f inPlace: %u, landTime: %u", bot->GetName(), dest_calculated.getX(), dest_calculated.getY(), dest_calculated.getZ(), timeToLand, distToLand, maxHeight, jumpInPlace, jumpTime);
+        sLog.outDetail("%s: KNOCKBACK x: %f, y: %f, z: %f, time: %f, dist: %f, maxHeight: %f inPlace: %u, landTime: %u", CStrCompat(bot->GetName()), dest_calculated.getX(), dest_calculated.getY(), dest_calculated.getZ(), timeToLand, distToLand, maxHeight, jumpInPlace, jumpTime);
         return;
     }
     case SMSG_CAST_RESULT:
@@ -565,7 +565,7 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
                     botdiag::BotActionLog::Write(this, "CC_CAST_FAILED",
                         "spell=%u result=%u targetGuid=0x%llx dist=%.1f moving=%u",
                         spellId, (unsigned)result,
-                        ccTarget ? (unsigned long long)ccTarget->getObjectGuid().GetRawValue() : 0ULL,
+                        ccTarget ? (unsigned long long)GuidRawCompat(ccTarget->getObjectGuid()) : 0ULL,
                         ccTarget ? bot->GetDistance(ccTarget) : -1.0f,
                         sServerFacade.isMoving(bot) ? 1u : 0u);
                 }
@@ -582,7 +582,7 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
 		// scheduled — points us at engine priority or trigger.Check() bugs.
 		if (packet.getOpcode() == SMSG_GROUP_INVITE) {
 			SC_LOG("bot=%s received SMSG_GROUP_INVITE — queued for 'group invite' trigger",
-			       bot ? bot->GetName() : "(null)");
+			       bot ? CStrCompat(bot->GetName()) : "(null)");
 		}
 		botOutgoingPacketHandlers.AddPacket(packet);
 	}
