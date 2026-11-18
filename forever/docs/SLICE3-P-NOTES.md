@@ -139,6 +139,20 @@ For the merge package (files this worker does not own):
 - The two-line `GetMaster()` fallbacks of the chat shortcuts (`event.GetOwner() ? event.GetOwner() : GetMaster()`) need the host to pass the commander as `Event` owner (spec section 2), else the shortcut
   uses the bot's master, which is the commander anyway (D2).
 
+## 9a. The host worker's request (lead's message, slice3/h)
+
+1. **Registered (all six actions, the strategies and values asked for):** `follow chat shortcut` ChatActionContext.h:157 (ChatShortcutActions.cpp, in SLICE3.txt), `stay chat shortcut` :158 (same file),
+   `follow target` :213 (ValueActions.cpp), `attack rti target` ActionContext.h:171 (AttackAction.cpp, slice 1), `pull my target` ActionContext.h:188 and `end pull` :199 (PullActions.cpp),
+   strategy `passive` StrategyContext.h:94 (PassiveStrategy.cpp), strategy `pull` (already registered by the compiled WarriorAiObjectContext.cpp:23; PullStrategy.cpp is in the slice), values `rti` ValueContext.h:269
+   (RtiValue.cpp), `rti target` :191 (TargetValue/TankTargetValue/DpsTargetValue.cpp in the slice; its other users GrindTargetValue.cpp and RtiAction.cpp are not, and nothing is missing at link), `explicit attack target` :344,
+   `last movement` :231 (both slice 1; header-only classes), `position` :270 (PositionValue.cpp), `master position` :273 (MasterPositionValue, header only; mine). Nothing needed adding to SLICE3.txt; nothing is left out
+   among the ones asked. `attack my target` is also registered (it refuses from the console, AttackAction.cpp:97). Table with creator file:line: SLICE3-KEYS.md and the generator output.
+2. **Factory reads the forced role:** `OrderedRole` takes the player-wide stored role (`SetPlayerForcedRole`) first, then the bot's own (`SetForcedRole`; 1 tank, 2 healer, other damage). Warrior + tank: protection / tank assist / pull / close / tank face
+   (+ food, default, follow non-combat). Warrior + dps (or none): arms / dps assist / close / buff + `threat`. Priest (any role): the slice-2 kit + `threat`. `GetPlayerRoles(player)` answers the stored role, then the AI's role (the full
+   version ignores the AI-level one, AiFactory.cpp:586-592), then the class default. The kit is rebuilt by `ResetStrategies` -> `AddDefault*Strategies`, which is what the host's next-tick rebuild calls.
+3. **`threat`:** `AiFactory::KeepsPartyThreatBackoff` is compiled in SliceAiFactory.cpp with the full factory's text (AiFactory.cpp:633-642): not for a tank; for the others when the bot has a real-player master, else when
+   `IsInCommandedGroup(bot)` is true (the host's answer) and the bot is not a tank. Added after the class kit, as AiFactory.cpp:1009. It needs the host's `IsInCommandedGroup` true for a bot bound by `.tb master`.
+
 ## 10. Gates
 
 (filled at the end)

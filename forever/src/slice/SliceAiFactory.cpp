@@ -77,7 +77,8 @@ uint8 OrderedRole(Player const* player, PlayerbotAI* const facade)
     uint8 const stored = PlayerbotAIStorage::Instance().GetPlayerForcedRole(player->GetObjectGuid());
     if (stored != static_cast<uint8>(BOT_ROLE_NONE))
         return stored;
-    return facade ? facade->GetForcedRole() : 0;
+    uint8 const own = facade ? facade->GetForcedRole() : 0;       // 1 = tank, 2 = healer, anything else = damage (PlayerbotAI.cpp:4263)
+    return own == 0 ? 0 : (own == 1 ? static_cast<uint8>(BOT_ROLE_TANK) : (own == 2 ? static_cast<uint8>(BOT_ROLE_HEALER) : static_cast<uint8>(BOT_ROLE_DPS)));
 }
 
 bool WarriorIsTank(Player const* player, PlayerbotAI* const facade)
@@ -106,7 +107,14 @@ BotRoles AiFactory::GetPlayerRoles(const Player* player)
     // The role the bot was ordered to play comes first (spec section 3: "the forced role first"), as PlayerbotAI::IsTank reads it.
     if (player)
     {
-        uint8 const ordered = PlayerbotAIStorage::Instance().GetPlayerForcedRole(player->GetObjectGuid());
+        uint8 ordered = PlayerbotAIStorage::Instance().GetPlayerForcedRole(player->GetObjectGuid());
+        // The bot's own (AI-level) forced role too: the full GetPlayerRoles(player) ignores it (AiFactory.cpp:586-592), but a host that sets only
+        // `SetForcedRole` must still be heard. The AI is not stored yet while it is being constructed: then there is none to read.
+        if (ordered == static_cast<uint8>(BOT_ROLE_NONE))
+            if (PlayerbotAI* botAi = PlayerbotAIStorage::Instance().GetAI(player->GetObjectGuid()))
+                ordered = botAi->GetForcedRole() == 1 ? static_cast<uint8>(BOT_ROLE_TANK) :
+                          botAi->GetForcedRole() == 2 ? static_cast<uint8>(BOT_ROLE_HEALER) :
+                          botAi->GetForcedRole() ? static_cast<uint8>(BOT_ROLE_DPS) : static_cast<uint8>(BOT_ROLE_NONE);
         if (ordered != static_cast<uint8>(BOT_ROLE_NONE))
             return static_cast<BotRoles>(ordered);
     }
