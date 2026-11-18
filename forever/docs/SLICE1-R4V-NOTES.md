@@ -186,4 +186,18 @@ the same of `PathFinder`), `HomeBindLocationCompat` (`TravelMgr.cpp:40`, `Unstuc
   Needs: the linking round either keeps the three constructors out of `ItemQualifier` or maps the random property to a bonus list id.
 
 ## Gates
-(see the end of this file when filled in)
+
+| Gate | Command | Result |
+|---|---|---|
+| Census, this package | `FOREVER_SLOT=2 FOREVER_CENSUS_LIST=forever/SLICE1-R4V.txt forever/tools/vm-census.sh "" 14` | `files 58 ... error places 35 (in 11 files)`; in files R4V owns 5 (baseline 220) |
+| ForeverCore module, slice option off | `ssh yulon-ubuntu2 'FOREVER_SLOT=2 ~/forever-build/build.sh 12 tortoisebots'` | `CMAKE_RC=0 MAKE_RC=0` |
+| Turtle build | `vm-build ~/wt-slice-r4v --wait` at `2ab6fa372` | `COMPILE_SECONDS=2521 CMAKE_RC=0 MAKE_RC=0`, `QUEUE_RC=0`. A first run at `4a8d3c5c2` failed: the path helpers named `PathFinder` in a header that not every file includes; `cmangos-compat-r4v.h` now includes `Maps/PathFinder.h` |
+| Turtle unit tests | `vm-test tb ~/wt-slice-r4v` at `07c8b7893` | `RESULT: PASS rc=0 vm_duration=1389s`. The one later commit (`2ab6fa372`) adds an include to the Turtle compat header; the four wiring tests that read that header were re-run on the laptop and pass |
+
+Wiring tests that pinned the old spelling (updated to the new spelling of the same expression; each still proves what it proved):
+`test_avoid_cast_wiring` (`GetRawValue()` -> `GuidKeyCompat(...)`, same unit), `test_jindo_r3_wiring` (same), `test_meet_no_heal_wiring` (same),
+`test_cc_area_guards_wiring` (`getDestination` -> `SpellDestinationCompat`), `test_raid_follow_formation_wiring` (`GetLosHitPosition` ->
+`GetLosHitPositionCompat`), `test_raid_snare_wiring` (`GetMainTankGuid` -> `GroupMainTankGuidCompat`), `test_ledge_chase_wiring` (path calls),
+`test_seek_aura_wiring` (`GetEffIndex` -> `DynamicObjectEffectIndexCompat`), `test_trap_avoid_wiring`, `test_dynobj_sensor_wiring`,
+`test_keepout_set_aside_wiring` (the search helpers; the "grid only" and "never loads a grid" facts now also pinned on the helper bodies in
+both compat headers), `test_friendly_threat_target` (its stub harness gets the Turtle body of `CreatureTauntImmuneCompat`).
