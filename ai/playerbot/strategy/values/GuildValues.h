@@ -159,7 +159,7 @@ namespace ai
     public:
         CanHandInPetitionValue(PlayerbotAI* ai) : CalculatedValue<bool>(ai, "can hand in guild petition") {}
 
-        bool Calculate() override { return !bot->GetGuildId() && AI_VALUE2(uint32, "item count", chat->formatQItem(5863)) && AI_VALUE(uint8, "petition signs") >= sWorld.getConfig(CONFIG_UINT32_MIN_PETITION_SIGNS); };
+        bool Calculate() override { return !bot->GetGuildId() && AI_VALUE2(uint32, "item count", chat->formatQItem(5863)) && AI_VALUE(uint8, "petition signs") >= WorldIntConfigCompat(CONFIG_UINT32_MIN_PETITION_SIGNS); };
     };
 
     class CanBuyTabard : public CalculatedValue<bool>

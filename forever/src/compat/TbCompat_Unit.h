@@ -337,3 +337,21 @@ struct UnitListSearcherCompat : Trinity::UnitListSearcher<Check>
     UnitListSearcherCompat(WorldObject const* searcher, std::list<Unit*>& objects, Check& check)
         : Trinity::UnitListSearcher<Check>(searcher, objects, check) { }
 };
+
+// Names as C strings: T GetName() returns char const*, F std::string; the bot hands it to printf-style calls (%s).
+inline char const* CStrCompat(char const* text) { return text; }
+inline char const* CStrCompat(std::string const& text) { return text.c_str(); }
+
+// The player's experience and lifetime honorable kills. T reads the update fields (PLAYER_XP,
+// PLAYER_FIELD_LIFETIME_HONORABLE_KILLS), F has them as accessors/active-player data fields.
+inline uint32 PlayerXPCompat(Player const* player) { return player->GetXP(); }
+inline uint32 PlayerLifetimeHonorableKillsCompat(Player const* player) { return player->m_activePlayerData->LifetimeHonorableKills; }
+
+// A unit's main-hand damage range. T reads UNIT_FIELD_MINDAMAGE / UNIT_FIELD_MAXDAMAGE; F GetWeaponDamageRange (Unit.h:1606),
+// the unit's base damage range for the attack type.
+inline float UnitMinDamageCompat(Unit const* unit) { return unit->GetWeaponDamageRange(BASE_ATTACK, MINDAMAGE); }
+inline float UnitMaxDamageCompat(Unit const* unit) { return unit->GetWeaponDamageRange(BASE_ATTACK, MAXDAMAGE); }
+
+// A server setting by its enum. T World::getConfig(eConfigUInt32Values), F World::getIntConfig (World.h); the shim's
+// CONFIG_UINT32_* names are the F enumerators.
+inline uint32 WorldIntConfigCompat(WorldIntConfigs index) { return sWorld.getIntConfig(index); }

@@ -54,6 +54,7 @@
 #include "LFGMgr.h"
 #include "Language.h"
 #include "Log.h"
+#include "Loot.h"
 #include "LootMgr.h"
 #include "Mail.h"
 #include "Map.h"

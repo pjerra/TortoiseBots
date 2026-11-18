@@ -499,7 +499,7 @@ namespace ai
                     {
                         stationMagmaLogAt = now;
                         TB_LOG_BASIC("TortoiseBots: %s: magma formation station at %.1f %.1f %.1f: move z %.1f, "
-                            "navmesh z %.1f (map %u)", bot->GetName(), loc.x, loc.y, loc.z, move.moveZ,
+                            "navmesh z %.1f (map %u)", CStrCompat(bot->GetName()), loc.x, loc.y, loc.z, move.moveZ,
                             move.navmeshZ, bot->GetMapId());
                     }
                     if (ai::PlanMagmaMoveZ(true, move.moveInMagma, move.navmeshDry, move.navmeshZ, move.moveZ) ==

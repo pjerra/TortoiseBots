@@ -131,3 +131,10 @@ struct UnitListSearcherCompat : MaNGOS::UnitListSearcher<Check>
     UnitListSearcherCompat(WorldObject const* /*searcher*/, std::list<Unit*>& objects, Check& check)
         : MaNGOS::UnitListSearcher<Check>(objects, check) { }
 };
+
+inline char const* CStrCompat(char const* text) { return text; }
+inline uint32 PlayerXPCompat(Player const* player) { return player->GetUInt32Value(PLAYER_XP); }
+inline uint32 PlayerLifetimeHonorableKillsCompat(Player const* player) { return player->GetUInt32Value(PLAYER_FIELD_LIFETIME_HONORABLE_KILLS); }
+inline float UnitMinDamageCompat(Unit const* unit) { return unit->GetFloatValue(UNIT_FIELD_MINDAMAGE); }
+inline float UnitMaxDamageCompat(Unit const* unit) { return unit->GetFloatValue(UNIT_FIELD_MAXDAMAGE); }
+inline uint32 WorldIntConfigCompat(eConfigUInt32Values index) { return sWorld.getConfig(index); }
