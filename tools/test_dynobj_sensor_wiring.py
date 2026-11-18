@@ -59,11 +59,13 @@ def body(text, start, end="\n}\n"):
 class DynObjScanWiring(unittest.TestCase):
     def test_the_dynobj_scan_visits_the_grid(self):
         fn = body(VALUES, "std::list<ObjectGuid> NearestDynamicObjects::Calculate()")
-        self.assertIn("WorldObjectListSearcher", fn)
+        # The grid-only search is one both-core helper (R4V): a WorldObjectListSearcher and
+        # Cell::VisitGridObjects on Turtle, the same on ForeverCore (see the helper pins below).
+        self.assertIn("VisitGridObjectsCompat(bot, targets, u_check, range)", fn)
         # A dynamic object lives only in the grid container; the world
         # containers (players, creatures, corpses) never hold one.
-        self.assertIn("Cell::VisitGridObjects(", fn)
-        self.assertNotIn("Cell::VisitAllObjects(", fn)
+        self.assertNotIn("VisitGameObjectsCompat(", fn)
+        self.assertNotIn("VisitUnitsCompat(", fn)
         self.assertNotIn("Leave the list", fn)
         self.assertNotIn("Penqle has no", fn)
         # WorldObjectListSearcher calls the check for every container type
@@ -82,8 +84,24 @@ class DynObjScanWiring(unittest.TestCase):
 
     def test_the_far_point_dynobj_query_visits_the_grid(self):
         fn = body(VALUES, "void ai::CollectDamagingDynObjHazardsAt(")
-        self.assertIn("Cell::VisitGridObjects(", fn)
-        self.assertNotIn("Cell::VisitAllObjects(", fn)
+        self.assertIn("VisitGridObjectsAtCompat(", fn)
+        self.assertNotIn("VisitGameObjectsAtCompat(", fn)
+        self.assertNotIn("VisitUnitsAtCompat(", fn)
+
+    def test_the_grid_only_helpers_keep_the_search_the_code_always_made(self):
+        # The helpers hold the searcher and the visit the call sites used to spell out.
+        turtle = (ROOT / "ai/cmangos-compat-r4v.h").read_text()
+        forever = (ROOT / "forever/src/compat/TbCompat_V.h").read_text()
+        for text in (turtle, forever):
+            grid = body(text, "inline void VisitGridObjectsCompat(", "\n}\n")
+            self.assertIn("WorldObjectListSearcher<Check> searcher(", grid)
+            self.assertIn("Cell::VisitGridObjects(center, searcher, range);", grid)
+            self.assertNotIn("VisitAllObjects", grid)
+            at_point = body(text, "inline void VisitGridObjectsAtCompat(", "\n}\n")
+            self.assertIn("Cell::VisitGridObjects(x, y, map, searcher, range", at_point)
+            self.assertNotIn("VisitAllObjects", at_point)
+        # Turtle: a bounded query that never loads a grid (dont_load = true), as the call sites passed.
+        self.assertIn("Cell::VisitGridObjects(x, y, map, searcher, range, true);", turtle)
 
 
 class GroundCloudEmitterWiring(unittest.TestCase):

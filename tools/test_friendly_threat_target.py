@@ -32,6 +32,8 @@ struct Creature : Unit {
     bool HasImmunityFlag(int) const { return immune; }
 };
 enum { CREATURE_IMMUNITY_TAUNT = 0x02 };
+// The Turtle side of the both-core helper (ai/cmangos-compat-r4v.h): the call ThreatValues.cpp always made.
+inline bool CreatureTauntImmuneCompat(Creature const* creature) { return creature->HasImmunityFlag(CREATURE_IMMUNITY_TAUNT); }
 struct Player;
 struct Group { std::vector<Player*> members; };
 struct Player : Unit {

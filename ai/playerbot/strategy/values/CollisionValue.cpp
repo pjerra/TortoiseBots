@@ -19,15 +19,14 @@ bool CollisionValue::Calculate()
     std::list<Unit*> targets;
     float range = sPlayerbotAIConfig.contactDistance;
     MaNGOS::AnyUnitInObjectRangeCheck u_check(bot, range);
-    MaNGOS::UnitListSearcher<MaNGOS::AnyUnitInObjectRangeCheck> searcher(targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, range);
+    VisitUnitsCompat(bot, targets, u_check, range);
 
     for (std::list<Unit*>::iterator i = targets.begin(); i != targets.end(); ++i)
     {
         Unit* target = *i;
         if (bot == target) continue;
 
-        if (!target->isVisibleFor(bot, bot))
+        if (!IsVisibleForCompat(target, bot))
             continue;
 
         float dist = sServerFacade.getDistance2d(bot, target->getPositionX(), target->getPositionY());

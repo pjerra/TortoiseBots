@@ -32,7 +32,7 @@ Unit* SnareTargetValue::Calculate()
     bool const tankTaunt = spell == "taunt" && ai->IsTank(bot);
     Group* group = bot->GetGroup();
     bool const inRaidGroup = group && group->isRaidGroup();
-    ObjectGuid const mainTankGuid = group ? group->GetMainTankGuid() : ObjectGuid();
+    ObjectGuid const mainTankGuid = group ? GroupMainTankGuidCompat(group) : ObjectGuid();
     for (std::list<ObjectGuid>::iterator i = attackers.begin(); i != attackers.end(); ++i)
     {
         Unit* unit = ai->GetUnit(*i);
@@ -109,7 +109,7 @@ Unit* SnareTargetValue::Calculate()
         {
             chaseTarget = sServerFacade.GetChaseTarget(unit);
             if (!chaseTarget) continue;
-            Player* chaseTargetPlayer = sObjectMgr.GetPlayer(chaseTarget->getObjectGuid());
+            Player* chaseTargetPlayer = GetPlayerCompat(chaseTarget->getObjectGuid());
 
             // check if need to snare
             bool shouldSnare = true;

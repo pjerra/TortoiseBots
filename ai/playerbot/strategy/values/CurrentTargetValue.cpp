@@ -31,7 +31,7 @@ Unit* CurrentTargetValue::Get()
     // see them. It covers stealth, invisibility and visibility state and does not
     // involve line of sight, so a target behind a pillar is not lost.
     if (unit && unit != bot &&
-        !unit->IsVisibleForOrDetect(bot, bot->GetCamera().GetBody(), true))
+        !CanSeeOrDetectCompat(bot, unit))
         return NULL;
 
     return unit;

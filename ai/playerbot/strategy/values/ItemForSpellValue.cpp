@@ -28,7 +28,7 @@ Item* ItemForSpellValue::Calculate()
     if (trader)
     {
         itemForSpell = trader->GetTradeData()->GetItem(TRADE_SLOT_NONTRADED);
-        if (itemForSpell && itemForSpell->IsFitToSpellRequirements(spellInfo))
+        if (itemForSpell && ItemFitsSpellCompat(itemForSpell, spellInfo))
             return itemForSpell;
     }
 
@@ -39,7 +39,7 @@ Item* ItemForSpellValue::Calculate()
         if (trader)
         {
             itemForSpell = trader->GetTradeData()->GetItem(TRADE_SLOT_NONTRADED);
-            if (itemForSpell && itemForSpell->IsFitToSpellRequirements(spellInfo))
+            if (itemForSpell && ItemFitsSpellCompat(itemForSpell, spellInfo))
                 return itemForSpell;
         }
     }
@@ -74,7 +74,7 @@ Item* ItemForSpellValue::Calculate()
         slots.push_back(slot);
     }
 
-    std::shuffle(slots.begin(), slots.end(), *GetRandomGenerator());
+    ShuffleCompat(slots.begin(), slots.end());
 
     for( auto& slot : slots )
     {
@@ -88,7 +88,7 @@ Item* ItemForSpellValue::Calculate()
     for (auto& item : AI_VALUE2(std::list<Item*>, "inventory items", "all"))
         items.push_back(item);
 
-    std::shuffle(items.begin(), items.end(), *GetRandomGenerator());
+    ShuffleCompat(items.begin(), items.end());
 
     for(auto& item: items)
     {
@@ -110,7 +110,7 @@ Item* ItemForSpellValue::GetItemFitsToSpellRequirements(Item* itemForSpell, Spel
     if (spellInfo->Effect[0] == SPELL_EFFECT_ENCHANT_ITEM && itemForSpell->GetEnchantmentId(PERM_ENCHANTMENT_SLOT) &&  urand(0,5))
         return NULL;
 
-    if (itemForSpell->IsFitToSpellRequirements(spellInfo))
+    if (ItemFitsSpellCompat(itemForSpell, spellInfo))
         return itemForSpell;
 
     return NULL;

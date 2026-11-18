@@ -26,7 +26,7 @@ uint8 AoeHealValue::Calculate()
 	Group::MemberSlotList const& groupSlot = group->GetMemberSlots();
 	for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
 	{
-		Player *player = sObjectMgr.GetPlayer(itr->guid);
+		Player *player = GetPlayerCompat(itr->guid);
 		if( !player || !sServerFacade.IsAlive(player) || sServerFacade.getDistance2d(bot, player) > 30.0f)
 			continue;
 

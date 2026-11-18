@@ -52,7 +52,7 @@ def body(text, start, end="\n}\n"):
 class TrapHazardRadiusWiring(unittest.TestCase):
     def test_radius_comes_from_the_trap_spell(self):
         fn = body(VALUES, "float ai::DamagingTrapHazardRadius(")
-        self.assertIn("goInfo->trap.spellId", fn)
+        self.assertIn("GameObjectTrapSpellIdCompat(goInfo)", fn)
         self.assertIn("sServerFacade.LookupSpellInfo(", fn)
         self.assertIn("sSpellRadiusStore.LookupEntry(spellProto->EffectRadiusIndex[i])", fn)
         self.assertIn("TrapHazardRadius(spellRadius, trapRadius)", fn)
@@ -92,6 +92,7 @@ class TrapHazardRadiusWiring(unittest.TestCase):
         self.assertIn("out.push_back(hazard)", fn)
         # One cached value read and GO lookups: no grid sweep per tick here.
         self.assertNotIn("VisitAllObjects", fn)
+        self.assertNotIn("VisitGameObjects", fn)
         self.assertIn("void CollectDamagingTrapHazards(", VALUES_H)
 
     def test_the_scan_covers_the_step_out_and_the_hold(self):
@@ -100,7 +101,7 @@ class TrapHazardRadiusWiring(unittest.TestCase):
         # in the next one.
         self.assertIn("kTrapScanRangeYd", fn)
         self.assertNotIn("kMaxAoeAvoidRadiusYd", fn)
-        for call in ("u_check(bot, kTrapScanRangeYd)", "searcher, kTrapScanRangeYd)"):
+        for call in ("u_check(bot, kTrapScanRangeYd)", "VisitGameObjectsCompat(bot, targets, u_check, kTrapScanRangeYd)"):
             self.assertIn(call, fn)
 
     def test_a_held_destination_gets_hazards_around_its_own_point(self):
@@ -112,8 +113,11 @@ class TrapHazardRadiusWiring(unittest.TestCase):
         # loading.
         self.assertIn("kTrapScanRangeYd", fn)
         self.assertIn("CollectDamagingTrapHazards(ai, bot, out)", fn)
-        self.assertIn("Cell::VisitAllObjects(", fn)
-        self.assertIn(", true)", fn)
+        self.assertIn("VisitGameObjectsAtCompat(x, y, map, targets, u_check, kTrapScanRangeYd)", fn)
+        # never per-tick grid loading: Turtle's helper passes dont_load = true to the visit, as this call did.
+        turtle = (ROOT / "ai/cmangos-compat-r4v.h").read_text()
+        self.assertIn("Cell::VisitAllObjects(x, y, map, searcher, range, true);",
+                      turtle[turtle.index("inline void VisitGameObjectsAtCompat("):])
 
 
 class TrapSensorWiring(unittest.TestCase):

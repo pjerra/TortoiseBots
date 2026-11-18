@@ -25,7 +25,7 @@ namespace
         Group* group = bot ? bot->GetGroup() : nullptr;
         if (!group)
             return false;
-        ObjectGuid const mainTank = group->GetMainTankGuid();
+        ObjectGuid const mainTank = GroupMainTankGuidCompat(group);
         return !mainTank.IsEmpty() && mainTank == bot->getObjectGuid();
     }
 
@@ -192,12 +192,12 @@ public:
         // AiPlayerbot.DungeonRunTankPostKeepsUnit: a latched `tank_post` keeps its unit, even when the raid tank order
         // moved the post's row to another slot index (its record still names the unit it arrived on), and no other
         // loose add pulls the tank off it. Neither candidate latched: the ranking below is unchanged.
-        std::uint64_t const oldGuid = oldUnit ? oldUnit->GetObjectGuid().GetRawValue() : 0;
+        std::uint64_t const oldGuid = oldUnit ? GuidKeyCompat(oldUnit->GetObjectGuid()) : 0;
         // The record's lock is taken only with the key on: off, the pick is the pre-key comparison.
         std::uint64_t const postLatched =
             sPlayerbotAIConfig.dungeonRunTankPostKeepsUnit ? ::ai::TankPostLatchedUnit(bot) : 0;
         int const postPick = ::ai::TankPostUnitPick(sPlayerbotAIConfig.dungeonRunTankPostKeepsUnit, postLatched,
-            newUnit->GetObjectGuid().GetRawValue(), oldGuid);
+            GuidKeyCompat(newUnit->GetObjectGuid()), oldGuid);
         if (postPick > 0)
             return true;
         if (postPick < 0)
@@ -278,8 +278,7 @@ public:
             return false;
         }
 
-        HostileReference* ref = sServerFacade.GetThreatManager(unit).getCurrentVictim();
-        Unit* victim = ref ? ref->getTarget() : nullptr;
+        Unit* victim = CurrentThreatVictimCompat(unit);
         if (victim == bot)
             return true;
         if (Player* victimPlayer = dynamic_cast<Player*>(victim))

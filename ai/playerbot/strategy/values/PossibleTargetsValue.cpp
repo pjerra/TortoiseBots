@@ -67,8 +67,7 @@ bool PossibleTargetsValue::AcceptUnit(Unit* unit)
 void PossibleTargetsValue::FindPossibleTargets(Player* player, std::list<Unit*>& targets, float range)
 {
     MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck u_check(player, player, range);
-    MaNGOS::UnitListSearcher<MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck> searcher(targets, u_check);
-    Cell::VisitAllObjects(player, searcher, range);
+    VisitUnitsCompat(player, targets, u_check, range);
 }
 
 bool PossibleTargetsValue::IsFriendly(Unit* target, Player* player)
@@ -85,9 +84,9 @@ bool PossibleTargetsValue::IsFriendly(Unit* target, Player* player)
 
 bool PossibleTargetsValue::IsAttackable(Unit* target, Player* player)
 {
-    return !target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_ATTACKABLE_1) &&
-           !target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNTARGETABLE) &&
-           !target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_UNINTERACTIBLE) &&
+    return !UnitHasFlagCompat(target, UNIT_FLAG_NOT_ATTACKABLE_1) &&
+           !UnitHasFlagCompat(target, UNIT_FLAG_UNTARGETABLE) &&
+           !UnitHasFlagCompat(target, UNIT_FLAG_UNINTERACTIBLE) &&
            !target->HasAuraType(SPELL_AURA_SPIRIT_OF_REDEMPTION);
 }
 
@@ -135,7 +134,7 @@ bool PossibleTargetsValue::IsValid(Unit* target, Player* player, bool ignoreLos)
 
         if (!ignoreLos && !isInCombatWithTarget)
         {
-            if (!target->IsVisibleForOrDetect(player, player->GetCamera().GetBody(), true))
+            if (!CanSeeOrDetectCompat(player, target))
             {
                 return false;
             }
@@ -152,8 +151,7 @@ bool PossibleTargetsValue::IsValid(Unit* target, Player* player, bool ignoreLos)
 void PossibleTriggersValue::FindUnits(std::list<Unit*> &targets)
 {
     MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck u_check(bot, bot, range);
-    MaNGOS::UnitListSearcher<MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck> searcher(targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, range);
+    VisitUnitsCompat(bot, targets, u_check, range);
 }
 
 bool PossibleTriggersValue::AcceptUnit(Unit* unit)
@@ -167,28 +165,25 @@ bool PossibleTriggersValue::AcceptUnit(Unit* unit)
     // mob with a permanent burning aura (Fire Shield II 184 on Scarlet
     // Conjuror 4297) must stay fightable: school damage still lists
     // invisible emitters only, weapon spins list anyone.
-    bool const selectable = !unit->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
-    Unit::AuraList const& triggered = unit->GetAurasByType(SPELL_AURA_PERIODIC_TRIGGER_SPELL);
+    bool const selectable = !UnitHasFlagCompat(unit, UNIT_FLAG_NOT_SELECTABLE);
     bool spinning = false;
-    for (Unit::AuraList::const_iterator it = triggered.begin(); it != triggered.end(); ++it)
+    ForEachAuraOfTypeCompat(unit, SPELL_AURA_PERIODIC_TRIGGER_SPELL, [&](AuraOfTypeCompat const& aura)
     {
-        Aura* aura = *it;
-        if (!aura)
-            continue;
-        SpellEntry const* spellProto = GetSpellEntryCompat(aura->GetSpellProto());
+        SpellEntry const* spellProto = aura.spell;
         if (!spellProto)
-            continue;
-        uint32 triggerSpell = spellProto->EffectTriggerSpell[aura->GetEffIndex()];
+            return false;
+        uint32 triggerSpell = spellProto->EffectTriggerSpell[aura.effIndex];
         SpellEntry const* triggerProto = sServerFacade.LookupSpellInfo(triggerSpell);
         if (!triggerProto)
-            continue;
+            return false;
         for (int i = 0; i < MAX_EFFECT_INDEX; ++i)
             if (TriggerSpellMarksSpinHazard((int)triggerProto->Effect[i],
                 (int)triggerProto->EffectImplicitTargetA[i], (int)triggerProto->EffectImplicitTargetB[i], selectable) ||
                 TriggerSpellMarksGroundHazard((int)triggerProto->Effect[i],
                 triggerProto->IsPositiveEffect(SpellEffectIndex(i)), selectable))
                 spinning = true;
-    }
+        return false;
+    });
     return spinning;
 }
 
@@ -294,10 +289,10 @@ bool PossibleTriggersValue::SnapshotRingedAt(PlayerbotAI* ai, float x, float y, 
     std::vector<uint64_t> judged;
     judged.reserve(live.size() + 2);
     for (ObjectGuid const& guid : live)
-        judged.push_back(guid.GetRawValue());
+        judged.push_back(GuidKeyCompat(guid));
     if (skip)
-        judged.push_back(skip->GetObjectGuid().GetRawValue());
-    judged.push_back(context->GetValue<ObjectGuid>("explicit attack target")->Get().GetRawValue());
+        judged.push_back(GuidKeyCompat(skip->GetObjectGuid()));
+    judged.push_back(GuidKeyCompat(context->GetValue<ObjectGuid>("explicit attack target")->Get()));
     // Listed creatures carrying their aura within `radius` of (px, py): one
     // bounded grid visit that never loads a grid.
     auto visit = [&](float px, float py, float radius)
@@ -305,11 +300,10 @@ bool PossibleTriggersValue::SnapshotRingedAt(PlayerbotAI* ai, float x, float y, 
         std::vector<CreatureAuraHazardEntry> out;
         std::list<Unit*> nearby;
         ListedKeepoutNearPoint check{ mapId, px, py, radius };
-        MaNGOS::UnitListSearcher<ListedKeepoutNearPoint> searcher(nearby, check);
-        Cell::VisitAllObjects(px, py, map, searcher, radius, true);
+        VisitUnitsAtCompat(px, py, map, nearby, check, radius);
         for (Unit* unit : nearby)
             if (CreatureAuraKeepout const* row = KeepoutFor(unit))
-                out.push_back({ unit->GetObjectGuid().GetRawValue(), unit->GetPositionX(), unit->GetPositionY(),
+                out.push_back({ GuidKeyCompat(unit->GetObjectGuid()), unit->GetPositionX(), unit->GetPositionY(),
                     unit->GetPositionZ(), CreatureAuraHazardRadius(*row),
                     !unit->IsStopped() || unit->GetMotionMaster()->GetCurrentMovementGeneratorType() != IDLE_MOTION_TYPE,
                     row->tankExempt });
@@ -371,7 +365,7 @@ bool PossibleTriggersValue::GapCloserCouldFire(PlayerbotAI* ai, std::string cons
     // CheckSpellPower (PlayerbotAI.cpp): the cost without caster spellmods.
     if (spellInfo->powerType < MAX_POWERS)
         r.powerShort = bot->GetPower(Powers(spellInfo->powerType)) <
-            Spell::CalculatePowerCost(spellInfo, bot, nullptr, nullptr);
+            SpellPowerCostCompat(spellInfo, bot);
     // Spell::CheckCast(strict): SPELL_FAILED_AFFECTING_COMBAT.
     r.nonCombatSpell = spellInfo->IsNonCombatSpell();
     r.inCombat = bot->IsInCombat();
@@ -384,7 +378,7 @@ bool PossibleTriggersValue::GapCloserCouldFire(PlayerbotAI* ai, std::string cons
             r.rangeKnown = true;
             r.minRange = minRange;
             r.maxRange = maxRange;
-            r.distance = bot->GetDistance(target, ai->IsRanged(bot) ? SizeFactor::CombatReach : SizeFactor::CombatReachWithMelee);
+            r.distance = GetDistanceCompat(bot, target, ai->IsRanged(bot) ? SizeFactor::CombatReach : SizeFactor::CombatReachWithMelee);
         }
     }
     return CreatureAuraGapCloserCouldFire(r);
@@ -413,7 +407,7 @@ bool PossibleTriggersValue::GapCloserIntoKeepout(PlayerbotAI* ai, std::string co
         return CreatureAuraGapCloserVetoed(true, false, isTank && targetRow->tankExempt, ordered);
     float lx = 0.0f, ly = 0.0f;
     CreatureAuraGapCloserLanding(bot->GetPositionX(), bot->GetPositionY(),
-        target->GetPositionX(), target->GetPositionY(), bot->GetCombatReach(target, true, 0.0f), lx, ly);
+        target->GetPositionX(), target->GetPositionY(), GetCombatReachCompat(bot, target, true, 0.0f), lx, ly);
     // Fast path: the bot's cached 15 yd list, read fresh every time.
     if (KeepoutRingAt(ai, lx, ly, nullptr, isTank))
         return CreatureAuraGapCloserVetoed(false, true, false, ordered);

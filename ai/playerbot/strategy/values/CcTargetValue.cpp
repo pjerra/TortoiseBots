@@ -182,7 +182,7 @@ public:
         Group::MemberSlotList const& groupSlot = group->GetMemberSlots();
         for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
         {
-            Player *member = sObjectMgr.GetPlayer(itr->guid);
+            Player *member = GetPlayerCompat(itr->guid);
             if(!member || !sServerFacade.IsAlive(member) || member == bot || bot->GetMapId() != member->GetMapId())
                 continue;
 
