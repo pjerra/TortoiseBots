@@ -1,0 +1,28 @@
+# invite: real Turtle server requests and complete observed reply texts
+# Capture date: 2026-11-18 CST. No replies are synthesized.
+# Request order matters: a repeated mutation can legitimately return a different result.
+
+## invite-addon
+Requester: Labbytres
+Observed at: 2026-11-18T02:20:12.569801873-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+invite Yonder
+REPLIES BEGIN
+The group invitation for Yonder was rejected by the native group handler.
+REPLIES END
+
+## invite-chat
+Requester: Labbytres
+Observed at: 2026-11-18T02:20:15.733083734-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot invite Yonder
+REPLIES BEGIN
+The group invitation for Yonder was rejected by the native group handler.
+REPLIES END
+

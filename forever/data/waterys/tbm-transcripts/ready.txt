@@ -1,0 +1,30 @@
+# ready: real Turtle server requests and complete observed reply texts
+# Capture date: 2026-11-18 CST. No replies are synthesized.
+# Request order matters: a repeated mutation can legitimately return a different result.
+
+## ready-addon
+Requester: Labbytres
+Observed at: 2026-11-18T02:21:27.288110326-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon, chat
+Observed addon channel labels (client decoder): guild
+REQUEST
+ready Yonder
+REPLIES BEGIN
+[Hp]x11, [Food]x20, [Mp]x18, [Water]x20
+Bot Yonder will run a readiness check.
+REPLIES END
+
+## ready-chat
+Requester: Labbytres
+Observed at: 2026-11-18T02:21:30.524031309-06:00
+Transport: chat (.bot)
+Observed reply event kinds: chat, system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot ready Yonder
+REPLIES BEGIN
+[Hp]x11, [Food]x20, [Mp]x18, [Water]x20
+Bot Yonder will run a readiness check.
+REPLIES END
+

@@ -1,0 +1,28 @@
+# sell: real Turtle server requests and complete observed reply texts
+# Capture date: 2026-11-18 CST. No replies are synthesized.
+# Request order matters: a repeated mutation can legitimately return a different result.
+
+## sell-addon
+Requester: Labbytres
+Observed at: 2026-11-18T02:21:08.023066392-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+sell
+REPLIES BEGIN
+No bot sold anything: nothing grey to sell.
+REPLIES END
+
+## sell-chat
+Requester: Labbytres
+Observed at: 2026-11-18T02:21:11.251216922-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot sell
+REPLIES BEGIN
+No bot sold anything: nothing grey to sell.
+REPLIES END
+

@@ -1,0 +1,28 @@
+# learn: real Turtle server requests and complete observed reply texts
+# Capture date: 2026-11-18 CST. No replies are synthesized.
+# Request order matters: a repeated mutation can legitimately return a different result.
+
+## learn-addon
+Requester: Labbytres
+Observed at: 2026-11-18T02:21:14.4851053-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+learn
+REPLIES BEGIN
+Commanded 0 companion bot(s) to learn spells from nearby trainers.
+REPLIES END
+
+## learn-chat
+Requester: Labbytres
+Observed at: 2026-11-18T02:21:17.651061279-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot learn
+REPLIES BEGIN
+Commanded 0 companion bot(s) to learn spells from nearby trainers.
+REPLIES END
+

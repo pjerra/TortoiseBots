@@ -1,0 +1,28 @@
+# choice: real Turtle server requests and complete observed reply texts
+# Capture date: 2026-11-18 CST. No replies are synthesized.
+# Request order matters: a repeated mutation can legitimately return a different result.
+
+## choice-addon
+Requester: Labby
+Observed at: 2026-11-18T02:18:49.449557574-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+choice Aelaria status
+REPLIES BEGIN
+Unknown bot command 'choice'. Try .bot help
+REPLIES END
+
+## choice-chat
+Requester: Labby
+Observed at: 2026-11-18T02:18:52.651743563-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot choice Aelaria status
+REPLIES BEGIN
+Unknown bot command 'choice'. Try .bot help
+REPLIES END
+

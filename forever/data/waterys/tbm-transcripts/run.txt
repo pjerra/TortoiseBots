@@ -1,0 +1,54 @@
+# run: real Turtle server requests and complete observed reply texts
+# Capture date: 2026-11-18 CST. No replies are synthesized.
+# Request order matters: a repeated mutation can legitimately return a different result.
+
+## run-addon
+Requester: Labby
+Observed at: 2026-11-18T02:19:40.90632944-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+run status
+REPLIES BEGIN
+TBM:ACTION_ERR|run status|not-bound|A run leads a bound party: use .bot commander bind <LeadBot> first, or start a player-led run in your own party (.bot run start [plan] player).
+REPLIES END
+
+## run-chat
+Requester: Labby
+Observed at: 2026-11-18T02:19:44.142363649-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot run status
+REPLIES BEGIN
+TBM:ACTION_ERRun status|not-bound|A run leads a bound party: use .bot commander bind <LeadBot> first, or start a player-led run in your own party (.bot run start [plan] player).
+REPLIES END
+
+## run-list-addon
+Requester: Labby
+Observed at: 2026-11-18T02:19:47.398413058-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+run list
+REPLIES BEGIN
+Dungeon plans: black_morass (map 269, 499 steps), blackfathom_deeps (map 48, 443 steps), blackrock_depths (map 230, 852 steps), blackwing_lair (map 469, 102 steps), crescent_grove (map 802, 497 steps), deadmines (map 36, 245 steps), dire_maul_east (map 429, 248 steps), dire_maul_north (map 429, 149 steps), dire_maul_west (map 429, 467 steps), dragonmaw_retreat (map 816, 748 steps), emerald_sanctum (map 807, 35 steps), frostmane_hollow (map 822, 312 steps), gilneas_city (map 815, 224 steps), gnomeregan (map 90, 501 steps), hateforge_quarry (map 808, 352 steps), karazhan_crypt (map 800, 270 steps), lower_blackrock_spire (map 229, 393 steps), lower_karazhan_halls (map 532, 234 steps), maraudon_orange (map 349, 649 steps), maraudon_purple (map 349, 1273 steps), molten_core (map 409, 518 steps), naxxramas (map 533, 615 steps), ragefire_chasm (map 389, 83 steps), razorfen_downs (map 129, 437 steps), razorfen_kraul (map 47, 682 steps), ruins_of_ahnqiraj (map 509, 365 steps), scarlet_armory (map 189, 88 steps), scarlet_cathedral (map 189, 77 steps), scarlet_graveyard (map 189, 153 steps), scarlet_library (map 189, 73 steps), scholomance (map 289, 478 steps), shadowfang_keep (map 33, 369 steps), stormwind_stockade (map 34, 77 steps), stormwind_vault (map 35, 97 steps), stormwrought_ruins (map 818, 623 steps), stratholme_live (map 329, 152 steps), stratholme_undead (map 329, 202 steps), sunken_temple (map 109, 2349 steps), temple_of_ahnqiraj (map 531, 654 steps), timbermaw_hold (map 819, 520 steps), uldaman (map 70, 139 steps), upper_karazhan_halls (map 814, 178 steps), wailing_caverns (map 43, 263 steps), windhorn_canyon (map 820, 1611 steps), zul_gurub (map 309, 694 steps), zulfarrak (map 209, 347 steps)
+TBM:ACTION_ACK|run list|plans|46|-
+REPLIES END
+
+## run-list-chat
+Requester: Labby
+Observed at: 2026-11-18T02:19:50.537543144-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot run list
+REPLIES BEGIN
+Dungeon plans: black_morass (map 269, 499 steps), blackfathom_deeps (map 48, 443 steps), blackrock_depths (map 230, 852 steps), blackwing_lair (map 469, 102 steps), crescent_grove (map 802, 497 steps), deadmines (map 36, 245 steps), dire_maul_east (map 429, 248 steps), dire_maul_north (map 429, 149 steps), dire_maul_west (map 429, 467 steps), dragonmaw_retreat (map 816, 748 steps), emerald_sanctum (map 807, 35 steps), frostmane_hollow (map 822, 312 steps), gilneas_city (map 815, 224 steps), gnomeregan (map 90, 501 steps), hateforge_quarry (map 808, 352 steps), karazhan_crypt (map 800, 270 steps), lower_blackrock_spire (map 229, 393 steps), lower_karazhan_halls (map 532, 234 steps), maraudon_orange (map 349, 649 steps), maraudon_purple (map 349, 1273 steps), molten_core (map 409, 518 steps), naxxramas (map 533, 615 steps), ragefire_chasm (map 389, 83 steps), razorfen_downs (map 129, 437 steps), razorfen_kraul (map 47, 682 steps), ruins_of_ahnqiraj (map 509, 365 steps), scarlet_armory (map 189, 88 steps), scarlet_cathedral (map 189, 77 steps), scarlet_graveyard (map 189, 153 steps), scarlet_library (map 189, 73 steps), scholomance (map 289, 478 steps), shadowfang_keep (map 33, 369 steps), stormwind_stockade (map 34, 77 steps), stormwind_vault (map 35, 97 steps), stormwrought_ruins (map 818, 623 steps), stratholme_live (map 329, 152 steps), stratholme_undead (map 329, 202 steps), sunken_temple (map 109, 2349 steps), temple_of_ahnqiraj (map 531, 654 steps), timbermaw_hold (map 819, 520 steps), uldaman (map 70, 139 steps), upper_karazhan_halls (map 814, 178 steps), wailing_caverns (map 43, 263 steps), windhorn_canyon (map 820, 1611 steps), zul_gurub (map 309, 694 steps), zulfarrak (map 209, 347 steps)
+TBM:ACTION_ACKun list|plans|46|-
+REPLIES END
+

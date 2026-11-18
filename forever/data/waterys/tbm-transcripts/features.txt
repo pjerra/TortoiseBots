@@ -1,0 +1,90 @@
+# features: real Turtle server requests and complete observed reply texts
+# Capture date: 2026-11-18 CST. No replies are synthesized.
+# Request order matters: a repeated mutation can legitimately return a different result.
+
+## features-addon
+Requester: Labby
+Observed at: 2026-11-18T02:17:52.348633478-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+features
+REPLIES BEGIN
+Server features: dungeon-run on, player-led on, remote-commander on, dungeon-tactics off, bot-lfg on, hiring on, hire-max 39, hire-pvp off, hire-anywhere on, hire-tier 0, world-buffs on, autogear-all off, alt-bots off, ah-market off, random-bots 0, run-trace off
+TBM:FEATURE|dungeon-run|on|Dungeon runs
+TBM:FEATURE|player-led|on|Player-led runs (I lead)
+TBM:FEATURE|remote-commander|on|Remote commander
+TBM:FEATURE|dungeon-tactics|off|Boss tactics for every bot
+TBM:FEATURE|bot-lfg|on|Bot LFG groups
+TBM:FEATURE|hiring|on|Hiring
+TBM:FEATURE|hire-max|39|Hires per player
+TBM:FEATURE|hire-pvp|off|Hires in battlegrounds
+TBM:FEATURE|hire-anywhere|on|Hire away from recruiters
+TBM:FEATURE|hire-tier|0|Hire gear start tier
+TBM:FEATURE|world-buffs|on|World buffs from recruiters
+TBM:FEATURE|autogear-all|off|Autogear for every player
+TBM:FEATURE|alt-bots|off|Alt bots
+TBM:FEATURE|ah-market|off|Auction house market
+TBM:FEATURE|random-bots|0|World bots (max)
+TBM:FEATURE|run-trace|off|Run trace
+REPLIES END
+
+## features-chat
+Requester: Labby
+Observed at: 2026-11-18T02:17:55.584037964-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot features
+REPLIES BEGIN
+Server features: dungeon-run on, player-led on, remote-commander on, dungeon-tactics off, bot-lfg on, hiring on, hire-max 39, hire-pvp off, hire-anywhere on, hire-tier 0, world-buffs on, autogear-all off, alt-bots off, ah-market off, random-bots 0, run-trace off
+TBM:FEATURE|dungeon-run|on|Dungeon runs
+TBM:FEATURE|player-led|on|Player-led runs (I lead)
+TBM:FEATUREemote-commander|on|Remote commander
+TBM:FEATURE|dungeon-tactics|off|Boss tactics for every bot
+TBM:FEATURE|bot-lfg|on|Bot LFG groups
+TBM:FEATURE|hiring|on|Hiring
+TBM:FEATURE|hire-max|39|Hires per player
+TBM:FEATURE|hire-pvp|off|Hires in battlegrounds
+TBM:FEATURE|hire-anywhere|on|Hire away from recruiters
+TBM:FEATURE|hire-tier|0|Hire gear start tier
+TBM:FEATURE|world-buffs|on|World buffs from recruiters
+TBM:FEATURE|autogear-all|off|Autogear for every player
+TBM:FEATURE|alt-bots|off|Alt bots
+TBM:FEATURE|ah-market|off|Auction house market
+TBM:FEATUREandom-bots|0|World bots (max)
+TBM:FEATUREun-trace|off|Run trace
+REPLIES END
+
+## features-all-addon
+Requester: Labby
+Observed at: 2026-11-18T02:17:58.812068137-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+features all AiPlayerbot.RaidBossDiagnostics
+REPLIES BEGIN
+Config: 1 keys match 'AiPlayerbot.RaidBossDiagnostics'.
+TBM:CONFIG_BEGIN|1
+TBM:CONFIG|RaidBossDiagnostics|1
+TBM:CONFIG_END|1|1
+REPLIES END
+
+## features-all-chat
+Requester: Labby
+Observed at: 2026-11-18T02:18:02.012684234-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot features all AiPlayerbot.RaidBossDiagnostics
+REPLIES BEGIN
+Config: 1 keys match 'AiPlayerbot.RaidBossDiagnostics'.
+TBM:CONFIG_BEGIN|1
+TBM:CONFIG|RaidBossDiagnostics|1
+TBM:CONFIG_END|1|1
+REPLIES END
+

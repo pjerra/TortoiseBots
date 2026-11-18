@@ -1,0 +1,260 @@
+# roster: real Turtle server requests and complete observed reply texts
+# Capture date: 2026-11-18 CST. No replies are synthesized.
+# Request order matters: a repeated mutation can legitimately return a different result.
+
+## roster-chat
+Requester: Labby
+Observed at: 2026-11-18T02:16:27.069725572-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot roster
+REPLIES BEGIN
+TBM:ROSTER_BEGIN|0
+TBM:ROSTER_END
+TBM:ALTBOTS|
+TBM:CC_ASSIGN_BEGIN|39
+TBM:CC_ASSIGN|Quasar|moon
+TBM:CC_ASSIGN|Ilda|moon
+TBM:CC_ASSIGN|Kathragna|moon
+TBM:CC_ASSIGN|Shalyn|moon
+TBM:CC_ASSIGN|Brunn|moon
+TBM:CC_ASSIGN|Toobias|moon
+TBM:CC_ASSIGN|Warble|moon
+TBM:CC_ASSIGN|Bubbletastic|moon
+TBM:CC_ASSIGN|Oranor|moon
+TBM:CC_ASSIGN|Leste|moon
+TBM:CC_ASSIGN|Lyssanthe|moon
+TBM:CC_ASSIGN|Nightwalker|moon
+TBM:CC_ASSIGN|Quel|moon
+TBM:CC_ASSIGN|Vaeliaa|moon
+TBM:CC_ASSIGN|Arendrin|moon
+TBM:CC_ASSIGN|Irelah|moon
+TBM:CC_ASSIGN|Caerethor|moon
+TBM:CC_ASSIGN|Ithil|moon
+TBM:CC_ASSIGN|Boomkinz|moon
+TBM:CC_ASSIGN|Binkle|moon
+TBM:CC_ASSIGN|Matth|moon
+TBM:CC_ASSIGN|Mathon|moon
+TBM:CC_ASSIGN|Gnomey|moon
+TBM:CC_ASSIGN|Smashface|moon
+TBM:CC_ASSIGN|Kaelius|moon
+TBM:CC_ASSIGN|Alen|moon
+TBM:CC_ASSIGN|Marda|moon
+TBM:CC_ASSIGN|Ivory|moon
+TBM:CC_ASSIGN|Tobian|moon
+TBM:CC_ASSIGN|Halira|moon
+TBM:CC_ASSIGN|Hald|moon
+TBM:CC_ASSIGN|Wildheart|moon
+TBM:CC_ASSIGN|Aelaria|moon
+TBM:CC_ASSIGN|Yrsannaa|moon
+TBM:CC_ASSIGN|Sheepinator|moon
+TBM:CC_ASSIGN|Twitter|moon
+TBM:CC_ASSIGN|Hawkfury|moon
+TBM:CC_ASSIGN|Dinkle|moon
+TBM:CC_ASSIGN|Kordrim|moon
+TBM:CC_ASSIGN_END
+TBM:CLAIMED_BEGIN|0
+TBM:CLAIMED_END
+TBM:BOTSTATE_BEGIN|39
+TBM:BOTSTATE|Quasar|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=off,potions=on,mimic=on,spread=off,sap=on,specs=protection
+TBM:BOTSTATE|Ilda|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=off,potions=on,mimic=on,spread=off,sap=on,specs=protection
+TBM:BOTSTATE|Kathragna|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=off,potions=on,mimic=on,spread=off,sap=on,specs=protection
+TBM:BOTSTATE|Shalyn|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=off,potions=on,mimic=on,spread=off,sap=on,specs=protection
+TBM:BOTSTATE|Brunn|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=holy+offdps
+TBM:BOTSTATE|Toobias|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=holy+offdps
+TBM:BOTSTATE|Warble|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=holy+offdps
+TBM:BOTSTATE|Bubbletastic|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=holy+offdps
+TBM:BOTSTATE|Oranor|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=holy+offdps
+TBM:BOTSTATE|Leste|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=holy+offdps
+TBM:BOTSTATE|Lyssanthe|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=holy+offdps
+TBM:BOTSTATE|Nightwalker|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=holy+offdps
+TBM:BOTSTATE|Quel|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=holy+offdps
+TBM:BOTSTATE|Vaeliaa|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=holy+offdps
+TBM:BOTSTATE|Arendrin|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=restoration+offdps
+TBM:BOTSTATE|Irelah|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=restoration+offdps
+TBM:BOTSTATE|Caerethor|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=restoration+offdps
+TBM:BOTSTATE|Ithil|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=restoration+offdps
+TBM:BOTSTATE|Boomkinz|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=restoration+offdps
+TBM:BOTSTATE|Binkle|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Matth|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Mathon|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Gnomey|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Smashface|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Kaelius|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Alen|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Marda|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Ivory|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Tobian|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Halira|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Hald|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Wildheart|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=arcane
+TBM:BOTSTATE|Aelaria|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=arcane
+TBM:BOTSTATE|Yrsannaa|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=arcane
+TBM:BOTSTATE|Sheepinator|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=arcane
+TBM:BOTSTATE|Twitter|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=arcane
+TBM:BOTSTATE|Hawkfury|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=arcane
+TBM:BOTSTATE|Dinkle|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=arcane
+TBM:BOTSTATE|Kordrim|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=arcane
+TBM:BOTSTATE_END
+TBM:VERSION|1.22.1
+TBM:PROTO|1|1
+TBM:CAPS|pull-seconds,flee,inventory,behavior,claimed-roster,loot-log,downtime,professions,guild-orders,guild-order-steps,guild-order-nobuy,dungeon-run
+TBM:TRANSPORT|party
+REPLIES END
+
+## roster-addon
+Requester: Labby
+Observed at: 2026-11-18T02:16:42.405482701-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+roster
+REPLIES BEGIN
+TBM:ROSTER_BEGIN|0
+TBM:ROSTER_END
+TBM:ALTBOTS|
+TBM:CC_ASSIGN_BEGIN|39
+TBM:CC_ASSIGN|Quasar|moon
+TBM:CC_ASSIGN|Ilda|moon
+TBM:CC_ASSIGN|Kathragna|moon
+TBM:CC_ASSIGN|Shalyn|moon
+TBM:CC_ASSIGN|Brunn|moon
+TBM:CC_ASSIGN|Toobias|moon
+TBM:CC_ASSIGN|Warble|moon
+TBM:CC_ASSIGN|Bubbletastic|moon
+TBM:CC_ASSIGN|Oranor|moon
+TBM:CC_ASSIGN|Leste|moon
+TBM:CC_ASSIGN|Lyssanthe|moon
+TBM:CC_ASSIGN|Nightwalker|moon
+TBM:CC_ASSIGN|Quel|moon
+TBM:CC_ASSIGN|Vaeliaa|moon
+TBM:CC_ASSIGN|Arendrin|moon
+TBM:CC_ASSIGN|Irelah|moon
+TBM:CC_ASSIGN|Caerethor|moon
+TBM:CC_ASSIGN|Ithil|moon
+TBM:CC_ASSIGN|Boomkinz|moon
+TBM:CC_ASSIGN|Binkle|moon
+TBM:CC_ASSIGN|Matth|moon
+TBM:CC_ASSIGN|Mathon|moon
+TBM:CC_ASSIGN|Gnomey|moon
+TBM:CC_ASSIGN|Smashface|moon
+TBM:CC_ASSIGN|Kaelius|moon
+TBM:CC_ASSIGN|Alen|moon
+TBM:CC_ASSIGN|Marda|moon
+TBM:CC_ASSIGN|Ivory|moon
+TBM:CC_ASSIGN|Tobian|moon
+TBM:CC_ASSIGN|Halira|moon
+TBM:CC_ASSIGN|Hald|moon
+TBM:CC_ASSIGN|Wildheart|moon
+TBM:CC_ASSIGN|Aelaria|moon
+TBM:CC_ASSIGN|Yrsannaa|moon
+TBM:CC_ASSIGN|Sheepinator|moon
+TBM:CC_ASSIGN|Twitter|moon
+TBM:CC_ASSIGN|Hawkfury|moon
+TBM:CC_ASSIGN|Dinkle|moon
+TBM:CC_ASSIGN|Kordrim|moon
+TBM:CC_ASSIGN_END
+TBM:CLAIMED_BEGIN|0
+TBM:CLAIMED_END
+TBM:BOTSTATE_BEGIN|39
+TBM:BOTSTATE|Quasar|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=off,potions=on,mimic=on,spread=off,sap=on,specs=protection
+TBM:BOTSTATE|Ilda|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=off,potions=on,mimic=on,spread=off,sap=on,specs=protection
+TBM:BOTSTATE|Kathragna|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=off,potions=on,mimic=on,spread=off,sap=on,specs=protection
+TBM:BOTSTATE|Shalyn|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=off,potions=on,mimic=on,spread=off,sap=on,specs=protection
+TBM:BOTSTATE|Brunn|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=holy+offdps
+TBM:BOTSTATE|Toobias|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=holy+offdps
+TBM:BOTSTATE|Warble|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=holy+offdps
+TBM:BOTSTATE|Bubbletastic|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=holy+offdps
+TBM:BOTSTATE|Oranor|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=holy+offdps
+TBM:BOTSTATE|Leste|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=holy+offdps
+TBM:BOTSTATE|Lyssanthe|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=holy+offdps
+TBM:BOTSTATE|Nightwalker|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=holy+offdps
+TBM:BOTSTATE|Quel|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=holy+offdps
+TBM:BOTSTATE|Vaeliaa|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=holy+offdps
+TBM:BOTSTATE|Arendrin|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=restoration+offdps
+TBM:BOTSTATE|Irelah|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=restoration+offdps
+TBM:BOTSTATE|Caerethor|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=restoration+offdps
+TBM:BOTSTATE|Ithil|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=restoration+offdps
+TBM:BOTSTATE|Boomkinz|move=custom,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=restoration+offdps
+TBM:BOTSTATE|Binkle|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Matth|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Mathon|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Gnomey|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Smashface|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Kaelius|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Alen|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Marda|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Ivory|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Tobian|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Halira|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Hald|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=fury
+TBM:BOTSTATE|Wildheart|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=arcane
+TBM:BOTSTATE|Aelaria|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=arcane
+TBM:BOTSTATE|Yrsannaa|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=arcane
+TBM:BOTSTATE|Sheepinator|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=arcane
+TBM:BOTSTATE|Twitter|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=arcane
+TBM:BOTSTATE|Hawkfury|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=arcane
+TBM:BOTSTATE|Dinkle|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=arcane
+TBM:BOTSTATE|Kordrim|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=on,spread=off,sap=on,specs=arcane
+TBM:BOTSTATE_END
+TBM:VERSION|1.22.1
+TBM:PROTO|1|1
+TBM:CAPS|pull-seconds,flee,inventory,behavior,claimed-roster,loot-log,downtime,professions,guild-orders,guild-order-steps,guild-order-nobuy,dungeon-run
+TBM:TRANSPORT|party
+REPLIES END
+
+## throwaway-roster-addon
+Requester: Labbytres
+Observed at: 2026-11-18T02:19:53.308876908-06:00
+Transport: addon; prefix=TBM; requested channel=PARTY
+Observed reply event kinds: addon
+Observed addon channel labels (client decoder): guild
+REQUEST
+roster
+REPLIES BEGIN
+TBM:ROSTER_BEGIN|0
+TBM:ROSTER_END
+TBM:ALTBOTS|
+TBM:CC_ASSIGN_BEGIN|1
+TBM:CC_ASSIGN|Yonder|moon
+TBM:CC_ASSIGN_END
+TBM:CLAIMED_BEGIN|0
+TBM:CLAIMED_END
+TBM:BOTSTATE_BEGIN|1
+TBM:BOTSTATE|Yonder|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=off,spread=off,sap=on,specs=arcane
+TBM:BOTSTATE_END
+TBM:VERSION|1.22.1
+TBM:PROTO|1|1
+TBM:CAPS|pull-seconds,flee,inventory,behavior,claimed-roster,loot-log,downtime,professions,guild-orders,guild-order-steps,guild-order-nobuy,dungeon-run
+TBM:TRANSPORT|party
+REPLIES END
+
+## throwaway-roster-chat
+Requester: Labbytres
+Observed at: 2026-11-18T02:19:56.505988967-06:00
+Transport: chat (.bot)
+Observed reply event kinds: system
+Observed addon channel labels (client decoder): -
+REQUEST
+.bot roster
+REPLIES BEGIN
+TBM:ROSTER_BEGIN|0
+TBM:ROSTER_END
+TBM:ALTBOTS|
+TBM:CC_ASSIGN_BEGIN|1
+TBM:CC_ASSIGN|Yonder|moon
+TBM:CC_ASSIGN_END
+TBM:CLAIMED_BEGIN|0
+TBM:CLAIMED_END
+TBM:BOTSTATE_BEGIN|1
+TBM:BOTSTATE|Yonder|move=follow,loot=on,aoe=on,autocc=off,savemana=off,boost=on,threat=on,potions=on,mimic=off,spread=off,sap=on,specs=arcane
+TBM:BOTSTATE_END
+TBM:VERSION|1.22.1
+TBM:PROTO|1|1
+TBM:CAPS|pull-seconds,flee,inventory,behavior,claimed-roster,loot-log,downtime,professions,guild-orders,guild-order-steps,guild-order-nobuy,dungeon-run
+TBM:TRANSPORT|party
+REPLIES END
+
