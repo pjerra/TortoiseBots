@@ -27,9 +27,18 @@ inline bool IsInLineOfSightCompat(Map const* map, float x1, float y1, float z1, 
 
 // Height of the ground at a point. T Map.h:568 `GetHeight(x, y, z, vmap, maxSearchDist)`, F Map.h:330 the same plus the phase
 // shift (the game-object floors depend on it); the default search distance is 10 yards in both (T GridMap.h:38).
+// Different answer, found live (R8): T's TerrainInfo::GetHeightStatic (GridMap.cpp:776) looks for the floor from z + 2, and when the vmap search
+// finds none within maxSearchDist it searches again with an infinite range; F's TerrainInfo::GetStaticHeight (TerrainMgr.cpp:924) searches from z
+// itself and takes the raw terrain only when z is above it. A bot standing on a floor under the terrain surface (a mine mouth, a building) read
+// "no height" (-200000) on F, so ChaseTo built an invalid end point and the warrior stood 6 to 20 yd from its target without a step. The helper
+// now asks the way T does: from z + 2, then once more with the infinite range.
 inline float GetHeightCompat(Map* map, float x, float y, float z, bool vmap = true, float maxSearchDist = DEFAULT_HEIGHT_SEARCH)
 {
-    return map->GetHeight(PhasingHandler::GetEmptyPhaseShift(), x, y, z, vmap, maxSearchDist);
+    PhaseShift const& phaseShift = PhasingHandler::GetEmptyPhaseShift();
+    float height = map->GetHeight(phaseShift, x, y, z + 2.0f, vmap, maxSearchDist);
+    if (vmap && height <= INVALID_HEIGHT)
+        height = map->GetHeight(phaseShift, x, y, z + 2.0f, vmap, 10000.0f);
+    return height;
 }
 
 // The bearing from one object to another, 0..2*pi. T Object.cpp:1650-1668 (a null target gives 0), F Position.h:

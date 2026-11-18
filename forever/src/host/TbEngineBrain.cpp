@@ -28,6 +28,7 @@
 #include "playerbot/BotState.h"
 #include "playerbot/PlayerbotAI.h"
 #include "playerbot/PlayerbotAIConfig.h"
+#include "playerbot/WorldPosition.h"
 #include "playerbot/strategy/AiObjectContext.h"
 #include "playerbot/strategy/Value.h"
 #include "PlayerbotAIStorage.h"
@@ -260,6 +261,15 @@ std::vector<std::string> Describe(Brain const* brain)
             ", victim: " + (self->GetVictim() ? self->GetVictim()->GetName() : "none"));
         // What gates a chase (MovementAction::ChaseTo: CanMove, IsSafe; PlayerbotAI::CanMove's jump/fall/control reads), for a bot that
         // stands off its target.
+        {
+            WorldPosition const here(self);
+            WorldPosition there(target->GetMapId(), self->GetPositionX() + 1.0f, self->GetPositionY(), self->GetPositionZ());
+            float const hereHeight = here.GetHeight();
+            float const thereHeight = there.GetHeight();
+            lines.push_back("ground: height at the bot " + std::to_string(hereHeight) + " (bot z " + std::to_string(self->GetPositionZ()) +
+                "), 1 yd east " + std::to_string(thereHeight) + ", map " + (here.GetMap(here.GetFirstInstanceId()) ? "found" : "NOT found") +
+                ", first instance id " + std::to_string(here.GetFirstInstanceId()) + ", valid " + (here.isValid() ? "yes" : "no"));
+        }
         lines.push_back(std::string("chase gates: can move ") + (pai->CanMove() ? "yes" : "no") + ", safe(target) " +
             (pai->IsSafe(target) ? "yes" : "no") + ", jumping " + (pai->IsJumping() ? "yes" : "no") + ", falling " +
             (self->IsFalling() ? "yes" : "no") + ", lost control " + (self->HasUnitState(UNIT_STAT_CAN_NOT_REACT_OR_LOST_CONTROL) ? "yes" : "no") +
