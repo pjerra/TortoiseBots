@@ -779,6 +779,6 @@ inline void ReleaseForeignSummonObjectsCompat(Player* bot, SpellEntry const* pSp
     }
 }
 inline bool SpellIconIdIsCompat(SpellEntry const* spell, uint32 icon) { return spell->SpellIconID == icon; }
-inline int32 ItemSpellChargesCompat(Item* item, uint8 index) { return item->GetSpellCharges(index); }
+inline int32 ItemSpellChargesCompat(Item const* item, uint8 index) { return item->GetSpellCharges(index); }
 
 // @@END@@
