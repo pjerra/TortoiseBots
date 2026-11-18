@@ -38,6 +38,12 @@ void BotMgr::LoadConfig()
 {
     _enabled = sConfigMgr->GetBoolDefault("TortoiseBots.Enable", false);
     _followDistance = sConfigMgr->GetFloatDefault("TortoiseBots.Spike.FollowDistance", 3.0f);
+    _engineByDefault = sConfigMgr->GetBoolDefault("TortoiseBots.Slice.EngineByDefault", false);
+    if (_engineByDefault && !engine::Built())
+    {
+        TC_LOG_WARN("tortoisebots", "BotMgr: TortoiseBots.Slice.EngineByDefault is 1 but this build has no engine (TORTOISEBOTS_SLICE1 is off); bots use the spike behaviour");
+        _engineByDefault = false;
+    }
 }
 
 std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master)
@@ -62,6 +68,7 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master)
     Bot bot;
     bot.session = std::make_shared<BotSession>(accountId, std::move(accountName));
     bot.master = master;
+    bot.useEngine = _engineByDefault;
     if (!bot.session->BeginLogin(characterGuid))
         return "the login could not be started (see the server log)";
 
@@ -83,6 +90,79 @@ void BotMgr::LogoutAll(char const* reason)
 {
     for (auto& [guid, bot] : _bots)
         bot.session->RequestLogout(reason);
+}
+
+std::string BotMgr::SetEngine(ObjectGuid characterGuid, bool on)
+{
+    auto itr = _bots.find(characterGuid);
+    if (itr == _bots.end())
+        return "not a logged-in bot";
+    Bot& bot = itr->second;
+    if (on)
+    {
+        if (!engine::Built())
+            return "this build has no engine (TORTOISEBOTS_SLICE1 is off)";
+        // Marked again after a failure: try to build the brain once more.
+        bot.useEngine = true;
+        bot.engineFailed = false;
+        bot.engineNote.clear();
+        return {};
+    }
+
+    bot.useEngine = false;
+    bot.engineFailed = false;
+    bot.engineNote.clear();
+    if (bot.brain)
+    {
+        DropBrain(bot);
+        // The engine's movement and attack state is left behind: start clean, the spike's Think takes over.
+        if (Player* me = bot.session->GetPlayer(); me && me->IsInWorld())
+        {
+            me->AttackStop();
+            me->GetMotionMaster()->Clear();
+        }
+        bot.following = false;
+        bot.chasing.Clear();
+    }
+    return {};
+}
+
+std::vector<std::string> BotMgr::DescribeBrain(ObjectGuid characterGuid) const
+{
+    std::vector<std::string> lines;
+    auto itr = _bots.find(characterGuid);
+    if (itr == _bots.end())
+        return lines;
+    Bot const& bot = itr->second;
+    if (bot.brain)
+    {
+        lines.push_back("brain: engine");
+        for (std::string const& line : engine::Describe(bot.brain.get()))
+            lines.push_back(line);
+    }
+    else if (bot.engineFailed)
+        lines.push_back("brain: spike (engine requested, not running: " + bot.engineNote + ")");
+    else if (bot.useEngine)
+        lines.push_back("brain: spike (engine requested, waiting for the bot to be placed next to its master)");
+    else
+        lines.push_back("brain: spike");
+    return lines;
+}
+
+void BotMgr::DropBrain(Bot& bot)
+{
+    // The engine's registry entry and the AI go before the Player does (see PlayerbotAIAdapter::Shutdown).
+    bot.brain.reset();
+}
+
+void BotMgr::OnPlayerLogout(Player* player)
+{
+    // PlayerScript::OnLogout runs inside WorldSession::LogoutPlayer, before the Player is deleted: the last point at
+    // which the engine can still be taken down in the order the legacy code requires. Covers the logouts the core
+    // starts by itself as well as ours.
+    auto itr = _bots.find(player->GetGUID());
+    if (itr != _bots.end())
+        DropBrain(itr->second);
 }
 
 std::string BotMgr::CreateCharacter(uint32 accountId, std::string const& name, uint8 race, uint8 playerClass, uint8 gender)
@@ -202,6 +282,11 @@ void BotMgr::Update(uint32 diff)
         else
             bot.ownerLoadingMs = 0;
 
+        // A logout is pending (ours: the console, the owner logging in, a missing master): the next Tick logs the Player
+        // out, so the engine goes first.
+        if (bot.session->LogoutRequested())
+            DropBrain(bot);
+
         if (!bot.session->Tick(diff))
         {
             finished.push_back(guid);
@@ -213,15 +298,25 @@ void BotMgr::Update(uint32 diff)
             continue;
 
         bot.thinkMs += diff;
-        if (bot.thinkMs < ThinkIntervalMs)
-            continue;
-        bot.thinkMs = 0;
-        Think(bot, me);
+        if (bot.thinkMs >= ThinkIntervalMs)
+        {
+            bot.thinkMs = 0;
+            Think(bot, me);
+        }
+
+        // The engine brain: every tick, with the tick's diff (PlayerbotAIBase::UpdateAI keeps its own delay). World
+        // thread, from WorldScript::OnBeforeMapsUpdate, i.e. before the maps update; the legacy engine takes no map
+        // lock and expects none (SLICE1-R5-NOTES.md). Think may have dropped the brain or sent the bot on a teleport.
+        if (bot.brain && !me->IsBeingTeleported())
+            engine::Tick(bot.brain.get(), diff);
     }
 
     for (ObjectGuid const& guid : finished)
     {
         TC_LOG_INFO("tortoisebots", "BotMgr: session of {} ended", guid.ToString());
+        // Normally gone already (OnPlayerLogout, or the pending-logout check above); never leave one behind.
+        if (auto itr = _bots.find(guid); itr != _bots.end())
+            DropBrain(itr->second);
         _bots.erase(guid);
     }
 }
@@ -254,6 +349,22 @@ void BotMgr::Think(Bot& bot, Player* me)
         me->TeleportTo(master->GetWorldLocation());
         return;
     }
+
+    // The engine: once the bot is in the world and next to its master (above), build its PlayerbotAI. From then on the
+    // engine does the following and fighting, and Think only keeps the placement and teleport above.
+    if (bot.useEngine && !bot.engineFailed && !bot.brain)
+    {
+        std::string error;
+        bot.brain.reset(engine::Create(me, master, error));
+        if (!bot.brain)
+        {
+            bot.engineFailed = true;
+            bot.engineNote = error;
+            TC_LOG_ERROR("tortoisebots", "BotMgr: engine for {} not started: {} (the spike behaviour stays)", me->GetName(), error);
+        }
+    }
+    if (bot.brain)
+        return;
 
     if (!me->IsAlive())
         return;
