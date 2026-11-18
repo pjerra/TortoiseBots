@@ -32,6 +32,13 @@
 #include "Timer.h"
 #include "DB2Stores.h"
 #include "UpdateTime.h"
+#include "Trainer.h"
+#include "Item.h"
+#include "ItemTemplate.h"
+#include "SpellHistory.h"
+#include "SpellPackets.h"
+#include "TbBotSession.h"
+#include "host/TbEngineBrain.h"
 
 using namespace Trinity::ChatCommands;
 using TortoiseBots::BotMgr;
@@ -183,6 +190,13 @@ public:
             { "spellscan", HandleSpellScan, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "spell",  HandleSpell,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "castfail", HandleCastFail, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "level",  HandleLevel,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "train",  HandleTrain,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "hurt",   HandleHurt,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "power",  HandlePower,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "additem", HandleAddItem, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "use",    HandleUse,    rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "castlog", HandleCastLog, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
         {
@@ -287,6 +301,12 @@ public:
             name.c_str(), uint32(bot->GetLevel()), bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(),
             uint32(bot->GetHealth()), uint32(bot->GetMaxHealth()), bot->IsInCombat() ? "in combat" : "out of combat",
             victim ? victim->GetName().c_str() : "none", victim ? uint32(victim->GetHealth()) : 0u);
+        {
+            uint64 const money = bot->GetMoney();
+            handler->PSendSysMessage("TortoiseBots: money: %llu copper (%llug %llus %lluc), mana %d/%d.", (unsigned long long)money,
+                (unsigned long long)(money / 10000), (unsigned long long)((money / 100) % 100), (unsigned long long)(money % 100),
+                bot->GetPower(POWER_MANA), bot->GetMaxPower(POWER_MANA));
+        }
         for (std::string const& line : BotMgr::Instance().DescribeBrain(bot->GetGUID()))
             handler->PSendSysMessage("TortoiseBots: %s", line.c_str());
 
@@ -340,6 +360,206 @@ public:
             return Fail(handler, name + ": no result sent: " + error + ".");
         handler->PSendSysMessage("TortoiseBots: %s: sent %s spell %u reason %u; the engine hears it on its next tick (`.tb where` shows the counts).",
             name.c_str(), interrupted ? "SMSG_SPELL_FAILURE" : "SMSG_CAST_FAILED", spellId, reason);
+        return true;
+    }
+
+
+    // ---- Slice 2 test commands (FOREVER-SLICE2-SPEC section 7, R3). They exist for the live test of the engine's priest, so each refuses
+    // in a build without the engine (the option TORTOISEBOTS_SLICE1 is off). `<name>` is a character that is logged in through `.tb login`.
+    static bool RequireEngine(ChatHandler* handler)
+    {
+        if (TortoiseBots::engine::Built())
+            return true;
+        return Fail(handler, "the engine is not built in (this build has no test commands for it).");
+    }
+
+    // The connected player of a character name, a bot or not (a master that logged in with `.tb login` is a bot session too).
+    static Player* PlayerByName(std::string const& name)
+    {
+        ObjectGuid const guid = GuidByName(name);
+        return guid.IsEmpty() ? nullptr : ObjectAccessor::FindPlayer(guid);
+    }
+
+    // .tb level <bot> <n>: the core's own level-up path, the one `.character level` takes (cs_character.cpp:914-917): GiveLevel (stats, health and
+    // mana, and what the core grants on a level), then InitTalentForLevel (the talent points of the level) and the experience bar to 0.
+    static bool HandleLevel(ChatHandler* handler, std::string name, uint8 level)
+    {
+        if (!RequireEngine(handler))
+            return false;
+        Player* bot = BotMgr::Instance().FindBot(GuidByName(name));
+        if (!bot)
+            return Fail(handler, name + " is not a logged-in bot.");
+        if (level < 1 || level > 60)
+            return Fail(handler, "the level must be 1 to 60.");
+        bot->GiveLevel(level);
+        bot->InitTalentForLevel();
+        bot->SetXP(0);
+        handler->PSendSysMessage("TortoiseBots: %s is level %u: health %u/%u, mana %d/%d.", name.c_str(), uint32(bot->GetLevel()),
+            uint32(bot->GetHealth()), uint32(bot->GetMaxHealth()), bot->GetPower(POWER_MANA), bot->GetMaxPower(POWER_MANA));
+        return true;
+    }
+
+    // .tb train <bot>: teaches the bot, free and without an NPC, every spell its class's trainers offer at its level. The data is the core's
+    // own trainer table (ObjectMgr::GetTrainers, ObjectMgr.h:1628, loaded from its trainer and trainer_spell tables) and the core's own
+    // per-trainer rule Trainer::TeachAvailableSpellsFree (Trainer.h:94: class, race, level and prerequisite checks as at the trainer). A
+    // trainer is used when its type is a class trainer (Trainer::Type::Talent) and its class mask (Trainer::GetClassMask, the classes of its
+    // spells' skill lines) holds the bot's class. Passes repeat while one teaches something (a spell can be the prerequisite of the next).
+    // No spell id is written in this module.
+    static bool HandleTrain(ChatHandler* handler, std::string name)
+    {
+        if (!RequireEngine(handler))
+            return false;
+        Player* bot = BotMgr::Instance().FindBot(GuidByName(name));
+        if (!bot)
+            return Fail(handler, name + " is not a logged-in bot.");
+        uint32 const classMask = 1u << (bot->GetClass() - 1);
+        uint32 taught = 0, trainers = 0, passes = 0;
+        Trainer::Trainer::FreeTeachTally tally;
+        for (; passes < 8; ++passes)
+        {
+            uint32 passTaught = 0;
+            trainers = 0;
+            for (auto const& [id, trainer] : sObjectMgr->GetTrainers())
+            {
+                if (trainer.GetType() != Trainer::Type::Talent || !(trainer.GetClassMask() & classMask))
+                    continue;
+                ++trainers;
+                passTaught += trainer.TeachAvailableSpellsFree(bot, &tally);
+            }
+            taught += passTaught;
+            if (!passTaught)
+                break;
+        }
+        handler->PSendSysMessage("TortoiseBots: %s learned %u spell(s) from %u class trainer(s) in %u pass(es); not taught: %u known, %u other class/race, %u level, %u ability, %u skill line, %u other.",
+            name.c_str(), taught, trainers, passes + 1, tally.known, tally.class_race, tally.level, tally.ability, tally.skill_line, tally.other);
+        return true;
+    }
+
+    // .tb hurt <name> <percent>: sets the character's health to that percent of its maximum (1 at least). Any logged-in character.
+    static bool HandleHurt(ChatHandler* handler, std::string name, uint32 percent)
+    {
+        if (!RequireEngine(handler))
+            return false;
+        Player* player = PlayerByName(name);
+        if (!player)
+            return Fail(handler, name + " is not logged in.");
+        if (percent > 100)
+            return Fail(handler, "the percent must be 0 to 100.");
+        if (!player->IsAlive())
+            return Fail(handler, name + " is dead.");
+        player->SetHealth(std::max<uint32>(1u, uint32(uint64(player->GetMaxHealth()) * percent / 100)));
+        handler->PSendSysMessage("TortoiseBots: %s health is %u/%u.", name.c_str(), uint32(player->GetHealth()), uint32(player->GetMaxHealth()));
+        return true;
+    }
+
+    // .tb power <bot> mana|rage|energy <value>: sets that power to <value> percent of its maximum (rage: percent of 100 = rage points, the
+    // unit `.tb rage` takes, which stays as the older spelling). The core stores rage times ten; SetPower takes core units (Unit.h:839).
+    static bool HandlePower(ChatHandler* handler, std::string name, std::string kind, uint32 value)
+    {
+        if (!RequireEngine(handler))
+            return false;
+        Player* bot = BotMgr::Instance().FindBot(GuidByName(name));
+        if (!bot)
+            return Fail(handler, name + " is not a logged-in bot.");
+        Powers power;
+        if (kind == "mana")
+            power = POWER_MANA;
+        else if (kind == "rage")
+            power = POWER_RAGE;
+        else if (kind == "energy")
+            power = POWER_ENERGY;
+        else
+            return Fail(handler, "usage: .tb power <character> mana|rage|energy <percent>.");
+        int32 const max = bot->GetMaxPower(power);
+        if (max <= 0)
+            return Fail(handler, name + " has no " + kind + ".");
+        bot->SetPower(power, int32(int64(max) * std::min<uint32>(value, 100) / 100));
+        handler->PSendSysMessage("TortoiseBots: %s %s is %d/%d (core units).", name.c_str(), kind.c_str(), bot->GetPower(power), max);
+        return true;
+    }
+
+    // .tb additem <bot> <item id> [count]: a new item into the bags (Player::StoreNewItemInBestSlots, Player.h:1626). The id is looked up
+    // with `.tb item <id>` first: no id is known from memory.
+    static bool HandleAddItem(ChatHandler* handler, std::string name, uint32 entry, Optional<uint32> count)
+    {
+        if (!RequireEngine(handler))
+            return false;
+        Player* bot = BotMgr::Instance().FindBot(GuidByName(name));
+        if (!bot)
+            return Fail(handler, name + " is not a logged-in bot.");
+        if (!sObjectMgr->GetItemTemplate(entry))
+            return Fail(handler, "item " + std::to_string(entry) + " does not exist.");
+        uint32 const n = std::max<uint32>(1u, count.value_or(1u));
+        if (!bot->StoreNewItemInBestSlots(entry, n, ItemContext::NONE))
+            return Fail(handler, name + ": the item was not stored (bags full?).");
+        handler->PSendSysMessage("TortoiseBots: %s now has %u of item %u.", name.c_str(), bot->GetItemCount(entry), entry);
+        return true;
+    }
+
+    // .tb castlog <bot> [on|off]: with a word, turns the bot's cast-result sink on or off (a bot without an engine has it off); without,
+    // prints and drains the queued cast results of the bot (spike U3 and U1, SLICE2-R0-NOTES.md section 5).
+    static bool HandleCastLog(ChatHandler* handler, std::string name, Optional<std::string> mode)
+    {
+        if (!RequireEngine(handler))
+            return false;
+        Player* bot = BotMgr::Instance().FindBot(GuidByName(name));
+        if (!bot)
+            return Fail(handler, name + " is not a logged-in bot.");
+        auto* session = dynamic_cast<TortoiseBots::BotSession*>(bot->GetSession());
+        if (!session)
+            return Fail(handler, name + " has no bot session.");
+        if (mode)
+        {
+            if (*mode != "on" && *mode != "off")
+                return Fail(handler, "usage: .tb castlog <character> [on|off].");
+            session->SetCastResultSink(*mode == "on");
+            handler->PSendSysMessage("TortoiseBots: %s cast-result sink %s.", name.c_str(), mode->c_str());
+            return true;
+        }
+        std::vector<TortoiseBots::CastResult> results;
+        session->DrainCastResults(results);
+        for (TortoiseBots::CastResult const& r : results)
+            handler->PSendSysMessage("TortoiseBots: kind=%s spell=%u reason=%u cast=%s%s", r.kind == TortoiseBots::CastResult::Kind::SpellFailure ? "SpellFailure" : "CastFailed",
+                r.spellId, r.reason, r.castId.ToString().c_str(), r.injected ? " injected" : "");
+        handler->PSendSysMessage("TortoiseBots: %s: %u result(s); sink %s; moving now %s; casting now %s.", name.c_str(), uint32(results.size()),
+            session->CastResultSink() ? "on" : "off", bot->isMoving() ? "yes" : "no",
+            bot->GetCurrentSpell(CURRENT_GENERIC_SPELL) ? "yes" : "no");
+        return true;
+    }
+
+    // .tb use <bot> <item id> [self]: the bot uses an item from its bags through the core's own item cast (Player::CastItemUseSpell, Player.h:2683:
+    // the call a client's use-item packet ends in, Player.cpp:33833), spike U1. Item id 0 only reports. Prints the item's facts first (legacy
+    // flag, effects, on-use spell: a legacy item's effect is ignored by the core, Player.cpp:9718-9744), then mana, current cast and auras.
+    // With the word `self` the cast carries the bot as its unit target; without, an empty target list (what a client sends for a self spell).
+    static bool HandleUse(ChatHandler* handler, std::string name, uint32 entry, Optional<std::string> mode)
+    {
+        if (!RequireEngine(handler))
+            return false;
+        Player* bot = BotMgr::Instance().FindBot(GuidByName(name));
+        if (!bot)
+            return Fail(handler, name + " is not a logged-in bot.");
+        if (entry)
+        {
+            Item* item = bot->GetItemByEntry(entry, ItemSearchLocation::Inventory);
+            if (!item)
+                return Fail(handler, "item " + std::to_string(entry) + " is not in the bags.");
+            uint32 spellId = 0;
+            for (ItemEffectEntry const* effect : item->GetEffects())
+                if (effect->TriggerType == ITEM_SPELLTRIGGER_ON_USE) { spellId = effect->SpellID; break; }
+            handler->PSendSysMessage("TortoiseBots: item %u: legacy %s, %u effect(s), on-use spell %u, count %u.", entry,
+                item->GetTemplate()->HasFlag(ITEM_FLAG_LEGACY) ? "yes" : "no", uint32(item->GetEffects().size()), spellId, bot->GetItemCount(entry));
+            if (!spellId)
+                return Fail(handler, "the item has no on-use effect.");
+            SpellCastTargets targets;
+            if (mode && *mode == "self")
+                targets.SetUnitTarget(bot);
+            bot->CastItemUseSpell(item, spellId, targets, ObjectGuid::Empty, { 0, 0, 0 });
+        }
+        std::string auras;
+        for (auto const& [id, app] : bot->GetAppliedAuras())
+            auras += std::to_string(id) + " ";
+        handler->PSendSysMessage("TortoiseBots: %s mana %d/%d, casting: %s, moving: %s, auras: %s", name.c_str(), bot->GetPower(POWER_MANA), bot->GetMaxPower(POWER_MANA),
+            bot->GetCurrentSpell(CURRENT_GENERIC_SPELL) ? "yes" : "no", bot->isMoving() ? "yes" : "no", auras.c_str());
         return true;
     }
 
