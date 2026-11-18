@@ -18,6 +18,7 @@ Run: `forever/tools/vm-census.sh "" 14` (all, about 45 minutes) or with a path p
 | 2026-11-17 | 6517af05 | shim round 2 (BEFORE, = round 1 AFTER at 233e35a0c) | 648 | 11 | 13,496 |
 | 2026-11-17 | 6517af05 | shim round 2 (AFTER, item prototype mirror, 570d22dd4) | 648 | 11 | 12,182 |
 | 2026-11-18 | 6517af05 | shim round 2 fix round 1 (review: block/holy/bag family/one fill; entry + IsMoving helpers, b7d20355a) | 648 | 11 | 11,938 |
+| 2026-11-18 | 6517af05 | shim round 3 (BEFORE, = round 2 fix 2) | 648 | 11 | 11,938 |
 
 The first row is not comparable with later ones: without the pre-include most files stopped early.
 

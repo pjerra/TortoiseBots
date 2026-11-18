@@ -11,6 +11,13 @@ Read `SPIKE.md` first. This file says how the rest of the module gets onto Forev
    (`forever/src/compat/TbItemPrototype.*`) is filled once, from `WorldScript::OnWorldInitialized`: the core has no item
    template reload at the pin (`LoadItemTemplates` is called once, `World.cpp:1608`), so a moved pin must re-check that
    the store is still loaded there and still not reloaded.
+   The spell mirror (`forever/src/compat/TbSpellEntry.*`) is filled per spell on first use, after
+   `tbcompat::InitSpellTable()` sizes its table from the same hook. The core has no spell reload either at the pin:
+   `LoadSpellInfoStore` and every pass that edits the `SpellInfo` objects (`LoadSpellInfoCorrections`,
+   `LoadClassicSpellInfo`, `LoadSpellInfoCustomAttributes`) are called once from `World::SetInitialWorldSettings`
+   (`World.cpp:1471-1491`), and no `.reload` handler calls them again (`scripts/Commands/cs_reload.cpp` reloads
+   `spell_required`, `spell_area`, `spell_proc` and the other side tables, never the store). A moved pin must re-check
+   both halves of that: the store loaded before the hook, and no runtime path that rebuilds a `SpellInfo`.
 4. Game data is not ported blindly. Spell ids, talents, races, zones, travel nodes and boss data are re-derived from
    ForeverCore's DB2 and world database, feature by feature.
 
