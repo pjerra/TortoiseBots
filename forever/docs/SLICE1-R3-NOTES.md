@@ -212,3 +212,16 @@ one-place headers.
    not for ForeverCore's skill and race ids above them (TravelMgr.h:111-112, PlayerbotAIConfig.h:761).
  * `AreaKeyAtCompat`: the key differs (see the table).
  * Both `Config` and `sConfig`: see above; `PlayerbotAIConfig::Initialize` still has to be called from `BotMgr::LoadConfig` (R5).
+
+## Gates
+
+Final tree `cf069a999` (the code is `ab3c44144`; the later commits are the notes and one test pin).
+
+| Gate | Command | Result |
+|---|---|---|
+| Slice census (final) | `FOREVER_SLOT=5 FOREVER_CENSUS_LIST=forever/SLICE1.txt forever/tools/vm-census.sh "" 14` | `files 127 compile clean 3 with errors 124 error places 1730 (in 97 files)`; header rows 224 places in 37 header files (baseline 2,504 in 140 files; 649 places in 71 header files) |
+| Slice census, registry move applied in the VM copy | same, after deleting the nine registry includes and the constructor from the VM copy of `AiObjectContext.cpp` | 1,570 places in 73 files; 64 places in 13 header files |
+| ForeverCore module, slice option off | `ssh yulon-ubuntu2 'FOREVER_SLOT=5 ~/forever-build/build.sh 12 tortoisebots'` | `CMAKE_RC=0 MAKE_RC=0` |
+| WorldLocation scope | `check_worldlocation_scope.py` on the 127 files | 0 core headers under the macro (1 file not preprocessable: `AiObjectContext.cpp`, registry only) |
+| Turtle build (files outside `forever/` changed) | `vm-build ~/wt-slice-r3 --wait` at `ab3c44144` | `COMPILE_SECONDS=2083 CMAKE_RC=0 MAKE_RC=0`, `QUEUE_RC=0`, rc=0 (a first run at `f6f5e11bc` failed on `CreatureTemplate`, a type name that does not exist on that core in the Turtle-side helper; fixed to `CreatureInfo`) |
+| Turtle unit tests | `vm-test tb ~/wt-slice-r3` | first run at `ab3c44144`: `RESULT: FAIL`, one wiring test pinned the old spelling of one line in `ReachTargetActions.h` (`tools/test_reach_hover_wiring.py:42`), updated to `GetHeightCompat(...)` as rounds 2 and 3 did for their pins; then at `cf069a999`: `RESULT: PASS`, rc=0, `vm_duration=893s` |
