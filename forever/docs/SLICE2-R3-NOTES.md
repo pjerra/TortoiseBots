@@ -199,10 +199,10 @@ Decision D3 is therefore not applied: drinking stays in the slice.
 | Option ON `worldserver` build (slot 1, `FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1 build.sh 12 worldserver`) | `CMAKE_RC=0 MAKE_RC=0` (the last incremental build after the final host edit; the first full pass is section 7) |
 | Option OFF module build (`-DTORTOISEBOTS_SLICE1=OFF build.sh 12 tortoisebots`) | `CMAKE_RC=0 MAKE_RC=0`; 6 objects (`TbBotMgr`, `TbBotSession`, `TbScripts`, `TbItemPrototype`, `TbSpellEntry`, `host/TbEngineBrain`): the list R9 states, nothing new |
 | Census `FOREVER_CENSUS_LIST=forever/SLICE2.txt` | `files 160  compile clean 160  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` |
-| Census `forever/SLICE1.txt` | see the report (run after the last code commit) |
+| Census `forever/SLICE1.txt` | `files 133  compile clean 133  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` |
 | `slice_gen_context.py --check`, `slice_registry_check.py` | file current; `(a)=0  (b)=234` |
 | `tools/verify_tortoise_surface.sh` | `Tortoise 1.18.1 Core module surface: OK` |
 | `forever-build/policy-tests.sh` (a private copy of the tree and script: `tb-r3`, `pt-r3`) | 472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL: the baseline (the same six files as SLICE1-R9-NOTES) |
-| Turtle `vm-build ~/wt-slice2-integ --wait` | see the report |
+| Turtle `vm-build ~/wt-slice2-integ --wait` (the first Turtle build of the V2 and I2 code; sha 4e5daeb9d, the commit with every change outside `forever/` and `tools/`; later commits touch only `forever/` and the two wiring tests) | `COMPILE_SECONDS=2508 CMAKE_RC=0 MAKE_RC=0` (no small errors this time: the V2 fix of `GuidFromQualifierCompat` was in the branch) |
 | Turtle `vm-test tb ~/wt-slice2-integ` | see the report |
 | The test server | stopped after every boot; `docker ps` shows `forever-bnet`, `forever-db` and no `forever-world`; the other worker's `worldserver` binary was put back after each boot |
