@@ -250,6 +250,15 @@ std::vector<std::string> Describe(Brain const* brain)
     if (ai::Value<Unit*>* value = pai->GetAiObjectContext()->GetValue<Unit*>("current target"))
         target = value->Get();
     lines.push_back(std::string("target: ") + (target ? target->GetName() : "none"));
+    if (target)
+    {
+        // Reach (findings items 12 and 16): the distance between the two units, the core's melee range for the pair and whether
+        // the core calls it in melee range, so a bot that stops short or runs through shows here.
+        Player* self = pai->GetBot();
+        lines.push_back("target reach: distance " + std::to_string(self->GetDistance(target)) + " yd, melee range " +
+            std::to_string(self->GetMeleeRange(target)) + " yd, in melee range: " + (self->IsWithinMeleeRange(target) ? "yes" : "no") +
+            ", victim: " + (self->GetVictim() ? self->GetVictim()->GetName() : "none"));
+    }
 
     // What the follow rule reads (strategy/triggers/RangeTriggers.h UpdateFollowTrigger): the engine's master, whether it counts
     // as a real player (a network session: a master that is itself a bot session does not), the "follow target" value, the
