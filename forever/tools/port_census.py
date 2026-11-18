@@ -48,6 +48,19 @@ def base_command(build):
 
 
 def sources(only):
+    # FOREVER_CENSUS_LIST: a file (path relative to the repository) with one source path per line; only those are
+    # checked. Lines starting with # and empty lines are ignored. Used to measure a slice of the tree.
+    listed = os.environ.get("FOREVER_CENSUS_LIST", "")
+    if listed:
+        wanted = []
+        for line in open(os.path.join(ROOT, listed)):
+            line = line.strip()
+            if line and not line.startswith("#"):
+                wanted.append(os.path.normpath(line))
+        missing = [w for w in wanted if not os.path.exists(os.path.join(ROOT, w))]
+        if missing:
+            sys.exit("census list names files that do not exist: " + ", ".join(missing[:10]))
+        return sorted(w for w in wanted if w.endswith(".cpp") and (not only or only in w))
     found = []
     for d, _, names in os.walk(ROOT):
         rel = os.path.relpath(d, ROOT)
@@ -65,16 +78,38 @@ ERROR = re.compile(r"^(?P<file>[^:\n]+):(?P<line>\d+):\d+: (?P<sev>fatal error|e
 QUOTED = re.compile(r"'([^']*)'")
 
 
-def check(args):
-    command, cwd, src, stubs = args
-    # The Turtle build puts ai/botpch.h in front of every file; here it is the ForeverCore counterpart.
-    extra = ["-fsyntax-only", "-ferror-limit=0", "-w", "-DMANGOSBOT_ZERO=1", "-DCMANGOS=1",
-             "-I" + os.path.join(ROOT, "forever", "compat"), "-I" + os.path.join(ROOT, "forever", "src", "compat"),
-             "-include", os.path.join(ROOT, "forever", "src", "compat", "botpch_forever.h")]
+def common_flags(stubs):
+    flags = ["-w", "-DMANGOSBOT_ZERO=1", "-DCMANGOS=1",
+             "-I" + os.path.join(ROOT, "forever", "compat"), "-I" + os.path.join(ROOT, "forever", "src", "compat")]
     if stubs:
-        extra += ["-idirafter", stubs]
+        flags += ["-idirafter", stubs]
     for d in OLD_INCLUDE_DIRS:
-        extra += ["-idirafter", os.path.join(ROOT, d)]
+        flags += ["-idirafter", os.path.join(ROOT, d)]
+    return flags
+
+
+PREINCLUDE = os.path.join(ROOT, "forever", "src", "compat", "botpch_forever.h")
+
+
+def build_pch(command, cwd, stubs, out):
+    """Compile the pre-include header once. Every file then loads it instead of parsing the core's headers again.
+    Returns the .pch path, or "" when it could not be built (the census then includes the header as text)."""
+    pch = os.path.join(out, "botpch_forever.pch")
+    if os.path.exists(pch):
+        os.remove(pch)
+    run = subprocess.run(command + common_flags(stubs) + ["-x", "c++-header", PREINCLUDE, "-o", pch],
+                         cwd=cwd, capture_output=True, text=True)
+    if run.returncode != 0 or not os.path.exists(pch):
+        sys.stderr.write("pre-include header did not precompile, falling back to a text include:\n" + run.stderr[-600:] + "\n")
+        return ""
+    return pch
+
+
+def check(args):
+    command, cwd, src, stubs, pch = args
+    # The Turtle build puts ai/botpch.h in front of every file; here it is the ForeverCore counterpart, precompiled.
+    extra = ["-fsyntax-only", "-ferror-limit=0"] + common_flags(stubs)
+    extra += ["-include-pch", pch] if pch else ["-include", PREINCLUDE]
     run = subprocess.run(command + extra + [os.path.join(ROOT, src)], cwd=cwd, capture_output=True, text=True)
     errors = []
     for line in run.stderr.splitlines():
@@ -101,8 +136,10 @@ def main():
         if not todo:
             break
         again = []
+        # A new stand-in header changes what the pre-include header sees, so it is precompiled again each round.
+        pch = "" if os.environ.get("FOREVER_CENSUS_NO_PCH") else build_pch(command, cwd, stubs, out)
         with concurrent.futures.ThreadPoolExecutor(jobs) as pool:
-            for src, rc, errors in pool.map(check, [(command, cwd, s, stubs) for s in todo]):
+            for src, rc, errors in pool.map(check, [(command, cwd, s, stubs, pch) for s in todo]):
                 results[src] = (rc, errors)
                 new_stub = False
                 for sev, msg, _ in errors:
