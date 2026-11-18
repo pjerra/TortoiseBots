@@ -73,7 +73,9 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const /*
 {
     if (player && player->GetClass() == CLASS_PRIEST)
     {
-        combatEngine->addStrategies("discipline", "offdps", "dps assist", "ranged", "buff", "cast time", NULL);
+        // "heal interrupt": the overheal cancel (a heal in its cast bar is cancelled when the patient no longer needs it), added by the full factory
+        // to every healer's combat engine (AiFactory.cpp:1021-1022); R5 item 3.
+        combatEngine->addStrategies("discipline", "offdps", "dps assist", "ranged", "buff", "cast time", "heal interrupt", NULL);
         return;
     }
     combatEngine->addStrategies("arms", "dps assist", "close", "buff", NULL);

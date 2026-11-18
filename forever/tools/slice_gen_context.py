@@ -55,7 +55,7 @@ SLICE_KEYS = {
              "trinkets on use, wait for attack time",
 }
 SLICE2_KEYS = {
-    "strategy": "ranged, food, loot, cast time, default",
+    "strategy": "ranged, food, loot, cast time, default, heal interrupt",
     "action": "reach spell, reach party member to heal, flee, shoot, drink, food, use, loot, open loot, move to loot, "
               "add all loot, store loot",
     "trigger": "enemy out of spell, enemy too close for spell, enemy five yards, medium mana, no mana, high mana, "
@@ -63,12 +63,12 @@ SLICE2_KEYS = {
                "medium threat, target of attacker, party member critical health, party member low health, "
                "party member medium health, party member almost full health, party member to heal out of spell range, "
                "group heal setting, medium group heal setting, resume drink, resume eat, loot available, can loot, "
-               "far from loot target, timer, loot response",
+               "far from loot target, timer, loot response, heal target full health",
     "value": "party member to heal, party member to dispel, buff targets, patchwerk soaker to shield, drink duration, "
              "eat duration, drink unfinished, rest to full, should drink, should eat, spell ready, custom position, "
              "nearest npcs no los, loot target, available loot, has available loot, can loot, always loot list, "
              "skip loot list, should loot object, stack space for item, force item usage, nearest corpses, "
-             "loot strategy, should get money, inventory item ids",
+             "loot strategy, should get money, inventory item ids, incoming heals",
 }
 KEYS = {k: [x.strip() for x in (SLICE_KEYS[k] + ", " + SLICE2_KEYS[k]).split(",")] for k in SLICE_KEYS}
 

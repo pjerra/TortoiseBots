@@ -24,6 +24,7 @@
 #include "playerbot/strategy/actions/ReachTargetActions.h"
 #include "playerbot/strategy/actions/UseItemAction.h"
 #include "playerbot/strategy/generic/CastTimeStrategy.h"
+#include "playerbot/strategy/generic/CombatStrategy.h"
 #include "playerbot/strategy/generic/DpsAssistStrategy.h"
 #include "playerbot/strategy/generic/FollowMasterStrategy.h"
 #include "playerbot/strategy/generic/LootNonCombatStrategy.h"
@@ -119,7 +120,7 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (6 of its keys)
+    // the registry of StrategyContext (7 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
@@ -131,6 +132,7 @@ namespace slice
             creators["loot"] = [](PlayerbotAI* ai) { return new LootNonCombatStrategy(ai); };
             creators["cast time"] = [](PlayerbotAI* ai) { return new CastTimeStrategy(ai); };
             creators["default"] = [](PlayerbotAI* ai) { return new WorldPacketHandlerStrategy(ai); };
+            creators["heal interrupt"] = [](PlayerbotAI* ai) { return new HealInterruptStrategy(ai); };
         }
     };
 
@@ -204,7 +206,7 @@ namespace slice
         }
     };
 
-    // the registry of TriggerContext (55 of its keys)
+    // the registry of TriggerContext (56 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -265,6 +267,7 @@ namespace slice
             creators["can loot"] = [](PlayerbotAI* ai) { return new CanLootTrigger(ai); };
             creators["far from loot target"] = [](PlayerbotAI* ai) { return new FarFromCurrentLootTrigger(ai); };
             creators["timer"] = [](PlayerbotAI* ai) { return new TimerTrigger(ai); };
+            creators["heal target full health"] = [](PlayerbotAI* ai) { return new HealTargetFullHealthTrigger(ai); };
         }
     };
 
@@ -278,7 +281,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (167 of its keys)
+    // the registry of ValueContext (168 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -451,11 +454,12 @@ namespace slice
             creators["loot strategy"] = [](PlayerbotAI* ai) { return new LootStrategyValue(ai); };
             creators["should get money"] = [](PlayerbotAI* ai) { return new ShouldGetMoneyValue(ai); };
             creators["inventory item ids"] = [](PlayerbotAI* ai) { return new InventoryItemIdValue(ai); };
+            creators["incoming heals"] = [](PlayerbotAI* ai) { return new IncomingHealsValue(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 8, kActions = 23, kTriggers = 56, kValues = 167;
+    constexpr unsigned kStrategies = 9, kActions = 23, kTriggers = 57, kValues = 168;
 }
 }
 
