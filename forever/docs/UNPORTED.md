@@ -96,3 +96,10 @@ Rows and stand-ins added by the slice-2 link (R3, `SLICE2-R3-NOTES.md` section 7
 | Feature | What it is | Call sites (files) | Failure value on ForeverCore | What porting it needs |
 |---|---|---|---|---|
 | item usage | `ai::ItemUsageValue` and its helpers: is an item needed for a quest, a future upgrade, an equip use, a recipe (lead decision D2: money only, the item-usage value is a later slice) | `IsNeededForQuest` (LootObjectStack.cpp), `IsFutureUpgrade` (LootStrategyValue.cpp), `QueryItemUsageForEquip` (LootValues.cpp), `GetRecipeSpell` (UseItemAction.cpp) | false / `ITEM_USAGE_NONE` / 0: not needed, not an upgrade, no recipe; the `item usage` key is not registered and the missing-key stand-in answers `ITEM_USAGE_NONE` | `ItemUsageValue.cpp` (2,419 lines, 53 census places) and its RandomItemMgr reads |
+
+<!-- slice 3, porting worker -->
+Row added by the slice-3 porting worker (`SLICE3-P-NOTES.md` section 7). Helper: `DebugSpellVisualCompat` in `forever/src/compat/TbCompat_S3.h` (Turtle twin: `ai/cmangos-compat-s3.h`).
+
+| Feature | What it is | Call sites (files) | Failure value on ForeverCore | What porting it needs |
+|---|---|---|---|---|
+| debug spell visuals | the two colour cues the `debug threat` strategy plays on a bot (high / medium threat): `Unit::SendPlaySpellVisual(kitId)` on T plays a 1.12 SpellVisualKit.dbc index; ForeverCore's `SendPlaySpellVisual` takes a target and a spell visual id of the new client | 2 (ThreatStrategy.cpp 2) | nothing is shown (counted, logged once); the bot's fight is unchanged, the strategy only draws | pick two visual kit ids of the F client (`SendPlaySpellVisualKit`, Unit.cpp:12989) and send them from the helper |
