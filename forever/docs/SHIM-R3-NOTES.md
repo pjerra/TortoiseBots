@@ -29,13 +29,25 @@ a stand-in for a Turtle-only header is compiled once against it), not from the c
 
 ## Storage: lazy, lock-free read path
 
-The spell store holds 35,889 spells (this server, ids up to 9,970,801), so nothing is filled eagerly (D2). `tbcompat::InitSpellTable()` runs once from the
-module's `WorldScript::OnWorldInitialized`, after `World::SetInitialWorldSettings` has loaded the spell store
-(`World.cpp:1471-1491`), and sizes a `std::atomic<SpellEntry*>` array from the highest id `sSpellMgr->ForEachSpellInfo`
-reports. `tbcompat::SpellProto(id)` is one acquire load in that array; the first reader of an id builds its mirror and
-publishes it with a compare-exchange, and a racing builder deletes its own copy (both copies come from the same immutable
-`SpellInfo`, so either is correct). A lookup before the table exists, or for an id above it, takes a mutex-guarded
-fallback map, which the same fill uses, so there is one fill function and one set of pre-checks.
+The spell store holds 35,889 spells (this server, ids up to 9,970,801), so nothing is filled eagerly (D2).
+`tbcompat::InitSpellTable()` runs once from the module's `WorldScript::OnWorldInitialized`, after
+`World::SetInitialWorldSettings` has loaded the spell store (`World.cpp:1471-1491`), and again on demand from the id
+bound's first lookup. It collects the ids of the `DIFFICULTY_NONE` records into a sorted, immutable array and allocates
+one `std::atomic<SpellEntry*>` slot per id (`forever/src/compat/TbSpellEntry.cpp`): storage is proportional to the
+number of spells, not to the highest id. `tbcompat::SpellProto(id)` binary-searches the array and makes one acquire load
+of the slot; the first reader of an id builds its mirror and publishes it with a compare-exchange, and a racing builder
+deletes its own copy (both copies come from the same immutable `SpellInfo`, so either is correct). A lookup before the
+index exists takes a mutex-guarded fallback map; a call while the store is still empty builds nothing and a later call
+retries.
+
+**Only the `DIFFICULTY_NONE` record is mirrored.** SpellMgr's map is keyed on `(Id, Difficulty)` (`SpellMgr.cpp:53-67`)
+and `ForEachSpellInfo` walks every variant, so publishing whichever variant reached the slot first would let a raid
+creature's spell variant answer for the id. `SpellProto(SpellInfo const*)` with another difficulty resolves to the same
+id's NONE record when one exists and returns nullptr (counted, logged once) when it does not; `.tb spellscan` prints how
+many records have a non-NONE difficulty and how many of their ids have no NONE record.
+
+**Nothing is allocated when `TortoiseBots.Enable = 0`**: `InitSpellTable` returns before the pass and every lookup returns
+nullptr, with one log line. That keeps a disabled module at zero cost, including the old 76 MiB table.
 
 **No spell reload at the pin.** `LoadSpellInfoStore` and every pass that edits the `SpellInfo` objects
 (`LoadSpellInfoCorrections`, `LoadClassicSpellInfo`, `LoadSpellInfoCustomAttributes`) are called once from
@@ -45,13 +57,17 @@ fallback map, which the same fill uses, so there is one fill function and one se
 `spell_pet_auras` and `spell_script_names` — side tables, never the store and never a `SpellInfo`. So a mirror is only as
 fresh as the core's object, which does not change after startup. Recorded in `PORT-PLAN.md` rule 3 next to the item note.
 
+**Memory.** 35,889 ids: the sorted id array and the slot array are `4 x n` and `8 x n` bytes plus the index header, about
+430 KB in all; `.tb spellscan` prints both numbers. The old design was one slot per id up to 9,970,801, 76 MiB, allocated
+even with the module off.
+
 ## What the shim does now
 
 - No `#define SpellEntry SpellInfo`: `SpellEntry` is the mirror (`TbSpellEntry.h`).
 - No `#define GetSpellEntry(...) GetSpellInfo(...)`. Every fetch is `GetSpellEntryCompat(...)` on both cores:
   - `sSpellMgr.GetSpellEntry(id)` (32 sites),
-  - `sSpellTemplate.LookupEntry<SpellEntry>(id)` (54 sites; the proxy returns the mirror and its `GetMaxEntry()` is the
-    highest id the core has, which the table computes at startup),
+  - `sSpellTemplate.LookupEntry<SpellEntry>(id)` (54 sites; the proxy returns the mirror and its `GetMaxEntry()` is one
+    past the highest id the core has, which the mirror computes on first use),
   - `X->m_spellInfo` (125 sites) and `X->GetSpellProto()` (32 sites): the core stores the `SpellInfo` there, the mirror is
     `GetSpellEntryCompat(...)` of it. On the Turtle core both helpers are identity / the old call.
 - `GetSpellInfoCompat(entry)` is the way back for a core function that wants the core's record. No bot call site needs it
@@ -72,8 +88,8 @@ fresh as the core's object, which does not change after startup. Recorded in `PO
   tests, the five `SPELL_INTERRUPT_FLAG_*` bits, `AURA_INTERRUPT_FLAG_NOT_SEATED`,
   `SPELL_RANGE_IDX_SELF_ONLY/COMBAT/ANYWHERE`, `SPELLCATEGORY_GLOBAL`, `TARGET_FLAG_SELF`.
 - Two more both-core helpers for the same family: `SpellRangeMin`/`SpellRangeMax` (the `SpellRangeEntry` row's two numbers:
-  `minRange`/`maxRange` here, `RangeMin[0]`/`RangeMax[0]` there) and `GetMaxSpellIdCompat()` (the highest spell id, the
-  Turtle core's `sSpellMgr.GetMaxSpellId()`).
+  `minRange`/`maxRange` here, `RangeMin[0]`/`RangeMax[0]` there) and `GetMaxSpellIdCompat()` (one past the highest spell
+  id, the Turtle core's `sSpellMgr.GetMaxSpellId()`, so a `id < bound` loop covers the last id).
 - `GetSpellPowerCostCompat(caster, entry)` is **not** added: no bot site reads a power cost for a caster. The three sites
   that price a cast do it from the mirrored flat cost and percent of the caster's base mana themselves
   (`GenericSpellActions.cpp:719-721`, `Commander.cpp:10539-10540`, `BossTacticsActions.cpp:13380-13384`), and for mana
@@ -102,7 +118,7 @@ F = `~/ForeverCore/src/server/game/Spells/SpellInfo.h` / `.cpp` at the pinned co
 | `maxLevel`, `baseLevel`, `spellLevel` (:556-558) | `MaxLevel`, `BaseLevel`, `SpellLevel` (F.h:435-437) | the SpellLevels row |
 | `powerType` (:560) | `PowerCosts[0]->PowerType` (F.h:401) | the first SpellPower row's power type, which is what the old single `powerType` column held |
 | `manaCost` (:561) | `GetClassicSpellCost(Id)->ManaCost` for a mana spell the core treats as legacy (`SpellInfo.cpp:4386-4395`); else `PowerCosts[0]->ManaCost` | for a legacy mana spell the core charges the vanilla table's flat number (plus its percent), which is exactly the old `manaCost` column of the same 1.12 spell_template; for anything else the DB2 row's flat cost. The core's `CalcPowerCost` adds percent and caster modifiers on top — the old field never carried those either |
-| `ManaCostPercentage` (:666) | the same classic cost row's `ManaCostPct`; else `round(PowerCosts[0]->PowerCostPct)` | percent of the caster's base mana, the quantity the old field held |
+| `ManaCostPercentage` (:666) | the same classic cost row's `ManaCostPct`; else `uint32(PowerCosts[0]->PowerCostPct)` (truncating, as the old loader's `GetUInt32` did) | percent of the caster's base mana, the quantity the old field held |
 | `rangeIndex` (:565) | `RangeEntry->ID` (F.h:402) | the client's SpellRange id: the core keeps the row, and the row's ID is the index the old column held and the bot looks up in `sSpellRangeStore`. The old struct's default (1) stays when the core has no row |
 | `speed` (:566) | `Speed` (F.h:403) | missile speed |
 | `StackAmount` (:568) | `StackAmount` (F.h:406), `SpellAuraOptions::CumulativeAura` | max stacks |
@@ -111,7 +127,7 @@ F = `~/ForeverCore/src/server/game/Spells/SpellInfo.h` / `.cpp` at the pinned co
 | `EquippedItemClass`, `EquippedItemSubClassMask`, `EquippedItemInventoryTypeMask` (:572-574) | the three fields (F.h:413-415) | SpellEquippedItems row |
 | `Effect[i]` (:575) | `GetEffects()[i].Effect` (F.h:236) | `SpellEffects` ids; filled for the first three slots by EffectIndex, the rest counted in `MoreEffects` |
 | `EffectDieSides[i]` (:576) | `classic_spell_value.die_sides` (F `ClassicSpellValue.h:38-46`, `SpellMgr.cpp:3678-3720`) | the vanilla dice of the same effect, matched by the core's own effect/aura/misc check; without a row a DB2 effect is a single result (die sides 1, below) |
-| `EffectBaseDice[i]` (:577) | 1 | the vanilla column's value for a fixed or single-die effect (the number of dice); the DB2 has no dice at all |
+| `EffectBaseDice[i]` (:577) | 1 (the core has no base-dice column; see Known differences) | the vanilla column's die count, which is 1 for the vast majority of the matched effects; the DB2 has no dice at all |
 | `EffectBasePoints[i]` (:579) | `classic_spell_value.base_points`; else `round(SpellEffectInfo::BasePoints) - 1` (F.h:241) | the old field is the client's base points, one below the smallest roll (the bot code adds one everywhere). For every legacy effect the core has a vanilla row, that row holds the same base-1 number. Without a row the core's `BasePoints` is the value the spell uses (the mean of the vanilla roll where there is one); minus one is the same shape |
 | `EffectRealPointsPerLevel[i]` (:578) | classic row `points_per_level`; else `RealPointsPerLevel` (F.h:239) | value added per level above the spell level |
 | `EffectPointsPerComboPoint[i]` (:614) | classic row `points_per_combo`; else `PointsPerResource` (F.h:240) | value per combo point |
@@ -169,6 +185,43 @@ from the mirrored fields; the two readers (`PlayerbotAI.cpp:5905`, `DebugSpellCo
 | `MinTargetLevel` (:696), `ScriptId`, `ParsedTooltip` (:702-703) | none | no core counterpart / unused by the bot |
 | `Stances`, `StancesNot`, `Targets`' sibling `CasterAuraState`/`TargetAuraState`, `procFlags`, `manaCostPerlevel`, `manaPerSecond`, `manaPerSecondPerLevel`, `EffectAmplitude`, `EffectMultipleValue`, `DmgMultiplier`, `EffectMechanic` | none (the scan of every `X->Field` read found no site) | not read by the bot; kept out rather than filled and forgotten |
 
+## Known differences (the core's answer where the bot used the old core's)
+
+These are places where the mirror or a helper asks the core the same question and the core answers differently from the
+Turtle core. No code change; each is a value the bot may see differ.
+
+- **`IsAreaOfEffectSpell` counts area auras.** It asks `SpellInfo::IsAffectingArea()` (which includes area-aura effects),
+  not the old core's computed "has an area effect" flag, so Devotion Aura `465` reports "area" on ForeverCore where the
+  old core did not.
+- **`IsPositiveSpell` has no `spell_mod` overrides or special cases.** ForeverCore is `NegativeEffects.none()`
+  (`SpellInfo.cpp:2036-2044`), a set it builds while loading the store. Turtle's `SpellEntry::IsPositiveEffect`
+  (`SpellEntry.cpp:891-925`) also honours the `SPELL_CUSTOM_POSITIVE`/`SPELL_CUSTOM_NEGATIVE` bits and a list of special
+  cases (Hellfire, Awaken Vault Warder `10258`, Kodo Kombobulator `18153`, the suicide/sacrifice instakills); a spell
+  whose 1.12 data carried one of those is classified by the core's own rules here.
+- **`IsAutocastable` also refuses `SPELL_ATTR1_NO_AUTOCAST_AI`** (`SpellInfo.cpp:1915-1922`). The Turtle shim only refuses
+  passive spells (`ai/cmangos-compat-shim.h:416-424`), because the Turtle core's Vanilla `SpellEntry` has no such bit, so
+  a ForeverCore spell with that attribute is not autocastable where the old build might have allowed it.
+- **`GetSpellCastTime` ignores the caster.** The core's `CalcCastTime(Spell*)` has no caster parameter and no
+  `CastTimePerLevel` term; Turtle's `GetCastTime` raises the cast time with the caster's spell rank
+  (`SpellEntry.cpp:582`: `CastTimePerLevel * (spellRank / 5 - baseLevel)`). The mirror's two-argument form takes the
+  caster and passes it to nothing.
+- **`EffectRadiusIndex` takes target A's radius only.** The core splits an effect's radius into `TargetARadiusEntry` and
+  `TargetBRadiusEntry`; the old 1.12 column was one index, and the mirror keeps A.
+- **`Rank` is `"Rank N"`.** 1.12 kept the rank text itself in `spell_template`; ForeverCore has only
+  `SpellChainNode::rank`, so a rank-1 chain member can print "Rank 1" where vanilla may have had an empty string.
+- **The 59 `< MAX_EFFECT_INDEX` loops miss an effect at index 3 or more.** `grep -rn '< MAX_EFFECT_INDEX' ai runtime
+  commands` (compat headers excluded) finds 59 loops; a ForeverCore spell with an effect at a later index is only seen by
+  the first three. The paths the review named: `ReactionCastIsHeal` (`PlayerbotAI.cpp:1092`), the heal-target guard in
+  `HealthTriggers.cpp:125`, the craft-effect scan in `AhBotItemPool.cpp:449`, `FindCraftEffectFor` (`GuildOrderCraft.h:42`,
+  with the `< 3` loops at `:26` and `:118`), and the rest of the 59. `.tb spellscan` counts the spells with more than three
+  effects.
+- **`EffectBaseDice` is 1 for every mirrored effect.** ForeverCore's `classic_spell_value` has no base-dice column
+  (`SHOW COLUMNS`: spell_id, effect_index, effect, apply_aura, base_points, die_sides, points_per_level, misc_value,
+  points_per_combo, bonus_coeff, spell_name), and neither does the DB2 effect, so the core holds no value to carry. In the
+  1.12 data the column is 1 for 7,420 of the 7,611 effects the core matched and 0 for 62 (plus 6 with 2, 3 or 500), so a
+  mirrored `CalculateSimpleValue` (the debug aura apply, `PlayerbotAI.cpp:5905`) can be one or two points high on those 68
+  effects; the two production readers are log lines. Fixing it exactly needs a core data column, not a mirror change.
+
 ## Call sites
 
 Script: `forever/tools/rewrite_spell_entry.py` (`--check` prints instead of writing), applied to `ai/`, `runtime/`,
@@ -197,11 +250,18 @@ member is the core `Spell`'s own `SpellInfo const*` and the core reads it, so th
 mana, then every non-empty effect and a summary line). Both are read-only, `Console::Yes`.
 
 ```
-TortoiseBots: spell mirrors: 35889 spells in 88 ms, highest id 9970801, 0 incomplete
-TortoiseBots: effects: 45607 effect slots in all, 456 spells with more than 3 effects (first: 1223037 (5), 1226997 (1), 436097 (3), 1310285 (1), 1247430 (4)), 136 spells with more than one school.
+TortoiseBots: spell mirrors: 35732 spells in 88 ms, spell id bound 9970802 (index 142952 B + slots 285856 B), 0 incomplete
+TortoiseBots: effects: 45345 effect slots in all, 456 spells with more than 3 effects (first: 1223037 (5), 1226997 (1), 436097 (3), 1310285 (1), 1247430 (4)), 136 spells with more than one school.
+TortoiseBots: difficulty: 157 SpellInfo records with a difficulty other than NONE, 0 of their ids have no DIFFICULTY_NONE record (mirror null; 0 such lookups counted).
 ```
 
-No assertion: the scan runs every fill path once (all 35,889 spells) and the boot log has `ASSERTION FAILED` 0.
+35,732 is the number of `DIFFICULTY_NONE` records; the 157 difficulty variants are not mirrored (their ids all have a NONE record, so
+each variant resolves to it). The old scan reported 35,889 because it walked every variant. Index 142,952 B + slots 285,856 B
+(about 419 KB) and the bound is 9,970,802, one past the highest id. No assertion: the scan runs every fill path once and the
+boot log has `ASSERTION FAILED` 0.
+
+With `TortoiseBots.Enable = 0`, the same scan prints `0 spells ... (index 0 B + slots 0 B)` and the first lookup logs
+`TortoiseBots: spell mirrors are off (TortoiseBots.Enable = 0); spell lookups return null.` — nothing is allocated.
 
 ```
 TC> tb spell 133
@@ -214,6 +274,13 @@ TC> tb spell 2050
 TortoiseBots: spell 2050 "Lesser Heal ": school 1 (mask 0x2), category 0, cast time 1500 ms, range 0.0-40.0 (idx 5), duration 0 ms, levels 1/3/1 (base/max/spell), recovery 0/0 ms, GCD 1500 ms (category 133), mana 30 (0%), power 0.
 TortoiseBots: effect 0: type 10, aura 0, base points 50 + 1, die sides 1, misc 0, target A/B 21/0, radius 0, trigger 0, item 0, chain 0, amp 1, points/level 0.30.
 TortoiseBots: targets 0x0, family 6 flags 0x40000, attributes 0x10000/0x0/0x80000, dispel 0, mechanic 0, stack 0, proc 0 x0, reagents 0/0 totem 0/0, max targets 0, more effects 0.
+
+TC> tb spell 11687
+TortoiseBots: spell 11687 "Life Tap ": school 5 (mask 0x20), category 0, cast time 0 ms, range 0.0-0.0 (idx 1), duration 0 ms, levels 36/46/36 (base/max/spell), recovery 0/0 ms, GCD 1500 ms (category 133), mana 0 (0%), power 4294967294.
+TortoiseBots: effect 0: type 3, aura 0, base points 209 + 1, die sides 1, misc 0, target A/B 1/0, radius 28, trigger 0, item 0, chain 0, amp 0, points/level 1.00.
+
+`power 4294967294` is `0xFFFFFFFE`, the uint32 image of `POWER_HEALTH` (-2): the old uint32 column held the same bits and the
+bot's health-cost branch (`PlayerbotAISpells.cpp:52-59`) tests that value.
 
 TC> tb spell 20154
 TortoiseBots: spell 20154 "Seal of Righteousness Rank 1": school 1 (mask 0x2), category 0, cast time 0 ms, range 0.0-0.0 (idx 1), duration 30000 ms, levels 1/7/1 (base/max/spell), recovery 0/0 ms, GCD 1500 ms (category 133), mana 20 (0%), power 0.
@@ -257,11 +324,10 @@ So the mirror agrees with the core's own numbers on every field the bot reads; w
 *minimum* it is the vanilla *mean*, which is the number the core uses. The one thing that would make it exact is the
 `classic_spell_value` row, which the core's data supplies for 5,984 spells on this server and not for these two.
 
-Table memory: the mirror table is `(highest id + 1) x sizeof(std::atomic<SpellEntry*>)` = 9,970,802 x 8 =
-**79,766,416 bytes (about 76 MiB)**, allocated once at startup; only the ~36k slots that hold a spell are ever written
-(the rest stay zero). That is the one cost of the D2 shape on this id distribution (the ids reach 9.97M for 35,889
-spells) and is written down for the lead: a two-level table or a lock-free hash would keep it under a megabyte if the
-80 MB ever matter.
+Table memory: the sorted id index is `4 x 35,889` bytes and the mirror slot array `8 x 35,889` bytes, plus the small
+index header: **143,556 + 287,112 = about 431 KB** on this server (`.tb spellscan` prints the exact two numbers). Nothing
+is allocated when `TortoiseBots.Enable = 0`; the old design (one atomic per id up to 9,970,801) was 76 MiB at startup
+even with the module off.
 
 ## Open points
 
@@ -280,7 +346,7 @@ spells) and is written down for the lead: a two-level table or a lock-free hash 
   old computed flag.
 - **`GetAllSpellMechanicMask`** is the core's `GetAllEffectsMechanicMask() >> 1`, because the bot builds its own masks as
   `1 << (MECHANIC_X - 1)` (TargetValue.cpp:214-217) while the core sets `1 << Mechanic`.
-- **Table memory.** 76 MiB, see the D7 section. A two-level or hashed table would cut it if the lead wants it.
+- **Table memory.** About 431 KB (see the D7 section), proportional to the spell count; nothing when the module is off.
 - **Tests.** Eight wiring tests pin the exact expression at the call site they guard, and three Viscidus harnesses compile
   production method bodies against fake types; they were updated to the new spelling and to define the helper (the same
   treatment round 2's B1/B2 gave their pinned tests). No test was deleted or weakened in what it checks.

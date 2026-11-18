@@ -342,6 +342,10 @@ void EquipAction::EquipItem(PlayerbotAI* ai, Player* requester, Item* item, bool
     // the bags until the order (or its branch) finishes.
     if (bot && bot->GetGuildId() && GuildOrderConsumesItem(bot, item ? GetItemProtoCompat(item)->ItemId : 0))
         return;
+    // The last gate before the core's equip: an item whose mirror could not be filled has fields the core will abort on
+    // (Player::_ApplyWeaponDamage on a weapon without a damage row). It stays in the bags.
+    if (!IsItemProtoUsableCompat(GetItemProtoCompat(item)))
+        return;
     AiObjectContext* context = ai->GetAiObjectContext();
 
     uint8 bagIndex = item->GetBagSlot();

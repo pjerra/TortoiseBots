@@ -117,6 +117,10 @@ ItemUsage ItemUsageValue::Calculate()
     if (!proto)
         return ItemUsage::ITEM_USAGE_NONE;
 
+    // A mirror whose fill found a missing client table is never a choice: sell it rather than equip, need or buy it.
+    if (!IsItemProtoUsableCompat(proto))
+        return ItemUsage::ITEM_USAGE_NONE;
+
     // `.bot order` first: the bot keeps the order item, the current supply
     // item, and (craft orders) the whole reagent tree through recipes it
     // knows - it must not sell, auction or use them while the order runs.

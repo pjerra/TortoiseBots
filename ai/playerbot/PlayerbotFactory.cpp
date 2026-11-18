@@ -1310,6 +1310,10 @@ bool PlayerbotFactory::CanEquipWeapon(ItemPrototype const* proto)
 
 bool PlayerbotFactory::CanEquipItem(ItemPrototype const* proto, uint32 desiredQuality)
 {
+    // The factory's single item-pick gate: never seed or equip an item whose mirror is incomplete.
+    if (!IsItemProtoUsableCompat(proto))
+        return false;
+
     if (proto->Duration & 0x80000000)
         return false;
 

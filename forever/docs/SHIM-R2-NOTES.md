@@ -385,16 +385,19 @@ TortoiseBots: stats 74:166, 7:249, 40:147, 36:74; spells none; resistances 0/0/0
 
 Three review passes (the cap). Codex adversarial twice, cold review twice, live boot. Shipped with these documented limits:
 
-- **Incomplete mirrors read as zero.** 379 items have an item level above 100; the client's weapon damage and armor
+- **Incomplete mirrors are never a bot choice.** 379 items have an item level above 100; the client's weapon damage and armor
   tables stop at 100 (`ItemDamageOneHand`, `...TwoHand`, both caster tables, `ItemArmorTotal`, `ItemArmorShield`: ids
   1-100; `ItemDamageAmmo`: 1-1000; read from the extracted DB2 headers). Their `Damage` or `Armor` is 0 and
-  `Incomplete` is set. Bot code that scores gear (`ItemUsageValue.cpp:48/57/988`, `RandomItemMgr.cpp:1571/1582`,
-  `PlayerbotFactory.cpp:2123/2385`, `EquipAction.cpp:884`) does not check the flag and would rate such an item as
-  worthless. Before this round the server aborted on them, so this is not a regression.
-  **Open check:** how many of the 379 have a required level of 60 or less. The example has required level 90. To
-  be read from the fill log on the next live boot (add the count to the log line).
+  `Incomplete` is set. `IsItemProtoUsableCompat` (both shims; ForeverCore: `false` for an incomplete mirror) now refuses
+  such an item at the four choice points: `ItemUsageValue::Calculate`, `RandomItemMgr`'s gear-candidate filter,
+  `PlayerbotFactory::CanEquipItem` and `EquipAction::EquipItem` before the core equip. The fill line answers the old open
+  check: **0 of the 379 have a required level of 60 or less** (live 2026-11-18), so no level-60 bot could meet one.
 - **The damage pre-check is stricter than the core.** It wants a row in all five damage tables. With the table ranges
   above that only differs from the core for an ammo item with item level 101-1000, which would be marked incomplete
-  although the core could answer. No such check exists yet; add it to the same log line.
+  although the core could answer. The fill line now counts those: **0 incomplete ammo items whose `ItemDamageAmmo` row
+  exists but the five-store pre-check rejects** (live 2026-11-18).
 - **No item template reload** at the pinned commit; see the pin rule in `PORT-PLAN.md`.
+- **Heirloom armor maps to rare** in the armor store pre-check, mirroring `ItemTemplate::GetArmor`
+  (`ItemTemplate.cpp:148-152`): before, an heirloom armor item whose item level had no armor table row was not marked
+  incomplete, while the core's `GetArmor` would have read those tables as rare.
 - A lazy lookup made before `LoadItemClassicBlock` (World.cpp:1631) would cache Block 0. Nothing does that today.
