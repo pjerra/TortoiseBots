@@ -356,6 +356,10 @@ bool UseAction::Execute(Event& event)
 
 GameObject* UseAction::NearestLockFor(uint32 keyItemId)
 {
+    // Opening a lock with a key means using a game object: not ported on ForeverCore ("game object use"), so there is no lock to walk to.
+    if (GameObjectUseUnportedCompat())
+        return nullptr;
+
     GameObject* nearest = nullptr;
     float closest = 30.0f;
     for (ObjectGuid const& guid : AI_VALUE(std::list<ObjectGuid>, "nearest game objects no los"))
