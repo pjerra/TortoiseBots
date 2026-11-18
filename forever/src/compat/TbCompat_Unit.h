@@ -358,3 +358,10 @@ inline uint32 WorldIntConfigCompat(WorldIntConfigs index) { return sWorld.getInt
 
 // The spell a trap game object casts. T GameObjectInfo::trap.spellId, F GameObjectTemplate::trap.spell (GameObjectData.h:185-196).
 inline uint32 GameObjectTrapSpellIdCompat(GameObjectTemplate const* info) { return info->trap.spell; }
+
+// The quest in a quest-log slot (0 = empty), with the Turtle helper's own bounds check (ai/cmangos-compat-shim.h:36-41). T reads
+// the slot's update field; F asks the player (Player.h:1831). The log has more slots on F (40 against 20).
+inline uint32 GetQuestSlotIdCompat(Player const* player, uint16 slot)
+{
+    return player && slot < MAX_QUEST_LOG_SIZE ? player->GetQuestSlotQuestId(slot) : 0;
+}

@@ -134,3 +134,6 @@ public:
     void Step() {}
     static void SetOutputState(bool /*state*/) {}
 };
+
+// The classes a quest is limited to, as a class mask (0 = every class): T QuestDef.h:231 GetRequiredClasses, F Quest::GetAllowableClasses.
+#define GetRequiredClasses GetAllowableClasses
