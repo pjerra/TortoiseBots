@@ -15,7 +15,7 @@ bool ChangeCombatStrategyAction::Execute(Event& event)
 
     if (!sPlayerbotAIConfig.bExplicitDbStoreSave)
     {
-       if (event.GetSource() == "co")
+       if (event.getSource() == "co")
        {
           std::vector<std::string> splitted = split(text, ',');
           CharacterDatabase.BeginTransaction(PlayerbotDbStore::DB_SERIAL_ID);
@@ -53,7 +53,7 @@ bool ChangeNonCombatStrategyAction::Execute(Event& event)
 
     if (!sPlayerbotAIConfig.bExplicitDbStoreSave)
     {
-       if (event.GetSource() == "nc")
+       if (event.getSource() == "nc")
        {
           std::vector<std::string> splitted = split(text, ',');
           CharacterDatabase.BeginTransaction(PlayerbotDbStore::DB_SERIAL_ID);
@@ -123,7 +123,7 @@ bool ChangeAllStrategyAction::Execute(Event& event)
 
     if (!sPlayerbotAIConfig.bExplicitDbStoreSave)
     {
-       if (event.GetSource() == "nc" || event.GetSource() == "co")
+       if (event.getSource() == "nc" || event.getSource() == "co")
        {
           std::vector<std::string> splitted = split(text, ',');
           CharacterDatabase.BeginTransaction(PlayerbotDbStore::DB_SERIAL_ID);

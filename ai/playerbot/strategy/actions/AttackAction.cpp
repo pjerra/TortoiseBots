@@ -84,9 +84,9 @@ bool AttackMyTargetAction::Execute(Event& event)
 {
     Player* requester = event.GetOwner() ? event.GetOwner() : GetMaster();
     SC_LOG("attack-cmd entry bot=%s requester=%s eventOwner=%s",
-           bot ? bot->GetName() : "(null)",
-           requester ? requester->GetName() : "(null)",
-           event.GetOwner() ? event.GetOwner()->GetName() : "(null)");
+           CStrCompat(bot ? bot->GetName() : "(null)"),
+           CStrCompat(requester ? requester->GetName() : "(null)"),
+           CStrCompat(event.GetOwner() ? event.GetOwner()->GetName() : "(null)"));
 
     // A new explicit command supersedes any previous command-only priority.
     // Autonomous AttackAction callers do not touch this marker.
@@ -98,9 +98,9 @@ bool AttackMyTargetAction::Execute(Event& event)
         SC_LOG("attack-cmd selection bot=%s requester=%s selGuid=0x%016llx",
                bot ? bot->GetName() : "(null)",
                requester->GetName(),
-               (unsigned long long)guid.GetRawValue());
+               (unsigned long long)GuidRawCompat(guid));
 
-        if (guid)
+        if (!guid.IsEmpty())
         {
             Unit* tgt = ai->GetUnit(guid);
             // A whispered "attack" ends a stay like the .bot attack orders do
@@ -108,8 +108,8 @@ bool AttackMyTargetAction::Execute(Event& event)
             if (tgt)
                 ai->EndStayForOrder();
             SC_LOG("attack-cmd target bot=%s tgt=%s tgtMap=%d botMap=%u",
-                   bot ? bot->GetName() : "(null)",
-                   tgt ? tgt->GetName() : "(null-unit)",
+                   CStrCompat(bot ? bot->GetName() : "(null)"),
+                   CStrCompat(tgt ? tgt->GetName() : "(null-unit)"),
                    tgt ? (int)tgt->GetMapId() : -1,
                    bot ? bot->GetMapId() : 0);
 
@@ -122,21 +122,21 @@ bool AttackMyTargetAction::Execute(Event& event)
             {
                 CommitExplicitAttackTarget(ai, guid);
                 SC_LOG("attack-cmd OK bot=%s tgt=%s",
-                       bot ? bot->GetName() : "(null)",
-                       tgt ? tgt->GetName() : "(null)");
+                       CStrCompat(bot ? bot->GetName() : "(null)"),
+                       CStrCompat(tgt ? tgt->GetName() : "(null)"));
                 return true;
             }
-            SC_LOG("attack-cmd FAIL bot=%s — Attack() returned false", bot ? bot->GetName() : "(null)");
+            SC_LOG("attack-cmd FAIL bot=%s — Attack() returned false", CStrCompat(bot ? bot->GetName() : "(null)"));
         }
         else if (verbose)
         {
-            SC_LOG("attack-cmd FAIL bot=%s — requester has no selection", bot ? bot->GetName() : "(null)");
+            SC_LOG("attack-cmd FAIL bot=%s — requester has no selection", CStrCompat(bot ? bot->GetName() : "(null)"));
             ai->TellError(requester, "You have no target");
         }
     }
     else
     {
-        SC_LOG("attack-cmd FAIL bot=%s — no requester (event has no owner, no master)", bot ? bot->GetName() : "(null)");
+        SC_LOG("attack-cmd FAIL bot=%s — no requester (event has no owner, no master)", CStrCompat(bot ? bot->GetName() : "(null)"));
     }
 
     return false;
@@ -269,7 +269,7 @@ bool AttackAction::Attack(Player* requester, Unit* target, float maxDistance, bo
     {
         // A dead bot refuses every order silently otherwise: nothing below names
         // the bot's own death (only the target's), so the player re-sends a corpse.
-        SC_LOG("attack-cmd FAIL bot=%s — bot is dead", bot ? bot->GetName() : "(null)");
+        SC_LOG("attack-cmd FAIL bot=%s — bot is dead", CStrCompat(bot ? bot->GetName() : "(null)"));
         if (verbose)
         {
             ai->TellPlayerNoFacing(requester, "I am dead");
@@ -281,7 +281,7 @@ bool AttackAction::Attack(Player* requester, Unit* target, float maxDistance, bo
     MotionMaster &mm = *bot->GetMotionMaster();
 	if (mm.GetCurrentMovementGeneratorType() == TAXI_MOTION_TYPE || (bot->IsFlying() && WorldPosition(bot).currentHeight() > 10.0f))
     {
-        SC_LOG("attack-cmd FAIL bot=%s — taxi/flying", bot ? bot->GetName() : "(null)");
+        SC_LOG("attack-cmd FAIL bot=%s — taxi/flying", CStrCompat(bot ? bot->GetName() : "(null)"));
         if (verbose)
         {
             ai->TellPlayerNoFacing(requester, "I cannot attack in flight");
@@ -293,8 +293,8 @@ bool AttackAction::Attack(Player* requester, Unit* target, float maxDistance, bo
     if (IsTargetValid(requester, target, maxDistance))
     {
         SC_LOG("attack-cmd valid-tgt bot=%s tgt=%s mounted=%d range=%.1f",
-               bot ? bot->GetName() : "(null)",
-               target ? target->GetName() : "(null)",
+               CStrCompat(bot ? bot->GetName() : "(null)"),
+               CStrCompat(target ? target->GetName() : "(null)"),
                bot ? (int)bot->IsMounted() : -1,
                target ? sServerFacade.getDistance2d(bot, target) : -1.0f);
         if (bot->IsMounted() && (sServerFacade.getDistance2d(bot, target) < 40.0f || bot->IsFlying()))
@@ -377,15 +377,15 @@ bool AttackAction::Attack(Player* requester, Unit* target, float maxDistance, bo
                 result = true;
             }
             SC_LOG("attack-cmd bot->Attack bot=%s tgt=%s result=%d meleeEval=%d",
-                   bot ? bot->GetName() : "(null)",
-                   target ? target->GetName() : "(null)",
+                   CStrCompat(bot ? bot->GetName() : "(null)"),
+                   CStrCompat(target ? target->GetName() : "(null)"),
                    (int)result,
                    (int)meleeEval);
         }
         else
         {
             SC_LOG("attack-cmd skip bot->Attack bot=%s — stealthed=%d isWaitingForAttack=%d",
-                   bot ? bot->GetName() : "(null)",
+                   CStrCompat(bot ? bot->GetName() : "(null)"),
                    (int)ai->HasStrategy("stealthed", BotState::BOT_STATE_COMBAT),
                    (int)isWaitingForAttack);
         }
@@ -413,7 +413,7 @@ bool AttackAction::Attack(Player* requester, Unit* target, float maxDistance, bo
         return result;
     }
 
-    SC_LOG("attack-cmd FAIL bot=%s — IsTargetValid rejected", bot ? bot->GetName() : "(null)");
+    SC_LOG("attack-cmd FAIL bot=%s — IsTargetValid rejected", CStrCompat(bot ? bot->GetName() : "(null)"));
     return false;
 }
 

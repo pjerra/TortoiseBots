@@ -172,7 +172,7 @@ bool ai::HealerWandAllowed(PlayerbotAI* ai, Unit* target)
     gate.targetEngaged = TargetFightsGroup(bot, target);
     gate.aloneNear = NoGroupMemberNear(bot);
     ObjectGuid const ordered = context->GetValue<ObjectGuid>("explicit attack target")->Get();
-    gate.explicitOrder = target && ordered && ordered == target->GetObjectGuid();
+    gate.explicitOrder = target && !ordered.IsEmpty() && ordered == target->GetObjectGuid();
     gate.healOnly = ai->RunHealOnly();
     gate.noMana = context->GetValue<bool>("has mana", "self target")->Get() &&
         context->GetValue<uint8>("mana", "self target")->Get() < 5;
@@ -231,7 +231,7 @@ bool HealerShouldAttackTrigger::IsActive()
     Unit* const target = AI_VALUE(Unit*, "current target");
     ObjectGuid const ordered = AI_VALUE(ObjectGuid, "explicit attack target");
     bool const engaged = TargetFightsGroup(bot, target) ||
-        (target && ordered && ordered == target->GetObjectGuid());
+        (target && !ordered.IsEmpty() && ordered == target->GetObjectGuid());
     if (!HealerDamageTargetAllowed(true, target != nullptr, engaged))
         return false;
 
@@ -1433,7 +1433,7 @@ bool TankFaceNeededTrigger::IsActive()
     // Hysteresis (donor TankFaceAction, tolerable = PI/2): fire only while
     // the mob's front points at the party side. After the sidestep the tank
     // sits ~108 degrees off, outside this window, so it does not jitter.
-    float delta = averageAngle - target->GetAngle(bot);
+    float delta = averageAngle - GetAngleCompat(target, bot);
     while (delta > M_PI)
         delta -= 2.0f * M_PI;
     while (delta < -M_PI)
@@ -1536,7 +1536,7 @@ bool WandBlocksCcTrigger::ComputeCcCastWaiting()
             continue;
         float maxRange = SpellRangeMax(rangeEntry);
         bot->ApplySpellMod(spellId, SPELLMOD_RANGE, maxRange);
-        if (bot->GetCombatDistance(target) > maxRange)
+        if (GetDistanceCompat(bot, target, SizeFactor::CombatReach) > maxRange)
             continue;
 
         WandState const state{true, ProbeSpell(spell, target), keepWandForThreat, noManaRowActive};
@@ -1682,12 +1682,12 @@ bool CorpseNearTrigger::IsActive()
 
 bool IsFallingTrigger::IsActive()
 {
-    return bot->HasMovementFlag(MOVEFLAG_JUMPING);
+    return HasMovementFlagCompat(bot, MOVEFLAG_JUMPING);
 }
 
 bool IsFallingFarTrigger::IsActive()
 {
-    return bot->HasMovementFlag(MOVEFLAG_FALLINGFAR);
+    return HasMovementFlagCompat(bot, MOVEFLAG_FALLINGFAR);
 }
 
 bool HasAreaDebuffTrigger::IsActive()
@@ -1860,7 +1860,7 @@ bool TargetOfAttacker::IsActive()
 bool TargetOfAttackerInRange::IsActive()
 {
     const Unit* closestAttacker = AI_VALUE(Unit*, "closest attacker targeting me");
-    return closestAttacker && bot->GetCombatDistance(closestAttacker) <= (distance - sPlayerbotAIConfig.contactDistance);
+    return closestAttacker && GetDistanceCompat(bot, closestAttacker, SizeFactor::CombatReach) <= (distance - sPlayerbotAIConfig.contactDistance);
 }
 
 bool TargetOfCastedAuraTypeTrigger::IsActive()

@@ -412,7 +412,7 @@ bool SetPetAction::Execute(Event& event)
         }
         else if (command == "attack")
         {
-            if (requester->GetSelectionGuid())
+            if (!requester->GetSelectionGuid().IsEmpty())
             {
                 constexpr uint32 PET_IMP = 416;
                 constexpr uint32 PHASE_SHIFT = 4511;

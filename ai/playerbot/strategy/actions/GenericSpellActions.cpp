@@ -134,9 +134,9 @@ void BuffClaimRegistry::Claim(ObjectGuid const& caster, ObjectGuid const& scope,
     }
 
     BuffClaim claim;
-    claim.caster = caster.GetRawValue();
+    claim.caster = GuidRawCompat(caster);
     claim.expiry = now + BUFF_CLAIM_TTL;
-    claims[std::make_pair(scope.GetRawValue(), spell)] = claim;
+    claims[std::make_pair(GuidRawCompat(scope), spell)] = claim;
 }
 
 bool BuffClaimRegistry::IsClaimedByOther(ObjectGuid const& caster, ObjectGuid const& scope, std::string const& spell)
@@ -146,7 +146,7 @@ bool BuffClaimRegistry::IsClaimedByOther(ObjectGuid const& caster, ObjectGuid co
     std::map<std::pair<uint64, std::string>, BuffClaim>& claims = BuffClaims();
 
     std::map<std::pair<uint64, std::string>, BuffClaim>::iterator it =
-        claims.find(std::make_pair(scope.GetRawValue(), spell));
+        claims.find(std::make_pair(GuidRawCompat(scope), spell));
     if (it == claims.end())
         return false;
 
@@ -158,7 +158,7 @@ bool BuffClaimRegistry::IsClaimedByOther(ObjectGuid const& caster, ObjectGuid co
 
     // The caster's own claim must never block it: consecutive casts of one bot
     // stay governed by the retry cooldowns alone.
-    return it->second.caster != caster.GetRawValue();
+    return it->second.caster != GuidRawCompat(caster);
 }
 
 ObjectGuid BuffClaimRegistry::GroupScope(Player* bot)
@@ -244,7 +244,7 @@ bool CastSpellAction::Execute(Event& event)
         Unit* target = GetTarget();
         if (!target)
         {
-            sLog.outDebug("%s: CastSpellAction::Execute aborting '%s' - target resolved to null at cast time", bot->GetName(), spellName.c_str());
+            sLog.outDebug("%s: CastSpellAction::Execute aborting '%s' - target resolved to null at cast time", CStrCompat(bot->GetName()), spellName.c_str());
             return false;
         }
 
@@ -308,7 +308,7 @@ bool CastSpellAction::isPossible()
     }
     else
     {
-        float dist = bot->GetDistance(spellTarget, ai->IsRanged(bot) ? SizeFactor::CombatReach : SizeFactor::CombatReachWithMelee);
+        float dist = GetDistanceCompat(bot, spellTarget, ai->IsRanged(bot) ? SizeFactor::CombatReach : SizeFactor::CombatReachWithMelee);
         if (range == ATTACK_DISTANCE)
         {
             canReach = bot->CanReachWithMeleeAutoAttack(spellTarget);
@@ -540,7 +540,7 @@ bool CastPetSpellAction::isPossible()
                 const SpellEntry* pSpellInfo = sServerFacade.LookupSpellInfo(spellId);
                 if (pSpellInfo)
                 {
-                    const float dist = pet->GetDistance(spellTarget, SizeFactor::CombatReach);
+                    const float dist = GetDistanceCompat(pet, spellTarget, SizeFactor::CombatReach);
                     canReach = dist <= (range + sPlayerbotAIConfig.contactDistance);
 
                     if (pSpellInfo->rangeIndex != SPELL_RANGE_IDX_COMBAT && pSpellInfo->rangeIndex != SPELL_RANGE_IDX_SELF_ONLY && pSpellInfo->rangeIndex != SPELL_RANGE_IDX_ANYWHERE)

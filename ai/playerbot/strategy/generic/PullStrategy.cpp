@@ -530,7 +530,7 @@ void PullStrategy::DecideOpening(Unit* target)
     input.autoEnabled = sPlayerbotAIConfig.rangedPull;
     input.meleeApproach = sPlayerbotAIConfig.rangedPullMeleeApproach;
     input.distance = bot->GetDistance(target);
-    input.inLos = bot->IsWithinLOSInMap(target, true);
+    input.inLos = IsWithinLOSInMapCompat(bot, target, true);
 
     // What the tank would fire, and how far. The weapon classes shoot with the
     // spell their weapon teaches; hunters and casters use their pull spell.

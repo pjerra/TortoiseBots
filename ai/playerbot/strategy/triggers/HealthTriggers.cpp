@@ -140,7 +140,7 @@ bool HealTargetFullHealthTrigger::IsActive()
     // The cast's cached unit-target pointer is refreshed only in the bot's next Spell::update, and the map frees a unit
     // removed in this tick, so resolve the guid the cast holds: a target that left the world reads none.
     ObjectGuid const targetGuid = currentSpell->m_targets.getUnitTargetGuid();
-    Unit* target = targetGuid ? ObjectAccessor::GetUnit(*bot, targetGuid) : nullptr;
+    Unit* target = !targetGuid.IsEmpty() ? ObjectAccessor::GetUnit(*bot, targetGuid) : nullptr;
     if (!target || !target->IsInWorld() || !target->IsAlive() || target->GetMap() != bot->GetMap())
         return false;
 
