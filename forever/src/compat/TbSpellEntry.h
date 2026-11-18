@@ -19,6 +19,8 @@
 #include "ClassicSpellValue.h"
 #include <array>
 #include <atomic>
+#include <functional>
+#include <vector>
 #include <mutex>
 #include <string>
 
@@ -91,7 +93,7 @@ struct SpellEntry
     uint32    EffectTriggerSpell[MAX_EFFECT_INDEX] = {};  // T :611  triggered spell id          F TriggerSpell                SpellInfo.h:260
     float     EffectPointsPerComboPoint[MAX_EFFECT_INDEX] = {}; // T :614  T :614 F classic row points_per_combo (else PointsPerResource)
     std::array<std::string, MAX_DBC_LOCALE> SpellName{};  // T :630  the name, per locale        F SpellName->Str[locale]      SpellInfo.h:420
-    std::array<std::string, MAX_DBC_LOCALE> Rank{};       // T :633  "Rank N"                    F ChainEntry->rank, else derived by name, family and level (R4, see g_derivedRanks)
+    std::array<std::string, MAX_DBC_LOCALE> Rank{};       // T :633  "Rank N"                    F ChainEntry->rank, else the chain table (R5: the core's chain or the SkillLineAbility links; none = empty)
     uint32    ManaCostPercentage = 0;                     // T :666  percent of the caster's base mana  F see Fill (classic cost row, else PowerCosts[0]->PowerCostPct)
     uint32    StartRecoveryCategory = 0;                  // T :667  GCD category                F StartRecoveryCategory       SpellInfo.h:418
     uint32    StartRecoveryTime = 0;                      // T :668  GCD in ms                  F StartRecoveryTime           SpellInfo.h:419
@@ -109,7 +111,9 @@ struct SpellEntry
     std::string IncompleteReason;
 
     // The old struct's helpers, answered by the core wherever the core asks the same question (SHIM-R3-NOTES.md).
-    int32 CalculateSimpleValue(SpellEffectIndex eff) const { return EffectBasePoints[eff] + int32(EffectBaseDice[eff]); }
+    // The arrays hold the first MAX_EFFECT_INDEX effects; SpellEffectIndex is the core's enum and can be 0..31 (R5 item 11): a slot beyond the mirrored
+    // three has no value here (0), as for a spell with fewer effects.
+    int32 CalculateSimpleValue(SpellEffectIndex eff) const { return uint32(eff) < MAX_EFFECT_INDEX ? EffectBasePoints[eff] + int32(EffectBaseDice[eff]) : 0; }
     bool IsPositiveSpell() const;
     bool IsPositiveEffect(SpellEffectIndex effIndex) const;
     bool IsPassiveSpell() const;
@@ -163,6 +167,20 @@ namespace tbcompat
     // Bytes held by the immutable id index and by the mirror slot array; 0 when not built.
     uint64 SpellIndexBytes();
     uint64 SpellSlotBytes();
+
+    // ---- Spell rank chains (R5, TbSpellEntry.cpp ChainTable). One table, every rank question: nothing is ranked by name, family or level.
+    struct SpellChainNode { uint32 rank = 0, first = 0, prev = 0, next = 0, last = 0; };
+    struct SpellChainList { std::vector<uint32> ids; bool fromCore = false; };   // ids in rank order; fromCore: the core's own chain entry
+    SpellChainNode const* SpellChainNodeOf(uint32 spellId);   // nullptr: the spell has no chain (rank 0)
+    uint32 SpellRankOf(uint32 spellId);                       // 1.. in a chain, 0 without
+    uint32 SpellFirstRank(uint32 spellId);                    // 0 without a chain
+    uint32 SpellNextRank(uint32 spellId);                     // 0 at the end or without a chain
+    uint32 SpellPrevRank(uint32 spellId);
+    uint32 SpellLastRank(uint32 spellId);
+    bool SpellsShareChain(uint32 a, uint32 b);                // both in a chain and the same one (a == b counts)
+    bool SpellIsHigherRank(uint32 spellId, uint32 otherId);   // same chain and a higher rank number
+    void ForEachSpellChain(std::function<void(SpellChainList const&)> const& fn);
+    uint32 SpellChainCount();
 
     // Lookups that asked for an id the core has only with a non-NONE difficulty (answered nullptr).
     uint32 NonNoneOnlyLookups();

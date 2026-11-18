@@ -111,6 +111,8 @@ inline bool SpellDestinationCompat(Spell const* spell, float& x, float& y, float
 }
 inline bool SpellIsPreparingCompat(Spell* spell) { return spell->getState() == SPELL_STATE_PREPARING; }
 inline bool IsHighRankOfSpellCompat(uint32 spellId, uint32 otherId) { return sSpellMgr.IsHighRankOfSpell(spellId, otherId); }
+// Do two spells belong to the same rank line. Turtle: always true; the caller's own name, family and icon tests decide, as they always did.
+inline bool SameRankLineCompat(SpellEntry const*, SpellEntry const*) { return true; }
 inline bool ItemFitsSpellCompat(Item* item, SpellEntry const* spell) { return item->IsFitToSpellRequirements(spell); }
 
 inline std::vector<uint32> PetSpellIdsCompat(Pet const* pet)
