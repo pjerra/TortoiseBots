@@ -286,6 +286,15 @@ inline std::string ItemLocalizedNameCompat(uint32 itemId, int locale, std::strin
 // any, else the map's linked zone; Maps/Map.h:149-166). F's key is the area ID and the row is the DB2 row of that id (0 gives none).
 // The key is therefore not comparable between the cores, only within one.
 inline AreaTableEntry const* AreaEntryOfKeyCompat(uint32 key, uint32 /*mapId*/) { return sAreaTableStore.LookupEntry(key); }
+// The zone and area ids an area key stands for (0, 0 for an unknown key). T `TerrainManager::GetZoneAndAreaIdByAreaFlag(zone, area, flag,
+// map)` (Maps/GridMap.cpp:1316): the area is the row's id, the zone the row's parent zone or the row itself when it is a zone. F reads the same
+// from the DB2 row of the id. Offered for the callers outside R4C that look a key up (TravelMgr.cpp:2775, FishAction.cpp:561, GuildOrderSources.cpp:123).
+inline void ZoneAndAreaIdOfKeyCompat(uint32& zoneId, uint32& areaId, uint16 key, uint32 mapId)
+{
+    AreaTableEntry const* area = AreaEntryOfKeyCompat(key, mapId);
+    areaId = area ? area->ID : 0;
+    zoneId = area ? (area->ParentAreaID ? area->ParentAreaID : area->ID) : 0;
+}
 // The row's own numbers. T AreaEntry::Id / ZoneId (0 when the area is itself a zone) / Team (AREATEAM_*: 2 Alliance, 4 Horde,
 // 6 both) / Name (char*); F ID / ParentAreaID (0 when it has no parent) / FactionGroupMask (the same 2 and 4 bits) / AreaName (DB2Structure.h:125).
 inline uint32 AreaIdOfCompat(AreaTableEntry const* area) { return area->ID; }
@@ -302,6 +311,10 @@ inline std::string MapNameOrEmptyCompat(MapEntry const* map)
     char const* name = map->MapName[LOCALE_enUS];
     return name ? name : "";
 }
+
+// Guid type tag of a map object transport (a boat or zeppelin, a `Transport`). T HIGHGUID_MO_TRANSPORT, F HighGuid::Transport (ObjectGuid.h:
+// `IsMOTransport()` is that tag). T's HIGHGUID_TRANSPORT (a game object based transport) has no ForeverCore tag and is NOT defined.
+#define HIGHGUID_MO_TRANSPORT HighGuid::Transport
 
 // ---- Spawn data -----------------------------------------------------------------------------------------------
 // Creature and game object spawn records by their database id, and the walk over all of them. T ObjectMgr::DoCreatureData /

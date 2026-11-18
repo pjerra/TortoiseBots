@@ -188,6 +188,10 @@ inline std::string ItemLocalizedNameCompat(uint32 itemId, int locale, std::strin
 // ---------------------------------------------------------------------------------------------------------------
 // Areas: T's key is the per-map area flag, F's the area id (forever/src/compat/TbCompat_C.h).
 inline AreaTableEntry const* AreaEntryOfKeyCompat(uint32 key, uint32 mapId) { return AreaEntry::GetByAreaFlagAndMap(key, mapId); }
+inline void ZoneAndAreaIdOfKeyCompat(uint32& zoneId, uint32& areaId, uint16 key, uint32 mapId)
+{
+    TerrainManager::GetZoneAndAreaIdByAreaFlag(zoneId, areaId, key, mapId);
+}
 inline uint32 AreaIdOfCompat(AreaTableEntry const* area) { return area->Id; }
 inline uint32 AreaZoneIdCompat(AreaTableEntry const* area) { return area->ZoneId; }
 inline uint32 AreaTeamCompat(AreaTableEntry const* area) { return area->Team; }
