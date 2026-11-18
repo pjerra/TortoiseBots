@@ -1,11 +1,11 @@
 item_id,name,first_aid_skill,item_level,how_obtained,source,client_build
-1251,Linen Bandage,1,1,crafted by First Aid (recipe from a First Aid trainer),TDB 2026-10-14 armory_item requiredSkill 2942 (First Aid),client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14
-6450,Silk Bandage,100,1,crafted by First Aid (recipe from a First Aid trainer),TDB 2026-10-14 armory_item requiredSkill 2942 (First Aid),client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14
-6451,Heavy Silk Bandage,125,1,crafted by First Aid (recipe from a First Aid trainer),TDB 2026-10-14 armory_item requiredSkill 2942 (First Aid),client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14
-8544,Mageweave Bandage,150,1,crafted by First Aid (recipe from a First Aid trainer),TDB 2026-10-14 armory_item requiredSkill 2942 (First Aid),client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14
-8545,Heavy Mageweave Bandage,175,1,crafted by First Aid (recipe from a First Aid trainer),TDB 2026-10-14 armory_item requiredSkill 2942 (First Aid),client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14
-2581,Heavy Linen Bandage,20,1,crafted by First Aid (recipe from a First Aid trainer),TDB 2026-10-14 armory_item requiredSkill 2942 (First Aid),client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14
-14529,Runecloth Bandage,200,52,crafted by First Aid (recipe from a First Aid trainer),TDB 2026-10-14 armory_item requiredSkill 2942 (First Aid),client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14
-14530,Heavy Runecloth Bandage,225,58,crafted by First Aid (recipe from a First Aid trainer); vendor: 15471 Lieutenant General Andorov,TDB 2026-10-14 armory_item requiredSkill 2942 (First Aid),client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14
-3530,Wool Bandage,50,1,crafted by First Aid (recipe from a First Aid trainer),TDB 2026-10-14 armory_item requiredSkill 2942 (First Aid),client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14
-3531,Heavy Wool Bandage,75,1,crafted by First Aid (recipe from a First Aid trainer),TDB 2026-10-14 armory_item requiredSkill 2942 (First Aid),client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14
+1251,Linen Bandage,1,1,crafted by First Aid (recipe from a First Aid trainer),TDB 2026-10-14 armory_item requiredSkill 2942 (First Aid),70938 (db2-70938 extraction 2026-11-18)
+6450,Silk Bandage,100,1,crafted by First Aid (recipe from a First Aid trainer),TDB 2026-10-14 armory_item requiredSkill 2942 (First Aid),70938 (db2-70938 extraction 2026-11-18)
+6451,Heavy Silk Bandage,125,1,crafted by First Aid (recipe from a First Aid trainer),TDB 2026-10-14 armory_item requiredSkill 2942 (First Aid),70938 (db2-70938 extraction 2026-11-18)
+8544,Mageweave Bandage,150,1,crafted by First Aid (recipe from a First Aid trainer),TDB 2026-10-14 armory_item requiredSkill 2942 (First Aid),70938 (db2-70938 extraction 2026-11-18)
+8545,Heavy Mageweave Bandage,175,1,crafted by First Aid (recipe from a First Aid trainer),TDB 2026-10-14 armory_item requiredSkill 2942 (First Aid),70938 (db2-70938 extraction 2026-11-18)
+2581,Heavy Linen Bandage,20,1,crafted by First Aid (recipe from a First Aid trainer),TDB 2026-10-14 armory_item requiredSkill 2942 (First Aid),70938 (db2-70938 extraction 2026-11-18)
+14529,Runecloth Bandage,200,52,crafted by First Aid (recipe from a First Aid trainer),TDB 2026-10-14 armory_item requiredSkill 2942 (First Aid),70938 (db2-70938 extraction 2026-11-18)
+14530,Heavy Runecloth Bandage,225,58,crafted by First Aid (recipe from a First Aid trainer); vendor: 15471 Lieutenant General Andorov,TDB 2026-10-14 armory_item requiredSkill 2942 (First Aid),70938 (db2-70938 extraction 2026-11-18)
+3530,Wool Bandage,50,1,crafted by First Aid (recipe from a First Aid trainer),TDB 2026-10-14 armory_item requiredSkill 2942 (First Aid),70938 (db2-70938 extraction 2026-11-18)
+3531,Heavy Wool Bandage,75,1,crafted by First Aid (recipe from a First Aid trainer),TDB 2026-10-14 armory_item requiredSkill 2942 (First Aid),70938 (db2-70938 extraction 2026-11-18)

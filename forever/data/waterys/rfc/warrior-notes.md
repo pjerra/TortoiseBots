@@ -1,6 +1,6 @@
 # Warrior notes for RFC (Ragefire Chasm, level 18, 1 prot + 1 priest + 3 arms)
 
-Client: DB2 70888 (repack extraction; target 70938 - re-verify deltas on live). TDB 2026-10-14.
+Client: DB2 70938 (db2-70938 extraction 2026-11-18) for spell names/ids (all RFC ids verified, see rfc-70938-check.csv); trainer/starting-bar evidence from TDB 2026-10-14 + 70888 SkillLineAbility parse. Target client is 70938.
 
 ## CONFIRMED: Defensive Stance (71), Taunt (355), Sunder Armor (7386) have NO learn path on Forever as-shipped
 
@@ -32,3 +32,5 @@ forced attack), no Sunder (Rend + Heroic Strike threat only).
 4: Charge, Rend. 6: Thunder Clap. 10: Bloodrage. 12: Shield Bash, Overpower.
 14: Demoralizing Shout, Revenge. 16: Shield Block, Mocking Blow. 18: nothing new.
 Ranks are all rank 1 in this bracket (rank-2+ starts at 20+ for most lines).
+
+Note (DeepSeek 70938 check): spell 5019 is named `Shoot (wand)` in the priest/mage CSVs vs DB2 `Shoot`; id present in both builds, annotation kept.
