@@ -92,9 +92,34 @@ has no unbind: the strategy is still given. With the host's constant `IsInComman
 New: **`debug spell visuals`** (`Feature::DebugVisuals`, UnportedFeatures.h, last row; UNPORTED.md): the `debug threat` strategy's two colour cues. Failure value: nothing is shown. "Less" value: the
 bot does the same fight, only without a debug marker (it never feeds a decision). One call site (ThreatStrategy.cpp, two lines). No other row.
 
-## 8. Link stand-ins (SliceLinkStubs.cpp)
+## 8. Link stand-ins (forever/src/slice/SliceLinkStubs.cpp)
 
-(filled in with the link analysis, section below)
+Method: an option-ON build of the module with the slice-3 list in slot 2 (the VM copy's `CMakeLists.txt` points at `SLICE3.txt`; the worktree's CMake is NOT changed: the merge
+package switches it), then `nm -u` over the module objects minus every symbol a module object defines. What is left is the core's own symbols and the stand-ins the new files need.
+No symbol is defined twice (`nm --defined-only` over the 186 objects, strong symbols).
+
+**Removed (real code now in the slice):** `ai::ThreatResetHolds` (its owner ThreatStrategy.cpp joined). Its readers of the boss table still end in the stand-ins (`GetBossTactics()` answers an empty
+table, so `ThreatResetWindowOf` is null and the function answers false before the seek snapshot), i.e. the same answer as the old stand-in.
+
+**New (3), each the real function's answer when its feature is absent, with the owner file read:**
+
+| Stand-in | Real body (file:line) | Value | Effect at the callers ("does less") |
+|---|---|---|---|
+| `ai::PatchwerkSoakersReadyForPull(PlayerbotAI*)` | PatchwerkSoakerActions.cpp:212: `if (!PatchwerkMainPull(puller)) return true;`; needs map 533, the unregistered strategy `patchwerk main` and a command pull | true | `PullAction::Execute` (PullActions.cpp:455) goes on to fire; the real function answers true for every pull outside the Patchwerk rendezvous. Nothing the stand-in permits that the real one blocks |
+| `ai::SeekCycleSnapshot(instance, key, view&)` | BossTacticsActions.cpp:10085: empties `out`, returns false without a record | false, empty view | only read by `ThreatResetHolds` after a boss-table row exists (never here) and behind `DungeonRunThreatResetWindow` (default false) |
+| `TortoiseBots::PlayerConvenience::NoteHoldOrder(ObjectGuid)` | PlayerConvenience.cpp:207: false when the bot has no pending summon | false, counted under `player summon request` | the stay / guard chat shortcuts ignore the result; no summon exists to restore a follow. If the host adds it beside the other PlayerConvenience answers (TbHostOwnership.cpp:66-), delete mine |
+
+**Re-read, no change (the spec's six):** the real body of each answers what the stand-in answers on this slice.
+`TankIgnoresTarget` (BossTacticsActions.cpp:5579): `TankIgnoreBosses(map, entry)` empty -> false. `IsSeekSourceForTankPickup` (:5130): `!dungeonRunSeekAura` (default false) -> false.
+`IsDpsHeld` (:5914): `dungeonRunSeekTakenSonThreatCap` and `dungeonRunAuraTactics` both default false -> false. `TankPostLatchedUnit` (:12268): empty `g_tankPost` -> 0, and only read behind
+`dungeonRunTankPostKeepsUnit` (TankTargetValue.cpp:198). `TauntRefusedByGate` (:6841): `TankPostReservesSubject` needs `dungeonRunTankPostOwnsSubject` (default false), `dungeonRunTauntGate` default false -> false (allowed).
+The shipped `forever/conf/aiplayerbot.conf.dist` keeps all of these keys at 0. **`AoeTauntStillNeeded` is different:** its real body (:6878) is NOT gated by a boss row: it counts loose attackers of
+the group and answers true when mobs stand on non-tanks. The stand-in's false is the spec's "no AoE taunt is asked for" (the `aoe` kit and the trigger `loose adds near`, the only
+non-order caller, are deliberately unregistered, GenericTriggers.cpp:394, WarriorActions.h:104); a `challenging shout` order would still reach `isUseful` and be refused. That is a feature left
+out (the bot does less), not the real answer: noted for the review.
+
+**Remaining stand-ins in the file** are unchanged: 161 definitions (slice 1 R9 audit) minus `ThreatResetHolds`, plus the 3 above = 163. Their owners (BossTacticsActions.cpp 18,000 lines,
+the Fankriss/Patchwerk/Viscidus files, the travel manager, the loot stack, the item and text managers) are not in the slice.
 
 ## 9. NEEDS FROM host
 
