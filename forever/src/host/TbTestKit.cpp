@@ -192,7 +192,10 @@ bool HandleEquip(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         Say(handler, head + " name=" + name + (worn ? " result=equipped slot=" + std::to_string(unsigned(dest & 255)) + " why=none" : " result=refused why=core-returned-no-item"), args);
         return true;
     }
-    if (!replace || result != EQUIP_ERR_NO_SLOT_AVAILABLE)
+    // With swap = false the core answers an occupied weapon / shield / ring slot with EQUIP_ERR_NO_SLOT_AVAILABLE (Player.cpp:11831) but FindEquipSlot returns
+    // NULL_SLOT and so EQUIP_ERR_NOT_EQUIPPABLE (:11821-11822) when every slot of the item's type is taken (live, M package: a one-hand weapon over a starter weapon).
+    // Both mean "the slot is taken": `replace` asks again with swap = true, which names the real refusal (proficiency, level, class...).
+    if (!replace || (result != EQUIP_ERR_NO_SLOT_AVAILABLE && result != EQUIP_ERR_NOT_EQUIPPABLE))
     {
         Say(handler, head + " name=" + name + " result=refused why=" + ResultName(result) + " code=" + std::to_string(unsigned(result)), args);
         return true;
