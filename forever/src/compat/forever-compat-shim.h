@@ -566,4 +566,5 @@ private:
 #include "TbCompat_Unported.h"    // slice 1, round R6A: features that do not work on ForeverCore yet (counted, logged once)
 #include "TbCompat_V2.h"          // slice 2, package V2: loot values, corpses, dispel target, the loot object stack
 #include "TbCompat_I2.h"          // slice 2, package I2: loot, add loot and use item actions
+#include "TbCompat_S3.h"          // slice 3: group fight on orders (threat/tank, pull, orders)
 #include "TbCompat_Position.h"    // WorldLocation with public mapId/x/y/z/o (must stay last)
