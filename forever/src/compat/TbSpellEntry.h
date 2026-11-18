@@ -77,7 +77,7 @@ struct SpellEntry
     int32     EquippedItemInventoryTypeMask = 0;          // T :574                          F EquippedItemInventoryTypeMask SpellInfo.h:415
     uint32    Effect[MAX_EFFECT_INDEX] = {};              // T :575  SPELL_EFFECT_*              F GetEffects()[i].Effect      SpellInfo.h:236
     int32     EffectDieSides[MAX_EFFECT_INDEX] = {};      // T :576  die sides of the roll       F classic_spell_value die_sides (else 1)
-    uint32    EffectBaseDice[MAX_EFFECT_INDEX] = {};      // T :577  dice count (1 in vanilla)   F 1: a DB2 effect carries no dice
+    uint32    EffectBaseDice[MAX_EFFECT_INDEX] = {};      // T :577  dice count (1 in vanilla)   F 1: no core column (Known differences)
     float     EffectRealPointsPerLevel[MAX_EFFECT_INDEX] = {};  // T :578 added per level  F classic row points_per_level / RealPointsPerLevel
     int32     EffectBasePoints[MAX_EFFECT_INDEX] = {};    // T :579  base - 1 of the roll        F classic row base_points (else round(BasePoints) - 1)
     float     EffectBonusCoefficient[MAX_EFFECT_INDEX] = {};  // T :580  spell power factor    F classic row bonus_coeff (else BonusCoefficient)

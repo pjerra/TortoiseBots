@@ -293,6 +293,10 @@ uint8 EquipAction::GetSmallestBagSlot(Player* bot, uint32 newClass, uint32 newSu
 
 void EquipAction::EquipItemToSlot(Player* requester, Item* item, uint8 targetSlot)
 {
+    // The explicit-slot sibling of EquipItem(): same rule, the item must be one the core can equip.
+    if (!IsItemProtoUsableCompat(GetItemProtoCompat(item)))
+        return;
+
     uint8 bagIndex = item->GetBagSlot();
     uint8 slot = item->GetSlot();
     uint32 itemId = GetItemProtoCompat(item)->ItemId;

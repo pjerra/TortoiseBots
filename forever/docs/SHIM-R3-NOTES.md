@@ -14,6 +14,7 @@ that FETCH the pointer change, to helpers that exist on both cores.
 |---|---|---|
 | BEFORE | full census, this branch at bd0a076ae (round 2 fix 2) | 11,938 in 531 files, 11 clean files |
 | AFTER | full census, this branch at the round-3 commit (6cbc923cd) | 11,065 in 520 files, 11 clean files |
+| FIX1 | full census, this branch at the fix-round commit (6f6bce297) | 11,063 in 520 files, 11 clean files (slice 1 unchanged at 2,504 in 140 files) |
 
 The 873 places that went away are the spell-data families: `Effect` 173 -> 0, `EffectApplyAuraName` 102 -> 0,
 `MAX_EFFECT_INDEX` 64 -> 0, `EffectTriggerSpell` 58 -> 0, `SpellEffectIndex` 28 -> 0, `EffectMiscValue` 42 -> 0,
@@ -29,7 +30,8 @@ a stand-in for a Turtle-only header is compiled once against it), not from the c
 
 ## Storage: lazy, lock-free read path
 
-The spell store holds 35,889 spells (this server, ids up to 9,970,801), so nothing is filled eagerly (D2).
+The spell store holds 35,889 `SpellInfo` records (35,732 of them `DIFFICULTY_NONE`, this server, ids up to 9,970,801), so
+nothing is filled eagerly (D2).
 `tbcompat::InitSpellTable()` runs once from the module's `WorldScript::OnWorldInitialized`, after
 `World::SetInitialWorldSettings` has loaded the spell store (`World.cpp:1471-1491`), and again on demand from the id
 bound's first lookup. It collects the ids of the `DIFFICULTY_NONE` records into a sorted, immutable array and allocates
@@ -57,9 +59,32 @@ nullptr, with one log line. That keeps a disabled module at zero cost, including
 `spell_pet_auras` and `spell_script_names` — side tables, never the store and never a `SpellInfo`. So a mirror is only as
 fresh as the core's object, which does not change after startup. Recorded in `PORT-PLAN.md` rule 3 next to the item note.
 
-**Memory.** 35,889 ids: the sorted id array and the slot array are `4 x n` and `8 x n` bytes plus the index header, about
-430 KB in all; `.tb spellscan` prints both numbers. The old design was one slot per id up to 9,970,801, 76 MiB, allocated
+**Memory.** 35,732 ids: the sorted id array and the slot array are `4 x n` and `8 x n` bytes plus the index header, about
+419 KB in all; `.tb spellscan` prints both numbers. The old design was one slot per id up to 9,970,801, 76 MiB, allocated
 even with the module off.
+
+**Id bound.** `tbcompat::MaxSpellId()` returns the highest id + 1, the old core's `GetMaxSpellId()` semantics
+(`SpellMgr.h:721-722` returns the map size; the cmangos shim's `GetMaxEntry` comment at `ai/cmangos-compat-shim.h:215`
+says the same), so the six `id < bound` loops include the highest spell. It builds the index itself when the store is
+loaded but the index is not, so a static cache of the bound (for example `ItemUsageValue.cpp:89-91`) cannot latch a zero.
+It is 0 only while the spell store is empty (a caller before `World::SetInitialWorldSettings`) or while the module is
+off; every bot caller today runs after `OnWorldInitialized`, so neither happens.
+
+**Clamps and casts in the fill** (a clamp is kept only where the core's signed value is a sentinel the old field cannot
+express as a value):
+
+| field | now | clamp | why |
+|---|---|---|---|
+| `powerType` | `uint32(PowerType)`, no clamp | — | `POWER_HEALTH` is -2 on both cores; Turtle's uint32 column held `0xFFFFFFFE`, which the bot's health-cost branch tests |
+| `manaCost` | `uint32` of the classic row / `PowerCosts[0]->ManaCost`, no clamp | — | the old column is the same raw number as a uint32 |
+| `ManaCostPercentage` | truncating `uint32(...)` (not `lround`) | negative/zero percent -> 0 | the old column is an unsigned integer percentage; Turtle's loader parsed the same float column with `GetUInt32` |
+| `EffectDieSides` | the signed vanilla value, no clamp | — | a negative count is a valid range on Turtle (`Object.cpp:4435-4454` rolls `irand(randomPoints, baseDice)`) |
+| `EffectChainTarget` | `uint32(ChainTargets)` | negative -> 0 | the core's field is a signed chain-target count (`Spell.cpp:1838-1851`); a negative is not a count, and 0 is the old column's "not a chain" |
+| `Totem[i]` | `uint32(Totem[i])` | negative -> 0 | the core's -1 is its "no totem" sentinel; the old column's "none" is 0, and the bit pattern would pass the bot's `Totem[0] > 0` test |
+| `ReagentCount[i]` | `uint32(ReagentCount[i])` | negative -> 0 | an int16 count in the core (`DB2Structure.h:4169`); a negative is not a count and the old field's "no reagent" is 0 |
+
+`EffectBaseDice` stays 1 for every effect the core has no column for; see Known differences below (62 matched effects have
+0 in the 1.12 data, 6 have 2, 3 or 500, and the core's table carries none of them).
 
 ## What the shim does now
 
@@ -249,6 +274,12 @@ member is the core `Spell`'s own `SpellInfo const*` and the core reads it, so th
 `.tb spell <id>` prints one spell's filled fields (cast time, range from `rangeIndex`, duration, levels, cooldowns, GCD,
 mana, then every non-empty effect and a summary line). Both are read-only, `Console::Yes`.
 
+The boot's item line now answers the two round-2 open checks:
+
+```
+TortoiseBots: item mirrors filled: 26054 items in 38 ms, 0 with a Stackable column <= 0 or INT_MAX, 379 incomplete (0 at required level 60 or less), 0 incomplete ammo items whose ItemDamageAmmo row exists but the five-store damage pre-check rejects: 284846 (no row for item level 298 in ItemDamageOneHand, ItemDamageOneHandCaster, ItemDamageTwoHand, ItemDamageTwoHandCaster); ...
+```
+
 ```
 TortoiseBots: spell mirrors: 35732 spells in 88 ms, spell id bound 9970802 (index 142952 B + slots 285856 B), 0 incomplete
 TortoiseBots: effects: 45345 effect slots in all, 456 spells with more than 3 effects (first: 1223037 (5), 1226997 (1), 436097 (3), 1310285 (1), 1247430 (4)), 136 spells with more than one school.
@@ -346,7 +377,7 @@ even with the module off.
   old computed flag.
 - **`GetAllSpellMechanicMask`** is the core's `GetAllEffectsMechanicMask() >> 1`, because the bot builds its own masks as
   `1 << (MECHANIC_X - 1)` (TargetValue.cpp:214-217) while the core sets `1 << Mechanic`.
-- **Table memory.** About 431 KB (see the D7 section), proportional to the spell count; nothing when the module is off.
+- **Table memory.** About 419 KB (see the D7 section), proportional to the spell count; nothing when the module is off.
 - **Tests.** Eight wiring tests pin the exact expression at the call site they guard, and three Viscidus harnesses compile
   production method bodies against fake types; they were updated to the new spelling and to define the helper (the same
   treatment round 2's B1/B2 gave their pinned tests). No test was deleted or weakened in what it checks.
@@ -357,8 +388,8 @@ All on the final tree; the only commit after them is this notes file.
 
 | Gate | Command | Result |
 |---|---|---|
-| G1 module compiles on ForeverCore | `forever-build/build.sh 12 worldserver` | PASS: `CMAKE_RC=0`, `MAKE_RC=0`, 9 s on the final commit (24 s and 29 s on the earlier round-3 commits); the worldserver binary was written at 06:48 |
-| G5 live boot | rsync core + module to `forever-build/src`, build, `forever-run/setup.sh`, `world.sh start`, poll `world.out` for `ready...` / `ASSERTION FAILED` / the mirrors line, `tb spellscan`, `tb spell 133/2050/20154/1223037`, `world.sh stop` | PASS: `ready...` 1, `ASSERTION FAILED` 0, item mirrors line 1; the spellscan and the four spell outputs above; server stopped, `forever-world` removed |
-| G2 Turtle build | `vm-build ~/wt-forever-port --wait` | PASS: `COMPILE_SECONDS=2248 CMAKE_RC=0 MAKE_RC=0`, `QUEUE_RC=0`, mangosd `1bcf69c1...c095b8` and realmd written (a cold slot, hence 2248 s) |
-| G3 Turtle unit tests | `vm-test tb ~/wt-forever-port` | PASS twice: `RESULT: PASS` rc=0, 890 s at decae2b34 and `RESULT: PASS` rc=0, 1137 s at 6cbc923cd (the whole `tools/verify_all.sh`: OKF, surface, wiring, 2,656 unit tests, decision trail) |
-| G4 core-free tests on the ForeverCore toolchain | `policy-tests.sh` on the tree under test | 472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL in 120 s - the same set as the round-2 baseline: `test_combat_monitor_service`, `test_combat_monitor_service_race`, `test_decision_capture_files`, `test_run_trace_writer` (COMPILE_FAIL), `test_decision_capture_codec`, `test_log_file_rotation` (RUN_FAIL). Nothing got worse |
+| G1 module compiles on ForeverCore | `forever-build/build.sh 12 worldserver` | PASS: `CMAKE_RC=0`, `MAKE_RC=0`, `TOTAL_SECONDS=17` at 6f6bce297 (warm ccache; TbSpellEntry.cpp, TbItemPrototype.cpp, TbScripts.cpp rebuilt, worldserver written) |
+| G5 live boot | rsync core + module to `forever-build/src`, build, `forever-run/setup.sh`, `world.sh start`, poll `world.out` for `ready...` / `ASSERTION FAILED` / the item and spell lines, `tb spellscan`, `tb spell 133/2050/11687` (11687 = Life Tap, power 4294967294), `world.sh stop` | PASS: `ready...` 1, `ASSERTION FAILED` 0, the item mirrors line and the spellscan/difficulty lines above, all three `tb spell` outputs; a second boot with `TortoiseBots.Enable = 0` printed the "spell mirrors are off" line and `0 spells ... (index 0 B + slots 0 B)`; server stopped, `forever-world` removed |
+| G2 Turtle build | `vm-build ~/wt-forever-port --wait` | (filled below) |
+| G3 Turtle unit tests | `vm-test tb ~/wt-forever-port` | PASS: `RESULT: PASS` rc=0, `sha=6f6bce297 dirty=1 files=3601`, `vm_duration=1024s` (the whole `tools/verify_all.sh`: OKF, surface, wiring, 2,656 unit tests, decision trail; the one dirty file is a docs edit from the same fix round, committed right after) |
+| G4 core-free tests on the ForeverCore toolchain | `policy-tests.sh` on the tree under test | 472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL in 138 s at 6f6bce297 - the same set as the round-2 baseline and round 3: `test_combat_monitor_service`, `test_combat_monitor_service_race`, `test_decision_capture_files`, `test_run_trace_writer` (COMPILE_FAIL), `test_decision_capture_codec`, `test_log_file_rotation` (RUN_FAIL). Nothing got worse |

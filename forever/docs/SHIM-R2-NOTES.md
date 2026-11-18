@@ -389,8 +389,9 @@ Three review passes (the cap). Codex adversarial twice, cold review twice, live 
   tables stop at 100 (`ItemDamageOneHand`, `...TwoHand`, both caster tables, `ItemArmorTotal`, `ItemArmorShield`: ids
   1-100; `ItemDamageAmmo`: 1-1000; read from the extracted DB2 headers). Their `Damage` or `Armor` is 0 and
   `Incomplete` is set. `IsItemProtoUsableCompat` (both shims; ForeverCore: `false` for an incomplete mirror) now refuses
-  such an item at the four choice points: `ItemUsageValue::Calculate`, `RandomItemMgr`'s gear-candidate filter,
-  `PlayerbotFactory::CanEquipItem` and `EquipAction::EquipItem` before the core equip. The fill line answers the old open
+  such an item at the choice points: `ItemUsageValue::Calculate`, `RandomItemMgr`'s gear-candidate filter,
+  `PlayerbotFactory::CanEquipItem` and both equip paths of `EquipAction` (`EquipItem` and `EquipItemToSlot`) before the
+  core equip. The fill line answers the old open
   check: **0 of the 379 have a required level of 60 or less** (live 2026-11-18), so no level-60 bot could meet one.
 - **The damage pre-check is stricter than the core.** It wants a row in all five damage tables. With the table ranges
   above that only differs from the core for an ammo item with item level 101-1000, which would be marked incomplete
