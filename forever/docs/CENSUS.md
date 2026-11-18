@@ -46,3 +46,15 @@ Shim round 2 (the item prototype mirror) notes: `SHIM-R2-NOTES.md`. The lead's r
 kept holy out of "+all resistances", converted `BagFamily` from the core mask to the old number, filled the mirror once at
 `OnWorldInitialized` (lock-free lookups afterwards) and moved the 180 entry lookups to `GetItemProtoByIdCompat`: census
 12,182 -> 11,938 places, with `GetItemPrototype` and `IsMoving` gone from the name table.
+
+## Slice 1 (bot engine + warrior)
+
+Measured on the 127 files of `forever/SLICE1.txt` only (`FOREVER_CENSUS_LIST=forever/SLICE1.txt forever/tools/vm-census.sh "" 14`).
+The whole-tree number above is no longer the target; this one is.
+
+| Date | State | Files | Compile clean | Error places |
+|---|---|---|---|---|
+| 2026-11-18 | baseline, at round 3 (spell mirror) | 127 | 3 | 2,504 (in 140 files incl. headers) |
+
+Where they are: `PlayerbotAI.cpp` 348, `MovementActions.cpp` 317, `WorldPosition.cpp` 258 and `WorldPosition.h` 225,
+`PlayerbotAISpells.cpp` 128, `PlayerbotAIPackets.cpp` 74, `GenericTriggers.cpp` 51.
