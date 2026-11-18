@@ -536,15 +536,9 @@ std::string ChatHelper::formatItem(ItemQualifier& itemQualifier, int count, int 
 
     if (itemQualifier.GetRandomPropertyId())
     {
-        ItemRandomPropertiesEntry const* item_rand = sItemRandomPropertiesStore.LookupEntry(abs(itemQualifier.GetRandomPropertyId()));
-
-        if (item_rand)
-        {
-            if (loc_idx < 0)
-                loc_idx = 0;
-            std::string suffix = item_rand->nameSuffix[loc_idx];
+        std::string suffix;
+        if (ItemRandomPropertySuffixCompat(itemQualifier.GetRandomPropertyId(), loc_idx, suffix))
             name += " " + suffix;
-        }
     }
 
     out << "|c" << color << "|Hitem:" << itemQualifier.GetLinkQualifier() << "|h[" << name

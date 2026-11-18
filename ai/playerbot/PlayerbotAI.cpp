@@ -250,6 +250,7 @@ PlayerbotAI::PlayerbotAI(Player* bot) :
     RegisterPacketHandlers(masterIncomingPacketHandlers, kMasterIncomingPacketHandlers, kMasterIncomingPacketHandlerCount);
     RegisterPacketHandlers(botOutgoingPacketHandlers, kBotOutgoingPacketHandlers, kBotOutgoingPacketHandlerCount);
     RegisterPacketHandlers(masterOutgoingPacketHandlers, kMasterOutgoingPacketHandlers, kMasterOutgoingPacketHandlerCount);
+    RegisterDirectPacketCasesCompat();
 
     // Issue #872: autonomous alts never auto-spend talents (B12). The
     // IsOwnedBot guard already covers companions; this covers the
@@ -1053,7 +1054,7 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
         Spell* currentSpell = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL);
         if (currentSpell && (currentSpell->getState() == SPELL_STATE_CASTING) && (currentSpell->GetCastedTime() > 0U))
         {
-            SetAIInternalUpdateDelay(currentSpell->GetCastedTime() + sPlayerbotAIConfig.reactDelay + sWorld.GetAverageDiff());
+            SetAIInternalUpdateDelay(currentSpell->GetCastedTime() + sPlayerbotAIConfig.reactDelay + WorldAverageDiffCompat());
 
             // Cancel the update if the new delay increased
             if (!CanUpdateAIInternal())

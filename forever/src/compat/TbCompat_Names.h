@@ -163,3 +163,7 @@ public:
 #define MOVEFLAG_SWIMMING MOVEMENTFLAG_SWIMMING
 #define MOVEFLAG_FALLINGFAR MOVEMENTFLAG_FALLING_FAR
 #define MOVEFLAG_JUMPING MOVEMENTFLAG_FALLING
+
+// First Aid, the skill line 129 on both cores (T SharedDefines.h; F has no name for it in its SkillType enum, but its own
+// Player.cpp:6478 says "First Aid 129" for the same line).
+inline constexpr uint32 SKILL_FIRST_AID = 129;

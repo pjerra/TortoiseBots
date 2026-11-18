@@ -551,4 +551,5 @@ private:
 #include "TbCompat_A.h"           // slice 1, round R4A: actions, triggers, generic strategies, warrior
 #include "TbCompat_P.h"           // slice 1, round R4P: the PlayerbotAI class
 #include "TbCompat_C.h"           // slice 1, round R4C: engine core, config, log, positions
+#include "TbCompat_Unported.h"    // slice 1, round R6A: features that do not work on ForeverCore yet (counted, logged once)
 #include "TbCompat_Position.h"    // WorldLocation with public mapId/x/y/z/o (must stay last)

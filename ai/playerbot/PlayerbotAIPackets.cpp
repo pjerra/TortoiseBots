@@ -18,18 +18,18 @@ using namespace ai;
 
 // The ack writer in SpeedChangeAckPolicy.h must name the same wire values the
 // core table does; both sides are checked at compile time.
-static_assert(TortoiseBots::SpeedChangeAck::kServerWalk == SMSG_FORCE_WALK_SPEED_CHANGE, "speed ack opcode drift");
-static_assert(TortoiseBots::SpeedChangeAck::kServerRun == SMSG_FORCE_RUN_SPEED_CHANGE, "speed ack opcode drift");
-static_assert(TortoiseBots::SpeedChangeAck::kServerRunBack == SMSG_FORCE_RUN_BACK_SPEED_CHANGE, "speed ack opcode drift");
-static_assert(TortoiseBots::SpeedChangeAck::kServerSwim == SMSG_FORCE_SWIM_SPEED_CHANGE, "speed ack opcode drift");
-static_assert(TortoiseBots::SpeedChangeAck::kServerSwimBack == SMSG_FORCE_SWIM_BACK_SPEED_CHANGE, "speed ack opcode drift");
-static_assert(TortoiseBots::SpeedChangeAck::kServerTurnRate == SMSG_FORCE_TURN_RATE_CHANGE, "speed ack opcode drift");
-static_assert(TortoiseBots::SpeedChangeAck::kClientWalk == CMSG_FORCE_WALK_SPEED_CHANGE_ACK, "speed ack opcode drift");
-static_assert(TortoiseBots::SpeedChangeAck::kClientRun == CMSG_FORCE_RUN_SPEED_CHANGE_ACK, "speed ack opcode drift");
-static_assert(TortoiseBots::SpeedChangeAck::kClientRunBack == CMSG_FORCE_RUN_BACK_SPEED_CHANGE_ACK, "speed ack opcode drift");
-static_assert(TortoiseBots::SpeedChangeAck::kClientSwim == CMSG_FORCE_SWIM_SPEED_CHANGE_ACK, "speed ack opcode drift");
-static_assert(TortoiseBots::SpeedChangeAck::kClientSwimBack == CMSG_FORCE_SWIM_BACK_SPEED_CHANGE_ACK, "speed ack opcode drift");
-static_assert(TortoiseBots::SpeedChangeAck::kClientTurnRate == CMSG_FORCE_TURN_RATE_CHANGE_ACK, "speed ack opcode drift");
+static_assert(OpcodesAgreeCompat(TortoiseBots::SpeedChangeAck::kServerWalk, SMSG_FORCE_WALK_SPEED_CHANGE), "speed ack opcode drift");
+static_assert(OpcodesAgreeCompat(TortoiseBots::SpeedChangeAck::kServerRun, SMSG_FORCE_RUN_SPEED_CHANGE), "speed ack opcode drift");
+static_assert(OpcodesAgreeCompat(TortoiseBots::SpeedChangeAck::kServerRunBack, SMSG_FORCE_RUN_BACK_SPEED_CHANGE), "speed ack opcode drift");
+static_assert(OpcodesAgreeCompat(TortoiseBots::SpeedChangeAck::kServerSwim, SMSG_FORCE_SWIM_SPEED_CHANGE), "speed ack opcode drift");
+static_assert(OpcodesAgreeCompat(TortoiseBots::SpeedChangeAck::kServerSwimBack, SMSG_FORCE_SWIM_BACK_SPEED_CHANGE), "speed ack opcode drift");
+static_assert(OpcodesAgreeCompat(TortoiseBots::SpeedChangeAck::kServerTurnRate, SMSG_FORCE_TURN_RATE_CHANGE), "speed ack opcode drift");
+static_assert(OpcodesAgreeCompat(TortoiseBots::SpeedChangeAck::kClientWalk, CMSG_FORCE_WALK_SPEED_CHANGE_ACK), "speed ack opcode drift");
+static_assert(OpcodesAgreeCompat(TortoiseBots::SpeedChangeAck::kClientRun, CMSG_FORCE_RUN_SPEED_CHANGE_ACK), "speed ack opcode drift");
+static_assert(OpcodesAgreeCompat(TortoiseBots::SpeedChangeAck::kClientRunBack, CMSG_FORCE_RUN_BACK_SPEED_CHANGE_ACK), "speed ack opcode drift");
+static_assert(OpcodesAgreeCompat(TortoiseBots::SpeedChangeAck::kClientSwim, CMSG_FORCE_SWIM_SPEED_CHANGE_ACK), "speed ack opcode drift");
+static_assert(OpcodesAgreeCompat(TortoiseBots::SpeedChangeAck::kClientSwimBack, CMSG_FORCE_SWIM_BACK_SPEED_CHANGE_ACK), "speed ack opcode drift");
+static_assert(OpcodesAgreeCompat(TortoiseBots::SpeedChangeAck::kClientTurnRate, CMSG_FORCE_TURN_RATE_CHANGE_ACK), "speed ack opcode drift");
 static_assert(TortoiseBots::SpeedChangeAck::MoveIndex(TortoiseBots::SpeedChangeAck::Move::Walk) == MOVE_WALK, "speed ack move order drift");
 static_assert(TortoiseBots::SpeedChangeAck::MoveIndex(TortoiseBots::SpeedChangeAck::Move::Run) == MOVE_RUN, "speed ack move order drift");
 static_assert(TortoiseBots::SpeedChangeAck::MoveIndex(TortoiseBots::SpeedChangeAck::Move::RunBack) == MOVE_RUN_BACK, "speed ack move order drift");
@@ -161,8 +161,7 @@ OpcodeSet BuildOpcodeSet(PacketHandlerSpec const* specs, size_t count, std::init
 
 void RegisterPacketHandlers(PacketHandlingHelper& helper, PacketHandlerSpec const* specs, size_t count)
 {
-    for (size_t i = 0; i < count; ++i)
-        helper.AddHandler(specs[i].opcode, specs[i].handler, specs[i].delay);
+    RegisterPacketHandlersCompat(helper, specs, count);
 }
 } // namespace
 
@@ -190,7 +189,8 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
 		WorldPacket p(packet);
 		p.rpos(0);
 		ObjectGuid casterGuid;
-        p >> casterGuid.ReadAsPacked();
+        if (!PackedGuidReadCompat(tbcompat::Feature::IncomingSpellState, p, casterGuid))
+            return;
 		if (casterGuid != bot->getObjectGuid())
 			return;
 
@@ -204,7 +204,8 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
 		WorldPacket p(packet);
 		p.rpos(0);
 		ObjectGuid casterGuid;
-        p >> casterGuid.ReadAsPacked();
+        if (!PackedGuidReadCompat(tbcompat::Feature::IncomingSpellState, p, casterGuid))
+            return;
 
 		if (casterGuid != bot->getObjectGuid())
 			return;
@@ -413,7 +414,12 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
         ObjectGuid guid;
         uint32 counter = 0;
         float speed = 0.f;
-        p >> guid.ReadAsPacked() >> counter >> speed;
+        if (!PackedGuidReadCompat(tbcompat::Feature::IncomingSpeedChange, p, guid))
+        {
+            botOutgoingPacketHandlers.AddPacket(packet);
+            return;
+        }
+        p >> counter >> speed;
         if (guid != bot->getObjectGuid())
         {
             // The change belongs to a unit the bot moves (a pet); the bot's own
@@ -422,9 +428,12 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
             return;
         }
 
-        WorldPacket ack(TortoiseBots::SpeedChangeAck::ClientOpcode(move), 8 + 4 + 30 + 4);
-        TortoiseBots::SpeedChangeAck::WriteAck(ack, guid.GetRawValue(), counter, bot->m_movementInfo, speed);
-        bot->GetSession()->HandleForceSpeedChangeAckOpcodes(ack);
+        UnportedBlockCompat(tbcompat::Feature::IncomingSpeedChange, [&](auto* player)
+        {
+            WorldPacket ack(TortoiseBots::SpeedChangeAck::ClientOpcode(move), 8 + 4 + 30 + 4);
+            TortoiseBots::SpeedChangeAck::WriteAck(ack, guid.GetRawValue(), counter, player->m_movementInfo, speed);
+            player->GetSession()->HandleForceSpeedChangeAckOpcodes(ack);
+        }, bot);
 
         if (sPlayerbotAIConfig.raidBossDiagnostics && sPlayerbotAIConfig.hasLog("bot_events.csv"))
         {
@@ -457,7 +466,9 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
         uint32 counter;
         float vcos, vsin, horizontalSpeed, verticalSpeed = 0.f;
 
-        p >> guid.ReadAsPacked() >> counter >> vcos >> vsin >> horizontalSpeed >> verticalSpeed;
+        if (!PackedGuidReadCompat(tbcompat::Feature::IncomingKnockBack, p, guid))
+            return;
+        p >> counter >> vcos >> vsin >> horizontalSpeed >> verticalSpeed;
         verticalSpeed = -verticalSpeed;
 
         // stop casting
@@ -480,7 +491,7 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
         }
 
         // set fall height for fall damage calculations
-        bot->SetFallInformation(maxHeight);
+        SetFallInformationCompat(bot, maxHeight);
 
         // fix height
         if (goodLanding)
@@ -509,19 +520,22 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
         bot->m_movementInfo.AddMovementFlag(MOVEFLAG_BACKWARD);
 
         // send ack
-        WorldPacket ack(CMSG_MOVE_KNOCK_BACK_ACK);
-        bot->m_movementInfo.jump.cosAngle = vcos;
-        bot->m_movementInfo.jump.sinAngle = vsin;
-        bot->m_movementInfo.jump.zspeed = -verticalSpeed;
-        bot->m_movementInfo.jump.xyspeed = horizontalSpeed;
-        ack << bot->getObjectGuid();
-        ack << uint32(0);
-        ack << bot->m_movementInfo;
-        bot->GetSession()->HandleMoveKnockBackAck(ack);
+        UnportedBlockCompat(tbcompat::Feature::IncomingKnockBack, [&](auto* player)
+        {
+            WorldPacket ack(CMSG_MOVE_KNOCK_BACK_ACK);
+            player->m_movementInfo.jump.cosAngle = vcos;
+            player->m_movementInfo.jump.sinAngle = vsin;
+            player->m_movementInfo.jump.zspeed = -verticalSpeed;
+            player->m_movementInfo.jump.xyspeed = horizontalSpeed;
+            ack << player->getObjectGuid();
+            ack << uint32(0);
+            ack << player->m_movementInfo;
+            player->GetSession()->HandleMoveKnockBackAck(ack);
+        }, bot);
 
         // write jump time
         uint32 curTime = WorldTimer::getMSTime();
-        jumpTime = curTime + sWorld.GetAverageDiff() + (uint32)(timeToLand * static_cast<uint32>(IN_MILLISECONDS)) + 1000;
+        jumpTime = curTime + WorldAverageDiffCompat() + (uint32)(timeToLand * static_cast<uint32>(IN_MILLISECONDS)) + 1000;
         SetJumpDestination(dest_calculated);
 
         // set highest jump point to relocate

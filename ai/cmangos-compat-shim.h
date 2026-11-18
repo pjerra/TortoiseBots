@@ -1071,3 +1071,4 @@ inline bool IsRealPlayer_Helper(Player* p) { return isRealPlayer_Helper(p); }
 #include "cmangos-compat-r4a.h"
 #include "cmangos-compat-r4p.h"
 #include "cmangos-compat-r4c.h"
+#include "cmangos-compat-unported.h"

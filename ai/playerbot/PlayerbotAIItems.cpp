@@ -79,7 +79,7 @@ std::vector<Item*> PlayerbotAI::GetInventoryAndEquippedItems()
         }
     }
 
-    for (int i = KEYRING_SLOT_START; i < KEYRING_SLOT_END; ++i)
+    for (int i : KeyringSlotsCompat())
     {
         if (Item* pItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
         {
@@ -124,7 +124,7 @@ std::vector<Item*> PlayerbotAI::GetInventoryItems()
         }
     }
 
-    for (int i = KEYRING_SLOT_START; i < KEYRING_SLOT_END; ++i)
+    for (int i : KeyringSlotsCompat())
     {
         if (Item* pItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
         {
@@ -167,7 +167,7 @@ uint32 PlayerbotAI::GetInventoryItemsCountWithId(uint32 itemId)
         }
     }
 
-    for (int i = KEYRING_SLOT_START; i < KEYRING_SLOT_END; ++i)
+    for (int i : KeyringSlotsCompat())
     {
         if (Item* pItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
         {
@@ -212,7 +212,7 @@ bool PlayerbotAI::HasItemInInventory(uint32 itemId)
         }
     }
 
-    for (int i = KEYRING_SLOT_START; i < KEYRING_SLOT_END; ++i)
+    for (int i : KeyringSlotsCompat())
     {
         if (Item* pItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
         {
@@ -270,8 +270,8 @@ bool PlayerbotAI::HasNotFullStacksInBagsForLootItems(LootItemList const& lootIte
 static Loot* LootForWorldObject(WorldObject* wo)
 {
     if (!wo) return nullptr;
-    if (wo->IsCreature()) return &static_cast<Creature*>(wo)->loot;
-    if (wo->IsGameObject()) return &static_cast<GameObject*>(wo)->loot;
+    if (wo->IsCreature()) return LootOfCreatureCompat(static_cast<Creature*>(wo));
+    if (wo->IsGameObject()) return LootOfGameObjectCompat(static_cast<GameObject*>(wo));
     return nullptr;
 }
 
@@ -311,7 +311,7 @@ void PlayerbotAI::InventoryIterateItemsInBags(IterateItemsVisitor* visitor)
             if (!visitor->Visit(pItem))
                 return;
 
-    for (int i = KEYRING_SLOT_START; i < KEYRING_SLOT_END; ++i)
+    for (int i : KeyringSlotsCompat())
         if (Item* pItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, i))
             if (!visitor->Visit(pItem))
                 return;
@@ -339,7 +339,7 @@ void PlayerbotAI::InventoryIterateItemsInEquip(IterateItemsVisitor* visitor)
 
 void PlayerbotAI::InventoryIterateItemsInBank(IterateItemsVisitor* visitor)
 {
-    for (uint8 slot = BANK_SLOT_ITEM_START; slot < BANK_SLOT_ITEM_END; slot++)
+    for (uint8 slot : BankItemSlotsCompat())
     {
         Item* pItem = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot);
         if (!pItem)
@@ -822,7 +822,7 @@ Item* PlayerbotAI::FindConsumable(uint32 displayId) const
          if (!pItemProto || bot->CanUseItem(GetItemTemplateCompat(pItemProto)) != EQUIP_ERR_OK)
             continue;
 
-         if ((pItemProto->Class == ITEM_CLASS_CONSUMABLE || pItemProto->Class == ITEM_CLASS_TRADE_GOODS) && pItemProto->DisplayInfoID == displayId)
+         if ((pItemProto->Class == ITEM_CLASS_CONSUMABLE || pItemProto->Class == ITEM_CLASS_TRADE_GOODS) && ItemProtoHasDisplayIdCompat(pItemProto, displayId))
             return pItem;
       }
    }
@@ -841,7 +841,7 @@ Item* PlayerbotAI::FindConsumable(uint32 displayId) const
                if (!pItemProto || bot->CanUseItem(GetItemTemplateCompat(pItemProto)) != EQUIP_ERR_OK)
                   continue;
 
-               if ((pItemProto->Class == ITEM_CLASS_CONSUMABLE || pItemProto->Class == ITEM_CLASS_TRADE_GOODS) && pItemProto->DisplayInfoID == displayId)
+               if ((pItemProto->Class == ITEM_CLASS_CONSUMABLE || pItemProto->Class == ITEM_CLASS_TRADE_GOODS) && ItemProtoHasDisplayIdCompat(pItemProto, displayId))
                   return pItem;
             }
          }
@@ -1042,32 +1042,7 @@ void PlayerbotAI::ImbueItem(Item* item, uint16 targetFlag, ObjectGuid targetGUID
       }
    }
 
-#ifdef CMANGOS
-   std::unique_ptr<WorldPacket> packet(new WorldPacket(CMSG_USE_ITEM, 20));
-#endif
-#ifdef MANGOS
-   WorldPacket* packet = new WorldPacket(CMSG_USE_ITEM);
-#endif
-
-   *packet << bagIndex;
-   *packet << slot;
-   *packet << spell_index;
-   *packet << targetFlag;
-
-#ifdef CMANGOS
-   if (targetFlag & (TARGET_FLAG_UNIT | TARGET_FLAG_ITEM | TARGET_FLAG_GAMEOBJECT))
-#endif
-#ifdef MANGOS
-   if (targetFlag & (TARGET_FLAG_UNIT | TARGET_FLAG_ITEM | TARGET_FLAG_OBJECT))
-#endif
-      *packet << targetGUID.WriteAsPacked();
-
-#ifdef CMANGOS
-   bot->GetSession()->QueuePacket(packet.release());
-#endif
-#ifdef MANGOS
-   bot->GetSession()->QueuePacket(packet);
-#endif
+   QueueUseItemPacketCompat(bot, bagIndex, slot, spell_index, targetFlag, targetGUID);
 }
 
 void PlayerbotAI::EnchantItemT(uint32 spellid, uint8 slot, Item* item)

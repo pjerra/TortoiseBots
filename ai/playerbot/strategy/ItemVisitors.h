@@ -291,8 +291,7 @@ namespace ai
 
         virtual bool Accept(const ItemPrototype* proto) override
         {
-            uint8 eslot = bot->FindEquipSlot(proto, NULL_SLOT, true);
-            return slot == eslot;
+            return ItemProtoFitsSlotCompat(bot, proto, slot);
         }
 
     private:
@@ -452,11 +451,8 @@ namespace ai
                     if (!spellInfo)
                         return false;
 
-                    for (int i = 0 ; i < 3; i++)
-                    {
-                        if (spellInfo->Effect[i] == SPELL_EFFECT_SUMMON_CRITTER)
-                            return true;
-                    }
+                    if (SpellSummonsCritterCompat(spellInfo))
+                        return true;
                 }
             }
             return false;
