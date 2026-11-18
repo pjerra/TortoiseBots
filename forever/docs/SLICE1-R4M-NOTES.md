@@ -73,14 +73,14 @@ which V's Turtle body does not include). Decision: F answers `SPELL_STATE_CHANNE
 
 One function turns a guid into a 64-bit key on ForeverCore: `GuidKeyCompat` (common pair; F: `std::hash<ObjectGuid>` of the 128 bits, 0 for the empty guid; T:
 `GetRawValue()`). One function turns it into text for people: `GuidTextCompat` (F `ToString()`, T the stream form). `GuidRawCompat` (A: both halves mixed, P: the low
-word) is gone: its 40 call sites (A 22, P 18) are `GuidKeyCompat`. `GuidWriteCompat/GuidReadCompat` (C) is not a second key: it is the round-trip text of a stored
+word) is gone: its 31 call sites (A 18, P 13) are `GuidKeyCompat`. `GuidWriteCompat/GuidReadCompat` (C) is not a second key: it is the round-trip text of a stored
 `GuidPosition` string and has to parse back (a hash cannot).
 
 What is NOT a guid key but is a `uint64`/`uint32` made from a guid, in the slice's files: the low part (`GetGUIDLow()` = `GetCounter()`) of a PLAYER guid used as a bot id
 (`BotActionLog` file map, `PlayerbotAI::worldPvpIgnoreGuidLow_`, `ChooseTargetActions` pursuit low guid, `WarriorTriggers.cpp:78` ordering): the counter of a player guid is
 unique on both cores, both sides of every compare use the same call, so these agree. They are not used for creatures (a creature counter is not unique across entries on F).
 
-Every place in the 127 files and the `ai/` headers that stores or compares a guid as `uint64`, and what feeds it (grep `GuidKeyCompat`, 62 sites, all in the slice):
+Every place in the 127 files and the `ai/` headers that stores or compares a guid as `uint64`, and what feeds it (grep `GuidKeyCompat`, 63 sites, all in the slice):
 
 | consumer (policy or store) | file:line in the slice that feeds it | helper |
 |---|---|---|
