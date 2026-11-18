@@ -67,7 +67,10 @@ last column; empty/no-value suggestions mean "fill from the Forever data files w
 Client build is checked in every data row (`client_build`): the client is now 1.60.1.70938
 (2026-11-17 `.build.info`), so the DB2 used for taxi/skill/spell names and ids was extracted fresh from
 it with the repack extractor into a throw-away folder (same 1,133 files, same layout hashes as the earlier
-70888 extraction). The world/hotfixes data is the TDB release 2026-10-14, which is not tied to a client build.
+70888 extraction). The extracted files carry the client's own static header `WOWSTATIC_1_60_1_70399` (the
+DB2 static-data version embedded in the 1.60 client); they were extracted from the installed 1.60.1.70938
+client, whose `.build.info` and the extractor both report 70938. `client_build` names the client, not that
+embedded string. The world/hotfixes data is the TDB release 2026-10-14, which is not tied to a client build.
 
 - Service points: NPC categories from `creature_template.npcflag` and coordinates from the first
   `creature` spawn per entry (`spawns` column has the count); flight masters matched to the nearest
@@ -82,3 +85,25 @@ it with the repack extractor into a throw-away folder (same 1,133 files, same la
   Forever boss entry, a boss `ScriptName` (cast not statically verifiable), or none.
 - Quests: ids from `quest_template` SQL, quest constants in code (`WorldBuffPolicy`, `HireUnlockPolicy`),
   and the Turtle mount comment in the config.
+
+## Round 7: supplies, battleground constants, NPC SQL draft, core how-tos
+
+- `supplies-by-level.csv` (127 rows): food/drink/bandage/potion/ammo/class-reagent/pet-food per 10-level
+  bracket. Item ids and brackets come from TB's own ladders (`RandomItemMgr`, `MimicConsumablePolicy`,
+  `ClassConsumablePolicy`, `PlayerbotFactory` first aid, `AmmoCachePolicy`); names, required level and
+  buy price are client `ItemSparse` DB2 (70938, `BuyPrice` per vendor unit) plus Forever `armory_item`,
+  `npc_vendor` (copper cost only) and `creature_template`. 34 rows are crafted/no-vendor and carry a blank
+  vendor and price; ammo 11-20 and 41-50 have no white-quality vendor ammo, and the ladders end before
+  level 51 for the other categories.
+- `bg-constants.csv` (55 rows): WSG/AB/AV flag and banner gameobjects, AB nodes, graveyards, area triggers,
+  captains/bosses, with TB value, Forever value and evidence. The two WSG area triggers TB uses (3646/3647)
+  do not exist in this client's `AreaTrigger` DB2; Forever's WSG script uses CapturePoints with a 6 yd
+  radius instead. Several TB graveyard ids are stale; Forever's TDB graveyards are listed row by row.
+- `tortoisebots-npcs-forever.sql` + `npcs-sql-notes.md`: DRAFT, not applied. Recruiters 95000-95067 are
+  renumbered to 1000000-1000067, credit creatures to 1000070-1000091, greetings to npc_text 1000000+ and
+  hotfix `broadcast_text` 1000000+ (95000-95167 is taken in the hotfixes DB). Forever schema: display ids
+  in `creature_template_model`, level in `creature_classic_level`; every guessed/dropped column is in the
+  notes. World buffs are a recruiter gossip branch, not a vendor NPC.
+- `core-howto/*.md` (7 files): LFG, loot and rolls, auction house, BG queue, flight paths, trainers,
+  talents. Client steps and the core CMSG/SMSG handlers with `path:line` in the pinned core clone
+  (`6517af05`); 1.60-specific behaviour is called out (two talent storages, classic AH runtimes, etc.).
