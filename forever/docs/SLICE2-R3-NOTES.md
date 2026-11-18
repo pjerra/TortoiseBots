@@ -67,7 +67,7 @@ names (`group invite`, `accept invitation`, `trade status`, `taxi`, `levelup`, `
 the guard logs `slice: missing ...` once per name. Reason for all of them: a packet-driven feature that is not in this slice (party invitations, trade, taxi, ready check, petitions, area triggers, XP and honor, resurrection, mount state, mail, guild).
 Not registered either, by reason: loot rolls (`loot roll`, `auto loot roll`, `log roll won`, `loot roll won`: rolls time out on F), gathering and destroying (`add gathering loot`, `reveal gathering item`, `smart destroy item`, `destroy all gray`),
 item usage (`query item usage`, `item usage` value: D2), pets (`set pet stance`, `new pet`), the feature rows of NonCombatStrategy (`faction`, `fish`, `world buff`, `need world buff`, `equipment audit`, `collision`, `move out of collision`, `at war`), `party member dead`, `val`, `skip go loot list`.
-The full list printed by the checker is in section 9.
+The 234 unregistered keys with a reason each are in `forever/docs/SLICE2-R3-UNREGISTERED.md` (generated from the checker; reasons by name and by the naming file); the ones the engine actually asked for in the boots are explained in section 9.5.
 
 The missing-key stand-in (`SliceMissingKeyGuard.h`) gains the value types `ItemUsage` (answers `ITEM_USAGE_NONE` = "not looted": fails toward less, the R2 rule) and `std::set<uint32>&` (`skip go loot list`: an empty list).
 
@@ -179,3 +179,29 @@ Decision D3 is therefore not applied: drinking stays in the slice.
 * 5 actions: `apply oil`, `check mail`, `check mount state`, `check values`, `use lightwell` (features outside the slice: oils, mail, mounts, a priest's lightwell).
 * 8 values: `enemy player target`, `has enemy player targets`, `keepout set aside`, `outfit list`, `runners let go`, `unreachable entries`, `unreachable targets` (PvP, equip and dungeon-run values, none used by the kit) and **`incoming heals`** (read by `PartyMemberToHeal.cpp:114,222` as a `std::map<ObjectGuid, uint32>`: the stand-in answers an empty map, "nobody else is healing this member", which is neutral for one priest and would overheal a target a second healer is already healing: registering `IncomingHealsValue` (PartyMemberToHeal.h) is the first thing to add if two healers ever play together).
 * The whole list is in `/tmp/r3-missing-3.txt` on the build VM; slice 1's list is in SLICE1-R6B-NOTES.
+
+## 10. Open items and what the live test (R4) should look at first
+
+1. **Run `.tb train` on a fresh priest** (create a new one: `Tbpriest` already holds the spells of the first boots, so a second run teaches nothing). The narrowing to trainers whose mask is the class (commit after boot 3) was compiled and booted once, but on the old character: it taught 0 (nothing new), which proves nothing. Expect Smite, Lesser Heal, Power Word: Shield, Renew, Shadow Word: Pain... and no riding or recipes.
+2. **Observation g (U3) is answered**: no cancel on MotionMaster movement; the walk waits (section 9.2). The live test's g becomes "the heal lands, the bot moves afterwards"; only a `.tb castfail ... 75` can show reason 75.
+3. **Observation j (drinking) passes**, including the engine's own `A:drink - OK` and a real async `reason=91` (item on cooldown / already drinking): watch whether the engine retries it every tick (one `CAST_FAILED_ASYNC spell=430` line per attempt) after a refusal.
+4. **Money**: both bots took their own share of a kobold's copper (4 and 2 copper: the party split of LootHandler.cpp:150-179, or two personal loots: not yet told apart; `.tb where` shows the money line). The master's share is the part of the split that goes to it: compare Tbbeta's money, which stayed 0 in the boot (it is a spike bot standing 4 yd away: the core's `IsAtGroupRewardDistance` decides).
+5. **`incoming heals`** is unregistered (section 9.5): neutral for one healer.
+6. **The other worker's console driver reaches any server that is up** (section 9). A live test that needs a clean run should be told when it may start, or run against its own run directory.
+7. Spec section 4 rows `incoming: forced speed change` and `incoming: knock back` ("not needed on F") are still in the table (each counts one registration per engine); their packet handlers are not served either way. Remove them with the next change to `TbCompat_Unported.*`.
+8. `UNPORTED.md`'s header count ("56 features") was stale before this package (R9 counted 70; the boot line says 74 now: slice 2 added `item usage`, merged the loot rows and removed `loot object stack`).
+
+## 11. Gates (final commit)
+
+| Gate | Result |
+|---|---|
+| Option ON `worldserver` build (slot 1, `FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1 build.sh 12 worldserver`) | `CMAKE_RC=0 MAKE_RC=0` (the last incremental build after the final host edit; the first full pass is section 7) |
+| Option OFF module build (`-DTORTOISEBOTS_SLICE1=OFF build.sh 12 tortoisebots`) | `CMAKE_RC=0 MAKE_RC=0`; 6 objects (`TbBotMgr`, `TbBotSession`, `TbScripts`, `TbItemPrototype`, `TbSpellEntry`, `host/TbEngineBrain`): the list R9 states, nothing new |
+| Census `FOREVER_CENSUS_LIST=forever/SLICE2.txt` | `files 160  compile clean 160  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` |
+| Census `forever/SLICE1.txt` | see the report (run after the last code commit) |
+| `slice_gen_context.py --check`, `slice_registry_check.py` | file current; `(a)=0  (b)=234` |
+| `tools/verify_tortoise_surface.sh` | `Tortoise 1.18.1 Core module surface: OK` |
+| `forever-build/policy-tests.sh` (a private copy of the tree and script: `tb-r3`, `pt-r3`) | 472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL: the baseline (the same six files as SLICE1-R9-NOTES) |
+| Turtle `vm-build ~/wt-slice2-integ --wait` | see the report |
+| Turtle `vm-test tb ~/wt-slice2-integ` | see the report |
+| The test server | stopped after every boot; `docker ps` shows `forever-bnet`, `forever-db` and no `forever-world`; the other worker's `worldserver` binary was put back after each boot |
