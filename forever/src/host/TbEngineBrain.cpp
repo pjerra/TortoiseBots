@@ -49,6 +49,7 @@ struct Brain
     PlayerbotAI* ai = nullptr;
     BotSession* session = nullptr;   // the bot's session (owned by BotMgr, which drops the brain before the session); its cast-result queue is on while the brain lives
     uint32 teleportAcks = 0;     // R10 (S3): how many teleports the host handed to PlayerbotAI::HandleTeleportAck (`.tb where`)
+    uint32 pendingMs = 0;        // R4: world time the engine has not been given yet (Tick hands it over in steps of kMinEngineStepMs)
 };
 
 namespace
@@ -269,12 +270,25 @@ Brain* Create(Player* bot, Player* master, std::string& error)
     return brain.release();
 }
 
+// R4 (slice 2): the engine is stepped at most once per kMinEngineStepMs of world time, with the time collected since its last step. Why: the
+// engine was written for a world loop that runs every ~50 ms (Turtle); ForeverCore's runs every millisecond (`.tb perf`: ~870 updates a
+// second on an idle server). Legacy code that answers "done" without setting a next-check delay (ReachTargetAction -> ChaseTo, "already
+// chasing this target": MovementActions.cpp:3622-3628) then ran the whole engine tick every millisecond for as long as the walk lasted (seen
+// live: a healer walking to a patient 35 yd away ticked 1,000 times a second for 4.6 s). A step of 50 ms is the cadence the engine had on Turtle;
+// the engine keeps its own delays on top (PlayerbotAIBase.cpp:16-31) and receives the real elapsed time, so nothing it counts in
+// milliseconds changes. Cast results are delivered in the same step.
+constexpr uint32 kMinEngineStepMs = 50;
+
 void Tick(Brain* brain, uint32 diff)
 {
     // World thread, from BotMgr::Update (WorldScript::OnBeforeMapsUpdate): the maps are not updating at this moment.
-    // PlayerbotAIBase::UpdateAI keeps its own delay (PlayerbotAIBase.cpp:16-31), so calling every tick is right.
     if (!Usable(brain))
         return;
+    brain->pendingMs += diff;
+    if (brain->pendingMs < kMinEngineStepMs)
+        return;
+    diff = brain->pendingMs;
+    brain->pendingMs = 0;
     try
     {
         // A CAST_FAILED the core sends during this call is the refusal of the engine's own cast (the call returns the same
