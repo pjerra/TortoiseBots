@@ -54,6 +54,24 @@ namespace slice
         std::remove_reference_t<T> value{};
     };
 
+    // R11: the one pointer type a caller WRITES through (`*AI_VALUE(FutureDestinations*, ...) = ...`, PlayerbotAI::Reset(true) at
+    // PlayerbotAI.cpp:2719 and the travel chooser): a null stand-in made every full reset a SIGSEGV at address 0x8 (a master changing maps).
+    // The key is registered now (SliceAiObjectContext.cpp), but a stand-in for it points at an owned, empty future instead of null, so a
+    // missing key can never again be a null write. Reads of the other pointer types stay null (callers test them or the stubs ignore `this`).
+    template <>
+    class InertValue<FutureDestinations*> : public Value<FutureDestinations*>
+    {
+    public:
+        FutureDestinations* Get() override { return &holder; }
+        typename Value<FutureDestinations*>::RefType GetRef() override { return pointer; }
+        FutureDestinations* LazyGet() override { return &holder; }
+        void Set(FutureDestinations*) override {}
+
+    private:
+        FutureDestinations holder;
+        FutureDestinations* pointer = &holder;
+    };
+
     // The stand-in object: an UntypedValue that is also an InertValue<T> for every T in the list.
     template <class... Ts>
     class InertValues : public UntypedValue, public InertValue<Ts>...

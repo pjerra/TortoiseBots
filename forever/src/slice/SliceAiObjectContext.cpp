@@ -88,6 +88,7 @@
 #include "playerbot/strategy/values/TankTargetValue.h"
 #include "playerbot/strategy/values/TargetValue.h"
 #include "playerbot/strategy/values/ThreatValues.h"
+#include "playerbot/strategy/values/TravelValues.h"
 #include "playerbot/strategy/values/WaitForAttackTimeValue.h"
 
 using namespace ai;
@@ -185,7 +186,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (140 of its keys)
+    // the registry of ValueContext (141 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -235,6 +236,7 @@ namespace slice
             creators["formation position"] = [](PlayerbotAI* ai) { return new FormationPositionValue(ai); };
             creators["free move center"] = [](PlayerbotAI* ai) { return new FreeMoveCenterValue(ai); };
             creators["free move range"] = [](PlayerbotAI* ai) { return new FreeMoveRangeValue(ai); };
+            creators["future travel destinations"] = [](PlayerbotAI* ai) { return new FutureTravelDestinationsValue(ai); };
             creators["group"] = [](PlayerbotAI* ai) { return new IsInGroupValue(ai); };
             creators["group and"] = [](PlayerbotAI* ai) { return new GroupBoolANDValue(ai); };
             creators["group members"] = [](PlayerbotAI* ai) { return new GroupMembersValue(ai); };
@@ -335,7 +337,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 3, kActions = 11, kTriggers = 30, kValues = 140;
+    constexpr unsigned kStrategies = 3, kActions = 11, kTriggers = 30, kValues = 141;
 }
 }
 

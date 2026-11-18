@@ -20,6 +20,7 @@
 #include "World.h"
 #include <algorithm>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace TortoiseBots
@@ -30,6 +31,31 @@ constexpr uint32 ThinkIntervalMs = 500;
 // The core waits 30 s for a bot to leave when its owner logs in to the same character. A normal character load is
 // well under this, so a real session that is still loading after this long is waiting for us.
 constexpr uint32 OwnerLoadingLimitMs = 2000;
+// R11: how long a bot whose master is on a map it could not enter waits before it asks the core again (it also asks at once when the master changes map).
+constexpr uint32 FollowRetryMs = 30000;
+
+// The core's reason for refusing a far teleport (Map::PlayerCannotEnter, Maps/Map.cpp:1829-1875), in words.
+std::string AbortReasonText(TransferAbortParams const& denied)
+{
+    char const* what = nullptr;
+    switch (denied.Reason)
+    {
+        case TRANSFER_ABORT_ERROR: what = "error"; break;
+        case TRANSFER_ABORT_MAX_PLAYERS: what = "the instance is full"; break;
+        case TRANSFER_ABORT_NOT_FOUND: what = "instance not found"; break;
+        case TRANSFER_ABORT_TOO_MANY_INSTANCES: what = "too many instances entered recently"; break;
+        case TRANSFER_ABORT_ZONE_IN_COMBAT: what = "an encounter is in progress"; break;
+        case TRANSFER_ABORT_INSUF_EXPAN_LVL: what = "the expansion is not available"; break;
+        case TRANSFER_ABORT_DIFFICULTY: what = "no map difficulty data for the party's dungeon difficulty (GetDownscaledMapDifficultyData)"; break;
+        case TRANSFER_ABORT_NEED_GROUP: what = "a raid group is needed"; break;
+        case TRANSFER_ABORT_MAP_NOT_ALLOWED: what = "map not allowed"; break;
+        case TRANSFER_ABORT_LOCKED_TO_DIFFERENT_INSTANCE: what = "locked to a different instance"; break;
+        case TRANSFER_ABORT_DIFFICULTY_NOT_FOUND: what = "difficulty not found"; break;
+        default: break;
+    }
+    return what ? Trinity::StringFormat("{} (TransferAbortReason {})", what, uint32(denied.Reason))
+                : Trinity::StringFormat("TransferAbortReason {}", uint32(denied.Reason));
+}
 }
 
 BotMgr& BotMgr::Instance()
@@ -296,6 +322,9 @@ std::vector<std::string> BotMgr::DescribeBrain(ObjectGuid characterGuid) const
         lines.push_back("brain: spike (engine requested, waiting for the bot to be placed next to its master)");
     else
         lines.push_back("brain: spike");
+    if (bot.followBlocked)
+        lines.push_back(Trinity::StringFormat("follow: blocked, the master is on map {} (instance {}) and the bot cannot go there: {}; asks again in {} s or when the master changes map",
+            bot.followBlockedMap, bot.followBlockedInstance, bot.followBlockedWhy, (bot.followRetryMs + 999) / 1000));
     return lines;
 }
 
@@ -602,6 +631,7 @@ void BotMgr::Update(uint32 diff)
         if (!me || !me->IsInWorld() || me->IsBeingTeleported())
             continue;
 
+        bot.followRetryMs = bot.followRetryMs > diff ? bot.followRetryMs - diff : 0;
         bot.thinkMs += diff;
         if (bot.thinkMs >= ThinkIntervalMs)
         {
@@ -664,15 +694,50 @@ void BotMgr::Think(Bot& bot, Player* me)
 
     // Stand next to the master once after login, and again whenever it is on another map or far away.
     bool const sameMap = me->GetMap() == master->GetMap();
+    if (sameMap)
+        bot.followBlocked = false;
     if (!bot.placed || !sameMap || !me->IsWithinDist(master, 100.0f))
     {
-        bot.placed = true;
-        bot.following = false;
-        bot.chasing.Clear();
-        bot.trail.clear();
-        me->AttackStop();
-        me->GetMotionMaster()->Clear();
-        me->TeleportTo(master->GetWorldLocation());
+        // R11: a bot that the core refused to send to the master's map (an instance it cannot enter) stays where it is and does not ask again at
+        // every Think: it asks again when the master is on another map or instance, or after FollowRetryMs. Its engine keeps running where it is.
+        uint32 const masterMap = master->GetMapId();
+        uint32 const masterInstance = master->GetInstanceId();
+        if (!sameMap && bot.followBlocked && bot.followBlockedMap == masterMap && bot.followBlockedInstance == masterInstance && bot.followRetryMs > 0)
+            return;
+
+        // Ask the core first whether this bot may enter that map at all (the same check Player::TeleportTo makes, Entities/Player/Player.cpp:1432),
+        // so the refusal has its reason; an instance is entered by the master's own instance id (the party's, not a new copy).
+        std::string refused;
+        if (!sameMap)
+            if (TransferAbortParams const denied = Map::PlayerCannotEnter(masterMap, me))
+                refused = AbortReasonText(denied);
+
+        if (refused.empty())
+        {
+            bot.placed = true;
+            bot.following = false;
+            bot.chasing.Clear();
+            bot.trail.clear();
+            me->AttackStop();
+            me->GetMotionMaster()->Clear();
+            std::optional<uint32> const instanceId = (!sameMap && master->GetMap()->IsDungeon()) ? std::optional<uint32>(masterInstance) : std::nullopt;
+            if (me->TeleportTo(master->GetWorldLocation(), TELE_TO_NONE, instanceId))
+            {
+                bot.followBlocked = false;
+                return;
+            }
+            refused = "Player::TeleportTo refused the teleport";
+        }
+
+        bool const changed = !bot.followBlocked || bot.followBlockedMap != masterMap || bot.followBlockedInstance != masterInstance || bot.followBlockedWhy != refused;
+        bot.followBlocked = true;
+        bot.followBlockedMap = masterMap;
+        bot.followBlockedInstance = masterInstance;
+        bot.followBlockedWhy = refused;
+        bot.followRetryMs = FollowRetryMs;
+        if (changed)
+            TC_LOG_INFO("tortoisebots", "BotMgr: {} cannot follow its master {} to map {} (instance {}): {}; it stays and asks again in {} s",
+                me->GetName(), master->GetName(), masterMap, masterInstance, refused, FollowRetryMs / 1000);
         return;
     }
 

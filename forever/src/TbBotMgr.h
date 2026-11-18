@@ -93,6 +93,13 @@ private:
         bool masterAway = false;
         bool masterSeenGone = false; // the master was seen missing from the world at least once since it went away (the logout itself runs in the same update)
         uint32 graceLeftMs = 0;
+        // R11: the master is on a map the bot could not be sent to (an instance the core refuses it, or a teleport the core refused). The bot stays
+        // where it is, does not ask again every Think, and `.tb where` says why. It asks again when the master changes map or after FollowRetryMs.
+        bool followBlocked = false;
+        uint32 followBlockedMap = 0;
+        uint32 followBlockedInstance = 0;
+        uint32 followRetryMs = 0;
+        std::string followBlockedWhy;
     };
 
     void Think(Bot& bot, Player* me);
