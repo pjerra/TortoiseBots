@@ -4,7 +4,7 @@ Client: DB2 70938 (db2-70938 extraction 2026-11-18) for spell names/ids (all RFC
 
 ## CONFIRMED: Defensive Stance (71), Taunt (355), Sunder Armor (7386) have NO learn path on Forever as-shipped
 
-hypeer is right: a fresh warrior knows only Heroic Strike + Battle Stance, and there is no trainer
+Confirmed: a fresh warrior knows only Heroic Strike + Battle Stance, and there is no trainer
 for the other three. Evidence, core data first:
 
 - `trainer_spell` (TDB world, 34696 rows): zero rows for 71, 355, 7386. (Battle Shout 6673,
