@@ -1064,3 +1064,6 @@ inline bool isRealPlayer_Helper(Player* p) {
 }
 inline bool IsInGroup_Helper(Player* a, Player* b, bool sameGroup=false) { if (!a || !b) return false; Group* g = a->GetGroup(); if (!g) return false; if (sameGroup) { Group* og = b->GetGroup(); return g == og; } return g->IsMember(b->GetObjectGuid()); }
 inline bool IsRealPlayer_Helper(Player* p) { return isRealPlayer_Helper(p); }
+
+// Both-core helpers added by the ForeverCore port (slice 1, round R3): same names as forever/src/compat/TbCompat_Unit.h.
+#include "cmangos-compat-r3.h"

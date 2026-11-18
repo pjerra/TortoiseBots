@@ -21,7 +21,7 @@ namespace ai
         void Reset()
         {
             id = 0;
-            target.Set(0);
+            target.Clear();
             time = 0;
         }
     public:

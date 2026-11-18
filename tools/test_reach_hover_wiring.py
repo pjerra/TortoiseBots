@@ -39,7 +39,7 @@ class HoverReachWiringTest(unittest.TestCase):
 
     def test_hover_walk_paths_to_the_ground_under_the_target(self):
         fn = body(ACTIONS, "bool MoveIntoRangeUnderHover(Unit* target, float distance)", "\n        }")
-        self.assertIn("float const groundZ = map->GetHeight(targetX, targetY, targetZ, true);", fn)
+        self.assertIn("float const groundZ = GetHeightCompat(map, targetX, targetY, targetZ, true);", fn)
         self.assertIn("bool const groundValid = groundZ > INVALID_HEIGHT + 1.0f;", fn)
         self.assertIn("if (!HoverReachApplies(true, map->IsDungeon()", fn)
         self.assertIn("WorldPosition const ground(bot->GetMapId(), targetX, targetY, groundZ);", fn)

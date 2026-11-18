@@ -221,7 +221,7 @@ namespace ai
                     continue;
 
                 attackers.push_back({attacker->IsAlive(), attacker->GetVictim() == bot,
-                                     bot->GetDistance(attacker, SizeFactor::CombatReach) <= ATTACK_DISTANCE});
+                                     GetDistanceCompat(bot, attacker, SizeFactor::CombatReach) <= ATTACK_DISTANCE});
             }
             return RetaliationWorthCooldown(attackers);
         }
@@ -273,7 +273,7 @@ namespace ai
             // the 30s cooldown as a silent no-op.
             if (!CastMeleeSpellAction::isPossible())
                 return false;
-            return bot->GetWeaponForAttack(BASE_ATTACK, true, true) != nullptr;
+            return GetWeaponForAttackCompat(bot, BASE_ATTACK, true, true) != nullptr;
         }
     };
     // fury

@@ -1171,7 +1171,7 @@ namespace ai
 
         virtual bool IsActive() override
         {
-            return AI_VALUE(ObjectGuid, "new player nearby");
+            return !AI_VALUE(ObjectGuid, "new player nearby").IsEmpty();
         }
     };
 

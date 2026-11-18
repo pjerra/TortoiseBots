@@ -21,7 +21,7 @@
 // ---------------------------------------------------------------------------------------------------------------
 using BattleGroundTypeId = BattlegroundTypeId;   // the battleground id enum; AV/WS/AB are 1/2/3 in both cores
 using CellPair = CellCoord;                      // CoordPair<TOTAL_NUMBER_OF_CELLS_PER_MAP>, x_coord/y_coord fields
-using Config = ConfigMgr;                        // the config store; cmangos names the class Config
+// (`Config`, the per-file ini reader, is our own class: TbCompat_Config.h, included at the end of this file.)
 using CreatureInfo = CreatureTemplate;           // the creature template record
 using GameObjectInfo = GameObjectTemplate;       // the game object template record
 using GenericTransport = Transport;              // a ship/zeppelin the player can stand on
@@ -539,3 +539,12 @@ private:
 };
 #undef sLog
 #define sLog (CmangosLogProxy())
+
+// ---------------------------------------------------------------------------------------------------------------
+// 5. TOPIC FILES (slice 1, round R3): one file per topic, each included here by one line. TbCompat_Position.h goes last:
+//    it ends by making the token `WorldLocation` mean the legacy struct, so nothing after it may name the core's class.
+// ---------------------------------------------------------------------------------------------------------------
+#include "TbCompat_Config.h"      // Config (ini reader with the Turtle class's interface), ACE_TString
+#include "TbCompat_Names.h"       // constants, unit states, member names a macro can carry
+#include "TbCompat_Unit.h"        // both-core helpers: line of sight, height, angle, session, respawn point
+#include "TbCompat_Position.h"    // WorldLocation with public mapId/x/y/z/o (must stay last)

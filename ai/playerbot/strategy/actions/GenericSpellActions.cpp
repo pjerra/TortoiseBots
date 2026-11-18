@@ -1350,7 +1350,7 @@ bool CastItemTargetAction::isPossible()
     if (!proto)
         return false;
 
-    if (HasSpellCooldown(itemId))
+    if (HasItemSpellCooldown(itemId))
         return false;
 
     if (!ai->HasCheat(BotCheatMask::item) && !bot->HasItemCount(itemId, 1))
@@ -1462,7 +1462,7 @@ bool CastItemTargetAction::Execute(Event& event)
     return count;
 }
 
-bool CastItemTargetAction::HasSpellCooldown(uint32 itemId)
+bool CastItemTargetAction::HasItemSpellCooldown(uint32 itemId)
 {
     ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
 

@@ -27,7 +27,7 @@ namespace ai
             if (group)
             {
                 ObjectGuid guid = group->GetTargetIcon(7); // skull target
-                if (guid && attacker->GetObjectGuid() == ObjectGuid(guid))
+                if (!guid.IsEmpty() && attacker->GetObjectGuid() == ObjectGuid(guid))
                     return;
             }
             if (!result || result->GetHealth() > attacker->GetHealth())
