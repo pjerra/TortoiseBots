@@ -40,7 +40,7 @@ namespace ai
                     return false;
                 }
 
-                float const combatReach = bot->GetCombatReach(target, false, 0.0f);
+                float const combatReach = GetCombatReachCompat(bot, target, false, 0.0f);
                 float const minDistance = ai->GetRange("spell") + combatReach;
                 float const targetDistance = sServerFacade.getDistance2d(bot, target) + combatReach;
 
@@ -162,7 +162,7 @@ namespace ai
                     return false;
                 }
 
-                float const combatReach = bot->GetCombatReach(target, false, 0.0f);
+                float const combatReach = GetCombatReachCompat(bot, target, false, 0.0f);
                 float const minShootDistance = ai->GetRange("shoot") + combatReach;
                 float const targetDistance = sServerFacade.getDistance2d(bot, target) + combatReach;
 
@@ -306,7 +306,7 @@ namespace ai
             if (!target)
                 return false;
 
-            return !bot->CanReachWithMeleeAutoAttack(target) || !bot->IsWithinLOSInMap(target, true);
+            return !bot->CanReachWithMeleeAutoAttack(target) || !IsWithinLOSInMapCompat(bot, target, true);
         }
     };
 
@@ -326,7 +326,7 @@ namespace ai
             if (!sServerFacade.IsHostileTo(bot, target))
                 return false;
 
-            return target && (bot->GetDistance(target, SizeFactor::CombatReach) > (distance - sPlayerbotAIConfig.contactDistance)) || !bot->IsWithinLOSInMap(target, true);
+            return target && (bot->GetDistance(target, SizeFactor::CombatReach) > (distance - sPlayerbotAIConfig.contactDistance)) || !IsWithinLOSInMapCompat(bot, target, true);
         }
     };
 
@@ -350,7 +350,7 @@ namespace ai
                 return false;
 
             bool const outOfRange = (bot->GetDistance(target, SizeFactor::CombatReach) > (distance - sPlayerbotAIConfig.contactDistance)) ||
-                !bot->IsWithinLOSInMap(target, true);
+                !IsWithinLOSInMapCompat(bot, target, true);
             if (!outOfRange)
                 return false;
 

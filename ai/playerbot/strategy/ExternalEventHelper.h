@@ -49,7 +49,7 @@ namespace ai
                 return true;
             }
 
-            if (owner->GetSession() && owner->GetSession()->HasNetworkTransport())
+            if (owner->GetSession() && HasNetworkTransportCompat(owner->GetSession()))
             {
                 HandleCommand("c", command, owner);
                 HandleCommand("t", command, owner);

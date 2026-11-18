@@ -660,7 +660,7 @@ namespace ai
             float spellRange;
             if (!ai->GetSpellRange(GetSpellName(), &spellRange))
                 return true;
-            return CcCastInReach(bot->GetDistance(target), spellRange, bot->IsWithinLOSInMap(target, true));
+            return CcCastInReach(bot->GetDistance(target), spellRange, IsWithinLOSInMapCompat(bot, target, true));
         }
 
     private:

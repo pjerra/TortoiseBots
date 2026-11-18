@@ -535,4 +535,6 @@ private:
 //    it ends by making the token `WorldLocation` mean the legacy struct, so nothing after it may name the core's class.
 // ---------------------------------------------------------------------------------------------------------------
 #include "TbCompat_Config.h"      // Config (ini reader with the Turtle class's interface), ACE_TString
+#include "TbCompat_Names.h"       // constants, unit states, member names a macro can carry
+#include "TbCompat_Unit.h"        // both-core helpers: line of sight, height, angle, session, respawn point
 #include "TbCompat_Position.h"    // WorldLocation with public mapId/x/y/z/o (must stay last)

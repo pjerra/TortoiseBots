@@ -737,13 +737,13 @@ public:
     // a real client. Headless sessions intentionally have no network transport.
     bool IsRealPlayer()
     {
-        return bot && bot->GetSession() && bot->GetSession()->HasNetworkTransport();
+        return bot && bot->GetSession() && HasNetworkTransportCompat(bot->GetSession());
     }
     bool IsRealPlayer(Unit* unit)
     {
         if (!unit->IsPlayer()) return false;
         Player* pl = (Player*)unit;
-        return pl->GetSession() && pl->GetSession()->HasNetworkTransport();
+        return pl->GetSession() && HasNetworkTransportCompat(pl->GetSession());
     }
     bool IsSelfMaster() { return master ? (master == bot) : false; }
     // Resolve the cached master against the live object accessor. The core
@@ -752,9 +752,9 @@ public:
     // pointers before any GetSession()/deref.
     Player* GetLiveMaster();
     //Bot has a master that is a player.
-    bool HasRealPlayerMaster() { Player* m = GetLiveMaster(); return m && m->GetSession() && m->GetSession()->HasNetworkTransport(); }
+    bool HasRealPlayerMaster() { Player* m = GetLiveMaster(); return m && m->GetSession() && HasNetworkTransportCompat(m->GetSession()); }
     //Bot has a master that is actively playing.
-    bool HasActivePlayerMaster() { Player* m = GetLiveMaster(); return m && m->GetSession() && m->GetSession()->HasNetworkTransport(); }
+    bool HasActivePlayerMaster() { Player* m = GetLiveMaster(); return m && m->GetSession() && HasNetworkTransportCompat(m->GetSession()); }
     //Checks if the bot is summoned as alt of a player
     bool IsAlt() { return HasRealPlayerMaster() && !TortoiseBots::BotManager::Instance().IsRandomBot(bot->GetObjectGuid()); }
     // Module-owned characters keep their saved build and class defaults. This

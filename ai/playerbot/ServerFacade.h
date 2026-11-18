@@ -96,10 +96,10 @@ class ServerFacade
         bool IsInRoots(Unit *unit)
         {
 #ifdef MANGOS
-            return unit->IsInRoots();
+            return unit->HasAuraType(SPELL_AURA_MOD_ROOT);
 #endif
 #ifdef CMANGOS
-            return unit->IsInRoots();
+            return unit->HasAuraType(SPELL_AURA_MOD_ROOT);
 #endif
         }
 
@@ -126,10 +126,10 @@ class ServerFacade
         bool isInFront(Unit *unit, WorldObject const* target, float distance,  float arc /*= M_PI_F*/)
         {
 #ifdef MANGOS
-            return unit && target && unit->IsWithinDistInMap(target, distance, false) && unit->HasInArc(target, arc);
+            return unit && target && unit->IsWithinDistInMap(target, distance, false) && HasInArcCompat(unit, target, arc);
 #endif
 #ifdef CMANGOS
-            return unit && target && unit->IsWithinDistInMap(target, distance, false) && unit->HasInArc(target, arc);
+            return unit && target && unit->IsWithinDistInMap(target, distance, false) && HasInArcCompat(unit, target, arc);
 #endif
         }
 
@@ -235,7 +235,7 @@ class ServerFacade
             return bot->IsWithinLOSInMap(wo);
 #endif
 #ifdef CMANGOS
-            return bot->IsWithinLOSInMap(wo, true);
+            return IsWithinLOSInMapCompat(bot, wo, true);
 #endif
         }
 
@@ -250,7 +250,7 @@ class ServerFacade
         bool IsDistanceLessOrEqualThan(float dist1, float dist2);
 
         void SetFacingTo(Unit* unit, float angle, bool force = false);
-        void SetFacingTo(Unit* unit, WorldObject* wo, bool force = false) {SetFacingTo(unit, unit->GetAngle(wo), force);}
+        void SetFacingTo(Unit* unit, WorldObject* wo, bool force = false) {SetFacingTo(unit, GetAngleCompat(unit, wo), force);}
 
         bool IsFriendlyTo(Unit* bot, Unit* to);
         bool IsFriendlyTo(WorldObject* bot, Unit* to);
