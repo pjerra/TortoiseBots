@@ -3,6 +3,14 @@
 // Owned by package R4A: no other package edits this file.
 #pragma once
 
+// The core headers the helpers below name (the shim is included before the bot's own headers pull them in).
+#include "Maps/PathFinder.h"
+#include "Maps/GridMap.h"
+#include "Movement/MotionMaster.h"
+#include "Movement/spline/MoveSplineInit.h"
+#include "Threat/ThreatManager.h"
+#include "ReputationMgr.h"
+
 // Guids: the raw 64-bit value.
 inline uint64 GuidRawCompat(ObjectGuid const& guid)
 {
@@ -28,7 +36,8 @@ inline float MeleeReachCompat(Unit const* unit)
 // Movement flags.
 inline bool HasMovementFlagCompat(Unit const* unit, uint64 flag)
 {
-    return unit->HasMovementFlag(static_cast<MovementFlags>(flag));
+    // Player::HasMovementFlag (Player.cpp:22989) is `m_movementInfo.HasMovementFlag(f)`; the bot calls it on its own player.
+    return unit->m_movementInfo.HasMovementFlag(static_cast<MovementFlags>(flag));
 }
 
 // Movement (the mapping table is in forever/src/compat/TbCompat_A.h section 5).
@@ -179,3 +188,6 @@ inline void HandlePetAbandonCompat(WorldSession* session, ObjectGuid const& petG
 }
 
 inline ObjectGuid GroupScopeGuidCompat(Group const* group, uint64 tag) { return ObjectGuid(tag | uint64(group->GetId())); }
+
+// Reputation flags (see forever/src/compat/TbCompat_A.h section 13).
+inline bool ReputationHasFlagCompat(FactionState const* state, uint32 legacyFlag) { return (state->Flags & legacyFlag) != 0; }

@@ -14,6 +14,10 @@
 // The parsed pet packets the pet command helpers fill (section 12); the core's WorldSession.h only forward-declares them.
 #include "PetPackets.h"
 
+// Reputation state and the charm info of a pet: Unit.h and Player.h only forward-declare them.
+#include "ReputationMgr.h"
+#include "CharmInfo.h"
+
 // ---------------------------------------------------------------------------------------------------------------
 // 1. NAMES a macro or a constant can carry. Each member rename is used by the bot only as `x->Name(...)` and no bot class
 //    defines a member of that name (grep over ai/ runtime/ host/ commands/), and the name does not occur in the core (grep
@@ -505,3 +509,27 @@ inline void HandlePetAbandonCompat(WorldSession* session, ObjectGuid const& petG
 // The scope guid the group buff claims use. T builds a synthetic guid out of a tag and the group id (Group.h:215); F uses the
 // group's own guid (Group.h:312), which no unit or player can share. The claims only compare it and take its raw value.
 inline ObjectGuid GroupScopeGuidCompat(Group const* group, uint64 /*tag*/) { return group->GetGUID(); }
+
+// ---------------------------------------------------------------------------------------------------------------
+// 13. REPUTATION flags. T ReputationMgr.h:32-38 (FACTION_FLAG_*, a bit word on the state); F ReputationMgr.h:33-45 (ReputationFlags in
+//     an EnumFlag). The legacy numbers are kept as names; the test maps each to the F flag of the same fact.
+//     DIFFERENT ANSWER: FACTION_FLAG_INVISIBLE_FORCED (T 0x08, the server hides the faction of the opposite team) has no F flag (F's 0x08
+//     is Header), so it reads false; FACTION_FLAG_PEACE_FORCED reads F's Peaceful (0x10).
+// ---------------------------------------------------------------------------------------------------------------
+constexpr uint32 FACTION_FLAG_VISIBLE = 0x01;
+constexpr uint32 FACTION_FLAG_AT_WAR = 0x02;
+constexpr uint32 FACTION_FLAG_HIDDEN = 0x04;
+constexpr uint32 FACTION_FLAG_INVISIBLE_FORCED = 0x08;
+constexpr uint32 FACTION_FLAG_PEACE_FORCED = 0x10;
+
+inline bool ReputationHasFlagCompat(FactionState const* state, uint32 legacyFlag)
+{
+    switch (legacyFlag)
+    {
+        case FACTION_FLAG_VISIBLE: return state->Flags.HasFlag(ReputationFlags::Visible);
+        case FACTION_FLAG_AT_WAR: return state->Flags.HasFlag(ReputationFlags::AtWar);
+        case FACTION_FLAG_HIDDEN: return state->Flags.HasFlag(ReputationFlags::Hidden);
+        case FACTION_FLAG_PEACE_FORCED: return state->Flags.HasFlag(ReputationFlags::Peaceful);
+        default: return false;
+    }
+}

@@ -2076,19 +2076,19 @@ bool AtWarTrigger::IsActive()
         if (!repState)
             continue;
 
-        if (!(repState->Flags & FACTION_FLAG_VISIBLE))
+        if (!(ReputationHasFlagCompat(repState, FACTION_FLAG_VISIBLE)))
             continue;
 
-        if (repState->Flags & FACTION_FLAG_HIDDEN)
+        if (ReputationHasFlagCompat(repState, FACTION_FLAG_HIDDEN))
             continue;
 
-        if (repState->Flags & FACTION_FLAG_INVISIBLE_FORCED)
+        if (ReputationHasFlagCompat(repState, FACTION_FLAG_INVISIBLE_FORCED))
             continue;
 
-        if (repState->Flags & FACTION_FLAG_PEACE_FORCED)
+        if (ReputationHasFlagCompat(repState, FACTION_FLAG_PEACE_FORCED))
             continue;
 
-        if (!(repState->Flags & FACTION_FLAG_AT_WAR))
+        if (!(ReputationHasFlagCompat(repState, FACTION_FLAG_AT_WAR)))
             continue;
 
         if (mgr.GetRank(factionEntry) < REP_HOSTILE)
