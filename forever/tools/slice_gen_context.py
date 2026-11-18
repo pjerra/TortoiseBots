@@ -123,6 +123,8 @@ def main(argv):
     for cls in order:
         if cls not in LOCAL:
             sys.exit("slice_gen_context: unknown full-build context class %s" % cls)
+    # registration order of the full build (AiObjectContext.cpp:21-35): StrategyContext, Movement, Assist, ..., then the rest
+    order.sort(key=lambda c: list(LOCAL).index(c))
 
     L = []
     w = L.append
@@ -136,6 +138,7 @@ def main(argv):
     w("// entries are not here: WarriorAiObjectContext (compiled as it is) adds them on top of this constructor.")
     w("#include \"compat/botpch_forever.h\"")
     w("#include \"playerbot/playerbot.h\"")
+    w("#include \"SliceLog.h\"")
     w("#include \"playerbot/strategy/AiObjectContext.h\"")
     w("#include \"playerbot/strategy/NamedObjectContext.h\"")
     for h in sorted(headers):
@@ -182,8 +185,8 @@ def main(argv):
     w("    if (!logged)")
     w("    {")
     w("        logged = true;")
-    w("        TC_LOG_INFO(\"tortoisebots\", \"slice: registered {}/{}/{}/{} (strategies/actions/triggers/values)\",")
-    w("            slice::kStrategies, slice::kActions, slice::kTriggers, slice::kValues);")
+    w("        slice::LogInfo(\"slice: registered \" + std::to_string(slice::kStrategies) + \"/\" + std::to_string(slice::kActions) + \"/\"")
+    w("            + std::to_string(slice::kTriggers) + \"/\" + std::to_string(slice::kValues) + \" (strategies/actions/triggers/values)\");")
     w("    }")
     w("}")
     text = "\n".join(L) + "\n"

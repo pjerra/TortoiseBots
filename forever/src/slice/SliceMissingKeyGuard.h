@@ -19,6 +19,7 @@
 // unregistered value, its types and flags one this list lacks.
 #pragma once
 
+#include "SliceLog.h"
 #include "playerbot/strategy/AiObjectContext.h"
 #include "playerbot/strategy/Value.h"
 #include "playerbot/LootObjectStack.h"
@@ -96,7 +97,7 @@ namespace slice
             std::lock_guard<std::mutex> lock(Mutex());
             if (!Seen().insert(key).second)
                 return;
-            TC_LOG_WARN("tortoisebots", "slice: missing {} {}", what, name);
+            LogWarn(std::string("slice: missing ") + what + " " + name);
         }
 
         static size_t Count()

@@ -20,6 +20,7 @@
 #include "playerbot/strategy/AiObjectContext.h"
 #include "playerbot/strategy/ReactionEngine.h"
 #include "playerbot/strategy/warrior/WarriorAiObjectContext.h"
+#include "SliceLog.h"
 #include "SliceMissingKeyGuard.h"
 
 AiObjectContext* AiFactory::createAiObjectContext(Player* player, PlayerbotAI* ai)
@@ -30,8 +31,7 @@ AiObjectContext* AiFactory::createAiObjectContext(Player* player, PlayerbotAI* a
     if (player && player->GetClass() != CLASS_WARRIOR && !warned)
     {
         warned = true;
-        TC_LOG_WARN("tortoisebots", "slice: {} is not a warrior; the slice build gives every bot the warrior context",
-            player->GetName());
+        slice::LogWarn("slice: " + player->GetName() + " is not a warrior; the slice build gives every bot the warrior context");
     }
     return new slice::GuardedContext<WarriorAiObjectContext>(ai);
 }

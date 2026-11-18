@@ -8,6 +8,7 @@
 // entries are not here: WarriorAiObjectContext (compiled as it is) adds them on top of this constructor.
 #include "compat/botpch_forever.h"
 #include "playerbot/playerbot.h"
+#include "SliceLog.h"
 #include "playerbot/strategy/AiObjectContext.h"
 #include "playerbot/strategy/NamedObjectContext.h"
 #include "playerbot/strategy/Value.h"
@@ -94,16 +95,6 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of AssistStrategyContext (1 of its keys)
-    class SliceAssistStrategyContext : public NamedObjectContext<Strategy>
-    {
-    public:
-        SliceAssistStrategyContext() : NamedObjectContext<Strategy>(false, true)
-        {
-            creators["dps assist"] = [](PlayerbotAI* ai) { return new DpsAssistStrategy(ai); };
-        }
-    };
-
     // the registry of StrategyContext (1 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
@@ -121,6 +112,16 @@ namespace slice
         SliceMovementStrategyContext() : NamedObjectContext<Strategy>(false, true)
         {
             creators["follow"] = [](PlayerbotAI* ai) { return new FollowMasterStrategy(ai); };
+        }
+    };
+
+    // the registry of AssistStrategyContext (1 of its keys)
+    class SliceAssistStrategyContext : public NamedObjectContext<Strategy>
+    {
+    public:
+        SliceAssistStrategyContext() : NamedObjectContext<Strategy>(false, true)
+        {
+            creators["dps assist"] = [](PlayerbotAI* ai) { return new DpsAssistStrategy(ai); };
         }
     };
 
@@ -335,9 +336,9 @@ namespace slice
 // The slice's constructor. Same signature as the full build's: only the registry differs.
 AiObjectContext::AiObjectContext(PlayerbotAI* ai) : PlayerbotAIAware(ai)
 {
-    strategyContexts.Add(new slice::SliceAssistStrategyContext());
     strategyContexts.Add(new slice::SliceStrategyContext());
     strategyContexts.Add(new slice::SliceMovementStrategyContext());
+    strategyContexts.Add(new slice::SliceAssistStrategyContext());
     actionContexts.Add(new slice::SliceActionContext());
     triggerContexts.Add(new slice::SliceTriggerContext());
     valueContexts.Add(new slice::SliceValueContext());
@@ -346,7 +347,7 @@ AiObjectContext::AiObjectContext(PlayerbotAI* ai) : PlayerbotAIAware(ai)
     if (!logged)
     {
         logged = true;
-        TC_LOG_INFO("tortoisebots", "slice: registered {}/{}/{}/{} (strategies/actions/triggers/values)",
-            slice::kStrategies, slice::kActions, slice::kTriggers, slice::kValues);
+        slice::LogInfo("slice: registered " + std::to_string(slice::kStrategies) + "/" + std::to_string(slice::kActions) + "/"
+            + std::to_string(slice::kTriggers) + "/" + std::to_string(slice::kValues) + " (strategies/actions/triggers/values)");
     }
 }
