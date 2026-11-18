@@ -83,7 +83,7 @@ The R3 leftover headers (`GuidPosition.h`, `RandomBotFacade.h`, `Talentspec.h`, 
 The dedupe table: 17 same-name helpers and 15 same-name macros or constants (tables 1a: 32 names), 15 different-name pairs (1b; 11 unified, 4 kept as two on purpose:
 the aura set, `GuidTextCompat`/`GuidWriteCompat`, `CStrCompat`/`CStrOrCompat`, `ForEachThreatenerCompat`/the new amount walk), 6 helpers added in R4M (1c).
 The common pair now holds 39 helpers on ForeverCore (36 on Turtle: the three the Turtle core has no use for are `GroupFlagHolderCompat` and the two liquid-flag translations),
-and `TbCompat_Names.h` 12 names. Behaviour-changing choices: `GuidRawCompat` -> `GuidKeyCompat`, `CurrentThreatVictimCompat`
+and `TbCompat_Names.h` 11 names. Behaviour-changing choices: `GuidRawCompat` -> `GuidKeyCompat`, `CurrentThreatVictimCompat`
 (`GetLastVictim`), `SpellIsChannelingCompat` (section 2), `LiquidStatusCompat` (0 = no filter, the four-type mask stays a filter), `DuelOpponentGuidCompat` (null check),
 `AreaNameOrEmptyCompat` (both null checks), `CreatureIsAboveNormalCompat` (boss flag), `ApplySpellModRangeCompat` and `SpellCalculateDamageCompat` (the checked forms).
 
