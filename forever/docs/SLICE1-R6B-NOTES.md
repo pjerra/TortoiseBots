@@ -116,7 +116,11 @@ talent spec tables 15, quest packets 11, group packets 9, trade 8, travel 3, oth
    `HasRealPlayerMaster()` / `HasActivePlayerMaster()` are false, and `PlayerbotAI::DoNextAction` runs the rule "remove bot masters not in our group" (PlayerbotAI.cpp:3392-3397): master not in the bot's group, not
    a real player -> `ClearBotMaster`. The host's `ClearBotMaster` clears both the engine's pointer and `BotMgr`'s master (the `.tb where` line reads `master: none (no network session)` within the first tick).
    A real client as the master (or the bot in the master's group) keeps it. Without a client there is no console command that makes a group (`.group` has no join), so R8 must either use a real client
-   or decide what a console-driven master counts as (a host switch for `HasNetworkTransportCompat`, or `ClearBotMaster` refusing). I did not change either: it is a behaviour decision. It was not run with a real client.
+   or decide what a console-driven master counts as (a host switch for `HasNetworkTransportCompat`, or `ClearBotMaster` refusing). I did not commit either: it is a behaviour decision.
+   **Verified by one throw-away build** (`HasNetworkTransportCompat` returned true for every session, not committed): `.tb where` then reads `master: Tbbeta (real player)`, `follow target: Tbbeta, safe: yes`,
+   motion type 14 (follow), and after `tb go Tbbeta 20 0` the warrior stood 3.1 yd from its master (it moved from -8803.1 to -8788.5 while the master went to -8783.1). It was not run with a real client.
+   The same run: `tb attack Tbbeta` (the master fights a Timber Wolf) -> after 15 s the warrior was still out of combat, victim none: the follow strategy's "master target active" trigger ->
+   "dps assist" is one of the 7 missing keys, and the slice's combat strategies only run once the bot is itself in combat.
 2. 7 missing keys above; the follow trigger set is the first thing to extend (`master target active`, `out of free move range`, `formation station` + its action).
 3. `boss and raid tactics` / `loot objects` / `cinematic and camera` calls are per-tick atomic increments; cheap, but the counts will dominate `.tb unported`.
 4. `DBErrors.log` on `~/forever-run/logs` is 150 MB (not from this package); `forever-world` was always stopped at the end.
