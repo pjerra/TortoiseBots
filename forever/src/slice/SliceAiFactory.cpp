@@ -72,9 +72,14 @@ void AiFactory::AddDefaultDeadStrategies(Player* /*player*/, PlayerbotAI* const 
     // Death and resurrection are out of the slice (spec section 1).
 }
 
-void AiFactory::AddDefaultReactionStrategies(Player* /*player*/, PlayerbotAI* const /*facade*/, ReactionEngine* /*reactionEngine*/)
+void AiFactory::AddDefaultReactionStrategies(Player* /*player*/, PlayerbotAI* const /*facade*/, ReactionEngine* reactionEngine)
 {
-    // Reactions (AoE avoidance, potions, chat) are out of the slice.
+    // Reactions (AoE avoidance, potions, chat) are out of the slice. The class strategy is not: its reaction triggers are the
+    // ones that move the bot between the engines ("combat start" -> "set combat state", "combat end" -> "set non combat state",
+    // "death" -> "set dead state": ClassStrategy::InitReactionTriggers), exactly as the full factory adds it (AiFactory.cpp:2085,
+    // a warrior on the arms tab). Without it the bot entered the combat engine (AttackAction calls OnCombatStarted itself) and
+    // never left it (R8 observation d).
+    reactionEngine->addStrategy("arms");
 }
 
 Engine* AiFactory::createCombatEngine(Player* player, PlayerbotAI* const facade, AiObjectContext* AiObjectContext)
