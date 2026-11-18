@@ -116,3 +116,66 @@ Added in `forever/src/slice/SliceLinkStubs.cpp`, each with the three statements 
 
 Host services (rule c, `forever/src/host/`): none needed. Files added to the slice (rule b): none. New unported row: `item usage` (the four `ItemUsageValue` stand-ins).
 Removed: the seven `LootObject` / `LootObjectStack` stand-ins of slice 1 (`SliceLinkStubs.cpp`, former lines 310-317) and their row `loot object stack`, because `LootObjectStack.cpp` is real now.
+
+## 8. Host test commands (`forever/src/TbScripts.cpp`, spec section 7)
+
+Every new command refuses with "the engine is not built in (this build has no test commands for it)" when `TortoiseBots::engine::Built()` is false (checked in the option-OFF build: it compiles, the six objects are unchanged).
+
+| Command | What it does | Core call |
+|---|---|---|
+| `.tb level <bot> <n>` (1-60) | the core's own level-up path of `.character level` (cs_character.cpp:914-917) | `Player::GiveLevel` (Player.h:1356), `InitTalentForLevel`, `SetXP(0)` |
+| `.tb train <bot>` | free class training at the bot's level, no spell id in the module, two passes repeated while one teaches something. **Pass 1: the class trainers** (`ObjectMgr::GetTrainers`, ObjectMgr.h:1628, the world database's `trainer` / `trainer_spell` rows; type `Trainer::Type::None` = the class trainers, 254 of 716 rows, e.g. the priests' trainers 7 and 8; `Trainer::Type::Talent` is a different set of 8 and taught nothing in the first boot: the spec's "Talent" is a misreading; filter `Trainer::GetClassMask()` holds the class) through the core's `Trainer::TeachAvailableSpellsFree` (Trainer.h:94). **Pass 2: the class skill-line abilities** (`sSkillLineAbilityStore`, the DB2 data the core's own `.learn my trainer` reads, cs_learn.cpp:144-181; class spell family `ChrClasses.SpellClassSet`, `IsSpellFitByClassAndRace`, `SpellMgr::IsSpellValid`, and `SpellInfo::SpellLevel <= level`, which the core's command lacks): this is where a priest's Smite and Lesser Heal come from, they are in no trainer table | `Trainer::TeachAvailableSpellsFree`, `Player::LearnSpell` (Player.h:2028) |
+| `.tb hurt <name> <percent>` | health to that percent of the maximum (1 at least), any logged-in character | `Unit::SetHealth` |
+| `.tb power <bot> mana\|rage\|energy <percent>` | that power as a percent of its maximum (rage: percent of 100 = rage points, so `.tb rage` keeps working: it stays as the older spelling) | `Unit::SetPower` (Unit.h:839) |
+| `.tb additem <bot> <item id> [count]` | a new item into the bags | `Player::StoreNewItemInBestSlots` (Player.h:1626) |
+| `.tb use <bot> <item id> [self]` | the core's own item cast (spike U1); id 0 only reports mana, cast, movement and auras; prints the item's legacy flag, effect count and on-use spell first | `Player::CastItemUseSpell` (Player.h:2683) |
+| `.tb castlog <bot> [on\|off]` | with a word: the cast-result sink of a bot without an engine; without: prints and drains the queue | `BotSession::SetCastResultSink`, `DrainCastResults` |
+| `.tb where` | gained `money: N copper (Xg Ys Zc), mana a/b` | `Player::GetMoney` |
+| `.tb castfail` (first package) | unchanged | |
+
+## 9. Boots (build VM `~/forever-run`, binary from `~/forever-build/r3-on`, a copy of the slot-1 option-ON build, so the slot could go back to OFF while waiting)
+
+The test server is shared. Boot 1 (21:04) was **taken over by the other worker's console driver within a minute**: their commands (`tb login Tbbeta`, `tb engine Tbalpha on`, `tb engine Tbgamma on`) arrived in my server before mine, so a slice-1 gate run was starting on a slice-2 binary. I stopped my server (I had started it), put their binary `worldserver.pre-r3` back, and waited. Boot 2 (21:07) the same driver sent `tb where Tbbeta` and `tele name Tbbeta RFC` after about five minutes; I took the U1 and castfail observations, stopped and restored again. Boot 3 (21:12) ran clean to the end (no foreign command), about 12 minutes. Boots used: 3 of 8. `ASSERT|Segmentation` lines in `world.out`: 0 in all three. The binary of the other worker was restored after each (`cmp` not needed: the copy is `worldserver.pre-r3`, taken before the first overwrite).
+
+Characters: master `Tbbeta` (level 3 priest, slice 1's), warrior `Tbalpha` (level 2), new priest `Tbpriest` (`.tb create 1#1 Tbpriest 1 5`, then `.tb level Tbpriest 10`), all in one party by `.tb login <bot> Tbbeta`.
+
+### 9.1 Registry and train
+
+* `slice: registered 8/23/56/166 (strategies/actions/triggers/values)`.
+* `.tb level Tbpriest 10` -> `Tbpriest is level 10: health 187/187, mana 487/487`.
+* First `.tb train` (trainer type Talent): `learned 0 spell(s) from 8 class trainer(s)` (the type filter above). After the fix (types None + the skill-line pass): `learned 15 spell(s) from 45 class trainer(s) and 15 from the class skill lines, in 2 pass(es)`; `.tb spells Tbpriest` = 87 spells, with `2050:Lesser Heal`, `591:Smite` and `585` (Smite rank 1), `17:Power Word: Shield`, `139:Renew`, `8092:Mind Blast`, `1243` Power Word: Fortitude.
+* **Open point for the next package:** the trainer pass also taught things that are not the priest's (riding passives, a tailoring recipe, Mind Spike, Shadowfiend, Pain Suppression, Circle of Healing...): 45 "class trainers" matched the priest mask, among them trainers whose spells name no class (the core's `GetClassMask` says "all classes when the data does not say", Trainer.h:96). The commit after boot 3 narrows the trainer pass to trainers whose mask IS the class (`GetClassMask() == classMask`); not re-run live (see section 10).
+
+### 9.2 Cast results (spike U3 and the cast-result path)
+
+* Injected: `.tb castfail Tbpriest 585 75` and `.tb castfail Tbpriest 2050 63 interrupt` -> the action log: `[CAST_FAILED_ASYNC] spell=585 reason=75 injected=1`, `[SPELL_FAILURE] spell=2050 reason=63 injected=1`; `.tb where`: `cast results: queued 3, delivered 3, dropped 0 (queue holds 32), pending 0; refused during the engine's own tick (not queued) 0, unreadable 0`.
+* **Real, async, from the core (boot 2):** the engine's `drink` while the console cast of the same drink was running: `[ACTION] A:drink - OK`, then 285 ms later `[CAST_FAILED_ASYNC] spell=430 reason=91` (`SPELL_FAILED_NOT_READY`): a refusal the core sent from the end of the cast, heard through the queue.
+* **Real, async (boot 3):** Smite on a Kobold Vermin the party killed: `[CAST_START] spell=Smite(585) ... castTime=1500ms`, `[CAST_OK] result=0`, 1.5 s later `[SPELL_FAILURE] spell=585 reason=63` (the target died during the bar): `last spell cast` cleared by `SpellInterrupted`, and the priest's next action followed in the same second.
+* **U3 (does the core cancel a spline-moved bot's cast): NO.** `.tb cast Tbpriest 2050` (Lesser Heal, 1.5 s, health 74 -> 125) then `.tb go Tbpriest -12 0` 0.3 s later: first `.tb castlog` 0.4 s after the walk was asked: `casting now yes, moving now no`; second, 1.5 s later: `casting now no, moving now yes`, 0 results, the heal landed. The core does not start the generator's movement while a movement-interruptible cast is preparing: `PointMovementGenerator.cpp:66` and `:153` (`owner->IsMovementPreventedByCasting()`, `Unit.cpp:3493-3508`); the Follow generator does the same (`FollowMovementGenerator.cpp:110`). So a MotionMaster-moved bot never gets reason 75; its walk waits for the cast. Observation g of the live test is therefore "no cancel, the movement waits"; a reason-75 result can only come from client-style movement flags (Spell.cpp:4336), which a bot session never produces.
+
+### 9.3 U1: drinking: PASS (the eight points of SLICE2-I2-NOTES section 3)
+
+Water: the vendor data of Innkeeper Farley (`npc_vendor` entry 295: items 159, 1179, 1205, 1708, 1645, 8766); `.tb item 159` -> `"Refreshing Spring Water": class 0/5, required level 1, spells 430 (trigger 0)`.
+
+1. `.tb use Tbpriest 159`: `item 159: legacy no, 1 effect(s), on-use spell 430, count 6.` (not legacy, an ON_USE effect).
+2. Food/drink recognised: the engine itself chose `drink` (`A:drink - OK`) and the helper passed the gate (no `item use except food and drink` count).
+3. The drink spell is a pure self spell: the cast went through (aura 430).
+4. Empty `SpellCastTargets` accepted: no `SPELL_FAILED_BAD_TARGETS`; the `self` word of `.tb use` was not needed.
+5. Through the engine: `A:drink - OK src=high mana` (the trigger's own name, as T) and `[CAST_OK]`; console: `mana 48/487` -> `62/487` at the cast, aura `430` in the list, then `160/487` and `239/487` 3 s apart (rising about 80 per 3 s), `casting: no` (the drink is an aura, not a cast bar). The item count went 7 -> 6 at the cast (consumed at once).
+6. A refusal: the real async `CAST_FAILED_ASYNC spell=430 reason=91` of 9.2 (the engine's drink while one was running), the action reported OK first (the refusal came after the call).
+7. The last item of a stack was not tried (5 + 2 in the bags).
+8. Moving: `ai->StopMoving()` is in the helper; not exercised (the priest stood).
+Decision D3 is therefore not applied: drinking stays in the slice.
+
+### 9.4 Smoke: heal and money loot
+
+* Heal: `.tb hurt Tbbeta 40` (the master, 32/82): the priest's log `PUSH:lesser heal on party ... src=party member medium health`, `[CAST_START] spell=Lesser Heal(2050) castTime=1500ms`, `[CAST_OK]`; `.tb where Tbbeta` 6 s later `48/82`, and `122/122` within 15 s (his maximum grew by the priest's Power Word: Fortitude). `A:heal on party - IMPOSSIBLE` (the priest at level 10 does not know Heal, level 16) and `lesser heal on party` is the alternative it took.
+* Money: master walked to the kobolds at Northshire (`.tb go`, then `.tb attack Tbbeta`), killed a Kobold Vermin; `.tb where`: **Tbpriest 4 copper, Tbalpha 2 copper**, master 0 (it is a spike bot with no engine); the action logs of both bots: `A:loot - OK src=loot available`, `A:open loot - OK src=can loot`, `[PUSH] PUSH:store loot ... src=loot response`, `A:store loot - OK`. One window per bot, no second open.
+* Perf: `.tb perf` 11,427 ticks: world update time avg 1.14 ms, worst 22 ms; the module's average at 3 bot sessions was 44 us in the first window (its worst, 1.5 s, is the first tick: the engine config load).
+
+### 9.5 `slice: missing` lines (61 over boots 2-3: 5 actions, 48 triggers, 8 values), explained
+
+* 48 triggers: 27 of `default`'s packet triggers (group invite, uninvite, trade, taxi, ready check, petitions, area triggers, xp/honor/levelup, summon, resurrect, item push, equip errors, money errors, gossip: all packet features outside this slice, decision D6), 8 quest packet triggers (`quest details`, `quest update ...`, `confirm quest`), 4 loot-roll triggers (`loot start roll`, `loot vote`, `loot roll won`: rolls time out on F), `party command`, `bg status`, `random bot update`, `inventory change failure`, `combat stuck`, `combat long stuck`, `feared`, `mounted`, `party member dead`, `check mount state`, `use game object`.
+* 5 actions: `apply oil`, `check mail`, `check mount state`, `check values`, `use lightwell` (features outside the slice: oils, mail, mounts, a priest's lightwell).
+* 8 values: `enemy player target`, `has enemy player targets`, `keepout set aside`, `outfit list`, `runners let go`, `unreachable entries`, `unreachable targets` (PvP, equip and dungeon-run values, none used by the kit) and **`incoming heals`** (read by `PartyMemberToHeal.cpp:114,222` as a `std::map<ObjectGuid, uint32>`: the stand-in answers an empty map, "nobody else is healing this member", which is neutral for one priest and would overheal a target a second healer is already healing: registering `IncomingHealsValue` (PartyMemberToHeal.h) is the first thing to add if two healers ever play together).
+* The whole list is in `/tmp/r3-missing-3.txt` on the build VM; slice 1's list is in SLICE1-R6B-NOTES.
