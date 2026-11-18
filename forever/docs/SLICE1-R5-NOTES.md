@@ -80,7 +80,34 @@ same moment from the packet or `SendPacket` side; BotSession drops packets, and 
 
 ## Census of the engine-facing file
 
-See the section "Census result" below (filled in after the run).
+`FOREVER_SLOT=4 FOREVER_CENSUS_LIST=forever/SLICE1-R5.txt forever/tools/vm-census.sh "" 14`. The list file starts with a
+`-DTORTOISEBOTS_SLICE1=1` line: `port_census.py` now takes `-D` lines of the list file, and `FOREVER_CENSUS_DEFINES`
+(space-separated flags) as well. The list-file form is the one that works today, because the VM's `census.sh` (outside the
+repository) forwards only `FOREVER_CENSUS_LIST` into the container. Both are no-ops when unset. The census also writes
+`errors.tsv` (every error place once: where, message) next to the other tables.
+
+Result: `files 1  with errors 1  error places 267 (in 8 files)`. **Errors in `TbEngineBrain.cpp`: 0.** (The first run had 2,
+both `TC_LOG_*` after the shim's `#define sLog`: fixed by logging with the legacy `sLog.outString/outError`.) All 267 are in
+legacy headers that do not compile on ForeverCore yet, i.e. other packages' work:
+
+| Header | Places | Owner (spec section 6) |
+|---|---|---|
+| `ai/playerbot/WorldPosition.h` | 225 | R4P/R4C (positions; `x y z mapId o` members, `sTerrainMgr`, `PathFinder`) |
+| `ai/playerbot/GuidPosition.h` | 12 | R4C (`ObjectGuid::Set`, `creature_id`, `GetWorldObject`) |
+| `ai/playerbot/ServerFacade.h` | 11 | R4C (`IsInRoots`, `HostileRefManager`, `GetAngle`, BG types) |
+| `ai/playerbot/PlayerbotAI.h` | 10 | R4P (`GetFactionTemplateEntry`, `LootItemList`, `HasNetworkTransport`) |
+| `ai/playerbot/Talentspec.h` | 4 | R4P/R3 (`GetBonusTalentCount`, `TalentTabEntry`) |
+| `ai/playerbot/strategy/Value.h` | 2 | R4V (`creature_id`, `name`) |
+| `ai/playerbot/PlayerbotAIConfig.h` | 2 | R4C (`MAX_RACES`, `SLOT_EMPTY`) |
+| `ai/playerbot/strategy/ExternalEventHelper.h` | 1 | R4P (`HasNetworkTransport`) |
+| `Config/Config.h` (not found, 1 include) | 1 | R4C: the `Config` adaptor |
+
+Caution: a header error can hide a use in my file (an incomplete type makes the use below it unchecked), so 0 here is
+"no error of its own so far"; run the census again after R4 lands. The names my file uses (`PlayerbotAI::SetMaster`,
+`ResetStrategies`, `EnsureDefaultMovementStrategy`, `GetStrategies`, `GetState`, `BotStateToString`, `GetBot`,
+`GetCurrentEngine`, `GetAiObjectContext`, `UpdateAI`, `PlayerbotAIStorage::{SetAI,RemoveAI,GetAI}`,
+`BotActionLog::{NoteLogin,Close(uint32)}`, `ai::Value<Unit*>::Get`) are declared in `PlayerbotAI.h`, `BotActionLog.h`,
+`PlayerbotAIStorage.h`, `strategy/Value.h` and resolved without error.
 
 ## Open questions
 
