@@ -194,4 +194,15 @@ creature template helpers (`CreatureIsCivilianCompat`, `CreatureIsGuardFlagCompa
 
 ## Gates
 
-(see the end of this file after the final run)
+Code tree `700832116` (the later commits are notes and one line of `tools/verify_tortoise_surface.sh`).
+
+| Gate | Command | Result |
+|---|---|---|
+| Census, R4C list | `FOREVER_SLOT=5 FOREVER_CENSUS_LIST=forever/SLICE1-R4C.txt forever/tools/vm-census.sh "" 14` | `files 29 compile clean 3 with errors 26 error places 60 (in 13 files)` (BEFORE 297 in 20 files) |
+| ForeverCore module, slice option off | `ssh yulon-ubuntu2 'FOREVER_SLOT=5 ~/forever-build/build.sh 12 tortoisebots'` | `CMAKE_RC=0 MAKE_RC=0` (`TbCompat_C.cpp` compiled) |
+| Turtle build | `vm-build ~/wt-slice-r4c --wait` at `8a673d19a` and again at `700832116` (after the one rename) | both `COMPILE_SECONDS=2935 / 2472 CMAKE_RC=0 MAKE_RC=0`, `QUEUE_RC=0` |
+| Turtle unit tests | `vm-test tb ~/wt-slice-r4c` | first two runs `RESULT: FAIL` in 2 s on the surface check: (1) `tools/verify_tortoise_surface.sh:49` greps `rtsc` case-insensitively and the helper `GuidFromPartsCompat` contains it: renamed `GuidFromNumbersCompat`; (2) line 154 wants `GetMotionMaster()->GetCurrent` in `ServerFacade.cpp`, which moved word for word into `ai/cmangos-compat-r4c.h`: the check now looks in both files (it still proves the chase inspection uses the core's own current generator). Then at `f3b38c786`: `RESULT: PASS`, rc=0, `vm_duration=1076s` |
+
+Wiring tests whose pins were updated to the new spelling of the same expression (all text pins; run locally first, 4 files, flock+nice, then in vm-test):
+`tools/test_swim_path_wiring.py` (the liquid query is `LiquidAtCompat(...)` and the Turtle helper body in `cmangos-compat-r4c.h` is asserted to hold the old `getLiquidStatus(... static_cast<uint8>(request) ...)` and `typeFlags = ... data.type_flags` lines; `IsInLineOfSightCompat`; `TransportOfCompat(bot)`), `tools/test_magma_guard_wiring.py` (isInMagma asks `LiquidAtCompat` and `ai::IsMagmaHazard(typeFlags`, helper body asserted the same way),
+`tools/test_move_fail_note_wiring.py` (`PathTypeOfCompat(*pathfinder)`). Each still proves what it proved: the same call, made by the same function, now one hop away in a header that is the old call.
