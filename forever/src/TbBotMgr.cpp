@@ -269,8 +269,13 @@ void BotMgr::OnPlayerLogout(Player* player)
     // which the engine can still be taken down in the order the legacy code requires. Covers the logouts the core
     // starts by itself as well as ours.
     auto itr = _bots.find(player->GetGUID());
-    if (itr != _bots.end())
-        DropBrain(itr->second);
+    if (itr == _bots.end())
+        return;
+    DropBrain(itr->second);
+    // A bot that leaves the world leaves its party too (a dismissed hire): the core keeps a logged-out member in the saved group, which
+    // would count against the party's five seats at the next login and re-form a party nobody asked for.
+    if (player->GetGroup())
+        player->RemoveFromGroup(GROUP_REMOVEMETHOD_LEAVE);
 }
 
 std::string BotMgr::CreateCharacter(uint32 accountId, std::string const& name, uint8 race, uint8 playerClass, uint8 gender)
