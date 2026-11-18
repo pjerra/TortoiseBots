@@ -59,7 +59,7 @@ class ChannelCancelWiring(unittest.TestCase):
 
     def test_the_area_guard_reads_the_spell_data_and_the_nearby_targets(self):
         area = body(TARGET_VALUE, "bool CcGuard::CcInRunningArea(")
-        self.assertIn("EnemyAreaOf(spell->m_spellInfo, atTarget, radius)", area)
+        self.assertIn("EnemyAreaOf(GetSpellEntryCompat(spell->m_spellInfo), atTarget, radius)", area)
         self.assertIn("spell->m_targets.getDestination(x, y, z)", area)
         self.assertIn("BreakableCcNear(x, y, z, mapId, radius)", area)
         # A crowd-controlled unit attacks nobody: the attackers list the other
@@ -97,7 +97,7 @@ class ChannelCancelWiring(unittest.TestCase):
         self.assertIn("class HurricaneChannelCheckTrigger", DRUID_TRIGGERS_H)
         hurricane = body(DRUID_TRIGGERS, "bool HurricaneChannelCheckTrigger::IsActive(")
         self.assertIn("GetCurrentSpell(CURRENT_CHANNELED_SPELL)", hurricane)
-        self.assertIn("IsEnemyAreaSpell(spell->m_spellInfo)", hurricane)
+        self.assertIn("IsEnemyAreaSpell(GetSpellEntryCompat(spell->m_spellInfo))", hurricane)
         self.assertIn("CcInRunningArea(spell)", hurricane)
         self.assertIn('creators["hurricane channel check"]', DRUID_CONTEXT)
         self.assertIn('"hurricane channel check"', BALANCE)

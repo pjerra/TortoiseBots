@@ -19,6 +19,7 @@ using uint32=unsigned;constexpr unsigned CLASS_MAGE=8,CLASS_WARRIOR=1,MAX_EFFECT
  SPELL_AURA_MOD_ROOT=1,SPELL_AURA_MOD_DECREASE_SPEED=2,CURRENT_MELEE_SPELL=0;
 struct SpellEntry{unsigned id=0,EffectRadiusIndex[3]={1,0,0};bool channel=false;unsigned cast=0;};
 struct Store{std::map<unsigned,SpellEntry> spells;template<class T>T*LookupEntry(unsigned id){return id?&spells[id]:nullptr;}}sSpellTemplate;
+SpellEntry* GetSpellEntryCompat(unsigned id){return sSpellTemplate.LookupEntry<SpellEntry>(id);}
 struct SpellRadiusEntry{float Radius=10;};struct Radii{SpellRadiusEntry r;SpellRadiusEntry*LookupEntry(unsigned i){return i?&r:nullptr;}}sSpellRadiusStore;
 struct Unit{unsigned entry=15667;float merge=12;bool root=false,slow=false,immune=false;
  unsigned GetEntry(){return entry;}float GetDistance(Unit*){return merge;}

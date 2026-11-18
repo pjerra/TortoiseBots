@@ -80,6 +80,7 @@ struct WorldPosition{void* source;template<class T>WorldPosition(T* p):source(p)
 using HazardPosition=std::pair<WorldPosition,float>;
 struct SpellEntry{unsigned EffectRadiusIndex[1]={8};};struct SpellRadiusEntry{float Radius=8;};
 struct Store{template<class T>T* LookupEntry(unsigned){static T t;return &t;}}sSpellTemplate;
+SpellEntry* GetSpellEntryCompat(unsigned){return sSpellTemplate.LookupEntry<SpellEntry>(0);}
 struct RadiusStore{SpellRadiusEntry* LookupEntry(unsigned){static SpellRadiusEntry r;return &r;}}sSpellRadiusStore;
 struct AI{Unit* unit;Unit* GetUnit(ObjectGuid){return unit;}};
 bool Live(Player*,Unit* u){return u&&u->live;}
@@ -142,6 +143,7 @@ struct Unit{unsigned entry=15299;unsigned GetEntry(){return entry;}};
 struct Player{};struct PlayerbotAI{Player bot;bool enabled=true,waitingMage=true;Player*GetBot(){return &bot;}};
 struct SpellEntry{unsigned School=4;bool positive=false;};
 struct Store{SpellEntry spell;template<class T>T* LookupEntry(unsigned){return &spell;}}sSpellTemplate;
+SpellEntry* GetSpellEntryCompat(unsigned){return sSpellTemplate.LookupEntry<SpellEntry>(0);}
 bool frozen=true;bool IsViscidusShatterTarget(Player*,Unit*){return frozen;}
 bool ViscidusEnabled(PlayerbotAI*a){return a&&a->enabled;}
 bool WaitingCaster(PlayerbotAI*a){return a->waitingMage;}

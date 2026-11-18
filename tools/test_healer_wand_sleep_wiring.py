@@ -38,7 +38,7 @@ class HealerWandSleepWiringTest(unittest.TestCase):
     def test_self_cancel_guard_stays(self):
         fn = body(SPELL_ACTIONS, "bool CastShootAction::Execute(Event& event)")
         self.assertIn("GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL)", fn)
-        self.assertIn("m_spellInfo->Id == GetSpellID()", fn)
+        self.assertIn("GetSpellEntryCompat(autoRepeatSpell->m_spellInfo)->Id == GetSpellID()", fn)
 
     def test_wand_means_shoot_spell_name(self):
         fn = body(SPELL_ACTIONS, "bool CastShootAction::Execute(Event& event)")

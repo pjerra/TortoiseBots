@@ -694,7 +694,7 @@ class DispelHoldAtCastTime(unittest.TestCase):
 
     def test_the_cast_gate_judges_every_type_the_spell_removes(self):
         fn = body(ACTIONS, "bool ai::DispelCastBlocked")
-        self.assertIn("CollectSpellDispelTypes(sSpellMgr.GetSpellEntry(spellId), types)", fn)
+        self.assertIn("CollectSpellDispelTypes(GetSpellEntryCompat(spellId), types)", fn)
         self.assertIn("DispelCastVerdict(targetKind, rows, auras, types", fn)
         self.assertIn("GetBossTactics().HasDispelMap(bot->GetMapId())", fn)
         self.assertIn('ai->HasStrategy("boss tactics", BotState::BOT_STATE_COMBAT)', fn)

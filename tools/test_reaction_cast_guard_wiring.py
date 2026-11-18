@@ -105,10 +105,10 @@ class ReactionCastGuardWiring(unittest.TestCase):
         self.assertIn("cast.remainingMs = spell->GetCastedTime();", CALL)
         # A channel counts its duration down (GetCastTime holds the pre-channel cast time, usually 0); a bar
         # counts its cast time down.
-        self.assertIn("cast.totalMs = cast.state == SPELL_STATE_CASTING && spell->m_spellInfo", CALL)
-        self.assertIn("? spell->m_spellInfo->CalculateDuration(bot) : spell->GetCastTime();", CALL)
+        self.assertIn("cast.totalMs = cast.state == SPELL_STATE_CASTING && GetSpellEntryCompat(spell->m_spellInfo)", CALL)
+        self.assertIn("? GetSpellEntryCompat(spell->m_spellInfo)->CalculateDuration(bot) : spell->GetCastTime();", CALL)
         # A heal by its effects: a direct heal or a periodic one.
-        self.assertIn("cast.isHeal = ReactionCastIsHeal(spell->m_spellInfo);", CALL)
+        self.assertIn("cast.isHeal = ReactionCastIsHeal(GetSpellEntryCompat(spell->m_spellInfo));", CALL)
         self.assertIn("entry->Effect[i] == SPELL_EFFECT_HEAL", PLAYERBOT_AI)
         self.assertIn("entry->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_HEAL", PLAYERBOT_AI)
 
