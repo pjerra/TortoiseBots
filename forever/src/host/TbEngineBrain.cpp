@@ -258,6 +258,12 @@ std::vector<std::string> Describe(Brain const* brain)
         lines.push_back("target reach: distance " + std::to_string(self->GetDistance(target)) + " yd, melee range " +
             std::to_string(self->GetMeleeRange(target)) + " yd, in melee range: " + (self->IsWithinMeleeRange(target) ? "yes" : "no") +
             ", victim: " + (self->GetVictim() ? self->GetVictim()->GetName() : "none"));
+        // What gates a chase (MovementAction::ChaseTo: CanMove, IsSafe; PlayerbotAI::CanMove's jump/fall/control reads), for a bot that
+        // stands off its target.
+        lines.push_back(std::string("chase gates: can move ") + (pai->CanMove() ? "yes" : "no") + ", safe(target) " +
+            (pai->IsSafe(target) ? "yes" : "no") + ", jumping " + (pai->IsJumping() ? "yes" : "no") + ", falling " +
+            (self->IsFalling() ? "yes" : "no") + ", lost control " + (self->HasUnitState(UNIT_STAT_CAN_NOT_REACT_OR_LOST_CONTROL) ? "yes" : "no") +
+            ", rooted " + (self->IsRooted() ? "yes" : "no") + ", motion " + std::to_string(int(self->GetMotionMaster()->GetCurrentMovementGeneratorType())));
     }
 
     // What the follow rule reads (strategy/triggers/RangeTriggers.h UpdateFollowTrigger): the engine's master, whether it counts

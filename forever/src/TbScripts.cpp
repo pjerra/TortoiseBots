@@ -120,6 +120,7 @@ public:
             { "where",  HandleWhere,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "engine", HandleEngine, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "status", HandleStatus, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "spells", HandleSpells, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "unported", HandleUnported, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "item",   HandleItem,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "spellscan", HandleSpellScan, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
@@ -249,6 +250,30 @@ public:
         }
         else
             handler->PSendSysMessage("TortoiseBots: %u creature(s) within 60 yd, none alive.", uint32(creatures.size()));
+        return true;
+    }
+
+    // .tb spells <character>: the spells the bot's spell map holds (id and name), what the engine's "spell id" value searches.
+    static bool HandleSpells(ChatHandler* handler, std::string name)
+    {
+        Player* bot = BotMgr::Instance().FindBot(GuidByName(name));
+        if (!bot)
+            return Fail(handler, name + " is not a logged-in bot.");
+        std::string line;
+        uint32 count = 0;
+        for (auto const& [spellId, spell] : bot->GetSpellMap())
+        {
+            SpellInfo const* info = sSpellMgr->GetSpellInfo(spellId, DIFFICULTY_NONE);
+            ++count;
+            line += std::to_string(spellId) + ":" + (info ? info->SpellName->Str[LOCALE_enUS] : "?") + (spell.active ? "" : "(inactive)") + (info && info->IsPassive() ? "(passive)" : "") + " ";
+            if (line.size() > 700)
+            {
+                handler->PSendSysMessage("TortoiseBots: spells: %s", line.c_str());
+                line.clear();
+            }
+        }
+        handler->PSendSysMessage("TortoiseBots: spells: %s", line.c_str());
+        handler->PSendSysMessage("TortoiseBots: %s knows %u spell(s).", name.c_str(), count);
         return true;
     }
 
