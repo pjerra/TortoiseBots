@@ -52,7 +52,7 @@ namespace
     // a transport, out of the world, or on another map than the path.
     bool SwimPathFits(const std::vector<WorldPosition>& path, const Unit* bot)
     {
-        if (!bot || bot->GetTransport() || path.size() < 2)
+        if (!bot || TransportOfCompat(bot) || path.size() < 2)
             return false;
         Map* const map = bot->FindMap();
         TerrainInfo const* const terrain = map ? map->GetTerrain() : nullptr;
@@ -60,10 +60,7 @@ namespace
             return false;
         auto const liquidAt = [terrain](float x, float y, float z, uint32 request, uint32& typeFlags)
         {
-            GridMapLiquidData data{};
-            uint32 const status = static_cast<uint32>(terrain->getLiquidStatus(x, y, z, static_cast<uint8>(request), &data));
-            typeFlags = status != LIQUID_MAP_NO_WATER ? data.type_flags : 0;
-            return status;
+            return LiquidAtCompat(terrain, x, y, z, request, typeFlags);
         };
         for (size_t i = 1; i < path.size(); ++i)
         {
@@ -73,7 +70,7 @@ namespace
                 return false;
             if (!ai::SwimLineInWater(a.getX(), a.getY(), a.getZ(), b.getX(), b.getY(), b.getZ(), liquidAt))
                 return false;
-            if (!map->isInLineOfSight(a.getX(), a.getY(), a.getZ() + 0.5f, b.getX(), b.getY(), b.getZ() + 0.5f, true))
+            if (!IsInLineOfSightCompat(map, a.getX(), a.getY(), a.getZ() + 0.5f, b.getX(), b.getY(), b.getZ() + 0.5f, true))
                 return false;
         }
         return true;
@@ -120,7 +117,7 @@ void WorldPosition::set(const ObjectGuid& guid, const uint32 mapId, const uint32
         setX(1); //Pretend to know so map can be loaded.
         if (Map* map = getMap(instanceId))
         {
-            Creature* creature = map->GetAnyTypeCreature(guid);
+            Creature* creature = GetAnyTypeCreatureCompat(map, guid);
             if (creature)
             {
                 set(creature);
@@ -393,7 +390,7 @@ bool WorldPosition::IsInStaticLineOfSight(WorldPosition pos, float heightMod) co
     float dstY = pos.y;
     float dstZ = pos.z + heightMod;
 
-    return VMAP::VMapFactory::createOrGetVMapManager()->isInLineOfSight(mapId, srcX, srcY, srcZ, dstX, dstY, dstZ);
+    return VmapLineOfSightCompat(mapId, srcX, srcY, srcZ, dstX, dstY, dstZ);
 }
 
 float WorldPosition::projectOnSegment(const WorldPosition& p1, const WorldPosition& p2) const
@@ -477,7 +474,7 @@ AreaTableEntry const* WorldPosition::GetArea() const
     // What it cost: TravelMgr::IsLocationLevelValid measures a travel point
     // against the level of the area it sits in, so quest turn-ins were being
     // judged by an unrelated zone's level and discarded.
-    return AreaEntry::GetByAreaFlagAndMap(getAreaFlag(), getMapId());
+    return AreaEntryOfKeyCompat(getAreaFlag(), getMapId());
 }
 
 bool WorldPosition::isEnemyHomeZoneFor(Team team) const
@@ -485,14 +482,14 @@ bool WorldPosition::isEnemyHomeZoneFor(Team team) const
     // Deliberately not GetArea(): that passes an area *flag* to
     // AreaEntry::GetById(), which expects an area *id*, and returns unrelated
     // areas - a position in the Barrens reported "Silverpine Forest".
-    AreaEntry const* area = AreaEntry::GetByAreaFlagAndMap(getAreaFlag(), getMapId());
+    AreaTableEntry const* area = AreaEntryOfKeyCompat(getAreaFlag(), getMapId());
     if (!area)
         return false;
 
-    uint32 areaTeam = area->Team;
-    if (areaTeam == AREATEAM_NONE && area->ZoneId)
-        if (AreaEntry const* zone = AreaEntry::GetById(area->ZoneId))
-            areaTeam = zone->Team;
+    uint32 areaTeam = AreaTeamCompat(area);
+    if (areaTeam == AREATEAM_NONE && AreaZoneIdCompat(area))
+        if (AreaTableEntry const* zone = GetAreaEntryByAreaID(AreaZoneIdCompat(area)))
+            areaTeam = AreaTeamCompat(zone);
 
     return (areaTeam == AREATEAM_ALLY  && team == HORDE)
         || (areaTeam == AREATEAM_HORDE && team == ALLIANCE);
@@ -525,10 +522,11 @@ void WorldPosition::EnsureHostileTownIndex()
             size_t* guards;
             bool operator()(CreatureDataPair const& dataPair)
             {
-                uint32 entry = dataPair.second.creature_id[0];
+                uint32 entry = CreatureEntryOfCompat(dataPair.second);
                 if (!entry)
                     return false;
-                uint32 mapId = dataPair.second.position.mapId;
+                WorldLocation const spawnLocation = LocationOfCompat(dataPair.second);
+                uint32 mapId = spawnLocation.mapId;
                 // Open world only: battleground/dungeon sentries (e.g. AV map 30
                 // bunkers) are objectives, not towns — indexing them would make
                 // bots refuse to assault towers as "hostile towns".
@@ -541,7 +539,7 @@ void WorldPosition::EnsureHostileTownIndex()
                 // happens to contain a guard word (e.g. Fanny Forgeguard 62463,
                 // an Ironforge vendor). Note some "Guard"-labeled quest NPCs ARE
                 // civilian-flagged (Guard Parker 464) — they don't aggro, out.
-                if (info->civilian)
+                if (CreatureIsCivilianCompat(info))
                     return false;
                 // Guard identity: CREATURE_FLAG_EXTRA_GUARD bit (0x400,
                 // Creature.h:62) OR a guard-title name match. The DB is
@@ -550,12 +548,11 @@ void WorldPosition::EnsureHostileTownIndex()
                 // (PVP) WITHOUT 0x400, yet kill bots. Titles cover EN + FR/DE/ES
                 // client locales. Numeric literal: the cmangos shim only aliases
                 // the INVISIBLE bit. strstr cost is build-time only.
-                uint32 constexpr GUARD_EXTRA_FLAG = 0x00000400;
-                bool isGuard = (info->flags_extra & GUARD_EXTRA_FLAG) != 0 ||
+                bool isGuard = CreatureIsGuardFlagCompat(info) ||
                     sPlayerbotAIConfig.IsExtraTownGuard(entry);
-                if (!isGuard && info->name.c_str() != nullptr)
+                if (!isGuard && CreatureNameCompat(info).c_str() != nullptr)
                 {
-                    const char* n = info->name.c_str();
+                    const char* n = CreatureNameCompat(info).c_str();
                     isGuard = strstr(n, "Guard") != nullptr ||
                         strstr(n, "Sentinel") != nullptr || strstr(n, "Sentry") != nullptr ||
                         strstr(n, "Deathguard") != nullptr || strstr(n, "Brave") != nullptr ||
@@ -569,14 +566,14 @@ void WorldPosition::EnsureHostileTownIndex()
                 // Faction routing (data-driven, core IsHostileTo: enemy/friend
                 // lists first, then hostile mask). Player templates: 1 = Alliance,
                 // 2 = Horde.
-                FactionTemplateEntry const* ally = sObjectMgr.GetFactionTemplateEntry(1);
-                FactionTemplateEntry const* horde = sObjectMgr.GetFactionTemplateEntry(2);
-                FactionTemplateEntry const* guardFaction = info->faction ? sObjectMgr.GetFactionTemplateEntry(info->faction) : nullptr;
+                FactionTemplateEntry const* ally = GetFactionTemplateEntryCompat(1);
+                FactionTemplateEntry const* horde = GetFactionTemplateEntryCompat(2);
+                FactionTemplateEntry const* guardFaction = info->faction ? GetFactionTemplateEntryCompat(info->faction) : nullptr;
                 if (!ally || !horde || !guardFaction)
                     return false;
                 auto hostileTo = [](FactionTemplateEntry const* guard, FactionTemplateEntry const* player)
                 {
-                    return guard->IsHostileTo(*player);
+                    return FactionTemplateHostileToCompat(guard, player);
                 };
                 // Neutral-town bruisers: guard-bit faction neutral to BOTH baseline
                 // templates (Booty Bay 121, Gadgetzan 475, Ratchet 637, Everlook
@@ -595,11 +592,11 @@ void WorldPosition::EnsureHostileTownIndex()
                 // Query radius is 2D (sqDistance2d at IsValid). Store the exact
                 // position so the query does the exact 2D distance check.
                 HostileTownCellKey key{ mapId,
-                    HostileTownCellCoord(dataPair.second.position.x),
-                    HostileTownCellCoord(dataPair.second.position.y) };
+                    HostileTownCellCoord(spawnLocation.x),
+                    HostileTownCellCoord(spawnLocation.y) };
                 auto push = [&](uint32 teamIdx)
                 {
-                    cells[teamIdx][key].push_back(HostileTownGuard{ dataPair.second.position.x, dataPair.second.position.y, info->faction, neutralBruiser });
+                    cells[teamIdx][key].push_back(HostileTownGuard{ spawnLocation.x, spawnLocation.y, info->faction, neutralBruiser });
                     ++guards[teamIdx];
                 };
                 if (neutralBruiser)
@@ -618,7 +615,7 @@ void WorldPosition::EnsureHostileTownIndex()
             }
         };
         HostileTownBuildWorker worker{ cells, guards };
-        sObjectMgr.DoCreatureData(worker);
+        DoCreatureDataCompat(worker);
         s_hostileTownCells[0] = std::move(cells[0]);
         s_hostileTownCells[1] = std::move(cells[1]);
         s_hostileTownGuards[0] = guards[0];
@@ -642,14 +639,15 @@ void WorldPosition::EnsurePointDangerIndex()
             std::unordered_map<PointDangerCellKey, std::vector<PointDangerSpawn>, PointDangerCellKeyHash>* cells;
             bool operator()(CreatureDataPair const& dataPair)
             {
-                uint32 entry = dataPair.second.creature_id[0];
+                uint32 entry = CreatureEntryOfCompat(dataPair.second);
                 if (!entry)
                     return false;
-                uint32 mapId = dataPair.second.position.mapId;
+                WorldLocation const spawnLocation = LocationOfCompat(dataPair.second);
+                uint32 mapId = spawnLocation.mapId;
                 if (mapId != 0 && mapId != 1)
                     return false;
                 CreatureInfo const* info = sObjectMgr.GetCreatureTemplate(entry);
-                if (!info || info->civilian)
+                if (!info || CreatureIsCivilianCompat(info))
                     return false;
                 // Invisible triggers and no-target spawns never aggro.
                 if (info->flags_extra & 0x00000080u /* CREATURE_FLAG_EXTRA_INVISIBLE */)
@@ -658,31 +656,31 @@ void WorldPosition::EnsurePointDangerIndex()
                     return false;
                 if (info->type == CREATURE_TYPE_CRITTER)
                     return false;
-                FactionTemplateEntry const* spawnFaction = info->faction ? sObjectMgr.GetFactionTemplateEntry(info->faction) : nullptr;
+                FactionTemplateEntry const* spawnFaction = info->faction ? GetFactionTemplateEntryCompat(info->faction) : nullptr;
                 if (!spawnFaction)
                     return false;
-                FactionTemplateEntry const* ally = sObjectMgr.GetFactionTemplateEntry(1);
-                FactionTemplateEntry const* horde = sObjectMgr.GetFactionTemplateEntry(2);
+                FactionTemplateEntry const* ally = GetFactionTemplateEntryCompat(1);
+                FactionTemplateEntry const* horde = GetFactionTemplateEntryCompat(2);
                 if (!ally || !horde)
                     return false;
                 // Static hostility per side (same reaction the target selection
                 // applies): a neutral-to-everyone spawn (wildlife on a neutral
                 // template) counts for neither side and never bars a point.
-                bool const toAlly = ally->IsHostileTo(*spawnFaction);
-                bool const toHorde = horde->IsHostileTo(*spawnFaction);
+                bool const toAlly = FactionTemplateHostileToCompat(ally, spawnFaction);
+                bool const toHorde = FactionTemplateHostileToCompat(horde, spawnFaction);
                 if (!toAlly && !toHorde)
                     return false;
                 PointDangerCellKey key{ mapId,
-                    PointDangerCellCoord(dataPair.second.position.x),
-                    PointDangerCellCoord(dataPair.second.position.y) };
-                (*cells)[key].push_back(PointDangerSpawn{ dataPair.second.position.x,
-                    dataPair.second.position.y, toAlly, toHorde, info->level_max,
-                    info->rank > CREATURE_ELITE_NORMAL });
+                    PointDangerCellCoord(spawnLocation.x),
+                    PointDangerCellCoord(spawnLocation.y) };
+                (*cells)[key].push_back(PointDangerSpawn{ spawnLocation.x,
+                    spawnLocation.y, toAlly, toHorde, info->level_max,
+                    CreatureIsAboveNormalCompat(info) });
                 return false;
             }
         };
         PointDangerBuildWorker worker{ &cells };
-        sObjectMgr.DoCreatureData(worker);
+        DoCreatureDataCompat(worker);
         s_pointDangerCells = std::move(cells);
     });
 }
@@ -826,15 +824,15 @@ bool WorldPosition::isGuardedHostileTownFor(Player const* bot, float radius, boo
                 // traffic), then the bot's live standing: forced-rank override,
                 // else at-war state — the same two calls the core's GetReactionTo
                 // consults before the mask math.
-                FactionTemplateEntry const* guardFaction = sObjectMgr.GetFactionTemplateEntry(guard.factionTemplate);
+                FactionTemplateEntry const* guardFaction = GetFactionTemplateEntryCompat(guard.factionTemplate);
                 if (!guardFaction || !botFaction)
                     continue;
-                if (!botFaction->IsHostileTo(*guardFaction))
+                if (!FactionTemplateHostileToCompat(botFaction, guardFaction))
                     continue;
-                if (bot->GetReputationMgr().GetForcedRankIfAny(guardFaction) != nullptr)
+                if (ForcedReputationRankCompat(bot, guardFaction) != nullptr)
                     return true;
-                if (FactionEntry const* factionEntry = sObjectMgr.GetFactionEntry(guardFaction->faction))
-                    if (bot->GetReputationMgr().IsAtWar(factionEntry))
+                if (FactionEntry const* factionEntry = FactionEntryOfCompat(FactionOfTemplateCompat(guardFaction)))
+                    if (ReputationAtWarCompat(bot, factionEntry))
                         return true;
                 return true;
             }
@@ -848,7 +846,7 @@ std::string WorldPosition::getAreaName(const bool fullName, const bool zoneName)
     {
         MapEntry const* map = sMapStore.LookupEntry(getMapId());
         if (map)
-            return std::string(map->name ? map->name : "");
+            return MapNameOrEmptyCompat(map);
     }
 
     AreaTableEntry const* area = GetArea();
@@ -856,11 +854,11 @@ std::string WorldPosition::getAreaName(const bool fullName, const bool zoneName)
     if (!area)
         return "";
 
-    std::string areaName = area->Name ? area->Name : "";
+    std::string areaName = AreaNameOrEmptyCompat(area);
 
     if (fullName)
     {
-        uint16 zoneId = area->ZoneId;
+        uint16 zoneId = AreaZoneIdCompat(area);
 
         while (zoneId > 0)
         {
@@ -869,14 +867,14 @@ std::string WorldPosition::getAreaName(const bool fullName, const bool zoneName)
             if (!parentArea)
                 break;
 
-            std::string subAreaName = parentArea->Name ? parentArea->Name : "";
+            std::string subAreaName = AreaNameOrEmptyCompat(parentArea);
 
             if (zoneName)
                 areaName = subAreaName;
             else
                 areaName = subAreaName + " " + areaName;
 
-            zoneId = parentArea->ZoneId;
+            zoneId = AreaZoneIdCompat(parentArea);
         }
     }
 
@@ -889,7 +887,7 @@ int32 WorldPosition::getAreaLevel() const
         return 1;
 
     if(GetArea())
-        return sTravelMgr.GetAreaLevel(GetArea()->Id);
+        return sTravelMgr.GetAreaLevel(AreaIdOfCompat(GetArea()));
 
     return 0;
 }
@@ -899,10 +897,10 @@ bool WorldPosition::HasAreaFlag(const AreaFlags flag) const
     AreaTableEntry const* areaEntry = GetArea();
     if (areaEntry)
     {
-        if (areaEntry->ZoneId)
-            areaEntry = GetAreaEntryByAreaID(areaEntry->ZoneId);
+        if (AreaZoneIdCompat(areaEntry))
+            areaEntry = GetAreaEntryByAreaID(AreaZoneIdCompat(areaEntry));
 
-        if (areaEntry && areaEntry->Flags & flag)
+        if (areaEntry && AreaHasFlagsCompat(areaEntry, flag))
             return true;
     }
 
@@ -914,11 +912,11 @@ bool WorldPosition::HasFaction(const Team team) const
     AreaTableEntry const* areaEntry = GetArea();
     if (areaEntry)
     {
-        if (areaEntry->Team == 2 && team == ALLIANCE)
+        if (AreaTeamCompat(areaEntry) == 2 && team == ALLIANCE)
             return true;
-        if (areaEntry->Team == 4 && team == HORDE)
+        if (AreaTeamCompat(areaEntry) == 4 && team == HORDE)
             return true;
-        if (areaEntry->Team == 6)
+        if (AreaTeamCompat(areaEntry) == 6)
             return true;
     }
     return false;
@@ -926,14 +924,7 @@ bool WorldPosition::HasFaction(const Team team) const
 
 std::set<GenericTransport*> WorldPosition::getTransports(uint32 entry)
 {
-    std::set<GenericTransport*> transports;
-    HashMapHolder<Transport>::ReadGuard guard(HashMapHolder<Transport>::GetLock());
-    for (auto const& transportEntry : HashMapHolder<Transport>::GetContainer()) // Boats & zeppelins.
-    {
-        GenericTransport* transport = transportEntry.second;
-        if (transport && transport->GetMapId() == getMapId() && (!entry || transport->GetEntry() == entry))
-            transports.insert(transport);
-    }
+    std::set<GenericTransport*> transports = TransportsOnMapCompat(getMapId(), entry);
 
     if (transports.empty() || !entry) //Elevators&rams
     {
@@ -943,8 +934,7 @@ std::set<GenericTransport*> WorldPosition::getTransports(uint32 entry)
         // so GetGameObject could never match it and this branch always came back
         // empty. Built properly it needs the entry too, which is gopair->second.id.
         for (auto gopair : getGameObjectsNear(0.0f, entry))
-            if (GameObject* go = getMap(getFirstInstanceId())->GetGameObject(
-                    ObjectGuid(HIGHGUID_GAMEOBJECT, gopair->second.id, gopair->first)))
+            if (GameObject* go = GetGameObjectBySpawnIdCompat(getMap(getFirstInstanceId()), gopair->second.id, gopair->first))
                 if (GenericTransport* transport = dynamic_cast<GenericTransport*>(go))
                     transports.insert(transport);
     }
@@ -954,12 +944,12 @@ std::set<GenericTransport*> WorldPosition::getTransports(uint32 entry)
 
 void WorldPosition::CalculatePassengerPosition(GenericTransport* transport)
 {
-    transport->CalculatePassengerPosition(x, y, z, &o);
+    PassengerPositionCompat(transport, x, y, z, &o);
 }
 
 void WorldPosition::CalculatePassengerOffset(GenericTransport* transport)
 {
-    transport->CalculatePassengerOffset(x, y, z, &o);
+    PassengerOffsetCompat(transport, x, y, z, &o);
 }
 
 bool WorldPosition::isOnTransport(GenericTransport* transport)
@@ -976,7 +966,7 @@ bool WorldPosition::isOnTransport(GenericTransport* transport)
 
     below.setZ(below.getZ() - 5.0f);
 
-    bool result0 = VMAP::VMapFactory::createOrGetVMapManager()->getObjectHitPos(mapId, x, y, z + 0.5f, below.getX(), below.getY(), below.getZ(), below.x, below.y, below.z, 0.0f);
+    bool result0 = VmapObjectHitPosCompat(mapId, x, y, z + 0.5f, below.getX(), below.getY(), below.getZ(), below.x, below.y, below.z, 0.0f);
 
     if (result0)
         return false;
@@ -1025,7 +1015,7 @@ bool WorldPosition::SetOnTransport(GenericTransport* transport, int32 startHeigh
     start.setZ(transPos.getZ() + startHeight);
     below.setZ(transPos.getZ() + endHeight);
 
-    bool result = VMAP::VMapFactory::createOrGetVMapManager()->getObjectHitPos(mapId, x, y, z, below.getX(), below.getY(), below.getZ(), below.x, below.y, below.z, 0.0f);
+    bool result = VmapObjectHitPosCompat(mapId, x, y, z, below.getX(), below.getY(), below.getZ(), below.x, below.y, below.z, 0.0f);
 
     if (result)
         return false;
@@ -1046,7 +1036,7 @@ WorldPosition WorldPosition::RandomPointOnTrans(GenericTransport* transport, uin
 
 WorldPosition WorldPosition::RandomPointOnTrans(GenericTransport* transport, uint32 radius, Player* botForPath, std::vector<WorldPosition>& path)
 {
-    GenericTransport* oldTrans = botForPath ? botForPath->GetTransport() : nullptr;
+    GenericTransport* oldTrans = botForPath ? TransportOfCompat(botForPath) : nullptr;
 
     if (!transport)
         return WorldPosition();
@@ -1140,16 +1130,16 @@ std::vector<GridPair> WorldPosition::getGridPairs(const WorldPosition& secondPos
 std::vector<WorldPosition> WorldPosition::fromGridPair(const GridPair& gridPair, uint32 mapId)
 {
     std::vector<WorldPosition> retVec;
-    GridPair g;
+    GridPair g(0, 0);
 
     for (uint32 d = 0; d < 4; d++)
     {
         g = gridPair;
 
         if (d == 1 || d == 2)
-            g >> 1;
+            CoordIncXCompat(g, 1);
         if (d == 2 || d == 3)
-            g += 1;
+            CoordIncYCompat(g, 1);
 
         retVec.push_back(WorldPosition(mapId, g));
     }
@@ -1160,16 +1150,16 @@ std::vector<WorldPosition> WorldPosition::fromGridPair(const GridPair& gridPair,
 std::vector<WorldPosition> WorldPosition::fromCellPair(const CellPair& cellPair) const
 {
     std::vector<WorldPosition> retVec;
-    CellPair p;
+    CellPair p(0, 0);
 
     for (uint32 d = 0; d < 4; d++)
     {
         p = cellPair;
 
         if (d == 1 || d == 2)
-            p >> 1;
+            CoordIncXCompat(p, 1);
         if (d == 2 || d == 3)
-            p += 1;
+            CoordIncYCompat(p, 1);
 
         retVec.push_back(WorldPosition(getMapId(), p));
     }
@@ -1237,7 +1227,7 @@ bool WorldPosition::isVmapLoaded(uint32 /*mapId*/, int /*x*/, int /*y*/)
 
 bool WorldPosition::isMmapLoaded(uint32 mapId, uint32 instanceId, int x, int y)
 {
-    return MMAP::MMapFactory::createOrGetMMapManager()->GetNavMesh(mapId) != nullptr;
+    return NavMeshLoadedCompat(mapId, instanceId);
 }
 
 bool WorldPosition::loadMapAndVMap(uint32 mapId, uint32 instanceId, int x, int y)
@@ -1261,7 +1251,7 @@ bool WorldPosition::loadMapAndVMap(uint32 mapId, uint32 instanceId, int x, int y
     if (!hasMmap)
     {
         // Penqle owns one navmesh per map; instances do not need a separate load.
-        isLoaded = MMAP::MMapFactory::createOrGetMMapManager()->loadMap(mapId, x, y);
+        isLoaded = NavMeshLoadTileCompat(mapId, instanceId, x, y);
 
         //if (!isLoaded)
         //    sTravelMgr.AddBadMmap(mapId, x, y);
@@ -1303,7 +1293,7 @@ bool WorldPosition::loadVMap(uint32 mapId, int x, int y)
     if (isVmapLoaded(mapId, x, y))
         return true;
 
-    return VMAP::VMapFactory::createOrGetVMapManager()->loadMap(sWorld.GetDataPath().c_str(), mapId, x, y);
+    return VmapLoadTileCompat(sWorld.GetDataPath().c_str(), mapId, x, y);
 }
 
 std::vector<WorldPosition> WorldPosition::fromPointsArray(const std::vector<G3D::Vector3>& path) const
@@ -1331,7 +1321,7 @@ bool WorldPosition::IsSwimLine(const std::vector<WorldPosition>& path, const Uni
 
 std::string WorldPosition::SwimLineWhy(const std::vector<WorldPosition>& path, const Unit* bot)
 {
-    if (!bot || bot->GetTransport() || path.size() < 2)
+    if (!bot || TransportOfCompat(bot) || path.size() < 2)
         return "no line";
     Map* const map = bot->FindMap();
     TerrainInfo const* const terrain = map ? map->GetTerrain() : nullptr;
@@ -1339,10 +1329,7 @@ std::string WorldPosition::SwimLineWhy(const std::vector<WorldPosition>& path, c
         return "no terrain";
     auto const liquidAt = [terrain](float x, float y, float z, uint32 request, uint32& typeFlags)
     {
-        GridMapLiquidData data{};
-        uint32 const status = static_cast<uint32>(terrain->getLiquidStatus(x, y, z, static_cast<uint8>(request), &data));
-        typeFlags = status != LIQUID_MAP_NO_WATER ? data.type_flags : 0;
-        return status;
+        return LiquidAtCompat(terrain, x, y, z, request, typeFlags);
     };
     for (size_t i = 1; i < path.size(); ++i)
     {
@@ -1364,7 +1351,7 @@ std::string WorldPosition::SwimLineWhy(const std::vector<WorldPosition>& path, c
                 << ": liquid status " << status << ", type flags " << flags;
             return out.str();
         }
-        if (!map->isInLineOfSight(a.getX(), a.getY(), a.getZ() + 0.5f, b.getX(), b.getY(), b.getZ() + 0.5f, true))
+        if (!IsInLineOfSightCompat(map, a.getX(), a.getY(), a.getZ() + 0.5f, b.getX(), b.getY(), b.getZ() + 0.5f, true))
             return "out of sight at +0.5 yd";
     }
     return "ok";
@@ -1412,39 +1399,39 @@ std::vector<WorldPosition> WorldPosition::getPathStepFrom(const WorldPosition& s
 
     WorldPosition start = startPos, end = *this;
 
-    if (bot && bot->GetTransport())
+    if (bot && TransportOfCompat(bot))
     {
-        start.CalculatePassengerOffset(bot->GetTransport());
-        end.CalculatePassengerOffset(bot->GetTransport());
+        start.CalculatePassengerOffset(TransportOfCompat(bot));
+        end.CalculatePassengerOffset(TransportOfCompat(bot));
     }
 
-    bool const grounded = !bot || (!bot->IsFlying() && !bot->IsTaxiFlying() && !bot->GetTransport());
+    bool const grounded = !bot || (!bot->IsFlying() && !bot->IsTaxiFlying() && !TransportOfCompat(bot));
     if (grounded)
         ExcludeSteepSlopes(*pathfinder);
-    pathfinder->calculate(start.getVector3(), end.getVector3(), false);
-    PathType strictType = pathfinder->getPathType();
+    PathCalculateCompat(*pathfinder, start.getVector3(), end.getVector3(), false);
+    PathType strictType = PathTypeOfCompat(*pathfinder);
     // The flag over-marks stairs a player walks: when strict does not reach,
     // one permissive query runs, and its path is walked only when a player
     // could climb it. A refused grade falls back to the strict answer below.
     bool const fellBack = grounded && FellBackToPermissive(strictType);
-    PointsArray strictPoints = pathfinder->getPath();
+    PointsArray strictPoints = PathPointsOfCompat(*pathfinder);
     bool permissiveKept = false;
     if (fellBack)
     {
         pathfinder = std::make_unique<PathFinder>(bot);
-        pathfinder->calculate(start.getVector3(), end.getVector3(), false);
-        permissiveKept = PermissivePathWalkable(pathfinder->getPath());
+        PathCalculateCompat(*pathfinder, start.getVector3(), end.getVector3(), false);
+        permissiveKept = PermissivePathWalkable(PathPointsOfCompat(*pathfinder));
     }
 
-    points = permissiveKept ? pathfinder->getPath() : strictPoints;
+    points = permissiveKept ? PathPointsOfCompat(*pathfinder) : strictPoints;
 
-    if (bot && bot->GetTransport())
+    if (bot && TransportOfCompat(bot))
     {
         for (auto& p : points)
-            bot->GetTransport()->CalculatePassengerPosition(p.x, p.y, p.z);
+            PassengerPositionCompat(TransportOfCompat(bot), p.x, p.y, p.z);
     }
 
-    type = permissiveKept ? pathfinder->getPathType() : strictType;
+    type = permissiveKept ? PathTypeOfCompat(*pathfinder) : strictType;
     LastPathStepType() = static_cast<uint32>(type);
 
     std::vector<WorldPosition> retvec = fromPointsArray(points);
@@ -1506,11 +1493,11 @@ bool WorldPosition::isInMagma(const TerrainInfo* terrain) const
 {
     if (!terrain)
         return false;
-    GridMapLiquidData liquid{};
-    GridMapLiquidStatus const status = terrain->getLiquidStatus(x, y, z + 0.01f, MAP_ALL_LIQUIDS, &liquid);
+    uint32 typeFlags = 0;
+    uint32 const status = LiquidAtCompat(terrain, x, y, z + 0.01f, MAP_ALL_LIQUIDS, typeFlags);
     if (status == LIQUID_MAP_NO_WATER)
         return false;
-    return ai::IsMagmaHazard(liquid.type_flags, static_cast<uint32>(status));
+    return ai::IsMagmaHazard(typeFlags, status);
 }
 // Same rule as isInMagma, for the slime type flag: the DispatchMovement
 // restore gate classifies a wet clamp on clampedZ, and slime is no safer a
@@ -1520,11 +1507,11 @@ bool WorldPosition::isInSlime(const TerrainInfo* terrain) const
 {
     if (!terrain)
         return false;
-    GridMapLiquidData liquid{};
-    GridMapLiquidStatus const status = terrain->getLiquidStatus(x, y, z + 0.01f, MAP_ALL_LIQUIDS, &liquid);
+    uint32 typeFlags = 0;
+    uint32 const status = LiquidAtCompat(terrain, x, y, z + 0.01f, MAP_ALL_LIQUIDS, typeFlags);
     if (status == LIQUID_MAP_NO_WATER)
         return false;
-    return ai::IsSlimeHazard(liquid.type_flags, static_cast<uint32>(status));
+    return ai::IsSlimeHazard(typeFlags, status);
 }
 
 // The point the core will move a server-moved player to: its own
@@ -1556,10 +1543,10 @@ bool WorldPosition::setAtWaterSurface()
     if (!terrain)
         return false;
 
-    if (!terrain->IsInWater(x, y, z) && !terrain->IsUnderWater(x, y, z))
+    if (!TerrainIsInWaterCompat(terrain, x, y, z) && !TerrainIsUnderWaterCompat(terrain, x, y, z))
         return false;
 
-    float waterLevel = terrain->GetWaterLevel(x, y, z);
+    float waterLevel = TerrainWaterLevelCompat(terrain, x, y, z);
     if (waterLevel > -100000.0f)
     {
         z = waterLevel + 0.5f;
@@ -1693,13 +1680,13 @@ bool WorldPosition::GetReachableRandomPointOnGround(const Player* bot, const flo
     uint32 const attempts = 8;
     for (uint32 attempt = 0; attempt < attempts; ++attempt)
     {
-        float const angle = rand_norm_f() * 2.0f * M_PI_F;
-        float const distance = randomRange ? radius * rand_norm_f() : radius;
+        float const angle = RandNormCompat() * 2.0f * M_PI_F;
+        float const distance = randomRange ? radius * RandNormCompat() : radius;
 
         WorldPosition candidate = start;
         candidate.x += cos(angle) * distance;
         candidate.y += sin(angle) * distance;
-        candidate.z = map->GetHeight(candidate.x, candidate.y, start.z, true);
+        candidate.z = GetHeightCompat(map, candidate.x, candidate.y, start.z, true);
 
         // The core has no navmesh random-point query. Height plus static VMap
         // line of sight is the strongest generic terrain contract available to
@@ -1718,8 +1705,8 @@ bool WorldPosition::GetReachableRandomPointOnGround(const Player* bot, const flo
 
 bool WorldPosition::isUnderground() const
 {
-    float groundZ = getMap(getFirstInstanceId())->GetHeight(x, y, z+0.5f, true), maxZ;
-    maxZ = getTerrain()->GetWaterOrGroundLevel(x, y, z + 0.5f, &groundZ, true);
+    float groundZ = GetHeightCompat(getMap(getFirstInstanceId()), x, y, z+0.5f, true), maxZ;
+    maxZ = TerrainWaterOrGroundLevelCompat(getTerrain(), x, y, z + 0.5f, &groundZ, true);
 
     if (maxZ > INVALID_HEIGHT)
     {
@@ -1736,11 +1723,11 @@ std::vector<WorldPosition> WorldPosition::ComputePathToRandomPoint(const Player*
 {
     WorldPosition start = *this;
 
-    float angle = rand_norm_f() * 2 * M_PI_F;
+    float angle = RandNormCompat() * 2 * M_PI_F;
     float range = radius;
 
     if (randomRange)
-        range *= rand_norm_f();
+        range *= RandNormCompat();
 
     x += range * cos(angle);
     y += range * sin(angle);
@@ -1766,7 +1753,7 @@ uint32 WorldPosition::getUnitsAggro(const std::list<ObjectGuid>& units, const Pl
 
         if (!unit) continue;
 
-        float attackDistance = unit->GetCombatReach(bot, false, 0.0f);
+        float attackDistance = GetCombatReachCompat(unit, bot, false, 0.0f);
         if (this->sqDistance(unit) > attackDistance * attackDistance)
             continue;
 
@@ -1780,8 +1767,9 @@ uint32 WorldPosition::getUnitsAggro(const std::list<ObjectGuid>& units, const Pl
 
 bool FindPointCreatureData::operator()(CreatureDataPair const& dataPair)
 {
-    if (!entry || dataPair.second.creature_id[0] == entry)
-        if ((!point || dataPair.second.position.mapId == point.GetMapId()) && (!radius || point.sqDistance(WorldPosition(dataPair.second.position.mapId, dataPair.second.position.x, dataPair.second.position.y, dataPair.second.position.z)) < radius * radius))
+    WorldLocation const spawnLocation = LocationOfCompat(dataPair.second);
+    if (!entry || CreatureEntryOfCompat(dataPair.second) == entry)
+        if ((!point || spawnLocation.mapId == point.GetMapId()) && (!radius || point.sqDistance(WorldPosition(spawnLocation.mapId, spawnLocation.x, spawnLocation.y, spawnLocation.z)) < radius * radius))
         {
             data.push_back(&dataPair);
         }
@@ -1791,8 +1779,9 @@ bool FindPointCreatureData::operator()(CreatureDataPair const& dataPair)
 
 bool FindPointGameObjectData::operator()(GameObjectDataPair const& dataPair)
 {
+    WorldLocation const spawnLocation = LocationOfCompat(dataPair.second);
     if (!entry || dataPair.second.id == entry)
-        if ((!point || dataPair.second.position.mapId == point.GetMapId()) && (!radius || point.sqDistance(WorldPosition(dataPair.second.position.mapId, dataPair.second.position.x, dataPair.second.position.y, dataPair.second.position.z)) < radius * radius))
+        if ((!point || spawnLocation.mapId == point.GetMapId()) && (!radius || point.sqDistance(WorldPosition(spawnLocation.mapId, spawnLocation.x, spawnLocation.y, spawnLocation.z)) < radius * radius))
         {
             data.push_back(&dataPair);
         }
@@ -1803,13 +1792,13 @@ bool FindPointGameObjectData::operator()(GameObjectDataPair const& dataPair)
 std::vector<CreatureDataPair const*> WorldPosition::getCreaturesNear(const float radius, const uint32 entry) const
 {
     FindPointCreatureData worker(*this, radius, entry);
-    sObjectMgr.DoCreatureData(worker);
+    DoCreatureDataCompat(worker);
     return worker.GetResult();
 }
 
 std::vector<GameObjectDataPair const*> WorldPosition::getGameObjectsNear(const float radius, const uint32 entry) const
 {
     FindPointGameObjectData worker(*this, radius, entry);
-    sObjectMgr.DoGOData(worker);
+    DoGameObjectDataCompat(worker);
     return worker.GetResult();
 }

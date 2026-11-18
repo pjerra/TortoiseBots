@@ -201,7 +201,7 @@ inline bool IsContestedPvpCompat(Player const* player) { return player->HasPlaye
 inline uint32 GameObjectFactionCompat(GameObjectTemplate const* tpl)
 {
     GameObjectTemplateAddon const* addon = sObjectMgr.GetGameObjectTemplateAddon(tpl->entry);
-    return addon ? addon->faction : 0;
+    return addon ? addon->Faction : 0;
 }
 
 // A teleport location's point. T GameTele::x/y/z, F position_x/y/z (ObjectMgr.h:156).
@@ -274,3 +274,171 @@ inline std::string ItemLocalizedNameCompat(uint32 itemId, int locale, std::strin
                     return name;
     return fallback;
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// WorldPosition.cpp: areas, spawn data, creature templates, terrain, line of sight, transports, grids, paths.
+// T = the Turtle core, F = ForeverCore.
+// ---------------------------------------------------------------------------------------------------------------
+
+// ---- Areas ----------------------------------------------------------------------------------------------------
+// The area row a position's area KEY names (the key is what AreaKeyAtCompat, R3, returns). T keys a per-map area FLAG:
+// AreaEntry::GetByAreaFlagAndMap(flag, map) walks the table for the row whose explore flag matches (the one on this map, else
+// any, else the map's linked zone; Maps/Map.h:149-166). F's key is the area ID and the row is the DB2 row of that id (0 gives none).
+// The key is therefore not comparable between the cores, only within one.
+inline AreaTableEntry const* AreaEntryOfKeyCompat(uint32 key, uint32 /*mapId*/) { return sAreaTableStore.LookupEntry(key); }
+// The row's own numbers. T AreaEntry::Id / ZoneId (0 when the area is itself a zone) / Team (AREATEAM_*: 2 Alliance, 4 Horde,
+// 6 both) / Name (char*); F ID / ParentAreaID (0 when it has no parent) / FactionGroupMask (the same 2 and 4 bits) / AreaName (DB2Structure.h:125).
+inline uint32 AreaIdOfCompat(AreaTableEntry const* area) { return area->ID; }
+inline uint32 AreaZoneIdCompat(AreaTableEntry const* area) { return area->ParentAreaID; }
+inline uint32 AreaTeamCompat(AreaTableEntry const* area) { return area->FactionGroupMask; }
+inline std::string AreaNameOrEmptyCompat(AreaTableEntry const* area)
+{
+    char const* name = area->AreaName[LOCALE_enUS];
+    return name ? name : "";
+}
+// A map's name. T MapEntry::name (char*), F MapName (DB2Structure.h:2911).
+inline std::string MapNameOrEmptyCompat(MapEntry const* map)
+{
+    char const* name = map->MapName[LOCALE_enUS];
+    return name ? name : "";
+}
+
+// ---- Spawn data -----------------------------------------------------------------------------------------------
+// Creature and game object spawn records by their database id, and the walk over all of them. T ObjectMgr::DoCreatureData /
+// DoGOData stop when the worker answers true (ObjectMgr.h:1116-1122); the pair type is the shim's (key = spawn id).
+// The id here is a DATABASE spawn id, never a guid counter.
+template <class Worker>
+inline void DoCreatureDataCompat(Worker& worker)
+{
+    for (auto const& pair : sObjectMgr.GetAllCreatureData())
+        if (worker(pair))
+            break;
+}
+template <class Worker>
+inline void DoGameObjectDataCompat(Worker& worker)
+{
+    for (auto const& pair : sObjectMgr.GetAllGameObjectData())
+        if (worker(pair))
+            break;
+}
+// The game object a SPAWN record is, if it is loaded on the map. T builds the guid from entry and spawn id, F asks the map by spawn id.
+inline GameObject* GetGameObjectBySpawnIdCompat(Map* map, uint32 /*entry*/, uint64 spawnId) { return map->GetGameObjectBySpawnId(spawnId); }
+
+// ---- Creature templates ---------------------------------------------------------------------------------------
+// Whether the template is a civilian. T `CreatureInfo::civilian`, F the extra flag the core itself reads in `Creature::IsCivilian`
+// (Creature.h:126, CREATURE_FLAG_EXTRA_CIVILIAN: "not aggro").
+inline bool CreatureIsCivilianCompat(CreatureInfo const* info) { return (info->flags_extra & CREATURE_FLAG_EXTRA_CIVILIAN) != 0; }
+// Whether the template is a guard. T flags_extra bit 0x400 (CREATURE_FLAG_EXTRA_GUARD, Creature.h:62), F the extra flag of the same
+// name at 0x8000 (CreatureData.h:359): the number differs, the flag does not.
+inline bool CreatureIsGuardFlagCompat(CreatureInfo const* info) { return (info->flags_extra & CREATURE_FLAG_EXTRA_GUARD) != 0; }
+// Whether the template never aggroes by design: an invisible trigger (T INVISIBLE 0x80, F TRIGGER 0x80) or, on T only, a "no
+// target" spawn (T NO_TARGET 0x20000; F's 0x20000 is NO_CRIT and it has no flag for an untargetable creature).
+inline bool CreatureNeverAggrosCompat(CreatureInfo const* info) { return (info->flags_extra & CREATURE_FLAG_EXTRA_TRIGGER) != 0; }
+// Whether the template is more than a normal creature (elite, rare elite, boss, rare). T `rank > CREATURE_ELITE_NORMAL`, F the
+// classification (SharedDefines.h:5181): Elite, RareElite, Obsolete (T's world boss, 3) and Rare count; Trivial and MinusMob (5, 6) are
+// below normal and do not.
+inline bool CreatureIsAboveNormalCompat(CreatureInfo const* info)
+{
+    switch (info->Classification)
+    {
+        case CreatureClassifications::Elite:
+        case CreatureClassifications::RareElite:
+        case CreatureClassifications::Obsolete:
+        case CreatureClassifications::Rare:
+            return true;
+        default:
+            return false;
+    }
+}
+// Whether one faction template is hostile to another. T takes the other by reference, F by pointer (DB2Structure.h:1726-).
+inline bool FactionTemplateHostileToCompat(FactionTemplateEntry const* from, FactionTemplateEntry const* to) { return from->IsHostileTo(to); }
+
+// ---- Randomness -----------------------------------------------------------------------------------------------
+// A random float in [0, 1). T `rand_norm_f()`, F `rand_norm()` (Random.h:45).
+inline float RandNormCompat() { return rand_norm(); }
+
+// ---- Terrain (R3's TerrainOfCompat gives the terrain) -----------------------------------------------------------
+// Liquid type masks in the Turtle numbering the policies are written in (SwimPathPolicy.h:51-54): magma 1, ocean 2, slime 4, water 8.
+// F numbers them water 1, ocean 2, magma 4, slime 8 (MapDefines.h:96-100); LiquidAtCompat translates both ways, so these names are
+// the numbers its callers get and give.
+inline constexpr uint32 MAP_LIQUID_TYPE_MAGMA = 0x01;
+inline constexpr uint32 MAP_LIQUID_TYPE_OCEAN = 0x02;
+inline constexpr uint32 MAP_LIQUID_TYPE_SLIME = 0x04;
+inline constexpr uint32 MAP_LIQUID_TYPE_WATER = 0x08;
+inline constexpr uint32 MAP_ALL_LIQUIDS = MAP_LIQUID_TYPE_WATER | MAP_LIQUID_TYPE_MAGMA | MAP_LIQUID_TYPE_OCEAN | MAP_LIQUID_TYPE_SLIME;
+// The liquid status at a point (a LIQUID_MAP_* value, the same numbers on both cores) and, through `typeFlags`, the liquid types
+// there (0 when none), in the Turtle numbering. `request` is a Turtle type mask; 0 or all four asks for any liquid. Out of line.
+uint32 LiquidAtCompat(TerrainInfo const* terrain, float x, float y, float z, uint32 request, uint32& typeFlags);
+// The water or ground level at a point (R3's TerrainWaterLevelCompat has no `swim`). T GetWaterOrGroundLevel(x, y, z, ground, swim),
+// F the same with the phase shift and map id in front (TerrainMgr.h:104).
+inline float TerrainWaterOrGroundLevelCompat(TerrainInfo const* terrain, float x, float y, float z, float* ground, bool swim)
+{
+    return const_cast<TerrainInfo*>(terrain)->GetWaterOrGroundLevel(PhasingHandler::GetEmptyPhaseShift(), terrain->GetId(), x, y, z, ground, swim);
+}
+
+// ---- Static line of sight and hit positions in the vmaps; map and navmesh loading -----------------------------------
+// T `VMapFactory::createOrGetVMapManager()->isInLineOfSight(map, ...)`, F the same call with the ignore flags (nothing ignored).
+bool VmapLineOfSightCompat(uint32 mapId, float x1, float y1, float z1, float x2, float y2, float z2);
+// T `getObjectHitPos(map, from, to, hit, modifyDist)`, F the same call (VMapManager.h:158). True when something was hit.
+bool VmapObjectHitPosCompat(uint32 mapId, float x1, float y1, float z1, float x2, float y2, float z2, float& rx, float& ry, float& rz, float modifyDist);
+// Whether the vmap tile loaded (or already was). T `loadMap(dataPath, map, x, y)` is a bool, F's returns LoadResult (VMapManager.h:147).
+bool VmapLoadTileCompat(char const* dataPath, uint32 mapId, int x, int y);
+// Whether the navmesh of a map is loaded. T `MMapManager::GetNavMesh(map) != nullptr` (one mesh per map), F per instance id
+// (MMapManager.h:72); the callers pass 0 for the continents and the instance id for the rest.
+bool NavMeshLoadedCompat(uint32 mapId, uint32 instanceId);
+// Load one navmesh tile. T `loadMap(map, x, y)`, F `loadMap(basePath, map, instanceId, x, y)` returning LoadResult; loaded or already loaded is true.
+bool NavMeshLoadTileCompat(uint32 mapId, uint32 instanceId, int x, int y);
+
+// ---- Grid and cell coordinates --------------------------------------------------------------------------------
+// T's CoordPair steps with operators (`>> n` x up, `<< n` x down, `+= n` y up, `-= n` y down, all clamped to [0, LIMIT-1],
+// Maps/GridDefines.h:105-135); F names the same four steps inc_x, dec_x, inc_y, dec_y (GridDefines.h:106-130).
+template <class Pair> inline void CoordIncXCompat(Pair& pair, uint32 value) { pair.inc_x(value); }
+template <class Pair> inline void CoordIncYCompat(Pair& pair, uint32 value) { pair.inc_y(value); }
+
+// ---- Transports -----------------------------------------------------------------------------------------------
+// The transport (boat, zeppelin, elevator object) a unit stands on. T `Unit::GetTransport()`, F returns the TransportBase of any
+// carrier (a vehicle too), so only a Transport counts.
+inline GenericTransport* TransportOfCompat(WorldObject const* object) { return dynamic_cast<GenericTransport*>(object->GetTransport()); }
+// Every transport on a map id, all of them or the ones of one entry. T walks the transport holder, F the transports of each loaded map.
+inline std::set<GenericTransport*> TransportsOnMapCompat(uint32 mapId, uint32 entry)
+{
+    std::set<GenericTransport*> transports;
+    sMapMgr.DoForAllMapsWithMapId(mapId, [&](Map* map)
+    {
+        for (Transport* transport : map->GetTransports())
+            if (transport && (!entry || transport->GetEntry() == entry))
+                transports.insert(transport);
+    });
+    return transports;
+}
+// Local offset to world position and back, for a passenger. T `Transport::CalculatePassengerPosition(x, y, z, &o)` turns a position
+// relative to the transport into a world one and `CalculatePassengerOffset` does the reverse (in place); F has the same pair as
+// `GetPositionWithOffset` / `GetPositionOffsetTo` (VehicleDefines.h:176-179), which return the result.
+inline void PassengerPositionCompat(GenericTransport* transport, float& x, float& y, float& z, float* o = nullptr)
+{
+    Position const world = transport->GetPositionWithOffset(Position(x, y, z, o ? *o : 0.0f));
+    x = world.GetPositionX();
+    y = world.GetPositionY();
+    z = world.GetPositionZ();
+    if (o)
+        *o = world.GetOrientation();
+}
+inline void PassengerOffsetCompat(GenericTransport* transport, float& x, float& y, float& z, float* o = nullptr)
+{
+    Position const local = transport->GetPositionOffsetTo(Position(x, y, z, o ? *o : 0.0f));
+    x = local.GetPositionX();
+    y = local.GetPositionY();
+    z = local.GetPositionZ();
+    if (o)
+        *o = local.GetOrientation();
+}
+
+// ---- Path generator -------------------------------------------------------------------------------------------
+// T PathFinder::calculate(start, dest, forceDest) / getPathType() / getPath(); F PathGenerator::CalculatePath(src xyz, dest xyz, forceDest) /
+// GetPathType() / GetPath() (PathGenerator.h:62,95-100).
+inline bool PathCalculateCompat(PathFinder& path, G3D::Vector3 const& start, G3D::Vector3 const& dest, bool forceDest)
+{
+    return path.CalculatePath(start.x, start.y, start.z, dest.x, dest.y, dest.z, forceDest);
+}
+inline PathType PathTypeOfCompat(PathFinder const& path) { return path.GetPathType(); }
+inline Movement::PointsArray const& PathPointsOfCompat(PathFinder const& path) { return path.GetPath(); }

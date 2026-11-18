@@ -4,6 +4,8 @@
 #pragma once
 
 #include "LFG/LFGMgr.h"
+#include "Maps/MoveMap.h"
+#include "Maps/PathFinder.h"
 #include "Movement/TargetedMovementGenerator.h"
 
 // Logging: the core's logger, as `sLog` is on this core (shared/Log.h:314).
@@ -180,3 +182,91 @@ inline std::string ItemLocalizedNameCompat(uint32 itemId, int locale, std::strin
     }
     return name;
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// WorldPosition.cpp: areas, spawn data, creature templates, terrain, line of sight, transports, grids, paths.
+// ---------------------------------------------------------------------------------------------------------------
+// Areas: T's key is the per-map area flag, F's the area id (forever/src/compat/TbCompat_C.h).
+inline AreaTableEntry const* AreaEntryOfKeyCompat(uint32 key, uint32 mapId) { return AreaEntry::GetByAreaFlagAndMap(key, mapId); }
+inline uint32 AreaIdOfCompat(AreaTableEntry const* area) { return area->Id; }
+inline uint32 AreaZoneIdCompat(AreaTableEntry const* area) { return area->ZoneId; }
+inline uint32 AreaTeamCompat(AreaTableEntry const* area) { return area->Team; }
+inline std::string AreaNameOrEmptyCompat(AreaTableEntry const* area) { return area->Name ? area->Name : ""; }
+inline std::string MapNameOrEmptyCompat(MapEntry const* map) { return std::string(map->name ? map->name : ""); }
+
+// Spawn data.
+template <class Worker> inline void DoCreatureDataCompat(Worker& worker) { sObjectMgr.DoCreatureData(worker); }
+template <class Worker> inline void DoGameObjectDataCompat(Worker& worker) { sObjectMgr.DoGOData(worker); }
+inline GameObject* GetGameObjectBySpawnIdCompat(Map* map, uint32 entry, uint64 spawnId)
+{
+    // The guid of a spawned object: entry and spawn id, as the old call built it (gopair->second.id, gopair->first).
+    return map->GetGameObject(ObjectGuid(HIGHGUID_GAMEOBJECT, entry, uint32(spawnId)));
+}
+
+// Creature templates.
+inline bool CreatureIsCivilianCompat(CreatureInfo const* info) { return info->civilian; }
+inline bool CreatureIsGuardFlagCompat(CreatureInfo const* info) { return (info->flags_extra & CREATURE_FLAG_EXTRA_GUARD) != 0; }
+inline bool CreatureNeverAggrosCompat(CreatureInfo const* info)
+{
+    return (info->flags_extra & (CREATURE_FLAG_EXTRA_INVISIBLE | CREATURE_FLAG_EXTRA_NO_TARGET)) != 0;
+}
+inline bool CreatureIsAboveNormalCompat(CreatureInfo const* info) { return info->rank > CREATURE_ELITE_NORMAL; }
+inline bool FactionTemplateHostileToCompat(FactionTemplateEntry const* from, FactionTemplateEntry const* to) { return from->IsHostileTo(*to); }
+
+// Randomness.
+inline float RandNormCompat() { return rand_norm_f(); }
+
+// Terrain.
+inline uint32 LiquidAtCompat(TerrainInfo const* terrain, float x, float y, float z, uint32 request, uint32& typeFlags)
+{
+    GridMapLiquidData data{};
+    uint32 const status = static_cast<uint32>(terrain->getLiquidStatus(x, y, z, static_cast<uint8>(request), &data));
+    typeFlags = status != LIQUID_MAP_NO_WATER ? data.type_flags : 0;
+    return status;
+}
+inline float TerrainWaterOrGroundLevelCompat(TerrainInfo const* terrain, float x, float y, float z, float* ground, bool swim)
+{
+    return terrain->GetWaterOrGroundLevel(x, y, z, ground, swim);
+}
+
+// Static line of sight and hit positions in the vmaps; map and navmesh loading.
+inline bool VmapLineOfSightCompat(uint32 mapId, float x1, float y1, float z1, float x2, float y2, float z2)
+{
+    return VMAP::VMapFactory::createOrGetVMapManager()->isInLineOfSight(mapId, x1, y1, z1, x2, y2, z2);
+}
+inline bool VmapObjectHitPosCompat(uint32 mapId, float x1, float y1, float z1, float x2, float y2, float z2, float& rx, float& ry, float& rz, float modifyDist)
+{
+    return VMAP::VMapFactory::createOrGetVMapManager()->getObjectHitPos(mapId, x1, y1, z1, x2, y2, z2, rx, ry, rz, modifyDist);
+}
+inline bool VmapLoadTileCompat(char const* dataPath, uint32 mapId, int x, int y)
+{
+    return VMAP::VMapFactory::createOrGetVMapManager()->loadMap(dataPath, mapId, x, y);
+}
+inline bool NavMeshLoadedCompat(uint32 mapId, uint32 /*instanceId*/) { return MMAP::MMapFactory::createOrGetMMapManager()->GetNavMesh(mapId) != nullptr; }
+inline bool NavMeshLoadTileCompat(uint32 mapId, uint32 /*instanceId*/, int x, int y) { return MMAP::MMapFactory::createOrGetMMapManager()->loadMap(mapId, x, y); }
+
+// Grid and cell coordinates.
+template <class Pair> inline void CoordIncXCompat(Pair& pair, uint32 value) { pair >> value; }
+template <class Pair> inline void CoordIncYCompat(Pair& pair, uint32 value) { pair += value; }
+
+// Transports.
+inline GenericTransport* TransportOfCompat(WorldObject const* object) { return object->GetTransport(); }
+inline std::set<GenericTransport*> TransportsOnMapCompat(uint32 mapId, uint32 entry)
+{
+    std::set<GenericTransport*> transports;
+    HashMapHolder<Transport>::ReadGuard guard(HashMapHolder<Transport>::GetLock());
+    for (auto const& transportEntry : HashMapHolder<Transport>::GetContainer()) // Boats & zeppelins.
+    {
+        GenericTransport* transport = transportEntry.second;
+        if (transport && transport->GetMapId() == mapId && (!entry || transport->GetEntry() == entry))
+            transports.insert(transport);
+    }
+    return transports;
+}
+inline void PassengerPositionCompat(GenericTransport* transport, float& x, float& y, float& z, float* o = nullptr) { transport->CalculatePassengerPosition(x, y, z, o); }
+inline void PassengerOffsetCompat(GenericTransport* transport, float& x, float& y, float& z, float* o = nullptr) { transport->CalculatePassengerOffset(x, y, z, o); }
+
+// Path generator.
+inline bool PathCalculateCompat(PathFinder& path, G3D::Vector3 const& start, G3D::Vector3 const& dest, bool forceDest) { return path.calculate(start, dest, forceDest); }
+inline PathType PathTypeOfCompat(PathFinder const& path) { return path.getPathType(); }
+inline Movement::PointsArray const& PathPointsOfCompat(PathFinder const& path) { return path.getPath(); }
