@@ -99,7 +99,7 @@ namespace
         // its explicit order.
         if (!pacedRow || !ai->HasStrategy("boss tactics", BotState::BOT_STATE_COMBAT))
             return false;
-        return OneAtATimeHolds(SoleKillGuid(ai, unit->GetEntry()), unit->GetObjectGuid().GetRawValue());
+        return OneAtATimeHolds(SoleKillGuid(ai, unit->GetEntry()), GuidKeyCompat(unit->GetObjectGuid()));
     }
 
     // Whether a free DPS bot leaves `unit` alone: a hold_kill row of its own entry holds it while the row's blocker lives
@@ -153,7 +153,7 @@ namespace
         const bool ordered = !context->GetValue<ObjectGuid>("explicit attack target")->Get().IsEmpty();
         // one_at_a_time: an explicit order does not lift it, so a focus-ordered bot is not the fourth on the same
         // Servant either. The pick itself stays attackable (it is what everyone is sent to).
-        if (pacedRow && OneAtATimeHolds(SoleKillGuid(ai, unit->GetEntry()), unit->GetObjectGuid().GetRawValue()))
+        if (pacedRow && OneAtATimeHolds(SoleKillGuid(ai, unit->GetEntry()), GuidKeyCompat(unit->GetObjectGuid())))
             return true;
         if (ordered)
             return false;
@@ -203,8 +203,8 @@ namespace
             Group* group = ai->GetBot()->GetGroup();
             if (!group)
                 return false;
-            ObjectGuid guid = group->GetTargetIcon(7);
-            return guid && attacker->getObjectGuid() == ObjectGuid(guid);
+            ObjectGuid guid = TargetIconGuidCompat(group, 7);
+            return !guid.IsEmpty() && attacker->getObjectGuid() == guid;
         }
 
         bool CheckSkull(Unit* attacker)
@@ -338,7 +338,7 @@ namespace
             Player* bot = ai->GetBot();
             if (newLevel == 10)
             {
-                Unit* comboUnit = ai->GetUnit(bot->GetComboTargetGuid());
+                Unit* comboUnit = ai->GetUnit(ComboTargetGuidCompat(bot));
                 if (newUnit == comboUnit)
                     return true;
                 return Lifetime(newUnit) < Lifetime(oldUnit);
@@ -564,7 +564,7 @@ Unit* DpsTargetValue::Calculate()
 
     Unit* rti = RtiTargetValue::CalculateFocus();
     if (rti && !AttackersValue::IsKeepoutSetAside(rti, bot) && !HeldDpsTarget(ai, bot, rti) &&
-        !(linked && LinkedDeathHoldsMember(linkedScan.param, linkedScan.members, rti->GetObjectGuid().GetRawValue())))
+        !(linked && LinkedDeathHoldsMember(linkedScan.param, linkedScan.members, GuidKeyCompat(rti->GetObjectGuid()))))
         return rti;
 
     if (Unit* fankriss = GetFankrissSpawnTarget(ai))
@@ -601,7 +601,7 @@ Unit* DpsTargetValue::Calculate()
         if (tankTarget != AI_VALUE(Unit*, "cc target") && !ccProbe.IsCcTarget(tankTarget) &&
             !IsWastedDpsTarget(ai, tankTarget) && !HeldDpsTarget(ai, bot, tankTarget) &&
             !(linked && LinkedDeathHoldsMember(linkedScan.param, linkedScan.members,
-                                               tankTarget->GetObjectGuid().GetRawValue())))
+                                               GuidKeyCompat(tankTarget->GetObjectGuid()))))
             return tankTarget;
     }
 
@@ -635,7 +635,7 @@ Unit* DpsTargetValue::Calculate()
     if (HeldDpsTarget(ai, bot, target))
         return nullptr;
     if (linked && target &&
-        LinkedDeathHoldsMember(linkedScan.param, linkedScan.members, target->GetObjectGuid().GetRawValue()))
+        LinkedDeathHoldsMember(linkedScan.param, linkedScan.members, GuidKeyCompat(target->GetObjectGuid())))
         return nullptr;
     return target;
 }

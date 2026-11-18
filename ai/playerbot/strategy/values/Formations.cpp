@@ -48,7 +48,7 @@ bool ai::FinalizeFollowSpot(Player* bot, Map* map, float fromX, float fromY, flo
     if (!map || !bot)
         return false;
 
-    float const ground = map->GetHeight(x, y, fromZ + kStairSearchHeadroom);
+    float const ground = GetHeightCompat(map, x, y, fromZ + kStairSearchHeadroom);
     // A spot with no floor under it hangs over a void: the formations that always refused one keep refusing it.
     if (refuseVoid && ground <= INVALID_HEIGHT)
         return false;
@@ -58,7 +58,7 @@ bool ai::FinalizeFollowSpot(Player* bot, Map* map, float fromX, float fromY, flo
         z = ground;
 
     // Prevent going into terrain.
-    map->GetLosHitPosition(fromX, fromY, fromZ + bot->GetCollisionHeight(), x, y, z, -0.5f);
+    GetLosHitPositionCompat(map, fromX, fromY, fromZ + bot->GetCollisionHeight(), x, y, z, -0.5f);
 
     if (!bot->IsFlying() && !bot->IsSwimming())
     {

@@ -186,7 +186,7 @@ bool CcGuard::ReadyCcMarkNear(WorldObject* center, float radius)
         Group::MemberSlotList const& groupSlot = group->GetMemberSlots();
         for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
         {
-            Player* player = sObjectMgr.GetPlayer(itr->guid);
+            Player* player = GetPlayerCompat(itr->guid);
             if (!player || !sServerFacade.IsAlive(player) || !ai->IsSafe(player) ||
                 player->GetMapId() != unit->GetMapId())
                 continue;
@@ -223,7 +223,7 @@ bool FindNonCcTargetStrategy::IsCastingCcAt(Unit* caster, Unit* target)
     if (!spell || !GetSpellEntryCompat(spell->m_spellInfo))
         return false;
     // Compare guids: the caster's cached unit-target pointer can point at a unit the map freed this tick.
-    if (spell->m_targets.getUnitTargetGuid() != (target ? target->GetObjectGuid() : ObjectGuid()))
+    if (SpellUnitTargetGuidCompat(spell) != (target ? target->GetObjectGuid() : ObjectGuid()))
         return false;
     return IsCcSpell(GetSpellEntryCompat(spell->m_spellInfo));
 }
@@ -235,15 +235,15 @@ bool CcGuard::PartyDotOn(Unit* unit)
     Player* const bot = ai->GetBot();
     Group* const group = bot->GetGroup();
     for (uint32 const type : kPeriodicDamageAuraTypes)
-        for (Aura const* aura : unit->GetAurasByType(static_cast<AuraType>(type)))
+        if (ForEachAuraOfTypeCompat(unit, static_cast<AuraType>(type), [&](AuraOfTypeCompat const& aura)
         {
-            Unit* const caster = aura ? aura->GetCaster() : nullptr;
+            Unit* const caster = aura.caster;
             if (!caster)
-                continue;
+                return false;
             Player* const owner = caster->GetCharmerOrOwnerPlayerOrPlayerItself();
-            if (owner && (owner == bot || (group && group->IsMember(owner->GetObjectGuid()))))
-                return true;
-        }
+            return owner && (owner == bot || (group && group->IsMember(owner->GetObjectGuid())));
+        }))
+            return true;
     return false;
 }
 
@@ -303,14 +303,12 @@ bool CcGuard::CcInRunningArea(Spell const* spell)
     {
         // Where the effect runs: the ground destination the cast was given, or
         // the unit a chain jumps from (a chain has no destination).
-        if (spell->m_targets.m_targetMask & TARGET_FLAG_DEST_LOCATION)
-            spell->m_targets.getDestination(x, y, z);
-        else
+        if (!SpellDestinationCompat(spell, x, y, z))
         {
             // The cached unit-target pointer is refreshed only in the caster's next Spell::update: resolve the guid the
             // cast holds, and a target that already left the world leaves the area at the bot's own position.
-            ObjectGuid const targetGuid = spell->m_targets.getUnitTargetGuid();
-            Unit* const target = targetGuid ? ObjectAccessor::GetUnit(*bot, targetGuid) : nullptr;
+            ObjectGuid const targetGuid = SpellUnitTargetGuidCompat(spell);
+            Unit* const target = !targetGuid.IsEmpty() ? ObjectAccessor::GetUnit(*bot, targetGuid) : nullptr;
             if (target)
             {
                 x = target->GetPositionX();
@@ -330,7 +328,7 @@ bool CcGuard::GroupCastsCcAt(Unit* unit)
         return unit && IsCastingCcAt(ai->GetBot(), unit);
     for (Group::MemberSlotList::const_iterator itr = group->GetMemberSlots().begin(); itr != group->GetMemberSlots().end(); ++itr)
     {
-        Player* player = sObjectMgr.GetPlayer(itr->guid);
+        Player* player = GetPlayerCompat(itr->guid);
         if (player && player->GetMapId() == unit->GetMapId() && IsCastingCcAt(player, unit))
             return true;
     }
@@ -366,7 +364,7 @@ bool FindNonCcTargetStrategy::IsCcProtected(Unit* unit)
     Group::MemberSlotList const& groupSlot = group->GetMemberSlots();
     for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
     {
-        Player* player = sObjectMgr.GetPlayer(itr->guid);
+        Player* player = GetPlayerCompat(itr->guid);
         if (!player || !sServerFacade.IsAlive(player) || !ai->IsSafe(player) || player->GetMapId() != unit->GetMapId())
             continue;
 
@@ -421,7 +419,7 @@ bool FindNonCcTargetStrategy::IsCcMark(Unit* attacker)
         Group::MemberSlotList const& groupSlot = group->GetMemberSlots();
         for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
         {
-            Player *player = sObjectMgr.GetPlayer(itr->guid);
+            Player *player = GetPlayerCompat(itr->guid);
             if (!player || !sServerFacade.IsAlive(player) || !ai->IsSafe(player))
                 continue;
 
@@ -434,15 +432,15 @@ bool FindNonCcTargetStrategy::IsCcMark(Unit* attacker)
                 int index = RtiTargetValue::GetRtiIndex(rti);
                 if (index != -1)
                 {
-                    uint64 guid = group->GetTargetIcon(index);
-                    if (guid && attacker->getObjectGuid() == ObjectGuid(guid))
+                    ObjectGuid const guid = TargetIconGuidCompat(group, index);
+                    if (!guid.IsEmpty() && attacker->getObjectGuid() == guid)
                         return true;
                 }
             }
         }
 
-        uint64 guid = group->GetTargetIcon(4);
-        if (guid && attacker->getObjectGuid() == ObjectGuid(guid))
+        ObjectGuid const guid = TargetIconGuidCompat(group, 4);
+        if (!guid.IsEmpty() && attacker->getObjectGuid() == guid)
             return true;
     }
 
@@ -518,7 +516,7 @@ WorldPosition LastLongMoveValue::Calculate()
 
 WorldPosition HomeBindValue::Calculate()
 {
-    return WorldPosition(bot->GetHomeBindLocation());
+    return WorldPosition(HomeBindLocationCompat(bot));
 }
 
 std::string HomeBindValue::Format()
@@ -573,7 +571,7 @@ Unit* ClosestAttackerTargetingMeTargetValue::Calculate()
         Unit* attacker = ai->GetUnit(attackerGuid);
         if (attacker)
         {
-            const float distance = bot->GetCombatDistance(attacker);
+            const float distance = GetCombatDistanceCompat(bot, attacker);
             if (distance < closest)
             {
                 closest = distance;

@@ -62,7 +62,7 @@ std::list<ObjectGuid> AttackersValue::Calculate()
         std::list<ObjectGuid> nearGuids = ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid> >("nearest friendly players")->Get();
         for (auto& i : nearGuids)
         {
-            Player* player = sObjectMgr.GetPlayer(i);
+            Player* player = GetPlayerCompat(i);
 
             if (!player)
                 continue;
@@ -191,7 +191,7 @@ void AttackersValue::AddTargetsOf(Group* group, std::set<Unit*>& targets, std::s
     for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
     {
         // Only add group member targets that are alive and near the player
-        Player* member = sObjectMgr.GetPlayer(itr->guid);
+        Player* member = GetPlayerCompat(itr->guid);
         if (member && (member != bot) &&
            sServerFacade.IsAlive(member) &&
            member->IsInWorld() &&
@@ -223,7 +223,7 @@ bool AttackersValue::IsValidForGroup(Unit* target)
         Group::MemberSlotList const& groupSlot = group->GetMemberSlots();
         for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
         {
-            Player* member = sObjectMgr.GetPlayer(itr->guid);
+            Player* member = GetPlayerCompat(itr->guid);
             if (member && (member != bot) &&
                sServerFacade.IsAlive(member) &&
                member->IsInWorld() &&
@@ -310,10 +310,10 @@ void AttackersValue::AddTargetsOf(Player* player, std::set<Unit*>& targets, std:
         }
 
         // Add the duel opponent (Only consider the owner bot)
-        if (bot == player && bot->m_duel && bot->m_duel->opponent)
+        if (bot == player && !DuelOpponentGuidCompat(bot).IsEmpty())
         {
             // Penqle's DuelInfo::opponent is an ObjectGuid; resolve to Unit*.
-            if (Unit* opp = ObjectAccessor::GetUnit(*bot, bot->m_duel->opponent))
+            if (Unit* opp = ObjectAccessor::GetUnit(*bot, DuelOpponentGuidCompat(bot)))
                 units.insert(opp);
         }
 
@@ -345,7 +345,7 @@ void AttackersValue::AddTargetsOf(Player* player, std::set<Unit*>& targets, std:
                         targets.insert(unit);
 
                         // Add the target's pet/guardian too
-                        unit->CallForAllControlledUnits(AddGuardiansHelper(targets), CONTROLLED_PET | CONTROLLED_GUARDIANS | CONTROLLED_CHARM | CONTROLLED_MINIPET | CONTROLLED_TOTEMS);
+                        ForEachControlledUnitCompat(unit, AddGuardiansHelper(targets));
 
                         if (getOne)
                         {
@@ -470,7 +470,7 @@ bool AttackersValue::IsValid(Unit* target, Player* player, Player* owner, bool c
             return false;
         }
 
-        const bool isDuelOpponent = player->m_duel && player->m_duel->opponent == target->getObjectGuid();
+        const bool isDuelOpponent = DuelOpponentGuidCompat(player) == target->getObjectGuid();
 
         // Don't check distance on duel opponents
         if (!isDuelOpponent)
@@ -575,7 +575,7 @@ bool AttackersValue::IsKeepoutSetAside(Unit* target, Player* bot)
     bool stillRinged = false;
     if (live && !isTank && !isKeepoutCreature)
     {
-        hitsBotInSight = target->GetVictim() == bot && bot->IsWithinLOSInMap(target, true);
+        hitsBotInSight = target->GetVictim() == bot && IsWithinLOSInMapCompat(bot, target, true);
         if (!hitsBotInSight)
         {
             // Ringed means: a listed creature of the cached list stands within
@@ -651,15 +651,15 @@ static void ReadRunnerWay(Unit* target, Player* bot, bool& complete, bool& cliff
     }
     PathFinder path(bot);
     WorldPosition::ExcludeSteepSlopes(path);
-    path.calculate(tx, ty, tz, false);
-    complete = path.getPathType() == PATHFIND_NORMAL;
+    PathCalculateCompat(path, tx, ty, tz, false);
+    complete = PathIsCompleteCompat(path);
     std::vector<ai::RunnerPathPoint> points;
     ai::RunnerPathPoint front;
     front.x = bot->GetPositionX();
     front.y = bot->GetPositionY();
     front.z = bot->GetPositionZ();
     points.push_back(front);
-    for (Vector3 const& v : path.getPath())
+    for (Vector3 const& v : PathPointsCompat(path))
     {
         ai::RunnerPathPoint point;
         point.x = v.x;
@@ -761,7 +761,7 @@ bool AttackersValue::IgnoreTarget(Unit* target, Player* playerToCheckAgainst)
     if (givenUp != unreachable.end())
     {
         if (WorldTimer::getMSTime() < givenUp->second &&
-            (cannotBeReached || target->GetVictim() != playerToCheckAgainst || !playerToCheckAgainst->IsWithinLOSInMap(target, true)))
+            (cannotBeReached || target->GetVictim() != playerToCheckAgainst || !IsWithinLOSInMapCompat(playerToCheckAgainst, target, true)))
             return true;
         unreachable.erase(givenUp);
     }
@@ -780,7 +780,7 @@ bool AttackersValue::IgnoreTarget(Unit* target, Player* playerToCheckAgainst)
         if (givenUpKind != unreachableKinds.end())
         {
             if (WorldTimer::getMSTime() < givenUpKind->second &&
-                (cannotBeReached || target->GetVictim() != playerToCheckAgainst || !playerToCheckAgainst->IsWithinLOSInMap(target, true)))
+                (cannotBeReached || target->GetVictim() != playerToCheckAgainst || !IsWithinLOSInMapCompat(playerToCheckAgainst, target, true)))
                 return true;
             unreachableKinds.erase(givenUpKind);
         }
@@ -795,8 +795,8 @@ bool AttackersValue::IgnoreTarget(Unit* target, Player* playerToCheckAgainst)
         uint32 const zone = target->GetZoneId();
         bool capital = zone == 1637 || zone == 1519 || zone == 1537 || zone == 1657 || zone == 1497 || zone == 1638;
         if (!capital)
-            if (AreaEntry const* area = AreaEntry::GetById(zone))
-                capital = (area->Flags & AREA_FLAG_CAPITAL) != 0;
+            if (AreaTableEntry const* area = GetAreaEntryByAreaID(zone))
+                capital = AreaHasFlagsCompat(area, AREA_FLAG_CAPITAL);
         if (capital)
             return true;
         // Hostile-town guard: target stands among guards hostile to this bot's team
@@ -891,7 +891,7 @@ std::string AttackersValue::Format()
         if (wo)
             out << wo->GetName();
         else
-            out << target;
+            out << GuidTextCompat(target);
     }
 
     return out.str();

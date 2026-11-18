@@ -85,7 +85,7 @@ void LogThreatCap(PlayerbotAI* ai, Player* bot, const ThreatCapPick& pick, Unit*
     const std::uint32_t nowMs = WorldTimer::getMSTime();
     {
         std::lock_guard<std::mutex> lock(g_threatCapLogMutex);
-        std::uint32_t& last = g_threatCapLog[bot->GetObjectGuid().GetRawValue()];
+        std::uint32_t& last = g_threatCapLog[GuidKeyCompat(bot->GetObjectGuid())];
         if (last != 0 && nowMs - last < kThreatCapLogGapMs)
             return;
         last = nowMs;
@@ -103,12 +103,12 @@ void LogThreatCap(PlayerbotAI* ai, Player* bot, const ThreatCapPick& pick, Unit*
     char info1[192];
     if (sPlayerbotAIConfig.dungeonRunThreatSuccessorStrict)
         snprintf(info1, sizeof(info1), "threat cap: ref=%s %.0f offtank_target=%s holder=%s white=%s ref0=%d",
-                 pick.offTank ? "offtank" : "main", pick.threat, offTankTarget ? offTankTarget->GetName() : "none",
+                 pick.offTank ? "offtank" : "main", pick.threat, offTankTarget ? CStrCompat(offTankTarget->GetName()) : "none",
                  ThreatCapHolderWord(pick.holder), ai->SuccessorWhiteCap().stopped ? "held" : "free",
                  pick.threat == 0.0f ? 1 : 0);
     else
         snprintf(info1, sizeof(info1), "threat cap: ref=%s %.0f offtank_target=%s holder=%s", pick.offTank ? "offtank" : "main",
-                 pick.threat, offTankTarget ? offTankTarget->GetName() : "none", ThreatCapHolderWord(pick.holder));
+                 pick.threat, offTankTarget ? CStrCompat(offTankTarget->GetName()) : "none", ThreatCapHolderWord(pick.holder));
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsThreatCap", info1, "");
 }
 
@@ -140,7 +140,7 @@ void LogHexSnapshot(PlayerbotAI* ai, Unit* boss, const RaidTankRoles& roles, Gro
     const std::uint32_t nowMs = WorldTimer::getMSTime();
     {
         std::lock_guard<std::mutex> lock(g_hexLogMutex);
-        std::uint32_t& lastScan = g_hexScan[std::make_pair(static_cast<std::uint32_t>(boss->GetInstanceId()), boss->GetObjectGuid().GetRawValue())];
+        std::uint32_t& lastScan = g_hexScan[std::make_pair(static_cast<std::uint32_t>(boss->GetInstanceId()), GuidKeyCompat(boss->GetObjectGuid()))];
         if (!HexScanDue(lastScan, nowMs))
             return;
         lastScan = nowMs;
@@ -164,7 +164,7 @@ void LogHexSnapshot(PlayerbotAI* ai, Unit* boss, const RaidTankRoles& roles, Gro
             if (known == player)
                 return;
         HexMember member;
-        member.key = player->GetObjectGuid().GetRawValue();
+        member.key = GuidKeyCompat(player->GetObjectGuid());
         member.tankIndex = tankIndexOf(player);
         wearers.push_back(member);
         wearerPlayers.push_back(player);
@@ -221,7 +221,7 @@ void LogHexSnapshot(PlayerbotAI* ai, Unit* boss, const RaidTankRoles& roles, Gro
     char info1[160];
     snprintf(info1, sizeof(info1), "holder=%s ot_threat=%.0f mt_threat=%.0f top_dps=%s:%.0f",
              HexHolderWord(HexHolderOf(true, wearerTankIndex)), threatOf(offTank), threatOf(mainTank),
-             topDps ? topDps->GetName() : "none", topDpsThreat);
+             topDps ? CStrCompat(topDps->GetName()) : "none", topDpsThreat);
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsHex", info1, "");
 }
 }
@@ -352,7 +352,7 @@ float ThreatValue::GetResetSuccessorThreat(PlayerbotAI* ai, Unit* target)
 bool ai::TargetTauntImmune(Unit* target)
 {
     Creature* const creature = target ? dynamic_cast<Creature*>(target) : nullptr;
-    return creature && creature->HasImmunityFlag(CREATURE_IMMUNITY_TAUNT);
+    return creature && CreatureTauntImmuneCompat(creature);
 }
 
 bool ai::ThreatSuccessorTarget(Unit* target)

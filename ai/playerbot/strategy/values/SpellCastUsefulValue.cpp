@@ -37,7 +37,7 @@ bool SpellCastUsefulValue::Calculate()
         if (spellid == lastSpellId)
         {
             Spell* const pSpell = bot->FindCurrentSpellBySpellId(lastSpellId);
-            if (pSpell && (pSpell->getState() == SPELL_STATE_CASTING || pSpell->getState() == SPELL_STATE_CHANNELING))
+            if (pSpell && SpellIsInFlightOrChannelingCompat(pSpell))
                 return false;
         }
 	}

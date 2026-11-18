@@ -13,8 +13,7 @@ using namespace MaNGOS;
 void NearestNpcsValue::FindUnits(std::list<Unit*> &targets)
 {
     AnyUnitInObjectRangeCheck u_check(bot, range);
-    UnitListSearcher<AnyUnitInObjectRangeCheck> searcher(targets, u_check);
-    Cell::VisitAllObjects(bot, searcher, range);
+    VisitUnitsCompat(bot, targets, u_check, range);
 }
 
 bool NearestNpcsValue::AcceptUnit(Unit* unit)

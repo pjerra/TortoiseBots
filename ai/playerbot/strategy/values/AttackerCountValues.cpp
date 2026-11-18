@@ -18,40 +18,21 @@ bool HasAggroValue::Calculate()
     // Player targets don't have aggro
     if (target && !target->IsPlayer())
     {
-        HostileReference* ref = sServerFacade.GetHostileRefManager(bot).getFirst();
-        if (ref)
+        bool found = false;
+        // The units that have the bot on their threat list: one of them is the target and attacks the bot.
+        bool const any = ForEachThreatenerCompat(bot, [&](Unit* attacker)
         {
-            while (ref)
-            {
-                ThreatManager* threatManager = ref->GetSource();
-                Unit* attacker = threatManager->getOwner();
-                Unit* victim = attacker->GetVictim();
+            Unit* victim = attacker->GetVictim();
+            found = (victim == bot) && (target == attacker);
+            return found;
+        });
+        if (found)
+            return true;
 
-                if ((victim == bot) && (target == attacker))
-                {
-                    return true;
-                }
-                else
-                {
-                    ref = ref->next();
-                }
-            }
-
-            ref = sServerFacade.GetThreatManager(target).getCurrentVictim();
-            if (ref)
-            {
-                Unit* victim = ref->getTarget();
-                return victim && (victim == bot);
-
-                /*
-                // What is the purpose of this?
-                if (victim)
-                {
-                    Player* pl = dynamic_cast<Player*>(victim);
-                    if (pl && ai->IsTank(pl)) return true;
-                }
-                */
-            }
+        if (any)
+        {
+            Unit* victim = CurrentThreatVictimCompat(target);
+            return victim && (victim == bot);
         }
     }
 
@@ -93,7 +74,7 @@ uint8 BalancePercentValue::Calculate()
             Group::MemberSlotList const& groupSlot = group->GetMemberSlots();
             for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
             {
-                Player* player = sObjectMgr.GetPlayer(itr->guid);
+                Player* player = GetPlayerCompat(itr->guid);
                 if (!player || !sServerFacade.IsAlive(player) || !player->IsInWorld() || player->GetMapId() != bot->GetMapId() || sServerFacade.getDistance2d(bot, player) > 30.0f)
                     continue;
 
@@ -120,7 +101,7 @@ uint8 BalancePercentValue::Calculate()
                 continue;
 
             uint32 level = creature->GetLevel();
-            switch (creature->GetCreatureInfo()->rank)
+            switch (CreatureRankCompat(creature))
             {
                 case CREATURE_ELITE_RARE:
                 {
