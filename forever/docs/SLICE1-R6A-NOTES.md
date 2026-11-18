@@ -117,11 +117,19 @@ instant logout follows the RBAC permission, not a security number; wand silence 
 | Census, slice | 460 places in 27 files -> `files 127  compile clean 127  with errors 0  error places 0 (in 0 files)` |
 | ForeverCore module, slice option off: `~/forever-build/build.sh 12 tortoisebots` | `CMAKE_RC=0 MAKE_RC=0` (compiles `TbCompat_Unported.cpp`) |
 | Turtle syntax check of all 23 touched or including `.cpp` files (docker g++ `-fsyntax-only` with the build dir's flags, no new build directory) | 0 errors |
-| Turtle build `vm-build ~/wt-slice-integ --wait` | see the last section |
-| Turtle unit tests `vm-test tb ~/wt-slice-integ` | see the last section |
+| Turtle build `vm-build ~/wt-slice-integ --wait` at `2c612f13c` (module code identical to the final commit; later commits are tests and docs) | `COMPILE_SECONDS=2146 CMAKE_RC=0 MAKE_RC=0`, `QUEUE_RC=0` |
+| Turtle unit tests `vm-test tb ~/wt-slice-integ` at `1a9b5e76f` | `RESULT: PASS`, `ALL TORTOISEBOTS CHECKS PASSED CLEANLY`, `VM-TEST-END rc=0 seconds=848` |
 
 ## 8. What I am unsure about
 * The 20 lambda blocks are proven on F only for names that do not depend on their `auto` arguments (types, constants); the rest is the original code, never compiled against F. If a later slice enables one, port it, do not trust it.
 * `DismountCompat`, `StopMovingCompat`, `ClearStaleTransportStateCompat`, `PlayTextEmoteCompat` and `NavExcludeFlagsCompat` are F code written from reading the core, never run.
 * `FreeTalentPointsCompat` 0 and `CanEnterAreaCompat` true are decisions, not measurements.
 * Counter calls on hot paths (`WorldAverageDiffCompat` per cast, keyring/bank scans): atomic increments, but the counts will be large; the log line is once per name.
+
+## 9. Wiring pins edited (each reads the new spelling of the SAME expression; the first vm-test run named them)
+`test_charm_yield_wiring` (`CallForAllControlledUnits(ParkGuardian{...}, CONTROLLED_GUARDIANS)` -> `ForAllGuardiansCompat(bot, ParkGuardian{...})`), `test_spell_school_immune_wiring`
+(`creatureInfo->school_immune_mask` -> `CreatureSchoolImmuneMaskCompat(creatureInfo)`), `test_stun_interrupt_wiring` (`info->mechanic_immune_mask` -> `CreatureMechanicImmuneMaskCompat(info)`),
+`test_place_unstick_wiring` (`PathInfo::FindWalkPoly` -> `NavMeshFindWalkPolyCompat`), `test_magma_guard_wiring` (`CalculatePassengerOffset(p.x, p.y, p.z)` -> `SplinePointToTransportCompat(botTransport, p.x, p.y, p.z)`),
+`test_speed_change_ack_wiring` (the ack block and the knock-back ack now run in a block over `player`; the packed guid read is `PackedGuidReadCompat`), `test_swim_path_wiring` (the path type bits are compared in
+`PathTypeBitsMatchCoreCompat` of the Turtle header: the test pins the call in WorldPosition.cpp and each `== PATHFIND_X` in the helper), `test_hazard_chase_motion` (its g++ mock gains `GenericTransport`, `TransportOfCompat`,
+`SplineSetTransportCompat`, with the Turtle bodies).
