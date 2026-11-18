@@ -45,11 +45,11 @@ namespace ai
         WorldPosition(const WorldPosition& pos) : WorldLocation(pos) {}
         WorldPosition(const std::string str) {char p; std::stringstream  out(str); out >> mapId >> p >> x >> p >> y >> p >> z >> p >> o; }
         WorldPosition(const uint32 mapId, const float x, const float y, const float z = 0, float o = 0) : WorldLocation(mapId, x, y, z, o) {}
-        WorldPosition(const uint32 mapId, const Position& pos) : WorldLocation(mapId, pos.x, pos.y, pos.z, pos.o) {}
+        WorldPosition(const uint32 mapId, const Position& pos) : WorldLocation(LocationOfCompat(mapId, pos)) {}
         WorldPosition(const WorldObject* wo) { if (wo) { set(WorldLocation(wo->GetMapId(), wo->GetPositionX(), wo->GetPositionY(), wo->GetPositionZ(), wo->GetOrientation())); } }
         // Penqle EMBEDS WorldLocation as `position` member; cmangos has flat fields.
-        WorldPosition(const CreatureDataPair* cdPair) { if (cdPair) { set(cdPair->second.position); } }
-        WorldPosition(const GameObjectDataPair* cdPair) { if (cdPair) { set(cdPair->second.position); } }
+        WorldPosition(const CreatureDataPair* cdPair) { if (cdPair) { set(LocationOfCompat(cdPair->second)); } }
+        WorldPosition(const GameObjectDataPair* cdPair) { if (cdPair) { set(LocationOfCompat(cdPair->second)); } }
         WorldPosition(const uint32 mapId, const GuidPosition& guidP, uint32 instanceId);
         WorldPosition(const std::vector<WorldPosition*>& list, const WorldPositionConst conType);
         WorldPosition(const std::vector<WorldPosition>& list, const WorldPositionConst conType);
@@ -57,11 +57,11 @@ namespace ai
         WorldPosition(const uint32 mapId, const CellPair cell) : WorldLocation(mapId, (int32(cell.x_coord) - CENTER_GRID_CELL_ID - 0.5)* SIZE_OF_GRID_CELL + CENTER_GRID_CELL_OFFSET, (int32(cell.y_coord) - CENTER_GRID_CELL_ID - 0.5)* SIZE_OF_GRID_CELL + CENTER_GRID_CELL_OFFSET, 0, 0) {}
         WorldPosition(const uint32 mapId, const mGridPair grid) : WorldLocation(mapId, (32 - grid.first)* SIZE_OF_GRIDS, (32 - grid.second)* SIZE_OF_GRIDS, 0, 0) {}
         // Penqle's SpellTargetPosition is a typedef for WorldLocation (cmangos has its own struct with target_X/Y/Z/mapId fields).
-        WorldPosition(const SpellTargetPosition* pos) : WorldLocation(pos->mapId, pos->x, pos->y, pos->z) {}
-        WorldPosition(const TaxiNodesEntry* pos) : WorldLocation(pos->map_id, pos->x, pos->y, pos->z) {}
+        WorldPosition(const SpellTargetPosition* pos) : WorldLocation(LocationOfCompat(pos)) {}
+        WorldPosition(const TaxiNodesEntry* pos) : WorldLocation(LocationOfCompat(pos)) {}
         // Penqle's WorldSafeLocsEntry has no o field; pass 0.
-        WorldPosition(const WorldSafeLocsEntry* pos) : WorldLocation(pos->map_id, pos->x, pos->y, pos->z, 0.0f) {}
-        WorldPosition(const PlayerInfo* pos) : WorldLocation(pos->mapId,pos->positionX, pos->positionY, pos->positionZ, pos->orientation) {}
+        WorldPosition(const WorldSafeLocsEntry* pos) : WorldLocation(LocationOfCompat(pos)) {}
+        WorldPosition(const PlayerInfo* pos) : WorldLocation(LocationOfCompat(pos)) {}
         WorldPosition(const Vector3& pos, const uint32 mapId = 0, float o = 0) : WorldLocation(mapId, pos.x, pos.y, pos.z, o) {}
 
         //Setters
@@ -125,8 +125,8 @@ namespace ai
         bool IsOverworld() const { return isOverworld(); }
         bool isBg() const { return mapId == 27 || mapId == 30 || mapId == 489 || mapId == 529; }
         bool isInstance() const { return !isOverworld() || mapId == 609;}
-        bool isInWater() const { return getTerrain() ? getTerrain()->IsInWater(x, y, z) : false; };
-        bool isUnderWater() const { return getTerrain() ? getTerrain()->IsUnderWater(x, y, z) : false; };
+        bool isInWater() const { return getTerrain() ? TerrainIsInWaterCompat(getTerrain(), x, y, z) : false; };
+        bool isUnderWater() const { return getTerrain() ? TerrainIsUnderWaterCompat(getTerrain(), x, y, z) : false; };
         bool IsUnderWater() const { return isUnderWater(); }
         // In magma by the core's own rule (MagmaHazardPolicy.h); the overload
         // takes a terrain the caller already resolved (one lookup per route).
@@ -136,8 +136,8 @@ namespace ai
         bool isInSlime(const TerrainInfo* terrain) const;
         bool setAtWaterSurface();
         bool isUnderground() const;
-        float getWaterLevel() const { return getTerrain() ? getTerrain()->GetWaterLevel(x, y, z) : -200000.0f; };
-        float getGroundLevel() const { float ground = 0.0f; getTerrain()->GetWaterLevel(x, y, z, &ground); return ground; };
+        float getWaterLevel() const { return getTerrain() ? TerrainWaterLevelCompat(getTerrain(), x, y, z) : -200000.0f; };
+        float getGroundLevel() const { float ground = 0.0f; TerrainWaterLevelCompat(getTerrain(), x, y, z, &ground); return ground; };
 
         WorldPosition relPoint(const WorldPosition& center) const { return WorldPosition(mapId, x - center.x, y - center.y, z - center.z, o); }
         WorldPosition offset(const WorldPosition& center) const { return WorldPosition(mapId, x + center.x, y + center.y, z + center.z, o); }
@@ -221,33 +221,33 @@ namespace ai
         //Map functions. Player independent.
         // cmangos uses sMapStore (DBCStorage<MapEntry>);
         // Penqle uses sMapStorage (SQLStorage) with templated LookupEntry.
-        const MapEntry* getMapEntry() const { return sMapStorage.LookupEntry<MapEntry>(mapId); }
+        const MapEntry* getMapEntry() const { return MapEntryCompat(mapId); }
         const MapEntry* GetMapEntry() const { return getMapEntry(); }
-        uint32 getFirstInstanceId() const { for (auto& map : sMapMgr.Maps()) { if (map.second->GetId() == getMapId()) return map.second->GetInstanceId(); }; return 0; }
+        uint32 getFirstInstanceId() const { return FirstInstanceIdCompat(getMapId()); }
 
         Map* getMap(uint32 instanceId) const { if (!*this) return nullptr; loadMapAndVMap(instanceId); return sMapMgr.FindMap(mapId, instanceId ? instanceId : (getMapEntry()->Instanceable() ? getFirstInstanceId() : 0)); }
-        const TerrainInfo* getTerrain() const { return getMap(getFirstInstanceId()) ? getMap(getFirstInstanceId())->GetTerrain() : sTerrainMgr.LoadTerrain(getMapId()); }
+        const TerrainInfo* getTerrain() const { return TerrainOfCompat(getMap(getFirstInstanceId()), getMapId()); }
         const TerrainInfo* GetTerrain() const { return getTerrain(); }
         bool isDungeon() { return getMapEntry()->IsDungeon(); }
         bool IsDungeon() { return isDungeon(); }
         // Penqle's AreaEntry uses Flags (capital F); cmangos uses flags.
-        bool isCity() { return GetArea() && GetArea()->Flags & (AREA_FLAG_CITY | AREA_FLAG_SLAVE_CAPITAL); }
-        float getVisibilityDistance() { return getMap(0) ? getMap(0)->GetVisibilityDistance() : (isOverworld() ? World::GetMaxVisibleDistanceOnContinents() : World::GetMaxVisibleDistanceInInstances()); }
+        bool isCity() { return AreaHasFlagsCompat(GetArea(), AREA_FLAG_CITY | AREA_FLAG_SLAVE_CAPITAL); }
+        float getVisibilityDistance() { return VisibilityDistanceCompat(getMap(0), isOverworld()); }
 
         bool IsInStaticLineOfSight(WorldPosition pos, float heightMod = 0.5f) const;
         // Penqle uses lowercase isInLineOfSight (cmangos uppercase IsInLineOfSight).
-        bool IsInLineOfSight(WorldPosition pos, float heightMod = 0.5f) const { return mapId == pos.mapId && getMap(getFirstInstanceId()) && getMap(getFirstInstanceId())->isInLineOfSight(x, y, z + heightMod, pos.x, pos.y, pos.z + heightMod, true); }
+        bool IsInLineOfSight(WorldPosition pos, float heightMod = 0.5f) const { return mapId == pos.mapId && getMap(getFirstInstanceId()) && IsInLineOfSightCompat(getMap(getFirstInstanceId()), x, y, z + heightMod, pos.x, pos.y, pos.z + heightMod, true); }
         // Penqle's equivalent of cmangos's GetHitPosition is GetLosHitPosition (signature: srcX,Y,Z, destX,Y,Z, modifyDist).
-        bool GetHitPosition(WorldPosition& pos) { return getMap(getFirstInstanceId())->GetLosHitPosition(x, y, z, pos.x, pos.y, pos.z, 0.0f);};
+        bool GetHitPosition(WorldPosition& pos) { return GetLosHitPositionCompat(getMap(getFirstInstanceId()), x, y, z, pos.x, pos.y, pos.z, 0.0f);};
 
 
         bool isOutside() const { WorldPosition high(*this); high.setZ(z + 500.0f); return IsInLineOfSight(high); }
         // Penqle's Map::GetHeight signature is (x, y, z, vmap=true, maxSearchDist=...).
         // Bot's `swim` parameter doesn't map directly; pass `true` for vmap (most common bot use case is on-map height).
-        float getHeight(bool swim = false) const { return getMap(getFirstInstanceId()) ? getMap(getFirstInstanceId())->GetHeight(x, y, z, true) : z; }
+        float getHeight(bool swim = false) const { return getMap(getFirstInstanceId()) ? GetHeightCompat(getMap(getFirstInstanceId()), x, y, z, true) : z; }
         float GetHeight(bool swim = false) const { return getHeight(swim); }
         // Penqle has no GetHeightInRange method. Approximate with GetHeight (loses range-search behavior).
-        float GetHeightInRange(float maxSearchDist = 4.0f) const { return getMap(getFirstInstanceId()) ? getMap(getFirstInstanceId())->GetHeight(x, y, z, true, maxSearchDist) : z; }
+        float GetHeightInRange(float maxSearchDist = 4.0f) const { return getMap(getFirstInstanceId()) ? GetHeightCompat(getMap(getFirstInstanceId()), x, y, z, true, maxSearchDist) : z; }
 
         float currentHeight() const { return z - getHeight(); }
 
@@ -303,7 +303,7 @@ namespace ai
         bool isValid() const { return MaNGOS::IsValidMapCoord(x, y, z, o); };
         virtual uint16 getAreaFlag() const {
             loadVMap();
-            return isValid() && isVmapLoaded() ? sTerrainMgr.GetAreaFlag(getMapId(), x, y, z) : 0; };
+            return isValid() && isVmapLoaded() ? AreaKeyAtCompat(getMapId(), x, y, z) : 0; };
         AreaTableEntry const* GetArea() const;
         uint16 GetAreaFlag() const { return getAreaFlag(); }
 

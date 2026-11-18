@@ -780,17 +780,7 @@ namespace ai
                 SpellEntry const* spell = sServerFacade.LookupSpellInfo(
                     AI_VALUE2(uint32, "spell id", spellName));
                 if (spell && spell->rangeIndex == SPELL_RANGE_IDX_COMBAT)
-                {
-                    float modifier = 1.0f;
-                    if (Player* owner = bot->GetSpellModOwner())
-                    {
-                        float base = ATTACK_DISTANCE;
-                        modifier += owner->ApplySpellMod(spell->Id, SPELLMOD_RANGE, base);
-                    }
-                    modifier += bot->GetTotalAuraRangeModifier(SPELL_AURA_MOD_ATTACK_AND_SPELL_RANGE) /
-                        1000.0f / ATTACK_DISTANCE;
-                    return bot->CanReachWithMeleeSpellAttack(target, modifier);
-                }
+                    return MeleeSpellReachCompat(bot, spell, target);
             }
             if (range <= 0.0f && RequiresAttackableTarget())
                 return bot->CanReachWithMeleeAutoAttack(target);

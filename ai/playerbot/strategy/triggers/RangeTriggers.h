@@ -326,7 +326,7 @@ namespace ai
             if (!sServerFacade.IsHostileTo(bot, target))
                 return false;
 
-            return target && (bot->GetDistance(target, SizeFactor::CombatReach) > (distance - sPlayerbotAIConfig.contactDistance)) || !IsWithinLOSInMapCompat(bot, target, true);
+            return target && (GetDistanceCompat(bot, target, SizeFactor::CombatReach) > (distance - sPlayerbotAIConfig.contactDistance)) || !IsWithinLOSInMapCompat(bot, target, true);
         }
     };
 
@@ -349,7 +349,7 @@ namespace ai
                     float(sPlayerbotAIConfig.almostFullHealth)))
                 return false;
 
-            bool const outOfRange = (bot->GetDistance(target, SizeFactor::CombatReach) > (distance - sPlayerbotAIConfig.contactDistance)) ||
+            bool const outOfRange = (GetDistanceCompat(bot, target, SizeFactor::CombatReach) > (distance - sPlayerbotAIConfig.contactDistance)) ||
                 !IsWithinLOSInMapCompat(bot, target, true);
             if (!outOfRange)
                 return false;

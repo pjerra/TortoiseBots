@@ -71,5 +71,34 @@ struct TbLegacyWorldLocation
 // A point of a legacy WorldLocation as a core Position (x, y, z, o), for the core functions that take one.
 inline Position TbCorePosition(TbLegacyWorldLocation const& loc) { return Position(loc.x, loc.y, loc.z, loc.o); }
 
+// The places where WorldPosition.h made a location out of a core record by reading its fields (`pos.x`, `data.position`,
+// `entry->map_id`). Each is a both-core helper (the Turtle side is ai/cmangos-compat-r3.h) that returns the legacy struct
+// built from the same facts: the map, the point, and the orientation only where the Turtle code read one.
+//   Position + map            T Position {x,y,z,o} / F Position::GetPosition{X,Y,Z}, GetOrientation
+//   CreatureData/GameObjectData  T `position` member / F SpawnData::mapId + spawnPoint (Maps/SpawnData.h:136)
+//   SpellTargetPosition       T and F both name a WorldLocation (F SpellMgr.h:370); the Turtle code dropped the orientation
+//   TaxiNodesEntry            T map_id,x,y,z / F ContinentID, Pos.X/Y/Z (DB2Structure.h:4383-4390); orientation 0 as before
+//   WorldSafeLocsEntry        T map_id,x,y,z (no orientation: 0) / F Loc (ObjectMgr.h:886-891)
+//   PlayerInfo                T mapId,positionX,Y,Z,orientation / F createPosition.Loc (ObjectMgr.h:704-709)
+inline TbLegacyWorldLocation LocationOfCompat(uint32 mapId, ::Position const& pos)
+{
+    return TbLegacyWorldLocation(mapId, pos.GetPositionX(), pos.GetPositionY(), pos.GetPositionZ(), pos.GetOrientation());
+}
+inline TbLegacyWorldLocation LocationOfCompat(CreatureData const& data) { return LocationOfCompat(data.mapId, data.spawnPoint); }
+inline TbLegacyWorldLocation LocationOfCompat(GameObjectData const& data) { return LocationOfCompat(data.mapId, data.spawnPoint); }
+inline TbLegacyWorldLocation LocationOfCompat(::WorldLocation const* pos)   // SpellTargetPosition const*
+{
+    return TbLegacyWorldLocation(pos->GetMapId(), pos->GetPositionX(), pos->GetPositionY(), pos->GetPositionZ());
+}
+inline TbLegacyWorldLocation LocationOfCompat(TaxiNodesEntry const* node)
+{
+    return TbLegacyWorldLocation(node->ContinentID, node->Pos.X, node->Pos.Y, node->Pos.Z);
+}
+inline TbLegacyWorldLocation LocationOfCompat(WorldSafeLocsEntry const* loc)
+{
+    return TbLegacyWorldLocation(loc->Loc.GetMapId(), loc->Loc.GetPositionX(), loc->Loc.GetPositionY(), loc->Loc.GetPositionZ(), 0.0f);
+}
+inline TbLegacyWorldLocation LocationOfCompat(PlayerInfo const* info) { return TbLegacyWorldLocation(info->createPosition.Loc); }
+
 // From here on the token means the struct above. Nothing below this line in the shim may name the core's class.
 #define WorldLocation TbLegacyWorldLocation

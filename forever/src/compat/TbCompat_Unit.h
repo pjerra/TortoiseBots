@@ -81,10 +81,181 @@ inline bool IsInGroup_Helper(Player* a, Player* b, bool sameGroup = false)
     return group->IsMember(b->GetGUID());
 }
 
+// "How far apart are these two objects": T Object.h:137 SizeFactor picks what is taken off the centre distance
+// (Object.cpp:1383-1426): None nothing, BoundingRadius both bounding radii, CombatReach both combat reaches,
+// CombatReachWithMelee both combat reaches raised to at least 1.5; the result is never negative. F has the combat-reach
+// form as GetDistance(obj) (Object.cpp:431-435) and no enum, so the enum is declared here and the others are computed from
+// the same members the Turtle code reads.
+enum class SizeFactor
+{
+    None,
+    BoundingRadius,
+    CombatReach,
+    CombatReachWithMelee,
+};
+
+inline float GetDistanceCompat(WorldObject const* self, WorldObject const* obj, SizeFactor distcalc)
+{
+    float const centre = self->GetExactDist(obj);
+    float size = 0.0f;
+    switch (distcalc)
+    {
+        case SizeFactor::BoundingRadius:
+            if (Unit const* a = self->ToUnit())
+                size = a->GetBoundingRadius();
+            if (Unit const* b = obj->ToUnit())
+                size += b->GetBoundingRadius();
+            break;
+        case SizeFactor::CombatReach:
+            size = self->GetCombatReach() + obj->GetCombatReach();
+            break;
+        case SizeFactor::CombatReachWithMelee:
+            size = std::max(1.5f, self->GetCombatReach()) + std::max(1.5f, obj->GetCombatReach());
+            break;
+        default:
+            break;
+    }
+    float const dist = centre - size;
+    return dist > 0.0f ? dist : 0.0f;
+}
+
 // Whether `target` lies in the arc in front of `self`. T Object.h:944 `HasInArc(target, arcangle, offset)`, F Position.h
 // `HasInArc(arcangle, pos, border = 2)`: both test the target's bearing against the facing within +-arcangle/2 (the default
 // border 2 halves the arc), the arguments come in the other order.
 inline bool HasInArcCompat(WorldObject const* self, WorldObject const* target, float arcAngle)
 {
     return self->HasInArc(arcAngle, target);
+}
+
+// Whether a melee SPELL of `bot` (a spell whose range is the combat range) reaches `target` now. T ReachTargetActions.h
+// (before R3) asked Unit::CanReachWithMeleeSpellAttack with a modifier built from the caster's range spell mods and range
+// auras; F answers it where the cast does: Spell::CalcMinMaxRange (Spell.cpp:7677), the numbers CheckRange tests, which
+// start from the caster's melee range to this target and apply the range spell mods itself.
+inline bool MeleeSpellReachCompat(Player* bot, SpellEntry const* spell, Unit* target)
+{
+    SpellInfo const* info = GetSpellInfoCompat(spell);
+    if (!info || !target)
+        return false;
+    SpellRange const range = Spell::CalcMinMaxRange(bot, target, false, info, false);
+    return bot->GetExactDistSq(target) <= range.Max * range.Max;
+}
+
+// The weapon in a hand. T Player.h:1281 `GetWeaponForAttack(type, nonbroken, useable)`, F Player.h:1514 `GetWeaponForAttack(type,
+// useable)`: F's `useable` is "not broken and the hand may be used" (the Turtle pair together), so either flag asks it.
+inline Item* GetWeaponForAttackCompat(Player const* player, WeaponAttackType attackType, bool nonBroken, bool useable)
+{
+    return player->GetWeaponForAttack(attackType, nonBroken || useable);
+}
+
+// Whether the creature carries a weapon. T Creature.cpp:3981 reads the item class of its main-hand virtual item; F keeps the
+// virtual item as an item id (Unit.h:1893), whose template has the class.
+inline bool CreatureHasWeaponCompat(Creature const* creature)
+{
+    uint32 const itemId = creature->GetVirtualItemId(0);
+    ItemTemplate const* tpl = itemId ? sObjectMgr->GetItemTemplate(itemId) : nullptr;
+    return tpl && tpl->GetClass() == ITEM_CLASS_WEAPON;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Maps and terrain, as WorldPosition.h uses them (all reads, no map is ever changed).
+// ---------------------------------------------------------------------------------------------------------------
+// The terrain object. T keeps one per map in the terrain manager for the life of the server and the bot holds a raw pointer
+// (`sTerrainMgr.LoadTerrain(mapId)`, or `map->GetTerrain()` when the map is loaded); F's LoadTerrain returns a shared_ptr the
+// manager does not own, so the helper keeps the pointers it handed out (one per map id) and the raw pointer stays valid.
+inline TerrainInfo const* TerrainOfCompat(Map const* map, uint32 mapId)
+{
+    if (map)
+        return map->GetTerrain();
+    static std::mutex lock;
+    static std::unordered_map<uint32, std::shared_ptr<TerrainInfo>> kept;
+    std::lock_guard<std::mutex> guard(lock);
+    std::shared_ptr<TerrainInfo>& slot = kept[mapId];
+    if (!slot)
+        slot = TerrainMgr::Instance().LoadTerrain(mapId);
+    return slot.get();
+}
+
+// T GridMap.h:149-154 take the point; F's TerrainInfo (TerrainMgr.h:100-102) also takes the map id and a phase shift. The
+// empty phase shift is what a viewer without phases sees; the map id is the terrain's own (TerrainMgr.h:49).
+inline bool TerrainIsInWaterCompat(TerrainInfo const* terrain, float x, float y, float z)
+{
+    return const_cast<TerrainInfo*>(terrain)->IsInWater(PhasingHandler::GetEmptyPhaseShift(), terrain->GetId(), x, y, z);
+}
+inline bool TerrainIsUnderWaterCompat(TerrainInfo const* terrain, float x, float y, float z)
+{
+    return const_cast<TerrainInfo*>(terrain)->IsUnderWater(PhasingHandler::GetEmptyPhaseShift(), terrain->GetId(), x, y, z);
+}
+// T GetWaterLevel(x, y, z, &ground): the liquid level at the point and, through the pointer, the ground under it. F's
+// GetWaterOrGroundLevel (TerrainMgr.h:104) returns the same pair (the water level, else the ground) and the ground.
+inline float TerrainWaterLevelCompat(TerrainInfo const* terrain, float x, float y, float z, float* ground = nullptr)
+{
+    return const_cast<TerrainInfo*>(terrain)->GetWaterOrGroundLevel(PhasingHandler::GetEmptyPhaseShift(), terrain->GetId(), x, y, z, ground);
+}
+// T `sTerrainMgr.GetAreaId(mapId, x, y, z)`; F asks for a phase shift as well.
+inline uint32 GetAreaIdCompat(WorldObject const* wo)
+{
+    return TerrainMgr::Instance().GetAreaId(wo->GetPhaseShift(), wo->GetMapId(), wo->GetPositionX(), wo->GetPositionY(), wo->GetPositionZ());
+}
+
+// The DBC row of a map (T SQL store `sMapStorage`, F DB2 store).
+inline MapEntry const* MapEntryCompat(uint32 mapId) { return sMapStore.LookupEntry(mapId); }
+
+// The instance id of the first loaded map with this map id (0 when none is). T walks the map manager's container,
+// F visits every map with that id.
+inline uint32 FirstInstanceIdCompat(uint32 mapId)
+{
+    uint32 instanceId = 0;
+    bool found = false;
+    sMapMgr.DoForAllMapsWithMapId(mapId, [&](Map* map)
+    {
+        if (!found)
+        {
+            instanceId = map->GetInstanceId();
+            found = true;
+        }
+    });
+    return instanceId;
+}
+
+// How far a client sees on this map: T `Map::GetVisibilityDistance()` (with `World::GetMaxVisibleDistance*` when the map is
+// not loaded), F `Map::GetVisibilityRange()` (Map.h:257) and the world's configured ranges.
+inline float VisibilityDistanceCompat(Map const* map, bool overworld)
+{
+    if (map)
+        return map->GetVisibilityRange();
+    return overworld ? World::GetMaxVisibleDistanceOnContinents() : World::GetMaxVisibleDistanceInInstances();
+}
+
+// Whether the area carries any of the flags. T AreaTableEntry::Flags is one word; F keeps two (AreaTableEntry::Flags[0] is
+// the one the classic client data fills, the same word the shim's AREA_FLAG_* names come from).
+inline bool AreaHasFlagsCompat(AreaTableEntry const* area, AreaFlags mask)
+{
+    return area && (area->Flags[0] & uint32(mask)) != 0;
+}
+
+// The point a ray from the source to the destination stops at. T `Map::GetLosHitPosition(src, dest&, modifyDist)` moves the
+// destination to the hit point and says whether it did; F `Map::getObjectHitPos` (Map.h:519) returns the hit point apart.
+inline bool GetLosHitPositionCompat(Map* map, float srcX, float srcY, float srcZ, float& destX, float& destY, float& destZ, float modifyDist)
+{
+    float hitX = destX, hitY = destY, hitZ = destZ;
+    bool const hit = map->getObjectHitPos(PhasingHandler::GetEmptyPhaseShift(), srcX, srcY, srcZ, destX, destY, destZ, hitX, hitY, hitZ, modifyDist);
+    if (hit)
+    {
+        destX = hitX;
+        destY = hitY;
+        destZ = hitZ;
+    }
+    return hit;
+}
+
+// The path object: T's PathFinder is the core's path generator, F names it PathGenerator.
+using PathFinder = PathGenerator;
+
+// Which area a point lies in, as the key into the area table: T `sTerrainMgr.GetAreaFlag(mapId, x, y, z)` is the grid's area FLAG
+// (a per-map index that GetAreaEntryByAreaFlagAndMap turns into the row), F has no flag and keys the table by area id
+// (TerrainMgr.h:147). The same question with each core's own key; whoever turns the key into an AreaTableEntry
+// (WorldPosition.cpp, R4C) reads it the way its core does.
+inline uint16 AreaKeyAtCompat(uint32 mapId, float x, float y, float z)
+{
+    return uint16(TerrainMgr::Instance().GetAreaId(PhasingHandler::GetEmptyPhaseShift(), mapId, x, y, z));
 }

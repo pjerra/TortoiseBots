@@ -101,3 +101,7 @@ enum TbLegacyUnitState : uint32
 // "Can this unit's auto attack reach that unit now": T Unit.cpp:11056 (combat reaches + leeway, z-reach), F Unit.cpp:734
 // (the core's melee range between the two, same map and phase). The core's own answer on each; the numbers differ by design.
 #define CanReachWithMeleeAutoAttack IsWithinMeleeRange
+
+// The terrain manager: T `sTerrainMgr` (a singleton by reference), F TerrainMgr::Instance() (TerrainMgr.h:142). The calls on it
+// differ (a phase shift, the map id first); the bot's own uses go through the helpers in TbCompat_Unit.h.
+#define sTerrainMgr (TerrainMgr::Instance())

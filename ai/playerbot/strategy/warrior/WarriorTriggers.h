@@ -52,10 +52,10 @@ namespace ai
                 return false;
 
             if (Player* playerTarget = target->ToPlayer())
-                return playerTarget->GetWeaponForAttack(BASE_ATTACK, true, true) != nullptr;
+                return GetWeaponForAttackCompat(playerTarget, BASE_ATTACK, true, true) != nullptr;
 
             Creature* creatureTarget = target->ToCreature();
-            return creatureTarget && creatureTarget->HasWeapon();
+            return creatureTarget && CreatureHasWeaponCompat(creatureTarget);
         }
     };
     DEBUFF_TRIGGER(DemoralizingShoutDebuffTrigger, "demoralizing shout");
@@ -295,7 +295,7 @@ namespace ai
             Unit* target = GetTarget();
             if (!target || !target->IsAlive())
                 return false;
-            return bot->GetWeaponForAttack(BASE_ATTACK, true, true) != nullptr;
+            return GetWeaponForAttackCompat(bot, BASE_ATTACK, true, true) != nullptr;
         }
     };
 }

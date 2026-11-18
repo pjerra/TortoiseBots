@@ -282,7 +282,7 @@ class ServerFacade
 
         uint32 GetAreaId(WorldObject* wo)
         {
-            return sTerrainMgr.GetAreaId(wo->GetMapId(), wo->GetPositionX(), wo->GetPositionY(), wo->GetPositionZ());
+            return GetAreaIdCompat(wo);
         }
 };
 
