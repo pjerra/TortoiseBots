@@ -1,4 +1,4 @@
-// Slice 1: the AiFactory of the slice build (FOREVER-SLICE1-SPEC section 4), compiled INSTEAD of ai/playerbot/AiFactory.cpp.
+// Slice 1 (slice 2 additions: the priest, R3): the AiFactory of the slice build (FOREVER-SLICE1-SPEC section 4), compiled INSTEAD of ai/playerbot/AiFactory.cpp.
 //
 // ai/playerbot/AiFactory.cpp is 2,200 lines of per-class kits, config strings, hire / commander / world-PvP rules and
 // the context augmenters of other modules. The slice has one warrior that follows its master, takes the master's target
@@ -12,7 +12,12 @@
 // Everything else the header declares stays undefined: a reference to it fails at link time, which is the point (R6).
 //
 // Defaults, from the spec: combat "arms", "dps assist", "close", "buff"; non-combat "arms", "dps assist", "follow";
-// dead and reaction engines get no strategy; the talent tab is 0 (arms) whatever the bot's talents. A strategy name the
+// dead and reaction engines get no strategy; the talent tab is 0 (arms) whatever the bot's talents.
+// Slice 2 (FOREVER-SLICE2-SPEC section 3): a priest gets its own context (PriestAiObjectContext, compiled as it is) and, on tab 0
+// (discipline: the slice never reads talents), combat "discipline", "offdps", "dps assist", "ranged", "buff", "cast time"; non-combat
+// "discipline", "dps assist", "follow", "buff", "food", "loot", "default"; reaction "discipline". The full factory's "flee", "cure",
+// "cc", "aoe" and "boost" are left out on purpose (the spec's list). The warrior's non-combat set gains "loot" and "default" (the
+// money looting and its "loot response" event; live test observation k has both bots open their corpse), its combat set is unchanged. A strategy name the
 // context does not know is skipped by the engine, and logged once by the guard (SliceMissingKeyGuard.h).
 #include "compat/botpch_forever.h"
 #include "playerbot/playerbot.h"
@@ -20,18 +25,22 @@
 #include "playerbot/strategy/AiObjectContext.h"
 #include "playerbot/strategy/ReactionEngine.h"
 #include "playerbot/strategy/warrior/WarriorAiObjectContext.h"
+#include "playerbot/strategy/priest/PriestAiObjectContext.h"
 #include "SliceLog.h"
 #include "SliceMissingKeyGuard.h"
 
 AiObjectContext* AiFactory::createAiObjectContext(Player* player, PlayerbotAI* ai)
 {
-    // The slice registers the warrior's strategies only (SliceAiObjectContext.cpp + WarriorAiObjectContext), whatever
-    // the class: another class would run on the warrior's kit, so say so once.
+    // The slice registers the warrior's and the priest's class strategies (SliceAiObjectContext.cpp + the class context compiled as it
+    // is); another class would run on the warrior's kit, so say so once.
+    if (player && player->GetClass() == CLASS_PRIEST)
+        return new slice::GuardedContext<PriestAiObjectContext>(ai);
+
     static bool warned = false;
     if (player && player->GetClass() != CLASS_WARRIOR && !warned)
     {
         warned = true;
-        slice::LogWarn("slice: " + player->GetName() + " is not a warrior; the slice build gives every bot the warrior context");
+        slice::LogWarn("slice: " + player->GetName() + " is neither a warrior nor a priest; the slice build gives every other bot the warrior context");
     }
     return new slice::GuardedContext<WarriorAiObjectContext>(ai);
 }
@@ -54,17 +63,30 @@ BotRoles AiFactory::GetPlayerRoles(const Player* player)
     // Spec tab 0 of a warrior is a damage role (AiFactory.cpp GetPlayerRoles(cls, tab): tab 2 tanks, the others dps).
     if (player && player->GetClass() == CLASS_WARRIOR)
         return BOT_ROLE_DPS;
+    // A priest on tab 0 or 1 (discipline, holy: the only tabs the slice gives it) heals (AiFactory.cpp GetPlayerRoles(cls, tab): tab 2 is dps).
+    if (player && player->GetClass() == CLASS_PRIEST)
+        return BOT_ROLE_HEALER;
     return BOT_ROLE_NONE;
 }
 
-void AiFactory::AddDefaultCombatStrategies(Player* /*player*/, PlayerbotAI* const /*facade*/, Engine* combatEngine)
+void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const /*facade*/, Engine* combatEngine)
 {
+    if (player && player->GetClass() == CLASS_PRIEST)
+    {
+        combatEngine->addStrategies("discipline", "offdps", "dps assist", "ranged", "buff", "cast time", NULL);
+        return;
+    }
     combatEngine->addStrategies("arms", "dps assist", "close", "buff", NULL);
 }
 
-void AiFactory::AddDefaultNonCombatStrategies(Player* /*player*/, PlayerbotAI* const /*facade*/, Engine* nonCombatEngine)
+void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const /*facade*/, Engine* nonCombatEngine)
 {
-    nonCombatEngine->addStrategies("arms", "dps assist", "follow", NULL);
+    if (player && player->GetClass() == CLASS_PRIEST)
+    {
+        nonCombatEngine->addStrategies("discipline", "dps assist", "follow", "buff", "food", "loot", "default", NULL);
+        return;
+    }
+    nonCombatEngine->addStrategies("arms", "dps assist", "follow", "loot", "default", NULL);
 }
 
 void AiFactory::AddDefaultDeadStrategies(Player* /*player*/, PlayerbotAI* const /*facade*/, Engine* /*deadEngine*/)
@@ -72,14 +94,14 @@ void AiFactory::AddDefaultDeadStrategies(Player* /*player*/, PlayerbotAI* const 
     // Death and resurrection are out of the slice (spec section 1).
 }
 
-void AiFactory::AddDefaultReactionStrategies(Player* /*player*/, PlayerbotAI* const /*facade*/, ReactionEngine* reactionEngine)
+void AiFactory::AddDefaultReactionStrategies(Player* player, PlayerbotAI* const /*facade*/, ReactionEngine* reactionEngine)
 {
     // Reactions (AoE avoidance, potions, chat) are out of the slice. The class strategy is not: its reaction triggers are the
     // ones that move the bot between the engines ("combat start" -> "set combat state", "combat end" -> "set non combat state",
     // "death" -> "set dead state": ClassStrategy::InitReactionTriggers), exactly as the full factory adds it (AiFactory.cpp:2085,
     // a warrior on the arms tab). Without it the bot entered the combat engine (AttackAction calls OnCombatStarted itself) and
     // never left it (R8 observation d).
-    reactionEngine->addStrategy("arms");
+    reactionEngine->addStrategy(player && player->GetClass() == CLASS_PRIEST ? "discipline" : "arms");
 }
 
 Engine* AiFactory::createCombatEngine(Player* player, PlayerbotAI* const facade, AiObjectContext* AiObjectContext)

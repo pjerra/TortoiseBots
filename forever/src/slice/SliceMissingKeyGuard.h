@@ -26,6 +26,7 @@
 #include "playerbot/PatchwerkOpeningPolicy.h"
 #include "playerbot/policy/combat/RunnerFinishPolicy.h"
 #include "playerbot/strategy/values/GuildValues.h"
+#include "playerbot/strategy/values/ItemUsageValue.h"
 #include "playerbot/strategy/values/TravelValues.h"
 
 #include <list>
@@ -68,6 +69,8 @@ namespace slice
 
     // The types the slice's sources read the unregistered values as (slice_registry_check.py parses this alias; keep
     // one type per line and no duplicates, a reference type and its value type are two entries).
+    // Slice 2 (R3) adds ItemUsage (`item usage`, read by LootStrategyValue.cpp:25; T{} = ITEM_USAGE_NONE = "not looted", the answer that
+    // makes the bot do less, decision D2) and std::set<uint32>& (`skip go loot list`, read in LootObjectStack.cpp: an empty list).
     using SliceInertValue = InertValues<
         bool,
         uint8,
@@ -85,7 +88,9 @@ namespace slice
         std::list<ObjectGuid>,
         std::string,
         std::list<std::string>&,
-        std::set<ObjectGuid>&>;
+        std::set<ObjectGuid>&,
+        std::set<uint32>&,
+        ItemUsage>;
 
     // Each missing name is reported once per process (every bot has its own context, the names repeat).
     class MissingKeyLog

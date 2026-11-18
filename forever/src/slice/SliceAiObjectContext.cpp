@@ -11,25 +11,40 @@
 #include "SliceLog.h"
 #include "playerbot/strategy/AiObjectContext.h"
 #include "playerbot/strategy/NamedObjectContext.h"
+#include "playerbot/RaidTankHealing.h"
 #include "playerbot/strategy/Value.h"
+#include "playerbot/strategy/actions/AddLootAction.h"
 #include "playerbot/strategy/actions/BotStateActions.h"
 #include "playerbot/strategy/actions/ChooseTargetActions.h"
 #include "playerbot/strategy/actions/FollowActions.h"
 #include "playerbot/strategy/actions/GenericActions.h"
 #include "playerbot/strategy/actions/GenericSpellActions.h"
+#include "playerbot/strategy/actions/LootAction.h"
+#include "playerbot/strategy/actions/MovementActions.h"
 #include "playerbot/strategy/actions/ReachTargetActions.h"
+#include "playerbot/strategy/actions/UseItemAction.h"
+#include "playerbot/strategy/generic/CastTimeStrategy.h"
 #include "playerbot/strategy/generic/DpsAssistStrategy.h"
 #include "playerbot/strategy/generic/FollowMasterStrategy.h"
+#include "playerbot/strategy/generic/LootNonCombatStrategy.h"
 #include "playerbot/strategy/generic/MeleeCombatStrategy.h"
+#include "playerbot/strategy/generic/RangedCombatStrategy.h"
+#include "playerbot/strategy/generic/UseFoodStrategy.h"
+#include "playerbot/strategy/generic/WorldPacketHandlerStrategy.h"
 #include "playerbot/strategy/triggers/BotStateTriggers.h"
 #include "playerbot/strategy/triggers/GenericTriggers.h"
 #include "playerbot/strategy/triggers/HealthTriggers.h"
+#include "playerbot/strategy/triggers/LootTriggers.h"
 #include "playerbot/strategy/triggers/RangeTriggers.h"
+#include "playerbot/strategy/triggers/WorldPacketTrigger.h"
+#include "playerbot/strategy/values/AlwaysLootListValue.h"
 #include "playerbot/strategy/values/AoeHealValues.h"
 #include "playerbot/strategy/values/AoeValues.h"
 #include "playerbot/strategy/values/AttackerCountValues.h"
 #include "playerbot/strategy/values/AttackerOfNonTankTargetValue.h"
 #include "playerbot/strategy/values/AttackersValue.h"
+#include "playerbot/strategy/values/AvailableLootValue.h"
+#include "playerbot/strategy/values/BudgetValues.h"
 #include "playerbot/strategy/values/CcTargetValue.h"
 #include "playerbot/strategy/values/CollisionValue.h"
 #include "playerbot/strategy/values/CombatStartTimeValue.h"
@@ -44,6 +59,7 @@
 #include "playerbot/strategy/values/Formations.h"
 #include "playerbot/strategy/values/FreeMoveValues.h"
 #include "playerbot/strategy/values/GroupValues.h"
+#include "playerbot/strategy/values/HasAvailableLootValue.h"
 #include "playerbot/strategy/values/HasTotemValue.h"
 #include "playerbot/strategy/values/HazardsValue.h"
 #include "playerbot/strategy/values/InterruptTargetValue.h"
@@ -53,19 +69,25 @@
 #include "playerbot/strategy/values/IsMovingValue.h"
 #include "playerbot/strategy/values/ItemCountValue.h"
 #include "playerbot/strategy/values/ItemForSpellValue.h"
+#include "playerbot/strategy/values/ItemUsageValue.h"
 #include "playerbot/strategy/values/LastMovementValue.h"
 #include "playerbot/strategy/values/LastSpellCastTimeValue.h"
 #include "playerbot/strategy/values/LastSpellCastValue.h"
+#include "playerbot/strategy/values/LootStrategyValue.h"
+#include "playerbot/strategy/values/LootValues.h"
+#include "playerbot/strategy/values/MaintenanceValues.h"
 #include "playerbot/strategy/values/ManaSaveLevelValue.h"
 #include "playerbot/strategy/values/MasterTargetValue.h"
 #include "playerbot/strategy/values/MoveStyleValue.h"
 #include "playerbot/strategy/values/NearestAdsValue.h"
+#include "playerbot/strategy/values/NearestCorpsesValue.h"
 #include "playerbot/strategy/values/NearestFriendlyPlayersValue.h"
 #include "playerbot/strategy/values/NearestGameObjects.h"
 #include "playerbot/strategy/values/NearestNpcsValue.h"
 #include "playerbot/strategy/values/NearestUnitsValue.h"
 #include "playerbot/strategy/values/NewPlayerNearbyValue.h"
 #include "playerbot/strategy/values/OperatorValues.h"
+#include "playerbot/strategy/values/PartyMemberToDispel.h"
 #include "playerbot/strategy/values/PartyMemberToHeal.h"
 #include "playerbot/strategy/values/PartyMemberWithoutAuraValue.h"
 #include "playerbot/strategy/values/PetTargetValue.h"
@@ -96,13 +118,18 @@ namespace ai
 {
 namespace slice
 {
-    // the registry of StrategyContext (1 of its keys)
+    // the registry of StrategyContext (6 of its keys)
     class SliceStrategyContext : public NamedObjectContext<Strategy>
     {
     public:
         SliceStrategyContext()
         {
             creators["close"] = [](PlayerbotAI* ai) { return new MeleeCombatStrategy(ai); };
+            creators["ranged"] = [](PlayerbotAI* ai) { return new RangedCombatStrategy(ai); };
+            creators["food"] = [](PlayerbotAI* ai) { return new UseFoodStrategy(ai); };
+            creators["loot"] = [](PlayerbotAI* ai) { return new LootNonCombatStrategy(ai); };
+            creators["cast time"] = [](PlayerbotAI* ai) { return new CastTimeStrategy(ai); };
+            creators["default"] = [](PlayerbotAI* ai) { return new WorldPacketHandlerStrategy(ai); };
         }
     };
 
@@ -126,7 +153,7 @@ namespace slice
         }
     };
 
-    // the registry of ActionContext (11 of its keys)
+    // the registry of ActionContext (21 of its keys)
     class SliceActionContext : public NamedObjectContext<Action>
     {
     public:
@@ -143,10 +170,40 @@ namespace slice
             creators["set dead state"] = [](PlayerbotAI* ai) { return new SetDeadStateAction(ai); };
             creators["interrupt current spell"] = [](PlayerbotAI* ai) { return new InterruptCurrentSpellAction(ai); };
             creators["formation station"] = [](PlayerbotAI* ai) { return new FormationStationAction(ai); };
+            creators["reach spell"] = [](PlayerbotAI* ai) { return new ReachSpellAction(ai); };
+            creators["reach party member to heal"] = [](PlayerbotAI* ai) { return new ReachPartyMemberToHealAction(ai); };
+            creators["flee"] = [](PlayerbotAI* ai) { return new FleeAction(ai); };
+            creators["shoot"] = [](PlayerbotAI* ai) { return new CastShootAction(ai); };
+            creators["drink"] = [](PlayerbotAI* ai) { return new DrinkAction(ai); };
+            creators["food"] = [](PlayerbotAI* ai) { return new EatAction(ai); };
+            creators["loot"] = [](PlayerbotAI* ai) { return new LootAction(ai); };
+            creators["open loot"] = [](PlayerbotAI* ai) { return new OpenLootAction(ai); };
+            creators["move to loot"] = [](PlayerbotAI* ai) { return new MoveToLootAction(ai); };
+            creators["add all loot"] = [](PlayerbotAI* ai) { return new AddAllLootAction(ai); };
         }
     };
 
-    // the registry of TriggerContext (30 of its keys)
+    // the registry of ChatActionContext (1 of its keys)
+    class SliceChatActionContext : public NamedObjectContext<Action>
+    {
+    public:
+        SliceChatActionContext()
+        {
+            creators["use"] = [](PlayerbotAI* ai) { return new UseAction(ai); };
+        }
+    };
+
+    // the registry of WorldPacketActionContext (1 of its keys)
+    class SliceWorldPacketActionContext : public NamedObjectContext<Action>
+    {
+    public:
+        SliceWorldPacketActionContext()
+        {
+            creators["store loot"] = [](PlayerbotAI* ai) { return new StoreLootAction(ai); };
+        }
+    };
+
+    // the registry of TriggerContext (55 of its keys)
     class SliceTriggerContext : public NamedObjectContext<Trigger>
     {
     public:
@@ -182,10 +239,45 @@ namespace slice
             creators["master target active"] = [](PlayerbotAI* ai) { return new MasterTargetActiveTrigger(ai); };
             creators["out of free move range"] = [](PlayerbotAI* ai) { return new OutOfFreeMoveRangeTrigger(ai); };
             creators["formation station"] = [](PlayerbotAI* ai) { return new FormationStationTrigger(ai); };
+            creators["enemy out of spell"] = [](PlayerbotAI* ai) { return new EnemyOutOfSpellRangeTrigger(ai); };
+            creators["enemy too close for spell"] = [](PlayerbotAI* ai) { return new EnemyTooCloseForSpellTrigger(ai); };
+            creators["enemy five yards"] = [](PlayerbotAI* ai) { return new EnemyInRangeTrigger(ai, "enemy five yards", 5.0f); };
+            creators["medium mana"] = [](PlayerbotAI* ai) { return new MediumManaTrigger(ai); };
+            creators["no mana"] = [](PlayerbotAI* ai) { return new NoManaTrigger(ai); };
+            creators["high mana"] = [](PlayerbotAI* ai) { return new HighManaTrigger(ai); };
+            creators["medium health"] = [](PlayerbotAI* ai) { return new MediumHealthTrigger(ai); };
+            creators["healer should attack"] = [](PlayerbotAI* ai) { return new HealerShouldAttackTrigger(ai); };
+            creators["healer should wand"] = [](PlayerbotAI* ai) { return new HealerShouldAttackTrigger(ai, "healer should wand", false); };
+            creators["melee medium aoe and healer should attack"] = [](PlayerbotAI* ai) { return new TwoTriggers(ai, "melee medium aoe", "healer should attack"); };
+            creators["medium threat"] = [](PlayerbotAI* ai) { return new MediumThreatTrigger(ai); };
+            creators["target of attacker"] = [](PlayerbotAI* ai) { return new TargetOfAttacker(ai); };
+            creators["party member critical health"] = [](PlayerbotAI* ai) { return new PartyMemberCriticalHealthTrigger(ai); };
+            creators["party member low health"] = [](PlayerbotAI* ai) { return new PartyMemberLowHealthTrigger(ai); };
+            creators["party member medium health"] = [](PlayerbotAI* ai) { return new PartyMemberMediumHealthTrigger(ai); };
+            creators["party member almost full health"] = [](PlayerbotAI* ai) { return new PartyMemberAlmostFullHealthTrigger(ai); };
+            creators["party member to heal out of spell range"] = [](PlayerbotAI* ai) { return new PartyMemberToHealOutOfSpellRangeTrigger(ai); };
+            creators["group heal setting"] = [](PlayerbotAI* ai) { return new AoeInGroupTrigger(ai, "group heal setting", "almost full"); };
+            creators["medium group heal setting"] = [](PlayerbotAI* ai) { return new AoeInGroupTrigger(ai, "medium group heal setting", "medium"); };
+            creators["resume drink"] = [](PlayerbotAI* ai) { return new ResumeDrinkTrigger(ai); };
+            creators["resume eat"] = [](PlayerbotAI* ai) { return new ResumeEatTrigger(ai); };
+            creators["loot available"] = [](PlayerbotAI* ai) { return new LootAvailableTrigger(ai); };
+            creators["can loot"] = [](PlayerbotAI* ai) { return new CanLootTrigger(ai); };
+            creators["far from loot target"] = [](PlayerbotAI* ai) { return new FarFromCurrentLootTrigger(ai); };
+            creators["timer"] = [](PlayerbotAI* ai) { return new TimerTrigger(ai); };
         }
     };
 
-    // the registry of ValueContext (140 of its keys)
+    // the registry of WorldPacketTriggerContext (1 of its keys)
+    class SliceWorldPacketTriggerContext : public NamedObjectContext<Trigger>
+    {
+    public:
+        SliceWorldPacketTriggerContext()
+        {
+            creators["loot response"] = [](PlayerbotAI* ai) { return new WorldPacketTrigger(ai, "loot response"); };
+        }
+    };
+
+    // the registry of ValueContext (166 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -331,11 +423,37 @@ namespace slice
             creators["trigger active"] = [](PlayerbotAI* ai) { return new TriggerActiveValue(ai); };
             creators["trinkets on use"] = [](PlayerbotAI* ai) { return new EquipedUsableTrinketValue(ai); };
             creators["wait for attack time"] = [](PlayerbotAI* ai) { return new WaitForAttackTimeValue(ai); };
+            creators["party member to heal"] = [](PlayerbotAI* ai) { return new PartyMemberToHeal(ai); };
+            creators["party member to dispel"] = [](PlayerbotAI* ai) { return new PartyMemberToDispel(ai); };
+            creators["buff targets"] = [](PlayerbotAI* ai) { return new BuffTargetsValue(ai); };
+            creators["patchwerk soaker to shield"] = [](PlayerbotAI* ai) { return new PatchwerkSoakerShieldValue(ai); };
+            creators["drink duration"] = [](PlayerbotAI* ai) { return new DrinkDurationValue(ai); };
+            creators["eat duration"] = [](PlayerbotAI* ai) { return new EatDurationValue(ai); };
+            creators["drink unfinished"] = [](PlayerbotAI* ai) { return new DrinkUnfinishedValue(ai); };
+            creators["rest to full"] = [](PlayerbotAI* ai) { return new RestToFullValue(ai); };
+            creators["should drink"] = [](PlayerbotAI* ai) { return new ShouldDrinkValue(ai); };
+            creators["should eat"] = [](PlayerbotAI* ai) { return new ShouldEatValue(ai); };
+            creators["spell ready"] = [](PlayerbotAI* ai) { return new SpellReadyValue(ai); };
+            creators["custom position"] = [](PlayerbotAI* ai) { return new CustomPositionValue(ai); };
+            creators["nearest npcs no los"] = [](PlayerbotAI* ai) { return new NearestNpcsValue(ai, sPlayerbotAIConfig.sightDistance, true); };
+            creators["loot target"] = [](PlayerbotAI* ai) { return new LootTargetValue(ai); };
+            creators["available loot"] = [](PlayerbotAI* ai) { return new AvailableLootValue(ai); };
+            creators["has available loot"] = [](PlayerbotAI* ai) { return new HasAvailableLootValue(ai); };
+            creators["can loot"] = [](PlayerbotAI* ai) { return new CanLootValue(ai); };
+            creators["always loot list"] = [](PlayerbotAI* ai) { return new AlwaysLootListValue(ai, "always loot list"); };
+            creators["skip loot list"] = [](PlayerbotAI* ai) { return new AlwaysLootListValue(ai, "skip loot list"); };
+            creators["should loot object"] = [](PlayerbotAI* ai) { return new ShouldLootObject(ai); };
+            creators["stack space for item"] = [](PlayerbotAI* ai) { return new StackSpaceForItem(ai); };
+            creators["force item usage"] = [](PlayerbotAI* ai) { return new ForceItemUsageValue(ai); };
+            creators["nearest corpses"] = [](PlayerbotAI* ai) { return new NearestCorpsesValue(ai); };
+            creators["loot strategy"] = [](PlayerbotAI* ai) { return new LootStrategyValue(ai); };
+            creators["should get money"] = [](PlayerbotAI* ai) { return new ShouldGetMoneyValue(ai); };
+            creators["inventory item ids"] = [](PlayerbotAI* ai) { return new InventoryItemIdValue(ai); };
         }
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 3, kActions = 11, kTriggers = 30, kValues = 140;
+    constexpr unsigned kStrategies = 8, kActions = 23, kTriggers = 56, kValues = 166;
 }
 }
 
@@ -346,7 +464,10 @@ AiObjectContext::AiObjectContext(PlayerbotAI* ai) : PlayerbotAIAware(ai)
     strategyContexts.Add(new slice::SliceMovementStrategyContext());
     strategyContexts.Add(new slice::SliceAssistStrategyContext());
     actionContexts.Add(new slice::SliceActionContext());
+    actionContexts.Add(new slice::SliceChatActionContext());
+    actionContexts.Add(new slice::SliceWorldPacketActionContext());
     triggerContexts.Add(new slice::SliceTriggerContext());
+    triggerContexts.Add(new slice::SliceWorldPacketTriggerContext());
     valueContexts.Add(new slice::SliceValueContext());
 
     static bool logged = false;
