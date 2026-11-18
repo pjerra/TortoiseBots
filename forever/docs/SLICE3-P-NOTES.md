@@ -155,4 +155,21 @@ For the merge package (files this worker does not own):
 
 ## 10. Gates
 
-(filled at the end)
+On the final code (the last commit only adds notes), slot 2 and the Turtle gates:
+
+| Gate | Result |
+|---|---|
+| census `forever/SLICE3.txt` | `files 170  compile clean 170  with errors 0  error places 0 (in 0 files)  includes of a header ForeverCore does not have 0` |
+| census `forever/SLICE2.txt` | `files 160  compile clean 160  with errors 0  error places 0 (in 0 files)` |
+| census `forever/SLICE1.txt` | `files 133  compile clean 133  with errors 0  error places 0 (in 0 files)` |
+| module build, slice option OFF (`FOREVER_SLOT=2 build.sh 12 tortoisebots`, `-DTORTOISEBOTS_SLICE1=OFF`) | `CMAKE_RC=0 MAKE_RC=0` |
+| module build, option ON, slice-2 list (the CMake as it is; files I changed that slice 2 compiles: UnportedFeatures.h, the two shim include lines, the slice factory/context) | `CMAKE_RC=0 MAKE_RC=0` |
+| module build, option ON, slice-3 list (VM copy only, to see the link needs; also compiles `SliceAiFactory.cpp`, `SliceAiObjectContext.cpp`, `SliceLinkStubs.cpp`) | `CMAKE_RC=0 MAKE_RC=0` |
+| `slice_gen_context.py --check` | `SliceAiObjectContext.cpp is up to date` |
+| `slice_registry_check.py` | `(a)=0  (b)=209` (keys the slice names and does not register, reasons in SLICE2-R3-UNREGISTERED.md and SLICE3-KEYS.md) |
+| Turtle `vm-build ~/wt-slice3-p --wait` (sha 37ddaaf5d; later commits touch `forever/` only) | `COMPILE_SECONDS=2699 CMAKE_RC=0 MAKE_RC=0` |
+| Turtle `vm-test tb ~/wt-slice3-p` | `RESULT: PASS ... rc=0` (876 s) |
+
+Wiring pins re-pinned to the new spelling of the same expression: `tools/test_threat_cap_wiring.py` (`interruptFlatThreat = threatEntry->threat;` -> `... = SpellFlatThreatCompat(*threatEntry);`: same read of the
+spell's flat threat) and `tools/test_debug_summon_null_guard.py` (the line finder now matches `SummonCreature(` and `SummonCreatureCompat(`; before it silently skipped every rewritten
+marker line, so its guard check covers MovementActions.cpp and WaitForAttackAction.cpp again; both pass).

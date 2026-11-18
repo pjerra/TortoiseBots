@@ -117,6 +117,7 @@ with `FOREVER_SLOT=2 FOREVER_CENSUS_LIST=forever/SLICE3.txt forever/tools/vm-cen
 | Date | State | Files | Compile clean | Error places |
 |---|---|---|---|---|
 | 2026-11-18 | baseline N0, slice 3 list | 170 | 165 | 17 (in 5 files); 0 includes of a header ForeverCore does not have |
+| 2026-11-18 | after the porting worker (slice3/p) | 170 | 170 | 0 (SLICE2.txt 160 files: 0; SLICE1.txt 133 files: 0) |
 
 Summary line: `files 170  compile clean 165  with errors 5  error places 17 (in 5 files)  includes of a header ForeverCore does not have 0`.
 All 160 slice-2 files and 5 of the 10 new ones are clean at once; the 17 places are all in new files (no header holds any).
