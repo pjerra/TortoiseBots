@@ -43,7 +43,7 @@ class MoveFailNoteWiringTest(unittest.TestCase):
         fn = body(MOVES, "std::string MovementAction::GetFailNote()", "\n}\n")
         self.assertIn("bool const tried = lastMove.moveTries != failNoteMark;", fn)
         self.assertIn("MoveFailNote(MoveFailNoteReason(failNoteMark, lastMove.moveTries, MoveFailReasonName(lastMove.moveFailReason)),", fn)
-        self.assertIn("bot->HasMovementFlag(MOVEFLAG_SWIMMING), tried ? lastMove.movePathType : 0);", fn)
+        self.assertIn("HasMovementFlagCompat(bot, MOVEFLAG_SWIMMING), tried ? lastMove.movePathType : 0);", fn)
 
     def test_reason_belongs_to_this_try(self):
         # Opus review 2026-10-23: the mark is taken before Execute and each try resets the reason.

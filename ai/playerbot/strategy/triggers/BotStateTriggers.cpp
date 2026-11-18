@@ -50,7 +50,7 @@ namespace
             Group::MemberSlotList const& slots = group->GetMemberSlots();
             for (Group::member_citerator itr = slots.begin(); itr != slots.end(); ++itr)
             {
-                Player* member = sObjectMgr.GetPlayer(itr->guid);
+                Player* member = ObjectAccessor::FindPlayer(itr->guid);
                 if (!member || member == bot || !sServerFacade.IsAlive(member) || !member->IsInWorld() ||
                     member->GetMapId() != bot->GetMapId())
                     continue;

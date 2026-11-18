@@ -111,12 +111,12 @@ WarriorGapCloser ai::DecideWarriorGapCloser(PlayerbotAI* ai, Unit** chosen)
         f.warriorInCombat = inCombat;
         f.isTank = isTank;
         f.rescue = unit == rescueTarget;
-        f.combatDistance = bot->GetCombatDistance(unit);
+        f.combatDistance = GetDistanceCompat(bot, unit, SizeFactor::CombatReach);
         if (!WarriorGapCloserInRange(f.combatDistance))
             continue;
         f.targetCrowdControlled = FindNonCcTargetStrategy::IsCrowdControlled(ai, unit);
         f.targetHeldCcMark = ccGuard.IsHeldCcMark(unit);
-        f.lineOfSight = bot->IsWithinLOSInMap(unit, true);
+        f.lineOfSight = IsWithinLOSInMapCompat(bot, unit, true);
         f.dpsHeld = IsDpsHeld(ai, bot, unit);
         f.bossPullbackOrStand = BossPullbackOrStand(ai, bot, unit);
         f.tankHoldsBoss = tankHoldsBoss;

@@ -182,7 +182,7 @@ static void LogMagmaRefusal(Player* bot, LastMovement& lastMove, const WorldPosi
     if (lastMove.magmaLogAt && now - lastMove.magmaLogAt < kMagmaLogSeconds)
         return;
     lastMove.magmaLogAt = now;
-    TB_LOG_DETAIL("TortoiseBots: %s: move refused: magma at %.1f %.1f %.1f (map %u, %s)", bot->GetName(), at.getX(),
+    TB_LOG_DETAIL("TortoiseBots: %s: move refused: magma at %.1f %.1f %.1f (map %u, %s)", CStrCompat(bot->GetName()), at.getX(),
         at.getY(), at.getZ(), at.GetMapId(), what);
 }
 
@@ -197,7 +197,7 @@ static void LogMagmaMoveZ(Player* bot, LastMovement& lastMove, const char* site,
         return;
     lastMove.magmaLogAt = now;
     TB_LOG_BASIC("TortoiseBots: %s: magma %s at %.1f %.1f %.1f: move z %.1f, navmesh z %.1f (map %u)",
-        bot->GetName(), site, x, y, move.navmeshZ, move.moveZ, move.navmeshZ, bot->GetMapId());
+        CStrCompat(bot->GetName()), site, x, y, move.navmeshZ, move.moveZ, move.navmeshZ, bot->GetMapId());
 }
 
 // MagmaHazardPolicy.h: whether the route walks into a liquid hazard after dry
@@ -230,7 +230,7 @@ static bool RouteEntersLiquidHazard(Player* bot, const WorldPosition& startPos, 
     ai::MagmaPathCut const cut = ai::CutPathBeforeMagma(start, route, [terrain, mapId, withSlime, &hazard](ai::MagmaPoint const& m)
     {
         GridMapLiquidData liquid{};
-        GridMapLiquidStatus const status = terrain->getLiquidStatus(m.x, m.y, m.z + 0.01f, MAP_ALL_LIQUIDS, &liquid);
+        GridMapLiquidStatus const status = LiquidStatusCompat(terrain, m.x, m.y, m.z + 0.01f, MAP_ALL_LIQUIDS, &liquid);
         if (status == LIQUID_MAP_NO_WATER)
             return false;
         ai::LiquidHazard const at = ai::ClassifyLiquidHazard(liquid.type_flags, static_cast<uint32>(status), withSlime);
@@ -350,9 +350,9 @@ static bool SlotGoesIntoMagma(Player* bot, const WorldPosition& slot, WorldPosit
     if (!routeCheck)
         return false;
     PathFinder path(bot);
-    path.calculate(slot.getX(), slot.getY(), slot.getZ(), false);
+    PathCalculateCompat(path, slot.getX(), slot.getY(), slot.getZ(), false);
     std::vector<WorldPosition> points;
-    Movement::PointsArray const& meshPoints = path.getPath();
+    Movement::PointsArray const& meshPoints = PathPointsCompat(path);
     points.reserve(meshPoints.size());
     for (Vector3 const& p : meshPoints)
         points.push_back(WorldPosition(slot.GetMapId(), p.x, p.y, p.z));
@@ -372,8 +372,8 @@ static bool SlotGoesIntoMagma(Player* bot, const WorldPosition& slot, WorldPosit
 static bool DryNavmeshPoint(Player* bot, float x, float y, float zRef, WorldPosition& out)
 {
     PathFinder path(bot);
-    path.calculate(x, y, zRef, false);
-    Movement::PointsArray const& points = path.getPath();
+    PathCalculateCompat(path, x, y, zRef, false);
+    Movement::PointsArray const& points = PathPointsCompat(path);
     if (points.size() < 2)
         return false;
     Vector3 const& end = points.back();
@@ -417,7 +417,7 @@ void MovementAction::CreateWp(Player* wpOwner, float x, float y, float z, float 
     //if(!important)
     //    delay *= 0.25;
 
-    Creature* wpCreature = wpOwner->SummonCreature(entry, x, y, z - 1, o, TEMPSPAWN_TIMED_DESPAWN, delay);
+    Creature* wpCreature = SummonCreatureCompat(wpOwner, entry, x, y, z - 1, o, TEMPSPAWN_TIMED_DESPAWN, delay);
     if (!wpCreature)
         return;
 
@@ -475,9 +475,9 @@ bool MovementAction::LaunchLandWalk(Player* bot, const WorldPosition& endPos, bo
     if (!DispatchPointMagmaChecked(bot, lastMove, reachedX, reachedY, reachedZ, "land walk"))
         return false;
 
-    bot->GetMotionMaster()->MovePoint(endPos.GetMapId(), reachedX, reachedY, reachedZ,
+    MovePointCompat(*bot->GetMotionMaster(), endPos.GetMapId(), reachedX, reachedY, reachedZ,
         (walk ? MOVE_WALK_MODE : MOVE_RUN_MODE) | MOVE_PATHFINDING);
-    Movement::MoveSplineInit init(*bot, "LandWalk");
+    MoveSplineInitCompat init(*bot, "LandWalk");
     init.MovebyPath(WorldPosition().toPointsArray(path));
     init.SetWalk(walk);
     init.Launch();
@@ -489,7 +489,7 @@ bool MovementAction::WalkChecked(const WorldPosition& endPos, bool walk)
 {
     if (!ai->CanMove() || !endPos.isValid() || endPos.GetMapId() != bot->GetMapId() ||
         bot->IsFlying() || bot->IsTaxiFlying() || bot->GetTransport() || !bot->IsAlive() ||
-        bot->IsInWater() || bot->IsUnderwater() || bot->HasMovementFlag(MOVEFLAG_SWIMMING) ||
+        bot->IsInWater() || IsUnderwaterCompat(bot) || HasMovementFlagCompat(bot, MOVEFLAG_SWIMMING) ||
         sServerFacade.IsUnderwater(bot))
         return false;
 
@@ -525,15 +525,15 @@ bool MovementAction::MoveNear(WorldObject* target, float distance)
     for (float angle = followAngle; angle <= followAngle + 2 * M_PI; angle += M_PI_F / 4.0f)
     {
 #ifdef CMANGOS
-        float dist = distance + target->GetObjectBoundingRadius();
-        target->GetNearPoint(bot, x, y, z, bot->GetObjectBoundingRadius(), std::min(dist, ai->GetRange("follow")), angle);
+        float dist = distance + ObjectBoundingRadiusCompat(target);
+        GetNearPointCompat(target, bot, x, y, z, ObjectBoundingRadiusCompat(bot), std::min(dist, ai->GetRange("follow")), angle);
 #endif
 #ifdef MANGOS
         float x = target->getPositionX() + cos(angle) * distance,
              y = target->getPositionY()+ sin(angle) * distance,
              z = target->getPositionZ();
 #endif
-        if (!bot->IsWithinLOS(x, y, z + bot->GetCollisionHeight(), true))
+        if (!IsWithinLOSCompat(bot, x, y, z + bot->GetCollisionHeight(), true))
             continue;
         bool moved = MoveTo(target->GetMapId(), x, y, z);
         if (moved)
@@ -581,7 +581,7 @@ bool MovementAction::UseTaxi(PlayerbotAI* ai, uint32 entry, bool needNpc)
         {
             bot->GetSession()->SendLearnNewTaxiNode(unit);
 
-            unit->SetFacingTo(unit->GetAngle(bot));
+            unit->SetFacingTo(GetAngleCompat(unit, bot));
         }
     }
 
@@ -667,7 +667,7 @@ bool MovementAction::MoveOnTransport(PlayerbotAI* ai, GenericTransport* transpor
     {
         for (auto& p : path)
         {
-            Creature* wpCreature = bot->SummonCreature(2334, p.getX(), p.getY(), p.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
+            Creature* wpCreature = SummonCreatureCompat(bot, 2334, p.getX(), p.getY(), p.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
             if (!wpCreature)
                 continue;
 
@@ -685,7 +685,7 @@ bool MovementAction::MoveOnTransport(PlayerbotAI* ai, GenericTransport* transpor
     bot->GetMotionMaster()->Clear();
 
     std::vector<G3D::Vector3> pointPath = transPos.toPointsArray(path);
-    Movement::MoveSplineInit init(*bot, "MoveOnTransport");
+    MoveSplineInitCompat init(*bot, "MoveOnTransport");
     init.MovebyPath(pointPath);
     init.SetTransport(transport->GetGUIDLow());
     init.Launch();
@@ -710,7 +710,7 @@ bool MovementAction::MoveOffTransport(PlayerbotAI* ai, WorldPosition exitPos, bo
 
     if (doTeleport)
     {
-        bot->TeleportTo(exitPos.GetMapId(), exitPos.getX(), exitPos.getY(), exitPos.getZ(), exitPos.getO(), 0);
+        TeleportToCompat(bot, exitPos.GetMapId(), exitPos.getX(), exitPos.getY(), exitPos.getZ(), exitPos.getO(), 0);
         return true;
     }
 
@@ -731,7 +731,7 @@ bool MovementAction::MoveOffTransport(PlayerbotAI* ai, WorldPosition exitPos, bo
     bot->GetMotionMaster()->Clear();
 
     std::vector<G3D::Vector3> pointPath = exitPos.toPointsArray(path);
-    Movement::MoveSplineInit init(*bot, "MoveOffTransport");
+    MoveSplineInitCompat init(*bot, "MoveOffTransport");
     init.MovebyPath(pointPath);
     init.Launch();
 
@@ -940,7 +940,7 @@ bool MovementAction::MinimalMove(PlayerbotAI* ai)
         return false;
     }
 
-    if (ai->HasPlayerNearby(nextStep->point, sWorld.getConfig(CONFIG_FLOAT_LISTEN_RANGE_YELL)))
+    if (ai->HasPlayerNearby(nextStep->point, ListenRangeYellCompat()))
         return true;
 
     bot->TeleportTo(nextStep->point);
@@ -1011,7 +1011,7 @@ std::string MovementAction::GetFailNote()
     LastMovement& lastMove = AI_VALUE(LastMovement&, "last movement");
     bool const tried = lastMove.moveTries != failNoteMark;
     return MoveFailNote(MoveFailNoteReason(failNoteMark, lastMove.moveTries, MoveFailReasonName(lastMove.moveFailReason)),
-        bot->IsInWater(), bot->IsUnderwater(), bot->HasMovementFlag(MOVEFLAG_SWIMMING), tried ? lastMove.movePathType : 0);
+        bot->IsInWater(), IsUnderwaterCompat(bot), HasMovementFlagCompat(bot, MOVEFLAG_SWIMMING), tried ? lastMove.movePathType : 0);
 }
 
 std::atomic<uint32_t> MovementAction::routeReuseCount{ 0 };
@@ -1156,7 +1156,7 @@ bool MovementAction::HandleSpecialMovement(TravelPath& path)
         if (currentPoint.entry)
             AI_VALUE(LastMovement&, "last area trigger").lastAreaTrigger = currentPoint.entry;
         else
-            return bot->TeleportTo(nextPoint.point.GetMapId(), nextPoint.point.getX(), nextPoint.point.getY(), nextPoint.point.getZ(), nextPoint.point.getO(), 0) ? true : false;
+            return TeleportToCompat(bot, nextPoint.point.GetMapId(), nextPoint.point.getX(), nextPoint.point.getY(), nextPoint.point.getZ(), nextPoint.point.getO(), 0) ? true : false;
     }
 
     //We are getting 'on' transport.
@@ -1187,7 +1187,7 @@ bool MovementAction::HandleSpecialMovement(TravelPath& path)
         else
         {
             if (!bot->GetTransport())
-                return bot->TeleportTo(nextPoint.point.GetMapId(), nextPoint.point.getX(), nextPoint.point.getY(), nextPoint.point.getZ(), nextPoint.point.getO(), 0) ? true : false;
+                return TeleportToCompat(bot, nextPoint.point.GetMapId(), nextPoint.point.getX(), nextPoint.point.getY(), nextPoint.point.getZ(), nextPoint.point.getO(), 0) ? true : false;
 
             lastTransportEntry = nextPoint.entry;
         }
@@ -1333,7 +1333,7 @@ bool MovementAction::DispatchMovement(TravelPath movePath, bool generatePath, bo
             // point itself is checked.
             uint32 moveOptions = (moveMode == FORCED_MOVEMENT_WALK) ? MOVE_WALK_MODE : MOVE_RUN_MODE;
             moveOptions |= MOVE_PATHFINDING;
-            mm.MovePoint(movePosition.GetMapId(),
+            MovePointCompat(mm, movePosition.GetMapId(),
                 movePosition.getX(),
                 movePosition.getY(),
                 movePosition.getZ(),
@@ -1366,7 +1366,7 @@ bool MovementAction::DispatchMovement(TravelPath movePath, bool generatePath, bo
     // it still runs.
     LastMovement& replayLog = AI_VALUE(LastMovement&, "last movement");
     if (!hazardRewrote && ai::RouteReplayApplies(hazardRewrote,
-            bot->IsInWater() || bot->IsUnderwater() || bot->HasMovementFlag(MOVEFLAG_SWIMMING) ||
+            bot->IsInWater() || IsUnderwaterCompat(bot) || HasMovementFlagCompat(bot, MOVEFLAG_SWIMMING) ||
             sServerFacade.IsUnderwater(bot)))
     {
         std::vector<WorldPosition> replayPath;
@@ -1386,7 +1386,7 @@ bool MovementAction::DispatchMovement(TravelPath movePath, bool generatePath, bo
             {
                 replayLog.routeReplayLogAt = now;
                 TB_LOG_DETAIL("TortoiseBots: %s: route replay kept the stored leg (%u points) to %.1f %.1f %.1f",
-                    bot->GetName(), static_cast<uint32>(path.size()),
+                    CStrCompat(bot->GetName()), static_cast<uint32>(path.size()),
                     path.back().getX(), path.back().getY(), path.back().getZ());
             }
         }
@@ -1480,7 +1480,7 @@ bool MovementAction::DispatchMovement(TravelPath movePath, bool generatePath, bo
             {
                 dispatchMove.magmaLogAt = now;
                 TB_LOG_DETAIL("TortoiseBots: %s: waypoint kept on the floor over magma at %.1f %.1f %.1f (clamp %.2f)",
-                    bot->GetName(), p.x, p.y, navmeshZ, clampedZ);
+                    CStrCompat(bot->GetName()), p.x, p.y, navmeshZ, clampedZ);
             }
         }
         // The spline sends this z, and the core's clamp put it in the magma:
@@ -1543,10 +1543,10 @@ bool MovementAction::DispatchMovement(TravelPath movePath, bool generatePath, bo
     // in the core when the speed changes. Created only here, after the magma
     // verdict, so a refused endpoint never reaches a generator and the one
     // created keeps any dry navmesh z the check restored.
-    mm.MovePoint(path.back().GetMapId(), pointPath.back().x, pointPath.back().y, pointPath.back().z,
+    MovePointCompat(mm, path.back().GetMapId(), pointPath.back().x, pointPath.back().y, pointPath.back().z,
         (moveMode == FORCED_MOVEMENT_WALK ? MOVE_WALK_MODE : MOVE_RUN_MODE) | MOVE_PATHFINDING);
 
-    Movement::MoveSplineInit init(*bot, "DispatchMovement");
+    MoveSplineInitCompat init(*bot, "DispatchMovement");
     init.MovebyPath(pointPath);
     init.SetWalk(moveMode == FORCED_MOVEMENT_WALK);
     if (bot->GetTransport())
@@ -1577,7 +1577,7 @@ static void LogSwimHandoff(Player* bot, LastMovement& lastMove, const char* kind
         return;
     lastMove.swimHandoffLogAt = now;
     TB_LOG_DETAIL("TortoiseBots: %s: swim hand-off (%s) to %.1f %.1f %.1f, %.1f yd (core path 0x%x; own route %u points, "
-        "%.1f yd; swim line: %s)", bot->GetName(), kind, endPos.getX(), endPos.getY(), endPos.getZ(), yd, coreType,
+        "%.1f yd; swim line: %s)", CStrCompat(bot->GetName()), kind, endPos.getX(), endPos.getY(), endPos.getZ(), yd, coreType,
         static_cast<uint32>(routePoints), routeYd, line.c_str());
 }
 
@@ -1593,7 +1593,7 @@ static void LogSwimHandoffRefused(Player* bot, LastMovement& lastMove, const cha
         return;
     lastMove.swimHandoffLogAt = now;
     TB_LOG_DETAIL("TortoiseBots: %s: swim hand-off refused (%s: %s) to %.1f %.1f %.1f (core path 0x%x; own route %u points, "
-        "%.1f yd)", bot->GetName(), kind, reason, endPos.getX(), endPos.getY(), endPos.getZ(), coreType,
+        "%.1f yd)", CStrCompat(bot->GetName()), kind, reason, endPos.getX(), endPos.getY(), endPos.getZ(), coreType,
         static_cast<uint32>(routePoints), routeYd);
 }
 
@@ -1628,7 +1628,7 @@ static bool SwimHandoffLegClear(PlayerbotAI* ai, Unit* mover, bool ignoreEnemyTa
 MovementAction::SwimHandoffResult MovementAction::SwimHandoff(const WorldPosition& startPos, const WorldPosition& endPos,
     TravelPath& movePath, LastMovement& lastMove, PackHoldResult* packHold, bool ignoreEnemyTargets)
 {
-    if (!(bot->IsInWater() || bot->IsUnderwater() || bot->HasMovementFlag(MOVEFLAG_SWIMMING)))
+    if (!(bot->IsInWater() || IsUnderwaterCompat(bot) || HasMovementFlagCompat(bot, MOVEFLAG_SWIMMING)))
         return SwimHandoffResult::NotTaken;
     // Round 1 (a): a follow that holds before packs keeps the old behaviour: never hand off.
     if (packHold != nullptr)
@@ -1646,26 +1646,26 @@ MovementAction::SwimHandoffResult MovementAction::SwimHandoff(const WorldPositio
 
     PathFinder path(bot);
     WorldPosition::ExcludeSteepSlopes(path);
-    path.calculate(endPos.getX(), endPos.getY(), endPos.getZ(), false);
-    f.coreType = static_cast<uint32>(path.getPathType());
-    Vector3 const coreEnd = path.getActualEndPosition();
+    PathCalculateCompat(path, endPos.getX(), endPos.getY(), endPos.getZ(), false);
+    f.coreType = static_cast<uint32>(PathTypeCompat(path));
+    Vector3 const coreEnd = PathActualEndCompat(path);
     Map* const map = bot->GetMap();
     bool const isShortcut0x11 = f.coreType == (ai::kPathTypeNormal | ai::kPathTypeNotUsingPath);
     f.coreLineHitsModel = isShortcut0x11
-        ? map->FindCollisionModel(startPos.getX(), startPos.getY(), startPos.getZ(),
-            coreEnd.x, coreEnd.y, coreEnd.z + 0.5f) != nullptr
-        : map->FindCollisionModel(startPos.getX(), startPos.getY(), startPos.getZ(),
-            coreEnd.x, coreEnd.y, coreEnd.z) != nullptr;
+        ? LineHitsCollisionModelCompat(map, startPos.getX(), startPos.getY(), startPos.getZ(),
+            coreEnd.x, coreEnd.y, coreEnd.z + 0.5f)
+        : LineHitsCollisionModelCompat(map, startPos.getX(), startPos.getY(), startPos.getZ(),
+            coreEnd.x, coreEnd.y, coreEnd.z);
     TerrainInfo const* const terrain = map->GetTerrain();
     GridMapLiquidData here{};
-    f.swimmableHere = terrain->IsSwimmable(startPos.getX(), startPos.getY(), startPos.getZ(), 1.5f, &here);
-    f.endSwimmable = terrain->IsSwimmable(endPos.getX(), endPos.getY(), endPos.getZ());
+    f.swimmableHere = TerrainIsSwimmableCompat(terrain, startPos.getX(), startPos.getY(), startPos.getZ(), 1.5f, &here);
+    f.endSwimmable = TerrainIsSwimmableCompat(terrain, endPos.getX(), endPos.getY(), endPos.getZ());
     // Karazhan Crypt shaft dive (Fix 2): for the mid-water 0x11 shortcut, the end must be in water too.
     // Sampled at +0.5 yd like SwimPathFits' sight test, so the floor under the end is not read as a wall.
     if (f.coreType == (ai::kPathTypeNormal | ai::kPathTypeNotUsingPath))
     {
         GridMapLiquidData endData{};
-        std::uint32_t const endStatus = terrain->getLiquidStatus(endPos.getX(), endPos.getY(), endPos.getZ() + 0.5f,
+        std::uint32_t const endStatus = LiquidStatusCompat(terrain, endPos.getX(), endPos.getY(), endPos.getZ() + 0.5f,
             ai::kSwimLiquidRequest, &endData);
         f.endInWater = ai::SwimSampleInWater(endStatus, endData.type_flags);
     }
@@ -1675,15 +1675,15 @@ MovementAction::SwimHandoffResult MovementAction::SwimHandoff(const WorldPositio
     // Round 1: the swim-out end must have ground under it (a floor query within 1 yd below it).
     if (f.swimmableHere && !f.endSwimmable)
     {
-        float const floorZ = map->GetHeight(endPos.getX(), endPos.getY(), endPos.getZ() + 0.5f);
+        float const floorZ = GetHeightCompat(map, endPos.getX(), endPos.getY(), endPos.getZ() + 0.5f);
         f.endHasGround = floorZ > INVALID_HEIGHT && endPos.getZ() - floorZ >= 0.0f && endPos.getZ() - floorZ <= 1.0f;
     }
     else
         f.endHasGround = false;
     f.surfaceLineClear = f.swimmableHere &&
-        map->isInLineOfSight(startPos.getX(), startPos.getY(), startPos.getZ() + 0.5f,
+        IsInLineOfSightCompat(map, startPos.getX(), startPos.getY(), startPos.getZ() + 0.5f,
             startPos.getX(), startPos.getY(), surfaceZ, true) &&
-        map->isInLineOfSight(startPos.getX(), startPos.getY(), surfaceZ,
+        IsInLineOfSightCompat(map, startPos.getX(), startPos.getY(), surfaceZ,
             endPos.getX(), endPos.getY(), endPos.getZ() + 0.5f, true);
     ai::SwimHandoff const kind = ai::ChooseSwimHandoff(f);
     // Round 1: name the stall the hand-off will not take (the brief's "model on the line, over
@@ -1716,7 +1716,7 @@ MovementAction::SwimHandoffResult MovementAction::SwimHandoff(const WorldPositio
     std::vector<WorldPosition> coreRoute;
     if (kind == ai::SwimHandoff::CoreLine && f.coreType == ai::kPathTypeNormal)
     {
-        for (G3D::Vector3 const& p : path.getPath())
+        for (G3D::Vector3 const& p : PathPointsCompat(path))
         {
             WorldPosition const wp(bot->GetMapId(), p.x, p.y, p.z);
             if (coreRoute.empty() && wp.distance(startPos) < 0.1f)
@@ -1838,15 +1838,15 @@ MovementAction::SwimHandoffResult MovementAction::SwimHandoff(const WorldPositio
         // points, as DispatchMovement walks an ordinary route (no fresh core recompute).
         std::vector<G3D::Vector3> pointPath = WorldPosition().toPointsArray(linePoints);
         length = WorldPosition().GetPathLength(linePoints);
-        Movement::MoveSplineInit init(*bot, "SwimHandoffCore");
+        MoveSplineInitCompat init(*bot, "SwimHandoffCore");
         init.MovebyPath(pointPath);
         init.SetWalk(false);
         init.Launch();
     }
     else if (kind == ai::SwimHandoff::CoreLine)
     {
-        mm.MovePoint(endPos.GetMapId(), endPos.getX(), endPos.getY(), endPos.getZ(), MOVE_RUN_MODE | MOVE_PATHFINDING);
-        length = path.Length() > 0.0f ? path.Length() : f.endFromBot;
+        MovePointCompat(mm, endPos.GetMapId(), endPos.getX(), endPos.getY(), endPos.getZ(), MOVE_RUN_MODE | MOVE_PATHFINDING);
+        length = PathLengthCompat(path) > 0.0f ? PathLengthCompat(path) : f.endFromBot;
     }
     else
     {
@@ -1855,7 +1855,7 @@ MovementAction::SwimHandoffResult MovementAction::SwimHandoff(const WorldPositio
             points.push_back(p.getVector3());
         for (size_t i = 1; i < points.size(); ++i)
             length += (points[i] - points[i - 1]).length();
-        Movement::MoveSplineInit init(*bot, "SwimOut");
+        MoveSplineInitCompat init(*bot, "SwimOut");
         init.MovebyPath(points);
         init.SetWalk(false);
         init.Launch();
@@ -2068,7 +2068,7 @@ MovementAction::SwimHandoffResult MovementAction::SwimHandoff(const WorldPositio
     {
         for (auto& p : movePath.GetPath())
         {
-            Creature* wpCreature = bot->SummonCreature(2334, p.point.getX(), p.point.getY(), p.point.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
+            Creature* wpCreature = SummonCreatureCompat(bot, 2334, p.point.getX(), p.point.getY(), p.point.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000.0f);
             if (!wpCreature)
                 continue;
             ai->AddAura(wpCreature, 246);
@@ -2103,7 +2103,7 @@ MovementAction::SwimHandoffResult MovementAction::SwimHandoff(const WorldPositio
 
     if (bot == mover)
     {
-        bot->HandleEmoteState(0);
+        HandleEmoteStateCompat(bot, 0);
         if (bot->GetStandState() != UNIT_STAND_STATE_STAND)
             bot->SetStandState(UNIT_STAND_STATE_STAND);
 
@@ -2154,7 +2154,7 @@ MovementAction::SwimHandoffResult MovementAction::SwimHandoff(const WorldPositio
         }
     }
 
-    bool generatePath = !noPath && !bot->IsFlying() && !bot->HasMovementFlag(MOVEFLAG_SWIMMING) && !bot->IsInWater() && !sServerFacade.IsUnderwater(bot);
+    bool generatePath = !noPath && !bot->IsFlying() && !HasMovementFlagCompat(bot, MOVEFLAG_SWIMMING) && !bot->IsInWater() && !sServerFacade.IsUnderwater(bot);
 
 
 
@@ -2194,7 +2194,7 @@ MovementAction::SwimHandoffResult MovementAction::SwimHandoff(const WorldPositio
         {
             bool isFromLastPath = (!lastMove.lastPath.empty() && lastMove.lastPath.GetPointPath().size() == movePath.GetPointPath().size());
 
-            sLog.outError("[BOT PATH BUG] %s near IF AH - abnormal upward path detected!", bot->GetName());
+            sLog.outError("[BOT PATH BUG] %s near IF AH - abnormal upward path detected!", CStrCompat(bot->GetName()));
             sLog.outError("[BOT PATH BUG] Bot pos: %.1f,%.1f,%.1f (map %d). Target: %.1f,%.1f,%.1f",
                 bot->getPositionX(), bot->getPositionY(), bot->getPositionZ(), bot->GetMapId(),
                 movePath.GetBack().x, movePath.GetBack().y, movePath.GetBack().z);
@@ -2403,7 +2403,7 @@ bool MovementAction::TryPlaceUnstick(LastMovement& lastMove)
     ai::PlaceUnstickInputs in;
     in.flagOn = true;
     in.inInstance = map->IsDungeon();
-    in.inBattleground = bot->InBattleGround() || map->IsBattleGround();
+    in.inBattleground = bot->InBattleGround() || MapIsBattlegroundCompat(map);
     in.hasMaster = hasMaster;
     in.masterYd = hasMaster ? bot->GetDistance(master) : 0.0f;
     in.masterOnTransport = hasMaster && master->GetTransport() != nullptr;
@@ -2412,7 +2412,7 @@ bool MovementAction::TryPlaceUnstick(LastMovement& lastMove)
     in.runCommanded = TortoiseBots::BotCommands::IsInCommandedGroup(bot);
     in.botAlive = sServerFacade.IsAlive(bot);
     in.botCharmed = !bot->GetCharmerGuid().IsEmpty();
-    in.botCharming = ai::PlaceUnstickBotPossessing(bot->GetMover() == bot);
+    in.botCharming = ai::PlaceUnstickBotPossessing(PlayerMoverCompat(bot) == bot);
     in.botCasting = bot->IsNonMeleeSpellCasted(true);
     in.masterFightNearBot = ai::PlaceUnstickIsFight(hasMaster && master->IsInCombat(), liveTarget,
         liveTarget ? bot->GetDistance(target) : 0.0f);
@@ -2478,7 +2478,7 @@ bool MovementAction::TryPlaceUnstick(LastMovement& lastMove)
         << " result=" << (moved ? "teleported" : "refused");
     sPlayerbotAIConfig.logEvent(ai, "BotUnstick", master->GetName(), row.str());
     sLog.outDetail("BotUnstick %s reason=nopath_island secs=%u master_yd=%d result=%s",
-        bot->GetName(), state.lastStreakMs / 1000, static_cast<int>(in.masterYd), moved ? "teleported" : "refused");
+        CStrCompat(bot->GetName()), state.lastStreakMs / 1000, static_cast<int>(in.masterYd), moved ? "teleported" : "refused");
 
     if (moved)
         lastMove.clear();
@@ -2607,12 +2607,12 @@ void MovementAction::UpdateMovementState()
     if (bot->IsInWater() || sServerFacade.IsUnderwater(bot))
     {
 		bot->m_movementInfo.AddMovementFlag(MOVEFLAG_SWIMMING);
-        bot->UpdateSpeed(MOVE_SWIM, true);
+        UpdateSpeedCompat(bot, MOVE_SWIM, true);
     }
     else
     {
 		bot->m_movementInfo.RemoveMovementFlag(MOVEFLAG_SWIMMING);
-        bot->UpdateSpeed(MOVE_SWIM, true);
+        UpdateSpeedCompat(bot, MOVE_SWIM, true);
     }
 
 }
@@ -2704,8 +2704,8 @@ bool MovementAction::Follow(Unit* target, float distance, float angle)
             Unit* targetToCheck = (targetInWater || selfOnSurface) ? target : bot;
             if (const TerrainInfo* terrain = moveToPos.GetTerrain())
             {
-                float bottom = terrain->GetHeightStatic(moveToPos.getX(), moveToPos.getY(), moveToPos.getZ());
-                float waterLevel = terrain->GetWaterOrGroundLevel(moveToPos.getX(), moveToPos.getY(), moveToPos.getZ(), &bottom, true);
+                float bottom = TerrainHeightStaticCompat(terrain, moveToPos.getX(), moveToPos.getY(), moveToPos.getZ());
+                float waterLevel = TerrainWaterOrGroundLevelCompat(terrain, moveToPos.getX(), moveToPos.getY(), moveToPos.getZ(), &bottom, true);
                 bool canSwimToTarget = selfOnSurface && botPos.IsInLineOfSight(tarPos);
                 moveToPos.setZ(waterLevel);
                 if (waterLevel > -200000.0f && waterLevel > bottom)
@@ -2714,8 +2714,8 @@ bool MovementAction::Follow(Unit* target, float distance, float angle)
                     WorldPosition::ExcludeSteepSlopes(pathfinder);
                     //Use standard pathfinder to find a route.
                     WorldPosition prevPoint = botPos;
-                    pathfinder.calculate(moveToPos.GetVector3(), tarPos.GetVector3());
-                    Movement::PointsArray const& pathPoints = pathfinder.getPath();
+                    PathCalculateCompat(pathfinder, moveToPos.GetVector3(), tarPos.GetVector3());
+                    Movement::PointsArray const& pathPoints = PathPointsCompat(pathfinder);
                     if (pathPoints.size() >= 2)
                     {
                         for (uint32 i = 1; i < pathPoints.size() - 1; i++)
@@ -2743,7 +2743,7 @@ bool MovementAction::Follow(Unit* target, float distance, float angle)
         }
     }
 
-    bot->HandleEmoteState(0);
+    HandleEmoteStateCompat(bot, 0);
     if (bot->GetStandState() != UNIT_STAND_STATE_STAND)
         bot->SetStandState(UNIT_STAND_STATE_STAND);
 
@@ -2806,7 +2806,7 @@ bool MovementAction::Follow(Unit* target, float distance, float angle)
         }
     }
 
-    mm.MoveFollow(target, distance, angle);
+    MoveFollowCompat(mm, target, distance, angle);
     return true;
 }
 
@@ -2841,7 +2841,7 @@ bool MovementAction::HoldFollowOutOfMagma(Unit* target, float distance, float an
         if (!engaged)
             return false;
         magmaFollowEngaged = ObjectGuid();
-        mm.MoveFollow(target, distance, angle);
+        MoveFollowCompat(mm, target, distance, angle);
         return true;
     }
     // Follow goal: the slot the native follow aims for (target position plus
@@ -2958,7 +2958,7 @@ bool MovementAction::HoldFollowOutOfMagma(Unit* target, float distance, float an
             // reset the generator.
             magmaFollowEngaged = ObjectGuid();
             if (distance > 0.0f)
-                mm.MoveFollow(target, distance, angle);
+                MoveFollowCompat(mm, target, distance, angle);
             return true;
         case ai::MagmaFollowAction::HoldOnTarget:
             // The slot is magma but the target's own spot is dry and
@@ -2970,7 +2970,7 @@ bool MovementAction::HoldFollowOutOfMagma(Unit* target, float distance, float an
             magmaFollowEngaged = targetGuid;
             if (mm.GetCurrentMovementGeneratorType() != FOLLOW_MOTION_TYPE ||
                 sServerFacade.GetChaseTarget(bot) != target)
-                mm.MoveFollow(target, 0.0f, 0.0f);
+                MoveFollowCompat(mm, target, 0.0f, 0.0f);
             return true;
         case ai::MagmaFollowAction::HoldInPlace:
             LogMagmaRefusal(bot, AI_VALUE(LastMovement&, "last movement"), magmaAt, "follow slot");
@@ -2997,7 +2997,7 @@ bool MovementAction::HoldChaseOutOfMagma(WorldObject* target, float distance, fl
     // Planning against a point on the bot's side of the target instead cleared
     // a dry radial goal while the behind slot the core actually walks to sat
     // in the lava.
-    float const slotDistance = distance + target->GetObjectBoundingRadius() + bot->GetObjectBoundingRadius();
+    float const slotDistance = distance + ObjectBoundingRadiusCompat(target) + ObjectBoundingRadiusCompat(bot);
     ai::MagmaPoint const goalPoint = ai::ChaseGoalPoint(target->GetPositionX(), target->GetPositionY(),
         target->GetOrientation(), slotDistance, angle);
     // Per-tick cost: the goal point and the memo come first (a chased target
@@ -3073,7 +3073,7 @@ bool MovementAction::HoldMeleeChaseOutOfMagma(WorldObject* target)
         return false;
     // The core's random attack point sits on a ring around the target: at
     // most the target radius plus the bot's combat reach out.
-    float const radius = target->GetObjectBoundingRadius() + bot->GetMeleeReach();
+    float const radius = ObjectBoundingRadiusCompat(target) + MeleeReachCompat(bot);
     uint32 const nowMs = WorldTimer::getMSTime();
     // The ring is re-sampled only when the target, its radius or the ring's
     // centre moved, or the window passed. Per-tick cost: a memo hit answers
@@ -3174,8 +3174,8 @@ bool MovementAction::HoldMeleeChaseOutOfMagma(WorldObject* target)
         LogMagmaRefusal(bot, AI_VALUE(LastMovement&, "last movement"), magmaAt, "melee chase ring");
         return true;
     }
-    ai::MeleeRingPlan const plan = ringDue ? ai::PlanMeleeRing(inMagma, target->GetAngle(bot))
-                                           : ai::PlanMeleeRing(magmaRingMemoInMagma, target->GetAngle(bot));
+    ai::MeleeRingPlan const plan = ringDue ? ai::PlanMeleeRing(inMagma, GetAngleCompat(target, bot))
+                                           : ai::PlanMeleeRing(magmaRingMemoInMagma, GetAngleCompat(target, bot));
     if (plan.step == ai::MeleeRingStep::KeepRandom)
     {
         magmaRingChaseTarget = ObjectGuid();
@@ -3211,7 +3211,7 @@ bool MovementAction::HoldMeleeChaseOutOfMagma(WorldObject* target)
     // is crossed. Sampling each spoke would be a route calculation per
     // bearing, the cost this guard exists to avoid; the MoveTo fallback keeps
     // its own MoveTo2 end-point and route guard.
-    float const offset = radius - target->GetObjectBoundingRadius() - bot->GetObjectBoundingRadius();
+    float const offset = radius - ObjectBoundingRadiusCompat(target) - ObjectBoundingRadiusCompat(bot);
     float const chaseAngle = plan.angle - target->GetOrientation();
     MotionMaster& mm = *bot->GetMotionMaster();
     // Same target and bearing as the chase already running: re-dispatching
@@ -3235,7 +3235,7 @@ bool MovementAction::HoldMeleeChaseOutOfMagma(WorldObject* target)
     magmaRingChaseAngle = chaseAngle;
     bot->SetTargetGuid(chased->getObjectGuid());
     bot->Attack(chased, false);
-    mm.MoveChase(chased, offset, chaseAngle);
+    MoveChaseCompat(mm, chased, offset, chaseAngle);
     return true;
 }
 
@@ -3315,10 +3315,10 @@ bool MovementAction::HoldChaseOutsideKeepout(WorldObject* target, float distance
         // per-bot action log (AiPlayerbot.EnableActionLog) and the detail
         // server log, which carries the other [BOT CHASE] lines.
         botdiag::BotActionLog::Write(ai, "KEEPOUT_SET_ASIDE", "target=%s entry=%u guid=0x%llx forMs=%u",
-            target->GetName(), target->GetEntry(), (unsigned long long)targetGuid.GetRawValue(),
+            CStrCompat(target->GetName()), target->GetEntry(), (unsigned long long)GuidRawCompat(targetGuid),
             kCreatureAuraSetAsideMs);
         sLog.outDetail("[BOT CHASE] %s: set aside %s (entry %u) for %u ms - it stands in a creature aura keep-out",
-            bot->GetName(), target->GetName(), target->GetEntry(), kCreatureAuraSetAsideMs);
+            CStrCompat(bot->GetName()), CStrCompat(target->GetName()), target->GetEntry(), kCreatureAuraSetAsideMs);
     }
     return true;
 }
@@ -3336,7 +3336,7 @@ bool MovementAction::HoldOutsideKeepout(float gx, float gy, float ax, float ay, 
         // inward.
         if (mm.GetCurrentMovementGeneratorType() == nativeType)
         {
-            mm.Clear(false, true);
+            MotionClearCompat(mm, false, true);
             mm.MoveIdle();
         }
     };
@@ -3430,13 +3430,13 @@ bool MovementAction::ChaseTo(WorldObject* obj, float distance, float angle)
 {
     if (!ai->CanMove())
     {
-        sLog.outDetail("[BOT CHASE] %s: CanMove() blocked", bot->GetName());
+        sLog.outDetail("[BOT CHASE] %s: CanMove() blocked", CStrCompat(bot->GetName()));
         return false;
     }
 
     if (!ai->IsSafe(obj))
     {
-        sLog.outDetail("[BOT CHASE] %s: IsSafe() blocked", bot->GetName());
+        sLog.outDetail("[BOT CHASE] %s: IsSafe() blocked", CStrCompat(bot->GetName()));
         return false;
     }
 
@@ -3465,14 +3465,14 @@ bool MovementAction::ChaseTo(WorldObject* obj, float distance, float angle)
     if (anchored && chased && bot->IsHostileTo(chased) &&
         !AnchorAllowsChase(anchor, obj->GetPositionX(), obj->GetPositionY(), kBossAnchorChaseReachYd))
     {
-        sLog.outDetail("[BOT CHASE] %s -> %s: outside the boss anchor, held", bot->GetName(), obj->GetName());
+        sLog.outDetail("[BOT CHASE] %s -> %s: outside the boss anchor, held", CStrCompat(bot->GetName()), CStrCompat(obj->GetName()));
         return false;
     }
 
 
     UpdateMovementState();
 
-    bot->HandleEmoteState(0);
+    HandleEmoteStateCompat(bot, 0);
     if (bot->GetStandState() != UNIT_STAND_STATE_STAND)
         bot->SetStandState(UNIT_STAND_STATE_STAND);
 
@@ -3490,7 +3490,7 @@ bool MovementAction::ChaseTo(WorldObject* obj, float distance, float angle)
     // must be visible from the bot (IsValidPosition), so for a target inside a mine
     // and a bot on the hill above it that point is the hill - the bot walks there,
     // still sees nothing and repeats, or falls back to a chase that does not move.
-    if (distanceToTarget > sPlayerbotAIConfig.sightDistance || !bot->IsWithinLOSInMap(obj, true))
+    if (distanceToTarget > sPlayerbotAIConfig.sightDistance || !IsWithinLOSInMapCompat(bot, obj, true))
     {
         float farX = targetPosition.getX();
         float farY = targetPosition.getY();
@@ -3547,7 +3547,7 @@ bool MovementAction::ChaseTo(WorldObject* obj, float distance, float angle)
             auto const accept = [&](float px, float py)
             {
                 Map* map = bot->GetMap();
-                float const floor = map ? map->GetHeight(px, py, anchor.z + 5.0f) : INVALID_HEIGHT;
+                float const floor = map ? GetHeightCompat(map, px, py, anchor.z + 5.0f) : INVALID_HEIGHT;
                 if (!AnchorFloorOk(anchor, floor > INVALID_HEIGHT, floor))
                     return false;
                 WorldPosition const candidate(obj->GetMapId(), px, py, floor);
@@ -3602,32 +3602,32 @@ bool MovementAction::ChaseTo(WorldObject* obj, float distance, float angle)
                 pathXY.emplace_back(point.getX(), point.getY());
         if (anchored && hazardPath && !AnchorPathInside(anchor, pathXY))
         {
-            sLog.outDetail("[BOT CHASE] %s -> %s: hazard path leaves the boss anchor, held", bot->GetName(),
-                obj->GetName());
+            sLog.outDetail("[BOT CHASE] %s -> %s: hazard path leaves the boss anchor, held", CStrCompat(bot->GetName()),
+                CStrCompat(obj->GetName()));
             return false;
         }
         if (hazardPath)
         {
             float distance = botPosition.GetPathLength(path);
-            mm.Clear(false, true);
+            MotionClearCompat(mm, false, true);
             mm.MoveIdle(); // A raw spline does not restore the default movement generator.
 
             std::vector<G3D::Vector3> pointsArray = WorldPosition().toPointsArray(path);
-            Movement::MoveSplineInit init(*bot, "ChaseTo");
+            MoveSplineInitCompat init(*bot, "ChaseTo");
             init.MovebyPath(pointsArray);
             if (bot->GetTransport())
                 init.SetTransport(bot->GetTransport()->GetGUIDLow());
             init.Launch();
             sLog.outDetail("[BOT CHASE] %s -> %s: dist=%.1f target=%.1f pts=%u wait=%.2f (MovePath)",
-                bot->GetName(), obj->GetName(), distanceToTarget, distance, (uint32)path.size(), distance / bot->GetSpeed(MOVE_RUN));
+                CStrCompat(bot->GetName()), CStrCompat(obj->GetName()), distanceToTarget, distance, (uint32)path.size(), distance / bot->GetSpeed(MOVE_RUN));
             WaitForReach(distance);
             return true;
         }
-        sLog.outDetail("[BOT CHASE] %s -> %s: dist=%.1f no hazard-avoidance path (no hazards or unroutable), using MoveChase", bot->GetName(), obj->GetName(), distanceToTarget);
+        sLog.outDetail("[BOT CHASE] %s -> %s: dist=%.1f no hazard-avoidance path (no hazards or unroutable), using MoveChase", CStrCompat(bot->GetName()), CStrCompat(obj->GetName()), distanceToTarget);
     }
     else
     {
-        sLog.outDetail("[BOT CHASE] %s -> %s: dist=%.1f endPos invalid, falling back", bot->GetName(), obj->GetName(), distanceToTarget);
+        sLog.outDetail("[BOT CHASE] %s -> %s: dist=%.1f endPos invalid, falling back", CStrCompat(bot->GetName()), CStrCompat(obj->GetName()), distanceToTarget);
     }
 
     if (bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == CHASE_MOTION_TYPE)
@@ -3666,11 +3666,11 @@ bool MovementAction::ChaseTo(WorldObject* obj, float distance, float angle)
     bot->SetTargetGuid(obj->getObjectGuid()); //Needed to keep chase going in combat.
     bot->Attack((Unit*)obj, false); //Needed to keep chase going in combat.
 
-    mm.MoveChase((Unit*)obj, distance, angle);
+    MoveChaseCompat(mm, (Unit*)obj, distance, angle);
     float dist = sServerFacade.getDistance2d(bot, obj);
     float distDiff = dist > distance ? dist - distance : 0.f;
     sLog.outDetail("[BOT CHASE] %s -> %s: dist=%.1f target=%.1f wait=%.2f (MoveChase)",
-        bot->GetName(), obj->GetName(), dist, distance, distDiff / bot->GetSpeed(MOVE_RUN));
+        CStrCompat(bot->GetName()), CStrCompat(obj->GetName()), dist, distance, distDiff / bot->GetSpeed(MOVE_RUN));
     WaitForReach(distDiff);
 
     return true;
@@ -3781,7 +3781,7 @@ bool MovementAction::Flee(Unit *target)
 
     LastMovement& fleeMovement = AI_VALUE(LastMovement&, "last movement");
     uint32 const nowMs = WorldTimer::getMSTime();
-    fleeMovement.fleeFailures.Observe(target->GetObjectGuid().GetRawValue(),
+    fleeMovement.fleeFailures.Observe(GuidRawCompat(target->GetObjectGuid()),
         target->GetMapId(), sServerFacade.getDistance2d(bot, target), nowMs, bot->movespline->GetId());
 
     if (!ai->CanMove())
@@ -3797,8 +3797,8 @@ bool MovementAction::Flee(Unit *target)
     if (ai::MoveBlockedByCast(bot->IsNonMeleeSpellCasted(false, true, true), false))
         return false;
 
-    HostileReference* ref = sServerFacade.GetThreatManager(target).getCurrentVictim();
-    const bool isTarget = ref && ref->getTarget() == bot;
+    Unit* const currentVictim = ThreatCurrentVictimCompat(sServerFacade.GetThreatManager(target));
+    const bool isTarget = currentVictim == bot;
 
     time_t lastFlee = AI_VALUE(LastMovement&, "last movement").lastFlee;
     time_t now = time(0);
@@ -3890,7 +3890,7 @@ bool MovementAction::Flee(Unit *target)
                 if ((isHealer && ai->IsHeal(groupMember)) || needHealer)
                 {
                     const float distanceToTarget = sServerFacade.getDistance2d(groupMember, target);
-                    if (distanceToTarget > minRangedTargetDistance && (needHealer || groupMember->IsWithinLOSInMap(target, true)))
+                    if (distanceToTarget > minRangedTargetDistance && (needHealer || IsWithinLOSInMapCompat(groupMember, target, true)))
                     {
                         possibleTargets.push_back(groupMember);
                     }
@@ -3900,7 +3900,7 @@ bool MovementAction::Flee(Unit *target)
                 {
                     const float distanceToTarget = sServerFacade.getDistance2d(groupMember, target);
                     if (distanceToTarget > minRangedTargetDistance && distanceToTarget < ai->GetRange("spell") &&
-                        groupMember->IsWithinLOSInMap(target, true))
+                        IsWithinLOSInMapCompat(groupMember, target, true))
                     {
                         possibleTargets.push_back(groupMember);
                     }
@@ -3915,7 +3915,7 @@ bool MovementAction::Flee(Unit *target)
         else
         {
             // If nothing was found, let's try the master
-            if (master && sServerFacade.IsAlive(master) && master->IsWithinLOSInMap(target, true))
+            if (master && sServerFacade.IsAlive(master) && IsWithinLOSInMapCompat(master, target, true))
             {
                 // Don't flee to group member if too close or too far
                 float const distanceToMaster = sServerFacade.getDistance2d(bot, master);
@@ -3994,7 +3994,7 @@ bool MovementAction::Flee(Unit *target)
             fullDistance = true;
 
         float const fleeDistance = fullDistance ? (ai->GetRange("flee") * 2) : ai->GetRange("flee");
-        FleeManager manager(bot, fleeDistance, bot->GetAngle(target) + M_PI);
+        FleeManager manager(bot, fleeDistance, GetAngleCompat(bot, target) + M_PI);
         if (!manager.isUseful())
         {
             return false;
@@ -4058,7 +4058,7 @@ bool MovementAction::FleeAlongLeadTrail(Unit* target, float distance, IdleMobVet
             continue;
         if (idleMobs.Wakes(point.x, point.y))
             continue;
-        if (!target->IsWithinLOS(point.x, point.y, point.z + bot->GetCollisionHeight(), true))
+        if (!IsWithinLOSCompat(target, point.x, point.y, point.z + bot->GetCollisionHeight(), true))
             continue;
         if (!MoveTo(bot->GetMapId(), point.x, point.y, point.z))
             continue;
@@ -4081,7 +4081,7 @@ void MovementAction::NoteFleeDispatch(Unit* target, float heading, float startDi
         lm.fleeCount = 1;
     lm.lastFleeAttempt = now;
     lm.lastFlee = now;
-    lm.fleeFailures.BeginAttempt(target->GetObjectGuid().GetRawValue(),
+    lm.fleeFailures.BeginAttempt(GuidRawCompat(target->GetObjectGuid()),
         target->GetMapId(), heading, startDistance, nowMs, bot->movespline->GetId());
     lm.lastSpreadStepMs = WorldTimer::getMSTime();
 }
@@ -4123,7 +4123,7 @@ bool MovementAction::FleeStepAway(Unit* target, float distance)
         if (pack.valid && totalLive > 1)
             away = std::atan2(bot->GetPositionY() - pack.y, bot->GetPositionX() - pack.x);
         else
-            away = target->GetAngle(bot);
+            away = GetAngleCompat(target, bot);
     }
 
     IdleMobVeto const idleMobs(ai, bot, AI_VALUE(std::list<ObjectGuid>, "possible targets"), target, distance);
@@ -4240,7 +4240,7 @@ bool MovementAction::StepDownOffLedge(Unit* target)
         return false;
 
     uint32 const nowMs = WorldTimer::getMSTime();
-    if (!ledgeStepDown.Due(nowMs, bot->GetPositionX(), bot->GetPositionY(), target->GetObjectGuid().GetRawValue()))
+    if (!ledgeStepDown.Due(nowMs, bot->GetPositionX(), bot->GetPositionY(), GuidRawCompat(target->GetObjectGuid())))
         return false;
 
     LedgePoint from;
@@ -4254,10 +4254,10 @@ bool MovementAction::StepDownOffLedge(Unit* target)
 
     PathFinder path(bot);
     WorldPosition::ExcludeSteepSlopes(path);
-    path.calculate(goal.x, goal.y, goal.z, false);
-    bool const incomplete = (path.getPathType() & PATHFIND_INCOMPLETE) != 0;
+    PathCalculateCompat(path, goal.x, goal.y, goal.z, false);
+    bool const incomplete = (PathTypeCompat(path) & PATHFIND_INCOMPLETE) != 0;
     float partialEndDistance = 0.0f;
-    Movement::PointsArray const& points = path.getPath();
+    Movement::PointsArray const& points = PathPointsCompat(path);
     if (!points.empty())
     {
         // Horizontal only: the partial end sits on the navmesh, which can be a
@@ -4279,7 +4279,7 @@ bool MovementAction::StepDownOffLedge(Unit* target)
     {
         if (!MaNGOS::IsValidMapCoord(x, y, z))
             return false;
-        float const height = map->GetHeight(x, y, z + 0.5f, true, kLedgeStepMaxDrop + 2.0f);
+        float const height = GetHeightCompat(map, x, y, z + 0.5f, true, kLedgeStepMaxDrop + 2.0f);
         if (height <= INVALID_HEIGHT)
             return false;
         outZ = height;
@@ -4291,7 +4291,7 @@ bool MovementAction::StepDownOffLedge(Unit* target)
     {
         GridMapLiquidData liquid{};
         // Half a yard above the bed: a ray from exactly on it can miss its own floor (t > 0, WorldModel.cpp:75; cf. GridMap.cpp:1212).
-        if (map->GetTerrain()->getLiquidStatus(point.x, point.y, point.z + 0.5f, MAP_ALL_LIQUIDS, &liquid) != LIQUID_MAP_NO_WATER &&
+        if (LiquidStatusCompat(map->GetTerrain(), point.x, point.y, point.z + 0.5f, MAP_ALL_LIQUIDS, &liquid) != LIQUID_MAP_NO_WATER &&
             (liquid.type_flags & (MAP_LIQUID_TYPE_MAGMA | MAP_LIQUID_TYPE_SLIME)))
             return false;
         return !IsHazardNearPosition(WorldPosition(bot->GetMapId(), point.x, point.y, point.z));
@@ -4301,17 +4301,17 @@ bool MovementAction::StepDownOffLedge(Unit* target)
     float const eyeHeight = bot->GetCollisionHeight();
     auto const clearLine = [map, eyeHeight](LedgePoint const& a, LedgePoint const& b)
     {
-        return map->isInLineOfSight(a.x, a.y, a.z + 0.5f, b.x, b.y, b.z + 0.5f, true) &&
-            map->isInLineOfSight(a.x, a.y, a.z + eyeHeight, b.x, b.y, b.z + eyeHeight, true);
+        return IsInLineOfSightCompat(map, a.x, a.y, a.z + 0.5f, b.x, b.y, b.z + 0.5f, true) &&
+            IsInLineOfSightCompat(map, a.x, a.y, a.z + eyeHeight, b.x, b.y, b.z + eyeHeight, true);
     };
     auto const pathFromLanding = [this, &goal](LedgePoint const& point)
     {
         PathFinder probe(bot);
         WorldPosition::ExcludeSteepSlopes(probe);
-        probe.calculate(Vector3(point.x, point.y, point.z), Vector3(goal.x, goal.y, goal.z), false);
+        PathCalculateCompat(probe, Vector3(point.x, point.y, point.z), Vector3(goal.x, goal.y, goal.z), false);
         LedgePathProbe result;
-        result.normal = probe.getPathType() == PATHFIND_NORMAL;
-        Movement::PointsArray const& steps = probe.getPath();
+        result.normal = PathTypeCompat(probe) == PATHFIND_NORMAL;
+        Movement::PointsArray const& steps = PathPointsCompat(probe);
         if (!steps.empty())
         {
             result.hasStart = true;
@@ -4330,7 +4330,7 @@ bool MovementAction::StepDownOffLedge(Unit* target)
         return false;
     }
 
-    bot->HandleEmoteState(0);
+    HandleEmoteStateCompat(bot, 0);
     if (bot->GetStandState() != UNIT_STAND_STATE_STAND)
         bot->SetStandState(UNIT_STAND_STATE_STAND);
 
@@ -4355,9 +4355,9 @@ bool MovementAction::StepDownOffLedge(Unit* target)
     legs.push_back(G3D::Vector3(choice.point.x, choice.point.y, choice.point.z));
 
     MotionMaster& mm = *bot->GetMotionMaster();
-    mm.Clear(false, true);
+    MotionClearCompat(mm, false, true);
     mm.MoveIdle(); // A raw spline does not restore the default movement generator.
-    Movement::MoveSplineInit init(*bot, "StepDownOffLedge");
+    MoveSplineInitCompat init(*bot, "StepDownOffLedge");
     init.MovebyPath(legs);
     init.SetWalk(false);
     init.Launch();
@@ -4524,12 +4524,12 @@ bool MovementAction::GeneratePathAvoidingHazards(std::vector<WorldPosition>& mov
         {
             for (auto& pathPoint : movePath)
             {
-                bot->SummonCreature(1, pathPoint.getX(), pathPoint.getY(), pathPoint.getZ(), 0.0f, TEMPSPAWN_TIMED_DESPAWN, 5000.0f);
+                SummonCreatureCompat(bot, 1, pathPoint.getX(), pathPoint.getY(), pathPoint.getZ(), 0.0f, TEMPSPAWN_TIMED_DESPAWN, 5000.0f);
             }
 
             for (auto& hazards : collidingHazards)
             {
-                bot->SummonCreature(15631, hazards.getX(), hazards.getY(), hazards.getZ(), 0.0f, TEMPSPAWN_TIMED_DESPAWN, 5000.0f);
+                SummonCreatureCompat(bot, 15631, hazards.getX(), hazards.getY(), hazards.getZ(), 0.0f, TEMPSPAWN_TIMED_DESPAWN, 5000.0f);
             }
         }
 
@@ -4642,11 +4642,7 @@ void AvoidAoeAction::RecallPetFromHazard(float radius, const WorldPosition& cent
     uint8 const flag = ACT_COMMAND;
     uint32 const spellId = COMMAND_FOLLOW;
     uint32 const command = (uint32(flag) << 24) | spellId;
-    WorldPacket data(CMSG_PET_ACTION);
-    data << petGuid;
-    data << command;
-    data << targetGuid;
-    bot->GetSession()->HandlePetAction(data);
+    HandlePetActionCompat(bot->GetSession(), petGuid, command, targetGuid);
 }
 
 bool AvoidAoeAction::AvoidAuraWithDynamicObj(float& outRadius, WorldPosition& outCenter)
@@ -4729,7 +4725,7 @@ bool AvoidAoeAction::AvoidTriggerNpc(float& outRadius, WorldPosition& outCenter)
         // with a permanent burning aura (Fire Shield II 184) does not — its
         // school-damage pulse keeps the invisible-emitter-only rule, or
         // melee would step out forever and never fight it.
-        bool const selectable = !unit->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+        bool const selectable = !HasUnitFlagCompat(unit, UNIT_FLAG_NOT_SELECTABLE);
         Unit::AuraList const& periodic = unit->GetAurasByType(SPELL_AURA_PERIODIC_TRIGGER_SPELL);
         for (Unit::AuraList::const_iterator it = periodic.begin(); it != periodic.end(); ++it)
         {
@@ -4814,11 +4810,11 @@ bool AvoidAoeAction::StrafeToSafety(const WorldPosition& hazardCenter, float rad
     float const angleFromHazard = hazardCenter.GetAngleTo(WorldPosition(bot));
     // No target (opened on the bot, target died mid-tick): the single
     // candidate above heads straight away from the hazard — never toward it.
-    float const angleToTarget = target ? bot->GetAngle(target) : angleFromHazard;
+    float const angleToTarget = target ? GetAngleCompat(bot, target) : angleFromHazard;
     const WorldPosition botPos(bot);
     LastMovement& lastMove = AI_VALUE(LastMovement&, "last movement");
     uint32 const nowMs = WorldTimer::getMSTime();
-    lastMove.fleeFailures.Observe(target ? target->GetObjectGuid().GetRawValue() : 0,
+    lastMove.fleeFailures.Observe(target ? GuidRawCompat(target->GetObjectGuid()) : 0,
         bot->GetMapId(), target ? sServerFacade.getDistance2d(bot, target) : 0.0f, nowMs, bot->movespline->GetId());
     // Unpulled-hostile guard (mirrors the FindStep aggro sense used by the
     // bomb/spread step-outs: FindStep itself lives in DungeonActions.cpp):
@@ -4959,7 +4955,7 @@ bool AvoidAoeAction::StrafeToSafety(const WorldPosition& hazardCenter, float rad
                 continue;
             if (!MoveTo(bot->GetMapId(), out.getX(), out.getY(), out.getZ(), false, IsReaction(), false, true))
                 continue;
-            lastMove.fleeFailures.BeginAttempt(target ? target->GetObjectGuid().GetRawValue() : 0,
+            lastMove.fleeFailures.BeginAttempt(target ? GuidRawCompat(target->GetObjectGuid()) : 0,
                 bot->GetMapId(), botPos.GetAngleTo(out),
                 target ? sServerFacade.getDistance2d(bot, target) : 0.0f, nowMs, bot->movespline->GetId());
             return true;
@@ -5015,7 +5011,7 @@ bool AvoidAoeAction::StrafeToSafety(const WorldPosition& hazardCenter, float rad
             AoeLanding const& out = landings[pick];
             if (MoveTo(bot->GetMapId(), out.x, out.y, out.z, false, IsReaction(), false, true))
             {
-                lastMove.fleeFailures.BeginAttempt(target ? target->GetObjectGuid().GetRawValue() : 0,
+                lastMove.fleeFailures.BeginAttempt(target ? GuidRawCompat(target->GetObjectGuid()) : 0,
                     bot->GetMapId(), botPos.GetAngleTo(WorldPosition(bot->GetMapId(), out.x, out.y, out.z)),
                     target ? sServerFacade.getDistance2d(bot, target) : 0.0f, nowMs, bot->movespline->GetId());
                 return true;
@@ -5084,14 +5080,14 @@ bool MoveToLootAction::Execute(Event& event)
     if (!loot.IsLootPossible(bot))
     {
         sLog.outDebug("[BOT LOOT] %s: MoveToLoot abort guid=%lu (IsLootPossible=false)",
-            bot->GetName(), loot.guid.GetRawValue());
+            CStrCompat(bot->GetName()), GuidRawCompat(loot.guid));
         if (ai->HasStrategy("debug loot", BotState::BOT_STATE_NON_COMBAT))
         {
             WorldObject* wo = loot.GetWorldObject(bot);
 
             if (!wo)
             {
-                ai->TellPlayerNoFacing(GetMaster(), "Can not move to loot " + std::to_string(loot.guid) +  " because it no longer exists.");
+                ai->TellPlayerNoFacing(GetMaster(), "Can not move to loot " + std::to_string(GuidRawCompat(loot.guid)) +  " because it no longer exists.");
             }
             else
             {
@@ -5131,7 +5127,7 @@ bool MoveToLootAction::Execute(Event& event)
             if (lootStack->IsAbandoned(loot.guid))
             {
                 sLog.outDebug("[BOT LOOT] %s: giving up on unreachable guid=%lu after repeated failed approaches",
-                    bot->GetName(), loot.guid.GetRawValue());
+                    CStrCompat(bot->GetName()), GuidRawCompat(loot.guid));
                 lootStack->Remove(loot.guid);
                 context->GetValue<LootObject>("loot target")->Set(LootObject());
             }
@@ -5139,7 +5135,7 @@ bool MoveToLootAction::Execute(Event& event)
     }
 
     sLog.outDebug("[BOT LOOT] %s: MoveToLoot guid=%lu dist=%.1f los=%d via=%s result=%d",
-        bot->GetName(), loot.guid.GetRawValue(), dist, los ? 1 : 0, los ? "MoveNear" : "MoveTo", moved ? 1 : 0);
+        CStrCompat(bot->GetName()), GuidRawCompat(loot.guid), dist, los ? 1 : 0, los ? "MoveNear" : "MoveTo", moved ? 1 : 0);
     return moved;
 }
 
@@ -5179,7 +5175,7 @@ bool SetFacingTargetAction::isUseful()
 bool SetFacingTargetAction::isPossible()
 {
     if (sServerFacade.IsFrozen(bot) || bot->IsPolymorphed() ||
-        (sServerFacade.UnitIsDead(bot) && !bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST)) ||
+        (sServerFacade.UnitIsDead(bot) && !HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST)) ||
         bot->IsBeingTeleported() ||
         bot->HasAuraType(SPELL_AURA_MOD_CONFUSE) || sServerFacade.IsCharmed(bot) ||
         bot->HasAuraType(SPELL_AURA_MOD_STUN) || bot->IsTaxiFlying() ||
@@ -5197,7 +5193,7 @@ bool SetBehindTargetAction::Execute(Event& event)
 
     float angle = GetFollowAngle() / 3 + target->getOrientation() + M_PI / 2.0f;
 
-    float distance = bot->GetCombatReach(target, true, 0.0f) * 0.8f;
+    float distance = GetCombatReachCompat(bot, target, true, 0.0f) * 0.8f;
     float x = target->getPositionX() + cos(target->getOrientation()) * -1.0f * distance,
         y = target->getPositionY() + sin(target->getOrientation()) * -1.0f * distance,
         z = target->getPositionZ();
@@ -5206,9 +5202,9 @@ bool SetBehindTargetAction::Execute(Event& event)
     // prevent going into terrain
     float ox, oy, oz;
     target->GetPosition(ox, oy, oz);
-    target->GetMap()->GetLosHitPosition(ox, oy, oz + bot->GetCollisionHeight(), x, y, z, -0.5f);
+    GetLosHitPositionCompat(target->GetMap(), ox, oy, oz + bot->GetCollisionHeight(), x, y, z, -0.5f);
 
-    const bool isLos = target->IsWithinLOS(x, y, z + bot->GetCollisionHeight(), true);
+    const bool isLos = IsWithinLOSCompat(target, x, y, z + bot->GetCollisionHeight(), true);
     // Creature aura keep-out: never end behind a mob inside a listed
     // creature's ring (the hazard check only bends the path there).
     bool moved = !EndPointInCreatureAuraKeepout(x, y, z) && MoveTo(bot->GetMapId(), x, y, z);
@@ -5242,14 +5238,14 @@ bool SetBehindTargetAction::isUseful()
     // Issue #911: position only once in melee reach (donor shape); closing in
     // is "reach melee"'s job, which this ACTION_HIGH row used to starve.
     const bool inMeleeReach = bot->CanReachWithMeleeAutoAttack(target);
-    const bool alreadyBehind = bot->IsBehindTarget(target, false);
+    const bool alreadyBehind = IsBehindTargetCompat(bot, target, false);
     if (!inMeleeReach || alreadyBehind)
         return false;
 
     // Bounded per-target streak: a blocked behind spot falls back to
     // attacking from the front instead of re-issuing the move forever.
     const uint32 nowMs = WorldTimer::getMSTime();
-    SetBehindStreakPoll(streak, target->getObjectGuid().GetRawValue(), nowMs);
+    SetBehindStreakPoll(streak, GuidRawCompat(target->getObjectGuid()), nowMs);
     return SetBehindUseful(inMeleeReach, alreadyBehind, SetBehindStreakExpired(streak, nowMs));
 }
 
@@ -5288,7 +5284,7 @@ bool RearFlankAction::isUseful()
     // Front-arc-only (mirrors the trigger): the tail clause would re-fire
     // at set-behind's exact-rear destination and ping-pong every tick.
     // (1.12 HasInArc takes the target first, arc second.)
-    return target->HasInArc(bot, 2.0f * (float)M_PI / 2.0f);
+    return HasInArcCompat(target, bot, 2.0f * (float)M_PI / 2.0f);
 }
 
 bool RearFlankAction::isPossible()
@@ -5312,7 +5308,7 @@ bool RearFlankAction::Execute(Event& event)
     // frontal cone to the exact rear point.
     float facing = target->GetOrientation();
     float flankAngle = frand((float)M_PI / 2.0f, 2.0f * (float)M_PI / 3.0f);
-    float baseDist = bot->GetCombatReach(target, true, 0.0f) * 0.5f;
+    float baseDist = GetCombatReachCompat(bot, target, true, 0.0f) * 0.5f;
     float leftX = target->getPositionX() + cosf(facing + flankAngle) * baseDist;
     float leftY = target->getPositionY() + sinf(facing + flankAngle) * baseDist;
     float rightX = target->getPositionX() + cosf(facing - flankAngle) * baseDist;
@@ -5330,7 +5326,7 @@ bool RearFlankAction::Execute(Event& event)
     {
         z = target->getPositionZ();
         bot->UpdateGroundPositionZ(x, y, z);
-        target->GetMap()->GetLosHitPosition(ox, oy, oz + bot->GetCollisionHeight(), x, y, z, -0.5f);
+        GetLosHitPositionCompat(target->GetMap(), ox, oy, oz + bot->GetCollisionHeight(), x, y, z, -0.5f);
     };
     float leftZ = 0.0f, rightZ = 0.0f;
     resolve(leftX, leftY, leftZ);
@@ -5346,7 +5342,7 @@ bool RearFlankAction::Execute(Event& event)
     float const destX = leftFirst ? leftX : rightX;
     float const destY = leftFirst ? leftY : rightY;
     float const destZ = leftFirst ? leftZ : rightZ;
-    if (!target->IsWithinLOS(destX, destY, destZ + bot->GetCollisionHeight(), true))
+    if (!IsWithinLOSCompat(target, destX, destY, destZ + bot->GetCollisionHeight(), true))
         return false;
     return MoveTo(bot->GetMapId(), destX, destY, destZ);
 }
@@ -5394,8 +5390,8 @@ bool TankFaceAwayAction::Execute(Event& event)
         bot->UpdateGroundPositionZ(x, y, z);
         float ox, oy, oz;
         target->GetPosition(ox, oy, oz);
-        target->GetMap()->GetLosHitPosition(ox, oy, oz + bot->GetCollisionHeight(), x, y, z, -0.5f);
-        if (!target->IsWithinLOS(x, y, z + bot->GetCollisionHeight(), true))
+        GetLosHitPositionCompat(target->GetMap(), ox, oy, oz + bot->GetCollisionHeight(), x, y, z, -0.5f);
+        if (!IsWithinLOSCompat(target, x, y, z + bot->GetCollisionHeight(), true))
             continue;
         float d = sServerFacade.getDistance2d(bot, x, y);
         if (d < bestDist)
@@ -5523,7 +5519,7 @@ bool MoveToAction::Execute(Event& event)
 
     GuidPosition guid = guidList.front();
 
-    return MoveTo(guid.GetMapId(), guid.getX(), guid.getY(), guid.getZ());
+    return MoveTo(guid.WorldPosition::GetMapId(), guid.getX(), guid.getY(), guid.getZ());
 }
 
 bool JumpAction::isUseful()
@@ -5691,7 +5687,7 @@ bool JumpAction::Execute(ai::Event &event)
                 if (!IsJumpFasterThanWalking(src, dest, possibleLanding, bot))
                     return false;
             }
-            sLog.outDebug("%s: GetPossibleJumpStartFor success! Jump speed: %f", bot->GetName(), requiredSpeed);
+            sLog.outDebug("%s: GetPossibleJumpStartFor success! Jump speed: %f", CStrCompat(bot->GetName()), requiredSpeed);
 
             // move to jump point
             if (src != jumpPoint && src.distance(jumpPoint) > sPlayerbotAIConfig.contactDistance)
@@ -5704,7 +5700,7 @@ bool JumpAction::Execute(ai::Event &event)
 
                 if (showLanding)
                 {
-                    Creature* wpCreature = bot->SummonCreature(2334, jumpPoint.getX(), jumpPoint.getY(), jumpPoint.getZ() - 1, bot->getOrientation(), TEMPSPAWN_TIMED_DESPAWN, 3000);
+                    Creature* wpCreature = SummonCreatureCompat(bot, 2334, jumpPoint.getX(), jumpPoint.getY(), jumpPoint.getZ() - 1, bot->getOrientation(), TEMPSPAWN_TIMED_DESPAWN, 3000);
                     if (wpCreature)
                         PlayerbotAI::AddAura(wpCreature, 246);
 
@@ -5727,7 +5723,7 @@ bool JumpAction::Execute(ai::Event &event)
 
                 if (showLanding)
                 {
-                    Creature* wpCreature = bot->SummonCreature(2334, possibleLanding.getX(), possibleLanding.getY(), possibleLanding.getZ() - 1, bot->getOrientation(), TEMPSPAWN_TIMED_DESPAWN, 3000);
+                    Creature* wpCreature = SummonCreatureCompat(bot, 2334, possibleLanding.getX(), possibleLanding.getY(), possibleLanding.getZ() - 1, bot->getOrientation(), TEMPSPAWN_TIMED_DESPAWN, 3000);
                     if (wpCreature)
                         PlayerbotAI::AddAura(wpCreature, 246);
 
@@ -5776,14 +5772,14 @@ bool JumpAction::Execute(ai::Event &event)
         // not jump randomly in the water
         if ((options == "r" || options == "random") && !event.GetOwner() && (jumpLanding.isInWater() || jumpLanding.isUnderWater()))
         {
-            sLog.outDetail("%s: Jump random fail: landing in water!", bot->GetName());
+            sLog.outDetail("%s: Jump random fail: landing in water!", CStrCompat(bot->GetName()));
             return false;
         }
 
         // only show landing
         if (showLanding || ai->HasStrategy("debug move", BotState::BOT_STATE_NON_COMBAT))
         {
-            Creature* wpCreature = bot->SummonCreature(2334, jumpLanding.getX(), jumpLanding.getY(), jumpLanding.getZ() - 1, bot->getOrientation(), TEMPSPAWN_TIMED_DESPAWN, 3000);
+            Creature* wpCreature = SummonCreatureCompat(bot, 2334, jumpLanding.getX(), jumpLanding.getY(), jumpLanding.getZ() - 1, bot->getOrientation(), TEMPSPAWN_TIMED_DESPAWN, 3000);
             if (wpCreature)
                 PlayerbotAI::AddAura(wpCreature, 246);
             if (showLanding)
@@ -5836,7 +5832,7 @@ WorldPosition JumpAction::CalculateJumpParameters(const WorldPosition& src, Unit
         float fx = ox;
         float fy = oy;
         float fz = oz + maxHeight + jumper->GetCollisionHeight();
-        if (jumper->GetMap()->GetLosHitPosition(ox, oy, oz, fx, fy, fz, -0.5f))
+        if (GetLosHitPositionCompat(jumper->GetMap(), ox, oy, oz, fx, fy, fz, -0.5f))
         {
             // hit object above
             goodLanding = false;
@@ -5872,7 +5868,7 @@ WorldPosition JumpAction::CalculateJumpParameters(const WorldPosition& src, Unit
         // not found - calculate very far
         if (i >= 25 && check_dist > (rough_distance + path_part))
         {
-            sLog.outDetail("%s: Jump checks too many, possible no collision!", jumper->GetName());
+            sLog.outDetail("%s: Jump checks too many, possible no collision!", CStrCompat(jumper->GetName()));
             check_dist += rough_distance;
         }
 
@@ -5889,7 +5885,7 @@ WorldPosition JumpAction::CalculateJumpParameters(const WorldPosition& src, Unit
         fx += jumper->GetObjectBoundingRadius() * vcos;
         fy += jumper->GetObjectBoundingRadius() * vsin;
 
-        foundCollision = jumper->GetMap()->GetLosHitPosition(ox, oy, oz, fx, fy, fz, -0.5f);
+        foundCollision = GetLosHitPositionCompat(jumper->GetMap(), ox, oy, oz, fx, fy, fz, -0.5f);
 
         if (!foundCollision)
         {
@@ -5900,7 +5896,7 @@ WorldPosition JumpAction::CalculateJumpParameters(const WorldPosition& src, Unit
             fx += jumper->GetObjectBoundingRadius() * vcos;
             fy += jumper->GetObjectBoundingRadius() * vsin;
 
-            foundCollision = jumper->GetMap()->GetLosHitPosition(ox, oy, oz + 0.5f, fx, fy, fz, -0.5f);
+            foundCollision = GetLosHitPositionCompat(jumper->GetMap(), ox, oy, oz + 0.5f, fx, fy, fz, -0.5f);
 
             if (!foundCollision)
             {
@@ -5943,7 +5939,7 @@ WorldPosition JumpAction::CalculateJumpParameters(const WorldPosition& src, Unit
                 goodLanding = false;
                 // reduce landing height by collision height
                 float fz_mod = fz - CONTACT_DISTANCE - jumper->GetCollisionHeight();
-                jumper->GetMap()->GetLosHitPosition(fx, fy, fz, fx, fy, fz_mod, -0.5f);
+                GetLosHitPositionCompat(jumper->GetMap(), fx, fy, fz, fx, fy, fz_mod, -0.5f);
                 fz = fz_mod;
                 //fz = fz - CONTACT_DISTANCE - jumper->GetCollisionHeight();
             }
@@ -5983,7 +5979,7 @@ WorldPosition JumpAction::CalculateJumpParameters(const WorldPosition& src, Unit
         check_dist += path_part;
     }
 
-    sLog.outDetail("%s: Jump collision fail to calculate!", jumper->GetName());
+    sLog.outDetail("%s: Jump collision fail to calculate!", CStrCompat(jumper->GetName()));
     timeToLand = 0.f;
     distanceToLand = 0.f;
     return WorldPosition();
@@ -6056,7 +6052,7 @@ bool JumpAction::CanWalkTo(const WorldPosition &src, const WorldPosition &dest, 
     std::vector<WorldPosition> path = dest.GetPathStepFrom(src, jumper, true);
     if (path.empty())
     {
-        sLog.outDetail("%s: Jump CanWalkTo Fail! No Path!", jumper->GetName());
+        sLog.outDetail("%s: Jump CanWalkTo Fail! No Path!", CStrCompat(jumper->GetName()));
         return false;
     }
 
@@ -6064,7 +6060,7 @@ bool JumpAction::CanWalkTo(const WorldPosition &src, const WorldPosition &dest, 
     // todo add config
     if (pathLength > maxDistance)
     {
-        sLog.outDetail("%s: Jump CanWalkTo Fail! Path is too big! Max Distance: %f, Path Distance %f", jumper->GetName(), maxDistance, pathLength);
+        sLog.outDetail("%s: Jump CanWalkTo Fail! Path is too big! Max Distance: %f, Path Distance %f", CStrCompat(jumper->GetName()), maxDistance, pathLength);
         return false;
     }
 
@@ -6095,21 +6091,21 @@ bool JumpAction::IsJumpFasterThanWalking(const WorldPosition& src, const WorldPo
 
     if (pathLengthWalk > 20.f && pathLengthWalk > (pathLengthJump * 2))
     {
-        sLog.outDebug("%s: Jump IsJumpFasterThanWalking Jumping is faster than walking! Walk Distance: %f, Jump Distance: %f", jumper->GetName(), pathLengthWalk, pathLengthJump);
+        sLog.outDebug("%s: Jump IsJumpFasterThanWalking Jumping is faster than walking! Walk Distance: %f, Jump Distance: %f", CStrCompat(jumper->GetName()), pathLengthWalk, pathLengthJump);
         return true;
     }
 
-    sLog.outDebug("%s: Jump IsJumpFasterThanWalking Jumping is slower than walking! Walk Distance: %f, Jump Distance: %f", jumper->GetName(), pathLengthWalk, pathLengthJump);
+    sLog.outDebug("%s: Jump IsJumpFasterThanWalking Jumping is slower than walking! Walk Distance: %f, Jump Distance: %f", CStrCompat(jumper->GetName()), pathLengthWalk, pathLengthJump);
     return false;
 }
 
 bool JumpAction::CanLand(const ai::WorldPosition &dest, Unit *jumper)
 {
     // do not let jump to abyss
-    float mapHeightCheck = jumper->GetMap()->GetHeight(dest.getX(), dest.getY(), dest.getZ() + 0.5f);
+    float mapHeightCheck = GetHeightCompat(jumper->GetMap(), dest.getX(), dest.getY(), dest.getZ() + 0.5f);
     if (mapHeightCheck <= INVALID_HEIGHT)
     {
-        sLog.outDetail("%s: Jump Fail! Invalid landing height: %f", jumper->GetName(), mapHeightCheck);
+        sLog.outDetail("%s: Jump Fail! Invalid landing height: %f", CStrCompat(jumper->GetName()), mapHeightCheck);
         return false;
     }
     return true;
@@ -6120,7 +6116,7 @@ bool JumpAction::IsNotMagmaSlime(const WorldPosition &dest, Unit *jumper)
     if (const TerrainInfo* terrain = dest.GetTerrain())
     {
         GridMapLiquidData data;
-        if (terrain->getLiquidStatus(dest.getX(), dest.getY(), dest.getZ(), MAP_ALL_LIQUIDS, &data) == LIQUID_MAP_NO_WATER)
+        if (LiquidStatusCompat(terrain, dest.getX(), dest.getY(), dest.getZ(), MAP_ALL_LIQUIDS, &data) == LIQUID_MAP_NO_WATER)
             return true;
 
         switch (data.type_flags)
@@ -6128,7 +6124,7 @@ bool JumpAction::IsNotMagmaSlime(const WorldPosition &dest, Unit *jumper)
             case MAP_LIQUID_TYPE_MAGMA:
             case MAP_LIQUID_TYPE_SLIME:
             {
-                sLog.outDetail("%s: Jump Fail! Landing is Magma or Slime!", jumper->GetName());
+                sLog.outDetail("%s: Jump Fail! Landing is Magma or Slime!", CStrCompat(jumper->GetName()));
                 return false;
             }
         }
@@ -6192,7 +6188,7 @@ bool JumpAction::JumpTowards(const ai::WorldPosition &src, const ai::WorldPositi
     bool goodLanding = true;
     std::vector<WorldPosition> path;
     WorldPosition jumpLanding = JumpAction::CalculateJumpParameters(src, jumper, angle, sPlayerbotAIConfig.jumpVSpeed, jumpSpeed, timeToLand, distToLand, maxHeight, goodLanding, path);
-    sLog.outDebug("%s: JumpTowards attempt! Jump speed: %f", bot->GetName(), jumpSpeed);
+    sLog.outDebug("%s: JumpTowards attempt! Jump speed: %f", CStrCompat(bot->GetName()), jumpSpeed);
     if (jumpLanding && goodLanding)
     {
         // set highest jump point to relocate
@@ -6206,7 +6202,7 @@ bool JumpAction::JumpTowards(const ai::WorldPosition &src, const ai::WorldPositi
         return DoJump((preSetLanding ? dest : jumpLanding), highestPoint, angle, sPlayerbotAIConfig.jumpVSpeed, jumpSpeed, timeToLand, distToLand, maxHeight, goodLanding, jumpInPlace, jumpBackward, false);
     }
 
-    sLog.outDetail("%s: Jump ForwardTo Fail!", jumper->GetName());
+    sLog.outDetail("%s: Jump ForwardTo Fail!", CStrCompat(jumper->GetName()));
     return false;
 }
 
@@ -6268,7 +6264,7 @@ bool JumpAction::DoJump(const WorldPosition &dest, const WorldPosition& highestP
     bot->m_movementInfo.jump.sinAngle = vsin;
     bot->m_movementInfo.jump.xyspeed = slowJump ? 0.f : hSpeed;
 
-    sLog.outDetail("%s: Jump x: %f, y: %f, z: %f, time: %f, dist: %f, inPlace: %u, landTime: %u, curTime: %u", bot->GetName(), landing.getX(), landing.getY(), landing.getZ(), timeToLand, distanceToLand, jumpInPlace, jumpTime, curTime);
+    sLog.outDetail("%s: Jump x: %f, y: %f, z: %f, time: %f, dist: %f, inPlace: %u, landTime: %u, curTime: %u", CStrCompat(bot->GetName()), landing.getX(), landing.getY(), landing.getZ(), timeToLand, distanceToLand, jumpInPlace, jumpTime, curTime);
 
     // send jump packet
     bot->m_movementInfo.AddMovementFlag(MOVEFLAG_JUMPING);
@@ -6351,7 +6347,7 @@ WorldPosition JumpAction::GetPossibleJumpStartFor(const WorldPosition& src, cons
     // no path found closer to it...
     if (path.empty() || path.size() == 2)
     {
-        sLog.outDetail("%s: Jump Fail! Can't pathfind closer!", jumper->GetName());
+        sLog.outDetail("%s: Jump Fail! Can't pathfind closer!", CStrCompat(jumper->GetName()));
         return WorldPosition();
     }
 
@@ -6380,7 +6376,7 @@ WorldPosition JumpAction::GetPossibleJumpStartFor(const WorldPosition& src, cons
         }
     }
 
-    sLog.outDetail("%s: GetPossibleJumpStartFor Failed to find jump point!", jumper->GetName());
+    sLog.outDetail("%s: GetPossibleJumpStartFor Failed to find jump point!", CStrCompat(jumper->GetName()));
     return WorldPosition();
 }
 
@@ -6401,7 +6397,7 @@ WorldPosition JumpAction::GetPossibleJumpStartForInRange(const WorldPosition& sr
     {
         if (ai->HasStrategy("debug move", BotState::BOT_STATE_NON_COMBAT))
         {
-            jumper->SummonCreature(VISUAL_WAYPOINT, src.getX(), src.getY(), src.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000);
+            SummonCreatureCompat(jumper, VISUAL_WAYPOINT, src.getX(), src.getY(), src.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000);
         }
         requiredSpeed = jumper->GetSpeed(MOVE_WALK);
         return src;
@@ -6413,7 +6409,7 @@ WorldPosition JumpAction::GetPossibleJumpStartForInRange(const WorldPosition& sr
         {
             if (ai->HasStrategy("debug move", BotState::BOT_STATE_NON_COMBAT))
             {
-                jumper->SummonCreature(VISUAL_WAYPOINT, src.getX(), src.getY(), src.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000);
+                SummonCreatureCompat(jumper, VISUAL_WAYPOINT, src.getX(), src.getY(), src.getZ(), 0, TEMPSPAWN_TIMED_DESPAWN, 10000);
             }
             requiredSpeed = jumper->GetSpeedRate(MOVE_RUN) * sPlayerbotAIConfig.jumpHSpeed;
             return src;
@@ -6467,7 +6463,7 @@ WorldPosition JumpAction::GetPossibleJumpStartForInRange(const WorldPosition& sr
 
             if (ai->HasStrategy("debug move", BotState::BOT_STATE_NON_COMBAT))
             {
-                jumper->SummonCreature(VISUAL_WAYPOINT, gx, gy, gz, 0, TEMPSPAWN_TIMED_DESPAWN, 10000);
+                SummonCreatureCompat(jumper, VISUAL_WAYPOINT, gx, gy, gz, 0, TEMPSPAWN_TIMED_DESPAWN, 10000);
             }
             ++successes;
             if (successes >= 10)
@@ -6480,7 +6476,7 @@ WorldPosition JumpAction::GetPossibleJumpStartForInRange(const WorldPosition& sr
         WorldPosition closest = src.closestSq(jumpPoints);
         if (ai->HasStrategy("debug move", BotState::BOT_STATE_NON_COMBAT))
         {
-            Creature* wpCreature = bot->SummonCreature(15631, closest.getX(), closest.getY(), closest.getZ(), closest.getO(), TEMPSPAWN_TIMED_DESPAWN, 2000.0f);
+            Creature* wpCreature = SummonCreatureCompat(bot, 15631, closest.getX(), closest.getY(), closest.getZ(), closest.getO(), TEMPSPAWN_TIMED_DESPAWN, 2000.0f);
             if (wpCreature)
                 wpCreature->SetObjectScale(0.2f);
         }
@@ -6490,7 +6486,7 @@ WorldPosition JumpAction::GetPossibleJumpStartForInRange(const WorldPosition& sr
         return closest;
     }
 
-    sLog.outDetail("%s: GetPossibleJumpStartFor Failed to find jump point!", jumper->GetName());
+    sLog.outDetail("%s: GetPossibleJumpStartFor Failed to find jump point!", CStrCompat(jumper->GetName()));
     return WorldPosition();
 }
 
@@ -6508,7 +6504,7 @@ bool AvoidEliteAction::Execute(Event& event)
     {
         float const x = from.getX() + stepYd * cos(away + turn);
         float const y = from.getY() + stepYd * sin(away + turn);
-        float const z = bot->GetMap()->GetHeight(x, y, bot->GetPositionZ() + 5.0f);
+        float const z = GetHeightCompat(bot->GetMap(), x, y, bot->GetPositionZ() + 5.0f);
         if (MoveTo(bot->GetMapId(), x, y, z, false, false, false, true))
             return true;
     }

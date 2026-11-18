@@ -106,7 +106,7 @@ class SwimHandoffWiringTest(unittest.TestCase):
     def test_handoff_guards_and_dispatch(self):
         h = self.hand
         self.assertIn("ai->IsRealPlayer() || bot->GetTransport() || bot->IsFlying() || bot->IsTaxiFlying()", h)
-        self.assertIn("bot->IsInWater() || bot->IsUnderwater() || bot->HasMovementFlag(MOVEFLAG_SWIMMING)", h)
+        self.assertIn("bot->IsInWater() || IsUnderwaterCompat(bot) || HasMovementFlagCompat(bot, MOVEFLAG_SWIMMING)", h)
         # Round 1 (a): a follow that holds before packs never hands off.
         self.assertIn("if (packHold != nullptr)", h)
         self.assertLess(h.index("if (packHold != nullptr)"), h.index("PathFinder path(bot);"))
@@ -114,8 +114,8 @@ class SwimHandoffWiringTest(unittest.TestCase):
         self.assertIn("f.routeEndFromBot = route.empty() ? 0.0f : route.back().distance(startPos);", h)
         self.assertNotIn("route.size() < 2 ? 0.0f", h)
         self.assertLess(h.index("f.routeEndFromBot > ai::kSwimNoProgressYd"), h.index("PathFinder path(bot);"))
-        self.assertIn("map->FindCollisionModel(", h)
-        self.assertIn("terrain->IsSwimmable(startPos.getX(), startPos.getY(), startPos.getZ(), 1.5f, &here)", h)
+        self.assertIn("LineHitsCollisionModelCompat(map, ", h)
+        self.assertIn("TerrainIsSwimmableCompat(terrain, startPos.getX(), startPos.getY(), startPos.getZ(), 1.5f, &here)", h)
         self.assertIn("GridMapLiquidData endData{};", h)
         self.assertIn("ai::kSwimLiquidRequest, &endData);", h)
         self.assertIn("f.endInWater = ai::SwimSampleInWater(", h)
@@ -136,12 +136,12 @@ class SwimHandoffWiringTest(unittest.TestCase):
         h = self.hand
         # Round 1 (b)/(2): the 0x1 answer walks its own points (path.getPath()) through the same
         # ClipPath (hostile/hazard + packHold), and launches exactly that validated spline.
-        self.assertIn("for (G3D::Vector3 const& p : path.getPath())", h)
+        self.assertIn("for (G3D::Vector3 const& p : PathPointsCompat(path))", h)
         self.assertIn("clipped.ClipPath(ai, bot, ignoreEnemyTargets, packHold);", h)
-        self.assertIn('Movement::MoveSplineInit init(*bot, "SwimHandoffCore");', h)
+        self.assertIn('MoveSplineInitCompat init(*bot, "SwimHandoffCore");', h)
         # The 0x1 branch launches the validated spline only (no MovePoint recompute beside the 0x81 line).
         core = h[h.index('if (kind == ai::SwimHandoff::CoreLine && f.coreType == ai::kPathTypeNormal)'):h.index('else if (kind == ai::SwimHandoff::CoreLine)')]
-        self.assertIn('Movement::MoveSplineInit init(*bot, "SwimHandoffCore");', core)
+        self.assertIn('MoveSplineInitCompat init(*bot, "SwimHandoffCore");', core)
         # Round 1 (c): the 0x81 line and the swim-out legs run the same ClipPath, segment by
         # segment; a cut refuses. packHold is threaded (a hold clips too).
         self.assertIn("static bool SwimHandoffLegClear(", MOVES)
@@ -153,7 +153,7 @@ class SwimHandoffWiringTest(unittest.TestCase):
         # waypoint-only slime loop missed a leg crossing a pool between two safe
         # points); the hand-off passes slime on, ordinary moves pass it off.
         self.assertIn("RouteEntersLiquidHazard(bot, startPos, line, hazardAt, true, hazardIsSlime)", h)
-        self.assertLess(h.index("for (G3D::Vector3 const& p : path.getPath())"), h.index("RouteEntersLiquidHazard(bot, startPos, line, hazardAt, true,"))
+        self.assertLess(h.index("for (G3D::Vector3 const& p : PathPointsCompat(path))"), h.index("RouteEntersLiquidHazard(bot, startPos, line, hazardAt, true,"))
         self.assertIn("hazardIsSlime", h)
         self.assertNotIn("slimeOnLine", h)
         self.assertIn("linePoints = coreRoute;", h)
@@ -161,7 +161,7 @@ class SwimHandoffWiringTest(unittest.TestCase):
         self.assertIn('"slime"', h)
         self.assertIn('"magma"', h)
         # Round 1 (3): the swim-out end needs ground within 1 yd below it.
-        self.assertIn("map->GetHeight(endPos.getX(), endPos.getY(), endPos.getZ() + 0.5f)", h)
+        self.assertIn("GetHeightCompat(map, endPos.getX(), endPos.getY(), endPos.getZ() + 0.5f)", h)
         self.assertIn("INVALID_HEIGHT", h)
         self.assertIn("f.endHasGround", h)
         # Round 1: every refused stall logs its reason, rate-limited on the hand-off stamp.

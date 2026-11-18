@@ -108,7 +108,7 @@ bool AttackAnythingAction::isUseful()
     // is inside the grind level cap. It keeps the front-arc check: starting a
     // fight is only for what the bot walks into, never for side aggro (that
     // is revenge above once it lands, or walked past otherwise).
-    if (!target->IsPlayer() && sServerFacade.isInFront(bot, target, target->GetCombatReach(bot, false, 0.0f) * 1.5f, M_PI_F * 0.5f) && target->IsHostileTo(bot) &&
+    if (!target->IsPlayer() && sServerFacade.isInFront(bot, target, GetCombatReachCompat(target, bot, false, 0.0f) * 1.5f, M_PI_F * 0.5f) && target->IsHostileTo(bot) &&
         ai::AllowPreemptiveStrike((int)target->GetLevel(), bot->GetLevel(), ai->HasRealPlayerMaster(), AI_VALUE(bool, "possible adds")))
         return true;
 
@@ -247,7 +247,7 @@ void ai::AttackAnythingAction::LogRepeatOrder(Unit* target)
     lastRepeatLogMs = nowMs;
 
     std::ostringstream out;
-    out << "guid=" << target->getObjectGuid().GetRawValue();
+    out << "guid=" << GuidRawCompat(target->getObjectGuid());
     out << " entry=" << target->GetEntry();
     out << " dz=" << (int)(bot->GetPositionZ() - target->GetPositionZ());
     out << " dist=" << (int)sServerFacade.getDistance2d(bot, target);
@@ -496,7 +496,7 @@ bool SelectNewTargetAction::Execute(Event& event)
     {
         // Save the dead target for later looting
         ObjectGuid guid = target->getObjectGuid();
-        if (guid)
+        if (!guid.IsEmpty())
         {
             AI_VALUE(LootObjectStack*, "available loot")->Add(guid);
         }
@@ -508,16 +508,16 @@ bool SelectNewTargetAction::Execute(Event& event)
     ObjectGuid explicitAttackTarget = AI_VALUE(ObjectGuid, "explicit attack target");
     ObjectGuid attackTarget = AI_VALUE(ObjectGuid, "attack target");
     std::list<ObjectGuid> possible = AI_VALUE(std::list<ObjectGuid>, "possible targets no los");
-    if (attackTarget && attackTarget != explicitAttackTarget &&
+    if (!attackTarget.IsEmpty() && attackTarget != explicitAttackTarget &&
         find(possible.begin(), possible.end(), attackTarget) == possible.end())
     {
         SET_AI_VALUE(ObjectGuid, "attack target", ObjectGuid());
     }
 
-    Unit* explicitTarget = explicitAttackTarget ? ai->GetUnit(explicitAttackTarget) : nullptr;
+    Unit* explicitTarget = !explicitAttackTarget.IsEmpty() ? ai->GetUnit(explicitAttackTarget) : nullptr;
     // Same wider ceiling as the order itself: a target inside order range must survive
     // reselection so the reach chain can walk the bot to it.
-    if (explicitAttackTarget && (!explicitTarget ||
+    if (!explicitAttackTarget.IsEmpty() && (!explicitTarget ||
         !PossibleAttackTargetsValue::IsValid(explicitTarget, bot,
             sPlayerbotAIConfig.reactDistance, false, false)))
     {
@@ -581,11 +581,7 @@ bool SelectNewTargetAction::Execute(Event& event)
                 const uint32 spellId = COMMAND_FOLLOW;
                 const uint32 command = (flag << 24) | spellId;
 
-                WorldPacket data(CMSG_PET_ACTION);
-                data << petGuid;
-                data << command;
-                data << targetGuid;
-                bot->GetSession()->HandlePetAction(data);
+                HandlePetActionCompat(bot->GetSession(), petGuid, command, targetGuid);
             }
         }
     }

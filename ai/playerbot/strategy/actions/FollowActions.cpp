@@ -308,12 +308,12 @@ bool FollowAction::StepUpToLeaderInDungeon(Unit* followTarget, bool& moved)
     ai::OpenFollowStep step = ai::DungeonFollowStepToward(bot->GetPositionX(), bot->GetPositionY(),
         followTarget->GetPositionX(), followTarget->GetPositionY());
     float const h = 2.0f;
-    bool const seesLeader = map->isInLineOfSight(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ() + h,
+    bool const seesLeader = IsInLineOfSightCompat(map, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ() + h,
         followTarget->GetPositionX(), followTarget->GetPositionY(), followTarget->GetPositionZ() + h);
     if (!ai::DungeonFollowStepAllowed(horizontal, dz, seesLeader))
         return false;
 
-    float groundZ = map->GetHeight(step.x, step.y, followTarget->GetPositionZ() + 0.5f);
+    float groundZ = GetHeightCompat(map, step.x, step.y, followTarget->GetPositionZ() + 0.5f);
     if (!MaNGOS::IsValidMapCoord(step.x, step.y, groundZ) ||
         !ai::DungeonFollowStepGroundNearLeader(groundZ, followTarget->GetPositionZ()))
         return false;
@@ -331,7 +331,7 @@ bool FollowAction::StepUpToLeaderInDungeon(Unit* followTarget, bool& moved)
         float const t = (float)i / (float)samples;
         float const sx = bot->GetPositionX() + sdx * t;
         float const sy = bot->GetPositionY() + sdy * t;
-        float const sampleZ = map->GetHeight(sx, sy, ai::DungeonFollowStepLineZ(botZ, groundZ, t) + 0.5f);
+        float const sampleZ = GetHeightCompat(map, sx, sy, ai::DungeonFollowStepLineZ(botZ, groundZ, t) + 0.5f);
         if (!MaNGOS::IsValidMapCoord(sx, sy, sampleZ) ||
             !ai::DungeonFollowStepSampleOk(true, sampleZ, ai::DungeonFollowStepLineZ(botZ, groundZ, t)))
             return false;
@@ -412,7 +412,7 @@ bool FollowAction::RescueStalledOpenFollow(Unit* followTarget, bool& moved)
 
     Map* map = bot->GetMap();
     float const h = 2.0f; // both ends raised, as in `.bot cmd move ... direct`
-    bool const seesLeader = map && map->isInLineOfSight(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ() + h,
+    bool const seesLeader = map && IsInLineOfSightCompat(map, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ() + h,
         followTarget->GetPositionX(), followTarget->GetPositionY(), followTarget->GetPositionZ() + h);
     if (!ai::OpenFollowStepAllowed(horizontal, dz, seesLeader))
         return true; // stalled but no step fits: hold the rescue, keep watching
@@ -423,7 +423,7 @@ bool FollowAction::RescueStalledOpenFollow(Unit* followTarget, bool& moved)
     // step either (it answered the same way the follow did); the short
     // sighted same-floor step stays a straight walk by design.
     float const startDist = bot->GetDistance(followTarget);
-    bot->GetMotionMaster()->MovePoint(bot->GetMapId(), step.x, step.y, bot->GetPositionZ(), MOVE_RUN_MODE);
+    MovePointCompat(*bot->GetMotionMaster(), bot->GetMapId(), step.x, step.y, bot->GetPositionZ(), MOVE_RUN_MODE);
     WaitForReach(bot->GetDistance(step.x, step.y, bot->GetPositionZ()));
     moved = true;
     openFollowStallWatch.Walked(nowMs, true);
@@ -552,7 +552,7 @@ bool FollowAction::FollowHoldingBeforePacks(Unit* followTarget, bool& moved)
 bool FollowAction::CanDeadFollow(Unit* target)
 {
     //Move to corpse when dead and player is alive or not a ghost.
-    if (!sServerFacade.IsAlive(bot) && (sServerFacade.IsAlive(target) || !target->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST)))
+    if (!sServerFacade.IsAlive(bot) && (sServerFacade.IsAlive(target) || !HasPlayerFlagCompat(target, PLAYER_FLAGS_GHOST)))
     {
         return false;
     }
