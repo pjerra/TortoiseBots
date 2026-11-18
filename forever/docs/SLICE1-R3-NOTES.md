@@ -8,17 +8,21 @@ file that includes it. Measure: `FOREVER_SLOT=5 FOREVER_CENSUS_LIST=forever/SLIC
 | Run | Error places | Files holding them | Places in headers | Header files |
 |---|---|---|---|---|
 | BEFORE (baseline, `ac7f77bda`) | 2,504 | 140 | 649 | 71 |
-| AFTER (this branch), census as it is | see "Final run" below | | | |
-| AFTER, with the registry move (R1/R2) applied by hand in the VM copy | 1,580 | 75 | 70 | 15 |
+| AFTER (this branch), census as it is | 1,730 | 97 | 224 | 37 |
+| AFTER, with the registry move (R1/R2) applied by hand in the VM copy | 1,570 | 73 | 64 | 13 |
 
 Why two AFTER rows. `AiObjectContext.cpp` is in the slice list and its constructor includes the nine registry headers, so the
 census sees 24 headers that only the registry pulls in (guild, quest, loot, invitation, duel, AH, BG, taxi-release, area-trigger and
 stuck-trigger headers: 158 places). R1 moves that constructor out and R2 replaces it by `SliceAiObjectContext.cpp`, which includes only
 the registered classes' headers, so those headers leave the slice's include closure. They are listed as (c), not fixed. The second
 row was measured by deleting the nine includes and the constructor from the VM copy of `AiObjectContext.cpp` only (nothing in the
-repository), which is what R1 does. 70 places in 15 header files remain (the list at the end).
+repository), which is what R1 does. 64 places in 13 header files remain (the list at the end).
 
-Top of `where.tsv` after (the full table is in `~/forever-build/census-5/where.tsv`): see "Final run".
+Top 15 of `where.tsv` after (census as it is; the full table is `~/forever-build/census-5/where.tsv`): PlayerbotAI.cpp 314,
+MovementActions.cpp 284, WorldPosition.cpp 130, PlayerbotAISpells.cpp 106, PlayerbotAIPackets.cpp 80, GenericTriggers.cpp 40,
+ChatHelper.cpp 39, ReleaseSpiritAction.h 39 (registry only), PlayerbotAIChat.cpp 34, GuidPosition.cpp 32, GenericSpellActions.cpp 32,
+PartyMemberToHeal.cpp 29, GuildManagementActions.h 27 (registry only), PossibleTargetsValue.cpp 24, PlayerbotAIItems.cpp 23.
+The remaining places are now almost all in `.cpp` files (R4V/R4A/R4P/R4C).
 
 ## What each header was and how it was closed (D4: a name entry, b both-core helper, c left and listed)
 
@@ -108,7 +112,7 @@ An empty file or a file of only comments returns true, as in Turtle. If a differ
 (`TortoiseBots.*`, `LogsDir`, `GetFilename()`). The shim keeps `sConfig` as the core's `ConfigMgr` (worldserver.conf + module
 config), which has `GetString/Bool/Int/FloatDefault` and `GetFilename`.
 
-### ServerFacade.h (11 places) - 6 closed, 5 left
+### ServerFacade.h (11 places) - 6 closed, 5 left (HostileRefManager 2, battleground types 3)
 
 Closed: `IsInRoots` (now `unit->HasAuraType(SPELL_AURA_MOD_ROOT)`, which is what the Turtle member is, Unit.h:930), `isInFront`
 (`HasInArcCompat`: both cores test +-arc/2 of the facing, the arguments come in the other order), `IsWithinLOSInMap`
@@ -154,7 +158,7 @@ own member `CastItemTargetAction::HasSpellCooldown` (GenericSpellActions.h:309, 
 `HasItemSpellCooldown` (3 lines, no behaviour change) so the macro stays valid for the unit calls.
 
 ### Other
- * `GuidPosition.h` (12 -> 5): `ObjectGuid::Set` becomes `Clear()` / `operator=`; the three comparison operators compare through
+ * `GuidPosition.h` (12 -> 5, census as it is also 5): `ObjectGuid::Set` becomes `Clear()` / `operator=`; the three comparison operators compare through
    `ObjectGuid`'s own operators (both cores have them); `GetWorldObject` through `GetWorldObjectCompat`; `npc_flags`.
  * `HasTotemValue.h`, `SubStrategyValue.h`, `WorldSquare.h`: name entries (`strstri`, `StrSplit`, `MANGOS_ASSERT`).
  * `NearestUnitsValue.h`, `Value.h`, `StatsValues.h`, `AttackerCountValues.h`, `LeastHpTargetValue.h`, `LastSpellCastValue.h`:
@@ -171,16 +175,16 @@ Files outside `forever/`: the headers listed above, `ai/cmangos-compat-shim.h` (
 `ai/cmangos-compat-r3.h` (the Turtle side of the helpers: each forwards to the call the header used to make) and
 `ai/playerbot/strategy/actions/GenericSpellActions.cpp` (the rename). Gate lines: see "Gates" at the end of this file.
 
-## Left (c): 70 places in 15 header files, with what each needs
+## Left (c): 64 places in 13 header files, with what each needs
 
 Measured with the registry move applied by hand in the VM copy (see Numbers).
 
 | file:line | what | needed |
 |---|---|---|
 | `strategy/triggers/GenericTriggers.h:1385,1407,1497` | `Player::GetSpellAuraHolderMap()` (3) | an aura-holder adaptor over `Unit::GetAppliedAuras()`; bodies use the holder's `GetSpellProto`, durations, stacks |
-| `GenericTriggers.h:1744-1785` | quest triage: `Quest::IsActive`, `ReqItemId/ReqItemCount/ReqSourceId/ReqSourceCount` arrays, `QUEST_ITEM_OBJECTIVES_COUNT`, `GetQuestLevel`, `GetType`, `GetRewOrReqMoney`, `QUEST_SPECIAL_FLAG_DELIVER`, `GetQuestLevelForPlayer` (18) | a quest-requirements view over `Quest::GetObjectives()`; quests are out of the slice, the trigger is never registered |
+| `GenericTriggers.h:1744-1785` | quest triage: `Quest::IsActive`, `ReqItemId/ReqItemCount/ReqSourceId/ReqSourceCount` arrays, `QUEST_ITEM_OBJECTIVES_COUNT`, `GetQuestLevel`, `GetType`, `GetRewOrReqMoney`, `QUEST_SPECIAL_FLAG_DELIVER`, `GetQuestLevelForPlayer` (17) | a quest-requirements view over `Quest::GetObjectives()`; quests are out of the slice, the trigger is never registered |
 | `TaxiRouteGuard.h:37-46` | `Player::IsTaxiFlying/GetTaxi/CleanupFlagsOnTaxiPathFinished`, `MotionMaster::MovementExpired`, `ObjectMgr::GetTaxiNodeEntry` (8) | taxi is out of the slice; helpers for the five calls |
-| `ServerFacade.h:136,142` | `HostileRefManager` / `Unit::GetHostileRefManager` | an adaptor type with `getFirst()/next()/getSource()` over `ThreatManager::GetThreatenedByMeList()` (3 users: `AttackerCountValues.cpp:21`, `TellTargetAction.cpp:42,76`) |
+| `ServerFacade.h:136,142` (2) | `HostileRefManager` / `Unit::GetHostileRefManager` | an adaptor type with `getFirst()/next()/getSource()` over `ThreatManager::GetThreatenedByMeList()` (3 users: `AttackerCountValues.cpp:21`, `TellTargetAction.cpp:42,76`) |
 | `ServerFacade.h:268,274,278` | `BattleGroundQueueTypeId`, `BattlegroundMgr::BGTemplateId` | battlegrounds are out of the slice; a type alias and one helper |
 | `GuidPosition.h:13,17,18,20` | `ObjectGuid(uint64)`, `ObjectGuid(HighGuid, entry, counter)`, `CreatureData::creature_id` | a guid factory: ForeverCore's creature/object guid carries the map id and the spawn id, which these constructors do not have; design with `GuidPosition.cpp` (R4C) |
 | `GuidPosition.h:86` | `ByteBuffer << WorldPosition` is deleted (the position's `ObjectGuid` base) | decide the wire form of a `GuidPosition`; only used by the chat/serialisation helpers |
@@ -192,7 +196,6 @@ Measured with the registry move applied by hand in the VM copy (see Numbers).
 | `WarriorActions.h:595` (2) | `Group::GetFirstMember()` / `GroupReference` iteration | a group-member iterator helper |
 | `ReachTargetActions.h:195` | `Creature::GetCombatStartPosition` | ForeverCore does not record where a creature began its fight; needs a core hook or a decision to drop the input of the evade rule (`ai::EvadeChasePolicy`) |
 | `PlayerbotAI.h:73` | `ChatHandler::ExtractSpellIdFromLink` | a spell-link parser (raw id, `|Hspell:|`, `|Henchant:|`, `|Htalent:|`); chat is out of the slice |
-| `TravelMgr.h` (1 left) | `Quest` member | quest view, as above |
 
 Out of the slice by the registry move (R1/R2), measured but not fixed: `ReleaseSpiritAction.h` 39, `GuildManagementActions.h` 27,
 `WithinAreaTrigger.h` 18, `QuestValues.h` 12, `StuckTriggers.h` 11, `AcceptInvitationAction.h` 10, `ChatActionContext.h` 6,
