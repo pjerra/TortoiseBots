@@ -581,11 +581,7 @@ bool SelectNewTargetAction::Execute(Event& event)
                 const uint32 spellId = COMMAND_FOLLOW;
                 const uint32 command = (flag << 24) | spellId;
 
-                WorldPacket data(CMSG_PET_ACTION);
-                data << petGuid;
-                data << command;
-                data << targetGuid;
-                bot->GetSession()->HandlePetAction(data);
+                HandlePetActionCompat(bot->GetSession(), petGuid, command, targetGuid);
             }
         }
     }

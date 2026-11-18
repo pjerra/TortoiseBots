@@ -308,7 +308,7 @@ bool FollowAction::StepUpToLeaderInDungeon(Unit* followTarget, bool& moved)
     ai::OpenFollowStep step = ai::DungeonFollowStepToward(bot->GetPositionX(), bot->GetPositionY(),
         followTarget->GetPositionX(), followTarget->GetPositionY());
     float const h = 2.0f;
-    bool const seesLeader = map->isInLineOfSight(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ() + h,
+    bool const seesLeader = IsInLineOfSightCompat(map, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ() + h,
         followTarget->GetPositionX(), followTarget->GetPositionY(), followTarget->GetPositionZ() + h);
     if (!ai::DungeonFollowStepAllowed(horizontal, dz, seesLeader))
         return false;
@@ -412,7 +412,7 @@ bool FollowAction::RescueStalledOpenFollow(Unit* followTarget, bool& moved)
 
     Map* map = bot->GetMap();
     float const h = 2.0f; // both ends raised, as in `.bot cmd move ... direct`
-    bool const seesLeader = map && map->isInLineOfSight(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ() + h,
+    bool const seesLeader = map && IsInLineOfSightCompat(map, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ() + h,
         followTarget->GetPositionX(), followTarget->GetPositionY(), followTarget->GetPositionZ() + h);
     if (!ai::OpenFollowStepAllowed(horizontal, dz, seesLeader))
         return true; // stalled but no step fits: hold the rescue, keep watching
@@ -552,7 +552,7 @@ bool FollowAction::FollowHoldingBeforePacks(Unit* followTarget, bool& moved)
 bool FollowAction::CanDeadFollow(Unit* target)
 {
     //Move to corpse when dead and player is alive or not a ghost.
-    if (!sServerFacade.IsAlive(bot) && (sServerFacade.IsAlive(target) || !target->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST)))
+    if (!sServerFacade.IsAlive(bot) && (sServerFacade.IsAlive(target) || !HasPlayerFlagCompat(target, PLAYER_FLAGS_GHOST)))
     {
         return false;
     }

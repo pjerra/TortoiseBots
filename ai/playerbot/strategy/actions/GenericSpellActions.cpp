@@ -67,7 +67,7 @@ bool CanInterruptCurrentSpell(Spell const* spell)
     // same lifecycle contract used by the mature implementation: preparing,
     // casting, and delayed spells can still be interrupted. Finished/idle
     // spells are not current interrupt targets.
-    return spell && spell->getState() <= SPELL_STATE_DELAYED;
+    return spell && spell->getState() <= SpellStateLastCompat;
 }
 
 // Seconds between two out-of-combat cast attempts of the same upkeep buff on the
@@ -167,7 +167,7 @@ ObjectGuid BuffClaimRegistry::GroupScope(Player* bot)
     if (!group)
         return bot ? bot->GetObjectGuid() : ObjectGuid();
 
-    return ObjectGuid(BUFF_CLAIM_GROUP_SCOPE_TAG | uint64(group->GetId()));
+    return GroupScopeGuidCompat(group, BUFF_CLAIM_GROUP_SCOPE_TAG);
 }
 
 bool BuffClaimRegistry::IsTargetClaimedByOther(Player* caster, Unit* target, std::string const& spell)
@@ -959,7 +959,7 @@ uint32 HealPartyMemberAction::DownrankSpellId(Unit* target)
         std::string rankName = info->SpellName[0];
         strToLower(rankName);
         if (rankName != name || info->SpellFamilyName != topInfo->SpellFamilyName ||
-            info->SpellIconID != topInfo->SpellIconID)
+            SpellIconIdCompat(info) != SpellIconIdCompat(topInfo))
             continue;
         uint32 heal = 0;
         for (uint32 effect = 0; effect < MAX_EFFECT_INDEX; ++effect)

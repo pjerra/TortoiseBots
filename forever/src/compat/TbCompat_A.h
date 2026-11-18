@@ -7,6 +7,13 @@
 // and the line is also in forever/docs/SLICE1-R4A-NOTES.md under "Different answers".
 #pragma once
 
+// The VMAP manager class: the core's VMapFactory.h only forward-declares it, and the module reads its floor height directly
+// (MovementActions.cpp magma guard). Its header also defines VMAP_INVALID_HEIGHT_VALUE.
+#include "VMapManager.h"
+
+// The parsed pet packets the pet command helpers fill (section 12); the core's WorldSession.h only forward-declares them.
+#include "PetPackets.h"
+
 // ---------------------------------------------------------------------------------------------------------------
 // 1. NAMES a macro or a constant can carry. Each member rename is used by the bot only as `x->Name(...)` and no bot class
 //    defines a member of that name (grep over ai/ runtime/ host/ commands/), and the name does not occur in the core (grep
@@ -341,3 +348,160 @@ inline void HandleEmoteStateCompat(Unit* unit, uint32 emote)
 {
     unit->SetEmoteState(static_cast<Emote>(emote));
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// 9. SMALL SHAPE DIFFERENCES found in the actions, triggers and warrior files.
+// ---------------------------------------------------------------------------------------------------------------
+// "Is the unit under water". T Unit.h:679 IsUnderwater(), F Unit.h:1115 IsUnderWater() (the bot's ServerFacade has a member
+// IsUnderwater of its own, so the name cannot be a macro).
+inline bool IsUnderwaterCompat(Unit const* unit) { return unit->IsUnderWater(); }
+
+// A point near an object, free of obstacles. T Object.cpp:2399 GetNearPoint(searcher, x, y, z, searcherBoundingRadius,
+// distance2d, absAngle): the point is distance2d + both bounding radii away. F Object.cpp:2777 GetNearPoint(searcher, x, y, z,
+// distance2d, absAngle) takes no radius and adds both COMBAT reaches itself (GetNearPoint2D, :2748-2754), so the searcher's
+// radius argument is dropped. DIFFERENT ANSWER: the distance differs by (combat reach - bounding radius) of the two units.
+inline void GetNearPointCompat(WorldObject const* target, WorldObject const* searcher, float& x, float& y, float& z,
+    float /*searcherBoundingRadius*/, float distance2d, float absAngle)
+{
+    target->GetNearPoint(searcher, x, y, z, distance2d, absAngle);
+}
+
+// A player flag (T `HasFlag(PLAYER_FLAGS, flag)` on the object, F Player::HasPlayerFlag, Player.h:1306) and a unit flag (T
+// `HasFlag(UNIT_FIELD_FLAGS, flag)`, F Unit.h:862 HasUnitFlag). The flag names the bot uses (PLAYER_FLAGS_GHOST, UNIT_FLAG_NOT_SELECTABLE)
+// exist on both cores with the same meaning. A non-player object has no player flags.
+inline bool HasPlayerFlagCompat(WorldObject const* obj, uint32 flag)
+{
+    Player const* player = obj->ToPlayer();
+    return player && player->HasPlayerFlag(static_cast<PlayerFlags>(flag));
+}
+inline bool HasUnitFlagCompat(Unit const* unit, uint32 flag)
+{
+    return unit->HasUnitFlag(static_cast<UnitFlags>(flag));
+}
+
+// Does the straight line between two points hit a static collision model. T Map.h:577 FindCollisionModel(...) != nullptr (the static
+// model tree); F has the same question as the VMAP line of sight (Map.h:509): no line of sight over the static models.
+inline bool LineHitsCollisionModelCompat(Map const* map, float x1, float y1, float z1, float x2, float y2, float z2)
+{
+    return !map->isInLineOfSight(PhasingHandler::GetEmptyPhaseShift(), x1, y1, z1, x2, y2, z2, LINEOFSIGHT_CHECK_VMAP, VMAP::ModelIgnoreFlags::Nothing);
+}
+
+// T Map::IsBattleGround, F Map.h:383 IsBattleground.
+inline bool MapIsBattlegroundCompat(Map const* map) { return map->IsBattleground(); }
+
+// The unit the player's client is moving. T Player::GetMover; F Unit.h:1275 GetUnitBeingMoved (the unit under direct client control).
+inline Unit* PlayerMoverCompat(Player* player) { return player->GetUnitBeingMoved(); }
+
+// Recompute one speed. T Unit::UpdateSpeed(type, forced) (forced = send the change at once); F Unit.h:1741 UpdateSpeed(type) always
+// sends it.
+inline void UpdateSpeedCompat(Unit* unit, UnitMoveType type, bool /*forced*/) { unit->UpdateSpeed(type); }
+
+// The unit a threat list currently points at. T getCurrentVictim() is a hostile reference (and getTarget its unit), F
+// ThreatManager.h:119 GetCurrentVictim returns the unit.
+inline Unit* ThreatCurrentVictimCompat(ThreatManager& threat) { return threat.GetCurrentVictim(); }
+
+// A spell's range after the player's own modifiers. T `ApplySpellMod(spellId, SPELLMOD_RANGE, range)`; F Player.h:2142
+// ApplySpellMod(SpellInfo const*, SpellModOp::Range, range).
+inline void ApplySpellModRangeCompat(Player* player, uint32 spellId, float& range)
+{
+    if (SpellInfo const* info = sSpellMgr.GetSpellInfo(spellId, DIFFICULTY_NONE))
+        player->ApplySpellMod(info, SpellModOp::Range, range);
+}
+
+// The icon identity of a spell (the ranks of one spell share it; the bot only compares two of them). T SpellEntry::SpellIconID (an
+// index of SpellIcon.dbc), F SpellInfo.h:415 IconFileDataId (the icon's file data id) through the mirror's link to the core spell.
+// DIFFERENT ANSWER: another number space; equal for the ranks of one spell on both, but not the same value.
+inline uint32 SpellIconIdCompat(SpellEntry const* entry)
+{
+    SpellInfo const* info = GetSpellInfoCompat(entry);
+    return info ? info->IconFileDataId : 0;
+}
+
+// Is `self` behind `target`. T Unit.cpp:3242 IsBehindTarget(target, strict): not within the target's front arc (pi); the strict form
+// also reads a creature's facing (its victim and its cast target guid). F has isInBack on the other unit with its own arc rule
+// (Object.cpp:674) and no creature cast-target guid. The bot calls it with strict = false only, which is carried as
+// !HasInArc(target -> self, pi) (HasInArcCompat); a strict call is refused.
+inline bool IsBehindTargetCompat(Unit const* self, Unit const* target, bool strict)
+{
+    ASSERT(!strict);
+    return !HasInArcCompat(target, self, float(M_PI));
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// 10. GROUPS.
+// ---------------------------------------------------------------------------------------------------------------
+// Walk a group's member references the old way: `for (ref = first; ref; ref = next)`. T Group::GetFirstMember() and the reference's
+// next() end with a null pointer; F keeps the references in a ring closed by the list head (LinkedList.h:44, RefManager.h:30-40),
+// so the end is detected against the list's end iterator and a null pointer is handed back.
+inline GroupReference* GroupFirstMemberCompat(Group* group)
+{
+    GroupRefManager& members = group->GetMembers();
+    return members.begin() == members.end() ? nullptr : &*members.begin();
+}
+inline GroupReference* GroupNextMemberCompat(Group* group, GroupReference* ref)
+{
+    LinkedListElement* next = ref->next();
+    return next == group->GetMembers().end().node() ? nullptr : static_cast<GroupReference*>(next);
+}
+
+// The member the group marked as main tank (an empty guid when none). T Group::GetMainTankGuid; F keeps it as the MAINTANK flag of
+// the member slot (Group.h:77, :211-221).
+inline ObjectGuid GroupMainTankGuidCompat(Group const* group)
+{
+    for (Group::MemberSlot const& slot : group->GetMemberSlots())
+        if (slot.flags & MEMBER_FLAG_MAINTANK)
+            return slot.guid;
+    return ObjectGuid::Empty;
+}
+
+
+// ---------------------------------------------------------------------------------------------------------------
+// 11. SPELL OBJECTS the healing triggers read.
+// ---------------------------------------------------------------------------------------------------------------
+// What one effect of a cast would do to a target. T Spell.h:372 CalculateDamage(effectIndex, target) (an int); F Spell.h:554
+// CalculateDamage(effect row, target) (a double). The effect row is the cast spell's own.
+inline int32 SpellCalculateDamageCompat(Spell* spell, uint32 effect, Unit* target)
+{
+    SpellInfo const* info = spell->GetSpellInfo();
+    if (!info || effect >= info->GetEffects().size())
+        return 0;
+    return static_cast<int32>(spell->CalculateDamage(info->GetEffect(static_cast<SpellEffIndex>(effect)), target));
+}
+
+// The mana a cast costs. T Spell.h:467 GetPowerCost (the one cost of the spell's power type); F Spell.h:713 a list of power costs
+// (one per power type). Only the mana entry is read: the bot asks it for mana healers' savings. DIFFERENT ANSWER: a spell paid in
+// another power reads 0 here and its cost on T.
+inline uint32 SpellPowerCostCompat(Spell const* spell)
+{
+    uint32 mana = 0;
+    for (SpellPowerCost const& cost : spell->GetPowerCost())
+        if (cost.Power == POWER_MANA && cost.Amount > 0)
+            mana += static_cast<uint32>(cost.Amount);
+    return mana;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// 12. PET COMMANDS. The bot sends a pet command the way a client would. T builds the packet CMSG_PET_ACTION (pet guid, action word,
+//     target guid) and hands it to the session's handler; F's handler takes the parsed packet (Server/Packets/PetPackets.h:192-203,
+//     :51-59), so the three values fill its fields. The action word is the same on both cores (the button type in the top byte,
+//     ACT_COMMAND / ACT_REACTION, and the command in the low 24 bits).
+// ---------------------------------------------------------------------------------------------------------------
+inline void HandlePetActionCompat(WorldSession* session, ObjectGuid const& petGuid, uint32 action, ObjectGuid const& targetGuid)
+{
+    WorldPackets::Pet::PetAction packet{ WorldPacket(CMSG_PET_ACTION) };
+    packet.PetGUID = petGuid;
+    packet.Action = action;
+    packet.TargetGUID = targetGuid;
+    session->HandlePetAction(packet);
+}
+
+inline void HandlePetAbandonCompat(WorldSession* session, ObjectGuid const& petGuid)
+{
+    WorldPackets::Pet::PetAbandon packet{ WorldPacket(CMSG_PET_ABANDON) };
+    packet.Pet = petGuid;
+    session->HandlePetAbandon(packet);
+}
+
+// The scope guid the group buff claims use. T builds a synthetic guid out of a tag and the group id (Group.h:215); F uses the
+// group's own guid (Group.h:312), which no unit or player can share. The claims only compare it and take its raw value.
+inline ObjectGuid GroupScopeGuidCompat(Group const* group, uint64 /*tag*/) { return group->GetGUID(); }

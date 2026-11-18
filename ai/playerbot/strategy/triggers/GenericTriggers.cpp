@@ -1339,7 +1339,7 @@ bool TankAssistTrigger::IsActive()
     Unit* victim = currentTarget->GetVictim();
     Player* victimPlayer = victim ? dynamic_cast<Player*>(victim) : nullptr;
     Group* group = bot->GetGroup();
-    ObjectGuid const mainTank = group ? group->GetMainTankGuid() : ObjectGuid();
+    ObjectGuid const mainTank = group ? GroupMainTankGuidCompat(group) : ObjectGuid();
     bool const isExplicitMainTank = group && !mainTank.IsEmpty() && mainTank == bot->getObjectGuid();
     bool holdsCurrent = TankHoldsCurrentTarget(victim == bot,
         victimPlayer && ai->IsTank(victimPlayer), isExplicitMainTank);
@@ -1379,7 +1379,7 @@ bool RearFlankNeededTrigger::IsActive()
         return false;
     if (AI_VALUE2(bool, "behind", "current target"))
         return false;
-    return target->HasInArc(bot, 2.0f * (float)M_PI / 2.0f);
+    return HasInArcCompat(target, bot, 2.0f * (float)M_PI / 2.0f);
 }
 
 bool IsNotFacingTargetTrigger::IsActive()
@@ -1535,7 +1535,7 @@ bool WandBlocksCcTrigger::ComputeCcCastWaiting()
         if (!rangeEntry)
             continue;
         float maxRange = SpellRangeMax(rangeEntry);
-        bot->ApplySpellMod(spellId, SPELLMOD_RANGE, maxRange);
+        ApplySpellModRangeCompat(bot, spellId, maxRange);
         if (GetDistanceCompat(bot, target, SizeFactor::CombatReach) > maxRange)
             continue;
 

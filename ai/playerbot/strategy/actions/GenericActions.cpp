@@ -328,11 +328,7 @@ bool SetPetAction::Execute(Event& event)
             const uint32 spellId = REACT_AGGRESSIVE;
             const uint32 data = (flag << 24) | spellId;
 
-            WorldPacket packet(CMSG_PET_ACTION);
-            packet << petGuid;
-            packet << data;
-            packet << uint64(0);
-            bot->GetSession()->HandlePetAction(packet);
+            HandlePetActionCompat(bot->GetSession(), petGuid, data, ObjectGuid());
             bot->PetSpellInitialize();
 
             ai->TellPlayer(requester, "Setting pet to aggressive mode");
@@ -346,11 +342,7 @@ bool SetPetAction::Execute(Event& event)
             const uint32 spellId = REACT_DEFENSIVE;
             const uint32 data = (flag << 24) | spellId;
 
-            WorldPacket packet(CMSG_PET_ACTION);
-            packet << petGuid;
-            packet << data;
-            packet << uint64(0);
-            bot->GetSession()->HandlePetAction(packet);
+            HandlePetActionCompat(bot->GetSession(), petGuid, data, ObjectGuid());
             bot->PetSpellInitialize();
 
             ai->TellPlayer(requester, "Setting pet to defensive mode");
@@ -364,11 +356,7 @@ bool SetPetAction::Execute(Event& event)
             const uint32 spellId = REACT_PASSIVE;
             const uint32 data = (flag << 24) | spellId;
 
-            WorldPacket packet(CMSG_PET_ACTION);
-            packet << petGuid;
-            packet << data;
-            packet << uint64(0);
-            bot->GetSession()->HandlePetAction(packet);
+            HandlePetActionCompat(bot->GetSession(), petGuid, data, ObjectGuid());
             bot->PetSpellInitialize();
 
             ai->TellPlayer(requester, "Setting pet to passive mode");
@@ -383,11 +371,7 @@ bool SetPetAction::Execute(Event& event)
             const uint32 spellId = COMMAND_FOLLOW;
             const uint32 command = (flag << 24) | spellId;
 
-            WorldPacket data(CMSG_PET_ACTION);
-            data << petGuid;
-            data << command;
-            data << targetGuid;
-            bot->GetSession()->HandlePetAction(data);
+            HandlePetActionCompat(bot->GetSession(), petGuid, command, targetGuid);
 
             ai->TellPlayer(requester, "Setting pet to follow me");
             return true;
@@ -401,11 +385,7 @@ bool SetPetAction::Execute(Event& event)
             const uint32 spellId = COMMAND_STAY;
             const uint32 command = (flag << 24) | spellId;
 
-            WorldPacket data(CMSG_PET_ACTION);
-            data << petGuid;
-            data << command;
-            data << targetGuid;
-            bot->GetSession()->HandlePetAction(data);
+            HandlePetActionCompat(bot->GetSession(), petGuid, command, targetGuid);
 
             ai->TellPlayer(requester, "Setting pet to stay in place");
             return true;
@@ -431,11 +411,7 @@ bool SetPetAction::Execute(Event& event)
                 const uint32 spellId = COMMAND_ATTACK;
                 const uint32 command = (flag << 24) | spellId;
 
-                WorldPacket data(CMSG_PET_ACTION);
-                data << petGuid;
-                data << command;
-                data << targetGuid;
-                bot->GetSession()->HandlePetAction(data);
+                HandlePetActionCompat(bot->GetSession(), petGuid, command, targetGuid);
 
                 ai->TellPlayer(requester, "Sending pet to attack");
                 return true;
@@ -470,11 +446,7 @@ bool SetPetAction::Execute(Event& event)
                 const uint32 spellId = COMMAND_DISMISS;
                 const uint32 command = (flag << 24) | spellId;
 
-                WorldPacket data(CMSG_PET_ACTION);
-                data << petGuid;
-                data << command;
-                data << targetGuid;
-                bot->GetSession()->HandlePetAction(data);
+                HandlePetActionCompat(bot->GetSession(), petGuid, command, targetGuid);
 
                 ai->ChangeStrategy("+pet", BotState::BOT_STATE_COMBAT);
                 ai->ChangeStrategy("+pet", BotState::BOT_STATE_NON_COMBAT);
@@ -496,10 +468,7 @@ bool SetPetAction::Execute(Event& event)
                 // Send pet action packet
                 const ObjectGuid& petGuid = pet->getObjectGuid();
 
-                WorldPacket packet(CMSG_PET_ABANDON);
-                packet << petGuid;
-
-                bot->GetSession()->HandlePetAbandon(packet);
+                HandlePetAbandonCompat(bot->GetSession(), petGuid);
 
                 return true;
             }
@@ -723,10 +692,6 @@ bool PetAttackAction::Execute(Event& event)
     const uint32 spellId = COMMAND_ATTACK;
     const uint32 command = (flag << 24) | spellId;
 
-    WorldPacket data(CMSG_PET_ACTION);
-    data << petGuid;
-    data << command;
-    data << targetGuid;
-    bot->GetSession()->HandlePetAction(data);
+    HandlePetActionCompat(bot->GetSession(), petGuid, command, targetGuid);
     return true;
 }

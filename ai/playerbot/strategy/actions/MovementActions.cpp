@@ -489,7 +489,7 @@ bool MovementAction::WalkChecked(const WorldPosition& endPos, bool walk)
 {
     if (!ai->CanMove() || !endPos.isValid() || endPos.GetMapId() != bot->GetMapId() ||
         bot->IsFlying() || bot->IsTaxiFlying() || bot->GetTransport() || !bot->IsAlive() ||
-        bot->IsInWater() || bot->IsUnderwater() || HasMovementFlagCompat(bot, MOVEFLAG_SWIMMING) ||
+        bot->IsInWater() || IsUnderwaterCompat(bot) || HasMovementFlagCompat(bot, MOVEFLAG_SWIMMING) ||
         sServerFacade.IsUnderwater(bot))
         return false;
 
@@ -526,7 +526,7 @@ bool MovementAction::MoveNear(WorldObject* target, float distance)
     {
 #ifdef CMANGOS
         float dist = distance + ObjectBoundingRadiusCompat(target);
-        target->GetNearPoint(bot, x, y, z, ObjectBoundingRadiusCompat(bot), std::min(dist, ai->GetRange("follow")), angle);
+        GetNearPointCompat(target, bot, x, y, z, ObjectBoundingRadiusCompat(bot), std::min(dist, ai->GetRange("follow")), angle);
 #endif
 #ifdef MANGOS
         float x = target->getPositionX() + cos(angle) * distance,
@@ -1011,7 +1011,7 @@ std::string MovementAction::GetFailNote()
     LastMovement& lastMove = AI_VALUE(LastMovement&, "last movement");
     bool const tried = lastMove.moveTries != failNoteMark;
     return MoveFailNote(MoveFailNoteReason(failNoteMark, lastMove.moveTries, MoveFailReasonName(lastMove.moveFailReason)),
-        bot->IsInWater(), bot->IsUnderwater(), HasMovementFlagCompat(bot, MOVEFLAG_SWIMMING), tried ? lastMove.movePathType : 0);
+        bot->IsInWater(), IsUnderwaterCompat(bot), HasMovementFlagCompat(bot, MOVEFLAG_SWIMMING), tried ? lastMove.movePathType : 0);
 }
 
 std::atomic<uint32_t> MovementAction::routeReuseCount{ 0 };
@@ -1366,7 +1366,7 @@ bool MovementAction::DispatchMovement(TravelPath movePath, bool generatePath, bo
     // it still runs.
     LastMovement& replayLog = AI_VALUE(LastMovement&, "last movement");
     if (!hazardRewrote && ai::RouteReplayApplies(hazardRewrote,
-            bot->IsInWater() || bot->IsUnderwater() || HasMovementFlagCompat(bot, MOVEFLAG_SWIMMING) ||
+            bot->IsInWater() || IsUnderwaterCompat(bot) || HasMovementFlagCompat(bot, MOVEFLAG_SWIMMING) ||
             sServerFacade.IsUnderwater(bot)))
     {
         std::vector<WorldPosition> replayPath;
@@ -1628,7 +1628,7 @@ static bool SwimHandoffLegClear(PlayerbotAI* ai, Unit* mover, bool ignoreEnemyTa
 MovementAction::SwimHandoffResult MovementAction::SwimHandoff(const WorldPosition& startPos, const WorldPosition& endPos,
     TravelPath& movePath, LastMovement& lastMove, PackHoldResult* packHold, bool ignoreEnemyTargets)
 {
-    if (!(bot->IsInWater() || bot->IsUnderwater() || HasMovementFlagCompat(bot, MOVEFLAG_SWIMMING)))
+    if (!(bot->IsInWater() || IsUnderwaterCompat(bot) || HasMovementFlagCompat(bot, MOVEFLAG_SWIMMING)))
         return SwimHandoffResult::NotTaken;
     // Round 1 (a): a follow that holds before packs keeps the old behaviour: never hand off.
     if (packHold != nullptr)
@@ -1652,10 +1652,10 @@ MovementAction::SwimHandoffResult MovementAction::SwimHandoff(const WorldPositio
     Map* const map = bot->GetMap();
     bool const isShortcut0x11 = f.coreType == (ai::kPathTypeNormal | ai::kPathTypeNotUsingPath);
     f.coreLineHitsModel = isShortcut0x11
-        ? map->FindCollisionModel(startPos.getX(), startPos.getY(), startPos.getZ(),
-            coreEnd.x, coreEnd.y, coreEnd.z + 0.5f) != nullptr
-        : map->FindCollisionModel(startPos.getX(), startPos.getY(), startPos.getZ(),
-            coreEnd.x, coreEnd.y, coreEnd.z) != nullptr;
+        ? LineHitsCollisionModelCompat(map, startPos.getX(), startPos.getY(), startPos.getZ(),
+            coreEnd.x, coreEnd.y, coreEnd.z + 0.5f)
+        : LineHitsCollisionModelCompat(map, startPos.getX(), startPos.getY(), startPos.getZ(),
+            coreEnd.x, coreEnd.y, coreEnd.z);
     TerrainInfo const* const terrain = map->GetTerrain();
     GridMapLiquidData here{};
     f.swimmableHere = TerrainIsSwimmableCompat(terrain, startPos.getX(), startPos.getY(), startPos.getZ(), 1.5f, &here);
@@ -1681,9 +1681,9 @@ MovementAction::SwimHandoffResult MovementAction::SwimHandoff(const WorldPositio
     else
         f.endHasGround = false;
     f.surfaceLineClear = f.swimmableHere &&
-        map->isInLineOfSight(startPos.getX(), startPos.getY(), startPos.getZ() + 0.5f,
+        IsInLineOfSightCompat(map, startPos.getX(), startPos.getY(), startPos.getZ() + 0.5f,
             startPos.getX(), startPos.getY(), surfaceZ, true) &&
-        map->isInLineOfSight(startPos.getX(), startPos.getY(), surfaceZ,
+        IsInLineOfSightCompat(map, startPos.getX(), startPos.getY(), surfaceZ,
             endPos.getX(), endPos.getY(), endPos.getZ() + 0.5f, true);
     ai::SwimHandoff const kind = ai::ChooseSwimHandoff(f);
     // Round 1: name the stall the hand-off will not take (the brief's "model on the line, over
@@ -2403,7 +2403,7 @@ bool MovementAction::TryPlaceUnstick(LastMovement& lastMove)
     ai::PlaceUnstickInputs in;
     in.flagOn = true;
     in.inInstance = map->IsDungeon();
-    in.inBattleground = bot->InBattleGround() || map->IsBattleGround();
+    in.inBattleground = bot->InBattleGround() || MapIsBattlegroundCompat(map);
     in.hasMaster = hasMaster;
     in.masterYd = hasMaster ? bot->GetDistance(master) : 0.0f;
     in.masterOnTransport = hasMaster && master->GetTransport() != nullptr;
@@ -2412,7 +2412,7 @@ bool MovementAction::TryPlaceUnstick(LastMovement& lastMove)
     in.runCommanded = TortoiseBots::BotCommands::IsInCommandedGroup(bot);
     in.botAlive = sServerFacade.IsAlive(bot);
     in.botCharmed = !bot->GetCharmerGuid().IsEmpty();
-    in.botCharming = ai::PlaceUnstickBotPossessing(bot->GetMover() == bot);
+    in.botCharming = ai::PlaceUnstickBotPossessing(PlayerMoverCompat(bot) == bot);
     in.botCasting = bot->IsNonMeleeSpellCasted(true);
     in.masterFightNearBot = ai::PlaceUnstickIsFight(hasMaster && master->IsInCombat(), liveTarget,
         liveTarget ? bot->GetDistance(target) : 0.0f);
@@ -2607,12 +2607,12 @@ void MovementAction::UpdateMovementState()
     if (bot->IsInWater() || sServerFacade.IsUnderwater(bot))
     {
 		bot->m_movementInfo.AddMovementFlag(MOVEFLAG_SWIMMING);
-        bot->UpdateSpeed(MOVE_SWIM, true);
+        UpdateSpeedCompat(bot, MOVE_SWIM, true);
     }
     else
     {
 		bot->m_movementInfo.RemoveMovementFlag(MOVEFLAG_SWIMMING);
-        bot->UpdateSpeed(MOVE_SWIM, true);
+        UpdateSpeedCompat(bot, MOVE_SWIM, true);
     }
 
 }
@@ -3315,7 +3315,7 @@ bool MovementAction::HoldChaseOutsideKeepout(WorldObject* target, float distance
         // per-bot action log (AiPlayerbot.EnableActionLog) and the detail
         // server log, which carries the other [BOT CHASE] lines.
         botdiag::BotActionLog::Write(ai, "KEEPOUT_SET_ASIDE", "target=%s entry=%u guid=0x%llx forMs=%u",
-            target->GetName(), target->GetEntry(), (unsigned long long)GuidRawCompat(targetGuid),
+            CStrCompat(target->GetName()), target->GetEntry(), (unsigned long long)GuidRawCompat(targetGuid),
             kCreatureAuraSetAsideMs);
         sLog.outDetail("[BOT CHASE] %s: set aside %s (entry %u) for %u ms - it stands in a creature aura keep-out",
             CStrCompat(bot->GetName()), CStrCompat(target->GetName()), target->GetEntry(), kCreatureAuraSetAsideMs);
@@ -3797,8 +3797,8 @@ bool MovementAction::Flee(Unit *target)
     if (ai::MoveBlockedByCast(bot->IsNonMeleeSpellCasted(false, true, true), false))
         return false;
 
-    HostileReference* ref = sServerFacade.GetThreatManager(target).getCurrentVictim();
-    const bool isTarget = ref && ref->getTarget() == bot;
+    Unit* const currentVictim = ThreatCurrentVictimCompat(sServerFacade.GetThreatManager(target));
+    const bool isTarget = currentVictim == bot;
 
     time_t lastFlee = AI_VALUE(LastMovement&, "last movement").lastFlee;
     time_t now = time(0);
@@ -4642,11 +4642,7 @@ void AvoidAoeAction::RecallPetFromHazard(float radius, const WorldPosition& cent
     uint8 const flag = ACT_COMMAND;
     uint32 const spellId = COMMAND_FOLLOW;
     uint32 const command = (uint32(flag) << 24) | spellId;
-    WorldPacket data(CMSG_PET_ACTION);
-    data << petGuid;
-    data << command;
-    data << targetGuid;
-    bot->GetSession()->HandlePetAction(data);
+    HandlePetActionCompat(bot->GetSession(), petGuid, command, targetGuid);
 }
 
 bool AvoidAoeAction::AvoidAuraWithDynamicObj(float& outRadius, WorldPosition& outCenter)
@@ -4729,7 +4725,7 @@ bool AvoidAoeAction::AvoidTriggerNpc(float& outRadius, WorldPosition& outCenter)
         // with a permanent burning aura (Fire Shield II 184) does not — its
         // school-damage pulse keeps the invisible-emitter-only rule, or
         // melee would step out forever and never fight it.
-        bool const selectable = !unit->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+        bool const selectable = !HasUnitFlagCompat(unit, UNIT_FLAG_NOT_SELECTABLE);
         Unit::AuraList const& periodic = unit->GetAurasByType(SPELL_AURA_PERIODIC_TRIGGER_SPELL);
         for (Unit::AuraList::const_iterator it = periodic.begin(); it != periodic.end(); ++it)
         {
@@ -5091,7 +5087,7 @@ bool MoveToLootAction::Execute(Event& event)
 
             if (!wo)
             {
-                ai->TellPlayerNoFacing(GetMaster(), "Can not move to loot " + std::to_string(loot.guid) +  " because it no longer exists.");
+                ai->TellPlayerNoFacing(GetMaster(), "Can not move to loot " + std::to_string(GuidRawCompat(loot.guid)) +  " because it no longer exists.");
             }
             else
             {
@@ -5179,7 +5175,7 @@ bool SetFacingTargetAction::isUseful()
 bool SetFacingTargetAction::isPossible()
 {
     if (sServerFacade.IsFrozen(bot) || bot->IsPolymorphed() ||
-        (sServerFacade.UnitIsDead(bot) && !bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST)) ||
+        (sServerFacade.UnitIsDead(bot) && !HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST)) ||
         bot->IsBeingTeleported() ||
         bot->HasAuraType(SPELL_AURA_MOD_CONFUSE) || sServerFacade.IsCharmed(bot) ||
         bot->HasAuraType(SPELL_AURA_MOD_STUN) || bot->IsTaxiFlying() ||
@@ -5242,7 +5238,7 @@ bool SetBehindTargetAction::isUseful()
     // Issue #911: position only once in melee reach (donor shape); closing in
     // is "reach melee"'s job, which this ACTION_HIGH row used to starve.
     const bool inMeleeReach = bot->CanReachWithMeleeAutoAttack(target);
-    const bool alreadyBehind = bot->IsBehindTarget(target, false);
+    const bool alreadyBehind = IsBehindTargetCompat(bot, target, false);
     if (!inMeleeReach || alreadyBehind)
         return false;
 
@@ -5288,7 +5284,7 @@ bool RearFlankAction::isUseful()
     // Front-arc-only (mirrors the trigger): the tail clause would re-fire
     // at set-behind's exact-rear destination and ping-pong every tick.
     // (1.12 HasInArc takes the target first, arc second.)
-    return target->HasInArc(bot, 2.0f * (float)M_PI / 2.0f);
+    return HasInArcCompat(target, bot, 2.0f * (float)M_PI / 2.0f);
 }
 
 bool RearFlankAction::isPossible()
@@ -5523,7 +5519,7 @@ bool MoveToAction::Execute(Event& event)
 
     GuidPosition guid = guidList.front();
 
-    return MoveTo(guid.GetMapId(), guid.getX(), guid.getY(), guid.getZ());
+    return MoveTo(guid.WorldPosition::GetMapId(), guid.getX(), guid.getY(), guid.getZ());
 }
 
 bool JumpAction::isUseful()

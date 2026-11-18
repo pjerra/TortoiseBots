@@ -592,7 +592,7 @@ namespace ai
                 Group* group = bot->GetGroup();
                 if (group)
                 {
-                    for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+                    for (GroupReference* ref = GroupFirstMemberCompat(group); ref; ref = GroupNextMemberCompat(group, ref))
                     {
                         Player* member = ref->GetSource();
                         if (!member || member == bot || !member->IsAlive() || !member->IsInWorld() ||

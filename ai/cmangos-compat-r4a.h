@@ -109,3 +109,73 @@ inline void HandleEmoteStateCompat(Unit* unit, uint32 emote)
 {
     unit->HandleEmoteState(emote);
 }
+
+// Small shape differences (see forever/src/compat/TbCompat_A.h section 9).
+inline bool IsUnderwaterCompat(Unit const* unit) { return unit->IsUnderwater(); }
+
+inline void GetNearPointCompat(WorldObject const* target, WorldObject const* searcher, float& x, float& y, float& z,
+    float searcherBoundingRadius, float distance2d, float absAngle)
+{
+    target->GetNearPoint(searcher, x, y, z, searcherBoundingRadius, distance2d, absAngle);
+}
+
+inline bool HasPlayerFlagCompat(WorldObject const* obj, uint32 flag) { return obj->HasFlag(PLAYER_FLAGS, flag); }
+inline bool HasUnitFlagCompat(Unit const* unit, uint32 flag) { return unit->HasFlag(UNIT_FIELD_FLAGS, flag); }
+
+inline bool LineHitsCollisionModelCompat(Map* map, float x1, float y1, float z1, float x2, float y2, float z2)
+{
+    return map->FindCollisionModel(x1, y1, z1, x2, y2, z2) != nullptr;
+}
+
+inline bool MapIsBattlegroundCompat(Map const* map) { return map->IsBattleGround(); }
+inline Unit* PlayerMoverCompat(Player* player) { return player->GetMover(); }
+inline void UpdateSpeedCompat(Unit* unit, UnitMoveType type, bool forced) { unit->UpdateSpeed(type, forced); }
+
+inline Unit* ThreatCurrentVictimCompat(ThreatManager& threat)
+{
+    HostileReference* ref = threat.getCurrentVictim();
+    return ref ? ref->getTarget() : nullptr;
+}
+
+inline void ApplySpellModRangeCompat(Player* player, uint32 spellId, float& range)
+{
+    player->ApplySpellMod(spellId, SPELLMOD_RANGE, range);
+}
+
+inline uint32 SpellIconIdCompat(SpellEntry const* entry) { return entry->SpellIconID; }
+
+inline bool IsBehindTargetCompat(Unit const* self, Unit const* target, bool strict) { return self->IsBehindTarget(target, strict); }
+
+// The last value of the spell state enum (T Spell.h:206-214 ends with SPELL_STATE_DELAYED).
+constexpr SpellState SpellStateLastCompat = SPELL_STATE_DELAYED;
+
+// Groups (see forever/src/compat/TbCompat_A.h section 10).
+inline GroupReference* GroupFirstMemberCompat(Group* group) { return group->GetFirstMember(); }
+inline GroupReference* GroupNextMemberCompat(Group* /*group*/, GroupReference* ref) { return ref->next(); }
+inline ObjectGuid GroupMainTankGuidCompat(Group const* group) { return group->GetMainTankGuid(); }
+
+// Spell objects (see forever/src/compat/TbCompat_A.h section 11).
+inline int32 SpellCalculateDamageCompat(Spell* spell, uint32 effect, Unit* target)
+{
+    return spell->CalculateDamage(SpellEffectIndex(effect), target);
+}
+inline uint32 SpellPowerCostCompat(Spell const* spell) { return spell->GetPowerCost(); }
+
+// Pet commands (see forever/src/compat/TbCompat_A.h section 12): the packet the bot always built.
+inline void HandlePetActionCompat(WorldSession* session, ObjectGuid const& petGuid, uint32 action, ObjectGuid const& targetGuid)
+{
+    WorldPacket packet(CMSG_PET_ACTION);
+    packet << petGuid;
+    packet << action;
+    packet << targetGuid;
+    session->HandlePetAction(packet);
+}
+
+inline void HandlePetAbandonCompat(WorldSession* session, ObjectGuid const& petGuid)
+{
+    WorldPacket packet(CMSG_PET_ABANDON);
+    packet << petGuid;
+    session->HandlePetAbandon(packet);
+}
+
+inline ObjectGuid GroupScopeGuidCompat(Group const* group, uint64 tag) { return ObjectGuid(tag | uint64(group->GetId())); }

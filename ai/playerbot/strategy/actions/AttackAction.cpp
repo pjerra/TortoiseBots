@@ -96,8 +96,8 @@ bool AttackMyTargetAction::Execute(Event& event)
     {
         const ObjectGuid guid = requester->GetSelectionGuid();
         SC_LOG("attack-cmd selection bot=%s requester=%s selGuid=0x%016llx",
-               bot ? bot->GetName() : "(null)",
-               requester->GetName(),
+               CStrCompat(bot ? bot->GetName() : "(null)"),
+               CStrCompat(requester->GetName()),
                (unsigned long long)GuidRawCompat(guid));
 
         if (!guid.IsEmpty())
@@ -253,7 +253,7 @@ bool AttackAction::ArmsMeleeSwing()
 {
     // Why "ranged" bots without a ranged weapon still swing: see Attack().
     return !ai->IsHeal(bot) &&
-        (!ai->IsRanged(bot) || !bot->GetWeaponForAttack(RANGED_ATTACK, true, true));
+        (!ai->IsRanged(bot) || !GetWeaponForAttackCompat(bot, RANGED_ATTACK, true, true));
 }
 
 bool AttackAction::Attack(Player* requester, Unit* target, float maxDistance, bool acceptCurrentVictim)
