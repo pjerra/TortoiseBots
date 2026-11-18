@@ -1,6 +1,7 @@
 // Script registration for the module: the world tick, the config load and the `.tb` chat commands.
 #include "TbBotMgr.h"
 #include "compat/TbItemPrototype.h"
+#include "compat/TbSpellEntry.h"
 #include "AccountMgr.h"
 #include "Map.h"
 #include "ObjectAccessor.h"
@@ -9,7 +10,9 @@
 #include "CharacterCache.h"
 #include "Chat.h"
 #include "Creature.h"
+#include <bitset>
 #include <list>
+#include <string>
 #include "ChatCommand.h"
 #include "Log.h"
 #include "ObjectMgr.h"
@@ -18,6 +21,9 @@
 #include "ScriptMgr.h"
 #include "SpellMgr.h"
 #include "SpellInfo.h"
+#include "SpellAuraDefines.h"
+#include "Timer.h"
+#include "DB2Stores.h"
 
 using namespace Trinity::ChatCommands;
 using TortoiseBots::BotMgr;
@@ -47,6 +53,8 @@ public:
         // The item store is loaded by now (World.cpp:1608, and item_classic_block at :1631); fill every mirror once so the
         // bot brain looks items up without a lock (TbItemPrototype.cpp).
         tbcompat::FillAll();
+        // The spell store is loaded too (World.cpp:1471); size the mirror table now so every later lookup is one atomic read.
+        tbcompat::InitSpellTable();
         TC_LOG_INFO("server.loading", "TortoiseBots (ForeverCore port, spike): {}", BotMgr::Instance().Enabled() ? "enabled" : "disabled");
     }
 
@@ -99,6 +107,8 @@ public:
             { "where",  HandleWhere,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "status", HandleStatus, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "item",   HandleItem,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "spellscan", HandleSpellScan, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "spell",  HandleSpell,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
         {
@@ -245,6 +255,94 @@ public:
     {
         handler->PSendSysMessage("TortoiseBots: %s, %u bot session(s).", BotMgr::Instance().Enabled() ? "enabled" : "disabled",
             uint32(BotMgr::Instance().Count()));
+        return true;
+    }
+
+    // .tb spellscan: build the spell mirror for every spell the core has, and report what it cost and what the mirror
+    // could not hold. Read-only. An assert anywhere in the core accessors the fill makes would abort here, which is what
+    // the check is for.
+    static bool HandleSpellScan(ChatHandler* handler)
+    {
+        uint32 const started = getMSTime();
+        uint32 spells = 0, incomplete = 0, moreEffects = 0, multiSchool = 0, effects = 0;
+        std::string firstTen, moreEffectsIds;
+
+        sSpellMgr->ForEachSpellInfo([&](SpellInfo const* info)
+        {
+            SpellEntry const* entry = tbcompat::SpellProto(info);
+            if (!entry)
+                return;
+            ++spells;
+            effects += uint32(info->GetEffects().size());
+            if (entry->MoreEffects)
+            {
+                ++moreEffects;
+                if (moreEffects <= 5)
+                    moreEffectsIds += (moreEffectsIds.empty() ? "" : ", ") + std::to_string(entry->Id) + " (" + std::to_string(entry->MoreEffects) + ")";
+            }
+            if (std::bitset<32>(info->SchoolMask).count() > 1)
+                ++multiSchool;
+            if (entry->Incomplete)
+            {
+                ++incomplete;
+                if (incomplete <= 10)
+                    firstTen += (firstTen.empty() ? "" : "; ") + std::to_string(entry->Id) + " (" + entry->IncompleteReason + ")";
+            }
+        });
+
+        uint32 const ms = getMSTimeDiff(started, getMSTime());
+        handler->PSendSysMessage("TortoiseBots: spell mirrors: %u spells in %u ms, highest id %u, %u incomplete%s",
+            spells, ms, tbcompat::MaxSpellId(), incomplete, incomplete ? (" (first: " + firstTen + ")").c_str() : "");
+        handler->PSendSysMessage("TortoiseBots: effects: %u effect slots in all, %u spells with more than 3 effects%s, %u spells with more than one school.",
+            effects, moreEffects, moreEffects ? (" (first: " + moreEffectsIds + ")").c_str() : "", multiSchool);
+        return true;
+    }
+
+    // .tb spell <id>: the fields the spell mirror (TbSpellEntry.h) holds for one spell, for comparing it with the client's data.
+    static bool HandleSpell(ChatHandler* handler, uint32 spellId)
+    {
+        SpellEntry const* entry = tbcompat::SpellProto(spellId);
+        if (!entry)
+            return Fail(handler, "spell " + std::to_string(spellId) + " does not exist.");
+
+        if (entry->Incomplete)
+            handler->PSendSysMessage("TortoiseBots: INCOMPLETE: %s", entry->IncompleteReason.c_str());
+
+        char const* name = entry->SpellName[LOCALE_enUS].empty() ? "?" : entry->SpellName[LOCALE_enUS].c_str();
+        char const* rank = entry->Rank[LOCALE_enUS].empty() ? "" : entry->Rank[LOCALE_enUS].c_str();
+
+        // The range the bot looks up from rangeIndex, the same lookup (SERVER side: SpellRange.dbc).
+        float minRange = 0.0f, maxRange = 0.0f;
+        if (SpellRangeEntry const* range = sSpellRangeStore.LookupEntry(entry->rangeIndex))
+        {
+            minRange = range->RangeMin[0];
+            maxRange = range->RangeMax[0];
+        }
+
+        handler->PSendSysMessage("TortoiseBots: spell %u \"%s %s\": school %u (mask 0x%X), category %u, cast time %u ms, range %.1f-%.1f (idx %u), duration %d ms, levels %u/%u/%u (base/max/spell), recovery %u/%u ms, GCD %u ms (category %u), mana %u (%u%%), power %u.",
+            entry->Id, name, rank, entry->School, entry->Core ? entry->Core->SchoolMask : 0u, entry->Category,
+            entry->GetCastTime(nullptr), minRange, maxRange, entry->rangeIndex, entry->GetDuration(),
+            entry->baseLevel, entry->maxLevel, entry->spellLevel,
+            entry->RecoveryTime, entry->CategoryRecoveryTime, entry->StartRecoveryTime, entry->StartRecoveryCategory,
+            entry->manaCost, entry->ManaCostPercentage, entry->powerType);
+
+        for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
+        {
+            if (!entry->Effect[i] && !entry->EffectApplyAuraName[i])
+                continue;
+            handler->PSendSysMessage("TortoiseBots: effect %u: type %u, aura %u, base points %d + 1, die sides %d, misc %d, target A/B %u/%u, radius %u, trigger %u, item %u, chain %u, amp %.0f, points/level %.2f.",
+                i, entry->Effect[i], entry->EffectApplyAuraName[i], entry->EffectBasePoints[i], entry->EffectDieSides[i],
+                entry->EffectMiscValue[i], entry->EffectImplicitTargetA[i], entry->EffectImplicitTargetB[i],
+                entry->EffectRadiusIndex[i], entry->EffectTriggerSpell[i], entry->EffectItemType[i],
+                entry->EffectChainTarget[i], entry->Core && i < entry->Core->GetEffects().size() ? entry->Core->GetEffects()[i].Amplitude : 0.0f,
+                entry->EffectRealPointsPerLevel[i]);
+        }
+
+        handler->PSendSysMessage("TortoiseBots: targets 0x%X, family %u flags 0x%llX, attributes 0x%X/0x%X/0x%X, dispel %u, mechanic %u, stack %u, proc %u x%u, reagents %d/%u totem %u/%u, max targets %u, more effects %u.",
+            entry->Targets, entry->SpellFamilyName, (unsigned long long)entry->SpellFamilyFlags, entry->Attributes,
+            entry->AttributesEx, entry->AttributesEx2, entry->Dispel, entry->Mechanic, entry->StackAmount,
+            entry->procChance, entry->procCharges, entry->Reagent[0], entry->ReagentCount[0], entry->Totem[0],
+            entry->Totem[1], entry->MaxAffectedTargets, entry->MoreEffects);
         return true;
     }
 

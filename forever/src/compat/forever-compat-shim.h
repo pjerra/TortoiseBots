@@ -37,10 +37,11 @@ using Movement::Vector3;                         // G3D::Vector3, the point type
 using CreatureDataPair = std::pair<ObjectGuid::LowType const, CreatureData>;
 using GameObjectDataPair = std::pair<ObjectGuid::LowType const, GameObjectData>;
 
-// A macro, not `using`: bot headers forward-declare `struct SpellEntry;`, and a type alias cannot be redeclared as a
-// class. The macro renames the forward declaration with the rest (a class-keyed redeclaration of a defined class is
-// legal). ForeverCore never uses the old name.
-#define SpellEntry SpellInfo
+// SpellEntry is not an alias: the bot brain reads spell data as public fields (`spellInfo->Effect[i]`,
+// `pSpellInfo->EffectBasePoints[i]`), which SpellInfo keeps in effect rows and floats. It is our own struct with the old
+// field names, filled from SpellInfo on first use (TbSpellEntry.h/.cpp). Everything that FETCHES a spell hands back the
+// mirror: sSpellTemplate.LookupEntry<SpellEntry>, sSpellMgr.GetSpellEntry, spell->m_spellInfo, aura->GetSpellProto().
+#include "TbSpellEntry.h"
 
 // ItemPrototype is not an alias: the bot brain reads item data as public fields (`proto->Class`, `proto->ItemStat[i]`),
 // which ItemTemplate hides behind accessors. It is our own struct with the old field names, filled from ItemTemplate once
@@ -163,8 +164,47 @@ struct CmangosObjectAccessorProxy
 #define AREA_FLAG_CITY AreaFlags::LinkedChatSpecialArea      // 0x00000200
 #define AREA_FLAG_SLAVE_CAPITAL AreaFlags::AllowTradeChannel // 0x00000008
 
-// SpellMgr::GetSpellInfo needs the difficulty; cmangos asked for one spell id and got the single entry.
-#define GetSpellEntry(spellId) GetSpellInfo((spellId), DIFFICULTY_NONE)
+// cmangos's sSpellMgr.GetSpellEntry(spellId) returned the single spell_entry record; the bot brain wants that record's old
+// fields, so the call sites read GetSpellEntryCompat(spellId) (section 4), which exists on both cores.
+
+// Spell attribute bits the bot tests, under cmangos's names. Both cores number the Attr0..Attr4 words the same way (the
+// client's bit order; e.g. 0x40 passive, 0x10000000 not in combat), so each name is the bit the bot has always tested,
+// written as the ForeverCore constant that holds it. Two names are misnomers on both cores and stay the same test:
+// USES_RANGED_SLOT is bit 0x10 (Is Ability), and EX2_TAME_BEAST is bit 0x10000 (the core calls it No Active Pets, the
+// classic client data uses it for Tame Beast). See SHIM-R3-NOTES.md.
+#define SPELL_ATTR_RANGED                      SPELL_ATTR0_USES_RANGED_SLOT
+#define SPELL_ATTR_USES_RANGED_SLOT            SPELL_ATTR0_IS_ABILITY
+#define SPELL_ATTR_ON_NEXT_SWING_1             SPELL_ATTR0_ON_NEXT_SWING_NO_DAMAGE
+#define SPELL_ATTR_ON_NEXT_SWING_2             SPELL_ATTR0_ON_NEXT_SWING
+#define SPELL_ATTR_ON_NEXT_SWING               SPELL_ATTR0_ON_NEXT_SWING
+#define SPELL_ATTR_ON_NEXT_SWING_NO_DAMAGE     SPELL_ATTR0_ON_NEXT_SWING_NO_DAMAGE
+#define SPELL_ATTR_TRADESPELL                  SPELL_ATTR0_IS_TRADESKILL
+#define SPELL_ATTR_OUTDOORS_ONLY               SPELL_ATTR0_ONLY_OUTDOORS
+#define SPELL_ATTR_NOT_SHAPESHIFT              SPELL_ATTR0_NOT_SHAPESHIFTED
+#define SPELL_ATTR_CASTABLE_WHILE_MOUNTED      SPELL_ATTR0_ALLOW_WHILE_MOUNTED
+#define SPELL_ATTR_CANT_USED_IN_COMBAT         SPELL_ATTR0_NOT_IN_COMBAT_ONLY_PEACEFUL
+#define SPELL_ATTR_CANT_CANCEL                 SPELL_ATTR0_NO_AURA_CANCEL
+#define SPELL_ATTR_EX_DISPEL_AURAS_ON_IMMUNITY SPELL_ATTR1_IMMUNITY_PURGES_EFFECT
+#define SPELL_ATTR_EX2_IGNORE_LOS              SPELL_ATTR2_IGNORE_LINE_OF_SIGHT
+
+// Interrupt flag bits: the classic client's numbers, which is what the core's InterruptFlags/ChannelInterruptFlags columns
+// carry (ForeverCore labels the same bits differently: 0x4 is Stun there, 0x8 Combat). SpellInterrupts.db2 column.
+#define SPELL_INTERRUPT_FLAG_MOVEMENT     0x00000001
+#define SPELL_INTERRUPT_FLAG_DAMAGE       0x00000002
+#define SPELL_INTERRUPT_FLAG_INTERRUPT    0x00000004
+#define SPELL_INTERRUPT_FLAG_AUTOATTACK   0x00000008
+#define SPELL_INTERRUPT_FLAG_ABORT_ON_DMG 0x00000010
+
+// Aura interrupt flag the bot tests: 0x00040000, "standing up", the classic bit (ForeverCore: SpellAuraInterruptFlags::Standing).
+#define AURA_INTERRUPT_FLAG_NOT_SEATED 0x00040000
+
+// SpellRange ids the bot compares a spell's range index with (the client's SpellRange.dbc ids on both cores).
+#define SPELL_RANGE_IDX_SELF_ONLY 1
+#define SPELL_RANGE_IDX_COMBAT    2
+#define SPELL_RANGE_IDX_ANYWHERE  13
+
+// The client's spell category that carries the global cooldown (SpellCategories.db2 StartRecoveryCategory).
+#define SPELLCATEGORY_GLOBAL 133
 
 // The cooldown moved to SpellHistory on ForeverCore; the questions (is this spell cooling down / clear it now) are the
 // same and take the same arguments.
@@ -231,24 +271,71 @@ struct CmangosObjectAccessorProxy
 // The area record by id; ForeverCore keeps it in the area table store.
 inline AreaTableEntry const* GetAreaEntryByAreaID(uint32 id) { return sAreaTableStore.LookupEntry(id); }
 
-// cmangos had these as free functions over a SpellEntry; ForeverCore has the same answers as SpellInfo members.
-inline uint32 GetSpellCastTime(SpellInfo const* spellInfo, Spell const* spell = nullptr)
+// ---- spells: the old free functions over the mirror (TbSpellEntry.h) ----
+// cmangos had these as free functions over a SpellEntry; the mirror answers each by asking the core (its SpellInfo), never by
+// re-deriving it from the mirrored fields.
+inline SpellEntry const* GetSpellEntryCompat(uint32 id) { return tbcompat::SpellProto(id); }
+inline SpellEntry const* GetSpellEntryCompat(SpellInfo const* info) { return tbcompat::SpellProto(info); }
+inline SpellEntry const* GetSpellEntryCompat(SpellEntry const* entry) { return entry; }
+inline SpellInfo const* GetSpellInfoCompat(SpellEntry const* entry) { return tbcompat::SpellCore(entry); }
+
+inline uint32 GetSpellCastTime(SpellEntry const* spellInfo, Spell const* spell = nullptr)
 {
-    return spellInfo ? spellInfo->CalcCastTime(const_cast<Spell*>(spell)) : 0;
+    return spellInfo ? spellInfo->GetCastTime(nullptr, const_cast<Spell*>(spell)) : 0;
 }
-inline int32 GetSpellDuration(SpellInfo const* spellInfo) { return spellInfo ? spellInfo->GetDuration() : 0; }
-inline uint32 GetSpellRecoveryTime(SpellInfo const* spellInfo) { return spellInfo ? spellInfo->GetRecoveryTime() : 0; }
-inline SpellSchoolMask GetSpellSchoolMask(SpellInfo const* spellInfo)
+inline uint32 GetSpellCastTime(SpellEntry const* spellInfo, WorldObject* caster, Spell const* spell = nullptr)
 {
-    return spellInfo ? spellInfo->GetSchoolMask() : SPELL_SCHOOL_MASK_NONE;
+    return spellInfo ? spellInfo->GetCastTime(caster, const_cast<Spell*>(spell)) : 0;
 }
-inline bool IsChanneledSpell(SpellInfo const* spellInfo) { return spellInfo && spellInfo->IsChanneled(); }
-inline bool IsPassiveSpell(SpellInfo const* spellInfo) { return spellInfo && spellInfo->IsPassive(); }
-inline bool IsPositiveEffect(SpellInfo const* spellInfo, uint8 effIndex)
+inline int32 GetSpellDuration(SpellEntry const* spellInfo) { return spellInfo ? spellInfo->GetDuration() : 0; }
+inline uint32 GetSpellRecoveryTime(SpellEntry const* spellInfo) { return spellInfo ? spellInfo->GetRecoveryTime() : 0; }
+inline SpellSchoolMask GetSpellSchoolMask(SpellEntry const* spellInfo)
 {
-    return spellInfo && spellInfo->IsPositiveEffect(effIndex);
+    return spellInfo && spellInfo->Core ? spellInfo->Core->GetSchoolMask() : SPELL_SCHOOL_MASK_NONE;
 }
-inline bool IsPositiveSpell(SpellInfo const* spellInfo) { return spellInfo && spellInfo->IsPositive(); }
+inline bool IsChanneledSpell(SpellEntry const* spellInfo) { return spellInfo && spellInfo->IsChanneledSpell(); }
+inline bool IsPassiveSpell(SpellEntry const* spellInfo) { return spellInfo && spellInfo->IsPassiveSpell(); }
+inline bool IsPositiveEffect(SpellEntry const* spellInfo, uint8 effIndex)
+{
+    return spellInfo && effIndex < MAX_EFFECT_INDEX && spellInfo->IsPositiveEffect(SpellEffectIndex(effIndex));
+}
+inline bool IsPositiveSpell(SpellEntry const* spellInfo) { return spellInfo && spellInfo->IsPositiveSpell(); }
+inline bool IsPositiveSpell(uint32 spellId) { return IsPositiveSpell(GetSpellEntryCompat(spellId)); }
+
+inline bool IsNonCombatSpell(SpellEntry const* spellInfo) { return spellInfo && spellInfo->IsNonCombatSpell(); }
+inline bool IsSpellHaveEffect(SpellEntry const* spellInfo, uint32 effect)
+{
+    return spellInfo && spellInfo->HasEffect(SpellEffects(effect));
+}
+inline bool IsSpellAppliesAura(SpellEntry const* spellInfo, uint32 effectMask = 0xFFFFFFFF)
+{
+    return spellInfo && spellInfo->IsSpellAppliesAura(effectMask);
+}
+inline bool IsAreaAuraEffect(uint32 effect)
+{
+    switch (effect)
+    {
+        case SPELL_EFFECT_APPLY_AREA_AURA_PARTY:
+        case SPELL_EFFECT_APPLY_AREA_AURA_PET:
+        case SPELL_EFFECT_APPLY_AREA_AURA_RAID:
+        case SPELL_EFFECT_APPLY_AREA_AURA_FRIEND:
+        case SPELL_EFFECT_APPLY_AREA_AURA_ENEMY:
+        case SPELL_EFFECT_APPLY_AREA_AURA_OWNER:
+            return true;
+        default:
+            return false;
+    }
+}
+inline bool IsNextMeleeSwingSpell(SpellEntry const* spellInfo) { return spellInfo && spellInfo->IsNextMeleeSwingSpell(); }
+inline bool IsAutoRepeatRangedSpell(SpellEntry const* spellInfo)
+{
+    return spellInfo && spellInfo->Core && spellInfo->Core->IsAutoRepeatRangedSpell();
+}
+inline bool IsAutocastable(SpellEntry const* spellInfo)
+{
+    return spellInfo && spellInfo->Core && spellInfo->Core->IsAutocastable();
+}
+inline bool IsAutocastable(uint32 spellId) { return IsAutocastable(GetSpellEntryCompat(spellId)); }
 
 // The item's template. cmangos asked the item (`item->GetProto()`); ForeverCore names the fetch after the template, and
 // the bot brain then reads the old fields, so here the template is turned into the mirror (TbItemPrototype.h). The same
@@ -341,13 +428,14 @@ struct WorldTimer
     static uint32 getMSTimeDiff(uint32 oldTime, uint32 newTime) { return ::getMSTimeDiff(oldTime, newTime); }
 };
 
-// sSpellTemplate: cmangos's spell DBC store object. ForeverCore's SpellMgr answers the same question; the spell
-// data for the base difficulty is the one entry cmangos had. (GetMaxEntry has no SpellMgr counterpart and is left
-// to the call sites.)
+// sSpellTemplate: cmangos's spell DBC store object. ForeverCore's SpellMgr answers the same question; the spell data for the
+// base difficulty is the one entry cmangos had, and the bot brain reads the old fields, so the proxy hands back the mirror
+// (TbSpellEntry.h). GetMaxEntry is the highest spell id the core has, which the mirror table computes at startup.
 struct CmangosSpellTemplateProxy
 {
-    template <typename T = SpellInfo>
-    T const* LookupEntry(uint32 id) const { return sSpellMgr.GetSpellInfo(id, DIFFICULTY_NONE); }
+    template <typename T = SpellEntry>
+    T const* LookupEntry(uint32 id) const { return tbcompat::SpellProto(id); }
+    uint32 GetMaxEntry() const { return tbcompat::MaxSpellId(); }
 };
 #undef sSpellTemplate
 #define sSpellTemplate (CmangosSpellTemplateProxy())
