@@ -164,7 +164,22 @@ Turtle shim); the member macros `GetAuraMaxDuration`, `GetAttackTimer`, `IsRaidG
 
 ## Gates
 
-(filled in at the end of the file by the gate run)
+Code tree `5e9ab8b37` (later commits: notes, comment line references, wiring-test spellings, one restored comment; no C++ change).
+
+| Gate | Command | Result |
+|---|---|---|
+| Slice census (final) | `FOREVER_SLOT=3 FOREVER_CENSUS_LIST=forever/SLICE1-R4A.txt forever/tools/vm-census.sh "" 14` | `files 33 compile clean 1 with errors 32 error places 159 (in 17 files)`; 128 of them in files this package owns (baseline 504 in 24 files, 473 owned) |
+| ForeverCore module, slice option off | `ssh yulon-ubuntu2 'FOREVER_SLOT=3 ~/forever-build/build.sh 12 tortoisebots'` | `CMAKE_RC=0 MAKE_RC=0` (4 s: the module target had nothing to rebuild; the census, which compiles every file through the same pre-include, is the real compile check) |
+| Turtle build | `vm-build ~/wt-slice-r4a --wait` at `5e9ab8b37` | `MAKE_RC=0`, `QUEUE_RC=0`, `QUEUE_RUN_SECONDS=2547`, job rc=0 |
+| Turtle unit tests | `vm-test tb ~/wt-slice-r4a` (tree at `53f4ef738` minus one comment) | `ALL TORTOISEBOTS CHECKS PASSED CLEANLY`, `VM-TEST-END rc=0 seconds=1104` |
+
+Wiring tests changed (8, all in `tools/`): `test_magma_guard_wiring`, `test_swim_path_wiring`, `test_boss_anchor_wiring`, `test_place_unstick_wiring`,
+`test_move_fail_note_wiring` pin source lines I rewrote; each pin now reads the helper spelling of the SAME expression (`MovePointCompat(mm, ...)`,
+`MoveFollowCompat`, `MoveChaseCompat`, `MotionClearCompat`, `ObjectBoundingRadiusCompat`, `MeleeReachCompat`, `GetAngleCompat`, `GetHeightCompat`,
+`TerrainIsSwimmableCompat`, `LineHitsCollisionModelCompat`, `PathCalculateCompat`, `PathPointsCompat`, `IsUnderwaterCompat`, `HasMovementFlagCompat`,
+`MapIsBattlegroundCompat`, `PlayerMoverCompat`, `MoveSplineInitCompat`), so each still proves the same ordering and presence checks.
+`test_hazard_chase_motion`, `test_hazard_waypoint`, `test_warrior_tank_threat` compile extracted function bodies with g++ against mocks; the mocks gained the
+helpers (each forwards to the mock call the old line made), so they still run the production body.
 
 ## What I am unsure about
 
