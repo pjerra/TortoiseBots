@@ -42,7 +42,7 @@ inline float GetAngleCompat(WorldObject const* from, WorldObject const* to)
 // Whether the session belongs to a connected player and not to a headless bot. The Turtle core's WorldSession has
 // HasNetworkTransport (a socket is attached); ForeverCore keeps the same fact as the flag the bot session sets when it is
 // made (WorldSession.h:1078, TbBotSession.cpp). A null session has no transport.
-inline bool HasNetworkTransportCompat(WorldSession const* session) { return session && !session->IsBot(); }
+inline bool HasNetworkTransportCompat(WorldSession* session) { return session && !session->IsBot(); }
 
 // The creature's home point. T Creature.h:579 `GetRespawnCoord(x, y, z, &ori, &dist)`: where it respawns and the wander
 // distance; F Creature.h:115 `GetRespawnPosition(&dist)` returns the same point as a Position.
@@ -327,7 +327,7 @@ inline WorldObject* GetWorldObjectCompat(Map* map, ObjectGuid const& guid)
 // The creature a spawn record is for, and the template's name. T CreatureData::creature_id is an array of ids per spawn (the bot
 // reads the first), F CreatureData::id one id (SpawnData); T CreatureInfo::name / F CreatureTemplate::Name.
 inline uint32 CreatureEntryOfCompat(CreatureData const& data) { return data.id; }
-inline std::string const& CreatureNameCompat(CreatureTemplate const* tpl) { return tpl->Name; }
+inline std::string const& CreatureNameCompat(CreatureInfo const* tpl) { return tpl->Name; }
 
 // A grid search for units around an object. T's UnitListSearcher takes (list, check), F's (the searching object, list,
 // check): the object gives the phase the search sees in. The wrapper has the F shape on both cores.

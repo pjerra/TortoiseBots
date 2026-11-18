@@ -23,7 +23,7 @@ inline float GetAngleCompat(WorldObject const* from, WorldObject const* to)
     return from->GetAngle(to);
 }
 
-inline bool HasNetworkTransportCompat(WorldSession const* session)
+inline bool HasNetworkTransportCompat(WorldSession* session)
 {
     return session->HasNetworkTransport();
 }
@@ -124,7 +124,7 @@ inline int32 AreaLevelCompat(AreaTableEntry const* area) { return area->AreaLeve
 inline WorldObject* GetWorldObjectCompat(Map* map, ObjectGuid const& guid) { return map->GetWorldObject(guid); }
 
 inline uint32 CreatureEntryOfCompat(CreatureData const& data) { return data.creature_id[0]; }
-inline std::string const& CreatureNameCompat(CreatureTemplate const* tpl) { return tpl->name; }
+inline std::string const& CreatureNameCompat(CreatureInfo const* tpl) { return tpl->name; }
 template <class Check>
 struct UnitListSearcherCompat : MaNGOS::UnitListSearcher<Check>
 {
