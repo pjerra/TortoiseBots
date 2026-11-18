@@ -198,6 +198,9 @@ struct CmangosObjectAccessorProxy
 // Aura interrupt flag the bot tests: 0x00040000, "standing up", the classic bit (ForeverCore: SpellAuraInterruptFlags::Standing).
 #define AURA_INTERRUPT_FLAG_NOT_SEATED 0x00040000
 
+// The target flags: the same numbers on both cores; ForeverCore has no name for the self flag because it is 0 (TARGET_FLAG_NONE).
+#define TARGET_FLAG_SELF TARGET_FLAG_NONE
+
 // SpellRange ids the bot compares a spell's range index with (the client's SpellRange.dbc ids on both cores).
 #define SPELL_RANGE_IDX_SELF_ONLY 1
 #define SPELL_RANGE_IDX_COMBAT    2
@@ -278,6 +281,7 @@ inline SpellEntry const* GetSpellEntryCompat(uint32 id) { return tbcompat::Spell
 inline SpellEntry const* GetSpellEntryCompat(SpellInfo const* info) { return tbcompat::SpellProto(info); }
 inline SpellEntry const* GetSpellEntryCompat(SpellEntry const* entry) { return entry; }
 inline SpellInfo const* GetSpellInfoCompat(SpellEntry const* entry) { return tbcompat::SpellCore(entry); }
+inline uint32 GetMaxSpellIdCompat() { return tbcompat::MaxSpellId(); }   // the highest spell id the core has
 
 inline uint32 GetSpellCastTime(SpellEntry const* spellInfo, Spell const* spell = nullptr)
 {

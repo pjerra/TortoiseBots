@@ -92,7 +92,7 @@ bool ItemUsageValue::IsCraftingTool(uint32 itemId)
     static std::unordered_set<uint32> const tools = []()
     {
         std::unordered_set<uint32> ids;
-        for (uint32 spellId = 1; spellId < sSpellMgr.GetMaxSpellId(); ++spellId)
+        for (uint32 spellId = 1; spellId < GetMaxSpellIdCompat(); ++spellId)
         {
             SpellEntry const* spell = GetSpellEntryCompat(spellId);
             if (!spell || (!spell->HasEffect(SPELL_EFFECT_CREATE_ITEM) && !spell->HasEffect(SPELL_EFFECT_ENCHANT_ITEM)))

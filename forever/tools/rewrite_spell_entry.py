@@ -36,6 +36,9 @@ E_SITES = [
     ("ai/playerbot/PlayerbotAISpells.cpp", "spellRangeEntry->maxRange", "SpellRangeMax(spellRangeEntry)"),
     ("ai/playerbot/strategy/actions/EnemyAreaSpell.h", "rangeEntry->maxRange", "SpellRangeMax(rangeEntry)"),
     ("ai/playerbot/strategy/triggers/GenericTriggers.cpp", "rangeEntry->maxRange", "SpellRangeMax(rangeEntry)"),
+    # The store bound: cmangos/Penqle read it from SpellMgr, ForeverCore from the mirror table.
+    ("ai/playerbot/strategy/values/ItemUsageValue.cpp", "sSpellMgr.GetMaxSpellId()", "GetMaxSpellIdCompat()"),
+    ("runtime/AhBotItemPool.cpp", "sSpellMgr.GetMaxSpellId()", "GetMaxSpellIdCompat()"),
 ]
 # Site -> why the core's SpellInfo has to stay there (a core member or a core call, not a field read).
 SKIP_SITES = {

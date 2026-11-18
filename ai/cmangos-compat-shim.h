@@ -906,6 +906,7 @@ inline float SpellRangeMax(SpellRangeEntry const* entry) { return entry ? entry-
 inline SpellEntry const* GetSpellEntryCompat(uint32 id) { return sSpellMgr.GetSpellEntry(id); }
 inline SpellEntry const* GetSpellEntryCompat(SpellEntry const* entry) { return entry; }
 inline SpellEntry const* GetSpellInfoCompat(SpellEntry const* entry) { return entry; }
+inline uint32 GetMaxSpellIdCompat() { return sSpellMgr.GetMaxSpellId(); }
 
 // === Free-function helpers (cmangos style) wrapping Penqle SpellEntry methods ===
 // cmangos exposes these as free functions; Penqle wraps them in SpellEntry::method.
