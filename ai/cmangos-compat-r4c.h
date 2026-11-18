@@ -6,6 +6,7 @@
 #include "LFG/LFGMgr.h"
 #include "Maps/MoveMap.h"
 #include "Maps/PathFinder.h"
+#include "vmap/VMapFactory.h"
 #include "Movement/TargetedMovementGenerator.h"
 
 // Logging: the core's logger, as `sLog` is on this core (shared/Log.h:314).
@@ -209,10 +210,11 @@ inline GameObject* GetGameObjectBySpawnIdCompat(Map* map, uint32 entry, uint64 s
 
 // Creature templates.
 inline bool CreatureIsCivilianCompat(CreatureInfo const* info) { return info->civilian; }
-inline bool CreatureIsGuardFlagCompat(CreatureInfo const* info) { return (info->flags_extra & CREATURE_FLAG_EXTRA_GUARD) != 0; }
+// The numbers the code always used (Creature.h:62 GUARD, :59 INVISIBLE, :69 NO_TARGET).
+inline bool CreatureIsGuardFlagCompat(CreatureInfo const* info) { return (info->flags_extra & 0x00000400) != 0; }
 inline bool CreatureNeverAggrosCompat(CreatureInfo const* info)
 {
-    return (info->flags_extra & (CREATURE_FLAG_EXTRA_INVISIBLE | CREATURE_FLAG_EXTRA_NO_TARGET)) != 0;
+    return (info->flags_extra & 0x00000080u) != 0 || (info->flags_extra & 0x00020000u) != 0;
 }
 inline bool CreatureIsAboveNormalCompat(CreatureInfo const* info) { return info->rank > CREATURE_ELITE_NORMAL; }
 inline bool FactionTemplateHostileToCompat(FactionTemplateEntry const* from, FactionTemplateEntry const* to) { return from->IsHostileTo(*to); }
@@ -255,20 +257,24 @@ template <class Pair> inline void CoordIncYCompat(Pair& pair, uint32 value) { pa
 
 // Transports.
 inline GenericTransport* TransportOfCompat(WorldObject const* object) { return object->GetTransport(); }
+// (Templates on the transport type: the Transport class is only complete in the files that include Transports/Transport.h.)
+template <class TransportType = Transport>
 inline std::set<GenericTransport*> TransportsOnMapCompat(uint32 mapId, uint32 entry)
 {
     std::set<GenericTransport*> transports;
-    HashMapHolder<Transport>::ReadGuard guard(HashMapHolder<Transport>::GetLock());
-    for (auto const& transportEntry : HashMapHolder<Transport>::GetContainer()) // Boats & zeppelins.
+    typename HashMapHolder<TransportType>::ReadGuard guard(HashMapHolder<TransportType>::GetLock());
+    for (auto const& transportEntry : HashMapHolder<TransportType>::GetContainer()) // Boats & zeppelins.
     {
-        GenericTransport* transport = transportEntry.second;
+        TransportType* transport = transportEntry.second;
         if (transport && transport->GetMapId() == mapId && (!entry || transport->GetEntry() == entry))
             transports.insert(transport);
     }
     return transports;
 }
-inline void PassengerPositionCompat(GenericTransport* transport, float& x, float& y, float& z, float* o = nullptr) { transport->CalculatePassengerPosition(x, y, z, o); }
-inline void PassengerOffsetCompat(GenericTransport* transport, float& x, float& y, float& z, float* o = nullptr) { transport->CalculatePassengerOffset(x, y, z, o); }
+template <class TransportType>
+inline void PassengerPositionCompat(TransportType* transport, float& x, float& y, float& z, float* o = nullptr) { transport->CalculatePassengerPosition(x, y, z, o); }
+template <class TransportType>
+inline void PassengerOffsetCompat(TransportType* transport, float& x, float& y, float& z, float* o = nullptr) { transport->CalculatePassengerOffset(x, y, z, o); }
 
 // Path generator.
 inline bool PathCalculateCompat(PathFinder& path, G3D::Vector3 const& start, G3D::Vector3 const& dest, bool forceDest) { return path.calculate(start, dest, forceDest); }

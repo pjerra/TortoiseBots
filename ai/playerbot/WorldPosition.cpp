@@ -650,9 +650,7 @@ void WorldPosition::EnsurePointDangerIndex()
                 if (!info || CreatureIsCivilianCompat(info))
                     return false;
                 // Invisible triggers and no-target spawns never aggro.
-                if (info->flags_extra & 0x00000080u /* CREATURE_FLAG_EXTRA_INVISIBLE */)
-                    return false;
-                if (info->flags_extra & 0x00020000u /* CREATURE_FLAG_EXTRA_NO_TARGET */)
+                if (CreatureNeverAggrosCompat(info))
                     return false;
                 if (info->type == CREATURE_TYPE_CRITTER)
                     return false;
