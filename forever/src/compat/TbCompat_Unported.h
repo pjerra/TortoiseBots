@@ -458,9 +458,11 @@ inline void EndCinematicIfWatchingCompat(Player* bot)
     }
 }
 
-// The loot window of a player (T: `GetLootGuid()` and the loot manager). Failure value: the empty guid ("no loot window open") and
-// nothing released.
-inline ObjectGuid LootGuidCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::LootObjects); return ObjectGuid::Empty; }
+// The loot window of a player (T: `GetLootGuid()` and the loot manager). F keeps it in the player data (Player.h:2348 GetLootGUID, the
+// target of the open loot window), so the question is answered for real: empty for a bot with no loot window, which is every bot while
+// no loot is ported. It is asked on every moving tick (PlayerbotAI.cpp:485), so counting the question buried the report (204k calls in
+// 4 minutes, R6B); only ReleaseLootIfFarCompat, reached with a non-empty guid, counts.
+inline ObjectGuid LootGuidCompat(Player* bot) { return bot->GetLootGUID(); }
 template <class GuidPos>
 inline void ReleaseLootIfFarCompat(Player* /*bot*/, GuidPos& /*lootObject*/, bool /*shouldRelease*/) { tbcompat::Unported(tbcompat::Feature::LootObjects); }
 

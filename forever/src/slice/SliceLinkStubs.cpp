@@ -100,7 +100,9 @@ void LoadBossStands() { NoteBoss(); }
 void LoadDungeonPlans() { NoteBoss(); }
 
 // BossTacticsActions.cpp
-BossTacticsScanScope::BossTacticsScanScope() { NoteBoss(); }
+// The per-update bracket PlayerbotAI::UpdateAI opens around the scan (PlayerbotAI.cpp:383): it opens no scan slot here, so it is not counted
+// (it was the hottest unported counter: once per bot per tick, no feature behind it; R8).
+BossTacticsScanScope::BossTacticsScanScope() {}
 BossTacticsScanScope::~BossTacticsScanScope() {}
 bool AoeTauntStillNeeded(PlayerbotAI*, Player*) { NoteBoss(); return false; }
 bool AreaTauntRefusedByPost(PlayerbotAI*, Player*, const char*) { NoteBoss(); return false; }
