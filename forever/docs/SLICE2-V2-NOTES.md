@@ -101,4 +101,17 @@ The lambdas on F are never called (generic lambdas for the one that names `Loot`
 
 ## 8. Gates
 
-(filled at the end)
+| Gate | Result |
+|---|---|
+| V2 census (`FOREVER_SLOT=1 FOREVER_CENSUS_LIST=forever/SLICE2-V2.txt`) | `files 6  compile clean 5  with errors 1  error places 13 (in 1 files)`: the 13 are all `policy/loot/CorpseLootPolicy.h` (I2) |
+| Slice-1 census in slot 1 (`FOREVER_CENSUS_LIST=forever/SLICE1.txt`) | `files 133  compile clean 133  with errors 0  error places 0` |
+| Module build, slice option off, slot 1 | `CMAKE_RC=0  MAKE_RC=0` |
+| Turtle `vm-test tb ~/wt-slice2-v` | `RESULT: PASS  rc=0  sha=38010e3aa` (890 s) |
+| Turtle `vm-build ~/wt-slice2-v --wait` | **not green on the final commit.** First run (sha `3e3567efb`): one error, `ObjectGuid(std::stoull(text))` ambiguous in `GuidFromQualifierCompat` (unsigned long long against uint64); fixed in `38010e3aa` the way `GuidFromRawCompat` (r4c.h:19) builds from a uint64. No other error was reported in the 30 translation units that include the header. Re-runs on `670d190a5` and `38010e3aa` were refused by the build VM's disk guard (`only 4G free on /mnt/tb/tb-build, need >= 8G`, 3.3 GB free afterwards): the lead must re-run `vm-build` on the final commit once that disk has room. |
+
+Wiring pins re-pinned to the new spelling of the SAME expression (each still proves what it proved: the rule the stack and the accessor ask is unchanged, only where the T code lives moved):
+`tools/test_corpse_refusal_reason_wiring.py` (the refusal facts are read from `CorpseRefusalFactsOfCompat` in `ai/cmangos-compat-s2v.h`; the line in `Refresh` passes `facts.*`),
+`tools/test_loot_view_rule_wiring.py` (MayLootCorpse ends in `CorpseHasVisiblePersonalItemForCompat(..., VisiblePersonalItemRule())`, whose rule is `ai::HasVisiblePersonalItemFor`; the content walk is `LootContentForCompat` with `!visible(...)`),
+`tools/test_loot_content.py` (compiles `LootContentForCompat` from the T header together with the accessor and runs the same fixtures),
+`tools/test_loot_slot_right_wiring.py` (`guid && !this->guid` -> `!guid.IsEmpty() && this->guid.IsEmpty()`),
+`tools/test_loot_order_behaviour.py` (the fixture now includes the T helpers verbatim from `ai/cmangos-compat-s2v.h`: `GameObjectLootTemplateCompat`, `ReferenceLootTemplateCompat`, the refusal facts, `CorpseSkinnableByCompat`, `GameObjectLootAllowedCompat`, and the rule struct).
