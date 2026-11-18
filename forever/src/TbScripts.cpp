@@ -402,8 +402,10 @@ public:
     // .tb train <bot>: teaches the bot, free and without an NPC, every spell its class's trainers offer at its level. The data is the core's
     // own trainer table (ObjectMgr::GetTrainers, ObjectMgr.h:1628, loaded from its trainer and trainer_spell tables) and the core's own
     // per-trainer rule Trainer::TeachAvailableSpellsFree (Trainer.h:94: class, race, level and prerequisite checks as at the trainer). A
-    // trainer is used when its type is a class trainer (Trainer::Type::Talent) and its class mask (Trainer::GetClassMask, the classes of its
-    // spells' skill lines) holds the bot's class. Passes repeat while one teaches something (a spell can be the prerequisite of the next).
+    // trainer is used when its type is a class trainer and its class mask (Trainer::GetClassMask, the classes of its spells' skill lines) holds
+    // the bot's class. The type of a class trainer in this core's data is `Trainer::Type::None` (trainer.Type 0 in the world database: all 254 class
+    // trainers incl. the priests' trainers 7 and 8); `Trainer::Type::Talent` (Type 1) is a different set of 8 trainers whose spells all need a skill line
+    // (the first boot of R3 taught nothing from them: the spec's "Talent" was a misreading of the enum). Passes repeat while one teaches something (a spell can be the prerequisite of the next).
     // No spell id is written in this module.
     static bool HandleTrain(ChatHandler* handler, std::string name)
     {
@@ -421,7 +423,7 @@ public:
             trainers = 0;
             for (auto const& [id, trainer] : sObjectMgr->GetTrainers())
             {
-                if (trainer.GetType() != Trainer::Type::Talent || !(trainer.GetClassMask() & classMask))
+                if (trainer.GetType() != Trainer::Type::None || !(trainer.GetClassMask() & classMask))
                     continue;
                 ++trainers;
                 passTaught += trainer.TeachAvailableSpellsFree(bot, &tally);
