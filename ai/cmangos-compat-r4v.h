@@ -3,6 +3,8 @@
 // Owned by package R4V: no other package edits this file.
 #pragma once
 
+#include "Maps/PathFinder.h"   // PathFinder, PATHFIND_NORMAL, Movement::PointsArray: the path helpers at the end name them
+
 // Players, guids, groups ------------------------------------------------------------------------------------------------
 inline Player* GetPlayerCompat(ObjectGuid const& guid) { return sObjectMgr.GetPlayer(guid); }
 inline uint64 GuidKeyCompat(ObjectGuid const& guid) { return guid.GetRawValue(); }
