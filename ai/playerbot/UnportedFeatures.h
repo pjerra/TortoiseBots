@@ -78,7 +78,11 @@
     X(ChatFilters, "chat filter chain", "CompositeChatFilter, the filters that rewrite a command line before the bot reads it; the line is used as it comes (R6B)") \
     X(FleeManager, "flee manager", "FleeManager and IdleMobVeto, the flee destination search; no destination is found (R6B)") \
     X(CampSpots, "camp spots table", "CampMgr, the table of camp spots (ai_playerbot_camp) and the active camp list; empty (R6B)") \
-    X(MiscLegacyServices, "other legacy services", "small out-of-slice helpers the slice links against: mount spell test, cheat mask parsing, emote variants, grind instance filter, meeting stone spot search, fishing session end, area trigger run, db store load, cast cancel log (R6B)")
+    X(MiscLegacyServices, "other legacy services", "small out-of-slice helpers the slice links against: mount spell test, cheat mask parsing, emote variants, grind instance filter, meeting stone spot search, fishing session end, area trigger run, db store load, cast cancel log (R6B)") \
+    /* --- slice 2, package I2 --- */ \
+    X(LootItems, "loot: items, quest items and rolls", "taking items out of a loot window (the autostore packet), the 1.12 per-slot loot view rights and personal copies, quest items in loot, loot rolls and the bot-only drop boost; lead decision D2 = money only, ForeverCore loot is read from its Loot object and only the money is taken (slice 2, I2)") \
+    X(LootGather, "loot: gathering, skinning and game objects", "opening a game object (chest, herb, ore) or skinning a corpse by a cast and the loot window that follows; the bot does not gather, skin or open objects on ForeverCore yet (slice 2, I2)") \
+    X(ItemUseOther, "item use except food and drink", "using an item on a target, an item, a game object or a lock, potions, scrolls, gems, quest-giver items, hearthstone, bandages, mounts: only food and drink on the bot itself go through the core's own item cast (slice 2, I2)")
 
 namespace tbcompat
 {

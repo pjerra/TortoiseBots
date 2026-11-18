@@ -114,6 +114,12 @@ struct Creature;
 struct GameObject;
 struct LootObjectStack;
 struct Group;
+// The both-core helpers the loot code reads guids, names and group ids through (ai/cmangos-compat-r3.h, cmangos-compat-s2i.h): the
+// Turtle bodies.
+inline uint64_t GuidKeyCompat(ObjectGuid const& guid) { return guid.GetRawValue(); }
+inline char const* CStrCompat(char const* text) { return text; }
+inline char const* CStrCompat(std::string const& text) { return text.c_str(); }
+inline uint64_t GroupIdKeyCompat(Group const*) { return 0; }
 struct Unit { std::string GetName() const { return "unit"; } uint32 GetLevel() const { return 1; } };
 
 struct WorldObject

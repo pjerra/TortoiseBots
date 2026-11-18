@@ -32,6 +32,10 @@ namespace ai
         bool OpenLockCheck();
 
     private:
+        // OpenLockCheck reads the Spell's lock-target internals: its body is a friend template of the per-core compat header
+        // (T: cmangos-compat-s2i.h, F: a stub that counts the feature, TbCompat_I2.h).
+        template <class SpellType> friend bool ::BotUseItemOpenLockCheckCompat(SpellType*);
+
         bool itemCheats;
     };
 

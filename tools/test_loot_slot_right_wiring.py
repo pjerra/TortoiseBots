@@ -19,6 +19,8 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 ACTION = (ROOT / "ai/playerbot/strategy/actions/LootAction.cpp").read_text()
 STACK = (ROOT / "ai/playerbot/LootObjectStack.cpp").read_text()
+# Slice 2: the slot read is the Turtle helper LootSlotFactsCompat (the same lines, moved word for word).
+COMPAT = (ROOT / "ai/cmangos-compat-s2i.h").read_text()
 
 
 def body(text, start, end):
@@ -28,11 +30,14 @@ def body(text, start, end):
 
 class LootSlotRightWiringTest(unittest.TestCase):
     def test_the_slot_asks_for_its_quest_and_ffa_copies(self):
-        self.assertIn("LootItemInSlot(itemindex, bot->GetGUIDLow(), &qitem, &ffaitem)", ACTION)
+        fn = body(COMPAT, "inline bool LootSlotFactsCompat(", "\n}\n")
+        self.assertIn("LootItemInSlot(itemindex, bot->GetGUIDLow(), &qitem, &ffaitem)", fn)
+        self.assertIn("GetSlotTypeForSharedLoot(ALL_PERMISSION, bot, lootTarget)", fn)
+        self.assertIn("LootSlotFactsCompat(bot, loot, itemindex,", ACTION)
 
     def test_the_policy_decides(self):
         fn = body(ACTION, "bool StoreLootAction::Execute(", "\n}\n")
-        self.assertIn("ai::BotMayTakeLootSlot(", fn)
+        self.assertIn("ai::BotMayTakeLootSlot(slotAllowedForPlayer, slotIsQuest, slotIsFfa, slotIsBlocked, slotSharedAllowed)", fn)
         self.assertNotIn("lootItem->is_blocked ||", fn)
 
     def test_the_corpse_rejection_is_named(self):

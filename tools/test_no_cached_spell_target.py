@@ -21,8 +21,9 @@ MARKER_LINES_ABOVE = 3
 
 # Justified reads: "<path>:<stripped line>". A new entry needs the marker comment and its reason in the source.
 ALLOWED = {
-    "ai/playerbot/strategy/actions/UseItemAction.cpp": [
-        "GameObject* const go = m_targets.getGOTarget();",
+    # Slice 2: OpenLockCheck's body moved into the Turtle compat header (a friend template of ai::BotUseItemSpell, `self` is the spell).
+    "ai/cmangos-compat-s2i.h": [
+        "GameObject* const go = self->m_targets.getGOTarget();",
     ],
 }
 

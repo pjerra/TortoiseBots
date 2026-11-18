@@ -61,14 +61,12 @@ bool LootAction::Execute(Event& event)
     bool released = false;
     if (!prevLoot.IsEmpty() && prevLoot.guid != lootObject.guid)
     {
-        WorldPacket packet(CMSG_LOOT_RELEASE, 8);
-        packet << prevLoot.guid;
-        bot->GetSession()->HandleLootReleaseOpcode(packet);
+        LootReleaseCompat(bot, prevLoot.guid);
         released = true;
     }
 
     sLog.outDebug("[BOT LOOT] %s: select target=%lu (prev=%lu released=%d)",
-        bot->GetName(), lootObject.guid.GetRawValue(), prevLoot.guid.GetRawValue(), released ? 1 : 0);
+        CStrCompat(bot->GetName()), GuidKeyCompat(lootObject.guid), GuidKeyCompat(prevLoot.guid), released ? 1 : 0);
 
     context->GetValue<LootObject>("loot target")->Set(lootObject);
     return true;
@@ -102,7 +100,7 @@ bool OpenLootAction::Execute(Event& event)
     {
         uint32 onlyItem = 0;
         bool const ordered = TortoiseBots::RemoteCommander::LootOrders().Watching(
-            bot->GetObjectGuid().GetRawValue(), lootGuid.GetRawValue(), onlyItem);
+            GuidKeyCompat(bot->GetObjectGuid()), GuidKeyCompat(lootGuid), onlyItem);
         if (!TortoiseBots::RemoteCommander::OwnLootTakesObject(true,
                 !ordered && TortoiseBots::BotCommands::IsInCommandedGroup(bot), ordered))
         {
@@ -157,7 +155,7 @@ bool OpenLootAction::Execute(Event& event)
     if (!lootGuid.IsEmpty() && lootStack && lootStack->IsAbandoned(lootGuid))
     {
         sLog.outDebug("[BOT LOOT] %s: giving up on guid=%lu after repeated failed opens",
-            bot->GetName(), lootGuid.GetRawValue());
+            CStrCompat(bot->GetName()), GuidKeyCompat(lootGuid));
         lootStack->Remove(lootGuid);
         context->GetValue<LootObject>("loot target")->Set(LootObject());
     }
@@ -169,7 +167,7 @@ bool OpenLootAction::DoLoot(LootObject& lootObject)
     if (lootObject.IsEmpty())
         return false;
 
-    sLog.outDebug("[BOT LOOT] %s: DoLoot target=%lu", bot->GetName(), lootObject.guid.GetRawValue());
+    sLog.outDebug("[BOT LOOT] %s: DoLoot target=%lu", CStrCompat(bot->GetName()), GuidKeyCompat(lootObject.guid));
 
     Creature* creature = ai->GetCreature(lootObject.guid);
 
@@ -181,7 +179,7 @@ bool OpenLootAction::DoLoot(LootObject& lootObject)
     if (creature && sServerFacade.GetDeathState(creature) != CORPSE)
     {
         sLog.outDebug("[BOT LOOT] %s: not a fresh CORPSE (deathstate=%d), dropping guid=%lu",
-            bot->GetName(), (int)sServerFacade.GetDeathState(creature), lootObject.guid.GetRawValue());
+            CStrCompat(bot->GetName()), (int)sServerFacade.GetDeathState(creature), GuidKeyCompat(lootObject.guid));
         AI_VALUE(LootObjectStack*, "available loot")->Remove(lootObject.guid);
         RESET_AI_VALUE(LootObject, "loot target");
         return false;
@@ -197,10 +195,10 @@ bool OpenLootAction::DoLoot(LootObject& lootObject)
     {
         if (creature)
             sLog.outDebug("[BOT LOOT] %s: not in loot range (dist2d=%.1f maxLoot=%.1f), keep approaching guid=%lu",
-                bot->GetName(), sServerFacade.getDistance2d(bot, creature), bot->GetMaxLootDistance(creature), lootObject.guid.GetRawValue());
+                CStrCompat(bot->GetName()), sServerFacade.getDistance2d(bot, creature), LootDistanceCompat(bot, creature), GuidKeyCompat(lootObject.guid));
         else
             sLog.outDebug("[BOT LOOT] %s: not in loot range, keep approaching guid=%lu",
-                bot->GetName(), lootObject.guid.GetRawValue());
+                CStrCompat(bot->GetName()), GuidKeyCompat(lootObject.guid));
         return false;
     }
 
@@ -221,21 +219,21 @@ bool OpenLootAction::DoLoot(LootObject& lootObject)
         if (!lootObject.IsLootPossible(bot)) //Clear loot if bot can't loot it.
         {
             sLog.outDebug("[BOT LOOT] %s: IsLootPossible=false on lootable corpse, clearing (corpse stays lootable -> may re-add)",
-                bot->GetName());
+                CStrCompat(bot->GetName()));
             return true;
         }
 
         sLog.outDebug("[BOT LOOT] %s: loot ctx guid=%lu alive=%d tapped=%d dist2d=%.1f maxLoot=%.1f",
-            bot->GetName(), lootObject.guid.GetRawValue(),
-            creature->IsAlive() ? 1 : 0, creature->IsTappedBy(bot) ? 1 : 0,
-            sServerFacade.getDistance2d(bot, creature), bot->GetMaxLootDistance(creature));
+            CStrCompat(bot->GetName()), GuidKeyCompat(lootObject.guid),
+            creature->IsAlive() ? 1 : 0, CreatureIsTappedByCompat(creature, bot) ? 1 : 0,
+            sServerFacade.getDistance2d(bot, creature), LootDistanceCompat(bot, creature));
 
         sLog.outDebug("[BOT LOOT] %s: sending CMSG_LOOT (crouch emote) guid=%lu lootDelay=%u",
-            bot->GetName(), lootObject.guid.GetRawValue(), sPlayerbotAIConfig.lootDelay);
+            CStrCompat(bot->GetName()), GuidKeyCompat(lootObject.guid), sPlayerbotAIConfig.lootDelay);
 
-        WorldPacket packet(CMSG_LOOT, 8);
-        packet << lootObject.guid;
-        bot->GetSession()->HandleLootOpcode(packet);
+        // Open the window (T: the packet; F: the core's own handler and the "loot response" event, TbCompat_I2.h). A corpse the core
+        // refuses to open (F sends nothing back) is a failed open: false, counted by OpenLootAction's attempt memory.
+        bool const windowOpened = LootOpenCompat(ai, bot, lootObject.guid);
         SetDuration(sPlayerbotAIConfig.lootDelay);
 
         if (isRealPlayer_Helper(bot))
@@ -246,16 +244,22 @@ bool OpenLootAction::DoLoot(LootObject& lootObject)
             bot->GetSession()->SendPacket(&data);
         }
 
-        return true;
+        return windowOpened;
     }
+
+    // Gathering, skinning and opening game objects (a cast on the object and the window that follows) are not ported: lead decision D2,
+    // nothing below this line runs on ForeverCore ("loot: gathering, skinning and game objects"). False = the open failed, which
+    // OpenLootAction counts and abandons after three tries.
+    if (LootGatherUnportedCompat())
+        return false;
 
     if (creature)
     {
         SkillType skill = (SkillType)GetRequiredLootSkillCompat(creature->GetCreatureInfo());
-        sLog.outDebug("[BOT LOOT] %s: gather/skin path skill=%u reqValue=%u", bot->GetName(), skill, lootObject.reqSkillValue);
+        sLog.outDebug("[BOT LOOT] %s: gather/skin path skill=%u reqValue=%u", CStrCompat(bot->GetName()), skill, lootObject.reqSkillValue);
         if (!CanOpenLock(skill, lootObject.reqSkillValue))
         {
-            sLog.outDebug("[BOT LOOT] %s: CanOpenLock=false (skill %u), abort", bot->GetName(), skill);
+            sLog.outDebug("[BOT LOOT] %s: CanOpenLock=false (skill %u), abort", CStrCompat(bot->GetName()), skill);
             return false;
         }
 
@@ -290,7 +294,7 @@ bool OpenLootAction::DoLoot(LootObject& lootObject)
     if (ai->StopForObjectCast())
     {
         stoppedForCast = true;
-        sLog.outDebug("[BOT LOOT] %s: still moving, stopped before the cast on guid=%lu", bot->GetName(), lootObject.guid.GetRawValue());
+        sLog.outDebug("[BOT LOOT] %s: still moving, stopped before the cast on guid=%lu", CStrCompat(bot->GetName()), GuidKeyCompat(lootObject.guid));
         return false;
     }
 
@@ -319,17 +323,17 @@ bool OpenLootAction::DoLoot(LootObject& lootObject)
     uint32 spellId = GetOpeningSpell(lootObject);
     if (!spellId)
     {
-        sLog.outDebug("[BOT LOOT] %s: GO no opening spell, abort", bot->GetName());
+        sLog.outDebug("[BOT LOOT] %s: GO no opening spell, abort", CStrCompat(bot->GetName()));
         return false;
     }
 
     if (!lootObject.IsLootPossible(bot)) //Clear loot if bot can't loot it.
     {
-        sLog.outDebug("[BOT LOOT] %s: GO IsLootPossible=false, clearing", bot->GetName());
+        sLog.outDebug("[BOT LOOT] %s: GO IsLootPossible=false, clearing", CStrCompat(bot->GetName()));
         return true;
     }
 
-    sLog.outDebug("[BOT LOOT] %s: GO opening with spell=%u guid=%lu", bot->GetName(), spellId, lootObject.guid.GetRawValue());
+    sLog.outDebug("[BOT LOOT] %s: GO opening with spell=%u guid=%lu", CStrCompat(bot->GetName()), spellId, GuidKeyCompat(lootObject.guid));
 
     //Keys need to use the key
     if (spellId == sPlayerbotAIConfig.openGoSpell && go && lootObject.reqItem && bot->HasItemCount(lootObject.reqItem,1,false))
@@ -476,7 +480,7 @@ static void DescribeLootSource(PlayerbotAI* ai, ObjectGuid guid, uint32 gatherSk
             name = creature->GetName();
         if (name.empty())
             if (CreatureInfo const* info = sObjectMgr.GetCreatureTemplate(guid.GetEntry()))
-                name = info->name;
+                name = CreatureNameCompat(info);
         return;
     }
 
@@ -524,7 +528,7 @@ static void NotifyOwnerOfLoot(PlayerbotAI* ai, Player* bot, std::string item, ui
         Player* member = ObjectAccessor::FindPlayer(slot.guid);
         if (!member || member == bot || !member->IsInWorld() || !ai->IsRealPlayer(member))
             continue;
-        member->SendAddonMessage("TBM", wireLine);
+        SendAddonMessageCompat(*member, "TBM", wireLine);
     }
 }
 
@@ -533,34 +537,25 @@ bool StoreLootAction::Execute(Event& event)
     Player* requester = event.GetOwner() ? event.GetOwner() : GetMaster();
     WorldPacket p(event.GetPacket()); // (8+1+4+1+1+4+4+4+4+4+1)
     ObjectGuid guid;
-    uint8 loot_type;
+    uint8 loot_type = 0;
     uint32 gold = 0;
     uint8 items = 0;
+    uint8 lootError = 0;
 
-    p.rpos(0);
-    p >> guid;      // 8 corpse guid
-    p >> loot_type; // 1 loot type
-
-    if (p.size() > 10)
-    {
-        p >> gold;      // 4 money on corpse
-        p >> items;     // 1 number of items on corpse
-    }
-    else
+    // The head of the loot response: T reads it from SMSG_LOOT_RESPONSE; F's event carries only the corpse guid and the money
+    // comes from the core's Loot object (LootWindowReadCompat, TbCompat_I2.h). False = no window (T: a loot error packet).
+    if (!LootWindowReadCompat(bot, p, guid, loot_type, gold, items, lootError))
     {
         // Not a loot response but a loot ERROR packet from Player::SendLootError:
         // [guid][uint8 loot_type=0][uint8 errorCode]. A real loot response (even an empty
         // one) always carries the gold + item-count block, so size <= 10 means the server
         // rejected the loot. Decode the trailing error byte so the rejection isn't a mystery.
-        uint8 lootError = 0;
-        if (p.rpos() < p.size())
-            p >> lootError;
 
         const char* errName =
             lootError == 0 ? "DIDNT_KILL/no-permission" :
             lootError == 4 ? "TOO_FAR" : "other";
         sLog.outDebug("[BOT LOOT] %s: loot REJECTED guid=%lu error=%u (%s)",
-            bot->GetName(), guid.GetRawValue(), lootError, errName);
+            CStrCompat(bot->GetName()), GuidKeyCompat(guid), lootError, errName);
 
         // Drop the corpse so the bot stops retrying a loot the server won't grant. Abandon it
         // rather than just unqueue it: the core still shows it lootable, so "add all loot"
@@ -574,13 +569,13 @@ bool StoreLootAction::Execute(Event& event)
             lootStack->Remove(guid);
         RESET_AI_VALUE(LootObject, "loot target");
         // A remote commander's loot order waits for this window: tell it the server refused.
-        TortoiseBots::RemoteCommander::LootOrders().NoteWindowEnd(bot->GetObjectGuid().GetRawValue(),
-            guid.GetRawValue(), true);
+        TortoiseBots::RemoteCommander::LootOrders().NoteWindowEnd(GuidKeyCompat(bot->GetObjectGuid()),
+            GuidKeyCompat(guid), true);
         return false;
     }
 
     sLog.outDebug("[BOT LOOT] %s: StoreLoot guid=%lu type=%u gold=%u items=%u",
-        bot->GetName(), guid.GetRawValue(), loot_type, gold, items);
+        CStrCompat(bot->GetName()), GuidKeyCompat(guid), loot_type, gold, items);
 
     // Profession loot is worth its own event: a StoreLootAction row cannot be told apart from
     // ordinary corpse loot afterwards, and skinning/gathering had no telemetry at all - the
@@ -590,22 +585,20 @@ bool StoreLootAction::Execute(Event& event)
     // server-side Loot still carries the real type (loot->loot_type), which is what marks a skin.
     // A node window (herb, ore, opened chest) also arrives as LOOT_SKINNING (EffectOpenLock), so a
     // game object's skill comes from its lock, never from the loot type.
-    bot->SetLootGuid(guid);
+    SetLootGuidCompat(bot, guid);
 
-    Loot* loot = sLootMgr.GetLoot(bot);
+    Loot* loot = LootOfWindowCompat(bot, guid);
 
     if (!loot)
     {
-        sLog.outDebug("[BOT LOOT] %s: StoreLoot GetLoot returned null, releasing to avoid crouch loop", bot->GetName());
+        sLog.outDebug("[BOT LOOT] %s: StoreLoot GetLoot returned null, releasing to avoid crouch loop", CStrCompat(bot->GetName()));
         // Release the corpse so the bot stops the loot (kneel) animation instead of staying
         // crouched forever, and drop it from the loot stack so it isn't retried next tick.
-        WorldPacket release(CMSG_LOOT_RELEASE, 8);
-        release << guid;
-        bot->GetSession()->HandleLootReleaseOpcode(release);
+        LootReleaseCompat(bot, guid);
         AI_VALUE(LootObjectStack*, "available loot")->Remove(guid);
         RESET_AI_VALUE(LootObject, "loot target");
-        TortoiseBots::RemoteCommander::LootOrders().NoteWindowEnd(bot->GetObjectGuid().GetRawValue(),
-            guid.GetRawValue(), true);
+        TortoiseBots::RemoteCommander::LootOrders().NoteWindowEnd(GuidKeyCompat(bot->GetObjectGuid()),
+            GuidKeyCompat(guid), true);
         return false;
     }
 
@@ -622,21 +615,23 @@ bool StoreLootAction::Execute(Event& event)
     // A remote commander's loot order on this very object (cmd loot / cmd open): an explicit
     // order takes its item (or everything the group rules give this bot) without the strategy's
     // loot filter, and the window reports what it took.
-    uint64 const botRaw = bot->GetObjectGuid().GetRawValue();
+    uint64 const botRaw = GuidKeyCompat(bot->GetObjectGuid());
     uint32 orderedItem = 0;
-    bool const commanderOrder = TortoiseBots::RemoteCommander::LootOrders().Watching(botRaw, guid.GetRawValue(), orderedItem);
+    bool const commanderOrder = TortoiseBots::RemoteCommander::LootOrders().Watching(botRaw, GuidKeyCompat(guid), orderedItem);
 
     std::string lootSourceType;
     std::string lootSourceName;
     DescribeLootSource(ai, guid, gatherSkill, lootSourceType, lootSourceName);
 
     // An order for one item leaves the money on the corpse.
-    if (gold > 0 && !(commanderOrder && orderedItem))
+    // T: the packet, always taken. F: the core's own handler, refused (false) only for a window the core would divide by zero on
+    // (LootMoneyCompat); nothing was taken then, so the window "gave nothing" below.
+    if (gold > 0 && !(commanderOrder && orderedItem) && !LootMoneyCompat(bot))
+        gold = 0;
+    else if (gold > 0 && !(commanderOrder && orderedItem))
     {
-        WorldPacket packet(CMSG_LOOT_MONEY, 0);
-        bot->GetSession()->HandleLootMoneyOpcode(packet);
         if (commanderOrder)
-            TortoiseBots::RemoteCommander::LootOrders().NoteCopper(botRaw, guid.GetRawValue(), gold);
+            TortoiseBots::RemoteCommander::LootOrders().NoteCopper(botRaw, GuidKeyCompat(guid), gold);
 
         // Money taken before the item loop, so gold-only corpses (most low-level
         // kills) used to leave no trace: income was unmeasurable and a bot that
@@ -669,7 +664,7 @@ bool StoreLootAction::Execute(Event& event)
 		if (lootslot_type != LOOT_SLOT_NORMAL
             )
 		{
-			sLog.outDebug("[BOT LOOT] %s: skip item=%u slot_type=%u (not normal/owner)", bot->GetName(), itemid, lootslot_type);
+			sLog.outDebug("[BOT LOOT] %s: skip item=%u slot_type=%u (not normal/owner)", CStrCompat(bot->GetName()), itemid, lootslot_type);
 			continue;
 		}
 
@@ -689,14 +684,14 @@ bool StoreLootAction::Execute(Event& event)
             // their grey loot too.
             if (!guid.IsCreature() || !GuildOrderSkinMobFor(bot, guid.GetEntry()))
             {
-                sLog.outDebug("[BOT LOOT] %s: skip item=%u (IsLootAllowed=false)", bot->GetName(), itemid);
+                sLog.outDebug("[BOT LOOT] %s: skip item=%u (IsLootAllowed=false)", CStrCompat(bot->GetName()), itemid);
                 continue;
             }
         }
 
         if (AI_VALUE2(uint32, "stack space for item", itemid) < itemcount)
         {
-            sLog.outDebug("[BOT LOOT] %s: skip item=%u (no stack space, need=%u)", bot->GetName(), itemid, itemcount);
+            sLog.outDebug("[BOT LOOT] %s: skip item=%u (no stack space, need=%u)", CStrCompat(bot->GetName()), itemid, itemcount);
             std::optional<TortoiseBots::GuildOrders::OrderRecord> order =
                 TortoiseBots::GuildOrders::Find(bot->GetGUIDLow());
             if (order && order->itemId == itemid && order->state == TortoiseBots::GuildOrders::OrderState::Working &&
@@ -709,21 +704,15 @@ bool StoreLootAction::Execute(Event& event)
         if (!proto)
             continue;
 
-        QuestItem* qitem = nullptr;
-        QuestItem* ffaitem = nullptr;
-        LootItem* lootItem = loot->LootItemInSlot(itemindex, bot->GetGUIDLow(), &qitem, &ffaitem);
-        if (!lootItem)
+        // The facts of the slot in the 1.12 loot view (T) behind the take decision; F reads no slots (items are not taken, D2).
+        bool slotAllowedForPlayer = false, slotIsQuest = false, slotIsFfa = false, slotIsBlocked = false, slotSharedAllowed = false;
+        if (!LootSlotFactsCompat(bot, loot, itemindex, slotAllowedForPlayer, slotIsQuest, slotIsFfa, slotIsBlocked, slotSharedAllowed))
             continue;
 
-        WorldObject const* lootTarget = loot ? loot->GetLootTarget() : nullptr;
-        bool const personal = qitem || ffaitem;
-        bool const sharedAllowed = !personal &&
-            lootItem->GetSlotTypeForSharedLoot(ALL_PERMISSION, bot, lootTarget) != MAX_LOOT_SLOT_TYPE;
-        if (!ai::BotMayTakeLootSlot(lootItem->AllowedForPlayer(bot, lootTarget), qitem != nullptr, ffaitem != nullptr,
-                lootItem->is_blocked, sharedAllowed))
+        if (!ai::BotMayTakeLootSlot(slotAllowedForPlayer, slotIsQuest, slotIsFfa, slotIsBlocked, slotSharedAllowed))
         {
-            sLog.outDebug("[BOT LOOT] %s: skip item=%u (no right: blocked=%u quest=%u ffa=%u)", bot->GetName(), itemid,
-                lootItem->is_blocked ? 1 : 0, qitem ? 1 : 0, ffaitem ? 1 : 0);
+            sLog.outDebug("[BOT LOOT] %s: skip item=%u (no right: blocked=%u quest=%u ffa=%u)", CStrCompat(bot->GetName()), itemid,
+                slotIsBlocked ? 1 : 0, slotIsQuest ? 1 : 0, slotIsFfa ? 1 : 0);
             continue;
         }
 
@@ -735,20 +724,18 @@ bool StoreLootAction::Execute(Event& event)
                 sRandomBotFacade.AddTradeDiscount(bot, master, price);
         }
 
-        WorldPacket packet(CMSG_AUTOSTORE_LOOT_ITEM, 1);
-        packet << itemindex;
         uint32 const countBefore = commanderOrder ? bot->GetItemCount(itemid) : 0;
-        bot->GetSession()->HandleAutostoreLootItemOpcode(packet);
+        LootAutostoreCompat(bot, itemindex);
         ++itemsTaken;
         if (commanderOrder)
         {
             // Only what really reached the bags counts (the core refuses a full bag or a unique item).
             uint32 const countAfter = bot->GetItemCount(itemid);
             if (countAfter > countBefore)
-                TortoiseBots::RemoteCommander::LootOrders().NoteItem(botRaw, guid.GetRawValue(), itemid,
+                TortoiseBots::RemoteCommander::LootOrders().NoteItem(botRaw, GuidKeyCompat(guid), itemid,
                     std::min(itemcount, countAfter - countBefore));
         }
-        sLog.outDebug("[BOT LOOT] %s: take item=%u x%u", bot->GetName(), itemid, itemcount);
+        sLog.outDebug("[BOT LOOT] %s: take item=%u x%u", CStrCompat(bot->GetName()), itemid, itemcount);
 
         if (proto->Quality > ITEM_QUALITY_NORMAL && !urand(0, 50) && ai->HasStrategy("emote", BotState::BOT_STATE_NON_COMBAT)) ai->PlayEmote(TEXTEMOTE_CHEER);
         if (proto->Quality >= ITEM_QUALITY_RARE && !urand(0, 1) && ai->HasStrategy("emote", BotState::BOT_STATE_NON_COMBAT)) ai->PlayEmote(TEXTEMOTE_CHEER);
@@ -783,7 +770,7 @@ bool StoreLootAction::Execute(Event& event)
         break;
     case LootWindowVerdict::Abandon:
         sLog.outDebug("[BOT LOOT] %s: abandoning guid=%lu (window gave nothing)",
-            bot->GetName(), guid.GetRawValue());
+            CStrCompat(bot->GetName()), GuidKeyCompat(guid));
         lootStack->Abandon(guid);
         break;
     case LootWindowVerdict::KeepCount:
@@ -792,20 +779,18 @@ bool StoreLootAction::Execute(Event& event)
 
     lootStack->Remove(guid);
     RESET_AI_VALUE(LootObject, "loot target");
-    RESET_AI_VALUE2(bool, "should loot object", std::to_string(guid.GetRawValue()));
+    RESET_AI_VALUE2(bool, "should loot object", std::to_string(GuidKeyCompat(guid)));
 
     sLog.outDebug("[BOT LOOT] %s: StoreLoot done guid=%lu items_taken=%u gold=%u, release sent",
-        bot->GetName(), guid.GetRawValue(), itemsTaken, gold);
+        CStrCompat(bot->GetName()), GuidKeyCompat(guid), itemsTaken, gold);
 
     // release loot
-    WorldPacket packet(CMSG_LOOT_RELEASE, 8);
-    packet << guid;
-    bot->GetSession()->HandleLootReleaseOpcode(packet);
+    LootReleaseCompat(bot, guid);
 
     ai->AccelerateRespawn(guid);
 
     if (commanderOrder)
-        TortoiseBots::RemoteCommander::LootOrders().NoteWindowEnd(botRaw, guid.GetRawValue(), false);
+        TortoiseBots::RemoteCommander::LootOrders().NoteWindowEnd(botRaw, GuidKeyCompat(guid), false);
 
     return true;
 }
@@ -813,6 +798,10 @@ bool StoreLootAction::Execute(Event& event)
 bool StoreLootAction::IsLootAllowed(ItemQualifier& itemQualifier, PlayerbotAI *ai)
 {
     AiObjectContext *context = ai->GetAiObjectContext();
+
+    // Item looting is not ported on ForeverCore (lead decision D2): no item is allowed. (T: false, the checks below run.)
+    if (ItemLootingUnportedCompat())
+        return false;
 
     ItemPrototype const* proto = GetItemProtoByIdCompat(itemQualifier.GetId());
     if (!proto)
@@ -854,12 +843,17 @@ bool StoreLootAction::IsLootAllowed(ItemQualifier& itemQualifier, PlayerbotAI *a
 
         for (int i = 0; i < 4; i++)
         {
-            if (quest->ReqItemId[i] == itemQualifier.GetId())
+            uint32 questItemId = 0;
+            uint32 questItemCount = 0;
+            if (!QuestRequiredItemCompat(quest, i, questItemId, questItemCount))
+                continue;
+
+            if (questItemId == itemQualifier.GetId())
             {
                 if (ai->GetMaster() && sPlayerbotAIConfig.syncQuestWithPlayer)
                     return false; //Quest is autocomplete for the bot so no item needed.
 
-                if (AI_VALUE2(uint32, "item count", proto->Name1) >= quest->ReqItemCount[i])
+                if (AI_VALUE2(uint32, "item count", proto->Name1) >= questItemCount)
                     return false;
             }
         }
@@ -883,17 +877,13 @@ bool ReleaseLootAction::Execute(Event& event)
     std::list<ObjectGuid> gos = context->GetValue<std::list<ObjectGuid> >("nearest game objects no los")->Get();
     for (std::list<ObjectGuid>::iterator i = gos.begin(); i != gos.end(); i++)
     {
-        WorldPacket packet(CMSG_LOOT_RELEASE, 8);
-        packet << *i;
-        bot->GetSession()->HandleLootReleaseOpcode(packet);
+        LootReleaseCompat(bot, *i);
     }
 
     std::list<ObjectGuid> corpses = context->GetValue<std::list<ObjectGuid> >("nearest corpses")->Get();
     for (std::list<ObjectGuid>::iterator i = corpses.begin(); i != corpses.end(); i++)
     {
-        WorldPacket packet(CMSG_LOOT_RELEASE, 8);
-        packet << *i;
-        bot->GetSession()->HandleLootReleaseOpcode(packet);
+        LootReleaseCompat(bot, *i);
     }
 
     return true;
@@ -917,10 +907,15 @@ namespace
 {
     constexpr int MAX_LOOT_BONUS_REF_DEPTH = 4;
 
-    void BoostRareLootTemplate(LootTemplateAccess const* access, float pathChance, Player* bot,
+    // Function templates: they read the 1.12 loot template layout (LootStoreItem fields, the loot groups), which ForeverCore does not
+    // have, so what they do with their arguments is only looked at where they are instantiated (T). ApplyBotLootBonus calls them
+    // through UnportedBlockCompat: on ForeverCore the boost is the named feature "loot: items, quest items and rolls".
+    template <class Access>
+    void BoostRareLootTemplate(Access const* access, float pathChance, Player* bot,
         Loot& loot, Creature* creature, PlayerbotAI* ai, int depth);
 
-    void BoostRareLootEntry(LootStoreItem const& entry, float pathChance, Player* bot,
+    template <class Entry>
+    void BoostRareLootEntry(Entry const& entry, float pathChance, Player* bot,
         Loot& loot, Creature* creature, PlayerbotAI* ai, int depth)
     {
         if (entry.mincountOrRef < 0)                            // reference row: gate the subtree by its own chance
@@ -960,16 +955,13 @@ namespace
 
         // Stack on the server's own quality rate so the multiplier means the same thing
         // whichever Rate.Drop.Item.* mangosd.conf ships.
-        float serverRate = LootTemplates_Creature.IsRatesAllowed()
-            ? sWorld.getConfig(proto->Quality == ITEM_QUALITY_UNCOMMON
-                ? CONFIG_FLOAT_RATE_DROP_ITEM_UNCOMMON : CONFIG_FLOAT_RATE_DROP_ITEM_RARE)
-            : 1.0f;
+        float serverRate = DropRateOfQualityCompat(LootTemplates_Creature, proto->Quality);
 
         float chance = entry.chance * pathChance * serverRate * (rate - 1.0f);
         if (chance > 100.0f)
             chance = 100.0f;
 
-        if (chance <= 0.0f || !roll_chance_f(chance))
+        if (chance <= 0.0f || !RollChanceCompat(chance))
             return;
 
         loot.AddItem(entry);
@@ -978,21 +970,22 @@ namespace
             std::to_string(proto->Quality) + ":" + std::to_string(proto->ItemId) + ":" + proto->Name1);
     }
 
-    void BoostRareLootTemplate(LootTemplateAccess const* access, float pathChance, Player* bot,
+    template <class Access>
+    void BoostRareLootTemplate(Access const* access, float pathChance, Player* bot,
         Loot& loot, Creature* creature, PlayerbotAI* ai, int depth)
     {
         if (!access || depth > MAX_LOOT_BONUS_REF_DEPTH)
             return;
 
-        for (LootStoreItem const& entry : access->Entries)
+        for (auto const& entry : access->Entries)
             BoostRareLootEntry(entry, pathChance, bot, loot, creature, ai, depth);
 
-        for (LootLootGroupAccess const& group : access->Groups)
+        for (auto const& group : access->Groups)
         {
-            for (LootStoreItem const& entry : group.ExplicitlyChanced)
+            for (auto const& entry : group.ExplicitlyChanced)
                 BoostRareLootEntry(entry, pathChance, bot, loot, creature, ai, depth);
 
-            for (LootStoreItem const& entry : group.EqualChanced)
+            for (auto const& entry : group.EqualChanced)
                 BoostRareLootEntry(entry, pathChance, bot, loot, creature, ai, depth);
         }
     }
@@ -1012,20 +1005,25 @@ void ai::ApplyBotLootBonus(PlayerbotAI* ai, Player* bot, ObjectGuid victimGuid)
     if (!creature || creature->IsAlive())
         return;
 
-    // Personal loot of this bot's own kill. m_personal is false whenever the core rolled the
-    // corpse for a group, which is exactly the "loot shared with a real player" case.
-    Loot& loot = creature->loot;
-    if (!loot.m_personal || creature->GetLootRecipient() != bot)
-        return;
+    // The rest reads the creature's 1.12 loot object and loot templates: T runs it as it was, F counts the feature ("loot: items,
+    // quest items and rolls": a random bot's drop boost; a host bot is never a random bot, so it is not reached there anyway).
+    UnportedBlockCompat(tbcompat::Feature::LootItems, [&](auto* corpse)
+    {
+        // Personal loot of this bot's own kill. m_personal is false whenever the core rolled the
+        // corpse for a group, which is exactly the "loot shared with a real player" case.
+        auto& loot = corpse->loot;
+        if (!loot.m_personal || corpse->GetLootRecipient() != bot)
+            return;
 
-    uint32 lootId = creature->GetLootId();
-    if (!lootId)
-        return;
+        uint32 lootId = corpse->GetLootId();
+        if (!lootId)
+            return;
 
-    LootTemplate const* lootTemplate = LootTemplates_Creature.GetLootFor(lootId);
-    if (!lootTemplate)
-        return;
+        auto const* lootTemplate = LootTemplates_Creature.GetLootFor(lootId);
+        if (!lootTemplate)
+            return;
 
-    BoostRareLootTemplate(reinterpret_cast<LootTemplateAccess const*>(lootTemplate),
-        1.0f, bot, loot, creature, ai, 0);
+        BoostRareLootTemplate(reinterpret_cast<LootTemplateAccess const*>(lootTemplate),
+            1.0f, bot, loot, corpse, ai, 0);
+    }, creature);
 }
