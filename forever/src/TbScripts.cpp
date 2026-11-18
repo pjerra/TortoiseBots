@@ -182,6 +182,7 @@ public:
             { "item",   HandleItem,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "spellscan", HandleSpellScan, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "spell",  HandleSpell,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "castfail", HandleCastFail, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
         {
@@ -319,6 +320,26 @@ public:
             return Fail(handler, name + " is not a logged-in bot.");
         bot->SetPower(POWER_RAGE, int32(std::min<uint32>(points, 100) * 10));
         handler->PSendSysMessage("TortoiseBots: %s rage is %d/%d (core units).", name.c_str(), bot->GetPower(POWER_RAGE), bot->GetMaxPower(POWER_RAGE));
+        return true;
+    }
+
+    // .tb castfail <character> <spell id> <reason> [interrupt]: sends the bot a real SMSG_CAST_FAILED (with `interrupt`: a
+    // SMSG_SPELL_FAILURE of its own cast) so the cast-result path can be tested without a fight: session reader, bounded queue,
+    // drain at the next engine tick (SLICE2-R0-NOTES.md). `reason` is the core's SpellCastResult number (SharedDefines.h:
+    // 63 interrupted, 75 moving, 87 not known, 118 out of range, 130 targets dead).
+    static bool HandleCastFail(ChatHandler* handler, std::string name, uint32 spellId, uint32 reason, Optional<std::string> mode)
+    {
+        Player* bot = BotMgr::Instance().FindBot(GuidByName(name));
+        if (!bot)
+            return Fail(handler, name + " is not a logged-in bot.");
+        bool const interrupted = mode && *mode == "interrupt";
+        if (mode && !interrupted)
+            return Fail(handler, "the optional last word is `interrupt` (an SMSG_SPELL_FAILURE); without it an SMSG_CAST_FAILED is sent.");
+        std::string const error = TortoiseBots::engine::InjectCastResult(bot, spellId, reason, interrupted);
+        if (!error.empty())
+            return Fail(handler, name + ": no result sent: " + error + ".");
+        handler->PSendSysMessage("TortoiseBots: %s: sent %s spell %u reason %u; the engine hears it on its next tick (`.tb where` shows the counts).",
+            name.c_str(), interrupted ? "SMSG_SPELL_FAILURE" : "SMSG_CAST_FAILED", spellId, reason);
         return true;
     }
 
