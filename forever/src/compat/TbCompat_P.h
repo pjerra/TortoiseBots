@@ -264,7 +264,7 @@ inline uint32 PlayerAccountIdCompat(ObjectGuid guid) { return sCharacterCache->G
 inline bool PlayerNameByGuidCompat(ObjectGuid guid, std::string& name) { return sCharacterCache->GetCharacterNameByGuid(guid, name); }
 inline ObjectGuid PlayerGuidByNameCompat(std::string const& name) { return sCharacterCache->GetCharacterGuidByName(name); }
 inline Player* PlayerByGuidCompat(ObjectGuid guid) { return ObjectAccessor::FindPlayer(guid); }
-inline ObjectGuid PlayerGuidCompat(uint64 low) { return ObjectGuid::Create<HighGuid::Player>(low); }
+inline ObjectGuid PlayerGuidCompat(uint32 low) { return ObjectGuid::Create<HighGuid::Player>(low); }
 
 // A session that belongs to a headless bot (no client). T WorldSession::IsHeadless; F IsBot (WorldSession.h:1078), the flag
 // the bot session sets when it is made. Different answer: T's flag is set by the Turtle bot manager, F's by BotSession.
@@ -376,3 +376,13 @@ inline uint32 ZoneIdAtCompat(uint32 mapId, float x, float y, float z)
 {
     return sTerrainMgr.GetZoneId(PhasingHandler::GetEmptyPhaseShift(), mapId, x, y, z);
 }
+
+// ---------------------------------------------------------------------------------------------------------------
+// The bot cheats (health, cooldown, repair; BotCheatMask). T Unit::SetHealthPercent (Unit.h:446), Unit::RemoveAllSpellCooldown
+// (Unit.h:1020), Player::DurabilityRepairAll(cost, discount) (Player.h:1442, returns the cost); F: health as a share of the maximum,
+// SpellHistory::ResetAllCooldowns (SpellHistory.h:170), Player::DurabilityRepairAll(takeCost, discountMod, guildBank)
+// (Player.h:2455, no result). The repair cheat does not use the cost.
+// ---------------------------------------------------------------------------------------------------------------
+inline void SetHealthPercentCompat(Unit* unit, float percent) { unit->SetHealth(uint32(unit->GetMaxHealth() * percent / 100.0f)); }
+inline void RemoveAllSpellCooldownCompat(Unit* unit) { unit->GetSpellHistory()->ResetAllCooldowns(); }
+inline void DurabilityRepairAllCompat(Player* player, bool takeCost, float discountMod) { player->DurabilityRepairAll(takeCost, discountMod, false); }

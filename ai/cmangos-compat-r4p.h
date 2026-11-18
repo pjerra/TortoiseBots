@@ -108,7 +108,7 @@ inline uint32 PlayerAccountIdCompat(ObjectGuid guid) { return sObjectMgr.GetPlay
 inline bool PlayerNameByGuidCompat(ObjectGuid guid, std::string& name) { return sObjectMgr.GetPlayerNameByGUID(guid, name); }
 inline ObjectGuid PlayerGuidByNameCompat(std::string const& name) { return sObjectMgr.GetPlayerGuidByName(name); }
 inline Player* PlayerByGuidCompat(ObjectGuid guid) { return sObjectMgr.GetPlayer(guid); }
-inline ObjectGuid PlayerGuidCompat(uint64 low) { return ObjectGuid(HIGHGUID_PLAYER, low); }
+inline ObjectGuid PlayerGuidCompat(uint32 low) { return ObjectGuid(HIGHGUID_PLAYER, low); }
 inline bool IsHeadlessCompat(WorldSession* session) { return session->IsHeadless(); }
 
 // The reaction of one faction template to another, the body PlayerbotAI::GetFactionReaction held before the port (a copy of the
@@ -171,3 +171,7 @@ inline Unit::SpellAuraHolderMap const& AuraHolderMapCompat(Unit const* unit) { r
 inline uint32 AreaZoneIdCompat(AreaTableEntry const* area) { return area->ZoneId; }
 inline std::string AreaNameOrEmptyCompat(AreaTableEntry const* area) { return area && area->Name ? std::string(area->Name) : std::string(); }
 inline uint32 ZoneIdAtCompat(uint32 mapId, float x, float y, float z) { return sTerrainMgr.getZoneId(mapId, x, y, z); }
+
+inline void SetHealthPercentCompat(Unit* unit, float percent) { unit->SetHealthPercent(percent); }
+inline void RemoveAllSpellCooldownCompat(Unit* unit) { unit->RemoveAllSpellCooldown(); }
+inline void DurabilityRepairAllCompat(Player* player, bool takeCost, float discountMod) { player->DurabilityRepairAll(takeCost, discountMod); }

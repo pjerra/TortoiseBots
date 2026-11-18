@@ -729,13 +729,13 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
     if (bot->IsAlive() && ((uint32)GetCheat() > 0 || (uint32)sPlayerbotAIConfig.botCheatMask > 0 || (uint32)sPlayerbotAIConfig.rndBotCheatMask > 0))
     {
         if (HasCheat(BotCheatMask::health))
-            bot->SetHealthPercent(100);
+            SetHealthPercentCompat(bot, 100);
         if (HasCheat(BotCheatMask::mana) && bot->GetPowerType() == POWER_MANA)
             bot->SetPower(POWER_MANA, bot->GetMaxPower(POWER_MANA));
         if (HasCheat(BotCheatMask::power) && bot->GetPowerType() != POWER_MANA)
             bot->SetPower(bot->GetPowerType(), bot->GetMaxPower(bot->GetPowerType()));
         if (HasCheat(BotCheatMask::cooldown))
-            bot->RemoveAllSpellCooldown();
+            RemoveAllSpellCooldownCompat(bot);
         if (HasCheat(BotCheatMask::repair))
         {
             // The "repair" cheat is meant to mean gear never actually breaks, but nothing
@@ -759,7 +759,7 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
                 }
             }
             if (needsRepair)
-                bot->DurabilityRepairAll(false, 0.0f);
+                DurabilityRepairAllCompat(bot, false, 0.0f);
         }
         if (HasCheat(BotCheatMask::movespeed))
         {
