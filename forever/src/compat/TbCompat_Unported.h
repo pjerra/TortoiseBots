@@ -464,7 +464,13 @@ inline void EndCinematicIfWatchingCompat(Player* bot)
 // 4 minutes, R6B); only ReleaseLootIfFarCompat, reached with a non-empty guid, counts.
 inline ObjectGuid LootGuidCompat(Player* bot) { return bot->GetLootGUID(); }
 template <class GuidPos>
-inline void ReleaseLootIfFarCompat(Player* /*bot*/, GuidPos& /*lootObject*/, bool /*shouldRelease*/) { tbcompat::Unported(tbcompat::Feature::LootObjects); }
+inline void ReleaseLootIfFarCompat(Player* /*bot*/, GuidPos& lootObject, bool /*shouldRelease*/)
+{
+    // The caller builds `lootObject` from the bot's own position, so it reads as set even when the guid is empty (GuidPosition::operator bool);
+    // only a real loot window (a non-empty guid) reaches the feature, which is why this was 250k calls in 4 minutes (R8).
+    if (!static_cast<ObjectGuid const&>(lootObject).IsEmpty())
+        tbcompat::Unported(tbcompat::Feature::LootObjects);
+}
 
 // PROPER: the clients are told about a new facing by F's SetFacingTo itself (a facing spline), so the extra facing broadcast of T
 // (MSG_MOVE_SET_FACING from the mover) has nothing left to do.

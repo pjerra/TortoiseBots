@@ -134,8 +134,10 @@ bool TauntRefusedByGate(PlayerbotAI*, Player*, Unit*, const char*) { NoteBoss();
 bool TauntTargetHeldByOtherTank(Player*, Unit*) { NoteBoss(); return false; }
 
 // The multipliers the slice's combat strategies push (CombatStrategy.cpp, DungeonStrategy.cpp, AvoidAoeStrategy): 1.0 = no change.
-float CharmedAllyHoldMultiplier::GetValue(Action*) { NoteBoss(); return 1.0f; }
-float TrapHoldMultiplier::GetValue(Action*) { NoteBoss(); return 1.0f; }
+// The engine evaluates every multiplier for every action candidate on every tick, so counting them made them the hottest boss-tactics
+// counter by far (R8); they answer 1.0 without a count, the rows above and below stay counted.
+float CharmedAllyHoldMultiplier::GetValue(Action*) { return 1.0f; }
+float TrapHoldMultiplier::GetValue(Action*) { return 1.0f; }
 
 // Fankriss*Actions.cpp, FankrissSpawnTarget.cpp, FankrissGauntletPolicy
 bool FankrissBlocksAoe(PlayerbotAI*, uint32) { NoteBoss(); return false; }
