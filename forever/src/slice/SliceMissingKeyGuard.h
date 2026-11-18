@@ -83,6 +83,7 @@ namespace slice
         std::map<uint32, uint32>&,
         std::map<ObjectGuid, RunnerLedgeEntry>&,
         std::list<ObjectGuid>,
+        std::string,
         std::list<std::string>&,
         std::set<ObjectGuid>&>;
 
