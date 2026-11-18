@@ -14,7 +14,7 @@ that FETCH the pointer change, to helpers that exist on both cores.
 |---|---|---|
 | BEFORE | full census, this branch at bd0a076ae (round 2 fix 2) | 11,938 in 531 files, 11 clean files |
 | AFTER | full census, this branch at the round-3 commit (6cbc923cd) | 11,065 in 520 files, 11 clean files |
-| FIX1 | full census, this branch at the fix-round commit (6f6bce297) | 11,063 in 520 files, 11 clean files (slice 1 unchanged at 2,504 in 140 files) |
+| FIX1 | full census, this branch at the fix-round commit (0a7f82604) | 11,063 in 520 files, 11 clean files (slice 1 unchanged at 2,504 in 140 files) |
 
 The 873 places that went away are the spell-data families: `Effect` 173 -> 0, `EffectApplyAuraName` 102 -> 0,
 `MAX_EFFECT_INDEX` 64 -> 0, `EffectTriggerSpell` 58 -> 0, `SpellEffectIndex` 28 -> 0, `EffectMiscValue` 42 -> 0,
@@ -388,8 +388,8 @@ All on the final tree; the only commit after them is this notes file.
 
 | Gate | Command | Result |
 |---|---|---|
-| G1 module compiles on ForeverCore | `forever-build/build.sh 12 worldserver` | PASS: `CMAKE_RC=0`, `MAKE_RC=0`, `TOTAL_SECONDS=17` at 6f6bce297 (warm ccache; TbSpellEntry.cpp, TbItemPrototype.cpp, TbScripts.cpp rebuilt, worldserver written) |
-| G5 live boot | rsync core + module to `forever-build/src`, build, `forever-run/setup.sh`, `world.sh start`, poll `world.out` for `ready...` / `ASSERTION FAILED` / the item and spell lines, `tb spellscan`, `tb spell 133/2050/11687` (11687 = Life Tap, power 4294967294), `world.sh stop` | PASS: `ready...` 1, `ASSERTION FAILED` 0, the item mirrors line and the spellscan/difficulty lines above, all three `tb spell` outputs; a second boot with `TortoiseBots.Enable = 0` printed the "spell mirrors are off" line and `0 spells ... (index 0 B + slots 0 B)`; server stopped, `forever-world` removed |
-| G2 Turtle build | `vm-build ~/wt-forever-port --wait` | (filled below) |
-| G3 Turtle unit tests | `vm-test tb ~/wt-forever-port` | PASS: `RESULT: PASS` rc=0, `sha=6f6bce297 dirty=1 files=3601`, `vm_duration=1024s` (the whole `tools/verify_all.sh`: OKF, surface, wiring, 2,656 unit tests, decision trail; the one dirty file is a docs edit from the same fix round, committed right after) |
-| G4 core-free tests on the ForeverCore toolchain | `policy-tests.sh` on the tree under test | 472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL in 138 s at 6f6bce297 - the same set as the round-2 baseline and round 3: `test_combat_monitor_service`, `test_combat_monitor_service_race`, `test_decision_capture_files`, `test_run_trace_writer` (COMPILE_FAIL), `test_decision_capture_codec`, `test_log_file_rotation` (RUN_FAIL). Nothing got worse |
+| G1 module compiles on ForeverCore | `forever-build/build.sh 12 worldserver` | PASS: `CMAKE_RC=0`, `MAKE_RC=0`, `TOTAL_SECONDS=13` at 0a7f82604 (warm ccache; TbSpellEntry.cpp and the module relinked, worldserver written) |
+| G5 live boot | rsync core + module to `forever-build/src`, build, `forever-run/setup.sh`, `world.sh start`, poll `world.out` for `ready...` / `ASSERTION FAILED` / the item and spell lines, `tb spellscan`, `tb spell 133/2050/11687` (11687 = Life Tap, power 4294967294), `world.sh stop` | PASS at 0a7f82604: `ready...` 1, `ASSERTION FAILED` 0, the item mirrors line and the spellscan/difficulty lines above, all three `tb spell` outputs; a second boot with `TortoiseBots.Enable = 0` printed the "spell mirrors are off" line and `0 spells ... (index 0 B + slots 0 B)`; server stopped, `forever-world` removed |
+| G2 Turtle build | `vm-build ~/wt-forever-port --wait` | PASS: `sha=0a7f82604 dirty-entries=0`, `COMPILE_SECONDS=1807 CMAKE_RC=0 MAKE_RC=0`, `QUEUE_RC=0`, slot 2, mangosd `8a540a0c...74e0fd` and realmd `85c40603...373868` written |
+| G3 Turtle unit tests | `vm-test tb ~/wt-forever-port` | PASS: `RESULT: PASS` rc=0, `sha=0a7f82604 dirty=0 files=3601`, `vm_duration=1430s` (the whole `tools/verify_all.sh`: OKF, surface, wiring, 2,656 unit tests, decision trail; also PASS at 6f6bce297, 1024 s) |
+| G4 core-free tests on the ForeverCore toolchain | `policy-tests.sh` on the tree under test | 472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL in 323 s at 0a7f82604 (run beside the build and census jobs) - the same set as the round-2 baseline and round 3: `test_combat_monitor_service`, `test_combat_monitor_service_race`, `test_decision_capture_files`, `test_run_trace_writer` (COMPILE_FAIL), `test_decision_capture_codec`, `test_log_file_rotation` (RUN_FAIL). Nothing got worse |

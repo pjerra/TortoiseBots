@@ -20,13 +20,12 @@ Run: `forever/tools/vm-census.sh "" 14` (all, about 45 minutes) or with a path p
 | 2026-11-18 | 6517af05 | shim round 2 fix round 1 (review: block/holy/bag family/one fill; entry + IsMoving helpers, b7d20355a) | 648 | 11 | 11,938 |
 | 2026-11-18 | 6517af05 | shim round 3 (BEFORE, = round 2 fix 2) | 648 | 11 | 11,938 |
 | 2026-11-18 | 6517af05 | shim round 3 (AFTER, spell mirror + fetch helpers, 6cbc923cd) | 648 | 11 | 11,065 |
-| 2026-11-18 | 6517af05 | shim round 3 fix round 1 (difficulty-NONE slot, sparse index, faithful casts, usable-item gate, 6f6bce297) | 648 | 11 | 11,063 |
+| 2026-11-18 | 6517af05 | shim round 3 fix round 1 (difficulty-NONE slot, sparse index, faithful casts, usable-item gate, 0a7f82604) | 648 | 11 | 11,063 |
 
 The first row is not comparable with later ones: without the pre-include most files stopped early.
 
-The fix-round row is two places below the round-3 AFTER (11,065): the only new compilable lines this round are one guard
-line in four item files that already fail the compile, and the slice — whose 127 files this round did not touch — is
-exactly 2,504 again.
+The fix-round row is two places below the round-3 AFTER (11,065); the slice — whose 127 files this round did not touch —
+is exactly 2,504 again. No error family appeared or vanished from the top of the name table.
 
 What the first run named most (distinct places): the cmangos singleton spelling (`MaNGOS::Singleton<>::Instance()`,
 `sObjectMgr.`), `Player` / `Item` / `Unit` members with other names (`GetObjectGuid`, `GetGUIDLow`, `GetProto`,
@@ -60,7 +59,7 @@ The whole-tree number above is no longer the target; this one is.
 | Date | State | Files | Compile clean | Error places |
 |---|---|---|---|---|
 | 2026-11-18 | baseline, at round 3 (spell mirror) | 127 | 3 | 2,504 (in 140 files incl. headers) |
-| 2026-11-18 | round 3 fix round 1 (6f6bce297; no slice file touched) | 127 | 3 | 2,504 (in 140 files incl. headers) |
+| 2026-11-18 | round 3 fix round 1 (6f6bce297; no slice file changed at 0a7f82604 either) | 127 | 3 | 2,504 (in 140 files incl. headers) |
 
 Where they are: `PlayerbotAI.cpp` 348, `MovementActions.cpp` 317, `WorldPosition.cpp` 258 and `WorldPosition.h` 225,
 `PlayerbotAISpells.cpp` 128, `PlayerbotAIPackets.cpp` 74, `GenericTriggers.cpp` 51.
