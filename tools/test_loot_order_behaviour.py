@@ -31,10 +31,10 @@ def between(text, start, end=None):
 
 
 def compat_helpers():
-    """The Turtle-side helpers the stack code calls, copied verbatim from ai/cmangos-compat-s2v.h (and the one-line CStrCompat)."""
+    """The Turtle-side helpers the stack code calls, copied verbatim from ai/cmangos-compat-s2v.h (CStrCompat comes from FIXTURE_HEAD)."""
     return "\n".join([
         "using LootStoreItemCompat = LootStoreItem;",
-        "inline char const* CStrCompat(std::string const& text) { return text.c_str(); }",
+        # CStrCompat is defined once, in FIXTURE_HEAD with the other Turtle bodies of the both-core name helpers (R3 merge: V2 and I2 each spelled it).
         between(STACK, "struct VisiblePersonalItemRule", "static bool MayLootCorpse("),
         between(S2V, "template <class Access, class Info>", "// Quest relation tables"),
         between(S2V, "// The five facts of the corpse-refusal debug text", "// Corpse distance:"),
