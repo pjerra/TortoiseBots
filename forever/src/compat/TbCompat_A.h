@@ -134,8 +134,17 @@ inline void MoveFollowCompat(MotionMaster& mm, Unit* target, float dist, float a
 // Chase a unit to a distance and an angle. T MotionMaster.cpp:405 and F MotionMaster.h:166 take the same three values.
 // DIFFERENT ANSWER: F's ChaseAngle has a +-pi/4 tolerance and its ChaseRange keeps the unit between the asked range and the
 // melee/combat reach; T walks to the exact point.
+// Found live (R8): the bot asks for distance 0 when it means "melee contact" (ReachMeleeAction, ChaseTo), and T's chase generator stops at the
+// attack reach for it. F's float overload turns 0 into ChaseRange(0), which is "to the target's centre": the warrior stood 0.005 to 0.3 yd
+// from its victim, inside it. F's own default (no range) is the melee/combat reach, and with no angle the bot closes in from where it
+// stands instead of being steered round the target to a +-pi/4 wedge of a bearing T read differently.
 inline void MoveChaseCompat(MotionMaster& mm, Unit* target, float dist, float angle)
 {
+    if (dist <= 0.0f)
+    {
+        mm.MoveChase(target);
+        return;
+    }
     mm.MoveChase(target, dist, angle);
 }
 
