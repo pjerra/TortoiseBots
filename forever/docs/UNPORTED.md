@@ -89,3 +89,10 @@ Rows added by slice 2 package I2 (money looting and food/drink use are ported th
 | game object use (existing row) | every game object use (doors, locks, chests, quest objects) | UseItemAction.cpp: `GameObjectUseUnportedCompat`, `QueueGameObjectUseCompat`; `NearestLockFor` answers no lock | "I can't use ..." and false | typed interact packet and the core's interact check |
 | item and totem casts (existing row) | `BotUseItemSpell::ForceSpellStart`, `OpenLockCheck` | UseItemAction.h/.cpp (generic lambdas, never built on F) | `SPELL_FAILED_ERROR` / false | n/a: F never builds a `BotUseItemSpell` |
 <!-- end slice 2, package I2 -->
+
+<!-- slice 2, R3 link stand-ins -->
+Rows and stand-ins added by the slice-2 link (R3, `SLICE2-R3-NOTES.md` section 7 lists each stand-in with its absent answer, value and effect at the callers). The `loot object stack` stand-ins of slice 1 (SliceLinkStubs.cpp, seven functions) and their row are gone: the real `LootObjectStack.cpp` is in the slice.
+
+| Feature | What it is | Call sites (files) | Failure value on ForeverCore | What porting it needs |
+|---|---|---|---|---|
+| item usage | `ai::ItemUsageValue` and its helpers: is an item needed for a quest, a future upgrade, an equip use, a recipe (lead decision D2: money only, the item-usage value is a later slice) | `IsNeededForQuest` (LootObjectStack.cpp), `IsFutureUpgrade` (LootStrategyValue.cpp), `QueryItemUsageForEquip` (LootValues.cpp), `GetRecipeSpell` (UseItemAction.cpp) | false / `ITEM_USAGE_NONE` / 0: not needed, not an upgrade, no recipe; the `item usage` key is not registered and the missing-key stand-in answers `ITEM_USAGE_NONE` | `ItemUsageValue.cpp` (2,419 lines, 53 census places) and its RandomItemMgr reads |
