@@ -21,6 +21,9 @@
 #include <vector>
 
 #include "ai/playerbot/UnportedFeatures.h"   // the closed list of feature names (core-free: the Turtle side names the same features)
+#ifndef TB_UNPORTED_TABLE_ONLY
+#include "CinematicMgr.h"   // EndCinematicIfWatchingCompat (a core type: the table-only includers do not need it)
+#endif
 
 namespace tbcompat
 {
@@ -442,8 +445,18 @@ inline dtPolyRef NavMeshFindWalkPolyCompat(Args&&...) { tbcompat::Unported(tbcom
 // PLAYERBOTAI.CPP (cinematics, loot window, facing, instance bind, mounts, camp, speed cheat, logout, movement stop, addon chat,
 // portals, taxi follow, text emotes, spawn lookups, guild rank, camera)
 // ===============================================================================================================
-// Cinematic: T ends a cinematic the bot is watching (a headless bot cannot finish it). Failure value: nothing is ended.
-inline void EndCinematicIfWatchingCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::CinematicCamera); }
+// Cinematic: T ends a cinematic the bot is watching (a headless bot cannot finish it). The engine asks this on every tick (PlayerbotAI.cpp:410),
+// so counting every call buried the report (102k calls in 4 minutes, R6B). F answers it for real: its CinematicMgr says whether the player is on a
+// cinematic (CinematicMgr.h:38) and EndCinematic ends it; only a bot that IS watching one reaches the feature counter (the camera body it
+// would otherwise look through is not ported).
+inline void EndCinematicIfWatchingCompat(Player* bot)
+{
+    if (CinematicMgr* cinematic = bot->GetCinematicMgr(); cinematic && cinematic->IsOnCinematic())
+    {
+        tbcompat::Unported(tbcompat::Feature::CinematicCamera);
+        cinematic->EndCinematic();
+    }
+}
 
 // The loot window of a player (T: `GetLootGuid()` and the loot manager). Failure value: the empty guid ("no loot window open") and
 // nothing released.

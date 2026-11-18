@@ -58,6 +58,7 @@
 #include "playerbot/strategy/values/LastSpellCastValue.h"
 #include "playerbot/strategy/values/ManaSaveLevelValue.h"
 #include "playerbot/strategy/values/MasterTargetValue.h"
+#include "playerbot/strategy/values/MoveStyleValue.h"
 #include "playerbot/strategy/values/NearestAdsValue.h"
 #include "playerbot/strategy/values/NearestFriendlyPlayersValue.h"
 #include "playerbot/strategy/values/NearestGameObjects.h"
@@ -184,7 +185,7 @@ namespace slice
         }
     };
 
-    // the registry of ValueContext (139 of its keys)
+    // the registry of ValueContext (140 of its keys)
     class SliceValueContext : public NamedObjectContext<UntypedValue>
     {
     public:
@@ -274,6 +275,7 @@ namespace slice
             creators["manual time"] = [](PlayerbotAI* ai) { return new TimeManualSetValue(ai); };
             creators["master target"] = [](PlayerbotAI* ai) { return new MasterTargetValue(ai); };
             creators["mounted"] = [](PlayerbotAI* ai) { return new IsMountedValue(ai); };
+            creators["move style"] = [](PlayerbotAI* ai) { return new MoveStyleValue(ai); };
             creators["moving"] = [](PlayerbotAI* ai) { return new IsMovingValue(ai); };
             creators["my attacker count"] = [](PlayerbotAI* ai) { return new MyAttackerCountValue(ai); };
             creators["my threat"] = [](PlayerbotAI* ai) { return new MyThreatValue(ai); };
@@ -333,7 +335,7 @@ namespace slice
     };
 
     // Counted when the constructor runs; SliceRegisteredCounts() reports them for the one-line boot log.
-    constexpr unsigned kStrategies = 3, kActions = 11, kTriggers = 30, kValues = 139;
+    constexpr unsigned kStrategies = 3, kActions = 11, kTriggers = 30, kValues = 140;
 }
 }
 

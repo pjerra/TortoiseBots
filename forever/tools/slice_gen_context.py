@@ -42,7 +42,7 @@ SLICE_KEYS = {
              "inventory items, item count, item for spell, last area trigger, last long move, last movement, "
              "last spell cast, last spell cast time, last taxi, leader travel target, lowest durability, main tank, "
              "mana, mana save level, manual bool, manual follow target, manual int, manual saved int, manual string, "
-             "manual time, master target, mounted, moving, my attacker count, my threat, nearest adds, "
+             "manual time, master target, mounted, move style, moving, my attacker count, my threat, nearest adds, "
              "nearest damaging traps, nearest dynamic objects no los, nearest friendly players, nearest game objects, "
              "nearest game objects no los, nearest npcs, nearest stealthed units, neglect threat, new player nearby, "
              "old target, party member to protect, party member to remove roots, party member without aura, "
