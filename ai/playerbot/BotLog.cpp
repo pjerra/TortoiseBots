@@ -35,7 +35,7 @@ void BotLog::Initialize(const char* logFile, const char* logsDir, bool debugEnab
     m_file = fopen(path.c_str(), "a");
     if (!m_file)
     {
-        Log::Instance().outError("[BotLog] Failed to open bot log file: %s", path.c_str());
+        LegacyLogCompat().outError("[BotLog] Failed to open bot log file: %s", path.c_str());
         return;
     }
 
@@ -72,7 +72,7 @@ void BotLog::Initialize(const char* logFile, const char* logsDir, bool debugEnab
         fprintf(m_file, "[%s] %s%s\n", _ts, prefix, _msg); \
         fflush(m_file);                                 \
     } else {                                            \
-        Log::Instance().slog_fn("%s", _msg);            \
+        LegacyLogCompat().slog_fn("%s", _msg);            \
     }
 
 #ifdef _WIN32
@@ -94,7 +94,7 @@ void BotLog::Initialize(const char* logFile, const char* logsDir, bool debugEnab
         fprintf(m_file, "[%s] %s%s\n", _ts, prefix, _msg); \
         fflush(m_file);                                 \
     } else {                                            \
-        Log::Instance().slog_fn("%s", _msg);            \
+        LegacyLogCompat().slog_fn("%s", _msg);            \
     }
 #endif
 
@@ -107,7 +107,7 @@ void BotLog::outString()
         fflush(m_file);
     }
     else
-        Log::Instance().outString();
+        LegacyLogCompat().outString();
 }
 
 void BotLog::outString(const char* fmt, ...)
@@ -143,7 +143,7 @@ void BotLog::outDebug(const char* fmt, ...)
             va_start(_ap, fmt);
             vsnprintf(_msg, sizeof(_msg), fmt, _ap);
             va_end(_ap);
-            Log::Instance().outDebug("%s", _msg);
+            LegacyLogCompat().outDebug("%s", _msg);
         }
         return;
     }

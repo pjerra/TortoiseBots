@@ -247,7 +247,7 @@ std::FILE* BotActionLog::Open(PlayerbotAI* ai)
     if (!f)
     {
         SC_LOG("BotActionLog::Open FAILED for bot=%s path=%s",
-               bot->GetName(), path.c_str());
+               CStrCompat(bot->GetName()), path.c_str());
         return nullptr;
     }
 
@@ -267,13 +267,13 @@ std::FILE* BotActionLog::Open(PlayerbotAI* ai)
         entry.path = path;
         entry.bytes = 0;
     }
-    SC_LOG("BotActionLog opened bot=%s path=%s", bot->GetName(), path.c_str());
+    SC_LOG("BotActionLog opened bot=%s path=%s", CStrCompat(bot->GetName()), path.c_str());
 
     // Header line: human-readable; subsequent lines are tag-prefixed
     // events.
     char header[512];
     int n = snprintf(header, sizeof(header), "# BotActionLog v1 — bot=%s guid=%u accountId=%u opened=%s\n",
-            bot->GetName(), guid,
+            CStrCompat(bot->GetName()), guid,
             bot->GetSession() ? bot->GetSession()->GetAccountId() : 0u,
             path.c_str());
     if (n > 0)
@@ -298,7 +298,7 @@ void BotActionLog::Close(PlayerbotAI* ai)
     if (!ai) return;
     Player* bot = ai->GetBot();
     if (!bot) return;
-    SC_LOG("BotActionLog closed bot=%s", bot->GetName() ? bot->GetName() : "?");
+    SC_LOG("BotActionLog closed bot=%s", CStrOrCompat(bot->GetName(), "?"));
     Close(bot->GetGUIDLow());
 }
 
@@ -467,7 +467,7 @@ void BotActionLog::LogState(PlayerbotAI* ai, const char* reason)
     uint32 mp     = maxMana ? (manaCur * 100u / maxMana) : 0u;
     bool inCombat = bot->IsInCombat();
     Unit* tgt     = bot->GetVictim();
-    const char* tgtName = tgt ? tgt->GetName() : "(none)";
+    const char* tgtName = tgt ? CStrCompat(tgt->GetName()) : "(none)";
 
     Write(ai, "STATE",
           "reason=%s hp=%u%% mp=%u%% combat=%d alive=%d level=%u "
@@ -476,8 +476,8 @@ void BotActionLog::LogState(PlayerbotAI* ai, const char* reason)
           reason ? reason : "tick",
           hp, mp, (int)inCombat, (int)bot->IsAlive(), bot->GetLevel(),
           bot->getPositionX(), bot->getPositionY(), bot->getPositionZ(), bot->getOrientation(),
-          bot->GetMapId(), bot->getZoneId(),
-          tgtName, (unsigned long long)(tgt ? tgt->getObjectGuid().GetRawValue() : 0));
+          bot->GetMapId(), ZoneIdCompat(bot),
+          tgtName, (unsigned long long)(tgt ? GuidKeyCompat(tgt->getObjectGuid()) : 0));
 
     // Aura snapshot: dump every aura currently
     // on the bot from m_spellAuraHolders. This lets us correlate what the user *sees*
@@ -492,26 +492,21 @@ void BotActionLog::LogState(PlayerbotAI* ai, const char* reason)
     {
         std::string holders;
         holders.reserve(256);
-        auto const& hm = bot->GetSpellAuraHolderMap();
-        for (auto const& it : hm)
+        for (uint32 spellId : AuraSpellIdsCompat(bot))
         {
             char buf[64];
-            snprintf(buf, sizeof(buf), "%u,", it.first);
+            snprintf(buf, sizeof(buf), "%u,", spellId);
             holders += buf;
         }
         if (holders.empty()) holders = "(none)";
 
         std::string slots;
         slots.reserve(256);
-        for (uint32 slot = 0; slot < MAX_AURAS; ++slot)
+        for (auto const& slotAndSpell : VisibleAuraSlotsCompat(bot))
         {
-            uint32 sid = bot->GetUInt32Value(UNIT_FIELD_AURA + slot);
-            if (sid)
-            {
-                char buf[64];
-                snprintf(buf, sizeof(buf), "[%u]=%u ", slot, sid);
-                slots += buf;
-            }
+            char buf[64];
+            snprintf(buf, sizeof(buf), "[%u]=%u ", slotAndSpell.first, slotAndSpell.second);
+            slots += buf;
         }
         if (slots.empty()) slots = "(none)";
 
@@ -526,7 +521,7 @@ void BotActionLog::LogCastStart(PlayerbotAI* ai, uint32 spellId, ObjectGuid targ
     Write(ai, "CAST_START",
           "spell=%s(%u) targetGuid=0x%llx castTime=%ums",
           spellName, spellId,
-          (unsigned long long)targetGuid.GetRawValue(),
+          (unsigned long long)GuidKeyCompat(targetGuid),
           castTimeMs);
 }
 
@@ -553,7 +548,7 @@ void BotActionLog::LogAuraApply(PlayerbotAI* ai, uint32 spellId, int32 durationM
     Write(ai, "AURA_APPLY",
           "spell=%s(%u) duration=%dms caster=0x%llx",
           spellName, spellId, durationMs,
-          (unsigned long long)casterGuid.GetRawValue());
+          (unsigned long long)GuidKeyCompat(casterGuid));
 }
 
 void BotActionLog::LogAuraRemove(PlayerbotAI* ai, uint32 spellId, ObjectGuid casterGuid, bool force)
@@ -563,7 +558,7 @@ void BotActionLog::LogAuraRemove(PlayerbotAI* ai, uint32 spellId, ObjectGuid cas
     Write(ai, "AURA_REMOVE",
           "spell=%s(%u) caster=0x%llx",
           spellName, spellId,
-          (unsigned long long)casterGuid.GetRawValue());
+          (unsigned long long)GuidKeyCompat(casterGuid));
 }
 
 // ---------------------------------------------------------------------------
@@ -714,7 +709,7 @@ void BotActionLog_LogAuraApply(Unit* target, uint32 spellId, int32 durationMs, u
 {
     PlayerbotAI* ai = AiFor(target);
     if (!ai) return;
-    BotActionLog::LogAuraApply(ai, spellId, durationMs, ObjectGuid(casterGuidRaw), /*force*/ true);
+    BotActionLog::LogAuraApply(ai, spellId, durationMs, GuidFromRawCompat(casterGuidRaw), /*force*/ true);
 }
 
 // AURA_ATTEMPT: top-of-AddSpellAuraHolder hook. Logs every incoming aura BEFORE early-returns
@@ -737,7 +732,7 @@ void BotActionLog_LogAuraRemove(Unit* target, uint32 spellId, uint64 casterGuidR
 {
     PlayerbotAI* ai = AiFor(target);
     if (!ai) return;
-    BotActionLog::LogAuraRemove(ai, spellId, ObjectGuid(casterGuidRaw), /*force*/ true);
+    BotActionLog::LogAuraRemove(ai, spellId, GuidFromRawCompat(casterGuidRaw), /*force*/ true);
 }
 
 void BotActionLog_LogCastStart(WorldObject* caster, uint32 spellId, uint64 targetGuidRaw, uint32 castTimeMs)
@@ -745,7 +740,7 @@ void BotActionLog_LogCastStart(WorldObject* caster, uint32 spellId, uint64 targe
     if (!caster || !caster->IsPlayer()) return;
     PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(static_cast<Player*>(caster));
     if (!ai) return;
-    BotActionLog::LogCastStart(ai, spellId, ObjectGuid(targetGuidRaw), castTimeMs);
+    BotActionLog::LogCastStart(ai, spellId, GuidFromRawCompat(targetGuidRaw), castTimeMs);
 }
 
 void BotActionLog_LogCastResult(WorldObject* caster, uint32 spellId, uint8 result, const char* phase)
@@ -768,22 +763,22 @@ void BotActionLog_LogDamage(Unit* attacker, Unit* victim, uint32 damage, uint32 
     if (!attackerAi && !victimAi) return;
 
     auto bucket = [&](Unit* who) -> bool {
-        uint64 g = who ? who->getObjectGuid().GetRawValue() : 0;
+        uint64 g = who ? GuidKeyCompat(who->getObjectGuid()) : 0;
         return ((++sCounter[g]) % kSampleEvery) == 0;
     };
 
     if (attackerAi && bucket(attacker)) {
         BotActionLog::Write(attackerAi, "DMG_DEALT",
             "victim=0x%llx victimName=%s spell=%u dmg=%u type=%s",
-            (unsigned long long)(victim ? victim->getObjectGuid().GetRawValue() : 0),
-            victim ? victim->GetName() : "?",
+            (unsigned long long)(victim ? GuidKeyCompat(victim->getObjectGuid()) : 0),
+            victim ? CStrCompat(victim->GetName()) : "?",
             spellId, damage, damageType ? damageType : "?");
     }
     if (victimAi && bucket(victim)) {
         BotActionLog::Write(victimAi, "DMG_TAKEN",
             "attacker=0x%llx attackerName=%s spell=%u dmg=%u type=%s",
-            (unsigned long long)(attacker ? attacker->getObjectGuid().GetRawValue() : 0),
-            attacker ? attacker->GetName() : "?",
+            (unsigned long long)(attacker ? GuidKeyCompat(attacker->getObjectGuid()) : 0),
+            attacker ? CStrCompat(attacker->GetName()) : "?",
             spellId, damage, damageType ? damageType : "?");
     }
 }

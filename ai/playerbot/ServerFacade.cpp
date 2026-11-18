@@ -65,8 +65,7 @@ void ServerFacade::SetFacingTo(Unit* unit, float angle, bool force)
     if (!force && !unit->IsStopped()) unit->SetFacingTo(angle);
     else
     {
-        unit->SetOrientation(angle);
-        unit->SendHeartBeat();
+        SetOrientationAndSendCompat(unit, angle);
     }
     //unit->m_movementInfo.RemoveMovementFlag(MovementFlags(MOVEFLAG_SPLINE_ENABLED | MOVEFLAG_FORWARD));
 }
@@ -149,7 +148,7 @@ bool ServerFacade::IsSpellReady(Player* bot, uint32 spell, uint32 itemId)
         if (const SpellEntry* spellInfo = GetSpellEntryCompat(spell))
             category = spellInfo->Category;
     }
-    return !category || !bot->HasSpellCategoryCooldown(category);
+    return !category || !HasSpellCategoryCooldownCompat(bot, category);
 #endif
 }
 
@@ -161,7 +160,7 @@ bool ServerFacade::IsUnderwater(Unit *unit)
     return unit->IsUnderWater();
 #endif
 #ifdef CMANGOS
-    return unit->IsUnderwater();
+    return IsUnderwaterCompat(unit);
 #endif
 }
 
@@ -177,33 +176,12 @@ FactionTemplateEntry const* ServerFacade::GetFactionTemplateEntry(Unit *unit)
 
 namespace
 {
-template<class T>
-Unit* GetTargetedMovementTarget(T* unit)
-{
-    if (!unit || !unit->GetMotionMaster())
-        return nullptr;
-
-    MovementGenerator const* generator = unit->GetMotionMaster()->GetCurrent();
-    if (!generator)
-        return nullptr;
-
-    switch (generator->GetMovementGeneratorType())
-    {
-        case CHASE_MOTION_TYPE:
-            return static_cast<ChaseMovementGenerator<T> const*>(generator)->GetTarget();
-        case FOLLOW_MOTION_TYPE:
-            return static_cast<FollowMovementGenerator<T> const*>(generator)->GetTarget();
-        default:
-            return nullptr;
-    }
-}
-
 float RelativeTargetAngle(Unit* unit, Unit* target)
 {
     if (!unit || !target)
         return 0.0f;
 
-    float angle = target->GetAngle(unit) - target->GetOrientation();
+    float angle = GetAngleCompat(target, unit) - target->GetOrientation();
     while (angle > M_PI_F)
         angle -= 2.0f * M_PI_F;
     while (angle < -M_PI_F)
@@ -214,14 +192,7 @@ float RelativeTargetAngle(Unit* unit, Unit* target)
 
 Unit* ServerFacade::GetChaseTarget(Unit* target)
 {
-    if (!target)
-        return nullptr;
-
-    if (target->GetTypeId() == TYPEID_PLAYER)
-        return GetTargetedMovementTarget(static_cast<Player*>(target));
-    if (target->GetTypeId() == TYPEID_UNIT)
-        return GetTargetedMovementTarget(static_cast<Creature*>(target));
-    return nullptr;
+    return TargetedMovementTargetCompat(target);
 }
 
 float ServerFacade::GetChaseAngle(Unit* target)
