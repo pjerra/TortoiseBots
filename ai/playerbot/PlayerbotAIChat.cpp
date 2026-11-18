@@ -132,7 +132,7 @@ bool PlayerbotAI::SayToGuild(std::string msg, bool likePlayer)
             for (auto& player : sRandomBotFacade.GetPlayers())
             {
                 // The facade view can outlive removed bots; resolve by GUID.
-                Player* guildBot = sObjectAccessor.FindPlayer(ObjectGuid(HIGHGUID_PLAYER, player.first));
+                Player* guildBot = sObjectAccessor.FindPlayer(PlayerGuidCompat(player.first));
                 if (!guildBot || !guildBot->IsInWorld())
                     continue;
 
@@ -140,17 +140,7 @@ bool PlayerbotAI::SayToGuild(std::string msg, bool likePlayer)
                 {
                     if (likePlayer)
                     {
-                        WorldPacket packet_template(CMSG_MESSAGECHAT);
-
-                        uint32 lang = LANG_UNIVERSAL;
-
-                        packet_template << CHAT_MSG_GUILD;
-                        packet_template << LANG_UNIVERSAL;
-                        packet_template << msg;
-
-                        std::unique_ptr<WorldPacket> packetPtr(new WorldPacket(packet_template));
-
-                        bot->GetSession()->QueuePacket(packetPtr.release());
+                        BotChatLikePlayerCompat(bot, CHAT_MSG_GUILD, LANG_UNIVERSAL, msg);
                         return true;
                     }
                     break;
@@ -202,27 +192,11 @@ bool PlayerbotAI::SayToParty(std::string msg, bool likePlayer)
 
     if (likePlayer)
     {
-        WorldPacket packet_template(CMSG_MESSAGECHAT);
-
-        uint32 lang = LANG_UNIVERSAL;
-
-        packet_template << CHAT_MSG_PARTY;
-        packet_template << LANG_UNIVERSAL;
-        packet_template << msg;
-
-        std::unique_ptr<WorldPacket> packetPtr(new WorldPacket(packet_template));
-
-        bot->GetSession()->QueuePacket(packetPtr.release());
+        BotChatLikePlayerCompat(bot, CHAT_MSG_PARTY, LANG_UNIVERSAL, msg);
         return true;
     }
 
-    WorldPacket data;
-    ChatHandler::BuildChatPacket(data, CHAT_MSG_PARTY, msg.c_str(), LANG_UNIVERSAL, CHAT_TAG_NONE, bot->getObjectGuid(), bot->GetName());
-
-    for (auto reciever : GetPlayersInGroup())
-    {
-        sServerFacade.SendPacket(reciever, data);
-    }
+    BotGroupChatCompat(bot, CHAT_MSG_PARTY, msg, GetPlayersInGroup());
 
     return true;
 }
@@ -234,13 +208,7 @@ bool PlayerbotAI::SayToRaid(std::string msg)
         return false;
     }
 
-    WorldPacket data;
-    ChatHandler::BuildChatPacket(data, CHAT_MSG_RAID, msg.c_str(), LANG_UNIVERSAL, CHAT_TAG_NONE, bot->getObjectGuid(), bot->GetName());
-
-    for (auto reciever : GetPlayersInGroup())
-    {
-        sServerFacade.SendPacket(reciever, data);
-    }
+    BotGroupChatCompat(bot, CHAT_MSG_RAID, msg, GetPlayersInGroup());
 
     return true;
 }
@@ -263,19 +231,11 @@ bool PlayerbotAI::Yell(std::string msg, bool likePlayer)
 
     if (likePlayer)
     {
-        WorldPacket packet_template(CMSG_MESSAGECHAT);
-
-        packet_template << CHAT_MSG_YELL;
-        packet_template << lang;
-        packet_template << msg;
-
-        std::unique_ptr<WorldPacket> packetPtr(new WorldPacket(packet_template));
-
-        bot->GetSession()->QueuePacket(packetPtr.release());
+        BotChatLikePlayerCompat(bot, CHAT_MSG_YELL, lang, msg);
         return true;
     }
 
-    bot->Yell(msg, lang);
+    BotYellCompat(bot, msg, lang);
 
     return true;
 }
@@ -298,19 +258,11 @@ bool PlayerbotAI::Say(std::string msg, bool likePlayer)
 
     if (likePlayer)
     {
-        WorldPacket packet_template(CMSG_MESSAGECHAT);
-
-        packet_template << CHAT_MSG_SAY;
-        packet_template << lang;
-        packet_template << msg;
-
-        std::unique_ptr<WorldPacket> packetPtr(new WorldPacket(packet_template));
-
-        bot->GetSession()->QueuePacket(packetPtr.release());
+        BotChatLikePlayerCompat(bot, CHAT_MSG_SAY, lang, msg);
         return true;
     }
 
-    bot->Say(msg, lang);
+    BotSayCompat(bot, msg, lang);
 
     return true;
 }
@@ -320,26 +272,16 @@ bool PlayerbotAI::Whisper(std::string msg, std::string receiverName, bool likePl
     if (msg.empty())
         return false;
 
-    ObjectGuid receiver = sObjectMgr.GetPlayerGuidByName(receiverName);
-    Player* rPlayer = sObjectMgr.GetPlayer(receiver);
+    ObjectGuid receiver = PlayerGuidByNameCompat(receiverName);
+    Player* rPlayer = PlayerByGuidCompat(receiver);
 
     if (!rPlayer)
     {
         return false;
     }
 
-    if (rPlayer == bot)
-    {
-        WorldPacket data;
-        ChatHandler::BuildChatPacket(data, CHAT_MSG_WHISPER, msg.c_str(), LANG_UNIVERSAL, bot->GetChatTag(), bot->getObjectGuid(), bot->GetName());
-        rPlayer->GetSession()->SendPacket(&data);
-
-        return true;
-    }
-
-    WorldPacket data;
-    ChatHandler::BuildChatPacket(data, CHAT_MSG_WHISPER, msg.c_str(), LANG_UNIVERSAL, bot->GetChatTag(), bot->GetObjectGuid(), bot->GetName());
-    rPlayer->GetSession()->SendPacket(&data);
+    // Both branches built the same packet for the receiver (the second with GetObjectGuid, the same guid).
+    BotWhisperCompat(bot, rPlayer, msg);
     return true;
 }
 

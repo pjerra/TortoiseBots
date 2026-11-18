@@ -84,8 +84,8 @@ class InterruptAllowStun(unittest.TestCase):
         self.assertIn("triggered->Effect[j] == SPELL_EFFECT_APPLY_AURA", trigger)
         self.assertIn("triggered->EffectApplyAuraName[j] == SPELL_AURA_MOD_STUN", trigger)
         # Immunity is read on the triggered spell's own spell and effect, so a stun-immune target refuses.
-        self.assertIn("!target->IsImmuneToSpell(triggered, false)", trigger)
-        self.assertIn("!target->IsImmuneToSpellEffect(triggered, (SpellEffectIndex)j, true)", trigger)
+        self.assertIn("!IsImmuneToSpellCompat(target, triggered, false, bot)", trigger)
+        self.assertIn("!IsImmuneToSpellEffectCompat(target, triggered, (SpellEffectIndex)j, true, bot)", trigger)
         self.assertIn("interrupt.effectTriggeredStun[i] = true;", trigger)
         # One level only: the trigger lookup is inside the effect loop, not recursive.
         self.assertIn("for (int32 j = EFFECT_INDEX_0; j <= EFFECT_INDEX_2; ++j)", trigger)
@@ -96,15 +96,15 @@ class InterruptAllowStun(unittest.TestCase):
                                   "uint8 effectMask)")
         immunity = brace_body(glue, "if (allowStun)\n    {")
         # 1. The spell-level check reads the spell's Mechanic (Bash/HoJ stun is there, not on the effect).
-        self.assertIn("target->IsImmuneToSpell(spellInfo, false)", immunity)
+        self.assertIn("IsImmuneToSpellCompat(target, spellInfo, false, bot)", immunity)
         # 2. The creature's raw mechanic_immune_mask, so a missing spell Mechanic cannot slip through.
         self.assertIn("ai::StunMechanicImmune(info->mechanic_immune_mask)", immunity)
         # 4. A boss counts as unstunnable without the bit: world boss, plan boss, boss rank.
         self.assertIn("creature->IsWorldBoss()", immunity)
-        self.assertIn("info->rank == CREATURE_ELITE_WORLDBOSS", immunity)
+        self.assertIn("CreatureIsWorldBossRankCompat(creature)", immunity)
         self.assertIn("ai::GetDungeonPlans().IsBossEntry(creature->GetMapId(), creature->GetEntry())", immunity)
         # 5. An existing stun aura or stun diminishing return at immune.
-        self.assertIn("target->GetAurasByType(SPELL_AURA_MOD_STUN).empty()", immunity)
+        self.assertIn("AurasByTypeCompat(target, SPELL_AURA_MOD_STUN).empty()", immunity)
         self.assertIn("StunDiminished(target, spellInfo, false)", immunity)
         # The DR helper covers the stun groups only.
         dr_groups = brace_body(SPELLS, "bool IsStunDiminishingGroup(DiminishingGroup group)")

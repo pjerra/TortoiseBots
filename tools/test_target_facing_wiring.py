@@ -51,7 +51,7 @@ class SpellFacingPrecheck(unittest.TestCase):
         call = UNIT_CHECK.index(
             "ai::TargetFacingRefuses(spellInfo->Attributes, fromBehindOnly, targetFacesCaster)")
         self.assertLess(gate, call)
-        self.assertLess(call, UNIT_CHECK.index("Spell *spell = new Spell(bot, spellInfo, false);"))
+        self.assertLess(call, UNIT_CHECK.index("Spell *spell = NewSpellCompat(bot, spellInfo, false);"))
         self.assertLess(call, UNIT_CHECK.index("spell->CheckCast(true)"))
         self.assertEqual(UNIT_CHECK.count("ai::TargetFacingRefuses("), 1)
 
@@ -61,10 +61,10 @@ class SpellFacingPrecheck(unittest.TestCase):
         # The arc is read only for the two facing rules (no angle math for every other spell).
         self.assertIn("bool const facingMatters = fromBehindOnly || "
                       "spellInfo->Attributes == ai::kTargetMustFaceCasterAttributes;", UNIT_CHECK)
-        self.assertIn("bool const targetFacesCaster = facingMatters && target->HasInArc(bot);", UNIT_CHECK)
+        self.assertIn("bool const targetFacesCaster = facingMatters && HasInArcCompat(target, bot, M_PI_F);", UNIT_CHECK)
         self.assertIn("if (facingMatters && ai::TargetFacingRefuses(", UNIT_CHECK)
         precheck = UNIT_CHECK[UNIT_CHECK.index("if (sPlayerbotAIConfig.spellFacingPrecheck)"):
-                              UNIT_CHECK.index("Spell *spell = new Spell(bot, spellInfo, false);")]
+                              UNIT_CHECK.index("Spell *spell = NewSpellCompat(bot, spellInfo, false);")]
         self.assertIn(
             "*checkResult = fromBehindOnly && targetFacesCaster ? SPELL_FAILED_NOT_BEHIND : SPELL_FAILED_NOT_INFRONT;",
             precheck)

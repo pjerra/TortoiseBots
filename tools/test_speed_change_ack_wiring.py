@@ -42,7 +42,7 @@ class SpeedCasesTest(unittest.TestCase):
 
     def test_only_a_headless_bot_session_acks(self):
         block = speed_block()
-        guard = block.index("!bot->GetSession()->IsHeadless()")
+        guard = block.index("!IsHeadlessCompat(bot->GetSession())")
         self.assertLess(guard, block.index("HandleForceSpeedChangeAckOpcodes(ack)"))
         # The ack is built from the bot's own guid; a pet's change is not acked
         # with the wrong mover.
