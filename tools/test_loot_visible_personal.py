@@ -51,6 +51,11 @@ struct Loot {
 };
 '''
         fixture += '#include "' + str(root / "ai/playerbot/policy/loot/LootViewRulePolicy.h") + '"\n'
+        # The Turtle body of the both-core helper the policy hands its algorithm to (ai/cmangos-compat-s2i.h).
+        fixture += r'''
+template <class LootType, class ViewerType, class Body>
+inline bool PersonalItemVisibleCompat(LootType const& loot, ViewerType* viewer, Body&& body) { return body(loot, viewer); }
+'''
         fixture += "namespace ai {\n" + method + "\n}\n" + r'''
 int main() {
     Player bot{1}, other{2};

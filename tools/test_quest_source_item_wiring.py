@@ -23,6 +23,9 @@ ITEM_USAGE = (ROOT / "ai/playerbot/strategy/values/ItemUsageValue.cpp").read_tex
 STACK = (ROOT / "ai/playerbot/LootObjectStack.cpp").read_text()
 LOOT_ACTION = (ROOT / "ai/playerbot/strategy/actions/LootAction.cpp").read_text()
 HELPER = (ROOT / "ai/playerbot/policy/loot/CorpseLootPolicy.h").read_text()
+# Slice 2: the policy asks CorpseHasBodyLootForCompat; the Turtle body (flag OR viewer right) is in the Turtle compat header, the
+# ForeverCore one (Player::isAllowedToLoot) in forever/src/compat/TbCompat_I2.h.
+COMPAT = (ROOT / "ai/cmangos-compat-s2i.h").read_text()
 
 
 def body(text, start, end):
@@ -39,8 +42,10 @@ class QuestSourceItemWiringTest(unittest.TestCase):
 
     def test_the_helper_covers_flag_and_viewer_right(self):
         self.assertIn("CorpseHasBodyLootFor(Player* bot, Creature* creature)", HELPER)
-        self.assertIn("UNIT_DYNFLAG_LOOTABLE", HELPER)
-        self.assertIn("IsAllowedToLoot(creature)", HELPER)
+        self.assertIn("CorpseHasBodyLootForCompat(bot, creature)", HELPER)
+        fn = body(COMPAT, "inline bool CorpseHasBodyLootForCompat(", "\n}\n")
+        self.assertIn("UNIT_DYNFLAG_LOOTABLE", fn)
+        self.assertIn("IsAllowedToLoot(creature)", fn)
 
     def test_the_corpse_branch_trusts_the_viewer_flag(self):
         fn = body(STACK, "void LootObject::Refresh(", "\n}\n")
