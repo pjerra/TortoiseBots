@@ -380,3 +380,21 @@ TortoiseBots: stats 74:166, 7:249, 40:147, 36:74; spells none; resistances 0/0/0
 | G2 Turtle build | `vm-build <worktree> --wait`, then `vm-build bd17aad7e --wait` | `MAKE_RC=0`, `QUEUE_RC=0` both times: worktree run `COMPILE_SECONDS=11`/`TOTAL_SECONDS=13`, 5 module files, job `1-1794961287780864682-1365186`; code-commit run `COMPILE_SECONDS=9`/`TOTAL_SECONDS=10`, 2 module files, job `1-1794963404060790845-1408401`, rc=0 slot 0 |
 | G3 Turtle unit tests | `vm-test tb ~/wt-forever-port` (the whole `tools/verify_all.sh`: OKF, surface, wiring, unit tests, standalone policy tests, decision trail) | `RESULT: PASS`, rc=0, `sha=bd17aad7e dirty=0 files=3529`, `vm_duration=860s`; `Ran 2656 tests in 309.342s`, `OK (skipped=61)`, engine unit tests passed. (An earlier run on the same code with these notes uncommitted was `dirty=5`, 875 s, PASS) |
 | G4 core-free tests, ForeverCore toolchain | `policy-tests.sh` on the tree under test (worktree synced to `~/forever-build/tb`) | 472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL in 112 s at `bd17aad7e` - the same set as the BEFORE commit and fix round 1: `test_combat_monitor_service`, `test_combat_monitor_service_race`, `test_decision_capture_files`, `test_run_trace_writer`; `test_decision_capture_codec` and `test_log_file_rotation`. Nothing got worse |
+
+## Review outcome (lead, 2026-11-18)
+
+Three review passes (the cap). Codex adversarial twice, cold review twice, live boot. Shipped with these documented limits:
+
+- **Incomplete mirrors read as zero.** 379 items have an item level above 100; the client's weapon damage and armor
+  tables stop at 100 (`ItemDamageOneHand`, `...TwoHand`, both caster tables, `ItemArmorTotal`, `ItemArmorShield`: ids
+  1-100; `ItemDamageAmmo`: 1-1000; read from the extracted DB2 headers). Their `Damage` or `Armor` is 0 and
+  `Incomplete` is set. Bot code that scores gear (`ItemUsageValue.cpp:48/57/988`, `RandomItemMgr.cpp:1571/1582`,
+  `PlayerbotFactory.cpp:2123/2385`, `EquipAction.cpp:884`) does not check the flag and would rate such an item as
+  worthless. Before this round the server aborted on them, so this is not a regression.
+  **Open check:** how many of the 379 have a required level of 60 or less. The example has required level 90. To
+  be read from the fill log on the next live boot (add the count to the log line).
+- **The damage pre-check is stricter than the core.** It wants a row in all five damage tables. With the table ranges
+  above that only differs from the core for an ammo item with item level 101-1000, which would be marked incomplete
+  although the core could answer. No such check exists yet; add it to the same log line.
+- **No item template reload** at the pinned commit; see the pin rule in `PORT-PLAN.md`.
+- A lazy lookup made before `LoadItemClassicBlock` (World.cpp:1631) would cache Block 0. Nothing does that today.
