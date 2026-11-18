@@ -93,7 +93,7 @@ inline void NoteMisc()      { tbcompat::Unported(tbcompat::Feature::MiscLegacySe
 
 // =====================================================================================================================
 // Boss and raid tactics. Owner files: ai/playerbot/strategy/actions/BossTacticsActions.cpp, Fankriss*Actions.cpp,
-// PatchwerkSoakerActions.cpp, PatchwerkSafety.cpp, ViscidusActions.cpp, EmeraldSanctumDungeon*.cpp, ThreatStrategy.cpp,
+// PatchwerkSoakerActions.cpp, PatchwerkSafety.cpp, ViscidusActions.cpp, EmeraldSanctumDungeon*.cpp,
 // FankrissGauntletPolicy (header), BossTacticsMgr.cpp, BossStandMgr.cpp, DungeonPlanMgr.cpp.
 // Answer: no boss rule applies (false / null / 0 / empty); the table getters return an empty table.
 // =====================================================================================================================
@@ -225,9 +225,9 @@ bool ViscidusBlocksSpell(PlayerbotAI*, uint32, Unit*) { NoteBoss(); return false
 Unit* FindSolniusAdd(PlayerbotAI*) { NoteBoss(); return nullptr; }
 bool IsSolniusAdd(Unit*) { NoteBoss(); return false; }
 
-// ThreatStrategy.cpp, PositionAction.cpp
-bool ThreatResetHolds(PlayerbotAI*, Player*, Unit*) { NoteBoss(); return false; }
-// StayWalkDueNow is the shared stay-walk rule and is no longer a stand-in (R9): PositionAction.cpp is in the slice.
+// ThreatResetHolds is the real function now (slice 3: ThreatStrategy.cpp is in the slice; its stand-in answered "never held" and is removed). Its
+// readers of the boss table still end in the stand-ins above (GetBossTactics: no row for any map and entry), so on a target without a row it answers
+// false exactly as before. StayWalkDueNow is the shared stay-walk rule and is no longer a stand-in either (R9): PositionAction.cpp is in the slice.
 
 // =====================================================================================================================
 // Startup tables of other managers. Owner files: GuildOrderSources.cpp, GuildOrderEnchants.cpp. Nothing is built.
