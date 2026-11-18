@@ -199,7 +199,7 @@ bool PartyMemberValue::IsTargetOfSpellCast(Unit* target, SpellEntryPredicate &pr
             for (int type = CURRENT_GENERIC_SPELL; type < CURRENT_MAX_SPELL; type++)
             {
                 Spell* spell = player->GetCurrentSpell((CurrentSpellTypes)type);
-                if (spell && predicate.Check(spell->m_spellInfo))
+                if (spell && predicate.Check(GetSpellEntryCompat(spell->m_spellInfo)))
                 {
                     ObjectGuid unitTarget = spell->m_targets.getUnitTargetGuid();
                     if (unitTarget == targetGuid)

@@ -145,7 +145,7 @@ trainableSpellMap* TrainableSpellMapValue::Calculate()
                 else
                 {
                     // exist, already checked at loading
-                    SpellEntry const* spell = sSpellTemplate.LookupEntry<SpellEntry>(trainerSpell.spell);
+                    SpellEntry const* spell = GetSpellEntryCompat(trainerSpell.spell);
 
                     spellRequirement = spell->EffectMiscValue[1];
                 }

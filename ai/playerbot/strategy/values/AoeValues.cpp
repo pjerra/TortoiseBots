@@ -116,7 +116,7 @@ bool HasAreaDebuffValue::Calculate()
         if (IsSoughtCloudFor(ai, bot, go))
             continue;
 
-        SpellEntry const* spellProto = sSpellTemplate.LookupEntry<SpellEntry>(go->GetSpellId());
+        SpellEntry const* spellProto = GetSpellEntryCompat(go->GetSpellId());
         if (!spellProto)
             continue;
 

@@ -521,7 +521,7 @@ void BotActionLog::LogState(PlayerbotAI* ai, const char* reason)
 
 void BotActionLog::LogCastStart(PlayerbotAI* ai, uint32 spellId, ObjectGuid targetGuid, uint32 castTimeMs)
 {
-    SpellEntry const* info = sSpellMgr.GetSpellEntry(spellId);
+    SpellEntry const* info = GetSpellEntryCompat(spellId);
     const char* spellName = info ? info->SpellName[0].c_str() : "?";
     Write(ai, "CAST_START",
           "spell=%s(%u) targetGuid=0x%llx castTime=%ums",
@@ -532,7 +532,7 @@ void BotActionLog::LogCastStart(PlayerbotAI* ai, uint32 spellId, ObjectGuid targ
 
 void BotActionLog::LogCastResult(PlayerbotAI* ai, uint32 spellId, uint8 result, const char* phase)
 {
-    SpellEntry const* info = sSpellMgr.GetSpellEntry(spellId);
+    SpellEntry const* info = GetSpellEntryCompat(spellId);
     const char* spellName = info ? info->SpellName[0].c_str() : "?";
     // REVIEW-FIX (M1 review): SPELL_CAST_OK is 0xFF on this core
     // (SpellDefines.h), not 0 — 0x00 is SPELL_FAILED_AFFECTING_COMBAT.
@@ -548,7 +548,7 @@ void BotActionLog::LogAuraApply(PlayerbotAI* ai, uint32 spellId, int32 durationM
     if (!force && durationMs > 0 && durationMs < 3000)
         return;
 
-    SpellEntry const* info = sSpellMgr.GetSpellEntry(spellId);
+    SpellEntry const* info = GetSpellEntryCompat(spellId);
     const char* spellName = info ? info->SpellName[0].c_str() : "?";
     Write(ai, "AURA_APPLY",
           "spell=%s(%u) duration=%dms caster=0x%llx",
@@ -558,7 +558,7 @@ void BotActionLog::LogAuraApply(PlayerbotAI* ai, uint32 spellId, int32 durationM
 
 void BotActionLog::LogAuraRemove(PlayerbotAI* ai, uint32 spellId, ObjectGuid casterGuid, bool force)
 {
-    SpellEntry const* info = sSpellMgr.GetSpellEntry(spellId);
+    SpellEntry const* info = GetSpellEntryCompat(spellId);
     const char* spellName = info ? info->SpellName[0].c_str() : "?";
     Write(ai, "AURA_REMOVE",
           "spell=%s(%u) caster=0x%llx",
@@ -725,7 +725,7 @@ void BotActionLog_LogAuraAttempt(Unit* target, uint32 spellId, int32 durationMs,
 {
     PlayerbotAI* ai = AiFor(target);
     if (!ai) return;
-    SpellEntry const* info = sSpellMgr.GetSpellEntry(spellId);
+    SpellEntry const* info = GetSpellEntryCompat(spellId);
     const char* spellName = info ? info->SpellName[0].c_str() : "?";
     BotActionLog::Write(ai, "AURA_ATTEMPT",
                         "spell=%s(%u) duration=%dms caster=0x%llx",

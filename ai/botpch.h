@@ -47,7 +47,7 @@
 #include "LootMgr.h"
 
 // cmangos -> Penqle compatibility shim. Must come AFTER Penqle's core headers
-// (so the shim's proxy methods can inline-call sSpellMgr.GetSpellEntry(...) etc.)
+// (so the shim's proxy methods can inline-call the spell fetch helpers etc.)
 // and BEFORE the bot module's own headers (which reference the shim's typedefs
 // like GuidSet, AreaTableEntry, GenericTransport).
 #include "cmangos-compat-shim.h"

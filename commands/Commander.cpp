@@ -1438,11 +1438,11 @@ RemoteCommander::View::Snapshot& ViewSnapshot()
 uint32 CurrentSpellId(Unit* unit)
 {
     if (Spell* spell = unit->GetCurrentSpell(CURRENT_GENERIC_SPELL))
-        if (spell->m_spellInfo)
-            return spell->m_spellInfo->Id;
+        if (GetSpellEntryCompat(spell->m_spellInfo))
+            return GetSpellEntryCompat(spell->m_spellInfo)->Id;
     if (Spell* spell = unit->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
-        if (spell->m_spellInfo)
-            return spell->m_spellInfo->Id;
+        if (GetSpellEntryCompat(spell->m_spellInfo))
+            return GetSpellEntryCompat(spell->m_spellInfo)->Id;
     return 0;
 }
 
@@ -1453,10 +1453,10 @@ uint32 ProgressSpellId(Unit* unit)
     Spell* spell = unit->GetCurrentSpell(CURRENT_GENERIC_SPELL);
     if (!spell)
         spell = unit->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
-    if (!spell || !spell->m_spellInfo)
+    if (!spell || !GetSpellEntryCompat(spell->m_spellInfo))
         return 0;
     bool const targetSelf = spell->m_targets.getUnitTargetGuid() == unit->GetObjectGuid();
-    return TortoiseBots::DungeonRun::ProgressSpell(spell->m_spellInfo->Id, targetSelf);
+    return TortoiseBots::DungeonRun::ProgressSpell(GetSpellEntryCompat(spell->m_spellInfo)->Id, targetSelf);
 }
 
 char ViewStateLetter(PlayerbotAI* ai, Player* bot)
@@ -3068,7 +3068,7 @@ static void TotemFocusCutSlot(Player* bot, CurrentSpellTypes slot, ObjectGuid fo
     else
         return; // a melee or autorepeat slot (an Auto Shot, a wand's shot) is never cut
     Spell* const spell = bot->GetCurrentSpell(slot);
-    if (!spell || !spell->m_spellInfo)
+    if (!spell || !GetSpellEntryCompat(spell->m_spellInfo))
         return;
     // The cast's own target, looked up by guid on the bot's map. SpellCastTargets::m_unitTarget (getUnitTarget) is a
     // raw pointer the map thread refreshes only in the caster's next Spell::update, and Map::Remove frees a dead
@@ -3083,8 +3083,8 @@ static void TotemFocusCutSlot(Player* bot, CurrentSpellTypes slot, ObjectGuid fo
         target = castGuid ? map->GetUnit(castGuid) : bot->GetSelectedUnit();
     if (target && !target->IsInWorld())
         target = nullptr;
-    if (!TortoiseBots::DungeonRun::TotemFocusMayInterrupt(kind, spell->m_spellInfo->Id,
-            TotemFocusResurrects(spell->m_spellInfo), spell->m_spellInfo->IsPositiveSpell(),
+    if (!TortoiseBots::DungeonRun::TotemFocusMayInterrupt(kind, GetSpellEntryCompat(spell->m_spellInfo)->Id,
+            TotemFocusResurrects(GetSpellEntryCompat(spell->m_spellInfo)), GetSpellEntryCompat(spell->m_spellInfo)->IsPositiveSpell(),
             TortoiseBots::DungeonRun::TotemFocusTargetHostile(!castGuid.IsEmpty(), target != nullptr,
                 target && bot->IsHostileTo(target)),
             !castGuid.IsEmpty() && castGuid == focusGuid))
@@ -4735,7 +4735,7 @@ void StopRitualChannel(CommanderTask const& task)
     if (!bot || !bot->IsInWorld() || !task.actSpellId)
         return;
     Spell* spell = bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
-    if (!spell || !spell->m_spellInfo || spell->m_spellInfo->Id != task.actSpellId)
+    if (!spell || !GetSpellEntryCompat(spell->m_spellInfo) || GetSpellEntryCompat(spell->m_spellInfo)->Id != task.actSpellId)
         return;
     GameObject* go = bot->GetMap() ? bot->GetMap()->GetGameObject(ObjectGuid(task.targetRaw)) : nullptr;
     if (go && go->GetGoState() == GO_STATE_ACTIVE)
@@ -4884,7 +4884,7 @@ void KeepStillDuringAct(CommanderTask const& task, Player* bot)
     if (!RemoteCommander::HoldsForAct(task.targetRaw != 0, task.noWalk) || !task.actStarted || !task.actSpellId)
         return;
     Spell* spell = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL);
-    if (!spell || !spell->m_spellInfo || spell->m_spellInfo->Id != task.actSpellId)
+    if (!spell || !GetSpellEntryCompat(spell->m_spellInfo) || GetSpellEntryCompat(spell->m_spellInfo)->Id != task.actSpellId)
         return;
     if (bot->HasUnitState(UNIT_STAT_CAN_NOT_REACT_OR_LOST_CONTROL))
         return;
@@ -5136,7 +5136,7 @@ ActStart BeginTaskAct(CommanderTask& task, Player* commander, Player* bot, Playe
     if (task.actStarted)
         if (Spell* spell = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL))
         {
-            task.actSpellId = spell->m_spellInfo ? spell->m_spellInfo->Id : 0;
+            task.actSpellId = GetSpellEntryCompat(spell->m_spellInfo) ? GetSpellEntryCompat(spell->m_spellInfo)->Id : 0;
             task.actCastMs = spell->GetCastedTime();
             task.actFrom = RemoteCommander::Point3{ bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ() };
             task.state.actBudgetMs = RemoteCommander::ActBudgetAfterCast(task.state, task.lootLike,
@@ -5446,7 +5446,7 @@ bool StepCommanderTask(CommanderTask& task, uint32 diff)
     {
         task.actRunMs += diff;
         Spell* spell = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL);
-        bool const running = spell && spell->m_spellInfo && spell->m_spellInfo->Id == task.actSpellId;
+        bool const running = spell && GetSpellEntryCompat(spell->m_spellInfo) && GetSpellEntryCompat(spell->m_spellInfo)->Id == task.actSpellId;
         if (RemoteCommander::ActCastBroken(running, task.actCastMs, task.actRunMs))
         {
             float const moved = bot->GetDistance(task.actFrom.x, task.actFrom.y, task.actFrom.z, SizeFactor::None);
@@ -8505,7 +8505,7 @@ bool HasMealAura(Player* bot)
 {
     for (auto const& entry : bot->GetSpellAuraHolderMap())
     {
-        SpellEntry const* spell = entry.second ? entry.second->GetSpellProto() : nullptr;
+        SpellEntry const* spell = entry.second ? GetSpellEntryCompat(entry.second->GetSpellProto()) : nullptr;
         if (spell && (spell->AuraInterruptFlags & AURA_INTERRUPT_FLAG_NOT_SEATED))
             return true;
     }
@@ -10523,7 +10523,7 @@ void ReadRezRoster(Player* lead, std::vector<Player*> const& bots, TortoiseBots:
         for (size_t i = 0; list && i < 5 && !spellId; ++i)
             if (bot->HasSpell(list[i]))
                 spellId = list[i];
-        SpellEntry const* spell = spellId ? sSpellTemplate.LookupEntry<SpellEntry>(spellId) : nullptr;
+        SpellEntry const* spell = spellId ? GetSpellEntryCompat(spellId) : nullptr;
         // Rebirth's 30 minute cooldown is a category cooldown, stored under the id that was cast, so the
         // category is asked, not only the rank's own id; the reagent (Rebirth's seed) must be in the bags.
         bool ready = spell && !bot->HasSpellCooldown(spellId) &&
@@ -10541,8 +10541,8 @@ void ReadRezRoster(Player* lead, std::vector<Player*> const& bots, TortoiseBots:
         }
         if (list)
             if (Spell* casting = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL))
-                for (size_t k = 0; casting->m_spellInfo && k < 5; ++k)
-                    if (casting->m_spellInfo->Id == list[k])
+                for (size_t k = 0; GetSpellEntryCompat(casting->m_spellInfo) && k < 5; ++k)
+                    if (GetSpellEntryCompat(casting->m_spellInfo)->Id == list[k])
                         f.rezInProgress = true;
         m.placed = true;
         m.x = bot->GetPositionX();
@@ -15651,7 +15651,7 @@ void NoteCommanderOrderResult(ChatHandler* handler, std::string const& intent, b
 // The name of a spell (English), empty when unknown.
 static std::string SpellNameOf(uint32 spellId)
 {
-    SpellEntry const* spell = sSpellMgr.GetSpellEntry(spellId);
+    SpellEntry const* spell = GetSpellEntryCompat(spellId);
     return spell ? spell->SpellName[0] : std::string();
 }
 
@@ -15720,13 +15720,13 @@ static void FillMobFacingAndCast(Unit* unit, CommanderTelemetry::MobInfo& mob)
     for (CurrentSpellTypes type : { CURRENT_GENERIC_SPELL, CURRENT_CHANNELED_SPELL })
     {
         Spell* spell = unit->GetCurrentSpell(type);
-        if (!spell || !spell->m_spellInfo)
+        if (!spell || !GetSpellEntryCompat(spell->m_spellInfo))
             continue;
         s_breathWindows.Forget(windowKey);
-        mob.castId = spell->m_spellInfo->Id;
+        mob.castId = GetSpellEntryCompat(spell->m_spellInfo)->Id;
         mob.castLeftMs = spell->GetCastedTime();
         mob.channel = type == CURRENT_CHANNELED_SPELL;
-        mob.castTotalMs = mob.channel ? static_cast<uint32>(spell->m_spellInfo->GetDuration())
+        mob.castTotalMs = mob.channel ? static_cast<uint32>(GetSpellEntryCompat(spell->m_spellInfo)->GetDuration())
                                       : static_cast<uint32>(spell->GetCastTime());
         mob.castTarget = spell->m_targets.getUnitTargetGuid().GetRawValue();
         if (TortoiseBots::SpellShape::Shape const* shape = TortoiseBots::SpellShape::For(mob.castId))
@@ -15757,7 +15757,7 @@ static char DispelLetter(uint32 dispel)
 static CommanderTelemetry::AuraRead AuraReadOf(SpellAuraHolder const* holder)
 {
     CommanderTelemetry::AuraRead read;
-    SpellEntry const* proto = holder->GetSpellProto();
+    SpellEntry const* proto = GetSpellEntryCompat(holder->GetSpellProto());
     if (!proto)
         return read;
     read.aura.id = proto->Id;
@@ -16137,7 +16137,7 @@ static void ReadReadyAuras(Player* bot, ReadyCacheEntry& entry)
         SpellAuraHolder const* holder = aura.second;
         if (!holder || holder->IsDeleted() || holder->IsPassive())
             continue;
-        SpellEntry const* proto = holder->GetSpellProto();
+        SpellEntry const* proto = GetSpellEntryCompat(holder->GetSpellProto());
         if (!proto)
             continue;
         uint32 const mask = sSpellMgr.GetSpellElixirMask(proto->Id);
@@ -16170,7 +16170,7 @@ static void ReadReadyKeySpells(Player* bot, ReadyCacheEntry& entry)
     {
         if (known.second.state == PLAYERSPELL_REMOVED || known.second.disabled)
             continue;
-        SpellEntry const* proto = sSpellMgr.GetSpellEntry(known.first);
+        SpellEntry const* proto = GetSpellEntryCompat(known.first);
         if (!proto)
             continue;
         TortoiseBots::ReadyCheck::SpellCd cd;
@@ -16816,7 +16816,7 @@ static void FeedCombatMonitor(RemoteCommander::Binding const& binding, Player* l
                 SpellAuraHolder const* holder = entry.second;
                 if (!holder || holder->IsDeleted() || holder->IsPassive())
                     continue;
-                SpellEntry const* proto = holder->GetSpellProto();
+                SpellEntry const* proto = GetSpellEntryCompat(holder->GetSpellProto());
                 if (!proto)
                     continue;
                 for (std::string const& key : CombatMonitor::DebuffKeys(proto->SpellName[0],

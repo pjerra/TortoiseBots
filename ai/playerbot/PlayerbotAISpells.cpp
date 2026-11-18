@@ -85,10 +85,10 @@ bool IsRealAura(Player* bot, Aura const* aura, Unit* unit)
         return true;
 
     uint32 stacks = aura->GetStackAmount();
-    if (stacks >= aura->GetSpellProto()->StackAmount)
+    if (stacks >= GetSpellEntryCompat(aura->GetSpellProto())->StackAmount)
         return true;
 
-    if (aura->GetCaster() == bot || IsPositiveSpell(aura->GetSpellProto()) || aura->IsAreaAura())
+    if (aura->GetCaster() == bot || IsPositiveSpell(GetSpellEntryCompat(aura->GetSpellProto())) || aura->IsAreaAura())
         return true;
 
     return false;
@@ -133,13 +133,13 @@ bool PlayerbotAI::HasAura(std::string name, Unit* unit, bool maxStack, bool chec
 
             if (ids.empty())
             {
-                const std::string auraName = aura->GetSpellProto()->SpellName[0];
+                const std::string auraName = GetSpellEntryCompat(aura->GetSpellProto())->SpellName[0];
                 if (auraName.empty() || auraName.length() != wnamepart.length() || !Utf8FitTo(auraName, wnamepart))
                     continue;
             }
             else
             {
-                if (std::find(ids.begin(), ids.end(), aura->GetSpellProto()->Id) == ids.end())
+                if (std::find(ids.begin(), ids.end(), GetSpellEntryCompat(aura->GetSpellProto())->Id) == ids.end())
                     continue;
             }
 
@@ -159,8 +159,8 @@ bool PlayerbotAI::HasAura(std::string name, Unit* unit, bool maxStack, bool chec
                         continue;
                 }
 
-                uint32 maxStackAmount = aura->GetSpellProto()->StackAmount;
-                uint32 maxProcCharges = aura->GetSpellProto()->procCharges;
+                uint32 maxStackAmount = GetSpellEntryCompat(aura->GetSpellProto())->StackAmount;
+                uint32 maxProcCharges = GetSpellEntryCompat(aura->GetSpellProto())->procCharges;
 
                 if (maxStack)
                 {
@@ -262,13 +262,13 @@ Aura* PlayerbotAI::GetAura(std::string name, Unit* unit, bool checkIsOwner)
 
                 if (ids.empty())
                 {
-                    const std::string auraName = aura->GetSpellProto()->SpellName[0];
+                    const std::string auraName = GetSpellEntryCompat(aura->GetSpellProto())->SpellName[0];
                     if (auraName.empty() || auraName.length() != wnamepart.length() || !Utf8FitTo(auraName, wnamepart))
                         continue;
                 }
                 else
                 {
-                    if (std::find(ids.begin(), ids.end(), aura->GetSpellProto()->Id) == ids.end())
+                    if (std::find(ids.begin(), ids.end(), GetSpellEntryCompat(aura->GetSpellProto())->Id) == ids.end())
                         continue;
                 }
 
@@ -400,7 +400,7 @@ uint32 PlayerbotAI::GetSpellCastDuration(Spell* spell)
     uint32 spellDuration = 0;
     if(spell)
     {
-        const SpellEntry* const pSpellInfo = spell->m_spellInfo;
+        const SpellEntry* const pSpellInfo = GetSpellEntryCompat(spell->m_spellInfo);
         spellDuration = spell->GetCastTime();
         if (IsChanneledSpell(pSpellInfo))
         {
@@ -641,7 +641,7 @@ bool PlayerbotAI::CheckCanCastSpell(uint32 spellid, Unit* target, uint8 effectMa
         Spell* autorepeatSpell = bot->GetCurrentSpell(CURRENT_MELEE_SPELL);
         if (autorepeatSpell)
         {
-            if (autorepeatSpell->m_spellInfo->Id == spellInfo->Id)
+            if (GetSpellEntryCompat(autorepeatSpell->m_spellInfo)->Id == spellInfo->Id)
             {
                 if (checkResult)
                 {
@@ -1815,14 +1815,14 @@ void PlayerbotAI::InterruptSpell(bool withMeleeAndAuto, const char* site, float 
                 continue;
         }
         Spell* currentSpell = bot->GetCurrentSpell((CurrentSpellTypes)type);
-        if (currentSpell && currentSpell->m_spellInfo && (currentSpell->m_spellInfo->InterruptFlags & SPELL_INTERRUPT_FLAG_INTERRUPT))
+        if (currentSpell && GetSpellEntryCompat(currentSpell->m_spellInfo) && (GetSpellEntryCompat(currentSpell->m_spellInfo)->InterruptFlags & SPELL_INTERRUPT_FLAG_INTERRUPT))
         {
             // The CastCancel row: this is the one choke point every ai->InterruptSpell() caller's cancel goes through
             // (the reaction engine, movement, target picks), so a cast lost here is named even when the caller is not.
             // The slot is the one about to be interrupted, never whichever cast happens to be live first.
             LogCastCancel(this, site ? site : "ai", (CurrentSpellTypes)type, movedYd);
             bot->InterruptSpell((CurrentSpellTypes)type);
-            SpellInterrupted(currentSpell->m_spellInfo->Id);
+            SpellInterrupted(GetSpellEntryCompat(currentSpell->m_spellInfo)->Id);
         }
     }
 }
@@ -1832,7 +1832,7 @@ bool PlayerbotAI::RemoveAura(const std::string& name)
     const Aura* aura = GetAura(name, bot);
     if (aura)
     {
-        const uint32 spellId = aura->GetSpellProto()->Id;
+        const uint32 spellId = GetSpellEntryCompat(aura->GetSpellProto())->Id;
         if (spellId > 0)
         {
             bot->RemoveAurasDueToSpell(spellId);
@@ -1865,15 +1865,15 @@ bool PlayerbotAI::IsInterruptableSpellCasting(Unit* target, std::string spell, u
     auto ReadSlot = [target](CurrentSpellTypes type, bool channeledSlot, ai::InterruptTargetSpell& out) -> ai::InterruptTargetSpell const*
     {
         Spell* current = target->GetCurrentSpell(type);
-        if (!current || !current->m_spellInfo)
+        if (!current || !GetSpellEntryCompat(current->m_spellInfo))
             return nullptr;
         out.spell = current;
         out.channeledSlot = channeledSlot;
         out.state = current->getState();
         out.castTime = current->GetCastTime();
-        out.preventionType = current->m_spellInfo->PreventionType;
-        out.interruptFlags = current->m_spellInfo->InterruptFlags;
-        out.channelInterruptFlags = current->m_spellInfo->ChannelInterruptFlags;
+        out.preventionType = GetSpellEntryCompat(current->m_spellInfo)->PreventionType;
+        out.interruptFlags = GetSpellEntryCompat(current->m_spellInfo)->InterruptFlags;
+        out.channelInterruptFlags = GetSpellEntryCompat(current->m_spellInfo)->ChannelInterruptFlags;
         return &out;
     };
     ai::InterruptTargetSpell generic{}, channeled{};
@@ -1981,7 +1981,7 @@ bool PlayerbotAI::IsSpreadingAura(const SpellEntry* entry)
 
     DispelSpellInput const input = ToDispelSpellInput(entry);
     bool const spreading = IsSpreadingAuraSpell(input, [](std::uint32_t trigId, DispelSpellInput& out) -> bool {
-        const SpellEntry* trigEntry = sSpellMgr.GetSpellEntry(trigId);
+        const SpellEntry* trigEntry = GetSpellEntryCompat(trigId);
         if (!trigEntry)
             return false;
         out = ToDispelSpellInput(trigEntry);
@@ -2011,7 +2011,7 @@ bool PlayerbotAI::HasAuraToDispel(Unit* target, uint32 dispelType, const DispelO
 		for (Unit::AuraList::const_iterator itr = auras.begin(); itr != auras.end(); ++itr)
 		{
 			const Aura* aura = *itr;
-			const SpellEntry* entry = aura->GetSpellProto();
+			const SpellEntry* entry = GetSpellEntryCompat(aura->GetSpellProto());
 			uint32 spellId = entry->Id;
 
 			bool isPositiveSpell = IsPositiveSpell(spellId);
@@ -2177,7 +2177,7 @@ bool PlayerbotAI::IsHerb(const GameObject* go)
 
 bool PlayerbotAI::HasSpellItems(uint32 spellId, const Item* castItem) const
 {
-    const SpellEntry* spellEntry = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+    const SpellEntry* spellEntry = GetSpellEntryCompat(spellId);
     if (spellEntry)
     {
         if (HasCheat(BotCheatMask::item))

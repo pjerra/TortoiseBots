@@ -58,8 +58,8 @@ namespace ai
         static uint32 parseSlot(const std::string& text);
 
         static std::string formatSpell(SpellEntry const *sInfo);
-        // Penqle uses sSpellMgr.GetSpellEntry() instead of cmangos's sSpellTemplate.LookupEntry<SpellEntry>().
-        static std::string formatSpell(uint32 spellId) {SpellEntry const* spellInfo = sSpellMgr.GetSpellEntry(spellId); if (!spellInfo) return ""; return formatSpell(spellInfo);};
+        // Both cores fetch a spell through GetSpellEntryCompat (the Turtle core's own record, ForeverCore's mirror).
+        static std::string formatSpell(uint32 spellId) {SpellEntry const* spellInfo = GetSpellEntryCompat(spellId); if (!spellInfo) return ""; return formatSpell(spellInfo);};
         uint32 parseSpell(std::string& text);
 
         static std::string formatGameobject(const GameObject* go);

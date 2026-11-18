@@ -94,7 +94,7 @@ bool ItemUsageValue::IsCraftingTool(uint32 itemId)
         std::unordered_set<uint32> ids;
         for (uint32 spellId = 1; spellId < sSpellMgr.GetMaxSpellId(); ++spellId)
         {
-            SpellEntry const* spell = sSpellMgr.GetSpellEntry(spellId);
+            SpellEntry const* spell = GetSpellEntryCompat(spellId);
             if (!spell || (!spell->HasEffect(SPELL_EFFECT_CREATE_ITEM) && !spell->HasEffect(SPELL_EFFECT_ENCHANT_ITEM)))
                 continue;
             for (uint32 totem : spell->Totem)
@@ -1782,7 +1782,7 @@ void ItemUsageValue::PopulateProfessionReagentIds()
                 if (skillLine->skillId != skillInfo->id)
                     continue;
 
-                SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(skillLine->spellId);
+                SpellEntry const* spellInfo = GetSpellEntryCompat(skillLine->spellId);
                 if (spellInfo)
                 {
                     bool isReagentFor = false;
@@ -1811,7 +1811,7 @@ void ItemUsageValue::PopulateReagentItemIdsForCraftableItemIds()
         if (!skillLine)
             continue;
 
-        SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(skillLine->spellId);
+        SpellEntry const* spellInfo = GetSpellEntryCompat(skillLine->spellId);
         if (spellInfo)
         {
             for (int i = 0; i < 3; ++i)

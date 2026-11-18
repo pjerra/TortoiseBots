@@ -769,9 +769,9 @@ bool RainOfFireChannelCheckTrigger::IsActive()
 {
     if (Spell* spell = bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
     {
-        if (spell->m_spellInfo)
+        if (GetSpellEntryCompat(spell->m_spellInfo))
         {
-            uint32 id = spell->m_spellInfo->Id;
+            uint32 id = GetSpellEntryCompat(spell->m_spellInfo)->Id;
             if (id == 5740 || id == 6219 || id == 11677 || id == 11678 || id == 27212)
             {
                 // A unit under our crowd control inside the rain breaks the
@@ -823,7 +823,7 @@ bool DarkHarvestChannelCheckTrigger::IsActive()
 {
     if (Spell* spell = bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
     {
-        if (spell->m_spellInfo && spell->m_spellInfo->Id == 52550)
+        if (GetSpellEntryCompat(spell->m_spellInfo) && GetSpellEntryCompat(spell->m_spellInfo)->Id == 52550)
         {
             // A dying target refunds the cooldown: keep channeling it. Cancel
             // only when a LIVE target has lost every own DoT.

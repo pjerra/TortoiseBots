@@ -1612,7 +1612,7 @@ uint32 RandomItemMgr::CalculateStatWeight(uint8 playerclass, uint8 spec, ItemPro
             continue;
 
         // check if it is valid spell
-        SpellEntry const* spellproto = sSpellTemplate.LookupEntry<SpellEntry>(spellData.SpellId);
+        SpellEntry const* spellproto = GetSpellEntryCompat(spellData.SpellId);
         if (!spellproto)
             continue;
 
@@ -2026,7 +2026,7 @@ uint32 RandomItemMgr::CalculateEnchantWeight(uint8 playerclass, uint8 spec, uint
             if (!pEnchant->spellid[s])
                 continue;
 
-            SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(pEnchant->spellid[s]);
+            SpellEntry const* spellInfo = GetSpellEntryCompat(pEnchant->spellid[s]);
 
             if (!spellInfo)
                 continue;
@@ -4570,7 +4570,7 @@ uint32 RandomItemMgr::CalculateProcEnchantWeight(uint8 playerclass, uint8 spec, 
         uint32 procSpellId = pEnchant->spellid[s];
         if (!procSpellId)
             continue;
-        SpellEntry const* procInfo = sSpellTemplate.LookupEntry<SpellEntry>(procSpellId);
+        SpellEntry const* procInfo = GetSpellEntryCompat(procSpellId);
         if (!procInfo)
             continue;
 
@@ -4694,7 +4694,7 @@ uint32 RandomItemMgr::CalculateBestBotEnchantId(Player* bot, uint32 specId, Item
         if (candidate.minLevel + levelMargin > level)
             continue;
 
-        SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(candidate.spellId);
+        SpellEntry const* spellInfo = GetSpellEntryCompat(candidate.spellId);
         if (!spellInfo || spellInfo->Effect[0] != SPELL_EFFECT_ENCHANT_ITEM)
             continue;
         uint32 enchantId = spellInfo->EffectMiscValue[0];

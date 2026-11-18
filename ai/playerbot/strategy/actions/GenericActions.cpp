@@ -161,7 +161,7 @@ bool InitializePetAction::Execute(Event& event)
             TortoiseBots::ForEachWarlockWantedSpell(pet->GetEntry(), pet->GetLevel(),
                 [pet, &autocastDefault](TortoiseBots::PetWantedSpell wanted)
             {
-                if (!sSpellMgr.GetSpellEntry(wanted.spellId) || pet->HasSpell(wanted.spellId))
+                if (!GetSpellEntryCompat(wanted.spellId) || pet->HasSpell(wanted.spellId))
                     return;
                 // Only a fresh spell gets the default: a new rank keeps the
                 // autocast state of the one it replaces (a player's choice).
@@ -207,7 +207,7 @@ bool InitializePetAction::isUseful()
         TortoiseBots::ForEachWarlockWantedSpell(pet->GetEntry(), pet->GetLevel(),
             [pet, &missing](TortoiseBots::PetWantedSpell wanted)
         {
-            if (missing || !sSpellMgr.GetSpellEntry(wanted.spellId))
+            if (missing || !GetSpellEntryCompat(wanted.spellId))
                 return;
             if (!pet->HasSpell(wanted.spellId))
                 missing = true;

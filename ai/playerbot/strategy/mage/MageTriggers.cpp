@@ -240,9 +240,9 @@ bool IciclesChannelCheckTrigger::IsActive()
 {
     if (Spell* spell = bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
     {
-        if (spell->m_spellInfo)
+        if (GetSpellEntryCompat(spell->m_spellInfo))
         {
-            uint32 id = spell->m_spellInfo->Id;
+            uint32 id = GetSpellEntryCompat(spell->m_spellInfo)->Id;
             if (id == 52516 || id == 51991 || id == 51995 || id == 51997)
             {
                 Unit* target = AI_VALUE(Unit*, "current target");
@@ -257,7 +257,7 @@ bool EvocationChannelCheckTrigger::IsActive()
 {
     if (Spell* spell = bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
     {
-        if (spell->m_spellInfo && spell->m_spellInfo->Id == 12051)
+        if (GetSpellEntryCompat(spell->m_spellInfo) && GetSpellEntryCompat(spell->m_spellInfo)->Id == 12051)
         {
             // Evocation restores mana; channeling at full mana wastes the
             // vulnerable window. Target-death does not apply (self channel).
@@ -371,12 +371,12 @@ bool BlizzardChannelCheckTrigger::IsActive()
 {
     if (Spell* spell = bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
     {
-        if (spell->m_spellInfo)
+        if (GetSpellEntryCompat(spell->m_spellInfo))
         {
             // Per-rank Blizzard channel ids (effect spells): 10 rank 1,
             // 6141 rank 2, 8427 rank 3, 10185/10186/10187 ranks 4-6.
             // Matches mod-playerbots BlizzardChannelCheckTrigger ids.
-            uint32 id = spell->m_spellInfo->Id;
+            uint32 id = GetSpellEntryCompat(spell->m_spellInfo)->Id;
             if (id == 10 || id == 6141 || id == 8427 ||
                 id == 10185 || id == 10186 || id == 10187)
             {

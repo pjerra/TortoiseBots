@@ -56,7 +56,7 @@ uint32 ReadyTaunt(PlayerbotAI* ai, Unit* boss)
     if (!name || MissingStance(ai)) return 0;
     AiObjectContext* context = ai->GetAiObjectContext();
     uint32 const id = AI_VALUE2(uint32, "spell id", name);
-    SpellEntry const* spell = sSpellTemplate.LookupEntry<SpellEntry>(id);
+    SpellEntry const* spell = GetSpellEntryCompat(id);
     if (!id || !spell || !ai->GetBot()->HasSpell(id)) return 0;
     bool taunt = false;
     for (int effect = EFFECT_INDEX_0; effect <= EFFECT_INDEX_2; ++effect)

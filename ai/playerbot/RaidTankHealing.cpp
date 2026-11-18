@@ -107,9 +107,9 @@ bool ai::StopUnsafeRaidHealerFiller(PlayerbotAI* ai)
     Player* bot = ai->GetBot();
     Spell* cast = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL);
     Spell* wand = bot->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL);
-    bool const offensiveCast = cast && cast->m_spellInfo &&
-        cast->getState() == SPELL_STATE_PREPARING && (IsRaidHealerFiller(cast->m_spellInfo->SpellName[0]) ||
-            IsRaidHealerMaintenance(cast->m_spellInfo->SpellName[0]));
+    bool const offensiveCast = cast && GetSpellEntryCompat(cast->m_spellInfo) &&
+        cast->getState() == SPELL_STATE_PREPARING && (IsRaidHealerFiller(GetSpellEntryCompat(cast->m_spellInfo)->SpellName[0]) ||
+            IsRaidHealerMaintenance(GetSpellEntryCompat(cast->m_spellInfo)->SpellName[0]));
     if ((!offensiveCast && !wand) || !RaidHealerShouldHoldDamage(ai))
         return false;
     if (offensiveCast)

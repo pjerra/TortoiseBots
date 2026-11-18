@@ -22,7 +22,7 @@ namespace ai
             if (!caster || !info)
                 return nullptr;
 
-            if (info != sSpellTemplate.LookupEntry<SpellEntry>(info->Id))
+            if (info != GetSpellEntryCompat(info->Id))
                 return nullptr;
 
             return new BotUseItemSpell(caster, info, triggeredFlags, originalCasterGUID, triggeredBy, itemCheats);
@@ -146,7 +146,7 @@ namespace ai
                                 continue;
                             }
 
-                            const SpellEntry* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellData.SpellId);
+                            const SpellEntry* spellInfo = GetSpellEntryCompat(spellData.SpellId);
                             if (spellInfo)
                             {
                                 bot->RemoveSpellCooldown(spellInfo->Id, false);
@@ -257,7 +257,7 @@ namespace ai
                                 continue;
                             }
 
-                            const SpellEntry* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellData.SpellId);
+                            const SpellEntry* spellInfo = GetSpellEntryCompat(spellData.SpellId);
                             if (spellInfo)
                             {
                                 bot->RemoveSpellCooldown(spellInfo->Id, false);

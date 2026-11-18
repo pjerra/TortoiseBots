@@ -146,7 +146,7 @@ bool ServerFacade::IsSpellReady(Player* bot, uint32 spell, uint32 itemId)
     }
     if (!category)
     {
-        if (const SpellEntry* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spell))
+        if (const SpellEntry* spellInfo = GetSpellEntryCompat(spell))
             category = spellInfo->Category;
     }
     return !category || !bot->HasSpellCategoryCooldown(category);

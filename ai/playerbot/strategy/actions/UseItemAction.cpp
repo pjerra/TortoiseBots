@@ -84,7 +84,7 @@ SpellCastResult BotUseItemSpell::ForceSpellStart(SpellCastTargets const* targets
         // Log spell + result code; the prepare path below logs its own.
         if (Player* botPlayer = m_caster ? m_caster->ToPlayer() : nullptr)
             if (PlayerbotAI* botAi = PlayerbotAIStorage::Instance().GetAI(botPlayer))
-                botdiag::BotActionLog::LogCastResult(botAi, m_spellInfo->Id, result, "ITEM-PREPARE");
+                botdiag::BotActionLog::LogCastResult(botAi, GetSpellEntryCompat(m_spellInfo)->Id, result, "ITEM-PREPARE");
         SendCastResult(result);
         finish(false);
         // No SpellEvent owns this Spell, so the standard destruction path
@@ -98,7 +98,7 @@ SpellCastResult BotUseItemSpell::ForceSpellStart(SpellCastTargets const* targets
     // signal. Record the queue so a later silent fizzle is attributable.
     if (Player* botPlayer = m_caster ? m_caster->ToPlayer() : nullptr)
         if (PlayerbotAI* botAi = PlayerbotAIStorage::Instance().GetAI(botPlayer))
-            botdiag::BotActionLog::LogCastStart(botAi, m_spellInfo->Id,
+            botdiag::BotActionLog::LogCastStart(botAi, GetSpellEntryCompat(m_spellInfo)->Id,
                 targets ? targets->getUnitTargetGuid() : ObjectGuid(), 0);
     // Hand off to Spell::prepare which creates exactly one SpellEvent and
     // becomes the sole owner of this Spell.
@@ -111,7 +111,7 @@ bool BotUseItemSpell::OpenLockCheck()
     for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
     {
         // for effects of spells that have only one target
-        switch (m_spellInfo->Effect[i])
+        switch (GetSpellEntryCompat(m_spellInfo)->Effect[i])
         {
             case SPELL_EFFECT_OPEN_LOCK_ITEM:
             case SPELL_EFFECT_OPEN_LOCK:
@@ -124,7 +124,7 @@ bool BotUseItemSpell::OpenLockCheck()
                 // it and the core reads the same pointer in the same pass (Spell::EffectOpenLock); it is not a
                 // current-spell pointer left over from an earlier tick.
                 GameObject* const go = m_targets.getGOTarget();
-                if (m_spellInfo->EffectImplicitTargetA[i] == TARGET_GAMEOBJECT && !go)
+                if (GetSpellEntryCompat(m_spellInfo)->EffectImplicitTargetA[i] == TARGET_GAMEOBJECT && !go)
                     return false;
 
                 // get the lock entry
@@ -643,7 +643,7 @@ bool UseAction::UseItemInternal(Player* requester, uint32 itemId, Unit* unit, Ga
             continue;
         }
 
-        const SpellEntry* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellData.SpellId);
+        const SpellEntry* spellInfo = GetSpellEntryCompat(spellData.SpellId);
         if (!spellInfo)
         {
             continue;
@@ -781,7 +781,7 @@ bool UseAction::UseItemInternal(Player* requester, uint32 itemId, Unit* unit, Ga
         if (validTarget)
         {
             // Validate spellInfo is a proper sSpellTemplate entry before constructing (mirrors MANGOS_ASSERT in Spell::Spell)
-            if (!spellInfo || spellInfo != sSpellTemplate.LookupEntry<SpellEntry>(spellInfo->Id))
+            if (!spellInfo || spellInfo != GetSpellEntryCompat(spellInfo->Id))
             {
                 continue;
             }
@@ -1190,7 +1190,7 @@ bool UseAction::HasItemCooldown(uint32 itemId) const
                 // The core also gates the cast on the spell's own category
                 // (healthstone, mana gem and Dark Rune share one), which an
                 // item-free use starts instead of the item's.
-                SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(proto->Spells[i].SpellId);
+                SpellEntry const* spellInfo = GetSpellEntryCompat(proto->Spells[i].SpellId);
                 if (spellInfo && spellInfo->Category && bot->HasSpellCategoryCooldown(spellInfo->Category))
                     return true;
             }
@@ -1290,7 +1290,7 @@ bool UseItemIdAction::isPossible()
         if (spellData.SpellTrigger != ITEM_SPELLTRIGGER_ON_USE && spellData.SpellTrigger != ITEM_SPELLTRIGGER_ON_NO_DELAY_USE)
             continue;
 
-        SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellData.SpellId);
+        SpellEntry const* spellInfo = GetSpellEntryCompat(spellData.SpellId);
         if (!spellInfo)
         {
             continue;

@@ -122,7 +122,7 @@ void FillAbilityRow(AbilityRow& row, SkillLineAbilityEntry const* ability, Playe
     row.maxValue = ability->max_value;
     row.known = bot->HasSpell(ability->spellId);
     row.passive = IsPassiveSpell(ability->spellId);
-    SpellEntry const* spell = sSpellMgr.GetSpellEntry(ability->spellId);
+    SpellEntry const* spell = GetSpellEntryCompat(ability->spellId);
     if (!spell)
         return;
     row.effect0 = spell->Effect[EFFECT_INDEX_0];
@@ -158,7 +158,7 @@ std::string CraftOrderField(AbilityRow const& row)
         inputs.itemOrderable = GuildOrders::IsOrderableItem(proto);
         inputs.itemNeedsProfession = proto->RequiredSkill != 0;
     }
-    if (SpellEntry const* spell = sSpellMgr.GetSpellEntry(row.spellId))
+    if (SpellEntry const* spell = GetSpellEntryCompat(row.spellId))
         inputs.spellRecoveryMs = spell->GetRecoveryTime();
     return GuildOrders::CraftOrderToken(GuildOrders::CraftOrderableVerdict(inputs));
 }
@@ -259,7 +259,7 @@ std::vector<CraftRecipeSnapshot> OrderableCraftRecipes(Player* bot, std::vector<
         {
             if (!ability || !ability->spellId || !bot->HasSpell(ability->spellId))
                 continue;
-            SpellEntry const* spell = sSpellMgr.GetSpellEntry(ability->spellId);
+            SpellEntry const* spell = GetSpellEntryCompat(ability->spellId);
             if (!spell)
                 continue;
             uint32_t createdItemId = 0;
@@ -332,7 +332,7 @@ std::vector<EnchantSnapshot> OrderableEnchantSpells(Player* bot, std::vector<std
         snapshot.slot = entry.slot;
         snapshot.skillValue = skillValue;
         snapshot.reqSkillValue = entry.reqSkill;
-        SpellEntry const* spell = sSpellMgr.GetSpellEntry(entry.spellId);
+        SpellEntry const* spell = GetSpellEntryCompat(entry.spellId);
         if (spell)
         {
             for (uint32 e = 0; e < MAX_SPELL_REAGENTS; ++e)

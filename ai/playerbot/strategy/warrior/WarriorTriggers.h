@@ -196,12 +196,12 @@ namespace ai
                 BattleShoutAttackPower(AI_VALUE2(uint32, "spell id", "battle shout")), talentBonus);
             if (Aura* might = ai->GetAura("blessing of might", bot))
             {
-                if (!ShouldBattleShout(shoutAp, true, BlessingOfMightAttackPower(might->GetSpellProto()->Id)))
+                if (!ShouldBattleShout(shoutAp, true, BlessingOfMightAttackPower(GetSpellEntryCompat(might->GetSpellProto())->Id)))
                     return false;
             }
             if (Aura* greaterMight = ai->GetAura("greater blessing of might", bot))
             {
-                if (!ShouldBattleShout(shoutAp, true, BlessingOfMightAttackPower(greaterMight->GetSpellProto()->Id)))
+                if (!ShouldBattleShout(shoutAp, true, BlessingOfMightAttackPower(GetSpellEntryCompat(greaterMight->GetSpellProto())->Id)))
                     return false;
             }
             return true;

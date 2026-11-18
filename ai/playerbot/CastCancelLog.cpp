@@ -34,12 +34,12 @@ void ai::LogCastCancel(PlayerbotAI* ai, const char* site, CurrentSpellTypes slot
     if (!bot)
         return;
     Spell* const cast = bot->GetCurrentSpell(slot);
-    if (!cast || !cast->m_spellInfo)
+    if (!cast || !GetSpellEntryCompat(cast->m_spellInfo))
         return;
     // A cast bar has its total in m_casttime; a channel's total is the spell's duration.
     int totalMs = cast->GetCastTime();
     if (totalMs <= 0)
-        totalMs = static_cast<int>(GetSpellDuration(cast->m_spellInfo));
+        totalMs = static_cast<int>(GetSpellDuration(GetSpellEntryCompat(cast->m_spellInfo)));
     const int pct = CastCancelPct(totalMs, cast->GetCastedTime());
     // The cast's cached unit target is refreshed only in the caster's next Spell::update, and the map frees a unit
     // removed in this tick, so a cancel at a dying boss's summons can read freed memory. Resolve the guid the cast
@@ -48,7 +48,7 @@ void ai::LogCastCancel(PlayerbotAI* ai, const char* site, CurrentSpellTypes slot
     Unit* const target = targetGuid ? ObjectAccessor::GetUnit(*bot, targetGuid) : nullptr;
     char info1[192];
     snprintf(info1, sizeof(info1), "site=%s,slot=%s,spell=%u,cast_pct=%d,target=%s,moved_yd=%.1f",
-             site, SlotWord(slot), cast->m_spellInfo->Id, pct, target ? target->GetName() : "none", movedYd);
+             site, SlotWord(slot), GetSpellEntryCompat(cast->m_spellInfo)->Id, pct, target ? target->GetName() : "none", movedYd);
     sPlayerbotAIConfig.logEvent(ai, "CastCancel", info1, "");
 }
 
@@ -63,7 +63,7 @@ void ai::LogCastCancelStop(PlayerbotAI* ai, const char* site, float movedYd)
     for (const CurrentSpellTypes slot : { CURRENT_GENERIC_SPELL, CURRENT_AUTOREPEAT_SPELL, CURRENT_CHANNELED_SPELL })
     {
         Spell* const cast = bot->GetCurrentSpell(slot);
-        if (cast && cast->m_spellInfo && cast->getState() == SPELL_STATE_PREPARING && cast->GetCastedTime())
+        if (cast && GetSpellEntryCompat(cast->m_spellInfo) && cast->getState() == SPELL_STATE_PREPARING && cast->GetCastedTime())
             LogCastCancel(ai, site, slot, movedYd);
     }
 }
@@ -78,10 +78,10 @@ void ai::LogCastCancelNonMelee(PlayerbotAI* ai, const char* site, bool withDelay
     for (const CurrentSpellTypes slot : { CURRENT_GENERIC_SPELL, CURRENT_AUTOREPEAT_SPELL })
     {
         Spell* const cast = bot->GetCurrentSpell(slot);
-        if (cast && cast->m_spellInfo && (withDelayed || cast->getState() != SPELL_STATE_DELAYED))
+        if (cast && GetSpellEntryCompat(cast->m_spellInfo) && (withDelayed || cast->getState() != SPELL_STATE_DELAYED))
             LogCastCancel(ai, site, slot, movedYd);
     }
     if (Spell* const channel = bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
-        if (channel->m_spellInfo)
+        if (GetSpellEntryCompat(channel->m_spellInfo))
             LogCastCancel(ai, site, CURRENT_CHANNELED_SPELL, movedYd);
 }

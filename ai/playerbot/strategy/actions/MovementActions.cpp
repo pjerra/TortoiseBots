@@ -1208,7 +1208,7 @@ bool MovementAction::HandleSpecialMovement(TravelPath& path)
         // progress instead of declining the leg, which made the travel step walk on
         // and interrupt it every few seconds (live: bots re-hearthing every ~13 s).
         Spell* currentSpell = bot->GetCurrentSpell(CURRENT_GENERIC_SPELL);
-        if (currentSpell && currentSpell->m_spellInfo->Id == nextPoint.entry)
+        if (currentSpell && GetSpellEntryCompat(currentSpell->m_spellInfo)->Id == nextPoint.entry)
             return true;
 
         bool canCastNow = !bot->IsFlying() || WorldPosition(bot).currentHeight() < 10.0f;
@@ -4736,7 +4736,7 @@ bool AvoidAoeAction::AvoidTriggerNpc(float& outRadius, WorldPosition& outCenter)
             Aura* aura = *it;
             if (!aura)
                 continue;
-            SpellEntry const* spellProto = aura->GetSpellProto();
+            SpellEntry const* spellProto = GetSpellEntryCompat(aura->GetSpellProto());
             if (!spellProto)
                 continue;
             SpellEntry const* triggerProto = sServerFacade.LookupSpellInfo(

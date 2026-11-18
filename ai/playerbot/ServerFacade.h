@@ -179,7 +179,7 @@ class ServerFacade
             return sSpellStore.LookupEntry(spellId);
 #endif
 #ifdef CMANGOS
-            return sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+            return GetSpellEntryCompat(spellId);
 #endif
         }
 

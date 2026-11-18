@@ -184,7 +184,7 @@ bool MimicConsumableAction::ApplyWeaponImbue(uint32_t stoneItemId)
             uint32_t spellId = proto->Spells[i].SpellId;
             if (!spellId)
                 continue;
-            SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+            SpellEntry const* spellInfo = GetSpellEntryCompat(spellId);
             if (!spellInfo)
                 continue;
             BotUseItemSpell* spell = BotUseItemSpell::Create(bot, spellInfo,
@@ -230,7 +230,7 @@ static bool HasUseSpell(ItemPrototype const* proto)
         if (proto->Spells[i].SpellTrigger != ITEM_SPELLTRIGGER_ON_USE &&
             proto->Spells[i].SpellTrigger != ITEM_SPELLTRIGGER_ON_NO_DELAY_USE)
             continue;
-        if (sSpellTemplate.LookupEntry<SpellEntry>(spellId))
+        if (GetSpellEntryCompat(spellId))
             return true;
     }
     return false;
@@ -256,7 +256,7 @@ bool MimicConsumableAction::CastMimicItem(uint32_t botItemId, bool withEatEmote)
         if (proto->Spells[i].SpellTrigger != ITEM_SPELLTRIGGER_ON_USE &&
             proto->Spells[i].SpellTrigger != ITEM_SPELLTRIGGER_ON_NO_DELAY_USE)
             continue;
-        SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+        SpellEntry const* spellInfo = GetSpellEntryCompat(spellId);
         if (!spellInfo)
             continue;
         // Spell-bound targeting (e.g. weapon imbues resolved earlier) is

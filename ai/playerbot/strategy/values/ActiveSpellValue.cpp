@@ -12,7 +12,7 @@ uint32 ActiveSpellValue::Calculate()
     for (int type = CURRENT_MELEE_SPELL; type <= CURRENT_CHANNELED_SPELL; ++type)
     {
         Spell *spell = bot->GetCurrentSpell((CurrentSpellTypes)type);
-        if (spell && spell->m_spellInfo) return spell->m_spellInfo->Id;
+        if (spell && GetSpellEntryCompat(spell->m_spellInfo)) return GetSpellEntryCompat(spell->m_spellInfo)->Id;
     }
 
     return 0;

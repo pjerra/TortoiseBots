@@ -1088,7 +1088,7 @@ bool CastShootAction::Execute(Event& event)
     {
         // Prevent calling the shoot spell when already active
         Spell* autoRepeatSpell = ai->GetBot()->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL);
-        if (autoRepeatSpell && (autoRepeatSpell->m_spellInfo->Id == GetSpellID()))
+        if (autoRepeatSpell && (GetSpellEntryCompat(autoRepeatSpell->m_spellInfo)->Id == GetSpellID()))
         {
             succeeded = true;
         }
@@ -1185,7 +1185,7 @@ void CastShootAction::UpdateWeaponInfo()
 bool StopWandAction::isUseful()
 {
     Spell* autoRepeat = bot->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL);
-    return autoRepeat && autoRepeat->m_spellInfo && autoRepeat->m_spellInfo->Category == WAND_SHOOT_CATEGORY;
+    return autoRepeat && GetSpellEntryCompat(autoRepeat->m_spellInfo) && GetSpellEntryCompat(autoRepeat->m_spellInfo)->Category == WAND_SHOOT_CATEGORY;
 }
 
 bool StopWandAction::Execute(Event& event)
@@ -1233,7 +1233,7 @@ bool InterruptCurrentSpellAction::Execute(Event& event)
             // target that turned out full, so this is the interrupt that loses the mana and the cast.
             ai::LogCastCancel(ai, "heal_full", (CurrentSpellTypes)type);
             bot->InterruptSpell((CurrentSpellTypes)type);
-            ai->SpellInterrupted(currentSpell->m_spellInfo->Id);
+            ai->SpellInterrupted(GetSpellEntryCompat(currentSpell->m_spellInfo)->Id);
             interrupted = true;
         }
     }
@@ -1370,7 +1370,7 @@ bool CastItemTargetAction::isPossible()
         if (spellData.SpellTrigger != ITEM_SPELLTRIGGER_ON_USE && spellData.SpellTrigger != ITEM_SPELLTRIGGER_ON_NO_DELAY_USE)
             continue;
 
-        SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellData.SpellId);
+        SpellEntry const* spellInfo = GetSpellEntryCompat(spellData.SpellId);
         if (!spellInfo)
         {
             continue;
@@ -1427,7 +1427,7 @@ bool CastItemTargetAction::Execute(Event& event)
         if (spellData.SpellTrigger != ITEM_SPELLTRIGGER_ON_USE && spellData.SpellTrigger != ITEM_SPELLTRIGGER_ON_NO_DELAY_USE)
             continue;
 
-        SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellData.SpellId);
+        SpellEntry const* spellInfo = GetSpellEntryCompat(spellData.SpellId);
         if (!spellInfo)
         {
             continue;

@@ -632,7 +632,7 @@ namespace ai
                 for (Unit::AuraList::const_iterator itr = auras.begin(); itr != auras.end(); ++itr)
                 {
                     const Aura* aura = *itr;
-                    const SpellEntry* entry = aura->GetSpellProto();
+                    const SpellEntry* entry = GetSpellEntryCompat(aura->GetSpellProto());
                     uint32 spellId = entry->Id;
                     if (!IsPositiveSpell(spellId))
                         continue;

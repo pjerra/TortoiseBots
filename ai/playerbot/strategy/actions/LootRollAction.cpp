@@ -115,7 +115,7 @@ namespace
                    (spellData.SpellTrigger == ITEM_SPELLTRIGGER_ON_USE || spellData.SpellTrigger == ITEM_SPELLTRIGGER_CHANCE_ON_HIT))))
                 continue;
 
-            SpellEntry const* spellproto = sSpellTemplate.LookupEntry<SpellEntry>(spellData.SpellId);
+            SpellEntry const* spellproto = GetSpellEntryCompat(spellData.SpellId);
             if (!spellproto)
                 continue;
 

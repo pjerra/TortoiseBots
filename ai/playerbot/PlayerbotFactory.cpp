@@ -771,7 +771,7 @@ bool PlayerbotFactory::PetAutoTrainAllowed(Player* bot)
 // core cannot teach costs more than any budget, so the planner never picks it.
 static int32 HunterPetSpellCost(uint32 spellId)
 {
-    if (!sSpellMgr.GetSpellEntry(spellId))
+    if (!GetSpellEntryCompat(spellId))
         return 1 << 20;
     SkillLineAbilityMapBounds bounds = sSpellMgr.GetSkillLineAbilityMapBoundsBySpellId(spellId);
     for (SkillLineAbilityMap::const_iterator itr = bounds.first; itr != bounds.second; ++itr)
@@ -909,7 +909,7 @@ void PlayerbotFactory::InitPetSpells()
         TortoiseBots::ForEachWarlockWantedSpell(pet->GetEntry(), pet->GetLevel(),
             [pet](TortoiseBots::PetWantedSpell wanted)
         {
-            if (!sSpellMgr.GetSpellEntry(wanted.spellId))
+            if (!GetSpellEntryCompat(wanted.spellId))
                 return;
             if (!pet->HasSpell(wanted.spellId))
                 pet->LearnSpell(wanted.spellId);
@@ -3691,7 +3691,7 @@ void PlayerbotFactory::InitSpecialSpells()
     {
         uint32 spellId = *i;
 
-        SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+        SpellEntry const* spellInfo = GetSpellEntryCompat(spellId);
 
         if(spellInfo)
             bot->LearnSpell(spellId, false);

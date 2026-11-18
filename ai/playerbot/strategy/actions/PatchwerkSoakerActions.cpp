@@ -414,7 +414,7 @@ bool ai::PatchwerkNeedsMeleeHold(PlayerbotAI* ai, Unit* boss)
         return false;
     Player* mainTank = nullptr;
     std::vector<uint64> soakers;
-    SpellEntry const* strike = sSpellTemplate.LookupEntry<SpellEntry>(28308);
+    SpellEntry const* strike = GetSpellEntryCompat(28308);
     if (!strike)
         return true;
     for (Player* member : LiveGroupMembers(ai->GetBot()->GetGroup()))

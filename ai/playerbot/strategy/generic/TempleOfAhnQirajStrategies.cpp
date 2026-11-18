@@ -34,7 +34,7 @@ namespace
             if (!target) return 1.0f;
             if (target->GetEntry() == 15667 && ai->GetBot()->GetClass() == CLASS_MAGE)
             {
-                SpellEntry const* spell = sSpellTemplate.LookupEntry<SpellEntry>(cast->GetSpellID());
+                SpellEntry const* spell = GetSpellEntryCompat(cast->GetSpellID());
                 if (spell && !IsPositiveSpell(spell) &&
                     (IsChanneledSpell(spell) || GetSpellCastTime(spell, ai->GetBot()))) return 0.0f;
             }
@@ -44,7 +44,7 @@ namespace
             if (target->GetEntry() == 15299 && !target->HasAura(25937) &&
                 ai->GetBot()->GetClass() == CLASS_MAGE && ai->GetBot()->HasSpell(116))
             {
-                SpellEntry const* spell = sSpellTemplate.LookupEntry<SpellEntry>(cast->GetSpellID());
+                SpellEntry const* spell = GetSpellEntryCompat(cast->GetSpellID());
                 if (spell && !IsPositiveSpell(spell) && cast->getThreatType() != ActionThreatType::ACTION_THREAT_NONE) return 0.0f;
             }
             return 1.0f;

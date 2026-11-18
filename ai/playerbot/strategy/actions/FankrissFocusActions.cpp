@@ -106,11 +106,11 @@ void ai::UpdateFankrissFocus(PlayerbotAI* ai) {
  if(FankrissSingleTargetActive(ai)) {
   Player* bot=ai->GetBot();
   for(CurrentSpellTypes type:{CURRENT_GENERIC_SPELL,CURRENT_CHANNELED_SPELL,CURRENT_MELEE_SPELL})
-   if(Spell* spell=bot->GetCurrentSpell(type))if(FankrissAoeSpell(spell->m_spellInfo)){if(spell->getState()!=SPELL_STATE_DELAYED)ai::LogCastCancel(ai,"fankriss",type);bot->InterruptSpell(type,false);}
+   if(Spell* spell=bot->GetCurrentSpell(type))if(FankrissAoeSpell(GetSpellEntryCompat(spell->m_spellInfo))){if(spell->getState()!=SPELL_STATE_DELAYED)ai::LogCastCancel(ai,"fankriss",type);bot->InterruptSpell(type,false);}
   std::vector<uint32> remove;
   for(auto const& entry:bot->GetSpellAuraHolderMap())
-   if(entry.second&&entry.second->GetCasterGuid()==bot->GetObjectGuid()&&FankrissAoeSpell(entry.second->GetSpellProto()))
-    remove.push_back(entry.second->GetSpellProto()->Id);
+   if(entry.second&&entry.second->GetCasterGuid()==bot->GetObjectGuid()&&FankrissAoeSpell(GetSpellEntryCompat(entry.second->GetSpellProto())))
+    remove.push_back(GetSpellEntryCompat(entry.second->GetSpellProto())->Id);
   for(uint32 id:remove)bot->RemoveAurasDueToSpell(id);
  }
  if(!FankrissFocusEnabled(ai))return;
@@ -184,7 +184,7 @@ uint32 FankrissControlSpell(PlayerbotAI* ai,Unit* spawn) {
  AiObjectContext* context=ai->GetAiObjectContext();
  for(char const* name:names) {
   uint32 id=AI_VALUE2(uint32,"spell id",name);
-  SpellEntry const* spell=sSpellTemplate.LookupEntry<SpellEntry>(id);
+  SpellEntry const* spell=GetSpellEntryCompat(id);
   if(!spell||!ai->GetBot()->HasSpell(id)||ai->HasAura(name,spawn)||spawn->IsImmuneToSpell(spell,false))continue;
   bool useful=false;
   for(unsigned i=0;i<3;++i)if(spell->Effect[i]==SPELL_EFFECT_APPLY_AURA&&
@@ -242,7 +242,7 @@ bool FankrissAoeSpellDepth(SpellEntry const* spell,unsigned depth) {
  }
  // Proc auras can be positive while their triggered spell damages an area.
  if(depth)for(unsigned i=0;i<3;++i)if(spell->EffectTriggerSpell[i])
-  if(FankrissAoeSpellDepth(sSpellTemplate.LookupEntry<SpellEntry>(spell->EffectTriggerSpell[i]),depth-1))return true;
+  if(FankrissAoeSpellDepth(GetSpellEntryCompat(spell->EffectTriggerSpell[i]),depth-1))return true;
  if(spell->IsPositiveSpell())return false;
  if(spell->IsAreaOfEffectSpell())return true;
  for(unsigned i=0;i<3;++i)if(spell->EffectChainTarget[i]>1)return true;
@@ -251,7 +251,7 @@ bool FankrissAoeSpellDepth(SpellEntry const* spell,unsigned depth) {
 }
 bool ai::FankrissAoeSpell(SpellEntry const* spell) {return FankrissAoeSpellDepth(spell,2);}
 bool ai::FankrissBlocksAoe(PlayerbotAI* ai,uint32 id) {
- return FankrissSingleTargetActive(ai)&&FankrissAoeSpell(sSpellTemplate.LookupEntry<SpellEntry>(id));
+ return FankrissSingleTargetActive(ai)&&FankrissAoeSpell(GetSpellEntryCompat(id));
 }
 namespace {
 struct RescueRecord {ObjectGuid target;uint32 seen=0;};

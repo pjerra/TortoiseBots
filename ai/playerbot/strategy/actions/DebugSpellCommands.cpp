@@ -135,7 +135,7 @@ void DebugAction::addAura(uint32 spellId, Unit* target)
 {
     if (!target)
         return;
-    SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+    SpellEntry const* spellInfo = GetSpellEntryCompat(spellId);
     if (!spellInfo)
         return;
 

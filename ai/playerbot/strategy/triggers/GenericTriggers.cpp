@@ -254,7 +254,7 @@ bool HealerShouldAttackTrigger::IsActive()
 bool WandBlocksCastTrigger::IsWanding()
 {
     Spell* autoRepeat = bot->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL);
-    return autoRepeat && autoRepeat->m_spellInfo && autoRepeat->m_spellInfo->Category == WAND_SHOOT_CATEGORY;
+    return autoRepeat && GetSpellEntryCompat(autoRepeat->m_spellInfo) && GetSpellEntryCompat(autoRepeat->m_spellInfo)->Category == WAND_SHOOT_CATEGORY;
 }
 
 WandSpellProbe WandBlocksCastTrigger::ProbeSpell(std::string const& spell, Unit* target, bool checkForm)
@@ -829,7 +829,7 @@ bool SuccessorWhiteCapTrigger::IsActive()
     // Each attack mode is judged on its own target (SuccessorWhiteStopsOf): melee on the boss with the wand on an add stops
     // the swing only, and the reverse interrupts the auto-repeat only.
     Spell* const autoRepeat = bot->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL);
-    const bool repeating = autoRepeat && autoRepeat->m_spellInfo;
+    const bool repeating = autoRepeat && GetSpellEntryCompat(autoRepeat->m_spellInfo);
     const bool meleeOnSuccessor = bot->HasUnitState(UNIT_STAT_MELEE_ATTACKING) && bot->GetVictim() == target;
     // Compare the guid the cast holds: its cached unit-target pointer can point at a unit the map freed this tick.
     const bool autoRepeatOnSuccessor = repeating && autoRepeat->m_targets.getUnitTargetGuid() == target->GetObjectGuid();
@@ -866,7 +866,7 @@ bool ThreatResetWhiteStopTrigger::IsActive()
     if (!ThreatResetHolds(ai, bot, target))
         return false;
     Spell* const autoRepeat = bot->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL);
-    const bool repeating = autoRepeat && autoRepeat->m_spellInfo;
+    const bool repeating = autoRepeat && GetSpellEntryCompat(autoRepeat->m_spellInfo);
     const bool meleeOnTarget = bot->HasUnitState(UNIT_STAT_MELEE_ATTACKING) && bot->GetVictim() == target;
     // Compare the guid the cast holds: its cached unit-target pointer can point at a unit the map freed this tick.
     const bool autoRepeatOnTarget = repeating && autoRepeat->m_targets.getUnitTargetGuid() == target->GetObjectGuid();
@@ -1190,7 +1190,7 @@ bool DeflectSpellTrigger::IsActive()
     Spell* spell = target->GetCurrentSpell(CURRENT_GENERIC_SPELL);
     if (spell)
     {
-        SpellEntry const* tarSpellInfo = spell->m_spellInfo;
+        SpellEntry const* tarSpellInfo = GetSpellEntryCompat(spell->m_spellInfo);
         if (tarSpellInfo)
         {
             attackSchool = GetSpellSchoolMask(tarSpellInfo);
@@ -1876,7 +1876,7 @@ bool TargetOfCastedAuraTypeTrigger::IsActive()
             const Spell* genericSpell = attacker->GetCurrentSpell(CurrentSpellTypes::CURRENT_GENERIC_SPELL);
             if (genericSpell)
             {
-                const SpellEntry* spellInfo = genericSpell->m_spellInfo;
+                const SpellEntry* spellInfo = GetSpellEntryCompat(genericSpell->m_spellInfo);
                 if (spellInfo)
                 {
                     for (int32 i = SpellEffectIndex::EFFECT_INDEX_0; i <= SpellEffectIndex::EFFECT_INDEX_2; i++)
@@ -1895,7 +1895,7 @@ bool TargetOfCastedAuraTypeTrigger::IsActive()
                 const Spell* channeledSpell = attacker->GetCurrentSpell(CurrentSpellTypes::CURRENT_CHANNELED_SPELL);
                 if (channeledSpell)
                 {
-                    const SpellEntry* spellInfo = channeledSpell->m_spellInfo;
+                    const SpellEntry* spellInfo = GetSpellEntryCompat(channeledSpell->m_spellInfo);
                     if (spellInfo)
                     {
                         for (int32 i = SpellEffectIndex::EFFECT_INDEX_0; i <= SpellEffectIndex::EFFECT_INDEX_2; i++)
@@ -1940,7 +1940,7 @@ bool DispelOnTargetTrigger::IsActive()
         const std::vector<Aura*> auras = ai->GetAuras(target);
         for (const Aura* aura : auras)
         {
-            const SpellEntry* spellInfo = aura->GetSpellProto();
+            const SpellEntry* spellInfo = GetSpellEntryCompat(aura->GetSpellProto());
             if (spellInfo && ((1 << spellInfo->Dispel) & dispelMask))
             {
                 return true;

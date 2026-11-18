@@ -208,7 +208,7 @@ bool PossibleAttackTargetsValue::IsImmuneToDamage(Unit* target, Player* player)
 
     for (const Aura* aura : ai->GetAuras(target))
     {
-        const SpellEntry* spellInfo = aura->GetSpellProto();
+        const SpellEntry* spellInfo = GetSpellEntryCompat(aura->GetSpellProto());
         if (!spellInfo)
             continue;
 

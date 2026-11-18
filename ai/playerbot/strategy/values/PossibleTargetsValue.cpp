@@ -175,7 +175,7 @@ bool PossibleTriggersValue::AcceptUnit(Unit* unit)
         Aura* aura = *it;
         if (!aura)
             continue;
-        SpellEntry const* spellProto = aura->GetSpellProto();
+        SpellEntry const* spellProto = GetSpellEntryCompat(aura->GetSpellProto());
         if (!spellProto)
             continue;
         uint32 triggerSpell = spellProto->EffectTriggerSpell[aura->GetEffIndex()];

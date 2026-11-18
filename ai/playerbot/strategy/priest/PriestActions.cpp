@@ -32,7 +32,7 @@ bool ai::PriestShadowformHealGateOpen(PlayerbotAI* ai, std::string const& spell,
     if (ai->SpellGlobalCooldownRemainingMs() > 0)
         blocked = true;
     Spell* autoRepeat = bot->GetCurrentSpell(CURRENT_AUTOREPEAT_SPELL);
-    if (autoRepeat && autoRepeat->m_spellInfo && autoRepeat->m_spellInfo->Category == WAND_SHOOT_CATEGORY &&
+    if (autoRepeat && GetSpellEntryCompat(autoRepeat->m_spellInfo) && GetSpellEntryCompat(autoRepeat->m_spellInfo)->Category == WAND_SHOOT_CATEGORY &&
         bot->GetAttackTimer(RANGED_ATTACK) > 0)
         blocked = true;
 

@@ -68,7 +68,7 @@ bool ReadyHealHere(PlayerbotAI* ai)
         {
             // The AI movement guard runs before the core's silence/aura checks.
             // Probe those too without starting a cast or changing movement.
-            SpellEntry const* entry = sSpellTemplate.LookupEntry<SpellEntry>(id);
+            SpellEntry const* entry = GetSpellEntryCompat(id);
             if (!entry) continue;
             Spell probe(ai->GetBot(), entry, false);
             probe.m_targets.setUnitTarget(patient);

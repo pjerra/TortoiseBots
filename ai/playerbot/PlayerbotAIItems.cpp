@@ -1092,7 +1092,7 @@ void PlayerbotAI::EnchantItemT(uint32 spellid, uint8 slot, Item* item)
 #ifdef MANGOS
    SpellEntry const* spellInfo = sSpellStore.LookupEntry(spellid);
 #else
-   SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellid);
+   SpellEntry const* spellInfo = GetSpellEntryCompat(spellid);
 #endif
    if (!spellInfo)
       return;

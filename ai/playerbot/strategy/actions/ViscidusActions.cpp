@@ -58,7 +58,7 @@ bool ai::IsViscidusShatterTarget(Player* player, Unit* target)
 bool ai::ViscidusBlocksSpell(PlayerbotAI* ai, uint32 spellId, Unit* target)
 {
     if (!ViscidusEnabled(ai) || !target || target->GetEntry() != 15299) return false;
-    SpellEntry const* spell = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+    SpellEntry const* spell = GetSpellEntryCompat(spellId);
     return spell && ViscidusHoldDamage(IsViscidusShatterTarget(ai->GetBot(), target),
         !IsPositiveSpell(spell), spell->School == SPELL_SCHOOL_FROST, WaitingCaster(ai));
 }
@@ -138,7 +138,7 @@ std::list<HazardPosition> ViscidusCombatAction::Clouds()
             // Three-second warning before the first persistent-area cast, and
             // the brief gap before its ten-second refresh. Never infer expiry
             // from the initial cast; the trigger survives for three minutes.
-            SpellEntry const* toxin = sSpellTemplate.LookupEntry<SpellEntry>(25989);
+            SpellEntry const* toxin = GetSpellEntryCompat(25989);
             SpellRadiusEntry const* radius = toxin ? sSpellRadiusStore.LookupEntry(toxin->EffectRadiusIndex[EFFECT_INDEX_0]) : nullptr;
             if (radius && radius->Radius > 0) hazards.emplace_back(WorldPosition(trigger), radius->Radius + 2.0f);
         }
@@ -321,7 +321,7 @@ namespace
         if (!name) return 0;
         AiObjectContext* context = ai->GetAiObjectContext();
         uint32 id = AI_VALUE2(uint32, "spell id", name);
-        SpellEntry const* spell = sSpellTemplate.LookupEntry<SpellEntry>(id);
+        SpellEntry const* spell = GetSpellEntryCompat(id);
         if (!spell || !ai->GetBot()->HasSpell(id) || boss->IsImmuneToSpell(spell, false)) return 0;
         for (unsigned i = 0; i < MAX_EFFECT_INDEX; ++i)
             if ((spell->Effect[i] == SPELL_EFFECT_ATTACK_ME || spell->EffectApplyAuraName[i] == SPELL_AURA_MOD_TAUNT) &&
@@ -381,7 +381,7 @@ bool ViscidusCombatAction::GlobBurst(Unit* target)
     auto cast = [&](char const* name, Unit* recipient)
     {
         uint32 id = AI_VALUE2(uint32, "spell id", name);
-        SpellEntry const* spell = sSpellTemplate.LookupEntry<SpellEntry>(id);
+        SpellEntry const* spell = GetSpellEntryCompat(id);
         if (!spell || IsChanneledSpell(spell) || GetSpellCastTime(spell, bot) ||
             !ai->CanCastSpell(id, recipient) || !ai->CastSpell(id, recipient)) return false;
         sPlayerbotAIConfig.logEvent(ai, "ViscidusGlobBurst", name,
@@ -392,7 +392,7 @@ bool ViscidusCombatAction::GlobBurst(Unit* target)
     if (bot->GetClass() == CLASS_MAGE)
     {
         uint32 explosion = AI_VALUE2(uint32, "spell id", "arcane explosion");
-        SpellEntry const* spell = sSpellTemplate.LookupEntry<SpellEntry>(explosion);
+        SpellEntry const* spell = GetSpellEntryCompat(explosion);
         float radius = 0;
         if (spell) for (unsigned i = 0; i < MAX_EFFECT_INDEX; ++i)
             if (SpellRadiusEntry const* entry = sSpellRadiusStore.LookupEntry(spell->EffectRadiusIndex[i]))
@@ -404,7 +404,7 @@ bool ViscidusCombatAction::GlobBurst(Unit* target)
         if (boss && target->GetDistance(boss) < 20.0f && !target->HasAuraType(SPELL_AURA_MOD_ROOT))
         {
             uint32 nova = AI_VALUE2(uint32, "spell id", "frost nova");
-            SpellEntry const* root = sSpellTemplate.LookupEntry<SpellEntry>(nova);
+            SpellEntry const* root = GetSpellEntryCompat(nova);
             float range = 0;
             if (root) for (unsigned i = 0; i < MAX_EFFECT_INDEX; ++i)
                 if (SpellRadiusEntry const* entry = sSpellRadiusStore.LookupEntry(root->EffectRadiusIndex[i])) range = std::max(range, entry->Radius);
@@ -503,7 +503,7 @@ void ViscidusCombatAction::Update()
         if (Spell* spell = bot->GetCurrentSpell(type))
             if ((spell->m_targets.getUnitTargetGuid() == boss->GetObjectGuid() ||
                  AI_VALUE(Unit*, "current target") == boss) &&
-                ViscidusBlocksSpell(ai, spell->m_spellInfo->Id, boss))
+                ViscidusBlocksSpell(ai, GetSpellEntryCompat(spell->m_spellInfo)->Id, boss))
             {
                 // The core's InterruptSpell(type, false) leaves a delayed cast alone: only a real cancel writes a row.
                 if (spell->getState() != SPELL_STATE_DELAYED)
@@ -516,7 +516,7 @@ void ViscidusCombatAction::Update()
     if (target->GetEntry() == 15667 && bot->GetClass() == CLASS_MAGE)
         for (CurrentSpellTypes type : {CURRENT_GENERIC_SPELL, CURRENT_CHANNELED_SPELL})
             if (Spell* spell = bot->GetCurrentSpell(type))
-                if (!IsPositiveSpell(spell->m_spellInfo) && (IsChanneledSpell(spell->m_spellInfo) || GetSpellCastTime(spell->m_spellInfo, bot)))
+                if (!IsPositiveSpell(GetSpellEntryCompat(spell->m_spellInfo)) && (IsChanneledSpell(GetSpellEntryCompat(spell->m_spellInfo)) || GetSpellCastTime(GetSpellEntryCompat(spell->m_spellInfo), bot)))
                 {
                     // The core's InterruptSpell(type, false) leaves a delayed cast alone: only a real cancel writes a row.
                     if (spell->getState() != SPELL_STATE_DELAYED)

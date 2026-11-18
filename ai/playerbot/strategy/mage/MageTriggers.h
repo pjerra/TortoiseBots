@@ -311,7 +311,7 @@ namespace ai
                     if (aura)
                     {
                         // Check if the stack is at the maximum
-                        const uint32 maxStackAmount = aura->GetSpellProto()->StackAmount;
+                        const uint32 maxStackAmount = GetSpellEntryCompat(aura->GetSpellProto())->StackAmount;
                         const uint32 stackAmount = aura->GetHolder()->GetStackAmount();
                         if (stackAmount >= maxStackAmount)
                         {

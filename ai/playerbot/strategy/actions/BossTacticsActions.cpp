@@ -76,8 +76,8 @@ void CurrentCastIds(Unit* unit, uint32& genericId, uint32& channeledId)
 {
     Spell* generic = unit->GetCurrentSpell(CURRENT_GENERIC_SPELL);
     Spell* channeled = unit->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
-    genericId = generic && generic->m_spellInfo ? generic->m_spellInfo->Id : 0;
-    channeledId = channeled && channeled->m_spellInfo ? channeled->m_spellInfo->Id : 0;
+    genericId = generic && GetSpellEntryCompat(generic->m_spellInfo) ? GetSpellEntryCompat(generic->m_spellInfo)->Id : 0;
+    channeledId = channeled && GetSpellEntryCompat(channeled->m_spellInfo) ? GetSpellEntryCompat(channeled->m_spellInfo)->Id : 0;
 }
 
 // The caster's cast slot a row matched: the same pick as ListedCastRadius, so the logged spell is the one whose radius
@@ -2112,7 +2112,7 @@ void WalkoutShotStateInfo(Player* puller, Creature* son, char* out, std::size_t 
     {
         bool castOnSon = false;
         Spell* const cast = WalkoutCurrentCast(puller, son, castOnSon);
-        std::uint32_t const spellId = cast && cast->m_spellInfo ? cast->m_spellInfo->Id : 0;
+        std::uint32_t const spellId = cast && GetSpellEntryCompat(cast->m_spellInfo) ? GetSpellEntryCompat(cast->m_spellInfo)->Id : 0;
         float const sonYd = puller->GetDistance(son);
         bool const los = puller->IsWithinLOSInMap(son);
         bool const inRange = sonYd <= WalkoutShotRangeYd(puller->GetClass() == CLASS_HUNTER);
@@ -3017,7 +3017,7 @@ void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, U
         {
             bool castOnSon = false;
             Spell* const cast = puller ? WalkoutCurrentCast(puller, son, castOnSon) : nullptr;
-            std::uint32_t const spellId = cast && cast->m_spellInfo ? cast->m_spellInfo->Id : 0;
+            std::uint32_t const spellId = cast && GetSpellEntryCompat(cast->m_spellInfo) ? GetSpellEntryCompat(cast->m_spellInfo)->Id : 0;
             bool const los = puller && son && puller->IsWithinLOSInMap(son);
             float const z = puller ? puller->GetPositionZ() : -1.0f;
             float const standYd = puller && state.standMs ?
@@ -4974,7 +4974,7 @@ bool ai::IsSoughtCloudFor(PlayerbotAI* ai, Player* bot, DynamicObject* dyn)
     if (!bot->IsInWorld() || !ai->HasStrategy("boss tactics", BotState::BOT_STATE_COMBAT) ||
         !GetBossTactics().HasSeekAuraMap(bot->GetMapId()))
         return false;
-    SpellEntry const* spell = sSpellTemplate.LookupEntry<SpellEntry>(dyn->GetSpellId());
+    SpellEntry const* spell = GetSpellEntryCompat(dyn->GetSpellId());
     if (!spell)
         return false;
     const std::uint32_t trigger = spell->EffectTriggerSpell[dyn->GetEffIndex()];
@@ -5267,7 +5267,7 @@ void ai::CollectDispelAuras(Unit* member, uint32 dispelType, std::vector<AuraOnM
         Unit::AuraList const& auras = member->GetAurasByType((AuraType)type);
         for (Unit::AuraList::const_iterator itr = auras.begin(); itr != auras.end(); ++itr)
         {
-            const SpellEntry* entry = (*itr)->GetSpellProto();
+            const SpellEntry* entry = GetSpellEntryCompat((*itr)->GetSpellProto());
             if (entry && entry->Dispel == dispelType)
             {
                 AuraOnMember aura;
@@ -5288,7 +5288,7 @@ void ai::CollectAllDispelAuras(Unit* member, std::vector<AuraOnMember>& out)
         Unit::AuraList const& auras = member->GetAurasByType((AuraType)type);
         for (Unit::AuraList::const_iterator itr = auras.begin(); itr != auras.end(); ++itr)
         {
-            const SpellEntry* entry = (*itr)->GetSpellProto();
+            const SpellEntry* entry = GetSpellEntryCompat((*itr)->GetSpellProto());
             if (entry && entry->Dispel != DISPEL_NONE)
             {
                 AuraOnMember aura;
@@ -7728,7 +7728,7 @@ void CollectSpellDispelTypes(SpellEntry const* entry, std::vector<uint32>& out, 
                  (entry->AttributesEx & SPELL_ATTR_EX_DISPEL_AURAS_ON_IMMUNITY))
             AddDispelType(out, entry->EffectMiscValue[i]);
         else if (depth == 0 && entry->EffectApplyAuraName[i] == SPELL_AURA_PERIODIC_TRIGGER_SPELL)
-            CollectSpellDispelTypes(sSpellMgr.GetSpellEntry(entry->EffectTriggerSpell[i]), out, depth + 1);
+            CollectSpellDispelTypes(GetSpellEntryCompat(entry->EffectTriggerSpell[i]), out, depth + 1);
     }
 }
 
@@ -7789,7 +7789,7 @@ float TotemDispelRadius(SpellEntry const* totemSpell)
     {
         if (totemSpell->EffectApplyAuraName[i] != SPELL_AURA_PERIODIC_TRIGGER_SPELL)
             continue;
-        SpellEntry const* pulse = sSpellMgr.GetSpellEntry(totemSpell->EffectTriggerSpell[i]);
+        SpellEntry const* pulse = GetSpellEntryCompat(totemSpell->EffectTriggerSpell[i]);
         if (!pulse)
             continue;
         for (int j = 0; j < MAX_EFFECT_INDEX; ++j)
@@ -7821,7 +7821,7 @@ bool SweepDispelCures(PlayerbotAI* ai, Player* bot, const ActiveBossRows& rows, 
             if (!aura)
                 continue;
             std::vector<uint32> types;
-            CollectSpellDispelTypes(aura->GetSpellProto(), types);
+            CollectSpellDispelTypes(GetSpellEntryCompat(aura->GetSpellProto()), types);
             if (types.empty())
                 continue;
             ObjectGuid const casterGuid = aura->GetCasterGuid();
@@ -7851,7 +7851,7 @@ bool SweepDispelCures(PlayerbotAI* ai, Player* bot, const ActiveBossRows& rows, 
         Totem* totem = bot->GetTotem(TotemSlot(slot));
         if (!totem || !totem->IsAlive())
             continue;
-        SpellEntry const* totemSpell = sSpellMgr.GetSpellEntry(totem->GetSpell());
+        SpellEntry const* totemSpell = GetSpellEntryCompat(totem->GetSpell());
         std::vector<uint32> types;
         CollectSpellDispelTypes(totemSpell, types);
         if (types.empty())
@@ -7933,7 +7933,7 @@ bool ai::DispelCastBlocked(PlayerbotAI* ai, Unit* target, uint32 spellId)
     if (!ai->HasStrategy("boss tactics", BotState::BOT_STATE_COMBAT))
         return false;
     std::vector<uint32> types;
-    CollectSpellDispelTypes(sSpellMgr.GetSpellEntry(spellId), types);
+    CollectSpellDispelTypes(GetSpellEntryCompat(spellId), types);
     if (types.empty())
         return false;
     const ActiveBossRows rows = DispelRows(ScanBossTactics(ai, bot));
@@ -8287,7 +8287,7 @@ bool BossTacticsAvoidCastAction::Execute(Event& event)
     {
         // The slot the row matched, the same pick the walk-out's radius used (ListedCastRadius).
         Spell* const spell = ListedCastSpell(fight.rows, caster);
-        LogAvoidCast(ai, bot, caster, spell, spell && spell->m_spellInfo ? spell->m_spellInfo->Id : 0, danger.radius,
+        LogAvoidCast(ai, bot, caster, spell, spell && GetSpellEntryCompat(spell->m_spellInfo) ? GetSpellEntryCompat(spell->m_spellInfo)->Id : 0, danger.radius,
                      distBefore, destDistance, stopped, walk);
     }
     return walk == AvoidCastWalk::Started;
@@ -8479,8 +8479,8 @@ BossStandTarget ai::FindBossStand(PlayerbotAI* ai, Player* bot)
         uint32 casting = 0;
         if (Spell* spell = unit->GetCurrentSpell(CURRENT_GENERIC_SPELL))
         {
-            if (spell->m_spellInfo)
-                casting = spell->m_spellInfo->Id;
+            if (GetSpellEntryCompat(spell->m_spellInfo))
+                casting = GetSpellEntryCompat(spell->m_spellInfo)->Id;
         }
         // A spell cast triggered (a breath) never shows as the current spell: the state the cast leaves opens the
         // window of a row whose signal says so (the boss stands still and has no target; the row also names the aura
@@ -11102,7 +11102,7 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
                 if (WalkoutShotWaits(castOnSon, cast != nullptr))
                 {
                     LogSeekWalkoutStand(ai, bot, task.source, WalkoutStandBranch::CastWait, range,
-                                        cast && cast->m_spellInfo ? cast->m_spellInfo->Id : 0);
+                                        cast && GetSpellEntryCompat(cast->m_spellInfo) ? GetSpellEntryCompat(cast->m_spellInfo)->Id : 0);
                     return true;
                 }
                 ai::LogCastCancelNonMelee(ai, "seek_shot", false);

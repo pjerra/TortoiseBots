@@ -89,14 +89,14 @@ std::map<ObjectGuid, uint32> IncomingHealsValue::Calculate()
         if (!caster || caster == bot || !caster->IsAlive())
             continue;
         Spell* spell = caster->GetCurrentSpell(CURRENT_GENERIC_SPELL);
-        if (!spell || spell->getState() != SPELL_STATE_PREPARING || !PlayerbotAI::IsHealSpell(spell->m_spellInfo))
+        if (!spell || spell->getState() != SPELL_STATE_PREPARING || !PlayerbotAI::IsHealSpell(GetSpellEntryCompat(spell->m_spellInfo)))
             continue;
         Unit* target = ai->GetUnit(spell->m_targets.getUnitTargetGuid());
         if (!target || !target->IsAlive())
             continue;
         for (uint32 effect = 0; effect < MAX_EFFECT_INDEX; ++effect)
         {
-            if (spell->m_spellInfo->Effect[effect] != SPELL_EFFECT_HEAL)
+            if (GetSpellEntryCompat(spell->m_spellInfo)->Effect[effect] != SPELL_EFFECT_HEAL)
                 continue;
             int32 const amount = spell->CalculateDamage(SpellEffectIndex(effect), target);
             if (amount > 0)

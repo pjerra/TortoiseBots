@@ -81,7 +81,7 @@ bool CanOpenFishingDobberValue::Calculate()
     if (!bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
         return false;
 
-    std::string spellName = bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL)->m_spellInfo->SpellName[0];
+    std::string spellName = GetSpellEntryCompat(bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL)->m_spellInfo)->SpellName[0];
     if (spellName.find("Fishing") != 0)
         return false;
 
@@ -110,7 +110,7 @@ bool DoneFishingValue::Calculate()
 
     if (bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
     {
-        std::string spellName = bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL)->m_spellInfo->SpellName[0];
+        std::string spellName = GetSpellEntryCompat(bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL)->m_spellInfo)->SpellName[0];
         if (spellName.find("Fishing") == 0)
             return false;
     }

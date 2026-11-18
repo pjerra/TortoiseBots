@@ -114,11 +114,11 @@ char StateLetter(PlayerbotAI* ai, Player* bot)
 uint32_t CurrentSpellId(Unit* unit)
 {
     if (Spell* spell = unit->GetCurrentSpell(CURRENT_GENERIC_SPELL))
-        if (spell->m_spellInfo)
-            return spell->m_spellInfo->Id;
+        if (GetSpellEntryCompat(spell->m_spellInfo))
+            return GetSpellEntryCompat(spell->m_spellInfo)->Id;
     if (Spell* spell = unit->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
-        if (spell->m_spellInfo)
-            return spell->m_spellInfo->Id;
+        if (GetSpellEntryCompat(spell->m_spellInfo))
+            return GetSpellEntryCompat(spell->m_spellInfo)->Id;
     return 0;
 }
 
@@ -149,7 +149,7 @@ uint32_t HarmfulGroundAura(Player* bot)
             continue;
         if (!holder->IsPersistent() && !holder->IsAreaAura())
             continue;
-        SpellEntry const* spell = holder->GetSpellProto();
+        SpellEntry const* spell = GetSpellEntryCompat(holder->GetSpellProto());
         if (!spell)
             continue;
         for (int i = 0; i < MAX_EFFECT_INDEX; ++i)

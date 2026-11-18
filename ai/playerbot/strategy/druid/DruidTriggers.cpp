@@ -172,7 +172,7 @@ bool SavageBiteTrigger::IsActive()
 bool HurricaneChannelCheckTrigger::IsActive()
 {
     Spell* spell = bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL);
-    if (!spell || !spell->m_spellInfo || !IsEnemyAreaSpell(spell->m_spellInfo))
+    if (!spell || !GetSpellEntryCompat(spell->m_spellInfo) || !IsEnemyAreaSpell(GetSpellEntryCompat(spell->m_spellInfo)))
         return false;
     CcGuard ccGuard(ai);
     return ccGuard.CcInRunningArea(spell);

@@ -345,7 +345,7 @@ static bool HasSeatedAura(Player* bot)
 {
     for (auto const& entry : bot->GetSpellAuraHolderMap())
     {
-        SpellEntry const* spell = entry.second ? entry.second->GetSpellProto() : nullptr;
+        SpellEntry const* spell = entry.second ? GetSpellEntryCompat(entry.second->GetSpellProto()) : nullptr;
         if (spell && (spell->AuraInterruptFlags & AURA_INTERRUPT_FLAG_NOT_SEATED))
             return true;
     }
@@ -359,7 +359,7 @@ bool PlayerbotAI::HasSeatedMeal(bool drink) const
 {
     for (auto const& entry : bot->GetSpellAuraHolderMap())
     {
-        SpellEntry const* spell = entry.second ? entry.second->GetSpellProto() : nullptr;
+        SpellEntry const* spell = entry.second ? GetSpellEntryCompat(entry.second->GetSpellProto()) : nullptr;
         if (!spell || !(spell->AuraInterruptFlags & AURA_INTERRUPT_FLAG_NOT_SEATED))
             continue;
         for (uint32 i = 0; i < MAX_EFFECT_INDEX; ++i)
@@ -551,7 +551,7 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
         if (!inCombat)
         {
             if (Spell* channel = bot->GetCurrentSpell(CURRENT_CHANNELED_SPELL))
-                if (channel->m_spellInfo && std::string(channel->m_spellInfo->SpellName[0]).find("Fishing") == 0)
+                if (GetSpellEntryCompat(channel->m_spellInfo) && std::string(GetSpellEntryCompat(channel->m_spellInfo)->SpellName[0]).find("Fishing") == 0)
                 {
                     ai::LogCastCancel(this, "fishing", CURRENT_CHANNELED_SPELL);
                     bot->InterruptSpell(CURRENT_CHANNELED_SPELL);
@@ -954,7 +954,7 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
                 bot->AttackStop();
             for (uint32 slot : {uint32(CURRENT_GENERIC_SPELL), uint32(CURRENT_CHANNELED_SPELL), uint32(CURRENT_AUTOREPEAT_SPELL), uint32(CURRENT_MELEE_SPELL)})
                 if (Spell* spell = bot->GetCurrentSpell(CurrentSpellTypes(slot)))
-                    if (PatchwerkOpeningBlocksSpell(this, spell->m_spellInfo->Id,
+                    if (PatchwerkOpeningBlocksSpell(this, GetSpellEntryCompat(spell->m_spellInfo)->Id,
                         aiObjectContext->GetValue<Unit*>("current target")->Get()))
                     {
                         ai::LogCastCancel(this, "patchwerk_opening", CurrentSpellTypes(slot));
@@ -1130,9 +1130,9 @@ bool PlayerbotAI::UpdateAIReaction(uint32 elapsed, bool minimal, bool isStunned)
                     cast.remainingMs = spell->GetCastedTime();
                     // A channel counts its duration down, while GetCastTime() holds the pre-channel cast time
                     // (usually 0); a cast bar counts its cast time down.
-                    cast.totalMs = cast.state == SPELL_STATE_CASTING && spell->m_spellInfo
-                        ? spell->m_spellInfo->CalculateDuration(bot) : spell->GetCastTime();
-                    cast.isHeal = ReactionCastIsHeal(spell->m_spellInfo);
+                    cast.totalMs = cast.state == SPELL_STATE_CASTING && GetSpellEntryCompat(spell->m_spellInfo)
+                        ? GetSpellEntryCompat(spell->m_spellInfo)->CalculateDuration(bot) : spell->GetCastTime();
+                    cast.isHeal = ReactionCastIsHeal(GetSpellEntryCompat(spell->m_spellInfo));
                 }
             }
 
@@ -3315,7 +3315,7 @@ int32 PlayerbotAI::CalculateGlobalCooldown(uint32 spellid)
         return 0;
 
     int32 globalCooldown = 0;
-    SpellEntry const* spellEntry = sSpellTemplate.LookupEntry<SpellEntry>(spellid);
+    SpellEntry const* spellEntry = GetSpellEntryCompat(spellid);
     if (spellEntry)
     {
         globalCooldown = spellEntry->StartRecoveryTime;
@@ -5881,7 +5881,7 @@ bool PlayerbotAI::AddAura(Unit* unit, uint32 spellId)
         return false;
     // number or [name] Shift-click form |color|Hspell:spell_id|h[name]|h|r or Htalent form
 
-    SpellEntry const* spellInfo = sSpellTemplate.LookupEntry<SpellEntry>(spellId);
+    SpellEntry const* spellInfo = GetSpellEntryCompat(spellId);
     if (!spellInfo)
         return false;
 

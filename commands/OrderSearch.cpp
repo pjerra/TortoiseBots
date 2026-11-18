@@ -100,7 +100,7 @@ std::unordered_set<uint32_t> ProfessionCraftedItems()
         SkillLineEntry const* skill = ability ? sSkillLineStore.LookupEntry(ability->skillId) : nullptr;
         if (!skill || (skill->categoryId != SKILL_CATEGORY_PROFESSION && skill->categoryId != SKILL_CATEGORY_SECONDARY))
             continue;
-        SpellEntry const* spell = sSpellTemplate.LookupEntry<SpellEntry>(ability->spellId);
+        SpellEntry const* spell = GetSpellEntryCompat(ability->spellId);
         if (!spell)
             continue;
         for (int e = 0; e < 3; ++e)

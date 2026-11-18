@@ -1496,7 +1496,7 @@ namespace ai
             bool wantsCure = false;
             for (auto itr : bot->GetSpellAuraHolderMap())
             {
-                SpellEntry const* spell = itr.second->GetSpellProto();
+                SpellEntry const* spell = GetSpellEntryCompat(itr.second->GetSpellProto());
                 if (IsPositiveSpell(spell->Id))
                     continue;
 

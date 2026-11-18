@@ -439,7 +439,7 @@ bool HandleOrderEnchantGive(ChatHandler* handler, Player* requester, std::string
     GuildOrders::EnchantGiveArgs args;
     args.inCatalogue = catalogue.spellId != 0;
     args.knownByBot = bot && bot->HasSpell(spellId);
-    SpellEntry const* spell = sSpellMgr.GetSpellEntry(spellId);
+    SpellEntry const* spell = GetSpellEntryCompat(spellId);
     uint32_t reqSkill = catalogue.spellId ? catalogue.reqSkill : 0;
     if (spell && (!catalogue.spellId || !reqSkill))
     {

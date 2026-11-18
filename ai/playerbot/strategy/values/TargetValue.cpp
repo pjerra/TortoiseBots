@@ -220,12 +220,12 @@ bool FindNonCcTargetStrategy::IsCcSpell(SpellEntry const* info)
 bool FindNonCcTargetStrategy::IsCastingCcAt(Unit* caster, Unit* target)
 {
     Spell* spell = caster ? caster->GetCurrentSpell(CURRENT_GENERIC_SPELL) : nullptr;
-    if (!spell || !spell->m_spellInfo)
+    if (!spell || !GetSpellEntryCompat(spell->m_spellInfo))
         return false;
     // Compare guids: the caster's cached unit-target pointer can point at a unit the map freed this tick.
     if (spell->m_targets.getUnitTargetGuid() != (target ? target->GetObjectGuid() : ObjectGuid()))
         return false;
-    return IsCcSpell(spell->m_spellInfo);
+    return IsCcSpell(GetSpellEntryCompat(spell->m_spellInfo));
 }
 
 bool CcGuard::PartyDotOn(Unit* unit)
@@ -290,11 +290,11 @@ bool CcGuard::BreakableCcInArea(SpellEntry const* info, Unit* spellTarget)
 
 bool CcGuard::CcInRunningArea(Spell const* spell)
 {
-    if (!spell || !spell->m_spellInfo)
+    if (!spell || !GetSpellEntryCompat(spell->m_spellInfo))
         return false;
     bool atTarget = false;
     float radius = 0.0f;
-    if (!EnemyAreaOf(spell->m_spellInfo, atTarget, radius) || radius <= 0.0f)
+    if (!EnemyAreaOf(GetSpellEntryCompat(spell->m_spellInfo), atTarget, radius) || radius <= 0.0f)
         return false;
     Player* const bot = ai->GetBot();
     float x = bot->GetPositionX(), y = bot->GetPositionY(), z = bot->GetPositionZ();

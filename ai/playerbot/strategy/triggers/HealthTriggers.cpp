@@ -117,7 +117,7 @@ bool HealTargetFullHealthTrigger::IsActive()
     if (!currentSpell || currentSpell->getState() != SPELL_STATE_PREPARING || !currentSpell->GetCastedTime())
         return false;
 
-    SpellEntry const* info = currentSpell->m_spellInfo;
+    SpellEntry const* info = GetSpellEntryCompat(currentSpell->m_spellInfo);
     if (!info || info->IsChanneledSpell() || info->IsAreaOfEffectSpell())
         return false;
 
