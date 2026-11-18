@@ -25,3 +25,14 @@ TortoiseBots.Spike.FollowDistance = 3
 #
 
 TortoiseBots.Slice.EngineByDefault = 0
+
+#
+#    Logger.tortoisebots
+#        Description: The module's own log category (bot login and logout, the engine, the `slice: missing ...` lines).
+#                     Without a logger of its own the category falls to the root logger, which only logs errors, so the
+#                     module's information and warning lines would not appear at all. Level 3 = info (1 trace, 2 debug,
+#                     3 info, 4 warn, 5 error). The appenders are the ones of the stock worldserver.conf.
+#        Default:     3
+#
+
+Logger.tortoisebots = 3,Console Server
