@@ -18,19 +18,10 @@
 #include "ReputationMgr.h"
 #include "CharmInfo.h"
 
-// ---------------------------------------------------------------------------------------------------------------
-// 1. NAMES a macro or a constant can carry. Each member rename is used by the bot only as `x->Name(...)` and no bot class
-//    defines a member of that name (grep over ai/ runtime/ host/ commands/), and the name does not occur in the core (grep
-//    over ForeverCore/src), so the token can be renamed for the rest of the translation unit.
-// ---------------------------------------------------------------------------------------------------------------
-// Maximum duration of an aura in ms (-1 never ends). T SpellAuras.h:186,474 (holder and aura), F SpellAuras.h:217 Aura::GetMaxDuration.
-#define GetAuraMaxDuration GetMaxDuration
 // The swing timer of a weapon slot in ms. T Unit.h:1074, F Unit.h:717 (getAttackTimer).
 #define GetAttackTimer getAttackTimer
 // "Is this a raid group". The Turtle shim has the same rename (ai/cmangos-compat-shim.h:1045); F Group.h:303 isRaidGroup.
 #define IsRaidGroup isRaidGroup
-// Time left of a cast in ms. T Spell.h:429 (m_timer), F Spell.h:728 GetTimer (m_timer).
-#define GetCastedTime GetTimer
 // The unit guid a cast aims at. T Spell.h:142, F SpellDefines.h:385 GetUnitTargetGUID.
 #define getUnitTargetGuid GetUnitTargetGUID
 // The unit's mount display id (0 = not mounted). T Unit.h:579 (UNIT_FIELD_MOUNTDISPLAYID), F Unit.h:930.
@@ -43,10 +34,6 @@
 // the same value 7 on both cores (T MotionMaster.h:37-58, F MovementDefines.h:42).
 #define TAXI_MOTION_TYPE FLIGHT_MOTION_TYPE
 
-// Unit state: "melee attacking someone". T UnitDefines.h:312 (0x1), F Unit.h:279 (0x2), the same fact; the bot only hands it to
-// HasUnitState, which takes the core's own word.
-#define UNIT_STAT_MELEE_ATTACKING UNIT_STATE_MELEE_ATTACKING
-
 // Item spell trigger "use without an equip cooldown" (T ItemPrototype.h:52, value 5). ForeverCore's item effects have no such
 // trigger (F ItemTemplate.h:126-133: 5 is ON_PICKUP, a different thing), and the item mirror hands F's trigger numbers through
 // (TbItemPrototype.cpp:325), so a comparison with this name has to be false for every item: the value is not an F trigger number.
@@ -56,29 +43,6 @@ constexpr uint32 ITEM_SPELLTRIGGER_ON_NO_DELAY_USE = 0xFFFFFFFFu;
 // The last value of the spell state enum. T Spell.h:206-214 ends with SPELL_STATE_DELAYED (5); F Spell.h:254-262 ends with
 // SPELL_STATE_IDLE (5). The bot only uses it as the upper bound of `state <= last`.
 constexpr SpellState SpellStateLastCompat = SPELL_STATE_IDLE;
-
-// ---------------------------------------------------------------------------------------------------------------
-// 2. GUIDS. T ObjectGuid keeps one uint64 (T ObjectGuid.h:147 GetRawValue); F's is 128 bit and GetRawValue() is a byte span
-//    (F ObjectGuid.h:326). The bot uses the number as a map key, a plain identity token and in log lines.
-//    DIFFERENT ANSWER: the number is a mix of both halves, equal for equal guids and (with 2^-64 odds) different for different
-//    ones; it is NOT the value the Turtle core prints.
-// ---------------------------------------------------------------------------------------------------------------
-inline uint64 GuidRawCompat(ObjectGuid const& guid)
-{
-    return guid.GetRawValue(0) ^ (guid.GetRawValue(1) * 0x9E3779B97F4A7C15ull);
-}
-
-// ---------------------------------------------------------------------------------------------------------------
-// 3. GEOMETRY. (The R3 helpers GetAngleCompat, GetHeightCompat, IsInLineOfSightCompat, IsWithinLOSInMapCompat, HasInArcCompat,
-//    GetDistanceCompat, GetCombatReachCompat, GetLosHitPositionCompat are in TbCompat_Unit.h.)
-// ---------------------------------------------------------------------------------------------------------------
-// Line of sight from an object to a point. T Object.h:931 `IsWithinLOS(x, y, z, checkDynLos, targetHeight)` (the bool adds the
-// dynamic game-object models); F Object.h:363 takes LineOfSightChecks (VMAP = static data, GOBJECT = game objects,
-// SharedDefines.h:7475-7481), so true is both and false the static data alone, as IsWithinLOSInMapCompat does.
-inline bool IsWithinLOSCompat(WorldObject const* from, float x, float y, float z, bool checkDynLos = true)
-{
-    return from->IsWithinLOS(x, y, z, checkDynLos ? LINEOFSIGHT_ALL_CHECKS : LINEOFSIGHT_CHECK_VMAP);
-}
 
 // The size a world object adds to distances. T Object.h:862 (the default DEFAULT_WORLD_OBJECT_SIZE, overridden by units with the
 // bounding radius field and by game objects with their display size); F has the bounding radius on Unit only (Unit.h:724) and
@@ -104,12 +68,6 @@ inline float MeleeReachCompat(Unit const* unit)
 //    DIFFERENT ANSWER: MOVEFLAG_JUMPING. T has a flag for "in a jump" (0x2000) and one for "fell far" (0x4000); F sets FALLING
 //    for the whole airborne stretch, jump or drop alike, so JUMPING reads true for a drop too.
 // ---------------------------------------------------------------------------------------------------------------
-#define MOVEFLAG_FORWARD MOVEMENTFLAG_FORWARD
-#define MOVEFLAG_BACKWARD MOVEMENTFLAG_BACKWARD
-#define MOVEFLAG_WALK_MODE MOVEMENTFLAG_WALKING
-#define MOVEFLAG_SWIMMING MOVEMENTFLAG_SWIMMING
-#define MOVEFLAG_FALLINGFAR MOVEMENTFLAG_FALLING_FAR
-#define MOVEFLAG_JUMPING MOVEMENTFLAG_FALLING
 
 // Does the unit carry the movement flag. T Unit's HasMovementFlag(flag) reads m_movementInfo; F Unit.h:1770 HasUnitMovementFlag
 // (the name HasMovementFlag is MovementInfo's member on F, so no macro).
@@ -206,127 +164,6 @@ private:
 };
 
 // ---------------------------------------------------------------------------------------------------------------
-// 6. PATHS. T PathFinder (= PathInfo, Maps/PathFinder.h:146) and F PathGenerator (Movement/PathGenerator.h:63); the alias is in
-//    TbCompat_Unit.h. The path types NORMAL 1, SHORTCUT 2, INCOMPLETE 4, NOPATH 8, NOT_USING_PATH 0x10 are the same on both;
-//    DIFFERENT ANSWER: the higher bits (T 0x20 forced destination, 0x40 fly path, 0x80 underwater, 0x100 caster; F 0x20 short,
-//    0x40/0x80 start/end far from the polygon).
-// ---------------------------------------------------------------------------------------------------------------
-// T PathInfo::calculate(x, y, z, forceDest) (PathFinder.h:66) from the owner's position; F CalculatePath(x, y, z, forceDest)
-// (PathGenerator.h:86).
-inline bool PathCalculateCompat(PathFinder& path, float x, float y, float z, bool forceDest = false)
-{
-    return path.CalculatePath(x, y, z, forceDest);
-}
-// T calculate(start, dest, forceDest) (PathFinder.h:67); F CalculatePath(sx, sy, sz, dx, dy, dz, forceDest) (:76).
-inline bool PathCalculateCompat(PathFinder& path, G3D::Vector3 const& start, G3D::Vector3 const& dest, bool forceDest = false)
-{
-    return path.CalculatePath(start.x, start.y, start.z, dest.x, dest.y, dest.z, forceDest);
-}
-// The points of the last path (T getPath, F GetPath).
-inline Movement::PointsArray const& PathPointsCompat(PathFinder const& path) { return path.GetPath(); }
-// The type bits of the last path (T getPathType, F GetPathType).
-inline uint32 PathTypeCompat(PathFinder const& path) { return static_cast<uint32>(path.GetPathType()); }
-// The closest reachable point to the asked end (T getActualEndPosition by value, F GetActualEndPosition).
-inline G3D::Vector3 PathActualEndCompat(PathFinder const& path) { return path.GetActualEndPosition(); }
-// The length of the point path. T Length() (PathFinder.cpp:1011) asserts a non-empty path; F GetPathLength (PathGenerator.cpp:1479)
-// would loop over an unsigned underflow on an empty one, so an empty path is 0 here.
-inline float PathLengthCompat(PathFinder const& path)
-{
-    return path.GetPath().empty() ? 0.0f : path.GetPathLength();
-}
-
-// ---------------------------------------------------------------------------------------------------------------
-// 7. LIQUID AND TERRAIN reads. T GridMap.h:149-156 (TerrainInfo, GridMapLiquidData / GridMapLiquidStatus, MAP_LIQUID_TYPE_*
-//    in Maps/GridMapDefines.h:57-74); F TerrainMgr.h:85-104 and common/Collision/Maps/MapDefines.h:96-150 (LiquidData,
-//    ZLiquidStatus, map_liquidHeaderTypeFlags).
-//    The legacy type-flag NUMBERS are kept (the module's policy files copy them, MagmaHazardPolicy.h): MAGMA 1, OCEAN 2, SLIME 4,
-//    WATER 8, DARK_WATER 0x10. F numbers them WATER 1, OCEAN 2, MAGMA 4, SLIME 8, DARK 0x10, so a result is re-encoded.
-//    DIFFERENT ANSWER: F asks for a collision height (its default 2.03) where T takes none; the status bands near the surface
-//    can differ by that.
-// ---------------------------------------------------------------------------------------------------------------
-constexpr uint32 MAP_LIQUID_TYPE_NO_WATER = 0x00;
-constexpr uint32 MAP_LIQUID_TYPE_MAGMA = 0x01;
-constexpr uint32 MAP_LIQUID_TYPE_OCEAN = 0x02;
-constexpr uint32 MAP_LIQUID_TYPE_SLIME = 0x04;
-constexpr uint32 MAP_LIQUID_TYPE_WATER = 0x08;
-constexpr uint32 MAP_LIQUID_TYPE_DARK_WATER = 0x10;
-constexpr uint32 MAP_ALL_LIQUIDS = MAP_LIQUID_TYPE_WATER | MAP_LIQUID_TYPE_MAGMA | MAP_LIQUID_TYPE_OCEAN | MAP_LIQUID_TYPE_SLIME;
-
-struct GridMapLiquidData
-{
-    uint32 type_flags = 0;
-    uint32 entry = 0;
-    float level = 0.0f;
-    float depth_level = 0.0f;
-};
-using GridMapLiquidStatus = ZLiquidStatus;
-
-inline map_liquidHeaderTypeFlags LiquidFlagsFromLegacyCompat(uint32 legacy)
-{
-    map_liquidHeaderTypeFlags flags = map_liquidHeaderTypeFlags::NoWater;
-    if (legacy & MAP_LIQUID_TYPE_WATER) flags |= map_liquidHeaderTypeFlags::Water;
-    if (legacy & MAP_LIQUID_TYPE_OCEAN) flags |= map_liquidHeaderTypeFlags::Ocean;
-    if (legacy & MAP_LIQUID_TYPE_MAGMA) flags |= map_liquidHeaderTypeFlags::Magma;
-    if (legacy & MAP_LIQUID_TYPE_SLIME) flags |= map_liquidHeaderTypeFlags::Slime;
-    if (legacy & MAP_LIQUID_TYPE_DARK_WATER) flags |= map_liquidHeaderTypeFlags::DarkWater;
-    return flags;
-}
-
-inline uint32 LiquidFlagsToLegacyCompat(EnumFlag<map_liquidHeaderTypeFlags> flags)
-{
-    uint32 legacy = 0;
-    if (flags.HasFlag(map_liquidHeaderTypeFlags::Water)) legacy |= MAP_LIQUID_TYPE_WATER;
-    if (flags.HasFlag(map_liquidHeaderTypeFlags::Ocean)) legacy |= MAP_LIQUID_TYPE_OCEAN;
-    if (flags.HasFlag(map_liquidHeaderTypeFlags::Magma)) legacy |= MAP_LIQUID_TYPE_MAGMA;
-    if (flags.HasFlag(map_liquidHeaderTypeFlags::Slime)) legacy |= MAP_LIQUID_TYPE_SLIME;
-    if (flags.HasFlag(map_liquidHeaderTypeFlags::DarkWater)) legacy |= MAP_LIQUID_TYPE_DARK_WATER;
-    return legacy;
-}
-
-// T `terrain->getLiquidStatus(x, y, z, mask, &data)`; F `GetLiquidStatus(phaseShift, mapId, x, y, z, flags, &data)`.
-inline GridMapLiquidStatus LiquidStatusCompat(TerrainInfo const* terrain, float x, float y, float z, uint32 reqLiquidType, GridMapLiquidData* data = nullptr)
-{
-    LiquidData out;
-    ZLiquidStatus const status = const_cast<TerrainInfo*>(terrain)->GetLiquidStatus(PhasingHandler::GetEmptyPhaseShift(), terrain->GetId(),
-        x, y, z, LiquidFlagsFromLegacyCompat(reqLiquidType), &out);
-    if (data)
-    {
-        data->type_flags = LiquidFlagsToLegacyCompat(out.type_flags);
-        data->entry = out.entry;
-        data->level = out.level;
-        data->depth_level = out.depth_level;
-    }
-    return status;
-}
-
-// T GridMap.cpp:1060-1076 IsSwimmable: in the water, under it, walking on it, or just above it within JUMP_HEIGHT (0.6, :1057), and
-// deeper than the radius. F has no such call; the same test over the liquid read above. T first asks whether a grid exists at the
-// point; F's liquid read answers no water where there is none.
-inline bool TerrainIsSwimmableCompat(TerrainInfo const* terrain, float x, float y, float z, float radius = 1.5f, GridMapLiquidData* data = nullptr)
-{
-    GridMapLiquidData local;
-    GridMapLiquidData* liquid = data ? data : &local;
-    GridMapLiquidStatus const status = LiquidStatusCompat(terrain, x, y, z, MAP_ALL_LIQUIDS, liquid);
-    if (status == LIQUID_MAP_IN_WATER || status == LIQUID_MAP_UNDER_WATER || status == LIQUID_MAP_WATER_WALK ||
-        (status == LIQUID_MAP_ABOVE_WATER && liquid->level + 0.6f >= z))
-        return liquid->level - liquid->depth_level > radius;
-    return false;
-}
-
-// T `terrain->GetHeightStatic(x, y, z)` (GridMap.h:148, checkVMap true, DEFAULT_HEIGHT_SEARCH); F GetStaticHeight (TerrainMgr.h:97).
-inline float TerrainHeightStaticCompat(TerrainInfo const* terrain, float x, float y, float z)
-{
-    return const_cast<TerrainInfo*>(terrain)->GetStaticHeight(PhasingHandler::GetEmptyPhaseShift(), terrain->GetId(), x, y, z);
-}
-
-// T `terrain->GetWaterOrGroundLevel(x, y, z, &ground, swim)` (GridMap.h:151, a const call); F TerrainMgr.h:104 (not const, and
-// the swim flag is unused there).
-inline float TerrainWaterOrGroundLevelCompat(TerrainInfo const* terrain, float x, float y, float z, float* ground, bool swim)
-{
-    return const_cast<TerrainInfo*>(terrain)->GetWaterOrGroundLevel(PhasingHandler::GetEmptyPhaseShift(), terrain->GetId(), x, y, z, ground, swim);
-}
-
-// ---------------------------------------------------------------------------------------------------------------
 // 8. OTHER ENGINE CALLS with a different shape.
 // ---------------------------------------------------------------------------------------------------------------
 // Summon a creature at a point for a time. T Object.h:1076 (despawn time in ms, a uint32); F Object.h:422 (Milliseconds).
@@ -353,13 +190,6 @@ inline void HandleEmoteStateCompat(Unit* unit, uint32 emote)
     unit->SetEmoteState(static_cast<Emote>(emote));
 }
 
-// ---------------------------------------------------------------------------------------------------------------
-// 9. SMALL SHAPE DIFFERENCES found in the actions, triggers and warrior files.
-// ---------------------------------------------------------------------------------------------------------------
-// "Is the unit under water". T Unit.h:679 IsUnderwater(), F Unit.h:1115 IsUnderWater() (the bot's ServerFacade has a member
-// IsUnderwater of its own, so the name cannot be a macro).
-inline bool IsUnderwaterCompat(Unit const* unit) { return unit->IsUnderWater(); }
-
 // A point near an object, free of obstacles. T Object.cpp:2399 GetNearPoint(searcher, x, y, z, searcherBoundingRadius,
 // distance2d, absAngle): the point is distance2d + both bounding radii away. F Object.cpp:2777 GetNearPoint(searcher, x, y, z,
 // distance2d, absAngle) takes no radius and adds both COMBAT reaches itself (GetNearPoint2D, :2748-2754), so the searcher's
@@ -368,19 +198,6 @@ inline void GetNearPointCompat(WorldObject const* target, WorldObject const* sea
     float /*searcherBoundingRadius*/, float distance2d, float absAngle)
 {
     target->GetNearPoint(searcher, x, y, z, distance2d, absAngle);
-}
-
-// A player flag (T `HasFlag(PLAYER_FLAGS, flag)` on the object, F Player::HasPlayerFlag, Player.h:1306) and a unit flag (T
-// `HasFlag(UNIT_FIELD_FLAGS, flag)`, F Unit.h:862 HasUnitFlag). The flag names the bot uses (PLAYER_FLAGS_GHOST, UNIT_FLAG_NOT_SELECTABLE)
-// exist on both cores with the same meaning. A non-player object has no player flags.
-inline bool HasPlayerFlagCompat(WorldObject const* obj, uint32 flag)
-{
-    Player const* player = obj->ToPlayer();
-    return player && player->HasPlayerFlag(static_cast<PlayerFlags>(flag));
-}
-inline bool HasUnitFlagCompat(Unit const* unit, uint32 flag)
-{
-    return unit->HasUnitFlag(static_cast<UnitFlags>(flag));
 }
 
 // Does the straight line between two points hit a static collision model. T Map.h:577 FindCollisionModel(...) != nullptr (the static
@@ -399,18 +216,6 @@ inline Unit* PlayerMoverCompat(Player* player) { return player->GetUnitBeingMove
 // Recompute one speed. T Unit::UpdateSpeed(type, forced) (forced = send the change at once); F Unit.h:1741 UpdateSpeed(type) always
 // sends it.
 inline void UpdateSpeedCompat(Unit* unit, UnitMoveType type, bool /*forced*/) { unit->UpdateSpeed(type); }
-
-// The unit a threat list currently points at. T getCurrentVictim() is a hostile reference (and getTarget its unit), F
-// ThreatManager.h:119 GetCurrentVictim returns the unit.
-inline Unit* ThreatCurrentVictimCompat(ThreatManager& threat) { return threat.GetCurrentVictim(); }
-
-// A spell's range after the player's own modifiers. T `ApplySpellMod(spellId, SPELLMOD_RANGE, range)`; F Player.h:2142
-// ApplySpellMod(SpellInfo const*, SpellModOp::Range, range).
-inline void ApplySpellModRangeCompat(Player* player, uint32 spellId, float& range)
-{
-    if (SpellInfo const* info = sSpellMgr.GetSpellInfo(spellId, DIFFICULTY_NONE))
-        player->ApplySpellMod(info, SpellModOp::Range, range);
-}
 
 // The icon identity of a spell (the ranks of one spell share it; the bot only compares two of them). T SpellEntry::SpellIconID (an
 // index of SpellIcon.dbc), F SpellInfo.h:415 IconFileDataId (the icon's file data id) through the mirror's link to the core spell.
@@ -448,34 +253,11 @@ inline GroupReference* GroupNextMemberCompat(Group* group, GroupReference* ref)
     return next == group->GetMembers().end().node() ? nullptr : static_cast<GroupReference*>(next);
 }
 
-// The member the group marked as main tank (an empty guid when none). T Group::GetMainTankGuid; F keeps it as the MAINTANK flag of
-// the member slot (Group.h:77, :211-221).
-inline ObjectGuid GroupMainTankGuidCompat(Group const* group)
-{
-    for (Group::MemberSlot const& slot : group->GetMemberSlots())
-        if (slot.flags & MEMBER_FLAG_MAINTANK)
-            return slot.guid;
-    return ObjectGuid::Empty;
-}
-
-
-// ---------------------------------------------------------------------------------------------------------------
-// 11. SPELL OBJECTS the healing triggers read.
-// ---------------------------------------------------------------------------------------------------------------
-// What one effect of a cast would do to a target. T Spell.h:372 CalculateDamage(effectIndex, target) (an int); F Spell.h:554
-// CalculateDamage(effect row, target) (a double). The effect row is the cast spell's own.
-inline int32 SpellCalculateDamageCompat(Spell* spell, uint32 effect, Unit* target)
-{
-    SpellInfo const* info = spell->GetSpellInfo();
-    if (!info || effect >= info->GetEffects().size())
-        return 0;
-    return static_cast<int32>(spell->CalculateDamage(info->GetEffect(static_cast<SpellEffIndex>(effect)), target));
-}
 
 // The mana a cast costs. T Spell.h:467 GetPowerCost (the one cost of the spell's power type); F Spell.h:713 a list of power costs
 // (one per power type). Only the mana entry is read: the bot asks it for mana healers' savings. DIFFERENT ANSWER: a spell paid in
 // another power reads 0 here and its cost on T.
-inline uint32 SpellPowerCostCompat(Spell const* spell)
+inline uint32 SpellManaCostCompat(Spell const* spell)
 {
     uint32 mana = 0;
     for (SpellPowerCost const& cost : spell->GetPowerCost())

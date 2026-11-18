@@ -98,7 +98,7 @@ std::map<ObjectGuid, uint32> IncomingHealsValue::Calculate()
         {
             if (GetSpellEntryCompat(spell->m_spellInfo)->Effect[effect] != SPELL_EFFECT_HEAL)
                 continue;
-            int32 const amount = SpellEffectAmountCompat(spell, effect, target);
+            int32 const amount = SpellCalculateDamageCompat(spell, effect, target);
             if (amount > 0)
                 incoming[target->GetObjectGuid()] += uint32(amount);
         }
@@ -159,7 +159,7 @@ bool ai::AnotherHealerCoversAlly(PlayerbotAI* ai, Unit* ally, float maxDistance)
                     uint32 const maxMana = member->GetMaxPower(POWER_MANA);
                     float const manaPct = maxMana ? member->GetPower(POWER_MANA) * 100.0f / maxMana : 100.0f;
                     return HealerFitToCover(member->HasUnitState(UNIT_STAT_CAN_NOT_REACT_OR_LOST_CONTROL),
-                        IsSilencedCompat(member) || UnitHasFlagCompat(member, UNIT_FLAG_PACIFIED), manaPct);
+                        IsSilencedCompat(member) || HasUnitFlagCompat(member, UNIT_FLAG_PACIFIED), manaPct);
                 },
                 [member]() { return PlayerbotAI::IsHeal(member); },
                 [member, ally]() { return IsWithinLOSInMapCompat(member, ally, true); }))

@@ -273,7 +273,7 @@ bool PlayerbotAI::Whisper(std::string msg, std::string receiverName, bool likePl
         return false;
 
     ObjectGuid receiver = PlayerGuidByNameCompat(receiverName);
-    Player* rPlayer = PlayerByGuidCompat(receiver);
+    Player* rPlayer = GetPlayerCompat(receiver);
 
     if (!rPlayer)
     {

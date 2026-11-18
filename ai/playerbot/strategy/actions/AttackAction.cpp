@@ -98,7 +98,7 @@ bool AttackMyTargetAction::Execute(Event& event)
         SC_LOG("attack-cmd selection bot=%s requester=%s selGuid=0x%016llx",
                CStrCompat(bot ? bot->GetName() : "(null)"),
                CStrCompat(requester->GetName()),
-               (unsigned long long)GuidRawCompat(guid));
+               (unsigned long long)GuidKeyCompat(guid));
 
         if (!guid.IsEmpty())
         {

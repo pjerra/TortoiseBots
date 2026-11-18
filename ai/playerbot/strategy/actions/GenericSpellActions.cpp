@@ -134,9 +134,9 @@ void BuffClaimRegistry::Claim(ObjectGuid const& caster, ObjectGuid const& scope,
     }
 
     BuffClaim claim;
-    claim.caster = GuidRawCompat(caster);
+    claim.caster = GuidKeyCompat(caster);
     claim.expiry = now + BUFF_CLAIM_TTL;
-    claims[std::make_pair(GuidRawCompat(scope), spell)] = claim;
+    claims[std::make_pair(GuidKeyCompat(scope), spell)] = claim;
 }
 
 bool BuffClaimRegistry::IsClaimedByOther(ObjectGuid const& caster, ObjectGuid const& scope, std::string const& spell)
@@ -146,7 +146,7 @@ bool BuffClaimRegistry::IsClaimedByOther(ObjectGuid const& caster, ObjectGuid co
     std::map<std::pair<uint64, std::string>, BuffClaim>& claims = BuffClaims();
 
     std::map<std::pair<uint64, std::string>, BuffClaim>::iterator it =
-        claims.find(std::make_pair(GuidRawCompat(scope), spell));
+        claims.find(std::make_pair(GuidKeyCompat(scope), spell));
     if (it == claims.end())
         return false;
 
@@ -158,7 +158,7 @@ bool BuffClaimRegistry::IsClaimedByOther(ObjectGuid const& caster, ObjectGuid co
 
     // The caster's own claim must never block it: consecutive casts of one bot
     // stay governed by the retry cooldowns alone.
-    return it->second.caster != GuidRawCompat(caster);
+    return it->second.caster != GuidKeyCompat(caster);
 }
 
 ObjectGuid BuffClaimRegistry::GroupScope(Player* bot)

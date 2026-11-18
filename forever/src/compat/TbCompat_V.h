@@ -17,10 +17,6 @@
 #define GetCreatorGuid GetCreatorGUID
 // "Is this unit swimming": T Object.h:977 reads the swimming movement flag, the same flag here (cf. IsRooted in TbCompat_Names.h).
 #define IsSwimming() m_movementInfo.HasMovementFlag(MOVEMENTFLAG_SWIMMING)
-// "How long does this aura last at most, in ms (-1 never)": T SpellAuras.h (Aura asks its holder), F SpellAuras.h:217.
-#define GetAuraMaxDuration GetMaxDuration
-// "Unit state: the unit is in a melee swing" T UNIT_STAT_MELEE_ATTACKING, F Unit.h UNIT_STATE_MELEE_ATTACKING.
-#define UNIT_STAT_MELEE_ATTACKING UNIT_STATE_MELEE_ATTACKING
 // T UNIT_STAT_CAN_NOT_REACT = STUNNED | FEIGN_DEATH | CONFUSED | FLEEING (UnitDefines.h); the same union of the F bits
 // TbCompat_Names.h maps (FEIGN_DEATH is F's DIED).
 #define UNIT_STAT_CAN_NOT_REACT (UNIT_STATE_STUNNED | UNIT_STATE_DIED | UNIT_STATE_CONFUSED | UNIT_STATE_FLEEING)
@@ -30,61 +26,9 @@
 #define UNIT_FLAG_UNTARGETABLE UNIT_FLAG_UNINTERACTIBLE
 #endif
 
-// The kinds of creature rank the bot sorts by. T SharedDefines.h:1020-1027 (CreatureEliteType); F has no such enum
-// (CreatureClassifications, a different numbering and no world boss), CreatureRankCompat below returns these numbers.
-enum CreatureEliteType
-{
-    CREATURE_ELITE_NORMAL    = 0,
-    CREATURE_ELITE_ELITE     = 1,
-    CREATURE_ELITE_RAREELITE = 2,
-    CREATURE_ELITE_WORLDBOSS = 3,
-    CREATURE_ELITE_RARE      = 4,
-    CREATURE_UNKNOWN         = 5
-};
-
-// ---------------------------------------------------------------------------------------------------------------------
-// Players, guids, groups
-// ---------------------------------------------------------------------------------------------------------------------
-// A player that is in the world, by guid. T ObjectMgr.h:701 `ObjectMgr::GetPlayer(guid)` is `ObjectAccessor::FindPlayer`,
-// F ObjectAccessor.h:82 `FindPlayer(guid)`. Offered to the other packages (126 uses in the tree).
-inline Player* GetPlayerCompat(ObjectGuid const& guid) { return ObjectAccessor::FindPlayer(guid); }
-
-// A 64-bit key of a guid, for the maps and policy functions the bot keys by `uint64`. T: GetRawValue() (the whole guid is 64
-// bits). F: the guid is 128 bits (ObjectGuid.h:325), there is no raw 64-bit value; the key is the hash the core's own
-// std::hash<ObjectGuid> gives (FNV-1a over the 16 bytes, ObjectGuid.h:441), 0 for the empty guid. Same guid, same key, in this
-// process only. NOT reversible: nothing may rebuild an ObjectGuid from it. Offered: every package that keys by raw guid must
-// use this one name, or two packages will disagree about the key of one unit.
-inline uint64 GuidKeyCompat(ObjectGuid const& guid)
-{
-    return guid.IsEmpty() ? 0 : uint64(std::hash<ObjectGuid>()(guid));
-}
-
-// The guid of the player a player is dueling now, empty when there is no duel. T Player.h:2806 `m_duel->opponent` (an
-// ObjectGuid), F Player.h:462-472 `duel->Opponent` (a Player*).
-inline ObjectGuid DuelOpponentGuidCompat(Player const* player)
-{
-    return player->duel ? player->duel->Opponent->GetGUID() : ObjectGuid::Empty;
-}
-
 // The guid on a raid target icon slot (0..7), empty when the slot is unset. T Group.h returns the raw uint64 of the guid, F Group.h:362
 // returns the ObjectGuid.
 inline ObjectGuid TargetIconGuidCompat(Group* group, uint8 icon) { return group->GetTargetIcon(icon); }
-
-// The raid's Main Tank / Main Assist. T Group.h:284-285 keeps one guid each; F keeps them as member flags (Group.h:76-78,
-// MemberSlot::flags), set through SetGroupMemberFlag which removes the flag from the previous holder (Group.cpp:1775), so
-// the first slot that carries the flag is the one holder. Empty when nobody holds it.
-inline ObjectGuid GroupFlagHolderCompat(Group const* group, uint8 flag)
-{
-    for (Group::MemberSlot const& slot : group->GetMemberSlots())
-        if (slot.flags & flag)
-            return slot.guid;
-    return ObjectGuid::Empty;
-}
-inline ObjectGuid GroupMainTankGuidCompat(Group const* group) { return GroupFlagHolderCompat(group, MEMBER_FLAG_MAINTANK); }
-inline ObjectGuid GroupMainAssistGuidCompat(Group const* group) { return GroupFlagHolderCompat(group, MEMBER_FLAG_MAINASSIST); }
-
-// A guid as text. T prints through its own ostream operator, F's guid has none (ObjectGuid.h:397 ToString).
-inline std::string GuidTextCompat(ObjectGuid const& guid) { return guid.ToString(); }
 
 // Shuffle a range with the core's random source. T has none of its own: the bot's shim keeps a PRNG (cmangos-compat-shim.h:982),
 // F Containers.h:171.
@@ -146,51 +90,11 @@ inline void VisitFriendlyUnitsCompat(Unit const* center, std::list<Unit*>& out, 
     VisitUnitsCompat(center, out, check, range);
 }
 
-// ---------------------------------------------------------------------------------------------------------------------
-// Auras: what callers ask (has it, how long, who cast it), not a container.
-// ---------------------------------------------------------------------------------------------------------------------
-// One aura effect of a type, as the loops over `GetAurasByType` read it. T: one Aura per effect (Unit.h GetAurasByType, the list
-// of Aura*), F: one AuraEffect per effect of an Aura (Unit.h:1366 GetAuraEffectsByType, AuraEffect::GetBase/GetEffIndex).
-struct AuraOfTypeCompat
-{
-    SpellEntry const* spell;   // the spell, mirror entry on F (null when the core has no such spell)
-    uint32 effIndex;           // the effect of the spell this aura carries
-    Unit* caster;              // the unit that cast it, null when gone
-};
-// Calls fn(AuraOfTypeCompat const&) for each aura of that type on the unit; fn returns true to stop. True when it stopped.
-template <class Fn>
-inline bool ForEachAuraOfTypeCompat(Unit const* unit, AuraType type, Fn&& fn)
-{
-    for (AuraEffect const* effect : unit->GetAuraEffectsByType(type))
-    {
-        if (!effect)
-            continue;
-        AuraOfTypeCompat const view{ GetSpellEntryCompat(effect->GetSpellInfo()), effect->GetEffIndex(), effect->GetCaster() };
-        if (fn(view))
-            return true;
-    }
-    return false;
-}
-// Is the aura a beneficial one. T Aura::IsPositive is the per-effect flag, F's Aura has none (the AuraApplication has it, per
-// target): the spell's own classification, SpellInfo::IsPositive (SpellInfo.h:520).
-inline bool AuraIsPositiveCompat(Aura const* aura) { return aura->GetSpellInfo()->IsPositive(); }
-
 // Is the unit silenced (any school). T: the unit flag, F: the silenced school mask (Unit.h:1524).
 inline bool IsSilencedCompat(Unit const* unit) { return unit->IsSilenced(SPELL_SCHOOL_MASK_ALL); }
-// Does the unit carry one of the unit flags (the bits UNIT_FLAG_NOT_ATTACKABLE_1, UNTARGETABLE/NOT_SELECTABLE, PACIFIED have the same
-// value on both cores). T `HasFlag(UNIT_FIELD_FLAGS, flag)`, F Unit.h:862 HasUnitFlag.
-inline bool UnitHasFlagCompat(Unit const* unit, uint32 flags) { return unit->HasUnitFlag(UnitFlags(flags)); }
 // The guid the unit has selected / is aiming at. T `GetGuidValue(UNIT_FIELD_TARGET)`, F Unit.h GetTarget (same field).
 inline ObjectGuid UnitTargetGuidCompat(Unit const* unit) { return unit->GetTarget(); }
 
-// ---------------------------------------------------------------------------------------------------------------------
-// Threat and hostility: who threatens me, who do I threaten.
-// ---------------------------------------------------------------------------------------------------------------------
-// The unit the creature's threat list has picked as its target (null when the list has none). T ThreatManager.h:206 returns the
-// stored HostileReference (getTarget() is the unit), a plain read. F's GetCurrentVictim (ThreatManager.cpp:245) re-selects the
-// victim when the stored one is gone, which writes to the creature's threat list from the engine's thread; GetLastVictim
-// (ThreatManager.cpp:253) is the same stored reference read without that write (null when it should be offline).
-inline Unit* CurrentThreatVictimCompat(Unit* unit) { return unit->GetThreatManager().GetLastVictim(); }
 // Calls fn(Unit* attacker) for each unit that has `me` on its threat list; fn returns true to stop. Returns true when there was at
 // least one such unit (T: the first HostileReference is not null; F: ThreatManager::IsThreateningAnyone counts offline entries
 // when asked, as T's reference list does).
@@ -209,20 +113,6 @@ inline bool ForEachThreatenerCompat(Unit* me, Fn&& fn)
     return true;
 }
 
-// The rank of a creature. T creature_template.rank (CreatureEliteType); F: the classification mapped to the same numbers, the world
-// boss being the boss type flag of the creature's difficulty (Creature.cpp:2637 isWorldBoss) which F keeps apart.
-inline uint32 CreatureRankCompat(Creature const* creature)
-{
-    if (creature->isWorldBoss())
-        return CREATURE_ELITE_WORLDBOSS;
-    switch (creature->GetCreatureClassification())
-    {
-        case CreatureClassifications::Elite:     return CREATURE_ELITE_ELITE;
-        case CreatureClassifications::RareElite: return CREATURE_ELITE_RAREELITE;
-        case CreatureClassifications::Rare:      return CREATURE_ELITE_RARE;
-        default:                                 return CREATURE_ELITE_NORMAL;
-    }
-}
 // Is the creature immune to taunt. T template immunity flag, F the template's "no taunt" extra flag, the one Unit::TauntApply tests.
 inline bool CreatureTauntImmuneCompat(Creature const* creature)
 {
@@ -269,25 +159,6 @@ inline bool SpellDestinationCompat(Spell const* spell, float& x, float& y, float
 }
 // Is the cast still being prepared (the cast time runs). Both cores name the state the same (T Spell.h, F Spell.h:257).
 inline bool SpellIsPreparingCompat(Spell* spell) { return spell->getState() == SPELL_STATE_PREPARING; }
-// Has the cast left the caster and is running (T SPELL_STATE_CASTING: cast time over, waiting for the delay; or channelling).
-// F: LAUNCHED (the missile is in flight, Spell.h:258) or channelling. Different numbers: see the notes.
-inline bool SpellIsInFlightOrChannelingCompat(Spell* spell)
-{
-    return spell->getState() == SPELL_STATE_LAUNCHED || spell->getState() == SPELL_STATE_CHANNELING;
-}
-// The amount effect `effIndex` of a cast gives to a target. T Spell::CalculateDamage(index, target), F takes the effect record.
-inline int32 SpellEffectAmountCompat(Spell* spell, uint32 effIndex, Unit* target)
-{
-    return int32(spell->CalculateDamage(spell->GetSpellInfo()->GetEffect(SpellEffIndex(effIndex)), target));
-}
-// The power the spell costs its caster, in the spell's own power type, without the caster's spell mods. T Spell::CalculatePowerCost
-// (static), F SpellInfo::CalcPowerCost (SpellInfo.h:578), 0 when the spell has no cost in that power.
-inline uint32 SpellPowerCostCompat(SpellEntry const* spell, Unit* caster)
-{
-    SpellInfo const* info = GetSpellInfoCompat(spell);
-    Optional<SpellPowerCost> cost = info->CalcPowerCost(Powers(spell->powerType), false, caster, info->GetSchoolMask());
-    return cost ? uint32(cost->Amount) : 0;
-}
 // Is `spellId` a higher rank of the same spell than `otherId`. T SpellMgr::IsHighRankOfSpell, F SpellInfo.h:593.
 inline bool IsHighRankOfSpellCompat(uint32 spellId, uint32 otherId)
 {
@@ -329,10 +200,6 @@ inline void ForEachControlledUnitCompat(Unit* unit, Fn&& fn)
 inline ObjectGuid ComboTargetGuidCompat(Player const* player) { return player->GetClassicComboTarget(); }
 inline uint8 ComboPointsCompat(Player const* player) { return uint8(player->GetPower(POWER_COMBO_POINTS)); }
 
-// Durability of an item now / at most. T item fields ITEM_FIELD_DURABILITY / ITEM_FIELD_MAXDURABILITY, F the item's update data.
-inline uint32 ItemDurabilityCompat(Item const* item) { return *item->m_itemData->Durability; }
-inline uint32 ItemMaxDurabilityCompat(Item const* item) { return *item->m_itemData->MaxDurability; }
-
 // The player's home bind (map and point). T Player::GetHomeBindLocation, F Player.h:2820 m_homebind.
 inline decltype(auto) HomeBindLocationCompat(Player* player) { return (player->m_homebind); }
 
@@ -358,17 +225,4 @@ inline SpellEffectIndex DynamicObjectEffectIndexCompat(DynamicObject const* dyn)
 inline bool DynamicObjectAffectsCompat(DynamicObject* dyn, Unit* unit)
 {
     return unit->HasAura(dyn->GetSpellId(), dyn->GetCasterGUID());
-}
-
-// The path object (R3 names PathFinder = PathGenerator). Compute a path to a point; is it a complete walkable path; its points.
-// T PathFinder::calculate / getPathType / getPath, F PathGenerator::CalculatePath / GetPathType / GetPath.
-inline bool PathCalculateCompat(PathFinder& path, float x, float y, float z, bool forceDest) { return path.CalculatePath(x, y, z, forceDest); }
-inline bool PathIsCompleteCompat(PathFinder const& path) { return path.GetPathType() == PATHFIND_NORMAL; }
-inline Movement::PointsArray const& PathPointsCompat(PathFinder const& path) { return path.GetPath(); }
-
-// Is a point in line of sight of an object. T WorldObject::IsWithinLOS(x, y, z, checkDynLos), F takes LineOfSightChecks (true is
-// VMAP + game objects, false VMAP alone, as IsWithinLOSInMapCompat in TbCompat_Unit.h).
-inline bool IsWithinLOSPointCompat(WorldObject const* from, float x, float y, float z, bool checkDynLos = true)
-{
-    return from->IsWithinLOS(x, y, z, checkDynLos ? LINEOFSIGHT_ALL_CHECKS : LINEOFSIGHT_CHECK_VMAP);
 }

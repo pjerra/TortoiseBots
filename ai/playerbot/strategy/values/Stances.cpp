@@ -36,7 +36,7 @@ WorldLocation Stance::GetNearLocation(float angle, float distance)
          y = target->getPositionY()+ sin(angle) * distance,
          z = target->getPositionZ();
 
-    if (IsWithinLOSPointCompat(bot, x, y, z + bot->GetCollisionHeight(), true))
+    if (IsWithinLOSCompat(bot, x, y, z + bot->GetCollisionHeight(), true))
         return WorldLocation(bot->GetMapId(), x, y, z);
 
     return Formation::NullLocation;

@@ -137,3 +137,29 @@ public:
 
 // The classes a quest is limited to, as a class mask (0 = every class): T QuestDef.h:231 GetRequiredClasses, F Quest::GetAllowableClasses.
 #define GetRequiredClasses GetAllowableClasses
+
+// ---------------------------------------------------------------------------------------------------------------
+// R4M (slice 1, integration): names that two or more of the packages V, A, P had defined with the same expansion.
+// ---------------------------------------------------------------------------------------------------------------
+// Maximum duration of an aura in ms (-1 never ends). T SpellAuras.h:186,474 (holder and aura), F SpellAuras.h:217 Aura::GetMaxDuration.
+#define GetAuraMaxDuration GetMaxDuration
+// Time left of a cast in ms. T Spell.h:429 (m_timer), F Spell.h:728 GetTimer (m_timer).
+#define GetCastedTime GetTimer
+// Unit state: "melee attacking someone". T UnitDefines.h:312 (0x1), F Unit.h:279 (0x2), the same fact; the bot only hands it to
+// HasUnitState, which takes the core's own word.
+#define UNIT_STAT_MELEE_ATTACKING UNIT_STATE_MELEE_ATTACKING
+// A cast in progress. T's SPELL_STATE_CASTING is set only when a CHANNELED spell starts channeling (T Spell.cpp:3996-3999, the
+// cast bar runs in SPELL_STATE_PREPARING; a missile in flight is DELAYED); F's state for that is SPELL_STATE_CHANNELING (Spell.h:259).
+#define SPELL_STATE_CASTING SPELL_STATE_CHANNELING
+// Movement flag names. T names (T Object.h:212-238) against F MovementFlags (MovementInfo.h:29-70): WALK_MODE is WALKING (0x100 on
+// both), FALLINGFAR is FALLING_FAR (T 0x4000, F 0x1000: the same fact), JUMPING is the flag the client sets while it is in a jump
+// or fall, which F calls FALLING (T JUMPING 0x2000). DIFFERENT ANSWER: T has a flag for "in a jump" and one for "fell far"; F sets
+// FALLING for the whole airborne stretch, so JUMPING reads true for a drop too. F has no ONTRANSPORT flag (a transport is the movement
+// info's transport guid): that name is not defined here.
+#define MOVEFLAG_NONE MOVEMENTFLAG_NONE
+#define MOVEFLAG_FORWARD MOVEMENTFLAG_FORWARD
+#define MOVEFLAG_BACKWARD MOVEMENTFLAG_BACKWARD
+#define MOVEFLAG_WALK_MODE MOVEMENTFLAG_WALKING
+#define MOVEFLAG_SWIMMING MOVEMENTFLAG_SWIMMING
+#define MOVEFLAG_FALLINGFAR MOVEMENTFLAG_FALLING_FAR
+#define MOVEFLAG_JUMPING MOVEMENTFLAG_FALLING

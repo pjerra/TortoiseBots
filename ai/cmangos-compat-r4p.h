@@ -3,23 +3,12 @@
 // Owned by package R4P: no other package edits this file.
 #pragma once
 
-inline uint64 GuidRawCompat(ObjectGuid const& guid) { return guid.GetRawValue(); }
-
-inline bool HasPlayerFlagCompat(Player const* player, uint32 flags) { return player->HasFlag(PLAYER_FLAGS, flags); }
-inline bool HasUnitFlagCompat(Unit const* unit, uint32 flags) { return unit->HasFlag(UNIT_FIELD_FLAGS, flags); }
 inline bool PlayerInSanctuaryCompat(Player const* player) { return player->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_SANCTUARY); }
 inline uint32 PlayerNextLevelXPCompat(Player const* player) { return player->GetUInt32Value(PLAYER_NEXT_LEVEL_XP); }
-inline uint32 ItemDurabilityCompat(Item const* item) { return item->GetUInt32Value(ITEM_FIELD_DURABILITY); }
-inline uint32 ItemMaxDurabilityCompat(Item const* item) { return item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY); }
 
 // The Turtle position already has the names x, y, z, o: handed back as it is.
 inline Position const& MovementPosCompat(MovementInfo const& info) { return info.pos; }
 
-
-inline ObjectGuid DuelOpponentGuidCompat(Player const* player)
-{
-    return player->m_duel ? player->m_duel->opponent : ObjectGuid();
-}
 
 inline Spell* NewSpellCompat(Unit* caster, SpellEntry const* info, bool triggered) { return new Spell(caster, info, triggered); }
 inline void SpellSetCastItemCompat(Spell* spell, Item* item) { spell->SetCastItem(item); }
@@ -34,7 +23,6 @@ inline Unit::AuraList const& AurasByTypeCompat(Unit const* unit, AuraType type) 
 inline Aura* GetAuraCompat(Unit* unit, uint32 spellId, uint32 effectIndex) { return unit->GetAura(spellId, SpellEffectIndex(effectIndex)); }
 inline SpellAuraHolder* AuraHolderCompat(Aura* aura) { return aura->GetHolder(); }
 inline SpellAuraHolder const* AuraHolderCompat(Aura const* aura) { return aura->GetHolder(); }
-inline bool AuraIsPositiveCompat(Aura const* aura) { return aura->IsPositive(); }
 inline bool AuraIsAreaCompat(Aura const* aura) { return aura->IsAreaAura(); }
 
 inline bool IsImmuneToSpellCompat(Unit const* target, SpellEntry const* spell, bool castOnSelf, WorldObject const* /*caster*/)
@@ -50,14 +38,7 @@ inline bool IsImmuneToDamageCompat(Unit const* target, SpellEntry const* spell, 
     return target->IsImmuneToDamage(spell->GetSpellSchoolMask(), spell);
 }
 
-inline uint32 SpellPowerCostCompat(SpellEntry const* spell, Unit const* caster) { return Spell::CalculatePowerCost(spell, const_cast<Unit*>(caster), nullptr, nullptr); }
-inline void ApplyRangeSpellModCompat(Player* modOwner, SpellEntry const* spell, float& range) { modOwner->ApplySpellMod(spell->Id, SPELLMOD_RANGE, range); }
 inline DiminishingGroup DiminishingGroupOfSpellCompat(SpellEntry const* spell, bool triggered) { return spell->GetDiminishingReturnsGroup(triggered); }
-inline bool CreatureIsWorldBossRankCompat(Creature const* creature)
-{
-    CreatureInfo const* info = creature->GetCreatureInfo();
-    return info && info->rank == CREATURE_ELITE_WORLDBOSS;
-}
 
 inline void AckNearTeleportCompat(Player* bot)
 {
@@ -104,10 +85,8 @@ inline void BotQueuePacketCompat(Player* bot, WorldPacket const& packet)
     bot->GetSession()->QueuePacket(queued.release());
 }
 
-inline uint32 PlayerAccountIdCompat(ObjectGuid guid) { return sObjectMgr.GetPlayerAccountIdByGUID(guid); }
 inline bool PlayerNameByGuidCompat(ObjectGuid guid, std::string& name) { return sObjectMgr.GetPlayerNameByGUID(guid, name); }
 inline ObjectGuid PlayerGuidByNameCompat(std::string const& name) { return sObjectMgr.GetPlayerGuidByName(name); }
-inline Player* PlayerByGuidCompat(ObjectGuid guid) { return sObjectMgr.GetPlayer(guid); }
 inline ObjectGuid PlayerGuidCompat(uint32 low) { return ObjectGuid(HIGHGUID_PLAYER, low); }
 inline bool IsHeadlessCompat(WorldSession* session) { return session->IsHeadless(); }
 
@@ -168,8 +147,6 @@ inline MovementGenerator* MotionMasterTopCompat(MotionMaster* master)
     return nullptr;
 }
 inline Unit::SpellAuraHolderMap const& AuraHolderMapCompat(Unit const* unit) { return unit->GetSpellAuraHolderMap(); }
-inline uint32 AreaZoneIdCompat(AreaTableEntry const* area) { return area->ZoneId; }
-inline std::string AreaNameOrEmptyCompat(AreaTableEntry const* area) { return area && area->Name ? std::string(area->Name) : std::string(); }
 inline uint32 ZoneIdAtCompat(uint32 mapId, float x, float y, float z) { return sTerrainMgr.getZoneId(mapId, x, y, z); }
 
 inline void SetHealthPercentCompat(Unit* unit, float percent) { unit->SetHealthPercent(percent); }

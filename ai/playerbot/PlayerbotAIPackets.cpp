@@ -565,7 +565,7 @@ void PlayerbotAI::HandleBotOutgoingPacket(const WorldPacket& packet)
                     botdiag::BotActionLog::Write(this, "CC_CAST_FAILED",
                         "spell=%u result=%u targetGuid=0x%llx dist=%.1f moving=%u",
                         spellId, (unsigned)result,
-                        ccTarget ? (unsigned long long)GuidRawCompat(ccTarget->getObjectGuid()) : 0ULL,
+                        ccTarget ? (unsigned long long)GuidKeyCompat(ccTarget->getObjectGuid()) : 0ULL,
                         ccTarget ? bot->GetDistance(ccTarget) : -1.0f,
                         sServerFacade.isMoving(bot) ? 1u : 0u);
                 }

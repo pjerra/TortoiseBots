@@ -176,7 +176,7 @@ bool HealTargetFullHealthTrigger::IsActive()
         return false;
     if (ai->HasStrategy("debug", BotState::BOT_STATE_NON_COMBAT))
     {
-        std::string msg = "target healed, can save " + std::to_string(SpellPowerCostCompat(currentSpell)) +
+        std::string msg = "target healed, can save " + std::to_string(SpellManaCostCompat(currentSpell)) +
             " mana, cast left: " + std::to_string(currentSpell->GetCastedTime()) + "ms";
         ai->TellPlayerNoFacing(GetMaster(), msg);
     }

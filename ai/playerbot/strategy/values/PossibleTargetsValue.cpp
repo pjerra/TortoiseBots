@@ -84,9 +84,9 @@ bool PossibleTargetsValue::IsFriendly(Unit* target, Player* player)
 
 bool PossibleTargetsValue::IsAttackable(Unit* target, Player* player)
 {
-    return !UnitHasFlagCompat(target, UNIT_FLAG_NOT_ATTACKABLE_1) &&
-           !UnitHasFlagCompat(target, UNIT_FLAG_UNTARGETABLE) &&
-           !UnitHasFlagCompat(target, UNIT_FLAG_UNINTERACTIBLE) &&
+    return !HasUnitFlagCompat(target, UNIT_FLAG_NOT_ATTACKABLE_1) &&
+           !HasUnitFlagCompat(target, UNIT_FLAG_UNTARGETABLE) &&
+           !HasUnitFlagCompat(target, UNIT_FLAG_UNINTERACTIBLE) &&
            !target->HasAuraType(SPELL_AURA_SPIRIT_OF_REDEMPTION);
 }
 
@@ -165,7 +165,7 @@ bool PossibleTriggersValue::AcceptUnit(Unit* unit)
     // mob with a permanent burning aura (Fire Shield II 184 on Scarlet
     // Conjuror 4297) must stay fightable: school damage still lists
     // invisible emitters only, weapon spins list anyone.
-    bool const selectable = !UnitHasFlagCompat(unit, UNIT_FLAG_NOT_SELECTABLE);
+    bool const selectable = !HasUnitFlagCompat(unit, UNIT_FLAG_NOT_SELECTABLE);
     bool spinning = false;
     ForEachAuraOfTypeCompat(unit, SPELL_AURA_PERIODIC_TRIGGER_SPELL, [&](AuraOfTypeCompat const& aura)
     {

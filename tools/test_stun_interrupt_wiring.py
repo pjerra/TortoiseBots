@@ -101,7 +101,7 @@ class InterruptAllowStun(unittest.TestCase):
         self.assertIn("ai::StunMechanicImmune(info->mechanic_immune_mask)", immunity)
         # 4. A boss counts as unstunnable without the bit: world boss, plan boss, boss rank.
         self.assertIn("creature->IsWorldBoss()", immunity)
-        self.assertIn("CreatureIsWorldBossRankCompat(creature)", immunity)
+        self.assertIn("CreatureRankCompat(creature) == CREATURE_ELITE_WORLDBOSS", immunity)
         self.assertIn("ai::GetDungeonPlans().IsBossEntry(creature->GetMapId(), creature->GetEntry())", immunity)
         # 5. An existing stun aura or stun diminishing return at immune.
         self.assertIn("AurasByTypeCompat(target, SPELL_AURA_MOD_STUN).empty()", immunity)

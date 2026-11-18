@@ -227,7 +227,7 @@ PlayerbotAI::PlayerbotAI(Player* bot) :
     m_lastPublicNoteMs = WorldTimer::getMSTime() -
         (TortoiseBots::kPublicNoteSkillRefreshSec * 1000 - (urand(0, TortoiseBots::kPublicNoteSkillRefreshSec * 1000 - 1)));
 
-	accountId = PlayerAccountIdCompat(bot->getObjectGuid());
+	accountId = AccountIdOfCharacterCompat(bot->getObjectGuid());
 
     aiObjectContext = AiFactory::createAiObjectContext(bot, this);
 
@@ -312,7 +312,7 @@ Player* PlayerbotAI::GetGroupMaster()
             return liveMaster;
 
         // 2. If the group leader is a real player, that leader takes authority.
-        Player* leader = PlayerByGuidCompat(group->GetLeaderGuid());
+        Player* leader = GetPlayerCompat(group->GetLeaderGuid());
         if (leader && leader->IsInWorld() && IsRealPlayer(leader))
             return leader;
 
@@ -1338,7 +1338,7 @@ bool PlayerbotAI::IsInRaid()
                     const CreatureInfo* creatureInfo = creature->GetCreatureInfo();
                     if (creatureInfo)
                     {
-                        if (CreatureIsWorldBossRankCompat(creature))
+                        if (CreatureRankCompat(creature) == CREATURE_ELITE_WORLDBOSS)
                         {
                             inRaidFight = true;
                             break;
@@ -2631,7 +2631,7 @@ void PlayerbotAI::UpdateAIInternal(uint32 elapsed, bool minimal)
 
     // A bot that joined a commanded summoning ritual stays a participant only while its helper channel
     // runs, and any cast, drink or step of its own ends it: its engine waits until the order lets it go.
-    if (TortoiseBots::RemoteCommander::RitualHolds().Holds(GuidRawCompat(bot->GetObjectGuid())))
+    if (TortoiseBots::RemoteCommander::RitualHolds().Holds(GuidKeyCompat(bot->GetObjectGuid())))
     {
         SetAIInternalUpdateDelay(sPlayerbotAIConfig.reactDelay);
         return;
@@ -2984,7 +2984,7 @@ bool PlayerbotAI::IsBotOwnerOrGm(Player const& fromPlayer) const
         owned.ownerAccountId != 0 && owned.ownerAccountId == senderAccount)
         return true;
     // Pre-ownership records (same character account as the bot itself).
-    return PlayerAccountIdCompat(bot->getObjectGuid()) == senderAccount;
+    return AccountIdOfCharacterCompat(bot->getObjectGuid()) == senderAccount;
 }
 bool PlayerbotAI::CheckBotCommandAuth(Player& fromPlayer, std::string const& command, bool silentDeny)
 {
@@ -6041,7 +6041,7 @@ bool PlayerbotAI::IsInRealGuild()
     if (!guild)
         return false;
 
-    uint32 leaderAccount = PlayerAccountIdCompat(guild->GetLeaderGuid());
+    uint32 leaderAccount = AccountIdOfCharacterCompat(guild->GetLeaderGuid());
     if (!leaderAccount)
         return false;
 

@@ -21,9 +21,9 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORLDPOS = (ROOT / "ai/playerbot/WorldPosition.cpp").read_text()
-# Slice 1 R4C: the liquid query and the other core calls of WorldPosition.cpp went to both-core helpers; on this core each helper is
+# Slice 1 R4C/R4M: the liquid query and the other core calls of WorldPosition.cpp went to both-core helpers; on this core each helper is
 # the call WorldPosition.cpp always made, in this file.
-COMPAT_R4C = (ROOT / "ai/cmangos-compat-r4c.h").read_text()
+COMPAT_R3 = (ROOT / "ai/cmangos-compat-r3.h").read_text()
 MOVES = (ROOT / "ai/playerbot/strategy/actions/MovementActions.cpp").read_text()
 
 
@@ -57,11 +57,11 @@ class SwimPathWiringTest(unittest.TestCase):
         # kSwimLiquidRequest (all liquids; a water | ocean request found no BFD water,
         # the vmap ANDs it with the WMO's raw liquid id 1), and the answer's type
         # flags (magma, slime) are handed back for the policy to refuse.
-        # (R4C: the lambda calls LiquidAtCompat; its Turtle-side body is the old lambda body word for word.)
-        self.assertIn("return LiquidAtCompat(terrain, x, y, z, request, typeFlags);", self.fits)
-        helper = body(COMPAT_R4C, "inline uint32 LiquidAtCompat(", "\n}\n")
-        self.assertIn("terrain->getLiquidStatus(x, y, z, static_cast<uint8>(request), &data)", helper)
-        self.assertIn("typeFlags = status != LIQUID_MAP_NO_WATER ? data.type_flags : 0;", helper)
+        # (R4M: the lambda calls LiquidStatusCompat; its Turtle-side body (cmangos-compat-r3.h) is the core's getLiquidStatus call.)
+        self.assertIn("uint32 const status = static_cast<uint32>(LiquidStatusCompat(terrain, x, y, z, request, &data));", self.fits)
+        self.assertIn("typeFlags = status != LIQUID_MAP_NO_WATER ? data.type_flags : 0;", self.fits)
+        helper = body(COMPAT_R3, "inline GridMapLiquidStatus LiquidStatusCompat(", "\n}\n")
+        self.assertIn("return terrain->getLiquidStatus(x, y, z, reqLiquidType, data);", helper)
         self.assertNotIn("MAP_LIQUID_TYPE_WATER | MAP_LIQUID_TYPE_OCEAN", self.fits)
         self.assertIn("ai::kSwimLiquidRequest == 0,", WORLDPOS)
         self.assertIn("ai::SwimLineInWater(a.getX(), a.getY(), a.getZ(), b.getX(), b.getY(), b.getZ(), liquidAt)", self.fits)

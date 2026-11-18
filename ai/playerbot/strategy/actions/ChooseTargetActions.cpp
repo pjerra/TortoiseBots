@@ -247,7 +247,7 @@ void ai::AttackAnythingAction::LogRepeatOrder(Unit* target)
     lastRepeatLogMs = nowMs;
 
     std::ostringstream out;
-    out << "guid=" << GuidRawCompat(target->getObjectGuid());
+    out << "guid=" << GuidKeyCompat(target->getObjectGuid());
     out << " entry=" << target->GetEntry();
     out << " dz=" << (int)(bot->GetPositionZ() - target->GetPositionZ());
     out << " dist=" << (int)sServerFacade.getDistance2d(bot, target);

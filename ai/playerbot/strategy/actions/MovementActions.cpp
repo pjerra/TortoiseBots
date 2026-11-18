@@ -3315,7 +3315,7 @@ bool MovementAction::HoldChaseOutsideKeepout(WorldObject* target, float distance
         // per-bot action log (AiPlayerbot.EnableActionLog) and the detail
         // server log, which carries the other [BOT CHASE] lines.
         botdiag::BotActionLog::Write(ai, "KEEPOUT_SET_ASIDE", "target=%s entry=%u guid=0x%llx forMs=%u",
-            CStrCompat(target->GetName()), target->GetEntry(), (unsigned long long)GuidRawCompat(targetGuid),
+            CStrCompat(target->GetName()), target->GetEntry(), (unsigned long long)GuidKeyCompat(targetGuid),
             kCreatureAuraSetAsideMs);
         sLog.outDetail("[BOT CHASE] %s: set aside %s (entry %u) for %u ms - it stands in a creature aura keep-out",
             CStrCompat(bot->GetName()), CStrCompat(target->GetName()), target->GetEntry(), kCreatureAuraSetAsideMs);
@@ -3781,7 +3781,7 @@ bool MovementAction::Flee(Unit *target)
 
     LastMovement& fleeMovement = AI_VALUE(LastMovement&, "last movement");
     uint32 const nowMs = WorldTimer::getMSTime();
-    fleeMovement.fleeFailures.Observe(GuidRawCompat(target->GetObjectGuid()),
+    fleeMovement.fleeFailures.Observe(GuidKeyCompat(target->GetObjectGuid()),
         target->GetMapId(), sServerFacade.getDistance2d(bot, target), nowMs, bot->movespline->GetId());
 
     if (!ai->CanMove())
@@ -3797,7 +3797,7 @@ bool MovementAction::Flee(Unit *target)
     if (ai::MoveBlockedByCast(bot->IsNonMeleeSpellCasted(false, true, true), false))
         return false;
 
-    Unit* const currentVictim = ThreatCurrentVictimCompat(sServerFacade.GetThreatManager(target));
+    Unit* const currentVictim = CurrentThreatVictimCompat(target);
     const bool isTarget = currentVictim == bot;
 
     time_t lastFlee = AI_VALUE(LastMovement&, "last movement").lastFlee;
@@ -4081,7 +4081,7 @@ void MovementAction::NoteFleeDispatch(Unit* target, float heading, float startDi
         lm.fleeCount = 1;
     lm.lastFleeAttempt = now;
     lm.lastFlee = now;
-    lm.fleeFailures.BeginAttempt(GuidRawCompat(target->GetObjectGuid()),
+    lm.fleeFailures.BeginAttempt(GuidKeyCompat(target->GetObjectGuid()),
         target->GetMapId(), heading, startDistance, nowMs, bot->movespline->GetId());
     lm.lastSpreadStepMs = WorldTimer::getMSTime();
 }
@@ -4240,7 +4240,7 @@ bool MovementAction::StepDownOffLedge(Unit* target)
         return false;
 
     uint32 const nowMs = WorldTimer::getMSTime();
-    if (!ledgeStepDown.Due(nowMs, bot->GetPositionX(), bot->GetPositionY(), GuidRawCompat(target->GetObjectGuid())))
+    if (!ledgeStepDown.Due(nowMs, bot->GetPositionX(), bot->GetPositionY(), GuidKeyCompat(target->GetObjectGuid())))
         return false;
 
     LedgePoint from;
@@ -4726,19 +4726,16 @@ bool AvoidAoeAction::AvoidTriggerNpc(float& outRadius, WorldPosition& outCenter)
         // school-damage pulse keeps the invisible-emitter-only rule, or
         // melee would step out forever and never fight it.
         bool const selectable = !HasUnitFlagCompat(unit, UNIT_FLAG_NOT_SELECTABLE);
-        Unit::AuraList const& periodic = unit->GetAurasByType(SPELL_AURA_PERIODIC_TRIGGER_SPELL);
-        for (Unit::AuraList::const_iterator it = periodic.begin(); it != periodic.end(); ++it)
+        bool hazardFound = false;
+        ForEachAuraOfTypeCompat(unit, SPELL_AURA_PERIODIC_TRIGGER_SPELL, [&](AuraOfTypeCompat const& aura)
         {
-            Aura* aura = *it;
-            if (!aura)
-                continue;
-            SpellEntry const* spellProto = GetSpellEntryCompat(aura->GetSpellProto());
+            SpellEntry const* spellProto = aura.spell;
             if (!spellProto)
-                continue;
+                return false;
             SpellEntry const* triggerProto = sServerFacade.LookupSpellInfo(
-                spellProto->EffectTriggerSpell[aura->GetEffIndex()]);
+                spellProto->EffectTriggerSpell[aura.effIndex]);
             if (!triggerProto)
-                continue;
+                return false;
             for (int i = 0; i < MAX_EFFECT_INDEX; ++i)
             {
                 // School damage lists invisible emitters only; self-centred
@@ -4761,9 +4758,13 @@ bool AvoidAoeAction::AvoidTriggerNpc(float& outRadius, WorldPosition& outCenter)
                     continue;
                 outRadius = radius;
                 outCenter = WorldPosition(unit->GetMapId(), unit->GetPositionX(), unit->GetPositionY(), unit->GetPositionZ());
+                hazardFound = true;
                 return true;
             }
-        }
+            return false;
+        });
+        if (hazardFound)
+            return true;
     }
     return false;
 }
@@ -4814,7 +4815,7 @@ bool AvoidAoeAction::StrafeToSafety(const WorldPosition& hazardCenter, float rad
     const WorldPosition botPos(bot);
     LastMovement& lastMove = AI_VALUE(LastMovement&, "last movement");
     uint32 const nowMs = WorldTimer::getMSTime();
-    lastMove.fleeFailures.Observe(target ? GuidRawCompat(target->GetObjectGuid()) : 0,
+    lastMove.fleeFailures.Observe(target ? GuidKeyCompat(target->GetObjectGuid()) : 0,
         bot->GetMapId(), target ? sServerFacade.getDistance2d(bot, target) : 0.0f, nowMs, bot->movespline->GetId());
     // Unpulled-hostile guard (mirrors the FindStep aggro sense used by the
     // bomb/spread step-outs: FindStep itself lives in DungeonActions.cpp):
@@ -4955,7 +4956,7 @@ bool AvoidAoeAction::StrafeToSafety(const WorldPosition& hazardCenter, float rad
                 continue;
             if (!MoveTo(bot->GetMapId(), out.getX(), out.getY(), out.getZ(), false, IsReaction(), false, true))
                 continue;
-            lastMove.fleeFailures.BeginAttempt(target ? GuidRawCompat(target->GetObjectGuid()) : 0,
+            lastMove.fleeFailures.BeginAttempt(target ? GuidKeyCompat(target->GetObjectGuid()) : 0,
                 bot->GetMapId(), botPos.GetAngleTo(out),
                 target ? sServerFacade.getDistance2d(bot, target) : 0.0f, nowMs, bot->movespline->GetId());
             return true;
@@ -5011,7 +5012,7 @@ bool AvoidAoeAction::StrafeToSafety(const WorldPosition& hazardCenter, float rad
             AoeLanding const& out = landings[pick];
             if (MoveTo(bot->GetMapId(), out.x, out.y, out.z, false, IsReaction(), false, true))
             {
-                lastMove.fleeFailures.BeginAttempt(target ? GuidRawCompat(target->GetObjectGuid()) : 0,
+                lastMove.fleeFailures.BeginAttempt(target ? GuidKeyCompat(target->GetObjectGuid()) : 0,
                     bot->GetMapId(), botPos.GetAngleTo(WorldPosition(bot->GetMapId(), out.x, out.y, out.z)),
                     target ? sServerFacade.getDistance2d(bot, target) : 0.0f, nowMs, bot->movespline->GetId());
                 return true;
@@ -5080,14 +5081,14 @@ bool MoveToLootAction::Execute(Event& event)
     if (!loot.IsLootPossible(bot))
     {
         sLog.outDebug("[BOT LOOT] %s: MoveToLoot abort guid=%lu (IsLootPossible=false)",
-            CStrCompat(bot->GetName()), GuidRawCompat(loot.guid));
+            CStrCompat(bot->GetName()), GuidKeyCompat(loot.guid));
         if (ai->HasStrategy("debug loot", BotState::BOT_STATE_NON_COMBAT))
         {
             WorldObject* wo = loot.GetWorldObject(bot);
 
             if (!wo)
             {
-                ai->TellPlayerNoFacing(GetMaster(), "Can not move to loot " + std::to_string(GuidRawCompat(loot.guid)) +  " because it no longer exists.");
+                ai->TellPlayerNoFacing(GetMaster(), "Can not move to loot " + std::to_string(GuidKeyCompat(loot.guid)) +  " because it no longer exists.");
             }
             else
             {
@@ -5127,7 +5128,7 @@ bool MoveToLootAction::Execute(Event& event)
             if (lootStack->IsAbandoned(loot.guid))
             {
                 sLog.outDebug("[BOT LOOT] %s: giving up on unreachable guid=%lu after repeated failed approaches",
-                    CStrCompat(bot->GetName()), GuidRawCompat(loot.guid));
+                    CStrCompat(bot->GetName()), GuidKeyCompat(loot.guid));
                 lootStack->Remove(loot.guid);
                 context->GetValue<LootObject>("loot target")->Set(LootObject());
             }
@@ -5135,7 +5136,7 @@ bool MoveToLootAction::Execute(Event& event)
     }
 
     sLog.outDebug("[BOT LOOT] %s: MoveToLoot guid=%lu dist=%.1f los=%d via=%s result=%d",
-        CStrCompat(bot->GetName()), GuidRawCompat(loot.guid), dist, los ? 1 : 0, los ? "MoveNear" : "MoveTo", moved ? 1 : 0);
+        CStrCompat(bot->GetName()), GuidKeyCompat(loot.guid), dist, los ? 1 : 0, los ? "MoveNear" : "MoveTo", moved ? 1 : 0);
     return moved;
 }
 
@@ -5245,7 +5246,7 @@ bool SetBehindTargetAction::isUseful()
     // Bounded per-target streak: a blocked behind spot falls back to
     // attacking from the front instead of re-issuing the move forever.
     const uint32 nowMs = WorldTimer::getMSTime();
-    SetBehindStreakPoll(streak, GuidRawCompat(target->getObjectGuid()), nowMs);
+    SetBehindStreakPoll(streak, GuidKeyCompat(target->getObjectGuid()), nowMs);
     return SetBehindUseful(inMeleeReach, alreadyBehind, SetBehindStreakExpired(streak, nowMs));
 }
 

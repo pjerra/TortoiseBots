@@ -365,3 +365,338 @@ inline uint32 GetQuestSlotIdCompat(Player const* player, uint16 slot)
 {
     return player && slot < MAX_QUEST_LOG_SIZE ? player->GetQuestSlotQuestId(slot) : 0;
 }
+
+// =====================================================================================================================
+// R4M (slice 1, integration): helpers that two or more of the packages V, A, P, C had defined, one name and one definition each.
+// The table with both definitions side by side and the reason for each choice is forever/docs/SLICE1-R4M-NOTES.md section 1.
+// Turtle side: ai/cmangos-compat-r3.h (same names and signatures). The names and macros of the same kind are in TbCompat_Names.h.
+// =====================================================================================================================
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Players, guids, groups
+// ---------------------------------------------------------------------------------------------------------------------
+// A player that is in the world, by guid. T ObjectMgr.h:701 `ObjectMgr::GetPlayer(guid)` is `ObjectAccessor::FindPlayer`,
+// F ObjectAccessor.h:82 `FindPlayer(guid)`. Offered to the other packages (126 uses in the tree).
+inline Player* GetPlayerCompat(ObjectGuid const& guid) { return ObjectAccessor::FindPlayer(guid); }
+
+// A 64-bit key of a guid, for the maps and policy functions the bot keys by `uint64`. T: GetRawValue() (the whole guid is 64
+// bits). F: the guid is 128 bits (ObjectGuid.h:325), there is no raw 64-bit value; the key is the hash the core's own
+// std::hash<ObjectGuid> gives (FNV-1a over the 16 bytes, ObjectGuid.h:441), 0 for the empty guid. Same guid, same key, in this
+// process only. NOT reversible: nothing may rebuild an ObjectGuid from it. Offered: every package that keys by raw guid must
+// use this one name, or two packages will disagree about the key of one unit.
+inline uint64 GuidKeyCompat(ObjectGuid const& guid)
+{
+    return guid.IsEmpty() ? 0 : uint64(std::hash<ObjectGuid>()(guid));
+}
+
+// A guid as text. T prints through its own ostream operator, F's guid has none (ObjectGuid.h:397 ToString).
+inline std::string GuidTextCompat(ObjectGuid const& guid) { return guid.ToString(); }
+
+// The account a character belongs to, by guid. T `sObjectMgr.GetPlayerAccountIdByGUID`, F `CharacterCache` (Cache/CharacterCache.h:75).
+inline uint32 AccountIdOfCharacterCompat(ObjectGuid const& guid) { return sCharacterCache->GetCharacterAccountIdByGuid(guid); }
+
+// ---------------------------------------------------------------------------------------------------------------
+// Duel. T Player::m_duel->opponent is the opponent's guid (null pointer = no duel); F Player::duel is a DuelInfo holding the
+// opponent Player* (Player.h:462-472, :2205).
+// ---------------------------------------------------------------------------------------------------------------
+inline ObjectGuid DuelOpponentGuidCompat(Player const* player)
+{
+    return player->duel && player->duel->Opponent ? player->duel->Opponent->GetGUID() : ObjectGuid::Empty;
+}
+
+// The raid's Main Tank / Main Assist. T Group.h:284-285 keeps one guid each; F keeps them as member flags (Group.h:76-78,
+// MemberSlot::flags), set through SetGroupMemberFlag which removes the flag from the previous holder (Group.cpp:1775), so
+// the first slot that carries the flag is the one holder. Empty when nobody holds it.
+inline ObjectGuid GroupFlagHolderCompat(Group const* group, uint8 flag)
+{
+    for (Group::MemberSlot const& slot : group->GetMemberSlots())
+        if (slot.flags & flag)
+            return slot.guid;
+    return ObjectGuid::Empty;
+}
+
+inline ObjectGuid GroupMainTankGuidCompat(Group const* group) { return GroupFlagHolderCompat(group, MEMBER_FLAG_MAINTANK); }
+
+inline ObjectGuid GroupMainAssistGuidCompat(Group const* group) { return GroupFlagHolderCompat(group, MEMBER_FLAG_MAINASSIST); }
+
+// A player flag (T `HasFlag(PLAYER_FLAGS, flag)` on the object, F Player::HasPlayerFlag, Player.h:1306) and a unit flag (T
+// `HasFlag(UNIT_FIELD_FLAGS, flag)`, F Unit.h:862 HasUnitFlag). The flag names the bot uses (PLAYER_FLAGS_GHOST, UNIT_FLAG_NOT_SELECTABLE)
+// exist on both cores with the same meaning. A non-player object has no player flags.
+inline bool HasPlayerFlagCompat(WorldObject const* obj, uint32 flag)
+{
+    Player const* player = obj->ToPlayer();
+    return player && player->HasPlayerFlag(static_cast<PlayerFlags>(flag));
+}
+
+inline bool HasUnitFlagCompat(Unit const* unit, uint32 flag)
+{
+    return unit->HasUnitFlag(static_cast<UnitFlags>(flag));
+}
+
+// An item's durability and its maximum. T update fields ITEM_FIELD_DURABILITY / ITEM_FIELD_MAXDURABILITY, F the item data
+// (Item.h:274-276: Durability, MaxDurability).
+inline uint32 ItemDurabilityCompat(Item const* item) { return *item->m_itemData->Durability; }
+inline uint32 ItemMaxDurabilityCompat(Item const* item) { return *item->m_itemData->MaxDurability; }
+
+// One aura effect of a type, as the loops over `GetAurasByType` read it. T: one Aura per effect (Unit.h GetAurasByType, the list
+// of Aura*), F: one AuraEffect per effect of an Aura (Unit.h:1366 GetAuraEffectsByType, AuraEffect::GetBase/GetEffIndex).
+struct AuraOfTypeCompat
+{
+    SpellEntry const* spell;   // the spell, mirror entry on F (null when the core has no such spell)
+    uint32 effIndex;           // the effect of the spell this aura carries
+    Unit* caster;              // the unit that cast it, null when gone
+};
+
+// Calls fn(AuraOfTypeCompat const&) for each aura of that type on the unit; fn returns true to stop. True when it stopped.
+template <class Fn>
+inline bool ForEachAuraOfTypeCompat(Unit const* unit, AuraType type, Fn&& fn)
+{
+    for (AuraEffect const* effect : unit->GetAuraEffectsByType(type))
+    {
+        if (!effect)
+            continue;
+        AuraOfTypeCompat const view{ GetSpellEntryCompat(effect->GetSpellInfo()), effect->GetEffIndex(), effect->GetCaster() };
+        if (fn(view))
+            return true;
+    }
+    return false;
+}
+
+// Is the aura a beneficial one. T Aura::IsPositive is the per-effect flag, F's Aura has none (the AuraApplication has it, per
+// target): the spell's own classification, SpellInfo::IsPositive (SpellInfo.h:520).
+inline bool AuraIsPositiveCompat(Aura const* aura) { return aura->GetSpellInfo()->IsPositive(); }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// Threat and hostility: who threatens me, who do I threaten.
+// ---------------------------------------------------------------------------------------------------------------------
+// The unit the creature's threat list has picked as its target (null when the list has none). T ThreatManager.h:206 returns the
+// stored HostileReference (getTarget() is the unit), a plain read. F's GetCurrentVictim (ThreatManager.cpp:245) re-selects the
+// victim when the stored one is gone, which writes to the creature's threat list from the engine's thread; GetLastVictim
+// (ThreatManager.cpp:253) is the same stored reference read without that write (null when it should be offline).
+inline Unit* CurrentThreatVictimCompat(Unit* unit) { return unit->GetThreatManager().GetLastVictim(); }
+
+// The kinds of creature rank the bot sorts by. T SharedDefines.h:1020-1027 (CreatureEliteType); F has no such enum
+// (CreatureClassifications, a different numbering and no world boss), CreatureRankCompat below returns these numbers.
+enum CreatureEliteType
+{
+    CREATURE_ELITE_NORMAL    = 0,
+    CREATURE_ELITE_ELITE     = 1,
+    CREATURE_ELITE_RAREELITE = 2,
+    CREATURE_ELITE_WORLDBOSS = 3,
+    CREATURE_ELITE_RARE      = 4,
+    CREATURE_UNKNOWN         = 5
+};
+
+// The rank of a creature. T creature_template.rank (CreatureEliteType); F: the classification mapped to the same numbers, the world
+// boss being the boss type flag of the creature's difficulty (Creature.cpp:2637 isWorldBoss) which F keeps apart.
+inline uint32 CreatureRankCompat(Creature const* creature)
+{
+    if (creature->isWorldBoss())
+        return CREATURE_ELITE_WORLDBOSS;
+    switch (creature->GetCreatureClassification())
+    {
+        case CreatureClassifications::Elite:     return CREATURE_ELITE_ELITE;
+        case CreatureClassifications::RareElite: return CREATURE_ELITE_RAREELITE;
+        case CreatureClassifications::Rare:      return CREATURE_ELITE_RARE;
+        default:                                 return CREATURE_ELITE_NORMAL;
+    }
+}
+
+// The cost of a spell in its own power type. T Spell::CalculatePowerCost (Spell.h:373); F SpellInfo::CalcPowerCost (SpellInfo.h:578),
+// asked for the spell's power type, 0 when the spell has no cost in it.
+inline uint32 SpellPowerCostCompat(SpellEntry const* spell, Unit const* caster)
+{
+    SpellInfo const* info = GetSpellInfoCompat(spell);
+    Optional<SpellPowerCost> cost = info->CalcPowerCost(Powers(spell->powerType), false, caster, info->GetSchoolMask());
+    return cost ? uint32(cost->Amount) : 0u;
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// 11. SPELL OBJECTS the healing triggers read.
+// ---------------------------------------------------------------------------------------------------------------
+// What one effect of a cast would do to a target. T Spell.h:372 CalculateDamage(effectIndex, target) (an int); F Spell.h:554
+// CalculateDamage(effect row, target) (a double). The effect row is the cast spell's own.
+inline int32 SpellCalculateDamageCompat(Spell* spell, uint32 effect, Unit* target)
+{
+    SpellInfo const* info = spell->GetSpellInfo();
+    if (!info || effect >= info->GetEffects().size())
+        return 0;
+    return static_cast<int32>(spell->CalculateDamage(info->GetEffect(static_cast<SpellEffIndex>(effect)), target));
+}
+
+// A spell's range after the player's own modifiers. T `ApplySpellMod(spellId, SPELLMOD_RANGE, range)`; F Player.h:2142
+// ApplySpellMod(SpellInfo const*, SpellModOp::Range, range).
+inline void ApplySpellModRangeCompat(Player* player, uint32 spellId, float& range)
+{
+    if (SpellInfo const* info = sSpellMgr.GetSpellInfo(spellId, DIFFICULTY_NONE))
+        player->ApplySpellMod(info, SpellModOp::Range, range);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// 3. GEOMETRY. (The R3 helpers GetAngleCompat, GetHeightCompat, IsInLineOfSightCompat, IsWithinLOSInMapCompat, HasInArcCompat,
+//    GetDistanceCompat, GetCombatReachCompat, GetLosHitPositionCompat are in TbCompat_Unit.h.)
+// ---------------------------------------------------------------------------------------------------------------
+// Line of sight from an object to a point. T Object.h:931 `IsWithinLOS(x, y, z, checkDynLos, targetHeight)` (the bool adds the
+// dynamic game-object models); F Object.h:363 takes LineOfSightChecks (VMAP = static data, GOBJECT = game objects,
+// SharedDefines.h:7475-7481), so true is both and false the static data alone, as IsWithinLOSInMapCompat does.
+inline bool IsWithinLOSCompat(WorldObject const* from, float x, float y, float z, bool checkDynLos = true)
+{
+    return from->IsWithinLOS(x, y, z, checkDynLos ? LINEOFSIGHT_ALL_CHECKS : LINEOFSIGHT_CHECK_VMAP);
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// 9. SMALL SHAPE DIFFERENCES found in the actions, triggers and warrior files.
+// ---------------------------------------------------------------------------------------------------------------
+// "Is the unit under water". T Unit.h:679 IsUnderwater(), F Unit.h:1115 IsUnderWater() (the bot's ServerFacade has a member
+// IsUnderwater of its own, so the name cannot be a macro).
+inline bool IsUnderwaterCompat(Unit const* unit) { return unit->IsUnderWater(); }
+
+// ---------------------------------------------------------------------------------------------------------------
+// 6. PATHS. T PathFinder (= PathInfo, Maps/PathFinder.h:146) and F PathGenerator (Movement/PathGenerator.h:63); the alias is in
+//    TbCompat_Unit.h. The path types NORMAL 1, SHORTCUT 2, INCOMPLETE 4, NOPATH 8, NOT_USING_PATH 0x10 are the same on both;
+//    DIFFERENT ANSWER: the higher bits (T 0x20 forced destination, 0x40 fly path, 0x80 underwater, 0x100 caster; F 0x20 short,
+//    0x40/0x80 start/end far from the polygon).
+// ---------------------------------------------------------------------------------------------------------------
+// T PathInfo::calculate(x, y, z, forceDest) (PathFinder.h:66) from the owner's position; F CalculatePath(x, y, z, forceDest)
+// (PathGenerator.h:86).
+inline bool PathCalculateCompat(PathFinder& path, float x, float y, float z, bool forceDest = false)
+{
+    return path.CalculatePath(x, y, z, forceDest);
+}
+
+// T calculate(start, dest, forceDest) (PathFinder.h:67); F CalculatePath(sx, sy, sz, dx, dy, dz, forceDest) (:76).
+inline bool PathCalculateCompat(PathFinder& path, G3D::Vector3 const& start, G3D::Vector3 const& dest, bool forceDest = false)
+{
+    return path.CalculatePath(start.x, start.y, start.z, dest.x, dest.y, dest.z, forceDest);
+}
+
+// The points of the last path (T getPath, F GetPath).
+inline Movement::PointsArray const& PathPointsCompat(PathFinder const& path) { return path.GetPath(); }
+
+// The type bits of the last path (T getPathType, F GetPathType).
+inline uint32 PathTypeCompat(PathFinder const& path) { return static_cast<uint32>(path.GetPathType()); }
+
+// The closest reachable point to the asked end (T getActualEndPosition by value, F GetActualEndPosition).
+inline G3D::Vector3 PathActualEndCompat(PathFinder const& path) { return path.GetActualEndPosition(); }
+
+// The length of the point path. T Length() (PathFinder.cpp:1011) asserts a non-empty path; F GetPathLength (PathGenerator.cpp:1479)
+// would loop over an unsigned underflow on an empty one, so an empty path is 0 here.
+inline float PathLengthCompat(PathFinder const& path)
+{
+    return path.GetPath().empty() ? 0.0f : path.GetPathLength();
+}
+
+inline bool PathIsCompleteCompat(PathFinder const& path) { return path.GetPathType() == PATHFIND_NORMAL; }
+
+
+// The zone id of an area row and its name. T AreaTableEntry::ZoneId (0 for a zone itself) / Name (a plain string, may be null), F ParentAreaID
+// (0 for none, DB2Structure.h:131) / AreaName (the enUS text). The name of a null row, or of a row with no name, is empty. (R4M: P and C each
+// had these two; P checked the row, C checked the name, this one checks both.)
+inline uint32 AreaZoneIdCompat(AreaTableEntry const* area) { return area->ParentAreaID; }
+inline std::string AreaNameOrEmptyCompat(AreaTableEntry const* area)
+{
+    char const* name = area ? area->AreaName[LOCALE_enUS] : nullptr;
+    return name ? name : "";
+}
+
+// Is the cast a channel in progress. T has no channeling state of its own: SPELL_STATE_CASTING (2) IS the channel (Spell.cpp:3999, a channeled
+// spell's handle_immediate), and a missile in flight is SPELL_STATE_DELAYED; F SPELL_STATE_CHANNELING (Spell.h:259). (R4M: V's helper also
+// answered F's LAUNCHED, a state T does not have an answer for; the read of both cores is in SLICE1-R4M-NOTES.md section 2.)
+inline bool SpellIsChannelingCompat(Spell const* spell) { return spell->getState() == SPELL_STATE_CHANNELING; }
+
+// ---------------------------------------------------------------------------------------------------------------
+// 7. LIQUID AND TERRAIN reads. T GridMap.h:149-156 (TerrainInfo, GridMapLiquidData / GridMapLiquidStatus, MAP_LIQUID_TYPE_*
+//    in Maps/GridMapDefines.h:57-74); F TerrainMgr.h:85-104 and common/Collision/Maps/MapDefines.h:96-150 (LiquidData,
+//    ZLiquidStatus, map_liquidHeaderTypeFlags).
+//    The legacy type-flag NUMBERS are kept (the module's policy files copy them, MagmaHazardPolicy.h): MAGMA 1, OCEAN 2, SLIME 4,
+//    WATER 8, DARK_WATER 0x10. F numbers them WATER 1, OCEAN 2, MAGMA 4, SLIME 8, DARK 0x10, so a result is re-encoded.
+//    DIFFERENT ANSWER: F asks for a collision height (its default 2.03) where T takes none; the status bands near the surface
+//    can differ by that.
+// ---------------------------------------------------------------------------------------------------------------
+constexpr uint32 MAP_LIQUID_TYPE_NO_WATER = 0x00;
+constexpr uint32 MAP_LIQUID_TYPE_MAGMA = 0x01;
+constexpr uint32 MAP_LIQUID_TYPE_OCEAN = 0x02;
+constexpr uint32 MAP_LIQUID_TYPE_SLIME = 0x04;
+constexpr uint32 MAP_LIQUID_TYPE_WATER = 0x08;
+constexpr uint32 MAP_LIQUID_TYPE_DARK_WATER = 0x10;
+constexpr uint32 MAP_ALL_LIQUIDS = MAP_LIQUID_TYPE_WATER | MAP_LIQUID_TYPE_MAGMA | MAP_LIQUID_TYPE_OCEAN | MAP_LIQUID_TYPE_SLIME;
+
+struct GridMapLiquidData
+{
+    uint32 type_flags = 0;
+    uint32 entry = 0;
+    float level = 0.0f;
+    float depth_level = 0.0f;
+};
+using GridMapLiquidStatus = ZLiquidStatus;
+
+inline map_liquidHeaderTypeFlags LiquidFlagsFromLegacyCompat(uint32 legacy)
+{
+    map_liquidHeaderTypeFlags flags = map_liquidHeaderTypeFlags::NoWater;
+    if (legacy & MAP_LIQUID_TYPE_WATER) flags |= map_liquidHeaderTypeFlags::Water;
+    if (legacy & MAP_LIQUID_TYPE_OCEAN) flags |= map_liquidHeaderTypeFlags::Ocean;
+    if (legacy & MAP_LIQUID_TYPE_MAGMA) flags |= map_liquidHeaderTypeFlags::Magma;
+    if (legacy & MAP_LIQUID_TYPE_SLIME) flags |= map_liquidHeaderTypeFlags::Slime;
+    if (legacy & MAP_LIQUID_TYPE_DARK_WATER) flags |= map_liquidHeaderTypeFlags::DarkWater;
+    return flags;
+}
+
+inline uint32 LiquidFlagsToLegacyCompat(EnumFlag<map_liquidHeaderTypeFlags> flags)
+{
+    uint32 legacy = 0;
+    if (flags.HasFlag(map_liquidHeaderTypeFlags::Water)) legacy |= MAP_LIQUID_TYPE_WATER;
+    if (flags.HasFlag(map_liquidHeaderTypeFlags::Ocean)) legacy |= MAP_LIQUID_TYPE_OCEAN;
+    if (flags.HasFlag(map_liquidHeaderTypeFlags::Magma)) legacy |= MAP_LIQUID_TYPE_MAGMA;
+    if (flags.HasFlag(map_liquidHeaderTypeFlags::Slime)) legacy |= MAP_LIQUID_TYPE_SLIME;
+    if (flags.HasFlag(map_liquidHeaderTypeFlags::DarkWater)) legacy |= MAP_LIQUID_TYPE_DARK_WATER;
+    return legacy;
+}
+
+// T `terrain->getLiquidStatus(x, y, z, mask, &data)`; F `GetLiquidStatus(phaseShift, mapId, x, y, z, flags, &data)`.
+inline GridMapLiquidStatus LiquidStatusCompat(TerrainInfo const* terrain, float x, float y, float z, uint32 reqLiquidType, GridMapLiquidData* data = nullptr)
+{
+    // Request 0 is "no type filter" on T (GridMap.cpp:550 `if (ReqLiquidType && !(ReqLiquidType & type))`, VMapManager2.cpp:281), which is an
+    // empty request on F (TerrainMgr.cpp:728); a non-zero mask is a filter on both, translated type by type. (R4M: R4A passed 0 as an
+    // engaged filter that matches nothing; R4C collapsed the four-type mask to "no filter", which adds dark water. T's exact rule is kept.)
+    Optional<map_liquidHeaderTypeFlags> requested;
+    if (reqLiquidType)
+        requested = LiquidFlagsFromLegacyCompat(reqLiquidType);
+    LiquidData out;
+    ZLiquidStatus const status = const_cast<TerrainInfo*>(terrain)->GetLiquidStatus(PhasingHandler::GetEmptyPhaseShift(), terrain->GetId(),
+        x, y, z, requested, &out);
+    if (data)
+    {
+        data->type_flags = LiquidFlagsToLegacyCompat(out.type_flags);
+        data->entry = out.entry;
+        data->level = out.level;
+        data->depth_level = out.depth_level;
+    }
+    return status;
+}
+
+// T GridMap.cpp:1060-1076 IsSwimmable: in the water, under it, walking on it, or just above it within JUMP_HEIGHT (0.6, :1057), and
+// deeper than the radius. F has no such call; the same test over the liquid read above. T first asks whether a grid exists at the
+// point; F's liquid read answers no water where there is none.
+inline bool TerrainIsSwimmableCompat(TerrainInfo const* terrain, float x, float y, float z, float radius = 1.5f, GridMapLiquidData* data = nullptr)
+{
+    GridMapLiquidData local;
+    GridMapLiquidData* liquid = data ? data : &local;
+    GridMapLiquidStatus const status = LiquidStatusCompat(terrain, x, y, z, MAP_ALL_LIQUIDS, liquid);
+    if (status == LIQUID_MAP_IN_WATER || status == LIQUID_MAP_UNDER_WATER || status == LIQUID_MAP_WATER_WALK ||
+        (status == LIQUID_MAP_ABOVE_WATER && liquid->level + 0.6f >= z))
+        return liquid->level - liquid->depth_level > radius;
+    return false;
+}
+
+// T `terrain->GetHeightStatic(x, y, z)` (GridMap.h:148, checkVMap true, DEFAULT_HEIGHT_SEARCH); F GetStaticHeight (TerrainMgr.h:97).
+inline float TerrainHeightStaticCompat(TerrainInfo const* terrain, float x, float y, float z)
+{
+    return const_cast<TerrainInfo*>(terrain)->GetStaticHeight(PhasingHandler::GetEmptyPhaseShift(), terrain->GetId(), x, y, z);
+}
+
+// T `terrain->GetWaterOrGroundLevel(x, y, z, &ground, swim)` (GridMap.h:151, a const call); F TerrainMgr.h:104 (not const, and
+// the swim flag is unused there).
+inline float TerrainWaterOrGroundLevelCompat(TerrainInfo const* terrain, float x, float y, float z, float* ground, bool swim)
+{
+    return const_cast<TerrainInfo*>(terrain)->GetWaterOrGroundLevel(PhasingHandler::GetEmptyPhaseShift(), terrain->GetId(), x, y, z, ground, swim);
+}

@@ -16,8 +16,6 @@ inline Log& LegacyLogCompat() { return Log::Instance(); }
 inline char const* CStrOrCompat(char const* text, char const* fallback) { return text ? text : fallback; }
 inline char const* CStrOrCompat(std::string const& text, char const* /*fallback*/) { return text.c_str(); }
 
-// Guids: one 64-bit number here, so every helper is the call the bot always made.
-inline uint64 GuidKeyCompat(ObjectGuid const& guid) { return guid.GetRawValue(); }
 inline ObjectGuid GuidFromRawCompat(uint64 raw) { return ObjectGuid(raw); }
 inline ObjectGuid GuidFromNumbersCompat(HighGuid hi, uint32 entry, uint32 counter) { return ObjectGuid(hi, entry, counter); }
 inline void GuidWriteCompat(std::ostream& out, ObjectGuid const& guid) { out << guid.GetRawValue(); }
@@ -34,7 +32,6 @@ inline uint32 MaxLevelCompat() { return DEFAULT_MAX_LEVEL; }
 
 // Players, units.
 inline uint32 ZoneIdCompat(WorldObject const* wo) { return wo->GetZoneId(); }
-inline uint32 AccountIdOfCharacterCompat(ObjectGuid const& guid) { return sObjectMgr.GetPlayerAccountIdByGUID(guid); }
 inline bool InBattleGroundQueueCompat(Player const* player) { return player->InBattleGroundQueue(); }
 inline bool IsPlayerInLfgQueueCompat(ObjectGuid const& guid) { return sLFGMgr.IsPlayerInQueue(guid); }
 inline bool HasSpellCategoryCooldownCompat(Player const* player, uint32 category) { return player->HasSpellCategoryCooldown(category); }
@@ -43,7 +40,6 @@ inline void SetOrientationAndSendCompat(Unit* unit, float angle)
     unit->SetOrientation(angle);
     unit->SendHeartBeat();
 }
-inline bool IsUnderwaterCompat(Unit const* unit) { return unit->IsUnderwater(); }
 
 // The unit a chase or follow movement generator is going after: the block that was in ServerFacade.cpp, word for word, with
 // the dispatch on the mover's type that GetChaseTarget did around it.
@@ -194,9 +190,7 @@ inline void ZoneAndAreaIdOfKeyCompat(uint32& zoneId, uint32& areaId, uint16 key,
     TerrainManager::GetZoneAndAreaIdByAreaFlag(zoneId, areaId, key, mapId);
 }
 inline uint32 AreaIdOfCompat(AreaTableEntry const* area) { return area->Id; }
-inline uint32 AreaZoneIdCompat(AreaTableEntry const* area) { return area->ZoneId; }
 inline uint32 AreaTeamCompat(AreaTableEntry const* area) { return area->Team; }
-inline std::string AreaNameOrEmptyCompat(AreaTableEntry const* area) { return area->Name ? area->Name : ""; }
 inline std::string MapNameOrEmptyCompat(MapEntry const* map) { return std::string(map->name ? map->name : ""); }
 
 // Spawn data.
@@ -221,19 +215,6 @@ inline bool FactionTemplateHostileToCompat(FactionTemplateEntry const* from, Fac
 
 // Randomness.
 inline float RandNormCompat() { return rand_norm_f(); }
-
-// Terrain.
-inline uint32 LiquidAtCompat(TerrainInfo const* terrain, float x, float y, float z, uint32 request, uint32& typeFlags)
-{
-    GridMapLiquidData data{};
-    uint32 const status = static_cast<uint32>(terrain->getLiquidStatus(x, y, z, static_cast<uint8>(request), &data));
-    typeFlags = status != LIQUID_MAP_NO_WATER ? data.type_flags : 0;
-    return status;
-}
-inline float TerrainWaterOrGroundLevelCompat(TerrainInfo const* terrain, float x, float y, float z, float* ground, bool swim)
-{
-    return terrain->GetWaterOrGroundLevel(x, y, z, ground, swim);
-}
 
 // Static line of sight and hit positions in the vmaps; map and navmesh loading.
 inline bool VmapLineOfSightCompat(uint32 mapId, float x1, float y1, float z1, float x2, float y2, float z2)
@@ -275,8 +256,3 @@ template <class TransportType>
 inline void PassengerPositionCompat(TransportType* transport, float& x, float& y, float& z, float* o = nullptr) { transport->CalculatePassengerPosition(x, y, z, o); }
 template <class TransportType>
 inline void PassengerOffsetCompat(TransportType* transport, float& x, float& y, float& z, float* o = nullptr) { transport->CalculatePassengerOffset(x, y, z, o); }
-
-// Path generator.
-inline bool PathCalculateCompat(PathFinder& path, G3D::Vector3 const& start, G3D::Vector3 const& dest, bool forceDest) { return path.calculate(start, dest, forceDest); }
-inline PathType PathTypeOfCompat(PathFinder const& path) { return path.getPathType(); }
-inline Movement::PointsArray const& PathPointsOfCompat(PathFinder const& path) { return path.getPath(); }

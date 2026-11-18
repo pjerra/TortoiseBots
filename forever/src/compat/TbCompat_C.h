@@ -22,15 +22,6 @@ inline CmangosLogProxy LegacyLogCompat() { return CmangosLogProxy(); }
 inline char const* CStrOrCompat(char const* text, char const* fallback) { return text ? text : fallback; }
 inline char const* CStrOrCompat(std::string const& text, char const* /*fallback*/) { return text.c_str(); }
 
-// ---------------------------------------------------------------------------------------------------------------
-// Guids. T's ObjectGuid is ONE 64-bit number (high type, entry, counter; ObjectGuid.h:119-125); F's is 128 bit
-// (ObjectGuid.h:262-: type, realm, map, entry, sub type, a 40-bit counter) and a creature's counter is NOT its database spawn id.
-// ---------------------------------------------------------------------------------------------------------------
-// A 64-bit key of a guid for maps, "same target" tests and log lines. T the raw guid itself. F has no 64-bit form: the key is
-// std::hash<ObjectGuid> (FNV-1a over the 16 bytes, ObjectGuid.h:430-436), equal guids give equal keys and unequal guids
-// differ except for a hash collision. Never turn the key back into a guid, and never compare it with a database id.
-inline uint64 GuidKeyCompat(ObjectGuid const& guid) { return uint64(std::hash<ObjectGuid>()(guid)); }
-
 // The 64-bit number a legacy hook or a typed-in qualifier hands over, as a guid. Only the empty guid (0) has a ForeverCore form;
 // any other number cannot be a 128-bit guid, so the caller gets the empty guid and one error line (TbCompat_C.cpp): a refusal
 // that is loud once, never a made-up guid.
@@ -78,8 +69,6 @@ inline ObjectGuid GuidReadCompat(std::istream& in)
 #define TEAM_BOTH_ALLOWED TEAM_NONE
 
 // Server settings by their Turtle names (T World.h eConfig*Values, F World.h WorldIntConfigs/WorldBoolConfigs).
-#define CONFIG_UINT32_MAX_PLAYER_LEVEL CONFIG_MAX_PLAYER_LEVEL
-#define CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_GROUP CONFIG_ALLOW_TWO_SIDE_INTERACTION_GROUP
 inline bool WorldBoolConfigCompat(WorldBoolConfigs index) { return sWorld.getBoolConfig(index); }
 
 // The highest level a character can reach. T `DEFAULT_MAX_LEVEL` is the compile-time 60 (SharedDefines.h); F has no such
@@ -91,9 +80,6 @@ inline uint32 MaxLevelCompat() { return sWorld.getIntConfig(CONFIG_MAX_PLAYER_LE
 // ---------------------------------------------------------------------------------------------------------------
 // The zone a world object stands in. T `Object::getZoneId()` (cached), F `WorldObject::GetZoneId()` (Object.h:332, cached).
 inline uint32 ZoneIdCompat(WorldObject const* wo) { return wo->GetZoneId(); }
-
-// The account a character belongs to, by guid. T `sObjectMgr.GetPlayerAccountIdByGUID`, F `CharacterCache` (Cache/CharacterCache.h:75).
-inline uint32 AccountIdOfCharacterCompat(ObjectGuid const& guid) { return sCharacterCache->GetCharacterAccountIdByGuid(guid); }
 
 // Whether the player is waiting in a battleground queue. T `Player::InBattleGroundQueue()`, F `InBattlegroundQueue(ignoreArena)`
 // (Player.h:2718); arenas do not exist on the Turtle core, so the default (arenas count too) is the same question.
@@ -114,9 +100,6 @@ inline bool HasSpellCategoryCooldownCompat(Player const* player, uint32 category
 // (`Unit::SendHeartBeat`); F has no such call (the heartbeat belongs to the movement generators) and turns a unit with a facing
 // spline, `SetFacingTo(ori, force)` (Unit.h:1203), which sets the orientation at its end and tells the clients itself.
 inline void SetOrientationAndSendCompat(Unit* unit, float angle) { unit->SetFacingTo(angle, true); }
-
-// Whether the unit is under water. T spells it `IsUnderwater` on the cmangos build, `IsUnderWater` on the Mangos one; F `IsUnderWater` (Unit.h:1115).
-inline bool IsUnderwaterCompat(Unit const* unit) { return unit->IsUnderWater(); }
 
 // The unit a chase or follow movement generator is going after (nullptr when the current generator is neither). T moved the
 // block out of ServerFacade.cpp word for word (the generators are templated on the mover); F's two generators are plain
@@ -298,13 +281,7 @@ inline void ZoneAndAreaIdOfKeyCompat(uint32& zoneId, uint32& areaId, uint16 key,
 // The row's own numbers. T AreaEntry::Id / ZoneId (0 when the area is itself a zone) / Team (AREATEAM_*: 2 Alliance, 4 Horde,
 // 6 both) / Name (char*); F ID / ParentAreaID (0 when it has no parent) / FactionGroupMask (the same 2 and 4 bits) / AreaName (DB2Structure.h:125).
 inline uint32 AreaIdOfCompat(AreaTableEntry const* area) { return area->ID; }
-inline uint32 AreaZoneIdCompat(AreaTableEntry const* area) { return area->ParentAreaID; }
 inline uint32 AreaTeamCompat(AreaTableEntry const* area) { return area->FactionGroupMask; }
-inline std::string AreaNameOrEmptyCompat(AreaTableEntry const* area)
-{
-    char const* name = area->AreaName[LOCALE_enUS];
-    return name ? name : "";
-}
 // A map's name. T MapEntry::name (char*), F MapName (DB2Structure.h:2911).
 inline std::string MapNameOrEmptyCompat(MapEntry const* map)
 {
@@ -349,7 +326,8 @@ inline bool CreatureIsGuardFlagCompat(CreatureInfo const* info) { return (info->
 inline bool CreatureNeverAggrosCompat(CreatureInfo const* info) { return (info->flags_extra & CREATURE_FLAG_EXTRA_TRIGGER) != 0; }
 // Whether the template is more than a normal creature (elite, rare elite, boss, rare). T `rank > CREATURE_ELITE_NORMAL`, F the
 // classification (SharedDefines.h:5181): Elite, RareElite, Obsolete (T's world boss, 3) and Rare count; Trivial and MinusMob (5, 6) are
-// below normal and do not.
+// below normal and do not. R4M: a template whose DIFFICULTY_NONE row carries the boss type flag counts too, which is the fact
+// `CreatureRankCompat` (V, common) calls a world boss on F, so "above normal" and "world boss" cannot disagree about one creature.
 inline bool CreatureIsAboveNormalCompat(CreatureInfo const* info)
 {
     switch (info->Classification)
@@ -360,8 +338,10 @@ inline bool CreatureIsAboveNormalCompat(CreatureInfo const* info)
         case CreatureClassifications::Rare:
             return true;
         default:
-            return false;
+            break;
     }
+    CreatureDifficulty const* difficulty = info->GetDifficulty(DIFFICULTY_NONE);
+    return difficulty && (difficulty->TypeFlags & CREATURE_TYPE_FLAG_BOSS_MOB) != 0;
 }
 // Whether one faction template is hostile to another. T takes the other by reference, F by pointer (DB2Structure.h:1726-).
 inline bool FactionTemplateHostileToCompat(FactionTemplateEntry const* from, FactionTemplateEntry const* to) { return from->IsHostileTo(to); }
@@ -369,25 +349,6 @@ inline bool FactionTemplateHostileToCompat(FactionTemplateEntry const* from, Fac
 // ---- Randomness -----------------------------------------------------------------------------------------------
 // A random float in [0, 1). T `rand_norm_f()`, F `rand_norm()` (Random.h:45).
 inline float RandNormCompat() { return rand_norm(); }
-
-// ---- Terrain (R3's TerrainOfCompat gives the terrain) -----------------------------------------------------------
-// Liquid type masks in the Turtle numbering the policies are written in (SwimPathPolicy.h:51-54): magma 1, ocean 2, slime 4, water 8.
-// F numbers them water 1, ocean 2, magma 4, slime 8 (MapDefines.h:96-100); LiquidAtCompat translates both ways, so these names are
-// the numbers its callers get and give.
-inline constexpr uint32 MAP_LIQUID_TYPE_MAGMA = 0x01;
-inline constexpr uint32 MAP_LIQUID_TYPE_OCEAN = 0x02;
-inline constexpr uint32 MAP_LIQUID_TYPE_SLIME = 0x04;
-inline constexpr uint32 MAP_LIQUID_TYPE_WATER = 0x08;
-inline constexpr uint32 MAP_ALL_LIQUIDS = MAP_LIQUID_TYPE_WATER | MAP_LIQUID_TYPE_MAGMA | MAP_LIQUID_TYPE_OCEAN | MAP_LIQUID_TYPE_SLIME;
-// The liquid status at a point (a LIQUID_MAP_* value, the same numbers on both cores) and, through `typeFlags`, the liquid types
-// there (0 when none), in the Turtle numbering. `request` is a Turtle type mask; 0 or all four asks for any liquid. Out of line.
-uint32 LiquidAtCompat(TerrainInfo const* terrain, float x, float y, float z, uint32 request, uint32& typeFlags);
-// The water or ground level at a point (R3's TerrainWaterLevelCompat has no `swim`). T GetWaterOrGroundLevel(x, y, z, ground, swim),
-// F the same with the phase shift and map id in front (TerrainMgr.h:104).
-inline float TerrainWaterOrGroundLevelCompat(TerrainInfo const* terrain, float x, float y, float z, float* ground, bool swim)
-{
-    return const_cast<TerrainInfo*>(terrain)->GetWaterOrGroundLevel(PhasingHandler::GetEmptyPhaseShift(), terrain->GetId(), x, y, z, ground, swim);
-}
 
 // ---- Static line of sight and hit positions in the vmaps; map and navmesh loading -----------------------------------
 // T `VMapFactory::createOrGetVMapManager()->isInLineOfSight(map, ...)`, F the same call with the ignore flags (nothing ignored).
@@ -445,13 +406,3 @@ inline void PassengerOffsetCompat(GenericTransport* transport, float& x, float& 
     if (o)
         *o = local.GetOrientation();
 }
-
-// ---- Path generator -------------------------------------------------------------------------------------------
-// T PathFinder::calculate(start, dest, forceDest) / getPathType() / getPath(); F PathGenerator::CalculatePath(src xyz, dest xyz, forceDest) /
-// GetPathType() / GetPath() (PathGenerator.h:62,95-100).
-inline bool PathCalculateCompat(PathFinder& path, G3D::Vector3 const& start, G3D::Vector3 const& dest, bool forceDest)
-{
-    return path.CalculatePath(start.x, start.y, start.z, dest.x, dest.y, dest.z, forceDest);
-}
-inline PathType PathTypeOfCompat(PathFinder const& path) { return path.GetPathType(); }
-inline Movement::PointsArray const& PathPointsOfCompat(PathFinder const& path) { return path.GetPath(); }

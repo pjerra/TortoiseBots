@@ -14,24 +14,6 @@
 #include "MovementPackets.h"
 #include "TradeData.h"
 
-// ---------------------------------------------------------------------------------------------------------------
-// Guids. T ObjectGuid::GetRawValue() is the one 64-bit word (high type | entry | counter); F's guid is 128 bit and
-// GetRawValue() is a byte span (ObjectGuid.h:325-326). GetRawValue(0) is the low word: the counter (40 bits) with the
-// spawn-group bits above it (ObjectGuid.h:336-346), unique for a player. The bot only logs it ("targetGuid=0x%llx") or
-// uses it as a key for a player's guid (RemoteCommander::RitualHolds().Holds).
-// Different answer: the number is not the Turtle number, and for a creature it does not carry the entry.
-// ---------------------------------------------------------------------------------------------------------------
-inline uint64 GuidRawCompat(ObjectGuid const& guid) { return guid.GetRawValue(0); }
-
-// ---------------------------------------------------------------------------------------------------------------
-// Flag words. T keeps the player and unit flags in update fields read with HasFlag(PLAYER_FLAGS / UNIT_FIELD_FLAGS, mask)
-// (T Object.h:521); F has typed accessors HasPlayerFlag (Player.h:3044) and HasUnitFlag (Unit.h:862), whose masks are the same
-// bits for the flags the bot names (PLAYER_FLAGS_GHOST/RESTING 0x10/0x20 on both, T Player.h:387-388, F Player.h:531-532;
-// UNIT_FLAG_IN_COMBAT 0x80000, UNIT_FLAG_FLEEING 0x800000, F UnitDefines.h:186-190).
-// ---------------------------------------------------------------------------------------------------------------
-inline bool HasPlayerFlagCompat(Player const* player, uint32 flags) { return player->HasPlayerFlag(PlayerFlags(flags)); }
-inline bool HasUnitFlagCompat(Unit const* unit, uint32 flags) { return unit->HasUnitFlag(UnitFlags(flags)); }
-
 // "The player stands in a sanctuary." T: the PLAYER_FLAGS_SANCTUARY player flag (0x10000, T Player.h:399). F: that bit is now
 // LOW_LEVEL_RAID_ENABLED (Player.h:543, "pre-3.0.3 PLAYER_FLAGS_SANCTUARY"), so the unit's sanctuary pvp flag answers the question
 // (Unit.h:902). Different answer: the flag is set by the area in the one core and by the unit's pvp state in the other.
@@ -39,11 +21,6 @@ inline bool PlayerInSanctuaryCompat(Player const* player) { return player->IsInS
 
 // The experience still needed for the next level. T update field PLAYER_NEXT_LEVEL_XP, F Player.h:1353.
 inline uint32 PlayerNextLevelXPCompat(Player const* player) { return player->GetXPForNextLevel(); }
-
-// An item's durability and its maximum. T update fields ITEM_FIELD_DURABILITY / ITEM_FIELD_MAXDURABILITY, F the item data
-// (Item.h:274-276: Durability, MaxDurability).
-inline uint32 ItemDurabilityCompat(Item const* item) { return *item->m_itemData->Durability; }
-inline uint32 ItemMaxDurabilityCompat(Item const* item) { return *item->m_itemData->MaxDurability; }
 
 // The position held in a movement info. T MovementInfo::pos is a Position with x, y, z, o (T Object.h:283); F Position keeps
 // them private behind getters (Position.h). The struct carries the four numbers by value under the Turtle names.
@@ -69,15 +46,6 @@ inline TbMovementPos MovementPosCompat(MovementInfo const& info)
 // hands the bot the object these two are asked of.
 #define GetCasterGuid GetCasterGUID
 #define GetAuraCharges GetCharges
-
-// ---------------------------------------------------------------------------------------------------------------
-// Duel. T Player::m_duel->opponent is the opponent's guid (null pointer = no duel); F Player::duel is a DuelInfo holding the
-// opponent Player* (Player.h:462-472, :2205).
-// ---------------------------------------------------------------------------------------------------------------
-inline ObjectGuid DuelOpponentGuidCompat(Player const* player)
-{
-    return player->duel && player->duel->Opponent ? player->duel->Opponent->GetGUID() : ObjectGuid::Empty;
-}
 
 // ---------------------------------------------------------------------------------------------------------------
 // Spell casting. T builds `new Spell(caster, SpellEntry const*, bool triggered)` (Spell.h:336) and fills a SpellCastTargets
@@ -130,9 +98,6 @@ inline Aura* GetAuraCompat(Unit* unit, uint32 spellId, uint32 effectIndex)
 // stacks). F: the Aura itself, which answers GetCasterGUID, GetCharges, GetDuration, GetStackAmount (SpellAuras.h:187-238).
 inline Aura const* AuraHolderCompat(Aura const* aura) { return aura; }
 inline Aura* AuraHolderCompat(Aura* aura) { return aura; }
-// T Aura::IsPositive (SpellAuras.h:512, set when the aura is made); F: the spell's own classification (SpellInfo.h:520).
-// Different answer: T's flag is per applied aura, F's is the spell's.
-inline bool AuraIsPositiveCompat(Aura const* aura) { return aura->GetSpellInfo()->IsPositive(); }
 // T Aura::IsAreaAura (SpellAuras.h:514); F: the spell carries an area aura effect (SpellInfo.h:462).
 inline bool AuraIsAreaCompat(Aura const* aura) { return aura->GetSpellInfo()->HasAreaAuraEffect(); }
 
@@ -157,30 +122,6 @@ inline bool IsImmuneToDamageCompat(Unit const* target, SpellEntry const* spell, 
     return target->IsImmunedToDamage(caster, GetSpellInfoCompat(spell));
 }
 
-// ---------------------------------------------------------------------------------------------------------------
-// A cast in progress. T's SPELL_STATE_CASTING is set only when a CHANNELED spell starts channeling (T Spell.cpp:3996-3999, the
-// cast bar runs in SPELL_STATE_PREPARING); F's state for that is SPELL_STATE_CHANNELING (Spell.h:259). T Spell::GetCastedTime
-// (Spell.h:429) is the m_timer of the spell (remaining cast time, or remaining channel time), F's GetTimer (Spell.h:728) the same field.
-// ---------------------------------------------------------------------------------------------------------------
-#define SPELL_STATE_CASTING SPELL_STATE_CHANNELING
-#define GetCastedTime GetTimer
-
-// The cost of a spell in its own power type. T Spell::CalculatePowerCost (Spell.h:373); F SpellInfo::CalcPowerCost (SpellInfo.h:578),
-// asked for the spell's power type, 0 when the spell has no cost in it.
-inline uint32 SpellPowerCostCompat(SpellEntry const* spell, Unit const* caster)
-{
-    SpellInfo const* info = GetSpellInfoCompat(spell);
-    Optional<SpellPowerCost> cost = info->CalcPowerCost(Powers(spell->powerType), false, caster, info->GetSchoolMask());
-    return cost ? uint32(cost->Amount) : 0u;
-}
-
-// The range of a spell changed by the caster's spell mods. T Player::ApplySpellMod(spellId, SPELLMOD_RANGE, value); F Player.h:2142
-// with the SpellInfo and SpellModOp::Range (SpellDefines.h:159).
-inline void ApplyRangeSpellModCompat(Player* modOwner, SpellEntry const* spell, float& range)
-{
-    modOwner->ApplySpellMod(GetSpellInfoCompat(spell), SpellModOp::Range, range);
-}
-
 // The diminishing-returns group of a spell. T SpellEntry::GetDiminishingReturnsGroup(triggered) separates the "triggered stun" groups
 // by the flag; F SpellInfo::GetDiminishingReturnsGroupForSpell() (SpellInfo.h:602) keeps the vanilla groups (SharedDefines.h:6654-6679)
 // and takes no flag. Different answer: the triggered flag is not passed. The group names the bot tests are F's DIMINISHING_STUN
@@ -191,12 +132,6 @@ inline DiminishingGroup DiminishingGroupOfSpellCompat(SpellEntry const* spell, b
 }
 #define DIMINISHING_CONTROL_STUN DIMINISHING_STUN
 #define DIMINISHING_KIDNEYSHOT DIMINISHING_KIDNEY_SHOT
-
-// "This creature is a world boss by rank". T `creature->GetCreatureInfo()->rank == CREATURE_ELITE_WORLDBOSS` (T CreatureInfo.h); F has
-// no such rank (the classification list ends at MinusMob, SharedDefines.h:5181-5189) and keeps the fact as the boss type flag, which
-// Creature::isWorldBoss reads (Creature.cpp:2637, the same member the shim's IsWorldBoss entry uses).
-// Different answer: rank against type flag, and F never answers true for a pet.
-inline bool CreatureIsWorldBossRankCompat(Creature const* creature) { return creature->isWorldBoss(); }
 
 // ---------------------------------------------------------------------------------------------------------------
 // Teleports and logout the bot acknowledges for itself, through the core's own handlers (the way forever/src/TbBotSession.cpp does
@@ -254,16 +189,8 @@ inline void BotChatLikePlayerCompat(Player* bot, ChatMsg chatType, uint32 lang, 
 // the layout of the packet is its builder's.
 inline void BotQueuePacketCompat(Player* bot, WorldPacket const& packet) { bot->GetSession()->QueuePacket(WorldPacket(packet)); }
 
-// ---------------------------------------------------------------------------------------------------------------
-// Players by guid or name. T asks the object manager (ObjectMgr.cpp:658-722: the name table, the cached player data, the online
-// player's session); F's character cache has the same three answers (CharacterCache.h:72-75). T ObjectMgr::GetPlayer(guid) is
-// ObjectAccessor::FindPlayer (ObjectMgr.h:701), the same call F has (ObjectAccessor.h:82). A player guid from a database
-// counter: T ObjectGuid(HIGHGUID_PLAYER, low), F ObjectGuid::Create<HighGuid::Player>(low).
-// ---------------------------------------------------------------------------------------------------------------
-inline uint32 PlayerAccountIdCompat(ObjectGuid guid) { return sCharacterCache->GetCharacterAccountIdByGuid(guid); }
 inline bool PlayerNameByGuidCompat(ObjectGuid guid, std::string& name) { return sCharacterCache->GetCharacterNameByGuid(guid, name); }
 inline ObjectGuid PlayerGuidByNameCompat(std::string const& name) { return sCharacterCache->GetCharacterGuidByName(name); }
-inline Player* PlayerByGuidCompat(ObjectGuid guid) { return ObjectAccessor::FindPlayer(guid); }
 inline ObjectGuid PlayerGuidCompat(uint32 low) { return ObjectGuid::Create<HighGuid::Player>(low); }
 
 // A session that belongs to a headless bot (no client). T WorldSession::IsHeadless; F IsBot (WorldSession.h:1078), the flag
@@ -276,11 +203,6 @@ inline bool IsHeadlessCompat(WorldSession* session) { return session->IsBot(); }
 // or fall, which F calls FALLING (T JUMPING 0x2000; the 3.3.5 core's FALLING is 0x2000 too). F has no ONTRANSPORT flag (a
 // transport is the movement info's transport guid): that name is not defined here.
 // ---------------------------------------------------------------------------------------------------------------
-#define MOVEFLAG_NONE MOVEMENTFLAG_NONE
-#define MOVEFLAG_BACKWARD MOVEMENTFLAG_BACKWARD
-#define MOVEFLAG_WALK_MODE MOVEMENTFLAG_WALKING
-#define MOVEFLAG_FALLINGFAR MOVEMENTFLAG_FALLING_FAR
-#define MOVEFLAG_JUMPING MOVEMENTFLAG_FALLING
 
 // The reaction of one faction template to another: the algorithm of PlayerbotAI::GetFactionReaction (a copy of the old core's
 // reputation logic, ai/cmangos-compat-r4p.h keeps it word for word) over F's field names (DB2Structure.h:1712-1721): ourMask is
@@ -367,10 +289,6 @@ inline std::vector<std::pair<uint32, Aura*>> AuraHolderMapCompat(Unit const* uni
     return result;
 }
 
-// The zone id of an area and its name. T AreaTableEntry::ZoneId (0 for a zone itself) and Name (a plain string, null-checked by the
-// callers); F ParentAreaID (DB2Structure.h:131) and AreaName (the enUS text, as AreaNameCompat reads it). The name of a null entry is empty.
-inline uint32 AreaZoneIdCompat(AreaTableEntry const* area) { return area->ParentAreaID; }
-inline std::string AreaNameOrEmptyCompat(AreaTableEntry const* area) { return area ? std::string(area->AreaName[LOCALE_enUS]) : std::string(); }
 // The zone at a point. T sTerrainMgr.getZoneId(map, x, y, z), F TerrainMgr::GetZoneId with the empty phase shift (TerrainMgr.h:151).
 inline uint32 ZoneIdAtCompat(uint32 mapId, float x, float y, float z)
 {

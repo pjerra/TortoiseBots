@@ -139,3 +139,113 @@ inline float UnitMinDamageCompat(Unit const* unit) { return unit->GetFloatValue(
 inline float UnitMaxDamageCompat(Unit const* unit) { return unit->GetFloatValue(UNIT_FIELD_MAXDAMAGE); }
 inline uint32 WorldIntConfigCompat(eConfigUInt32Values index) { return sWorld.getConfig(index); }
 inline uint32 GameObjectTrapSpellIdCompat(GameObjectInfo const* info) { return info->trap.spellId; }
+
+// R4M (slice 1, integration): the helpers two or more of the packages V, A, P, C had defined (one name, one definition each; the table is
+// forever/docs/SLICE1-R4M-NOTES.md section 1). Same names and signatures as the R4M section of forever/src/compat/TbCompat_Unit.h.
+#include "Maps/PathFinder.h"
+#include "Maps/GridMap.h"
+#include "Threat/ThreatManager.h"
+
+// Players, guids, groups.
+inline Player* GetPlayerCompat(ObjectGuid const& guid) { return sObjectMgr.GetPlayer(guid); }
+inline uint64 GuidKeyCompat(ObjectGuid const& guid) { return guid.GetRawValue(); }
+inline std::string GuidTextCompat(ObjectGuid const& guid)
+{
+    std::ostringstream out;
+    out << guid;
+    return out.str();
+}
+inline uint32 AccountIdOfCharacterCompat(ObjectGuid const& guid) { return sObjectMgr.GetPlayerAccountIdByGUID(guid); }
+inline ObjectGuid DuelOpponentGuidCompat(Player const* player)
+{
+    return player->m_duel ? player->m_duel->opponent : ObjectGuid();
+}
+inline ObjectGuid GroupMainTankGuidCompat(Group const* group) { return group->GetMainTankGuid(); }
+inline ObjectGuid GroupMainAssistGuidCompat(Group const* group) { return group->GetMainAssistantGuid(); }
+inline bool HasPlayerFlagCompat(WorldObject const* obj, uint32 flag) { return obj->HasFlag(PLAYER_FLAGS, flag); }
+inline bool HasUnitFlagCompat(Unit const* unit, uint32 flag) { return unit->HasFlag(UNIT_FIELD_FLAGS, flag); }
+inline uint32 ItemDurabilityCompat(Item const* item) { return item->GetUInt32Value(ITEM_FIELD_DURABILITY); }
+inline uint32 ItemMaxDurabilityCompat(Item const* item) { return item->GetUInt32Value(ITEM_FIELD_MAXDURABILITY); }
+// Auras.
+struct AuraOfTypeCompat
+{
+    SpellEntry const* spell;
+    uint32 effIndex;
+    Unit* caster;
+};
+template <class Fn>
+inline bool ForEachAuraOfTypeCompat(Unit const* unit, AuraType type, Fn&& fn)
+{
+    for (Aura const* aura : unit->GetAurasByType(type))
+    {
+        if (!aura)
+            continue;
+        AuraOfTypeCompat const view{ GetSpellEntryCompat(aura->GetSpellProto()), uint32(aura->GetEffIndex()), aura->GetCaster() };
+        if (fn(view))
+            return true;
+    }
+    return false;
+}
+inline bool AuraIsPositiveCompat(Aura const* aura) { return aura->IsPositive(); }
+// Threat and hostility.
+inline Unit* CurrentThreatVictimCompat(Unit* unit)
+{
+    HostileReference* ref = unit->GetThreatManager().getCurrentVictim();
+    return ref ? ref->getTarget() : nullptr;
+}
+inline uint32 CreatureRankCompat(Creature const* creature) { return creature->GetCreatureInfo()->rank; }
+inline uint32 SpellPowerCostCompat(SpellEntry const* spell, Unit const* caster) { return Spell::CalculatePowerCost(spell, const_cast<Unit*>(caster), nullptr, nullptr); }
+// Spell objects.
+inline int32 SpellCalculateDamageCompat(Spell* spell, uint32 effect, Unit* target)
+{
+    return spell->CalculateDamage(SpellEffectIndex(effect), target);
+}
+inline void ApplySpellModRangeCompat(Player* player, uint32 spellId, float& range)
+{
+    player->ApplySpellMod(spellId, SPELLMOD_RANGE, range);
+}
+// Geometry.
+inline bool IsWithinLOSCompat(WorldObject const* from, float x, float y, float z, bool checkDynLos = true)
+{
+    return from->IsWithinLOS(x, y, z, checkDynLos);
+}
+// Small shape differences.
+inline bool IsUnderwaterCompat(Unit const* unit) { return unit->IsUnderwater(); }
+inline uint32 AreaZoneIdCompat(AreaTableEntry const* area) { return area->ZoneId; }
+inline std::string AreaNameOrEmptyCompat(AreaTableEntry const* area) { return area && area->Name ? std::string(area->Name) : std::string(); }
+// Paths.
+inline bool PathCalculateCompat(PathFinder& path, float x, float y, float z, bool forceDest = false)
+{
+    return path.calculate(x, y, z, forceDest);
+}
+inline bool PathCalculateCompat(PathFinder& path, G3D::Vector3 const& start, G3D::Vector3 const& dest, bool forceDest = false)
+{
+    return path.calculate(start, dest, forceDest);
+}
+inline Movement::PointsArray const& PathPointsCompat(PathFinder const& path) { return path.getPath(); }
+inline uint32 PathTypeCompat(PathFinder const& path) { return static_cast<uint32>(path.getPathType()); }
+inline G3D::Vector3 PathActualEndCompat(PathFinder const& path) { return path.getActualEndPosition(); }
+inline float PathLengthCompat(PathFinder const& path) { return path.Length(); }
+inline bool PathIsCompleteCompat(PathFinder const& path) { return path.getPathType() == PATHFIND_NORMAL; }
+// Liquid and terrain reads.
+inline GridMapLiquidStatus LiquidStatusCompat(TerrainInfo const* terrain, float x, float y, float z, uint32 reqLiquidType, GridMapLiquidData* data = nullptr)
+{
+    return terrain->getLiquidStatus(x, y, z, reqLiquidType, data);
+}
+inline bool TerrainIsSwimmableCompat(TerrainInfo const* terrain, float x, float y, float z, float radius = 1.5f, GridMapLiquidData* data = nullptr)
+{
+    return terrain->IsSwimmable(x, y, z, radius, data);
+}
+inline float TerrainHeightStaticCompat(TerrainInfo const* terrain, float x, float y, float z)
+{
+    return terrain->GetHeightStatic(x, y, z);
+}
+inline float TerrainWaterOrGroundLevelCompat(TerrainInfo const* terrain, float x, float y, float z, float* ground, bool swim)
+{
+    return terrain->GetWaterOrGroundLevel(x, y, z, ground, swim);
+}
+inline bool SpellIsChannelingCompat(Spell const* spell)
+{
+    // T has no separate channeling state: SPELL_STATE_CHANNELING is SPELL_STATE_CASTING in the shim (the call the bot always made).
+    return spell->getState() == SPELL_STATE_CASTING || spell->getState() == SPELL_STATE_CHANNELING;
+}

@@ -372,7 +372,7 @@ bool PlayerbotAI::GetSpellRange(std::string name, float* maxRange, float* minRan
 
                 if (Player* modOwner = bot->GetSpellModOwner())
                 {
-                    ApplyRangeSpellModCompat(modOwner, spellInfo, spellMaxRange);
+                    ApplySpellModRangeCompat(modOwner, spellInfo->Id, spellMaxRange);
                 }
 
                 spellMaxRange += rangeMod;
@@ -600,7 +600,7 @@ bool PlayerbotAI::CheckCanCastSpell(uint32 spellid, Unit* target, uint8 effectMa
     // expression is spelled exactly as Spell::prepare() spells it: channeled
     // and auto-repeat spells are not "in progress" for this purpose.
     if (bot->IsNonMeleeSpellCasted(false, true, true) ||
-        TortoiseBots::RemoteCommander::RitualHolds().Holds(GuidRawCompat(bot->GetObjectGuid())))
+        TortoiseBots::RemoteCommander::RitualHolds().Holds(GuidKeyCompat(bot->GetObjectGuid())))
     {
         if (checkResult)
         {
@@ -1139,7 +1139,7 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
         if (fallbackSpellInfo && CheckSpellTargetAlignment(fallbackSpellInfo, bot) != SPELL_CAST_OK)
         {
             sLog.outDetail("PlayerbotAI::CastSpell: %s target resolved to self for harmful spell %u - refusing to self-cast", CStrCompat(bot->GetName()), spellId);
-            botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=self-harmful-refused", spellId, (unsigned long long)GuidRawCompat(target->getObjectGuid()));
+            botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=self-harmful-refused", spellId, (unsigned long long)GuidKeyCompat(target->getObjectGuid()));
             return false;
         }
     }
@@ -1148,7 +1148,7 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
     // core resolves the type of a Cure cast at random, so the hold is judged again here, at the last gate.
     if (DispelCastBlocked(this, target, spellId))
     {
-        botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=dispel-hold", spellId, (unsigned long long)GuidRawCompat(target->getObjectGuid()));
+        botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=dispel-hold", spellId, (unsigned long long)GuidKeyCompat(target->getObjectGuid()));
         return false;
     }
 
@@ -1157,7 +1157,7 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
     {
         // M1 trail: pet-owned ability leaves the unit-cast path here; the
         // pet overload owns the actual attempt/result from this point.
-        botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=pet-redirect", spellId, (unsigned long long)GuidRawCompat(target->getObjectGuid()));
+        botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=pet-redirect", spellId, (unsigned long long)GuidKeyCompat(target->getObjectGuid()));
         return CastPetSpell(spellId, target);
     }
 
@@ -1172,9 +1172,9 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
     // plus the herb/ore/opening spells of the same path. Same expression as prepare(): a channeled
     // or auto-repeat spell does not count as "in progress".
     if (bot->IsNonMeleeSpellCasted(false, true, true) ||
-        TortoiseBots::RemoteCommander::RitualHolds().Holds(GuidRawCompat(bot->GetObjectGuid())))
+        TortoiseBots::RemoteCommander::RitualHolds().Holds(GuidKeyCompat(bot->GetObjectGuid())))
     {
-        botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=cast-in-progress", spellId, (unsigned long long)GuidRawCompat(target->getObjectGuid()));
+        botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=cast-in-progress", spellId, (unsigned long long)GuidKeyCompat(target->getObjectGuid()));
         NoteCastCheckFail(SPELL_FAILED_SPELL_IN_PROGRESS);
         return false;
     }
@@ -1186,7 +1186,7 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
 
     if (bot->IsFlying() || bot->IsTaxiFlying())
     {
-        botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=flying", spellId, (unsigned long long)GuidRawCompat(target->getObjectGuid()));
+        botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=flying", spellId, (unsigned long long)GuidKeyCompat(target->getObjectGuid()));
         return false;
     }
 
@@ -1232,7 +1232,7 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
             *outSpellDuration = sPlayerbotAIConfig.globalCoolDown;
         }
 
-        botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=stand-or-facing-delay stand=%u stopped=%u realMaster=%u motion=%u", spellId, (unsigned long long)GuidRawCompat(target->getObjectGuid()),
+        botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=stand-or-facing-delay stand=%u stopped=%u realMaster=%u motion=%u", spellId, (unsigned long long)GuidKeyCompat(target->getObjectGuid()),
             (uint32)bot->GetStandState(), (uint32)bot->IsStopped(), (uint32)HasRealPlayerMaster(), (uint32)mm.GetCurrentMovementGeneratorType());
         return false;
     }
@@ -1331,7 +1331,7 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
         if (IsJumping() || bot->IsFalling())
         {
             spell->cancel();
-            botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=moving-jump-fall", spellId, (unsigned long long)GuidRawCompat(target->getObjectGuid()));
+            botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=moving-jump-fall", spellId, (unsigned long long)GuidKeyCompat(target->getObjectGuid()));
             NoteCastCheckFail(SPELL_FAILED_MOVING);
             return false;
         }
@@ -1347,7 +1347,7 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
             }
 
             spell->cancel();
-            botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=moving-no-master", spellId, (unsigned long long)GuidRawCompat(target->getObjectGuid()));
+            botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=moving-no-master", spellId, (unsigned long long)GuidKeyCompat(target->getObjectGuid()));
             NoteCastCheckFail(SPELL_FAILED_MOVING);
             return false;
         }
@@ -1403,7 +1403,7 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
             if (!loot.IsLootPossible(bot))
             {
                 spell->cancel();
-                botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=loot-impossible", spellId, (unsigned long long)GuidRawCompat(target->getObjectGuid()));
+                botdiag::BotActionLog::Write(this, "CAST_GATE", "spell=%u targetGuid=0x%llx reason=loot-impossible", spellId, (unsigned long long)GuidKeyCompat(target->getObjectGuid()));
                 //delete spell;
                 return false;
             }
@@ -1902,7 +1902,7 @@ bool PlayerbotAI::IsInterruptableSpellCasting(Unit* target, std::string spell, u
             CreatureInfo const* const info = creature->GetCreatureInfo();
             stunImmunity.stunMechanicImmune = ai::StunMechanicImmune(info->mechanic_immune_mask);
             stunImmunity.boss = creature->IsWorldBoss() ||
-                CreatureIsWorldBossRankCompat(creature) ||
+                CreatureRankCompat(creature) == CREATURE_ELITE_WORLDBOSS ||
                 ai::GetDungeonPlans().IsBossEntry(creature->GetMapId(), creature->GetEntry());
         }
     }

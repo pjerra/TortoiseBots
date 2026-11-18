@@ -60,7 +60,10 @@ namespace
             return false;
         auto const liquidAt = [terrain](float x, float y, float z, uint32 request, uint32& typeFlags)
         {
-            return LiquidAtCompat(terrain, x, y, z, request, typeFlags);
+            GridMapLiquidData data{};
+            uint32 const status = static_cast<uint32>(LiquidStatusCompat(terrain, x, y, z, request, &data));
+            typeFlags = status != LIQUID_MAP_NO_WATER ? data.type_flags : 0;
+            return status;
         };
         for (size_t i = 1; i < path.size(); ++i)
         {
@@ -1327,7 +1330,10 @@ std::string WorldPosition::SwimLineWhy(const std::vector<WorldPosition>& path, c
         return "no terrain";
     auto const liquidAt = [terrain](float x, float y, float z, uint32 request, uint32& typeFlags)
     {
-        return LiquidAtCompat(terrain, x, y, z, request, typeFlags);
+        GridMapLiquidData data{};
+        uint32 const status = static_cast<uint32>(LiquidStatusCompat(terrain, x, y, z, request, &data));
+        typeFlags = status != LIQUID_MAP_NO_WATER ? data.type_flags : 0;
+        return status;
     };
     for (size_t i = 1; i < path.size(); ++i)
     {
@@ -1407,21 +1413,21 @@ std::vector<WorldPosition> WorldPosition::getPathStepFrom(const WorldPosition& s
     if (grounded)
         ExcludeSteepSlopes(*pathfinder);
     PathCalculateCompat(*pathfinder, start.getVector3(), end.getVector3(), false);
-    PathType strictType = PathTypeOfCompat(*pathfinder);
+    PathType strictType = PathType(PathTypeCompat(*pathfinder));
     // The flag over-marks stairs a player walks: when strict does not reach,
     // one permissive query runs, and its path is walked only when a player
     // could climb it. A refused grade falls back to the strict answer below.
     bool const fellBack = grounded && FellBackToPermissive(strictType);
-    PointsArray strictPoints = PathPointsOfCompat(*pathfinder);
+    PointsArray strictPoints = PathPointsCompat(*pathfinder);
     bool permissiveKept = false;
     if (fellBack)
     {
         pathfinder = std::make_unique<PathFinder>(bot);
         PathCalculateCompat(*pathfinder, start.getVector3(), end.getVector3(), false);
-        permissiveKept = PermissivePathWalkable(PathPointsOfCompat(*pathfinder));
+        permissiveKept = PermissivePathWalkable(PathPointsCompat(*pathfinder));
     }
 
-    points = permissiveKept ? PathPointsOfCompat(*pathfinder) : strictPoints;
+    points = permissiveKept ? PathPointsCompat(*pathfinder) : strictPoints;
 
     if (bot && TransportOfCompat(bot))
     {
@@ -1429,7 +1435,7 @@ std::vector<WorldPosition> WorldPosition::getPathStepFrom(const WorldPosition& s
             PassengerPositionCompat(TransportOfCompat(bot), p.x, p.y, p.z);
     }
 
-    type = permissiveKept ? PathTypeOfCompat(*pathfinder) : strictType;
+    type = permissiveKept ? PathType(PathTypeCompat(*pathfinder)) : strictType;
     LastPathStepType() = static_cast<uint32>(type);
 
     std::vector<WorldPosition> retvec = fromPointsArray(points);
@@ -1491,11 +1497,11 @@ bool WorldPosition::isInMagma(const TerrainInfo* terrain) const
 {
     if (!terrain)
         return false;
-    uint32 typeFlags = 0;
-    uint32 const status = LiquidAtCompat(terrain, x, y, z + 0.01f, MAP_ALL_LIQUIDS, typeFlags);
+    GridMapLiquidData liquid{};
+    GridMapLiquidStatus const status = LiquidStatusCompat(terrain, x, y, z + 0.01f, MAP_ALL_LIQUIDS, &liquid);
     if (status == LIQUID_MAP_NO_WATER)
         return false;
-    return ai::IsMagmaHazard(typeFlags, status);
+    return ai::IsMagmaHazard(liquid.type_flags, static_cast<uint32>(status));
 }
 // Same rule as isInMagma, for the slime type flag: the DispatchMovement
 // restore gate classifies a wet clamp on clampedZ, and slime is no safer a
@@ -1505,11 +1511,11 @@ bool WorldPosition::isInSlime(const TerrainInfo* terrain) const
 {
     if (!terrain)
         return false;
-    uint32 typeFlags = 0;
-    uint32 const status = LiquidAtCompat(terrain, x, y, z + 0.01f, MAP_ALL_LIQUIDS, typeFlags);
+    GridMapLiquidData liquid{};
+    GridMapLiquidStatus const status = LiquidStatusCompat(terrain, x, y, z + 0.01f, MAP_ALL_LIQUIDS, &liquid);
     if (status == LIQUID_MAP_NO_WATER)
         return false;
-    return ai::IsSlimeHazard(typeFlags, status);
+    return ai::IsSlimeHazard(liquid.type_flags, static_cast<uint32>(status));
 }
 
 // The point the core will move a server-moved player to: its own
