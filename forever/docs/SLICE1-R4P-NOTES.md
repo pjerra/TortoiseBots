@@ -216,7 +216,25 @@ another shape (or not yet): rule (d), nothing stubbed. Counts are error places.
 
 ## Gates
 
-See "Gates" appended at the end of this file by the final commit.
+Code commit `7be9c0c99` (the final commit adds only the six wiring-test pins named below and these gate lines).
+
+| Gate | Command | Result |
+|---|---|---|
+| Slice census (list R4P) | `FOREVER_SLOT=4 FOREVER_CENSUS_LIST=forever/SLICE1-R4P.txt forever/tools/vm-census.sh "" 14` | before `error places 618 (in 18 files)`, mine 576; after `error places 315 (in 17 files)`, mine 273; `TbCompat_P.h` 0 |
+| ForeverCore module, slice option off | `ssh yulon-ubuntu2 'FOREVER_SLOT=4 ~/forever-build/build.sh 12 tortoisebots'` | `CMAKE_RC=0 MAKE_RC=0` |
+| Turtle build | `vm-build ~/wt-slice-r4p --wait` at `7be9c0c99` | `COMPILE_SECONDS=2955 CMAKE_RC=0 MAKE_RC=0`, `QUEUE_RC=0`, job `1-1794992839461421143-2073500` (59 module files; the wrapper kept waiting after the job was done, the result was read with `--result`) |
+| Turtle unit tests | `vm-test tb ~/wt-slice-r4p` | first run at `7be9c0c99`: `RESULT: FAIL`, 9 wiring tests pinned the old spelling of lines this round rewrote; after the pins below, at `dd120bafa`: `RESULT: PASS`, rc=0, `vm_duration=1378s` |
+
+Wiring pins changed to the new spelling of the SAME expression (each still proves what it proved): `test_aura_tactics_wiring`
+(`new Spell(` -> `NewSpellCompat(`: the dispel gate still comes before the spell is made), `test_speed_change_ack_wiring`
+(`!bot->GetSession()->IsHeadless()` -> `!IsHeadlessCompat(bot->GetSession())`: the headless guard still comes before the ack),
+`test_target_facing_wiring` (`new Spell(bot, spellInfo, false)` -> `NewSpellCompat(...)`, `target->HasInArc(bot)` -> `HasInArcCompat(target, bot,
+M_PI_F)`: the facing pre-check still sits before the probe and reads the default arc), `test_teleport_landing_wiring`
+(`HandleMoveTeleportAckOpcode(p)` -> `AckNearTeleportCompat(bot)`, twice: the ack still comes before the landing logic),
+`test_hire_never_leaves_wiring` (`ObjectAccessor::FindPlayerNotInWorld(hirerGuid)` -> `FindPlayerNotInWorldCompat(hirerGuid)`),
+`test_stun_interrupt_wiring` (`IsImmuneToSpell`, `IsImmuneToSpellEffect`, `GetAurasByType(...).empty()`, `info->rank == CREATURE_ELITE_WORLDBOSS`
+-> their `...Compat` helpers, with the caster argument `bot`).
+The `action_loop` "Mage stay FAILED x9+" line in the decision-trail report is in the R3 PASS run too (not a test failure).
 
 ## Unsure
 
