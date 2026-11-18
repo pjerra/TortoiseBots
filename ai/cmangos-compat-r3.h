@@ -138,3 +138,4 @@ inline uint32 PlayerLifetimeHonorableKillsCompat(Player const* player) { return 
 inline float UnitMinDamageCompat(Unit const* unit) { return unit->GetFloatValue(UNIT_FIELD_MINDAMAGE); }
 inline float UnitMaxDamageCompat(Unit const* unit) { return unit->GetFloatValue(UNIT_FIELD_MAXDAMAGE); }
 inline uint32 WorldIntConfigCompat(eConfigUInt32Values index) { return sWorld.getConfig(index); }
+inline uint32 GameObjectTrapSpellIdCompat(GameObjectInfo const* info) { return info->trap.spellId; }

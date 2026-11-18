@@ -203,7 +203,7 @@ class ServerFacade
             if (!go->GetOwnerGuid().IsEmpty())
                 return false;
 
-            SpellEntry const* spellInfo = LookupSpellInfo(goInfo->trap.spellId);
+            SpellEntry const* spellInfo = LookupSpellInfo(GameObjectTrapSpellIdCompat(goInfo));
             if (!spellInfo)
                 return false;
 

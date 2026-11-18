@@ -355,3 +355,6 @@ inline float UnitMaxDamageCompat(Unit const* unit) { return unit->GetWeaponDamag
 // A server setting by its enum. T World::getConfig(eConfigUInt32Values), F World::getIntConfig (World.h); the shim's
 // CONFIG_UINT32_* names are the F enumerators.
 inline uint32 WorldIntConfigCompat(WorldIntConfigs index) { return sWorld.getIntConfig(index); }
+
+// The spell a trap game object casts. T GameObjectInfo::trap.spellId, F GameObjectTemplate::trap.spell (GameObjectData.h:185-196).
+inline uint32 GameObjectTrapSpellIdCompat(GameObjectTemplate const* info) { return info->trap.spell; }
