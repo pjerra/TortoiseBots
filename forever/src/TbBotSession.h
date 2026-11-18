@@ -83,6 +83,9 @@ public:
     void PushCastResult(CastResult const& result);                  // any thread
     std::size_t DrainCastResults(std::vector<CastResult>& out);     // appends the queued results in arrival order; counts them delivered
     CastResultCounts GetCastResultCounts() const;                   // any thread
+    // The latest SMSG_CAST_FAILED the core sent during this bot's own engine tick (see EngineTickScope): the answer to a core call
+    // that returns nothing, such as Player::CastItemUseSpell. Returns false when there is none since the last take. World thread.
+    bool TakeInTickRefusal(CastResult& out);
     // `.tb castfail`: builds the core's own typed packet (WorldPackets::Spells::SpellFailure for `interrupted`, CastFailed
     // otherwise) and sends it through Player::SendDirectMessage -> SendPacket, the path the core takes, so the reader and the
     // queue are exercised end to end. World thread. Empty string = sent, else why not.
@@ -114,5 +117,7 @@ private:
     mutable std::mutex _castResultLock;                 // guards _castResults and the counters below
     std::deque<CastResult> _castResults;
     CastResultCounts _castResultCounts;
+    CastResult _inTickRefusal;
+    bool _hasInTickRefusal = false;
 };
 }

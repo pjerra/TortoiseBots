@@ -9,6 +9,7 @@
 #include "Opcodes.h"
 #include "Player.h"
 #include "WorldPacket.h"
+#include "Spell.h"
 #include "SpellPackets.h"
 #include "WorldSocket.h"
 
@@ -127,8 +128,11 @@ void BotSession::CaptureCastResult(WorldPacket const& packet)
             // code): the engine has it already, queueing it would make every refusal a second, "asynchronous" event.
             if (t_tickingSession == this)
             {
+                result.spellId = uint32(spellId);
                 std::lock_guard<std::mutex> lock(_castResultLock);
                 ++_castResultCounts.refusedInTick;
+                _inTickRefusal = result;    // kept for a helper whose core call returns nothing (Player::CastItemUseSpell, SLICE2-R0-NOTES.md U1)
+                _hasInTickRefusal = true;
                 return;
             }
         }
@@ -198,6 +202,16 @@ std::string BotSession::InjectCastResult(uint32 spellId, uint32 reason, bool int
     (void)spellId; (void)reason; (void)interrupted;
     return "this build has no engine (TORTOISEBOTS_SLICE1 is off)";
 #endif
+}
+
+bool BotSession::TakeInTickRefusal(CastResult& out)
+{
+    std::lock_guard<std::mutex> lock(_castResultLock);
+    if (!_hasInTickRefusal)
+        return false;
+    out = _inTickRefusal;
+    _hasInTickRefusal = false;
+    return true;
 }
 
 std::size_t BotSession::DrainCastResults(std::vector<CastResult>& out)
