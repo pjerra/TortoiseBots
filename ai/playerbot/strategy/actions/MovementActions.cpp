@@ -3703,7 +3703,7 @@ bool MovementAction::FollowOnTransport(Unit* target)
             // behind - a stale flag without a transport freezes every later
             // movement until relog (issue #216).
             bot->m_movementInfo.ClearTransportData();
-            bot->m_movementInfo.RemoveMovementFlag(MOVEFLAG_ONTRANSPORT);
+            RemoveOnTransportFlagCompat(bot);
         }
 
         if (auto* pHisTransport = target->GetTransport())

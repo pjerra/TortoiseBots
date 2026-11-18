@@ -479,6 +479,11 @@ inline void SpeedCheatCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Fea
 // permission RBAC_PERM_INSTANT_LOGOUT for exactly that (MiscHandler.cpp:251).
 inline bool SessionHasInstantLogoutCompat(WorldSession* session) { return session->HasPermission(rbac::RBAC_PERM_INSTANT_LOGOUT); }
 
+// T clears MOVEFLAG_ONTRANSPORT after RemovePassenger; F has no such flag (the transport is in the movement info) and its
+// RemovePassenger clears that state, so there is nothing to drop (only reached inside the transport blocks, which do not run on F).
+template <class P>
+inline void RemoveOnTransportFlagCompat(P* /*bot*/) {}
+
 // The movement generator interrupt and the movement heartbeat of T. Failure value: nothing is sent or interrupted.
 inline void InterruptCurrentMovementCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::MovementInterrupt); }
 inline void SendHeartBeatCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::MovementInterrupt); }

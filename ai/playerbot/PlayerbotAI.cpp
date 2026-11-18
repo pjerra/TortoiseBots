@@ -859,7 +859,7 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
                     bot->GetTransport()->RemovePassenger(bot);
                     // RemovePassenger leaves MOVEFLAG_ONTRANSPORT set in the core;
                     // a stale flag with no transport freezes the bot (issue #216).
-                    bot->m_movementInfo.RemoveMovementFlag(MOVEFLAG_ONTRANSPORT);
+                    RemoveOnTransportFlagCompat(bot);
                     bot->NearTeleportTo(MovementPosCompat(bot->m_movementInfo).x, MovementPosCompat(bot->m_movementInfo).y, MovementPosCompat(bot->m_movementInfo).z, MovementPosCompat(bot->m_movementInfo).o);
                     MANGOS_ASSERT(botPos.fDist(bot) < 500.0f);
                 }
@@ -869,7 +869,7 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
                     // Clear unconditionally: the core skips the state clear when the
                     // bot is no longer in the passenger set, which would loop forever.
                     bot->GetTransport()->RemovePassenger(bot);
-                    bot->m_movementInfo.RemoveMovementFlag(MOVEFLAG_ONTRANSPORT);
+                    RemoveOnTransportFlagCompat(bot);
                     bot->m_movementInfo.ClearTransportData();
                     bot->SetTransport(nullptr);
                 }
@@ -889,7 +889,7 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
             bot->GetTransport()->RemovePassenger(bot);
             // RemovePassenger leaves MOVEFLAG_ONTRANSPORT set in the core;
             // a stale flag with no transport freezes the bot (issue #216).
-            bot->m_movementInfo.RemoveMovementFlag(MOVEFLAG_ONTRANSPORT);
+            RemoveOnTransportFlagCompat(bot);
             bot->NearTeleportTo(MovementPosCompat(bot->m_movementInfo).x, MovementPosCompat(bot->m_movementInfo).y, MovementPosCompat(bot->m_movementInfo).z, MovementPosCompat(bot->m_movementInfo).o);
             MANGOS_ASSERT(botPos.fDist(bot) < 500.0f);
             bot->StopMoving();
@@ -4191,7 +4191,7 @@ bool PlayerbotAI::PlayEmote(uint32 emote)
         return false;
 
     uint32 const variant = urand(0, EmoteAction::GetNumberOfEmoteVariants((TextEmotes)emote, bot->GetRace(), bot->GetGender()) - 1);
-    ObjectGuid const emoteTarget = ((master && (sServerFacade.getDistance2d(bot, master) < 30.0f) && urand(0, 1)) ? master->getObjectGuid() : (bot->GetSelectionGuid() && urand(0, 1)) ? bot->GetSelectionGuid() : ObjectGuid());
+    ObjectGuid const emoteTarget = ((master && (sServerFacade.getDistance2d(bot, master) < 30.0f) && urand(0, 1)) ? master->getObjectGuid() : (!bot->GetSelectionGuid().IsEmpty() && urand(0, 1)) ? bot->GetSelectionGuid() : ObjectGuid());
     PlayTextEmoteCompat(bot, emote, variant, emoteTarget);
 
     return true;

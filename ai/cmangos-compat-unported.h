@@ -549,6 +549,8 @@ inline void SpeedCheatCompat(Player* bot)
 
 inline bool SessionHasInstantLogoutCompat(WorldSession* session) { return session->GetSecurity() >= (AccountTypes)sWorld.getConfig(CONFIG_UINT32_INSTANT_LOGOUT); }
 
+template <class P>
+inline void RemoveOnTransportFlagCompat(P* bot) { bot->m_movementInfo.RemoveMovementFlag(MOVEFLAG_ONTRANSPORT); }
 inline void InterruptCurrentMovementCompat(Player* bot)
 {
     if (!bot->GetMotionMaster()->empty())
