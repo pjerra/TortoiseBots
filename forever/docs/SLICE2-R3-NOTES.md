@@ -86,7 +86,7 @@ Build: `FOREVER_SLOT=1 FOREVER_CMAKE_EXTRA=-DTORTOISEBOTS_SLICE1=1 ~/forever-bui
 | Pass | Result |
 |---|---|
 | 1 (after the merge, A2, registry, host commands) | compile: 1 file failed, the generated registry: `MaintenanceValues.h` (header-only value classes: nothing in the census includes a header that has no `.cpp`, so these four places were invisible to it): `SPELL_ID_PASSIVE_RESURRECTION_SICKNESS`, `Player::GetPowerPercent`, `Player::GetAngle` x2. Fixed: `GetPowerPercent` joins the name macros of the shim (`GetPowerPct`), `GetAngle` -> `GetAngleCompat(master, bot)` (existing pair), the spell id constant 15007 in `TbCompat_Names.h` (T: SharedDefines.h:1342; the number is read back by `.tb spell 15007` in the boot, section 10) |
-| 2 | every object compiled; **link: 25 undefined functions and 10 vtables** |
+| 2 | every object compiled; **link: 25 undefined symbols (15 functions and 10 vtables)** |
 | 3 | `worldserver` linked, `MAKE_RC=0` |
 
 ### 7.1 The 10 vtables: routed (rule a), 8 call sites in 3 files
