@@ -31,7 +31,7 @@ class HireNeverLeavesWiringTest(unittest.TestCase):
 
     def test_adoption_asks_the_hire_policy(self):
         fn = body(AI, "bool const dungeonCrew =", "// fix bots in BG not having proper strategies")
-        self.assertIn("ObjectAccessor::FindPlayerNotInWorld(hirerGuid)", fn)
+        self.assertIn("FindPlayerNotInWorldCompat(hirerGuid)", fn)
         self.assertIn("bool const hirerBetweenMaps = hirer && !hirer->IsInWorld();", fn)
         self.assertIn(
             "TortoiseBots::HireAllowsMasterAdoption(hired, hirerBetweenMaps, IsRealPlayer(newMaster))", fn)
