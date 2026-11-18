@@ -1711,7 +1711,7 @@ MovementAction::SwimHandoffResult MovementAction::SwimHandoff(const WorldPositio
     // the core's MovePoint would recompute a different route; the module walks exactly the path
     // it validated. It runs through the SAME ClipPath (hostile/hazard + packHold) as an ordinary
     // route; a cut route is dispatched when 2+ points remain, else the hand-off is refused.
-    // PathPointsCompat(path)[0] is the bot's own spot, so it is kept once, not duplicated (a zero-length
+    // path.getPath()[0] is the bot's own spot, so it is kept once, not duplicated (a zero-length
     // first leg would freeze the spline: Launch overwrites legs[0] with the live position).
     std::vector<WorldPosition> coreRoute;
     if (kind == ai::SwimHandoff::CoreLine && f.coreType == ai::kPathTypeNormal)
