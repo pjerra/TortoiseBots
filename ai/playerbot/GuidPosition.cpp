@@ -160,35 +160,22 @@ bool GuidPosition::isDead(uint32 instanceId) const
 uint16 GuidPosition::IsPartOfAPool()
 {
     if (IsCreature())
-        return sPoolMgr.IsPartOfAPool<Creature>(GetCounter());
+        return PoolOfSpawnCompat(true, GetCounter());
     if (IsGameObject())
-        return sPoolMgr.IsPartOfAPool<GameObject>(GetCounter());
+        return PoolOfSpawnCompat(false, GetCounter());
 
     return 0;
 }
 
 uint16 GuidPosition::GetGameEventId()
 {
-    if (uint16 pool_id = IsPartOfAPool())
-    {
-        uint16 top_pool_id = sPoolMgr.IsPartOfTopPool<Pool>(pool_id);
-
-        if (int16 event_id = sGameEventMgr.GetGameEventId<Pool>(top_pool_id))
-            return event_id;
-    }
-
-    if (IsCreature())
-        return sGameEventMgr.GetGameEventId<Creature>(GetCounter());
-    if (IsGameObject())
-        return sGameEventMgr.GetGameEventId<GameObject>(GetCounter());
-
-    return 0;
+    return GameEventOfSpawnCompat(IsPartOfAPool(), IsCreature(), IsGameObject(), GetCounter());
 }
 
 bool GuidPosition::IsEventUnspawned()
 {
     if (int16 event_id = GetGameEventId())
-        if (!sGameEventMgr.IsActiveEvent(event_id))
+        if (!GameEventActiveCompat(event_id))
             return true;
 
     return false;

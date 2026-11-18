@@ -29,46 +29,50 @@ ChatChannelSource PlayerbotAI::GetChatChannelSource(Player* bot, uint32 type, st
         }
         else
         {
-            ChannelMgr* cMgr = channelMgr(bot->GetTeam());
-            if (!cMgr)
+            return UnportedBlockResultCompat(tbcompat::Feature::AddonChat, ChatChannelSource::SRC_UNDEFINED, [&](auto* bot) -> ChatChannelSource
             {
-                return ChatChannelSource::SRC_UNDEFINED;
-            }
-
-            const Channel* channel = cMgr->GetChannel(channelName, sObjectAccessor.FindPlayerPointer(bot->GetObjectGuid()));
-
-            if (channel)
-            {
-                switch (channel->GetChannelId())
+                auto* cMgr = channelMgr(bot->GetTeam());
+                if (!cMgr)
                 {
-                case ChatChannelId::GENERAL:
-                {
-                    return ChatChannelSource::SRC_GENERAL;
-                }
-                case ChatChannelId::TRADE:
-                {
-                    return ChatChannelSource::SRC_TRADE;
-                }
-                case ChatChannelId::LOCAL_DEFENSE:
-                {
-                    return ChatChannelSource::SRC_LOCAL_DEFENSE;
-                }
-                case ChatChannelId::WORLD_DEFENSE:
-                {
-                    return ChatChannelSource::SRC_WORLD_DEFENSE;
-                }
-                case ChatChannelId::LOOKING_FOR_GROUP:
-                {
-                    return ChatChannelSource::SRC_LOOKING_FOR_GROUP;
-                }
-                case ChatChannelId::GUILD_RECRUITMENT:
-                {
-                    return ChatChannelSource::SRC_GUILD_RECRUITMENT;
-                }
-                default:
                     return ChatChannelSource::SRC_UNDEFINED;
                 }
-            }
+
+                auto* channel = cMgr->GetChannel(channelName, sObjectAccessor.FindPlayerPointer(bot->GetObjectGuid()));
+
+                if (channel)
+                {
+                    switch (channel->GetChannelId())
+                    {
+                    case ChatChannelId::GENERAL:
+                    {
+                        return ChatChannelSource::SRC_GENERAL;
+                    }
+                    case ChatChannelId::TRADE:
+                    {
+                        return ChatChannelSource::SRC_TRADE;
+                    }
+                    case ChatChannelId::LOCAL_DEFENSE:
+                    {
+                        return ChatChannelSource::SRC_LOCAL_DEFENSE;
+                    }
+                    case ChatChannelId::WORLD_DEFENSE:
+                    {
+                        return ChatChannelSource::SRC_WORLD_DEFENSE;
+                    }
+                    case ChatChannelId::LOOKING_FOR_GROUP:
+                    {
+                        return ChatChannelSource::SRC_LOOKING_FOR_GROUP;
+                    }
+                    case ChatChannelId::GUILD_RECRUITMENT:
+                    {
+                        return ChatChannelSource::SRC_GUILD_RECRUITMENT;
+                    }
+                    default:
+                        return ChatChannelSource::SRC_UNDEFINED;
+                    }
+                }
+                return ChatChannelSource::SRC_UNDEFINED;
+            }, bot);
         }
     }
     else
@@ -146,13 +150,7 @@ bool PlayerbotAI::SayToGuild(std::string msg, bool likePlayer)
                     break;
                 }
             }
-            if (!guild->HasRankRight(bot->GetRank(), GR_RIGHT_GCHATSPEAK))
-            {
-                return false;
-            }
-
-            guild->BroadcastToGuild(bot->GetSession(), msg.c_str(), LANG_UNIVERSAL);
-            return true;
+            return GuildSayCompat(bot, guild, msg);
         }
     }
 
@@ -162,13 +160,7 @@ bool PlayerbotAI::SayToGuild(std::string msg, bool likePlayer)
 static bool SayToNamedChannel(Player* bot, std::string const& name, std::string const& msg)
 {
     if (!bot || msg.empty()) return false;
-    ChannelMgr* mgr = channelMgr(bot->GetTeam());
-    Channel* channel = mgr ? mgr->GetOrCreateChannel(name) : nullptr;
-    if (!channel) return false;
-    ObjectGuid guid = bot->GetObjectGuid();
-    channel->Join(guid, "", false);
-    channel->AsyncSay(guid, msg.c_str(), LANG_UNIVERSAL);
-    return true;
+    return SayToChannelCompat(bot, name, msg);
 }
 
 bool PlayerbotAI::SayToWorld(std::string msg) { return SayToNamedChannel(bot, "World", msg); }
@@ -398,8 +390,7 @@ bool PlayerbotAI::TellPlayerNoFacing(Player* player, std::string text, Playerbot
                 {
                     text = "BOT\t" + text;
 
-                    ChatHandler::BuildChatPacket(data, type == CHAT_MSG_ADDON ? CHAT_MSG_PARTY : type, text.c_str(), type == CHAT_MSG_ADDON ? LANG_ADDON : LANG_UNIVERSAL, CHAT_TAG_NONE, bot->getObjectGuid(), bot->GetName());
-                    sServerFacade.SendPacket(player, data);
+                    SendChatPacketCompat(sServerFacade, bot, player, type == CHAT_MSG_ADDON ? CHAT_MSG_PARTY : type, text, type == CHAT_MSG_ADDON ? LANG_ADDON : LANG_UNIVERSAL);
                     return true;
                 }
 

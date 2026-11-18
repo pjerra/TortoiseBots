@@ -4,6 +4,7 @@
 #include "TbCompat_Unported.h"
 
 #include "Log.h"
+#include "MMapManager.h"
 
 #include <array>
 #include <atomic>
@@ -11,6 +12,12 @@
 #include <cstdio>
 #include <initializer_list>
 #include <sstream>
+
+// TbCompat_Unported.h: the navmesh query of a map.
+dtNavMeshQuery const* NavMeshQueryCompat(uint32 mapId, uint32 instanceId)
+{
+    return MMAP::MMapManager::instance()->GetNavMeshQuery(mapId, mapId, instanceId);
+}
 
 // TbCompat_Unported.h: printf into a std::string, the way the Turtle core's PQuery formats a query.
 std::string LegacyFormatCompat(char const* format, ...)

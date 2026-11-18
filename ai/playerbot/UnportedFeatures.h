@@ -61,7 +61,12 @@
     X(MovementInterrupt, "movement interrupt and heartbeat", "MovementGenerator::Interrupt and Player::SendHeartBeat; ForeverCore movement generators have no such calls") \
     X(AddonChat, "chat channels, addon bridge, chat tags", "addon messages (SendAddonMessage, BuildChatPacket with a chat tag), chat channels (ChannelMgr by team) and guild chat; ForeverCore chat is typed packets") \
     X(GuildRanks, "guild", "guild rank rights and member slots (Guild::GetRanksSize, GetMemberSlot, HasRankRight); ForeverCore has Guild::Member and rank ids") \
-    X(AuraHolders, "aura holders (debug apply)", "SpellAuraHolder and CreateSpellAuraHolder for the debug aura command; ForeverCore creates auras from SpellInfo")
+    X(AuraHolders, "aura holders (debug apply)", "SpellAuraHolder and CreateSpellAuraHolder for the debug aura command; ForeverCore creates auras from SpellInfo") \
+    X(SpawnIdOfGuid, "spawn id of a creature", "the spawn record of a creature or game object found by the guid counter (T GetCreatureDataPair(guid.GetCounter()), GetGODataPair); ForeverCore's guid counter is not a spawn id (findings item 20)") \
+    X(CreatureLevels, "creature template level", "CreatureInfo::level_max (T); ForeverCore templates scale levels per difficulty") \
+    X(PoolsAndEvents, "pools and game events", "the pool and game event of a creature or game object found by its guid counter (PoolMgr::IsPartOfAPool, GameEventMgr::GetGameEventId); ForeverCore keys both by spawn id") \
+    X(SummonSlots, "summon-object slots", "the four summon object slots of a player (m_ObjectSlotGuid, SPELL_EFFECT_SUMMON_OBJECT_SLOT1-4: totems, traps); ForeverCore has one slot effect and different bookkeeping") \
+    X(SpellData, "spell data (icon ids, item charges)", "SpellEntry::SpellIconID and Item::GetSpellCharges(index) on the mirror spell entry; ForeverCore reads them from SpellInfo / ItemEffectEntry")
 
 namespace tbcompat
 {

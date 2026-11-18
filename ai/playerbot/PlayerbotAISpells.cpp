@@ -1353,39 +1353,7 @@ bool PlayerbotAI::CastSpell(uint32 spellId, Unit* target, Item* itemTarget, bool
         }
     }
 
-    for (uint32 j = 0; j < MAX_EFFECT_INDEX; ++j)
-    {
-        uint8 slot = 0;
-        switch (pSpellInfo->Effect[j])
-        {
-        case SPELL_EFFECT_SUMMON_OBJECT_SLOT1: slot = 0; break;
-        case SPELL_EFFECT_SUMMON_OBJECT_SLOT2: slot = 1; break;
-        case SPELL_EFFECT_SUMMON_OBJECT_SLOT3: slot = 2; break;
-        case SPELL_EFFECT_SUMMON_OBJECT_SLOT4: slot = 3; break;
-        default: continue;
-        }
-
-        if (ObjectGuid guid = bot->m_ObjectSlotGuid[slot])
-        {
-            if (GameObject* obj = bot ? bot->GetMap()->GetGameObject(guid) : nullptr)
-            {
-                //Object is not mine because I created an object with same guid on different map.
-                //Make object mine, remove it from my list and give it back to the original owner.
-                if (obj->GetOwnerGuid() != bot->getObjectGuid())
-                {
-                    ObjectGuid ownerGuid = obj->GetOwnerGuid();
-                    obj->SetOwnerGuid(bot->getObjectGuid());
-                    obj->SetLootState(GO_JUST_DEACTIVATED);
-
-                    bot->RemoveGameObject(obj, false);
-                    bot->m_ObjectSlotGuid[slot].Clear();
-
-                    obj->SetOwnerGuid(ownerGuid);
-                }
-            }
-        }
-    }
-
+    ReleaseForeignSummonObjectsCompat(bot, pSpellInfo);
 
     // M1 trail: attempt plus native preparation result. PREPARE ok means the
     // core accepted the cast, not that effects landed — no module-visible
@@ -1789,11 +1757,7 @@ bool PlayerbotAI::CastPetSpell(uint32 spellId, Unit* target)
 
         uint32 command = (flag << 24) | spellId;
 
-        WorldPacket data(CMSG_PET_ACTION);
-        data << pet->getObjectGuid();
-        data << command;
-        data << (target ? target->getObjectGuid() : ObjectGuid());
-        bot->GetSession()->HandlePetAction(data);
+        HandlePetActionCompat(bot->GetSession(), pet->getObjectGuid(), command, target ? target->getObjectGuid() : ObjectGuid());
         return true;
     }
 
@@ -1900,7 +1864,7 @@ bool PlayerbotAI::IsInterruptableSpellCasting(Unit* target, std::string spell, u
         {
             Creature* const creature = static_cast<Creature*>(target);
             CreatureInfo const* const info = creature->GetCreatureInfo();
-            stunImmunity.stunMechanicImmune = ai::StunMechanicImmune(info->mechanic_immune_mask);
+            stunImmunity.stunMechanicImmune = ai::StunMechanicImmune(CreatureMechanicImmuneMaskCompat(info));
             stunImmunity.boss = creature->IsWorldBoss() ||
                 CreatureRankCompat(creature) == CREATURE_ELITE_WORLDBOSS ||
                 ai::GetDungeonPlans().IsBossEntry(creature->GetMapId(), creature->GetEntry());
@@ -2090,8 +2054,8 @@ bool PlayerbotAI::IsHealSpell(const SpellEntry* spell)
     // Holy Light/Flash of Light
     if (spell->SpellFamilyName == SPELLFAMILY_PALADIN)
     {
-        if (spell->SpellIconID == 70 ||
-            spell->SpellIconID == 242)
+        if (SpellIconIdIsCompat(spell, 70) ||
+            SpellIconIdIsCompat(spell, 242))
             return true;
     }
 
@@ -2210,7 +2174,7 @@ bool PlayerbotAI::HasSpellItems(uint32 spellId, const Item* castItem) const
                         for (uint8 s = 0; s < MAX_ITEM_PROTO_SPELLS; ++s)
                         {
                             // CastItem will be used up and does not count as reagent
-                            int32 charges = castItem->GetSpellCharges(s);
+                            int32 charges = ItemSpellChargesCompat(castItem, s);
                             if (proto->Spells[s].SpellCharges < 0 && abs(charges) < 2)
                             {
                                 ++itemcount;

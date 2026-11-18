@@ -396,13 +396,14 @@ inline bool TaxiDestinationCompat(Player* player, uint32& mapId, float& x, float
     return true;
 }
 
-inline dtNavMeshQuery const* NavMeshQueryCompat(uint32 mapId)
+inline dtNavMeshQuery const* NavMeshQueryCompat(uint32 mapId, uint32 /*instanceId*/ = 0)
 {
     MMAP::MMapManager* const mmap = MMAP::MMapFactory::createOrGetMMapManager();
     if (!mmap)
         return nullptr;
     return mmap->GetNavMeshQuery(mapId);
 }
+inline dtNavMeshQuery const* NavMeshProbeQueryCompat(uint32 mapId) { return NavMeshQueryCompat(mapId); }
 template <class... Args>
 inline dtPolyRef NavMeshFindWalkPolyCompat(Args&&... args) { return PathInfo::FindWalkPoly(std::forward<Args>(args)...); }
 
@@ -662,5 +663,122 @@ inline bool GuildRanksOfBotCompat(GuildType* guild, ObjectGuid const& botGuid, u
 }
 
 inline WorldObject* PlayerViewObjectCompat(Player* player) { return player->GetCamera().GetBody(); }
+
+
+// ===============================================================================================================
+// WORLDPOSITION.CPP, GUIDPOSITION.CPP
+// ===============================================================================================================
+inline GameObjectDataPair const* GameObjectDataPairOfCounterCompat(uint64 counter) { return sObjectMgr.GetGODataPair(counter); }
+inline CreatureDataPair const* CreatureDataPairOfCounterCompat(uint64 counter) { return sObjectMgr.GetCreatureDataPair(counter); }
+inline uint32 CreatureMaxLevelCompat(CreatureInfo const* info) { return info->level_max; }
+template <class PathFinderType>
+inline void ExcludeSteepSlopesCompat(PathFinderType& pathfinder) { pathfinder.ExcludeSteepSlopes(); }
+
+constexpr bool PathTypeBitsMatchCoreCompat(uint32 normal, uint32 shortcut, uint32 incomplete, uint32 noPath, uint32 notUsingPath, uint32 destForced, uint32 flyPath, uint32 underwater)
+{
+    return normal == PATHFIND_NORMAL && shortcut == PATHFIND_SHORTCUT && incomplete == PATHFIND_INCOMPLETE && noPath == PATHFIND_NOPATH &&
+        notUsingPath == PATHFIND_NOT_USING_PATH && destForced == PATHFIND_DEST_FORCED && flyPath == PATHFIND_FLYPATH && underwater == PATHFIND_UNDERWATER;
+}
+constexpr bool NavFlagsMatchCoreCompat(uint32 ground, uint32 magma, uint32 slime, uint32 water, uint32 steep)
+{
+    return ground == NAV_GROUND && magma == NAV_MAGMA && slime == NAV_SLIME && water == NAV_WATER && steep == NAV_STEEP_SLOPES;
+}
+inline uint16 NavExcludeFlagsCompat() { return NAV_MAGMA | NAV_SLIME | NAV_WATER | NAV_STEEP_SLOPES; }
+
+
+inline uint16 PoolOfSpawnCompat(bool creature, uint64 counter)
+{
+    return creature ? sPoolMgr.IsPartOfAPool<Creature>(counter) : sPoolMgr.IsPartOfAPool<GameObject>(counter);
+}
+// GuidPosition::GetGameEventId: the pool's top pool first, then the creature or game object itself.
+inline int16 GameEventOfSpawnCompat(uint16 poolId, bool creature, bool gameObject, uint64 counter)
+{
+    if (poolId)
+    {
+        uint16 top_pool_id = sPoolMgr.IsPartOfTopPool<Pool>(poolId);
+
+        if (int16 event_id = sGameEventMgr.GetGameEventId<Pool>(top_pool_id))
+            return event_id;
+    }
+
+    if (creature)
+        return sGameEventMgr.GetGameEventId<Creature>(counter);
+    if (gameObject)
+        return sGameEventMgr.GetGameEventId<GameObject>(counter);
+
+    return 0;
+}
+inline bool GameEventActiveCompat(int16 eventId) { return sGameEventMgr.IsActiveEvent(eventId); }
+
+
+inline bool GuildSayCompat(Player* bot, Guild* guild, std::string const& msg)
+{
+    if (!guild->HasRankRight(bot->GetRank(), GR_RIGHT_GCHATSPEAK))
+    {
+        return false;
+    }
+
+    guild->BroadcastToGuild(bot->GetSession(), msg.c_str(), LANG_UNIVERSAL);
+    return true;
+}
+inline bool SayToChannelCompat(Player* bot, std::string const& name, std::string const& msg)
+{
+    ChannelMgr* mgr = channelMgr(bot->GetTeam());
+    Channel* channel = mgr ? mgr->GetOrCreateChannel(name) : nullptr;
+    if (!channel) return false;
+    ObjectGuid guid = bot->GetObjectGuid();
+    channel->Join(guid, "", false);
+    channel->AsyncSay(guid, msg.c_str(), LANG_UNIVERSAL);
+    return true;
+}
+template <class Facade>
+inline void SendChatPacketCompat(Facade& facade, Player* from, Player* to, uint32 chatType, std::string const& text, uint32 language)
+{
+    WorldPacket data;
+    ChatHandler::BuildChatPacket(data, chatType, text.c_str(), language, CHAT_TAG_NONE, from->getObjectGuid(), from->GetName());
+    facade.SendPacket(to, data);
+}
+
+
+// ===============================================================================================================
+// SPELLS
+// ===============================================================================================================
+inline void ReleaseForeignSummonObjectsCompat(Player* bot, SpellEntry const* pSpellInfo)
+{
+    for (uint32 j = 0; j < MAX_EFFECT_INDEX; ++j)
+    {
+        uint8 slot = 0;
+        switch (pSpellInfo->Effect[j])
+        {
+        case SPELL_EFFECT_SUMMON_OBJECT_SLOT1: slot = 0; break;
+        case SPELL_EFFECT_SUMMON_OBJECT_SLOT2: slot = 1; break;
+        case SPELL_EFFECT_SUMMON_OBJECT_SLOT3: slot = 2; break;
+        case SPELL_EFFECT_SUMMON_OBJECT_SLOT4: slot = 3; break;
+        default: continue;
+        }
+
+        if (ObjectGuid guid = bot->m_ObjectSlotGuid[slot])
+        {
+            if (GameObject* obj = bot ? bot->GetMap()->GetGameObject(guid) : nullptr)
+            {
+                //Object is not mine because I created an object with same guid on different map.
+                //Make object mine, remove it from my list and give it back to the original owner.
+                if (obj->GetOwnerGuid() != bot->getObjectGuid())
+                {
+                    ObjectGuid ownerGuid = obj->GetOwnerGuid();
+                    obj->SetOwnerGuid(bot->getObjectGuid());
+                    obj->SetLootState(GO_JUST_DEACTIVATED);
+
+                    bot->RemoveGameObject(obj, false);
+                    bot->m_ObjectSlotGuid[slot].Clear();
+
+                    obj->SetOwnerGuid(ownerGuid);
+                }
+            }
+        }
+    }
+}
+inline bool SpellIconIdIsCompat(SpellEntry const* spell, uint32 icon) { return spell->SpellIconID == icon; }
+inline int32 ItemSpellChargesCompat(Item* item, uint8 index) { return item->GetSpellCharges(index); }
 
 // @@END@@

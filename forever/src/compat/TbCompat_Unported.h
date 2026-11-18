@@ -426,10 +426,14 @@ inline bool UsePortalObjectCompat(Player* /*bot*/, GameObject* /*object*/) { tbc
 // destination").
 inline bool TaxiDestinationCompat(Player* /*player*/, uint32& /*mapId*/, float& /*x*/, float& /*y*/, float& /*z*/) { tbcompat::Unported(tbcompat::Feature::Taxi); return false; }
 
-// The navmesh query object of a map and the core's walkable-poly pick (the navmesh-island probe, WorldPosition's path walks). T: the
-// MMapManager singleton and `PathInfo::FindWalkPoly`. F's MMapManager is keyed by map, instance and phase and has no such pick.
-// Failure values: nullptr ("no navmesh for that map": every caller then answers false) and the invalid poly ref 0.
-inline dtNavMeshQuery const* NavMeshQueryCompat(uint32 /*mapId*/) { tbcompat::Unported(tbcompat::Feature::NavmeshProbe); return nullptr; }
+// PROPER: the navmesh query object of a map (T `MMapManager::GetNavMeshQuery(mapId)`, one mesh per map; F keys it by mesh map, instance
+// map and instance id, so the map's own id is passed for the first two, as the continents and TbCompat_C.cpp do). nullptr when no mesh
+// is loaded for it. Defined in TbCompat_Unported.cpp (the MMapManager header is not in the pre-included set).
+dtNavMeshQuery const* NavMeshQueryCompat(uint32 mapId, uint32 instanceId = 0);
+// The navmesh-island probe (MovementAction's ProbePlaceUnstickIsolated) needs the core's own walkable-poly pick (T
+// `PathInfo::FindWalkPoly`), which F's PathGenerator has no call for; the probe's query and poly pick are NOT proper. Failure values:
+// nullptr (the probe then answers "not isolated": no unstick teleport) and the invalid poly ref 0.
+inline dtNavMeshQuery const* NavMeshProbeQueryCompat(uint32 /*mapId*/) { tbcompat::Unported(tbcompat::Feature::NavmeshProbe); return nullptr; }
 template <class... Args>
 inline dtPolyRef NavMeshFindWalkPolyCompat(Args&&...) { tbcompat::Unported(tbcompat::Feature::NavmeshProbe); return 0; }
 
@@ -569,6 +573,67 @@ inline bool GuildRanksOfBotCompat(GuildType* /*guild*/, ObjectGuid const& /*botG
 // PROPER: the object a player's client looks through (a farsight or cinematic camera body). T `GetCamera().GetBody()`, F
 // `GetViewpoint()` (nullptr without a farsight; the caller ignores the player itself and objects not in the world).
 inline WorldObject* PlayerViewObjectCompat(Player* player) { return player->GetViewpoint(); }
+
+
+// ===============================================================================================================
+// WORLDPOSITION.CPP, GUIDPOSITION.CPP
+// ===============================================================================================================
+// T's guid type of a game object based transport. F has no such tag: the label can never match (HighGuid::Count is no real guid
+// type). The same switch lists HIGHGUID_MO_TRANSPORT, which is F's transport tag.
+#define HIGHGUID_TRANSPORT HighGuid::Count
+
+// The spawn record behind a guid counter. Failure value: nullptr ("no spawn record"); WorldPosition(guid) then answers the empty
+// position, as it does for a guid it does not know.
+inline GameObjectDataPair const* GameObjectDataPairOfCounterCompat(uint64 /*counter*/) { tbcompat::Unported(tbcompat::Feature::SpawnIdOfGuid); return nullptr; }
+inline CreatureDataPair const* CreatureDataPairOfCounterCompat(uint64 /*counter*/) { tbcompat::Unported(tbcompat::Feature::SpawnIdOfGuid); return nullptr; }
+
+// The highest level of a creature template (T `level_max`). Failure value: 0 ("level unknown").
+inline uint32 CreatureMaxLevelCompat(CreatureInfo const* /*info*/) { tbcompat::Unported(tbcompat::Feature::CreatureLevels); return 0; }
+
+// The steep-slope exclusion of a pathfinder (T `PathFinder::ExcludeSteepSlopes()`). Failure value: nothing excluded ("the path may use
+// steep ground").
+template <class PathFinderType>
+inline void ExcludeSteepSlopesCompat(PathFinderType& /*pathfinder*/) { tbcompat::Unported(tbcompat::Feature::NavmeshProbe); }
+
+// The checks that the legacy policy constants equal the core's path type and navmesh flag bits. T: compared. F: the bits mean other
+// things (R4M decision 8, UNPORTED.md "navmesh and path internals"), no equality is claimed.
+constexpr bool PathTypeBitsMatchCoreCompat(uint32, uint32, uint32, uint32, uint32, uint32, uint32, uint32) { return true; }
+constexpr bool NavFlagsMatchCoreCompat(uint32, uint32, uint32, uint32, uint32) { return true; }
+
+// PROPER: the navmesh flags a walkable-ground query excludes: magma, slime, water and steep slopes (F merges magma and slime).
+inline uint16 NavExcludeFlagsCompat() { return NAV_MAGMA_SLIME | NAV_WATER | NAV_GROUND_STEEP; }
+
+
+// Pool and game event of a spawn found by its guid counter. Failure values: 0 ("not part of a pool", "no event").
+inline uint16 PoolOfSpawnCompat(bool /*creature*/, uint64 /*counter*/) { tbcompat::Unported(tbcompat::Feature::PoolsAndEvents); return 0; }
+inline int16 GameEventOfSpawnCompat(uint16 /*poolId*/, bool /*creature*/, bool /*gameObject*/, uint64 /*counter*/) { tbcompat::Unported(tbcompat::Feature::PoolsAndEvents); return 0; }
+// PROPER: whether a game event is running (F's manager is a pointer-style singleton).
+inline bool GameEventActiveCompat(int16 eventId) { return sGameEventMgr->IsActiveEvent(eventId); }
+
+
+// ===============================================================================================================
+// CHAT (PlayerbotAIChat.cpp)
+// ===============================================================================================================
+// Say something in the bot's guild (T: the speak right of its rank, then Guild::BroadcastToGuild). Failure value: false (not said).
+inline bool GuildSayCompat(Player* /*bot*/, Guild* /*guild*/, std::string const& /*msg*/) { tbcompat::Unported(tbcompat::Feature::GuildRanks); return false; }
+// Join a named channel of the bot's team and say something in it (T: ChannelMgr by team, GetOrCreateChannel, Join, AsyncSay). Failure
+// value: false (not said).
+inline bool SayToChannelCompat(Player* /*bot*/, std::string const& /*name*/, std::string const& /*msg*/) { tbcompat::Unported(tbcompat::Feature::AddonChat); return false; }
+// A chat packet from the bot to a player (T BuildChatPacket with CHAT_TAG_NONE). Failure value: not sent.
+template <class Facade>
+inline void SendChatPacketCompat(Facade& /*facade*/, Player* /*from*/, Player* /*to*/, uint32 /*chatType*/, std::string const& /*text*/, uint32 /*language*/) { tbcompat::Unported(tbcompat::Feature::AddonChat); }
+
+
+// ===============================================================================================================
+// SPELLS (PlayerbotAISpells.cpp)
+// ===============================================================================================================
+// Hand an object the bot summoned on another map back to its owner (T: the four summon object slots of the player). Failure value:
+// nothing is handed back.
+inline void ReleaseForeignSummonObjectsCompat(Player* /*bot*/, SpellEntry const* /*spellInfo*/) { tbcompat::Unported(tbcompat::Feature::SummonSlots); }
+// Whether the spell's icon id is this one (T `SpellIconID == icon`). Failure value: false.
+inline bool SpellIconIdIsCompat(SpellEntry const* /*spell*/, uint32 /*icon*/) { tbcompat::Unported(tbcompat::Feature::SpellData); return false; }
+// The charges of an item's spell by index (T `Item::GetSpellCharges(index)`). Failure value: 0 charges.
+inline int32 ItemSpellChargesCompat(Item* /*item*/, uint8 /*index*/) { tbcompat::Unported(tbcompat::Feature::SpellData); return 0; }
 
 // @@END@@
 #endif // TB_UNPORTED_TABLE_ONLY

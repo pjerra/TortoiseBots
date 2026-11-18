@@ -25,10 +25,8 @@ using namespace ai;
 using namespace MaNGOS;
 
 // SwimPathPolicy.h mirrors the core's path types and liquid states.
-static_assert(ai::kPathTypeNormal == PATHFIND_NORMAL && ai::kPathTypeShortcut == PATHFIND_SHORTCUT &&
-    ai::kPathTypeIncomplete == PATHFIND_INCOMPLETE && ai::kPathTypeNoPath == PATHFIND_NOPATH &&
-    ai::kPathTypeNotUsingPath == PATHFIND_NOT_USING_PATH && ai::kPathTypeDestForced == PATHFIND_DEST_FORCED &&
-    ai::kPathTypeFlyPath == PATHFIND_FLYPATH && ai::kPathTypeUnderwater == PATHFIND_UNDERWATER,
+static_assert(PathTypeBitsMatchCoreCompat(ai::kPathTypeNormal, ai::kPathTypeShortcut, ai::kPathTypeIncomplete, ai::kPathTypeNoPath,
+    ai::kPathTypeNotUsingPath, ai::kPathTypeDestForced, ai::kPathTypeFlyPath, ai::kPathTypeUnderwater),
     "SwimPathPolicy.h path types out of step with the core's PathFinder.h");
 static_assert(ai::kLiquidNoWater == LIQUID_MAP_NO_WATER && ai::kLiquidAboveWater == LIQUID_MAP_ABOVE_WATER &&
     ai::kLiquidWaterWalk == LIQUID_MAP_WATER_WALK && ai::kLiquidInWater == LIQUID_MAP_IN_WATER &&
@@ -38,8 +36,7 @@ static_assert(ai::kLiquidTypeMagma == MAP_LIQUID_TYPE_MAGMA && ai::kLiquidTypeOc
     ai::kLiquidTypeSlime == MAP_LIQUID_TYPE_SLIME && ai::kLiquidTypeWater == MAP_LIQUID_TYPE_WATER &&
     ai::kSwimLiquidRequest == 0,
     "SwimPathPolicy.h liquid types out of step with the core's GridMapDefines.h");
-static_assert(ai::kNavGround == NAV_GROUND && ai::kNavMagma == NAV_MAGMA && ai::kNavSlime == NAV_SLIME &&
-    ai::kNavWater == NAV_WATER && ai::kNavSteepSlopes == NAV_STEEP_SLOPES,
+static_assert(NavFlagsMatchCoreCompat(ai::kNavGround, ai::kNavMagma, ai::kNavSlime, ai::kNavWater, ai::kNavSteepSlopes),
     "SteepSlopePolicy.h nav flags out of step with the core's MoveMapSharedDefines.h");
 static_assert(ai::kSteepPathNoPath == PATHFIND_NOPATH,
     "SteepSlopePolicy.h NOPATH out of step with the core's PathFinder.h");
@@ -106,7 +103,7 @@ void WorldPosition::set(const ObjectGuid& guid, const uint32 mapId, const uint32
     }
     case HIGHGUID_GAMEOBJECT:
     {
-        GameObjectDataPair const* gpair = sObjectMgr.GetGODataPair(guid.GetCounter());
+        GameObjectDataPair const* gpair = GameObjectDataPairOfCounterCompat(guid.GetCounter());
         if (gpair)
         {
             set(gpair);
@@ -128,7 +125,7 @@ void WorldPosition::set(const ObjectGuid& guid, const uint32 mapId, const uint32
             }
         }
 
-        CreatureDataPair const* cpair = sObjectMgr.GetCreatureDataPair(guid.GetCounter());
+        CreatureDataPair const* cpair = CreatureDataPairOfCounterCompat(guid.GetCounter());
         if (cpair)
         {
             set(cpair);
@@ -675,7 +672,7 @@ void WorldPosition::EnsurePointDangerIndex()
                     PointDangerCellCoord(spawnLocation.x),
                     PointDangerCellCoord(spawnLocation.y) };
                 (*cells)[key].push_back(PointDangerSpawn{ spawnLocation.x,
-                    spawnLocation.y, toAlly, toHorde, info->level_max,
+                    spawnLocation.y, toAlly, toHorde, CreatureMaxLevelCompat(info),
                     CreatureIsAboveNormalCompat(info) });
                 return false;
             }
@@ -1362,7 +1359,7 @@ std::string WorldPosition::SwimLineWhy(const std::vector<WorldPosition>& path, c
 }
 
 //A single pathfinding attempt from one position to another. Returns pathfinding status and path.
-void WorldPosition::ExcludeSteepSlopes(PathFinder& pathfinder) { pathfinder.ExcludeSteepSlopes(); }
+void WorldPosition::ExcludeSteepSlopes(PathFinder& pathfinder) { ExcludeSteepSlopesCompat(pathfinder); }
  bool WorldPosition::FellBackToPermissive(PathType strictType)
  {
      return ai::ShouldRetryPermissive(static_cast<std::uint32_t>(strictType));
@@ -1640,11 +1637,7 @@ bool WorldPosition::ClosestCorrectPoint(float maxRange, float maxHeight, uint32 
 {
     MANGOS_ASSERT(std::isfinite(x) && std::isfinite(y) && std::isfinite(z));
 
-    MMAP::MMapManager* mmap = MMAP::MMapFactory::createOrGetMMapManager();
-
-    MANGOS_ASSERT(mmap);
-
-    dtNavMeshQuery const* query = mmap->GetNavMeshQuery(getMapId());
+    dtNavMeshQuery const* query = NavMeshQueryCompat(getMapId(), instanceId);
 
     MANGOS_ASSERT(query && query->getAttachedNavMesh());
 
@@ -1658,7 +1651,7 @@ bool WorldPosition::ClosestCorrectPoint(float maxRange, float maxHeight, uint32 
     uint16 includeFlags = NAV_GROUND;
     // Walkable ground that is not steep, the same ground ExcludeSteepSlopes
     // plans over: magma, slime and water were never walkable here either.
-    uint16 excludeFlags = NAV_MAGMA | NAV_SLIME | NAV_WATER | NAV_STEEP_SLOPES;
+    uint16 excludeFlags = NavExcludeFlagsCompat();
     filter.setIncludeFlags(includeFlags);
     filter.setExcludeFlags(excludeFlags);
 

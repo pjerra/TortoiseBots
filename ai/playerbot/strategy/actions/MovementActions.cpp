@@ -658,13 +658,13 @@ bool MovementAction::MoveOnTransport(PlayerbotAI* ai, GenericTransport* transpor
             ai->StopMoving();
 
             if (!bot->GetMotionMaster()->empty())
-                if (MovementGenerator* movgen = bot->GetMotionMaster()->top())
+                if (auto* movgen = bot->GetMotionMaster()->top())
                     movgen->Interrupt(*bot);
 
             bot->SendHeartBeat();
 
             if (!bot->GetMotionMaster()->empty())
-                if (MovementGenerator* movgen = bot->GetMotionMaster()->top())
+                if (auto* movgen = bot->GetMotionMaster()->top())
                     movgen->Reset(*bot);
         }
 
@@ -2325,7 +2325,7 @@ static bool PlaceUnstickRegionAround(dtNavMeshQuery const* query, dtQueryFilter 
 // not beside the island, for the bot's pet.
 static bool ProbePlaceUnstickIsolated(uint32 mapId, float fx, float fy, float fz, Player* master)
 {
-    dtNavMeshQuery const* const query = NavMeshQueryCompat(mapId);
+    dtNavMeshQuery const* const query = NavMeshProbeQueryCompat(mapId);
     if (!query || !query->getAttachedNavMesh())
         return false;
     dtQueryFilter filter;
