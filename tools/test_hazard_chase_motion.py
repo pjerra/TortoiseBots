@@ -46,6 +46,11 @@ struct Unit {
     bool IsStopped() const { return !moving; }
     float GetSpeed(int) const { return 7; }
 };
+using GenericTransport = Transport;
+// The both-core helpers of ai/cmangos-compat-unported.h and TbCompat_C.h (T bodies, same text).
+inline GenericTransport* TransportOfCompat(Unit* unit) { return unit->GetTransport(); }
+template <class Init>
+inline void SplineSetTransportCompat(Init& init, GenericTransport* transport) { init.SetTransport(transport->GetGUIDLow()); }
 struct WorldPosition {
     float GetPathLength(const std::vector<WorldPosition>&) const { return 10; }
     std::vector<G3D::Vector3> toPointsArray(const std::vector<WorldPosition>& path) const {

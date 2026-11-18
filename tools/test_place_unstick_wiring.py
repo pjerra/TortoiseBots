@@ -92,8 +92,8 @@ class PlaceUnstickWiring(unittest.TestCase):
         # A connected start restarts the streak: the query runs at most once per 10 s streak.
         self.assertIn("ai::PlaceUnstickRestartStreak(state, nowMs);", unstick[probe:teleport])
         query = body(MOVEMENT, "static bool ProbePlaceUnstickIsolated(uint32 mapId, float fx, float fy, float fz, Player* master)")
-        self.assertIn("PathInfo::FindWalkPoly(query, start, filter, startNearest)", query)
-        self.assertIn("PathInfo::FindWalkPoly(query, end, filter, endNearest)", query)
+        self.assertIn("NavMeshFindWalkPolyCompat(query, start, filter, startNearest)", query)
+        self.assertIn("NavMeshFindWalkPolyCompat(query, end, filter, endNearest)", query)
         self.assertIn("query->findPath(startRef, endRef", query)
         self.assertIn("bool const reachedEnd = polys[polyCount - 1] == endRef;", query)
         self.assertIn("return ai::PlaceUnstickStartIsolated(true, true, true, reachedEnd, reachYd, regionEnclosed);", query)

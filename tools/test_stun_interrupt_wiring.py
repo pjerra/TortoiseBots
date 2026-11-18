@@ -98,7 +98,7 @@ class InterruptAllowStun(unittest.TestCase):
         # 1. The spell-level check reads the spell's Mechanic (Bash/HoJ stun is there, not on the effect).
         self.assertIn("IsImmuneToSpellCompat(target, spellInfo, false, bot)", immunity)
         # 2. The creature's raw mechanic_immune_mask, so a missing spell Mechanic cannot slip through.
-        self.assertIn("ai::StunMechanicImmune(info->mechanic_immune_mask)", immunity)
+        self.assertIn("ai::StunMechanicImmune(CreatureMechanicImmuneMaskCompat(info))", immunity)
         # 4. A boss counts as unstunnable without the bit: world boss, plan boss, boss rank.
         self.assertIn("creature->IsWorldBoss()", immunity)
         self.assertIn("CreatureRankCompat(creature) == CREATURE_ELITE_WORLDBOSS", immunity)

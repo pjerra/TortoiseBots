@@ -75,8 +75,14 @@ class SwimPathWiringTest(unittest.TestCase):
         self.assertIn("a.GetMapId() != map->GetId() || b.GetMapId() != map->GetId()", self.fits)
 
     def test_bits_are_asserted_against_the_core(self):
+        # The assert now goes through PathTypeBitsMatchCoreCompat (ai/cmangos-compat-unported.h on Turtle, where it
+        # compares each policy constant with the core's PATHFIND_ name; ForeverCore claims no equality: UNPORTED.md).
+        unported = (ROOT / "ai/cmangos-compat-unported.h").read_text()
+        self.assertIn("static_assert(PathTypeBitsMatchCoreCompat(ai::kPathTypeNormal, ai::kPathTypeShortcut, "
+                      "ai::kPathTypeIncomplete, ai::kPathTypeNoPath,\n"
+                      "    ai::kPathTypeNotUsingPath, ai::kPathTypeDestForced, ai::kPathTypeFlyPath, ai::kPathTypeUnderwater),", WORLDPOS)
         for name in ("NORMAL", "SHORTCUT", "INCOMPLETE", "NOPATH", "NOT_USING_PATH", "DEST_FORCED", "FLYPATH", "UNDERWATER"):
-            self.assertRegex(WORLDPOS, r"ai::kPathType\w+ == PATHFIND_%s\b" % name)
+            self.assertRegex(unported, r"\w+ == PATHFIND_%s\b" % name)
         for name in ("NO_WATER", "ABOVE_WATER", "WATER_WALK", "IN_WATER", "UNDER_WATER"):
             self.assertRegex(WORLDPOS, r"ai::kLiquid\w+ == LIQUID_MAP_%s\b" % name)
 

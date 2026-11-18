@@ -36,9 +36,10 @@ class SpeedCasesTest(unittest.TestCase):
 
     def test_the_block_echoes_what_the_server_sent(self):
         block = speed_block()
-        self.assertIn("p >> guid.ReadAsPacked() >> counter >> speed;", block)
-        self.assertIn("SpeedChangeAck::WriteAck(ack, guid.GetRawValue(), counter, bot->m_movementInfo, speed)", block)
-        self.assertIn("bot->GetSession()->HandleForceSpeedChangeAckOpcodes(ack);", block)
+        self.assertIn("PackedGuidReadCompat(tbcompat::Feature::IncomingSpeedChange, p, guid)", block)
+        self.assertIn("p >> counter >> speed;", block)
+        self.assertIn("SpeedChangeAck::WriteAck(ack, guid.GetRawValue(), counter, player->m_movementInfo, speed)", block)
+        self.assertIn("player->GetSession()->HandleForceSpeedChangeAckOpcodes(ack);", block)
 
     def test_only_a_headless_bot_session_acks(self):
         block = speed_block()
@@ -65,7 +66,7 @@ class SpeedCasesTest(unittest.TestCase):
     def test_knockback_is_untouched(self):
         knock = body(PACKETS, "case SMSG_MOVE_KNOCK_BACK: // handle knockbacks")
         self.assertIn("WorldPacket ack(CMSG_MOVE_KNOCK_BACK_ACK);", knock)
-        self.assertIn("bot->GetSession()->HandleMoveKnockBackAck(ack);", knock)
+        self.assertIn("player->GetSession()->HandleMoveKnockBackAck(ack);", knock)
 
 
 class HandledOpcodeTest(unittest.TestCase):

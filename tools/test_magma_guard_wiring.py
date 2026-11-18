@@ -150,7 +150,7 @@ class MagmaGuardWiringTest(unittest.TestCase):
         # floor height). Dropping it would restore over a transport ride.
         self.assertIn("!bot->GetTransport()", f[clampedAt:keep])
         # (void) casts only in mutation scratch, never in shipped tests.
-        self.assertNotIn("(void)", f[clampedAt:at(f, "CalculatePassengerOffset(p.x, p.y, p.z);")])
+        self.assertNotIn("(void)", f[clampedAt:at(f, "SplinePointToTransportCompat(botTransport, p.x, p.y, p.z);")])
     def test_route_check_never_edits_the_route(self):
         # Round 2: the ONE sampled liquid-hazard guard (magma, and slime for
         # the hand-off) owns the traversal; the magma-only entry keeps its name.
