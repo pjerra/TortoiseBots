@@ -123,6 +123,12 @@ if(TORTOISEBOTS_SLICE1)
     endif()
   endforeach()
 
+  # Debug info for the module's own objects only (a backtrace with arguments under gdb); the core stays as built.
+  option(TORTOISEBOTS_DEBUG_INFO "Compile the module with -g (gdb backtraces with arguments)" OFF)
+  if(TORTOISEBOTS_DEBUG_INFO AND NOT MSVC)
+    target_compile_options(tortoisebots PRIVATE -g -fno-omit-frame-pointer)
+  endif()
+
   target_compile_definitions(tortoisebots
     PUBLIC
       TORTOISEBOTS_SLICE1=1

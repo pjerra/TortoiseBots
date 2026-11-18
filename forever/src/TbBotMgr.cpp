@@ -13,12 +13,15 @@
 #include "Config.h"
 #include "Log.h"
 #include "StringFormat.h"
+#include "DB2Stores.h"
 #include "Map.h"
 #include "MotionMaster.h"
 #include "ObjectAccessor.h"
 #include "Player.h"
 #include "World.h"
+#include <algorithm>
 #include <memory>
+#include <optional>
 #include <vector>
 
 namespace TortoiseBots
@@ -29,6 +32,31 @@ constexpr uint32 ThinkIntervalMs = 500;
 // The core waits 30 s for a bot to leave when its owner logs in to the same character. A normal character load is
 // well under this, so a real session that is still loading after this long is waiting for us.
 constexpr uint32 OwnerLoadingLimitMs = 2000;
+// R11: how long a bot whose master is on a map it could not enter waits before it asks the core again (it also asks at once when the master changes map).
+constexpr uint32 FollowRetryMs = 30000;
+
+// The core's reason for refusing a far teleport (Map::PlayerCannotEnter, Maps/Map.cpp:1829-1875), in words.
+std::string AbortReasonText(TransferAbortParams const& denied)
+{
+    char const* what = nullptr;
+    switch (denied.Reason)
+    {
+        case TRANSFER_ABORT_ERROR: what = "error"; break;
+        case TRANSFER_ABORT_MAX_PLAYERS: what = "the instance is full"; break;
+        case TRANSFER_ABORT_NOT_FOUND: what = "instance not found"; break;
+        case TRANSFER_ABORT_TOO_MANY_INSTANCES: what = "too many instances entered recently"; break;
+        case TRANSFER_ABORT_ZONE_IN_COMBAT: what = "an encounter is in progress"; break;
+        case TRANSFER_ABORT_INSUF_EXPAN_LVL: what = "the expansion is not available"; break;
+        case TRANSFER_ABORT_DIFFICULTY: what = "no map difficulty data for the dungeon difficulty asked for (GetDownscaledMapDifficultyData found none)"; break;
+        case TRANSFER_ABORT_NEED_GROUP: what = "a raid group is needed"; break;
+        case TRANSFER_ABORT_MAP_NOT_ALLOWED: what = "map not allowed"; break;
+        case TRANSFER_ABORT_LOCKED_TO_DIFFERENT_INSTANCE: what = "locked to a different instance"; break;
+        case TRANSFER_ABORT_DIFFICULTY_NOT_FOUND: what = "difficulty not found"; break;
+        default: break;
+    }
+    return what ? Trinity::StringFormat("{} (TransferAbortReason {})", what, uint32(denied.Reason))
+                : Trinity::StringFormat("TransferAbortReason {}", uint32(denied.Reason));
+}
 }
 
 BotMgr& BotMgr::Instance()
@@ -42,6 +70,11 @@ void BotMgr::LoadConfig()
     _enabled = sConfigMgr->GetBoolDefault("TortoiseBots.Enable", false);
     _followDistance = sConfigMgr->GetFloatDefault("TortoiseBots.Spike.FollowDistance", 3.0f);
     _engineByDefault = sConfigMgr->GetBoolDefault("TortoiseBots.Slice.EngineByDefault", false);
+    // R10 (S2): how long a bot waits for a master that logged out. Default 300 s, the hire lifecycle's own: AiPlayerbot.HireDisconnectGracePeriod,
+    // default 300 (ai/playerbot/PlayerbotAIConfig.h:621, read at PlayerbotAIConfig.cpp:1050, capped at 3600 on the next line, used by
+    // HireLifecycle::SweepGracePeriod, runtime/HireLifecycle.cpp:781-896). The same cap here; 0 = no grace, the bots log out with their master.
+    int32 const graceSeconds = sConfigMgr->GetIntDefault("TortoiseBots.Slice.MasterGraceSeconds", 300);
+    _masterGraceMs = uint32(std::clamp<int32>(graceSeconds, 0, 3600)) * 1000;
     if (_engineByDefault && !engine::Built())
     {
         TC_LOG_WARN("tortoisebots", "BotMgr: TortoiseBots.Slice.EngineByDefault is 1 but the engine is not built in (TORTOISEBOTS_SLICE1 is off); bots use the spike behaviour");
@@ -70,6 +103,12 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master)
 
     Bot bot;
     bot.session = std::make_shared<BotSession>(accountId, std::move(accountName));
+    // R10 (S3): the engine hears of every teleport the session acknowledges for this bot (looked up by guid at the time: the brain comes and goes).
+    bot.session->SetTeleportAckHook([this, characterGuid]()
+    {
+        if (auto itr = _bots.find(characterGuid); itr != _bots.end() && itr->second.brain)
+            engine::HandleTeleportAck(itr->second.brain.get());
+    });
     bot.master = master;
     bot.wantParty = !master.IsEmpty();
     bot.useEngine = _engineByDefault;
@@ -80,7 +119,12 @@ std::string BotMgr::Login(ObjectGuid characterGuid, ObjectGuid master)
         uint32 members = 1;
         if (Player* leader = ObjectAccessor::FindPlayer(master))
             if (Group* group = leader->GetGroup())
+            {
+                // R10 (S1): the host forms 5-man parties only. A raid is refused here, before a session is made (JoinParty checks it again).
+                if (group->isRaidGroup())
+                    return "the master leads a raid: raids are not in this slice, the bot is not logged in";
                 members = group->GetMembersCount();
+            }
         for (auto const& [guid, other] : _bots)
             if (other.wantParty && other.master == master)
                 ++members;
@@ -118,6 +162,10 @@ std::string BotMgr::JoinParty(Player* bot, Player* master)
         return "both characters must be in the world";
 
     Group* group = master->GetGroup();
+    // R10 (S1): the host forms and keeps 5-man parties. Group::IsFull is the 40-member check for a raid, so a raid would have taken the bot as
+    // its 4th or 30th member: refuse it first (even when the bot is already in it: the host's master binding is for a party).
+    if (group && group->isRaidGroup())
+        return "the master leads a raid: raids are not in this slice, the bot was not added";
     if (group && bot->GetGroup() == group)
         return {};                                   // already in it
     if (bot->GetGroup() || bot->GetGroupInvite())
@@ -128,11 +176,13 @@ std::string BotMgr::JoinParty(Player* bot, Player* master)
     {
         if (!group->IsLeader(master->GetGUID()))
             return "the master is not the leader of its party";
-        if (group->IsFull())
+        // The party's own five, counted against MAX_GROUP_SIZE here and not through IsFull (which is the raid's 40 for a raid).
+        if (group->GetMembersCount() >= MAX_GROUP_SIZE)
             return Trinity::StringFormat("the party is full ({} members at most, raids are not in this slice)", uint32(MAX_GROUP_SIZE));
     }
 
     // The invite, as HandlePartyInviteOpcode makes it: a new group is not created or saved until the first accept.
+    bool createdHere = false;
     if (!group)
     {
         group = new Group();
@@ -158,9 +208,21 @@ std::string BotMgr::JoinParty(Player* bot, Player* master)
         group->RemoveInvite(master);
         group->Create(master);
         sGroupMgr->AddGroup(group);
+        createdHere = true;
     }
     if (!group->AddMember(bot))
+    {
+        // R10 (S1): a group this call made is saved (Group::Create writes it) and holds only the master now: take it down again, so the master is not
+        // left in a persisted one-member group nobody asked for (Group::Disband removes the saved rows, the group manager's entry and the group itself;
+        // `group` is gone after it). A group the master already had is left as it was.
+        if (createdHere)
+        {
+            group->Disband(true);
+            master->RemovePlayerFlag(PLAYER_FLAGS_GROUP_LEADER);   // Group::Create set it; the core clears it again only when the player loads (_LoadGroup)
+            TC_LOG_ERROR("tortoisebots", "BotMgr: the party made for {} was disbanded again: the core refused to add {}", master->GetName(), bot->GetName());
+        }
         return "the core refused to add the bot to the party";
+    }
     group->BroadcastGroupUpdate();
     return {};
 }
@@ -181,6 +243,7 @@ std::string BotMgr::GroupWith(ObjectGuid botGuid, ObjectGuid masterGuid)
         return error;
     itr->second.master = masterGuid;
     itr->second.wantParty = false;
+    itr->second.masterAway = false;
     return {};
 }
 
@@ -197,6 +260,7 @@ std::string BotMgr::Ungroup(ObjectGuid botGuid)
     bot->RemoveFromGroup();
     itr->second.master = ObjectGuid::Empty;
     itr->second.wantParty = false;
+    itr->second.masterAway = false;
     return {};
 }
 
@@ -242,7 +306,12 @@ std::vector<std::string> BotMgr::DescribeBrain(ObjectGuid characterGuid) const
     if (itr == _bots.end())
         return lines;
     Bot const& bot = itr->second;
-    if (bot.brain)
+    if (bot.masterAway)
+    {
+        lines.push_back("brain: none (detached)");
+        lines.push_back(Trinity::StringFormat("master away, {} s left", (bot.graceLeftMs + 999) / 1000));
+    }
+    else if (bot.brain)
     {
         lines.push_back("brain: engine");
         for (std::string const& line : engine::Describe(bot.brain.get()))
@@ -254,6 +323,9 @@ std::vector<std::string> BotMgr::DescribeBrain(ObjectGuid characterGuid) const
         lines.push_back("brain: spike (engine requested, waiting for the bot to be placed next to its master)");
     else
         lines.push_back("brain: spike");
+    if (bot.followBlocked)
+        lines.push_back(Trinity::StringFormat("follow: blocked, the master is on map {} (instance {}) and the bot cannot go there: {}; asks again in {} s or when the master changes map",
+            bot.followBlockedMap, bot.followBlockedInstance, bot.followBlockedWhy, (bot.followRetryMs + 999) / 1000));
     return lines;
 }
 
@@ -261,6 +333,75 @@ void BotMgr::DropBrain(Bot& bot)
 {
     // The engine's registry entry and the AI go before the Player does (see PlayerbotAIAdapter::Shutdown).
     bot.brain.reset();
+}
+
+void BotMgr::DetachFromMaster(Bot& bot)
+{
+    DropBrain(bot);
+    if (_masterGraceMs == 0)
+    {
+        bot.master = ObjectGuid::Empty;
+        bot.wantParty = false;
+        if (!bot.session->LogoutRequested())
+            bot.session->RequestLogout("the master left the game");
+        return;
+    }
+    if (bot.masterAway)
+        return;
+    bot.masterAway = true;
+    bot.masterSeenGone = false;
+    bot.graceLeftMs = _masterGraceMs;
+    bot.following = false;
+    bot.chasing.Clear();
+    bot.trail.clear();
+    // Stop what the engine or the follow was doing: nothing steers the bot now. It stays where it is, in its party.
+    if (Player* me = bot.session->GetPlayer(); me && me->IsInWorld())
+    {
+        me->AttackStop();
+        me->GetMotionMaster()->Clear();
+    }
+    TC_LOG_INFO("tortoisebots", "BotMgr: the master of {} is away: the bot stays and waits {} s for it", bot.session->GetCharacterGuid().ToString(), _masterGraceMs / 1000);
+}
+
+bool BotMgr::UpdateMasterAway(Bot& bot, uint32 diff)
+{
+    Player* master = ObjectAccessor::FindPlayer(bot.master);
+    if (!master)
+        bot.masterSeenGone = true;
+    // The master's own logout runs in an update of its own session: until it has been missing once, a master that is still found is the one on
+    // its way out, not one that came back.
+    if (master && bot.masterSeenGone)
+    {
+        bot.masterAway = false;
+        bot.masterSeenGone = false;
+        bot.graceLeftMs = 0;
+        bot.placed = false;      // stand next to the master again (Think teleports it when it is on another map or far away)
+        Player* me = bot.session->GetPlayer();
+        if (me && me->IsInWorld())
+        {
+            // The master is in the saved party when it was a real player (the core keeps a logged-out member): nothing to do. A party that does not
+            // hold the master any more (it was a bot, which leaves its party when it leaves the world) is left, and Think joins the master's own.
+            if (Group* group = me->GetGroup(); group && !group->IsMember(master->GetGUID()))
+                me->RemoveFromGroup(GROUP_REMOVEMETHOD_LEAVE);
+            if (!me->GetGroup())
+                bot.wantParty = true;
+        }
+        TC_LOG_INFO("tortoisebots", "BotMgr: the master of {} is back: the bot follows again", bot.session->GetCharacterGuid().ToString());
+        return true;
+    }
+
+    if (bot.graceLeftMs > diff)
+    {
+        bot.graceLeftMs -= diff;
+        return false;
+    }
+    bot.graceLeftMs = 0;
+    bot.masterAway = false;
+    bot.master = ObjectGuid::Empty;
+    bot.wantParty = false;
+    if (!bot.session->LogoutRequested())
+        bot.session->RequestLogout("the master did not come back within the grace period");
+    return false;
 }
 
 void BotMgr::OnPlayerLogout(Player* player)
@@ -271,18 +412,22 @@ void BotMgr::OnPlayerLogout(Player* player)
     ObjectGuid const leaving = player->GetGUID();
 
     // The bots whose MASTER is the player logging out (R9, findings R1'): their engines hold a pointer to it (the engine re-checks it by guid
-    // every tick, so it is safe today; this is the defence). Take each brain down and the bot out of the world with it, and clear the host's
-    // master (the guid every later Think reads), so nothing builds a brain on a master that is going away. The bot's own logout then
-    // runs through its session as a normal one (a bot that leaves leaves its party in the branch below).
+    // every tick, so it is safe today; this is the defence). R10 (S2): the original keeps hired bots through the master's disconnect and reunites them
+    // (HireLifecycle, the disconnect grace), so the bot is DETACHED, not logged out: the brain goes (its master pointer with it), the bot stays in the
+    // world and in its party, keeps the master's guid, and DetachFromMaster starts the grace. A bot that is already on its way out (server shutdown,
+    // the account owner logging in) is not detached: its brain goes and its master is cleared, as in R9.
     for (auto& [guid, bot] : _bots)
     {
         if (guid == leaving || bot.master != leaving)
             continue;
-        DropBrain(bot);
-        bot.master = ObjectGuid::Empty;
-        bot.wantParty = false;
-        if (!bot.session->LogoutRequested())   // a bot that is already on its way out (server shutdown) is not asked twice
-            bot.session->RequestLogout("the master left the game");
+        if (bot.session->LogoutRequested())
+        {
+            DropBrain(bot);
+            bot.master = ObjectGuid::Empty;
+            bot.wantParty = false;
+            continue;
+        }
+        DetachFromMaster(bot);
     }
 
     auto itr = _bots.find(leaving);
@@ -360,6 +505,61 @@ bool BotMgr::WalkBy(ObjectGuid characterGuid, float dx, float dy)
     return true;
 }
 
+std::string BotMgr::Hop(ObjectGuid characterGuid, float dx, float dy)
+{
+    Player* me = FindBot(characterGuid);
+    if (!me)
+        return "not a logged-in bot";
+    if (me->IsBeingTeleported())
+        return "the bot is already being teleported";
+    float const x = me->GetPositionX() + dx;
+    float const y = me->GetPositionY() + dy;
+    float z = me->GetPositionZ();
+    me->UpdateAllowedPositionZ(x, y, z);
+    if (!me->TeleportTo(WorldLocation(me->GetMapId(), x, y, z, me->GetOrientation())))
+        return "the core refused the teleport";
+    return {};
+}
+
+std::vector<std::string> BotMgr::CanEnter(ObjectGuid characterGuid, uint32 mapId)
+{
+    std::vector<std::string> lines;
+    Player* who = ObjectAccessor::FindPlayer(characterGuid);
+    if (!who)
+    {
+        lines.push_back("refused: the character is not in the world");
+        return lines;
+    }
+    MapEntry const* entry = sMapStore.LookupEntry(mapId);
+    if (!entry)
+    {
+        lines.push_back(Trinity::StringFormat("refused: map {} is not in the map store", mapId));
+        return lines;
+    }
+    TransferAbortParams const denied = Map::PlayerCannotEnter(mapId, who);
+    lines.push_back(denied ? "refused: " + AbortReasonText(denied) : std::string("allowed: Map::PlayerCannotEnter has no objection"));
+    Group* group = who->GetGroup();
+    lines.push_back(Trinity::StringFormat("map {}: dungeon {}, raid {}; {} difficulty asked for: {}", mapId, entry->IsDungeon() ? "yes" : "no", entry->IsRaid() ? "yes" : "no",
+        group ? "the party's" : "the character's own", uint32(group ? group->GetDifficultyID(entry) : who->GetDifficultyID(entry))));
+    return lines;
+}
+
+std::string BotMgr::ConvertToRaid(ObjectGuid masterGuid)
+{
+    Player* master = ObjectAccessor::FindPlayer(masterGuid);
+    if (!master)
+        return "the master is not in the world";
+    Group* group = master->GetGroup();
+    if (!group)
+        return "the master is not in a party";
+    if (group->isRaidGroup())
+        return "the party is a raid already";
+    if (!group->IsLeader(masterGuid))
+        return "the character is not the leader of its party";
+    group->ConvertToRaid();
+    return {};
+}
+
 std::string BotMgr::AttackNearest(ObjectGuid characterGuid, float range)
 {
     Player* me = FindBot(characterGuid);
@@ -415,6 +615,7 @@ bool BotMgr::SetMaster(ObjectGuid characterGuid, ObjectGuid master)
     if (itr == _bots.end())
         return false;
     itr->second.master = master;
+    itr->second.masterAway = false;
     return true;
 }
 
@@ -446,10 +647,15 @@ void BotMgr::Update(uint32 diff)
             continue;
         }
 
+        // R10 (S2): a bot whose master is away does nothing (no Think, no engine) until it is back; the grace counts down meanwhile.
+        if (bot.masterAway && !UpdateMasterAway(bot, diff))
+            continue;
+
         Player* me = bot.session->GetPlayer();
         if (!me || !me->IsInWorld() || me->IsBeingTeleported())
             continue;
 
+        bot.followRetryMs = bot.followRetryMs > diff ? bot.followRetryMs - diff : 0;
         bot.thinkMs += diff;
         if (bot.thinkMs >= ThinkIntervalMs)
         {
@@ -487,9 +693,10 @@ void BotMgr::Think(Bot& bot, Player* me)
     {
         // Master gone (logged out or on a loading screen for a long time is handled by the caller's next ticks). The engine goes with it
         // (R9): a brain is never kept, and never ticked, while its master is not in the world.
+        // R10 (S2): a master that is gone from the server starts the grace (the bot stays); one that is only between maps is waited for.
         DropBrain(bot);
         if (!ObjectAccessor::FindConnectedPlayer(bot.master))
-            bot.session->RequestLogout("the master left the game");
+            DetachFromMaster(bot);
         return;
     }
 
@@ -511,15 +718,53 @@ void BotMgr::Think(Bot& bot, Player* me)
 
     // Stand next to the master once after login, and again whenever it is on another map or far away.
     bool const sameMap = me->GetMap() == master->GetMap();
+    if (sameMap)
+        bot.followBlocked = false;
     if (!bot.placed || !sameMap || !me->IsWithinDist(master, 100.0f))
     {
-        bot.placed = true;
-        bot.following = false;
-        bot.chasing.Clear();
-        bot.trail.clear();
-        me->AttackStop();
-        me->GetMotionMaster()->Clear();
-        me->TeleportTo(master->GetWorldLocation());
+        // R11: a bot that the core refused to send to the master's map (an instance it cannot enter) stays where it is and does not ask again at
+        // every Think: it asks again when the master is on another map or instance, or after FollowRetryMs. Its engine keeps running where it is.
+        uint32 const masterMap = master->GetMapId();
+        uint32 const masterInstance = master->GetInstanceId();
+        if (!sameMap && bot.followBlocked && bot.followBlockedMap == masterMap && bot.followBlockedInstance == masterInstance && bot.followRetryMs > 0)
+            return;
+
+        // Ask the core first whether this bot may enter that map at all (the same check Player::TeleportTo makes, Entities/Player/Player.cpp:1432),
+        // so the refusal has its reason; an instance is entered by the master's own instance id (the party's, not a new copy).
+        std::string refused;
+        if (!sameMap)
+            if (TransferAbortParams const denied = Map::PlayerCannotEnter(masterMap, me))
+                refused = AbortReasonText(denied);
+
+        if (refused.empty())
+        {
+            bot.placed = true;
+            bot.following = false;
+            bot.chasing.Clear();
+            bot.trail.clear();
+            me->AttackStop();
+            me->GetMotionMaster()->Clear();
+            std::optional<uint32> const instanceId = (!sameMap && master->GetMap()->IsDungeon()) ? std::optional<uint32>(masterInstance) : std::nullopt;
+            if (me->TeleportTo(master->GetWorldLocation(), TELE_TO_NONE, instanceId))
+            {
+                bot.followBlocked = false;
+                return;
+            }
+            refused = "Player::TeleportTo refused the teleport";
+        }
+
+        bool const changed = !bot.followBlocked || bot.followBlockedMap != masterMap || bot.followBlockedInstance != masterInstance || bot.followBlockedWhy != refused;
+        bot.followBlocked = true;
+        bot.followBlockedMap = masterMap;
+        bot.followBlockedInstance = masterInstance;
+        bot.followBlockedWhy = refused;
+        bot.followRetryMs = FollowRetryMs;
+        // The engine goes too: with the master on a map the bot cannot reach, its follow action asks for a path to a point on another map at every
+        // tick (live: 395 "[BOT PATH BUG]" error lines a minute for two bots). It is built again by the code below once the bot stands on the master's map.
+        DropBrain(bot);
+        if (changed)
+            TC_LOG_INFO("tortoisebots", "BotMgr: {} cannot follow its master {} to map {} (instance {}): {}; it stays and asks again in {} s",
+                me->GetName(), master->GetName(), masterMap, masterInstance, refused, FollowRetryMs / 1000);
         return;
     }
 

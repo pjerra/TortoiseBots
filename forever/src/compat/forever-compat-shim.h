@@ -477,24 +477,35 @@ inline CmangosSpellTemplateProxy* GetSpellStore()
 struct CmangosLogProxy
 {
     void outBasic() const { LogAt(LOG_LEVEL_INFO, "server", ""); }
-    template <typename... Args> void outBasic(char const* fmt, Args const&... args) const { LogAt(LOG_LEVEL_INFO, "server", Format(fmt, args...)); }
+    template <typename... Args> void outBasic(char const* fmt, Args const&... args) const { Emit(LOG_LEVEL_INFO, "server", fmt, args...); }
     void outDebug() const { LogAt(LOG_LEVEL_DEBUG, "server", ""); }
-    template <typename... Args> void outDebug(char const* fmt, Args const&... args) const { LogAt(LOG_LEVEL_DEBUG, "server", Format(fmt, args...)); }
+    template <typename... Args> void outDebug(char const* fmt, Args const&... args) const { Emit(LOG_LEVEL_DEBUG, "server", fmt, args...); }
     void outDetail() const { LogAt(LOG_LEVEL_DEBUG, "server", ""); }
-    template <typename... Args> void outDetail(char const* fmt, Args const&... args) const { LogAt(LOG_LEVEL_DEBUG, "server", Format(fmt, args...)); }
+    template <typename... Args> void outDetail(char const* fmt, Args const&... args) const { Emit(LOG_LEVEL_DEBUG, "server", fmt, args...); }
     void outError() const { LogAt(LOG_LEVEL_ERROR, "server", ""); }
-    template <typename... Args> void outError(char const* fmt, Args const&... args) const { LogAt(LOG_LEVEL_ERROR, "server", Format(fmt, args...)); }
+    template <typename... Args> void outError(char const* fmt, Args const&... args) const { Emit(LOG_LEVEL_ERROR, "server", fmt, args...); }
     void outErrorDb() const { LogAt(LOG_LEVEL_ERROR, "sql.sql", ""); }
-    template <typename... Args> void outErrorDb(char const* fmt, Args const&... args) const { LogAt(LOG_LEVEL_ERROR, "sql.sql", Format(fmt, args...)); }
+    template <typename... Args> void outErrorDb(char const* fmt, Args const&... args) const { Emit(LOG_LEVEL_ERROR, "sql.sql", fmt, args...); }
     void outInfo() const { LogAt(LOG_LEVEL_INFO, "server", ""); }
-    template <typename... Args> void outInfo(char const* fmt, Args const&... args) const { LogAt(LOG_LEVEL_INFO, "server", Format(fmt, args...)); }
+    template <typename... Args> void outInfo(char const* fmt, Args const&... args) const { Emit(LOG_LEVEL_INFO, "server", fmt, args...); }
     void outString() const { LogAt(LOG_LEVEL_INFO, "server", ""); }
-    template <typename... Args> void outString(char const* fmt, Args const&... args) const { LogAt(LOG_LEVEL_INFO, "server", Format(fmt, args...)); }
+    template <typename... Args> void outString(char const* fmt, Args const&... args) const { Emit(LOG_LEVEL_INFO, "server", fmt, args...); }
 
 private:
     static void LogAt(LogLevel level, char const* logger, std::string const& message)
     {
         Log::instance()->OutMessage(logger, level, "{}", message);
+    }
+
+    // R10 (S4): the level is asked BEFORE the line is formatted. The engine logs a detail line per action per tick per bot (Engine::LogAction,
+    // sLog.outDetail), and Format is two snprintf passes plus the string copies; at the shipped Logger.server level those lines are
+    // dropped, so formatting them was the whole cost. The arguments are still evaluated by the caller (no change to the engine's own code).
+    template <typename... Args>
+    static void Emit(LogLevel level, char const* logger, char const* fmt, Args const&... args)
+    {
+        if (!Log::instance()->ShouldLog(logger, level))
+            return;
+        LogAt(level, logger, Format(fmt, args...));
     }
 
     // printf formatting of the old line. A std::string argument reaches %s as its characters: ForeverCore returns

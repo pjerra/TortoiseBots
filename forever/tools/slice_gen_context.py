@@ -37,7 +37,7 @@ SLICE_KEYS = {
              "combat start time, combo, corpse run, current cc target, current target, dead, death count, distance, "
              "dps aoe target, dps target, duel target, durability, durability inventory, enemy healer target, energy, "
              "estimated group dps, explicit attack target, facing, focus heal targets, follow target, formation, "
-             "formation position, free move center, free move range, group, group and, group members, group or, "
+             "formation position, free move center, free move range, future travel destinations, group, group and, group members, group or, "
              "group ready, has aggro, has area debuff, has attackers, has mana, has strategy, has totem, hazards, "
              "health, ignore rpg target, incoming damage, inside target, interrupt target, invalid target, "
              "inventory items, item count, item for spell, last area trigger, last long move, last movement, "

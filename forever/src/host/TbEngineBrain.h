@@ -40,6 +40,11 @@ Brain* Create(Player* bot, Player* master, std::string& error);
 // the action log's CAST_FAILED_ASYNC line. The queue is filled only while the bot has a brain (SLICE2-R0-NOTES.md).
 void Tick(Brain* brain, uint32 diff);
 
+// R10 (S3): the bot's teleport is being acknowledged by the host session: PlayerbotAI::HandleTeleportAck (transition generation, teleport grace, stale
+// queues, the post-teleport landing logic), which on the host replaces the engine-driven ack of the Turtle build (BotManager.cpp:2404). A same-map
+// teleport: called before the session acknowledges it (the engine does it itself); a far one: after, with the Player in the new world.
+void HandleTeleportAck(Brain* brain);
+
 // Unregisters and deletes the brain. Must run before the bot's Player is deleted (see the logout paths in BotMgr).
 void Destroy(Brain* brain);
 

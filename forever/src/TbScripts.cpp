@@ -178,6 +178,9 @@ public:
             { "logout", HandleLogout, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "cast",   HandleCast,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "go",     HandleGo,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "hop",    HandleHop,    rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "raid",   HandleRaid,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "enter",  HandleEnter,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "attack", HandleAttack, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "where",  HandleWhere,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "engine", HandleEngine, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
@@ -279,6 +282,34 @@ public:
         if (!BotMgr::Instance().WalkBy(GuidByName(name), dx, dy))
             return Fail(handler, name + " is not a logged-in bot.");
         handler->PSendSysMessage("TortoiseBots: %s walks.", name.c_str());
+        return true;
+    }
+
+    // .tb hop <character> <dx> <dy>: the bot is teleported that many yards east/north on its own map (R10: the engine's teleport handler, `.tb where`).
+    static bool HandleHop(ChatHandler* handler, std::string name, float dx, float dy)
+    {
+        std::string const error = BotMgr::Instance().Hop(GuidByName(name), dx, dy);
+        if (!error.empty())
+            return Fail(handler, name + " not teleported: " + error + ".");
+        handler->PSendSysMessage("TortoiseBots: %s is teleported.", name.c_str());
+        return true;
+    }
+
+    // .tb raid <master>: converts the master's party into a raid (R10 test helper for the "no bot joins a raid" rule).
+    static bool HandleRaid(ChatHandler* handler, std::string name)
+    {
+        std::string const error = BotMgr::Instance().ConvertToRaid(GuidByName(name));
+        if (!error.empty())
+            return Fail(handler, name + "'s party not converted: " + error + ".");
+        handler->PSendSysMessage("TortoiseBots: the party of %s is a raid now.", name.c_str());
+        return true;
+    }
+
+    // .tb enter <character> <mapid>: may that character enter that map, according to the core (R11 test helper, `.tb where` shows the same reason for a blocked follower).
+    static bool HandleEnter(ChatHandler* handler, std::string name, uint32 mapId)
+    {
+        for (std::string const& line : BotMgr::Instance().CanEnter(GuidByName(name), mapId))
+            handler->PSendSysMessage("TortoiseBots: %s: %s", name.c_str(), line.c_str());
         return true;
     }
 

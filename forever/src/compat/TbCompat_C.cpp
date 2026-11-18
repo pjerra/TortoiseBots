@@ -17,6 +17,8 @@
 #include "World.h"
 
 #include <atomic>
+#include <mutex>
+#include <unordered_set>
 
 // TbCompat_C.h: GuidFromRawCompat. Only 0 (no guid) has a 128-bit form; a legacy 64-bit number is refused once, loudly.
 ObjectGuid GuidFromRawCompat(uint64 raw)
@@ -72,8 +74,41 @@ bool NavMeshLoadedCompat(uint32 mapId, uint32 instanceId)
     return MMAP::MMapManager::instance()->GetNavMesh(mapId, instanceId) != nullptr;
 }
 
+namespace
+{
+// R10 (S5): the engine asks for a tile again on every getMap/getHeight/path query, and the legacy code that would remember a missing
+// tile (WorldPosition.cpp:1252-1255, AddBadMmap) is commented out, so each ask built the file name and opened the file (MMapManager::loadMap:
+// fopen) again, for ever. A tile whose file is missing or unreadable does not appear later in a running server (the files are read-only data), so
+// a failed (map, x, y) is remembered here, on the ForeverCore side only (the Turtle build keeps its own TravelMgr bad-mmap list untouched).
+// Only the answers that name the FILE are remembered (FileNotFound, VersionMismatch, ReadFromFileFailed); LibraryError (a navmesh library
+// error at that moment) is tried again. Bounded: when the set is full no new entry is added (the lookup still works for the ones in it).
+constexpr std::size_t MaxFailedNavTiles = 16384;
+std::mutex failedNavTilesLock;
+std::unordered_set<uint64> failedNavTiles;
+uint64 FailedNavTileKey(uint32 mapId, int x, int y) { return (uint64(mapId) << 32) | (uint64(uint16(x)) << 16) | uint64(uint16(y)); }
+}
+
 bool NavMeshLoadTileCompat(uint32 mapId, uint32 instanceId, int x, int y)
 {
+    uint64 const key = FailedNavTileKey(mapId, x, y);
+    {
+        std::lock_guard<std::mutex> guard(failedNavTilesLock);
+        if (failedNavTiles.count(key))
+            return false;
+    }
+
     MMAP::LoadResult const result = MMAP::MMapManager::instance()->loadMap(sWorld->GetDataPath(), mapId, instanceId, x, y);
-    return result == MMAP::LoadResult::Success || result == MMAP::LoadResult::AlreadyLoaded;
+    if (result == MMAP::LoadResult::Success || result == MMAP::LoadResult::AlreadyLoaded)
+        return true;
+
+    if (result == MMAP::LoadResult::FileNotFound || result == MMAP::LoadResult::VersionMismatch || result == MMAP::LoadResult::ReadFromFileFailed)
+    {
+        std::lock_guard<std::mutex> guard(failedNavTilesLock);
+        if (failedNavTiles.size() < MaxFailedNavTiles)
+        {
+            failedNavTiles.insert(key);
+            TC_LOG_DEBUG("tortoisebots", "navmesh tile map {} {},{} not loaded (result {}): not asked again", mapId, x, y, int(result));
+        }
+    }
+    return false;
 }

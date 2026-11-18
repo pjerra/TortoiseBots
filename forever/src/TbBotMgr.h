@@ -25,6 +25,7 @@ public:
 
     void LoadConfig();
     bool Enabled() const { return _enabled; }
+    uint32 MasterGraceSeconds() const { return _masterGraceMs / 1000; }
 
     // Empty string = started. Otherwise the reason it was refused. An empty master = the bot stands where it is.
     std::string Login(ObjectGuid characterGuid, ObjectGuid master);
@@ -34,6 +35,15 @@ public:
 
     // Console test helpers for a bot without a master.
     bool WalkBy(ObjectGuid characterGuid, float dx, float dy);
+    // `.tb hop <bot> <dx> <dy>` (R10 test helper): a teleport of the bot on its own map, that many yards east/north (a short one is a near teleport, the
+    // kind the engine's HandleTeleportAck covers). Empty string = started, else the reason.
+    std::string Hop(ObjectGuid characterGuid, float dx, float dy);
+    // `.tb raid <master>` (R10 test helper): converts the master's party into a raid (the core's Group::ConvertToRaid), to check that the host
+    // refuses to add bots to one. Empty string = done, else the reason.
+    std::string ConvertToRaid(ObjectGuid masterGuid);
+    // `.tb enter <character> <mapid>` (R11 test helper): what the core's Map::PlayerCannotEnter says about that character entering that map, with the
+    // difficulty it asked for (the party's, or the character's own). Returns the lines to print; the first starts with `allowed` or `refused`.
+    std::vector<std::string> CanEnter(ObjectGuid characterGuid, uint32 mapId);
     std::string AttackNearest(ObjectGuid characterGuid, float range);
     bool Logout(ObjectGuid characterGuid, char const* reason);
     void LogoutAll(char const* reason);
@@ -50,7 +60,8 @@ public:
     std::string SetEngine(ObjectGuid characterGuid, bool on);
     // Lines for `.tb where`: the first is `brain: engine` or `brain: spike`, then (engine only) state, strategies, target.
     std::vector<std::string> DescribeBrain(ObjectGuid characterGuid) const;
-    // PlayerScript::OnLogout: the Player is about to be deleted, the engine must go first.
+    // PlayerScript::OnLogout: the Player is about to be deleted, the engine must go first. A bot whose master is the one leaving is detached
+    // (R10, S2): it stays in the world and its party, stops acting, and is logged out when the master has not come back after the grace period.
     void OnPlayerLogout(Player* player);
 
     Player* FindBot(ObjectGuid characterGuid) const;
@@ -80,15 +91,32 @@ private:
         std::string engineNote;      // why, for `.tb where`
         std::unique_ptr<engine::Brain, engine::BrainDeleter> brain;
         std::vector<ai::FollowTrailPoint> trail;   // where the master walked, for catching up around corners
+        // R10 (S2): the master logged out. The bot keeps its guid in `master`, has no brain, does not act, and waits for the master to be
+        // in the world again (then it re-binds and the brain is built again) or for `graceLeftMs` to run out (then it logs out).
+        bool masterAway = false;
+        bool masterSeenGone = false; // the master was seen missing from the world at least once since it went away (the logout itself runs in the same update)
+        uint32 graceLeftMs = 0;
+        // R11: the master is on a map the bot could not be sent to (an instance the core refuses it, or a teleport the core refused). The bot stays
+        // where it is, does not ask again every Think, and `.tb where` says why. It asks again when the master changes map or after FollowRetryMs.
+        bool followBlocked = false;
+        uint32 followBlockedMap = 0;
+        uint32 followBlockedInstance = 0;
+        uint32 followRetryMs = 0;
+        std::string followBlockedWhy;
     };
 
     void Think(Bot& bot, Player* me);
     static std::string JoinParty(Player* bot, Player* master);
     void DropBrain(Bot& bot);
+    // R10 (S2): the master is gone: take the brain down and wait out the grace (or log the bot out at once when the grace is 0).
+    void DetachFromMaster(Bot& bot);
+    // R10 (S2): one update of a bot whose master is away. True when the master is back in the world and the bot has been re-bound.
+    bool UpdateMasterAway(Bot& bot, uint32 diff);
 
     std::unordered_map<ObjectGuid, Bot> _bots;
     bool _enabled = false;
     float _followDistance = 3.0f;
     bool _engineByDefault = false;
+    uint32 _masterGraceMs = 300000;   // TortoiseBots.Slice.MasterGraceSeconds
 };
 }
