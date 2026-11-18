@@ -427,8 +427,8 @@ built in"), the read of `TortoiseBots.Slice.EngineByDefault` (a warning when it 
 | `slice_gen_context.py --check`, `slice_registry_check.py` | file current; `(a)=0  (b)=164` (unchanged) |
 | `tools/verify_tortoise_surface.sh` | `Tortoise 1.18.1 Core module surface: OK` |
 | `forever-build/policy-tests.sh` (tree synced to `forever-build/tb`) | 472 PASS, 4 COMPILE_FAIL, 2 RUN_FAIL: the baseline (SHIM-R3 notes G4: `test_combat_monitor_service`, `_race`, `test_decision_capture_files`, `test_run_trace_writer`; RUN_FAIL `test_log_file_rotation`, `test_decision_capture_codec`) |
-| Turtle `vm-build ~/wt-slice-integ --wait` | TURTLE_BUILD_PLACEHOLDER |
-| Turtle `vm-test tb ~/wt-slice-integ` | TURTLE_TEST_PLACEHOLDER |
+| Turtle `vm-build ~/wt-slice-integ --wait` | `COMPILE_SECONDS=2267 CMAKE_RC=0 MAKE_RC=0` (sha 84ca1ef89: the commit with all shared-file changes; the later commits touch only `forever/`) |
+| Turtle `vm-test tb ~/wt-slice-integ` | `RESULT: PASS  kind=tb wt=wt-slice-integ sha=7d775e61c dirty=0 files=3660`, `rc=0 vm_duration=867s` (once, at the final code) |
 | The server on the build VM | stopped after every boot; `docker ps` shows `forever-bnet`, `forever-db` and no `forever-world` |
 
 ## 6. What I am unsure about
