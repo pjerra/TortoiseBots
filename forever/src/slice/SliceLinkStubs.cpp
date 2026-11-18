@@ -64,13 +64,13 @@ namespace
 {
 // Boss and raid tactics is reached by per-tick checks in about 40 shared files (target filters, the taunt and hold gates, the anchor clamp), several
 // hundred times per bot per tick: 1.9 million calls in 5 minutes with two bots (R8). The checks sit in shared code, so a guard at the call sites would be a
-// shared change (and a Turtle proof for each); the stand-ins instead count once per world tick, so the counter reads "ticks that reached the feature"
-// and no longer buries the other rows.
+// shared change (and a Turtle proof for each); the stand-ins instead count once per second of world time, so the counter reads "seconds in which a check
+// reached the feature" and no longer buries the other rows. (Counting once per world tick, about every millisecond, still gave 1.27 million in 22 minutes.)
 inline void NoteBoss()
 {
-    static std::atomic<uint32_t> lastTickMs{ 0xFFFFFFFFu };
-    uint32_t const now = GameTime::GetGameTimeMS();
-    if (lastTickMs.exchange(now) != now)
+    static std::atomic<uint32_t> lastSecond{ 0xFFFFFFFFu };
+    uint32_t const now = GameTime::GetGameTimeMS() / 1000u;
+    if (lastSecond.exchange(now) != now)
         tbcompat::Unported(tbcompat::Feature::BossTactics);
 }
 inline void NoteTravel()    { tbcompat::Unported(tbcompat::Feature::TravelMgr); }
