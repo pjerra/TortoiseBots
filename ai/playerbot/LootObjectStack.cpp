@@ -273,7 +273,7 @@ void LootObject::Refresh(Player* bot, ObjectGuid guid, bool debug)
 
         /*if (!guid.IsEmpty())
         {
-            for (auto& entry : GAI_VALUE2(std::list<int32>, "item drop list", -1*uint(go->GetEntry())))
+            for (auto& entry : GAI_VALUE2_COMPAT(std::list<int32>, "item drop list", -1*uint(go->GetEntry())))
             {
                 if (IsNeededForQuest(bot, entry))
                 {
@@ -516,7 +516,7 @@ bool LootObject::IsLootPossible(Player* bot)
                     if (go->ActivateToQuest(bot))
                     {
                         bool hasQuestItems = false;
-                        for (auto& entry : GAI_VALUE2(std::list<uint32>, "entry loot list", -1*int(go->GetEntry())))
+                        for (auto& entry : GAI_VALUE2_COMPAT(std::list<uint32>, "entry loot list", -1*int(go->GetEntry())))
                         {
                             if (ItemUsageValue::IsNeededForQuest(bot, entry))
                             {

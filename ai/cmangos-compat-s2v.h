@@ -247,3 +247,9 @@ inline Access const* ReferenceLootTemplateCompat(uint32 referenceId)
 }
 
 // Quest relation tables: T's own ObjectMgr members (QuestValues.h reads them through a derived class); nothing to add.
+
+// The global (shared) value context. T: the macros of strategy/ValueMacros.h, expanded where they are used (R3: the slice's loot files read the
+// drop maps and the entry loot lists through it). On F the shared context is not built (its creators name the vtables of the vendor, travel,
+// trainer and mount values, which are not in the slice), so the call sites use these two names, see TbCompat_V2.h.
+#define GAI_VALUE_COMPAT(type, name) GAI_VALUE(type, name)
+#define GAI_VALUE2_COMPAT(type, name, param) GAI_VALUE2(type, name, param)

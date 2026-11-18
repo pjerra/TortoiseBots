@@ -46,7 +46,9 @@
 #include "playerbot/strategy/actions/PatchwerkSafety.h"
 #include "playerbot/strategy/actions/PatchwerkSoakerActions.h"
 #include "playerbot/strategy/actions/PositionAction.h"
+#include "playerbot/strategy/actions/TellLosAction.h"
 #include "playerbot/strategy/actions/UseMeetingStoneAction.h"
+#include "playerbot/strategy/actions/WorldBuffAction.h"
 #include "playerbot/strategy/actions/ViscidusActions.h"
 #include "playerbot/strategy/generic/ThreatStrategy.h"
 #include "playerbot/strategy/triggers/EmeraldSanctumDungeonTriggers.h"
@@ -61,6 +63,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cfloat>
+#include <limits>
 #include <cmath>
 #include "GameTime.h"
 
@@ -307,6 +310,59 @@ bool FleeManager::CalculateDestination(float*, float*, float*, FleeFailureMemory
 bool FleeManager::isUseful() { NoteFlee(); return false; }
 
 // LootObjectStack.cpp (slice 2): the real file is in the slice now; its seven stand-ins and the `loot object stack` row are gone (R3).
+
+// ---------------------------------------------------------------------------------------------------------------------------------------------------
+// Slice 2 (R3), link stand-ins of the priest, loot and item-use files. Each one names: the real function's "absent" answer, the value given here, and the
+// effect at its callers (the findings rule: a fallback makes the bot do LESS).
+// ---------------------------------------------------------------------------------------------------------------------------------------------------
+
+// BossTacticsActions.cpp (feature "boss and raid tactics": counted once per second, like the slice-1 stand-ins above).
+// ScanBossTactics: absent = a fight with no boss row. Value: no units, no rows. Effect (PartyMemberToDispel.cpp): `rows` is empty, so the dispel pick is the
+// plain tier search (`ranked` false); CollectDispelAuras / NearestGroupMemberYd / LogDispel* below are only reached when rows exist, so never.
+BossTacticsFight ScanBossTactics(PlayerbotAI*, Player*) { NoteBoss(); return BossTacticsFight{}; }
+// Absent = the unit carries no dispellable aura. Value: `out` left as the caller passed it (empty). Effect: no aura is offered to the dispel verdict (LESS).
+void CollectDispelAuras(Unit*, uint32, std::vector<AuraOnMember>&) { NoteBoss(); }
+// Absent = "a large value when the unit has none" (BossTacticsActions.h:55): the carrier counts as alone, i.e. clear. Value: the largest float, the same
+// "no group member near" the caller's own non-ranked branch uses. Effect: unreachable without rows; if reached, a `clear` row would release the dispel
+// (the only case where this is MORE than the real answer, and it needs a boss row, which the slice never has).
+float NearestGroupMemberYd(Unit*) { NoteBoss(); return std::numeric_limits<float>::max(); }
+// Absent = nothing to log. Value: nothing. Effect: one bot_events.csv row not written.
+void LogDispelPick(PlayerbotAI*, Player*, DispelVerdict const&, Unit*, float) {}
+void LogDispelExcluded(PlayerbotAI*, Player*, DispelVerdict const&, Unit*, float) {}
+// Absent = no live spread row names a potion for this bot (BossTacticsActions.h:743: "Nothing unless ... the map has a spread row"). Value: kNoProtectionPotion
+// (item 0). Effect (UseItemAction.cpp:1171): no boss protection potion is chosen or drunk (LESS).
+ProtectionPotion BossRowProtectionPotion(PlayerbotAI*, Player*) { NoteBoss(); return kNoProtectionPotion; }
+
+// WorldBuffAction.cpp (feature "other legacy services"): absent = the unit needs no world buff. Value: empty list. Effect: NeedWorldBuffTrigger (CureTriggers.cpp)
+// is never active; the trigger key itself is not registered in the slice either (LESS: no buff is asked for).
+std::vector<uint32> WorldBuffAction::NeedWorldBuffs(Unit*) { NoteMisc(); return {}; }
+
+// TellLosAction.cpp (feature "game object use"): the "use gos <modifiers>" form of the use command finds game objects by line-of-sight modifiers. Absent =
+// no game object matches. Value: empty modifier list / empty object list. Effect (UseItemAction.cpp:244): `gos` is empty, no target game object is set,
+// and the use command does nothing (game object use is refused on ForeverCore anyway, `GameObjectUseUnportedCompat`) (LESS).
+std::vector<LosModifierStruct> TellLosAction::ParseLosModifiers(const std::string&) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return {}; }
+std::list<GameObject*> TellLosAction::GoGuidListToObjList(PlayerbotAI*, const std::list<ObjectGuid>&) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return {}; }
+std::list<GameObject*> TellLosAction::FilterGameObjects(Player*, const std::list<GameObject*>&, const std::vector<LosModifierStruct>&)
+{
+    tbcompat::Unported(tbcompat::Feature::GameObjectUse);
+    return {};
+}
+
+// ItemUsageValue.cpp (feature "item usage", lead decision D2: the item-usage value is a later slice; the `item usage` key is not registered, the
+// missing-key stand-in answers ITEM_USAGE_NONE).
+// IsNeededForQuest: absent = "no quest needs this item". Value: false. Effect (LootObjectStack.cpp:187): the corpse-refusal facts do not name a quest item
+// (a debug text), the game object branch (:521) is not reached on ForeverCore. No item is looted for a quest either way (items are not looted).
+bool ItemUsageValue::IsNeededForQuest(Player*, uint32, bool) { tbcompat::Unported(tbcompat::Feature::ItemUsage); return false; }
+// IsFutureUpgrade: absent = "not an upgrade". Value: false. Effect (LootStrategyValue.cpp:25): a CanLoot answer that would wait for an upgrade is "no" (LESS).
+bool ItemUsageValue::IsFutureUpgrade(ItemQualifier&, Player*) { tbcompat::Unported(tbcompat::Feature::ItemUsage); return false; }
+// QueryItemUsageForEquip: absent = the item has no equip use. Value: ITEM_USAGE_NONE. Effect (LootValues.cpp HasUpgradeValue, not registered): no upgrade is found.
+ItemUsage ItemUsageValue::QueryItemUsageForEquip(ItemQualifier&, Player*) { tbcompat::Unported(tbcompat::Feature::ItemUsage); return ItemUsage::ITEM_USAGE_NONE; }
+// GetRecipeSpell: absent = the item teaches no recipe. Value: 0. Effect (UseItemAction.cpp UseRandomRecipe): no recipe is picked, the action finds nothing to use (LESS).
+uint32 ItemUsageValue::GetRecipeSpell(ItemPrototype const*) { tbcompat::Unported(tbcompat::Feature::ItemUsage); return 0; }
+
+// GuildOrderSources.cpp (feature "pool and hire services": the guild order store is not built). Absent = no open guild order wants a skin from this mob.
+// Value: false. Effect (LootObjectStack.cpp:479): a corpse with nothing else to take is not kept in the stack for a skin (LESS).
+bool GuildOrderSkinMobFor(Player*, uint32_t) { NotePool(); return false; }
 }
 
 // =====================================================================================================================

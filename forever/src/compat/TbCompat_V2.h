@@ -288,3 +288,24 @@ enum __QuestGiverStatus
     DIALOG_STATUS_REWARD2     = 7,
     DIALOG_STATUS_UNDEFINED   = 100
 };
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The global (shared) value context, "drop map", "item drop map", "item drop list", "entry loot list" (R3). T reads them through
+// GAI_VALUE / GAI_VALUE2 (strategy/ValueMacros.h: sSharedObjectContext, whose constructor builds SharedValueContext, whose creators name
+// the vendor, travel, trainer, quest, mount and PvP values). Those classes are not in the slice, so using the singleton at all would not link
+// (R3: ten vtables). On F the shared context is not built and every read answers the empty value of its type: the drop maps are read from
+// loot templates F keeps private anyway (feature "loot tables (drop maps)").
+// Absent answer: T{} = nullptr for a `DropMap*`, an empty list for `entry loot list` / `item drop list`.
+// Effect at the callers: every one tests for null / iterates a list: ItemDropMapValue (LootValues.cpp:157) returns the drop map without the item-sourced
+// drops, ItemDropListValue and EntryLootListValue (:184, :205) return an empty list, EntryLootUsageValue and HasUpgradeValue (:259, :269) find no item
+// (no upgrade is chased, none is looted for it), the game object paths of the stack (LootObjectStack.cpp:276, :519) and of LootAction (:312) are not
+// reached on F (no game object is ever a loot target). Nothing is looted or chased because of them: LESS.
+// ---------------------------------------------------------------------------------------------------------------------
+template <class T, class Param>
+inline T SharedValueUnportedCompat(Param const& /*param*/)
+{
+    tbcompat::Unported(tbcompat::Feature::LootTables);
+    return T{};
+}
+#define GAI_VALUE_COMPAT(type, name) SharedValueUnportedCompat<type>(0)
+#define GAI_VALUE2_COMPAT(type, name, param) SharedValueUnportedCompat<type>(param)

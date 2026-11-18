@@ -154,7 +154,7 @@ DropMap* DropMapValue::Calculate()
 		}
 	}
 
-	DropMap* itemDropMap = GAI_VALUE(DropMap*, "item drop map");
+	DropMap* itemDropMap = GAI_VALUE_COMPAT(DropMap*, "item drop map");
 	if (!itemDropMap)
 		return dropMap;
 
@@ -181,7 +181,7 @@ std::list<int32> ItemDropListValue::Calculate()
 {
 	uint32 itemId = stoi(getQualifier());
 
-	DropMap* dropMap = GAI_VALUE(DropMap*, "drop map");
+	DropMap* dropMap = GAI_VALUE_COMPAT(DropMap*, "drop map");
 	if (!dropMap)
 		return {};
 
@@ -202,7 +202,7 @@ std::list<uint32> EntryLootListValue::Calculate()
 
 	std::list<uint32> items;
 
-	DropMap* dropMap = GAI_VALUE(DropMap*, "drop map");
+	DropMap* dropMap = GAI_VALUE_COMPAT(DropMap*, "drop map");
 	if (!dropMap)
 		return {};
 	for (auto it = dropMap->begin(); it != dropMap->end(); ++it)
@@ -256,7 +256,7 @@ itemUsageMap EntryLootUsageValue::Calculate()
 {
 	itemUsageMap items;
 
-	for (auto itemId : GAI_VALUE2(std::list<uint32>, "entry loot list", getQualifier()))
+	for (auto itemId : GAI_VALUE2_COMPAT(std::list<uint32>, "entry loot list", getQualifier()))
 	{
 		items[AI_VALUE2(ItemUsage, "item usage", itemId)].push_back(itemId);
 	}
@@ -266,7 +266,7 @@ itemUsageMap EntryLootUsageValue::Calculate()
 
 bool HasUpgradeValue::Calculate()
 {
-	for (auto itemId : GAI_VALUE2(std::list<uint32>, "entry loot list", getQualifier()))
+	for (auto itemId : GAI_VALUE2_COMPAT(std::list<uint32>, "entry loot list", getQualifier()))
 	{
 		ForceItemUsage forceUsage = AI_VALUE2_EXISTS(ForceItemUsage, "force item usage", itemId, ForceItemUsage::FORCE_USAGE_NONE);
 

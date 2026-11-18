@@ -82,7 +82,8 @@
     X(LootItems, "loot: items, quest items and rolls", "taking items out of a loot window (the autostore packet), the 1.12 per-slot loot view rights and personal copies, quest items in loot, loot rolls and the bot-only drop boost; lead decision D2 = money only, ForeverCore loot is read from its Loot object and only the money is taken (slice 2, I2)") \
     X(LootTables, "loot tables (drop maps)", "the creature, game object, item, skinning and pickpocket loot templates and the drop maps built from them (entry loot list, item drop list, loot chance, item usage of drops); ForeverCore keeps the rows of a loot template private") \
     X(GatheringLoot, "loot: gathering, skinning and game objects", "opening a game object (chest, herb, ore) or skinning a corpse by a cast and the loot window that follows; the bot does not gather, skin or open objects on ForeverCore yet (slice 2, V2 and I2: looting a game object, its lock, tool and skill tests, skinning; lead decision D2: money from corpses only)") \
-    X(ItemUseOther, "item use except food and drink", "using an item on a target, an item, a game object or a lock, potions, scrolls, gems, quest-giver items, hearthstone, bandages, mounts: only food and drink on the bot itself go through the core's own item cast (slice 2, I2)")
+    X(ItemUseOther, "item use except food and drink", "using an item on a target, an item, a game object or a lock, potions, scrolls, gems, quest-giver items, hearthstone, bandages, mounts: only food and drink on the bot itself go through the core's own item cast (slice 2, I2)") \
+    X(ItemUsage, "item usage", "ai::ItemUsageValue and its helpers (is this item needed for a quest, a future upgrade, an equip use, a recipe): the item-usage value is a later slice (lead decision D2: loot money only); the `item usage` key is not registered and the missing-key stand-in answers ITEM_USAGE_NONE (slice 2, R3)")
 
 namespace tbcompat
 {
