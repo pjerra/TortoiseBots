@@ -73,6 +73,22 @@ inline void LootReleaseCompat(Player* bot, ObjectGuid const& guid)
     bot->GetSession()->HandleLootReleaseOpcode(packet);
 }
 
+// Release EVERY window of the bot's loot view (R5 item 2). T: the named window only (T opens one window per corpse and has no area loot, so this is
+// what it always did). F: with Loot.EnableAELoot on (World.cpp:713, default 1) HandleLootOpcode also opened up to 49 other corpses within 30 yards into
+// m_AELootView and HandleLootMoneyOpcode took the money of the whole view, so after the money take every window in the view is closed through the same
+// handler (LootReleaseCompat per owner guid; the owner guids are copied first, as the release erases from the view): the bot leaves every looters list,
+// loses UNIT_FLAG_LOOTING, and the other corpses reach the looted-corpse cleanup on their normal timer. `guid` (the named corpse) is released first.
+inline void LootReleaseAllCompat(Player* bot, ObjectGuid const& guid)
+{
+    std::vector<ObjectGuid> owners;
+    for (std::pair<ObjectGuid const, Loot*> const& view : bot->GetAELootView())
+        if (view.second && view.second->GetOwnerGUID() != guid)
+            owners.push_back(view.second->GetOwnerGUID());
+    LootReleaseCompat(bot, guid);
+    for (ObjectGuid const& owner : owners)
+        LootReleaseCompat(bot, owner);
+}
+
 // Take the money of the open windows: WorldSession::HandleLootMoneyOpcode(LootMoney&) (LootHandler.cpp:142-209). It walks the player's
 // WHOLE loot view; for a corpse window of a player in a group the money is split between the group members that are allowed looters
 // of that loot and within the group reward distance (:151-179), everybody else's share goes to them with their own money messages;
@@ -291,8 +307,10 @@ inline ItemSpellUseCompat CastItemSpellCompat(AiType* ai, Player* bot, ItemProto
     bot->CastItemUseSpell(itemUsed, spellData.SpellId, targets, ObjectGuid::Empty, { 0, 0, 0 });
     // itemUsed may be gone now (the last of a stack is consumed by the cast): not touched again.
 
+    // Only a refusal OF THIS spell is the drink's: the in-tick slot may hold the failure of an earlier, interrupted cast (R5 item 4), which is not
+    // this item's answer and is left out (the checks below read what the cast really did).
     TortoiseBots::CastResult refusal;
-    if (session->TakeInTickRefusal(refusal))
+    if (session->TakeInTickRefusal(refusal) && refusal.spellId == spellData.SpellId)
     {
         ai->NoteCastCheckFail(SpellCastResult(refusal.reason));
         return out;
@@ -307,6 +325,11 @@ inline ItemSpellUseCompat CastItemSpellCompat(AiType* ai, Player* bot, ItemProto
     out.castDuration = 24000;                           // food and drink: the sit of the legacy action (UseItemAction.cpp: SetDuration(24000))
     return out;
 }
+
+// The count of a stack the bot has just used from. T: the item object's own count (the item is still there). F: an instant-use item is consumed
+// synchronously by the cast and a just-created item can be deleted at once (Item.cpp:1326-1335), so the object may be freed; the count is asked of the
+// player by item id, which reads the bags (R5 item 5). F counts every stack of the id, T the one stack used: the message only says "some left".
+inline uint32 ItemCountAfterUseCompat(Player* bot, Item* /*itemUsed*/, uint32 itemId) { return bot->GetItemCount(itemId); }
 
 // CMSG_OPEN_ITEM (open a bag item that holds loot): not ported. Failure value: false (not opened).
 inline bool OpenItemCompat(Player* /*bot*/, Item* /*item*/) { tbcompat::Unported(tbcompat::Feature::ItemUseOther); return false; }

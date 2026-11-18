@@ -27,6 +27,9 @@ inline void LootReleaseCompat(Player* bot, ObjectGuid const& guid)
     bot->GetSession()->HandleLootReleaseOpcode(packet);
 }
 
+// Release every open window of the bot: Turtle opens one window per corpse and has no area loot, so this is the named window only.
+inline void LootReleaseAllCompat(Player* bot, ObjectGuid const& guid) { LootReleaseCompat(bot, guid); }
+
 // CMSG_LOOT_MONEY: take the money of the open window. Returns true (the legacy code never looked at an answer).
 inline bool LootMoneyCompat(Player* bot)
 {
@@ -168,6 +171,9 @@ inline bool IsTargetValidForItemUse(uint32 itemID, Unit* target)
 
     return false;
 }
+
+// The count of the stack the bot has just used from: the item object's own count (the item is still there on this core).
+inline uint32 ItemCountAfterUseCompat(Player*, Item* itemUsed, uint32) { return itemUsed->GetCount(); }
 
 // One on-use spell of an item: UseAction::UseItemInternal's loop body from "Check if valid targets" to the end of the cast, moved
 // word for word. SpellType is ai::BotUseItemSpell (declared after this header); `itemForSpell(spellId)` is the "item for spell" value.
