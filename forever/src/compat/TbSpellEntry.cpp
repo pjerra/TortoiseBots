@@ -67,11 +67,10 @@ void InitSpellTable()
     if (g_table.load(std::memory_order_relaxed))
         return;
 
-    // Not one atomic per possible id: the ids are dense enough (the store holds about 300k entries) that 8 bytes each is
-    // a few megabytes, and the array is what makes every later lookup a single acquire load.
+    // One atomic per id up to the highest: on this server that is 9,970,802 slots (35,889 of them hold a spell) and the
+    // array is 76 MiB, paid once, in exchange for a lookup that is a single acquire load with no lock and no map.
     std::size_t const count = std::size_t(maxId) + 1;
     std::atomic<SpellEntry*>* const table = new std::atomic<SpellEntry*>[count]();
-    table[0].store(nullptr);
 
     // Publish the table, then move any mirror the lazy path built before this call into it.
     std::lock_guard fallbackLock(g_fallbackMutex);
