@@ -403,7 +403,8 @@ public:
     // (no spell id is written in this module):
     //  1. the class trainers: ObjectMgr::GetTrainers (ObjectMgr.h:1628, the world database's trainer and trainer_spell tables) and the core's own
     //     per-trainer rule Trainer::TeachAvailableSpellsFree (Trainer.h:94: class, race, level and prerequisite checks as at the trainer). A trainer is
-    //     used when its type is a class trainer and its class mask (Trainer::GetClassMask) holds the bot's class. The type of a class trainer in this
+    //     used when its type is a class trainer and its class mask (Trainer::GetClassMask) IS the bot's class (a mask of several classes is a trainer whose
+    //     data names no class: riding, recipes; the first boot of R3 taught a priest riding passives and a tailoring recipe through them). The type of a class trainer in this
     //     core's data is `Trainer::Type::None` (trainer.Type 0: 254 of 716 trainers, the priests' trainers 7 and 8 among them); `Trainer::Type::Talent` (1)
     //     is another set of 8 whose spells all need a skill line (the first boot of R3 taught nothing from them: the spec's "Talent" was a misreading).
     //  2. the class skill-line abilities (sSkillLineAbilityStore, the DB2 data the core's own `.learn my trainer` reads, cs_learn.cpp:144-181): a spell of
@@ -428,7 +429,7 @@ public:
             trainers = 0;
             for (auto const& [id, trainer] : sObjectMgr->GetTrainers())
             {
-                if (trainer.GetType() != Trainer::Type::None || !(trainer.GetClassMask() & classMask))
+                if (trainer.GetType() != Trainer::Type::None || trainer.GetClassMask() != classMask)
                     continue;
                 ++trainers;
                 passTaught += trainer.TeachAvailableSpellsFree(bot, &tally);
