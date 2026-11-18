@@ -59,7 +59,20 @@ void RunTraceService::NoteSpellInterrupted(PlayerbotAI* /*ai*/, uint32_t /*spell
 {
 }
 
+// RunTraceService owns a writer object whose inline destructor closes it; no file is ever opened (the service is inactive), so
+// there is nothing to flush (runtime/RunTraceWriter.cpp).
+namespace RunTrace
+{
+RunTraceWriter::WriterStats RunTraceWriter::Close()
+{
+    return WriterStats{};
+}
+}
+
 // ---- ObservabilityEmitter: disabled. ----
+ObservabilityEmitter::ObservabilityEmitter() = default;
+ObservabilityEmitter::~ObservabilityEmitter() = default;
+
 ObservabilityEmitter& ObservabilityEmitter::Instance()
 {
     static ObservabilityEmitter instance;

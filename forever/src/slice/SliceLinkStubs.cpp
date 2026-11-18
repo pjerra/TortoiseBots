@@ -257,6 +257,7 @@ void TravelMgr::CollectMapTransferPortals(const WorldPosition&, uint32, std::vec
 float TravelMgr::MapTransDistance(const WorldPosition&, const WorldPosition&, bool) const { NoteTravel(); return 0.0f; }
 
 TravelTarget::TravelTarget(PlayerbotAI* ai) : AiObject(ai) { NoteTravel(); }
+TravelTarget::~TravelTarget() {}
 bool TravelTarget::IsActive() { NoteTravel(); return false; }
 void TravelTarget::SetStatus(TravelStatus) { NoteTravel(); }
 

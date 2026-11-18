@@ -17,6 +17,7 @@
 #include "compat/botpch_forever.h"
 
 #include <exception>
+#include <filesystem>
 #include <memory>
 #include "ByteBuffer.h"
 #include "Player.h"
@@ -84,6 +85,19 @@ std::string EnsureConfig()
     if (attempted)
         return result;
     attempted = true;
+
+    // The engine reads aiplayerbot.conf itself, from the directory of the worldserver.conf the server was started with
+    // (PlayerbotAIConfig.cpp:650-658; findings item 19). The CMake CONFIGS list puts the .dist file in worldserver.conf.d, where
+    // the core's own parser would read it as part of the main config; the deployment copies it one directory up. Say so when it
+    // is missing, instead of leaving only the engine's "No configuration file" line.
+    std::string const mainConfig = sConfig.GetFilename();
+    size_t const slash = mainConfig.find_last_of("/\\");
+    std::string const engineConfig = (slash == std::string::npos ? std::string() : mainConfig.substr(0, slash + 1)) + "aiplayerbot.conf";
+    if (std::string(sConfig.GetStringDefault("AiPlayerbot.ConfigFile", "")).empty() && !std::filesystem::exists(engineConfig))
+    {
+        result = "no " + engineConfig + " (copy aiplayerbot.conf.dist from worldserver.conf.d to that path)";
+        return result;
+    }
 
     if (!sPlayerbotAIConfig.Initialize())
         result = "PlayerbotAIConfig::Initialize failed (no aiplayerbot.conf or AiPlayerbot.Enabled = 0; see the server log)";

@@ -18,9 +18,14 @@
 #include "PlayerbotAIStorage.h"
 #include "runtime/AltBotService.h"
 #include "runtime/BotManager.h"
+#include "runtime/PlayerbotAIAdapter.h"
 
 namespace TortoiseBots
 {
+// BotEntry's destructor is out of line in runtime/BotManager.cpp (it needs the complete adapter type for its unique_ptr). The
+// legacy singleton below holds a table of them, so the destructor has to exist; the table stays empty on this host.
+BotEntry::~BotEntry() = default;
+
 // The legacy singleton is never filled: its records stay empty because the host's table is the registry (see above). It exists so
 // the legacy call sites (`BotManager::Instance().IsBot(...)`) have an object to call.
 BotManager& BotManager::Instance()
