@@ -57,9 +57,22 @@
 #include "playerbot/strategy/values/MountValues.h"
 #include "playerbot/strategy/values/WorldPvpSeekChecks.h"
 
+#include <atomic>
+#include "GameTime.h"
+
 namespace
 {
-inline void NoteBoss()      { tbcompat::Unported(tbcompat::Feature::BossTactics); }
+// Boss and raid tactics is reached by per-tick checks in about 40 shared files (target filters, the taunt and hold gates, the anchor clamp), several
+// hundred times per bot per tick: 1.9 million calls in 5 minutes with two bots (R8). The checks sit in shared code, so a guard at the call sites would be a
+// shared change (and a Turtle proof for each); the stand-ins instead count once per world tick, so the counter reads "ticks that reached the feature"
+// and no longer buries the other rows.
+inline void NoteBoss()
+{
+    static std::atomic<uint32_t> lastTickMs{ 0xFFFFFFFFu };
+    uint32_t const now = GameTime::GetGameTimeMS();
+    if (lastTickMs.exchange(now) != now)
+        tbcompat::Unported(tbcompat::Feature::BossTactics);
+}
 inline void NoteTravel()    { tbcompat::Unported(tbcompat::Feature::TravelMgr); }
 inline void NoteLoot()      { tbcompat::Unported(tbcompat::Feature::LootStack); }
 inline void NoteItems()     { tbcompat::Unported(tbcompat::Feature::RandomItems); }
