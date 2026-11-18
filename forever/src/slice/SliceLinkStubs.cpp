@@ -59,17 +59,17 @@
 
 namespace
 {
-inline void Boss()      { tbcompat::Unported(tbcompat::Feature::BossTactics); }
-inline void Travel()    { tbcompat::Unported(tbcompat::Feature::TravelMgr); }
-inline void Loot()      { tbcompat::Unported(tbcompat::Feature::LootStack); }
-inline void Items()     { tbcompat::Unported(tbcompat::Feature::RandomItems); }
-inline void Texts()     { tbcompat::Unported(tbcompat::Feature::BotTexts); }
-inline void Specs()     { tbcompat::Unported(tbcompat::Feature::TalentSpecs); }
-inline void Pool()      { tbcompat::Unported(tbcompat::Feature::PoolServices); }
-inline void Factory()   { tbcompat::Unported(tbcompat::Feature::BotFactory); }
-inline void Filters()   { tbcompat::Unported(tbcompat::Feature::ChatFilters); }
-inline void Flee()      { tbcompat::Unported(tbcompat::Feature::FleeManager); }
-inline void Misc()      { tbcompat::Unported(tbcompat::Feature::MiscLegacyServices); }
+inline void NoteBoss()      { tbcompat::Unported(tbcompat::Feature::BossTactics); }
+inline void NoteTravel()    { tbcompat::Unported(tbcompat::Feature::TravelMgr); }
+inline void NoteLoot()      { tbcompat::Unported(tbcompat::Feature::LootStack); }
+inline void NoteItems()     { tbcompat::Unported(tbcompat::Feature::RandomItems); }
+inline void NoteTexts()     { tbcompat::Unported(tbcompat::Feature::BotTexts); }
+inline void NoteSpecs()     { tbcompat::Unported(tbcompat::Feature::TalentSpecs); }
+inline void NotePool()      { tbcompat::Unported(tbcompat::Feature::PoolServices); }
+inline void NoteFactory()   { tbcompat::Unported(tbcompat::Feature::BotFactory); }
+inline void NoteFilters()   { tbcompat::Unported(tbcompat::Feature::ChatFilters); }
+inline void NoteFlee()      { tbcompat::Unported(tbcompat::Feature::FleeManager); }
+inline void NoteMisc()      { tbcompat::Unported(tbcompat::Feature::MiscLegacyServices); }
 }
 
 // =====================================================================================================================
@@ -83,162 +83,162 @@ namespace ai
 // BossTacticsMgr.cpp / DungeonPlanMgr.cpp: the tables stay empty (their Load* functions are stand-ins below).
 BossTacticTable& GetBossTactics()
 {
-    Boss();
+    NoteBoss();
     static BossTacticTable table;
     return table;
 }
 
 DungeonPlanTable& GetDungeonPlans()
 {
-    Boss();
+    NoteBoss();
     static DungeonPlanTable table;
     return table;
 }
 
-void LoadBossTactics() { Boss(); }
-void LoadBossStands() { Boss(); }
-void LoadDungeonPlans() { Boss(); }
+void LoadBossTactics() { NoteBoss(); }
+void LoadBossStands() { NoteBoss(); }
+void LoadDungeonPlans() { NoteBoss(); }
 
 // BossTacticsActions.cpp
-BossTacticsScanScope::BossTacticsScanScope() { Boss(); }
+BossTacticsScanScope::BossTacticsScanScope() { NoteBoss(); }
 BossTacticsScanScope::~BossTacticsScanScope() {}
-bool AoeTauntStillNeeded(PlayerbotAI*, Player*) { Boss(); return false; }
-bool AreaTauntRefusedByPost(PlayerbotAI*, Player*, const char*) { Boss(); return false; }
-bool ClampMoveToBossAnchor(PlayerbotAI*, Player*, float&, float&, float&) { Boss(); return false; }
-bool DispelCastBlocked(PlayerbotAI*, Unit*, std::uint32_t) { Boss(); return false; }
-BossStandTarget FindBossStand(PlayerbotAI*, Player*) { Boss(); return BossStandTarget{}; }
-TankPostHealDuty FindTankPostHealDuty(PlayerbotAI*, Player*) { Boss(); return TankPostHealDuty{}; }
-std::uint32_t GateHoldFighters(PlayerbotAI*, std::uint32_t, float) { Boss(); return 0; }
+bool AoeTauntStillNeeded(PlayerbotAI*, Player*) { NoteBoss(); return false; }
+bool AreaTauntRefusedByPost(PlayerbotAI*, Player*, const char*) { NoteBoss(); return false; }
+bool ClampMoveToBossAnchor(PlayerbotAI*, Player*, float&, float&, float&) { NoteBoss(); return false; }
+bool DispelCastBlocked(PlayerbotAI*, Unit*, std::uint32_t) { NoteBoss(); return false; }
+BossStandTarget FindBossStand(PlayerbotAI*, Player*) { NoteBoss(); return BossStandTarget{}; }
+TankPostHealDuty FindTankPostHealDuty(PlayerbotAI*, Player*) { NoteBoss(); return TankPostHealDuty{}; }
+std::uint32_t GateHoldFighters(PlayerbotAI*, std::uint32_t, float) { NoteBoss(); return 0; }
 // "Whether a healer may top up the target": with no boss row the Turtle answer is today's mana rule; the slice's healer path is
 // not reached by a warrior, and true (no reserve refuses) is the permissive end of it.
-bool HealTopUpAllowedFor(PlayerbotAI*, Player*, Unit*) { Boss(); return true; }
-bool HealReserveRefusesTopUp(PlayerbotAI*, Player*, Unit*, float) { Boss(); return false; }
-std::uint32_t HoldKillBlockers(PlayerbotAI*, std::uint32_t) { Boss(); return 0; }
-bool IsDpsHeld(PlayerbotAI*, Player*, Unit*, DpsHoldTrigger*) { Boss(); return false; }
-bool IsLiveWalkoutPuller(Player*) { Boss(); return false; }
-bool IsRangedOnlyHeld(PlayerbotAI*, Player*, Unit*, float*) { Boss(); return false; }
-bool IsSeekSourceForTankPickup(PlayerbotAI*, Player*, Unit*) { Boss(); return false; }
-bool IsSoughtCloudFor(PlayerbotAI*, Player*, DynamicObject*) { Boss(); return false; }
-bool LiveBossAnchor(PlayerbotAI*, Player*, BossAnchorCircle&) { Boss(); return false; }
-bool MeetSonChaseExempt(PlayerbotAI*, Player*, Unit*) { Boss(); return false; }
-void ReleaseWalkoutPet(Player*) { Boss(); }
-BossLinkedDeathScan ScanBossLinkedDeath(PlayerbotAI*, Player*) { Boss(); return BossLinkedDeathScan{}; }
-std::uint64_t SeekMeetHealPuller(std::uint32_t) { Boss(); return 0; }
-bool SeekMeetPrePlaceHoldsChase(PlayerbotAI*, Player*, Unit*, const char*) { Boss(); return false; }
-std::uint64_t SoleKillGuid(PlayerbotAI*, std::uint32_t) { Boss(); return 0; }
-bool TankIgnoresTarget(PlayerbotAI*, Player*, Unit*) { Boss(); return false; }
-std::uint64_t TankPostLatchedUnit(Player*) { Boss(); return 0; }
-bool TauntRefusedByGate(PlayerbotAI*, Player*, Unit*, const char*) { Boss(); return false; }
-bool TauntTargetHeldByOtherTank(Player*, Unit*) { Boss(); return false; }
+bool HealTopUpAllowedFor(PlayerbotAI*, Player*, Unit*) { NoteBoss(); return true; }
+bool HealReserveRefusesTopUp(PlayerbotAI*, Player*, Unit*, float) { NoteBoss(); return false; }
+std::uint32_t HoldKillBlockers(PlayerbotAI*, std::uint32_t) { NoteBoss(); return 0; }
+bool IsDpsHeld(PlayerbotAI*, Player*, Unit*, DpsHoldTrigger*) { NoteBoss(); return false; }
+bool IsLiveWalkoutPuller(Player*) { NoteBoss(); return false; }
+bool IsRangedOnlyHeld(PlayerbotAI*, Player*, Unit*, float*) { NoteBoss(); return false; }
+bool IsSeekSourceForTankPickup(PlayerbotAI*, Player*, Unit*) { NoteBoss(); return false; }
+bool IsSoughtCloudFor(PlayerbotAI*, Player*, DynamicObject*) { NoteBoss(); return false; }
+bool LiveBossAnchor(PlayerbotAI*, Player*, BossAnchorCircle&) { NoteBoss(); return false; }
+bool MeetSonChaseExempt(PlayerbotAI*, Player*, Unit*) { NoteBoss(); return false; }
+void ReleaseWalkoutPet(Player*) { NoteBoss(); }
+BossLinkedDeathScan ScanBossLinkedDeath(PlayerbotAI*, Player*) { NoteBoss(); return BossLinkedDeathScan{}; }
+std::uint64_t SeekMeetHealPuller(std::uint32_t) { NoteBoss(); return 0; }
+bool SeekMeetPrePlaceHoldsChase(PlayerbotAI*, Player*, Unit*, const char*) { NoteBoss(); return false; }
+std::uint64_t SoleKillGuid(PlayerbotAI*, std::uint32_t) { NoteBoss(); return 0; }
+bool TankIgnoresTarget(PlayerbotAI*, Player*, Unit*) { NoteBoss(); return false; }
+std::uint64_t TankPostLatchedUnit(Player*) { NoteBoss(); return 0; }
+bool TauntRefusedByGate(PlayerbotAI*, Player*, Unit*, const char*) { NoteBoss(); return false; }
+bool TauntTargetHeldByOtherTank(Player*, Unit*) { NoteBoss(); return false; }
 
 // The multipliers the slice's combat strategies push (CombatStrategy.cpp, DungeonStrategy.cpp, AvoidAoeStrategy): 1.0 = no change.
-float CharmedAllyHoldMultiplier::GetValue(Action*) { Boss(); return 1.0f; }
-float TrapHoldMultiplier::GetValue(Action*) { Boss(); return 1.0f; }
+float CharmedAllyHoldMultiplier::GetValue(Action*) { NoteBoss(); return 1.0f; }
+float TrapHoldMultiplier::GetValue(Action*) { NoteBoss(); return 1.0f; }
 
 // Fankriss*Actions.cpp, FankrissSpawnTarget.cpp, FankrissGauntletPolicy
-bool FankrissBlocksAoe(PlayerbotAI*, uint32) { Boss(); return false; }
-bool FankrissBurnSpawn(PlayerbotAI*, Unit*) { Boss(); return false; }
-bool FankrissDpsMayAttack(PlayerbotAI*, Unit*) { Boss(); return true; }   // "may attack": no Fankriss rule forbids it
-bool FankrissHealReachable(PlayerbotAI*, Unit*) { Boss(); return true; }  // "reachable": no Fankriss rule says otherwise
-bool FankrissHealingActive(PlayerbotAI*) { Boss(); return false; }
-Unit* GetAssignedFankrissSpawnTankTarget(PlayerbotAI*) { Boss(); return nullptr; }
-Unit* GetAssignedFankrissTankTarget(PlayerbotAI*) { Boss(); return nullptr; }
-Unit* GetFankrissDpsTarget(PlayerbotAI*) { Boss(); return nullptr; }
-Unit* GetFankrissSpawnTarget(PlayerbotAI*) { Boss(); return nullptr; }
-bool IgnoreFankrissGauntlet(Player*, Unit*) { Boss(); return false; }
-bool RetainFankrissFocusTarget(PlayerbotAI*, Unit*) { Boss(); return false; }
-void UpdateFankrissFocus(PlayerbotAI*) { Boss(); }
-void UpdateFankrissHealing(PlayerbotAI*) { Boss(); }
+bool FankrissBlocksAoe(PlayerbotAI*, uint32) { NoteBoss(); return false; }
+bool FankrissBurnSpawn(PlayerbotAI*, Unit*) { NoteBoss(); return false; }
+bool FankrissDpsMayAttack(PlayerbotAI*, Unit*) { NoteBoss(); return true; }   // "may attack": no Fankriss rule forbids it
+bool FankrissHealReachable(PlayerbotAI*, Unit*) { NoteBoss(); return true; }  // "reachable": no Fankriss rule says otherwise
+bool FankrissHealingActive(PlayerbotAI*) { NoteBoss(); return false; }
+Unit* GetAssignedFankrissSpawnTankTarget(PlayerbotAI*) { NoteBoss(); return nullptr; }
+Unit* GetAssignedFankrissTankTarget(PlayerbotAI*) { NoteBoss(); return nullptr; }
+Unit* GetFankrissDpsTarget(PlayerbotAI*) { NoteBoss(); return nullptr; }
+Unit* GetFankrissSpawnTarget(PlayerbotAI*) { NoteBoss(); return nullptr; }
+bool IgnoreFankrissGauntlet(Player*, Unit*) { NoteBoss(); return false; }
+bool RetainFankrissFocusTarget(PlayerbotAI*, Unit*) { NoteBoss(); return false; }
+void UpdateFankrissFocus(PlayerbotAI*) { NoteBoss(); }
+void UpdateFankrissHealing(PlayerbotAI*) { NoteBoss(); }
 
 // PatchwerkSoakerActions.cpp, PatchwerkSafety.cpp
-Unit* GetAssignedPatchwerkTankTarget(PlayerbotAI*) { Boss(); return nullptr; }
-Unit* GetPatchwerkSoakBoss(PlayerbotAI*) { Boss(); return nullptr; }
-Player* GetPatchwerkSoakPuller(PlayerbotAI*) { Boss(); return nullptr; }
-Player* PatchwerkHealingTarget(PlayerbotAI*) { Boss(); return nullptr; }
-bool PatchwerkDpsOpeningHold(PlayerbotAI*) { Boss(); return false; }
-bool PatchwerkOpeningBlocksSpell(PlayerbotAI*, uint32, Unit*) { Boss(); return false; }
-bool PatchwerkThreatTank(PlayerbotAI*, Unit*) { Boss(); return false; }
-bool UpdatePatchwerkSafety(PlayerbotAI*) { Boss(); return false; }
-void WakePatchwerkPullMain(PlayerbotAI*) { Boss(); }
+Unit* GetAssignedPatchwerkTankTarget(PlayerbotAI*) { NoteBoss(); return nullptr; }
+Unit* GetPatchwerkSoakBoss(PlayerbotAI*) { NoteBoss(); return nullptr; }
+Player* GetPatchwerkSoakPuller(PlayerbotAI*) { NoteBoss(); return nullptr; }
+Player* PatchwerkHealingTarget(PlayerbotAI*) { NoteBoss(); return nullptr; }
+bool PatchwerkDpsOpeningHold(PlayerbotAI*) { NoteBoss(); return false; }
+bool PatchwerkOpeningBlocksSpell(PlayerbotAI*, uint32, Unit*) { NoteBoss(); return false; }
+bool PatchwerkThreatTank(PlayerbotAI*, Unit*) { NoteBoss(); return false; }
+bool UpdatePatchwerkSafety(PlayerbotAI*) { NoteBoss(); return false; }
+void WakePatchwerkPullMain(PlayerbotAI*) { NoteBoss(); }
 // The three actions UpdateAI builds on the stack when a Patchwerk fight is on (GetPatchwerkSoakBoss non-null, never here).
-bool PatchwerkMainEngageAction::Execute(Event&) { Boss(); return false; }
-bool PatchwerkSoakStageAction::Execute(Event&) { Boss(); return false; }
-bool PatchwerkSoakEngageAction::isUseful() { Boss(); return false; }
-bool PatchwerkSoakEngageAction::Execute(Event&) { Boss(); return false; }
+bool PatchwerkMainEngageAction::Execute(Event&) { NoteBoss(); return false; }
+bool PatchwerkSoakStageAction::Execute(Event&) { NoteBoss(); return false; }
+bool PatchwerkSoakEngageAction::isUseful() { NoteBoss(); return false; }
+bool PatchwerkSoakEngageAction::Execute(Event&) { NoteBoss(); return false; }
 
 // ViscidusActions.cpp
-Unit* GetViscidusCombatTarget(PlayerbotAI*) { Boss(); return nullptr; }
-std::list<HazardPosition> GetViscidusToxinHazards(PlayerbotAI*) { Boss(); return {}; }
-bool IsViscidusShatterTarget(Player*, Unit*) { Boss(); return false; }
-void UpdateViscidus(PlayerbotAI*) { Boss(); }
-bool ViscidusBlocksSpell(PlayerbotAI*, uint32, Unit*) { Boss(); return false; }
+Unit* GetViscidusCombatTarget(PlayerbotAI*) { NoteBoss(); return nullptr; }
+std::list<HazardPosition> GetViscidusToxinHazards(PlayerbotAI*) { NoteBoss(); return {}; }
+bool IsViscidusShatterTarget(Player*, Unit*) { NoteBoss(); return false; }
+void UpdateViscidus(PlayerbotAI*) { NoteBoss(); }
+bool ViscidusBlocksSpell(PlayerbotAI*, uint32, Unit*) { NoteBoss(); return false; }
 
 // EmeraldSanctumDungeonTriggers.cpp
-Unit* FindSolniusAdd(PlayerbotAI*) { Boss(); return nullptr; }
-bool IsSolniusAdd(Unit*) { Boss(); return false; }
+Unit* FindSolniusAdd(PlayerbotAI*) { NoteBoss(); return nullptr; }
+bool IsSolniusAdd(Unit*) { NoteBoss(); return false; }
 
 // ThreatStrategy.cpp, PositionAction.cpp
-bool ThreatResetHolds(PlayerbotAI*, Player*, Unit*) { Boss(); return false; }
-bool StayWalkDueNow(PlayerbotAI*, Player*, PositionEntry const&) { Boss(); return false; }
+bool ThreatResetHolds(PlayerbotAI*, Player*, Unit*) { NoteBoss(); return false; }
+bool StayWalkDueNow(PlayerbotAI*, Player*, PositionEntry const&) { NoteBoss(); return false; }
 
 // =====================================================================================================================
 // Startup tables of other managers. Owner files: GuildOrderSources.cpp, GuildOrderEnchants.cpp. Nothing is built.
 // =====================================================================================================================
-void BuildGuildOrderEnchantIndex() { Pool(); }
-void BuildGuildOrderSourceIndex() { Pool(); }
-std::vector<GuildOrderEntrySource> GuildOrderSourcesFor(uint32_t) { Pool(); return {}; }
+void BuildGuildOrderEnchantIndex() { NotePool(); }
+void BuildGuildOrderSourceIndex() { NotePool(); }
+std::vector<GuildOrderEntrySource> GuildOrderSourcesFor(uint32_t) { NotePool(); return {}; }
 
 // =====================================================================================================================
 // Misc legacy services. Owner files named per line.
 // =====================================================================================================================
 // CastCancelLog.cpp: diagnostics only (a log line per cancelled cast), off.
-void LogCastCancel(PlayerbotAI*, const char*, CurrentSpellTypes, float) { Misc(); }
-void LogCastCancelNonMelee(PlayerbotAI*, const char*, bool, float) { Misc(); }
-void LogCastCancelStop(PlayerbotAI*, const char*, float) { Misc(); }
+void LogCastCancel(PlayerbotAI*, const char*, CurrentSpellTypes, float) { NoteMisc(); }
+void LogCastCancelNonMelee(PlayerbotAI*, const char*, bool, float) { NoteMisc(); }
+void LogCastCancelStop(PlayerbotAI*, const char*, float) { NoteMisc(); }
 // FishAction.cpp
-void EndFishingSession(PlayerbotAI*, char const*) { Misc(); }
+void EndFishingSession(PlayerbotAI*, char const*) { NoteMisc(); }
 // BotAreaTriggers.cpp
-void UpdateBotAreaTriggers(Player*, BotAreaTriggerState&, std::vector<uint32_t> const*) { Misc(); }
+void UpdateBotAreaTriggers(Player*, BotAreaTriggerState&, std::vector<uint32_t> const*) { NoteMisc(); }
 
 // CheatAction.cpp: the mask of cheats a config string names. 0 = none (the cheat actions are not in the slice).
-BotCheatMask CheatAction::GetCheatMask(std::string) { Misc(); return BotCheatMask(0); }
+BotCheatMask CheatAction::GetCheatMask(std::string) { NoteMisc(); return BotCheatMask(0); }
 // EmoteAction.cpp: how many chat variants a text emote has. 1 = only the plain one.
-uint32 EmoteActionBase::GetNumberOfEmoteVariants(TextEmotes, uint8, uint8) { Misc(); return 1; }
+uint32 EmoteActionBase::GetNumberOfEmoteVariants(TextEmotes, uint8, uint8) { NoteMisc(); return 1; }
 // MountValues.cpp
-bool MountValue::IsMountSpell(uint32) { Misc(); return false; }
+bool MountValue::IsMountSpell(uint32) { NoteMisc(); return false; }
 // GrindTargetValue.cpp: "an instance target may be ground": no.
-bool GrindTargetValue::IsAllowedInstanceTarget(PlayerbotAI*, Unit*) { Misc(); return false; }
+bool GrindTargetValue::IsAllowedInstanceTarget(PlayerbotAI*, Unit*) { NoteMisc(); return false; }
 // UseMeetingStoneAction.cpp: no spot found beside the summoner.
-bool SummonAction::FindSpotBeside(Player*, Player*, float, float, float&, float&, float&) { Misc(); return false; }
+bool SummonAction::FindSpotBeside(Player*, Player*, float, float, float&, float&, float&) { NoteMisc(); return false; }
 // ItemUsageValue.cpp: the reagent and vendor tables are not built.
-void ItemUsageValue::PopulateProfessionReagentIds() { Items(); }
-void ItemUsageValue::PopulateReagentItemIdsForCraftableItemIds() { Items(); }
-void ItemUsageValue::PopulateSoldByVendorItemIds() { Items(); }
+void ItemUsageValue::PopulateProfessionReagentIds() { NoteItems(); }
+void ItemUsageValue::PopulateReagentItemIdsForCraftableItemIds() { NoteItems(); }
+void ItemUsageValue::PopulateSoldByVendorItemIds() { NoteItems(); }
 // EnemyPlayerValue.cpp, WorldPvpSeekChecks.cpp: no open-world PvP seeking.
-float EnemyPlayerValue::GetMaxAttackDistance(Player*) { Misc(); return 0.0f; }
-bool WorldPvpSeekChecks::IsSeeking(PlayerbotAI*, Player*) { Misc(); return false; }
-bool WorldPvpSeekChecks::IsSeekTarget(PlayerbotAI*, Player*, Player*) { Misc(); return false; }
+float EnemyPlayerValue::GetMaxAttackDistance(Player*) { NoteMisc(); return 0.0f; }
+bool WorldPvpSeekChecks::IsSeeking(PlayerbotAI*, Player*) { NoteMisc(); return false; }
+bool WorldPvpSeekChecks::IsSeekTarget(PlayerbotAI*, Player*, Player*) { NoteMisc(); return false; }
 
 // ChatFilter.cpp: the chain keeps no filter, a line is returned as it comes.
-std::string ChatFilter::Filter(std::string message, std::string) { Filters(); return message; }
+std::string ChatFilter::Filter(std::string message, std::string) { NoteFilters(); return message; }
 CompositeChatFilter::CompositeChatFilter(PlayerbotAI* ai) : ChatFilter(ai) {}
 CompositeChatFilter::~CompositeChatFilter() {}
-std::string CompositeChatFilter::Filter(std::string message) { Filters(); return message; }
+std::string CompositeChatFilter::Filter(std::string message) { NoteFilters(); return message; }
 
 // FleeManager.cpp: no destination is found, no mob veto.
-IdleMobVeto::IdleMobVeto(PlayerbotAI*, Player*, std::list<ObjectGuid> const&, Unit*, float) { Flee(); }
-bool IdleMobVeto::Wakes(float, float) const { Flee(); return false; }
-bool FleeManager::CalculateDestination(float*, float*, float*, FleeFailureMemory const*, uint32) { Flee(); return false; }
-bool FleeManager::isUseful() { Flee(); return false; }
+IdleMobVeto::IdleMobVeto(PlayerbotAI*, Player*, std::list<ObjectGuid> const&, Unit*, float) { NoteFlee(); }
+bool IdleMobVeto::Wakes(float, float) const { NoteFlee(); return false; }
+bool FleeManager::CalculateDestination(float*, float*, float*, FleeFailureMemory const*, uint32) { NoteFlee(); return false; }
+bool FleeManager::isUseful() { NoteFlee(); return false; }
 
 // LootObjectStack.cpp: an empty stack that never loots.
 LootObject::LootObject(const LootObject&) = default;
-bool LootObject::IsLootPossible(Player*) { Loot(); return false; }
-WorldObject* LootObject::GetWorldObject(Player*) { Loot(); return nullptr; }
-bool LootObjectStack::Add(ObjectGuid, bool) { Loot(); return false; }
-void LootObjectStack::Remove(ObjectGuid) { Loot(); }
-void LootObjectStack::NoteApproachFailure(ObjectGuid) { Loot(); }
-bool LootObjectStack::IsAbandoned(ObjectGuid) { Loot(); return false; }
+bool LootObject::IsLootPossible(Player*) { NoteLoot(); return false; }
+WorldObject* LootObject::GetWorldObject(Player*) { NoteLoot(); return nullptr; }
+bool LootObjectStack::Add(ObjectGuid, bool) { NoteLoot(); return false; }
+void LootObjectStack::Remove(ObjectGuid) { NoteLoot(); }
+void LootObjectStack::NoteApproachFailure(ObjectGuid) { NoteLoot(); }
+bool LootObjectStack::IsAbandoned(ObjectGuid) { NoteLoot(); return false; }
 }
 
 // =====================================================================================================================
@@ -246,36 +246,36 @@ bool LootObjectStack::IsAbandoned(ObjectGuid) { Loot(); return false; }
 // =====================================================================================================================
 namespace ai
 {
-void TravelMgr::Clear() { Travel(); }
-void TravelMgr::LoadAreaLevels() { Travel(); }
-void TravelMgr::LoadQuestTravelTable() { Travel(); }
-void TravelMgr::LoadTaxiNodeZones() { Travel(); }
-int32 TravelMgr::GetAreaLevel(uint32) { Travel(); return 0; }
-void TravelMgr::SetNullTravelTarget(TravelTarget*) const { Travel(); }
-void TravelMgr::CollectMapTransferPortals(const WorldPosition&, uint32, std::vector<std::pair<WorldPosition, float>>&) const { Travel(); }
+void TravelMgr::Clear() { NoteTravel(); }
+void TravelMgr::LoadAreaLevels() { NoteTravel(); }
+void TravelMgr::LoadQuestTravelTable() { NoteTravel(); }
+void TravelMgr::LoadTaxiNodeZones() { NoteTravel(); }
+int32 TravelMgr::GetAreaLevel(uint32) { NoteTravel(); return 0; }
+void TravelMgr::SetNullTravelTarget(TravelTarget*) const { NoteTravel(); }
+void TravelMgr::CollectMapTransferPortals(const WorldPosition&, uint32, std::vector<std::pair<WorldPosition, float>>&) const { NoteTravel(); }
 // Distance across a map change: "no portal known" is the length of a direct line is not knowable; 0 keeps the plain distance.
-float TravelMgr::MapTransDistance(const WorldPosition&, const WorldPosition&, bool) const { Travel(); return 0.0f; }
+float TravelMgr::MapTransDistance(const WorldPosition&, const WorldPosition&, bool) const { NoteTravel(); return 0.0f; }
 
-TravelTarget::TravelTarget(PlayerbotAI* ai) : AiObject(ai) { Travel(); }
-bool TravelTarget::IsActive() { Travel(); return false; }
-void TravelTarget::SetStatus(TravelStatus) { Travel(); }
+TravelTarget::TravelTarget(PlayerbotAI* ai) : AiObject(ai) { NoteTravel(); }
+bool TravelTarget::IsActive() { NoteTravel(); return false; }
+void TravelTarget::SetStatus(TravelStatus) { NoteTravel(); }
 
-WorldPosition TravelNodeMap::getMapOffset(uint32) { Travel(); return WorldPosition(); }
-TravelPath TravelNodeMap::getFullPath(WorldPosition, WorldPosition, Unit*) { Travel(); return TravelPath(); }
-void TravelPath::ClipPath(PlayerbotAI*, Unit*, bool, PackHoldResult*) { Travel(); }
-bool TravelPath::UpcommingSpecialMovement(WorldPosition, float, bool) { Travel(); return false; }
-bool TravelPath::cutTo(PathNodePoint, bool) { Travel(); return false; }
-void TravelPath::makeShortCut(WorldPosition, float, Unit*) { Travel(); }
+WorldPosition TravelNodeMap::getMapOffset(uint32) { NoteTravel(); return WorldPosition(); }
+TravelPath TravelNodeMap::getFullPath(WorldPosition, WorldPosition, Unit*) { NoteTravel(); return TravelPath(); }
+void TravelPath::ClipPath(PlayerbotAI*, Unit*, bool, PackHoldResult*) { NoteTravel(); }
+bool TravelPath::UpcommingSpecialMovement(WorldPosition, float, bool) { NoteTravel(); return false; }
+bool TravelPath::cutTo(PathNodePoint, bool) { NoteTravel(); return false; }
+void TravelPath::makeShortCut(WorldPosition, float, Unit*) { NoteTravel(); }
 
 // The vtables of the destination classes TravelMgr's members construct: the key functions, with the "nothing is possible"
 // answers the base TravelDestination gives.
-std::string EntryTravelDestination::GetShortName() const { Travel(); return ""; }
-bool GrindTravelDestination::IsPossible(const PlayerTravelInfo&) const { Travel(); return false; }
-bool GrindTravelDestination::IsActive(Player*, const PlayerTravelInfo&) const { Travel(); return false; }
-std::string GrindTravelDestination::GetTitle() const { Travel(); return "grind"; }
-bool GatherTravelDestination::IsPossible(const PlayerTravelInfo&) const { Travel(); return false; }
-bool GatherTravelDestination::IsActive(Player*, const PlayerTravelInfo&) const { Travel(); return false; }
-std::string GatherTravelDestination::GetTitle() const { Travel(); return "gather"; }
+std::string EntryTravelDestination::GetShortName() const { NoteTravel(); return ""; }
+bool GrindTravelDestination::IsPossible(const PlayerTravelInfo&) const { NoteTravel(); return false; }
+bool GrindTravelDestination::IsActive(Player*, const PlayerTravelInfo&) const { NoteTravel(); return false; }
+std::string GrindTravelDestination::GetTitle() const { NoteTravel(); return "grind"; }
+bool GatherTravelDestination::IsPossible(const PlayerTravelInfo&) const { NoteTravel(); return false; }
+bool GatherTravelDestination::IsActive(Player*, const PlayerTravelInfo&) const { NoteTravel(); return false; }
+std::string GatherTravelDestination::GetTitle() const { NoteTravel(); return "gather"; }
 }
 
 // =====================================================================================================================
@@ -284,45 +284,45 @@ std::string GatherTravelDestination::GetTitle() const { Travel(); return "gather
 // =====================================================================================================================
 RandomItemMgr::RandomItemMgr() {}
 RandomItemMgr::~RandomItemMgr() {}
-void RandomItemMgr::Init() { Items(); }
-uint32 RandomItemMgr::GetStatWeight(Player*, uint32) { Items(); return 0; }
-uint32 RandomItemMgr::GetStatWeight(uint32, uint32) { Items(); return 0; }
-uint32 RandomItemMgr::GetPlayerSpecId(Player*) { Items(); return 0; }
-uint32 RandomItemMgr::GetFood(uint32, uint32, uint32) { Items(); return 0; }
+void RandomItemMgr::Init() { NoteItems(); }
+uint32 RandomItemMgr::GetStatWeight(Player*, uint32) { NoteItems(); return 0; }
+uint32 RandomItemMgr::GetStatWeight(uint32, uint32) { NoteItems(); return 0; }
+uint32 RandomItemMgr::GetPlayerSpecId(Player*) { NoteItems(); return 0; }
+uint32 RandomItemMgr::GetFood(uint32, uint32, uint32) { NoteItems(); return 0; }
 
 // The bot text lookups answer the text name itself (an empty text would make the caller say nothing; the name is at least
 // visible in a log). The locale priority is "none".
 PlayerbotTextMgr::PlayerbotTextMgr() {}
 PlayerbotTextMgr::~PlayerbotTextMgr() {}
-void PlayerbotTextMgr::LoadBotTexts() { Texts(); }
-std::string PlayerbotTextMgr::GetBotText(std::string name) { Texts(); return name; }
-std::string PlayerbotTextMgr::GetBotText(std::string name, std::map<std::string, std::string>) { Texts(); return name; }
+void PlayerbotTextMgr::LoadBotTexts() { NoteTexts(); }
+std::string PlayerbotTextMgr::GetBotText(std::string name) { NoteTexts(); return name; }
+std::string PlayerbotTextMgr::GetBotText(std::string name, std::map<std::string, std::string>) { NoteTexts(); return name; }
 int32 PlayerbotTextMgr::GetLocalePriority() { return 0; }
 
 PlayerbotHelpMgr::PlayerbotHelpMgr() {}
 PlayerbotHelpMgr::~PlayerbotHelpMgr() {}
-void PlayerbotHelpMgr::LoadBotHelpTexts() { Texts(); }
+void PlayerbotHelpMgr::LoadBotHelpTexts() { NoteTexts(); }
 
 // Talentspec.cpp: no spec is read, no spec checks pass or fail (the premade spec config is not loaded).
-void TalentSpec::GetTalents(uint32) { Specs(); }
-void TalentSpec::ReadTalents(std::string) { Specs(); }
-void TalentSpec::ReadTalents(Player*) { Specs(); }
-bool TalentSpec::CheckTalents(uint32, std::ostringstream*) { Specs(); return false; }
-bool TalentSpec::CheckTalentLink(std::string, std::ostringstream*) { Specs(); return false; }
-uint32 TalentSpec::LeveltoPoints(uint32) { Specs(); return 0; }
-void TalentSpec::SetPublicNote(Player*) { Specs(); }
+void TalentSpec::GetTalents(uint32) { NoteSpecs(); }
+void TalentSpec::ReadTalents(std::string) { NoteSpecs(); }
+void TalentSpec::ReadTalents(Player*) { NoteSpecs(); }
+bool TalentSpec::CheckTalents(uint32, std::ostringstream*) { NoteSpecs(); return false; }
+bool TalentSpec::CheckTalentLink(std::string, std::ostringstream*) { NoteSpecs(); return false; }
+uint32 TalentSpec::LeveltoPoints(uint32) { NoteSpecs(); return 0; }
+void TalentSpec::SetPublicNote(Player*) { NoteSpecs(); }
 
 // PlayerbotFactory.cpp: no ammo and no pet set-up.
-void PlayerbotFactory::InitAmmo() { Factory(); }
-void PlayerbotFactory::InitPet(bool) { Factory(); }
-void PlayerbotFactory::InitPetSpells() { Factory(); }
-bool PlayerbotFactory::PetAutoTrainAllowed(Player*) { Factory(); return false; }
-bool PlayerbotFactory::TrainHunterPet(Player*, Pet*, bool, std::function<bool(uint32)> const&) { Factory(); return false; }
+void PlayerbotFactory::InitAmmo() { NoteFactory(); }
+void PlayerbotFactory::InitPet(bool) { NoteFactory(); }
+void PlayerbotFactory::InitPetSpells() { NoteFactory(); }
+bool PlayerbotFactory::PetAutoTrainAllowed(Player*) { NoteFactory(); return false; }
+bool PlayerbotFactory::TrainHunterPet(Player*, Pet*, bool, std::function<bool(uint32)> const&) { NoteFactory(); return false; }
 
 // PlayerbotDbStore.cpp: nothing is stored on ForeverCore (the ai_playerbot tables do not exist), so a load finds nothing.
-void PlayerbotDbStore::Load(PlayerbotAI*, std::string) { Misc(); }
+void PlayerbotDbStore::Load(PlayerbotAI*, std::string) { NoteMisc(); }
 
 // RandomBotFacade loaders (runtime/PlayerbotRuntimeFacade.cpp): the pool caches are not built.
-void RandomBotFacade::LoadNamedLocationCache() { Pool(); }
-void RandomBotFacade::LoadBattleMastersCache() { Pool(); }
-void RandomBotFacade::LoadAuctionPrices() { Pool(); }
+void RandomBotFacade::LoadNamedLocationCache() { NotePool(); }
+void RandomBotFacade::LoadBattleMastersCache() { NotePool(); }
+void RandomBotFacade::LoadAuctionPrices() { NotePool(); }

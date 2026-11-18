@@ -16,6 +16,7 @@
 // not compile after it, so this file logs with sLog.outString/outError, as the legacy code does.
 #include "compat/botpch_forever.h"
 
+#include <exception>
 #include <memory>
 #include "ByteBuffer.h"
 #include "Player.h"
@@ -108,18 +109,44 @@ Brain* Create(Player* bot, Player* master, std::string& error)
     if (!error.empty())
         return nullptr;
 
+    // The one thing the PlayerbotAI constructor writes to the Player is the taxi-cheat flag (PlayerbotAI.cpp:212, when the
+    // `taxi` cheat is configured); the AI's other state is its own. A failed Create must leave the Player as it found it
+    // (findings item 10), so the flag is read first and put back on every failure path below.
+    bool const taxiCheatBefore = bot->IsTaxiCheater();
+    auto const restorePlayer = [&]()
+    {
+        if (!taxiCheatBefore && bot->IsTaxiCheater())
+            bot->SetTaxiCheater(false);
+    };
+
+    // The bot must already count as OWNED here (findings items 1 and 10): `PlayerbotAI::IsOwnedBot` asks
+    // BotManager::IsBot / IsRandomBot, which the host answers from BotMgr's entry (host/TbHostBotManager.cpp), and that entry
+    // exists from `BotMgr::Login` on, so the constructor's "auto talents" branch (PlayerbotAI.cpp:257-260) is closed.
+    //
     // PlayerbotAIAdapter::Initialize (:36-52). The legacy constructor builds the context with
     // AiFactory::createAiObjectContext and the four engines (PlayerbotAI.cpp:232-239).
-    PlayerbotAI* pai = new PlayerbotAI(bot);
-    pai->SetMaster(master);
-    // The engines were built before the master was known, so saved strategies and values are applied now (:41-44).
-    pai->ResetStrategies();
-    // Re-applies the movement default ("follow" for a player master) (:45-49).
-    pai->EnsureDefaultMovementStrategy();
+    PlayerbotAI* pai = nullptr;
+    try
+    {
+        pai = new PlayerbotAI(bot);
+        pai->SetMaster(master);
+        // The engines were built before the master was known, so saved strategies and values are applied now (:41-44).
+        pai->ResetStrategies();
+        // Re-applies the movement default ("follow" for a player master) (:45-49).
+        pai->EnsureDefaultMovementStrategy();
+    }
+    catch (std::exception const& e)
+    {
+        delete pai;
+        restorePlayer();
+        error = std::string("the engine threw while it was built: ") + e.what();
+        return nullptr;
+    }
 
     if (!pai->GetAiObjectContext())
     {
         delete pai;
+        restorePlayer();
         error = "the engine has no object context";
         return nullptr;
     }
@@ -135,6 +162,7 @@ Brain* Create(Player* bot, Player* master, std::string& error)
     if (!Usable(brain.get()))
     {
         Dispose(brain.release());
+        restorePlayer();
         error = "the engine is not usable after creation (no current engine or registry mismatch)";
         return nullptr;
     }

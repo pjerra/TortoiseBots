@@ -1,6 +1,8 @@
 // Script registration for the module: the world tick, the config load and the `.tb` chat commands.
 #include "TbBotMgr.h"
 #include "compat/TbItemPrototype.h"
+#define TB_UNPORTED_TABLE_ONLY 1   // the table of unported features without the helpers that need the core's types (R6A, R6B)
+#include "compat/TbCompat_Unported.h"
 #include "compat/TbSpellEntry.h"
 #include "AccountMgr.h"
 #include "Map.h"
@@ -60,6 +62,9 @@ public:
         tbcompat::MarkSpellStoreReady();
         tbcompat::InitSpellTable();
         TC_LOG_INFO("server.loading", "TortoiseBots (ForeverCore port, spike): {}", BotMgr::Instance().Enabled() ? "enabled" : "disabled");
+        // Without the slice nothing reaches an unported feature, so the line is only for a build that has the engine.
+        if (TortoiseBots::engine::Built())
+            TC_LOG_INFO("server.loading", "TortoiseBots: {}", tbcompat::UnportedBootLine());
     }
 
     void OnBeforeMapsUpdate(uint32 diff) override
@@ -113,6 +118,7 @@ public:
             { "where",  HandleWhere,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "engine", HandleEngine, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "status", HandleStatus, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "unported", HandleUnported, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "item",   HandleItem,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "spellscan", HandleSpellScan, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "spell",  HandleSpell,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
@@ -218,6 +224,22 @@ public:
         }
         else
             handler->PSendSysMessage("TortoiseBots: %u creature(s) within 60 yd, none alive.", uint32(creatures.size()));
+        return true;
+    }
+
+    // .tb unported: every feature of the legacy engine that is not ported yet, with how many times the engine reached it.
+    static bool HandleUnported(ChatHandler* handler)
+    {
+        std::string const report = tbcompat::UnportedReport();
+        size_t begin = 0;
+        while (begin < report.size())
+        {
+            size_t end = report.find('\n', begin);
+            if (end == std::string::npos)
+                end = report.size();
+            handler->PSendSysMessage("TortoiseBots: %s", report.substr(begin, end - begin).c_str());
+            begin = end + 1;
+        }
         return true;
     }
 
