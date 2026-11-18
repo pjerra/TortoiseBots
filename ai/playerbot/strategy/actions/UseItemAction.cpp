@@ -439,6 +439,21 @@ bool UseAction::UseItemInternal(Player* requester, uint32 itemId, Unit* unit, Ga
         return false;
     }
 
+    // ForeverCore uses only food and drink (on the bot itself, through the core's own item cast); every other use of an item is not
+    // ported ("item use except food and drink"): opening, quest-giver items, hearthstone, potions, bandages, keys, scrolls, gems.
+    // T: always false. The refusal reads like any other that the action reports (use_command_item_error).
+    if (ItemUseUnportedCompat(IsFood(proto) || IsDrink(proto)))
+    {
+        if (verbose)
+        {
+            std::map<std::string, std::string> replyArgs;
+            replyArgs["%item"] = chat->formatItem(proto);
+            ai->TellPlayerNoFacing(requester, BOT_TEXT2("use_command_item_error", replyArgs), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+        }
+
+        return false;
+    }
+
     if (proto->Flags & ITEM_FLAG_HAS_LOOT)
     {
         std::list<Item*> items = AI_VALUE2(std::list<Item*>, "inventory items", ChatHelper::formatQItem(itemId));
@@ -673,6 +688,14 @@ bool UseAction::UseGameObject(Player* requester, Event& event, GameObject* gameO
     if (gameObject == nullptr)
     {
         ai->TellPlayerNoFacing(requester, "Invalid game object", PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+        return false;
+    }
+
+    // Using a game object (a door, a lock, a chest, a quest giver object) is not ported on ForeverCore ("game object use"); T: false.
+    if (GameObjectUseUnportedCompat())
+    {
+        std::ostringstream out; out << "I can't use " << chat->formatGameobject(gameObject);
+        ai->TellPlayerNoFacing(requester, out.str(), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
         return false;
     }
 

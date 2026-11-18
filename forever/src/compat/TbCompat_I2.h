@@ -316,3 +316,14 @@ inline bool BotUseItemOpenLockCheckCompat(SpellType* /*self*/) { tbcompat::Unpor
 // The plain use of a game object (the use packet T queues): F uses typed packets and a different interact check (feature "game object
 // use"). Failure value: false (not used).
 inline bool QueueGameObjectUseCompat(Player* /*bot*/, GameObject* /*go*/) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return false; }
+
+// Every use of an item except food and drink, and every use of a game object by the bot, is the named feature (the bot does less):
+// UseAction::UseItemInternal and UseGameObject refuse and report failure. True = refused.
+inline bool ItemUseUnportedCompat(bool foodOrDrink)
+{
+    if (foodOrDrink)
+        return false;
+    tbcompat::Unported(tbcompat::Feature::ItemUseOther);
+    return true;
+}
+inline bool GameObjectUseUnportedCompat() { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return true; }
