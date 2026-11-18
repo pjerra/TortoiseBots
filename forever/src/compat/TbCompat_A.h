@@ -40,7 +40,7 @@
 // SetSelectionGuid to it (forever-compat-shim.h:134).
 #define SetTargetGuid SetSelection
 // cmangos called the taxi flight motion TAXI_MOTION_TYPE; the Turtle shim maps it to FLIGHT_MOTION_TYPE (cmangos-compat-shim.h:513),
-// the same value 7 on both cores (T MotionMaster.h:40-58, F MovementDefines.h:42).
+// the same value 7 on both cores (T MotionMaster.h:37-58, F MovementDefines.h:42).
 #define TAXI_MOTION_TYPE FLIGHT_MOTION_TYPE
 
 // Unit state: "melee attacking someone". T UnitDefines.h:312 (0x1), F Unit.h:279 (0x2), the same fact; the bot only hands it to
@@ -121,7 +121,7 @@ inline bool HasMovementFlagCompat(Unit const* unit, uint64 flag)
 // ---------------------------------------------------------------------------------------------------------------
 // 5. MOVEMENT: the calls the bot makes on the unit's MotionMaster, grouped so that every place the two cores differ is one
 //    function here. Mapping table, Turtle call -> ForeverCore call, with file:line on both cores:
-//      MovePointCompat      T MotionMaster.h:151-152 MovePoint(id, x, y, z, options, speed, finalOrientation)
+//      MovePointCompat      T MotionMaster.h:136-137 MovePoint(id, x, y, z, options, speed, finalOrientation)
 //                           F MotionMaster.h:174 MovePoint(id, x, y, z, generatePath, finalOrient, speed, speedSelectionMode, ...)
 //      MoveFollowCompat     T MotionMaster.cpp:425 (Clear(), then FollowMovementGenerator(target, dist, angle))
 //                           F MotionMaster.h:163 MoveFollow(target, dist, ChaseAngle) (adds to the active slot, no clear)
@@ -129,7 +129,7 @@ inline bool HasMovementFlagCompat(Unit const* unit, uint64 flag)
 //      MotionClearCompat    T MotionMaster.h:112 Clear(reset, all)                   F MotionMaster.h:145-148 Clear() / Clear(slot)
 //      MoveSplineInitCompat T MoveSplineInit.h (Unit&, name; MovebyPath, SetWalk, Launch)
 //                           F Spline/MoveSplineInit.h:40,51,86,113 (Unit*; MovebyPath(span), SetWalk, Launch)
-//      current generator    GetCurrentMovementGeneratorType() is the same call on both (T MotionMaster.h:154 / F MotionMaster.h:128),
+//      current generator    GetCurrentMovementGeneratorType() is the same call on both (T MotionMaster.h:150 / F MotionMaster.h:130),
 //                           the enumerators the bot compares with (CHASE 5, POINT 8, FOLLOW 14 and FLIGHT 7, IDLE 0) have the
 //                           same names and values; EFFECT is 15 on T and 16 on F (the name is what the bot uses).
 // ---------------------------------------------------------------------------------------------------------------
@@ -138,7 +138,7 @@ typedef int ForcedMovement;
 #define FORCED_MOVEMENT_RUN 1
 #define FORCED_MOVEMENT_WALK 0
 
-// The option bits of MovePoint. T MotionMaster.h:68-79 (MoveOptions); F has no bit word: pathfinding is a bool, walk/run a
+// The option bits of MovePoint. T MotionMaster.h:69-79 (MoveOptions); F has no bit word: pathfinding is a bool, walk/run a
 // speed selection mode.
 enum TbLegacyMoveOption : uint32
 {
@@ -211,13 +211,13 @@ private:
 //    DIFFERENT ANSWER: the higher bits (T 0x20 forced destination, 0x40 fly path, 0x80 underwater, 0x100 caster; F 0x20 short,
 //    0x40/0x80 start/end far from the polygon).
 // ---------------------------------------------------------------------------------------------------------------
-// T PathInfo::calculate(x, y, z, forceDest) (PathFinder.h:60) from the owner's position; F CalculatePath(x, y, z, forceDest)
+// T PathInfo::calculate(x, y, z, forceDest) (PathFinder.h:66) from the owner's position; F CalculatePath(x, y, z, forceDest)
 // (PathGenerator.h:86).
 inline bool PathCalculateCompat(PathFinder& path, float x, float y, float z, bool forceDest = false)
 {
     return path.CalculatePath(x, y, z, forceDest);
 }
-// T calculate(start, dest, forceDest) (PathFinder.h:61); F CalculatePath(sx, sy, sz, dx, dy, dz, forceDest) (:76).
+// T calculate(start, dest, forceDest) (PathFinder.h:67); F CalculatePath(sx, sy, sz, dx, dy, dz, forceDest) (:76).
 inline bool PathCalculateCompat(PathFinder& path, G3D::Vector3 const& start, G3D::Vector3 const& dest, bool forceDest = false)
 {
     return path.CalculatePath(start.x, start.y, start.z, dest.x, dest.y, dest.z, forceDest);
