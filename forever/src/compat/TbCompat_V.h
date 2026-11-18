@@ -68,7 +68,7 @@ inline ObjectGuid DuelOpponentGuidCompat(Player const* player)
 
 // The guid on a raid target icon slot (0..7), empty when the slot is unset. T Group.h returns the raw uint64 of the guid, F Group.h:362
 // returns the ObjectGuid.
-inline ObjectGuid TargetIconGuidCompat(Group const* group, uint8 icon) { return group->GetTargetIcon(icon); }
+inline ObjectGuid TargetIconGuidCompat(Group* group, uint8 icon) { return group->GetTargetIcon(icon); }
 
 // The raid's Main Tank / Main Assist. T Group.h:284-285 keeps one guid each; F keeps them as member flags (Group.h:76-78,
 // MemberSlot::flags), set through SetGroupMemberFlag which removes the flag from the previous holder (Group.cpp:1775), so
@@ -355,7 +355,7 @@ inline SpellEffectIndex DynamicObjectEffectIndexCompat(DynamicObject const* dyn)
                 return SpellEffectIndex(effect.EffectIndex);
     return SpellEffectIndex(0);
 }
-inline bool DynamicObjectAffectsCompat(DynamicObject const* dyn, Unit* unit)
+inline bool DynamicObjectAffectsCompat(DynamicObject* dyn, Unit* unit)
 {
     return unit->HasAura(dyn->GetSpellId(), dyn->GetCasterGUID());
 }

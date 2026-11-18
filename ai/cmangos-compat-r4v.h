@@ -10,7 +10,7 @@ inline ObjectGuid DuelOpponentGuidCompat(Player const* player)
 {
     return player->m_duel ? player->m_duel->opponent : ObjectGuid();
 }
-inline ObjectGuid TargetIconGuidCompat(Group const* group, uint8 icon) { return ObjectGuid(group->GetTargetIcon(icon)); }
+inline ObjectGuid TargetIconGuidCompat(Group* group, uint8 icon) { return ObjectGuid(group->GetTargetIcon(icon)); }
 inline ObjectGuid GroupMainTankGuidCompat(Group const* group) { return group->GetMainTankGuid(); }
 inline ObjectGuid GroupMainAssistGuidCompat(Group const* group) { return group->GetMainAssistantGuid(); }
 inline std::string GuidTextCompat(ObjectGuid const& guid)
@@ -176,7 +176,7 @@ inline decltype(auto) HomeBindLocationCompat(Player* player) { return player->Ge
 inline float GetCombatDistanceCompat(WorldObject const* self, WorldObject const* target) { return self->GetCombatDistance(target); }
 
 inline SpellEffectIndex DynamicObjectEffectIndexCompat(DynamicObject const* dyn) { return dyn->GetEffIndex(); }
-inline bool DynamicObjectAffectsCompat(DynamicObject const* dyn, Unit* unit) { return dyn->IsAffecting(unit); }
+inline bool DynamicObjectAffectsCompat(DynamicObject* dyn, Unit* unit) { return dyn->IsAffecting(unit); }
 
 inline bool PathCalculateCompat(PathFinder& path, float x, float y, float z, bool forceDest) { return path.calculate(x, y, z, forceDest); }
 inline bool PathIsCompleteCompat(PathFinder const& path) { return path.getPathType() == PATHFIND_NORMAL; }
