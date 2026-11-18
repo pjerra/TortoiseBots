@@ -19,6 +19,7 @@ Run: `forever/tools/vm-census.sh "" 14` (all, about 45 minutes) or with a path p
 | 2026-11-17 | 6517af05 | shim round 2 (AFTER, item prototype mirror, 570d22dd4) | 648 | 11 | 12,182 |
 | 2026-11-18 | 6517af05 | shim round 2 fix round 1 (review: block/holy/bag family/one fill; entry + IsMoving helpers, b7d20355a) | 648 | 11 | 11,938 |
 | 2026-11-18 | 6517af05 | shim round 3 (BEFORE, = round 2 fix 2) | 648 | 11 | 11,938 |
+| 2026-11-18 | 6517af05 | shim round 3 (AFTER, spell mirror + fetch helpers, 6cbc923cd) | 648 | 11 | 11,065 |
 
 The first row is not comparable with later ones: without the pre-include most files stopped early.
 
@@ -30,6 +31,14 @@ differently), update fields (`GetUInt32Value`), `WorldTimer`, `sLog.outString`.
 
 Shim round 1 notes, the table of mapped names and the "cannot shim" groups: `SHIM-R1-NOTES.md`. Largest groups left:
 item template fields (1,168 places), then spell data, position members, database calls, update fields, `GetProto`.
+
+Shim round 3 (the spell mirror) notes: `SHIM-R3-NOTES.md`. `SpellEntry` is our own struct on ForeverCore, filled per spell
+from `SpellInfo` on first use; every spell fetch reads `GetSpellEntryCompat` (32 `sSpellMgr.GetSpellEntry` and 54
+`sSpellTemplate.LookupEntry` sites, 125 `X->m_spellInfo` and 32 `X->GetSpellProto()` wraps, 4 by hand). The spell-data
+families are gone from the name table: `Effect` 173 -> 0, `EffectApplyAuraName` 102 -> 0, `MAX_EFFECT_INDEX` 64 -> 0,
+`EffectTriggerSpell` 58 -> 0, `EffectMiscValue` 42 -> 0, `EffectItemType` 37 -> 0, `EffectBasePoints` 35 -> 0,
+`SpellEffectIndex` 28 -> 0, `IsPassiveSpell` 21 -> 0, `GetSpellCastTime` 18 -> 0, `manaCost` 11 -> 0, `rangeIndex` 9 -> 0;
+what stays is `SpellIconID` (3) and `Custom` (2), both left out for want of a counterpart. Census 11,938 -> 11,065.
 
 Shim round 2 (the item prototype mirror) notes: `SHIM-R2-NOTES.md`. The lead's round-1 finding on
 `IsMoving -> isMoving` is resolved there: the rename is removed (D6), and the bot's 59 `IsMoving()` calls now go through
