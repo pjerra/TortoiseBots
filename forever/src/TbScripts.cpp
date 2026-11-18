@@ -149,6 +149,7 @@ public:
             { "where",  HandleWhere,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "engine", HandleEngine, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "status", HandleStatus, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "rage",   HandleRage,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "perf",   HandlePerf,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "spells", HandleSpells, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "unported", HandleUnported, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
@@ -280,6 +281,18 @@ public:
         }
         else
             handler->PSendSysMessage("TortoiseBots: %u creature(s) within 60 yd, none alive.", uint32(creatures.size()));
+        return true;
+    }
+
+    // .tb rage <character> <rage points>: sets the bot's rage (the core stores rage times ten), the console's stand-in for `.modify rage`
+    // (which needs a selected target): a level 1 warrior's short fights never reach the 40 rage the heroic strike trigger asks for.
+    static bool HandleRage(ChatHandler* handler, std::string name, uint32 points)
+    {
+        Player* bot = BotMgr::Instance().FindBot(GuidByName(name));
+        if (!bot)
+            return Fail(handler, name + " is not a logged-in bot.");
+        bot->SetPower(POWER_RAGE, int32(std::min<uint32>(points, 100) * 10));
+        handler->PSendSysMessage("TortoiseBots: %s rage is %d/%d (core units).", name.c_str(), bot->GetPower(POWER_RAGE), bot->GetMaxPower(POWER_RAGE));
         return true;
     }
 
