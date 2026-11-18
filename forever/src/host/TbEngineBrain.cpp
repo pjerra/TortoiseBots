@@ -9,6 +9,7 @@
 // See forever/docs/SLICE1-R5-NOTES.md.
 #include "TbEngineBrain.h"
 #include "TbBotSession.h"
+#include "host/TbH3.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
 
@@ -281,6 +282,7 @@ void Tick(Brain* brain, uint32 diff)
         // result): the session counts it and does not queue it (BotSession::EngineTickScope).
         BotSession::EngineTickScope tickScope(brain->session);
         DeliverCastResults(brain);
+        TortoiseBots::h3::BeforeEngineTick(brain->bot, brain->ai);   // H3: the bot's queued orders, before its tick
         brain->ai->UpdateAI(diff);
     }
     catch (ByteBufferException const&)

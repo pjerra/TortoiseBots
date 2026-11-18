@@ -1,0 +1,395 @@
+// Slice 3, host package H3: what the bots are doing, as an interface (`.tb state`, `.tb party`, `.tb threat`) and the party forming
+// (`.tb party <leader> <member>...`). The line grammar is in forever/docs/TB-COMMANDS.md; every reply goes to the sender of the command
+// through the core's ChatHandler (TbH3.h, Say).
+#include "host/TbH3.h"
+#include "TbBotMgr.h"
+#include "host/TbEngineBrain.h"
+
+#if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
+
+#include "compat/botpch_forever.h"
+
+#include <algorithm>
+#include <cstdio>
+#include <set>
+#include "Config.h"
+#include "Group.h"
+#include "ObjectAccessor.h"
+#include "Player.h"
+#include "ThreatManager.h"
+#include "Unit.h"
+
+#include "TbBotSession.h"
+#include "compat/TbCompat_Unit.h"
+#include "compat/TbCompat_V.h"
+#include "playerbot/PlayerbotAI.h"
+#include "playerbot/strategy/AiObjectContext.h"
+#include "playerbot/strategy/Value.h"
+#include "PlayerbotAIStorage.h"
+
+namespace TortoiseBots
+{
+namespace h3
+{
+namespace
+{
+char const* ClassName(uint8 classId)
+{
+    static char const* const names[] = { "none", "warrior", "paladin", "hunter", "rogue", "priest", "deathknight", "shaman", "mage", "warlock", "monk", "druid", "demonhunter" };
+    return classId < sizeof(names) / sizeof(names[0]) ? names[classId] : "unknown";
+}
+
+std::string PowerName(Powers power)
+{
+    switch (power)
+    {
+        case POWER_MANA: return "mana";
+        case POWER_RAGE: return "rage";
+        case POWER_FOCUS: return "focus";
+        case POWER_ENERGY: return "energy";
+        default: return "power" + std::to_string(int(power));
+    }
+}
+
+std::string Fixed(float value, int decimals = 1)
+{
+    char buffer[32];
+    std::snprintf(buffer, sizeof(buffer), "%.*f", decimals, value);
+    return buffer;
+}
+
+std::string Join(PlayerbotAI* ai, BotState state, size_t cap)
+{
+    std::string text;
+    for (std::string_view name : ai->GetStrategies(state))
+    {
+        if (!text.empty())
+            text += '+';
+        text.append(name);
+    }
+    for (char& c : text)
+        if (c == ' ')
+            c = '_';
+    if (text.size() > cap)
+    {
+        text.resize(cap);
+        text += "...";
+    }
+    return text.empty() ? "none" : text;
+}
+
+std::string RoleOf(Player* bot, PlayerbotAI* ai)
+{
+    if (ai ? PlayerbotAI::IsTank(bot, true) : PlayerbotAIStorage::Instance().GetPlayerForcedRole(bot->GetGUID()) == 1)
+        return "tank";
+    if (ai ? PlayerbotAI::IsHeal(bot, true) : PlayerbotAIStorage::Instance().GetPlayerForcedRole(bot->GetGUID()) == 2)
+        return "healer";
+    return ai || PlayerbotAIStorage::Instance().GetPlayerForcedRole(bot->GetGUID()) ? "dps" : "none";
+}
+
+std::string DistanceTo(Player* bot, Player* other)
+{
+    if (!other)
+        return "none";
+    if (other == bot)
+        return "self";
+    if (other->GetMapId() != bot->GetMapId() || other->GetInstanceId() != bot->GetInstanceId())
+        return "othermap";
+    return Fixed(bot->GetDistance(other));
+}
+
+uint32 PercentOf(uint64 value, uint64 max)
+{
+    return max ? uint32(std::min<uint64>(100, value * 100 / max)) : 0;
+}
+
+// One state line of one bot (grammar: TB-COMMANDS.md). `resting` is set when the bot is NOT ready for the next pull.
+std::string StateLine(Player* bot, bool& resting)
+{
+    PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot);
+    AiObjectContext* context = ai ? ai->GetAiObjectContext() : nullptr;
+    ObjectGuid const guid = bot->GetGUID();
+
+    uint32 const hp = uint32(bot->GetHealth());
+    uint32 const hpMax = uint32(bot->GetMaxHealth());
+    Powers const power = bot->GetPowerType();
+    int32 powerValue = bot->GetPower(power);
+    int32 powerMax = bot->GetMaxPower(power);
+    if (power == POWER_RAGE)       // the core keeps rage times ten; the line shows rage points
+    {
+        powerValue /= 10;
+        powerMax /= 10;
+    }
+    bool const usesMana = power == POWER_MANA && powerMax > 0;
+    uint32 const manaPct = usesMana ? PercentOf(uint64(std::max(powerValue, 0)), uint64(powerMax)) : 0;
+
+    std::string state = !bot->IsAlive() ? "dead" : bot->IsInCombat() ? "combat" : "non-combat";
+    if (ai)
+        state = ai->GetState() == BotState::BOT_STATE_DEAD ? "dead" : ai->GetState() == BotState::BOT_STATE_COMBAT ? "combat" : "non-combat";
+
+    Unit* target = nullptr;
+    if (context)
+        if (ai::Value<Unit*>* value = context->GetValue<Unit*>("current target"))
+            target = value->Get();
+    Unit* victim = bot->GetVictim();
+
+    Player* master = ai ? ai->GetMaster() : CommanderOf(bot);
+    Group* group = bot->GetGroup();
+    Player* leader = group ? ObjectAccessor::FindPlayer(group->GetLeaderGUID()) : nullptr;
+
+    bool away = false, blocked = false, hasBrain = false;
+    uint32 awaySeconds = 0;
+    std::string blockedWhy;
+    BotMgr::Instance().FollowStatus(guid, away, awaySeconds, blocked, blockedWhy, hasBrain);
+    std::string stuck = away ? "away:" + std::to_string(awaySeconds) : blocked ? "blocked:" + Esc(blockedWhy) : !ai ? "noengine" : "none";
+
+    OrderStatus const order = LastOrder(guid);
+
+    bool eating = false, drinking = false;
+    if (ai)
+    {
+        eating = ai->HasSeatedMeal(false);
+        drinking = ai->HasSeatedMeal(true);
+    }
+    int32 const restHealthPct = std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Slice.RestHealthPct", 90), 0, 100);
+    int32 const restManaPct = std::clamp<int32>(sConfigMgr->GetIntDefault("TortoiseBots.Slice.RestManaPct", 80), 0, 100);
+    std::string why;
+    auto const add = [&why](char const* reason) { why += (why.empty() ? "" : "+") + std::string(reason); };
+    if (!bot->IsAlive())
+        add("dead");
+    if (bot->IsInCombat())
+        add("combat");
+    if (bot->IsAlive() && uint64(hp) * 100 < uint64(restHealthPct) * hpMax)
+        add("hp");
+    if (bot->IsAlive() && usesMana && int32(manaPct) < restManaPct)
+        add("mana");
+    if (eating)
+        add("eating");
+    if (drinking)
+        add("drinking");
+    resting = !why.empty();
+
+    std::string line = "state bot=" + Esc(bot->GetName());
+    line += " role=" + RoleOf(bot, ai);
+    line += std::string(" rolesrc=") + (PlayerbotAIStorage::Instance().GetPlayerForcedRole(guid) ? "forced" : "auto");
+    line += std::string(" class=") + ClassName(bot->GetClass());
+    line += " level=" + std::to_string(unsigned(bot->GetLevel()));
+    line += " hp=" + std::to_string(hp) + " hpmax=" + std::to_string(hpMax) + " hppct=" + std::to_string(PercentOf(hp, hpMax));
+    line += " power=" + PowerName(power) + " pw=" + std::to_string(powerValue) + " pwmax=" + std::to_string(powerMax);
+    line += " manapct=" + (usesMana ? std::to_string(manaPct) : std::string("none"));
+    line += " st=" + state;
+    line += std::string(" incombat=") + (bot->IsInCombat() ? "yes" : "no");
+    line += " tgt=" + (target ? GuidText(target->GetGUID()) : std::string("none"));
+    line += " tgtentry=" + (target ? std::to_string(target->GetEntry()) : std::string("none"));
+    line += " tgthp=" + (target ? std::to_string(PercentOf(uint64(target->GetHealth()), uint64(target->GetMaxHealth()))) : std::string("none"));
+    line += " victim=" + (victim ? GuidText(victim->GetGUID()) : std::string("none"));
+    line += std::string(" hold=") + (ai && ai->HasStrategy("passive", BotState::BOT_STATE_COMBAT) ? "yes" : "no");
+    line += std::string(" mv=") + (!ai ? "none" : ai->HasStrategy("follow", BotState::BOT_STATE_NON_COMBAT) ? "follow" :
+        ai->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT) ? "stay" : "none");
+    line += " stuck=" + stuck;
+    line += std::string(" engine=") + (ai ? "yes" : "no");
+    line += " x=" + Fixed(bot->GetPositionX()) + " y=" + Fixed(bot->GetPositionY()) + " z=" + Fixed(bot->GetPositionZ());
+    line += " map=" + std::to_string(bot->GetMapId()) + " inst=" + std::to_string(bot->GetInstanceId());
+    line += " dl=" + DistanceTo(bot, leader) + " dm=" + DistanceTo(bot, master);
+    line += " ord=" + std::to_string(order.seq) + ":" + Esc(order.result) + " lastorder=" + Esc(order.verb);
+    line += " co=" + (ai ? Join(ai, BotState::BOT_STATE_COMBAT, 150) : std::string("none"));
+    line += " nc=" + (ai ? Join(ai, BotState::BOT_STATE_NON_COMBAT, 150) : std::string("none"));
+    if (auto* session = dynamic_cast<BotSession*>(bot->GetSession()))
+    {
+        CastResultCounts const counts = session->GetCastResultCounts();
+        line += " cast_queued=" + std::to_string(counts.queued) + " cast_delivered=" + std::to_string(counts.delivered) +
+            " cast_dropped=" + std::to_string(counts.dropped) + " cast_pending=" + std::to_string(counts.pending);
+    }
+    else
+        line += " cast_queued=none cast_delivered=none cast_dropped=none cast_pending=none";
+    line += std::string(" eating=") + (eating ? "yes" : "no") + " drinking=" + (drinking ? "yes" : "no");
+    line += std::string(" resting=") + (resting ? "yes" : "no") + " rest_why=" + (why.empty() ? "none" : why);
+    return line;
+}
+
+std::string NameOf(Unit const* unit)
+{
+    return unit ? Esc(unit->GetName()) : std::string("none");
+}
+}
+
+// ---- `.tb state <bot|party [leader]> [#token]` ----
+
+bool HandleState(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
+{
+    Words const args = Split(tail);
+    if (!RequireBuilt(handler, args, "state"))
+        return false;
+    bool const leaderFollows = args.w.size() >= 2 && Lower(args.w[0]) == "party";
+    size_t pos = 0;
+    Address who = ResolveAddress(args, pos, SenderPlayer(handler), leaderFollows);
+    if (!who.ok())
+        return Fail(handler, args, "state", who.code, who.detail);
+    if (pos < args.w.size())
+        return Fail(handler, args, "state", "unexpected-argument", args.w[pos]);
+
+    uint32 resting = 0;
+    for (Player* bot : who.bots)
+    {
+        bool rest = false;
+        Say(handler, StateLine(bot, rest), args);
+        if (rest)
+            ++resting;
+    }
+    Say(handler, "state-end count=" + std::to_string(who.bots.size()) + " resting=" + std::to_string(resting) + " target=" + Esc(who.label), args);
+    return true;
+}
+
+// ---- `.tb threat <bot|party [leader]> [#token]` ----
+
+bool HandleThreat(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
+{
+    Words const args = Split(tail);
+    if (!RequireBuilt(handler, args, "threat"))
+        return false;
+    bool const leaderFollows = args.w.size() >= 2 && Lower(args.w[0]) == "party";
+    size_t pos = 0;
+    Address who = ResolveAddress(args, pos, SenderPlayer(handler), leaderFollows);
+    if (!who.ok())
+        return Fail(handler, args, "threat", who.code, who.detail);
+    if (pos < args.w.size())
+        return Fail(handler, args, "threat", "unexpected-argument", args.w[pos]);
+
+    // The mobs that have one of the bots on their threat list (the walk the engine's own value uses, ForEachThreatenerCompat), each once.
+    std::vector<Unit*> mobs;
+    for (Player* bot : who.bots)
+        ForEachThreatenerCompat(bot, [&mobs](Unit* attacker)
+        {
+            if (std::find(mobs.begin(), mobs.end(), attacker) == mobs.end())
+                mobs.push_back(attacker);
+            return false;
+        });
+
+    for (Unit* mob : mobs)
+    {
+        // READ ONLY: GetSortedThreatList and the last victim (CurrentThreatVictimCompat). Nothing that adds, scales, taunts, resets or re-selects.
+        std::vector<std::pair<float, Unit*>> list;
+        for (ThreatReference const* ref : mob->GetThreatManager().GetSortedThreatList())
+            if (ref && ref->GetVictim())
+                list.emplace_back(ref->GetThreat(), ref->GetVictim());
+        std::stable_sort(list.begin(), list.end(), [](auto const& a, auto const& b) { return a.first > b.first; });
+        std::string top;
+        for (size_t i = 0; i < list.size() && i < 3; ++i)
+            top += (top.empty() ? "" : ",") + Esc(list[i].second->GetName()) + ":" + Fixed(list[i].first, 0);
+        Say(handler, "threat mob=" + GuidText(mob->GetGUID()) + " entry=" + std::to_string(mob->GetEntry()) + " name=" + Esc(mob->GetName()) +
+            " hppct=" + std::to_string(PercentOf(uint64(mob->GetHealth()), uint64(mob->GetMaxHealth()))) +
+            " victim=" + NameOf(CurrentThreatVictimCompat(mob)) + " target=" + NameOf(mob->GetVictim()) +
+            " size=" + std::to_string(list.size()) + " top=" + (top.empty() ? std::string("none") : top), args);
+    }
+    Say(handler, "threat-end count=" + std::to_string(mobs.size()) + " bots=" + std::to_string(who.bots.size()) + " target=" + Esc(who.label), args);
+    return true;
+}
+
+// ---- `.tb party <leader>` (the roster) and `.tb party <leader> <member>...` (forms a party) ----
+
+bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
+{
+    Words const args = Split(tail);
+    if (!RequireBuilt(handler, args, "party"))
+        return false;
+    if (args.w.empty())
+        return Fail(handler, args, "party", "missing-leader", ".tb party <leader>  or  .tb party <leader> <member>...");
+    Player* leader = FindOnline(args.w[0]);
+    if (!leader)
+        return Fail(handler, args, "party", "no-such-player", args.w[0] + " is not in the world");
+
+    if (args.w.size() > 1)
+    {
+        if (args.w.size() > 5)
+            return Fail(handler, args, "party", "too-many", "a party holds five: the leader and four members");
+        std::set<ObjectGuid> seen;
+        seen.insert(leader->GetGUID());
+        for (size_t i = 1; i < args.w.size(); ++i)
+        {
+            Player* member = FindOnline(args.w[i]);
+            if (!member)
+                return Fail(handler, args, "party", "no-such-player", args.w[i] + " is not in the world");
+            if (!IsHostBot(member))
+                return Fail(handler, args, "party", "not-a-bot", args.w[i] + " is not a logged-in host bot");
+            if (!seen.insert(member->GetGUID()).second)
+                return Fail(handler, args, "party", "duplicate", args.w[i]);
+        }
+        uint32 joined = 0;
+        for (size_t i = 1; i < args.w.size(); ++i)
+        {
+            Player* member = FindOnline(args.w[i]);
+            std::string const error = BotMgr::Instance().GroupWith(member->GetGUID(), leader->GetGUID());
+            if (error.empty())
+            {
+                ++joined;
+                Say(handler, "party-join bot=" + Esc(member->GetName()) + " leader=" + Esc(leader->GetName()) + " status=joined", args);
+            }
+            else
+                Say(handler, "party-join bot=" + Esc(member->GetName()) + " leader=" + Esc(leader->GetName()) + " status=refused error=party-refused msg=" + Esc(error), args);
+        }
+        Say(handler, "party-formed leader=" + Esc(leader->GetName()) + " joined=" + std::to_string(joined) + " asked=" + std::to_string(args.w.size() - 1) +
+            " note=host_master_is_the_leader_run_.tb_master_next", args);
+        return true;
+    }
+
+    Group* group = leader->GetGroup();
+    if (!group)
+        return Fail(handler, args, "party", "no-party", leader->GetName() + " is not in a party");
+    uint32 count = 0, bots = 0;
+    std::set<std::string> commanders;
+    for (Group::MemberSlot const& slot : group->GetMemberSlots())
+    {
+        Player* member = ObjectAccessor::FindPlayer(slot.guid);
+        bool const online = member && member->IsInWorld();
+        ++count;
+        std::string line = "party member=" + Esc(slot.name) + " leader=" + (group->IsLeader(slot.guid) ? "yes" : "no") + " online=" + (online ? "yes" : "no");
+        if (online)
+        {
+            bool const bot = IsHostBot(member);
+            PlayerbotAI* ai = bot ? PlayerbotAIStorage::Instance().GetAI(member) : nullptr;
+            Player* commander = bot ? CommanderOf(member) : nullptr;
+            bool const bound = bot && !CommanderGuid(member->GetGUID()).IsEmpty();
+            line += std::string(" bot=") + (bot ? "yes" : "no") + " class=" + ClassName(member->GetClass()) + " level=" + std::to_string(unsigned(member->GetLevel())) +
+                " role=" + (bot ? RoleOf(member, ai) : std::string("none")) + std::string(" engine=") + (ai ? "yes" : "no") +
+                " master=" + (commander ? Esc(commander->GetName()) : std::string("none")) + std::string(" commanded=") + (bound ? "yes" : "no");
+            if (bot)
+                ++bots;
+            if (bound && commander)
+                commanders.insert(commander->GetName());
+        }
+        Say(handler, line, args);
+    }
+    Say(handler, "party-end leader=" + Esc(group->GetLeaderName()) + " count=" + std::to_string(count) + " bots=" + std::to_string(bots) +
+        " raid=" + (group->isRaidGroup() ? "yes" : "no") + " commander=" + (commanders.empty() ? std::string("none") : commanders.size() == 1 ? Esc(*commanders.begin()) : std::string("mixed")), args);
+    return true;
+}
+}
+}
+
+#else   // not built with the slice
+
+namespace TortoiseBots
+{
+namespace h3
+{
+bool HandleState(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
+{
+    Words const args = Split(tail);
+    return RequireBuilt(handler, args, "state");
+}
+
+bool HandleThreat(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
+{
+    Words const args = Split(tail);
+    return RequireBuilt(handler, args, "threat");
+}
+
+bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
+{
+    Words const args = Split(tail);
+    return RequireBuilt(handler, args, "party");
+}
+}
+}
+
+#endif

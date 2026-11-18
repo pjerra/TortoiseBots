@@ -72,6 +72,9 @@ public:
     bool SetMaster(ObjectGuid characterGuid, ObjectGuid master);
     bool IsBot(ObjectGuid characterGuid) const { return _bots.count(characterGuid) != 0; }
     std::size_t Count() const { return _bots.size(); }
+    // H3 (slice 3): the host master guid of a bot (empty = none or not a bot), and what `.tb state` shows of its follow state.
+    ObjectGuid MasterOf(ObjectGuid characterGuid) const { auto itr = _bots.find(characterGuid); return itr == _bots.end() ? ObjectGuid::Empty : itr->second.master; }
+    bool FollowStatus(ObjectGuid characterGuid, bool& away, uint32& awaySeconds, bool& blocked, std::string& blockedWhy, bool& hasBrain) const { auto itr = _bots.find(characterGuid); if (itr == _bots.end()) return false; Bot const& b = itr->second; away = b.masterAway; awaySeconds = (b.graceLeftMs + 999) / 1000; blocked = b.followBlocked; blockedWhy = b.followBlockedWhy; hasBrain = b.brain != nullptr; return true; }
 
     void Update(uint32 diff);
 
