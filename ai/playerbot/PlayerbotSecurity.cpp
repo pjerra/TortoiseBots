@@ -12,7 +12,7 @@ PlayerbotSecurity::PlayerbotSecurity(Player* const bot) : bot(bot), account(0)
 {
     if (bot)
     {
-        account = sObjectMgr.GetPlayerAccountIdByGUID(bot->getObjectGuid());
+        account = AccountIdOfCharacterCompat(bot->getObjectGuid());
     }
 }
 
@@ -49,7 +49,7 @@ PlayerbotSecurityLevel PlayerbotSecurity::LevelFor(Player* from, DenyReason* rea
 
         if (PlayerbotAIStorage::Instance().GetAI(bot)->IsOpposing(from))
         {
-            if (sWorld.getConfig(CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_GROUP))
+            if (WorldBoolConfigCompat(CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_GROUP))
                 return PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL;
             if (reason) *reason = DenyReason::PLAYERBOT_DENY_OPPOSING;
             return PlayerbotSecurityLevel::PLAYERBOT_SECURITY_DENY_ALL;
@@ -68,14 +68,14 @@ PlayerbotSecurityLevel PlayerbotSecurity::LevelFor(Player* from, DenyReason* rea
         {
             uint32 botGS = PlayerbotAIStorage::Instance().GetAI(bot)->GetEquipGearScore(bot, false, false);
             uint32 fromGS = PlayerbotAIStorage::Instance().GetAI(bot)->GetEquipGearScore(from, false, false);
-            if (botGS && bot->GetLevel() > 15 && botGS > fromGS && (100 * (botGS - fromGS) / botGS) >= 12 * sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL) / from->GetLevel())
+            if (botGS && bot->GetLevel() > 15 && botGS > fromGS && (100 * (botGS - fromGS) / botGS) >= 12 * WorldIntConfigCompat(CONFIG_UINT32_MAX_PLAYER_LEVEL) / from->GetLevel())
             {
                 if (reason) *reason = DenyReason::PLAYERBOT_DENY_GEARSCORE;
                 return PlayerbotSecurityLevel::PLAYERBOT_SECURITY_TALK;
             }
         }
 
-        if (bot->InBattleGroundQueue())
+        if (InBattleGroundQueueCompat(bot))
         {
             if (!bot->GetGuildId() || bot->GetGuildId() != from->GetGuildId())
             {
@@ -84,7 +84,7 @@ PlayerbotSecurityLevel PlayerbotSecurity::LevelFor(Player* from, DenyReason* rea
             }
         }
 
-        if (sLFGMgr.IsPlayerInQueue(bot->getObjectGuid()))
+        if (IsPlayerInLfgQueueCompat(bot->getObjectGuid()))
         {
             if (!bot->GetGuildId() || bot->GetGuildId() != from->GetGuildId())
             {
@@ -180,7 +180,7 @@ bool PlayerbotSecurity::CheckLevelFor(PlayerbotSecurityLevel level, bool silent,
                 int botGS = (int)PlayerbotAIStorage::Instance().GetAI(bot)->GetEquipGearScore(bot, false, false);
                 int fromGS = (int)PlayerbotAIStorage::Instance().GetAI(bot)->GetEquipGearScore(from, false, false);
                 int diff = (100 * (botGS - fromGS) / botGS);
-                int req = 12 * sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL) / from->GetLevel();
+                int req = 12 * WorldIntConfigCompat(CONFIG_UINT32_MAX_PLAYER_LEVEL) / from->GetLevel();
                 out << "Your gearscore is too low: |cffff0000" << fromGS << "|cffffffff/|cff00ff00" << botGS << " |cffff0000" << diff << "%|cffffffff/|cff00ff00" << req << "%";
             }
             break;
@@ -209,7 +209,7 @@ bool PlayerbotSecurity::CheckLevelFor(PlayerbotSecurityLevel level, bool silent,
 					const AreaTableEntry* entry = GetAreaEntryByAreaID(area);
                     if (entry)
                     {
-                        out << " |cffffffff(|cffff0000" << entry->Name << "|cffffffff)";
+                        out << " |cffffffff(|cffff0000" << AreaNameCompat(entry) << "|cffffffff)";
                     }
                 }
             }
@@ -246,7 +246,7 @@ bool PlayerbotSecurity::CheckLevelFor(PlayerbotSecurityLevel level, bool silent,
     }
 
     std::string text = out.str();
-    uint64 guid = from->getObjectGuid().GetRawValue();
+    uint64 guid = GuidKeyCompat(from->getObjectGuid());
     time_t lastSaid = whispers[guid][text];
     if (!lastSaid || (time(0) - lastSaid) >= sPlayerbotAIConfig.repeatDelay / 1000)
     {
@@ -255,7 +255,7 @@ bool PlayerbotSecurity::CheckLevelFor(PlayerbotSecurityLevel level, bool silent,
         {
             // Penqle uses MasterPlayer::Whisper; Player::Whisper not available.
             // Security whispers are non-essential for headless lifecycle.
-            sLog.outString("TortoiseBots: whisper to %s: %s", from->GetName(), text.c_str());
+            sLog.outString("TortoiseBots: whisper to %s: %s", CStrCompat(from->GetName()), text.c_str());
         }
     }
     return false;

@@ -170,8 +170,11 @@ class MagmaGuardWiringTest(unittest.TestCase):
 
     def test_magma_query_is_the_cores(self):
         f = body(WORLDPOS, "bool WorldPosition::isInMagma(", "\n}\n")
-        self.assertIn("getLiquidStatus(x, y, z + 0.01f, MAP_ALL_LIQUIDS, &liquid)", f)
-        self.assertIn("ai::IsMagmaHazard(liquid.type_flags", f)
+        # (R4C: the query is LiquidAtCompat, whose Turtle-side body is the core's getLiquidStatus call the code always made.)
+        self.assertIn("LiquidAtCompat(terrain, x, y, z + 0.01f, MAP_ALL_LIQUIDS, typeFlags)", f)
+        self.assertIn("ai::IsMagmaHazard(typeFlags", f)
+        compat = (ROOT / "ai/cmangos-compat-r4c.h").read_text()
+        self.assertIn("terrain->getLiquidStatus(x, y, z, static_cast<uint8>(request), &data)", compat)
 
     def test_formation_station_skips_a_slot_in_magma(self):
         f = body(TRIGGERS, "class FormationStationTrigger", "\n    };\n")

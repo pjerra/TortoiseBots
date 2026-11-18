@@ -197,8 +197,8 @@ ChatHelper::ChatHelper(PlayerbotAI* ai) : PlayerbotAIAware(ai)
     for (uint32 id = 0; id < sChrRacesStore.GetNumRows(); ++id)
     {
         ChrRacesEntry const* race = sChrRacesStore.LookupEntry(id);
-        if (race && race->name[LOCALE_enUS])
-            races[race->RaceID] = race->name[LOCALE_enUS];
+        if (race && RaceNameCompat(race, LOCALE_enUS))
+            races[RaceIdCompat(race)] = RaceNameCompat(race, LOCALE_enUS);
     }
 }
 
@@ -386,7 +386,7 @@ std::vector<uint32> ChatHelper::parseItemsUnordered(const std::string& text, boo
             continue;
         }
 
-        if (isNumeric(itemStr))
+        if (IsNumericCompat(itemStr))
         {
             const uint32 itemID = std::stoi(itemStr);
             if (!validate || GetItemProtoByIdCompat(itemID) != nullptr)
@@ -426,14 +426,8 @@ std::string ChatHelper::formatQuest(Quest const* quest)
 {
     std::ostringstream out;
     int loc_idx = sPlayerbotTextMgr.GetLocalePriority();
-    std::string title = quest->GetTitle();
-    if (loc_idx >= 0)
-    {
-        if (QuestLocale const* locale = sObjectMgr.GetQuestLocale(quest->GetQuestId()))
-            if (static_cast<size_t>(loc_idx) < locale->Title.size() && !locale->Title[loc_idx].empty())
-                title = locale->Title[loc_idx];
-    }
-    out << "|cFFFFFF00|Hquest:" << quest->GetQuestId() << ':' << quest->GetQuestLevel() << "|h[" << title << "]|h|r";
+    std::string title = QuestTitleCompat(quest, loc_idx);
+    out << "|cFFFFFF00|Hquest:" << quest->GetQuestId() << ':' << QuestLevelCompat(quest) << "|h[" << title << "]|h|r";
     return out.str();
 }
 
@@ -451,7 +445,9 @@ std::string ChatHelper::formatGameobject(const GameObject* go)
                 name = gl->Name[loc_idx];
         }
     }
-    out << "|cFFFFFF00|Hfound:" << go->getObjectGuid().GetRawValue() << ":" << go->GetEntry() << ":" <<  "|h[" << name << "]|h|r";
+    out << "|cFFFFFF00|Hfound:";
+    GuidWriteCompat(out, go->getObjectGuid());
+    out << ":" << go->GetEntry() << ":" <<  "|h[" << name << "]|h|r";
     return out.str();
 }
 
@@ -470,7 +466,9 @@ std::string ChatHelper::formatWorldobject(const WorldObject* wo)
                 name = gl->Name[loc_idx];
         }
     }
-    out << "|cFFFFFF00|Hfound:" << wo->getObjectGuid().GetRawValue() << ":" << wo->GetEntry() << ":" << "|h[" << name << "]|h|r";
+    out << "|cFFFFFF00|Hfound:";
+    GuidWriteCompat(out, wo->getObjectGuid());
+    out << ":" << wo->GetEntry() << ":" << "|h[" << name << "]|h|r";
     return out.str();
 }
 
@@ -492,7 +490,7 @@ std::string ChatHelper::formatWorldEntry(int32 entry)
     if (entry < 0 && gInfo)
         name = gInfo->name;
     else if (entry > 0 && cInfo)
-        name = cInfo->name;
+        name = CreatureNameCompat(cInfo);
 
     if(name.empty())
         name = "unknown:" + std::to_string(entry);
@@ -534,13 +532,7 @@ std::string ChatHelper::formatItem(ItemQualifier& itemQualifier, int count, int 
 
     std::ostringstream out;
     int loc_idx = sPlayerbotTextMgr.GetLocalePriority();
-    std::string name = proto->Name1;
-    if (loc_idx >= 0)
-    {
-        if (ItemLocale const* locale = sObjectMgr.GetItemLocale(itemQualifier.GetId()))
-            if (static_cast<size_t>(loc_idx) < locale->Name.size() && !locale->Name[loc_idx].empty())
-                name = locale->Name[loc_idx];
-    }
+    std::string name = ItemLocalizedNameCompat(itemQualifier.GetId(), loc_idx, proto->Name1);
 
     if (itemQualifier.GetRandomPropertyId())
     {
@@ -612,7 +604,7 @@ std::string ChatHelper::formatSkill(uint32 skillId, Player* player)
 
         if (loc_idx == -1)
             loc_idx = 0;
-        name = skillInfo->name[loc_idx];
+        name = SkillNameCompat(skillInfo, loc_idx);
     }
     std::ostringstream out;
     out << "|cffffffff|Hskill:" << skillId
@@ -620,10 +612,10 @@ std::string ChatHelper::formatSkill(uint32 skillId, Player* player)
 
     if (player && player->HasSkill(skillId))
     {
-        uint32 curValue = player->GetSkillValuePure(skillId);
-        uint32 maxValue = player->GetSkillMaxPure(skillId);
-        uint32 permValue = player->GetSkillBonusPermanent(skillId);
-        uint32 tempValue = player->GetSkillBonusTemporary(skillId);
+        uint32 curValue = SkillValuePureCompat(player, skillId);
+        uint32 maxValue = SkillMaxPureCompat(player, skillId);
+        uint32 permValue = SkillBonusPermanentCompat(player, skillId);
+        uint32 tempValue = SkillBonusTemporaryCompat(player, skillId);
 
         out << " (";
 
@@ -655,7 +647,7 @@ std::string ChatHelper::formatReaction(ReputationRank rank, Player* player)
 
     int loc_idx = sPlayerbotTextMgr.GetLocalePriority();
 
-    std::string rankName = sObjectMgr.GetMangosString(ReputationRankStrIndex[rank], loc_idx);
+    std::string rankName = MangosStringCompat(ReputationRankStrIndex[rank], loc_idx);
 
     std::ostringstream out;
 
@@ -695,7 +687,7 @@ std::string ChatHelper::formatFaction(uint32 factionId, Player* player)
         int loc_idx = sPlayerbotTextMgr.GetLocalePriority();
         if (loc_idx == -1)
             loc_idx = 0;
-        name = factionEntry->name[loc_idx];
+        name = FactionNameCompat(factionEntry, loc_idx);
     }
     std::ostringstream out;
     out << "|cffffffff|Hfaction:" << factionId
@@ -703,14 +695,14 @@ std::string ChatHelper::formatFaction(uint32 factionId, Player* player)
 
     if (player)
     {
-        FactionState const* repState = player->GetReputationMgr().GetState(factionEntry);
+        ReputationStateCompat const repState = ReputationStateOfCompat(player, factionEntry);
 
-        if (repState && repState->Flags & FACTION_FLAG_VISIBLE)
+        if (repState.known && repState.visible)
         {
-            ReputationRank rank = player->GetReputationMgr().GetRank(factionEntry);
-            out << " " << formatReaction(rank, player) << " (" << player->GetReputationMgr().GetReputation(factionEntry) << ")";
+            ReputationRank rank = ReputationRankCompat(player, factionEntry);
+            out << " " << formatReaction(rank, player) << " (" << ReputationValueCompat(player, factionEntry) << ")";
 
-            if (repState->Flags & FACTION_FLAG_AT_WAR)
+            if (repState.atWar)
                 out << " at war";
         }
     }
@@ -772,7 +764,7 @@ std::list<ObjectGuid> ChatHelper::parseGameobjects(const std::string& text)
         if (endPos == -1)     //break if error
             break;
         std::istringstream stream(text.substr(pos, endPos - pos));
-        uint64 guid; stream >> guid;
+        ObjectGuid lootCurrent = GuidReadCompat(stream);
 
         // extract GO entry
         pos = endPos + 1;
@@ -783,9 +775,7 @@ std::list<ObjectGuid> ChatHelper::parseGameobjects(const std::string& text)
         std::string entryC = text.substr(pos, endPos - pos);     // get std::string within window i.e entry
         uint32 entry = std::atol(entryC.c_str());     // convert ascii to float
 
-        ObjectGuid lootCurrent = ObjectGuid(guid);
-
-        if (guid)
+        if (!lootCurrent.IsEmpty())
             gos.push_back(lootCurrent);
     }
 
@@ -1085,7 +1075,7 @@ std::string ChatHelper::formatFactionName(uint32 factionId)
         int loc_idx = sPlayerbotTextMgr.GetLocalePriority();
         if (loc_idx == -1)
             loc_idx = 0;
-        name = factionEntry->name[loc_idx];
+        name = FactionNameCompat(factionEntry, loc_idx);
     }
 
     return name;
@@ -1157,7 +1147,13 @@ std::string ChatHelper::formatGuidPosition(const GuidPosition& guidP, const Guid
     else if (guidP.GetGameObjectInfo())
         out << formatWorldEntry(guidP.GetEntry()*-1);
     else
-        out << "|cFFFFFF00|Hfound:" << guidP.GetRawValue() << ":" << guidP.GetEntry() << ":" << "|h[unkown " << guidP.GetTypeName() << " " << guidP.GetRawValue() << "]|h|r";
+        {
+        out << "|cFFFFFF00|Hfound:";
+        GuidWriteCompat(out, guidP);
+        out << ":" << guidP.GetEntry() << ":" << "|h[unkown " << guidP.GetTypeName() << " ";
+        GuidWriteCompat(out, guidP);
+        out << "]|h|r";
+    }
 
     out.seekp(-5, out.cur);
 

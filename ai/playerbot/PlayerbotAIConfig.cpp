@@ -393,7 +393,7 @@ std::vector<std::pair<std::string, std::string>> PlayerbotAIConfig::FindConfigEn
 
 void PlayerbotAIConfig::LoadAhBotPriceKeys()
 {
-    static_assert(PlayerbotAIConfig::kAhBotMaxItemClass == MAX_ITEM_CLASS, "AhBot class array size must match MAX_ITEM_CLASS");
+    static_assert(PlayerbotAIConfig::kAhBotMaxItemClass == LegacyItemClassCountCompat, "AhBot class array size must match the item class count");
     ahBotCompleteItemValueOverrideEnabled = config.GetBoolDefault("AiPlayerbot.AhBot.CompleteItemValueOverride.Enabled", false);
     ahBotCompleteItemValueOverrideItems = config.GetStringDefault("AiPlayerbot.AhBot.CompleteItemValueOverride.Items", "");
     ahBotCompleteItemValueOverrideDoApplyBidVariations = config.GetBoolDefault("AiPlayerbot.AhBot.CompleteItemValueOverride.DoApplyBidVariations", false);
@@ -2082,7 +2082,7 @@ void PlayerbotAIConfig::logEvent(PlayerbotAI* ai, std::string eventName, ObjectG
     std::string info1 = "";
 
     Unit* victim;
-    if (guid)
+    if (!guid.IsEmpty())
     {
         victim = ai->GetUnit(guid);
         if (victim)
@@ -2133,7 +2133,7 @@ void PlayerbotAIConfig::LoadTalentSpecs()
 
                 TalentPath talentPath(spec, specName, probability);
 
-                for (uint32 level = 10; level <= DEFAULT_MAX_LEVEL; level++)
+                for (uint32 level = 10; level <= MaxLevelCompat(); level++)
                 {
                     std::ostringstream os; os << "AiPlayerbot.PremadeSpecLink." << cls << "." << spec << "." << level;
                     std::string specLink = config.GetStringDefault(os.str().c_str(), "");
@@ -2181,7 +2181,7 @@ void PlayerbotAIConfig::LoadTalentSpecs()
         sLog.outErrorDb("No premade specs found!!");
     else
     {
-        if (maxSpecLevel < DEFAULT_MAX_LEVEL && randomBotMaxLevel < DEFAULT_MAX_LEVEL)
+        if (maxSpecLevel < MaxLevelCompat() && randomBotMaxLevel < MaxLevelCompat())
             sLog.outErrorDb("!!!!!!!!!!! randomBotMaxLevel and the talent specs are below the Vanilla/Tortoise level cap. Please check the configuration.");
 
     }

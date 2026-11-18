@@ -9,7 +9,7 @@ using namespace ai;
 std::string ObjectGuidCalculatedValue::Format()
 {
     ObjectGuid guid = Get();
-    return guid ? std::to_string(guid.GetRawValue()) : "<none>";
+    return !guid.IsEmpty() ? std::to_string(GuidKeyCompat(guid)) : "<none>";
 }
 
 std::string ObjectGuidListCalculatedValue::Format()

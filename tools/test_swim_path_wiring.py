@@ -21,6 +21,9 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORLDPOS = (ROOT / "ai/playerbot/WorldPosition.cpp").read_text()
+# Slice 1 R4C: the liquid query and the other core calls of WorldPosition.cpp went to both-core helpers; on this core each helper is
+# the call WorldPosition.cpp always made, in this file.
+COMPAT_R4C = (ROOT / "ai/cmangos-compat-r4c.h").read_text()
 MOVES = (ROOT / "ai/playerbot/strategy/actions/MovementActions.cpp").read_text()
 
 
@@ -54,18 +57,21 @@ class SwimPathWiringTest(unittest.TestCase):
         # kSwimLiquidRequest (all liquids; a water | ocean request found no BFD water,
         # the vmap ANDs it with the WMO's raw liquid id 1), and the answer's type
         # flags (magma, slime) are handed back for the policy to refuse.
-        self.assertIn("terrain->getLiquidStatus(x, y, z, static_cast<uint8>(request), &data)", self.fits)
-        self.assertIn("typeFlags = status != LIQUID_MAP_NO_WATER ? data.type_flags : 0;", self.fits)
+        # (R4C: the lambda calls LiquidAtCompat; its Turtle-side body is the old lambda body word for word.)
+        self.assertIn("return LiquidAtCompat(terrain, x, y, z, request, typeFlags);", self.fits)
+        helper = body(COMPAT_R4C, "inline uint32 LiquidAtCompat(", "\n}\n")
+        self.assertIn("terrain->getLiquidStatus(x, y, z, static_cast<uint8>(request), &data)", helper)
+        self.assertIn("typeFlags = status != LIQUID_MAP_NO_WATER ? data.type_flags : 0;", helper)
         self.assertNotIn("MAP_LIQUID_TYPE_WATER | MAP_LIQUID_TYPE_OCEAN", self.fits)
         self.assertIn("ai::kSwimLiquidRequest == 0,", WORLDPOS)
         self.assertIn("ai::SwimLineInWater(a.getX(), a.getY(), a.getZ(), b.getX(), b.getY(), b.getZ(), liquidAt)", self.fits)
-        self.assertIn("            if (!map->isInLineOfSight(a.getX(), a.getY(), a.getZ() + 0.5f, b.getX(), b.getY(), b.getZ() + 0.5f, true))\n                return false;", self.fits)
+        self.assertIn("            if (!IsInLineOfSightCompat(map, a.getX(), a.getY(), a.getZ() + 0.5f, b.getX(), b.getY(), b.getZ() + 0.5f, true))\n                return false;", self.fits)
         self.assertIn("            if (!ai::SwimLineInWater(", self.fits)
         # Every leg, not just the first.
         self.assertIn("for (size_t i = 1; i < path.size(); ++i)", self.fits)
 
     def test_fits_refuses_transport_and_other_map(self):
-        self.assertIn("if (!bot || bot->GetTransport() || path.size() < 2)\n            return false;", self.fits)
+        self.assertIn("if (!bot || TransportOfCompat(bot) || path.size() < 2)\n            return false;", self.fits)
         self.assertIn("a.GetMapId() != map->GetId() || b.GetMapId() != map->GetId()", self.fits)
 
     def test_bits_are_asserted_against_the_core(self):
@@ -193,7 +199,7 @@ class SwimHandoffWiringTest(unittest.TestCase):
     def test_why_mirrors_the_fits_test(self):
         why = body(WORLDPOS, "std::string WorldPosition::SwimLineWhy(", "\n}\n")
         self.assertIn("ai::SwimLineFirstFailing(", why)
-        self.assertIn("map->isInLineOfSight(a.getX(), a.getY(), a.getZ() + 0.5f, b.getX(), b.getY(), b.getZ() + 0.5f, true)", why)
+        self.assertIn("IsInLineOfSightCompat(map, a.getX(), a.getY(), a.getZ() + 0.5f, b.getX(), b.getY(), b.getZ() + 0.5f, true)", why)
 
 
 if __name__ == "__main__":

@@ -10,14 +10,14 @@ namespace ai
         GuidPosition(ObjectGuid guid, WorldPosition pos) : ObjectGuid(guid), WorldPosition(pos) {};
         GuidPosition(ObjectGuid guid, const uint32 mapId, const uint32 instanceId) : ObjectGuid(guid) { WorldPosition::set(guid, mapId, instanceId); if (getX() == 0 && getY() == 0 && getZ() == 0) ObjectGuid::Clear(); }
         GuidPosition(ObjectGuid guid, const WorldObject* wo) : ObjectGuid(guid), WorldPosition(wo) {}
-        GuidPosition(uint64 const& guid, WorldPosition const& pos) : ObjectGuid(guid), WorldPosition(pos) {};
+        GuidPosition(uint64 const& guid, WorldPosition const& pos) : ObjectGuid(GuidFromRawCompat(guid)), WorldPosition(pos) {};
         //template<class T>
         //GuidPosition(ObjectGuid guid, T) : ObjectGuid(guid) {WorldPosition::set(WorldPosition(T))};
         // cmangos has CreatureData::id; Penqle has CreatureData::creature_id (array, MAX_CREATURE_IDS_PER_SPAWN entries). Use first.
         GuidPosition(CreatureDataPair const* dataPair) : ObjectGuid(HIGHGUID_UNIT, dataPair->second.creature_id[0], dataPair->first), WorldPosition(dataPair) {};
         GuidPosition(GameObjectDataPair const* dataPair) : ObjectGuid(HIGHGUID_GAMEOBJECT, dataPair->second.id, dataPair->first), WorldPosition(dataPair) {};
         GuidPosition(const WorldObject* wo) : WorldPosition(wo) { ObjectGuid::operator=(wo->GetObjectGuid()); };
-        GuidPosition(HighGuid hi, uint32 entry, uint32 counter = 1, WorldPosition pos = WorldPosition()) : ObjectGuid(hi, entry, counter), WorldPosition(pos) {};
+        GuidPosition(HighGuid hi, uint32 entry, uint32 counter = 1, WorldPosition pos = WorldPosition()) : ObjectGuid(GuidFromNumbersCompat(hi, entry, counter)), WorldPosition(pos) {};
         GuidPosition(std::string qualifier);
 
         enum CreationMask

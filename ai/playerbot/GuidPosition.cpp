@@ -14,17 +14,16 @@ GuidPosition::GuidPosition(std::string qualifier)
 {
     std::stringstream b(qualifier);
 
-    uint64 g;
     char p;
     b >> this->mapId >> p >> this->x >> p >> this->y >> p >> this->z >> p >> this->o;
 
     //if (b.tellp() == std::streampos(0))
     //    return;
 
-    b >> p >> g;
+    b >> p;
 
-    ObjectGuid guid(g);
-    ObjectGuid::Set(guid);
+    ObjectGuid guid = GuidReadCompat(b);
+    ObjectGuid::operator=(guid);
 }
 
 GuidPosition::GuidPosition(CreationMask type, const std::string& qualifier, const WorldPosition& referencePos, uint32 instanceId)
@@ -36,7 +35,7 @@ GuidPosition::GuidPosition(CreationMask type, const std::string& qualifier, cons
         if (std::regex_match(qualifier, pattern))
         {
             WorldPosition::set(WorldPosition(qualifier));
-            GuidPosition::Set(0);
+            ObjectGuid::Clear();
             return;
         }
     }
@@ -46,8 +45,10 @@ GuidPosition::GuidPosition(CreationMask type, const std::string& qualifier, cons
         GameTele const* tele = sObjectMgr.GetGameTele(qualifier);
         if (tele)
         {
-            set(WorldPosition(tele->mapId, tele->x, tele->y, tele->z, referencePos.o));
-            GuidPosition::Set(0);
+            float teleX, teleY, teleZ;
+            GameTelePointCompat(tele, teleX, teleY, teleZ);
+            set(WorldPosition(tele->mapId, teleX, teleY, teleZ, referencePos.o));
+            ObjectGuid::Clear();
             return;
         }
     }
@@ -57,7 +58,8 @@ std::string GuidPosition::to_string() const
 {
     std::ostringstream b;
     char p = '|';
-    b << this->GetMapId() << p << this->x << p << this->y << p << this->z << p << this->o << p << GetRawValue();
+    b << this->WorldPosition::GetMapId() << p << this->x << p << this->y << p << this->z << p << this->o << p;
+    GuidWriteCompat(b, *this);
     return b.str();
 }
 
@@ -69,7 +71,7 @@ Creature* GuidPosition::GetCreature(uint32 instanceId) const
     if (!getMap(instanceId))
         return nullptr;
 
-    return getMap(instanceId)->GetAnyTypeCreature(*this);
+    return GetAnyTypeCreatureCompat(getMap(instanceId), *this);
 }
 
 Unit* GuidPosition::GetUnit(uint32 instanceId) const
@@ -112,7 +114,7 @@ const FactionTemplateEntry* GuidPosition::GetFactionTemplateEntry() const
     if (IsCreature()  && GetCreatureTemplate())
         return sFactionTemplateStore.LookupEntry(GetCreatureTemplate()->faction);
     if (IsGameObject() && GetGameObjectInfo())
-        return sFactionTemplateStore.LookupEntry(GetGameObjectInfo()->faction);
+        return sFactionTemplateStore.LookupEntry(GameObjectFactionCompat(GetGameObjectInfo()));
 
     return nullptr;
 }
@@ -120,18 +122,18 @@ const FactionTemplateEntry* GuidPosition::GetFactionTemplateEntry() const
 const ReputationRank GuidPosition::GetReactionTo(const GuidPosition& other, uint32 instanceId) const
 {
     if(other.IsUnit() && other.GetUnit(instanceId))
-        if (other.GetUnit(instanceId)->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PLAYER_CONTROLLED))
+        if (IsPlayerControlledCompat(other.GetUnit(instanceId)))
         {
             if (const Player* unitPlayer = other.GetUnit(instanceId)->GetCharmerOrOwnerPlayerOrPlayerItself())
             {
-                if (unitPlayer->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_CONTESTED_PVP) && GetFactionTemplateEntry()->IsContestedGuardFaction())
+                if (IsContestedPvpCompat(unitPlayer) && GetFactionTemplateEntry()->IsContestedGuardFaction())
                     return REP_HOSTILE;
 
-                if (const ReputationRank* rank = unitPlayer->GetReputationMgr().GetForcedRankIfAny(GetFactionTemplateEntry()))
+                if (const ReputationRank* rank = ForcedReputationRankCompat(unitPlayer, GetFactionTemplateEntry()))
                     return (*rank);
 
-                const FactionEntry* unitFactionEntry = sFactionStore.LookupEntry(GetFactionTemplateEntry()->faction);
-                return unitPlayer->GetReputationMgr().IsAtWar(unitFactionEntry) ? REP_HOSTILE : REP_FRIENDLY;
+                const FactionEntry* unitFactionEntry = sFactionStore.LookupEntry(FactionOfTemplateCompat(GetFactionTemplateEntry()));
+                return ReputationAtWarCompat(unitPlayer, unitFactionEntry) ? REP_HOSTILE : REP_FRIENDLY;
             }
         }
 
@@ -143,7 +145,7 @@ bool GuidPosition::isDead(uint32 instanceId) const
     if (!getMap(instanceId))
         return false;
 
-    if (!getMap(instanceId)->IsLoaded(getX(), getY()))
+    if (!MapIsLoadedCompat(getMap(instanceId), getX(), getY()))
         return false;
 
     if (IsUnit() && GetUnit(instanceId) && GetUnit(instanceId)->IsInWorld() && GetUnit(instanceId)->IsAlive())
@@ -195,7 +197,7 @@ bool GuidPosition::IsEventUnspawned()
 std::string GuidPosition::print()
 {
     std::ostringstream out;
-    out << this->GetRawValue();
+    GuidWriteCompat(out, *this);
     out << ';' << mapId << std::fixed << std::setprecision(2);
     out << ';' << x;
     out << ';' << y;
