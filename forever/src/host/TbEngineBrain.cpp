@@ -20,6 +20,7 @@
 #include <filesystem>
 #include <memory>
 #include "ByteBuffer.h"
+#include "MotionMaster.h"
 #include "Player.h"
 #include "Unit.h"
 
@@ -245,6 +246,22 @@ std::vector<std::string> Describe(Brain const* brain)
     if (ai::Value<Unit*>* value = pai->GetAiObjectContext()->GetValue<Unit*>("current target"))
         target = value->Get();
     lines.push_back(std::string("target: ") + (target ? target->GetName() : "none"));
+
+    // What the follow rule reads (strategy/triggers/RangeTriggers.h UpdateFollowTrigger): the engine's master, whether it counts
+    // as a real player (a network session: a master that is itself a bot session does not), the "follow target" value, the
+    // distance to the master and the motion the bot is in. A bot that does not follow shows here which of them is wrong.
+    AiObjectContext* context = pai->GetAiObjectContext();
+    Player* master = pai->GetMaster();
+    lines.push_back(std::string("master: ") + (master ? master->GetName() : "none") + (pai->HasRealPlayerMaster() ? " (real player)" : " (no network session)"));
+    Unit* followTarget = nullptr;
+    if (ai::Value<Unit*>* value = context->GetValue<Unit*>("follow target"))
+        followTarget = value->Get();
+    float masterDistance = -1.0f;
+    if (ai::Value<float>* value = context->GetValue<float>("distance", "master target"))
+        masterDistance = value->Get();
+    lines.push_back(std::string("follow target: ") + (followTarget ? followTarget->GetName() : "none") + ", safe: " +
+        (followTarget && pai->IsSafe(followTarget) ? "yes" : "no") + ", distance to master target: " + std::to_string(masterDistance) +
+        ", motion type: " + std::to_string(int(pai->GetBot()->GetMotionMaster()->GetCurrentMovementGeneratorType())));
     return lines;
 }
 }
