@@ -27,6 +27,16 @@ TortoiseBots.Spike.FollowDistance = 3
 TortoiseBots.Slice.EngineByDefault = 0
 
 #
+#    TortoiseBots.Slice.MasterGraceSeconds
+#        Description: How long a bot waits when its master logs out. The bot stays in the world and in its party, stops acting, and follows
+#                     again when the master is back in the world within this time; after it the bot logs out. 0 = the bots log out with
+#                     their master at once. Capped at 3600.
+#        Default:     300 (the hire lifecycle's own default: AiPlayerbot.HireDisconnectGracePeriod)
+#
+
+TortoiseBots.Slice.MasterGraceSeconds = 300
+
+#
 #    Logger.tortoisebots
 #        Description: The module's own log category (bot login and logout, the engine, the `slice: missing ...` lines).
 #                     Without a logger of its own the category falls to the root logger, which only logs errors, so the

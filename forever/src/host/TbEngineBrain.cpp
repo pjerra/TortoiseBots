@@ -43,6 +43,7 @@ struct Brain
     Player* bot = nullptr;       // only compared and passed back to the registry after the Player is gone, never dereferenced then
     uint32 guidLow = 0;          // the bot's low guid: the action log is closed by it (the Player may be gone)
     PlayerbotAI* ai = nullptr;
+    uint32 teleportAcks = 0;     // R10 (S3): how many teleports the host handed to PlayerbotAI::HandleTeleportAck (`.tb where`)
 };
 
 namespace
@@ -223,6 +224,22 @@ void Tick(Brain* brain, uint32 diff)
     }
 }
 
+void HandleTeleportAck(Brain* brain)
+{
+    // The host session hands over every teleport it acknowledges for the bot (TbBotSession.cpp AcknowledgeTeleports). World thread.
+    if (!Usable(brain))
+        return;
+    try
+    {
+        brain->ai->HandleTeleportAck();
+        ++brain->teleportAcks;
+    }
+    catch (ByteBufferException const&)
+    {
+        sLog.outError("TortoiseBots engine: dropped a malformed packet in the teleport acknowledgement of bot %s", brain->bot->GetName().c_str());
+    }
+}
+
 void Destroy(Brain* brain)
 {
     if (brain)
@@ -255,6 +272,7 @@ std::vector<std::string> Describe(Brain const* brain)
 
     PlayerbotAI* pai = brain->ai;
     lines.push_back("state: " + PlayerbotAI::BotStateToString(pai->GetState()));
+    lines.push_back("teleport acks handled by the engine: " + std::to_string(brain->teleportAcks) + ", transition generation: " + std::to_string(pai->GetTransitionGeneration()));
     lines.push_back("combat strategies: " + JoinStrategies(pai, BotState::BOT_STATE_COMBAT));
     lines.push_back("non-combat strategies: " + JoinStrategies(pai, BotState::BOT_STATE_NON_COMBAT));
 
@@ -331,6 +349,7 @@ Brain* Create(Player*, Player*, std::string& error)
     return nullptr;
 }
 void Tick(Brain*, uint32) {}
+void HandleTeleportAck(Brain*) {}
 void Destroy(Brain*) {}
 std::vector<std::string> Describe(Brain const*) { return { "engine: not built with the slice" }; }
 }

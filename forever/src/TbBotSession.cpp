@@ -72,6 +72,16 @@ void BotSession::AcknowledgeTeleports()
     {
         case TeleportState::WaitingForTeleportAck:
         {
+            // R10 (S3): the engine sees a same-map teleport BEFORE it is acknowledged (see SetTeleportAckHook): PlayerbotAI::HandleTeleportAck
+            // acknowledges it itself, as on Turtle (AckNearTeleportCompat), and its landing logic reads IsBeingTeleportedNear(). Only a teleport still
+            // pending afterwards (no engine, or the engine did not ack) is acknowledged here.
+            if (_teleportAckHook)
+            {
+                _teleportAckHook();
+                player = GetPlayer();
+                if (!player || player->GetTeleportState() != TeleportState::WaitingForTeleportAck)
+                    break;
+            }
             // What the client answers to a teleport inside the map.
             WorldPackets::Movement::MoveTeleportAck ack{ WorldPacket(CMSG_MOVE_TELEPORT_ACK) };
             ack.MoverGUID = player->GetGUID();
@@ -82,7 +92,13 @@ void BotSession::AcknowledgeTeleports()
         case TeleportState::WaitingForWorldPortAck:
             // Teleport to another map: the client would answer the suspend token and then the new-world packet.
             if (!player->IsInWorld())
+            {
                 HandleMoveWorldportAck();
+                // R10 (S3): the engine hears of it once the Player is in the new world again (its bookkeeping and Reset() need a Player that is in the world;
+                // the engine's own far-teleport branch, the ack itself, is already done above).
+                if (_teleportAckHook)
+                    _teleportAckHook();
+            }
             break;
         default:
             break;
