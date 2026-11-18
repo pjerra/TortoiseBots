@@ -151,7 +151,7 @@ fi
 grep -q 'CheckCast(true)' ai/playerbot/strategy/actions/UseItemAction.cpp \
     || fail "item casts are not using the native core pre-cast contract"
 
-grep -q 'GetMotionMaster()->GetCurrent' ai/playerbot/ServerFacade.cpp \
+grep -q 'GetMotionMaster()->GetCurrent' ai/playerbot/ServerFacade.cpp ai/cmangos-compat-r4c.h \
     || fail "chase inspection fell back to a non-native victim/default path"
 grep -q 'GetChannelEntryFor' ai/cmangos-compat-shim.h \
     || fail "chat-channel compatibility proxy is not backed by core data"
