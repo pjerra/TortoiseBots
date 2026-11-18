@@ -41,6 +41,9 @@ public:
     // `.tb raid <master>` (R10 test helper): converts the master's party into a raid (the core's Group::ConvertToRaid), to check that the host
     // refuses to add bots to one. Empty string = done, else the reason.
     std::string ConvertToRaid(ObjectGuid masterGuid);
+    // `.tb enter <character> <mapid>` (R11 test helper): what the core's Map::PlayerCannotEnter says about that character entering that map, with the
+    // difficulty it asked for (the party's, or the character's own). Returns the lines to print; the first starts with `allowed` or `refused`.
+    std::vector<std::string> CanEnter(ObjectGuid characterGuid, uint32 mapId);
     std::string AttackNearest(ObjectGuid characterGuid, float range);
     bool Logout(ObjectGuid characterGuid, char const* reason);
     void LogoutAll(char const* reason);

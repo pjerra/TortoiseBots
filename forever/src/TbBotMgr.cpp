@@ -13,6 +13,7 @@
 #include "Config.h"
 #include "Log.h"
 #include "StringFormat.h"
+#include "DB2Stores.h"
 #include "Map.h"
 #include "MotionMaster.h"
 #include "ObjectAccessor.h"
@@ -46,7 +47,7 @@ std::string AbortReasonText(TransferAbortParams const& denied)
         case TRANSFER_ABORT_TOO_MANY_INSTANCES: what = "too many instances entered recently"; break;
         case TRANSFER_ABORT_ZONE_IN_COMBAT: what = "an encounter is in progress"; break;
         case TRANSFER_ABORT_INSUF_EXPAN_LVL: what = "the expansion is not available"; break;
-        case TRANSFER_ABORT_DIFFICULTY: what = "no map difficulty data for the party's dungeon difficulty (GetDownscaledMapDifficultyData)"; break;
+        case TRANSFER_ABORT_DIFFICULTY: what = "no map difficulty data for the dungeon difficulty asked for (GetDownscaledMapDifficultyData found none)"; break;
         case TRANSFER_ABORT_NEED_GROUP: what = "a raid group is needed"; break;
         case TRANSFER_ABORT_MAP_NOT_ALLOWED: what = "map not allowed"; break;
         case TRANSFER_ABORT_LOCKED_TO_DIFFERENT_INSTANCE: what = "locked to a different instance"; break;
@@ -520,6 +521,29 @@ std::string BotMgr::Hop(ObjectGuid characterGuid, float dx, float dy)
     return {};
 }
 
+std::vector<std::string> BotMgr::CanEnter(ObjectGuid characterGuid, uint32 mapId)
+{
+    std::vector<std::string> lines;
+    Player* who = ObjectAccessor::FindPlayer(characterGuid);
+    if (!who)
+    {
+        lines.push_back("refused: the character is not in the world");
+        return lines;
+    }
+    MapEntry const* entry = sMapStore.LookupEntry(mapId);
+    if (!entry)
+    {
+        lines.push_back(Trinity::StringFormat("refused: map {} is not in the map store", mapId));
+        return lines;
+    }
+    TransferAbortParams const denied = Map::PlayerCannotEnter(mapId, who);
+    lines.push_back(denied ? "refused: " + AbortReasonText(denied) : std::string("allowed: Map::PlayerCannotEnter has no objection"));
+    Group* group = who->GetGroup();
+    lines.push_back(Trinity::StringFormat("map {}: dungeon {}, raid {}; {} difficulty asked for: {}", mapId, entry->IsDungeon() ? "yes" : "no", entry->IsRaid() ? "yes" : "no",
+        group ? "the party's" : "the character's own", uint32(group ? group->GetDifficultyID(entry) : who->GetDifficultyID(entry))));
+    return lines;
+}
+
 std::string BotMgr::ConvertToRaid(ObjectGuid masterGuid)
 {
     Player* master = ObjectAccessor::FindPlayer(masterGuid);
@@ -735,6 +759,9 @@ void BotMgr::Think(Bot& bot, Player* me)
         bot.followBlockedInstance = masterInstance;
         bot.followBlockedWhy = refused;
         bot.followRetryMs = FollowRetryMs;
+        // The engine goes too: with the master on a map the bot cannot reach, its follow action asks for a path to a point on another map at every
+        // tick (live: 395 "[BOT PATH BUG]" error lines a minute for two bots). It is built again by the code below once the bot stands on the master's map.
+        DropBrain(bot);
         if (changed)
             TC_LOG_INFO("tortoisebots", "BotMgr: {} cannot follow its master {} to map {} (instance {}): {}; it stays and asks again in {} s",
                 me->GetName(), master->GetName(), masterMap, masterInstance, refused, FollowRetryMs / 1000);
