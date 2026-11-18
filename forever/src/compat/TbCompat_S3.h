@@ -52,3 +52,14 @@ inline Player* PlayerOfGuidKeyCompat(uint64 key)
     }
     return nullptr;
 }
+
+// ===============================================================================================================
+// MASTER (PlayerbotAI.cpp, the master adoption step of DoNextAction)
+// ===============================================================================================================
+
+// Does a commanded bot (BotCommands::IsInCommandedGroup) keep the master it was bound to instead of adopting the group leader? F: yes. The commander of
+// a console or GM-less setup is a bot session, which HasActivePlayerMaster() does not count, so the adoption step (PlayerbotAI.cpp: `!master ||
+// !HasActivePlayerMaster()`) runs and, for a leader that is a bot, hands the master over to the leader (M package, live: four of five bots of the party
+// led by the tank lost the commander on the first tick). The strip rule is already skipped for a commanded bot; the adoption must be too.
+// "Different answer": T keeps the original expression (always false here), so Turtle behaviour is unchanged.
+inline bool CommandedBotKeepsMasterCompat(bool commanded) { return commanded; }

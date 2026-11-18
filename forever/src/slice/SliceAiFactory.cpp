@@ -98,8 +98,9 @@ bool AiFactory::KeepsPartyThreatBackoff(Player* player, PlayerbotAI* const facad
     bool const isTank = PlayerbotAI::IsTank(player);
     if (facade->HasRealPlayerMaster())
         return !isTank;
-    return TortoiseBots::RemoteCommander::KeepsCommandedThreatBackoff(
-        TortoiseBots::BotCommands::IsInCommandedGroup(player), isTank);
+    bool const commanded = TortoiseBots::BotCommands::IsInCommandedGroup(player);
+    ai::slice::LogInfo(std::string("slice: threat back-off for ") + player->GetName() + ": commanded=" + (commanded ? "yes" : "no") + " tank=" + (isTank ? "yes" : "no"));
+    return TortoiseBots::RemoteCommander::KeepsCommandedThreatBackoff(commanded, isTank);
 }
 
 BotRoles AiFactory::GetPlayerRoles(const Player* player)

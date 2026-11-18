@@ -21,3 +21,11 @@ inline void DebugSpellVisualCompat(Unit* unit, uint32 kitId) { unit->SendPlaySpe
 
 // The online player with this guid key: T's key is the raw guid, so this is the original `sObjectMgr.GetPlayer(ObjectGuid(key))`.
 inline Player* PlayerOfGuidKeyCompat(uint64 key) { return sObjectMgr.GetPlayer(ObjectGuid(key)); }
+
+// ===============================================================================================================
+// MASTER (PlayerbotAI.cpp, the master adoption step of DoNextAction)
+// ===============================================================================================================
+
+// Does a commanded bot (BotCommands::IsInCommandedGroup) keep the master it was bound to instead of adopting the group leader? T: no helper effect,
+// the step reads exactly what it always read (a commander there is a network player, which HasActivePlayerMaster() counts, so the step does not run).
+inline bool CommandedBotKeepsMasterCompat(bool /*commanded*/) { return false; }

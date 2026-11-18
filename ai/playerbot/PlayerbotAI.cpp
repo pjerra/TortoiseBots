@@ -3479,7 +3479,7 @@ void PlayerbotAI::DoNextAction(bool min, bool forceActivity)
         // is only between maps.
         // A commanded bot never takes a real player of its group as master (see `commanded`).
         if (newMaster && (!master || master != newMaster) && bot != newMaster &&
-            !(commanded && IsRealPlayer(newMaster)) &&
+            !(commanded && IsRealPlayer(newMaster)) && !CommandedBotKeepsMasterCompat(commanded) &&
             TortoiseBots::HireAllowsMasterAdoption(hired, hirerBetweenMaps, IsRealPlayer(newMaster)))
         {
             bool masterChanged = true;
