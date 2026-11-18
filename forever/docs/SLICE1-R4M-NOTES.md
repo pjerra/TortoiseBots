@@ -246,4 +246,21 @@ Classified by the file:line ranges the four notes name and by the message; the "
 | Census, after the dedupe | same | `files 127  compile clean 4  with errors 123  error places 466 (in 30 files)` |
 | Census, final (NEEDS satisfied, items 11 and 14) | same | `files 127  compile clean 4  with errors 123  error places 460 (in 27 files)` |
 | ForeverCore module, slice option off | `ssh yulon-ubuntu2 '~/forever-build/build.sh 12 tortoisebots'` | `CMAKE_RC=0 MAKE_RC=0` |
+| Turtle build | `vm-build ~/wt-slice-integ --wait` at `1bf8246bf` (code identical to `ec4018173`; later commits are notes only) | `COMPILE_SECONDS=2078 CMAKE_RC=0 MAKE_RC=0`, `QUEUE_RC=0 QUEUE_RUN_SECONDS=2082`, job rc=0 |
+| Turtle unit tests | `vm-test tb ~/wt-slice-integ` at `1bf8246bf` | `ALL TORTOISEBOTS CHECKS PASSED CLEANLY`, `VM-TEST-END rc=0 seconds=847` |
+
+Wiring tests edited in this package (all text pins, each now reads the new spelling of the SAME expression and still proves what it proved): `test_swim_path_wiring`
+and `test_magma_guard_wiring` (`LiquidAtCompat(...)` -> `LiquidStatusCompat(...)` with the Turtle body pinned in `cmangos-compat-r3.h`), `test_move_fail_note_wiring`
+(`PathTypeOfCompat(*pathfinder)` -> `PathType(PathTypeCompat(*pathfinder))`), `test_stun_interrupt_wiring` (`CreatureIsWorldBossRankCompat(creature)` ->
+`CreatureRankCompat(creature) == CREATURE_ELITE_WORLDBOSS`). The four merges needed no conflict resolution.
+
+## 8. What I am unsure about
+
+- The Turtle side was changed by moving definitions and by 4 call-site rewrites with real bodies (`TellTargetAction.cpp`, the `AvoidTriggerNpc` periodic loop, `GenericTriggers.h`
+  mechanic masks, `WorldPosition.cpp` liquid lambdas); the gates passed, but no wiring test pins the rewritten loops: they are the same control flow by reading, not by test.
+- ForeverCore side of the new helpers is proven by the census (no error in the compat headers or `TbCompat_C.cpp`), not run: `AuraHasMechanicMaskCompat` (the `<< 1` shift and the
+  spell-level read), `ForEachThreatenerThreatCompat`, `CombatStartPositionCompat` (home position) and the `LiquidStatusCompat` 0 = no filter rule need the live test.
+- `CreatureIsAboveNormalCompat` now counts the boss type flag of the `DIFFICULTY_NONE` row; whether `GetDifficulty(DIFFICULTY_NONE)` is non-null for every template was not read in the core.
+- The failure-value column of section 6 is from return types, not from each site.
+- The guid-key audit lists producers outside the slice by `grep`; it does not prove that no other uint64 in `runtime/`, `host/` or `commands/` is a guid key.
 
