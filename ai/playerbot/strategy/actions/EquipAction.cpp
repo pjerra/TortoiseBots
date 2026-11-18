@@ -293,6 +293,10 @@ uint8 EquipAction::GetSmallestBagSlot(Player* bot, uint32 newClass, uint32 newSu
 
 void EquipAction::EquipItemToSlot(Player* requester, Item* item, uint8 targetSlot)
 {
+    // The explicit-slot sibling of EquipItem(): same rule, the item must be one the core can equip.
+    if (!IsItemProtoUsableCompat(GetItemProtoCompat(item)))
+        return;
+
     uint8 bagIndex = item->GetBagSlot();
     uint8 slot = item->GetSlot();
     uint32 itemId = GetItemProtoCompat(item)->ItemId;
@@ -341,6 +345,10 @@ void EquipAction::EquipItem(PlayerbotAI* ai, Player* requester, Item* item, bool
     // Never equip order stock: the order item and its reagent tree stay in
     // the bags until the order (or its branch) finishes.
     if (bot && bot->GetGuildId() && GuildOrderConsumesItem(bot, item ? GetItemProtoCompat(item)->ItemId : 0))
+        return;
+    // The last gate before the core's equip: an item whose mirror could not be filled has fields the core will abort on
+    // (Player::_ApplyWeaponDamage on a weapon without a damage row). It stays in the bags.
+    if (!IsItemProtoUsableCompat(GetItemProtoCompat(item)))
         return;
     AiObjectContext* context = ai->GetAiObjectContext();
 

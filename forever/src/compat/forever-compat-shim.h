@@ -174,10 +174,14 @@ struct CmangosObjectAccessorProxy
 // classic client data uses it for Tame Beast). See SHIM-R3-NOTES.md.
 #define SPELL_ATTR_RANGED                      SPELL_ATTR0_USES_RANGED_SLOT
 #define SPELL_ATTR_USES_RANGED_SLOT            SPELL_ATTR0_IS_ABILITY
+// The two "next swing" words, by the bit each name carries on the Turtle core (SpellDefines.h:726 SPELL_ATTR_ON_NEXT_SWING_1
+// = 0x4, :734 SPELL_ATTR_ON_NEXT_SWING_2 = 0x400; its cmangos aliases name _1 ON_NEXT_SWING and _2 NO_DAMAGE,
+// ai/cmangos-compat-shim.h:994-999). ForeverCore numbers the same two bits in the opposite order (SharedDefines.h:440
+// ON_NEXT_SWING_NO_DAMAGE = 0x4, :448 ON_NEXT_SWING = 0x400), so the two aliases cross over.
 #define SPELL_ATTR_ON_NEXT_SWING_1             SPELL_ATTR0_ON_NEXT_SWING_NO_DAMAGE
 #define SPELL_ATTR_ON_NEXT_SWING_2             SPELL_ATTR0_ON_NEXT_SWING
-#define SPELL_ATTR_ON_NEXT_SWING               SPELL_ATTR0_ON_NEXT_SWING
-#define SPELL_ATTR_ON_NEXT_SWING_NO_DAMAGE     SPELL_ATTR0_ON_NEXT_SWING_NO_DAMAGE
+#define SPELL_ATTR_ON_NEXT_SWING               SPELL_ATTR0_ON_NEXT_SWING_NO_DAMAGE
+#define SPELL_ATTR_ON_NEXT_SWING_NO_DAMAGE     SPELL_ATTR0_ON_NEXT_SWING
 #define SPELL_ATTR_TRADESPELL                  SPELL_ATTR0_IS_TRADESKILL
 #define SPELL_ATTR_OUTDOORS_ONLY               SPELL_ATTR0_ONLY_OUTDOORS
 #define SPELL_ATTR_NOT_SHAPESHIFT              SPELL_ATTR0_NOT_SHAPESHIFTED
@@ -287,7 +291,7 @@ inline SpellEntry const* GetSpellEntryCompat(uint32 id) { return tbcompat::Spell
 inline SpellEntry const* GetSpellEntryCompat(SpellInfo const* info) { return tbcompat::SpellProto(info); }
 inline SpellEntry const* GetSpellEntryCompat(SpellEntry const* entry) { return entry; }
 inline SpellInfo const* GetSpellInfoCompat(SpellEntry const* entry) { return tbcompat::SpellCore(entry); }
-inline uint32 GetMaxSpellIdCompat() { return tbcompat::MaxSpellId(); }   // the highest spell id the core has
+inline uint32 GetMaxSpellIdCompat() { return tbcompat::MaxSpellId(); }   // one past the highest spell id the core has
 
 inline uint32 GetSpellCastTime(SpellEntry const* spellInfo, Spell const* spell = nullptr)
 {
@@ -362,6 +366,11 @@ inline ItemTemplate const* GetItemTemplateCompat(Item const* item) { return item
 // The item template by entry, in the spelling the shared bot code uses on both cores; here the entry is answered by the
 // mirror table (TbItemPrototype.h). Same as the Turtle shim's helper.
 inline ItemPrototype const* GetItemProtoByIdCompat(uint32 entry) { return tbcompat::ItemProto(entry); }
+
+// Whether a bot may accept the item for equipping, rolling need, buying or generating. A mirror is incomplete when a
+// client table the core reads had no row for the item (TbItemPrototype.h); the core itself aborts in
+// Player::_ApplyWeaponDamage on a weapon whose item level has no damage row, so an incomplete item is never a candidate.
+inline bool IsItemProtoUsableCompat(ItemPrototype const* proto) { return proto && !proto->Incomplete; }
 
 // A unit's movement state, in the spelling the shared bot code uses on both cores; ForeverCore names the member isMoving().
 // The same helper exists in ai/cmangos-compat-shim.h. A null unit crashed before and is false now.
@@ -441,7 +450,8 @@ struct WorldTimer
 
 // sSpellTemplate: cmangos's spell DBC store object. ForeverCore's SpellMgr answers the same question; the spell data for the
 // base difficulty is the one entry cmangos had, and the bot brain reads the old fields, so the proxy hands back the mirror
-// (TbSpellEntry.h). GetMaxEntry is the highest spell id the core has, which the mirror table computes at startup.
+// (TbSpellEntry.h). GetMaxEntry is one past the highest spell id the core has (cmangos's `id < GetMaxEntry()` loop bound),
+// which the mirror computes on first use.
 struct CmangosSpellTemplateProxy
 {
     template <typename T = SpellEntry>

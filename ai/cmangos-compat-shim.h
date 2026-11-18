@@ -112,6 +112,15 @@ inline ItemPrototype const* GetItemProtoByIdCompat(uint32 entry)
     return entry ? sObjectMgr.GetItemPrototype(entry) : nullptr;
 }
 
+// Whether a bot may accept the item for equipping, rolling need, buying or generating. On this core every non-null
+// template is usable: the client tables it reads are the ones the server runs with. The ForeverCore half refuses a mirror
+// whose fill found a missing client table (an incomplete item, TbItemPrototype.h), because the core itself aborts in
+// Player::_ApplyWeaponDamage on a weapon whose item level has no damage row.
+inline bool IsItemProtoUsableCompat(ItemPrototype const* proto)
+{
+    return proto != nullptr;
+}
+
 // A unit's movement state, in the spelling the shared bot code uses on both cores. On this core it is the member.
 inline bool IsMovingCompat(Unit const* unit)
 {

@@ -181,7 +181,12 @@ std::string MissingDamageReason(uint32 itemLevel)
 bool ArmorUsesStores(ItemTemplate const* tpl, bool& shield)
 {
     shield = false;
-    if (tpl->GetQuality() > ITEM_QUALITY_ARTIFACT || tpl->GetClass() != ITEM_CLASS_ARMOR)
+    // GetArmor maps heirloom to rare before its quality ceiling (ItemTemplate.cpp:148-150), so an heirloom armor item
+    // still reads the item-level tables and must be marked when one is missing.
+    uint32 quality = tpl->GetQuality();
+    if (quality == ITEM_QUALITY_HEIRLOOM)
+        quality = ITEM_QUALITY_RARE;
+    if (quality > ITEM_QUALITY_ARTIFACT || tpl->GetClass() != ITEM_CLASS_ARMOR)
         return false;
 
     uint32 const subClass = tpl->GetSubClass();
@@ -417,7 +422,7 @@ void FillAll()
 
     // One line, whether or not anything is missing, so the log always says how the fill went. The first ten mirrors with a
     // field no client table could answer are named by entry, in the store's own order.
-    uint32 incomplete = 0;
+    uint32 incomplete = 0, incompleteLowLevel = 0, ammoStrictRejects = 0;
     std::string firstIncomplete;
     for (auto const& entry : store)
     {
@@ -425,6 +430,18 @@ void FillAll()
         if (!mirror || !mirror->Incomplete)
             continue;
         ++incomplete;
+        if (mirror->RequiredLevel <= 60)
+            ++incompleteLowLevel;
+
+        // The damage pre-check is stricter than the core: it asks all five ItemDamage* stores, while GetDPS picks one by
+        // inventory type. An ammo item whose own store has its row but another does not is rejected by the pre-check
+        // alone; count those so the difference is visible.
+        ItemTemplate const& tpl = entry.second;
+        uint32 const itemLevel = tpl.GetBaseItemLevel();
+        if (tpl.GetInventoryType() == INVTYPE_AMMO &&
+            sItemDamageAmmoStore.LookupEntry(itemLevel) && !MissingDamageReason(itemLevel).empty())
+            ++ammoStrictRejects;
+
         if (incomplete <= 10)
         {
             if (!firstIncomplete.empty())
@@ -433,8 +450,8 @@ void FillAll()
         }
     }
 
-    TC_LOG_INFO("server.loading", "TortoiseBots: item mirrors filled: {} items in {} ms, {} with a Stackable column <= 0 or INT_MAX, {} incomplete: {}.",
-        uint32(store.size()), GetMSTimeDiffToNow(start), stackableAnomalies, incomplete,
+    TC_LOG_INFO("server.loading", "TortoiseBots: item mirrors filled: {} items in {} ms, {} with a Stackable column <= 0 or INT_MAX, {} incomplete ({} at required level 60 or less), {} incomplete ammo items whose ItemDamageAmmo row exists but the five-store damage pre-check rejects: {}.",
+        uint32(store.size()), GetMSTimeDiffToNow(start), stackableAnomalies, incomplete, incompleteLowLevel, ammoStrictRejects,
         firstIncomplete.empty() ? std::string("none") : firstIncomplete);
 }
 

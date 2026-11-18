@@ -26,6 +26,11 @@ namespace
         if (!proto)
             return false;
 
+        // A mirror whose fill found a missing client table must never be generated for a bot (the core aborts on an
+        // equippable item whose damage row is missing); see IsItemProtoUsableCompat.
+        if (!IsItemProtoUsableCompat(proto))
+            return false;
+
         if (proto->Flags & (ITEM_FLAG_CONJURED | ITEM_FLAG_DEPRECATED | ITEM_FLAG_WRAPPER))
             return false;
 

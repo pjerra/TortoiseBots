@@ -13,6 +13,7 @@
 #include <bitset>
 #include <list>
 #include <string>
+#include <unordered_set>
 #include "ChatCommand.h"
 #include "Log.h"
 #include "ObjectMgr.h"
@@ -53,7 +54,10 @@ public:
         // The item store is loaded by now (World.cpp:1608, and item_classic_block at :1631); fill every mirror once so the
         // bot brain looks items up without a lock (TbItemPrototype.cpp).
         tbcompat::FillAll();
-        // The spell store is loaded too (World.cpp:1471); size the mirror table now so every later lookup is one atomic read.
+        // The spell store is loaded too (World.cpp:1471). This hook is what tells the mirror so: it answers 0 and null
+        // without touching the store until the flag is set, so a lookup from any earlier hook cannot index a half-loaded
+        // store into a table that is never rebuilt.
+        tbcompat::MarkSpellStoreReady();
         tbcompat::InitSpellTable();
         TC_LOG_INFO("server.loading", "TortoiseBots (ForeverCore port, spike): {}", BotMgr::Instance().Enabled() ? "enabled" : "disabled");
     }
@@ -280,17 +284,36 @@ public:
         return true;
     }
 
-    // .tb spellscan: build the spell mirror for every spell the core has, and report what it cost and what the mirror
-    // could not hold. Read-only. An assert anywhere in the core accessors the fill makes would abort here, which is what
-    // the check is for.
+    // .tb spellscan: build the spell mirror for every DIFFICULTY_NONE spell the core has, and report what it cost and
+    // what the mirror could not hold. Read-only. An assert anywhere in the core accessors the fill makes would abort
+    // here, which is what the check is for.
     static bool HandleSpellScan(ChatHandler* handler)
     {
         uint32 const started = getMSTime();
         uint32 spells = 0, incomplete = 0, moreEffects = 0, multiSchool = 0, effects = 0;
+        uint32 nonNoneRecords = 0;
         std::string firstTen, moreEffectsIds;
+        std::unordered_set<uint32> nonNoneIds, nonNoneOnlyIds;
 
         sSpellMgr->ForEachSpellInfo([&](SpellInfo const* info)
         {
+            if (!info)
+                return;
+
+            // The slot holds only DIFFICULTY_NONE records; the other variants are counted, and so are the ids that have
+            // no NONE record at all (SpellProto answers those with nullptr).
+            if (info->Difficulty != DIFFICULTY_NONE)
+            {
+                ++nonNoneRecords;
+                if (nonNoneIds.insert(info->Id).second)
+                {
+                    SpellInfo const* none = sSpellMgr->GetSpellInfo(info->Id, DIFFICULTY_NONE);
+                    if (!none || none->Difficulty != DIFFICULTY_NONE)
+                        nonNoneOnlyIds.insert(info->Id);
+                }
+                return;
+            }
+
             SpellEntry const* entry = tbcompat::SpellProto(info);
             if (!entry)
                 return;
@@ -312,11 +335,31 @@ public:
             }
         });
 
+        std::string firstNonNoneOnly;
+        for (uint32 id : nonNoneOnlyIds)
+        {
+            if (!firstNonNoneOnly.empty())
+                firstNonNoneOnly += ", ";
+            if (firstNonNoneOnly.size() < 200)
+                firstNonNoneOnly += std::to_string(id);
+            else
+            {
+                firstNonNoneOnly += "...";
+                break;
+            }
+        }
+
+        uint64 const indexBytes = tbcompat::SpellIndexBytes();
+        uint64 const slotBytes = tbcompat::SpellSlotBytes();
         uint32 const ms = getMSTimeDiff(started, getMSTime());
-        handler->PSendSysMessage("TortoiseBots: spell mirrors: %u spells in %u ms, highest id %u, %u incomplete%s",
-            spells, ms, tbcompat::MaxSpellId(), incomplete, incomplete ? (" (first: " + firstTen + ")").c_str() : "");
+        handler->PSendSysMessage("TortoiseBots: spell mirrors: %u spells in %u ms, spell id bound %u (index %llu B + slots %llu B), %u incomplete%s",
+            spells, ms, tbcompat::MaxSpellId(), (unsigned long long)indexBytes, (unsigned long long)slotBytes,
+            incomplete, incomplete ? (" (first: " + firstTen + ")").c_str() : "");
         handler->PSendSysMessage("TortoiseBots: effects: %u effect slots in all, %u spells with more than 3 effects%s, %u spells with more than one school.",
             effects, moreEffects, moreEffects ? (" (first: " + moreEffectsIds + ")").c_str() : "", multiSchool);
+        handler->PSendSysMessage("TortoiseBots: difficulty: %u SpellInfo records with a difficulty other than NONE, %u of their ids have no DIFFICULTY_NONE record (mirror null; %u such lookups counted%s).",
+            nonNoneRecords, uint32(nonNoneOnlyIds.size()), tbcompat::NonNoneOnlyLookups(),
+            nonNoneOnlyIds.empty() ? "" : (" (first: " + firstNonNoneOnly + ")").c_str());
         return true;
     }
 

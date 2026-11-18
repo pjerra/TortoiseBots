@@ -12,7 +12,12 @@ Read `SPIKE.md` first. This file says how the rest of the module gets onto Forev
    template reload at the pin (`LoadItemTemplates` is called once, `World.cpp:1608`), so a moved pin must re-check that
    the store is still loaded there and still not reloaded.
    The spell mirror (`forever/src/compat/TbSpellEntry.*`) is filled per spell on first use, after
-   `tbcompat::InitSpellTable()` sizes its table from the same hook. The core has no spell reload either at the pin:
+   `tbcompat::InitSpellTable()` builds its sorted `DIFFICULTY_NONE` id index and slot array from the same hook. The hook
+   first calls `tbcompat::MarkSpellStoreReady()`; only that sets the readiness flag, and until it is set the id bound
+   answers 0 and every spell lookup nullptr without reading the store, so a lookup from an earlier hook cannot publish
+   an index built from a half-loaded store. After the flag the id bound's lookup builds the index too, and nothing is
+   built while `TortoiseBots.Enable = 0`. The core has no spell reload
+   either at the pin:
    `LoadSpellInfoStore` and every pass that edits the `SpellInfo` objects (`LoadSpellInfoCorrections`,
    `LoadClassicSpellInfo`, `LoadSpellInfoCustomAttributes`) are called once from `World::SetInitialWorldSettings`
    (`World.cpp:1471-1491`), and no `.reload` handler calls them again (`scripts/Commands/cs_reload.cpp` reloads

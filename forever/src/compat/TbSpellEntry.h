@@ -77,7 +77,7 @@ struct SpellEntry
     int32     EquippedItemInventoryTypeMask = 0;          // T :574                          F EquippedItemInventoryTypeMask SpellInfo.h:415
     uint32    Effect[MAX_EFFECT_INDEX] = {};              // T :575  SPELL_EFFECT_*              F GetEffects()[i].Effect      SpellInfo.h:236
     int32     EffectDieSides[MAX_EFFECT_INDEX] = {};      // T :576  die sides of the roll       F classic_spell_value die_sides (else 1)
-    uint32    EffectBaseDice[MAX_EFFECT_INDEX] = {};      // T :577  dice count (1 in vanilla)   F 1: a DB2 effect carries no dice
+    uint32    EffectBaseDice[MAX_EFFECT_INDEX] = {};      // T :577  dice count (1 in vanilla)   F 1: no core column (Known differences)
     float     EffectRealPointsPerLevel[MAX_EFFECT_INDEX] = {};  // T :578 added per level  F classic row points_per_level / RealPointsPerLevel
     int32     EffectBasePoints[MAX_EFFECT_INDEX] = {};    // T :579  base - 1 of the roll        F classic row base_points (else round(BasePoints) - 1)
     float     EffectBonusCoefficient[MAX_EFFECT_INDEX] = {};  // T :580  spell power factor    F classic row bonus_coeff (else BonusCoefficient)
@@ -132,19 +132,38 @@ struct SpellEntry
 
 namespace tbcompat
 {
-    // Sizes the mirror table from the highest spell id the core has. Called once from the module's
-    // WorldScript::OnWorldInitialized (the spell store is loaded by then: World.cpp:1471); after that every lookup is a
-    // lock-free atomic read. A lookup before this call, or for an id above the table, takes a locked fallback map.
+    // Sets the readiness flag. ONLY the module's WorldScript::OnWorldInitialized calls it, after World::
+    // SetInitialWorldSettings has returned (Main.cpp:372), before it calls InitSpellTable. Until it runs, no lookup
+    // reads the spell store and nothing allocates.
+    void MarkSpellStoreReady();
+
+    // Builds the index of DIFFICULTY_NONE spell ids and the dense slot array for their mirrors. Called from the module's
+    // WorldScript::OnWorldInitialized after MarkSpellStoreReady (the spell store is loaded by then: World.cpp:1471), and
+    // lazily from a lookup of the id bound or a first spell lookup after that flag. One builder at a time: the store scan
+    // is inside the builder's lock. Returns without touching the store while the flag is unset, and builds nothing when
+    // TortoiseBots.Enable = 0.
     void InitSpellTable();
 
     // One fill for both paths: the lazy path and `.tb spellscan` use the same function, so the same pre-checks apply.
     SpellEntry* BuildSpellEntry(SpellInfo const* info);
 
-    // The mirror of a spell; nullptr when the core has no such spell. Safe from any thread (the bot brain runs on map threads).
+    // The mirror of a DIFFICULTY_NONE spell. A SpellInfo of another difficulty resolves to the same id's
+    // DIFFICULTY_NONE mirror when one exists, and to nullptr (counted, logged once) when it does not. nullptr too when
+    // the core has no such spell, the module is off, or the store is not ready yet (before MarkSpellStoreReady; logged
+    // once). Safe from any thread (the bot brain runs on map threads).
     SpellEntry const* SpellProto(uint32 id);
     SpellEntry const* SpellProto(SpellInfo const* info);   // nullptr for nullptr
     SpellInfo const* SpellCore(SpellEntry const* entry);   // back to the core's object
 
-    // The highest spell id the core has, or 0 before InitSpellTable.
+    // The old core's GetMaxSpellId(): one past the highest spell id the core has, so a `id < bound` loop covers the
+    // last id. Builds the index itself once the store is ready; 0 before MarkSpellStoreReady (logged once) and while
+    // the module is off.
     uint32 MaxSpellId();
+
+    // Bytes held by the immutable id index and by the mirror slot array; 0 when not built.
+    uint64 SpellIndexBytes();
+    uint64 SpellSlotBytes();
+
+    // Lookups that asked for an id the core has only with a non-NONE difficulty (answered nullptr).
+    uint32 NonNoneOnlyLookups();
 }
