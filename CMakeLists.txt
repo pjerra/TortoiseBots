@@ -91,7 +91,7 @@ if(TORTOISEBOTS_SLICE1)
   if(MSVC)
     set_source_files_properties(${TB_SLICE_LEGACY} PROPERTIES COMPILE_OPTIONS "/FI${TB_SLICE_PREINCLUDE}")
   else()
-    set_source_files_properties(${TB_SLICE_LEGACY} PROPERTIES COMPILE_OPTIONS "SHELL:-include ${TB_SLICE_PREINCLUDE}")
+    set_source_files_properties(${TB_SLICE_LEGACY} PROPERTIES COMPILE_OPTIONS "-include;${TB_SLICE_PREINCLUDE}")
   endif()
 
   # What forever/tools/port_census.py compiles the legacy files with: forever/compat and forever/src/compat first, the
