@@ -3,3 +3,19 @@
 // Owned by the slice-3 porting worker: no other package edits this file.
 #pragma once
 
+// ===============================================================================================================
+// THREAT AND TANK (ThreatStrategy.cpp)
+// ===============================================================================================================
+
+// SpellThreatEntry::threat, the flat threat of a spell (SpellMgr.h:108).
+inline float SpellFlatThreatCompat(SpellThreatEntry const& entry) { return entry.threat; }
+
+// Unit::SendPlaySpellVisual(id): the debug threat strategy's visual (Unit.h:687).
+inline void DebugSpellVisualCompat(Unit* unit, uint32 kitId) { unit->SendPlaySpellVisual(kitId); }
+
+// ===============================================================================================================
+// PULL (PullTriggers.cpp)
+// ===============================================================================================================
+
+// The online player with this guid key: T's key is the raw guid, so this is the original `sObjectMgr.GetPlayer(ObjectGuid(key))`.
+inline Player* PlayerOfGuidKeyCompat(uint64 key) { return sObjectMgr.GetPlayer(ObjectGuid(key)); }

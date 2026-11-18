@@ -340,7 +340,7 @@ Unit* PullMyTargetAction::GetTarget(Event& event)
     Unit* target = nullptr;
 
     Player* requester = event.GetOwner() ? event.GetOwner() : GetMaster();
-    if (event.GetSource() == "attack anything")
+    if (event.getSource() == "attack anything")
     {
         ObjectGuid guid = event.getObject();
         target = ai->GetCreature(guid);
@@ -437,7 +437,7 @@ bool PullAction::Execute(Event& event)
                 strategy->NotePullApproach(distanceToTarget, sServerFacade.isMoving(bot));
                 // Retry the reach pull action
                 strategy->RequestPull(target, false);
-                ai::Event reachEvent(event.GetSource(), "", event.GetOwner());
+                ai::Event reachEvent(event.getSource(), "", event.GetOwner());
                 ai->DoSpecificAction("reach pull", reachEvent, true);
                 return false;
             }
