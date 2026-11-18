@@ -1,0 +1,34 @@
+entry,name,map,x,y,z,faction,taxi_node,spawns,zone_id,client_build,source,class
+914,Ander Germaine,0,-8705.41,329.59,111.69,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+4594,Angela Curthas,0,1775.77,409.61,-57.11,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+2131,Austil de Mon,0,2254.76,238.44,33.72,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+4595,Baltus Fowler,0,1767.26,418.44,-57.11,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+5114,Bilban Tosslespanner,0,-5035.67,-1234.64,507.83,875,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+4593,Christoph Walker,0,1780.46,422.93,-57.11,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+2119,Dannal Stern,0,1862.46,1556.33,94.88,68,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+1229,Granis Swiftaxe,0,-5605.73,-530.38,399.74,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+5480,Ilsa Corbin,0,-8688.56,325.76,109.52,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+1901,Kelstrum Stonebreaker,0,-5044.87,-1243.06,507.84,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+5113,Kelv Sternhammer,0,-5047.54,-1269.69,510.41,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+911,Llane Beshere,0,-8918.36,-208.41,82.31,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+913,Lyria Du Lac,0,-9461.85,109.35,57.88,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+985,Malosh,0,-10502.0,-3252.67,21.21,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+912,Thran Khorman,0,-6084.77,382.14,395.63,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+5479,Wu Shen,0,-8689.32,323.24,109.52,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+3593,Alyissia,1,10526.6,778.09,1329.68,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+4087,Arias'ta Bladesinger,1,9992.01,2316.97,1330.87,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+8141,Captain Evencane,1,-3727.67,-4538.45,25.92,894,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+7315,Darnath Bladesinger,1,9988.85,2314.61,1330.87,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+3153,Frang,1,-639.34,-4230.19,38.56,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+3353,Grezz Ragefist,1,1980.0,-4799.74,55.88,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+3059,Harutt Thunderhorn,1,-2880.43,-213.02,54.9,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+3043,Ker Ragetotem,1,-1444.95,-84.28,159.1,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+3063,Krang Stonehoof,1,-2347.98,-495.92,-8.96,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+3598,Kyra Windblade,1,9822.23,952.01,1308.86,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+3042,Sark Ragetotem,1,-1472.87,-78.18,161.19,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+4089,Sildanair,1,9940.36,2284.55,1341.48,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+3354,Sorek,1,1970.95,-4808.17,56.85,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+3169,Tarshaw Jaggedscar,1,311.35,-4827.79,9.66,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+3041,Torm Ragetotem,1,-1457.96,-80.81,159.1,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+3408,Zel'mak,1,1997.93,-4807.95,56.85,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior
+251964,Blademaster Ren,2991,4061.54,1802.9,982.96,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),warrior

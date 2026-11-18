@@ -1,0 +1,31 @@
+entry,name,map,x,y,z,faction,taxi_node,spawns,zone_id,client_build,source,class
+5115,Daera Brightspear,0,-5043.04,-1274.67,510.41,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+10930,Dargh Trueaim,0,-5635.34,-4266.36,407.91,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+5515,Einris Brightspear,0,-8415.76,552.7,95.53,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+1231,Grif Wildheart,0,-5618.54,-454.07,407.84,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+1404,Kragg,0,-12388.9,227.7,2.41,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+987,Ogromm,0,-10437.8,-3307.04,20.45,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+5116,Olmin Burningbeard,0,-5010.39,-1274.05,507.83,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+5117,Regnus Thundergranite,0,-5006.6,-1266.04,507.84,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+5517,Thorfin Stoneshield,0,-8412.8,541.4,102.58,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+895,Thorgas Grimson,0,-6091.79,365.14,395.62,55,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+5516,Ulfir Ironbeard,0,-8410.29,548.57,95.53,12,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+8308,Alenndaar Lapidaar,1,2373.12,661.41,153.25,1076,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+3596,Ayanna Everstride,1,10458.5,827.87,1381.02,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+3963,Danlaar Nightstride,1,2061.15,-1191.24,101.05,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+3601,Dazalar,1,9812.33,928.81,1308.19,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+4205,Dorion,1,10187.0,2491.67,1358.62,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+3039,Holt Thunderhorn,1,-1474.76,-81.37,161.19,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+4138,Jeen'ra Nightrunner,1,10200.3,2517.94,1368.91,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+3154,Jen'shan,1,-635.46,-4227.52,38.37,126,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+4146,Jocaste,1,10178.0,2511.01,1343.24,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+5501,Kaerbrus,1,6229.31,-1917.08,563.13,80,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+3038,Kary Thunderhorn,1,-1464.61,-93.78,159.1,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+3061,Lanka Farshot,1,-2865.4,-225.73,54.96,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+3352,Ormak Grimshot,1,2100.58,-4606.96,58.79,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+3407,Sian'dur,1,2107.35,-4633.78,58.74,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+3171,Thotar,1,275.34,-4704.0,11.71,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+3040,Urek Thunderhorn,1,-1454.48,-100.47,159.1,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+3406,Xor'juul,1,2084.96,-4623.77,58.68,29,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+3065,Yaw Sharpmane,1,-2180.22,-408.82,-4.52,104,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
+251376,Tai'ree Farsight,2991,4076.28,1869.05,976.79,35,,1,0,client DB2 70938 (2026-11-17); world/hotfixes TDB 2026-10-14,world DB creature/creature_template (TDB 2026-10-14),hunter
