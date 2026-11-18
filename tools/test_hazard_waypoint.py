@@ -49,6 +49,8 @@ struct Bot {
     unsigned GetMapId() const { return 0; }
     void SummonCreature(int,float,float,float,float,int,float) {}
 } botObject;
+// The both-core summon helper (ai/cmangos-compat-r4a.h): on Turtle it is the old call.
+inline void SummonCreatureCompat(Bot* owner, int entry, float x, float y, float z, float o, int type, float despawn) { owner->SummonCreature(entry, x, y, z, o, type, despawn); }
 struct AI { bool HasStrategy(const char*, int) const { return false; } } aiObject;
 struct MovementAction {
     Bot* bot = &botObject; AI* ai = &aiObject;

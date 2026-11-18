@@ -70,10 +70,10 @@ class PlaceUnstickWiring(unittest.TestCase):
         unstick = body(MOVEMENT, "bool MovementAction::TryPlaceUnstick(LastMovement& lastMove)")
         self.assertIn("if (ai::PlaceUnstickDecide(in) != ai::PlaceUnstickVerdict::Teleport)", unstick)
         self.assertIn("in.inInstance = map->IsDungeon();", unstick)
-        self.assertIn("in.inBattleground = bot->InBattleGround() || map->IsBattleGround();", unstick)
+        self.assertIn("in.inBattleground = bot->InBattleGround() || MapIsBattlegroundCompat(map);", unstick)
         self.assertIn("in.botCharmed = !bot->GetCharmerGuid().IsEmpty();", unstick)
         # Possess only: the bot's own pet or an enslaved demon leaves it its own mover.
-        self.assertIn("in.botCharming = ai::PlaceUnstickBotPossessing(bot->GetMover() == bot);", unstick)
+        self.assertIn("in.botCharming = ai::PlaceUnstickBotPossessing(PlayerMoverCompat(bot) == bot);", unstick)
         self.assertNotIn("GetCharmGuid()", unstick)
         self.assertIn("in.masterOnTransport = hasMaster && master->GetTransport() != nullptr;", unstick)
         self.assertIn("in.botCasting = bot->IsNonMeleeSpellCasted(true);", unstick)

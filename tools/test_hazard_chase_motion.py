@@ -65,6 +65,10 @@ struct MoveSplineInit {
     }
 };
 }
+// The both-core helpers (ai/cmangos-compat-r4a.h): on Turtle each is the old call, so the mock forwards to the old mock call.
+inline void MotionClearCompat(MotionMaster& mm, bool reset, bool all) { mm.Clear(reset, all); }
+using MoveSplineInitCompat = Movement::MoveSplineInit;
+inline const char* CStrCompat(const char* text) { return text; }
 struct Log { template<class... T> void outDetail(const char*, T...) {} } sLog;
 struct MovementAction {
     Unit* bot;

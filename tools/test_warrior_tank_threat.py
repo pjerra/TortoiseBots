@@ -39,6 +39,9 @@ struct Unit {
 using Player=Unit;
 struct GroupReference { Player* GetSource(){return nullptr;} GroupReference* next(){return nullptr;} };
 struct Group { GroupReference* GetFirstMember(){return nullptr;} };
+// The both-core helpers (ai/cmangos-compat-r4a.h): on Turtle each is the old call, so the mock forwards to the old mock call.
+GroupReference* GroupFirstMemberCompat(Group* group){return group->GetFirstMember();}
+GroupReference* GroupNextMemberCompat(Group*, GroupReference* ref){return ref->next();}
 const int CLASS_WARRIOR=1;
 struct Aura {
  int stacks=1, duration=30000;
