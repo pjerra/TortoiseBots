@@ -224,6 +224,13 @@ std::size_t BotSession::DrainCastResults(std::vector<CastResult>& out)
     return count;
 }
 
+std::size_t BotSession::PeekCastResults(std::vector<CastResult>& out) const
+{
+    std::lock_guard<std::mutex> lock(_castResultLock);
+    out.insert(out.end(), _castResults.begin(), _castResults.end());
+    return _castResults.size();
+}
+
 CastResultCounts BotSession::GetCastResultCounts() const
 {
     std::lock_guard<std::mutex> lock(_castResultLock);

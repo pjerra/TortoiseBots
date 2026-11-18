@@ -89,6 +89,7 @@ public:
     bool CastResultSink() const { return _castResultSink.load(std::memory_order_relaxed); }
     void PushCastResult(CastResult const& result);                  // any thread
     std::size_t DrainCastResults(std::vector<CastResult>& out);     // appends the queued results in arrival order; counts them delivered
+    std::size_t PeekCastResults(std::vector<CastResult>& out) const;  // appends a COPY of the queued results; the queue and the counts are untouched (`.tb castlog`)
     CastResultCounts GetCastResultCounts() const;                   // any thread
     // The latest SMSG_CAST_FAILED the core sent during this bot's own engine tick (see EngineTickScope): the answer to a core call
     // that returns nothing, such as Player::CastItemUseSpell. Returns false when there is none since the last take. World thread.
