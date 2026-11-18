@@ -46,6 +46,11 @@ public:
     void OnPlayerLogout(Player* player);
 
     Player* FindBot(ObjectGuid characterGuid) const;
+    // The in-world bots whose master is `master` (host/TbHostBotManager.cpp answers the legacy BotManager::GetBotsForMaster with it).
+    std::vector<Player*> BotsOfMaster(ObjectGuid master) const;
+    // Re-binds a bot's master (empty = none). False when it is not a logged-in bot. The engine's own master pointer is the
+    // caller's (host/TbHostBotManager.cpp BindBotMaster/ClearBotMaster set it too).
+    bool SetMaster(ObjectGuid characterGuid, ObjectGuid master);
     bool IsBot(ObjectGuid characterGuid) const { return _bots.count(characterGuid) != 0; }
     std::size_t Count() const { return _bots.size(); }
 

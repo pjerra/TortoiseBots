@@ -26,7 +26,9 @@ file(GLOB_RECURSE PRIVATE_SOURCES CONFIGURE_DEPENDS
 
 # forever/src/slice holds the sources of the slice-1 build (the AiObjectContext constructor, the AiFactory, the
 # missing-key guard); they belong to the TORTOISEBOTS_SLICE1 build only and are added below when it is ON.
-list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/slice/[^/]*\\.cpp$")
+# forever/src/host/TbHost*.cpp are the host services that answer the legacy engine's questions (R6B): they include legacy
+# headers, so they too belong to the TORTOISEBOTS_SLICE1 build only.
+list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/(slice/[^/]*|host/TbHost[^/]*)\\.cpp$")
 
 # Slice 1 (forever/docs/SLICE1-R2-NOTES.md): the legacy bot brain files listed in forever/SLICE1.txt, built next to the
 # module. OFF (the default) leaves the module exactly as it was: nothing below this option runs.
@@ -82,7 +84,8 @@ if(TORTOISEBOTS_SLICE1)
     list(APPEND TB_SLICE_LEGACY ${CMAKE_CURRENT_SOURCE_DIR}/${line})
   endforeach()
 
-  file(GLOB TB_SLICE_NEW CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/forever/src/slice/*.cpp)
+  file(GLOB TB_SLICE_NEW CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/forever/src/slice/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/forever/src/host/TbHost*.cpp)
 
   target_sources(tortoisebots PRIVATE ${TB_SLICE_LEGACY} ${TB_SLICE_NEW})
 

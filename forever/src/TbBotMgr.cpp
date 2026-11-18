@@ -265,6 +265,29 @@ Player* BotMgr::FindBot(ObjectGuid characterGuid) const
     return player && player->IsInWorld() ? player : nullptr;
 }
 
+std::vector<Player*> BotMgr::BotsOfMaster(ObjectGuid master) const
+{
+    std::vector<Player*> result;
+    for (auto const& [guid, bot] : _bots)
+    {
+        if (bot.master != master)
+            continue;
+        Player* player = bot.session->GetPlayer();
+        if (player && player->IsInWorld())
+            result.push_back(player);
+    }
+    return result;
+}
+
+bool BotMgr::SetMaster(ObjectGuid characterGuid, ObjectGuid master)
+{
+    auto itr = _bots.find(characterGuid);
+    if (itr == _bots.end())
+        return false;
+    itr->second.master = master;
+    return true;
+}
+
 void BotMgr::Update(uint32 diff)
 {
     std::vector<ObjectGuid> finished;
