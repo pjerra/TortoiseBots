@@ -471,17 +471,19 @@ void PlayerbotAIConfig::LoadAhBotPriceKeys()
     ahBotPriceMultiplierItemLevelCategoryKey = config.GetFloatDefault("AiPlayerbot.AhBot.PriceMultiplier.ItemLevel.Category.Key", 0.0f);
     ahBotPriceMultiplierItemLevelCategoryMisc = config.GetFloatDefault("AiPlayerbot.AhBot.PriceMultiplier.ItemLevel.Category.Misc", 0.0f);
     {
+        // The tables and loops use the pricing policy's own sizes (16 classes, 7 qualities), not the core's macros: ForeverCore's
+        // MAX_ITEM_CLASS is 21 and MAX_ITEM_QUALITY 8, which read a null name (a crash) and wrote past the 16-row array.
         ai::AhBotPricingConfig const ahBotDefaults = ai::MakeDefaultVanillaPricingConfig();
-        static char const* const kCatNames[MAX_ITEM_CLASS] = {
+        static char const* const kCatNames[ai::kAhBotPriceMaxItemClass] = {
             "Consumable", "Container", "Weapon", nullptr, "Armor", "Reagent", "Projectile",
             "TradeGood", "Generic", "Recipe", nullptr, "Quiver", "Quest", "Key", nullptr, "Misc"
         };
-        static char const* const kQualNames[MAX_ITEM_QUALITY] = {
+        static char const* const kQualNames[ai::kAhBotPriceMaxItemQuality] = {
             "Poor", "Normal", "Uncommon", "Rare", "Epic", "Legendary", "Artifact"
         };
-        for (uint32 c = 0; c < MAX_ITEM_CLASS; ++c)
+        for (uint32 c = 0; c < ai::kAhBotPriceMaxItemClass; ++c)
         {
-            for (uint32 q = 0; q < MAX_ITEM_QUALITY; ++q)
+            for (uint32 q = 0; q < ai::kAhBotPriceMaxItemQuality; ++q)
             {
                 float def = ahBotDefaults.priceMultiplierCategoryQuality[c][q];
                 if (kCatNames[c])
@@ -495,7 +497,7 @@ void PlayerbotAIConfig::LoadAhBotPriceKeys()
                 }
             }
         }
-        for (uint32 q = 0; q < MAX_ITEM_QUALITY; ++q)
+        for (uint32 q = 0; q < ai::kAhBotPriceMaxItemQuality; ++q)
         {
             std::string mountKey = std::string("AiPlayerbot.AhBot.PriceMultiplier.CategoryMount.Quality") + kQualNames[q];
             ahBotPriceMultiplierCategoryMountQuality[q] = config.GetFloatDefault(mountKey.c_str(), ahBotDefaults.priceMultiplierCategoryMountQuality[q]);
