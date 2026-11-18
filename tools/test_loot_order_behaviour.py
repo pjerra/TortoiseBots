@@ -21,11 +21,25 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 STACK = (ROOT / "ai/playerbot/LootObjectStack.cpp").read_text()
 ADD_LOOT = (ROOT / "ai/playerbot/strategy/actions/AddLootAction.cpp").read_text()
+# Slice 2 (V2): the Turtle-side helpers the stack calls now live here (the bodies the stack held before, moved word for word).
+S2V = (ROOT / "ai/cmangos-compat-s2v.h").read_text()
 
 
 def between(text, start, end=None):
     i = text.index(start)
     return text[i:text.index(end, i + len(start))] if end else text[i:]
+
+
+def compat_helpers():
+    """The Turtle-side helpers the stack code calls, copied verbatim from ai/cmangos-compat-s2v.h (and the one-line CStrCompat)."""
+    return "\n".join([
+        "using LootStoreItemCompat = LootStoreItem;",
+        "inline char const* CStrCompat(std::string const& text) { return text.c_str(); }",
+        between(STACK, "struct VisiblePersonalItemRule", "static bool MayLootCorpse("),
+        between(S2V, "template <class Access, class Info>", "// Quest relation tables"),
+        between(S2V, "// The five facts of the corpse-refusal debug text", "// Corpse distance:"),
+        between(S2V, "inline bool CorpseSkinnableByCompat(", "// The loot an object carries"),
+    ]) + "\n"
 
 
 def production_methods():
@@ -507,7 +521,7 @@ ADD_ALL_METHODS = "\n".join([
 
 
 def build_source():
-    source = FIXTURE_HEAD + production_methods() + "\n" + ADD_ALL_FIXTURE + ADD_ALL_METHODS + "\n" + MAIN
+    source = FIXTURE_HEAD + compat_helpers() + production_methods() + "\n" + ADD_ALL_FIXTURE + ADD_ALL_METHODS + "\n" + MAIN
     source = source.replace('"LOOT_WINDOW_POLICY"',
                             '"' + str(ROOT / "ai/playerbot/policy/loot/LootWindowPolicy.h") + '"')
     source = source.replace('"GAMEOBJECT_PICKUP_POLICY"',

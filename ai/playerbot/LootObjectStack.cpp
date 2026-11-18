@@ -100,6 +100,14 @@ LootObject::LootObject(Player* bot, ObjectGuid guid, bool playerOrder)
 // refuses it (Creature::GetLootRecipient() resolves the pet guid to nothing). "Always tag the mob
 // yourself or the pet kill gives no loot and no XP" is the vanilla rule, not a module bug; making
 // such corpses lootable needs the core to credit the pet's owner, not a change here.
+// The module's personal-item rule (policy/loot/CorpseLootPolicy.h), handed to the both-core corpse helpers (TbCompat_V2.h /
+// cmangos-compat-s2v.h): T runs it, F never calls it (money only, D2). A template, so ForeverCore does not compile its body against the core's Loot.
+struct VisiblePersonalItemRule
+{
+    template <class LootT, class PlayerT>
+    bool operator()(LootT const& loot, PlayerT* viewer) const { return ai::HasVisiblePersonalItemFor(loot, viewer); }
+};
+
 static bool MayLootCorpse(Player* bot, Creature* creature)
 {
     if (!CorpseAllowedToLootCompat(bot, creature))
@@ -119,10 +127,7 @@ static bool MayLootCorpse(Player* bot, Creature* creature)
         return true;
 
     // another member's turn: personal loot it will show (F: money only, none is claimed)
-    return CorpseHasVisiblePersonalItemForCompat(creature, bot, [](auto const& loot, auto* viewer)
-    {
-        return ai::HasVisiblePersonalItemFor(loot, viewer);
-    });
+    return CorpseHasVisiblePersonalItemForCompat(creature, bot, VisiblePersonalItemRule());
 }
 // Collects every item an open chest can hold, following reference tables
 // one level deep. Returns false as soon as one item is better than common.
@@ -220,10 +225,7 @@ void LootObject::Refresh(Player* bot, ObjectGuid guid, bool debug)
 
             if (debug)
             {
-                CorpseRefusalFactsCompat const facts = CorpseRefusalFactsOfCompat(creature, bot, [](auto const& loot, auto* viewer)
-                {
-                    return ai::HasVisiblePersonalItemFor(loot, viewer);
-                });
+                CorpseRefusalFactsCompat const facts = CorpseRefusalFactsOfCompat(creature, bot, VisiblePersonalItemRule());
                 ai->TellDebug(ai->GetMaster(), "Creature lootable but not this bot's to loot: " +
                     ai::CorpseRefusalReason(facts.allowedLooter, facts.hasQuestItems, facts.hasItemFor, facts.otherTurn, facts.reserved),
                     "debug loot");

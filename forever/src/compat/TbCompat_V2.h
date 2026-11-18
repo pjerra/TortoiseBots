@@ -55,7 +55,7 @@ inline bool CorpseAllowedToLootCompat(Player* bot, Creature* creature) { return 
 inline Loot* CreatureLootForCompat(Creature const* creature, Player const* bot) { return creature->GetLootForPlayer(bot); }
 
 // The player whose turn the corpse is (round robin owner); empty when released or when there is none. T `Loot::roundRobinPlayer` (a raw
-// 64-bit guid), F Loot::roundRobinPlayer (Loot.h:300, an ObjectGuid, set to the loot owner at generation, Loot.cpp:959).
+// 64-bit guid), F Loot::roundRobinPlayer (Loot.h:299, an ObjectGuid, set to the loot owner at generation, Loot.cpp:959).
 inline ObjectGuid CorpseRoundRobinGuidCompat(Creature const* creature, Player const* bot)
 {
     Loot const* loot = creature->GetLootForPlayer(bot);
