@@ -182,7 +182,9 @@ inline bool RollChanceCompat(float /*chance*/) { tbcompat::Unported(tbcompat::Fe
 // gold always counts (Loot.cpp:1184-1188), and the round-robin / group-loot turn). Different answer: the raw lootable dynamic flag is not
 // read (on T the core masks it per viewer so it mostly equalled the right; on F it is one value for everybody, so it would also say
 // yes for a corpse another player tapped).
-inline bool CorpseHasBodyLootForCompat(Player* bot, Creature* creature) { return bot->isAllowedToLoot(creature); }
+// R3 merge: the same core call as V2's CorpseAllowedToLootCompat (TbCompat_V2.h, included first): one F definition. On T the two differ
+// (this one ORs the raw lootable flag, V2's is the right alone: each keeps the line it replaced), see SLICE2-R3-NOTES.md.
+inline bool CorpseHasBodyLootForCompat(Player* bot, Creature* creature) { return CorpseAllowedToLootCompat(bot, creature); }
 
 // ai::HasVisiblePersonalItemFor: the personal items (quest, free-for-all) the viewer may see while another member holds the turn.
 // F: Loot::hasItemFor(viewer) (Loot.cpp:1197-1209: quest items of the viewer and its free-for-all items), the very test

@@ -779,7 +779,7 @@ bool StoreLootAction::Execute(Event& event)
 
     lootStack->Remove(guid);
     RESET_AI_VALUE(LootObject, "loot target");
-    RESET_AI_VALUE2(bool, "should loot object", std::to_string(GuidKeyCompat(guid)));
+    RESET_AI_VALUE2(bool, "should loot object", GuidQualifierCompat(guid));
 
     sLog.outDebug("[BOT LOOT] %s: StoreLoot done guid=%lu items_taken=%u gold=%u, release sent",
         CStrCompat(bot->GetName()), GuidKeyCompat(guid), itemsTaken, gold);
