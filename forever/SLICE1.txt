@@ -130,5 +130,6 @@ runtime/PlayerbotAIStorage.cpp
 # R6B: small, core-free files the link needed (string helpers, move style value, world PvP seek log, raid tank healing)
 ai/playerbot/Helpers.cpp
 ai/playerbot/strategy/values/MoveStyleValue.cpp
+ai/playerbot/strategy/values/SubStrategyValue.cpp
 ai/playerbot/strategy/values/WorldPvpSeekLog.cpp
 ai/playerbot/RaidTankHealing.cpp
