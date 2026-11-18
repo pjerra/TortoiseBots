@@ -220,7 +220,7 @@ void PlayerbotAI::UpdateEvadeProbe()
         float homeX, homeY, homeZ, homeO;
         GetRespawnCoordCompat(creature, homeX, homeY, homeZ, &homeO);
         float combatStartX, combatStartY, combatStartZ;
-        creature->GetCombatStartPosition(combatStartX, combatStartY, combatStartZ);
+        CombatStartPositionCompat(creature, combatStartX, combatStartY, combatStartZ);
         Unit* pet = bot->GetPet();
         out << " motion=" << (uint32)creature->GetMotionMaster()->GetCurrentMovementGeneratorType();
         out << " homedist=" << (uint32)creature->GetDistance(homeX, homeY, homeZ);

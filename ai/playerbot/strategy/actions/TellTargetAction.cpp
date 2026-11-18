@@ -39,21 +39,12 @@ bool TellAttackersAction::Execute(Event& event)
     }
 
     ai->TellPlayer(requester, "--- Threat ---");
-    HostileReference* ref = sServerFacade.GetHostileRefManager(bot).getFirst();
-    if (!ref)
-        return true;
-
-    while (ref)
+    ForEachThreatenerThreatCompat(bot, [&](Unit* unit, float threat)
     {
-        ThreatManager* threatManager = ref->GetSource();
-        Unit* unit = threatManager->getOwner();
-        float threat = ref->getThreat();
-
         std::ostringstream out; out << unit->GetName() << " (" << threat << ")";
         ai->TellPlayer(requester, out);
-
-        ref = ref->next();
-    }
+        return false;
+    });
     return true;
 }
 
@@ -73,20 +64,11 @@ bool TellPossibleAttackTargetsAction::Execute(Event& event)
     }
 
     ai->TellPlayer(requester, "--- Threat ---");
-    HostileReference *ref = sServerFacade.GetHostileRefManager(bot).getFirst();
-    if (!ref)
-        return true;
-
-    while( ref )
+    ForEachThreatenerThreatCompat(bot, [&](Unit* unit, float threat)
     {
-        ThreatManager *threatManager = ref->GetSource();
-        Unit *unit = threatManager->getOwner();
-        float threat = ref->getThreat();
-
         std::ostringstream out; out << unit->GetName() << " (" << threat << ")";
         ai->TellPlayer(requester, out);
-
-        ref = ref->next();
-    }
+        return false;
+    });
     return true;
 }

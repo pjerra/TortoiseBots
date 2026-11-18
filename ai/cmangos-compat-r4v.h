@@ -71,6 +71,22 @@ inline bool ForEachThreatenerCompat(Unit* me, Fn&& fn)
     }
     return true;
 }
+template <class Fn>
+inline bool ForEachThreatenerThreatCompat(Unit* me, Fn&& fn)
+{
+    HostileReference* ref = me->GetHostileRefManager().getFirst();
+    if (!ref)
+        return false;
+    while (ref)
+    {
+        ThreatManager* threatManager = ref->GetSource();
+        Unit* attacker = threatManager->getOwner();
+        if (fn(attacker, ref->getThreat()))
+            break;
+        ref = ref->next();
+    }
+    return true;
+}
 inline bool CreatureTauntImmuneCompat(Creature const* creature) { return creature->HasImmunityFlag(CREATURE_IMMUNITY_TAUNT); }
 inline bool CreatureHasLootRecipientCompat(Creature const* creature) { return creature->HasLootRecipient(); }
 inline bool CreatureIsTappedByCompat(Creature const* creature, Player const* player) { return creature->IsTappedBy(player); }

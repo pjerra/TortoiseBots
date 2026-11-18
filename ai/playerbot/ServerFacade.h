@@ -133,7 +133,11 @@ class ServerFacade
 #endif
         }
 
-        HostileRefManager& GetHostileRefManager(Unit *unit)
+        // A template so that the declaration names no type ForeverCore lacks (it has no HostileRefManager): never instantiated there; the
+        // slice no longer calls it (TellTargetAction uses ForEachThreatenerThreatCompat). On Turtle every call site (the commander's
+        // deleteReferences / getFirst, outside the slice) instantiates it with its own Unit type and gets the same reference as before.
+        template <class UnitType>
+        decltype(auto) GetHostileRefManager(UnitType *unit)
         {
 #ifdef MANGOS
             return unit->GetHostileRefManager();

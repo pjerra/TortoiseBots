@@ -700,3 +700,29 @@ inline float TerrainWaterOrGroundLevelCompat(TerrainInfo const* terrain, float x
 {
     return const_cast<TerrainInfo*>(terrain)->GetWaterOrGroundLevel(PhasingHandler::GetEmptyPhaseShift(), terrain->GetId(), x, y, z, ground, swim);
 }
+
+// Where a creature began its fight, for the evade-chase policy (how far it may be pulled before it evades). T Creature.h:925
+// GetCombatStartPosition. F records no combat start point; lead decision (findings item 11): the creature's HOME position
+// (Creature.h:399 GetHomePosition), the point F itself measures a creature's leash from. DIFFERENT ANSWER: for a patrolling mob the bot's
+// leash estimate is from its spawn point, not from where the pull began.
+inline void CombatStartPositionCompat(Creature const* creature, float& x, float& y, float& z)
+{
+    Position const& home = creature->GetHomePosition();
+    x = home.GetPositionX();
+    y = home.GetPositionY();
+    z = home.GetPositionZ();
+}
+
+// Seconds since the creature entered combat, -1 when unknown. T Creature.h:833 GetCombatTime (a time_t). F keeps no engage time
+// (Creature::AtEngage is the only hook); lead decision (findings item 14): -1, the value CcMarkHoldPolicy.h already defines for
+// "unknown" (the mark-hold window then stays closed, as for a creature the bot has not seen engage).
+inline time_t CombatTimeCompat(Creature const* /*creature*/) { return time_t(-1); }
+
+// Does an applied aura (T: the spell's aura holder) carry one of the mechanics in a legacy mask (bit `mechanic - 1`). T
+// SpellAuraHolder::HasMechanicMask (SpellAuras.cpp:7392: the spell's mechanic, or the mechanic of an effect the holder applied); F
+// SpellInfo::GetAllEffectsMechanicMask (SpellInfo.cpp:2800), whose bit is `mechanic` (not `mechanic - 1`), hence the shift. The mechanic ids
+// are the same numbers on both (SLEEP 10). DIFFERENT ANSWER: F reads the spell's effects, not the effects this application applied.
+inline bool AuraHasMechanicMaskCompat(Aura const* aura, uint32 legacyMask)
+{
+    return (aura->GetSpellInfo()->GetAllEffectsMechanicMask() & (uint64(legacyMask) << 1)) != 0;
+}

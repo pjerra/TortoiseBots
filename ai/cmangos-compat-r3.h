@@ -249,3 +249,8 @@ inline bool SpellIsChannelingCompat(Spell const* spell)
     // T has no separate channeling state: SPELL_STATE_CHANNELING is SPELL_STATE_CASTING in the shim (the call the bot always made).
     return spell->getState() == SPELL_STATE_CASTING || spell->getState() == SPELL_STATE_CHANNELING;
 }
+
+inline void CombatStartPositionCompat(Creature const* creature, float& x, float& y, float& z) { creature->GetCombatStartPosition(x, y, z); }
+inline time_t CombatTimeCompat(Creature const* creature) { return creature->GetCombatTime(); }
+
+inline bool AuraHasMechanicMaskCompat(SpellAuraHolder const* holder, uint32 legacyMask) { return holder->HasMechanicMask(legacyMask); }

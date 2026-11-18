@@ -192,7 +192,7 @@ namespace ai
                         float homeX, homeY, homeZ, homeO;
                         GetRespawnCoordCompat(creature, homeX, homeY, homeZ, &homeO);
                         float combatStartX, combatStartY, combatStartZ;
-                        creature->GetCombatStartPosition(combatStartX, combatStartY, combatStartZ);
+                        CombatStartPositionCompat(creature, combatStartX, combatStartY, combatStartZ);
                         ai::EvadeChaseState state;
                         state.evading = true;
                         state.unreachable = creature->IsEvadeBecauseTargetNotReachable();

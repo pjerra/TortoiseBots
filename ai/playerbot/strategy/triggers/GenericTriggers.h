@@ -1382,9 +1382,9 @@ namespace ai
                 bot->HasAuraType(SPELL_AURA_AOE_CHARM))
                 return true;
             uint32 sleepMask = 1 << (MECHANIC_SLEEP - 1);
-            for (auto itr : bot->GetSpellAuraHolderMap())
+            for (auto const& itr : AuraHolderMapCompat(bot))
             {
-                if (itr.second->HasMechanicMask(sleepMask))
+                if (AuraHasMechanicMaskCompat(itr.second, sleepMask))
                     return true;
             }
             return false;
@@ -1404,9 +1404,9 @@ namespace ai
             if (bot->HasAuraType(SPELL_AURA_MOD_FEAR))
                 return true;
             uint32 sleepSapMask = (1 << (MECHANIC_SLEEP - 1)) | (1 << (MECHANIC_SAPPED - 1));
-            for (auto itr : bot->GetSpellAuraHolderMap())
+            for (auto const& itr : AuraHolderMapCompat(bot))
             {
-                if (itr.second->HasMechanicMask(sleepSapMask))
+                if (AuraHasMechanicMaskCompat(itr.second, sleepSapMask))
                     return true;
             }
             return false;
@@ -1494,7 +1494,7 @@ namespace ai
             uint32 poisMask = GetDispellMask(DISPEL_POISON);
             uint32 bleedType = 1 << (MECHANIC_BLEED - 1);
             bool wantsCure = false;
-            for (auto itr : bot->GetSpellAuraHolderMap())
+            for (auto const& itr : AuraHolderMapCompat(bot))
             {
                 SpellEntry const* spell = GetSpellEntryCompat(itr.second->GetSpellProto());
                 if (IsPositiveSpell(spell->Id))
@@ -1509,7 +1509,7 @@ namespace ai
                 if (((1 << spell->Dispel) & disMask) || ((1 << spell->Dispel) & poisMask))
                     wantsCure = true;
 
-                if (itr.second->HasMechanicMask(bleedType))
+                if (AuraHasMechanicMaskCompat(itr.second, bleedType))
                     wantsCure = true;
             }
             return wantsCure;

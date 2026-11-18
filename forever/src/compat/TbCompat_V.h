@@ -113,6 +113,24 @@ inline bool ForEachThreatenerCompat(Unit* me, Fn&& fn)
     return true;
 }
 
+// The same walk with the threat `me` has on each attacker's list: fn(attacker, threat). T `HostileReference::getThreat`, F
+// `ThreatReference::GetThreat` (ThreatManager.h:295, the amount plus the temporary modifier, never below 0). Added in R4M for
+// TellTargetAction (A), which printed the amount and was the last user of the HostileRefManager walk besides the commander.
+template <class Fn>
+inline bool ForEachThreatenerThreatCompat(Unit* me, Fn&& fn)
+{
+    ThreatManager const& threat = me->GetThreatManager();
+    if (!threat.IsThreateningAnyone(true))
+        return false;
+    for (auto const& entry : threat.GetThreatenedByMeList())
+    {
+        Unit* attacker = entry.second->GetOwner();
+        if (attacker && fn(attacker, entry.second->GetThreat()))
+            break;
+    }
+    return true;
+}
+
 // Is the creature immune to taunt. T template immunity flag, F the template's "no taunt" extra flag, the one Unit::TauntApply tests.
 inline bool CreatureTauntImmuneCompat(Creature const* creature)
 {

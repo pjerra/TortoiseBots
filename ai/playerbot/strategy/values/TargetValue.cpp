@@ -358,7 +358,7 @@ bool FindNonCcTargetStrategy::IsCcProtected(Unit* unit)
 
     Creature* creature = unit->ToCreature();
     if (creature)
-        state.combatSeconds = static_cast<long>(creature->GetCombatTime());
+        state.combatSeconds = static_cast<long>(CombatTimeCompat(creature));
     bool const inWindow = state.combatSeconds >= 0 && state.combatSeconds <= CcMarkHoldSeconds;
 
     Group::MemberSlotList const& groupSlot = group->GetMemberSlots();
