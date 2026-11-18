@@ -95,12 +95,8 @@ class ServerFacade
 
         bool IsInRoots(Unit *unit)
         {
-#ifdef MANGOS
-            return unit->HasAuraType(SPELL_AURA_MOD_ROOT);
-#endif
-#ifdef CMANGOS
-            return unit->HasAuraType(SPELL_AURA_MOD_ROOT);
-#endif
+            // The core's own answer: Unit::IsInRoots() on Turtle, Unit::HasRootAura() on ForeverCore (RootedCompat, R9).
+            return RootedCompat(unit);
         }
 
         bool IsCharmed(Unit *unit)

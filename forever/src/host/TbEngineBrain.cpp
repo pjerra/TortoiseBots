@@ -16,6 +16,7 @@
 // not compile after it, so this file logs with sLog.outString/outError, as the legacy code does.
 #include "compat/botpch_forever.h"
 
+#include <chrono>
 #include <exception>
 #include <filesystem>
 #include <memory>
@@ -82,11 +83,14 @@ std::string EnsureConfig()
     // Initialize() reads aiplayerbot.conf through the legacy `Config::SetSource` and the host's `sConfig`
     // (ai/playerbot/PlayerbotAIConfig.cpp:650-676), and returns false when there is no such file. ForeverCore's
     // ConfigMgr has neither: the adaptor belongs to package R4C (see SLICE1-R5-NOTES.md).
-    static bool attempted = false;
-    static std::string result;
-    if (attempted)
-        return result;
-    attempted = true;
+    //
+    // Only a success is remembered (R9): a missing conf file or a failed Initialize is tried again on the next call (the next
+    // brain, `.tb engine on`, a config reload), so fixing the file needs no restart. A failure never reaches the engine's half
+    // state: Initialize itself runs again from the top.
+    static bool ready = false;
+    if (ready)
+        return std::string();
+    std::string result;
 
     // The engine reads aiplayerbot.conf itself, from the directory of the worldserver.conf the server was started with
     // (PlayerbotAIConfig.cpp:650-658; findings item 19). The CMake CONFIGS list puts the .dist file in worldserver.conf.d, where
@@ -105,6 +109,7 @@ std::string EnsureConfig()
         result = "PlayerbotAIConfig::Initialize failed (no aiplayerbot.conf or AiPlayerbot.Enabled = 0; see the server log)";
     else if (!sPlayerbotAIConfig.enabled)
         result = "AiPlayerbot.Enabled is 0";
+    ready = result.empty();
     return result;
 }
 
@@ -144,16 +149,24 @@ Brain* Create(Player* bot, Player* master, std::string& error)
     PlayerbotAI* pai = nullptr;
     try
     {
+        auto const started = std::chrono::steady_clock::now();
+        auto const lap = [&started]() { return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count(); };
         pai = new PlayerbotAI(bot);
+        auto const constructedMs = lap();
         pai->SetMaster(master);
         // The engines were built before the master was known, so saved strategies and values are applied now (:41-44).
         pai->ResetStrategies();
+        auto const resetMs = lap();
         // The movement mode. The adapter re-applies the default (:45-49): "follow" for a master with a network session,
         // "wander" otherwise (GetDefaultMovementStrategy). A host master is whoever the console or the hire flow named; it is
         // a bot session when no client drives it, and the default would then pick "wander" (a free-roaming mode the slice does
         // not register). The host bound this master on purpose, so the bot follows it: the same strategy change the chat
         // order "follow" makes (SetMovementStrategy("follow")).
         pai->SetMovementStrategy("follow");
+        // How long the world thread was held (the `.tb perf` worst tick of an engine start): the constructor builds the context and the four engines,
+        // ResetStrategies applies the default strategies.
+        sLog.outString("TortoiseBots engine: brain of %s built in %lld ms (PlayerbotAI constructor %lld, strategies %lld, movement %lld)", bot->GetName().c_str(),
+            static_cast<long long>(lap()), static_cast<long long>(constructedMs), static_cast<long long>(resetMs - constructedMs), static_cast<long long>(lap() - resetMs));
     }
     catch (std::exception const& e)
     {
@@ -311,10 +324,10 @@ namespace TortoiseBots
 namespace engine
 {
 bool Built() { return false; }
-std::string EnsureConfig() { return "this build has no engine (TORTOISEBOTS_SLICE1 is off)"; }
+std::string EnsureConfig() { return "the engine is not built in (TORTOISEBOTS_SLICE1 is off)"; }
 Brain* Create(Player*, Player*, std::string& error)
 {
-    error = "this build has no engine (TORTOISEBOTS_SLICE1 is off)";
+    error = "the engine is not built in (TORTOISEBOTS_SLICE1 is off)";
     return nullptr;
 }
 void Tick(Brain*, uint32) {}

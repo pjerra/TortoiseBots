@@ -24,8 +24,10 @@ struct Brain;
 // True when this build contains the engine (TORTOISEBOTS_SLICE1).
 bool Built();
 
-// Loads the engine's own configuration (PlayerbotAIConfig) once, before the first brain. Safe to call again: only the
-// first call does the work and later calls return its result. Empty string = ready, else why the engine cannot run.
+// Loads the engine's own configuration (PlayerbotAIConfig) once, before the first brain (WorldScript::OnWorldInitialized
+// calls it when the engine is built in and the module is enabled, so the first bot does not pay for it). Safe to call again:
+// a success is remembered and later calls return at once; a failure is NOT remembered, the next call tries again (the next
+// brain, `.tb engine on`, a config reload). Empty string = ready, else why the engine cannot run.
 std::string EnsureConfig();
 
 // Builds the brain for a bot that is in the world and placed next to `master`: PlayerbotAI, master, default strategies,

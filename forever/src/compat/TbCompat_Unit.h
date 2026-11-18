@@ -564,6 +564,10 @@ inline bool IsWithinLOSCompat(WorldObject const* from, float x, float y, float z
 // "Is the unit under water". T Unit.h:679 IsUnderwater(), F Unit.h:1115 IsUnderWater() (the bot's ServerFacade has a member
 // IsUnderwater of its own, so the name cannot be a macro).
 inline bool IsUnderwaterCompat(Unit const* unit) { return unit->IsUnderWater(); }
+// "Is the unit rooted by an aura". T Unit.h:930 IsInRoots() (HasAuraType(SPELL_AURA_MOD_ROOT)); F has no IsInRoots, its own name for the question is
+// HasRootAura() (Unit.h:1108), which also counts SPELL_AURA_MOD_ROOT_2 and the gravity-less root (R9: the bot no longer carries a copy of the T body).
+// DIFFERENT ANSWER: a root of the two extra kinds reads as rooted on F.
+inline bool RootedCompat(Unit const* unit) { return unit->HasRootAura(); }
 
 // ---------------------------------------------------------------------------------------------------------------
 // 6. PATHS. T PathFinder (= PathInfo, Maps/PathFinder.h:146) and F PathGenerator (Movement/PathGenerator.h:63); the alias is in

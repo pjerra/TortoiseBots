@@ -1639,7 +1639,10 @@ bool WorldPosition::ClosestCorrectPoint(float maxRange, float maxHeight, uint32 
 
     dtNavMeshQuery const* query = NavMeshQueryCompat(getMapId(), instanceId);
 
-    MANGOS_ASSERT(query && query->getAttachedNavMesh());
+    // isMmapLoaded only tests that the mesh is loaded, not that a query object exists for the map: no query means no corrected point (R9: this was a
+    // MANGOS_ASSERT, which aborts the server on both cores when the query is missing).
+    if (!query || !query->getAttachedNavMesh())
+        return false;
 
     float curPoint[VERTEX_SIZE] = {y, z, x };
     float extend[VERTEX_SIZE] = { maxRange, maxHeight, maxRange };

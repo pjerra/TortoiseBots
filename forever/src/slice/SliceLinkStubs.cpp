@@ -56,8 +56,12 @@
 #include "playerbot/strategy/values/ItemUsageValue.h"
 #include "playerbot/strategy/values/MountValues.h"
 #include "playerbot/strategy/values/WorldPvpSeekChecks.h"
+#include "playerbot/policy/combat/TauntHeldTargetPolicy.h"
 
+#include <algorithm>
 #include <atomic>
+#include <cfloat>
+#include <cmath>
 #include "GameTime.h"
 
 namespace
@@ -119,14 +123,24 @@ BossTacticsScanScope::BossTacticsScanScope() {}
 BossTacticsScanScope::~BossTacticsScanScope() {}
 bool AoeTauntStillNeeded(PlayerbotAI*, Player*) { NoteBoss(); return false; }
 bool AreaTauntRefusedByPost(PlayerbotAI*, Player*, const char*) { NoteBoss(); return false; }
-bool ClampMoveToBossAnchor(PlayerbotAI*, Player*, float&, float&, float&) { NoteBoss(); return false; }
+// R9: the real function answers true when there is no live anchor row (the move is allowed, the point is left as it is); false means "the clamped
+// point has no floor", which refuses the move. There is never an anchor here.
+bool ClampMoveToBossAnchor(PlayerbotAI*, Player*, float&, float&, float&) { NoteBoss(); return true; }
 bool DispelCastBlocked(PlayerbotAI*, Unit*, std::uint32_t) { NoteBoss(); return false; }
 BossStandTarget FindBossStand(PlayerbotAI*, Player*) { NoteBoss(); return BossStandTarget{}; }
 TankPostHealDuty FindTankPostHealDuty(PlayerbotAI*, Player*) { NoteBoss(); return TankPostHealDuty{}; }
 std::uint32_t GateHoldFighters(PlayerbotAI*, std::uint32_t, float) { NoteBoss(); return 0; }
-// "Whether a healer may top up the target": with no boss row the Turtle answer is today's mana rule; the slice's healer path is
-// not reached by a warrior, and true (no reserve refuses) is the permissive end of it.
-bool HealTopUpAllowedFor(PlayerbotAI*, Player*, Unit*) { NoteBoss(); return true; }
+// "Whether a healer may top up the target": with no boss row (no live heal reserve) the real answer is today's mana rule, `mana >= mediumMana`
+// (BossTacticsActions.cpp:9550), not "yes" (R9: the old stand-in answered true at any mana).
+bool HealTopUpAllowedFor(PlayerbotAI* ai, Player* bot, Unit*)
+{
+    NoteBoss();
+    if (!ai || !bot)
+        return true;
+    std::uint8_t const mediumManaPct = static_cast<std::uint8_t>(std::min<std::uint32_t>(100, sPlayerbotAIConfig.mediumMana));
+    AiObjectContext* context = ai->GetAiObjectContext();
+    return AI_VALUE2(std::uint8_t, "mana", "self target") >= mediumManaPct;
+}
 bool HealReserveRefusesTopUp(PlayerbotAI*, Player*, Unit*, float) { NoteBoss(); return false; }
 std::uint32_t HoldKillBlockers(PlayerbotAI*, std::uint32_t) { NoteBoss(); return 0; }
 bool IsDpsHeld(PlayerbotAI*, Player*, Unit*, DpsHoldTrigger*) { NoteBoss(); return false; }
@@ -144,7 +158,20 @@ std::uint64_t SoleKillGuid(PlayerbotAI*, std::uint32_t) { NoteBoss(); return 0; 
 bool TankIgnoresTarget(PlayerbotAI*, Player*, Unit*) { NoteBoss(); return false; }
 std::uint64_t TankPostLatchedUnit(Player*) { NoteBoss(); return 0; }
 bool TauntRefusedByGate(PlayerbotAI*, Player*, Unit*, const char*) { NoteBoss(); return false; }
-bool TauntTargetHeldByOtherTank(Player*, Unit*) { NoteBoss(); return false; }
+// Not boss logic (R9): the real body (BossTacticsActions.cpp:6865) is a victim check through the shared policy; a taunt stands down when another tank holds the target.
+bool TauntTargetHeldByOtherTank(Player* bot, Unit* target)
+{
+    NoteBoss();
+    if (!bot || !target)
+        return false;
+    Unit* victim = target->GetVictim();
+    Player* victimPlayer = victim ? victim->ToPlayer() : nullptr;
+    TauntHeldInputs in;
+    in.victimIsPlayer = victimPlayer != nullptr;
+    in.victimIsSelf = victimPlayer == bot;
+    in.victimIsTank = victimPlayer && PlayerbotAI::IsTank(victimPlayer);
+    return TauntStandsDownForTank(in);
+}
 
 // The multipliers the slice's combat strategies push (CombatStrategy.cpp, DungeonStrategy.cpp, AvoidAoeStrategy): 1.0 = no change.
 // The engine evaluates every multiplier for every action candidate on every tick, so counting them made them the hottest boss-tactics
@@ -156,7 +183,9 @@ float TrapHoldMultiplier::GetValue(Action*) { return 1.0f; }
 bool FankrissBlocksAoe(PlayerbotAI*, uint32) { NoteBoss(); return false; }
 bool FankrissBurnSpawn(PlayerbotAI*, Unit*) { NoteBoss(); return false; }
 bool FankrissDpsMayAttack(PlayerbotAI*, Unit*) { NoteBoss(); return true; }   // "may attack": no Fankriss rule forbids it
-bool FankrissHealReachable(PlayerbotAI*, Unit*) { NoteBoss(); return true; }  // "reachable": no Fankriss rule says otherwise
+// The real function is a plain reach check (alive, in map, hurt, friendly, a heal in range), not a boss rule; its only caller here is behind FankrissHealingActive (false),
+// and "not reachable" is the answer that does less (R9: was true).
+bool FankrissHealReachable(PlayerbotAI*, Unit*) { NoteBoss(); return false; }
 bool FankrissHealingActive(PlayerbotAI*) { NoteBoss(); return false; }
 Unit* GetAssignedFankrissSpawnTankTarget(PlayerbotAI*) { NoteBoss(); return nullptr; }
 Unit* GetAssignedFankrissTankTarget(PlayerbotAI*) { NoteBoss(); return nullptr; }
@@ -196,7 +225,7 @@ bool IsSolniusAdd(Unit*) { NoteBoss(); return false; }
 
 // ThreatStrategy.cpp, PositionAction.cpp
 bool ThreatResetHolds(PlayerbotAI*, Player*, Unit*) { NoteBoss(); return false; }
-bool StayWalkDueNow(PlayerbotAI*, Player*, PositionEntry const&) { NoteBoss(); return false; }
+// StayWalkDueNow is the shared stay-walk rule and is no longer a stand-in (R9): PositionAction.cpp is in the slice.
 
 // =====================================================================================================================
 // Startup tables of other managers. Owner files: GuildOrderSources.cpp, GuildOrderEnchants.cpp. Nothing is built.
@@ -224,7 +253,21 @@ uint32 EmoteActionBase::GetNumberOfEmoteVariants(TextEmotes, uint8, uint8) { Not
 // MountValues.cpp
 bool MountValue::IsMountSpell(uint32) { NoteMisc(); return false; }
 // GrindTargetValue.cpp: "an instance target may be ground": no.
-bool GrindTargetValue::IsAllowedInstanceTarget(PlayerbotAI*, Unit*) { NoteMisc(); return false; }
+// The real rule (GrindTargetValue.cpp:39): outside a grouped dungeon with a real player master every target is allowed. Inside one only a target the group
+// ordered (explicit attack target) is; the real rest (marked targets, the group's own threat and victim links) is not ported, so it answers "no" (less).
+bool GrindTargetValue::IsAllowedInstanceTarget(PlayerbotAI* ai, Unit* target)
+{
+    NoteMisc();
+    if (!target)
+        return false;
+    Player* bot = ai->GetBot();
+    Group* group = bot->GetGroup();
+    Player* master = ai->GetMaster();
+    if (!group || !ai->HasRealPlayerMaster() || !master || master->GetGroup() != group || !bot->IsInWorld() || !bot->GetMap()->IsDungeon())
+        return true;
+    AiObjectContext* context = ai->GetAiObjectContext();
+    return AI_VALUE(ObjectGuid, "explicit attack target") == target->GetObjectGuid();
+}
 // UseMeetingStoneAction.cpp: no spot found beside the summoner.
 bool SummonAction::FindSpotBeside(Player*, Player*, float, float, float&, float&, float&) { NoteMisc(); return false; }
 // ItemUsageValue.cpp: the reagent and vendor tables are not built.
@@ -232,15 +275,31 @@ void ItemUsageValue::PopulateProfessionReagentIds() { NoteItems(); }
 void ItemUsageValue::PopulateReagentItemIdsForCraftableItemIds() { NoteItems(); }
 void ItemUsageValue::PopulateSoldByVendorItemIds() { NoteItems(); }
 // EnemyPlayerValue.cpp, WorldPvpSeekChecks.cpp: no open-world PvP seeking.
-float EnemyPlayerValue::GetMaxAttackDistance(Player*) { NoteMisc(); return 0.0f; }
+// The real answer outside a battleground is 60 yd (EnemyPlayerValue.cpp:276). In one the real values are 40 (10 late in Alterac Valley); battlegrounds are
+// not ported, so the shortest of them answers (less).
+float EnemyPlayerValue::GetMaxAttackDistance(Player* bot) { NoteMisc(); return bot && bot->InBattleground() ? 10.0f : 60.0f; }
 bool WorldPvpSeekChecks::IsSeeking(PlayerbotAI*, Player*) { NoteMisc(); return false; }
 bool WorldPvpSeekChecks::IsSeekTarget(PlayerbotAI*, Player*, Player*) { NoteMisc(); return false; }
 
-// ChatFilter.cpp: the chain keeps no filter, a line is returned as it comes.
-std::string ChatFilter::Filter(std::string message, std::string) { NoteFilters(); return message; }
+// ChatFilter.cpp: the base filter is the real body (ChatFilter.cpp:11, it strips the "@..." prefix). The chain of role, class, race, rti, level and group filters
+// is not ported, so a line that opens with "@" (a command for a role or a group the bot cannot check) is refused (R9): the empty text means "not for this bot".
+// Any other line is returned as it comes, as the real chain does for a line no filter touches.
+std::string ChatFilter::Filter(std::string message, std::string filter)
+{
+    NoteFilters();
+    if (message.find("@") == std::string::npos)
+        return message;
+    if (filter.empty())
+        return message.substr(message.find(" ") + 1);
+    return message.substr(message.find(filter) + filter.size() + 1);
+}
 CompositeChatFilter::CompositeChatFilter(PlayerbotAI* ai) : ChatFilter(ai) {}
 CompositeChatFilter::~CompositeChatFilter() {}
-std::string CompositeChatFilter::Filter(std::string message) { NoteFilters(); return message; }
+std::string CompositeChatFilter::Filter(std::string message)
+{
+    NoteFilters();
+    return !message.empty() && message[0] == '@' ? std::string() : message;
+}
 
 // FleeManager.cpp: no destination is found, no mob veto.
 IdleMobVeto::IdleMobVeto(PlayerbotAI*, Player*, std::list<ObjectGuid> const&, Unit*, float) { NoteFlee(); }
@@ -269,16 +328,31 @@ void TravelMgr::LoadQuestTravelTable() { NoteTravel(); }
 void TravelMgr::LoadTaxiNodeZones() { NoteTravel(); }
 int32 TravelMgr::GetAreaLevel(uint32) { NoteTravel(); return 0; }
 void TravelMgr::SetNullTravelTarget(TravelTarget*) const { NoteTravel(); }
-void TravelMgr::CollectMapTransferPortals(const WorldPosition&, uint32, std::vector<std::pair<WorldPosition, float>>&) const { NoteTravel(); }
-// Distance across a map change: "no portal known" is the length of a direct line is not knowable; 0 keeps the plain distance.
-float TravelMgr::MapTransDistance(const WorldPosition&, const WorldPosition&, bool) const { NoteTravel(); return 0.0f; }
+// The real function clears the out list; on the same map the start itself is the one "portal" at distance 0; otherwise the transfer table answers, and it is empty.
+void TravelMgr::CollectMapTransferPortals(const WorldPosition& start, uint32 endMapId, std::vector<std::pair<WorldPosition, float>>& outPortals) const
+{
+    NoteTravel();
+    outPortals.clear();
+    if (start.GetMapId() == endMapId)
+        outPortals.emplace_back(start, 0.0f);
+}
+// The real distance (TravelMgr.cpp:3644): on one map the flat distance, across maps the distance through the nearest known transfer, FLT_MAX when there is
+// none. No transfer table is built here, so every cross-map distance is FLT_MAX (R9: 0.0f made it read "right here", 53 call sites).
+float TravelMgr::MapTransDistance(const WorldPosition& start, const WorldPosition& end, bool) const
+{
+    NoteTravel();
+    if (start.GetMapId() == end.GetMapId())
+        return std::sqrt(start.sqDistance2d(end));
+    return FLT_MAX;
+}
 
 TravelTarget::TravelTarget(PlayerbotAI* ai) : AiObject(ai) { NoteTravel(); }
 TravelTarget::~TravelTarget() {}
 bool TravelTarget::IsActive() { NoteTravel(); return false; }
 void TravelTarget::SetStatus(TravelStatus) { NoteTravel(); }
 
-WorldPosition TravelNodeMap::getMapOffset(uint32) { NoteTravel(); return WorldPosition(); }
+// The real answer with no stored offset: the map with a zero position.
+WorldPosition TravelNodeMap::getMapOffset(uint32 mapId) { NoteTravel(); return WorldPosition(mapId, 0, 0, 0, 0); }
 TravelPath TravelNodeMap::getFullPath(WorldPosition, WorldPosition, Unit*) { NoteTravel(); return TravelPath(); }
 void TravelPath::ClipPath(PlayerbotAI*, Unit*, bool, PackHoldResult*) { NoteTravel(); }
 bool TravelPath::UpcommingSpecialMovement(WorldPosition, float, bool) { NoteTravel(); return false; }
@@ -308,14 +382,25 @@ uint32 RandomItemMgr::GetStatWeight(uint32, uint32) { NoteItems(); return 0; }
 uint32 RandomItemMgr::GetPlayerSpecId(Player*) { NoteItems(); return 0; }
 uint32 RandomItemMgr::GetFood(uint32, uint32, uint32) { NoteItems(); return 0; }
 
-// The bot text lookups answer the text name itself (an empty text would make the caller say nothing; the name is at least
-// visible in a log). The locale priority is "none".
+// With no text table the real GetBotText(name) answers the empty text (PlayerbotTextMgr.cpp:65; R9: the old stand-in answered the key, so a bot whispered raw
+// keys such as "hello"); every caller of it skips an empty text. The placeholder form falls back to the name with the placeholders replaced, as the real one does.
+// The locale priority is "none".
 PlayerbotTextMgr::PlayerbotTextMgr() {}
 PlayerbotTextMgr::~PlayerbotTextMgr() {}
 void PlayerbotTextMgr::LoadBotTexts() { NoteTexts(); }
-std::string PlayerbotTextMgr::GetBotText(std::string name) { NoteTexts(); return name; }
-std::string PlayerbotTextMgr::GetBotText(std::string name, std::map<std::string, std::string>) { NoteTexts(); return name; }
-int32 PlayerbotTextMgr::GetLocalePriority() { return 0; }
+std::string PlayerbotTextMgr::GetBotText(std::string) { NoteTexts(); return std::string(); }
+std::string PlayerbotTextMgr::GetBotText(std::string name, std::map<std::string, std::string> placeholders)
+{
+    NoteTexts();
+    std::string text = std::move(name);
+    for (auto const& placeholder : placeholders)
+        for (std::size_t at = text.find(placeholder.first); at != std::string::npos && !placeholder.first.empty(); at = text.find(placeholder.first, at + placeholder.second.size()))
+            text.replace(at, placeholder.first.size(), placeholder.second);
+    return text;
+}
+// -1 = no locale has priority: the default (English) text and names. (The real function answers -1 too whenever a real player is online and no text locale was counted;
+// it answers 0 only when no session is online, and index 0 is a real client locale, never "none".) R9: was 0.
+int32 PlayerbotTextMgr::GetLocalePriority() { return -1; }
 
 PlayerbotHelpMgr::PlayerbotHelpMgr() {}
 PlayerbotHelpMgr::~PlayerbotHelpMgr() {}

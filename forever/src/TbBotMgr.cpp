@@ -44,7 +44,7 @@ void BotMgr::LoadConfig()
     _engineByDefault = sConfigMgr->GetBoolDefault("TortoiseBots.Slice.EngineByDefault", false);
     if (_engineByDefault && !engine::Built())
     {
-        TC_LOG_WARN("tortoisebots", "BotMgr: TortoiseBots.Slice.EngineByDefault is 1 but this build has no engine (TORTOISEBOTS_SLICE1 is off); bots use the spike behaviour");
+        TC_LOG_WARN("tortoisebots", "BotMgr: TortoiseBots.Slice.EngineByDefault is 1 but the engine is not built in (TORTOISEBOTS_SLICE1 is off); bots use the spike behaviour");
         _engineByDefault = false;
     }
 }
@@ -209,7 +209,7 @@ std::string BotMgr::SetEngine(ObjectGuid characterGuid, bool on)
     if (on)
     {
         if (!engine::Built())
-            return "this build has no engine (TORTOISEBOTS_SLICE1 is off)";
+            return "the engine is not built in (TORTOISEBOTS_SLICE1 is off)";
         // Marked again after a failure: try to build the brain once more.
         bot.useEngine = true;
         bot.engineFailed = false;
@@ -268,7 +268,23 @@ void BotMgr::OnPlayerLogout(Player* player)
     // PlayerScript::OnLogout runs inside WorldSession::LogoutPlayer, before the Player is deleted: the last point at
     // which the engine can still be taken down in the order the legacy code requires. Covers the logouts the core
     // starts by itself as well as ours.
-    auto itr = _bots.find(player->GetGUID());
+    ObjectGuid const leaving = player->GetGUID();
+
+    // The bots whose MASTER is the player logging out (R9, findings R1'): their engines hold a pointer to it (the engine re-checks it by guid
+    // every tick, so it is safe today; this is the defence). Take each brain down and the bot out of the world with it, and clear the host's
+    // master (the guid every later Think reads), so nothing builds a brain on a master that is going away. The bot's own logout then
+    // runs through its session as a normal one (a bot that leaves leaves its party in the branch below).
+    for (auto& [guid, bot] : _bots)
+    {
+        if (guid == leaving || bot.master != leaving)
+            continue;
+        DropBrain(bot);
+        bot.master = ObjectGuid::Empty;
+        bot.wantParty = false;
+        bot.session->RequestLogout("the master left the game");
+    }
+
+    auto itr = _bots.find(leaving);
     if (itr == _bots.end())
         return;
     DropBrain(itr->second);
@@ -443,7 +459,9 @@ void BotMgr::Update(uint32 diff)
         // The engine brain: every tick, with the tick's diff (PlayerbotAIBase::UpdateAI keeps its own delay). World
         // thread, from WorldScript::OnBeforeMapsUpdate, i.e. before the maps update; the legacy engine takes no map
         // lock and expects none (SLICE1-R5-NOTES.md). Think may have dropped the brain or sent the bot on a teleport.
-        if (bot.brain && !me->IsBeingTeleported())
+        // Not in the update in which its logout was requested or its master was lost (R9): Think may have asked for the logout above, and
+        // the brain is gone by then.
+        if (bot.brain && !bot.session->LogoutRequested() && !me->IsBeingTeleported())
             engine::Tick(bot.brain.get(), diff);
     }
 
@@ -466,7 +484,9 @@ void BotMgr::Think(Bot& bot, Player* me)
     Player* master = ObjectAccessor::FindPlayer(bot.master);
     if (!master)
     {
-        // Master gone (logged out or on a loading screen for a long time is handled by the caller's next ticks).
+        // Master gone (logged out or on a loading screen for a long time is handled by the caller's next ticks). The engine goes with it
+        // (R9): a brain is never kept, and never ticked, while its master is not in the world.
+        DropBrain(bot);
         if (!ObjectAccessor::FindConnectedPlayer(bot.master))
             bot.session->RequestLogout("the master left the game");
         return;

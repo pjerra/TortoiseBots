@@ -131,6 +131,8 @@ inline uint32 TotalTalentPointsCompat(Player* bot)
     return uint32(pts * sWorld.getConfig(CONFIG_FLOAT_RATE_TALENT));
 }
 inline uint32 FreeTalentPointsCompat(Player* bot) { return bot->GetFreeTalentPoints(); }
+// Whether the premade talent specs of the config are read and checked (R9). Always on this core; on ForeverCore they are not ported (one summary line).
+inline bool PremadeSpecsPortedCompat() { return true; }
 template <class Tab>
 inline int TalentTabPageCompat(Tab const* tab) { return tab->tabpage; }
 
@@ -402,6 +404,9 @@ inline bool TaxiDestinationCompat(Player* player, uint32& mapId, float& x, float
     z = tEnd->z;
     return true;
 }
+
+// The position a player reads on the zone map (T `Map2ZoneCoordinates`; ForeverCore: the UI map position, forever/src/compat/TbCompat_Unported.cpp).
+inline void Map2ZoneCoordinatesCompat(float& x, float& y, uint32 zone) { Map2ZoneCoordinates(x, y, zone); }
 
 inline dtNavMeshQuery const* NavMeshQueryCompat(uint32 mapId, uint32 /*instanceId*/ = 0)
 {

@@ -4,6 +4,7 @@
 #include "TbCompat_Unported.h"
 
 #include "Log.h"
+#include "DB2Stores.h"
 #include "MMapManager.h"
 
 #include <array>
@@ -17,6 +18,14 @@
 dtNavMeshQuery const* NavMeshQueryCompat(uint32 mapId, uint32 instanceId)
 {
     return MMAP::MMapManager::instance()->GetNavMeshQuery(mapId, mapId, instanceId);
+}
+
+// TbCompat_Unported.h: the position a player reads on the zone map. T `Map2ZoneCoordinates(x, y, zone)` (DBCStores.cpp:556, the old world map area
+// rectangle); F `DB2Manager::Map2ZoneCoordinates(area, x, y)` (DB2Stores.cpp:3551, the UI map position 0 to 100, which leaves x and y alone when the area
+// has no UI map). DIFFERENT ANSWER, display only: the numbers of the stay position the bot tells its master.
+void Map2ZoneCoordinatesCompat(float& x, float& y, uint32 zone)
+{
+    sDB2Manager.Map2ZoneCoordinates(zone, x, y);
 }
 
 // TbCompat_Unported.h: printf into a std::string, the way the Turtle core's PQuery formats a query.

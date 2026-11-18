@@ -18,7 +18,7 @@ void TellPosition(PlayerbotAI* ai, Player* requester, std::string name, ai::Posi
     if (pos.isSet())
     {
         float x = pos.x, y = pos.y;
-        Map2ZoneCoordinates(x, y, ai->GetBot()->getZoneId());
+        Map2ZoneCoordinatesCompat(x, y, ZoneIdCompat(ai->GetBot()));
         out << " is set to " << x << "," << y;
     }
     else
@@ -167,7 +167,7 @@ bool SetReturnPositionAction::Execute(Event& event)
              z = bot->getPositionZ();
         bot->UpdateAllowedPositionZ(x, y, z);
 
-        if (!bot->IsWithinLOS(x, y, z, true))
+        if (!IsWithinLOSCompat(bot, x, y, z, true))
             return false;
 
         randomPos.Set(x, y, z, bot->GetMapId());

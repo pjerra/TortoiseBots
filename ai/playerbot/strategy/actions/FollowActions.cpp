@@ -601,16 +601,19 @@ bool FleeToMasterAction::Execute(Event& event)
     else if (distance < sPlayerbotAIConfig.reactDistance * 3)
     {
         if (!urand(0, scale))
-            ai->TellPlayerNoFacing(requester, BOT_TEXT("wait_travel_close"), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+            if (std::string const text = BOT_TEXT("wait_travel_close"); !text.empty())   // no text table: say nothing
+                ai->TellPlayerNoFacing(requester, text, PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
     }
     else if (distance < 1000)
     {
         if (!urand(0, scale*4))
-            ai->TellPlayerNoFacing(requester, BOT_TEXT("wait_travel_medium"), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+            if (std::string const text = BOT_TEXT("wait_travel_medium"); !text.empty())   // no text table: say nothing
+                ai->TellPlayerNoFacing(requester, text, PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
     }
     else
         if (!urand(0, scale*6))
-            ai->TellPlayerNoFacing(requester, BOT_TEXT("wait_travel_medium"), PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
+            if (std::string const text = BOT_TEXT("wait_travel_medium"); !text.empty())   // no text table: say nothing
+                ai->TellPlayerNoFacing(requester, text, PlayerbotSecurityLevel::PLAYERBOT_SECURITY_ALLOW_ALL, false);
 
     SetDuration(3000U);
     return true;

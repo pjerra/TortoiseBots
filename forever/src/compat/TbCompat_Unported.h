@@ -247,6 +247,15 @@ inline void SetFallInformationCompat(Player* /*player*/, float /*z*/) { tbcompat
 // spend. Failure value: 0 ("no talent points"), so nothing is spent.
 inline uint32 TotalTalentPointsCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::Talents); return 0; }
 inline uint32 FreeTalentPointsCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::Talents); return 0; }
+// Whether the premade talent specs of the config are read and checked (R9). They are not ported: the talent tables behind TalentSpec are stand-ins that
+// refuse every link, which printed an error per configured spec at init. The config load asks this once, skips the spec loop and the line below is the
+// whole report (one line, no flood). Failure value: false.
+inline bool PremadeSpecsPortedCompat()
+{
+    tbcompat::Unported(tbcompat::Feature::TalentSpecs);
+    sLog.outString("TortoiseBots: premade talent specs are not ported (no spec is read, no talent is chosen)");
+    return false;
+}
 // The tab page of a talent tab row (T `tabpage`). The row type is only declared here. Failure value: page 0.
 template <class Tab>
 inline int TalentTabPageCompat(Tab const* /*tab*/) { tbcompat::Unported(tbcompat::Feature::Talents); return 0; }
@@ -301,12 +310,36 @@ inline bool UseGameObjectCompat(Player* /*bot*/, GameObject* /*object*/) { tbcom
 template <class AI>
 inline bool HasThrownSkillCompat(AI* /*ai*/) { tbcompat::Unported(tbcompat::Feature::Skills); return false; }
 
-// Creature immunity masks (T `CreatureInfo::school_immune_mask` / `mechanic_immune_mask`). Failure value: 0 ("immune to nothing").
-inline uint32 CreatureSchoolImmuneMaskCompat(CreatureInfo const* /*info*/) { tbcompat::Unported(tbcompat::Feature::CreatureImmunity); return 0; }
-inline uint32 CreatureMechanicImmuneMaskCompat(CreatureInfo const* /*info*/) { tbcompat::Unported(tbcompat::Feature::CreatureImmunity); return 0; }
+// PROPER (R9): the creature template's immunity masks. T keeps them as two masks on the template (`CreatureInfo::school_immune_mask`, bit
+// `1 << school`; `mechanic_immune_mask`, bit `1 << (mechanic - 1)`, Creature.cpp:2172). F keeps them in a CreatureImmunities row that the template names
+// (`CreatureTemplate::CreatureImmunitiesId`, CreatureData.h:533; the row is `SpellMgr::GetCreatureImmunities(id)`, SpellMgr.h:566 / :750) and
+// `Creature::LoadTemplateImmunities` (Creature.cpp:2540) applies as the creature's school (`1 << school`) and mechanic (index = the Mechanics value)
+// immunities. The helpers rebuild T's two masks from that row, so the school gate (`SpellSchoolImmune`) and the stun selection
+// (`StunMechanicImmune`, bit MECHANIC_STUN - 1) read what they read on T. A template with no row is immune to nothing, as on T.
+inline uint32 CreatureSchoolImmuneMaskCompat(CreatureInfo const* info)
+{
+    CreatureImmunities const* const immunities = info ? SpellMgr::GetCreatureImmunities(info->CreatureImmunitiesId) : nullptr;
+    uint32 mask = 0;
+    if (immunities)
+        for (std::size_t school = 0; school < immunities->School.size() && school < 32; ++school)
+            if (immunities->School[school])
+                mask |= 1u << school;
+    return mask;
+}
+inline uint32 CreatureMechanicImmuneMaskCompat(CreatureInfo const* info)
+{
+    CreatureImmunities const* const immunities = info ? SpellMgr::GetCreatureImmunities(info->CreatureImmunitiesId) : nullptr;
+    uint32 mask = 0;
+    if (immunities)
+        for (std::size_t mechanic = 1; mechanic < immunities->Mechanic.size() && mechanic <= 32; ++mechanic)
+            if (immunities->Mechanic[mechanic])
+                mask |= 1u << (mechanic - 1);
+    return mask;
+}
 
-// Whether a player is a hidden GM (T `GetVisibility() == VISIBILITY_OFF`). Failure value: false ("not hidden").
-inline bool PlayerHiddenGmCompat(Player* /*player*/) { tbcompat::Unported(tbcompat::Feature::GmVisibility); return false; }
+// PROPER (R9): whether a player is a hidden GM. T `GetVisibility() == VISIBILITY_OFF` (`.gm visible off`); F `.gm visible off` sets
+// PLAYER_EXTRA_GM_INVISIBLE, which `isGMVisible()` reads (Player.h:1340).
+inline bool PlayerHiddenGmCompat(Player* player) { return !player->isGMVisible(); }
 
 // The heal one effect of a spell would do for the bot (T: CalculateSpellDamage then SpellHealingBonusDone, 0 when the base is not
 // positive). Failure value: 0 ("this effect heals nothing"); the caller skips a spell that heals nothing.
@@ -433,6 +466,9 @@ inline bool TaxiDestinationCompat(Player* /*player*/, uint32& /*mapId*/, float& 
 // map and instance id, so the map's own id is passed for the first two, as the continents and TbCompat_C.cpp do). nullptr when no mesh
 // is loaded for it. Defined in TbCompat_Unported.cpp (the MMapManager header is not in the pre-included set).
 dtNavMeshQuery const* NavMeshQueryCompat(uint32 mapId, uint32 instanceId = 0);
+// The position a player reads on the zone map (T `Map2ZoneCoordinates`, F `DB2Manager::Map2ZoneCoordinates`: the UI map position). Defined in TbCompat_Unported.cpp.
+// DIFFERENT ANSWER, display only.
+void Map2ZoneCoordinatesCompat(float& x, float& y, uint32 zone);
 // The navmesh-island probe (MovementAction's ProbePlaceUnstickIsolated) needs the core's own walkable-poly pick (T
 // `PathInfo::FindWalkPoly`), which F's PathGenerator has no call for; the probe's query and poly pick are NOT proper. Failure values:
 // nullptr (the probe then answers "not isolated": no unstick teleport) and the invalid poly ref 0.
@@ -476,10 +512,11 @@ inline void ReleaseLootIfFarCompat(Player* /*bot*/, GuidPos& lootObject, bool /*
 // (MSG_MOVE_SET_FACING from the mover) has nothing left to do.
 inline void BroadcastFacingCompat(Player* /*bot*/) {}
 
-// Whether a bot may enter an area trigger's map (instance full, encounter in progress, bound to another save). Failure value: true
-// ("no restriction known": the dungeon is treated as unbound, ForeverCore's own teleport checks still apply).
+// Whether a bot may enter an area trigger's map (instance full, encounter in progress, bound to another save). Failure value (R9): false
+// ("may not"): the lock checks are not ported, so the bot does not walk into an instance on its own (it was true, "no restriction known").
+// Only random bots ask (PlayerbotAI::CanEnterArea), and a host bot is never one.
 template <class Area>
-inline bool CanEnterAreaCompat(Player* /*bot*/, Area const* /*area*/) { tbcompat::Unported(tbcompat::Feature::InstanceBind); return true; }
+inline bool CanEnterAreaCompat(Player* /*bot*/, Area const* /*area*/) { tbcompat::Unported(tbcompat::Feature::InstanceBind); return false; }
 
 // PROPER: take the bot off its mount. T removes the mount auras, unmounts and recomputes the run speed (forced and not); F's
 // Dismount() and a speed update do the same.
@@ -541,7 +578,8 @@ inline void SendAddonChatCompat(Facade& /*facade*/, Player* /*from*/, Player* /*
 
 // Party portal game objects (the mage portal the bot follows). Failure values: not a portal object / not blocked / cannot interact.
 inline bool PartyPortalSpellOfObjectCompat(GameObject* /*go*/, uint32& /*spellId*/) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return false; }
-inline bool GameObjectNoInteractCompat(GameObject* /*go*/) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return false; }
+// R9: "blocked" (true) when the flag cannot be read: the original answers true for an object the bot may not touch, so an unknown object is not touched.
+inline bool GameObjectNoInteractCompat(GameObject* /*go*/) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return true; }
 inline bool GameObjectCanInteractCompat(Player* /*bot*/, GameObject* /*go*/) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return false; }
 inline void SendGameObjectUseCompat(Player* /*bot*/, GameObject* /*go*/) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); }
 

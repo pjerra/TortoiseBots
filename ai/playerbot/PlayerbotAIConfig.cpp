@@ -2121,9 +2121,14 @@ void PlayerbotAIConfig::LoadTalentSpecs()
 
     uint32 maxSpecLevel = 0;
 
+    // ForeverCore: the premade specs are not ported (one summary line, not one error per configured spec, and no spec is read). Turtle: always true.
+    bool const premadeSpecsPorted = PremadeSpecsPortedCompat();
+
     for (uint32 cls = 1; cls < MAX_CLASSES; ++cls)
     {
         classSpecs[cls] = ClassSpecs(1 << (cls - 1));
+        if (!premadeSpecsPorted)
+            continue;
         for (uint32 spec = 0; spec < 10; ++spec)
         {
             std::ostringstream os; os << "AiPlayerbot.PremadeSpecName." << cls << "." << spec;
@@ -2179,7 +2184,11 @@ void PlayerbotAIConfig::LoadTalentSpecs()
         }
     }
 
-    if (classSpecs[1].talentPath.empty())
+    if (!premadeSpecsPorted)
+    {
+        // said once by PremadeSpecsPortedCompat
+    }
+    else if (classSpecs[1].talentPath.empty())
         sLog.outErrorDb("No premade specs found!!");
     else
     {

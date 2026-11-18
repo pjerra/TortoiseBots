@@ -34,6 +34,13 @@ list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/(slice/[^/]*|host/TbHost
 # module. OFF (the default) leaves the module exactly as it was: nothing below this option runs.
 option(TORTOISEBOTS_SLICE1 "Also build the slice-1 legacy bot engine (forever/SLICE1.txt)" OFF)
 
+# The option-OFF build is the spike plus the item and spell mirrors and nothing more (R9, findings R12): the compat sources that only the engine
+# needs (the R4C helpers, the legacy ini reader, the unported-feature counters) are not compiled into it. TbScripts.cpp and TbEngineBrain.cpp
+# answer `.tb engine` / `.tb unported` with "the engine is not built in" and never name them without the option.
+if(NOT TORTOISEBOTS_SLICE1)
+  list(FILTER PRIVATE_SOURCES EXCLUDE REGEX "/forever/src/compat/(TbCompat_C|TbCompat_Config|TbCompat_Unported)\\.cpp$")
+endif()
+
 add_library(tortoisebots STATIC ${PRIVATE_SOURCES})
 
 target_include_directories(tortoisebots

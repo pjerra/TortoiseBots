@@ -97,6 +97,11 @@ inline std::vector<std::pair<uint32, uint32>> VisibleAuraSlotsCompat(Unit const*
 
 // Item classes: the count the AhBot tables are sized with (see forever/src/compat/TbCompat_C.h).
 inline constexpr uint32 LegacyItemClassCountCompat = MAX_ITEM_CLASS;
+// The two guards the AhBot price tables had on Turtle (R5, R9): the pricing policy's own sizes equal the core's item class and quality counts here.
+// (ForeverCore's counts are 21 and 8, which is why the tables use the policy's sizes; the guards belong to this side.)
+#include "../runtime/policy/ah/AhBotPricingPolicy.h"
+static_assert(ai::kAhBotPriceMaxItemClass == MAX_ITEM_CLASS, "AhBot price table class count must match MAX_ITEM_CLASS");
+static_assert(ai::kAhBotPriceMaxItemQuality == MAX_ITEM_QUALITY, "AhBot price table quality count must match MAX_ITEM_QUALITY");
 
 // Factions and reputation.
 inline uint32 FactionOfTemplateCompat(FactionTemplateEntry const* faction) { return faction->faction; }

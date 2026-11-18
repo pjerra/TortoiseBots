@@ -1,8 +1,10 @@
 // Script registration for the module: the world tick, the config load and the `.tb` chat commands.
 #include "TbBotMgr.h"
 #include "compat/TbItemPrototype.h"
+#ifdef TORTOISEBOTS_SLICE1      // the engine's unported-feature counters exist only in the build that has the engine (R9)
 #define TB_UNPORTED_TABLE_ONLY 1   // the table of unported features without the helpers that need the core's types (R6A, R6B)
 #include "compat/TbCompat_Unported.h"
+#endif
 #include "compat/TbSpellEntry.h"
 #include "AccountMgr.h"
 #include "Map.h"
@@ -60,14 +62,30 @@ PerfWindow& Perf()
     return window;
 }
 
+// Loads the engine's config and says how long it took (the whole read happens on the world thread).
+void LoadEngineConfig()
+{
+    auto const started = std::chrono::steady_clock::now();
+    std::string const error = TortoiseBots::engine::EnsureConfig();
+    uint32 const ms = uint32(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - started).count());
+    if (error.empty())
+        TC_LOG_INFO("server.loading", "TortoiseBots: engine configuration loaded in {} ms", ms);
+    else
+        TC_LOG_WARN("server.loading", "TortoiseBots: engine configuration not loaded ({}); the next engine start tries again", error);
+}
+
 class tortoisebots_world : public WorldScript
 {
 public:
     tortoisebots_world() : WorldScript("tortoisebots_world") { }
 
-    void OnConfigLoad(bool /*reload*/) override
+    void OnConfigLoad(bool reload) override
     {
         BotMgr::Instance().LoadConfig();
+        // A reload gives a failed engine config load (a missing aiplayerbot.conf, now present) another try at once; the first load is
+        // made by OnWorldInitialized, when the stores the engine reads are there.
+        if (reload && BotMgr::Instance().Enabled() && TortoiseBots::engine::Built())
+            LoadEngineConfig();
     }
 
     void OnWorldInitialized() override
@@ -82,9 +100,17 @@ public:
         tbcompat::MarkSpellStoreReady();
         tbcompat::InitSpellTable();
         TC_LOG_INFO("server.loading", "TortoiseBots (ForeverCore port, spike): {}", BotMgr::Instance().Enabled() ? "enabled" : "disabled");
-        // Without the slice nothing reaches an unported feature, so the line is only for a build that has the engine.
+        // Without the slice nothing reaches an unported feature, so the lines are only for a build that has the engine.
+#ifdef TORTOISEBOTS_SLICE1
         if (TortoiseBots::engine::Built())
+        {
             TC_LOG_INFO("server.loading", "TortoiseBots: {}", tbcompat::UnportedBootLine());
+            // The engine's own config (the 720-key read and the spell and talent tables) now, not on the first bot: it stalled the world
+            // for 1.09 s at the first engine start (R8). Only when the module is on, as nothing builds an engine otherwise.
+            if (BotMgr::Instance().Enabled())
+                LoadEngineConfig();
+        }
+#endif
     }
 
     void OnBeforeMapsUpdate(uint32 diff) override
@@ -339,7 +365,11 @@ public:
     // .tb unported: every feature of the legacy engine that is not ported yet, with how many times the engine reached it.
     static bool HandleUnported(ChatHandler* handler)
     {
+#ifdef TORTOISEBOTS_SLICE1
         std::string const report = tbcompat::UnportedReport();
+#else
+        std::string const report = "the engine is not built in (this build has no list of unported features)";
+#endif
         size_t begin = 0;
         while (begin < report.size())
         {

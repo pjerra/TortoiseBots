@@ -466,7 +466,8 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
         if (sServerFacade.IsInCombat(bot) || (master && sServerFacade.IsInCombat(master) && sServerFacade.getDistance2d(bot, master) < 30.0f))
         {
             CancelLogoutCompat(bot);
-            TellPlayer(GetMaster(), BOT_TEXT("logout_cancel"));
+            if (std::string const text = BOT_TEXT("logout_cancel"); !text.empty())   // no text table: say nothing, never the raw key
+                TellPlayer(GetMaster(), text);
         }
     }
 
@@ -2734,7 +2735,8 @@ void PlayerbotAI::Reset(bool full)
         if (!logout && bot->GetSession()->isLogingOut())
         {
             CancelLogoutCompat(bot);
-            TellPlayer(GetMaster(), BOT_TEXT("logout_cancel"));
+            if (std::string const text = BOT_TEXT("logout_cancel"); !text.empty())   // no text table: say nothing, never the raw key
+                TellPlayer(GetMaster(), text);
         }
     }
 
@@ -3102,7 +3104,8 @@ void PlayerbotAI::HandleCommand(uint32 type, const std::string& text, Player& fr
         if (!bot->GetSession()->isLogingOut())
         {
             if (type == CHAT_MSG_WHISPER)
-                TellPlayer(&fromPlayer, BOT_TEXT("logout_start"));
+                if (std::string const text = BOT_TEXT("logout_start"); !text.empty())
+                    TellPlayer(&fromPlayer, text);
 
             if (master && TortoiseBots::BotManager::Instance().IsBot(bot->GetObjectGuid()))
                 SetShouldLogOut(true);
@@ -3113,7 +3116,8 @@ void PlayerbotAI::HandleCommand(uint32 type, const std::string& text, Player& fr
         if (bot->GetSession()->isLogingOut())
         {
             if (type == CHAT_MSG_WHISPER)
-                TellPlayer(&fromPlayer, BOT_TEXT("logout_cancel"));
+                if (std::string const text = BOT_TEXT("logout_cancel"); !text.empty())
+                    TellPlayer(&fromPlayer, text);
 
             CancelLogoutCompat(bot);
             SetShouldLogOut(false);
@@ -3508,7 +3512,8 @@ void PlayerbotAI::DoNextAction(bool min, bool forceActivity)
                 }
 
                 if (GetMaster() != GetGroupMaster())
-                    TellPlayer(master, BOT_TEXT("hello"));
+                    if (std::string const text = BOT_TEXT("hello"); !text.empty())
+                        TellPlayer(master, text);
             }
         }
     }

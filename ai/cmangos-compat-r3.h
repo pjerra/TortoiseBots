@@ -211,6 +211,8 @@ inline bool IsWithinLOSCompat(WorldObject const* from, float x, float y, float z
 }
 // Small shape differences.
 inline bool IsUnderwaterCompat(Unit const* unit) { return unit->IsUnderwater(); }
+// The core's own "is the unit rooted by an aura" (R9): Unit::IsInRoots() here, Unit::HasRootAura() on ForeverCore (forever/src/compat/TbCompat_Unit.h).
+inline bool RootedCompat(Unit const* unit) { return unit->IsInRoots(); }
 inline uint32 AreaZoneIdCompat(AreaTableEntry const* area) { return area->ZoneId; }
 inline std::string AreaNameOrEmptyCompat(AreaTableEntry const* area) { return area && area->Name ? std::string(area->Name) : std::string(); }
 // Paths.
