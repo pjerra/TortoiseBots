@@ -57,6 +57,36 @@ Common pair = `forever/src/compat/TbCompat_Unit.h` (section "R4M") and `ai/cmang
 | `CStrCompat` (R3, used by A, P, V) vs `CStrOrCompat` (C) | not a duplicate: R3's is the one `CStrCompat`; C's takes a fallback for the places that tested the pointer | both kept, nothing to merge |
 | `HasMovementFlagCompat` (A) and the `MOVEFLAG_*` names (A, P) | see 1a | names to `TbCompat_Names.h`, `HasMovementFlagCompat` stays in A (only A uses it) |
 
+
+### 1c. Helpers and edits R4M added (each used by more than one package or closing a NEEDS)
+
+| what | where | why |
+|---|---|---|
+| `CombatStartPositionCompat(creature, x, y, z)` | common pair | findings item 11 (ForeverCore: the creature's home position); used by `ReachTargetActions.h:195` (A) and `BotDiagnostics.cpp:223` (C) |
+| `CombatTimeCompat(creature)` | common pair | findings item 14 (ForeverCore: `-1`); used by `TargetValue.cpp:361` (V) |
+| `ForEachThreatenerThreatCompat(me, fn(attacker, threat))` | `TbCompat_V.h` / `cmangos-compat-r4v.h` | `TellTargetAction.cpp` (A) printed the threat amount; the walk without the amount (`ForEachThreatenerCompat`) was not enough. T: the same `HostileRefManager` walk with `getThreat()`; F: `ThreatReference::GetThreat()` |
+| `AuraHasMechanicMaskCompat(aura, legacyMask)` | common pair | `GenericTriggers.h` (A) asked the aura holder `HasMechanicMask` in 3 places; F: the spell's mechanic mask with the shift `bit mechanic` against the legacy `bit mechanic - 1` |
+| `SpellIsChannelingCompat` (was V's `SpellIsInFlightOrChannelingCompat`) | common pair | see section 2 |
+| `SpellManaCostCompat(Spell const*)` (was A's overload `SpellPowerCostCompat(Spell const*)`) | `TbCompat_A.h` | another question than P's/V's `SpellPowerCostCompat(entry, caster)`; the same name hid it |
+| `TellTargetAction.cpp:42,76` | rewritten on `ForEachThreatenerThreatCompat` | V's NEEDS FROM A |
+| `ServerFacade::GetHostileRefManager` | NOT deleted; made `template <class UnitType> decltype(auto)` | V's NEEDS FROM C asked for deletion once `TellTargetAction` moved. `commands/Commander.cpp` (outside the slice, Turtle only) calls it 11 times and 8 wiring tests pin those lines, so deleting it breaks the Turtle build. As a template the declaration names no type ForeverCore lacks (the two census places at `ServerFacade.h:136,142` are gone); on Turtle every call instantiates it with its own unit type and gets the same reference as before |
+| `MovementActions.cpp` periodic-trigger loop in `AvoidAoeAction::AvoidTriggerNpc` | rewritten on `ForEachAuraOfTypeCompat` | A's "aura list (2 places)" left open; the loop needs the spell and the effect index, which is exactly V's view. The body is unchanged (the lambda returns `true` on the first hazard, as the old `return true`) |
+| `GenericTriggers.h` 3 loops `for (auto itr : bot->GetSpellAuraHolderMap())` | `for (auto const& itr : AuraHolderMapCompat(bot))` + `AuraHasMechanicMaskCompat` | A's "aura holder map (3 places)" left open; P's `AuraHolderMapCompat` was the adaptor |
+| `LiquidStatusCompat` | one definition (see 1b) | `WorldPosition.cpp`: the 4 sites C had moved to `LiquidAtCompat` are back on the `GridMapLiquidData` shape (the original text, with `LiquidStatusCompat` for `getLiquidStatus`); the three wiring tests that pinned `LiquidAtCompat` (`test_swim_path_wiring`, `test_magma_guard_wiring`) now pin `LiquidStatusCompat` and its Turtle body in `cmangos-compat-r3.h` |
+| `CreatureIsAboveNormalCompat` (C) | also true when the template's `DIFFICULTY_NONE` row carries `CREATURE_TYPE_FLAG_BOSS_MOB` | so "above normal" (templates, `WorldPosition.cpp:676`) and "world boss" (creatures, `CreatureRankCompat`) cannot disagree about one creature on F |
+
+Not done, with the reason: `UseItemAction.h:18` / `GenericSpellActions.cpp:1409-1445` (item and totem casts): `BotUseItemSpell` is a SUBCLASS of `Spell` that overrides `ForceSpellStart`; P's `NewSpellCompat` builds a spell, it cannot be inherited from.
+The R3 leftover headers (`GuidPosition.h`, `RandomBotFacade.h`, `Talentspec.h`, `TaxiRouteGuard.h`, `ItemUsageValue.h`, `ItemVisitors.h`, `GenericActions.h`, `PlayerbotAI.h:73`) are features the slice does not use (section 6); none has a helper that answers it today.
+
+### 1d. Counts
+
+The dedupe table: 17 same-name helpers and 15 same-name macros or constants (tables 1a: 32 names), 15 different-name pairs (1b; 11 unified, 4 kept as two on purpose:
+the aura set, `GuidTextCompat`/`GuidWriteCompat`, `CStrCompat`/`CStrOrCompat`, `ForEachThreatenerCompat`/the new amount walk), 6 helpers added in R4M (1c).
+The common pair now holds 39 helpers on ForeverCore (36 on Turtle: the three the Turtle core has no use for are `GroupFlagHolderCompat` and the two liquid-flag translations),
+and `TbCompat_Names.h` 12 names. Behaviour-changing choices: `GuidRawCompat` -> `GuidKeyCompat`, `CurrentThreatVictimCompat`
+(`GetLastVictim`), `SpellIsChannelingCompat` (section 2), `LiquidStatusCompat` (0 = no filter, the four-type mask stays a filter), `DuelOpponentGuidCompat` (null check),
+`AreaNameOrEmptyCompat` (both null checks), `CreatureIsAboveNormalCompat` (boss flag), `ApplySpellModRangeCompat` and `SpellCalculateDamageCompat` (the checked forms).
+
 ### 2. SPELL_STATE_CASTING (this one changes behaviour)
 
 Read both cores. T `Spell.h:206-214`: `NULL 0, PREPARING 1, CASTING 2, FINISHED 3, IDLE 4, DELAYED 5`; there is no separate channeling
@@ -112,7 +142,28 @@ The host's `BotRegistryKey` has the same trap (`GetRawValue()` as the key of the
 
 ## 4. Requests to the host, CMake or the lead
 
-(filled in at the end)
+Nothing below was implemented in this package.
+
+**CMake / deployment (lead, R5/R6)**
+1. `CMakeLists.txt:123-124` `trinity_add_module(... CONFIGS ...)`: add `forever/conf/aiplayerbot.conf.dist`; the deployment copies it to `<directory of worldserver.conf>/aiplayerbot.conf` (`~/forever-run/etc/` on the VM, `setup.sh`/`world.sh`, and forever-test1). NOT into `worldserver.conf.d` (findings item 19).
+2. `forever/conf/tortoisebots.conf.dist` (R5): optional `AiPlayerbot.ConfigFile =` (silences one WARN per `PlayerbotAIConfig::Initialize`).
+3. The option TORTOISEBOTS_SLICE1 still selects a source set that does not compile (460 places); the option-ON build gate is R6's (findings item 6).
+
+**Host (R5/R6)**
+4. Before `new PlayerbotAI(bot)`: `BotManager::IsBot(guid)` true, `IsRandomBot(guid)` false, `AltBotService::IsAutonomous(guid)` false, keyed by `guid.GetCounter()` (the `BotRegistryKey` of `runtime/BotManager.cpp` calls `GetRawValue()`, a byte span on F); restore `PLAYER_EXTRA_TAXICHEAT` when a `Create` fails (findings items 1 and 10). `GetFreeTalentPoints()` has no ForeverCore accessor (`PlayerbotAI.cpp:257`).
+5. A world update-time average for `GetAverageDiff` (`PlayerbotAI.cpp:1056`, `MovementActions.cpp:6261`).
+6. The host hooks `BotActionLog_LogAuraApply/Remove/CastStart` (called by the patched Turtle core) take a `uint64`; nothing calls them on ForeverCore: when the host wires them it must pass `GuidKeyCompat` keys.
+7. The engine reads threat with `GetLastVictim` (V): the world-thread / map-thread question (findings items 2 and 16) is R8's.
+
+**Decisions for the lead (linking round)**
+8. Path type bits 0x20/0x40/0x80 and `NAV_MAGMA/SLIME/STEEP_SLOPES`: 4 static_asserts, `ExcludeSteepSlopes`, `ClosestCorrectPoint` (10 places, table 6): the swim and steep-slope policies read T's bits, F means other things by them.
+9. Whether bots jump on ForeverCore at all (`JumpTowards`, 29 places).
+10. Packet receivers: `SMSG_CAST_RESULT` (asynchronous cast failure) and the six forced-speed acks are class (ii) (findings item 9): R8 watches them.
+11. Spawn id from a guid counter (2 places), pool and game-event lookups (13): a guid-to-spawn-id answer.
+12. `BotLog`/`SC_LOG` taking `std::string` would remove the 66+44+ `CStrCompat` wrappers (A's optional ask): not now.
+13. `forever/docs/UNPORTED.md` and `TbCompat_Unported.h` (findings item 8, R6): the table in section 6 is its input.
+14. Every producer outside the slice that feeds the uint64-keyed policies with `GetRawValue()` (section 3) changes to `GuidKeyCompat` in the same change that ports its file.
+15. `runtime/BotManager.cpp` `BotRegistryKey` and the other `GetRawValue()` users of `runtime/`, `host/`, `commands/` (section 3).
 
 ## 5. PQuery / PExecute / DirectPExecute with printf placeholders (finding 18)
 
@@ -131,8 +182,68 @@ in the 127 files or the `ai/` headers. (Outside the slice the same pattern is ev
 
 ## 6. The remaining error places by feature (input for the linking round, finding 8)
 
-(filled in at the end)
+Census on `slice1/integ` (the 127 files of `forever/SLICE1.txt`, `FOREVER_CENSUS_LIST=forever/SLICE1.txt forever/tools/vm-census.sh "" 14`): **460 error places in 27 files**
+(before the four packages: 1,570 in 73 files; the four census numbers added up, 569, count a header place once for each package whose file includes it).
+Classified by the file:line ranges the four notes name and by the message; the "failure value" column is read from the return type of the function around the place (it is the value
+`TbNotOnForeverYet` would hand back, findings item 8), the sites themselves are read again by the linking round.
+
+| feature | places | files | the failure value the callers already handle (from the function's return type; each site is read again in the linking round) |
+|---|---|---|---|
+| packet tables and opcodes | 78 | PlayerbotAIPackets.cpp 72, PlayerbotAI.cpp 6 | none: F's bot session drops every packet it would send and receives none, so the handlers are never called; the tables stay empty (per-opcode typed handlers are a decision per event) |
+| transports | 49 | strategy/actions/MovementActions.cpp 33, PlayerbotAI.cpp 15, WorldPosition.cpp 1 | `TransportOfCompat` is nullptr ("not on a transport"); `MoveOnTransport`, `MoveOffTransport`, `UseTransport` return bool (false = nothing happened) |
+| jump, fall, knockback, facing, speed | 29 | PlayerbotAI.cpp 17, strategy/actions/MovementActions.cpp 12 | `JumpTowards` and the fall handling return bool (false = no jump); the facing broadcast is void and F's `SetFacingTo` already tells the clients |
+| taxi | 29 | strategy/actions/MovementActions.cpp 11, PlayerbotAI.cpp 10, TaxiRouteGuard.h 8 | `UseTaxi` returns bool (false); `GetTaxi` absent = "not on a taxi" |
+| quest internals | 22 | strategy/triggers/GenericTriggers.h 17, PlayerbotAIQuests.cpp 5 | an empty requirement view / quest level 0 (the triage trigger is not registered in the slice) |
+| game objects (party portal, use) | 17 | PlayerbotAI.cpp 10, strategy/actions/MovementActions.cpp 5, strategy/actions/GenericActions.h 2 | bool false ("could not use it"); the lightwell and portal calls are void actions |
+| chat channels, addon bridge, chat tags | 16 | PlayerbotAIChat.cpp 10, PlayerbotAI.cpp 6 | no channel (nullptr) / the message is not sent (void); the TBM addon bridge is skipped |
+| bank and keyring slots | 14 | PlayerbotAIItems.cpp 12, PlayerbotAI.cpp 2 | an empty item list (no item found in the slot range) |
+| pools and game events | 13 | GuidPosition.cpp 13 | 0 / false ("not part of a pool", "no event") |
+| instance bind | 13 | PlayerbotAI.cpp 13 | no bind (nullptr / false): the dungeon is treated as unbound |
+| pets and guardians | 13 | strategy/actions/GenericActions.cpp 8, PlayerbotAI.cpp 4, PlayerbotAISpells.cpp 1 | bool false / no pet spell; the guardian walk visits nobody |
+| guid from spawn data, map lookups by guid | 12 | PlayerbotAI.cpp 8, GuidPosition.h 2, WorldPosition.cpp 2 | the empty guid / a null unit (no spawn record) |
+| loot | 12 | PlayerbotAI.cpp 10, PlayerbotAIItems.cpp 2 | an empty loot guid ("no loot window open"), no loot object |
+| summon-object slots | 11 | PlayerbotAISpells.cpp 11 | the slot reads empty (empty guid) |
+| path type bits and navmesh flags | 10 | WorldPosition.cpp 10 | a decision, not a failure value: the policies read T's bits (0x20/0x40/0x80, NAV_*), F means other things by them |
+| ammo and thrown weapons | 9 | PlayerbotAI.cpp 4, strategy/generic/PullStrategy.cpp 3, strategy/actions/GenericSpellActions.cpp 2 | 0 (no ammo item), no thrown skill: the ammo checks report "none" |
+| item and totem casts (Spell construction) | 9 | strategy/actions/GenericSpellActions.cpp 6, strategy/actions/UseItemAction.h 3 | the cast does not start: bool false |
+| skills | 7 | PlayerbotAI.cpp 5, ChatHelper.cpp 1, strategy/ItemVisitors.h 1 | skill value 0 / false |
+| item random properties | 7 | PlayerbotAI.cpp 3, ChatHelper.cpp 2, strategy/values/ItemUsageValue.h 2 | 0 (no random property id) |
+| emotes | 7 | PlayerbotAI.cpp 7 | no emote (void) |
+| navmesh and path internals | 7 | strategy/actions/MovementActions.cpp 4, WorldPosition.cpp 3 | false / no point found (the unstick probe is skipped) |
+| guild | 6 | PlayerbotAI.cpp 3, PlayerbotAIChat.cpp 3 | no rank right: false; no guild chat |
+| auction | 6 | RandomBotFacade.h 4, strategy/values/ItemUsageValue.h 2 | type level: `AuctionEntry` is named in the declarations of the auction code, which the slice never reaches |
+| database transactions (strategy store) | 6 | strategy/actions/ChangeStrategyAction.cpp 6 | false: the store keeps no row |
+| camp, rest, water breathing, fishing zone | 5 | PlayerbotAI.cpp 5 | no-op / zone 0 |
+| talents | 5 | Talentspec.h 4, PlayerbotAI.cpp 1 | 0 free talent points (the constructor's "auto talents" branch stays unreached while `IsOwnedBot()` holds) |
+| mounts | 4 | PlayerbotAI.cpp 4 | bool false ("not mounted", "could not dismount") |
+| server settings (instant logout) | 4 | PlayerbotAI.cpp 4 | the default value 0 |
+| cinematic and camera | 4 | PlayerbotAI.cpp 4 | "not in a cinematic": no-op |
+| aura holders (debug apply) | 4 | PlayerbotAI.cpp 4 | debug command only: false |
+| database reads with printf placeholders (PQuery) | 4 | strategy/CustomStrategy.cpp 2, strategy/actions/GenericActions.cpp 2 | no result: empty rows (see section 5: these also drop their arguments on F) |
+| wand silence and school lockout | 4 | strategy/triggers/GenericTriggers.cpp 4 | "not silenced / not locked out": false |
+| chat link parsing | 3 | PlayerbotAI.cpp 2, PlayerbotAI.h 1 | 0 (no spell id parsed) |
+| battleground queue | 3 | ServerFacade.h 3 | "not queued": false |
+| item use packet (packed guid) | 2 | PlayerbotAIItems.cpp 2 | (per site: see the file list) |
+| item display id | 2 | PlayerbotAIItems.cpp 2 | (per site: see the file list) |
+| creature immunity data | 2 | PlayerbotAISpells.cpp 1, strategy/actions/GenericSpellActions.cpp 1 | (per site: see the file list) |
+| spell data (icon ids) | 2 | PlayerbotAISpells.cpp 2 | (per site: see the file list) |
+| visibility (GM) | 2 | strategy/actions/GenericSpellActions.cpp 2 | (per site: see the file list) |
+| heal estimate (spell damage bonus) | 2 | strategy/actions/GenericSpellActions.cpp 2 | (per site: see the file list) |
+| wire form of a GuidPosition | 1 | GuidPosition.h 1 | (per site: see the file list) |
+| world update time average (host value) | 1 | PlayerbotAI.cpp 1 | (per site: see the file list) |
+| spell data (item effects) | 1 | PlayerbotAISpells.cpp 1 | (per site: see the file list) |
+| creature template level | 1 | WorldPosition.cpp 1 | (per site: see the file list) |
+| item prototype vs item | 1 | strategy/ItemVisitors.h 1 | (per site: see the file list) |
+| companions (summon critter effect) | 1 | strategy/ItemVisitors.h 1 | (per site: see the file list) |
+| **total** | **460** | 27 files | |
+
 
 ## 7. Numbers and gates
 
-(filled in at the end)
+| Gate | Command | Result |
+|---|---|---|
+| Census, merged tree, before any dedupe edit | `FOREVER_CENSUS_LIST=forever/SLICE1.txt forever/tools/vm-census.sh "" 14` | `compile clean 0, error places 493 (in 33 files)`: every file fails on the redefinitions of the four compat headers |
+| Census, after the dedupe | same | `files 127  compile clean 4  with errors 123  error places 466 (in 30 files)` |
+| Census, final (NEEDS satisfied, items 11 and 14) | same | `files 127  compile clean 4  with errors 123  error places 460 (in 27 files)` |
+| ForeverCore module, slice option off | `ssh yulon-ubuntu2 '~/forever-build/build.sh 12 tortoisebots'` | `CMAKE_RC=0 MAKE_RC=0` |
+
