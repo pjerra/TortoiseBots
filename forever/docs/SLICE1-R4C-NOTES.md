@@ -111,7 +111,7 @@ the core log). No other R4C file creates a file, a directory or removes one.
   back into a guid. `GuidFromRawCompat(raw)`: only 0 has a ForeverCore form; any other number gives the empty guid and ONE error line ("a legacy 64-bit guid has no ForeverCore form").
   Its callers: the three host hook wrappers `BotActionLog_LogAuraApply/Remove/CastStart` (they are called by the patched Turtle core, nothing calls them on ForeverCore) and
   `GuidPosition(uint64, pos)` (`GuidPosition(0, pos)` in four travel places, and `stoull(getQualifier())` in a travel command).
-  `GuidFromPartsCompat(hi, entry, counter)`: a guid-shaped record of the three numbers (world object format with map 0, or a plain database-id guid for a player/item); it names no live object.
+  `GuidFromNumbersCompat(hi, entry, counter)`: a guid-shaped record of the three numbers (world object format with map 0, or a plain database-id guid for a player/item); it names no live object.
   The text form of a guid inside a `GuidPosition` string and inside a `|Hfound:...|h` chat link (`GuidWriteCompat`/`GuidReadCompat`): T one decimal, F `high/low` (two decimals,
   lossless); a string written by one core cannot be read by the other.
 * **Liquid** (`LiquidAtCompat`): F numbers the liquid types water 1, ocean 2, magma 4, slime 8; T magma 1, ocean 2, slime 4, water 8, and the policies (`SwimPathPolicy.h`,
@@ -175,7 +175,7 @@ In other packages' headers (not counted above): `ItemUsageValue.h:14-16` (V; ite
 
 ## OFFERED (defined in `TbCompat_C.h`, usable by every package; the lead dedupes at the merge)
 
-`GuidKeyCompat`, `GuidFromRawCompat`, `GuidFromPartsCompat`, `GuidWriteCompat`/`GuidReadCompat`, `CStrOrCompat`, `IsNumericCompat`, `ZoneIdCompat` (a package that spells
+`GuidKeyCompat`, `GuidFromRawCompat`, `GuidFromNumbersCompat`, `GuidWriteCompat`/`GuidReadCompat`, `CStrOrCompat`, `IsNumericCompat`, `ZoneIdCompat` (a package that spells
 `getZoneId()` can use it instead of a macro), `AccountIdOfCharacterCompat`, `WorldBoolConfigCompat` with `CONFIG_UINT32_MAX_PLAYER_LEVEL` and
 `CONFIG_BOOL_ALLOW_TWO_SIDE_INTERACTION_GROUP`, `MaxLevelCompat`, `TEAM_BOTH_ALLOWED`, the reputation helpers (`ReputationStateOfCompat`, `ReputationRankCompat`, `ReputationValueCompat`,
 `ReputationAtWarCompat`, `ForcedReputationRankCompat`), `FactionOfTemplateCompat`, `FactionEntryOfCompat`, `FactionNameCompat`, `FactionTemplateHostileToCompat`, `IsPlayerControlledCompat`,

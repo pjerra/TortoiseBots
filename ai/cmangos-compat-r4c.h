@@ -19,7 +19,7 @@ inline char const* CStrOrCompat(std::string const& text, char const* /*fallback*
 // Guids: one 64-bit number here, so every helper is the call the bot always made.
 inline uint64 GuidKeyCompat(ObjectGuid const& guid) { return guid.GetRawValue(); }
 inline ObjectGuid GuidFromRawCompat(uint64 raw) { return ObjectGuid(raw); }
-inline ObjectGuid GuidFromPartsCompat(HighGuid hi, uint32 entry, uint32 counter) { return ObjectGuid(hi, entry, counter); }
+inline ObjectGuid GuidFromNumbersCompat(HighGuid hi, uint32 entry, uint32 counter) { return ObjectGuid(hi, entry, counter); }
 inline void GuidWriteCompat(std::ostream& out, ObjectGuid const& guid) { out << guid.GetRawValue(); }
 inline ObjectGuid GuidReadCompat(std::istream& in)
 {

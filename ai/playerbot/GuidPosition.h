@@ -17,7 +17,7 @@ namespace ai
         GuidPosition(CreatureDataPair const* dataPair) : ObjectGuid(HIGHGUID_UNIT, dataPair->second.creature_id[0], dataPair->first), WorldPosition(dataPair) {};
         GuidPosition(GameObjectDataPair const* dataPair) : ObjectGuid(HIGHGUID_GAMEOBJECT, dataPair->second.id, dataPair->first), WorldPosition(dataPair) {};
         GuidPosition(const WorldObject* wo) : WorldPosition(wo) { ObjectGuid::operator=(wo->GetObjectGuid()); };
-        GuidPosition(HighGuid hi, uint32 entry, uint32 counter = 1, WorldPosition pos = WorldPosition()) : ObjectGuid(GuidFromPartsCompat(hi, entry, counter)), WorldPosition(pos) {};
+        GuidPosition(HighGuid hi, uint32 entry, uint32 counter = 1, WorldPosition pos = WorldPosition()) : ObjectGuid(GuidFromNumbersCompat(hi, entry, counter)), WorldPosition(pos) {};
         GuidPosition(std::string qualifier);
 
         enum CreationMask

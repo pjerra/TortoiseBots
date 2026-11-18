@@ -40,7 +40,7 @@ ObjectGuid GuidFromRawCompat(uint64 raw);
 // about a template (faction, name). T packs the three numbers (ObjectGuid.h:127: nothing when the counter is 0). F makes a world
 // object guid with the entry and the counter and map id 0, or a plain database-id guid for a player or item (no entry in those).
 // It is a guid-shaped record of the three numbers: it names no live object.
-inline ObjectGuid GuidFromPartsCompat(HighGuid hi, uint32 entry, uint32 counter)
+inline ObjectGuid GuidFromNumbersCompat(HighGuid hi, uint32 entry, uint32 counter)
 {
     if (!counter)
         return ObjectGuid::Empty;
