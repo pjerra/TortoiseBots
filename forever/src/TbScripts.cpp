@@ -86,6 +86,8 @@ public:
     {
         if (BotMgr::Instance().IsBot(player->GetGUID()))
             TC_LOG_INFO("tortoisebots", "bot {} left the world", player->GetName());
+        // Before the Player is deleted: the engine brain (PlayerbotAI) must be gone by then.
+        BotMgr::Instance().OnPlayerLogout(player);
     }
 };
 
@@ -105,6 +107,7 @@ public:
             { "go",     HandleGo,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "attack", HandleAttack, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "where",  HandleWhere,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "engine", HandleEngine, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "status", HandleStatus, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "item",   HandleItem,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "spellscan", HandleSpellScan, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
@@ -190,6 +193,8 @@ public:
             name.c_str(), uint32(bot->GetLevel()), bot->GetMapId(), bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(),
             uint32(bot->GetHealth()), uint32(bot->GetMaxHealth()), bot->IsInCombat() ? "in combat" : "out of combat",
             victim ? victim->GetName().c_str() : "none", victim ? uint32(victim->GetHealth()) : 0u);
+        for (std::string const& line : BotMgr::Instance().DescribeBrain(bot->GetGUID()))
+            handler->PSendSysMessage("TortoiseBots: %s", line.c_str());
 
         // What the bot has around it: proves its part of the map is loaded and populated.
         std::list<Creature*> creatures;
@@ -209,6 +214,23 @@ public:
         }
         else
             handler->PSendSysMessage("TortoiseBots: %u creature(s) within 60 yd, none alive.", uint32(creatures.size()));
+        return true;
+    }
+
+    // .tb engine <character> on|off: run the bot on the real engine (PlayerbotAI) or on the spike's follow/assist.
+    static bool HandleEngine(ChatHandler* handler, std::string name, std::string mode)
+    {
+        bool on;
+        if (mode == "on")
+            on = true;
+        else if (mode == "off")
+            on = false;
+        else
+            return Fail(handler, "usage: .tb engine <character> on|off.");
+        std::string const error = BotMgr::Instance().SetEngine(GuidByName(name), on);
+        if (!error.empty())
+            return Fail(handler, name + ": engine not changed: " + error + ".");
+        handler->PSendSysMessage("TortoiseBots: %s engine %s.", name.c_str(), on ? "on" : "off");
         return true;
     }
 

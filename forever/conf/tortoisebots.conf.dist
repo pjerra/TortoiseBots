@@ -15,3 +15,13 @@ TortoiseBots.Enable = 0
 #
 
 TortoiseBots.Spike.FollowDistance = 3
+
+#
+#    TortoiseBots.Slice.EngineByDefault
+#        Description: A bot that logs in runs on the real bot engine (PlayerbotAI) instead of the spike's follow/assist.
+#                     Only has an effect in a build made with TORTOISEBOTS_SLICE1. `.tb engine <character> on|off`
+#                     changes it for one bot that is already logged in.
+#        Default:     0
+#
+
+TortoiseBots.Slice.EngineByDefault = 0

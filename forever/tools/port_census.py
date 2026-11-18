@@ -47,15 +47,22 @@ def base_command(build):
     sys.exit("TbScripts.cpp is not in the compile database: configure the core with -DBUILD_TORTOISEBOTS=1 first")
 
 
+EXTRA_DEFINES = []   # -D flags added to every compile (FOREVER_CENSUS_DEFINES, or -D lines in the census list file)
+
+
 def sources(only):
     # FOREVER_CENSUS_LIST: a file (path relative to the repository) with one source path per line; only those are
     # checked. Lines starting with # and empty lines are ignored. Used to measure a slice of the tree.
+    # A line starting with -D is not a source: it is a define for every compile (for example -DTORTOISEBOTS_SLICE1=1), so
+    # a list can ask for a build flavour even where the VM's census.sh does not forward FOREVER_CENSUS_DEFINES.
     listed = os.environ.get("FOREVER_CENSUS_LIST", "")
     if listed:
         wanted = []
         for line in open(os.path.join(ROOT, listed)):
             line = line.strip()
-            if line and not line.startswith("#"):
+            if line.startswith("-D"):
+                EXTRA_DEFINES.append(line)
+            elif line and not line.startswith("#"):
                 wanted.append(os.path.normpath(line))
         missing = [w for w in wanted if not os.path.exists(os.path.join(ROOT, w))]
         if missing:
@@ -79,7 +86,7 @@ QUOTED = re.compile(r"'([^']*)'")
 
 
 def common_flags(stubs):
-    flags = ["-w", "-DMANGOSBOT_ZERO=1", "-DCMANGOS=1",
+    flags = ["-w", "-DMANGOSBOT_ZERO=1", "-DCMANGOS=1"] + EXTRA_DEFINES + [
              "-I" + os.path.join(ROOT, "forever", "compat"), "-I" + os.path.join(ROOT, "forever", "src", "compat")]
     if stubs:
         flags += ["-idirafter", stubs]
@@ -126,6 +133,9 @@ def main():
     only = sys.argv[4] if len(sys.argv) > 4 else ""
     os.makedirs(out, exist_ok=True)
     command, cwd = base_command(build)
+    # FOREVER_CENSUS_DEFINES: extra defines for every compile, space separated (for example "-DTORTOISEBOTS_SLICE1=1").
+    # Unset or empty changes nothing.
+    EXTRA_DEFINES.extend(shlex.split(os.environ.get("FOREVER_CENSUS_DEFINES", "")))
     # A missing header stops a file at once. To see what is behind it, the census gives every header that has no
     # ForeverCore counterpart an empty stand-in (in <out>/stubs, never in the repository) and tries again.
     stubs = os.path.join(out, "stubs")
@@ -171,6 +181,9 @@ def main():
     with open(os.path.join(out, "files.tsv"), "w") as f:
         for s, (rc, n) in sorted(per_file.items(), key=lambda kv: (kv[1][1], kv[0])):
             f.write(f"{n}\t{rc}\t{s}\n")
+    with open(os.path.join(out, "errors.tsv"), "w") as f:   # every place once: where, message (to read the exact errors of one file)
+        for where, msg in sorted(seen):
+            f.write(f"{where}\t{msg}\n")
     for name, counter in (("kinds.tsv", kinds), ("names.tsv", names), ("fatal.tsv", fatal), ("where.tsv", where_count)):
         with open(os.path.join(out, name), "w") as f:
             for key, n in counter.most_common():

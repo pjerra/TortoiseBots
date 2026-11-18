@@ -30,6 +30,8 @@ public:
     void RequestLogout(std::string_view reason);
 
     bool LoginPending() const { return _loginPending; }
+    // A logout was asked for: the next Tick logs the Player out (BotMgr drops the engine brain before that).
+    bool LogoutRequested() const { return _logoutRequested; }
     ObjectGuid GetCharacterGuid() const { return _characterGuid; }
 
     // Bots have no client: everything the server sends is dropped here. Later this is where the bot "reads" the server.
