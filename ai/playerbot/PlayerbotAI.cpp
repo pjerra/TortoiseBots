@@ -137,7 +137,7 @@ std::set<std::string> PlayerbotAI::unsecuredCommands;
 uint32 PlayerbotChatHandler::extractQuestId(std::string str)
 {
     char* source = (char*)str.c_str();
-    char* cId = ExtractKeyFromLink(&source,"Hquest");
+    char* cId = ExtractKeyFromLinkCompat(&source,"Hquest");
     return cId ? atol(cId) : 0;
 }
 
@@ -255,7 +255,7 @@ PlayerbotAI::PlayerbotAI(Player* bot) :
     // Issue #872: autonomous alts never auto-spend talents (B12). The
     // IsOwnedBot guard already covers companions; this covers the
     // masterless autonomous state (master was cleared at session start).
-    if (!HasRealPlayerMaster() && !IsOwnedBot() && bot->GetFreeTalentPoints() > 0 &&
+    if (!HasRealPlayerMaster() && !IsOwnedBot() && FreeTalentPointsCompat(bot) > 0 &&
         !TortoiseBots::AltBotService::Instance().IsAutonomous(bot->GetObjectGuid()))
     {
         DoSpecificAction("auto talents");
@@ -796,7 +796,7 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
                 case ITEM_SUBCLASS_WEAPON_THROWN:
                     break;
                 }
-                uint32 ammoId = bot->GetUInt32Value(PLAYER_AMMO_ID);
+                uint32 ammoId = AmmoItemIdCompat(bot);
                 ItemPrototype const* ammoProto = ammoId ? GetItemProtoByIdCompat(ammoId) : nullptr;
                 if (wantSub && (!ammoProto || ammoProto->Class != ITEM_CLASS_PROJECTILE || ammoProto->SubClass != wantSub))
                     ammoMismatch = true;
@@ -810,7 +810,7 @@ void PlayerbotAI::UpdateAI(uint32 elapsed, bool minimal)
                     PlayerbotFactory(bot, bot->GetLevel(), 0).InitAmmo();
                 }
             }
-            uint32 itemId = bot->GetUInt32Value(PLAYER_AMMO_ID);
+            uint32 itemId = AmmoItemIdCompat(bot);
             if (itemId && bot->GetItemCount(itemId))
             {
                 std::list<Item*> items = AI_VALUE2(std::list<Item*>, "inventory items", this->chatHelper.formatQItem(itemId));

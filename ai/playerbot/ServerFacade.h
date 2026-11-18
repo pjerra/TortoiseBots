@@ -271,12 +271,7 @@ class ServerFacade
 
         BattleGroundTypeId BgTemplateId(BattleGroundQueueTypeId queueTypeId)
         {
-#ifdef MANGOS
-            return sBattleGroundMgr.BGTemplateId(queueTypeId);
-#endif
-#ifdef CMANGOS
-            return sBattleGroundMgr.BGTemplateId(queueTypeId);
-#endif
+            return BgTemplateIdCompat(queueTypeId);
         }
 
         BattleGroundTypeId BGTemplateId(BattleGroundQueueTypeId queueTypeId)

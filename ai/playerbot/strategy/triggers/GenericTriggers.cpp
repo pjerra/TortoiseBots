@@ -277,14 +277,13 @@ WandCastBlockers WandBlocksCastTrigger::CastBlockers(std::string const& spell, U
 
     // Spell::CheckCasterAuras: silence and the school lockout of a
     // Counterspell-like interrupt (Unit::IsSpellProhibited), pacify.
-    uint32 const unitFlags = bot->GetUInt32Value(UNIT_FIELD_FLAGS);
     if (spellInfo->PreventionType == SPELL_PREVENTION_TYPE_SILENCE)
     {
-        blockers.silenced = (unitFlags & UNIT_FLAG_SILENCED) != 0;
-        blockers.lockedOut = bot->IsSpellProhibited(spellInfo);
+        blockers.silenced = UnitSilencedCompat(bot);
+        blockers.lockedOut = SpellProhibitedCompat(bot, spellInfo);
     }
     else if (spellInfo->PreventionType == SPELL_PREVENTION_TYPE_PACIFY)
-        blockers.silenced = (unitFlags & UNIT_FLAG_PACIFIED) != 0;
+        blockers.silenced = UnitPacifiedCompat(bot);
 
     // Player::ProhibitSpellSchool puts every spell of the school on its own
     // cooldown, and the bot-side check reports that as NOT_READY too. The

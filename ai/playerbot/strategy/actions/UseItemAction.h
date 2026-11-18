@@ -11,11 +11,11 @@
 namespace ai
 {
     //This class bypasses the requirement for a bot to have a key item in their inventory when opening a lock.
-    class BotUseItemSpell : public Spell
+    class BotUseItemSpell : public ItemCastSpellBaseCompat
     {
     public:
         BotUseItemSpell(WorldObject* caster, SpellEntry const* info, uint32 triggeredFlags, ObjectGuid originalCasterGUID = ObjectGuid(), SpellEntry const* triggeredBy = nullptr, bool itemCheats = false)
-            : Spell(caster->ToUnit() ? caster->ToUnit() : (Unit*)nullptr, info, triggeredFlags != 0, originalCasterGUID, triggeredBy), itemCheats(itemCheats) {};
+            : ItemCastSpellBaseCompat(caster->ToUnit() ? caster->ToUnit() : (Unit*)nullptr, info, triggeredFlags != 0, originalCasterGUID, triggeredBy), itemCheats(itemCheats) {};
 
         static BotUseItemSpell* Create(WorldObject* caster, SpellEntry const* info, uint32 triggeredFlags, ObjectGuid originalCasterGUID = ObjectGuid(), SpellEntry const* triggeredBy = nullptr, bool itemCheats = false)
         {
@@ -150,7 +150,7 @@ namespace ai
                             if (spellInfo)
                             {
                                 bot->RemoveSpellCooldown(spellInfo->Id, false);
-                                bot->AddSpellAndCategoryCooldowns(spellInfo, proto->ItemId);
+                                AddSpellAndCategoryCooldownsCompat(bot, spellInfo, proto->ItemId);
                                 break;
                             }
                         }
@@ -261,7 +261,7 @@ namespace ai
                             if (spellInfo)
                             {
                                 bot->RemoveSpellCooldown(spellInfo->Id, false);
-                                bot->AddSpellAndCategoryCooldowns(spellInfo, proto->ItemId);
+                                AddSpellAndCategoryCooldownsCompat(bot, spellInfo, proto->ItemId);
                                 break;
                             }
                         }

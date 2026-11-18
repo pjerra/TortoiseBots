@@ -14,8 +14,8 @@ namespace ai
         //template<class T>
         //GuidPosition(ObjectGuid guid, T) : ObjectGuid(guid) {WorldPosition::set(WorldPosition(T))};
         // cmangos has CreatureData::id; Penqle has CreatureData::creature_id (array, MAX_CREATURE_IDS_PER_SPAWN entries). Use first.
-        GuidPosition(CreatureDataPair const* dataPair) : ObjectGuid(HIGHGUID_UNIT, dataPair->second.creature_id[0], dataPair->first), WorldPosition(dataPair) {};
-        GuidPosition(GameObjectDataPair const* dataPair) : ObjectGuid(HIGHGUID_GAMEOBJECT, dataPair->second.id, dataPair->first), WorldPosition(dataPair) {};
+        GuidPosition(CreatureDataPair const* dataPair) : ObjectGuid(GuidOfCreatureDataCompat(dataPair)), WorldPosition(dataPair) {};
+        GuidPosition(GameObjectDataPair const* dataPair) : ObjectGuid(GuidOfGameObjectDataCompat(dataPair)), WorldPosition(dataPair) {};
         GuidPosition(const WorldObject* wo) : WorldPosition(wo) { ObjectGuid::operator=(wo->GetObjectGuid()); };
         GuidPosition(HighGuid hi, uint32 entry, uint32 counter = 1, WorldPosition pos = WorldPosition()) : ObjectGuid(GuidFromNumbersCompat(hi, entry, counter)), WorldPosition(pos) {};
         GuidPosition(std::string qualifier);
@@ -82,8 +82,7 @@ namespace ai
 
     inline ByteBuffer& operator<<(ByteBuffer& b, GuidPosition& guidP)
     {
-        b << (ObjectGuid)guidP;
-        b << (WorldPosition)guidP;
+        GuidPositionWriteCompat(b, guidP);
 
         return b;
     }

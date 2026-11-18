@@ -427,7 +427,7 @@ bool CastSpellAction::isUseful()
             CreatureInfo const* creatureInfo = static_cast<Creature*>(spellTarget)->GetCreatureInfo();
             if (creatureInfo && !info->IsPositiveSpell() &&
                 TortoiseBots::SpellSchoolImmune(static_cast<uint32>(info->GetSpellSchoolMask()),
-                    creatureInfo->school_immune_mask))
+                    CreatureSchoolImmuneMaskCompat(creatureInfo)))
                 return false;
         }
     }
@@ -764,7 +764,7 @@ uint32 BuffOnPartyAction::CountGroupMembersMissingBoth(std::string const& groupN
             continue;
         // A hidden GM never gets the buff (see PartyMemberValue::Check), so
         // counting them would keep the group version wanted forever.
-        if (member->GetVisibility() == VISIBILITY_OFF)
+        if (PlayerHiddenGmCompat(member))
             continue;
         Aura* single = ai->GetAura(GetSpellName(), member);
         if (!ai::BuffNeedsRefresh(single != nullptr, single ? single->GetAuraDuration() : 0,
@@ -970,10 +970,7 @@ uint32 HealPartyMemberAction::DownrankSpellId(Unit* target)
                 continue;
             // Same estimate shape as the server's EffectHeal:
             // base incl. level scaling, then the +healing bonus.
-            int32 base = bot->CalculateSpellDamage(target, info, SpellEffectIndex(effect), nullptr);
-            if (base <= 0)
-                continue;
-            heal += bot->SpellHealingBonusDone(target, info, SpellEffectIndex(effect), base, HEAL);
+            heal += EstimateHealOfEffectCompat(bot, target, info, effect);
         }
         if (!heal)
             continue;
@@ -1169,7 +1166,7 @@ void CastShootAction::UpdateWeaponInfo()
 
         // Check the ammunition
         needsAmmo = (GetSpellName() != "shoot") ? (AI_VALUE2(uint32, "item count", "ammo") <= 0) : false;
-        if (!needsAmmo && bot->GetUInt32Value(PLAYER_AMMO_ID) == 0)
+        if (!needsAmmo && AmmoItemIdCompat(bot) == 0)
         {
             std::list<Item*> ammo = AI_VALUE2(std::list<Item*>, "inventory items", "ammo");
             if (!ammo.empty() && ammo.front())
@@ -1403,63 +1400,7 @@ bool CastItemTargetAction::Execute(Event& event)
         item = items.front();
     }
 
-    SpellCastTargets targets;
-    if (target)
-    {
-        targets.setUnitTarget(target);
-        targets.setDestination(target->getPositionX(), target->getPositionY(), target->getPositionZ());
-    }
-    else
-        targets.m_targetMask = TARGET_FLAG_SELF;
-
-    // use triggered flag only for items with many spell casts and for not first cast
-    int count = 0;
-
-    for (int i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
-    {
-        _Spell const& spellData = proto->Spells[i];
-
-        // no spell
-        if (!spellData.SpellId)
-            continue;
-
-        // wrong triggering type
-        if (spellData.SpellTrigger != ITEM_SPELLTRIGGER_ON_USE && spellData.SpellTrigger != ITEM_SPELLTRIGGER_ON_NO_DELAY_USE)
-            continue;
-
-        SpellEntry const* spellInfo = GetSpellEntryCompat(spellData.SpellId);
-        if (!spellInfo)
-        {
-            continue;
-        }
-
-        if (spellInfo->Targets & TARGET_FLAG_DEST_LOCATION)
-            targets.m_targetMask = TARGET_FLAG_DEST_LOCATION;
-
-        BotUseItemSpell* spell = new BotUseItemSpell(bot, spellInfo, (count > 0) ? TRIGGERED_OLD_TRIGGERED : TRIGGERED_NONE);
-
-        Item* tItem = nullptr;
-
-        if (item)
-        {
-            spell->SetCastItem(item);
-        }
-
-        bool result = (spell->ForceSpellStart(&targets) == SPELL_CAST_OK);
-
-        if (!result)
-            return false;
-
-        // NOTE: no manual cooldown on the item-cheat path (see UseAction::
-        // UseItemInternal). The core applies spell + category cooldowns in
-        // Spell::SendSpellCooldown after validation; pre-applying them here
-        // made the deferred SpellEvent re-validation see our own cooldown
-        // and cancel the just-started cast.
-
-        ++count;
-    }
-
-    return count;
+    return CastItemOnTargetCompat<BotUseItemSpell>(bot, target, item, proto);
 }
 
 bool CastItemTargetAction::HasItemSpellCooldown(uint32 itemId)

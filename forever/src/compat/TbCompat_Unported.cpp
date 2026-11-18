@@ -7,9 +7,30 @@
 
 #include <array>
 #include <atomic>
+#include <cstdarg>
 #include <cstdio>
 #include <initializer_list>
 #include <sstream>
+
+// TbCompat_Unported.h: printf into a std::string, the way the Turtle core's PQuery formats a query.
+std::string LegacyFormatCompat(char const* format, ...)
+{
+    va_list args;
+    va_start(args, format);
+    va_list copy;
+    va_copy(copy, args);
+    int const length = vsnprintf(nullptr, 0, format, copy);
+    va_end(copy);
+    std::string text;
+    if (length > 0)
+    {
+        text.resize(static_cast<size_t>(length) + 1);
+        vsnprintf(text.data(), text.size(), format, args);
+        text.resize(static_cast<size_t>(length));
+    }
+    va_end(args);
+    return text;
+}
 
 namespace tbcompat
 {

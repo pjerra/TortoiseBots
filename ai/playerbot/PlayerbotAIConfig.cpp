@@ -1773,7 +1773,7 @@ void PlayerbotAIConfig::loadFreeAltBotAccounts()
             if (std::find(toggleAlwaysOnlineAccounts.begin(), toggleAlwaysOnlineAccounts.end(), accountName) != toggleAlwaysOnlineAccounts.end())
                 accountToggle = true;
 
-            auto result = CharacterDatabase.PQuery("SELECT name, guid FROM characters WHERE account = '%u'", accountId);
+            auto result = CharacterPQueryCompat("SELECT name, guid FROM characters WHERE account = '%u'", accountId);
             if (!result)
                 continue;
 

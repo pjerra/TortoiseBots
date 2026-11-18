@@ -35,7 +35,21 @@
     X(IncomingChat, "incoming: chat message", "chat messages (1.12 SMSG_MESSAGECHAT layout): party and whisper commands typed to a bot") \
     X(IncomingSpellState, "incoming: spell failure and delay", "spell failure and spell delayed packets (1.12 layouts)") \
     X(JumpFall, "jump, fall and knockback", "jumping, fall damage bookkeeping and knock-back handling by 1.12 movement packets (MSG_MOVE_JUMP, SetFallInformation, forced movement acks); ForeverCore moves by spline and movement generators") \
-    X(WorldAverageDiff, "world update time average", "sWorld.GetAverageDiff(): the average world update time, a host value (R4M request 5); ForeverCore keeps no such average")
+    X(WorldAverageDiff, "world update time average", "sWorld.GetAverageDiff(): the average world update time, a host value (R4M request 5); ForeverCore keeps no such average") \
+    X(Talents, "talents", "talent points and trees (1.12 TalentTab.dbc, Player::GetFreeTalentPoints, GetBonusTalentCount); ForeverCore has no equivalent accessors in the pre-included set") \
+    X(SpawnGuid, "guid from spawn data", "an object guid built from a spawn record (creature data id + spawn id, 1.12 guid layout); ForeverCore keys spawns by spawn id and map, not by guid counter") \
+    X(GuidPositionWire, "wire form of a GuidPosition", "writing a GuidPosition into a packet buffer (1.12 layout)") \
+    X(BattlegroundQueue, "battleground queue", "battleground template id from a queue type id (BattleGroundMgr::BGTemplateId); ForeverCore's queue type id is a struct and the mapping is not ported") \
+    X(ChatLinks, "chat link parsing", "extracting quest and spell ids from chat links (1.12 ChatHandler helpers ExtractKeyFromLink, ExtractSpellIdFromLink)") \
+    X(Pets, "pets and guardians", "pet spell learning and autocast, pet command packets, the controlled-guardian walk (1.12 Pet, CallForAllControlledUnits)") \
+    X(GameObjectUse, "game object use", "using a game object by the use packet (lightwell, party portal, ritual objects); ForeverCore uses typed packets and a different interact check") \
+    X(ItemCasts, "item and totem casts", "casting an item spell with a hand-built Spell (SpellCastTargets setters, triggered flags, SetCastItem, item cooldowns); ForeverCore constructs a Spell from SpellInfo") \
+    X(CreatureImmunity, "creature immunity data", "CreatureInfo school and mechanic immune masks; ForeverCore keeps immunities in CreatureImmunities rows") \
+    X(GmVisibility, "visibility (GM)", "Player::GetVisibility() == VISIBILITY_OFF (a hidden GM); ForeverCore has no such visibility value") \
+    X(HealEstimate, "heal estimate (spell damage bonus)", "Player::CalculateSpellDamage and SpellHealingBonusDone on a SpellEntry; the mirror entry is not a SpellInfo") \
+    X(CustomStrategyStore, "custom strategy store", "reading custom strategy lines from ai_playerbot_custom_strategy; that table does not exist in ForeverCore characters schema") \
+    X(StrategyStoreTransactions, "strategy store transactions", "BeginTransaction(serial) / CommitTransaction() around saving strategies; ForeverCore transactions are objects and the ai_playerbot tables do not exist") \
+    X(Skills, "skills", "skill lines ForeverCore does not name (thrown) and skill writes (SetSkill with the 1.12 argument list)")
 
 namespace tbcompat
 {

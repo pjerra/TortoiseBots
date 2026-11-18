@@ -113,4 +113,181 @@ inline void RegisterDirectPacketCasesCompat() {}
 inline uint32 WorldAverageDiffCompat() { return sWorld.GetAverageDiff(); }
 inline void SetFallInformationCompat(Player* player, float z) { player->SetFallInformation(z); }
 
+
+// ===============================================================================================================
+// TALENTS, GUID FROM SPAWN DATA, BATTLEGROUND QUEUE, CHAT LINKS
+// ===============================================================================================================
+inline uint32 TotalTalentPointsCompat(Player* bot)
+{
+    uint32 pts = bot->GetLevel() < 10 ? 0 : bot->GetLevel() - 9;
+    pts += bot->GetBonusTalentCount();
+    return uint32(pts * sWorld.getConfig(CONFIG_FLOAT_RATE_TALENT));
+}
+inline uint32 FreeTalentPointsCompat(Player* bot) { return bot->GetFreeTalentPoints(); }
+inline int TalentTabPageCompat(TalentTabEntry const* tab) { return tab->tabpage; }
+
+template <class DataPair>
+inline ObjectGuid GuidOfCreatureDataCompat(DataPair const* dataPair) { return ObjectGuid(HIGHGUID_UNIT, dataPair->second.creature_id[0], dataPair->first); }
+template <class DataPair>
+inline ObjectGuid GuidOfGameObjectDataCompat(DataPair const* dataPair) { return ObjectGuid(HIGHGUID_GAMEOBJECT, dataPair->second.id, dataPair->first); }
+
+template <class GuidPos>
+inline void GuidPositionWriteCompat(ByteBuffer& b, GuidPos& guidP)
+{
+    b << (ObjectGuid)guidP;
+    b << (WorldPosition)guidP;
+}
+
+inline BattleGroundTypeId BgTemplateIdCompat(BattleGroundQueueTypeId queueTypeId) { return sBattleGroundMgr.BGTemplateId(queueTypeId); }
+
+inline char* ExtractKeyFromLinkCompat(char** text, char const* linkType) { return ExtractKeyFromLink(text, linkType); }
+inline uint32 ExtractSpellIdFromLinkCompat(char** text) { return ExtractSpellIdFromLink(text); }
+
+
+// ===============================================================================================================
+// PROPER both-core helpers added by R6A
+// ===============================================================================================================
+inline uint32 AmmoItemIdCompat(Player const* player) { return const_cast<Player*>(player)->GetUInt32Value(PLAYER_AMMO_ID); }
+
+// The wand blockers: the unit flags and Unit::IsSpellProhibited, as GenericTriggers.cpp read them.
+inline bool UnitSilencedCompat(Unit* unit) { return (unit->GetUInt32Value(UNIT_FIELD_FLAGS) & UNIT_FLAG_SILENCED) != 0; }
+inline bool UnitPacifiedCompat(Unit* unit) { return (unit->GetUInt32Value(UNIT_FIELD_FLAGS) & UNIT_FLAG_PACIFIED) != 0; }
+inline bool SpellProhibitedCompat(Player* player, SpellEntry const* spellInfo) { return player->IsSpellProhibited(spellInfo); }
+
+// ===============================================================================================================
+// PETS, GAME OBJECTS, ITEM CASTS, MISC FEATURES
+// ===============================================================================================================
+inline void PetLearnSpellCompat(Pet* pet, uint32 spellId) { pet->LearnSpell(spellId); }
+inline void PetToggleAutocastCompat(Pet* pet, uint32 spellId, bool on) { pet->ToggleAutocast(spellId, on); }
+// GenericActions.cpp: the dismiss command of the pet action, sent as a pet action packet.
+inline bool PetDismissCommandCompat(Player* bot, Pet* pet)
+{
+    const ObjectGuid& petGuid = pet->getObjectGuid();
+    const ObjectGuid& targetGuid = ObjectGuid();
+    const uint8 flag = ACT_COMMAND;
+    const uint32 spellId = COMMAND_DISMISS;
+    const uint32 command = (flag << 24) | spellId;
+
+    HandlePetActionCompat(bot->GetSession(), petGuid, command, targetGuid);
+    return true;
+}
+template <class Visitor>
+inline void ForAllGuardiansCompat(Player* bot, Visitor&& visitor) { bot->CallForAllControlledUnits(visitor, CONTROLLED_GUARDIANS); }
+
+inline bool UseGameObjectCompat(Player* bot, GameObject* go)
+{
+    WorldPacket data(CMSG_GAMEOBJ_USE);
+    data << go->getObjectGuid();
+    bot->GetSession()->HandleGameObjectUseOpcode(data);
+    return true;
+}
+
+template <class AI>
+inline bool HasThrownSkillCompat(AI* ai) { return ai->HasSkill(SKILL_THROWN); }
+
+inline uint32 CreatureSchoolImmuneMaskCompat(CreatureInfo const* info) { return info->school_immune_mask; }
+inline uint32 CreatureMechanicImmuneMaskCompat(CreatureInfo const* info) { return info->mechanic_immune_mask; }
+
+inline bool PlayerHiddenGmCompat(Player* player) { return player->GetVisibility() == VISIBILITY_OFF; }
+
+inline int32 EstimateHealOfEffectCompat(Player* bot, Unit* target, SpellEntry const* info, uint32 effect)
+{
+    int32 base = bot->CalculateSpellDamage(target, info, SpellEffectIndex(effect), nullptr);
+    if (base <= 0)
+        return 0;
+    return bot->SpellHealingBonusDone(target, info, SpellEffectIndex(effect), base, HEAL);
+}
+
+// CastItemTargetAction::Execute's cast loop, moved word for word. SpellType is ai::BotUseItemSpell (declared after this header).
+template <class SpellType>
+inline bool CastItemOnTargetCompat(Player* bot, Unit* target, Item* item, ItemPrototype const* proto)
+{
+    SpellCastTargets targets;
+    if (target)
+    {
+        targets.setUnitTarget(target);
+        targets.setDestination(target->getPositionX(), target->getPositionY(), target->getPositionZ());
+    }
+    else
+        targets.m_targetMask = TARGET_FLAG_SELF;
+
+    // use triggered flag only for items with many spell casts and for not first cast
+    int count = 0;
+
+    for (int i = 0; i < MAX_ITEM_PROTO_SPELLS; ++i)
+    {
+        _Spell const& spellData = proto->Spells[i];
+
+        // no spell
+        if (!spellData.SpellId)
+            continue;
+
+        // wrong triggering type
+        if (spellData.SpellTrigger != ITEM_SPELLTRIGGER_ON_USE && spellData.SpellTrigger != ITEM_SPELLTRIGGER_ON_NO_DELAY_USE)
+            continue;
+
+        SpellEntry const* spellInfo = GetSpellEntryCompat(spellData.SpellId);
+        if (!spellInfo)
+        {
+            continue;
+        }
+
+        if (spellInfo->Targets & TARGET_FLAG_DEST_LOCATION)
+            targets.m_targetMask = TARGET_FLAG_DEST_LOCATION;
+
+        SpellType* spell = new SpellType(bot, spellInfo, (count > 0) ? TRIGGERED_OLD_TRIGGERED : TRIGGERED_NONE);
+
+        Item* tItem = nullptr;
+
+        if (item)
+        {
+            spell->SetCastItem(item);
+        }
+
+        bool result = (spell->ForceSpellStart(&targets) == SPELL_CAST_OK);
+
+        if (!result)
+            return false;
+
+        // NOTE: no manual cooldown on the item-cheat path (see UseAction::
+        // UseItemInternal). The core applies spell + category cooldowns in
+        // Spell::SendSpellCooldown after validation; pre-applying them here
+        // made the deferred SpellEvent re-validation see our own cooldown
+        // and cancel the just-started cast.
+
+        ++count;
+    }
+
+    return count;
+}
+inline void AddSpellAndCategoryCooldownsCompat(Player* bot, SpellEntry const* spellInfo, uint32 itemId) { bot->AddSpellAndCategoryCooldowns(spellInfo, itemId); }
+using ItemCastSpellBaseCompat = Spell;
+
+inline bool DbStoreBeginCompat(uint32 serialId) { CharacterDatabase.BeginTransaction(serialId); return true; }
+inline void DbStoreCommitCompat() { CharacterDatabase.CommitTransaction(); }
+inline void LoadCustomStrategyLinesCompat(std::string const& qualifier, uint32 owner, std::list<std::string>& lines)
+{
+    std::string safeQualifier = qualifier;
+    CharacterDatabase.escape_string(safeQualifier);
+    auto results = CharacterDatabase.PQuery("SELECT action_line FROM ai_playerbot_custom_strategy WHERE name = '%s' and owner = '%u' order by idx",
+            safeQualifier.c_str(), owner);
+    std::unique_ptr<QueryResult> results_guard(results);
+    if (results)
+    {
+        do
+        {
+            Field* fields = results->Fetch();
+            std::string action = fields[0].GetString();
+            lines.push_back(action);
+        } while (results->NextRow());
+    }
+}
+
+// Database reads with printf formats: the core's own PQuery (printf formats on this core). The raw result is returned as the
+// call returned it; QueryGuardCompat is the unique_ptr the call sites wrapped it in.
+template <class... Args>
+inline auto CharacterPQueryCompat(char const* format, Args... args) { return CharacterDatabase.PQuery(format, args...); }
+inline std::unique_ptr<QueryResult> QueryGuardCompat(QueryResult* result) { return std::unique_ptr<QueryResult>(result); }
+inline void EscapeStringCompat(std::string& text) { CharacterDatabase.escape_string(text); }
+
 // @@END@@

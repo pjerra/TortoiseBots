@@ -228,6 +228,135 @@ inline uint32 WorldAverageDiffCompat() { tbcompat::Unported(tbcompat::Feature::W
 // meaning of the pair. Failure value: nothing is recorded ("no fall damage is computed from this jump").
 inline void SetFallInformationCompat(Player* /*player*/, float /*z*/) { tbcompat::Unported(tbcompat::Feature::JumpFall); }
 
+
+// ===============================================================================================================
+// TALENTS, GUID FROM SPAWN DATA, BATTLEGROUND QUEUE, CHAT LINKS (Talentspec.h, GuidPosition.h, ServerFacade.h, PlayerbotAI.h)
+// ===============================================================================================================
+// The talent points a character has in total (T: the level rule plus bonus points times the talent rate) and the free ones to
+// spend. Failure value: 0 ("no talent points"), so nothing is spent.
+inline uint32 TotalTalentPointsCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::Talents); return 0; }
+inline uint32 FreeTalentPointsCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::Talents); return 0; }
+// The tab page of a talent tab row (T `tabpage`). The row type is only declared here. Failure value: page 0.
+inline int TalentTabPageCompat(TalentTabEntry const* /*tab*/) { tbcompat::Unported(tbcompat::Feature::Talents); return 0; }
+
+// An object guid from a creature or game object spawn record (T `ObjectGuid(HIGHGUID_UNIT, creature entry, spawn counter)`). Failure
+// value: the empty guid ("no such object"); the record's position is still read by the caller's WorldPosition part.
+template <class DataPair>
+inline ObjectGuid GuidOfCreatureDataCompat(DataPair const* /*dataPair*/) { tbcompat::Unported(tbcompat::Feature::SpawnGuid); return ObjectGuid::Empty; }
+template <class DataPair>
+inline ObjectGuid GuidOfGameObjectDataCompat(DataPair const* /*dataPair*/) { tbcompat::Unported(tbcompat::Feature::SpawnGuid); return ObjectGuid::Empty; }
+
+// Writes a GuidPosition (guid then position) into a packet buffer. Failure value: nothing is written.
+template <class GuidPos>
+inline void GuidPositionWriteCompat(ByteBuffer& /*buffer*/, GuidPos& /*guidPosition*/) { tbcompat::Unported(tbcompat::Feature::GuidPositionWire); }
+
+// The queue type id of the pre-included battleground code under its Turtle spelling.
+using BattleGroundQueueTypeId = BattlegroundQueueTypeId;
+// The battleground type of a queue type id. Failure value: BATTLEGROUND_TYPE_NONE ("no such battleground").
+inline BattleGroundTypeId BgTemplateIdCompat(BattleGroundQueueTypeId /*queueTypeId*/) { tbcompat::Unported(tbcompat::Feature::BattlegroundQueue); return BATTLEGROUND_TYPE_NONE; }
+
+// Chat links: `ExtractKeyFromLink(&text, "Hquest")` and `ExtractSpellIdFromLink(&text)` of the 1.12 chat handler. Failure values:
+// nullptr ("no such link") and 0 ("no spell id"); both callers treat them so.
+inline char* ExtractKeyFromLinkCompat(char** /*text*/, char const* /*linkType*/) { tbcompat::Unported(tbcompat::Feature::ChatLinks); return nullptr; }
+inline uint32 ExtractSpellIdFromLinkCompat(char** /*text*/) { tbcompat::Unported(tbcompat::Feature::ChatLinks); return 0; }
+
+
+// ===============================================================================================================
+// PROPER both-core helpers added by R6A (ForeverCore has the thing: no Unported call)
+// ===============================================================================================================
+// The ammo item the bot's ranged weapon draws from. T `GetUInt32Value(PLAYER_AMMO_ID)`, F (Classic 1.60) `Player::GetAmmoId()`.
+inline uint32 AmmoItemIdCompat(Player const* player) { return player->GetAmmoId(); }
+
+// Silence, pacify and the school lockout, for the wand trigger. T reads the unit flags (UNIT_FLAG_SILENCED / UNIT_FLAG_PACIFIED)
+// and Unit::IsSpellProhibited; F has the pacify flag, a silence AURA (SPELL_AURA_MOD_SILENCE, no flag) and SpellHistory school
+// lockouts. Each asks the same question on both cores.
+inline bool UnitSilencedCompat(Unit const* unit) { return unit->HasAuraType(SPELL_AURA_MOD_SILENCE); }
+inline bool UnitPacifiedCompat(Unit const* unit) { return unit->HasUnitFlag(UNIT_FLAG_PACIFIED); }
+inline bool SpellProhibitedCompat(Player const* player, SpellEntry const* spellInfo)
+{
+    return player->GetSpellHistory()->IsSchoolLocked(spellInfo->GetSpellSchoolMask());
+}
+
+// ===============================================================================================================
+// PETS, GAME OBJECTS, ITEM CASTS, MISC FEATURES (the "Unported" helpers: failure value in each comment)
+// ===============================================================================================================
+// Pets. Failure values: nothing learned / toggled / sent / visited ("the action did not happen").
+inline void PetLearnSpellCompat(Pet* /*pet*/, uint32 /*spellId*/) { tbcompat::Unported(tbcompat::Feature::Pets); }
+inline void PetToggleAutocastCompat(Pet* /*pet*/, uint32 /*spellId*/, bool /*on*/) { tbcompat::Unported(tbcompat::Feature::Pets); }
+inline bool PetDismissCommandCompat(Player* /*bot*/, Pet* /*pet*/) { tbcompat::Unported(tbcompat::Feature::Pets); return false; }
+template <class Visitor>
+inline void ForAllGuardiansCompat(Player* /*bot*/, Visitor&&) { tbcompat::Unported(tbcompat::Feature::Pets); }
+
+// Use a game object by the 1.12 use packet. Failure value: false ("could not use it").
+inline bool UseGameObjectCompat(Player* /*bot*/, GameObject* /*object*/) { tbcompat::Unported(tbcompat::Feature::GameObjectUse); return false; }
+
+// The skill ForeverCore does not name. Failure value: false ("not trained").
+template <class AI>
+inline bool HasThrownSkillCompat(AI* /*ai*/) { tbcompat::Unported(tbcompat::Feature::Skills); return false; }
+
+// Creature immunity masks (T `CreatureInfo::school_immune_mask` / `mechanic_immune_mask`). Failure value: 0 ("immune to nothing").
+inline uint32 CreatureSchoolImmuneMaskCompat(CreatureInfo const* /*info*/) { tbcompat::Unported(tbcompat::Feature::CreatureImmunity); return 0; }
+inline uint32 CreatureMechanicImmuneMaskCompat(CreatureInfo const* /*info*/) { tbcompat::Unported(tbcompat::Feature::CreatureImmunity); return 0; }
+
+// Whether a player is a hidden GM (T `GetVisibility() == VISIBILITY_OFF`). Failure value: false ("not hidden").
+inline bool PlayerHiddenGmCompat(Player* /*player*/) { tbcompat::Unported(tbcompat::Feature::GmVisibility); return false; }
+
+// The heal one effect of a spell would do for the bot (T: CalculateSpellDamage then SpellHealingBonusDone, 0 when the base is not
+// positive). Failure value: 0 ("this effect heals nothing"); the caller skips a spell that heals nothing.
+inline int32 EstimateHealOfEffectCompat(Player* /*bot*/, Unit* /*target*/, SpellEntry const* /*info*/, uint32 /*effect*/)
+{
+    tbcompat::Unported(tbcompat::Feature::HealEstimate);
+    return 0;
+}
+
+// An item cast with a hand-built Spell: the loop of CastItemTargetAction::Execute. Failure value: false (the cast did not start).
+template <class SpellType>
+inline bool CastItemOnTargetCompat(Player* /*bot*/, Unit* /*target*/, Item* /*item*/, ItemPrototype const* /*proto*/)
+{
+    tbcompat::Unported(tbcompat::Feature::ItemCasts);
+    return false;
+}
+// The triggered flags of the n-th spell of an item cast (T: TRIGGERED_OLD_TRIGGERED after the first), and the item cooldowns.
+inline void AddSpellAndCategoryCooldownsCompat(Player* /*bot*/, SpellEntry const* /*spellInfo*/, uint32 /*itemId*/) { tbcompat::Unported(tbcompat::Feature::ItemCasts); }
+// Base class of ai::BotUseItemSpell: T's Spell. F cannot build a Spell from the mirror SpellEntry, so the class is only a
+// declaration there: its constructor counts the feature (nothing can reach it in the slice: the item cast above returns first).
+class ItemCastSpellBaseCompat
+{
+public:
+    ItemCastSpellBaseCompat(Unit* /*caster*/, SpellEntry const* /*info*/, bool /*triggered*/, ObjectGuid const& /*originalCaster*/, SpellEntry const* /*triggeredBy*/)
+    {
+        tbcompat::Unported(tbcompat::Feature::ItemCasts);
+    }
+    void SetCastItem(Item* /*item*/) {}
+};
+
+// The strategy store (ai_playerbot_*): not in ForeverCore's schema. Begin returns false ("no transaction, store nothing").
+inline bool DbStoreBeginCompat(uint32 /*serialId*/) { tbcompat::Unported(tbcompat::Feature::StrategyStoreTransactions); return false; }
+inline void DbStoreCommitCompat() {}
+// The custom strategy lines of one owner (T: SELECT from ai_playerbot_custom_strategy). Failure value: no lines.
+inline void LoadCustomStrategyLinesCompat(std::string const& /*qualifier*/, uint32 /*owner*/, std::list<std::string>& /*lines*/)
+{
+    tbcompat::Unported(tbcompat::Feature::CustomStrategyStore);
+}
+
+// ===============================================================================================================
+// DATABASE READS WITH PRINTF FORMATS (findings item 18)
+// ===============================================================================================================
+// `CharacterDatabase.PQuery("... '%s' ... '%u'", ...)` COMPILES on ForeverCore but its PQuery takes `{}` formats and silently drops
+// the arguments. This helper formats with printf (the Turtle rules), escapes nothing by itself (callers pass escaped, quoted
+// strings as they do today) and sends the text with Query(). String arguments must be `char const*`.
+std::string LegacyFormatCompat(char const* format, ...);
+template <class... Args>
+inline QueryResult CharacterPQueryCompat(char const* format, Args... args)
+{
+    static_assert((!std::is_same_v<std::decay_t<Args>, std::string> && ...), "pass char const* to a printf format");
+    return CharacterDatabase.Query(LegacyFormatCompat(format, args...).c_str());
+}
+// A guard for what CharacterPQueryCompat returns: the legacy code wrapped the raw result in a unique_ptr; F's result is shared.
+inline QueryResult QueryGuardCompat(QueryResult result) { return result; }
+// Escapes a string for a query (T `CharacterDatabase.escape_string(s)`, F `EscapeString(s)`).
+inline void EscapeStringCompat(std::string& text) { CharacterDatabase.EscapeString(text); }
+
 // @@END@@
 #endif // TB_UNPORTED_TABLE_ONLY
 

@@ -131,7 +131,7 @@ PullRangedBlocker PullStrategy::GetRangedBlocker(float distance) const
             case ITEM_SUBCLASS_WEAPON_BOW: trained = ai->HasSkill(SKILL_BOWS); break;
             case ITEM_SUBCLASS_WEAPON_GUN: trained = ai->HasSkill(SKILL_GUNS); break;
             case ITEM_SUBCLASS_WEAPON_CROSSBOW: trained = ai->HasSkill(SKILL_CROSSBOWS); break;
-            case ITEM_SUBCLASS_WEAPON_THROWN: trained = ai->HasSkill(SKILL_THROWN); break;
+            case ITEM_SUBCLASS_WEAPON_THROWN: trained = HasThrownSkillCompat(ai); break;
             case ITEM_SUBCLASS_WEAPON_WAND: trained = ai->HasSkill(SKILL_WANDS); break;
             default: break;
         }
@@ -148,7 +148,7 @@ PullRangedBlocker PullStrategy::GetRangedBlocker(float distance) const
 
         if (proto->SubClass != ITEM_SUBCLASS_WEAPON_THROWN && proto->SubClass != ITEM_SUBCLASS_WEAPON_WAND)
         {
-            if (ai->GetBot()->GetUInt32Value(PLAYER_AMMO_ID) == 0)
+            if (AmmoItemIdCompat(ai->GetBot()) == 0)
             {
                 std::list<Item*> ammo = ai->GetAiObjectContext()->GetValue<std::list<Item*>>("inventory items", "ammo")->Get();
                 if (!ammo.empty() && ammo.front())

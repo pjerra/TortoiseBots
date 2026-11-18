@@ -165,9 +165,9 @@ bool InitializePetAction::Execute(Event& event)
                     return;
                 // Only a fresh spell gets the default: a new rank keeps the
                 // autocast state of the one it replaces (a player's choice).
-                pet->LearnSpell(wanted.spellId);
+                PetLearnSpellCompat(pet, wanted.spellId);
                 if (pet->HasSpell(wanted.spellId) && !IsPassiveSpell(wanted.spellId))
-                    pet->ToggleAutocast(wanted.spellId, autocastDefault(wanted.spellId));
+                    PetToggleAutocastCompat(pet, wanted.spellId, autocastDefault(wanted.spellId));
             });
         }
         return true;
@@ -234,7 +234,7 @@ bool InitializePetAction::isUseful()
             bool hasTamedPet = false;
             if (storedPetLookup.ShouldQuery(false, time(nullptr)))
             {
-                std::unique_ptr<QueryResult> queryResult(CharacterDatabase.PQuery("SELECT id, entry, owner "
+                auto queryResult = QueryGuardCompat(CharacterPQueryCompat("SELECT id, entry, owner "
                                                                                     "FROM character_pet WHERE owner = '%u' AND (slot = '%u' OR slot > '%u') ",
                                                                                     bot->GetGUIDLow(), PET_SAVE_AS_CURRENT, PET_SAVE_LAST_STABLE_SLOT));
 
@@ -298,7 +298,7 @@ bool SetPetAction::Execute(Event& event)
                     };
 
                     const bool autocastActive = IsAutocastActive();
-                    pet->ToggleAutocast(spellId, !autocastActive);
+                    PetToggleAutocastCompat(pet, spellId, !autocastActive);
                     // PET-3: an ordered taunt beats the group-tank sweep.
                     if (TortoiseBots::IsPetTauntSpell(spellId))
                         ai->SetPetTauntAutocastOrdered();
@@ -440,13 +440,8 @@ bool SetPetAction::Execute(Event& event)
             else
             {
                 // Send pet action packet
-                const ObjectGuid& petGuid = pet->getObjectGuid();
-                const ObjectGuid& targetGuid = ObjectGuid();
-                const uint8 flag = ACT_COMMAND;
-                const uint32 spellId = COMMAND_DISMISS;
-                const uint32 command = (flag << 24) | spellId;
-
-                HandlePetActionCompat(bot->GetSession(), petGuid, command, targetGuid);
+                if (!PetDismissCommandCompat(bot, pet))
+                    return false;
 
                 ai->ChangeStrategy("+pet", BotState::BOT_STATE_COMBAT);
                 ai->ChangeStrategy("+pet", BotState::BOT_STATE_NON_COMBAT);
@@ -583,32 +578,35 @@ bool TogglePetSpellAutoCastAction::Execute(Event& /*event*/)
         }
     }
 
-    for (PetSpellMap::const_iterator itr = pet->m_petSpells.begin(); itr != pet->m_petSpells.end(); ++itr)
+    UnportedBlockCompat(tbcompat::Feature::Pets, [&](auto* pet)
     {
-        if (itr->second.state == PETSPELL_REMOVED)
-            continue;
+        for (auto itr = pet->m_petSpells.begin(); itr != pet->m_petSpells.end(); ++itr)
+        {
+            if (itr->second.state == PETSPELL_REMOVED)
+                continue;
 
-        uint32 spellId = itr->first;
-        if (IsPassiveSpell(spellId))
-            continue;
-        if (!TortoiseBots::ShouldSweepPetSpell(playerMaster, tauntOrdered,
-                TortoiseBots::IsPetTauntSpell(spellId)))
-            continue;
+            uint32 spellId = itr->first;
+            if (IsPassiveSpell(spellId))
+                continue;
+            if (!TortoiseBots::ShouldSweepPetSpell(playerMaster, tauntOrdered,
+                    TortoiseBots::IsPetTauntSpell(spellId)))
+                continue;
 
-        bool active = std::find(pet->m_autospells.begin(), pet->m_autospells.end(), spellId) != pet->m_autospells.end();
-        bool const disabled = TortoiseBots::IsDisabledPetAutocast(spellId) ||
-            (TortoiseBots::IsPetTauntSpell(spellId) && !tauntAllowed);
-        TortoiseBots::PetAutocastDecision decision =
-            TortoiseBots::DecidePetAutocast(active, disabled);
-        if (decision == TortoiseBots::PetAutocastDecision::LeaveAlone)
-            continue;
+            bool active = std::find(pet->m_autospells.begin(), pet->m_autospells.end(), spellId) != pet->m_autospells.end();
+            bool const disabled = TortoiseBots::IsDisabledPetAutocast(spellId) ||
+                (TortoiseBots::IsPetTauntSpell(spellId) && !tauntAllowed);
+            TortoiseBots::PetAutocastDecision decision =
+                TortoiseBots::DecidePetAutocast(active, disabled);
+            if (decision == TortoiseBots::PetAutocastDecision::LeaveAlone)
+                continue;
 
-        pet->ToggleAutocast(spellId, decision == TortoiseBots::PetAutocastDecision::Enable);
-        // Counted only when the toggle took: a spell the core refuses would
-        // otherwise "change" on every visit and hog the bot again.
-        if (active != (std::find(pet->m_autospells.begin(), pet->m_autospells.end(), spellId) != pet->m_autospells.end()))
-            changed = true;
-    }
+            PetToggleAutocastCompat(pet, spellId, decision == TortoiseBots::PetAutocastDecision::Enable);
+            // Counted only when the toggle took: a spell the core refuses would
+            // otherwise "change" on every visit and hog the bot again.
+            if (active != (std::find(pet->m_autospells.begin(), pet->m_autospells.end(), spellId) != pet->m_autospells.end()))
+                changed = true;
+        }
+    }, pet);
 
     return changed;
 }
@@ -650,7 +648,7 @@ bool SetPetStanceAction::Execute(Event& /*event*/)
             creature->SetReactState(REACT_DEFENSIVE);
         }
     };
-    bot->CallForAllControlledUnits(ApplyStance(), CONTROLLED_GUARDIANS);
+    ForAllGuardiansCompat(bot, ApplyStance());
 
     return true;
 }

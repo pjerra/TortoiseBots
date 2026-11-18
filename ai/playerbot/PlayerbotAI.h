@@ -70,7 +70,7 @@ public:
     uint32 extractSpellId(std::string str)
     {
         char* source = (char*)str.c_str();
-        return ExtractSpellIdFromLink(&source);
+        return ExtractSpellIdFromLinkCompat(&source);
     }
 };
 
