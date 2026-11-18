@@ -547,4 +547,8 @@ private:
 #include "TbCompat_Config.h"      // Config (ini reader with the Turtle class's interface), ACE_TString
 #include "TbCompat_Names.h"       // constants, unit states, member names a macro can carry
 #include "TbCompat_Unit.h"        // both-core helpers: line of sight, height, angle, session, respawn point
+#include "TbCompat_V.h"           // slice 1, round R4V: values
+#include "TbCompat_A.h"           // slice 1, round R4A: actions, triggers, generic strategies, warrior
+#include "TbCompat_P.h"           // slice 1, round R4P: the PlayerbotAI class
+#include "TbCompat_C.h"           // slice 1, round R4C: engine core, config, log, positions
 #include "TbCompat_Position.h"    // WorldLocation with public mapId/x/y/z/o (must stay last)

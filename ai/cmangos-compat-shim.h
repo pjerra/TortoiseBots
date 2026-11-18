@@ -1067,3 +1067,7 @@ inline bool IsRealPlayer_Helper(Player* p) { return isRealPlayer_Helper(p); }
 
 // Both-core helpers added by the ForeverCore port (slice 1, round R3): same names as forever/src/compat/TbCompat_Unit.h.
 #include "cmangos-compat-r3.h"
+#include "cmangos-compat-r4v.h"
+#include "cmangos-compat-r4a.h"
+#include "cmangos-compat-r4p.h"
+#include "cmangos-compat-r4c.h"
