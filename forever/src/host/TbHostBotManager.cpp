@@ -26,6 +26,10 @@ namespace TortoiseBots
 // legacy singleton below holds a table of them, so the destructor has to exist; the table stays empty on this host.
 BotEntry::~BotEntry() = default;
 
+// ... and BotEntry owns a PlayerbotAIAdapter through a unique_ptr, so the adapter's destructor has to exist too
+// (runtime/PlayerbotAIAdapter.cpp). No adapter is ever built on this host: TbEngineBrain.cpp (host/) does its job.
+PlayerbotAIAdapter::~PlayerbotAIAdapter() = default;
+
 // The legacy singleton is never filled: its records stay empty because the host's table is the registry (see above). It exists so
 // the legacy call sites (`BotManager::Instance().IsBot(...)`) have an object to call.
 BotManager& BotManager::Instance()
