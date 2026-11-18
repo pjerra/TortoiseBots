@@ -251,6 +251,14 @@ std::vector<std::string> Describe(Brain const* brain)
     if (ai::Value<Unit*>* value = pai->GetAiObjectContext()->GetValue<Unit*>("current target"))
         target = value->Get();
     lines.push_back(std::string("target: ") + (target ? target->GetName() : "none"));
+    {
+        // Rage (the spell kit's currency): the engine's own "rage" value (what the heroic strike trigger reads, 40 or more) and the core's power.
+        uint32 engineRage = 0;
+        if (ai::Value<uint8>* value = pai->GetAiObjectContext()->GetValue<uint8>("rage", "self target"))
+            engineRage = value->Get();
+        lines.push_back("rage: engine value " + std::to_string(engineRage) + ", core power " +
+            std::to_string(pai->GetBot()->GetPower(POWER_RAGE)) + "/" + std::to_string(pai->GetBot()->GetMaxPower(POWER_RAGE)));
+    }
     if (target)
     {
         // Reach (findings items 12 and 16): the distance between the two units, the core's melee range for the pair and whether
