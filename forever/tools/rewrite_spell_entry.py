@@ -29,6 +29,14 @@ SKIP_FILES = {
     "ai/cmangos-compat-shim.h",
     "forever/src/compat/forever-compat-shim.h",
 }
+# The SpellRange row's two numbers: the old struct spells them minRange/maxRange, ForeverCore RangeMin[i]/RangeMax[i], so the
+# read goes through a helper that exists on both cores (the lookup itself compiles on both).
+E_SITES = [
+    ("ai/playerbot/PlayerbotAISpells.cpp", "spellRangeEntry->minRange", "SpellRangeMin(spellRangeEntry)"),
+    ("ai/playerbot/PlayerbotAISpells.cpp", "spellRangeEntry->maxRange", "SpellRangeMax(spellRangeEntry)"),
+    ("ai/playerbot/strategy/actions/EnemyAreaSpell.h", "rangeEntry->maxRange", "SpellRangeMax(rangeEntry)"),
+    ("ai/playerbot/strategy/triggers/GenericTriggers.cpp", "rangeEntry->maxRange", "SpellRangeMax(rangeEntry)"),
+]
 # Site -> why the core's SpellInfo has to stay there (a core member or a core call, not a field read).
 SKIP_SITES = {
     ("ai/playerbot/strategy/actions/UseItemAction.cpp", "m_triggeredByAuraSpell = triggeredByAura->GetSpellProto()"),
@@ -151,33 +159,37 @@ def receiver_start(text, arrow):
 
 
 def wrap(text, target, spans, wrapped):
-    """Wrap every <receiver><target> in the file. `wrapped` collects (line, text) for the report."""
+    """Wrap every <receiver><target> in the file. `wrapped` collects (line, text) for the report.
+
+    `pos` is the end of the text copied into the output so far; a hit that is skipped (a comment, a receiver the parser
+    cannot follow, or something already wrapped) only moves the scan position, never the copy position, so no text is lost."""
     out = []
     pos = 0
+    scan = 0
     changed = 0
     while True:
-        hit = text.find(target, pos)
+        hit = text.find(target, scan)
         if hit < 0:
             break
+        end = hit + len(target)
         if in_spans(hit, spans):
-            pos = hit + len(target)
+            scan = end
             continue
         start = receiver_start(text, hit)
         if start is None or start < pos:
-            pos = hit + len(target)
+            scan = end
             continue
-        # Already wrapped (a second run, or a nested expression): the char before the receiver is '('.
         before = text[:start].rstrip()
-        if before.endswith("GetSpellEntryCompat("):
-            pos = hit + len(target)
+        if before.endswith("GetSpellEntryCompat(") or before.endswith("SpellRangeMin(") or before.endswith("SpellRangeMax("):
+            scan = end
             continue
-        end = hit + len(target)
         out.append(text[pos:start])
         out.append("GetSpellEntryCompat(" + text[start:end] + ")")
         line = text.count("\n", 0, start) + 1
         wrapped.append((line, text[start:end]))
         changed += 1
         pos = end
+        scan = end
     out.append(text[pos:])
     return "".join(out), changed
 
@@ -245,6 +257,11 @@ def main():
                     print(f"  {rel}:{line}: {frag}")
             if skipped:
                 text = text.replace(target.replace("->", "\x01"), target)
+
+        for f, old, new in E_SITES:
+            if f == rel and old in text:
+                text = text.replace(old, new)
+                changed[old] = text.count(new)
 
         if changed:
             total[rel] = changed

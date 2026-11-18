@@ -1534,7 +1534,7 @@ bool WandBlocksCcTrigger::ComputeCcCastWaiting()
         SpellRangeEntry const* rangeEntry = spellInfo ? sSpellRangeStore.LookupEntry(spellInfo->rangeIndex) : nullptr;
         if (!rangeEntry)
             continue;
-        float maxRange = rangeEntry->maxRange;
+        float maxRange = SpellRangeMax(rangeEntry);
         bot->ApplySpellMod(spellId, SPELLMOD_RANGE, maxRange);
         if (bot->GetCombatDistance(target) > maxRange)
             continue;

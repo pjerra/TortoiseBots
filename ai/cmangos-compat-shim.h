@@ -896,6 +896,17 @@ inline CmangosLootMgrAdapter sLootMgr;
 // Penqle uses GetLosHitPosition. The bot module's call sites were patched at
 // the source level (TravelMgr.cpp / WorldPosition.h).
 
+// === Spell fetch helpers, spelled the same on both cores ===
+// On ForeverCore each of these hands back our SpellEntry mirror of the core's SpellInfo (TbSpellEntry.h); here the record IS
+// the core's SpellEntry, so the pointer is identity. GetSpellInfoCompat is the way back for a core function that wants the
+// core's record (the same object here). The client's SpellRange row spells its two numbers minRange/maxRange here and
+// RangeMin[i]/RangeMax[i] there.
+inline float SpellRangeMin(SpellRangeEntry const* entry) { return entry ? entry->minRange : 0.0f; }
+inline float SpellRangeMax(SpellRangeEntry const* entry) { return entry ? entry->maxRange : 0.0f; }
+inline SpellEntry const* GetSpellEntryCompat(uint32 id) { return sSpellMgr.GetSpellEntry(id); }
+inline SpellEntry const* GetSpellEntryCompat(SpellEntry const* entry) { return entry; }
+inline SpellEntry const* GetSpellInfoCompat(SpellEntry const* entry) { return entry; }
+
 // === Free-function helpers (cmangos style) wrapping Penqle SpellEntry methods ===
 // cmangos exposes these as free functions; Penqle wraps them in SpellEntry::method.
 inline uint32 GetSpellCastTime(SpellEntry const* spellInfo, Spell const* spell = nullptr) {

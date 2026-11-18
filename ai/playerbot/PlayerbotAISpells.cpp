@@ -358,8 +358,8 @@ bool PlayerbotAI::GetSpellRange(std::string name, float* maxRange, float* minRan
                     rangeMod = bot->GetCombatReach();
                 else
                 {
-                    spellMinRange = spellRangeEntry->minRange;
-                    spellMaxRange = spellRangeEntry->maxRange;
+                    spellMinRange = SpellRangeMin(spellRangeEntry);
+                    spellMaxRange = SpellRangeMax(spellRangeEntry);
                 }
 
                 if (spellInfo->Attributes & SPELL_ATTR_USES_RANGED_SLOT)
