@@ -8,7 +8,9 @@
 // ===============================================================================================================
 
 // SpellThreatEntry::threat, the flat threat of a spell (SpellMgr.h:108).
-inline float SpellFlatThreatCompat(SpellThreatEntry const& entry) { return entry.threat; }
+// (a template: the shim is included before SpellMgr.h declares SpellThreatEntry on some include orders)
+template <class ThreatEntry>
+inline float SpellFlatThreatCompat(ThreatEntry const& entry) { return entry.threat; }
 
 // Unit::SendPlaySpellVisual(id): the debug threat strategy's visual (Unit.h:687).
 inline void DebugSpellVisualCompat(Unit* unit, uint32 kitId) { unit->SendPlaySpellVisual(kitId); }

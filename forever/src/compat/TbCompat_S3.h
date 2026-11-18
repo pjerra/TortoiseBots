@@ -18,7 +18,8 @@
 // The flat threat a spell adds on top of its damage or healing (the spell threat table). T `SpellThreatEntry::threat` (SpellMgr.h:108,
 // uint16, the `spell_threat` row's flat value); F `SpellThreatEntry::flatMod` (SpellMgr.h:362, int32, "flat threat-value for this Spell",
 // the same row). Only the field name and the sign range differ: the ThreatCap interrupt rule adds it to the bot's own threat as a float.
-inline float SpellFlatThreatCompat(SpellThreatEntry const& entry) { return static_cast<float>(entry.flatMod); }
+template <class ThreatEntry>
+inline float SpellFlatThreatCompat(ThreatEntry const& entry) { return static_cast<float>(entry.flatMod); }
 
 // A visual the `debug threat` strategy plays on the bot to show its threat band (high / medium). T `Unit::SendPlaySpellVisual(id)`
 // (Unit.cpp:11476: SMSG_PLAY_SPELL_VISUAL, guid + a SpellVisualKit.dbc index of the 1.12 client). F has no call with that meaning:
