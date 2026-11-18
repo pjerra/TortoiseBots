@@ -78,7 +78,11 @@
     X(ChatFilters, "chat filter chain", "CompositeChatFilter, the filters that rewrite a command line before the bot reads it; the line is used as it comes (R6B)") \
     X(FleeManager, "flee manager", "FleeManager and IdleMobVeto, the flee destination search; no destination is found (R6B)") \
     X(CampSpots, "camp spots table", "CampMgr, the table of camp spots (ai_playerbot_camp) and the active camp list; empty (R6B)") \
-    X(MiscLegacyServices, "other legacy services", "small out-of-slice helpers the slice links against: mount spell test, cheat mask parsing, emote variants, grind instance filter, meeting stone spot search, fishing session end, area trigger run, db store load, cast cancel log (R6B)")
+    X(MiscLegacyServices, "other legacy services", "small out-of-slice helpers the slice links against: mount spell test, cheat mask parsing, emote variants, grind instance filter, meeting stone spot search, fishing session end, area trigger run, db store load, cast cancel log (R6B)") \
+    /* --- slice 2, package V2 --- */ \
+    X(LootItems, "loot: items", "what a corpse's loot holds besides money: the item list, the per-player quest / free-for-all / conditional copies, the status bits that depend on them, the personal-item visibility rule (lead's decision D2: the bot loots money only; items wait for an item-usage slice)") \
+    X(LootTables, "loot tables (drop maps)", "the creature, game object, item, skinning and pickpocket loot templates and the drop maps built from them (entry loot list, item drop list, loot chance, item usage of drops); ForeverCore keeps the rows of a loot template private") \
+    X(GatheringLoot, "game object loot, gathering and skinning", "looting a game object (chest, herb or ore node, goober), the lock test, tool and skill checks, and skinning a looted corpse (lead's decision D2: money from corpses only)")
 
 namespace tbcompat
 {

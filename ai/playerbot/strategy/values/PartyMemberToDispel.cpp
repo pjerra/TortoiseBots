@@ -29,7 +29,7 @@ public:
     virtual bool Check(Unit* unit) override
     {
         Pet* pet = dynamic_cast<Pet*>(unit);
-        if (pet && pet->getPetType() == MINI_PET)
+        if (pet && PetIsMiniPetCompat(pet))
             return false;
         bool const isPet = pet != nullptr;
 
