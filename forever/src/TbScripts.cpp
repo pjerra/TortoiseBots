@@ -12,7 +12,9 @@
 #include "CharacterCache.h"
 #include "Chat.h"
 #include "Creature.h"
+#include <algorithm>
 #include <bitset>
+#include <chrono>
 #include <list>
 #include <string>
 #include <unordered_set>
@@ -27,6 +29,7 @@
 #include "SpellAuraDefines.h"
 #include "Timer.h"
 #include "DB2Stores.h"
+#include "UpdateTime.h"
 
 using namespace Trinity::ChatCommands;
 using TortoiseBots::BotMgr;
@@ -38,6 +41,23 @@ ObjectGuid GuidByName(std::string name)
     if (!normalizePlayerName(name))
         return ObjectGuid::Empty;
     return sCharacterCache->GetCharacterGuidByName(name);
+}
+
+// Tick cost window (`.tb perf`): the world's own update time (the previous update's duration, as `server info` prints it, sampled once per tick)
+// and the module's share of it (BotMgr::Update: bot sessions plus the engines), average and worst since the last `.tb perf`.
+struct PerfWindow
+{
+    uint64 ticks = 0;
+    uint64 worldSumMs = 0;
+    uint32 worldMaxMs = 0;
+    uint64 botSumUs = 0;
+    uint32 botMaxUs = 0;
+    void Reset() { *this = PerfWindow(); }
+};
+PerfWindow& Perf()
+{
+    static PerfWindow window;
+    return window;
 }
 
 class tortoisebots_world : public WorldScript
@@ -69,7 +89,16 @@ public:
 
     void OnBeforeMapsUpdate(uint32 diff) override
     {
+        auto const started = std::chrono::steady_clock::now();
         BotMgr::Instance().Update(diff);
+        uint32 const us = uint32(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count());
+        uint32 const worldMs = sWorldUpdateTime.GetLastUpdateTime();
+        PerfWindow& perf = Perf();
+        ++perf.ticks;
+        perf.worldSumMs += worldMs;
+        perf.worldMaxMs = std::max(perf.worldMaxMs, worldMs);
+        perf.botSumUs += us;
+        perf.botMaxUs = std::max(perf.botMaxUs, us);
     }
 
     void OnShutdown() override
@@ -120,6 +149,7 @@ public:
             { "where",  HandleWhere,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "engine", HandleEngine, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "status", HandleStatus, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "perf",   HandlePerf,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "spells", HandleSpells, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "unported", HandleUnported, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "item",   HandleItem,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
@@ -250,6 +280,22 @@ public:
         }
         else
             handler->PSendSysMessage("TortoiseBots: %u creature(s) within 60 yd, none alive.", uint32(creatures.size()));
+        return true;
+    }
+
+    // .tb perf: the tick cost since the last `.tb perf` (or the start), then a new window.
+    static bool HandlePerf(ChatHandler* handler)
+    {
+        PerfWindow& perf = Perf();
+        if (!perf.ticks)
+        {
+            handler->PSendSysMessage("TortoiseBots: perf: no tick since the window opened.");
+            return true;
+        }
+        handler->PSendSysMessage("TortoiseBots: perf: %llu ticks; world update time avg %.2f ms, worst %u ms; module (sessions + engines) avg %.0f us, worst %u us; %u bot session(s).",
+            (unsigned long long)perf.ticks, double(perf.worldSumMs) / double(perf.ticks), perf.worldMaxMs, double(perf.botSumUs) / double(perf.ticks),
+            perf.botMaxUs, uint32(BotMgr::Instance().Count()));
+        perf.Reset();
         return true;
     }
 
