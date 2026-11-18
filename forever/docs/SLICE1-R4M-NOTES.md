@@ -71,7 +71,44 @@ which V's Turtle body does not include). Decision: F answers `SPELL_STATE_CHANNE
 
 ## 3. GUID keys (finding 15)
 
-(filled in after the code change, see "GUID-key audit")
+One function turns a guid into a 64-bit key on ForeverCore: `GuidKeyCompat` (common pair; F: `std::hash<ObjectGuid>` of the 128 bits, 0 for the empty guid; T:
+`GetRawValue()`). One function turns it into text for people: `GuidTextCompat` (F `ToString()`, T the stream form). `GuidRawCompat` (A: both halves mixed, P: the low
+word) is gone: its 40 call sites (A 22, P 18) are `GuidKeyCompat`. `GuidWriteCompat/GuidReadCompat` (C) is not a second key: it is the round-trip text of a stored
+`GuidPosition` string and has to parse back (a hash cannot).
+
+What is NOT a guid key but is a `uint64`/`uint32` made from a guid, in the slice's files: the low part (`GetGUIDLow()` = `GetCounter()`) of a PLAYER guid used as a bot id
+(`BotActionLog` file map, `PlayerbotAI::worldPvpIgnoreGuidLow_`, `ChooseTargetActions` pursuit low guid, `WarriorTriggers.cpp:78` ordering): the counter of a player guid is
+unique on both cores, both sides of every compare use the same call, so these agree. They are not used for creatures (a creature counter is not unique across entries on F).
+
+Every place in the 127 files and the `ai/` headers that stores or compares a guid as `uint64`, and what feeds it (grep `GuidKeyCompat`, 62 sites, all in the slice):
+
+| consumer (policy or store) | file:line in the slice that feeds it | helper |
+|---|---|---|
+| `ActionFailureBackoff::Key(targetGuid, destGuid)` | `Engine.cpp:141,143` (target, rpg target) | `GuidKeyCompat` |
+| `WhyTraceService::NoteTickStart(botKey, ...)` | `Engine.cpp:327` | `GuidKeyCompat`; the reader `runtime/WhyTrace.cpp` (outside the slice) keys by `GetRawValue()`: see "outside the slice" |
+| action log lines `0x%llx` and the damage throttle map (`BotActionLog.cpp:766` `g`) | `BotActionLog.cpp:480,524,551,561,766,773,780`, `PlayerbotAISpells.cpp` CAST_GATE x10, `PlayerbotAIPackets.cpp:568`, `AttackAction.cpp:101`, `ChooseTargetActions.cpp:250`, `MovementActions.cpp:3318,5084,5091,5131,5139` | `GuidKeyCompat` |
+| `BotDiagnostics` sampled target (`BotDiagnostics.h:68`) | `BotDiagnostics.cpp:152` | `GuidKeyCompat` |
+| `PlayerbotSecurity` per-sender map | `PlayerbotSecurity.cpp:249` | `GuidKeyCompat` |
+| `RitualHolds().Holds(key)` (`runtime/RemoteCommanderTasks.h:415`) | `PlayerbotAI.cpp:2634`, `PlayerbotAISpells.cpp:603,1175` | `GuidKeyCompat`; the inserting side `commands/Commander.cpp:4720,5653` uses `task.botRaw` (outside the slice) |
+| `ClaimTable` (`caster`, `std::pair(scope, spell)`) | `GenericSpellActions.cpp:137,139,149,161` | `GuidKeyCompat` for caster and scope (scope = `GroupScopeGuidCompat`, a guid, then keyed) |
+| flee / ledge / behind-streak policies (`fleeFailures.Observe/BeginAttempt`, `ledgeStepDown.Due`, `SetBehindStreakPoll`) | `MovementActions.cpp:3784,4084,4243,4818,4959,5015,5249` | `GuidKeyCompat` |
+| `LinkedDeathHoldsMember(..., guid)`, `OneAtATimeHolds(solePick, guid)` (`BossTacticsPolicy.h:1783,2198`) | `AoeValues.cpp:33`, `DpsTargetValue.cpp:102,156,567,604,638`, `PossibleTargetsValue.cpp:292-306` | `GuidKeyCompat`; `solePick` comes from `ai::SoleKillGuid` (`BossTacticsActions.cpp:778`, outside the slice) |
+| `TankPostUnitPick(keyOn, latched, newGuid, oldGuid)` (`BossTacticsPolicy.h:4360`) | `TankTargetValue.cpp:195,200` | `GuidKeyCompat`; `latched` comes from `ai::TankPostLatchedUnit` (`BossTacticsActions.cpp:12268`, outside the slice: it looks the record up by `bot->GetObjectGuid().GetRawValue()` and returns `arrivedSubjectGuid` stored the same way) |
+| `SeekMeetHealWalker(guid, meetPuller)` (`SeekAuraPolicy.h:360`), `HealTargetPolicy` assigned/focus lists | `PartyMemberToHeal.cpp:202,206,258,293` | `GuidKeyCompat`; `meetPuller` comes from `SeekCycleSnapshot` (`BossTacticsActions.cpp`, outside the slice) |
+| `ThreatValues` maps (`g_threatCapLog`, `g_hexScan` pair with the instance id, `member.key`) | `ThreatValues.cpp:88,143,167` | `GuidKeyCompat` |
+| `ObjectGuidCalculatedValue::Format()` (a guid as the text of a value) | `Value.cpp:12` | `std::to_string(GuidKeyCompat(...))`; the same text is built by `LootObjectStack.cpp:474` (`std::to_string(guid.GetRawValue())`, outside the slice) for the qualifier of "should loot object" |
+| `PlayerbotAIPackets.cpp:426` `SpeedChangeAck::WriteAck(ack, guid.GetRawValue(), ...)` | a packet field (the mover guid), not a key | still `GetRawValue()`: in the packet table that P left open (does not compile on F, listed in the feature table) |
+| `GuidPosition(uint64 guid, pos)` (`GuidPosition.h:13`) | callers `TravelMgr` (outside the slice) | `GuidFromRawCompat` (only 0 has a form); a key must never go in here |
+
+A key produced by anything else, found in the slice's files: none (the only `GetRawValue()` left in the 127 files is the packet field above; the `ai/` headers
+`strategy/hunter/HunterTriggers.h:280` and `strategy/warlock/WarlockActions.h:236` also still call it, they are not reached by the slice and are listed for their class
+slice). Producers OUTSIDE the slice that feed the same policies with `GetRawValue()` (this is the list the porting rounds must change to `GuidKeyCompat` in the same
+change that ports the file, or the policies disagree about which unit a key means): `BossTacticsActions.cpp` (179 places: tank post records, sole kill, seek cycle,
+latches), `commands/Commander.cpp` (237), `LootAction.cpp` (25), `runtime/RunTrace.cpp` (12), `AddLootAction.cpp` (11), `runtime/BotManager.cpp` (10, `BotRegistryKey`),
+`ViscidusActions.cpp` (9), `runtime/WhyTrace.cpp` (8), `PatchwerkSafety.cpp` (8), `FankrissFocusActions.cpp` (8), `runtime/ObservabilityEmitter.cpp` (6),
+`HoldKillBlockersValue.cpp` (6), `TravelMgr.cpp` (6), `host/ViscidusDiagnostics.cpp` (5), `MaintenanceValues.cpp` (5), `PatchwerkSoakerActions.cpp` (5), and 25 smaller files.
+The host's `BotRegistryKey` has the same trap (`GetRawValue()` as the key of the bot table).
+
 
 ## 4. Requests to the host, CMake or the lead
 
@@ -79,7 +116,18 @@ which V's Turtle body does not include). Decision: F answers `SPELL_STATE_CHANNE
 
 ## 5. PQuery / PExecute / DirectPExecute with printf placeholders (finding 18)
 
-(filled in at the end)
+Three calls with printf placeholders, all in the slice's `.cpp` files (no `.h` of the slice has one; `runtime/HireUnlockKillStore.h:12` only names `PExecute` in a comment).
+On ForeverCore each COMPILES (the core's `PQuery` takes a `{}` format), silently drops its arguments and raises no error: the query text is the format string as written.
+
+| file:line | call | format string (and arguments) |
+|---|---|---|
+| `ai/playerbot/strategy/CustomStrategy.cpp:120` | `CharacterDatabase.PQuery` | `"SELECT action_line FROM ai_playerbot_custom_strategy WHERE name = '%s' and owner = '%u' order by idx"`, `safeQualifier.c_str(), owner` (and `CharacterDatabase.escape_string` at :119, which F lacks) |
+| `ai/playerbot/PlayerbotAIConfig.cpp:1776` | `CharacterDatabase.PQuery` | `"SELECT name, guid FROM characters WHERE account = '%u'"`, `accountId` |
+| `ai/playerbot/strategy/actions/GenericActions.cpp:237` | `CharacterDatabase.PQuery` | `"SELECT id, entry, owner FROM character_pet WHERE owner = '%u' AND (slot = '%u' OR slot > '%u') "`, `bot->GetGUIDLow(), PET_SAVE_AS_CURRENT, PET_SAVE_LAST_STABLE_SLOT` |
+
+For completeness (no placeholder, safe as written): `PlayerbotAIConfig.cpp:1752` `LoginDatabase.PQuery("SELECT username, id FROM account")`. No `PExecute`, no `DirectPExecute`
+in the 127 files or the `ai/` headers. (Outside the slice the same pattern is everywhere: `commands/`, `runtime/`, `PlayerbotDbStore.cpp`: the porting rounds grep them.)
+
 
 ## 6. The remaining error places by feature (input for the linking round, finding 8)
 
