@@ -47,7 +47,7 @@ points and any rank cap that is lower on Forever.
 `sql-inventory.csv` was built by splitting every SQL statement (comments/strings aware) in
 `data/sql/world`, `data/sql/character`, `tools/optional-plans` and `tools/sql/rollback`, resolving
 dynamic `ALTER` statements hidden behind `information_schema` + `PREPARE`, and comparing every touched
-core table/column with the bundled Trinity 1.60 schema (`/mnt/a/WoWForever/sql/base`). Own tables are
+core table/column with the bundled Trinity 1.60 schema (the WoW Forever repack's `sql/base`). Own tables are
 the module's `ai_*`, `tortoise_bots_*` and `ahbot_items` tables (all created by the migrations).
 MySQL 8 risks checked: `TYPE=` engines, zero dates, `VALUES()` in ON DUPLICATE, `ADD/DROP COLUMN IF
 [NOT] EXISTS`, unquoted reserved words. None is used; the PREPARE-based ALTERs are explicitly MySQL 8
