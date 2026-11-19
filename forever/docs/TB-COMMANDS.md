@@ -67,7 +67,8 @@ Lead decision 2026-11-20; the one encoder is `Enc`/`Rec`/`Reply` in `forever/src
 * **Errors**: `error code=<word> cmd=<word> [msg=<encoded text>] #token`, exactly those keys, one line, nothing else for that command. A per-bot refusal inside an accepted command is the same words on the bot's own line: `order bot=.. verb=.. status=refused code=.. msg=..`.
   Codes: `engine-not-built`, `missing-target`, `no-such-player`, `not-a-bot`, `no-party`, `no-bots`, `ambiguous-party`, `missing-verb`, `unknown-verb`, `missing-argument`, `unexpected-argument`, `bad-argument`, `bad-target`, `bad-role`, `bad-id`, `too-many`,
   `no-engine`, `queue-full`, `not-in-group`, `needs-player-sender`, `no-selection`, `mark-empty`, `no-such-spawn`, `target-not-found`, `target-dead`, `not-attackable`, `no-pull-strategy`, `no-commander`, `other-map`, `too-far`, `nothing-to-assist`, `self-master`, `missing-commander`,
-  `missing-leader`, `duplicate`, `party-refused`, and `action-not-registered` (with `name=<the legacy action key>`). A refusal by the core itself (no permission, unknown command) is the core's own untagged text, not this grammar.
+  `missing-leader`, `duplicate`, `party-refused`, and `action-not-registered` (with `name=<the legacy action key>`). Slice 4 adds (section 8): `no-trigger`, `not-allowed`, `leader-refused`, `leader-inside`, `not-leader`, `lfg-group`, `not-empty`, `locked`, `no-entrance`,
+`already-on-map`, `in-combat`, `dead`, `not-dead`, `teleporting`, `teleport-refused`, `timeout`, `stuck`, and the entry refusals `level`, `full`, `difficulty`, `not-found`, `other`. A refusal by the core itself (no permission, unknown command) is the core's own untagged text, not this grammar.
 * **Addressing.** `<bot>` is a character name (a logged-in host bot). `party <leader>` is every host bot in the party of that character. `party` with no leader is, in this order: the bots bound (`.tb master`) to the sender, or to the one commander there is, or the members of the one bot-led party there is;
   anything else needs the leader's name (`error code=ambiguous-party`). Names are case-insensitive. The `target=` of a reply is `<name>`, `party:<leader>` or `party:commander:<name>` as parts.
 * **In a build without the engine** every command below (and `grammar`) answers `error code=engine-not-built cmd=<command> msg=...`.
@@ -106,6 +107,7 @@ Each bot of the address gets the order QUEUED at once; the engine runs it right 
 | `free` | - | `ResetStrategies`, movement `follow`, the explicit attack target cleared | - |
 | `assist` | a party member's name | one shot: `attack` on what that member is attacking when the order runs | the member is not in the party, or has no attackable victim now |
 | `co` / `nc` | `+name,-name` | `ChangeStrategy(arg, combat / non-combat)`: a debug switch | characters other than letters, digits, space, `+ - , _` |
+| `release` | - | `release` (the dead bot releases its spirit; inside a dungeon the core revives it at the instance's entrance, section 8) | the instance has no entrance point (`no-entrance`: the release is held, never a graveyard outside) |
 
 One bot and a party (both have the markers):
 ```
@@ -167,8 +169,16 @@ party-end count=5 leader=Mtank bots=5 raid=no commander=Mcmd #p9
 | `cast_queued` `cast_delivered` `cast_dropped` `cast_pending` | the cast-result queue counters (absent without a bot session) |
 | `eating` `drinking` | a seated food / drink aura is on the bot |
 | `resting` `rest_why` | the rest gate: `resting=no` means out of the old rest conditions; `rest_why` is a `;` list of `dead`, `combat`, `hp`, `mana`, `eating`, `drinking` |
+| `life` | slice 4: `alive`; `dead` (a body that will release); `awaiting-res` (a body held by the crew rule, or with a resurrection pending); `ghost`; `running-back` (alive again, more than 30 yd from its commander or leader, until it is within 20 yd) |
+| `relhold` | slice 4: why a BODY on an instance map waits (commanded bots): `rezzer` (a living priest, paladin, shaman or druid of the party is on the map), `combat` (a member fights), `wipe` (nobody is left: it releases now), `no-entrance` (the instance has no entrance point: the release is held); empty otherwise |
+| `resreq` | slice 4: the party member or commander whose resurrection offer is pending for this dead bot; empty when none |
+| `corpse` `corpsemap` | slice 4, dead bots only: `x,y,z` of the body (unreleased) or of the corpse a ghost has, and its map id |
+| `outside` | slice 4: `yes` when the party's leader is inside an instance and this bot is not in that instance, else `no` |
+| `entered` `entry` `block` `blockmsg` | slice 4: how the last map change the host started happened (`trigger`, `order` (a direct entry or `.tb instance leave`), `setup` (`.tb tele`); empty = none yet); `entry` is the phase of a running entry (`walking`, `waiting-leader`, `teleporting`; empty when none); `block` is the code of the last refused entry or lost teleport (empty = none) and `blockmsg` says it in words |
+| `catchup` `practice` | slice 4: how many open-world catch-up teleports the host made for this bot (never into or inside an instance); `yes` after `.tb revive` until the next combat ends |
 
 End line: `state-end count=<lines> records=<records> bots=<n> resting=<number of bots resting> ready=yes|no [why=<reason>:<bot>;...] marks=<set raid marks> target=<label> #token`.
+Slice 4 adds to the end line: `alive=<n> dead=<n> ghost=<n> wipe=yes|no whole=yes|no` (`dead` = bodies; `wipe` = nobody is alive; `whole` = every addressed bot is alive, on its leader's map and within 40 yd of it).
 **ready** = every bot is alive, out of combat, not resting, within follow range of its master (10 yd; 18 yd for a healer) and not blocked or away. `why` lists `<reason>:<bot>` items, reason one of `dead`, `combat`, `resting`, `far`, `blocked`.
 
 Real output (one bot, final boot of package L; the party was inside Ragefire Chasm):
@@ -181,7 +191,7 @@ state-end count=1 records=1 bots=1 resting=0 ready=yes marks=0 target=Mtank #t2
 
 ### `.tb threat <bot|party [leader]> [#token]`
 READ ONLY (`GetSortedThreatList`, `GetLastVictim`). `threat-begin`, one line per mob that has one of the bots on its threat list, `threat-end count=<lines> mobs=<n> bots=<n> target=<label>`:
-`threat mob=<GUID text> entry=426 name=Redridge%20Brute hppct=100 victim=Mtank target=Mtank size=3 top=Mtank:343;Mdpsb:338;Mdpsc:196 #token` (`victim` is the mob's current threat victim, `target` what the mob is fighting, `top` the first three of the sorted list).
+`threat mob=<GUID text> entry=426 name=Redridge%20Brute hppct=100 victim=Mtank target=Mtank size=3 top=Mtank:343;Mdpsb:338;Mdpsc:196 pos=-9091.12,-2001.40,131.00 flee=no #token` (`victim` is the mob's current threat victim, `target` what the mob is fighting, `top` the first three of the sorted list; slice 4 adds `pos=x,y,z` of the mob and `flee=yes|no`: the mob is in the fear state of a flee, or walks to the nearest helper as the core's `DoFleeToGetAssistance` makes it).
 
 ## 6. Test kit
 * `.tb learn <bot> <spell id>...`: `learn-begin`, `learn bot=.. spell=<id> result=<learned|known|unknown|invalid|not-learned> name=..`, `learn-end count=.. bot=.. learned=..`. Core path: `SpellMgr::IsSpellValid`, `Player::LearnSpell`. At most 40 ids.
@@ -193,3 +203,104 @@ READ ONLY (`GetSortedThreatList`, `GetLastVictim`). `threat-begin`, one line per
 ## 7. Config keys
 
 `TortoiseBots.Slice.RestHealthPct` (default 90) and `TortoiseBots.Slice.RestManaPct` (default 80), `forever/conf/tortoisebots.conf.dist`; read on each `.tb state`.
+
+## 8. Slice 4: entering a dungeon, instances, death (package H4)
+
+Commands of the "instance and death" slice. They follow the grammar of section 3 (markers named after the command, `count=`/`records=`, `error` on one line, the token last). **The sample lines below are REAL output of the module on ForeverCore (package M4, build VM test server, 2026-11-19): every block was copied from a boot.** `.tb grammar selftest` also prints one fixed-value record of every kind and key of this section (`selftest case=state-h4`, `state-h4-refused`, `state-end-h4`, `threat-h4`, then one `trigger enter instance leave reset tele revive kill gm` record): its output on the final binary is in section 9. The old `.tb enter <character> <map id>` (a character and a map NUMBER, free text) is unchanged.
+
+Who may be named: a host bot, or the character of the GM who typed the command (`MayLeadBots`); a second character in a command goes through the same check (`not-allowed`). Everything runs on the world thread.
+A reply is TRUE: a record says `started` when the core accepted the first step and the outcome is in the bot's `state` record (`entered=`, `block=`, `inst=`), never `ok` before the change holds; a refusal changes nothing.
+
+### `.tb trigger <area trigger id> [#token]`
+The AreaTrigger.db2 row and its `areatrigger_teleport` target. Read only.
+```
+trigger-begin #trg
+trigger id=2230 map=1 pos=1818.40,-4427.26,-10.45 shape=box length=21.69 width=11.83 height=21.22 yaw=0.58 target=1102230 targetmap=389 targetpos=0.80,-8.23,-15.53 #trg
+trigger-end count=1 records=1 id=2230 #trg
+```
+(`pos` is the box centre, `target` is the `world_safe_locs` id the core's handler sends the player to.) Errors: `missing-argument`, `bad-id`.
+
+### `.tb enter <bot|party [leader]> [trigger <id> | map <id>] [direct] [#token]`
+The bots enter a dungeon through its real entrance. Per bot: the engine goes down, the bot walks into the trigger's box (`MovePoint`; the walk is abandoned after 20 s without progress, the whole entry after 120 s), and then the host calls THE CORE'S OWN area-trigger handler for the bot
+(`WorldSession::HandleAreaTriggerOpcode`, MiscHandler.cpp:538: box test, corpse rule, entry rule, teleport to the instance's entrance). The entry question is asked through the one guarded function (`BotMgr::CanEnterMap`/`CheckEntry`) first.
+With no `trigger`/`map` the trigger is the one the leader stands in that leads to another map; `map <id>` takes the first trigger that leads into that map. The party's LEADER (a host bot among the addressed bots) enters first; the others call the handler only after it stands on the target map (the group's
+recent instance, MapManager.cpp:300, so all five land in the SAME instance); if the leader is refused or fails, they are refused (`leader-refused`). `direct` = the fallback D1: no walk and no handler, the same checks, then `Player::TeleportTo` to the entrance the instance names, else to the trigger's target.
+A bot already on the target map, dead, in combat or being teleported is refused. The result of a started entry is read from `state` (`entered=trigger`, `inst=`, or `block=` with `blockmsg=`); a refusal at the door says why in the same `block=` key.
+```
+enter-begin #e1
+enter bot=Mtank trigger=2230 map=389 status=started inbox=no direct=no #e1
+enter bot=Mpriest trigger=2230 map=389 leader=Mtank status=started inbox=no direct=no #e1
+enter bot=Mdpsa trigger=2230 map=389 leader=Mtank status=started inbox=no direct=no #e1
+enter bot=Mdpsb trigger=2230 map=389 leader=Mtank status=started inbox=no direct=no #e1
+enter bot=Mdpsc trigger=2230 map=389 leader=Mtank status=started inbox=no direct=no #e1
+enter-end count=5 records=5 trigger=2230 map=389 target=party:Mtank bots=5 started=5 refused=0 #e1
+```
+(Live: the party stood at the game_tele `RagefireChasm` spot, 1811.78,-4410.5, a few yards outside the box (`inbox=no`); all five were on map 389, instance 1, at the entrance 0.80,-8.23 within 3 s, `entered=trigger`. The refusal line of a level-9 bot is `enter bot=Mlow trigger=2230 map=389 leader=Mtank status=refused code=level msg=level%20too%20low%20for%20this%20instance%20%28needs%2010%29`, seen in the selftest.)
+Refusal codes (`code=`, also the `block=` words): `level` (a minimum level), `full`, `locked`, `difficulty` (no map difficulty for the group's setting), `not-found`, `other` (any other entry condition), `already-on-map`, `in-combat`, `dead`, `teleporting`, `leader-refused`, `bad-id`, `other-map` (the bot is not on the trigger's map), `not-a-bot`, `duplicate` (an entry runs already);
+later, in `block=`: `teleport-refused` (the core ported the bot elsewhere), `timeout`, `stuck`.
+
+### `.tb instance <leader> info [map <id>] | reset | leave [#token]`
+`<leader>` is a character in the world. **info**: the instance the leader is in, else (with `map`) the one its party was last in, else one a party member stands in. `players` counts without GMs; `mobs_total` = the world database's creature spawns of the map and difficulty, `mobs_alive` = those whose creature lives, or, when it is not loaded,
+that have no future respawn time (a killed creature keeps one), `mobs_loaded` = creatures the map holds now; `boss` = see below; `entrance` = the instance script's entrance point (0 = none), `recent` = the party's recent instance id for the map.
+```
+instance-begin #i1
+instance leader=Mtank map=389 name=Ragefire%20Chasm inst=1 diff=1 players=5 gms=1 mobs_alive=121 mobs_total=132 mobs_loaded=130 boss=2732:alive;2733:alive;2734:alive;2735:alive entrance=1102230 recent=1 owner=Mtank #i1
+instance-end count=1 records=1 verb=info map=389 inst=1 #i1
+```
+Real leave and reset answers:
+```
+instance-begin #l1
+leave bot=Mcmd map=1 status=started #l1
+leave bot=Mdpsa map=1 status=started #l1
+leave bot=Mdpsb map=1 status=started #l1
+leave bot=Mdpsc map=1 status=started #l1
+leave bot=Mpriest map=1 status=started #l1
+leave bot=Mtank map=1 status=started #l1
+instance-end count=6 records=6 verb=leave map=389 inst=1 bots=6 started=6 refused=0 #l1
+instance-begin #rs1
+reset map=389 inst=1 status=ok #rs1
+instance-end count=1 records=1 verb=reset leader=Mtank instances=1 ok=1 failed=0 #rs1
+```
+`boss` is `<DungeonEncounter id>:<alive|dead>` for every boss of the instance script's own table (`InstanceScript::GetBossDungeonEncounter`, dead = boss state DONE; 2732 Oggleflint, 2733 Taragaman, 2734 Jergosh, 2735 Bazzalan): the creature-template flag the first version scanned for does not exist at run time (the core strips CREATURE_FLAG_EXTRA_DUNGEON_BOSS from the database value). **leave**: every host bot on that instance (the party and the commander) is teleported to the exit trigger's target (`GetGoBackTrigger`); a DEAD bot is refused (`code=dead`: its body stays in the dungeon until it is raised or released inside; moved out, its engine would release it at a graveyard outside, which for an Alliance bot is Razor Hill, a ghost until `.tb revive`); records `leave bot= map= status=started|refused [code= msg=]`, end `verb=leave ... bots= started= refused=`. **reset**: follows the core's rules
+(`HandleResetInstancesOpcode` MiscHandler.cpp:985, `Group::ResetInstances` Group.cpp:1348, `InstanceMap::Reset` Map.cpp:3182) and refuses, before the core is called, with `leader-inside` (the core ignores a reset sent from an instance), `no-party`, `not-leader`, `lfg-group`, `target-not-found` (the party owns no instance), `not-empty` (anyone, a body or a GM,
+is on the map) or `locked` (a boss was killed: the lock stays); otherwise the core is called and the outcome is READ: a successful reset makes the group forget the instance, so records `reset map= inst= status=ok|failed`, end `verb=reset leader= instances= ok= failed=`. After an `ok`, the next entry opens a FRESH instance (a new map object: every creature alive again, a new script); its `inst` can be the same number, because the core hands out the lowest free id again (`MapManager::GenerateInstanceId`, `_freeInstanceIds`) once the reset instance is unloaded.
+
+### `.tb tele <character> to <character> [revive]` and `.tb tele <bot|party [leader]> <map> <x> <y> <z> [o] [revive] [#token]`
+Test setup (`tag=SETUP`; `tag=PRACTICE` with `revive`). Refused: `bad-target` (the same character), `teleporting`, `in-combat` (either), `dead` (the target, or the source without `revive`), `not-allowed` (not a host bot / the sender's own character), `already-on-map` (the source stands in ANOTHER instance of the target's map:
+the core aborts an entry check for a player on that map, so it is refused first), `not-in-group` (into an instance: a non-GM must be in the target's party; a GM may join any instance), the entry refusals of `.tb enter`, `teleport-refused`. Into an instance the source joins the TARGET's instance (the same instance id), through the public
+`Player::TeleportTo(location, options, instanceId)`; that is how the commander (GM, not in the party) enters the tank's instance. With `revive` a dead source is raised at the teleport (`TELE_REVIVE_AT_TELEPORT`) and marked `practice`. `started` means the core began the teleport; where it ended is in the bot's `entered=`/`block=`.
+```
+tele-begin #t3
+tele bot=Mcmd to=Mtank status=started map=389 inst=1 tag=SETUP #t3
+tele-end count=1 records=1 target=Mcmd bots=1 started=1 refused=0 #t3
+tele-begin #tx
+tele bot=Mcmd to=Mtank status=refused code=already-on-map msg=Mcmd%20stands%20in%20another%20instance%20of%20that%20map%3A%20it%20must%20leave%20it%20first%20%28the%20core%20aborts%20an%20entry%20check%20for%20a%20player%20on%20that%20map%29 #tx
+tele-end count=1 records=1 target=Mcmd bots=1 started=0 refused=1 #tx
+```
+
+### `.tb revive <bot|party [leader]> [#token]`   (PRACTICE)
+The driver's shortcut: a dead bot is raised in place with full health (`ResurrectPlayer(1.0f)`, corpse bones removed). Every line carries `tag=PRACTICE`, a log line says PRACTICE, and the bot's `state` says `practice=yes` until the next combat ends. A bot that is alive is refused (`not-dead`).
+```
+revive-begin #rv1
+revive bot=Mdpsb tag=PRACTICE status=revived practice=yes #rv1
+revive-end count=1 records=1 tag=PRACTICE target=Mdpsb bots=1 revived=1 refused=0 #rv1
+```
+
+### `.tb kill <bot|party [leader]>` and `.tb gm <character> on|off`
+`kill` (as `.die`; `dead` when it is already dead) and `gm` (`Player::SetGameMaster`; a GM passes the instance's player cap and owning-group tests, takes no seat, and its instances are always valid) are test setup: records `kill bot= tag=SETUP status=killed|refused`, `gm bot= tag=SETUP status=ok|refused gm=yes|no`; ends `kill ... killed= refused=` and `gm target= gm=`. Real:
+```
+kill-begin #kw
+kill bot=Mtank tag=SETUP status=killed #kw
+...
+kill-end count=5 records=5 target=party:Mtank bots=5 killed=5 refused=0 #kw
+gm-begin #gm1
+gm bot=Mcmd tag=SETUP status=ok gm=yes #gm1
+gm-end count=1 records=1 target=Mcmd gm=yes #gm1
+```
+
+### Death and the instance's entrance point (decision D2)
+`.tb order <bot> release` makes the dead bot release its spirit. Inside a non-raid dungeon the core revives a released player at once (`Player::RepopAtGraveyard`, Player.cpp:5211-5262), at the instance script's entrance point when it has one (:5227-5228), else at the closest graveyard, which for Ragefire Chasm and an Alliance bot is
+Razor Hill, OUTSIDE. The host therefore gives every dungeon instance an entrance (`InstanceScript::SetEntranceLocation`, public, InstanceScript.h:289) as soon as a host bot is on it: the target of the trigger the first entry used, else the first trigger that leads into the map (`ObjectMgr::GetMapEntranceTrigger`). A dungeon whose instance has NO script
+or no trigger leading into it gets none, and then a release is HELD (`relhold=no-entrance`, `.tb order release` is refused with `no-entrance`): the bot waits at its body, never a graveyard revive outside.
+Commanded bots (`.tb master`) answer the engine's lease question as `Dungeon` (the legacy dungeon-crew rule of `RunReleaseHold::Decide`): on an instance map a dead bot waits while a living priest, paladin, shaman or druid of its party is on the map or a member fights (`relhold=rezzer`/`combat`, `life=awaiting-res`), and releases only on a wipe (`relhold=wipe`);
+a resurrection offered by a party member or the commander is accepted at once (`accept resurrect` with the offerer as the event's object; a stranger's offer is not answered); `.tb state` reports `resreq=`. After a release the bot is `life=running-back` until it is within 20 yd of its commander (or leader). No host teleport ever moves a dead bot or a commanded bot into or inside an instance (the open-world catch-up is unchanged and counted in `catchup=`).

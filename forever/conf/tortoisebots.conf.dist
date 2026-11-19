@@ -37,6 +37,15 @@ TortoiseBots.Slice.EngineByDefault = 0
 TortoiseBots.Slice.MasterGraceSeconds = 300
 
 #
+#    TortoiseBots.Slice.DeadBackstopSeconds
+#        Description: How long a commanded bot's body may lie in a dungeon (nothing raising it, its commander away, a hold that never ends)
+#                     before the bot releases itself and comes back at the dungeon's entrance. 10 to 3600.
+#        Default:     180
+#
+
+TortoiseBots.Slice.DeadBackstopSeconds = 180
+
+#
 #    Logger.tortoisebots
 #        Description: The module's own log category (bot login and logout, the engine, the `slice: missing ...` lines).
 #                     Without a logger of its own the category falls to the root logger, which only logs errors, so the

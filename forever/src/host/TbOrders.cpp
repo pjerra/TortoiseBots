@@ -6,6 +6,7 @@
 // PlayerbotAI::DoSpecificAction (PlayerbotAI.h:466), never PlayerbotAI::HandleCommand (spec D1). Both the command and the tick run on the
 // world thread (TbH3.h), so the queue is plain data. The outcome of an order is kept per bot and shown by `.tb state` (ord=<seq>:<result>).
 #include "host/TbH3.h"
+#include "MiscPackets.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
 
@@ -93,7 +94,7 @@ constexpr uint8 RoleTank = 1, RoleHealer = 2, RoleDps = 4;      // ChatHelper.h 
 
 bool IsVerb(std::string const& word)
 {
-    static char const* const verbs[] = { "follow", "stay", "come", "attack", "pull", "endpull", "end", "hold", "free", "assist", "co", "nc" };
+    static char const* const verbs[] = { "follow", "stay", "come", "attack", "pull", "endpull", "end", "hold", "free", "assist", "co", "nc", "release" };
     for (char const* verb : verbs)
         if (word == verb)
             return true;
@@ -312,6 +313,10 @@ std::string Run(Player* bot, PlayerbotAI* ai, Order const& o)
     }
     if (o.verb == "endpull")
         return act("end pull", Event("tb order", std::string(), owner)) ? "ok" : "fail:end-pull";
+    // H4: the order verb `release` (ChatActionContext "release"): the dead bot releases its spirit now. Inside a dungeon the core revives it at the
+    // instance's entrance (D2). The action's own result is the order's result; a bot that is not dead has nothing to release (`fail:release`).
+    if (o.verb == "release")
+        return act("release", Event("tb order", std::string(), owner)) ? "ok" : "fail:release";
     if (o.verb == "hold")
     {
         ai->ChangeStrategy("+passive", BotState::BOT_STATE_COMBAT);
@@ -392,11 +397,58 @@ std::string JoinFrom(std::vector<std::string> const& words, size_t from)
 
 // ---- the engine hooks ----
 
+// H4 (slice 4, spec section 2): who offered the dead bot a resurrection, when that is a member of its party or its commander (a stranger's offer is
+// DECLINED: the bot does nothing, the offer lapses by itself; the legacy action would accept any). The core keeps the pending offer on the Player
+// (Player::SetResurrectRequestData, Player.cpp:25470); `IsResurrectRequestedBy` is the public question. Reading the Player's own state replaces a capture
+// of SMSG_RESURRECT_REQUEST in the session: the same fact, on the world thread, with no packet to parse.
+Player* ResurrectOffererOf(Player* bot)
+{
+    if (!bot || bot->IsAlive() || !bot->IsResurrectRequested())
+        return nullptr;
+    if (Group* group = bot->GetGroup())
+        for (Group::MemberSlot const& slot : group->GetMemberSlots())
+            if (slot.guid != bot->GetGUID() && bot->IsResurrectRequestedBy(slot.guid))
+                if (Player* member = ObjectAccessor::FindPlayer(slot.guid); member && member->IsInWorld())
+                    return member;
+    if (Player* commander = CommanderOf(bot); commander && bot->IsResurrectRequestedBy(commander->GetGUID()))
+        return commander;
+    return nullptr;
+}
+
 void BeforeEngineTick(Player* bot, PlayerbotAI* ai)
 {
     if (!bot || !ai)
         return;
     ObjectGuid const guid = bot->GetGUID();
+
+    // H4: a dead bot with a pending resurrection from its own party answers it ("accept resurrect", the legacy action, with the offerer's guid as the event's
+    // object: the shape the action reads). At most once per second per bot; the core's accept (ResurrectResponse, Response 0 = accept, MiscHandler.cpp:507-534)
+    // is what the engine side turns the action into.
+    if (!bot->IsAlive() && bot->IsResurrectRequested() && ActionRegistered(ai, "accept resurrect"))
+        if (Player* offerer = ResurrectOffererOf(bot))
+        {
+            static std::map<ObjectGuid, uint32> lastAccept;
+            uint32 const nowMs = NowMs();
+            uint32& last = lastAccept[guid];
+            if (!last || nowMs - last >= 1000)
+            {
+                last = nowMs;
+                bool const done = ai->DoSpecificAction("accept resurrect", Event("resurrect request", offerer->GetGUID(), bot), true);
+                sLog.outString("TortoiseBots: %s answers the resurrection offered by %s: %s", bot->GetName().c_str(), offerer->GetName().c_str(), done ? "accepted" : "the action did not accept");
+            }
+        }
+
+    // N7 (package N): a resurrection request that is NOT from the bot's party or its commander (a GM or a player outside) is DECLINED, not left pending: the core
+    // keeps one request per player and refuses a second caster's while one is stored (Spell::EffectResurrect, SpellEffects.cpp:3825), so a stranger's request
+    // would block the party priest and the body would wait. The core's own decline: ResurrectResponse with Response != 0 clears the request whoever sent it
+    // (WorldSession::HandleResurrectResponse, MiscHandler.cpp:511-515).
+    if (!bot->IsAlive() && bot->IsResurrectRequested() && !ResurrectOffererOf(bot) && bot->GetSession())
+    {
+        WorldPackets::Misc::ResurrectResponse decline{ WorldPacket(CMSG_RESURRECT_RESPONSE) };
+        decline.Response = 1;
+        bot->GetSession()->HandleResurrectResponse(decline);
+        sLog.outString("TortoiseBots: %s declined a resurrection request from outside its party and commander", bot->GetName().c_str());
+    }
 
     // A brain that was built after `.tb role` (the engine was off, or it was rebuilt) starts with no forced role: the stored role is applied
     // before its first tick, so the kit it runs is the one the role asks for.
@@ -458,7 +510,7 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     if (!who.ok())
         return Fail(handler, args, "order", who.code, who.detail);
     if (pos >= args.w.size())
-        return Fail(handler, args, "order", "missing-verb", "follow, stay, come, attack, pull, endpull, hold, free, assist, co, nc");
+        return Fail(handler, args, "order", "missing-verb", "follow, stay, come, attack, pull, endpull, hold, free, assist, co, nc, release");
     std::string verb = Lower(args.w[pos++]);
     if (verb == "end")
     {
@@ -473,7 +525,7 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     if ((verb == "attack" || verb == "pull" || verb == "assist" || verb == "co" || verb == "nc") && rest.empty())
         return Fail(handler, args, "order", "missing-argument", verb == "assist" ? "assist <member name>" :
             (verb == "co" || verb == "nc") ? "co|nc <+strategy,-strategy>" : "attack|pull <my | mark | skull | spawn:<id> | 32-hex guid>");
-    if ((verb == "stay" || verb == "come" || verb == "hold" || verb == "free" || verb == "endpull") && !rest.empty())
+    if ((verb == "stay" || verb == "come" || verb == "hold" || verb == "free" || verb == "endpull" || verb == "release") && !rest.empty())
         return Fail(handler, args, "order", "unexpected-argument", rest);
     if (verb == "co" || verb == "nc")
         for (char c : rest)
@@ -600,6 +652,16 @@ bool HandleOrder(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         }
         else if (verb == "endpull")
             needAction[0] = "end pull";
+        else if (verb == "release")
+        {
+            needAction[0] = "release";
+            // D2: no entrance on the instance = the core would revive the bot at a graveyard OUTSIDE (Player::RepopAtGraveyard, Player.cpp:5237-5242): refused.
+            if (!BotMgr::Instance().ReleaseHasEntrance(bot))
+            {
+                refuse("no-entrance", "the instance has no entrance point (no script or no trigger target): a release would revive the bot outside, so it is held");
+                continue;
+            }
+        }
 
         bool missing = false;
         for (char const* key : needAction)

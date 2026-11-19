@@ -16,6 +16,8 @@
 #include "Group.h"
 #include "ObjectAccessor.h"
 #include "Player.h"
+#include "Map.h"
+#include "MotionMaster.h"
 #include "ThreatManager.h"
 #include "Unit.h"
 
@@ -96,7 +98,32 @@ struct Readiness
 {
     bool rest = false;                    // the old rest gate (health, mana, eating, drinking, combat, dead)
     std::vector<std::string> why;         // reasons this bot is not ready: dead combat resting far blocked
+    std::string life;                     // H4: alive | dead | ghost | awaiting-res | running-back (the `life` key)
+    bool together = false;                // H4: alive, and on its leader's map within 40 yd (or it is the leader): part of `whole=yes`
 };
+
+// H4 (the crew rule the lease answer asks of RunReleaseHold::Decide, runtime/RunReleaseHold.h:57-64): is a living priest, paladin, shaman or druid of the bot's
+// party on its map, and is a living member of the party in combat? Read-only; the same two questions AutoReleaseSpiritAction asks (ReleaseSpiritAction.h:64-98).
+void CrewFacts(Player* bot, bool& rezzer, bool& fighting)
+{
+    rezzer = fighting = false;
+    Group* group = bot->GetGroup();
+    if (!group)
+        return;
+    for (Group::MemberSlot const& slot : group->GetMemberSlots())
+    {
+        Player* member = ObjectAccessor::FindPlayer(slot.guid);
+        if (!member || member == bot || !member->IsInWorld() || !member->IsAlive() || member->GetMapId() != bot->GetMapId())
+            continue;
+        switch (member->GetClass())
+        {
+            case CLASS_PRIEST: case CLASS_PALADIN: case CLASS_SHAMAN: case CLASS_DRUID: if (MemberKnowsOocResurrection(member)) rezzer = true; break;
+            default: break;
+        }
+        if (member->IsInCombat())
+            fighting = true;
+    }
+}
 
 // One state record of one bot (grammar version 2: forever/docs/TB-COMMANDS.md). `ready` says what keeps the bot from the next pull.
 Rec StateRec(Player* bot, Readiness& ready)
@@ -223,6 +250,68 @@ Rec StateRec(Player* bot, Readiness& ready)
     }
     rec.B("eating", eating).B("drinking", drinking);
     rec.B("resting", ready.rest).L("rest_why", restWhy);
+
+    // ---- H4 (slice 4): life, corpse, where the bot stands against its leader's instance, the last entry (appended: the older keys are unchanged) ----
+    // life: alive | dead (a body that will release) | awaiting-res (a body held by the crew rule or by a pending resurrection) | ghost | running-back
+    // (alive again, more than 30 yd from its commander or leader, until it is within 20 yd). relhold says why a body waits: rezzer (a living resurrecter on
+    // the map), combat (a member fights), wipe (nobody left: it releases now), no-entrance (the instance has none: the release is held, never a graveyard
+    // outside), empty (not a body on an instance map, or alive).
+    bool const alive = bot->IsAlive();
+    bool const ghost = !alive && bot->HasPlayerFlag(PLAYER_FLAGS_GHOST);
+    std::string relhold;                  // empty = not a body on an instance map (the grammar never writes the word none)
+    std::string life = "alive";
+    if (!alive)
+    {
+        if (ghost)
+            life = "ghost";
+        else
+        {
+            life = "dead";
+            Map* map = bot->GetMap();
+            if (map && map->IsDungeon() && IsCommandedBot(bot))
+            {
+                bool rezzer = false, fighting = false;
+                CrewFacts(bot, rezzer, fighting);
+                if (!BotMgr::Instance().ReleaseHasEntrance(bot))
+                    relhold = "no-entrance";
+                else if (rezzer)
+                    relhold = "rezzer";
+                else if (fighting)
+                    relhold = "combat";
+                else
+                    relhold = "wipe";
+                if (relhold != "wipe")
+                    life = "awaiting-res";
+            }
+            if (life == "dead" && bot->IsResurrectRequested())
+                life = "awaiting-res";
+        }
+    }
+    else if (BotMgr::Instance().RunningBack(guid))
+        life = "running-back";
+    ready.life = life;
+    Player* offerer = ResurrectOffererOf(bot);
+    rec.S("life", life).S("relhold", relhold).S("resreq", offerer ? std::string(offerer->GetName()) : std::string());
+    if (!alive)
+    {
+        // The body (not yet released) lies where the bot is; a released ghost has a corpse, which may be on another map.
+        if (bot->HasCorpse())
+        {
+            auto const& corpse = bot->GetCorpseLocation();   // (WorldLocation is a legacy alias in this file: take the core type by auto)
+            rec.Coord("corpse", corpse.GetPositionX(), corpse.GetPositionY(), corpse.GetPositionZ()).N("corpsemap", corpse.GetMapId());
+        }
+        else
+            rec.Coord("corpse", bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ()).N("corpsemap", bot->GetMapId());
+    }
+    // outside=yes: the party's leader is inside an instance and the bot is not in that instance.
+    bool const outside = leader && leader != bot && leader->IsInWorld() && leader->GetMap() && leader->GetMap()->Instanceable() && leader->GetMap() != bot->GetMap();
+    rec.B("outside", outside);
+    ready.together = alive && (!leader || leader == bot || (leader->GetMap() == bot->GetMap() && bot->GetDistance(leader) <= 40.0f));
+    BotMgr::EntryInfo const entry = BotMgr::Instance().GetEntryInfo(guid);
+    rec.S("entered", entry.entered).S("entry", entry.phase).S("block", entry.block);
+    if (!entry.blockText.empty())
+        rec.T("blockmsg", entry.blockText);
+    rec.N("catchup", entry.catchups).B("practice", BotMgr::Instance().Practice(guid));
     return rec;
 }
 
@@ -250,7 +339,7 @@ bool HandleState(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
 
     Reply reply(handler, args, "state");
     reply.Begin();
-    uint32 resting = 0;
+    uint32 resting = 0, aliveCount = 0, deadCount = 0, ghostCount = 0, togetherCount = 0;
     std::vector<std::vector<std::string>> notReady;
     for (Player* bot : who.bots)
     {
@@ -258,6 +347,14 @@ bool HandleState(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         reply.Line(StateRec(bot, ready));
         if (ready.rest)
             ++resting;
+        if (bot->IsAlive())
+            ++aliveCount;
+        else if (ready.life == "ghost")
+            ++ghostCount;
+        else
+            ++deadCount;
+        if (ready.together)
+            ++togetherCount;
         for (std::string const& reason : ready.why)
             notReady.push_back({reason, bot->GetName()});
     }
@@ -272,6 +369,10 @@ bool HandleState(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     if (!notReady.empty())
         end.LP("why", notReady);
     end.N("marks", marks).P("target", LabelParts(who.label));
+    // H4: how many of the addressed bots live, wait as a body or run as a ghost; wipe = nobody is alive; whole = every addressed bot is alive and with its
+    // leader (same map, within 40 yd).
+    uint32 const total = uint32(who.bots.size());
+    end.N("alive", aliveCount).N("dead", deadCount).N("ghost", ghostCount).B("wipe", total > 0 && aliveCount == 0).B("whole", total > 0 && togetherCount == total);
     reply.End(end);
     return true;
 }
@@ -319,6 +420,10 @@ bool HandleThreat(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
         rec.N("hppct", PercentOf(uint64(mob->GetHealth()), uint64(mob->GetMaxHealth())));
         rec.S("victim", NameOf(CurrentThreatVictimCompat(mob))).S("target", NameOf(mob->GetVictim()));
         rec.N("size", list.size()).LP("top", top);
+        // H4 (Q2): where the mob stands and whether it flees (the fear-state of a 15 % flee, or the walk to the nearest helper that DoFleeToGetAssistance
+        // starts: Creature.cpp:1050-1072). Read only.
+        bool const fleeing = mob->HasUnitState(UNIT_STATE_FLEEING) || mob->GetMotionMaster()->GetCurrentMovementGeneratorType() == ASSISTANCE_MOTION_TYPE;
+        rec.Coord("pos", mob->GetPositionX(), mob->GetPositionY(), mob->GetPositionZ()).B("flee", fleeing);
         reply.Line(rec);
     }
     Rec end("threat");
@@ -417,6 +522,33 @@ bool HandleParty(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     end.S("commander", commanders.empty() ? std::string() : commanders.size() == 1 ? *commanders.begin() : std::string("mixed"));
     reply.End(end);
     return true;
+}
+}
+}
+
+namespace TortoiseBots
+{
+namespace h3
+{
+// N3 (package N): does this party member KNOW an out-of-combat resurrection (the legacy action names: priest "resurrection", paladin "redemption", shaman
+// "ancestral spirit", druid "revive"; a druid's battle resurrection "rebirth" is not one)? A host bot is asked through its own spell book; a host bot with no
+// engine cannot cast, so it does not count; a real player is counted by class (nothing to ask, the legacy rule). Shared with the engine side through
+// MemberKnowsOocResurrectionCompat (compat/TbCompat_D4.h), so the engine's hold and `relhold` agree.
+bool MemberKnowsOocResurrection(Player* member)
+{
+    if (!member)
+        return false;
+    PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(member);
+    if (!ai)
+        return !IsHostBot(member);
+    switch (member->GetClass())
+    {
+        case CLASS_PRIEST: return ai->HasSpell("resurrection");
+        case CLASS_PALADIN: return ai->HasSpell("redemption");
+        case CLASS_SHAMAN: return ai->HasSpell("ancestral spirit");
+        case CLASS_DRUID: return ai->HasSpell("revive");
+        default: return false;
+    }
 }
 }
 }

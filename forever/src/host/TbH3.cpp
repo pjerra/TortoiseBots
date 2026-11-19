@@ -3,6 +3,7 @@
 #include "host/TbH3.h"
 #include "TbBotMgr.h"
 #include "host/TbEngineBrain.h"
+#include "host/TbH4.h"
 
 #include "CharacterCache.h"
 #include "Chat.h"
@@ -360,6 +361,7 @@ bool HandleGrammar(ChatHandler* handler, Trinity::ChatCommands::Tail tail)
     // split below the cap is refused with `error code=line-too-long` (counted), never cut.
     reply.Line(Rec("selftest").S("bot", "Mtank").S("case", "freetext").T("msg", std::string(450, 'x') + " tail", 400));
     reply.Line(Rec("selftest").S("bot", "Mtank").S("case", "unsplittable").S("value", std::string(3100, 'y')));
+    h4::SelfTestRecords(reply);               // H4: one example of every record kind and key slice 4 adds
     Rec end("selftest");
     end.N("line_too_long", LineTooLongCount()).S("note", "fixed records").B("ready", false).LP("why", {{"resting", "Mpriest"}, {"far", "Mdpsb"}});     // why= is present exactly when ready=no
     reply.End(end);
