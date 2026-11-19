@@ -11,6 +11,7 @@
 #include "host/run/TbPlanUnits.h"
 #include "host/run/TbRun.h"
 #include "host/run/TbRunFactsPure.h"
+#include "host/run/TbRunLiquid.h"
 
 #include <chrono>
 #include <list>
@@ -753,12 +754,10 @@ void ReadLead(Ctx& c, Facts& f)
     uint32 const instanceId = lead->GetInstanceId();
     f.pointLiquid = [mapId, instanceId](float x, float y, float z)
     {
+        // R6 (review item 2): the core's own bits rule plus the level rule, at the asked z (TbRunLiquid.h). The old test compared the status for equality, which
+        // missed a bot on the floor of a lava pool (OCEAN_FLOOR ORed in). No map = refused.
         Map* const m = sMapMgr.FindMap(mapId, instanceId);
-        TerrainInfo const* terrain = m ? m->GetTerrain() : nullptr;
-        if (!terrain)
-            return true;
-        GridMapLiquidStatus const status = LiquidStatusCompat(terrain, x, y, z, MAP_ALL_LIQUIDS, nullptr);
-        return status == LIQUID_MAP_IN_WATER || status == LIQUID_MAP_UNDER_WATER;
+        return !m || run::liquid::PointRefusedOnMap(m, x, y, z);
     };
 }
 

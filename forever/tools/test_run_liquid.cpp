@@ -1,0 +1,63 @@
+// R6 (review items 2, 3, 7): the run glue's liquid rule (forever/src/host/run/TbRunLiquid.h), core-free.
+//   g++ -std=c++17 -Wall -Wextra -I. forever/tools/test_run_liquid.cpp -o /tmp/t && /tmp/t
+// Each case names what it would have been on the code before the fix.
+#include "forever/src/host/run/TbRunLiquid.h"
+
+#include <cstdio>
+#include <vector>
+
+namespace L = TortoiseBots::run::liquid;
+
+static int failures = 0;
+#define CHECK(cond) do { if (!(cond)) { std::printf("FAIL line %d: %s\n", __LINE__, #cond); ++failures; } } while (0)
+
+// The rule the facts and the stand search used before the fix: the status compared for equality, the level never read.
+static bool OldRule(std::uint32_t status) { return status == 0x04 || status == 0x08; }
+
+struct P { float x, y, z; };
+
+int main()
+{
+    // item 2: ForeverCore ORs OCEAN_FLOOR (0x10) into the status near a floor: a bot standing on the floor of a lava pool reads 0x04|0x10.
+    CHECK(L::PointRefused(0x04 | 0x10, 5.0f, 0.0f));          // new: refused
+    CHECK(!OldRule(0x04 | 0x10));                             // old: passed (the bug)
+    CHECK(L::PointRefused(0x08 | 0x10, 5.0f, 0.0f));          // under water on the floor
+    CHECK(L::PointRefused(0x04, 5.0f, 0.0f) && L::PointRefused(0x08, 5.0f, 0.0f));
+    CHECK(!L::PointRefused(0, 99.0f, 0.0f));                  // no liquid: the level is not read
+
+    // item 3: a path laid ON the lava surface reads ABOVE_WATER (0x01); the level rule refuses it at the point's own z (the old read was 0.5 yd up).
+    CHECK(L::PointRefused(0x01, 10.0f, 10.0f));               // surface exactly at z
+    CHECK(L::PointRefused(0x01, 9.5f, 10.0f));                // 0.5 yd under z: within the 0.6 slack
+    CHECK(!L::PointRefused(0x01, 9.3f, 10.0f));               // 0.7 yd under: dry enough
+    CHECK(L::PointRefused(0x02, 10.2f, 10.0f));               // walking on it
+    CHECK(!L::PointRefused(0x01, 2.0f, 10.0f));               // lava far below the walk: fine
+    CHECK(!OldRule(0x01));                                    // old: ABOVE_WATER never refused
+
+    // item 3 and 7: a lava strip BETWEEN two dry ends. The strip is 2 yd wide at x 10..12; the line runs x 0 -> 20 at z 0.
+    auto strip = [](float x, float, float) { return x >= 10.0f && x <= 12.0f; };
+    CHECK(L::SegmentRefused(0, 0, 0, 20, 0, 0, strip));       // sampled every <= 1.5 yd: caught
+    CHECK(!strip(0, 0, 0) && !strip(20, 0, 0));               // an end-point-only test (the old one) sees nothing
+    CHECK(!L::SegmentRefused(0, 0, 0, 9.5f, 0, 0, strip));    // a line that stops before the strip is clear
+    CHECK(L::SegmentRefused(0, 0, 0, 10.5f, 0, 0, strip));    // ... and one that ends inside it is not
+    // a long line stays within the sample bound: 100 yd = 67 samples + 1
+    int calls = 0;
+    L::SegmentRefused(0, 0, 0, 100, 0, 0, [&calls](float, float, float) { ++calls; return false; });
+    CHECK(calls == 68);
+    int zero = 0;                                             // a zero-length line still asks its point twice at most
+    L::SegmentRefused(5, 5, 5, 5, 5, 5, [&zero](float, float, float) { ++zero; return false; });
+    CHECK(zero >= 1 && zero <= 2);
+
+    // a path: vertices and legs
+    std::vector<P> path = { {0, 0, 0}, {8, 0, 0}, {8, 10, 0}, {20, 10, 0} };
+    auto lavaAt = [](float x, float y, float) { return x >= 13.0f && x <= 14.0f && y > 9.0f && y < 11.0f; };
+    CHECK(L::PathRefused(path, path.size(), lavaAt));         // the last leg crosses it though no vertex is in it
+    auto none = [](float, float, float) { return false; };
+    CHECK(!L::PathRefused(path, path.size(), none));
+    std::vector<P> single = { {1, 2, 3} };
+    CHECK(L::PathRefused(single, 1, [](float, float, float) { return true; }));
+
+    if (failures)
+        return 1;
+    std::printf("RESULT: PASS (test_run_liquid)\n");
+    return 0;
+}

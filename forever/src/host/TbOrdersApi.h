@@ -38,5 +38,16 @@ bool PreflightOrder(Player* bot, OrderSpec const& spec, std::string& code, std::
 
 // Preflight, then queue (the bot's engine runs it at its next tick). `seq` is the order's number for `h3::LastOrder`.
 bool QueueOrder(Player* bot, OrderSpec const& spec, std::string& code, std::string& detail, uint32& seq);
+
+// R6 (review item 1): the run's cancel. `CancelRunOrders` removes the orders the run's executor queued for this bot (OrderSpec::fromRun) and have not run yet
+// (a hand-typed `.tb order` stays); the bot's last result becomes `fail:cancelled`. Returns how many. `EndRunPull` ends a pull the run started on this bot: the
+// pull strategy's "end pull" (tank) and the bot's own pull join window / hold (every member), so no pull hold or pullback return outlives the run.
+// Both are safe on a bot with no queue, no engine or no pull. World thread only.
+uint32 CancelRunOrders(ObjectGuid bot);
+void EndRunPull(Player* bot);
+
+// R6 (review item 5): registers (on) or drops (off) a run's leader: while registered, the bot's engine hook keeps it from following its commander when it is out of
+// combat with no pull under way (it holds on `stay` where it stands). The run calls it at start and at its end.
+void HoldRunLead(ObjectGuid bot, bool on);
 }
 }

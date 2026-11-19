@@ -10,6 +10,7 @@
 #include "host/run/TbPlanUnits.h"
 #include "host/run/TbRunFacts.h"
 #include "host/run/TbRunOrders.h"
+#include "host/TbOrdersApi.h"
 #include "host/run/TbRunStands.h"
 #include "runtime/SystemRunPolicy.h"
 
@@ -252,6 +253,21 @@ uint32 StayParty(RunRec const& rec)
     return stayed;
 }
 
+// R6 (review item 1): everything the run still has in flight dies with it. The run's orders are queued (the executor's call) and run by the bots' engines at
+// their next tick, up to 15 s later; a stop or a pause that came between the call and that tick must not be followed by a pull, a move, a focus attack or a
+// rest. For the leader and every bound member: the queued orders of the run (fromRun) are removed (a hand-typed order stays), and a pull the run started (the
+// tank's pull strategy, every member's join window and hold) is ended. Called BEFORE the final stay of a stop, on a pause and when a stop is pending.
+void CancelRunWork(RunRec const& rec, bool endPulls)
+{
+    for (ObjectGuid guid : PartyGuids(rec))
+    {
+        h3::CancelRunOrders(guid);
+        if (endPulls)
+            if (Player* bot = InWorld(guid))
+                h3::EndRunPull(bot);
+    }
+}
+
 // The run's own skull mark on a unit (P's focus order, `DropFocus`) comes off, only where it still is (T: EndRunIcon).
 void DropFocusMark(RunRec const& rec, uint64 handle)
 {
@@ -402,6 +418,7 @@ void Observe(RunRec& rec, uint32 nowMs, DungeonRun::Facts const* f)
         if (run.state == State::Paused)
         {
             ++rec.pauses;
+            CancelRunWork(rec, true);       // R6: a paused run has no order in flight and no pull hold (the order of this very tick included)
             Note(rec, nowMs, "pause", current, rec.pauseCode.empty() ? run.note : rec.pauseCode);
         }
         else if (run.state == State::Running)
@@ -451,6 +468,8 @@ void Observe(RunRec& rec, uint32 nowMs, DungeonRun::Facts const* f)
 uint32 Finish(RunRec& rec, uint32 nowMs, bool stopped, std::string const& why)
 {
     Observe(rec, nowMs, nullptr);
+    CancelRunWork(rec, true);               // R6: queued run orders and a run pull die before the final stay
+    h3::HoldRunLead(rec.leader, false);
     uint32 const stayed = StayParty(rec);
     if (rec.run.focusIconClear)
     {
@@ -503,6 +522,8 @@ void TickRun(RunRec& rec, uint32 nowMs)
     {
         if (!PartyInCombat(rec))
             EndEarly(rec, nowMs, rec.stopWhy);
+        else if (nowMs - rec.stopPendingSinceMs >= kStopPendingMaxMs)
+            EndEarly(rec, nowMs, DungeonRun::RunStopNote("stopped after " + std::to_string(kStopPendingMaxMs / 1000) + " s in combat: " + rec.stopWhy));   // R6 item 6
         return;
     }
     if (run.state == State::Done)
@@ -516,6 +537,13 @@ void TickRun(RunRec& rec, uint32 nowMs)
     if (lead && (!group || group->GetLeaderGUID() != rec.leader))
     {
         EndEarly(rec, nowMs, DungeonRun::RunStopNote("the party no longer has this leader"));
+        return;
+    }
+    // R6 (review item 4): the run belongs to ONE instance of the plan's map. A leader that stands on the plan's map in ANOTHER instance (a different copy: it
+    // was moved, or it re-entered a new one) is not "back": its plan facts are those of another dungeon, so the run ends (do less), it never resumes there.
+    if (lead && lead->IsInWorld() && !lead->IsBeingTeleported() && lead->GetMapId() == plan->map && rec.instanceId && lead->GetInstanceId() != rec.instanceId)
+    {
+        EndEarly(rec, nowMs, DungeonRun::RunStopNote("the lead bot is in another instance of the map"));
         return;
     }
     if (group)
@@ -792,10 +820,13 @@ StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs)
         {
             std::string const failed = member->GetName();
             ReleaseAll(*rec);
+            h3::HoldRunLead(leader->GetGUID(), false);
             Remove(leader->GetGUID());
             return refuse("bind-failed", "the host refused to bind " + failed + " to " + name);
         }
     rec->run.liveTactics = &ai::GetBossTactics();
+    rec->instanceId = leader->GetInstanceId();     // R6 (review item 4)
+    h3::HoldRunLead(leader->GetGUID(), true);      // R6 (review item 5)
     rec->lastTickMs = nowMs;
     BaselineOrders(*rec);
     rec->seenInit = true;
@@ -826,7 +857,9 @@ StopOutcome StopRun(RunRec& rec, uint32 nowMs, std::string const& reason)
     if (PartyInCombat(rec))
     {
         rec.stopPending = true;
+        rec.stopPendingSinceMs = nowMs ? nowMs : 1;
         rec.stopWhy = note;
+        CancelRunWork(rec, false);          // R6: no queued order of the run runs while the stop waits (the pull that is fighting stays: ending it mid-fight is no help)
         out.pending = true;
         return out;
     }
@@ -851,6 +884,7 @@ StateOutcome PauseRun(RunRec& rec, uint32 nowMs)
     }
     DungeonRun::PausePlayer(rec.run, "paused by .tb run pause");
     PauseWith(rec, "command");
+    CancelRunWork(rec, true);               // R6: at once, not at the next tick's Observe: an order queued a moment ago must not run
     Observe(rec, nowMs, nullptr);
     return out;
 }

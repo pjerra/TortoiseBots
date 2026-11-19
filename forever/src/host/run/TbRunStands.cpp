@@ -2,15 +2,15 @@
 //
 // The legacy glue (commands/Commander.cpp:7532 ApproachStandSearch, :7603 NearestReachablePoint) ported call for call, with these differences (said, not hidden):
 //  * NO STAND IN OR OVER LIQUID. The legacy ring search never asked for liquid (Turtle's mesh has no lava floor the path would cross; the ForeverCore mesh of
-//    Ragefire Chasm has magma next to the floor). Every candidate, and every vertex of its path, is refused when the terrain reports any liquid at it
-//    (the same test as the facts' pointLiquid: LIQUID_MAP_IN_WATER / UNDER_WATER of MAP_ALL_LIQUIDS).
+//    Ragefire Chasm has magma next to the floor). Every candidate, every vertex of its path and every leg between two vertices (sampled every <= 1.5 yd) is
+//    refused by the ONE rule of TbRunLiquid.h (the core's IsInWater bits incl. OCEAN_FLOOR ORed in, plus liquid present with its level >= z - 0.6).
 //  * NO STAND OFF THE NAVMESH. A candidate needs a complete path (DetourPointReachable: not partial beyond the slop, not a shortcut, not "not using path"); a point
 //    with no map height is dropped before any path is asked.
 //  * ExcludeSteepSlopes is not ported (TbCompat_Unported.h): the path may use a slope Turtle excludes; the verdict is never stricter than the core's own path.
 //  * The boss anchor circle (BossAnchorOfBoss) is not linked on this build: a boss stand is not held inside an anchor. Ragefire Chasm has no boss-tactic rows.
 // Cost: one ring search = at most (25 - ApproachStandMinRing)/5 + 1 rings x 12 points; each point costs one height read, a few liquid reads and at most ONE
 // PathFinder query and ONE line-of-sight ray (a point with no height, in liquid, or with no complete path costs less). For RFC (pull radius 10-30 yd,
-// min ring 12-35) that is 12-60 candidates, once per request.
+// min ring 12-35) that is 12-60 candidates, once per request. R6: plus one liquid read per 1.5 yd of each COMPLETE path (a 60 yd path = 41 reads, a few us each).
 #include "host/run/TbRunStands.h"
 
 #if defined(TORTOISEBOTS_SLICE1) && TORTOISEBOTS_SLICE1
@@ -19,6 +19,7 @@
 
 #include "host/run/TbRun.h"
 #include "host/run/TbRunFactsPure.h"
+#include "host/run/TbRunLiquid.h"
 
 #include <chrono>
 #include <cmath>
@@ -72,21 +73,17 @@ float DistLead(Player* lead, float x, float y, float z)
     return Dist(lead->GetPositionX(), lead->GetPositionY(), lead->GetPositionZ(), x, y, z);
 }
 
+// R6 (review items 2 and 3): one liquid rule for every point and every leg (TbRunLiquid.h): the core's bits (OCEAN_FLOOR ORed in near a floor), the level rule at
+// the point's own z (a path laid on the lava surface reads ABOVE_WATER from 0.5 yd up, so no lift), and the legs between path points sampled every <= 1.5 yd.
 bool InLiquid(Map* map, float x, float y, float z)
 {
-    TerrainInfo const* terrain = map ? map->GetTerrain() : nullptr;
-    if (!terrain)
-        return true;            // no terrain to ask: refuse the point (do less)
-    GridMapLiquidStatus const status = LiquidStatusCompat(terrain, x, y, z + 0.5f, MAP_ALL_LIQUIDS, nullptr);
-    return status == LIQUID_MAP_IN_WATER || status == LIQUID_MAP_UNDER_WATER;
+    return liquid::PointRefusedOnMap(map, x, y, z);
 }
 
-bool PathInLiquid(Map* map, G3D::Vector3 const* points, size_t count)
+template <class Points>
+bool PathInLiquid(Map* map, Points const& points)
 {
-    for (size_t i = 0; i < count; ++i)
-        if (InLiquid(map, points[i].x, points[i].y, points[i].z))
-            return true;
-    return false;
+    return liquid::PathRefused(points, points.size(), [map](float x, float y, float z) { return liquid::PointRefusedOnMap(map, x, y, z); });
 }
 
 // The lead of the run: a living player in the world on a map.
@@ -140,7 +137,7 @@ bool SearchApproachStand(RunRec const& rec, uint32 team, float& ox, float& oy, f
                 continue;
             ++cost.candidates;
             if (InLiquid(map, px, py, ground))
-                continue;                       // never a stand in lava or water
+                continue;                       // never a stand in lava or water (the point itself, at its own z)
             StandCandidate c;
             c.x = px;
             c.y = py;
@@ -156,7 +153,7 @@ bool SearchApproachStand(RunRec const& rec, uint32 team, float& ox, float& oy, f
             if (!c.reachable)
                 continue;
             Movement::PointsArray const& way = PathPointsCompat(path);
-            if (!way.empty() && PathInLiquid(map, way.data(), way.size()))
+            if (!way.empty() && PathInLiquid(map, way))
                 continue;                       // its path crosses liquid
             c.pathYd = PathLengthCompat(path);
             for (G3D::Vector3 const& v : way)
@@ -207,7 +204,7 @@ bool SearchStallStand(RunRec const& rec, float& ox, float& oy, float& oz, StandC
                 DistLead(lead, end.x, end.y, end.z), DistLead(lead, px, py, ground), PathLengthCompat(path)))
             return false;
         Movement::PointsArray const& way = PathPointsCompat(path);
-        if (!way.empty() && PathInLiquid(map, way.data(), way.size()))
+        if (!way.empty() && PathInLiquid(map, way))
             return false;
         // And its OWN path toward the plan's point leads on (Commander.cpp:7640: the pit the tank fell into has a ring point the lead's path reaches, no way out).
         PathFinder probe(lead);
