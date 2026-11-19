@@ -1,0 +1,9 @@
+role,order,talent_id,spell_id,rank,source,client_build
+priest,10,1181,18530,1,"Talent.db2 70959 (binary id hit); Holy tree, still tier 1 (9 spent); headroom in spell-matched 1181 (max 5, was 2)",70959 (db2-70959 extraction)
+priest,11,361,14892,1,Talent.db2 70959 (binary id hit); Holy tree tier-1 row (spell-matched 191),70959 (db2-70959 extraction)
+priest,12,361,14892,1,Talent.db2 70959 (binary id hit); Holy tree tier-1 row (spell-matched 191),70959 (db2-70959 extraction)
+priest,13,361,14892,1,Talent.db2 70959 (binary id hit); Holy tree tier-1 row (spell-matched 191),70959 (db2-70959 extraction)
+mage,10,69,12472,1,Talent.db2 70959 (binary id hit); Frost tier 2 opens at 5 tree pts; Cold Snap resets Frost Nova - the add-control button,70959 (db2-70959 extraction)
+mage,11,73,11207,1,"Talent.db2 70959 (binary id hit); Frost tier-2 Ice Shards r1 (Frostbolt crit damage, main nuke)",70959 (db2-70959 extraction)
+mage,12,73,11207,1,Talent.db2 70959 (binary id hit); Ice Shards r2,70959 (db2-70959 extraction)
+mage,13,73,11207,1,Talent.db2 70959 (binary id hit); Ice Shards r3,70959 (db2-70959 extraction)
