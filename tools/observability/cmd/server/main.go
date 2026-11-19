@@ -106,6 +106,8 @@ func main() {
 	dbWorld := flag.String("db-world", getEnv("DB_WORLD", "tw_world"), "MariaDB / MySQL world database name")
 	dbcDir := flag.String("dbc-dir", getEnv("DBC_DIR", ""), "Optional operator DBC directory (same files mangosd reads); enables talent trees when world talent mirrors are empty")
 	itemsFile := flag.String("items-file", getEnv("TBDASH_ITEMS_FILE", ""), "Optional ForeverCore item catalog JSON (tortoisebots-items.json) for item names, quality and item level (env TBDASH_ITEMS_FILE)")
+	uimapsFile := flag.String("uimaps-file", getEnv("TBDASH_UIMAPS_FILE", ""), "Optional ForeverCore UiMap catalog JSON (tortoisebots-uimaps.json) for map names (env TBDASH_UIMAPS_FILE)")
+	artDir := flag.String("art-dir", getEnv("TBDASH_ART_DIR", ""), "Optional ForeverCore art folder containing maps/ and icons/ (env TBDASH_ART_DIR)")
 	issueMinAgeSec := flag.Int("issue-min-age-sec", getEnvInt("ISSUE_MIN_AGE_SEC", 300), "Only surface bot issues that persist at least this many seconds")
 	minGMLevel := flag.Int("min-gm-level", getEnvInt("MIN_GM_LEVEL", 2), "Minimum GM rank required for dashboard login (2 = gamemaster)")
 	// An optional external commander dashboard (for example turtle-agent's
@@ -275,6 +277,61 @@ func main() {
 			}
 			return out
 		},
+		LiveStats: func(guid uint32) (armory.CharacterStats, bool) {
+			if *core != "forever" {
+				return armory.CharacterStats{}, false
+			}
+			bs, ok := store.BotStats(guid)
+			if !ok {
+				return armory.CharacterStats{}, false
+			}
+			return armory.CharacterStats{
+				Source:            "live",
+				MaxHealth:         bs.MaxHealth,
+				MaxPower1:         bs.MaxPower1,
+				MaxPower2:         bs.MaxPower2,
+				MaxPower3:         bs.MaxPower3,
+				MaxPower4:         bs.MaxPower4,
+				MaxPower5:         bs.MaxPower5,
+				Strength:          bs.Strength,
+				Agility:           bs.Agility,
+				Stamina:           bs.Stamina,
+				Intellect:         bs.Intellect,
+				Spirit:            bs.Spirit,
+				Armor:             bs.Armor,
+				ResHoly:           bs.ResHoly,
+				ResFire:           bs.ResFire,
+				ResNature:         bs.ResNature,
+				ResFrost:          bs.ResFrost,
+				ResShadow:         bs.ResShadow,
+				ResArcane:         bs.ResArcane,
+				BlockPct:          bs.BlockPct,
+				DodgePct:          bs.DodgePct,
+				ParryPct:          bs.ParryPct,
+				MeleeCritPct:      bs.MeleeCritPct,
+				RangedCritPct:     bs.RangedCritPct,
+				AttackPower:       bs.AttackPower,
+				RangedAttackPower: bs.RangedAttackPower,
+				MeleeDamage:       bs.MeleeDamage,
+				RangedDamage:      bs.RangedDamage,
+				MeleeSpeed:        bs.MeleeSpeed,
+				RangedSpeed:       bs.RangedSpeed,
+				CastSpeed:         bs.CastSpeed,
+				MeleeHit:          bs.MeleeHit,
+				RangedHit:         bs.RangedHit,
+				SpellHit:          bs.SpellHit,
+				SpellDamage:       bs.SpellDamage,
+				HealingPower:      bs.HealingPower,
+				SpellCritPct:      bs.SpellCritPct,
+				ManaRegen:         bs.ManaRegen,
+				SpellDmgFire:      bs.SpellDmgFire,
+				SpellDmgFrost:     bs.SpellDmgFrost,
+				SpellDmgShadow:    bs.SpellDmgShadow,
+				SpellDmgNature:    bs.SpellDmgNature,
+				SpellDmgArcane:    bs.SpellDmgArcane,
+				SpellDmgHoly:      bs.SpellDmgHoly,
+			}, true
+		},
 	})
 	if err != nil {
 		log.Fatalf("Failed to initialize armory service: %v", err)
@@ -439,6 +496,7 @@ func main() {
 	}
 
 	udpListener := udp.NewListener(*udpHost, *udpPort, store, metricsRegistry, projectionEngine, hub)
+	udpListener.SetForever(*core == "forever")
 	udpListener.SetCombatStore(combatStore)
 	udpListener.SetLiveSink(liveHub)
 	if historyStore != nil {
@@ -632,6 +690,23 @@ func main() {
 
 	mux.HandleFunc("/api/v1/bots", requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, store.Snapshot().Bots)
+	}))
+
+	mux.Handle("/forever-art/maps/", requireAuth(noCache(serveArtSubdir(*artDir, "maps", "/forever-art/maps/")).ServeHTTP))
+	mux.Handle("/forever-art/icons/", requireAuth(noCache(serveArtSubdir(*artDir, "icons", "/forever-art/icons/")).ServeHTTP))
+
+	mux.HandleFunc("GET /api/v1/uimaps", requireAuth(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if *uimapsFile == "" {
+			_, _ = w.Write([]byte(`{"maps":[]}`))
+			return
+		}
+		data, err := os.ReadFile(*uimapsFile)
+		if err != nil {
+			_, _ = w.Write([]byte(`{"maps":[]}`))
+			return
+		}
+		_, _ = w.Write(data)
 	}))
 
 	mux.HandleFunc("/api/v1/grinding", requireAuth(func(w http.ResponseWriter, r *http.Request) {
@@ -1273,5 +1348,27 @@ func combatFightsHandler(combatStore *combat.Store, historyStore *history.Store)
 			}
 		}
 		writeJSON(w, rows)
+	}
+}
+
+func serveArtSubdir(artDir, subdir, prefix string) http.HandlerFunc {
+	base := filepath.Join(artDir, subdir)
+	return func(w http.ResponseWriter, r *http.Request) {
+		if artDir == "" {
+			http.NotFound(w, r)
+			return
+		}
+		name := strings.TrimPrefix(r.URL.Path, prefix)
+		if name == "" || name == "." || name == ".." || strings.ContainsAny(name, `/\`) {
+			http.NotFound(w, r)
+			return
+		}
+		full := filepath.Join(base, name)
+		info, err := os.Stat(full)
+		if err != nil || info.IsDir() {
+			http.NotFound(w, r)
+			return
+		}
+		http.ServeFile(w, r, full)
 	}
 }

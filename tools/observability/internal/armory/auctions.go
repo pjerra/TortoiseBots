@@ -865,6 +865,9 @@ func (s *Service) loadAuctionsForever(ahbotSellers map[uint32]bool, items *forev
 				r.ItemClass = uint8(it.Class)
 				r.RequiredLevel = it.ReqLevel
 				r.ItemLevel = it.ItemLvl
+				if it.Icon > 0 {
+					r.Icon = fmt.Sprintf("%d", it.Icon)
+				}
 			}
 		}
 		if r.Name == "" {

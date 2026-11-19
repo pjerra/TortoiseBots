@@ -22,6 +22,7 @@ type Item struct {
 	InvType  uint32 `json:"inv_type"`
 	Sell     uint32 `json:"sell"`
 	Buy      uint32 `json:"buy"`
+	Icon     uint32 `json:"icon"`
 }
 
 type Store struct {

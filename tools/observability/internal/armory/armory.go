@@ -31,6 +31,8 @@ type Config struct {
 	// LiveGUIDs returns the GUIDs currently in the daemon's live roster, used on
 	// ForeverCore where there is no pool-account table.
 	LiveGUIDs func() []uint32
+	// LiveStats returns live character stats from BOT_STATS when fresh.
+	LiveStats func(guid uint32) (CharacterStats, bool)
 }
 
 type Service struct {
