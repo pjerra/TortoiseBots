@@ -34,7 +34,7 @@ bool CanFishValue::Calculate()
     if (!sRandomBotFacade.IsFreeBot(bot) || ai->HasRealPlayerMaster())
         return false;
 
-    if (bot->IsInWater() || bot->IsUnderwater())
+    if (bot->IsInWater() || IsUnderwaterCompat(bot))
         return false;
 
     if (sServerFacade.IsInCombat(bot))

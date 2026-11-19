@@ -526,7 +526,7 @@ bool MoveToTravelTargetAction::TravelLegChainDue(PlayerbotAI* ai, Player* bot)
     // dungeon or grouped wait stands still by design.
     if (!bot || bot->IsInCombat() || bot->IsTaxiFlying() || bot->IsFlying() ||
         bot->IsMounted() || bot->IsBeingTeleported() || bot->GetTransport() ||
-        bot->InBattleGround() || bot->IsInWater() || bot->IsUnderwater() ||
+        bot->InBattleGround() || bot->IsInWater() || IsUnderwaterCompat(bot) ||
         bot->HasMovementFlag(MOVEFLAG_SWIMMING))
         return false;
     if (bot->GetMap() && bot->GetMap()->IsDungeon())

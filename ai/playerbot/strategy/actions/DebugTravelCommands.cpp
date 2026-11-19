@@ -317,7 +317,7 @@ bool DebugAction::HandleNodes(Event& event, Player* requester, const std::string
 
     bool inCombat = bot->IsInCombat();
     bool inWater = bot->IsInWater();
-    bool isUnderWater = bot->IsUnderwater();
+    bool isUnderWater = IsUnderwaterCompat(bot);
     ai->TellPlayer(requester, "Bot state: combat=" + std::string(inCombat ? "YES" : "NO") +
                    " water=" + std::string(inWater ? "YES" : "NO") +
                    " underwater=" + std::string(isUnderWater ? "YES" : "NO"));

@@ -11804,7 +11804,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
             surfaceFound, surfaceZ);
         f.leadFloorZ = TortoiseBots::DungeonRun::LeadFloorZ(mapFloorZ, probeFound, probeZ);
         f.leadOffFloor = mmapLoaded && TortoiseBots::DungeonRun::LeadOffFloor(leadZ, mapFloorZ, probeFound, probeZ,
-            lead->IsInWater() || lead->IsUnderwater(), onSurface);
+            lead->IsInWater() || IsUnderwaterCompat(lead), onSurface);
     }
     // The terrain read the rescue, strand and return pickers share (DungeonRun::Facts::pointLiquid): a point in or
     // under liquid at its own z is never one to walk or teleport the lead bot to (ZG walk 33: the rescue put it in
@@ -11821,7 +11821,7 @@ void ReadRunFacts(DungeonRunSlot const& slot, Player* lead, std::vector<Player*>
     f.leadCasting = lead->IsNonMeleeSpellCasted(true, false, true);
     // The stuck note and the stall's fallback (DungeonRun::StuckNote, StallFallback): the lead bot in water, and
     // its own "move to position" failing now (stamped by MoveToPositionAction::Execute).
-    f.leadInWater = lead->IsInWater() || lead->IsUnderwater();
+    f.leadInWater = lead->IsInWater() || IsUnderwaterCompat(lead);
     if (PlayerbotAI* const moveAi = PlayerbotAIStorage::Instance().GetAI(lead))
     {
         ai::LastMovement& lastMove = moveAi->GetAiObjectContext()->GetValue<ai::LastMovement&>("last movement")->Get();
@@ -14308,7 +14308,7 @@ static bool SpeedChangeWaitsFor(Player* bot)
 {
     if (!bot)
         return false;
-    bool const inWater = bot->IsInWater() || bot->IsUnderwater() ||
+    bool const inWater = bot->IsInWater() || IsUnderwaterCompat(bot) ||
         bot->HasMovementFlag(MOVEFLAG_SWIMMING);
     bool const splineMoving = !bot->movespline->Finalized();
     return TortoiseBots::DungeonRun::SpeedChangeWaits(inWater, splineMoving);
