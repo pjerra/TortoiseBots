@@ -589,7 +589,7 @@ bool IsWorldBot(Player* bot)
         return false;
     if (!record->masterGuid.IsEmpty())
         if (Player* master = ObjectAccessor::FindPlayer(record->masterGuid))
-            if (master->GetSession() && master->GetSession()->HasNetworkTransport())
+            if (master->GetSession() && HasNetworkTransportCompat(master->GetSession()))
                 return false;
     return true;
 }
@@ -957,7 +957,7 @@ RemoteCommander::BindingState ReadBindingState(RemoteCommander::Binding const& b
     state.raidAllowed = sPlayerbotAIConfig.dungeonRunRaid && sPlayerbotAIConfig.dungeonSelfClear;
     Player* commander = FindCharacter(binding.commanderGuid);
     state.commanderOnline = commander && commander->GetSession() &&
-        commander->GetSession()->HasNetworkTransport();
+        HasNetworkTransportCompat(commander->GetSession());
     Player* lead = FindCharacter(binding.leadGuid);
     state.leadOnline = lead != nullptr;
     if (Group* group = lead ? lead->GetGroup() : nullptr)
@@ -1206,7 +1206,7 @@ uint32 ReleaseBinding(uint64 commanderRaw, RemoteCommander::ReleaseReason reason
                 present.found = commander != nullptr;
                 present.inWorld = commander && commander->IsInWorld();
                 present.hasSession = commander && commander->GetSession() &&
-                    commander->GetSession()->HasNetworkTransport();
+                    HasNetworkTransportCompat(commander->GetSession());
                 present.isMember = group->IsMember(ObjectGuid(commanderRaw));
                 present.leadFound = lead && group->IsMember(lead->GetObjectGuid());
                 present.playerLed = removed.playerLed;
@@ -1222,7 +1222,7 @@ uint32 ReleaseBinding(uint64 commanderRaw, RemoteCommander::ReleaseReason reason
                                 continue;
                             Player* const player = FindCharacter(slot.guid.GetRawValue());
                             if (player && player->IsInWorld() && player->GetSession() &&
-                                player->GetSession()->HasNetworkTransport())
+                                HasNetworkTransportCompat(player->GetSession()))
                             {
                                 group->ChangeLeader(slot.guid);
                                 break;
@@ -13370,7 +13370,7 @@ void ReadRunPlayers(DungeonRunSlot const& slot, uint64 commanderRaw, Player* lea
         TortoiseBots::DungeonRun::PlayerFact p;
         p.commander = entry.guid.GetRawValue() == commanderRaw;
         Player* const member = FindCharacter(entry.guid.GetRawValue());
-        if (!member || !member->GetSession() || !member->GetSession()->HasNetworkTransport())
+        if (!member || !member->GetSession() || !HasNetworkTransportCompat(member->GetSession()))
         {
             // Logged out (or his connection lost) but still a member: offline, not in the instance; a pull waits
             // for him (bounded, then a pause naming him offline).
@@ -16429,7 +16429,7 @@ void CollectCommanderTelemetry(std::vector<CommanderTelemetry::BindingRef>& out)
         {
             ref.commander = CommanderDisplayName(*binding, commander);
             ref.commanderGuid = ::ObjectGuid(commanderRaw).GetCounter();
-            ref.commanderOnline = commander && commander->GetSession() && commander->GetSession()->HasNetworkTransport();
+            ref.commanderOnline = commander && commander->GetSession() && HasNetworkTransportCompat(commander->GetSession());
         }
         ref.groupId = binding->groupId;
         if (auto const laid = RaidLayouts().find(binding->groupId); laid != RaidLayouts().end())

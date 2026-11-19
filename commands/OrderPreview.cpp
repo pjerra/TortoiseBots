@@ -302,7 +302,7 @@ bool HandleOrderPreview(ChatHandler* handler, Player* requester, std::string con
         return true;
     }
     Guild* guild = sGuildMgr.GetGuildById(guildId);
-    if (!requester->GetSession() || !requester->GetSession()->HasNetworkTransport() ||
+    if (!requester->GetSession() || !HasNetworkTransportCompat(requester->GetSession()) ||
         !guild || !guild->HasRankRight(requester->GetRank(), GR_RIGHT_EOFFNOTE))
     {
         SendActionError(handler, "order", "forbidden", "Your guild rank may not give orders.");

@@ -549,7 +549,7 @@ void LftBotFillService::AcceptPartyBotOffers()
         for (Player* candidate : candidates)
         {
             if (!candidate || candidate == bot || !candidate->IsInWorld() || !candidate->GetSession() ||
-                !candidate->GetSession()->HasNetworkTransport() ||
+                !HasNetworkTransportCompat(candidate->GetSession()) ||
                 !sLFTMgr.IsInOffer(candidate->GetObjectGuid()))
                 continue;
             bool const anchorIsHireMaster = !hireMaster.IsEmpty() && candidate->GetObjectGuid() == hireMaster;

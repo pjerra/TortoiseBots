@@ -54,7 +54,7 @@ bool EligiblePlayer(Player* player, Player* bot)
     if (!player || player == bot || !player->IsInWorld() || !player->IsAlive())
         return false;
     WorldSession* session = player->GetSession();
-    if (!session || !session->HasNetworkTransport())
+    if (!session || !HasNetworkTransportCompat(session))
         return false;
     if (BotManager::Instance().IsBot(player->GetObjectGuid()))
         return false;
@@ -114,7 +114,7 @@ void PassingBuffsService::Update(uint32_t diff)
     for (auto const& entry : sWorld.GetAllSessions())
     {
         WorldSession* session = entry.second;
-        if (!session || !session->HasNetworkTransport())
+        if (!session || !HasNetworkTransportCompat(session))
             continue;
         Player* player = session->GetPlayer();
         if (player && player->IsInWorld())

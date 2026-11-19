@@ -1220,7 +1220,7 @@ void BotManager::OnPlayerLogin(::Player* player)
 
     auto it = m_bots.find(player->GetObjectGuid().GetCounter());
     ::WorldSession* session = player->GetSession();
-    if (!session || session->HasNetworkTransport())
+    if (!session || HasNetworkTransportCompat(session))
     {
         if (it != m_bots.end())
             ReleaseToClient(player);
@@ -1636,7 +1636,7 @@ void BotManager::DetachOwnedBots(::Player* master)
 
 void BotManager::RebindOwnedBots(::Player* master)
 {
-    if (!master || !master->GetSession() || !master->GetSession()->HasNetworkTransport())
+    if (!master || !master->GetSession() || !HasNetworkTransportCompat(master->GetSession()))
         return;
 
     ObjectGuid masterGuid = master->GetObjectGuid();
@@ -1976,7 +1976,7 @@ bool BotManager::RemoveBot(::ObjectGuid guid, bool save)
         if (::Player* p = sObjectAccessor.FindPlayer(guid))
         {
             ::WorldSession* s = p->GetSession();
-            if (s && s->HasNetworkTransport())
+            if (s && HasNetworkTransportCompat(s))
                 TB_LOG_DETAIL("TortoiseBots: RemoveBot %s reclaimed by network — releasing", guid.GetString().c_str());
         }
         m_bots.erase(it);
@@ -2052,7 +2052,7 @@ bool BotManager::IsLiveHeadlessBot(BotEntry const& entry, ::Player* player) cons
         return false;
 
     ::WorldSession* session = player->GetSession();
-    if (!session || !IsHeadlessCompat(session) || session->HasNetworkTransport())
+    if (!session || !IsHeadlessCompat(session) || HasNetworkTransportCompat(session))
         return false;
     if (!entry.aiAdapter || !entry.aiAdapter->IsUsable())
         return false;
@@ -2246,7 +2246,7 @@ bool HasLiveRealPlayerMaster(::ObjectGuid masterGuid)
         return false;
 
     ::WorldSession* session = master->GetSession();
-    return session && session->HasNetworkTransport();
+    return session && HasNetworkTransportCompat(session);
 }
 
 // Classification inputs for one bot: the managed-pool account registry says
@@ -2522,7 +2522,7 @@ void BotManager::UpdateBots(uint32_t diff)
         for (auto const& sessionPair : sWorld.GetAllSessions())
         {
             ::WorldSession* session = sessionPair.second;
-            if (!session || !session->HasNetworkTransport())
+            if (!session || !HasNetworkTransportCompat(session))
                 continue;
             ::Player* observer = session->GetPlayer();
             if (!observer || !observer->IsInWorld() || observer->IsBeingTeleported())
@@ -2705,7 +2705,7 @@ void BotManager::OnWorldUpdate(uint32_t diff)
         if (rec.lifecycle == BotLifecycle::Removing)
         {
             // Ensure Stop was requested; if player was reclaimed by Network, core owns transfer.
-            if (p && p->GetSession() && p->GetSession()->HasNetworkTransport())
+            if (p && p->GetSession() && HasNetworkTransportCompat(p->GetSession()))
             {
                 TB_LOG_DETAIL("TortoiseBots: Bot %s reclaimed by network during removal — releasing",
                     rec.characterGuid.GetString().c_str());
@@ -2735,7 +2735,7 @@ void BotManager::OnWorldUpdate(uint32_t diff)
         if (p)
         {
             ::WorldSession* playerSess = p->GetSession();
-            if (playerSess && playerSess->HasNetworkTransport())
+            if (playerSess && HasNetworkTransportCompat(playerSess))
             {
                 TB_LOG_DETAIL("TortoiseBots: Bot %s reclaimed by network session acct %u — releasing",
                     rec.characterGuid.GetString().c_str(), playerSess->GetAccountId());
@@ -3125,7 +3125,7 @@ void BotManager::UpdateAutoTest(uint32_t diff)
                         std::string playerInfo = p ? (p->IsInWorld() ? "IsInWorld" : "not InWorld") : "FindPlayer null";
                         TB_LOG_DEBUG("TortoiseBots: AutoTest LoggingIn tick %u sess %s state %u acct %u loading %u player %s pending %u", m_autoTestTicks, sessInfo.c_str(), static_cast<uint32>(st), rec->accountId, loading, playerInfo.c_str(), st == HeadlessSessionState::Pending);
                         if (st != HeadlessSessionState::NotFound && p && p->GetSession())
-                            TB_LOG_DEBUG("TortoiseBots:   sess details network %u headless %u", p->GetSession()->HasNetworkTransport(), IsHeadlessCompat(p->GetSession()));
+                            TB_LOG_DEBUG("TortoiseBots:   sess details network %u headless %u", HasNetworkTransportCompat(p->GetSession()), IsHeadlessCompat(p->GetSession()));
                     }
                     if (m_autoTestTicks > 400)
                     {

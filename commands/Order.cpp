@@ -70,7 +70,7 @@ void OrderError(ChatHandler* handler, char const* code, std::string const& messa
 // edit officer notes.
 bool CheckGiver(ChatHandler* handler, Player* requester, uint32_t guildId)
 {
-    if (!requester || !requester->GetSession() || !requester->GetSession()->HasNetworkTransport())
+    if (!requester || !requester->GetSession() || !HasNetworkTransportCompat(requester->GetSession()))
     {
         OrderError(handler, "forbidden", "Only a real player can give orders.");
         return false;
@@ -934,7 +934,7 @@ bool HandleOrderAccess(ChatHandler* handler, Player* requester)
 
 bool HandleOrderRank(ChatHandler* handler, Player* requester, std::string const& rankToken)
 {
-    if (!requester || !requester->GetSession() || !requester->GetSession()->HasNetworkTransport())
+    if (!requester || !requester->GetSession() || !HasNetworkTransportCompat(requester->GetSession()))
     {
         OrderError(handler, "forbidden", "Only a real player can change the bots' rank.");
         return true;

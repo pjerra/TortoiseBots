@@ -106,7 +106,7 @@ void ai::UpdateBotAreaTriggers(Player* bot, BotAreaTriggerState& state, std::vec
         {
             Player* member = ObjectAccessor::FindPlayer(slot.guid);
             if (member && member != bot && member->IsInWorld() && member->GetSession() &&
-                member->GetSession()->HasNetworkTransport() && member->GetMapId() == bot->GetMapId() &&
+                HasNetworkTransportCompat(member->GetSession()) && member->GetMapId() == bot->GetMapId() &&
                 member->GetInstanceId() == bot->GetInstanceId() &&
                 member->IsWithinDist(bot, kBotAreaTriggerHumanRange))
             {

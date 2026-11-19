@@ -74,7 +74,7 @@ std::vector<RealPlayer> RealPlayersOnline()
     for (auto const& entry : sWorld.GetAllSessions())
     {
         WorldSession* session = entry.second;
-        if (!session || !session->HasNetworkTransport())
+        if (!session || !HasNetworkTransportCompat(session))
             continue;
         Player* player = session->GetPlayer();
         if (!player || !player->IsInWorld())
@@ -1011,7 +1011,7 @@ void BotLfgService::HandleWhisper(LfgWhisper const& whisper)
     Player* sender = ObjectAccessor::FindPlayer(ObjectGuid(whisper.sender));
     if (!group || !leader || !sender)
         return;
-    if (!(sender->GetSession() && sender->GetSession()->HasNetworkTransport() &&
+    if (!(sender->GetSession() && HasNetworkTransportCompat(sender->GetSession()) &&
             !BotManager::Instance().IsBot(sender->GetObjectGuid())))
         return;
     if (sender->GetGroup() && sender->GetGroup()->GetId() == group->groupId)

@@ -409,7 +409,7 @@ void CollectOnlinePlayers(std::vector<Player*>& out)
     for (auto const& pair : sWorld.GetAllSessions())
     {
         WorldSession* sess = pair.second;
-        if (!sess || !sess->HasNetworkTransport())
+        if (!sess || !HasNetworkTransportCompat(sess))
             continue;
         Player* player = sess->GetPlayer();
         if (!player || !player->IsInWorld())
