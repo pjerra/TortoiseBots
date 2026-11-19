@@ -1,6 +1,7 @@
 // Script registration for the module: the world tick, the config load and the `.tb` chat commands.
 #include "TbBotMgr.h"
 #include "host/run/TbPlanCommands.h"
+#include "host/run/TbRunCommands.h"
 #include "compat/TbItemPrototype.h"
 #ifdef TORTOISEBOTS_SLICE1      // the engine's unported-feature counters exist only in the build that has the engine (R9)
 #define TB_UNPORTED_TABLE_ONLY 1   // the table of unported features without the helpers that need the core's types (R6A, R6B)
@@ -145,6 +146,9 @@ public:
         perf.worldMaxMs = std::max(perf.worldMaxMs, worldMs);
         perf.botSumUs += us;
         perf.botMaxUs = std::max(perf.botMaxUs, us);
+#ifdef TORTOISEBOTS_SLICE1
+        TortoiseBots::run::Update(diff);      // S6 (C6): the dungeon runs, once a second each; its cost is its own (`.tb run status all`: tick_avg_us, tick_max_us), not in the share above
+#endif
     }
 
     void OnShutdown() override
@@ -231,6 +235,7 @@ public:
             { "kill",   TortoiseBots::h4::HandleKill,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "gm",     TortoiseBots::h4::HandleGm,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "plan",   TortoiseBots::run::HandlePlan,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "run",    TortoiseBots::run::HandleRun,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
         {

@@ -15,6 +15,7 @@
 
 #include <deque>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -53,6 +54,33 @@ struct RunRec
     // The state of each plan boss the run KNOWS: entry -> dead. Only the S6 glue sets an entry (from the boss creature it read), so an entry that was
     // never read is not in the map and the `boss=` list does not name it: a boss is never reported alive by default.
     std::map<uint32, bool> bossDead;
+
+    // ---- S6 (package C6): what the tick keeps between its 1 Hz runs. Plain data and guids only: no Player, Unit or Map pointer is kept across ticks. ----
+    // A member's host master and whether it was commanded (`.tb master`) before the run bound it to the tank (decision D1); `.tb run stop` and the end of the
+    // run put it back. Only members of the leader's party are in it (the leader itself is never rebound).
+    struct Binding
+    {
+        ObjectGuid master;              // BotMgr's host master before the run (empty: none)
+        bool commanded = false;         // h3::CommanderGuid was set (then it named `master`)
+    };
+    std::map<ObjectGuid, Binding> bound;
+    std::map<ObjectGuid, uint32> orderSeen;     // member (and the leader) -> the `.tb order` seq the run last saw: a newer seq is an order from outside
+    uint32 lastTickMs = 0;                       // GameTime::GetGameTimeMS() of the last tick (the dt the policy is given)
+    uint32 ticks = 0;
+    bool stopPending = false;                    // `.tb run stop` came in a fight: no new order, the stop takes effect when the fight is over
+    std::string stopWhy;
+    std::string pauseCode;                       // the machine word of the next pause event's `why=` (outside-order, player-in-group, lead-off-map, command); empty: the run's own note
+    bool pausedForPlayer = false;                // the system run's join flag (SystemRun::JoinFlagAfterScan)
+    // What the last tick saw, to name the events (start .. stop) of the next one.
+    bool seenInit = false;
+    DungeonRun::State seenState = DungeonRun::State::Running;
+    DungeonRun::Phase seenPhase = DungeonRun::Phase::Begin;
+    size_t seenStep = 0;
+    bool seenCombat = false;
+    bool seenWipe = false;
+    std::set<std::string> seenDead;
+    size_t pullChecked = size_t(-1);             // the pull step whose unit rows were counted (StepMatchedMembers), and the pass it was counted on
+    uint32 pullCheckedPass = 0;
 };
 
 // The run table. `Create` fails (null) when the leader already has a run; the Turtle run is started on the plan at step 0.
@@ -66,6 +94,46 @@ uint32 AddEvent(RunRec& rec, uint32 nowMs, std::string kind, int32 step = -1, in
 
 // running | paused | done (the Turtle run's state), or stopped when `stopped` is set.
 std::string StateName(RunRec const& rec);
+
+// ---- S6 (package C6): the tick, the binding and the commands' logic (the `.tb run` handlers in TbRunCommands.cpp only parse and write replies) ----
+// `Update` is called once per world tick from OnBeforeMapsUpdate (TbRunHooks.h); it runs every live run once per second. Cost of one run tick: one
+// `ReadFacts` (F6: at most a few path queries and grid scans, 2-3 us in the pure half), one `DungeonRun::Tick`, at most ONE order through the
+// executor, and a handful of map lookups; `TickTotals` says what it measured.
+struct TickTotals
+{
+    uint64 ticks = 0;           // run ticks since boot
+    uint64 totalUs = 0;         // wall clock of all of them
+    uint32 maxUs = 0;           // the worst one
+};
+TickTotals const& TickCost();
+
+bool Ended(RunRec const& rec);                          // the run is done or stopped (it stays in the table for `status` and `events` until a new start)
+
+struct StartOutcome
+{
+    std::string code;           // empty = started; else not-bot not-leader group-raid player-in-group not-tank no-engine wrong-map already-running not-commanded bind-failed no-plan
+    std::string detail;
+    RunRec* rec = nullptr;
+};
+// Checks the party and starts the run (binds every other member to the leader). Nothing changes when a code is returned.
+StartOutcome StartRun(Player* leader, ai::DungeonPlan const* plan, uint32 nowMs);
+
+struct StopOutcome
+{
+    std::string code;           // empty = accepted; else not-running
+    std::string detail;
+    bool pending = false;       // a fight is going on: the stop takes effect when it ends
+    uint32 stayed = 0;          // members the executor accepted a `stay` for (0 while the run is pending)
+};
+StopOutcome StopRun(RunRec& rec, uint32 nowMs, std::string const& reason);
+
+struct StateOutcome
+{
+    std::string code;           // empty = done; else not-running | not-paused | stopping | player-in-group | refused
+    std::string detail;
+};
+StateOutcome PauseRun(RunRec& rec, uint32 nowMs);
+StateOutcome ResumeRun(RunRec& rec, uint32 nowMs);
 
 // The `run` record of `.tb run status` (S6) and of the selftest, and the `event` record of `.tb run events`.
 h3::Rec RunRecord(RunRec const& rec, uint32 nowMs);
