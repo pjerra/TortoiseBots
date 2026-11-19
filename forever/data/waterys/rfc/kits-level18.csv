@@ -1,0 +1,56 @@
+role,slot,item_id,name,source,reason
+protection warrior,head,7130,Brutal Helm,quest (1845 Brutal Helm),"quest/vendor preferred, console-handable"
+protection warrior,neck,281265,Roadwatcher's Confidence,quest (95981 Watching the Roads),"quest/vendor preferred, console-handable"
+protection warrior,shoulder,17695,Chestnut Mantle,quest (6565 Allegiance to the Old Gods),"quest/vendor preferred, console-handable"
+protection warrior,back,7004,Prelacy Cape,quest (1275 Researching the Corruption),"quest/vendor preferred, console-handable"
+protection warrior,chest,2041,Tunic of Westfall,quest (166 The Defias Brotherhood),"quest/vendor preferred, console-handable"
+protection warrior,wrist,280095,Cryptwalker Bracers,quest (96394 The Restless Dead),"quest/vendor preferred, console-handable"
+protection warrior,hands,7606,Polar Gauntlets,quest (2040 Underground Assault),"quest/vendor preferred, console-handable"
+protection warrior,waist,279897,Dusty Belt,quest (96394 The Restless Dead),"quest/vendor preferred, console-handable"
+protection warrior,legs,15451,Gargoyle Leggings,quest (5725 The Power to Destroy...),"quest/vendor preferred, console-handable"
+protection warrior,feet,10658,Quagmire Galoshes,quest (3369 In Nightmares),"quest/vendor preferred, console-handable"
+protection warrior,finger,6749,Tiger Band,quest (1144 Willix the Importer),"quest/vendor preferred, console-handable"
+protection warrior,finger,6748,Monkey Ring,quest (1144 Willix the Importer),"second ring, distinct item"
+protection warrior,trinket,,,none,EMPTY: no wearable trinket for protection warrior at <=18 in gear-level18.csv
+protection warrior,trinket2,,,none,EMPTY: no wearable trinket2 for protection warrior at <=18 in gear-level18.csv
+protection warrior,main_hand,279874,The Stitcher,quest (92421 Light's Justice),"quest/vendor preferred, console-handable"
+protection warrior,off_hand,6746,Basalt Buckler,quest (1488 The Corrupter),"quest/vendor preferred, console-handable"
+arms warrior,head,7130,Brutal Helm,quest (1845 Brutal Helm),"quest/vendor preferred, console-handable"
+arms warrior,neck,281265,Roadwatcher's Confidence,quest (95981 Watching the Roads),"quest/vendor preferred, console-handable"
+arms warrior,shoulder,17695,Chestnut Mantle,quest (6565 Allegiance to the Old Gods),"quest/vendor preferred, console-handable"
+arms warrior,back,7004,Prelacy Cape,quest (1275 Researching the Corruption),"quest/vendor preferred, console-handable"
+arms warrior,chest,2041,Tunic of Westfall,quest (166 The Defias Brotherhood),"quest/vendor preferred, console-handable"
+arms warrior,wrist,280095,Cryptwalker Bracers,quest (96394 The Restless Dead),"quest/vendor preferred, console-handable"
+arms warrior,hands,7606,Polar Gauntlets,quest (2040 Underground Assault),"quest/vendor preferred, console-handable"
+arms warrior,waist,279897,Dusty Belt,quest (96394 The Restless Dead),"quest/vendor preferred, console-handable"
+arms warrior,legs,15451,Gargoyle Leggings,quest (5725 The Power to Destroy...),"quest/vendor preferred, console-handable"
+arms warrior,feet,10658,Quagmire Galoshes,quest (3369 In Nightmares),"quest/vendor preferred, console-handable"
+arms warrior,finger,6749,Tiger Band,quest (1144 Willix the Importer),"quest/vendor preferred, console-handable"
+arms warrior,finger,6748,Monkey Ring,quest (1144 Willix the Importer),"second ring, distinct item"
+arms warrior,trinket,,,none,EMPTY: no wearable trinket for arms warrior at <=18 in gear-level18.csv
+arms warrior,trinket2,,,none,EMPTY: no wearable trinket2 for arms warrior at <=18 in gear-level18.csv
+arms warrior,off_hand,,,none,EMPTY: no wearable off_hand for arms warrior at <=18 in gear-level18.csv
+arms warrior,two_hand,279864,Monstrous Cleaver,quest (97290 Unending Torment),"quest/vendor preferred, console-handable"
+priest,head,23323,Crown of the Fire Festival,quest (9339 A Thief's Reward),"quest/vendor preferred, console-handable"
+priest,neck,281265,Roadwatcher's Confidence,quest (95981 Watching the Roads),"quest/vendor preferred, console-handable"
+priest,shoulder,3324,Ghostly Mantle,quest (1098 Deathstalkers in Shadowfang),"quest/vendor preferred, console-handable"
+priest,back,7004,Prelacy Cape,quest (1275 Researching the Corruption),"quest/vendor preferred, console-handable"
+priest,chest,17043,Zealot's Robe,quest (6521 An Unholy Alliance),"quest/vendor preferred, console-handable"
+priest,wrist,15452,Featherbead Bracers,quest (5724 Returning the Lost Satchel),"quest/vendor preferred, console-handable"
+priest,hands,279877,Blight Gloves,quest (95216 The New Plague),"quest/vendor preferred, console-handable"
+priest,waist,16975,Warsong Sash,quest (6571 Warsong Supplies),"quest/vendor preferred, console-handable"
+priest,legs,15449,Ghastly Trousers,quest (5725 The Power to Destroy...),"quest/vendor preferred, console-handable"
+priest,feet,6998,Nimbus Boots,quest (1199 Twilight Falls),"quest/vendor preferred, console-handable"
+priest,finger,6749,Tiger Band,quest (1144 Willix the Importer),"quest/vendor preferred, console-handable"
+priest,finger,6748,Monkey Ring,quest (1144 Willix the Importer),"second ring, distinct item"
+priest,trinket,,,none,EMPTY: no wearable trinket for priest at <=18 in gear-level18.csv
+priest,trinket2,,,none,EMPTY: no wearable trinket2 for priest at <=18 in gear-level18.csv
+priest,main_hand,279874,The Stitcher,quest (92421 Light's Justice),"quest/vendor preferred, console-handable"
+priest,off_hand,,,none,EMPTY: no wearable off_hand for priest at <=18 in gear-level18.csv
+priest,ranged,279896,Deepblaze,quest (96393 Old Ironforge Incursion),"quest/vendor preferred, console-handable"
+protection warrior,food,4540,Tough Hunk of Bread,vendor (5 alliance vendors),widely stocked alliance vendor food/water
+protection warrior,drink,159,Refreshing Spring Water,vendor (20 alliance vendors),widely stocked alliance vendor food/water
+arms warrior,food,4540,Tough Hunk of Bread,vendor (5 alliance vendors),widely stocked alliance vendor food/water
+arms warrior,drink,159,Refreshing Spring Water,vendor (20 alliance vendors),widely stocked alliance vendor food/water
+priest,food,4540,Tough Hunk of Bread,vendor (5 alliance vendors),widely stocked alliance vendor food/water
+priest,drink,159,Refreshing Spring Water,vendor (20 alliance vendors),widely stocked alliance vendor food/water
