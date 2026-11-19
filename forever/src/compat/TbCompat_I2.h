@@ -26,7 +26,7 @@
 // Open the loot window of a corpse: WorldSession::HandleLootOpcode(LootUnit&) (LootHandler.cpp:213-259). It checks, in this order,
 // that the player is alive and the guid is a creature (:216), that the creature exists (:219), AELootCreatureCheck::IsValidLootTarget
 // (:223: the corpse is dead, within 30 yards of the player (LootHandler.cpp:46,:55), and Player::isAllowedToLoot = this player is an
-// allowed looter and has something to loot, Player.cpp:20246-20288), then interrupts a running cast (:228-229), and calls
+// allowed looter and has something to loot, Player.cpp:20256-20298), then interrupts a running cast (:228-229), and calls
 // Player::SendLoot(*creature->GetLootForPlayer(player)) (:254), which puts the loot into the player's loot view (Player.cpp:10019-10046:
 // SetLootGUID, m_AELootView[loot guid], UNIT_FLAG_LOOTING). A refusal sends NOTHING (the handler returns), so the answer here is read
 // back from the loot view. With AE loot on (CONFIG_ENABLE_AE_LOOT) the core also opens up to 49 other corpses of the area (:233-251);
@@ -93,7 +93,7 @@ inline void LootReleaseAllCompat(Player* bot, ObjectGuid const& guid)
 // WHOLE loot view; for a corpse window of a player in a group the money is split between the group members that are allowed looters
 // of that loot and within the group reward distance (:151-179), everybody else's share goes to them with their own money messages;
 // alone, or for a non-corpse window, the player takes all of it (:181-191). The split divides by the number of such members (:162):
-// with none the core would divide by zero. The looter itself always counts (IsAtGroupRewardDistance(self) is true, Player.cpp:28052-28065)
+// with none the core would divide by zero. The looter itself always counts (IsAtGroupRewardDistance(self) is true, Player.cpp:28062-28075)
 // as long as it is an allowed looter of the loot, which opening the window already required; the same test is made here first, and a
 // window that fails it is not taken (false) instead of reaching the division. Different answer: a bot in a party shares the money
 // with the party (the master gets a part of the bot's corpse gold), as every player of this core does.
@@ -194,7 +194,7 @@ inline float DropRateOfQualityCompat(LootStoreType& /*creatureLootStore*/, uint3
 inline bool RollChanceCompat(float /*chance*/) { tbcompat::Unported(tbcompat::Feature::LootItems); return false; }
 
 // Whether a corpse still has loot this bot may take. T: the raw lootable flag OR the viewer's own right. F: the core's own right
-// Player::isAllowedToLoot (Player.cpp:20246-20288: dead, the viewer's loot exists and is not looted, the viewer is an allowed looter,
+// Player::isAllowedToLoot (Player.cpp:20256-20298: dead, the viewer's loot exists and is not looted, the viewer is an allowed looter,
 // gold always counts (Loot.cpp:1184-1188), and the round-robin / group-loot turn). Different answer: the raw lootable dynamic flag is not
 // read (on T the core masks it per viewer so it mostly equalled the right; on F it is one value for everybody, so it would also say
 // yes for a corpse another player tapped).
@@ -204,7 +204,7 @@ inline bool CorpseHasBodyLootForCompat(Player* bot, Creature* creature) { return
 
 // ai::HasVisiblePersonalItemFor: the personal items (quest, free-for-all) the viewer may see while another member holds the turn.
 // F: Loot::hasItemFor(viewer) (Loot.cpp:1197-1209: quest items of the viewer and its free-for-all items), the very test
-// Player::isAllowedToLoot makes for the same situation (Player.cpp:20271, :20284). The policy's own T algorithm (`body`) is not run.
+// Player::isAllowedToLoot makes for the same situation (Player.cpp:20281, :20294). The policy's own T algorithm (`body`) is not run.
 template <class LootType, class ViewerType, class Body>
 inline bool PersonalItemVisibleCompat(LootType const& loot, ViewerType* viewer, Body&&) { return loot.hasItemFor(viewer); }
 
@@ -236,7 +236,7 @@ inline Item* FindItemByEntryCompat(Player* player, uint32 itemEntry)
 // reports failure): the bot does less.
 //
 // The core call: Player::CastItemUseSpell(item, spellId, targets, castId, misc) (Player.cpp:9707-9757), the call ProcessItemCast ends in
-// when the client sends CMSG_USE_ITEM (Player.cpp:33751-33837, from WorldSession::HandleUseItemOpcode, SpellHandler.cpp:50-64). It checks
+// when the client sends CMSG_USE_ITEM (Player.cpp:33761-33847, from WorldSession::HandleUseItemOpcode, SpellHandler.cpp:50-64). It checks
 // that the spell is an ON_USE effect of a non-LEGACY item, or a use-spell enchantment (:9716-9744, an error line and no cast otherwise),
 // builds `Spell(this, spellInfo, TRIGGERED_NONE)` with m_CastItem = the item and calls prepare(targets) (:9746-9756); prepare checks the
 // cast (CheckCast), refuses with SendCastResult and otherwise queues the cast, which consumes the item when it finishes. The call

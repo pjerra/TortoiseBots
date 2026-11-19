@@ -54,7 +54,7 @@ namespace TortoiseBots { namespace h3 { bool MemberKnowsOocResurrection(Player* 
 inline bool MemberKnowsOocResurrectionCompat(Player* member) { return TortoiseBots::h3::MemberKnowsOocResurrection(member); }
 
 // "Waiting to Resurrect" (spell 2584) on a bot that released inside a battleground. T: the original self cast with the old triggered flag.
-// F: the core puts the aura on a player itself when its spirit guide is chosen (Player::SetAreaSpiritHealer, Player.cpp:33468) and the bot
+// F: the core puts the aura on a player itself when its spirit guide is chosen (Player::SetAreaSpiritHealer, Player.cpp:33478) and the bot
 // cannot choose one: battlegrounds are out of the port (a later slice), counted and not cast: the bot does LESS.
 inline void WaitingForResurrectAuraCompat(Player* /*bot*/) { tbcompat::Unported(tbcompat::Feature::BattlegroundRelease); }
 
@@ -96,7 +96,7 @@ inline bool ResurrectOffererAcceptableCompat(AI* ai, ObjectGuid const& offerer)
 // field the handler reads, so `AcceptResurrectCompat` accepts on both cores.
 // What accepting does on F (the answer to "how does a session with no client accept"): the handler checks that a request FROM THIS offerer is
 // pending (:517), and if the offerer is in the world looks at its instance's combat-resurrection charges (:519-529: only when the config
-// asks for them AND an encounter is in progress; the RFC script has none), then ResurrectUsingRequestData (Player.cpp:28079): TeleportTo the
+// asks for them AND an encounter is in progress; the RFC script has none), then ResurrectUsingRequestData (Player.cpp:28089): TeleportTo the
 // caster's position at cast time, and when that is a near teleport (the same map) the resurrect is DELAYED to the teleport's acknowledgement
 // (DELAYED_RESURRECT_PLAYER, :28084-28087, run by ProcessDelayedOperations, Player.cpp:1566, which the teleport ack calls, MovementHandler.cpp:479): the host session acknowledges near teleports
 // by itself (TbBotSession.cpp AcknowledgeTeleports), so the bot is alive one tick later at the offerer's position. The return value says

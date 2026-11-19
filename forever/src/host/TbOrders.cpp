@@ -399,7 +399,7 @@ std::string JoinFrom(std::vector<std::string> const& words, size_t from)
 
 // H4 (slice 4, spec section 2): who offered the dead bot a resurrection, when that is a member of its party or its commander (a stranger's offer is
 // DECLINED: the bot does nothing, the offer lapses by itself; the legacy action would accept any). The core keeps the pending offer on the Player
-// (Player::SetResurrectRequestData, Player.cpp:25470); `IsResurrectRequestedBy` is the public question. Reading the Player's own state replaces a capture
+// (Player::SetResurrectRequestData, Player.cpp:25480); `IsResurrectRequestedBy` is the public question. Reading the Player's own state replaces a capture
 // of SMSG_RESURRECT_REQUEST in the session: the same fact, on the world thread, with no packet to parse.
 Player* ResurrectOffererOf(Player* bot)
 {
