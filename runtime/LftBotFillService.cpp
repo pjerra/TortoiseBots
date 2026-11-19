@@ -126,7 +126,7 @@ bool LftBotFillService::IsEligibleCandidate(Player* bot) const
 {
     if (!bot) return false;
     if (!bot->IsInWorld()) return false;
-    if (!bot->GetSession() || !bot->GetSession()->IsHeadless()) return false;
+    if (!bot->GetSession() || !IsHeadlessCompat(bot->GetSession())) return false;
     if (AhBotSellerAccount::Instance().IsSellerGuid(bot->GetGUIDLow())) return false;
     if (!BotManager::Instance().IsRandomBot(bot->GetObjectGuid())) return false;
     if (sLFTMgr.IsQueued(bot->GetObjectGuid()) || sLFTMgr.IsInOffer(bot->GetObjectGuid())) return false;
@@ -149,7 +149,7 @@ bool LftBotFillService::IsEligibleCandidate(Player* bot) const
 bool LftBotFillService::IsModuleOwnedHeadlessBot(Player const* bot) const
 {
     if (!bot) return false;
-    if (!bot->GetSession() || !bot->GetSession()->IsHeadless()) return false;
+    if (!bot->GetSession() || !IsHeadlessCompat(bot->GetSession())) return false;
     if (AhBotSellerAccount::Instance().IsSellerGuid(bot->GetGUIDLow())) return false;
     if (!BotManager::Instance().IsRandomBot(bot->GetObjectGuid())) return false;
     const Player* p = bot;

@@ -282,7 +282,7 @@ bool AhMarketService::TryTeleportToAuctioneer(Player* bot)
 
 AhMarketService::PostResult AhMarketService::TryPostForBot(Player* bot, bool allowTeleport)
 {
-    if (!bot || !bot->GetSession() || !bot->GetSession()->IsHeadless())
+    if (!bot || !bot->GetSession() || !IsHeadlessCompat(bot->GetSession()))
         return PostResult::Failed;
     if (!bot->IsInWorld() || !bot->IsAlive() || bot->IsBeingTeleported())
         return PostResult::Failed;

@@ -123,7 +123,7 @@ void RandomBotFacade::SyncNativePlayers()
     players.clear();
     for (Player* player : TortoiseBots::BotManager::Instance().GetAllBots())
     {
-        if (!player || !player->GetSession() || !player->GetSession()->IsHeadless())
+        if (!player || !player->GetSession() || !IsHeadlessCompat(player->GetSession()))
             continue;
 
         TortoiseBots::BotRecord* record =

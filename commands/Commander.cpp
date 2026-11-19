@@ -8075,7 +8075,7 @@ bool RunOffMapReturn(Player* commander, std::string const& order, std::string& a
         answer = "failed: the teleport was refused";
         return false;
     }
-    if (bot->GetSession() && bot->GetSession()->IsHeadless())
+    if (bot->GetSession() && IsHeadlessCompat(bot->GetSession()))
     {
         if (bot->IsBeingTeleportedNear())
             bot->ExecuteTeleportNear();
@@ -8164,7 +8164,7 @@ bool RunFetchReturn(Player* commander, std::string const& order, std::string& an
         }
         bot->GetMotionMaster()->Clear(false);
         bot->StopMoving();
-        if (bot->GetSession() && bot->GetSession()->IsHeadless())
+        if (bot->GetSession() && IsHeadlessCompat(bot->GetSession()))
         {
             if (bot->IsBeingTeleportedNear())
                 bot->ExecuteTeleportNear();
@@ -8488,7 +8488,7 @@ bool RunInstanceRejoin(Player* commander, std::string const& order, std::string&
         answer = "failed: the teleport was refused";
         return false;
     }
-    if (bot->GetSession() && bot->GetSession()->IsHeadless())
+    if (bot->GetSession() && IsHeadlessCompat(bot->GetSession()))
     {
         if (bot->IsBeingTeleportedNear())
             bot->ExecuteTeleportNear();

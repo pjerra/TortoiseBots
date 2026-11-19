@@ -193,7 +193,7 @@ bool HireProvisionService::CheckHireAllowed(Player* requester, bool fromGossip, 
 static SeatMasterPresence SeatMasterPresenceOf(ObjectGuid masterGuid)
 {
     Player* master = sObjectAccessor.FindPlayerNotInWorld(masterGuid);
-    bool const liveSession = master && master->GetSession() && !master->GetSession()->IsHeadless();
+    bool const liveSession = master && master->GetSession() && !IsHeadlessCompat(master->GetSession());
     return DecideSeatMasterPresence(master != nullptr, liveSession, master && master->IsInWorld(),
         master && master->IsBeingTeleportedFar());
 }
@@ -717,7 +717,7 @@ void HireProvisionService::StepRaidJobs()
         // dying. Only a master that is gone (logged out) drops the job, and
         // then there is no one left to send the summary to.
         Player* master = sObjectAccessor.FindPlayerNotInWorld(job.masterGuid);
-        bool online = master && master->GetSession() && !master->GetSession()->IsHeadless();
+        bool online = master && master->GetSession() && !IsHeadlessCompat(master->GetSession());
         if (online && (!master->IsInWorld() || master->IsBeingTeleportedFar()))
         {
             ++i;
@@ -1179,7 +1179,7 @@ bool HireProvisionService::ProvisionNow(Player* bot, PendingProvision& pending)
         return false;
     Player* master = sObjectAccessor.FindPlayer(pending.masterGuid);
     bool masterOnline = master && master->IsInWorld() && master->GetSession() &&
-        !master->GetSession()->IsHeadless();
+        !IsHeadlessCompat(master->GetSession());
 
     PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot);
     if (!ai)

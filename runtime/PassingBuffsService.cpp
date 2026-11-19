@@ -35,7 +35,7 @@ bool EligibleBot(Player* bot)
 {
     if (!bot || !bot->IsInWorld() || !bot->IsAlive() || bot->IsBeingTeleported() ||
         bot->InBattleGround() || bot->IsTaxiFlying() || !bot->GetSession() ||
-        !bot->GetSession()->IsHeadless())
+        !IsHeadlessCompat(bot->GetSession()))
         return false;
     if (!BotManager::Instance().IsRandomBot(bot->GetObjectGuid()))
         return false;

@@ -188,7 +188,7 @@ std::vector<BotLfgService::Scanned> BotLfgService::ScanCandidates()
         if (!bot)
             continue;
         BotLfg::CandidateFacts facts;
-        facts.liveHeadless = bot->IsInWorld() && bot->GetSession() && bot->GetSession()->IsHeadless();
+        facts.liveHeadless = bot->IsInWorld() && bot->GetSession() && IsHeadlessCompat(bot->GetSession());
         facts.worldBot = BotCommands::IsLfgWorldBot(bot);
         if (PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot))
             facts.playerMaster = ai->HasActivePlayerMaster();

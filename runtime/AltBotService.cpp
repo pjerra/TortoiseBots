@@ -341,7 +341,7 @@ void AltBotService::TryStart(ObjectGuid guid)
         return;
 
     Player* bot = sObjectAccessor.FindPlayer(guid);
-    if (!bot || !bot->GetSession() || !bot->GetSession()->IsHeadless())
+    if (!bot || !bot->GetSession() || !IsHeadlessCompat(bot->GetSession()))
         return;
     // Still (or again) grouped: a party member was removed, not this alt.
     if (bot->GetGroup())

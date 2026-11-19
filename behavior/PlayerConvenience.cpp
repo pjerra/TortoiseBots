@@ -71,7 +71,7 @@ bool PlayerConvenience::RequestSummon(Player* requester, Player* bot, Player* an
     if (origin == bot || !origin->IsInWorld() || !origin->IsAlive() ||
         origin->IsBeingTeleported() || origin->IsTaxiFlying())
         return false;
-    if (!bot->IsInWorld() || !bot->GetSession() || !bot->GetSession()->IsHeadless() ||
+    if (!bot->IsInWorld() || !bot->GetSession() || !IsHeadlessCompat(bot->GetSession()) ||
         bot->IsBeingTeleported() || !bot->IsAlive() || bot->IsInCombat() || bot->IsTaxiFlying())
         return false;
 
@@ -152,7 +152,7 @@ bool PlayerConvenience::RequestGroupSummon(Player* requester, Player* bot, Summo
         return false;
     if (!requester->IsAlive() && !conditions.allowMasterDead)
         return false;
-    if (!bot->IsInWorld() || !bot->GetSession() || !bot->GetSession()->IsHeadless() ||
+    if (!bot->IsInWorld() || !bot->GetSession() || !IsHeadlessCompat(bot->GetSession()) ||
         bot->IsBeingTeleported() || bot->IsTaxiFlying())
         return false;
     // The native flow never summons into or out of combat; the knob opens
@@ -252,7 +252,7 @@ void PlayerConvenience::UpdateSummons(uint32 diff)
         // The summon point: the master, or the anchor named at the request
         // (issue #884). It holds the portal and must stay where it was.
         Player* origin = state.anchorGuid.IsEmpty() ? master : sObjectAccessor.FindPlayer(state.anchorGuid);
-        if (!bot || !bot->GetSession() || !bot->GetSession()->IsHeadless() || !master ||
+        if (!bot || !bot->GetSession() || !IsHeadlessCompat(bot->GetSession()) || !master ||
             !origin || !origin->IsInWorld() || !origin->IsAlive() || origin->IsBeingTeleported() ||
             origin->IsTaxiFlying() ||
             origin->GetMapId() != state.destMap)
@@ -276,7 +276,7 @@ void PlayerConvenience::UpdateSummons(uint32 diff)
 
         if (state.phase == SummonState::Phase::AwaitingArrival)
         {
-            if (bot->GetSession() && bot->GetSession()->IsHeadless())
+            if (bot->GetSession() && IsHeadlessCompat(bot->GetSession()))
             {
                 if (bot->IsBeingTeleportedNear())
                     bot->ExecuteTeleportNear();
@@ -398,7 +398,7 @@ void PlayerConvenience::UpdateSummons(uint32 diff)
             it = m_summons.erase(it);
             continue;
         }
-        if (bot->GetSession() && bot->GetSession()->IsHeadless())
+        if (bot->GetSession() && IsHeadlessCompat(bot->GetSession()))
         {
             if (bot->IsBeingTeleportedNear())
                 bot->ExecuteTeleportNear();

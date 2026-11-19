@@ -277,7 +277,7 @@ bool TryRandomTeleport(::Player* bot, BotRecord const& record)
 {
     if (!sPlayerbotAIConfig.enableRandomTeleports)
         return false;
-    if (!bot || !bot->GetSession() || !bot->GetSession()->IsHeadless())
+    if (!bot || !bot->GetSession() || !IsHeadlessCompat(bot->GetSession()))
         return false;
     if (!record.random)
         return false;
@@ -343,7 +343,7 @@ bool GroupHasRealPlayer(::Player* bot)
     if (!group)
         return false;
     for (Player* member : LiveGroupMembers(group))
-        if (member != bot && member->GetSession() && !member->GetSession()->IsHeadless())
+        if (member != bot && member->GetSession() && !IsHeadlessCompat(member->GetSession()))
             return true;
     return false;
 }
@@ -354,7 +354,7 @@ bool MisplacedBotEligible(::Player* bot, int32& areaLevelOut, std::string* why =
     auto no = [&](std::string const& reason) { if (why) *why = reason; return false; };
     if (!sPlayerbotAIConfig.relocateHopelessDeaths)
         return no("relocation disabled");
-    if (!bot || !bot->GetSession() || !bot->GetSession()->IsHeadless())
+    if (!bot || !bot->GetSession() || !IsHeadlessCompat(bot->GetSession()))
         return no("no headless session");
     if (!bot->IsInWorld() || bot->IsBeingTeleported() || bot->InBattleGround())
         return no(!bot->IsInWorld() ? "not in world" : bot->IsBeingTeleported() ? "being teleported" : "in a battleground");
@@ -585,7 +585,7 @@ void BotManager::SweepDeadBots(uint32_t diff)
             ++skipNoPlayer;
             continue;
         }
-        if (!p->GetSession() || !p->GetSession()->IsHeadless())
+        if (!p->GetSession() || !IsHeadlessCompat(p->GetSession()))
         {
             ++skipNotHeadless;
             m_deadSince.erase(key);
@@ -829,7 +829,7 @@ bool BotManager::SendStrandedLowbieHome(::Player* bot)
 {
     if (!sPlayerbotAIConfig.relocateHopelessDeaths)
         return false;
-    if (!bot || !bot->GetSession() || !bot->GetSession()->IsHeadless())
+    if (!bot || !bot->GetSession() || !IsHeadlessCompat(bot->GetSession()))
         return false;
     if (!bot->IsInWorld() || bot->IsBeingTeleported() || bot->InBattleGround())
         return false;
@@ -911,7 +911,7 @@ void BotManager::SweepStrandedBots(uint32_t diff)
         bool stranded = (rec.random || AltBotService::Instance().IsAutonomous(key)) &&
             rec.lifecycle == BotLifecycle::InWorld && rec.masterGuid.IsEmpty() &&
             (p = sObjectAccessor.FindPlayer(rec.characterGuid)) != nullptr &&
-            p->GetSession() && p->GetSession()->IsHeadless() && p->IsInWorld() &&
+            p->GetSession() && IsHeadlessCompat(p->GetSession()) && p->IsInWorld() &&
             !GroupHasRealPlayer(p) && !p->InBattleGround() && !p->IsBeingTeleported() &&
             !sRandomBotFacade.IsPinnedBot(key);
         int32 areaLevel = 0;
@@ -975,7 +975,7 @@ void BotManager::SweepAbandonedInstanceBots(uint32_t diff)
         BotRecord& rec = entry.record;
         ::Player* p = sObjectAccessor.FindPlayer(rec.characterGuid);
         AbandonedInstanceFacts facts;
-        facts.isHeadless = p && p->GetSession() && p->GetSession()->IsHeadless();
+        facts.isHeadless = p && p->GetSession() && IsHeadlessCompat(p->GetSession());
         facts.inWorld = p && p->IsInWorld();
         facts.beingTeleported = p && p->IsBeingTeleported();
         facts.inBattleground = p && p->InBattleGround();
@@ -993,7 +993,7 @@ void BotManager::SweepAbandonedInstanceBots(uint32_t diff)
             // A bot that took over as group leader is no master here: only a
             // real player in the instance keeps the bot there.
             facts.masterInSameInstance = master && master->IsInWorld() &&
-                !(master->GetSession() && master->GetSession()->IsHeadless()) &&
+                !(master->GetSession() && IsHeadlessCompat(master->GetSession())) &&
                 master->GetMapId() == p->GetMapId() &&
                 master->GetInstanceId() == p->GetInstanceId();
         }
@@ -1095,7 +1095,7 @@ void BotManager::SweepOrphanedBotGroups(uint32_t diff)
         }
 
         OrphanedBotGroupFacts facts;
-        facts.isHeadless = p && p->GetSession() && p->GetSession()->IsHeadless();
+        facts.isHeadless = p && p->GetSession() && IsHeadlessCompat(p->GetSession());
         facts.inWorld = p && p->IsInWorld();
         facts.beingTeleported = p && p->IsBeingTeleported();
         facts.inBattleground = p && p->InBattleGround();
@@ -1144,7 +1144,7 @@ void BotManager::SweepOrphanedBotGroups(uint32_t diff)
 // separately logged-in bot character after the core restores saved GM flags.
 bool NormalizeHeadlessGmPresentation(::Player* bot)
 {
-    if (!bot || !bot->GetSession() || !bot->GetSession()->IsHeadless())
+    if (!bot || !bot->GetSession() || !IsHeadlessCompat(bot->GetSession()))
         return false;
 
     uint32 const gmFlags = PLAYER_EXTRA_GM_ON | PLAYER_EXTRA_GM_ACCEPT_TICKETS |
@@ -1563,7 +1563,7 @@ void BotManager::OnPlayerBeforeLogout(::Player* player)
         return;
 
     ::WorldSession* session = player->GetSession();
-    if (!session || !session->IsHeadless())
+    if (!session || !IsHeadlessCompat(session))
     {
         AltBotService::Instance().OnOwnerLogout(player);
         TortoiseBots::DowntimeService::OnOwnerLogout(player);
@@ -1620,7 +1620,7 @@ void BotManager::DetachOwnedBots(::Player* master)
             continue;
 
         ::Player* bot = sObjectAccessor.FindPlayer(entry.record.characterGuid);
-        if (!bot || !bot->GetSession() || !bot->GetSession()->IsHeadless())
+        if (!bot || !bot->GetSession() || !IsHeadlessCompat(bot->GetSession()))
             continue;
 
         if (entry.aiAdapter && entry.aiAdapter->IsInitialized())
@@ -1647,7 +1647,7 @@ void BotManager::RebindOwnedBots(::Player* master)
     {
         // If the current leader is a headless bot, transfer leadership to the live human player.
         Player* currentLeader = GetPlayerCompat(masterGroup->GetLeaderGuid());
-        if (currentLeader && currentLeader->GetSession() && currentLeader->GetSession()->IsHeadless())
+        if (currentLeader && currentLeader->GetSession() && IsHeadlessCompat(currentLeader->GetSession()))
         {
             masterGroup->ChangeLeader(masterGuid);
         }
@@ -1680,7 +1680,7 @@ void BotManager::RebindOwnedBots(::Player* master)
             continue;
 
         ::Player* bot = sObjectAccessor.FindPlayer(entry.record.characterGuid);
-        if (!bot || !bot->GetSession() || !bot->GetSession()->IsHeadless())
+        if (!bot || !bot->GetSession() || !IsHeadlessCompat(bot->GetSession()))
             continue;
 
         entry.record.masterGuid = masterGuid;
@@ -2052,7 +2052,7 @@ bool BotManager::IsLiveHeadlessBot(BotEntry const& entry, ::Player* player) cons
         return false;
 
     ::WorldSession* session = player->GetSession();
-    if (!session || !session->IsHeadless() || session->HasNetworkTransport())
+    if (!session || !IsHeadlessCompat(session) || session->HasNetworkTransport())
         return false;
     if (!entry.aiAdapter || !entry.aiAdapter->IsUsable())
         return false;
@@ -2089,7 +2089,7 @@ bool BotManager::BindBotMaster(::ObjectGuid botGuid, ::ObjectGuid masterGuid)
     bool moduleHeadlessMaster = master && masterEntry != m_bots.end() &&
         IsLiveHeadlessBot(masterEntry->second, master);
     if (!master || !master->IsInWorld() || !master->GetSession() ||
-        (master->GetSession()->IsHeadless() && !moduleHeadlessMaster))
+        (IsHeadlessCompat(master->GetSession()) && !moduleHeadlessMaster))
     {
         sLog.outError("TortoiseBots: cannot bind bot %s to missing or unsupported master %s",
             botGuid.GetString().c_str(), masterGuid.GetString().c_str());
@@ -2389,7 +2389,7 @@ void BotManager::UpdateBots(uint32_t diff)
         // far-teleporting player, while the public NotInWorld lookup retains
         // the object long enough for HandleTeleportAck() to finish the move.
         ::Player* player = sObjectAccessor.FindPlayerNotInWorld(entry.record.characterGuid);
-        if (player && player->GetSession() && player->GetSession()->IsHeadless() &&
+        if (player && player->GetSession() && IsHeadlessCompat(player->GetSession()) &&
             player->IsBeingTeleported() && entry.aiAdapter && entry.aiAdapter->IsInitialized())
         {
             // A far teleport can spend one tick in the core's pending queue
@@ -3125,7 +3125,7 @@ void BotManager::UpdateAutoTest(uint32_t diff)
                         std::string playerInfo = p ? (p->IsInWorld() ? "IsInWorld" : "not InWorld") : "FindPlayer null";
                         TB_LOG_DEBUG("TortoiseBots: AutoTest LoggingIn tick %u sess %s state %u acct %u loading %u player %s pending %u", m_autoTestTicks, sessInfo.c_str(), static_cast<uint32>(st), rec->accountId, loading, playerInfo.c_str(), st == HeadlessSessionState::Pending);
                         if (st != HeadlessSessionState::NotFound && p && p->GetSession())
-                            TB_LOG_DEBUG("TortoiseBots:   sess details network %u headless %u", p->GetSession()->HasNetworkTransport(), p->GetSession()->IsHeadless());
+                            TB_LOG_DEBUG("TortoiseBots:   sess details network %u headless %u", p->GetSession()->HasNetworkTransport(), IsHeadlessCompat(p->GetSession()));
                     }
                     if (m_autoTestTicks > 400)
                     {

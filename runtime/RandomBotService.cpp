@@ -1507,7 +1507,7 @@ void RandomBotService::QueueOrderBots(uint32_t target, uint32_t perInterval, uin
         Candidate const& candidate = m_candidates[index];
         if (Player* player = sObjectAccessor.FindPlayer(candidate.characterGuid))
         {
-            if (!player->GetSession() || !player->GetSession()->IsHeadless())
+            if (!player->GetSession() || !IsHeadlessCompat(player->GetSession()))
                 continue;
         }
         if (BotSessionAdapter::GetHeadlessSessionState(candidate.characterGuid) != HeadlessSessionState::NotFound)
@@ -1588,7 +1588,7 @@ void RandomBotService::MaintainOnlinePool()
 
             if (Player* player = sObjectAccessor.FindPlayer(pinnedCandidate->characterGuid))
             {
-                if (!player->GetSession() || !player->GetSession()->IsHeadless())
+                if (!player->GetSession() || !IsHeadlessCompat(player->GetSession()))
                     continue;
             }
             if (BotSessionAdapter::GetHeadlessSessionState(pinnedCandidate->characterGuid) != HeadlessSessionState::NotFound)
@@ -1646,7 +1646,7 @@ void RandomBotService::MaintainOnlinePool()
             if (Player* player = sObjectAccessor.FindPlayer(candidate.characterGuid))
             {
                 // A network session owns the character; never steal it.
-                if (!player->GetSession() || !player->GetSession()->IsHeadless())
+                if (!player->GetSession() || !IsHeadlessCompat(player->GetSession()))
                 {
                     m_ladderRetryMs[index] = nowMs + LADDER_BUSY_RETRY_MS;
                     ++sessionBusy;
@@ -1709,7 +1709,7 @@ void RandomBotService::MaintainOnlinePool()
             // A network session owns the character; native random control may
             // never steal it. Headless sessions are likewise left to the
             // existing BotManager record/reclaim path.
-            if (!player->GetSession() || !player->GetSession()->IsHeadless())
+            if (!player->GetSession() || !IsHeadlessCompat(player->GetSession()))
                 continue;
         }
         if (BotSessionAdapter::GetHeadlessSessionState(candidate.characterGuid) != HeadlessSessionState::NotFound)

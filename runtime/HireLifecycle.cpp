@@ -193,7 +193,7 @@ bool HireLifecycle::MasterOnline(HiredRecord const& record) const
 {
     Player* master = sObjectAccessor.FindPlayer(record.masterGuid);
     return master && master->IsInWorld() && master->GetSession() &&
-        !master->GetSession()->IsHeadless();
+        !IsHeadlessCompat(master->GetSession());
 }
 
 bool HireLifecycle::MasterLeftGroup(HiredRecord const& record) const
@@ -633,7 +633,7 @@ void HireLifecycle::OnGroupDisband(Group* group)
 
 void HireLifecycle::OnMasterLogin(Player* master)
 {
-    if (!master || !master->GetSession() || master->GetSession()->IsHeadless())
+    if (!master || !master->GetSession() || IsHeadlessCompat(master->GetSession()))
         return;
     ObjectGuid masterGuid = master->GetObjectGuid();
     // Snapshot first: re-grouping a hire runs group hooks that may end other
@@ -871,7 +871,7 @@ void HireLifecycle::SweepGracePeriod(time_t now)
             // a logout hook (crash). Start the clock on first observation.
             Player* master = sObjectAccessor.FindPlayer(record.masterGuid);
             bool online = master && master->IsInWorld() && master->GetSession() &&
-                !master->GetSession()->IsHeadless();
+                !IsHeadlessCompat(master->GetSession());
             if (!online && MasterOnline(record) == false)
             {
                 // Only start the clock when the master is genuinely gone, not
@@ -1004,7 +1004,7 @@ bool HireLifecycle::ProcessDeletion(PendingDeletion& entry, time_t now)
 
     ObjectGuid guid(HIGHGUID_PLAYER, guidLow);
     Player* player = sObjectAccessor.FindPlayer(guid);
-    if (player && player->GetSession() && !player->GetSession()->IsHeadless())
+    if (player && player->GetSession() && !IsHeadlessCompat(player->GetSession()))
     {
         // A network session owns the character now (an operator logging into a
         // managed account, for example): human sessions are never deleted.
