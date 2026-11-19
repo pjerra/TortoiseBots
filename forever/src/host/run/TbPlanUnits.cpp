@@ -263,6 +263,45 @@ PlanCheck const& CheckPlanOnMap(std::string const& planName, Map const* map, boo
         unit.spawnId = pair.spawnId;
     }
 
+    // A patrol row (role=patrol) stands at the first point of the patrol's path and names the creature that patrols: in the Ragefire Chasm plan it is
+    // the pack member of the same step itself (the exporter writes both, the same spawn). One-to-one matching leaves that second row with no spawn, which
+    // is a false "missing": a patrol row may take the spawn a row of its own step already holds. It can only turn a missing row into a match when a
+    // spawn of the entry stands within kNearYd of the row, so it never reports a creature that is not there.
+    for (size_t i = 0; i < rows.size(); ++i)
+    {
+        if (rowUsed[i] || rows[i].role != "patrol")
+            continue;
+        auto const it = spawnsOfEntry.find(rows[i].entry);
+        if (it == spawnsOfEntry.end())
+            continue;
+        UnitCheck const* best = nullptr;
+        float bestYd = 0.f;
+        for (size_t j = 0; j < rows.size(); ++j)
+        {
+            UnitCheck const& other = check.units[j];
+            if (j == i || !rowUsed[j] || other.leg != rows[i].leg || other.seq != rows[i].seq || other.entry != rows[i].entry)
+                continue;
+            for (SpawnRef const& spawn : it->second)
+            {
+                if (spawn.spawnId != other.spawnId)
+                    continue;
+                float const yd = Dist3(rows[i].x, rows[i].y, rows[i].z, spawn.x, spawn.y, spawn.z);
+                if (yd <= kNearYd && (!best || yd < bestYd || (yd == bestYd && other.spawnId < best->spawnId)))
+                {
+                    best = &other;
+                    bestYd = yd;
+                }
+            }
+        }
+        if (best)
+        {
+            UnitCheck& unit = check.units[i];
+            unit.result = bestYd <= kMatchYd ? UnitResult::Matched : UnitResult::Near;
+            unit.yd = bestYd;
+            unit.spawnId = best->spawnId;
+        }
+    }
+
     // Totals, and the verdict of each step (every non-optional member matched or near, and at least one member found).
     struct StepTally { bool found = false; bool shortMember = false; };
     std::map<std::pair<uint8, uint16>, StepTally> steps;
