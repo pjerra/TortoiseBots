@@ -534,12 +534,12 @@ class MagmaGuardWiringTest(unittest.TestCase):
         # was (0, 0, 0) and every stand was rejected (found 2026-11-13).
         f = body(COMMANDS, "bool HealerPullStand(Player* lead, Unit* target, Player* healer, float& ox, float& oy, float& oz)",
                  "\n}\n")
-        calc = at(f, "path.calculate(px, py, ground, false);")
-        kind = at(f, "path.getPathType()")
-        end = at(f, "path.getActualEndPosition()")
+        calc = at(f, "PathCalculateCompat(path, px, py, ground, false);")
+        kind = at(f, "PathTypeCompat(path)")
+        end = at(f, "PathActualEndCompat(path)")
         self.assertLess(calc, kind)
         self.assertLess(calc, end)
-        self.assertEqual(f.count("path.calculate("), 1)
+        self.assertEqual(f.count("PathCalculateCompat(path,"), 1)
 
 
 if __name__ == "__main__":

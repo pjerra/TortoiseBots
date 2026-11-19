@@ -325,7 +325,7 @@ inline bool TellGrouped(PlayerbotAI* ai, Player* requester)
     else
         out << "Grouped with ";
 
-    Player* groupLeader = sObjectMgr.GetPlayer(bot->GetGroup()->GetLeaderGuid());
+    Player* groupLeader = GetPlayerCompat(bot->GetGroup()->GetLeaderGuid());
 
     if (groupLeader)
     {
@@ -337,7 +337,7 @@ inline bool TellGrouped(PlayerbotAI* ai, Player* requester)
     else
     {
         std::string leaderName;
-        if (sObjectMgr.GetPlayerNameByGUID(bot->GetGroup()->GetLeaderGuid(), leaderName))
+        if (PlayerNameByGuidCompat(bot->GetGroup()->GetLeaderGuid(), leaderName))
             out << "offline player " << leaderName;
         else
             out << "unknown player " << bot->GetGroup()->GetLeaderGuid();
@@ -725,13 +725,13 @@ bool GoAction::MoveToGps(std::string& param, Player* requester)
         {
             PathFinder path(bot);
 
-            path.calculate(x, y, z, false);
+            PathCalculateCompat(path, x, y, z, false);
 
             Vector3 end = path.getEndPosition();
-            Vector3 aend = path.getActualEndPosition();
+            Vector3 aend = PathActualEndCompat(path);
 
-            PointsArray const& points = path.getPath();
-            PathType type = path.getPathType();
+            PointsArray const& points = PathPointsCompat(path);
+            PathType type = PathType(PathTypeCompat(path));
 
             std::ostringstream out;
 
@@ -758,7 +758,7 @@ bool GoAction::MoveToGps(std::string& param, Player* requester)
             ai->TellPlayer(requester, out);
         }
 
-        if (bot->IsWithinLOS(x, y, z, true))
+        if (IsWithinLOSCompat(bot, x, y, z, true))
             return MoveNear(bot->GetMapId(), x, y, z, 0);
         else
             return MoveTo(bot->GetMapId(), x, y, z, false, false);
@@ -797,7 +797,7 @@ bool GoAction::MoveToMapGps(std::string& param, Player* requester)
             return false;
         }
 
-        float ground = map->GetHeight(x, y, z + 0.5f);
+        float ground = GetHeightCompat(map, x, y, z + 0.5f);
         if (ground <= INVALID_HEIGHT)
         {
             ai->TellError(requester, BOT_TEXT("error_cant_go"));

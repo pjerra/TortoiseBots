@@ -271,7 +271,7 @@ uint32_t MailStacks(Player* bot, uint32_t itemId, ObjectGuid receiverGuid,
     mailedAny = false;
     if (!bot || !receiverGuid || receiverGuid == bot->getObjectGuid())
         return 0;
-    Player* receiver = sObjectMgr.GetPlayer(receiverGuid);
+    Player* receiver = GetPlayerCompat(receiverGuid);
     uint32_t mailed = 0;
     while (delivered + mailed < amount)
     {
@@ -343,7 +343,7 @@ uint32_t MailGiverSurplus(Player* bot, uint32_t itemId, uint32_t quota, ObjectGu
 {
     if (!bot || !itemId || !quota || !giverGuid || giverGuid == bot->getObjectGuid())
         return 0;
-    Player* giver = sObjectMgr.GetPlayer(giverGuid);
+    Player* giver = GetPlayerCompat(giverGuid);
     uint32_t mailed = 0;
     while (mailed < quota)
     {

@@ -188,7 +188,7 @@ bool RandomBotPoolReset::PreflightHumanSessions(std::string& error) const
         if (!player)
             continue;
         WorldSession* session = player->GetSession();
-        if (session && !session->IsHeadless())
+        if (session && !IsHeadlessCompat(session))
         {
             error = "pool character " + target.name + " (" + std::to_string(target.guidLow) +
                 ") is being played by a network session; this feature never logs out or deletes human sessions";
@@ -396,7 +396,7 @@ bool RandomBotPoolReset::DrainPoolSessions(std::string& error, bool& busy)
         if (player)
         {
             WorldSession* session = player->GetSession();
-            if (session && !session->IsHeadless())
+            if (session && !IsHeadlessCompat(session))
             {
                 error = "pool character " + target.name + " (" + std::to_string(target.guidLow) +
                     ") gained a network session during the reset; human sessions are never deleted";
@@ -499,7 +499,7 @@ bool RandomBotPoolReset::DeleteNextTarget(std::string& error)
     if (Player* player = sObjectAccessor.FindPlayer(guid))
     {
         WorldSession* session = player->GetSession();
-        if (session && !session->IsHeadless())
+        if (session && !IsHeadlessCompat(session))
         {
             error = "pool character " + target.name + " (" + std::to_string(target.guidLow) +
                 ") gained a network session during the reset; human sessions are never deleted";

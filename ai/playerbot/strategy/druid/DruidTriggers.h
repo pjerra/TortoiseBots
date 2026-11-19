@@ -423,7 +423,7 @@ namespace ai
             Unit* target = AI_VALUE(Unit*, "current target");
             if (!target || !target->IsAlive())
                 return false;
-            return !bot->CanReachWithMeleeAutoAttack(target) || !bot->IsWithinLOSInMap(target, true);
+            return !bot->CanReachWithMeleeAutoAttack(target) || !IsWithinLOSInMapCompat(bot, target, true);
         }
     };
 

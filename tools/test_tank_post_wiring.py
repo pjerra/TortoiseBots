@@ -220,7 +220,7 @@ class TankPostWiring(unittest.TestCase):
         self.assertIn("entry.first == self", reserve)
         # Only the keys leave the lock; the player lookup and the instance compare happen after it.
         lock = reserve.index("std::lock_guard<std::mutex> lock(g_tankPostMutex);")
-        self.assertLess(lock, reserve.index("sObjectMgr.GetPlayer("))
+        self.assertLess(lock, reserve.index("GetPlayerCompat("))
         self.assertIn("tank->GetInstanceId() != bot->GetInstanceId()", reserve)
         self.assertIn("TankPostTankCanAct(tank)", reserve)
         # The distance is the post tank's to the subject (3D), and the loose clock is the record's, read under its lock.
@@ -248,7 +248,7 @@ class TankPostWiring(unittest.TestCase):
                       POLICY)
         self.assertIn("TankPostLooseClockState const loose = TankPostLooseClock(it->second.looseSinceMs,", reserve)
         self.assertIn("it->second.unhittableSinceMs, onOwner,", reserve)
-        self.assertIn("!target->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE), "
+        self.assertIn("!HasUnitFlagCompat(target, UNIT_FLAG_NOT_SELECTABLE), "
                       "tank->IsValidAttackTarget(target),", reserve)
         self.assertIn("it->second.looseSinceMs = loose.looseSinceMs;", reserve)
         self.assertIn("it->second.unhittableSinceMs = loose.unhittableSinceMs;", reserve)
@@ -452,7 +452,7 @@ class TankPostWiring(unittest.TestCase):
         # MoveTo aims the stance's formation spot): the point is checked for ground and the walk issues it itself.
         self.assertIn("TankPostMeleePoint(bot->GetPositionX(), bot->GetPositionY(),", engage)
         self.assertIn("bot->GetCombatReach(task.subject, false, 0.0f), x, y)", engage)
-        self.assertIn("float const floor = map ? map->GetHeight(x, y, z + 5.0f) : INVALID_HEIGHT;", engage)
+        self.assertIn("float const floor = map ? GetHeightCompat(map, x, y, z + 5.0f) : INVALID_HEIGHT;", engage)
         self.assertIn("walkPoint = floor > INVALID_HEIGHT;", engage)
         self.assertNotIn("MoveTo(task.subject)", engage)
         self.assertIn("if (!MoveTo(bot->GetMapId(), x, y, z, false, false, false, true))\n                return false;",

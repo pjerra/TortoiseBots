@@ -179,7 +179,7 @@ class SeekWalkoutLiveFixes(unittest.TestCase):
         update = body(ACTIONS, "void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, Unit* boss,")
         self.assertIn("FindSeekWalkoutStand(bot, shooter, sons[static_cast<std::size_t>(i)],", update)
         stand = body(ACTIONS, "bool FindSeekWalkoutStand(Player* bot, const BossAnchorCircle& c, Unit* son, float rangeYd,")
-        for call in ("WalkoutStandCandidates(c, son->GetPositionX(), son->GetPositionY())", "GetHeight(", "WalkoutStandOk(",
+        for call in ("WalkoutStandCandidates(c, son->GetPositionX(), son->GetPositionY())", "GetHeightCompat(map, ", "WalkoutStandOk(",
                      "isInLineOfSight("):
             self.assertIn(call, stand)
         self.assertIn('"seek pull: walk-out no stand sons=%d reach=%.0f hunter_pass=%d"', ACTIONS)

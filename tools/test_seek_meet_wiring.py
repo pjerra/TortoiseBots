@@ -394,7 +394,7 @@ class CauseInsanityRowWiring(unittest.TestCase):
         self.assertIn("sPlayerbotAIConfig.dungeonRunThreatSuccessorNotHolder", log)
         self.assertIn("capWho[static_cast<std::size_t>(capPick.index)]", log)
         self.assertIn('std::strcmp(CharmRoleWord(entry.unit), "dps") == 0', log)
-        self.assertIn('capRef ? capRef->GetName() : "none",', log)
+        self.assertIn('capRef ? CStrCompat(capRef->GetName()) : "none",', log)
         # Review M2: the reference's kind, from the pick itself.
         self.assertIn('!capRef ? "none" : capPick.offTank ? "offtank" : "main", capRef ? capPick.threat : -1.0f, '
                       'topDpsThreat,\n             extra);', log)

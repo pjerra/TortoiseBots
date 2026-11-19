@@ -819,7 +819,7 @@ bool ShouldLeaveOutgrownZoneValue::Calculate()
     // floor below is a zone-level test, so the trigger must be one too or
     // the two disagree on what "outgrown" means.
     AreaTableEntry const* botArea = WorldPosition(bot).GetArea();
-    uint32 botZoneId = botArea ? (botArea->ZoneId ? botArea->ZoneId : botArea->Id) : 0;
+    uint32 botZoneId = botArea ? (AreaZoneIdCompat(botArea) ? AreaZoneIdCompat(botArea) : botArea->Id) : 0;
     int32 zoneLevel = 0;
     bool const zoneKnown = botZoneId && sTravelMgr.TryGetValidatedAreaLevel(botZoneId, zoneLevel) && zoneLevel > 0;
     bool const outgrown = zoneKnown && zoneLevel + 5 < (int32)bot->GetLevel();

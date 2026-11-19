@@ -51,7 +51,7 @@ class PlayerInPartyWiringTest(unittest.TestCase):
         # The decision is the pure DecideReleaseParty, fed with the reason and what the glue reads of him.
         self.assertIn("present.reason = reason;", rel)
         self.assertIn("present.inWorld = commander && commander->IsInWorld();", rel)
-        self.assertIn("commander->GetSession()->HasNetworkTransport();", rel)
+        self.assertIn("HasNetworkTransportCompat(commander->GetSession());", rel)
         self.assertIn("present.isMember = group->IsMember(ObjectGuid(commanderRaw));", rel)
         self.assertIn("RemoteCommander::DecideReleaseParty(present);", rel)
         self.assertIn("if (action == RemoteCommander::ReleasePartyAction::BotsLeave)", rel)
@@ -136,7 +136,7 @@ class PlayerInPartyWiringTest(unittest.TestCase):
         self.assertIn("if (BotManager::Instance().IsBot(entry.guid))\n            continue;", fn)
         self.assertIn("p.commander = entry.guid.GetRawValue() == commanderRaw;", fn)
         self.assertIn("p.onMap = member->IsInWorld() && member->GetMapId() == slot.run.plan->map", fn)
-        self.assertIn("p.ghost = member->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST)", fn)
+        self.assertIn("p.ghost = HasPlayerFlagCompat(member, PLAYER_FLAGS_GHOST)", fn)
         self.assertIn("f.players.push_back(p);", fn)
         self.assertIn("f.itemPlayer", fn)
         self.assertIn("f.lootTurnPlayer", fn)

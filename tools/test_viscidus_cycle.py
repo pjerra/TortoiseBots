@@ -113,6 +113,8 @@ struct Config{float sightDistance=60;}sPlayerbotAIConfig;
 struct AI{Unit* glob=nullptr;Unit* held=nullptr;Unit* other=nullptr;bool IsHeal(Player* p){return p->healer;}
  bool IsTank(Player* p){return p->tank;}Unit* GetUnit(ObjectGuid guid){return guid==2?other:glob;}};
 bool Live(Player*,Unit* u){return u&&u->live;}
+inline unsigned GuidKeyCompat(Unit::Guid g){return g.GetRawValue();}
+inline bool HasUnitFlagCompat(Unit* u,unsigned f){return u->HasFlag(UNIT_FIELD_FLAGS,f);}
 #define AI_VALUE(type,name) ai->held
 struct ViscidusCombatAction{Player* bot;AI* ai;Unit* boss;std::vector<ObjectGuid> globs{1};
  Unit* Boss(){return boss;}Unit* Target();};

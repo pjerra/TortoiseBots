@@ -355,7 +355,7 @@ bool CastCustomSpellAction::CastSummonPlayer(Player* requester, std::string comm
                         const Group::MemberSlotList& groupSlot = group->GetMemberSlots();
                         for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
                         {
-                            Player* member = sObjectMgr.GetPlayer(itr->guid);
+                            Player* member = GetPlayerCompat(itr->guid);
                             if (member)
                             {
                                 if (member->GetName() == playerName)
@@ -385,7 +385,7 @@ bool CastCustomSpellAction::CastSummonPlayer(Player* requester, std::string comm
                                 const Group::MemberSlotList& groupSlot = group->GetMemberSlots();
                                 for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
                                 {
-                                    Player* member = sObjectMgr.GetPlayer(itr->guid);
+                                    Player* member = GetPlayerCompat(itr->guid);
                                     if (member)
                                     {
                                         if (itr->guid == targetGuid)
@@ -875,7 +875,7 @@ bool MailServiceStackBack(Player* bot, uint32_t senderLow, Item* item, std::stri
 {
     if (!bot || !item)
         return false;
-    Player* sender = sObjectMgr.GetPlayer(ObjectGuid(HIGHGUID_PLAYER, senderLow));
+    Player* sender = GetPlayerCompat(ObjectGuid(HIGHGUID_PLAYER, senderLow));
     ObjectGuid receiverGuid = sender ? sender->getObjectGuid() : ObjectGuid(HIGHGUID_PLAYER, senderLow);
     std::ostringstream body;
     body << "Hello,\n\n";

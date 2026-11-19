@@ -83,7 +83,7 @@ bool WorldPvpSeekChecks::IsSeekTarget(PlayerbotAI* ai, Player* bot, Player* targ
         return false;
     if (NearGraveyard(bot) || NearGraveyard(target))
         return false;
-    if (!bot->IsWithinLOSInMap(target, true))
+    if (!IsWithinLOSInMapCompat(bot, target, true))
         return false;
 
     std::int32_t const gap = std::int32_t(target->GetLevel()) - std::int32_t(bot->GetLevel());

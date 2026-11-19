@@ -14,7 +14,7 @@ Player* GuidManageAction::GetPlayer(Event event)
 
     if (guid)
     {
-        player = sObjectMgr.GetPlayer(guid);
+        player = GetPlayerCompat(guid);
 
         if (player)
             return player;
@@ -39,7 +39,7 @@ Player* GuidManageAction::GetPlayer(Event event)
     if (master && master == event.GetOwner())
         guid = bot->GetSelectionGuid();
 
-    player = sObjectMgr.GetPlayer(guid);
+    player = GetPlayerCompat(guid);
 
     if (player)
         return player;
@@ -76,7 +76,7 @@ bool GuildManageNearbyAction::Execute(Event& event)
     std::list<ObjectGuid> nearGuids = ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid> >("nearest friendly players")->Get();
     for (auto& guid : nearGuids)
     {
-        Player* player = sObjectMgr.GetPlayer(guid);
+        Player* player = GetPlayerCompat(guid);
 
         if (!player || bot == player)
             continue;

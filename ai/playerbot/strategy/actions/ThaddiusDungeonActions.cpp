@@ -13,7 +13,7 @@ namespace
     bool PetActive(Unit* pet)
     {
         return pet && IsThaddiusPetActive(pet->IsAlive(),
-            pet->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE));
+            HasUnitFlagCompat(pet, UNIT_FLAG_NOT_SELECTABLE));
     }
 }
 

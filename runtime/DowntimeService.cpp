@@ -648,7 +648,7 @@ void DowntimeService::Update()
 
         Player* master = sObjectAccessor.FindPlayer(window.masterGuid);
         bool const masterGone = !master || !master->IsInWorld() || !master->GetSession() ||
-            !master->GetSession()->HasNetworkTransport();
+            !HasNetworkTransportCompat(master->GetSession());
         bool const expired = DowntimeWindowExpired(window.startedAt, now);
         // An explicit owner movement order ends the window: compare live state
         // against the kit the window SET, not the pre-window snapshot it

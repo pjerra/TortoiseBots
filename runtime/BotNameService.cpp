@@ -75,7 +75,7 @@ bool UsableCharacterName(std::string const& name)
     return !name.empty() &&
         ObjectMgr::CheckPlayerName(name, true) == CHAR_NAME_SUCCESS &&
         !sObjectMgr.IsReservedName(name) &&
-        !sObjectMgr.GetPlayerGuidByName(name);
+        !PlayerGuidByNameCompat(name);
 }
 
 } // namespace

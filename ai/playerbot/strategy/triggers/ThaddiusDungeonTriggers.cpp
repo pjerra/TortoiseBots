@@ -10,7 +10,7 @@ namespace
     bool PetActive(Unit* pet)
     {
         return pet && IsThaddiusPetActive(pet->IsAlive(),
-            pet->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE));
+            HasUnitFlagCompat(pet, UNIT_FLAG_NOT_SELECTABLE));
     }
 }
 
@@ -45,7 +45,7 @@ bool ThaddiusPhaseTransitionTrigger::IsActive()
     if (IsThaddiusPhasePet(PetActive(feugen), PetActive(stalagg)))
         return false;
     return thaddius && IsThaddiusPhaseTransition(false,
-        thaddius->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE));
+        HasUnitFlagCompat(thaddius, UNIT_FLAG_NOT_SELECTABLE));
 }
 
 bool ThaddiusPhaseThaddiusTrigger::IsActive()
@@ -56,5 +56,5 @@ bool ThaddiusPhaseThaddiusTrigger::IsActive()
     FindThaddiusAdds(ai, bot, stalagg, feugen, thaddius);
     if (IsThaddiusPhasePet(PetActive(feugen), PetActive(stalagg)))
         return false;
-    return thaddius && !thaddius->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+    return thaddius && !HasUnitFlagCompat(thaddius, UNIT_FLAG_NOT_SELECTABLE);
 }

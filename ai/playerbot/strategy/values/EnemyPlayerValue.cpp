@@ -122,7 +122,7 @@ bool EnemyPlayersValue::IsValid(Unit* target, Player* player)
                     playerAi->GetAiObjectContext()->GetValue<std::map<ObjectGuid, uint32>&>("unreachable targets")->Get();
                 auto givenUp = unreachable.find(target->getObjectGuid());
                 if (givenUp != unreachable.end() && WorldTimer::getMSTime() < givenUp->second &&
-                    (target->GetVictim() != player || !player->IsWithinLOSInMap(target, true)))
+                    (target->GetVictim() != player || !IsWithinLOSInMapCompat(player, target, true)))
                     return false;
             }
 
@@ -150,7 +150,7 @@ bool EnemyPlayersValue::CanEngageFromHere(Unit* target) const
     if (fabs(bot->GetPositionZ() - target->GetPositionZ()) >= 30.0f)
         return false;
 
-    return bot->IsWithinLOSInMap(target, true);
+    return IsWithinLOSInMapCompat(bot, target, true);
 }
 
 void EnemyPlayersValue::ApplyFilter(std::list<ObjectGuid>& targets, bool getOne, bool proximityScan)

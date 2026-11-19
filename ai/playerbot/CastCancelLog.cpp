@@ -48,7 +48,7 @@ void ai::LogCastCancel(PlayerbotAI* ai, const char* site, CurrentSpellTypes slot
     Unit* const target = targetGuid ? ObjectAccessor::GetUnit(*bot, targetGuid) : nullptr;
     char info1[192];
     snprintf(info1, sizeof(info1), "site=%s,slot=%s,spell=%u,cast_pct=%d,target=%s,moved_yd=%.1f",
-             site, SlotWord(slot), GetSpellEntryCompat(cast->m_spellInfo)->Id, pct, target ? target->GetName() : "none", movedYd);
+             site, SlotWord(slot), GetSpellEntryCompat(cast->m_spellInfo)->Id, pct, target ? CStrCompat(target->GetName()) : "none", movedYd);
     sPlayerbotAIConfig.logEvent(ai, "CastCancel", info1, "");
 }
 

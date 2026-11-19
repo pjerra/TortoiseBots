@@ -94,7 +94,7 @@ void PlayerbotAIAdapter::RebindMaster(Player* master)
         return;
 
     ai_->SetMaster(master); // pi-lens-ignore: clang:all
-    if (master && master->GetSession() && !master->GetSession()->IsHeadless())
+    if (master && master->GetSession() && !IsHeadlessCompat(master->GetSession()))
     {
         ai_->Reset(true);
         if (bot_)
@@ -110,7 +110,7 @@ void PlayerbotAIAdapter::RebindMaster(Player* master)
     }
     // If the bot fell into wander while master was offline, return it to follow.
     if (ai_->HasStrategy("wander", BotState::BOT_STATE_NON_COMBAT) &&
-        master && master->GetSession() && !master->GetSession()->IsHeadless())
+        master && master->GetSession() && !IsHeadlessCompat(master->GetSession()))
     {
         ai_->SetMovementStrategy("follow"); // pi-lens-ignore: clang:all
     }

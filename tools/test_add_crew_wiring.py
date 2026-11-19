@@ -85,7 +85,7 @@ class AddCrewWiring(unittest.TestCase):
         self.assertIn("PlayerbotAI* const memberAi = GET_PLAYERBOT_AI(member);", value)
         self.assertIn("!memberAi->IsRanged(member)", value)
         self.assertIn("AddCrewClassOrder(member->GetClass())", value)
-        self.assertIn("AddCrewRank(candidates, bot->GetObjectGuid().GetRawValue())", value)
+        self.assertIn("AddCrewRank(candidates, GuidKeyCompat(bot->GetObjectGuid()))", value)
         self.assertIn("AddCrewMember(PlayerbotAI::IsTank(bot), PlayerbotAI::IsHeal(bot), ai->IsRanged(bot),", value)
         self.assertIn("AddCrewStateFor(true, true, switchAlive, member)", value)
         self.assertIn('creators["add crew"] = [](PlayerbotAI* ai) { return new AddCrewValue(ai); };', VALUE_CONTEXT)

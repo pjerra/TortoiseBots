@@ -201,7 +201,7 @@ static void GiveUpCombatStuckTarget(PlayerbotAI* ai, Player* bot)
     std::string const targetName = target->GetName();
     uint32 const targetEntry = target->IsCreature() ? target->GetEntry() : 0;
     float const distanceToTarget = bot->GetDistance(target);
-    bool const inLos = bot->IsWithinLOSInMap(target, true);
+    bool const inLos = IsWithinLOSInMapCompat(bot, target, true);
     context->GetValue<ObjectGuid>("attack target")->Set(ObjectGuid());
     context->GetValue<ObjectGuid>("explicit attack target")->Set(ObjectGuid());
     context->GetValue<Unit*>("current target")->Set(nullptr);

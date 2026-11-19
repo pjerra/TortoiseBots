@@ -262,7 +262,7 @@ bool HunterStepOutAction::Execute(Event& event)
     if (!target || !state)
         return false;
 
-    uint64 const targetRaw = target->GetObjectGuid().GetRawValue();
+    uint64 const targetRaw = GuidKeyCompat(target->GetObjectGuid());
     uint32 const nowMs = WorldTimer::getMSTime();
 
     // A step is already under way for this mob: let it finish. A finished
@@ -291,7 +291,7 @@ bool HunterStepOutAction::Execute(Event& event)
     // Reach terms between centre and edge distance, constant for the step.
     float const reach = std::max(0.0f, center - edge);
     float const step = HunterStepOutLength(edge, minRange, state->stepOutAttempt);
-    float const away = target->GetAngle(bot);
+    float const away = GetAngleCompat(target, bot);
     WorldPosition const botPos(bot);
 
     std::list<ObjectGuid> const& possibleTargets = AI_VALUE(std::list<ObjectGuid>, "possible targets");

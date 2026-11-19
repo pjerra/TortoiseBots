@@ -91,7 +91,7 @@ std::vector<SoleCandidate> SoleKillCandidatesValue::Calculate()
         if (!creature->IsAlive() || !creature->IsInCombat())
             continue;
         SoleCandidate candidate;
-        candidate.guid = creature->GetObjectGuid().GetRawValue();
+        candidate.guid = GuidKeyCompat(creature->GetObjectGuid());
         candidate.hpPct = static_cast<int>(creature->GetHealthPercent());
         candidate.inCombat = true;
         candidate.eligible = !creature->IsInEvadeMode() && !FindNonCcTargetStrategy::IsCrowdControlled(ai, creature);
@@ -115,7 +115,7 @@ std::vector<KillFirstGridUnit> KillFirstGridUnitsValue::Calculate()
         if (!creature->IsAlive())
             continue;
         KillFirstGridUnit unit;
-        unit.guid = creature->GetObjectGuid().GetRawValue();
+        unit.guid = GuidKeyCompat(creature->GetObjectGuid());
         unit.entry = creature->GetEntry();
         unit.distance = bot->GetDistance(creature);
         unit.alive = true;
@@ -157,7 +157,7 @@ std::vector<KillFirstGridUnit> KillFirstGridUnitsValue::Calculate()
             if (TemporarySummon* summon = dynamic_cast<TemporarySummon*>(creature))
                 summoner = summon->GetSummonerGuid();
         }
-        unit.owner = summoner.GetRawValue();
+        unit.owner = GuidKeyCompat(summoner);
         units.push_back(unit);
     }
     return units;
@@ -176,7 +176,7 @@ std::vector<TankPostUnit> TankPostUnitsValue::Calculate()
         if (!creature)
             continue;
         TankPostUnit unit;
-        unit.guid = creature->GetObjectGuid().GetRawValue();
+        unit.guid = GuidKeyCompat(creature->GetObjectGuid());
         unit.x = creature->GetPositionX();
         unit.y = creature->GetPositionY();
         unit.z = creature->GetPositionZ();
@@ -223,9 +223,9 @@ uint8 AddCrewValue::Calculate()
         int const order = AddCrewClassOrder(member->GetClass());
         if (order < 0)
             continue;
-        candidates.push_back(AddCrewCandidate{member->GetObjectGuid().GetRawValue(), order});
+        candidates.push_back(AddCrewCandidate{GuidKeyCompat(member->GetObjectGuid()), order});
     }
     bool const member = AddCrewMember(PlayerbotAI::IsTank(bot), PlayerbotAI::IsHeal(bot), ai->IsRanged(bot),
-        AddCrewRank(candidates, bot->GetObjectGuid().GetRawValue()), crewSize);
+        AddCrewRank(candidates, GuidKeyCompat(bot->GetObjectGuid())), crewSize);
     return static_cast<uint8>(AddCrewStateFor(true, true, switchAlive, member));
 }
