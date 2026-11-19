@@ -16,12 +16,16 @@
 #include "Creature.h"
 #include <algorithm>
 #include <bitset>
+#include <cctype>
+#include <cstdlib>
+#include <string_view>
 #include <chrono>
 #include <list>
 #include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 #include "ChatCommand.h"
 #include "Log.h"
 #include "ObjectMgr.h"
@@ -42,6 +46,7 @@
 #include "TbBotSession.h"
 #include "host/TbEngineBrain.h"
 #include "host/TbH3.h"
+#include "host/TbH4.h"
 
 using namespace Trinity::ChatCommands;
 using TortoiseBots::BotMgr;
@@ -183,7 +188,7 @@ public:
             { "go",     HandleGo,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "hop",    HandleHop,    rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "raid",   HandleRaid,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
-            { "enter",  HandleEnter,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "enter",  HandleEnter,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },   // H4: `.tb enter <bot|party> ...` is TortoiseBots::h4::HandleEnter (below)
             { "attack", HandleAttack, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "where",  HandleWhere,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "engine", HandleEngine, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
@@ -214,6 +219,12 @@ public:
             { "equip",  TortoiseBots::h3::HandleEquip,  rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "itemscan", TortoiseBots::h3::HandleItemScan, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
             { "grammar", TortoiseBots::h3::HandleGrammar, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "trigger", TortoiseBots::h4::HandleTrigger, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "instance", TortoiseBots::h4::HandleInstance, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "tele",   TortoiseBots::h4::HandleTele,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "revive", TortoiseBots::h4::HandleRevive, rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "kill",   TortoiseBots::h4::HandleKill,   rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
+            { "gm",     TortoiseBots::h4::HandleGm,     rbac::RBAC_PERM_COMMAND_GM, Console::Yes },
         };
         static ChatCommandTable commandTable =
         {
@@ -324,10 +335,39 @@ public:
     }
 
     // .tb enter <character> <mapid>: may that character enter that map, according to the core (R11 test helper, `.tb where` shows the same reason for a blocked follower).
-    static bool HandleEnter(ChatHandler* handler, std::string name, uint32 mapId)
+    // H4 (slice 4): `.tb enter <bot|party [leader]> [trigger <id> | map <id>] [direct] [#token]` makes the bots enter a dungeon through its area trigger
+    // (host/TbH4.cpp). The old two-word form (a character and a map NUMBER) is kept as it was; every other shape is the new command.
+    static bool HandleEnter(ChatHandler* handler, Tail args)
     {
-        for (std::string const& line : BotMgr::Instance().CanEnter(GuidByName(name), mapId))
-            handler->PSendSysMessage("TortoiseBots: %s: %s", name.c_str(), line.c_str());
+        std::vector<std::string> words;
+        {
+            std::string_view const text(args);
+            size_t i = 0;
+            while (i < text.size())
+            {
+                while (i < text.size() && std::isspace(static_cast<unsigned char>(text[i])))
+                    ++i;
+                size_t const start = i;
+                while (i < text.size() && !std::isspace(static_cast<unsigned char>(text[i])))
+                    ++i;
+                if (i > start)
+                    words.emplace_back(text.substr(start, i - start));
+            }
+        }
+        bool legacy = words.size() == 2 && !words[1].empty();
+        if (legacy)
+        {
+            std::string first = words[0];
+            std::transform(first.begin(), first.end(), first.begin(), [](unsigned char c) { return char(std::tolower(c)); });
+            legacy = first != "party";
+            for (char c : words[1])
+                legacy = legacy && std::isdigit(static_cast<unsigned char>(c));
+        }
+        if (!legacy)
+            return TortoiseBots::h4::HandleEnter(handler, args);
+        uint32 const mapId = uint32(std::strtoul(words[1].c_str(), nullptr, 10));
+        for (std::string const& line : BotMgr::Instance().CanEnter(GuidByName(words[0]), mapId))
+            handler->PSendSysMessage("TortoiseBots: %s: %s", words[0].c_str(), line.c_str());
         return true;
     }
 

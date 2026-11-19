@@ -7,6 +7,7 @@
 #include "ObjectGuid.h"
 #include "ai/playerbot/FollowTrailPolicy.h"   // shared with the Turtle build, no core includes
 #include "host/TbEngineBrain.h"                 // the engine brain: opaque here, no legacy header
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -76,9 +77,66 @@ public:
     ObjectGuid MasterOf(ObjectGuid characterGuid) const { auto itr = _bots.find(characterGuid); return itr == _bots.end() ? ObjectGuid::Empty : itr->second.master; }
     bool FollowStatus(ObjectGuid characterGuid, bool& away, uint32& awaySeconds, bool& blocked, std::string& blockedWhy, bool& hasBrain) const { auto itr = _bots.find(characterGuid); if (itr == _bots.end()) return false; Bot const& b = itr->second; away = b.masterAway; awaySeconds = (b.graceLeftMs + 999) / 1000; blocked = b.followBlocked; blockedWhy = b.followBlockedWhy; hasBrain = b.brain != nullptr; return true; }
 
+    // ---- slice 4, host package H4: entering an instance as a group, the entrance rule, life state ----
+    // The entry question with its code: `code` is empty when the core has no objection, else one of level full locked difficulty not-found teleporting
+    // in-combat dead other (the `block=` words of `.tb state`), `text` says it in words. This is CanEnterMap's answer in two parts (C1: the ONE place that
+    // calls Map::PlayerCannotEnter is still CanEnterMap).
+    struct EntryCheck { std::string code; std::string text; };
+    static EntryCheck CheckEntry(Player* who, uint32 mapId);
+
+    // `.tb enter`: the bot walks into the area trigger's box (its engine is down meanwhile) and the core's own area-trigger handler is called for it
+    // (WorldSession::HandleAreaTriggerOpcode, MiscHandler.cpp:538), which asks the core's entry rule and teleports it. `leader` (not empty) = the
+    // party leader's guid: the bot calls the handler only after the leader stands on the trigger's target map (followers enter after their leader
+    // into the SAME instance: the group's recent instance, MapManager.cpp:300). `direct` = the D1 fallback: no walk and no handler, the same checks,
+    // then Player::TeleportTo to the trigger's target (the instance's entrance when it names one), exactly the handler's last step.
+    // Empty `code` = started (the walk begins), else the refusal (nothing was started or changed).
+    struct EntryStart { std::string code; std::string text; };
+    EntryStart StartEntry(ObjectGuid botGuid, uint32 triggerId, ObjectGuid leader, bool direct);
+    // What `.tb state` shows: the way of the last map change and its refusal. `entering` is true while a walk or a teleport of an entry is running.
+    struct EntryInfo
+    {
+        std::string entered = "none";     // trigger | order | setup | none
+        std::string block;                // empty = none; else the code of the last refusal (see CheckEntry)
+        std::string blockText;
+        uint32 catchups = 0;              // open-world catch-up teleports (BotMgr::Think); never into or inside an instance
+        bool entering = false;
+        std::string phase;                // walking | waiting-leader | teleporting | "" (for `.tb where`)
+    };
+    EntryInfo GetEntryInfo(ObjectGuid botGuid) const;
+    // `.tb tele`: a teleport the host started for a bot (`how` = setup | order): the landing is noted (`entered=`) when the core has finished it,
+    // a teleport that ends elsewhere is a `block=teleport-refused`.
+    void NoteTeleportStarted(ObjectGuid botGuid, char const* how, uint32 destMapId);
+    // Life state the host keeps between ticks (`.tb state`): `running-back` = alive again after a death, still more than 30 yd from the commander or
+    // leader, until it is within 20 yd; `practice` = a `.tb revive` happened and no combat has ended since (`.tb revive`, grammar tag PRACTICE).
+    bool RunningBack(ObjectGuid botGuid) const { auto itr = _bots.find(botGuid); return itr != _bots.end() && itr->second.runBack; }
+    bool Practice(ObjectGuid botGuid) const { auto itr = _bots.find(botGuid); return itr != _bots.end() && itr->second.practice; }
+    void MarkPractice(ObjectGuid botGuid);
+    // D2: the entrance the host gave an instance (world_safe_locs id), 0 = none. `entranceFor(instance id)` is what the landing of an entry recorded.
+    uint32 InstanceEntrance(Player* player) const;   // the instance script's entrance location for the map the player is on (0 = none, or not an instance)
+    // `.tb order <bot> release` and the release rule read this: false while the instance the bot is in has NO entrance (no script or no trigger target),
+    // a release there would revive the bot at a graveyard outside (Player::RepopAtGraveyard, Player.cpp:5237-5242).
+    bool ReleaseHasEntrance(Player* bot) const;
+
     void Update(uint32 diff);
 
 private:
+    // Slice 4 entry job of one bot (see StartEntry).
+    struct Entry
+    {
+        bool active = false;
+        uint32 triggerId = 0;
+        uint32 targetMap = 0;
+        uint32 safeLocId = 0;          // the trigger's target safe location (world_safe_locs id)
+        ObjectGuid leader;             // empty = this bot is the leader (no gate)
+        bool direct = false;
+        bool teleporting = false;      // the handler (or the direct teleport) started a teleport: wait for the landing
+        uint32 ageMs = 0;
+        uint32 stepMs = 0;
+        uint32 noProgressMs = 0;
+        float bestDist = 1.0e9f;
+        std::string phase;
+    };
+    struct Landing { bool pending = false; std::string how; uint32 mapId = 0; };
     struct Bot
     {
         std::shared_ptr<BotSession> session;
@@ -108,6 +166,17 @@ private:
         uint32 outOfSightMs = 0;       // N2: how long the master has been over 100 yd away and out of line of sight
         uint32 catchUpCooldownMs = 0;  // N2: no second catch-up teleport before this has run out
         std::string followBlockedWhy;
+        // Slice 4 (H4)
+        Entry entry;
+        Landing landing;
+        std::string entered = "none";   // trigger | order | setup | none: the way of the last map change this host started
+        std::string block;              // the code of the last refused entry or lost teleport (empty = none)
+        std::string blockText;
+        uint32 catchups = 0;
+        bool wasDead = false;
+        bool runBack = false;
+        bool practice = false;
+        bool practiceSawCombat = false;
     };
 
     void Think(Bot& bot, Player* me);
@@ -116,6 +185,11 @@ public:
     static std::string CanEnterMap(Player* who, uint32 mapId);
 private:
     static std::string JoinParty(Player* bot, Player* master);
+    // H4 private steps
+    void UpdateEntry(Bot& bot, Player* me, uint32 diff);
+    void FailEntry(Bot& bot, std::string code, std::string text);
+    void TrackLife(Bot& bot, Player* me);
+    void EnsureEntrance(Player* me);
     void DropBrain(Bot& bot);
     // R10 (S2): the master is gone: take the brain down and wait out the grace (or log the bot out at once when the grace is 0).
     void DetachFromMaster(Bot& bot);
@@ -127,5 +201,7 @@ private:
     float _followDistance = 3.0f;
     bool _engineByDefault = false;
     uint32 _masterGraceMs = 300000;   // TortoiseBots.Slice.MasterGraceSeconds
+    std::map<uint32, uint32> _entranceByInstance;   // H4: instance id -> world_safe_locs id the host gave its script (D2), logged once
+    std::map<uint32, uint32> _entryTriggerByInstance;   // H4: instance id -> the area trigger the first entry used
 };
 }

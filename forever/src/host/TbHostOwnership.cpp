@@ -18,7 +18,11 @@
 #include "runtime/GuildOrderStore.h"
 #include "runtime/HireLifecycle.h"
 #include "runtime/RandomBotAccountRegistry.h"
+#include "runtime/RunReleaseHold.h"
 #include "host/TbH3.h"
+#include "TbBotMgr.h"
+#include "ObjectAccessor.h"
+#include "Player.h"
 
 namespace TortoiseBots
 {
@@ -51,16 +55,46 @@ bool ClaimLifecycle::IsClaimedByPlayer(uint32_t /*botGuidLow*/, uint32_t /*playe
     return false;
 }
 
-// ---- BotActivityLeaseManager (runtime/BotActivityLease.cpp): no bot holds a lease, every bot is Idle. ----
+// ---- BotActivityLeaseManager (runtime/BotActivityLease.cpp): no bot holds a lease, every bot is Idle, except a COMMANDED bot (H4). ----
 BotActivityLeaseManager& BotActivityLeaseManager::Instance()
 {
     static BotActivityLeaseManager instance;
     return instance;
 }
 
-BotActivity BotActivityLeaseManager::GetActivity(uint32_t /*guidLow*/) const
+namespace
 {
-    return BotActivity::Idle;
+// H4 (spec section 6, "Lease answer", decision D5): the "dungeon crew" rule of the legacy release logic applies to a bot that `.tb master` bound to a
+// commander. RunReleaseHold::Decide (runtime/RunReleaseHold.h:57-64): a Dungeon lease INSIDE an instance map waits at its body while a living
+// priest/paladin/shaman/druid is on the map or a living member still fights, and releases only on a wipe. Every other reader of the lease treats
+// Dungeon as "leave the bot alone" (R0 list, all in the slice's sources): PlayerbotAI.cpp:3367 (no master strip: a commanded bot has that already,
+// BotCommands::IsInCommandedGroup), LeaveGroupAction.cpp:88 (never leaves its group), InviteToGroupAction.cpp:14 (no random invites), the guild gates
+// (GuildManagementActions.cpp:156, GuildCreateActions.cpp/.h: idle/grinding/player-master only: a Dungeon bot does no guild errand), ReleaseSpiritAction.h:232
+// (`RepopLeavesGroup`: a repop leaves the group for a Dungeon bot: `repop` is not registered in the slice). Each of them makes the bot do LESS.
+//
+// No entrance on the instance (no script, no area trigger into the map: BotMgr::EnsureEntrance): a release would revive the bot at a graveyard OUTSIDE, so it
+// is HELD instead: the lease answer is PlayerMaster and the run-hold query below says "held", which Decide turns into Wait (relhold=no-entrance). The only
+// other readers of PlayerMaster are the guild gates, whose actions the slice does not register.
+bool HeldNoEntrance(Player* bot)
+{
+    return bot && !bot->IsAlive() && TortoiseBots::h3::IsCommandedBot(bot) && !BotMgr::Instance().ReleaseHasEntrance(bot);
+}
+
+struct RegisterHold
+{
+    RegisterHold() { RunReleaseHold::Register(&HeldNoEntrance); }
+} registerHold;
+}
+
+BotActivity BotActivityLeaseManager::GetActivity(uint32_t guidLow) const
+{
+    ObjectGuid const guid = ObjectGuid::Create<HighGuid::Player>(guidLow);
+    if (TortoiseBots::h3::CommanderGuid(guid).IsEmpty())
+        return BotActivity::Idle;
+    Player* bot = ObjectAccessor::FindPlayer(guid);
+    if (bot && !BotMgr::Instance().ReleaseHasEntrance(bot))
+        return BotActivity::PlayerMaster;
+    return BotActivity::Dungeon;
 }
 
 // ---- PlayerConvenience (behavior/PlayerConvenience.cpp) ----

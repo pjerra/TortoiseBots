@@ -53,6 +53,9 @@ struct OrderStatus
 };
 OrderStatus LastOrder(ObjectGuid bot);
 uint8 WantedRole(ObjectGuid bot);
+// H4 (slice 4): the member of the dead bot's party (or its commander) that offered it a resurrection that is still pending; null when there is none or the
+// bot is alive. Defined with the slice only.
+Player* ResurrectOffererOf(Player* bot);
 
 // ---- helpers shared by the three files (TbH3.cpp) ----
 // A command's words (whitespace separated) and its echo token: the last word that starts with '#' is taken out of the words and
