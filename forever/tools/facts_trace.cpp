@@ -224,8 +224,15 @@ struct World
     std::size_t unitsStep = std::size_t(-1);
     std::size_t deadBossStep = std::size_t(-1); // the boss step whose boss lies dead
     float spawnX = 0, spawnY = 0, spawnZ = 0;
+    int dead = 0;                            // dead members (the scenario sets it)
+    bool leadDead = false;
+    int stragglerTicks = 0;
+    int pullsSeen = 0;
+    bool wiped = false;
+    bool wipedOnce = false;
 };
 
+static std::string g_scn = "happy";
 static float Dist(float ax, float ay, float bx, float by) { return std::sqrt((ax - bx) * (ax - bx) + (ay - by) * (ay - by)); }
 
 static void FillMembers(Facts& f, World const& w, std::string const& lead)
@@ -233,6 +240,10 @@ static void FillMembers(Facts& f, World const& w, std::string const& lead)
     char const* names[5] = {"Mtank", "Mpriest", "Mdpsa", "Mdpsb", "Mdpsc"};
     for (int i = 0; i < 5; ++i)
     {
+        if (g_scn == "death" && w.dead > 0 && i == 3)
+            continue; // the dead bot is no living member
+        if (g_scn == "wipe" && w.wiped)
+            continue;
         MemberFact m;
         m.name = names[i];
         m.yd = i == 0 ? 0.0f : 4.0f + float(i);
@@ -246,6 +257,8 @@ static void FillMembers(Facts& f, World const& w, std::string const& lead)
         m.withLead = true;
         m.inCombat = w.fightTicks > 0;
         m.engagedRead = true;
+        if (g_scn == "straggler" && w.stragglerTicks > 0 && i == 2)
+            m.yd = 45.0f, m.x = w.x + 45.0f;
         f.members.push_back(m);
     }
     (void)lead;
@@ -257,8 +270,17 @@ static void ReadWorld(Facts& f, World& w, Run const& r, DungeonPlan const& plan)
 {
     f.leadX = w.x; f.leadY = w.y; f.leadZ = w.z;
     f.leadFloorZ = w.z;
-    f.leadAlive = true;
-    f.total = 5; f.alive = 5; f.dead = 0;
+    f.leadAlive = !w.wiped;
+    f.total = 5; f.alive = 5 - w.dead; f.dead = w.dead;
+    if (w.dead > 0)
+        f.deadNames = {"Mdpsb"};
+    if (g_scn == "wipe" && w.wiped)
+    {
+        f.alive = 0; f.dead = 5; f.leadAlive = false;
+        f.deadNames = {"Mtank", "Mpriest", "Mdpsa", "Mdpsb", "Mdpsc"};
+    }
+    if (g_scn == "straggler" && w.stragglerTicks > 0)
+        f.maxMemberYd = 45.0f;
     f.carrier = "Mtank";
     f.leadIsTank = true;
     f.leadStaying = !w.walking;
@@ -269,11 +291,17 @@ static void ReadWorld(Facts& f, World& w, Run const& r, DungeonPlan const& plan)
     f.dpsAlive = 3;
     f.leadPathGood = true;
     // config copies (ReadRunFacts); forced on ForeverCore per the spec: walkBackRescue 0, dryWalk 0
-    f.fightForward = true;
-    f.lightRest = false;
-    f.walkBackRescue = false;
+    // the code defaults of PlayerbotAIConfig.cpp (a key left out of aiplayerbot.conf), with the two the spec forces on ForeverCore
+    // (DungeonRunWalkBackRescue = 0, DungeonRunDryWalk = 0) and the return teleport off
+    f.fightForward = true;                 // DungeonRunFightForward default 1
+    f.lightRest = true;                    // DungeonRunLightRest default 1
+    f.walkBackRescue = false;              // default 1, forced 0 on ForeverCore
     f.dryWalk = false;
     f.teleportReturnYd = 0.0f;
+    f.packClearMarginYd = 10.0f;           // DungeonRunPackClearMarginYd default 10
+    f.packClearRepulls = 3;                // DungeonRunPackClearRepulls default 3
+    f.nearWipeStopCount = 2;               // DungeonRunNearWipeStop default 2
+    f.nearWipeStopWindowMs = 10u * 60u * 1000u; // DungeonRunNearWipeStopMinutes default 10
     FillMembers(f, w, "Mtank");
 
     PlanStep const* s = Current(r);
@@ -319,6 +347,17 @@ static void ReadWorld(Facts& f, World& w, Run const& r, DungeonPlan const& plan)
             u.engaged = w.fightTicks > 0;
         }
         f.units = w.units;
+        if (g_scn == "patrol")
+        {
+            UnitFact p;
+            p.guid = 5000 + r.step; p.entry = 20048642; p.x = s->x + 25.0f; p.y = s->y; p.z = s->z; p.hostile = true;
+            p.distLead = Dist(w.x, w.y, p.x, p.y);
+            f.patrollers.push_back(p);
+        }
+        if (g_scn == "evade" && !f.units.empty() && (r.step % 3) == 0 && w.fightTicks == 0 && (g_tick % 40) < 3)
+            f.units[0].evading = true;
+        if (g_scn == "evade" && f.units.size() > 1 && (r.step % 4) == 0 && (g_tick % 40) < 3)
+            f.units[1].stealthed = true;
     }
     else
         w.unitsStep = std::size_t(-1);
@@ -340,6 +379,8 @@ int main(int argc, char** argv)
         return 2;
     }
     int const maxTicks = argc > 4 ? std::atoi(argv[4]) : 3000;
+    if (char const* scn = std::getenv("FACTS_SCN"))
+        g_scn = scn;
     std::string name;
     auto table = LoadPlan(argv[1], name);
     DungeonPlan const* plan = table->Find(name);
@@ -431,15 +472,36 @@ int main(int argc, char** argv)
             if (d <= 14.0f) { w.x = w.tx; w.y = w.ty; w.z = w.tz; w.walking = false; }
             else { w.x += (w.tx - w.x) / d * 14.0f; w.y += (w.ty - w.y) / d * 14.0f; w.z = w.tz; }
         }
+        if (verb == "revive")
+        {
+            w.dead = 0;
+            if (w.wiped) { w.wiped = false; w.x = 0; w.y = 0; w.z = 0; w.walking = false; }
+        }
+        if (g_scn == "stragglerX") {}
+        if (g_scn == "straggler")
+        {
+            if (w.stragglerTicks > 0) --w.stragglerTicks;
+            else if (before && before->kind == PlanStepKind::Pull && (g_tick % 17) == 3) w.stragglerTicks = 6;
+        }
         if (w.fightTicks > 0 && --w.fightTicks == 0)
         {
+            ++w.pullsSeen;
+            if (g_scn == "death" && w.pullsSeen % 3 == 0)
+                w.dead = 1;
+            if (g_scn == "wipe" && before && before->kind == PlanStepKind::Boss && !w.wiped && !w.wipedOnce)
+                w.wiped = true, w.wipedOnce = true;
+            if (g_scn == "rest")
+                w.manaPct = 20, w.healthPct = 50;
             if (before && before->kind == PlanStepKind::Boss)
                 w.deadBossStep = stepBefore;
             w.units.clear();
-            w.manaPct = 55;
+            if (g_scn != "rest") w.manaPct = 55;
         }
         if (verb == "rest" || r.phase == Phase::Rest)
+        {
             w.manaPct = std::min(100, w.manaPct + 15);
+            w.healthPct = std::min(100, w.healthPct + 15);
+        }
         if (r.state == State::Done || r.state == State::Paused)
         {
             std::fprintf(stderr, "tick %d: state %d step %zu note: %s\n", g_tick, int(r.state), r.step, r.note.c_str());
