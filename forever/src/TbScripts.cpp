@@ -35,6 +35,7 @@
 #include "RBAC.h"
 #include "ScriptMgr.h"
 #include "SpellMgr.h"
+#include "Spell.h"
 #include "SpellInfo.h"
 #include "SpellAuraDefines.h"
 #include "Timer.h"
@@ -156,6 +157,15 @@ public:
     }
 };
 
+// The dashboard's fight numbers: damage dealt and taken, healing and overhealing.
+class tortoisebots_unit : public UnitScript
+{
+public:
+    tortoisebots_unit() : UnitScript("tortoisebots_unit") { }
+    void OnDamageSpell(Unit* attacker, Unit* victim, uint32 damage, SpellInfo const* spellInfo) override { TortoiseBots::Dashboard::OnDamage(attacker, victim, damage, spellInfo); }
+    void OnHealOutcome(Unit* healer, Unit* /*target*/, uint32 /*spellId*/, uint32 raw, uint32 effective) override { TortoiseBots::Dashboard::OnHealOutcome(healer, raw, effective); }
+};
+
 class tortoisebots_player : public PlayerScript
 {
 public:
@@ -166,6 +176,7 @@ public:
     void OnQuestStatusChange(Player* player, uint32 questId) override { TortoiseBots::Dashboard::OnQuestStatusChange(player, questId); }
     void OnLootItem(Player* player, Item* item) override { TortoiseBots::Dashboard::OnLootItem(player, item); }
     void OnMoneyChanged(Player* player, int64& amount) override { TortoiseBots::Dashboard::OnMoneyChanged(player, amount); }
+    void OnSpellCast(Player* player, Spell* spell, bool /*skipCheck*/) override { TortoiseBots::Dashboard::OnSpellCast(player, spell && !spell->IsTriggered() ? spell->GetSpellInfo() : nullptr); }
 
     void OnLogin(Player* player, bool /*firstLogin*/) override
     {
@@ -1207,5 +1218,6 @@ void AddSC_tortoisebots()
 {
     new tortoisebots_world();
     new tortoisebots_player();
+    new tortoisebots_unit();
     new tortoisebots_commands();
 }
