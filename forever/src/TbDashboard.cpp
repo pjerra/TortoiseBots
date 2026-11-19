@@ -4,6 +4,8 @@
 #include "Creature.h"
 #include "DB2Stores.h"
 #include "Item.h"
+#include "Map.h"
+#include "Spell.h"
 #include "MotionMaster.h"
 #include "GameTables.h"
 #include "ItemEnchantmentMgr.h"
@@ -27,6 +29,8 @@
 #include <ctime>
 #include <fstream>
 #include <unordered_map>
+#include <list>
+#include <map>
 #include <memory>
 #include <optional>
 #include <sstream>
@@ -436,6 +440,110 @@ void SendStats(std::vector<Player*> const& bots)
     }
 }
 
+// DUNGEON_MOBS: every dungeon or raid copy with bots in it, its members (and their targets) and the creatures near
+// them (health, place, victim, reaction to the bots, level, rank, the spell being cast). Ids are "p<n>" for players
+// and "c<n>" for creatures so a mob's victim names a member.
+constexpr float DungeonMobRange = 80.0f;
+constexpr size_t DungeonMobCap = 60;
+
+std::string UnitId(Unit const* unit)
+{
+    return (unit->GetTypeId() == TYPEID_PLAYER ? "p" : "c") + std::to_string(unit->GetGUID().GetCounter());
+}
+
+void SendDungeonMobs(std::vector<Player*> const& bots, uint64 seq, time_t now)
+{
+    Sender& s = Get();
+    std::map<std::pair<uint32, uint32>, std::vector<Player*>> runs;
+    for (Player* bot : bots)
+        if (Map* map = bot->GetMap(); map && map->IsDungeon())
+            runs[{ bot->GetMapId(), bot->GetInstanceId() }].push_back(bot);
+
+    std::ostringstream ss;
+    ss << "{\"v\":" << ProtocolVersion << ",\"session\":" << s.session << ",\"seq\":" << seq << ",\"ts\":" << now
+       << ",\"type\":\"DUNGEON_MOBS\",\"part\":0,\"parts\":1,\"runs\":[";
+    bool firstRun = true;
+    for (auto const& [key, members] : runs)
+    {
+        std::map<ObjectGuid, Creature*> mobs;
+        for (Player* member : members)
+        {
+            FindCreatureOptions options;
+            options.IsAlive = FindCreatureAliveState::Alive;
+            std::list<Creature*> near;
+            member->GetCreatureListWithOptionsInGrid(near, DungeonMobRange, options);
+            for (Creature* creature : near)
+                mobs.emplace(creature->GetGUID(), creature);
+        }
+        Player* viewer = members.front();
+        ss << (firstRun ? "" : ",") << "{\"map\":" << key.first << ",\"instance\":" << key.second << ",\"raid\":" << (viewer->GetMap()->IsRaid() ? "true" : "false")
+           << ",\"members\":[";
+        firstRun = false;
+        for (size_t i = 0; i < members.size(); ++i)
+        {
+            Unit const* target = ObjectAccessor::GetUnit(*members[i], members[i]->GetTarget());
+            ss << (i ? "," : "") << "{\"guid\":" << members[i]->GetGUID().GetCounter() << ",\"id\":\"" << UnitId(members[i]) << "\""
+               << (target ? ",\"target\":\"" + UnitId(target) + "\"" : std::string()) << "}";
+        }
+        ss << "],\"mobs_map\":" << key.first << ",\"mobs_total\":" << mobs.size() << ",\"mobs\":[";
+        size_t shown = 0;
+        for (auto const& [guid, mob] : mobs)
+        {
+            if (shown >= DungeonMobCap)
+                break;
+            char const* reaction = viewer->IsHostileTo(mob) ? "h" : viewer->IsFriendlyTo(mob) ? "f" : "n";
+            CreatureClassifications const cls = mob->GetCreatureClassification();
+            char const* rank = mob->IsDungeonBoss() ? "b" : (cls == CreatureClassifications::Elite || cls == CreatureClassifications::RareElite) ? "e"
+                : cls == CreatureClassifications::Rare ? "r" : "";
+            std::string cast;
+            if (Spell const* spell = mob->GetCurrentSpell(CURRENT_GENERIC_SPELL))
+                cast = (*spell->GetSpellInfo()->SpellName)[sWorld->GetDefaultDbcLocale()];
+            Unit const* victim = mob->GetVictim();
+            ss << (shown ? "," : "") << "{\"id\":\"" << UnitId(mob) << "\",\"entry\":" << mob->GetEntry() << ",\"name\":\"" << Escape(mob->GetName())
+               << "\",\"hp\":" << uint32(mob->GetHealthPct()) << ",\"x\":" << mob->GetPositionX() << ",\"y\":" << mob->GetPositionY()
+               << (victim ? ",\"victim\":\"" + UnitId(victim) + "\"" : std::string()) << ",\"reaction\":\"" << reaction << "\",\"lvl\":" << uint32(mob->GetLevel())
+               << (*rank ? std::string(",\"rank\":\"") + rank + "\"" : std::string()) << (cast.empty() ? std::string() : ",\"cast\":\"" + Escape(cast) + "\"") << "}";
+            ++shown;
+        }
+        ss << "]}";
+    }
+    ss << "]}";
+    Send(ss.str());
+}
+
+// RAIDS: every raid group with a bot in it: leader, where the leader is, the members with their subgroup and whether they are online.
+void SendRaids(std::vector<Player*> const& bots, uint64 seq, time_t now)
+{
+    Sender& s = Get();
+    std::map<ObjectGuid, Group*> groups;
+    for (Player* bot : bots)
+        if (Group* group = bot->GetGroup(); group && group->isRaidGroup())
+            groups.emplace(group->GetGUID(), group);
+
+    std::ostringstream ss;
+    ss << "{\"v\":" << ProtocolVersion << ",\"session\":" << s.session << ",\"seq\":" << seq << ",\"ts\":" << now << ",\"type\":\"RAIDS\",\"raids\":[";
+    bool first = true;
+    for (auto const& [guid, group] : groups)
+    {
+        Player* leader = ObjectAccessor::FindConnectedPlayer(group->GetLeaderGUID());
+        ss << (first ? "" : ",") << "{\"group\":" << guid.GetCounter() << ",\"key\":\"\",\"map\":" << (leader ? leader->GetMapId() : 0)
+           << ",\"instance\":" << (leader ? leader->GetInstanceId() : 0) << ",\"rg\":true,\"leader\":\"" << Escape(group->GetLeaderName())
+           << "\",\"leader_guid\":" << group->GetLeaderGUID().GetCounter() << ",\"members\":[";
+        first = false;
+        bool firstMember = true;
+        for (Group::MemberSlot const& slot : group->GetMemberSlots())
+        {
+            bool const online = ObjectAccessor::FindConnectedPlayer(slot.guid) != nullptr;
+            ss << (firstMember ? "" : ",") << "{\"g\":" << slot.guid.GetCounter() << ",\"s\":" << uint32(slot.group) << ",\"n\":\"" << Escape(slot.name) << "\""
+               << (online ? "" : ",\"off\":true") << "}";
+            firstMember = false;
+        }
+        ss << "]}";
+    }
+    ss << "]}";
+    Send(ss.str());
+}
+
 void SendCycle()
 {
     Sender& s = Get();
@@ -497,6 +605,8 @@ void SendCycle()
                << ",\"kind\":\"" << (mgr.MasterOf(bot->GetGUID()).IsEmpty() ? "pool" : "hired") << "\""
                << ",\"class\":\"" << ClassName(bot->GetClass()) << "\",\"role\":\"" << Escape(brain.role) << "\""
                << ",\"group\":" << (group ? group->GetGUID().GetCounter() : 0)
+               << ",\"subgroup\":" << (group ? uint32(group->GetMemberGroup(bot->GetGUID())) : 0)
+               << (bot->GetMap() && bot->GetMap()->IsRaid() ? ",\"raid\":true" : "")
                << ",\"level\":" << uint32(bot->GetLevel())
                << ",\"hp\":" << bot->GetHealth() << ",\"max_hp\":" << bot->GetMaxHealth()
                << ",\"power\":" << ShownPower(bot, power, bot->GetPower(power)) << ",\"max_power\":" << ShownPower(bot, power, bot->GetMaxPower(power))
@@ -513,6 +623,9 @@ void SendCycle()
         ss << "]}";
         Send(ss.str());
     }
+
+    SendDungeonMobs(bots, seq, now);
+    SendRaids(bots, seq, now);
 
     s.statsSinceMs += s.intervalMs;
     if (s.statsSinceMs >= StatsIntervalMs)
