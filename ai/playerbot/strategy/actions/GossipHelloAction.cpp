@@ -40,7 +40,7 @@ bool GossipHelloAction::Execute(Event& event)
 
     std::string text = event.GetParam();
 	int menuToSelect = -1;
-    if (event.GetSource().find("rpg action") == 0)
+    if (event.getSource().find("rpg action") == 0)
     {
         Creature* pCreature = bot->GetNPCIfCanInteractWith(guid, UNIT_NPC_FLAG_NONE);
 

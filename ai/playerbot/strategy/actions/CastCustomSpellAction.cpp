@@ -416,7 +416,7 @@ bool CastCustomSpellAction::CastSummonPlayer(Player* requester, std::string comm
 
                             WorldPacket data(SMSG_SUMMON_REQUEST, 8 + 4 + 4);
                             data << bot->getObjectGuid();
-                            data << uint32(bot->getZoneId());
+                            data << uint32(bot->GetZoneId());
                             data << uint32(MAX_PLAYER_SUMMON_DELAY * IN_MILLISECONDS);
                             target->GetSession()->SendPacket(&data);
                         }

@@ -193,7 +193,7 @@ namespace ai
         if (!HasAllDMTributeBuffs(player))
             return WorldBuffTravelStep::STEP_BRAGOK;
 
-        uint32 zoneId = player->getZoneId();
+        uint32 zoneId = player->GetZoneId();
         uint32 portalDestZone = GetDMPortalDestZone(player);
         if (zoneId != ZONE_FELWOOD && zoneId != portalDestZone)
         {

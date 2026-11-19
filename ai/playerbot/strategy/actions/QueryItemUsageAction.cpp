@@ -50,7 +50,7 @@ bool QueryItemUsageAction::Execute(Event& event)
 
         if (sPlayerbotAIConfig.hasLog("bot_events.csv"))
         {
-            if (event.GetSource() == "item push result")
+            if (event.getSource() == "item push result")
             {
 
                 QuestStatusMap& questMap = bot->getQuestStatusMap();

@@ -539,10 +539,10 @@ bool EquipUpgradesAction::Execute(Event& event)
     // "equipment audit" node picks the same upgrade up out of combat instead.
     // PlayerbotAI's "attacked while fishing" wake-up is the one deliberate
     // in-combat call and labels its event so it still lands.
-    if (sServerFacade.IsInCombat(bot) && event.GetSource() != "fishing pole recovery")
+    if (sServerFacade.IsInCombat(bot) && event.getSource() != "fishing pole recovery")
         return false;
 
-    if (event.GetSource() == "trade status")
+    if (event.getSource() == "trade status")
     {
         WorldPacket p(event.GetPacket());
         p.rpos(0);
@@ -554,7 +554,7 @@ bool EquipUpgradesAction::Execute(Event& event)
             return false;
         }
     }
-    else if (event.GetSource() == "item push result")
+    else if (event.getSource() == "item push result")
     {
         bool valid = false;
         WorldPacket& data = event.GetPacket();
@@ -654,7 +654,7 @@ bool EquipUpgradesAction::Execute(Event& event)
     bool equippedBags = false;
     bool forceUsageChanged = false;
     std::set<uint8> filledSlots;
-    std::set<uint32> ownerTradedIds = (event.GetSource() == "trade status") ? ai->TakeOwnerTradedItemIds() : std::set<uint32>{};
+    std::set<uint32> ownerTradedIds = (event.getSource() == "trade status") ? ai->TakeOwnerTradedItemIds() : std::set<uint32>{};
 
     for (auto& item : items)
     {

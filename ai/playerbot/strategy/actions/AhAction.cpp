@@ -46,7 +46,7 @@ bool AhAction::Execute(Event& event)
         // nothing (deposit, price or profit check refused every item), but its
         // AH stock still raises the seller need, so it re-picked the AH every
         // ~35 s without leaving. Park the AH purpose like ParkVendorErrand.
-        if (!doneAuction && text == "vendor" && event.GetSource() == "rpg action" && getName() == "ah")
+        if (!doneAuction && text == "vendor" && event.getSource() == "rpg action" && getName() == "ah")
         {
             std::string const purposeKey = std::to_string((uint32)TravelDestinationPurpose::AH);
             SET_AI_VALUE2(bool, "no active travel destinations", purposeKey, true);

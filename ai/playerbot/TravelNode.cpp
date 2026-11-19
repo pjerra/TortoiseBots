@@ -3774,16 +3774,16 @@ TravelNodeMap::PathFindResult TravelNodeMap::testPathToLoop(const WorldPosition&
     Player* player = (Player*)bot;
     if (PlayerbotAIStorage::Instance().GetAI(player))
     {
-        if (!PlayerbotAIStorage::Instance().GetAI(player)->GetLastEvent().GetSource().empty())
-            reason = PlayerbotAIStorage::Instance().GetAI(player)->GetLastEvent().GetSource();
+        if (!PlayerbotAIStorage::Instance().GetAI(player)->GetLastEvent().getSource().empty())
+            reason = PlayerbotAIStorage::Instance().GetAI(player)->GetLastEvent().getSource();
 
         AiObjectContext* context = PlayerbotAIStorage::Instance().GetAI(player)->GetAiObjectContext();
         if (context)
         {
             LastMovement& lastMove = context->GetValue<LastMovement&>("last movement")->Get();
-            if (!(!lastMove.moveEvent) && !lastMove.moveEvent.GetSource().empty())
+            if (!(!lastMove.moveEvent) && !lastMove.moveEvent.getSource().empty())
             {
-                prevReason = lastMove.moveEvent.GetSource();
+                prevReason = lastMove.moveEvent.getSource();
             }
         }
     }
