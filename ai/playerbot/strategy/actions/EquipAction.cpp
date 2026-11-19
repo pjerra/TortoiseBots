@@ -18,6 +18,7 @@
 #include "../../../../runtime/AltBotPolicy.h"
 #include "../../../runtime/policy/hire/HireSourceGuardPolicy.h"
 #include "../../../runtime/policy/hire/HireGearPolicy.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 

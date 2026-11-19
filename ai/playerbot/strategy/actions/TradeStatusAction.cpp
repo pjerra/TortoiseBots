@@ -29,6 +29,7 @@
 #include "runtime/GuildOrderDelivery.h"
 #include "runtime/GuildOrderStore.h"
 #include "runtime/GuildOrderNeedPolicy.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 

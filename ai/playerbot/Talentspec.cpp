@@ -6,6 +6,7 @@
 #include "../../runtime/PublicNotePolicy.h"
 #include "../../runtime/BotManager.h"
 #include "playerbot/AiFactory.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace std::placeholders;
 
@@ -43,12 +44,12 @@ bool TalentSpec::CheckTalentLink(std::string link, std::ostringstream* out) {
 uint32 TalentSpec::LeveltoPoints(uint32 level)
 {
     uint32 talentPointsForLevel = level < 10 ? 0 : level - 9;
-    return uint32(talentPointsForLevel * sWorld.getConfig(CONFIG_FLOAT_RATE_TALENT));
+    return uint32(talentPointsForLevel * WorldFloatConfigW2(CONFIG_FLOAT_RATE_TALENT));
 }
 
 uint32 TalentSpec::PointstoLevel(int points) const
 {
-    return uint32(ceil(points / sWorld.getConfig(CONFIG_FLOAT_RATE_TALENT)))+9;
+    return uint32(ceil(points / WorldFloatConfigW2(CONFIG_FLOAT_RATE_TALENT)))+9;
 }
 
 //Check the talentspec for errors.

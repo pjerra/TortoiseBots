@@ -53,6 +53,7 @@
 #include <set>
 #include <sstream>
 #include <iomanip>
+#include "../ai/playerbot/TbCompatW2.h"
 
 namespace TortoiseBots {
 
@@ -2031,24 +2032,24 @@ void ObservabilityEmitter::EmitServerInfo()
        << ",\"core_revision\":\"" << EscapeJson(CoreRevision()) << "\""
        << ",\"core_date\":\"" << EscapeJson(CoreRevisionDate()) << "\""
        << ",\"uptime\":" << sWorld.GetUptime()
-       << ",\"max_level\":" << sWorld.getConfig(CONFIG_UINT32_MAX_PLAYER_LEVEL)
+       << ",\"max_level\":" << WorldU32ConfigW2(CONFIG_UINT32_MAX_PLAYER_LEVEL)
        << ",\"rates\":{"
-       << "\"xp_kill\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_XP_KILL)
-       << ",\"xp_kill_elite\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_XP_KILL_ELITE)
-       << ",\"xp_quest\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_XP_QUEST)
-       << ",\"xp_explore\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_XP_EXPLORE)
-       << ",\"drop_money\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_MONEY)
-       << ",\"drop_poor\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_ITEM_POOR)
-       << ",\"drop_normal\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_ITEM_NORMAL)
-       << ",\"drop_uncommon\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_ITEM_UNCOMMON)
-       << ",\"drop_rare\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_ITEM_RARE)
-       << ",\"drop_epic\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_ITEM_EPIC)
-       << ",\"drop_legendary\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_DROP_ITEM_LEGENDARY)
-       << ",\"honor\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_HONOR)
-       << ",\"rep_gain\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_REPUTATION_GAIN)
-       << ",\"rep_low_kill\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_REPUTATION_LOWLEVEL_KILL)
-       << ",\"rep_low_quest\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_REPUTATION_LOWLEVEL_QUEST)
-       << ",\"talent\":" << sWorld.getConfig(CONFIG_FLOAT_RATE_TALENT)
+       << "\"xp_kill\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_XP_KILL)
+       << ",\"xp_kill_elite\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_XP_KILL_ELITE)
+       << ",\"xp_quest\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_XP_QUEST)
+       << ",\"xp_explore\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_XP_EXPLORE)
+       << ",\"drop_money\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_DROP_MONEY)
+       << ",\"drop_poor\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_DROP_ITEM_POOR)
+       << ",\"drop_normal\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_DROP_ITEM_NORMAL)
+       << ",\"drop_uncommon\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_DROP_ITEM_UNCOMMON)
+       << ",\"drop_rare\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_DROP_ITEM_RARE)
+       << ",\"drop_epic\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_DROP_ITEM_EPIC)
+       << ",\"drop_legendary\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_DROP_ITEM_LEGENDARY)
+       << ",\"honor\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_HONOR)
+       << ",\"rep_gain\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_REPUTATION_GAIN)
+       << ",\"rep_low_kill\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_REPUTATION_LOWLEVEL_KILL)
+       << ",\"rep_low_quest\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_REPUTATION_LOWLEVEL_QUEST)
+       << ",\"talent\":" << WorldFloatConfigW2(CONFIG_FLOAT_RATE_TALENT)
        << ",\"bot_xp_mult\":" << sPlayerbotAIConfig.playerbotsXPrate
        << "}"
        << ",\"bots\":{"

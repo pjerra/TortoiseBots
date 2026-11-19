@@ -14,6 +14,7 @@
 #include "playerbot/TravelMgr.h"
 #include "playerbot/RandomBotFacade.h"
 #include "playerbot/strategy/values/MaintenanceValues.h"
+#include "playerbot/TbCompatW2.h"
 
 
 using namespace ai;
@@ -92,7 +93,7 @@ void RpgHelper::resetFacing(GuidPosition guidPosition)
 
     if (data)
     {
-        unit->SetFacingTo(data->position.o);
+        unit->SetFacingTo(SpawnOW2(*data));
     }
 }
 

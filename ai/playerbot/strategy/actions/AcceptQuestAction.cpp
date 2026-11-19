@@ -7,6 +7,7 @@
 #include "../../../runtime/policy/hire/HireQuestPolicy.h"
 #include "../../../../runtime/AltBotService.h"
 #include "../../../../runtime/AltBotPolicy.h"
+#include "playerbot/TbCompatW2.h"
 using namespace ai;
 
 static bool IsFixedRewardUpgrade(AiObjectContext* context, Quest const* quest)
@@ -107,7 +108,7 @@ bool AcceptAllQuestsAction::WouldAcceptQuest(PlayerbotAI* ai, Player* bot, Quest
             TortoiseBots::AltBotService::Instance().IsAutonomous(bot->GetObjectGuid())) &&
         !quest->GetRequiredClasses() &&
         QuestLevelCompat(quest) > 0 &&
-        bot->GetLevel() > bot->GetQuestLevelForPlayer(quest) + (uint32)sWorld.getConfig(CONFIG_INT32_QUEST_LOW_LEVEL_HIDE_DIFF) + 1)
+        bot->GetLevel() > bot->GetQuestLevelForPlayer(quest) + (uint32)WorldI32ConfigW2(CONFIG_INT32_QUEST_LOW_LEVEL_HIDE_DIFF) + 1)
     {
         if (!AI_VALUE2(bool, "need quest reward", (int32)quest->GetQuestId()) && !IsFixedRewardUpgrade(context, quest))
             return false;

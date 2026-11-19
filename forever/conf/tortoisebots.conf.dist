@@ -73,3 +73,29 @@ TortoiseBots.Slice.RestHealthPct = 90
 #
 
 TortoiseBots.Slice.RestManaPct = 80
+
+#
+#    TortoiseBots.Dashboard.Enable
+#        Description: Send the bot roster to the TortoiseBots dashboard (tools/observability) over UDP. Only while TortoiseBots.Enable = 1.
+#        Default:     1
+#
+
+TortoiseBots.Dashboard.Enable = 1
+
+#
+#    TortoiseBots.Dashboard.Host
+#    TortoiseBots.Dashboard.Port
+#        Description: Where the dashboard listens for telemetry (its -udp-host / -udp-port). The host must be an IP address.
+#        Default:     127.0.0.1, 9195
+#
+
+TortoiseBots.Dashboard.Host = "127.0.0.1"
+TortoiseBots.Dashboard.Port = 9195
+
+#
+#    TortoiseBots.Dashboard.IntervalMs
+#        Description: How often the roster is sent, in milliseconds (at least 500).
+#        Default:     2000
+#
+
+TortoiseBots.Dashboard.IntervalMs = 2000

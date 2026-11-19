@@ -1,0 +1,96 @@
+role,slot,item_id,name,source,reason
+protection warrior,head,281701,Restored Mail Coif,"armory (req 1, ilvl 1)",best green armory match; verify vendor/quest/drop origin on live
+protection warrior,neck,281719,Restored Necklace,"armory (req 1, ilvl 1)",best green armory match; verify vendor/quest/drop origin on live
+protection warrior,shoulder,250486,Sterling Silver Shoulders,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+protection warrior,back,15340,Pathfinder Cloak,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+protection warrior,chest,3049,Lambent Scale Breastplate,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+protection warrior,wrist,6591,Battleforge Wristguards,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+protection warrior,hands,3483,Silvered Bronze Gauntlets,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+protection warrior,waist,4707,Lambent Scale Girdle,"armory (req 21, ilvl 26)",best green armory match; verify vendor/quest/drop origin on live
+protection warrior,legs,15521,Spiked Chain Leggings,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+protection warrior,feet,15516,Spiked Chain Slippers,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+protection warrior,finger,278019,Apology Ring,"armory (req 1, ilvl 35)",best green armory match; verify vendor/quest/drop origin on live
+protection warrior,finger2,278018,Renegotiated Ring,"armory (req 1, ilvl 35)",best green armory match; verify vendor/quest/drop origin on live
+protection warrior,trinket,276895,Transformative Cocoon,"armory (req 1, ilvl 31)",best green armory match; verify vendor/quest/drop origin on live
+protection warrior,trinket2,,,none,"EMPTY: only one green trinket at req<=22 exists in armory (Transformative Cocoon 276895, used in trinket slot)"
+protection warrior,main_hand,277515,Dagger of Deals,"armory (req 1, ilvl 33)",best green armory match; verify vendor/quest/drop origin on live
+protection warrior,off_hand,7958,Bronze Battle Axe,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+protection warrior,food,3770,Mutton Chop,vendor (4 alliance vendors),level-15 food (was level-1 Tough Jerky); widely stocked alliance vendor food
+protection warrior,drink,1205,Melon Juice,vendor (16 alliance vendors),level-15 drink (was level-1 Refreshing Spring Water); widely stocked alliance vendor drink
+protection warrior,bandage,3531,bandage-skill 75,crafted via First Aid (bandages-by-skill.csv),highest bandage at First Aid <=150
+arms warrior,head,281701,Restored Mail Coif,"armory (req 1, ilvl 1)",best green armory match; verify vendor/quest/drop origin on live
+arms warrior,neck,281719,Restored Necklace,"armory (req 1, ilvl 1)",best green armory match; verify vendor/quest/drop origin on live
+arms warrior,shoulder,250486,Sterling Silver Shoulders,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+arms warrior,back,15340,Pathfinder Cloak,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+arms warrior,chest,3049,Lambent Scale Breastplate,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+arms warrior,wrist,6591,Battleforge Wristguards,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+arms warrior,hands,3483,Silvered Bronze Gauntlets,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+arms warrior,waist,4707,Lambent Scale Girdle,"armory (req 21, ilvl 26)",best green armory match; verify vendor/quest/drop origin on live
+arms warrior,legs,15521,Spiked Chain Leggings,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+arms warrior,feet,15516,Spiked Chain Slippers,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+arms warrior,finger,278019,Apology Ring,"armory (req 1, ilvl 35)",best green armory match; verify vendor/quest/drop origin on live
+arms warrior,finger2,278018,Renegotiated Ring,"armory (req 1, ilvl 35)",best green armory match; verify vendor/quest/drop origin on live
+arms warrior,trinket,276895,Transformative Cocoon,"armory (req 1, ilvl 31)",best green armory match; verify vendor/quest/drop origin on live
+arms warrior,trinket2,,,none,"EMPTY: only one green trinket at req<=22 exists in armory (Transformative Cocoon 276895, used in trinket slot)"
+arms warrior,two_hand,7958,Bronze Battle Axe,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+arms warrior,food,3770,Mutton Chop,vendor (4 alliance vendors),level-15 food (was level-1 Tough Jerky); widely stocked alliance vendor food
+arms warrior,drink,1205,Melon Juice,vendor (16 alliance vendors),level-15 drink (was level-1 Refreshing Spring Water); widely stocked alliance vendor drink
+arms warrior,bandage,3531,bandage-skill 75,crafted via First Aid (bandages-by-skill.csv),highest bandage at First Aid <=150
+priest,head,281685,Restored Cloth Helm,"armory (req 1, ilvl 1)",best green armory match; verify vendor/quest/drop origin on live
+priest,neck,281719,Restored Necklace,"armory (req 1, ilvl 1)",best green armory match; verify vendor/quest/drop origin on live
+priest,shoulder,14378,Sanguine Mantle,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+priest,back,15340,Pathfinder Cloak,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+priest,chest,9774,Greenweave Vest,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+priest,wrist,4036,Silver-thread Cuffs,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+priest,hands,282655,Bog Pickers,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+priest,waist,4828,Nightwind Belt,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+priest,legs,9772,Greenweave Leggings,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+priest,feet,6394,Silver-thread Boots,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+priest,finger,278019,Apology Ring,"armory (req 1, ilvl 35)",best green armory match; verify vendor/quest/drop origin on live
+priest,finger2,278018,Renegotiated Ring,"armory (req 1, ilvl 35)",best green armory match; verify vendor/quest/drop origin on live
+priest,trinket,276895,Transformative Cocoon,"armory (req 1, ilvl 31)",best green armory match; verify vendor/quest/drop origin on live
+priest,trinket2,,,none,"EMPTY: only one green trinket at req<=22 exists in armory (Transformative Cocoon 276895, used in trinket slot)"
+priest,main_hand,277515,Dagger of Deals,"armory (req 1, ilvl 33)",best green armory match; verify vendor/quest/drop origin on live
+priest,ranged,284574,Snapped Branch Wand,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+priest,food,3770,Mutton Chop,vendor (4 alliance vendors),level-15 food (was level-1 Tough Jerky); widely stocked alliance vendor food
+priest,drink,1205,Melon Juice,vendor (16 alliance vendors),level-15 drink (was level-1 Refreshing Spring Water); widely stocked alliance vendor drink
+priest,bandage,3531,bandage-skill 75,crafted via First Aid (bandages-by-skill.csv),highest bandage at First Aid <=150
+mage,head,281685,Restored Cloth Helm,"armory (req 1, ilvl 1)",best green armory match; verify vendor/quest/drop origin on live
+mage,neck,281719,Restored Necklace,"armory (req 1, ilvl 1)",best green armory match; verify vendor/quest/drop origin on live
+mage,shoulder,14378,Sanguine Mantle,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+mage,back,15340,Pathfinder Cloak,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+mage,chest,9774,Greenweave Vest,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+mage,wrist,4036,Silver-thread Cuffs,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+mage,hands,282655,Bog Pickers,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+mage,waist,4828,Nightwind Belt,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+mage,legs,9772,Greenweave Leggings,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+mage,feet,6394,Silver-thread Boots,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+mage,finger,278019,Apology Ring,"armory (req 1, ilvl 35)",best green armory match; verify vendor/quest/drop origin on live
+mage,finger2,278018,Renegotiated Ring,"armory (req 1, ilvl 35)",best green armory match; verify vendor/quest/drop origin on live
+mage,trinket,276895,Transformative Cocoon,"armory (req 1, ilvl 31)",best green armory match; verify vendor/quest/drop origin on live
+mage,trinket2,,,none,"EMPTY: only one green trinket at req<=22 exists in armory (Transformative Cocoon 276895, used in trinket slot)"
+mage,main_hand,277515,Dagger of Deals,"armory (req 1, ilvl 33)",best green armory match; verify vendor/quest/drop origin on live
+mage,ranged,284574,Snapped Branch Wand,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+mage,food,3770,Mutton Chop,vendor (4 alliance vendors),level-15 food (was level-1 Tough Jerky); widely stocked alliance vendor food
+mage,drink,1205,Melon Juice,vendor (16 alliance vendors),level-15 drink (was level-1 Refreshing Spring Water); widely stocked alliance vendor drink
+mage,bandage,3531,bandage-skill 75,crafted via First Aid (bandages-by-skill.csv),highest bandage at First Aid <=150
+rogue,head,281693,Restored Leather Hood,"armory (req 1, ilvl 1)",best green armory match; verify vendor/quest/drop origin on live
+rogue,neck,281719,Restored Necklace,"armory (req 1, ilvl 1)",best green armory match; verify vendor/quest/drop origin on live
+rogue,shoulder,14573,Bristlebark Amice,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+rogue,back,15340,Pathfinder Cloak,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+rogue,chest,15118,Rigid Tunic,"armory (req 21, ilvl 26)",best green armory match; verify vendor/quest/drop origin on live
+rogue,wrist,14580,Dokebi Bracers,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+rogue,hands,9806,Superior Gloves,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+rogue,waist,6600,Dervish Belt,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+rogue,legs,2233,Shadow Weaver Leggings,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+rogue,feet,282642,Feather-Stitched Moccasins,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+rogue,finger,278019,Apology Ring,"armory (req 1, ilvl 35)",best green armory match; verify vendor/quest/drop origin on live
+rogue,finger2,278018,Renegotiated Ring,"armory (req 1, ilvl 35)",best green armory match; verify vendor/quest/drop origin on live
+rogue,trinket,276895,Transformative Cocoon,"armory (req 1, ilvl 31)",best green armory match; verify vendor/quest/drop origin on live
+rogue,trinket2,,,none,"EMPTY: only one green trinket at req<=22 exists in armory (Transformative Cocoon 276895, used in trinket slot)"
+rogue,main_hand,277515,Dagger of Deals,"armory (req 1, ilvl 33)",best green armory match; verify vendor/quest/drop origin on live
+rogue,off_hand,5752,Wyvern Tailspike,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+rogue,ranged,14188,Raincaller Cloak,"armory (req 22, ilvl 27)",best green armory match; verify vendor/quest/drop origin on live
+rogue,food,3770,Mutton Chop,vendor (4 alliance vendors),level-15 food (was level-1 Tough Jerky); widely stocked alliance vendor food
+rogue,drink,1205,Melon Juice,vendor (16 alliance vendors),level-15 drink (was level-1 Refreshing Spring Water); widely stocked alliance vendor drink
+rogue,bandage,3531,bandage-skill 75,crafted via First Aid (bandages-by-skill.csv),highest bandage at First Aid <=150

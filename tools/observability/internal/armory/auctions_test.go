@@ -225,4 +225,42 @@ func TestListAuctionsNilDB(t *testing.T) {
 	if _, err := (&Service{}).ListAuctions(AuctionFilter{}); err == nil {
 		t.Fatal("expected error when armory Service DB is nil")
 	}
+	if _, err := (&Service{}).ListAuctionsForever(AuctionFilter{}, nil); err == nil {
+		t.Fatal("expected error when armory Service DB is nil on Forever")
+	}
+}
+
+func TestAssignAuctionSellersAndClamp(t *testing.T) {
+	if got := clampUint32(42); got != 42 {
+		t.Fatalf("clampUint32(42) = %d, want 42", got)
+	}
+	if got := clampUint32(1 << 40); got != ^uint32(0) {
+		t.Fatalf("clampUint32(1<<40) = %d, want MaxUint32", got)
+	}
+
+	rows := []AuctionRow{
+		{ID: 1, SellerGUID: 0},
+		{ID: 2, SellerGUID: 10},
+		{ID: 3, SellerGUID: 20},
+		{ID: 4, SellerGUID: 30},
+	}
+	sellers := map[uint32]auctionSellerInfo{
+		10: {name: "AhSeller", class: 1},
+		20: {name: "BotChar", class: 8, bot: true},
+		30: {name: "PlayerChar", class: 5},
+	}
+	assignAuctionSellers(rows, sellers, map[uint32]bool{10: true})
+
+	if rows[0].SellerKind != "market" {
+		t.Fatalf("row 0 kind = %q, want market", rows[0].SellerKind)
+	}
+	if rows[1].SellerKind != "ahbot" || rows[1].SellerName != "AhSeller" {
+		t.Fatalf("row 1 = %+v, want ahbot AhSeller", rows[1])
+	}
+	if rows[2].SellerKind != "bot" || rows[2].SellerClass != 8 {
+		t.Fatalf("row 2 = %+v, want bot class 8", rows[2])
+	}
+	if rows[3].SellerKind != "player" || rows[3].SellerName != "PlayerChar" {
+		t.Fatalf("row 3 = %+v, want player PlayerChar", rows[3])
+	}
 }

@@ -1,5 +1,6 @@
 // Script registration for the module: the world tick, the config load and the `.tb` chat commands.
 #include "TbBotMgr.h"
+#include "TbDashboard.h"
 #include "host/run/TbPlanCommands.h"
 #include "host/run/TbRunCommands.h"
 #include "compat/TbItemPrototype.h"
@@ -101,6 +102,7 @@ public:
     void OnConfigLoad(bool reload) override
     {
         BotMgr::Instance().LoadConfig();
+        TortoiseBots::Dashboard::LoadConfig();
         // A reload gives a failed engine config load (a missing aiplayerbot.conf, now present) another try at once; the first load is
         // made by OnWorldInitialized, when the stores the engine reads are there.
         if (reload && BotMgr::Instance().Enabled() && TortoiseBots::engine::Built())
@@ -110,9 +112,11 @@ public:
     void OnWorldInitialized() override
     {
         BotMgr::Instance().LoadConfig();
+        TortoiseBots::Dashboard::LoadConfig();
         // The item store is loaded by now (World.cpp:1608, and item_classic_block at :1631); fill every mirror once so the
         // bot brain looks items up without a lock (TbItemPrototype.cpp).
         tbcompat::FillAll();
+        TortoiseBots::Dashboard::WriteItemsFile();
         // The spell store is loaded too (World.cpp:1471). This hook is what tells the mirror so: it answers 0 and null
         // without touching the store until the flag is set, so a lookup from any earlier hook cannot index a half-loaded
         // store into a table that is never rebuilt.
@@ -139,6 +143,7 @@ public:
     {
         auto const started = std::chrono::steady_clock::now();
         BotMgr::Instance().Update(diff);
+        TortoiseBots::Dashboard::Update(diff);
         uint32 const us = uint32(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count());
         uint32 const worldMs = sWorldUpdateTime.GetLastUpdateTime();
         PerfWindow& perf = Perf();
@@ -164,6 +169,11 @@ class tortoisebots_player : public PlayerScript
 {
 public:
     tortoisebots_player() : PlayerScript("tortoisebots_player") { }
+
+    void OnCreatureKill(Player* killer, Creature* killed) override { TortoiseBots::Dashboard::OnKill(killer, killed); }
+    void OnPlayerKilledByCreature(Creature* killer, Player* killed) override { TortoiseBots::Dashboard::OnKilledByCreature(killer, killed); }
+    void OnQuestStatusChange(Player* player, uint32 questId) override { TortoiseBots::Dashboard::OnQuestStatusChange(player, questId); }
+    void OnLootItem(Player* player, Item* item) override { TortoiseBots::Dashboard::OnLootItem(player, item); }
 
     void OnLogin(Player* player, bool /*firstLogin*/) override
     {

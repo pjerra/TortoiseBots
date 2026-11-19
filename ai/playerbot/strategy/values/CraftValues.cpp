@@ -2,6 +2,7 @@
 #include "ItemUsageValue.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/PlayerbotAI.h"
+#include "playerbot/TbCompatW2.h"
 
 using namespace ai;
 
@@ -201,13 +202,13 @@ bool ShouldCraftSpellValue::Calculate()
 inline int SkillGainChance(uint32 SkillValue, uint32 GrayLevel, uint32 GreenLevel, uint32 YellowLevel)
 {
     if (SkillValue >= GrayLevel)
-        return sWorld.getConfig(CONFIG_UINT32_SKILL_CHANCE_GREY) * 10;
+        return WorldU32ConfigW2(CONFIG_UINT32_SKILL_CHANCE_GREY) * 10;
     else if (SkillValue >= GreenLevel)
-        return sWorld.getConfig(CONFIG_UINT32_SKILL_CHANCE_GREEN) * 10;
+        return WorldU32ConfigW2(CONFIG_UINT32_SKILL_CHANCE_GREEN) * 10;
     else if (SkillValue >= YellowLevel)
-        return sWorld.getConfig(CONFIG_UINT32_SKILL_CHANCE_YELLOW) * 10;
+        return WorldU32ConfigW2(CONFIG_UINT32_SKILL_CHANCE_YELLOW) * 10;
 
-    return sWorld.getConfig(CONFIG_UINT32_SKILL_CHANCE_ORANGE) * 10;
+    return WorldU32ConfigW2(CONFIG_UINT32_SKILL_CHANCE_ORANGE) * 10;
 }
 
 bool ShouldCraftSpellValue::SpellGivesSkillUp(uint32 spellId, Player* bot)
@@ -224,7 +225,7 @@ bool ShouldCraftSpellValue::SpellGivesSkillUp(uint32 spellId, Player* bot)
             if (maxSkillValue <= skillValue)
                 continue;
 
-            uint32 craft_skill_gain = sWorld.getConfig(CONFIG_UINT32_SKILL_GAIN_CRAFTING);
+            uint32 craft_skill_gain = WorldU32ConfigW2(CONFIG_UINT32_SKILL_GAIN_CRAFTING);
 
             if (SkillGainChance(skillValue,
                 skill->max_value,

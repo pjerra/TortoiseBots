@@ -17,6 +17,7 @@ import (
 )
 
 type Config struct {
+	Core       string
 	DBHost     string
 	DBPort     int
 	DBUser     string
@@ -82,6 +83,10 @@ func (s *Service) Authenticate(username, password string) (*SessionData, error) 
 		return nil, fmt.Errorf("username and password are required")
 	}
 
+	if s.cfg.Core == "forever" {
+		return s.authenticateForever(username, password)
+	}
+
 	hash := CalculateShaPassHash(username, password)
 
 	// Primary query: Penqle tw_logon uses account.rank. RANK is reserved on
@@ -143,6 +148,17 @@ func (s *Service) minLevel() uint32 {
 // the check, so the stream is closed rather than fed without revalidation;
 // the client reconnects and the login path decides again.
 func (s *Service) RecheckAccount(accountID uint32) error {
+	if s.cfg.Core == "forever" {
+		rank, err := s.foreverRank(accountID)
+		if err != nil {
+			return fmt.Errorf("rank check: %w", err)
+		}
+		if rank < s.minLevel() {
+			return fmt.Errorf("account %d no longer meets the minimum GM rank", accountID)
+		}
+		return nil
+	}
+
 	var rank uint32
 	if err := s.db.QueryRow(`SELECT a.rank FROM account a WHERE a.id = ? LIMIT 1`, accountID).Scan(&rank); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return fmt.Errorf("rank check: %w", err)
