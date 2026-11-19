@@ -657,6 +657,71 @@ inline void ReadLeadGround(Facts& f, float leadZ, LeadGround const& g)
     f.leadOffFloor = g.mmapLoaded && DungeonRun::LeadOffFloor(leadZ, g.mapFloorZ, g.probeFound, g.probeZ, g.inWater, onSurface);
 }
 
+// ---- the lead and the guard reads ----
+// Everything the glue reads of the lead bot itself in one plain struct (Commander.cpp:11796-11935 and ReadGuardFacts' Lead mode, :9661).
+struct LeadObs
+{
+    bool alive = true;
+    float x = 0.0f, y = 0.0f, z = 0.0f;
+    std::string name;
+    bool alliance = true;
+    bool moving = false;
+    bool casting = false;
+    bool inWater = false;
+    bool resting = false;           // a seated meal, or not standing
+    bool moveFailed = false;
+    std::string moveFailReason;
+    LeadGround ground;
+    std::uint64_t icons[8] = {};    // the group's raid marks as guid handles (0: empty)
+    bool iconsRead = false;
+    // the guard read (only in a fight, GuardRead::Lead)
+    bool guardRead = false;
+    bool isTank = false;
+    bool staying = false;
+    bool stayKnown = false;
+    float stayX = 0.0f, stayY = 0.0f, stayZ = 0.0f;
+    bool hit = false;               // a mob with the lead as its victim in melee reach
+    bool hasAttacker = false;
+    UnitFact attacker;              // the nearest such mob
+    bool reaching = false;          // the lead's own pull is still reaching its target
+    std::uint32_t reachAggro = 0;
+};
+
+inline void ReadLeadFacts(Facts& f, LeadObs const& l)
+{
+    f.leadAlive = l.alive;
+    f.leadX = l.x;
+    f.leadY = l.y;
+    f.leadZ = l.z;
+    f.carrier = l.name;
+    f.team = l.alliance ? ai::kPlanFlagAlliance : ai::kPlanFlagHorde;
+    f.leadMoving = l.moving;
+    f.leadCasting = l.casting;
+    f.leadInWater = l.inWater;
+    f.leadResting = l.resting;
+    f.leadMoveFailed = l.moveFailed;
+    f.leadMoveFailReason = l.moveFailReason;
+    ReadLeadGround(f, l.z, l.ground);
+    for (int i = 0; i < 8; ++i)
+        f.raidIcons[i] = l.icons[i];
+    f.raidIconsRead = l.iconsRead;
+    if (l.guardRead)
+    {
+        f.leadIsTank = l.isTank;
+        f.leadStaying = l.staying;
+        f.leadStayKnown = l.stayKnown;
+        f.leadStayX = l.stayX;
+        f.leadStayY = l.stayY;
+        f.leadStayZ = l.stayZ;
+        f.leadHit = l.hit;
+        f.leadHasAttacker = l.hasAttacker;
+        if (l.hasAttacker)
+            f.leadAttacker = l.attacker;
+        f.leadReaching = l.reaching;
+        f.reachAggro = l.reachAggro;
+    }
+}
+
 // ---- the fight reads, shared shape ----
 // A unit hostile to the party that is in a fight with it (the engaged read) as the world gave it; the reader turns it into a UnitFact.
 struct EngagedObs
@@ -698,6 +763,252 @@ inline UnitFact EngagedFact(EngagedObs const& e)
     u.level = e.level;
     return u;
 }
+
+// The fight reads of one tick, as plain lists: the engaged units (one entry each), the fight's own units resolved by the glue and the plan's kill_first.
+inline void ReadFightFacts(Facts& f, ai::DungeonPlan const* plan, std::vector<EngagedObs> const& engaged,
+    std::vector<DungeonRun::OwnUnitFact> const* ownFight, std::size_t* cut)
+{
+    for (EngagedObs const& e : engaged)
+    {
+        if (f.engagedUnits.size() >= kMaxListed)
+        {
+            if (cut)
+                ++*cut;
+            break;
+        }
+        f.engagedUnits.push_back(EngagedFact(e));
+    }
+    f.engagedRead = true;
+    f.staleCombat = f.engagedUnits.empty();
+    if (plan && !plan->killFirst.empty())
+        for (EngagedObs const& e : engaged)
+            if (plan->KillFirstRank(e.entry) >= 0)
+            {
+                UnitFact u = EngagedFact(e);
+                u.hostile = true;
+                f.killFirst.push_back(u);
+            }
+    if (ownFight)
+    {
+        f.ownFightUnits = *ownFight;
+        f.ownFightRead = true;
+    }
+}
+
+// ---- the step read: the dispatch of ReadRunFacts (Commander.cpp:12170-12440 and :7367-7440) as ONE function over a small world interface ----
+// The core implements StepWorld with its grid, path and line-of-sight calls (TbRunFacts.cpp); the unit test implements it with a scripted world. Which
+// reads happen on which tick, in which order and with which radius is therefore the same code in both.
+struct LeadView
+{
+    float x = 0.0f, y = 0.0f, z = 0.0f;
+    bool alive = true;
+    std::uint32_t mapId = 0;
+};
+
+// A hostile creature near the lead, for the fight-forward read: its entry, place and the distance its aggro reaches (Creature::GetAttackDistance).
+struct ForwardObs
+{
+    std::uint32_t entry = 0;
+    float x = 0.0f, y = 0.0f, z = 0.0f;
+    float aggroReachYd = 0.0f;
+};
+
+class StepWorld
+{
+public:
+    virtual ~StepWorld() = default;
+    // One navmesh path from the lead to a point (a "valid=false" answer when no query can be made).
+    virtual PathObs PathFromLead(float x, float y, float z) = 0;
+    // Line of sight from the lead to a point.
+    virtual bool LeadSees(float x, float y, float z) = 0;
+    // The living and dead creatures of one entry within `range` of the lead (the grid search), each observed.
+    virtual std::vector<CreatureObs> CreaturesOfEntry(std::uint32_t entry, float range) = 0;
+    // The boss step's own spawn; false = not known (no unit row of the plan matched it).
+    virtual bool OwnBoss(ai::PlanStep const& step, OwnBossObs& out) = 0;
+    // The matched spawns of the boss entry on the map; false = none known.
+    virtual bool BossSpawns(ai::PlanStep const& step, std::vector<BossSpawnObs>& out) = 0;
+    // Hostile creatures within `range` of the lead that may be hop-pulled around (cx,cy,cz): the world applies the budget (line of sight, at most
+    // kMaxHopPaths path queries) and leaves `pathRead` false on the rest.
+    virtual void HopCandidates(float range, float cx, float cy, float cz, std::vector<HopObs>& out) = 0;
+    // The floor under a flier at its x,y.
+    virtual bool GroundUnder(CreatureObs const& c, float stepZ, float& groundZ) = 0;
+    // Living hostile creatures within `range` of the lead (not pets), for the fight-forward read.
+    virtual void HostilesNear(float range, std::vector<ForwardObs>& out) = 0;
+    // A fact the world could not answer this tick (the "do less" value stands).
+    virtual void NotKnown(char const* /*field*/) {}
+};
+
+inline void ReadStepFacts(Facts& f, DungeonRun::Run const& run, LeadView const& lead, DungeonRun::MoveProbeCache& probe, StepWorld& w)
+{
+    using namespace DungeonRun;
+    if (!run.plan)
+        return;
+    // The lead's way back to the run's anchor: one path, only on a tick after a gather asked (Commander.cpp:12079).
+    if (run.anchorPathWanted && run.anchorKnown && lead.alive && lead.mapId == run.plan->map)
+    {
+        PathObs const path = w.PathFromLead(run.anchorX, run.anchorY, run.anchorZ);
+        f.anchorPathRead = true;
+        float const offset = Dist3(path.endX, path.endY, path.endZ, run.anchorX, run.anchorY, run.anchorZ);
+        // RemoteCommander::kMaxMoveEndOffset is 3 yd; a path that could not be read is "not reachable".
+        f.anchorReachable = path.valid && !path.noPath && (path.incomplete || offset <= 3.0f);
+    }
+    ai::PlanStep const* const step = FactStep(run);
+    if (!step)
+        return;
+    float const toPoint = Dist3(lead.x, lead.y, lead.z, step->x, step->y, step->z);
+    f.seen = toPoint <= kSeeYd;
+    bool const wantsApproach = !f.seen && run.phase != Phase::Walk && !run.regroup && lead.mapId == run.plan->map;
+    f.approachRead = f.seen || wantsApproach;
+    bool const ownStep = run.step < run.plan->steps.size() && step == &run.plan->steps[run.step];
+
+    auto approach = [&](float x, float y, float z, bool way, bool incomplete)
+    {
+        f.approachKnown = ReadApproach(f, w.PathFromLead(x, y, z), lead.x, lead.y, lead.z, x, y, z, way, incomplete);
+    };
+
+    switch (step->kind)
+    {
+        case ai::PlanStepKind::Pull:
+        case ai::PlanStepKind::Boss:
+        {
+            bool const boss = step->kind == ai::PlanStepKind::Boss;
+            if (boss && run.bossSearchWanted && ownStep)
+            {
+                std::vector<BossSpawnObs> list;
+                if (!w.BossSpawns(*step, list))
+                    w.NotKnown("bossSearchNoSpawn");
+                ReadBossSearch(f, *step, list);
+            }
+            if (!f.seen)
+            {
+                if (wantsApproach)
+                    approach(step->x, step->y, step->z, true, false);
+                break;
+            }
+            std::vector<std::uint32_t> entries = step->entries;
+            if (step->entry)
+                entries.push_back(step->entry);
+            float const range = std::min(toPoint + step->radius, 2.0f * kSeeYd);
+            float const packRange = std::min(toPoint + step->radius + (f.packClearMarginYd > 0.0f ? kSpawnPatrolSeeYd : kPatrolSeeYd), 2.0f * kSeeYd);
+            std::vector<CreatureObs> creatures;
+            for (std::uint32_t entry : entries)
+            {
+                bool const bossRange = boss && entry == step->entry;
+                float const reach = bossRange ? std::min(toPoint + step->radius + kSeeYd, 2.0f * kSeeYd) : !boss ? packRange : range;
+                for (CreatureObs const& c : w.CreaturesOfEntry(entry, reach))
+                {
+                    bool dup = false;
+                    for (CreatureObs const& have : creatures)
+                        dup = dup || have.handle == c.handle;
+                    if (!dup && creatures.size() < 4 * kMaxListed)
+                        creatures.push_back(c);
+                }
+            }
+            OwnBossObs own;
+            if (boss && !w.OwnBoss(*step, own))
+                w.NotKnown("bossOwnDead");
+            GroundFn ground = [&](CreatureObs const& o, float& z) { return w.GroundUnder(o, step->z, z); };
+            ReadStepCreatures(f, run, *step, toPoint, creatures, own, ground);
+            break;
+        }
+        case ai::PlanStepKind::Move:
+        case ai::PlanStepKind::MoveDirect:
+        {
+            float cx = step->x, cy = step->y, cz = step->z;
+            if (!f.seen)
+            {
+                if (wantsApproach)
+                {
+                    bool const direct = run.walkBack && run.walkBackDirect;
+                    approach(step->x, step->y, step->z, step->kind == ai::PlanStepKind::Move, direct);
+                    if (direct && f.approachKnown)
+                        w.NotKnown("directPathCrossesPack");    // the cross-pack test needs the live pack list: false = not known
+                }
+                if (!run.walkBack)
+                    break;
+                if (f.approachKnown)
+                {
+                    cx = f.approachX;
+                    cy = f.approachY;
+                    cz = f.approachZ;
+                }
+                else if (run.phase == Phase::Walk)
+                {
+                    cx = run.walkX;
+                    cy = run.walkY;
+                    cz = run.walkZ;
+                }
+                else
+                    break;
+            }
+            else if (step->kind == ai::PlanStepKind::Move && run.phase != Phase::Walk && !run.regroup && lead.alive &&
+                lead.mapId == run.plan->map && toPoint > kArriveYd &&
+                (run.walkBack || ForwardMoveProbeWanted(run, true, f.seen, f.anyInCombat, toPoint)))
+            {
+                bool const forward = !run.walkBack;
+                if (forward && MoveProbeHit(probe, run.step, lead.x, lead.y, step->x, step->y, step->z, run.runMs))
+                {
+                    f.leadIsland = probe.island;
+                    f.leadPathGood = probe.good;
+                }
+                else
+                {
+                    NoteLeadWay(f, w.PathFromLead(step->x, step->y, step->z), lead.x, lead.y, lead.z, step->x, step->y, step->z);
+                    if (forward)
+                        StoreMoveProbe(probe, run.step, lead.x, lead.y, step->x, step->y, step->z, run.runMs, f.leadIsland, f.leadPathGood);
+                }
+            }
+            float const toCentre = Dist3(lead.x, lead.y, lead.z, cx, cy, cz);
+            std::vector<HopObs> hops;
+            w.HopCandidates(std::min(toCentre + kHopPullYd, 2.0f * kSeeYd), cx, cy, cz, hops);
+            if (hops.size() > kMaxHopUnits)
+                hops.resize(kMaxHopUnits);
+            ReadHopUnits(f, run, cx, cy, cz, hops);
+            break;
+        }
+        default:
+            // wait_clear, wait_object, hold, ritual, gossip, loot, open, use_item, use_on: not read (the plan has none for the Ragefire Chasm run); such a
+            // step reads as "nothing there" and the policy waits its own timeout and pauses.
+            w.NotKnown("stepKind");
+            break;
+    }
+    // The way-reads the policy asked for last tick (fight forward, replay shortcut): one path each (Commander.cpp:7367).
+    std::size_t const npos = static_cast<std::size_t>(-1);
+    if (run.fightForwardWanted != npos && run.fightForwardWanted < run.plan->steps.size() && lead.alive)
+    {
+        ai::PlanStep const& pull = run.plan->steps[run.fightForwardWanted];
+        PathObs const way = w.PathFromLead(pull.x, pull.y, pull.z);
+        f.forwardRead = true;
+        f.forwardFor = run.fightForwardWanted;
+        f.forwardPathOk = DirectNav(way, lead.x, lead.y, lead.z, pull.x, pull.y, pull.z);
+        f.forwardLos = w.LeadSees(pull.x, pull.y, pull.z + 1.0f);
+        std::vector<ForwardObs> around;
+        w.HostilesNear(kFightForwardYd + 40.0f, around);
+        for (ForwardObs const& u : around)
+        {
+            bool own = false;
+            for (std::uint32_t entry : pull.entries)
+                own = own || (u.entry == entry && Dist3(u.x, u.y, u.z, pull.x, pull.y, pull.z) <= pull.radius);
+            own = own || (pull.entry && u.entry == pull.entry);
+            if (!own && way.points.size() >= 2)
+                for (std::size_t i = 1; i < way.points.size() && !f.forwardHostileNear; ++i)
+                    f.forwardHostileNear = SegmentDistance(way.points[i - 1], way.points[i], u.x, u.y, u.z) <= u.aggroReachYd + kForwardAggroMarginYd;
+            for (std::size_t k = run.step; k < run.fightForwardWanted && !f.forwardHopAlive; ++k)
+            {
+                ai::PlanStep const& p = run.plan->steps[k];
+                f.forwardHopAlive = !own && Dist3(u.x, u.y, u.z, p.x, p.y, p.z) <= kHopPullYd;
+            }
+        }
+    }
+    if (run.shortcutWanted != npos && run.shortcutWanted < run.plan->steps.size() && lead.alive)
+    {
+        ai::PlanStep const& p = run.plan->steps[run.shortcutWanted];
+        f.shortcutRead = true;
+        f.shortcutFor = run.shortcutWanted;
+        f.shortcutOk = DirectNav(w.PathFromLead(p.x, p.y, p.z), lead.x, lead.y, lead.z, p.x, p.y, p.z);
+    }
+}
+
 }
 }
 }

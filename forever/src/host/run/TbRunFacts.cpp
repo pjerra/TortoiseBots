@@ -34,6 +34,7 @@
 #include "TbBotMgr.h"
 #include "compat/TbCompat_Unit.h"
 #include "playerbot/PlayerbotAI.h"
+#include "playerbot/MoveFailNotePolicy.h"
 #include "playerbot/PlayerbotAIConfig.h"
 #include "playerbot/ServerFacade.h"
 #include "playerbot/WorldPosition.h"
@@ -98,11 +99,12 @@ struct Ctx
     FactsReport& R() { return report ? *report : local; }
     std::unordered_set<ObjectGuid> partyGuids;      // the bots and their pets
     std::vector<Player*> bots;                      // living bots in the world on the lead's map (lead first)
+    fx::LeadObs lo;                                 // the lead's own facts, written by ReadLead and ReadGuard, applied once
 
     uint64 H(ObjectGuid guid) { return state->handles.Handle(guid, nowMs); }
 };
 
-void NotKnown(Ctx& c, char const* field)
+void NotKnownField(Ctx& c, char const* field)
 {
     if (c.report)
         c.report->notKnown.push_back(field);
@@ -385,17 +387,29 @@ void ReadEngaged(Ctx& c, Facts& f)
                 AddEngaged(c, pet->GetVictim(), seen, obs, victims);
             }
     }
-    for (fx::EngagedObs const& e : obs)
+    std::vector<DungeonRun::OwnUnitFact> ownFight;
+    bool ownFightRead = false;
+    ai::DungeonPlan const* plan = c.rec->run.plan;
+    // The fight's own units, one object lookup each (Commander.cpp:8992).
+    if (c.map && plan && c.map->GetId() == plan->map)
     {
-        if (f.engagedUnits.size() >= fx::kMaxListed)
+        for (std::uint64_t handle : c.rec->run.ownFightGuids)
         {
-            ++c.R().listsCut;
-            break;
+            DungeonRun::OwnUnitFact fact;
+            fact.guid = handle;
+            ObjectGuid guid;
+            if (c.state->handles.Resolve(handle, guid))
+            {
+                Unit* unit = ObjectAccessor::GetUnit(*c.lead, guid);
+                fact.state = !unit ? DungeonRun::OwnUnitState::Gone : !unit->IsAlive() ? DungeonRun::OwnUnitState::Dead : DungeonRun::OwnUnitState::Alive;
+            }
+            ownFight.push_back(fact);        // an unresolved handle stays Unknown: it never ends a step
         }
-        f.engagedUnits.push_back(fx::EngagedFact(e));
+        ownFightRead = true;
     }
-    f.engagedRead = true;
-    f.staleCombat = f.engagedUnits.empty();
+    size_t cut = 0;
+    fx::ReadFightFacts(f, plan, obs, ownFightRead ? &ownFight : nullptr, &cut);
+    c.R().listsCut += uint32(cut);
     // The members' own engaged lists (CombatDropTick): in combat only, the units on the member's and its pet's attacker sets.
     for (MemberFact& m : f.members)
     {
@@ -425,34 +439,6 @@ void ReadEngaged(Ctx& c, Facts& f)
                 m.engaged.push_back(fx::EngagedFact(e));
         m.engagedRead = true;
     }
-    // The plan's kill_first units among the engaged ones (the one fact a kill_first plan needs; the grid read of a totem key is not ported).
-    ai::DungeonPlan const* plan = c.rec->run.plan;
-    if (plan && !plan->killFirst.empty())
-        for (fx::EngagedObs const& e : obs)
-            if (plan->KillFirstRank(e.entry) >= 0)
-            {
-                UnitFact u = fx::EngagedFact(e);
-                u.hostile = true;
-                f.killFirst.push_back(u);
-            }
-    // The fight's own units, one object lookup each (Commander.cpp:8992).
-    Map* const map = c.map;
-    if (map && plan && map->GetId() == plan->map)
-    {
-        for (std::uint64_t handle : c.rec->run.ownFightGuids)
-        {
-            DungeonRun::OwnUnitFact fact;
-            fact.guid = handle;
-            ObjectGuid guid;
-            if (c.state->handles.Resolve(handle, guid))
-            {
-                Unit* unit = ObjectAccessor::GetUnit(*c.lead, guid);
-                fact.state = !unit ? DungeonRun::OwnUnitState::Gone : !unit->IsAlive() ? DungeonRun::OwnUnitState::Dead : DungeonRun::OwnUnitState::Alive;
-            }
-            f.ownFightUnits.push_back(fact);        // an unresolved handle stays Unknown: it never ends a step
-        }
-        f.ownFightRead = true;
-    }
 }
 
 // ---- the guard reads (Commander.cpp:9522 ReadReachFacts, :9661 ReadGuardFacts, GuardRead::Lead only: a bot-led party has no raid) ----
@@ -462,7 +448,7 @@ void ReadGuard(Ctx& c, Facts& f)
     PlayerbotAI* leadAi = PlayerbotAIStorage::Instance().GetAI(lead);
     if (!leadAi || !lead->IsInWorld())
     {
-        NotKnown(c, "leadIsTank");
+        NotKnownField(c, "leadIsTank");
         return;
     }
     if (lead->IsAlive())
@@ -484,27 +470,28 @@ void ReadGuard(Ctx& c, Facts& f)
                     Unit* victim = attacker->GetVictim();
                     if (victim && c.partyGuids.count(victim->GetGUID()) && attacker != target &&
                         DungeonRun::ReachAggroCounts(attacker->GetDistance(target)) && seen.insert(attacker->GetGUID()).second)
-                        ++f.reachAggro;
+                        ++c.lo.reachAggro;
                 }
             }
             Unit* victim = target->GetVictim();
-            f.leadReaching = !(victim && c.partyGuids.count(victim->GetGUID()));
+            c.lo.reaching = !(victim && c.partyGuids.count(victim->GetGUID()));
         }
-        f.leadIsTank = PlayerbotAI::IsTank(lead);
+        c.lo.isTank = PlayerbotAI::IsTank(lead);
     }
-    if (DungeonRun::GuardReadMode(lead->IsAlive(), f.leadIsTank, false, false) != DungeonRun::GuardRead::Lead)
+    c.lo.guardRead = true;
+    if (DungeonRun::GuardReadMode(lead->IsAlive(), c.lo.isTank, false, false) != DungeonRun::GuardRead::Lead)
         return;
-    f.leadStaying = leadAi->HasStrategy("stay", BotState::BOT_STATE_COMBAT) || leadAi->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT);
-    if (f.leadStaying)
+    c.lo.staying = leadAi->HasStrategy("stay", BotState::BOT_STATE_COMBAT) || leadAi->HasStrategy("stay", BotState::BOT_STATE_NON_COMBAT);
+    if (c.lo.staying)
     {
         ai::PositionMap& posMap = leadAi->GetAiObjectContext()->GetValue<ai::PositionMap&>("position")->Get();
         auto const stay = posMap.find("stay");
         if (stay != posMap.end() && stay->second.isSet() && stay->second.mapId == lead->GetMapId())
         {
-            f.leadStayKnown = true;
-            f.leadStayX = stay->second.x;
-            f.leadStayY = stay->second.y;
-            f.leadStayZ = stay->second.z;
+            c.lo.stayKnown = true;
+            c.lo.stayX = stay->second.x;
+            c.lo.stayY = stay->second.y;
+            c.lo.stayZ = stay->second.z;
         }
     }
     Unit* nearestHit = nullptr;
@@ -512,7 +499,7 @@ void ReadGuard(Ctx& c, Facts& f)
     for (Unit* attacker : lead->getAttackers())
         if (attacker && attacker->IsAlive() && attacker->GetVictim() == lead && attacker->CanReachWithMeleeAutoAttack(lead))
         {
-            f.leadHit = true;
+            c.lo.hit = true;
             float const yd = lead->GetDistance(attacker);
             if (attacker->IsCreature() && !sServerFacade.IsFriendlyTo(attacker, lead) && (!nearestHit || yd < nearestHitYd))
             {
@@ -522,7 +509,7 @@ void ReadGuard(Ctx& c, Facts& f)
         }
     if (nearestHit)
     {
-        UnitFact& u = f.leadAttacker;
+        UnitFact& u = c.lo.attacker;
         u.guid = c.H(nearestHit->GetGUID());
         u.entry = nearestHit->GetEntry();
         u.distLead = nearestHitYd;
@@ -530,7 +517,7 @@ void ReadGuard(Ctx& c, Facts& f)
         u.engaged = true;
         u.hitting = true;
         u.attackable = lead->IsValidAttackTarget(nearestHit);
-        f.leadHasAttacker = true;
+        c.lo.hasAttacker = true;
     }
     // Living mobs whose victim is a party bot (or pet) other than the lead within kGuardYd of it.
     std::unordered_set<ObjectGuid> partyVictims, seen;
@@ -594,7 +581,7 @@ void ReadGuard(Ctx& c, Facts& f)
     if (Pet* pet = lead->GetPet())
         if (pet->IsAlive() && pet->IsInWorld())
             addAttackers(pet, false, true, false);
-    NotKnown(c, "partyAttackers.campIdle");
+    NotKnownField(c, "partyAttackers.campIdle");
 }
 
 // ---- the lead's own state ----
@@ -602,29 +589,30 @@ void ReadLead(Ctx& c, Facts& f)
 {
     Player* const lead = c.lead;
     Map* const map = c.map;
-    f.leadAlive = lead->IsAlive();
-    f.leadX = lead->GetPositionX();
-    f.leadY = lead->GetPositionY();
-    f.leadZ = lead->GetPositionZ();
-    f.carrier = lead->GetName();
-    f.team = lead->GetTeam() == ALLIANCE ? ai::kPlanFlagAlliance : ai::kPlanFlagHorde;
-    f.leadMoving = IsMovingCompat(lead);
-    f.leadCasting = lead->IsNonMeleeSpellCast(true, false, true);
-    f.leadInWater = lead->IsInWater() || IsUnderwaterCompat(lead);
+    fx::LeadObs& lo = c.lo;
+    lo.alive = lead->IsAlive();
+    lo.x = lead->GetPositionX();
+    lo.y = lead->GetPositionY();
+    lo.z = lead->GetPositionZ();
+    lo.name = lead->GetName();
+    lo.alliance = lead->GetTeam() == ALLIANCE;
+    lo.moving = IsMovingCompat(lead);
+    lo.casting = lead->IsNonMeleeSpellCast(true, false, true);
+    lo.inWater = lead->IsInWater() || IsUnderwaterCompat(lead);
     bool meal = false;
     if (PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(lead))
     {
         meal = ai->HasSeatedMeal(false) || ai->HasSeatedMeal(true);
         ai::LastMovement& lastMove = ai->GetAiObjectContext()->GetValue<ai::LastMovement&>("last movement")->Get();
-        f.leadMoveFailed = ai::PositionMoveFailing(lastMove.positionMoveFailMs, WorldTimer::getMSTime());
-        f.leadMoveFailReason = ai::MoveFailReasonName(lastMove.moveFailReason);
+        lo.moveFailed = ai::PositionMoveFailing(lastMove.positionMoveFailMs, WorldTimer::getMSTime());
+        lo.moveFailReason = ai::MoveFailReasonName(lastMove.moveFailReason);
     }
     else
-        NotKnown(c, "leadMoveFailed");
-    NotKnown(c, "leadStayWalkResting");
-    f.leadResting = meal || lead->GetStandState() != UNIT_STAND_STATE_STAND;
+        NotKnownField(c, "leadMoveFailed");
+    NotKnownField(c, "leadStayWalkResting");
+    lo.resting = meal || lead->GetStandState() != UNIT_STAND_STATE_STAND;
     // The floor under the lead (Commander.cpp:11796): the map's height read; no navmesh feet probe on ForeverCore (leadFloorZ is the height read).
-    fx::LeadGround g;
+    fx::LeadGround& g = lo.ground;
     float const leadZ = lead->GetPositionZ();
     g.mapFloorZ = leadZ;
     if (map)
@@ -639,24 +627,23 @@ void ReadLead(Ctx& c, Facts& f)
         g.mmapLoaded = feet.isMmapLoaded(lead->GetInstanceId());
     }
     g.onTransport = lead->GetTransport() != nullptr;
-    g.inWater = f.leadInWater;
-    fx::ReadLeadGround(f, leadZ, g);
+    g.inWater = lo.inWater;
     // The group's raid icons (Group.h:362): a mark is a handle.
     if (Group* group = lead->GetGroup())
     {
         for (uint8 i = 0; i < 8; ++i)
         {
             ObjectGuid const icon = group->GetTargetIcon(i);
-            f.raidIcons[i] = icon.IsEmpty() ? 0 : c.H(icon);
+            lo.icons[i] = icon.IsEmpty() ? 0 : c.H(icon);
         }
-        f.raidIconsRead = true;
+        lo.iconsRead = true;
     }
     // Terrain read: any point in or under liquid is refused; a map or terrain that cannot be found refuses the point too (do less).
     uint32 const mapId = lead->GetMapId();
     uint32 const instanceId = lead->GetInstanceId();
     f.pointLiquid = [mapId, instanceId](float x, float y, float z)
     {
-        Map* const m = sMapMgr->FindMap(mapId, instanceId);
+        Map* const m = sMapMgr.FindMap(mapId, instanceId);
         TerrainInfo const* terrain = m ? m->GetTerrain() : nullptr;
         if (!terrain)
             return true;
@@ -709,280 +696,182 @@ fx::BossSpawnObs ObserveSpawn(Ctx& c, uint32 spawnId, bool own)
     else
     {
         o.respawnPending = c.map->GetCreatureRespawnTime(spawnId) > GameTime::GetGameTime();
-        if (CreatureData const* data = sObjectMgr->GetCreatureData(spawnId))
+        if (CreatureData const* data = sObjectMgr.GetCreatureData(spawnId))
             o.gridLoaded = c.map->IsGridLoaded(data->spawnPoint.GetPositionX(), data->spawnPoint.GetPositionY());
     }
     return o;
 }
 
-void ReadStep(Ctx& c, Facts& f)
+// The core's StepWorld: the grid, path and sight calls behind TbRunFactsPure.h's ReadStepFacts. All counters go to the report.
+class CoreStepWorld : public fx::StepWorld
 {
-    Player* const lead = c.lead;
-    DungeonRun::Run const& run = c.rec->run;
-    ai::PlanStep const* const step = DungeonRun::FactStep(run);
-    if (!step || !lead->IsInWorld() || !c.map)
-        return;
-    c.R().stepKind = ai::PlanStepKindName(step->kind);
-    float const toPoint = DistanceTo(lead, step->x, step->y, step->z);
-    f.seen = toPoint <= DungeonRun::kSeeYd;
-    bool const wantsApproach = !f.seen && run.phase != DungeonRun::Phase::Walk && !run.regroup && lead->GetMapId() == run.plan->map;
-    f.approachRead = f.seen || wantsApproach;
-    bool const ownStep = run.step < run.plan->steps.size() && step == &run.plan->steps[run.step];
+public:
+    CoreStepWorld(Ctx& c, Facts const& f) : _c(c), _f(f) {}
 
-    auto approach = [&](float x, float y, float z, bool way, bool incomplete)
-    {
-        fx::PathObs const path = QueryPath(c, lead, x, y, z);
-        f.approachKnown = fx::ReadApproach(f, path, f.leadX, f.leadY, f.leadZ, x, y, z, way, incomplete);
-    };
+    fx::PathObs PathFromLead(float x, float y, float z) override { return QueryPath(_c, _c.lead, x, y, z); }
 
-    switch (step->kind)
+    bool LeadSees(float x, float y, float z) override
     {
-        case ai::PlanStepKind::Pull:
-        case ai::PlanStepKind::Boss:
+        ++_c.R().losQueries;
+        return _c.lead->IsWithinLOS(x, y, z);
+    }
+
+    std::vector<fx::CreatureObs> CreaturesOfEntry(std::uint32_t entry, float range) override
+    {
+        std::vector<fx::CreatureObs> out;
+        std::list<Creature*> found;
+        ++_c.R().gridScans;
+        _c.lead->GetCreatureListWithEntryInGrid(found, entry, range);       // Object.h:500, the same call as the Turtle glue
+        for (Creature* creature : found)
         {
-            bool const boss = step->kind == ai::PlanStepKind::Boss;
-            StepSpawns spawns;
-            if (boss)
-                spawns = SpawnsOfStep(c, *step);
-            if (boss && run.bossSearchWanted && ownStep)
+            if (out.size() >= 4 * fx::kMaxListed)
             {
-                std::vector<fx::BossSpawnObs> list;
-                for (uint32 spawnId : spawns.all)
-                    list.push_back(ObserveSpawn(c, spawnId, spawnId == spawns.own));
-                if (list.empty())
-                    NotKnown(c, "bossSearchNoSpawn");
-                fx::ReadBossSearch(f, *step, list);
-            }
-            if (!f.seen)
-            {
-                if (wantsApproach)
-                    approach(step->x, step->y, step->z, true, false);
+                ++_c.R().listsCut;
                 break;
             }
-            std::vector<uint32> entries = step->entries;
-            if (step->entry)
-                entries.push_back(step->entry);
-            float const range = std::min(toPoint + step->radius, 2.0f * DungeonRun::kSeeYd);
-            bool const pullStep = !boss;
-            float const packRange = std::min(toPoint + step->radius + (f.packClearMarginYd > 0.0f ? DungeonRun::kSpawnPatrolSeeYd : DungeonRun::kPatrolSeeYd),
-                2.0f * DungeonRun::kSeeYd);
-            std::vector<fx::CreatureObs> creatures;
-            std::unordered_set<ObjectGuid> seen;
-            for (uint32 entry : entries)
-            {
-                bool const bossRange = boss && entry == step->entry;
-                std::list<Creature*> found;
-                ++c.R().gridScans;
-                lead->GetCreatureListWithEntryInGrid(found, entry,
-                    bossRange ? std::min(toPoint + step->radius + DungeonRun::kSeeYd, 2.0f * DungeonRun::kSeeYd) : pullStep ? packRange : range);
-                for (Creature* creature : found)
-                {
-                    if (!seen.insert(creature->GetGUID()).second)
-                        continue;
-                    if (creatures.size() >= 4 * fx::kMaxListed)
-                    {
-                        ++c.R().listsCut;
-                        break;
-                    }
-                    ++c.R().creaturesSeen;
-                    creatures.push_back(ObserveCreature(c, creature));
-                }
-            }
-            fx::OwnBossObs own;
-            if (boss && spawns.own)
-            {
-                fx::BossSpawnObs const o = ObserveSpawn(c, spawns.own, true);
-                own.known = true;
-                own.loaded = o.loaded;
-                own.alive = o.alive;
-                own.respawnPending = o.respawnPending;
-                own.entry = o.entry;
-                own.handle = o.handle;
-                own.x = o.x;
-                own.y = o.y;
-                own.z = o.z;
-                if (CreatureData const* data = sObjectMgr->GetCreatureData(spawns.own))
-                {
-                    own.rowX = data->spawnPoint.GetPositionX();
-                    own.rowY = data->spawnPoint.GetPositionY();
-                }
-            }
-            else if (boss)
-                NotKnown(c, "bossOwnDead");
-            fx::GroundFn ground = [&](fx::CreatureObs const& o, float& groundZ)
-            {
-                ++c.R().heightQueries;
-                float const g = GetHeightCompat(c.map, o.x, o.y, o.z, true, std::fabs(o.z - step->z) + DungeonRun::kPackResidueZYd + 2.0f);
-                groundZ = g;
-                return g > INVALID_HEIGHT;
-            };
-            fx::ReadStepCreatures(f, run, *step, toPoint, creatures, own, ground);
-            break;
+            ++_c.R().creaturesSeen;
+            out.push_back(ObserveCreature(_c, creature));
         }
-        case ai::PlanStepKind::Move:
-        case ai::PlanStepKind::MoveDirect:
-        {
-            float cx = step->x, cy = step->y, cz = step->z;
-            if (!f.seen)
-            {
-                if (wantsApproach)
-                {
-                    bool const direct = run.walkBack && run.walkBackDirect;
-                    approach(step->x, step->y, step->z, step->kind == ai::PlanStepKind::Move, direct);
-                    if (direct && f.approachKnown)
-                        NotKnown(c, "directPathCrossesPack");   // the cross-pack test needs the live pack list: false = "not known"
-                }
-                if (!run.walkBack)
-                    break;
-                if (f.approachKnown)
-                {
-                    cx = f.approachX;
-                    cy = f.approachY;
-                    cz = f.approachZ;
-                }
-                else if (run.phase == DungeonRun::Phase::Walk)
-                {
-                    cx = run.walkX;
-                    cy = run.walkY;
-                    cz = run.walkZ;
-                }
-                else
-                    break;
-            }
-            else if (step->kind == ai::PlanStepKind::Move && run.phase != DungeonRun::Phase::Walk && !run.regroup && lead->IsAlive() &&
-                lead->GetMapId() == run.plan->map && toPoint > DungeonRun::kArriveYd &&
-                (run.walkBack || DungeonRun::ForwardMoveProbeWanted(run, true, f.seen, f.anyInCombat, toPoint)))
-            {
-                bool const forward = !run.walkBack;
-                if (forward && DungeonRun::MoveProbeHit(c.state->moveProbe, run.step, lead->GetPositionX(), lead->GetPositionY(), step->x, step->y,
-                        step->z, run.runMs))
-                {
-                    f.leadIsland = c.state->moveProbe.island;
-                    f.leadPathGood = c.state->moveProbe.good;
-                }
-                else
-                {
-                    fx::NoteLeadWay(f, QueryPath(c, lead, step->x, step->y, step->z), f.leadX, f.leadY, f.leadZ, step->x, step->y, step->z);
-                    if (forward)
-                        DungeonRun::StoreMoveProbe(c.state->moveProbe, run.step, lead->GetPositionX(), lead->GetPositionY(), step->x, step->y, step->z,
-                            run.runMs, f.leadIsland, f.leadPathGood);
-                }
-            }
-            // Hop units: living hostile creatures within kHopPullYd of the centre, in sight, with a path read (at most kMaxHopPaths).
-            float const toCentre = DistanceTo(lead, cx, cy, cz);
-            float const around = std::min(toCentre + DungeonRun::kHopPullYd, 2.0f * DungeonRun::kSeeYd);
-            std::list<Unit*> hostiles;
-            Trinity::AnyUnfriendlyUnitInObjectRangeCheck check(lead, lead, around);
-            Trinity::UnitListSearcher<Trinity::AnyUnfriendlyUnitInObjectRangeCheck> searcher(lead, hostiles, check);
-            ++c.R().gridScans;
-            Cell::VisitAllObjects(lead, searcher, around);
-            std::vector<fx::HopObs> hops;
-            size_t paths = 0;
-            for (Unit* unit : hostiles)
-            {
-                if (!unit->IsCreature() || !unit->GetOwnerGUID().IsEmpty() || !lead->IsHostileTo(unit) || !unit->IsAlive())
-                    continue;
-                if (DistanceTo(unit, cx, cy, cz) > DungeonRun::kHopPullYd || unit->IsInCombat())
-                    continue;
-                if (hops.size() >= fx::kMaxHopUnits)
-                {
-                    ++c.R().listsCut;
-                    break;
-                }
-                fx::HopObs h;
-                h.handle = c.H(unit->GetGUID());
-                h.entry = unit->GetEntry();
-                h.x = unit->GetPositionX();
-                h.y = unit->GetPositionY();
-                h.z = unit->GetPositionZ();
-                h.distLead = lead->GetDistance(unit);
-                h.stealthed = IsStealthed(unit);
-                h.evading = static_cast<Creature*>(unit)->IsInEvadeMode();
-                h.attackable = !c.judge || c.judge->IsValidAttackTarget(unit);
-                if (!h.stealthed && !h.evading && h.attackable)
-                {
-                    ++c.R().losQueries;
-                    h.los = IsWithinLOSInMapCompat(lead, unit);
-                    if (h.los && paths < fx::kMaxHopPaths)
-                    {
-                        ++paths;
-                        fx::PathObs const p = QueryPath(c, lead, h.x, h.y, h.z);
-                        h.pathRead = p.valid;
-                        h.noPath = p.noPath;
-                        h.incomplete = p.incomplete;
-                        h.shortcut = p.shortcut;
-                        h.notUsingPath = p.notUsingPath;
-                        h.endX = p.endX;
-                        h.endY = p.endY;
-                        h.endZ = p.endZ;
-                        h.pathYd = p.lengthYd;
-                        h.straightYd = ai::PlanDistance(f.leadX, f.leadY, f.leadZ, h.x, h.y, h.z);
-                        if (p.points.size() < 2)
-                            h.pathRead = false;
-                    }
-                }
-                hops.push_back(h);
-            }
-            fx::ReadHopUnits(f, run, cx, cy, cz, hops);
-            break;
-        }
-        default:
-            // Every other kind (wait_clear, wait_object, hold, ritual, gossip, loot, open, use_item, use_on): not read; the plan has none for the
-            // Ragefire Chasm run, and a step of such a kind reads as "nothing there" (the policy then waits its own timeout and pauses).
-            NotKnown(c, "stepKind");
-            break;
+        return out;
     }
-    // The way-reads the policy asked for last tick (fight forward, replay shortcut): one path each.
-    std::size_t const npos = static_cast<std::size_t>(-1);
-    if (run.fightForwardWanted != npos && run.fightForwardWanted < run.plan->steps.size() && lead->IsAlive())
+
+    bool OwnBoss(ai::PlanStep const& step, fx::OwnBossObs& out) override
     {
-        ai::PlanStep const& pull = run.plan->steps[run.fightForwardWanted];
-        fx::PathObs const way = QueryPath(c, lead, pull.x, pull.y, pull.z);
-        f.forwardRead = true;
-        f.forwardFor = run.fightForwardWanted;
-        f.forwardPathOk = fx::DirectNav(way, f.leadX, f.leadY, f.leadZ, pull.x, pull.y, pull.z);
-        ++c.R().losQueries;
-        f.forwardLos = lead->IsWithinLOS(pull.x, pull.y, pull.z + 1.0f);
+        StepSpawns const spawns = SpawnsOfStep(_c, step);
+        if (!spawns.own)
+            return false;
+        fx::BossSpawnObs const o = ObserveSpawn(_c, spawns.own, true);
+        out.known = true;
+        out.loaded = o.loaded;
+        out.alive = o.alive;
+        out.respawnPending = o.respawnPending;
+        out.entry = o.entry;
+        out.handle = o.handle;
+        out.x = o.x;
+        out.y = o.y;
+        out.z = o.z;
+        if (CreatureData const* data = sObjectMgr.GetCreatureData(spawns.own))
+        {
+            out.rowX = data->spawnPoint.GetPositionX();
+            out.rowY = data->spawnPoint.GetPositionY();
+        }
+        return true;
+    }
+
+    bool BossSpawns(ai::PlanStep const& step, std::vector<fx::BossSpawnObs>& out) override
+    {
+        StepSpawns const spawns = SpawnsOfStep(_c, step);
+        for (uint32 spawnId : spawns.all)
+            out.push_back(ObserveSpawn(_c, spawnId, spawnId == spawns.own));
+        return !out.empty();
+    }
+
+    void HopCandidates(float range, float, float, float, std::vector<fx::HopObs>& out) override
+    {
+        Player* const lead = _c.lead;
+        std::list<Unit*> hostiles;
+        Trinity::AnyUnfriendlyUnitInObjectRangeCheck check(lead, lead, range);
+        Trinity::UnitListSearcher<Trinity::AnyUnfriendlyUnitInObjectRangeCheck> searcher(lead, hostiles, check);
+        ++_c.R().gridScans;
+        Cell::VisitAllObjects(lead, searcher, range);       // Cell.h / GridNotifiers.h:1190, the same search as the Turtle glue
+        size_t paths = 0;
+        for (Unit* unit : hostiles)
+        {
+            if (!unit->IsCreature() || !unit->GetOwnerGUID().IsEmpty() || !lead->IsHostileTo(unit) || !unit->IsAlive() || unit->IsInCombat())
+                continue;
+            if (out.size() >= fx::kMaxHopUnits)
+            {
+                ++_c.R().listsCut;
+                break;
+            }
+            fx::HopObs h;
+            h.handle = _c.H(unit->GetGUID());
+            h.entry = unit->GetEntry();
+            h.x = unit->GetPositionX();
+            h.y = unit->GetPositionY();
+            h.z = unit->GetPositionZ();
+            h.distLead = lead->GetDistance(unit);
+            h.stealthed = IsStealthed(unit);
+            h.evading = static_cast<Creature*>(unit)->IsInEvadeMode();
+            h.attackable = !_c.judge || _c.judge->IsValidAttackTarget(unit);
+            if (!h.stealthed && !h.evading && h.attackable)
+            {
+                ++_c.R().losQueries;
+                h.los = IsWithinLOSInMapCompat(lead, unit);
+                if (h.los && paths < fx::kMaxHopPaths)
+                {
+                    ++paths;
+                    fx::PathObs const p = QueryPath(_c, lead, h.x, h.y, h.z);
+                    h.pathRead = p.valid && p.points.size() >= 2;
+                    h.noPath = p.noPath;
+                    h.incomplete = p.incomplete;
+                    h.shortcut = p.shortcut;
+                    h.notUsingPath = p.notUsingPath;
+                    h.endX = p.endX;
+                    h.endY = p.endY;
+                    h.endZ = p.endZ;
+                    h.pathYd = p.lengthYd;
+                    h.straightYd = ai::PlanDistance(lead->GetPositionX(), lead->GetPositionY(), lead->GetPositionZ(), h.x, h.y, h.z);
+                }
+            }
+            out.push_back(h);
+        }
+    }
+
+    bool GroundUnder(fx::CreatureObs const& o, float stepZ, float& groundZ) override
+    {
+        ++_c.R().heightQueries;
+        groundZ = GetHeightCompat(_c.map, o.x, o.y, o.z, true, std::fabs(o.z - stepZ) + DungeonRun::kPackResidueZYd + 2.0f);
+        return groundZ > INVALID_HEIGHT;
+    }
+
+    void HostilesNear(float range, std::vector<fx::ForwardObs>& out) override
+    {
+        Player* const lead = _c.lead;
         std::list<Unit*> around;
-        Trinity::AnyUnfriendlyUnitInObjectRangeCheck check(lead, lead, DungeonRun::kFightForwardYd + 40.0f);
+        Trinity::AnyUnfriendlyUnitInObjectRangeCheck check(lead, lead, range);
         Trinity::UnitListSearcher<Trinity::AnyUnfriendlyUnitInObjectRangeCheck> searcher(lead, around, check);
-        ++c.R().gridScans;
-        Cell::VisitAllObjects(lead, searcher, DungeonRun::kFightForwardYd + 40.0f);
-        size_t examined = 0;
+        ++_c.R().gridScans;
+        Cell::VisitAllObjects(lead, searcher, range);
         for (Unit* unit : around)
         {
             if (!unit->IsCreature() || !unit->IsAlive() || !lead->IsHostileTo(unit) || !unit->GetOwnerGUID().IsEmpty())
                 continue;
-            if (++examined > 4 * fx::kMaxListed)
+            if (out.size() >= 4 * fx::kMaxListed)
             {
-                ++c.R().listsCut;
+                ++_c.R().listsCut;
                 break;
             }
-            float const ux = unit->GetPositionX(), uy = unit->GetPositionY(), uz = unit->GetPositionZ();
-            bool own = false;
-            for (std::uint32_t entry : pull.entries)
-                own = own || (unit->GetEntry() == entry && ai::PlanDistance(ux, uy, uz, pull.x, pull.y, pull.z) <= pull.radius);
-            own = own || (pull.entry && unit->GetEntry() == pull.entry);
-            if (!own && way.points.size() >= 2)
-            {
-                float const reach = static_cast<Creature*>(unit)->GetAttackDistance(lead) + DungeonRun::kForwardAggroMarginYd;
-                for (size_t i = 1; i < way.points.size() && !f.forwardHostileNear; ++i)
-                    f.forwardHostileNear = DungeonRun::SegmentDistance(way.points[i - 1], way.points[i], ux, uy, uz) <= reach;
-            }
-            for (std::size_t k = run.step; k < run.fightForwardWanted && !f.forwardHopAlive; ++k)
-            {
-                ai::PlanStep const& p = run.plan->steps[k];
-                f.forwardHopAlive = !own && ai::PlanDistance(ux, uy, uz, p.x, p.y, p.z) <= DungeonRun::kHopPullYd;
-            }
+            fx::ForwardObs o;
+            o.entry = unit->GetEntry();
+            o.x = unit->GetPositionX();
+            o.y = unit->GetPositionY();
+            o.z = unit->GetPositionZ();
+            o.aggroReachYd = static_cast<Creature*>(unit)->GetAttackDistance(lead);
+            out.push_back(o);
         }
     }
-    if (run.shortcutWanted != npos && run.shortcutWanted < run.plan->steps.size() && lead->IsAlive())
-    {
-        ai::PlanStep const& p = run.plan->steps[run.shortcutWanted];
-        f.shortcutRead = true;
-        f.shortcutFor = run.shortcutWanted;
-        f.shortcutOk = fx::DirectNav(QueryPath(c, lead, p.x, p.y, p.z), f.leadX, f.leadY, f.leadZ, p.x, p.y, p.z);
-    }
+
+    void NotKnown(char const* field) override { NotKnownField(_c, field); }
+
+private:
+    Ctx& _c;
+    Facts const& _f;
+};
+
+void ReadStep(Ctx& c, Facts& f)
+{
+    DungeonRun::Run const& run = c.rec->run;
+    if (DungeonRun::FactStep(run))
+        c.R().stepKind = ai::PlanStepKindName(DungeonRun::FactStep(run)->kind);
+    fx::LeadView lead;
+    lead.x = c.lead->GetPositionX();
+    lead.y = c.lead->GetPositionY();
+    lead.z = c.lead->GetPositionZ();
+    lead.alive = c.lead->IsAlive();
+    lead.mapId = c.lead->GetMapId();
+    CoreStepWorld world(c, f);
+    fx::ReadStepFacts(f, run, lead, c.state->moveProbe, world);
 }
 }   // namespace
 
@@ -1028,22 +917,14 @@ bool ReadFacts(RunRec& rec, uint32 nowMs, DungeonRun::Facts& f, FactsReport* rep
     ReadParty(c, f, playerInGroup);
     ReadLead(c, f);
     if (f.anyInCombat)
-        ReadEngaged(c, f);
-    if (f.anyInCombat)
-        ReadGuard(c, f);
-    // The lead's way back to the run's anchor (one path, only on a tick after a gather asked).
-    DungeonRun::Run const& run = rec.run;
-    if (run.anchorPathWanted && run.anchorKnown && c.lead->IsAlive() && c.lead->GetMapId() == run.plan->map)
     {
-        fx::PathObs const path = QueryPath(c, c.lead, run.anchorX, run.anchorY, run.anchorZ);
-        f.anchorPathRead = true;
-        // Reachable: no NOPATH, and (partial or ending within kMaxMoveEndOffset of the anchor). A path that could not be read: not reachable.
-        float const offset = ai::PlanDistance(path.endX, path.endY, path.endZ, run.anchorX, run.anchorY, run.anchorZ);
-        f.anchorReachable = path.valid && !path.noPath && (path.incomplete || offset <= 3.0f);
+        ReadEngaged(c, f);
+        ReadGuard(c, f);
     }
+    fx::ReadLeadFacts(f, c.lo);
     ReadStep(c, f);
-    NotKnown(c, "leadShotYd");
-    NotKnown(c, "members.actedMs(exact)");
+    NotKnownField(c, "leadShotYd");
+    NotKnownField(c, "members.actedMs(exact)");
     return finish(true);
 }
 
