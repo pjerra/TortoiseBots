@@ -94,9 +94,18 @@ call, at boot and `.tb plan reload`. Failure value: the do-less one (nothing loa
   param, healers): all exist, with the types the Field getters expect (tinyint unsigned -> GetUInt8, smallint unsigned -> GetUInt16, int unsigned ->
   GetUInt32, float -> GetFloat, varchar -> text). No mismatch.
 
-## 4. Gates (final code commit `63182629f`, later commits are tools and notes only)
+## 4. Gates (code final at `63182629f`; run again on the merge `00b7a3984` of tbf/port/forever (wide pass, no conflicts); later commits are notes only)
 
-See the end of this file (filled in when the runs finished).
+| gate | result |
+|---|---|
+| census slot 3, SLICE5.txt (merged tree) | files 172, clean 172, error places 0 (baseline before P5: 172 / 170 / 38; the merge did not change the baseline: re-taken on tbf/port/forever + SLICE5.txt: 172 / 170 / 38) |
+| census SLICE3 / SLICE2 / SLICE1 | 170 / 160 / 133 files, all clean, 0 error places (before and after the merge) |
+| header TU `forever/tools/s5_headers.list` | 1 file, clean, 0 places |
+| `slice_gen_context.py --check`, `slice_registry_check.py` | up to date; (a)=0 |
+| module build option OFF, slot 3 | CMAKE_RC=0 MAKE_RC=0 |
+| `test_dungeon_run_policy`, `test_system_run_policy` (g++ -std=c++17 -Wall -Wextra, VM) | `ok`, `109 checks passed`, no warnings |
+| `vm-build ~/wt-run-p5 --wait` (merged, 00b7a3984) | COMPILE_SECONDS=335 CMAKE_RC=0 MAKE_RC=0 (before the merge, 958951dd9: 366 s, MAKE_RC=0) |
+| `vm-test tb ~/wt-run-p5` (merged, 00b7a3984) | RESULT: PASS, rc=0, 1591 s |
 
 ## 5. For H5 and the next slice
 
