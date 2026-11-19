@@ -306,7 +306,7 @@ void RandomItemMgr::BuildRandomItemCache()
                     if (!proto)
                         continue;
 
-                    sLog.outDetail("        [%d] %s", itemId, proto->Name1);
+                    sLog.outDetail("        [%d] %s", itemId, CStrCompat(proto->Name1));
                 }
             }
         }

@@ -1672,7 +1672,7 @@ void LogSeekPull(PlayerbotAI* ai, Player* bot, Unit* son, float yd, SeekPullStep
         last = nowMs;
     }
     char info1[128];
-    snprintf(info1, sizeof(info1), "seek pull: %s -> %u %.1f yd %s", bot->GetName(), son->GetGUIDLow(), yd,
+    snprintf(info1, sizeof(info1), "seek pull: %s -> %u %.1f yd %s", CStrCompat(bot->GetName()), son->GetGUIDLow(), yd,
              SeekPullStepName(step));
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsSeekPull", info1, "");
 }
@@ -1717,7 +1717,7 @@ void LogSeekTake(PlayerbotAI* ai, Player* bot, Unit* son, const char* reason, bo
     Unit* const victim = son->GetVictim();
     char info1[224];
     snprintf(info1, sizeof(info1), "seek take: %s -> %u victim=%s reason=%s meet=%d src=%s reach_yd=%.1f beyond_yd=%.1f",
-             bot->GetName(), son->GetGUIDLow(), victim ? victim->GetName() : "none", reason, meet ? 1 : 0, src.c_str(),
+             CStrCompat(bot->GetName()), son->GetGUIDLow(), victim ? CStrCompat(victim->GetName()) : "none", reason, meet ? 1 : 0, src.c_str(),
              bot->GetDistance(son), beyondYd);
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsSeekPull", info1, "");
 }
@@ -1763,8 +1763,8 @@ void LogSeekTakeHeld(PlayerbotAI* ai, Player* bot, Unit* son, const SeekCapGuard
     snprintf(info1, sizeof(info1),
              "seek take held son=%u taker=%s reason=cap_guard ref=%s share=%.0f src=%s victim=%s on_nontank_ms=%u "
              "victim_hp=%.0f",
-             son->GetGUIDLow(), bot->GetName(), info.refName.c_str(), info.sharePct, src,
-             victim ? victim->GetName() : "none", onNonTankMs, victim ? victim->GetHealthPercent() : 100.0f);
+             son->GetGUIDLow(), CStrCompat(bot->GetName()), info.refName.c_str(), info.sharePct, src,
+             victim ? CStrCompat(victim->GetName()) : "none", onNonTankMs, victim ? victim->GetHealthPercent() : 100.0f);
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsSeekPull", info1, "");
 }
 
@@ -1816,7 +1816,7 @@ void LogSeekMeetWait(PlayerbotAI* ai, Player* bot, Unit* son, Unit* victim, std:
     const std::uint64_t guid = son->GetObjectGuid().GetRawValue();
     char info1[192];
     snprintf(info1, sizeof(info1), "son=%u,event=wait,reason=receiver_wait,victim=%s,son_yd=%.1f,after_ms=%u",
-             ObjectGuid(guid).GetCounter(), victim ? victim->GetName() : "none", bot->GetDistance(son),
+             ObjectGuid(guid).GetCounter(), victim ? CStrCompat(victim->GetName()) : "none", bot->GetDistance(son),
              nowMs - meetMs);
     LogSeekMeet(ai, info1);
 }
@@ -2022,7 +2022,7 @@ void NoteSeekReceiverExempt(PlayerbotAI* ai, Player* bot, std::uint64_t son, std
     const std::uint64_t guid = son;
     char info1[160];
     snprintf(info1, sizeof(info1), "son=%u,event=receiver_exempt,receiver=%s,beyond_yd=%.1f",
-             ObjectGuid(guid).GetCounter(), bot->GetName(), beyondYd);
+             ObjectGuid(guid).GetCounter(), CStrCompat(bot->GetName()), beyondYd);
     LogSeekMeet(ai, info1);
 }
 
@@ -2692,7 +2692,7 @@ void EndLostWalkoutPrePlace(PlayerbotAI* ai, Map* map, Unit* boss, std::uint32_t
     const std::uint64_t guid = state.son ? state.son : state.meetSon;
     char info1[128];
     snprintf(info1, sizeof(info1), "son=%u,event=preplace_end,receiver=%s,reason=%s",
-             ObjectGuid(guid).GetCounter(), receiver ? receiver->GetName() : "none",
+             ObjectGuid(guid).GetCounter(), receiver ? CStrCompat(receiver->GetName()) : "none",
              !alive ? "receiver_dead" : charmed ? "receiver_charmed" : "receiver_victim");
     LogSeekMeet(ai, info1);
 }
@@ -2812,8 +2812,8 @@ void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, U
             {
                 char info1[192];
                 snprintf(info1, sizeof(info1), "son=%u,event=taken,receiver=%s,by=%s,after_ms=%u",
-                         ObjectGuid(guid).GetCounter(), meetReceiver ? meetReceiver->GetName() : "none",
-                         takenBy->GetName(), nowMs - state.meetMs);
+                         ObjectGuid(guid).GetCounter(), meetReceiver ? CStrCompat(meetReceiver->GetName()) : "none",
+                         CStrCompat(takenBy->GetName()), nowMs - state.meetMs);
                 LogSeekMeet(ai, info1);
             }
             else if (cleared)
@@ -2973,7 +2973,7 @@ void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, U
                         snprintf(info1, sizeof(info1),
                                  "son=%u,event=meet,receiver=%s,tank_idx=%d,receiver_yd=%.1f,due_in=%u,"
                                  "receiver_point_yd=%.1f",
-                                 ObjectGuid(guid).GetCounter(), receiver->GetName(), pick,
+                                 ObjectGuid(guid).GetCounter(), CStrCompat(receiver->GetName()), pick,
                                  puller ? puller->GetDistance(receiver) : -1.0f, out.dueInMs / 1000,
                                  receiverPointYd);
                     }
@@ -3348,22 +3348,22 @@ void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, U
         if (sPlayerbotAIConfig.dungeonRunSeekSiphonClock)
             snprintf(info1, sizeof(info1),
                      "seek pull: ranged walk-out %s -> %u due=%u try=%d reach=%.0f ray=%.0f tr=%.2f floor=%u",
-                     bot->GetName(), scan.son->GetGUIDLow(), dueInMs / 1000, starts, scan.reachYd, scan.rayDeg, tr,
+                     CStrCompat(bot->GetName()), scan.son->GetGUIDLow(), dueInMs / 1000, starts, scan.reachYd, scan.rayDeg, tr,
                      rules.firstStartMinMs / 1000);
         else
             snprintf(info1, sizeof(info1),
-                     "seek pull: ranged walk-out %s -> %u due=%u try=%d reach=%.0f ray=%.0f tr=%.2f", bot->GetName(),
+                     "seek pull: ranged walk-out %s -> %u due=%u try=%d reach=%.0f ray=%.0f tr=%.2f", CStrCompat(bot->GetName()),
                      scan.son->GetGUIDLow(), dueInMs / 1000, starts, scan.reachYd, scan.rayDeg, tr);
     }
     else
-        snprintf(info1, sizeof(info1), "seek pull: ranged walk-out %s -> %u", bot->GetName(), scan.son->GetGUIDLow());
+        snprintf(info1, sizeof(info1), "seek pull: ranged walk-out %s -> %u", CStrCompat(bot->GetName()), scan.son->GetGUIDLow());
     LogSeekWalkout(ai, info1);
     if (prePlaceTank)
     {
         const std::uint64_t guid = sonGuid;
         char info2[160];
         snprintf(info2, sizeof(info2), "son=%u,event=preplace,receiver=%s,receiver_yd=%.1f,point_yd=%.1f",
-                 ObjectGuid(guid).GetCounter(), prePlaceTank->GetName(), bot->GetDistance(prePlaceTank),
+                 ObjectGuid(guid).GetCounter(), CStrCompat(prePlaceTank->GetName()), bot->GetDistance(prePlaceTank),
                  prePlaceTank->GetDistance2d(prePlaceX, prePlaceY));
         LogSeekMeet(ai, info2);
     }
@@ -3372,7 +3372,7 @@ void UpdateSeekWalkout(PlayerbotAI* ai, Player* bot, const BossTacticRow& row, U
         const std::uint64_t guid = sonGuid;
         char info2[128];
         snprintf(info2, sizeof(info2), "son=%u,event=preplace_skip,receiver=%s,reason=%s",
-                 ObjectGuid(guid).GetCounter(), prePlaceFloorRefused->GetName(), "floor");
+                 ObjectGuid(guid).GetCounter(), CStrCompat(prePlaceFloorRefused->GetName()), "floor");
         LogSeekMeet(ai, info2);
     }
     out.walkout = true;
@@ -4636,7 +4636,7 @@ void LogSeekCharm(PlayerbotAI* ai, Player* bot, Unit* boss, std::uint64_t charme
              "charmed=%s:%s,victim=%s:%s,ot1=%.0f,ot2=%.0f,top=%s,cap_ref=%s,ref_kind=%s,cap_ref_threat=%.0f,"
              "top_dps_threat=%.0f%s",
              CharmRoleWord(charmed), CharmClassWord(charmed), CharmRoleWord(victim), CharmClassWord(victim),
-             ot1, ot2, top, capRef ? capRef->GetName() : "none",
+             ot1, ot2, top, capRef ? CStrCompat(capRef->GetName()) : "none",
              !capRef ? "none" : capPick.offTank ? "offtank" : "main", capRef ? capPick.threat : -1.0f, topDpsThreat,
              extra);
     char info2[160];
@@ -5861,7 +5861,7 @@ void LogSeekTakenSonCapped(PlayerbotAI* ai, Player* bot, Unit* son, std::uint8_t
         return;
     char info1[160];
     snprintf(info1, sizeof(info1), "seek take capped son=%u bot=%s pct=%u since_take_ms=%u", son->GetGUIDLow(),
-             bot->GetName(), static_cast<unsigned>(pct), sinceTakeMs);
+             CStrCompat(bot->GetName()), static_cast<unsigned>(pct), sinceTakeMs);
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsSeekPull", info1, "");
 }
 
@@ -6781,7 +6781,7 @@ void ai::LogShadeCover(PlayerbotAI* ai, Player* bot, const BossTacticsFight& fig
                 snprintf(targetText, sizeof(targetText), "none");
             char info2[160];
             snprintf(info2, sizeof(info2), "shade=%u:%u,healer=%s,dist=%.1f,target=%s", shade->GetEntry(),
-                     shade->GetGUIDLow(), victim ? victim->GetName() : "none", facts.distanceYd, targetText);
+                     shade->GetGUIDLow(), victim ? CStrCompat(victim->GetName()) : "none", facts.distanceYd, targetText);
             sPlayerbotAIConfig.logEvent(memberAi, "BossTacticsShadeCover", info1, info2);
         }
     }
@@ -9981,7 +9981,7 @@ void NotePrePlaceHold(PlayerbotAI* ai, Player* bot, const SeekPrePlaceProgress& 
     const std::uint64_t guid = progress.son;
     char info1[200];
     snprintf(info1, sizeof(info1), "son=%u,event=preplace_hold,receiver=%s,boss=%u,action=%s,point_yd=%.1f",
-             ObjectGuid(guid).GetCounter(), bot->GetName(), bossEntry, actionKind ? actionKind : "reach",
+             ObjectGuid(guid).GetCounter(), CStrCompat(bot->GetName()), bossEntry, actionKind ? actionKind : "reach",
              bot->GetDistance2d(progress.x, progress.y));
     LogSeekMeet(ai, info1);
 }
@@ -10458,7 +10458,7 @@ void SeekReliefTakeNoteExec(PlayerbotAI* ai, Player* bot, const RaidTankRoles& r
         return;
     char info1[192];
     snprintf(info1, sizeof(info1), "seek relief son=%u from=%s by=%s dwell_ms=%u n=%u cap=%d reach_yd=%.1f",
-             son->GetGUIDLow(), from ? from->GetName() : "none", bot->GetName(), static_cast<unsigned>(dwellMs),
+             son->GetGUIDLow(), from ? CStrCompat(from->GetName()) : "none", CStrCompat(bot->GetName()), static_cast<unsigned>(dwellMs),
              static_cast<unsigned>(takes), SeekTankLeaveCollapsesCap(ai, roles, boss, bot, nullptr) ? 1 : 0,
              bot->GetDistance(son));
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsSeekPull", info1, "");
@@ -10520,7 +10520,7 @@ bool SeekMeetPrePlaceTask(Player* bot, const BossTacticRow* row, SeekTankTask& t
         const std::uint64_t guid = progress.son;
         char info1[160];
         snprintf(info1, sizeof(info1), "son=%u,event=preplace_arrive,receiver=%s,after_ms=%u,point_yd=%.1f",
-                 ObjectGuid(guid).GetCounter(), bot->GetName(), afterMs, bot->GetDistance2d(x, y));
+                 ObjectGuid(guid).GetCounter(), CStrCompat(bot->GetName()), afterMs, bot->GetDistance2d(x, y));
         LogSeekMeet(botAi, info1);
     }
     return true;
@@ -11070,7 +11070,7 @@ bool BossTacticsSeekTankAction::Execute(Event& event)
                             char info1[192];
                             snprintf(info1, sizeof(info1),
                                      "son=%u,event=shot_wait,receiver=%s,receiver_point_yd=%.1f,waited_ms=%u,reason=%s",
-                                     ObjectGuid(guid).GetCounter(), receiver ? receiver->GetName() : "none",
+                                     ObjectGuid(guid).GetCounter(), receiver ? CStrCompat(receiver->GetName()) : "none",
                                      pointYd, wait.waitedMs,
                                      WalkoutShotWaitReason(live, pointYd, wait.waitedMs, task.walkoutDueInMs,
                                                            wait.taskAgeMs));
@@ -12940,7 +12940,7 @@ BossTankPost ai::FindBossTankPost(PlayerbotAI* ai, Player* bot, const BossTactic
             {
                 Player* const healer = sObjectMgr.GetPlayer(ObjectGuid(picked[i]));
                 const int written = std::snprintf(info2 + used, sizeof(info2) - used, ",h%u=%s",
-                    static_cast<unsigned>(i + 1), healer ? healer->GetName() : "gone");
+                    static_cast<unsigned>(i + 1), healer ? CStrCompat(healer->GetName()) : "gone");
                 if (written > 0)
                     used = std::min(used + static_cast<std::size_t>(written), sizeof(info2) - 1);
             }

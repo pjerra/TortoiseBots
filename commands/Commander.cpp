@@ -731,7 +731,7 @@ void GiveRunItems(DungeonRunSlot& slot, Player* lead, const std::vector<RunGiveO
             if (slot.bagsFullLogged.insert(botRaw).second) // once per run per bot, not every tick
             {
                 TB_LOG_DETAIL("TortoiseBots: run leader: cannot give item %u to %s (no bag space): the leg gate / step pause covers it.",
-                    order.item, bot->GetName());
+                    order.item, CStrCompat(bot->GetName()));
                 if (!slot.run.note.empty())
                     slot.run.note += " ";
                 slot.run.note += std::string(bot->GetName()) + "'s bags are full: item " + std::to_string(order.item) + " not given (the leg gate / step pause covers it)";
@@ -749,7 +749,7 @@ void GiveRunItems(DungeonRunSlot& slot, Player* lead, const std::vector<RunGiveO
         if (!RunGivenRowInsert(itemGuidLow, bot->GetGUIDLow(), order.item))
         {
             sLog.outError("TortoiseBots: run leader: the ledger write for item %u (guid %u) to %s failed: not given.",
-                order.item, itemGuidLow, bot->GetName());
+                order.item, itemGuidLow, CStrCompat(bot->GetName()));
             delete given;
             continue;
         }
@@ -1250,7 +1250,7 @@ uint32 ReleaseBinding(uint64 commanderRaw, RemoteCommander::ReleaseReason reason
         TortoiseBots::CombatMonitorService::Instance().Forget(removed.groupId);
     TB_LOG_DETAIL("TortoiseBots: %s %s released group of %s: %s",
         removed.system ? "system run" : "remote commander",
-        commander ? commander->GetName() : "(offline)", lead ? lead->GetName() : "(offline)",
+        commander ? CStrCompat(commander->GetName()) : "(offline)", lead ? CStrCompat(lead->GetName()) : "(offline)",
         RemoteCommander::ReleaseReasonText(reason));
     if (notify)
         if (std::unique_ptr<ChatHandler> const chat = CommanderReplyHandler(commanderRaw, removed.system))
@@ -3402,7 +3402,7 @@ static void NoteRunMagma(Player* lead, float x, float y, float z, RunMagmaNote k
         return;
     last = now;
     TB_LOG_DETAIL("TortoiseBots: %s in magma at %.1f %.1f %.1f (map %u, lead %s)", what, x, y, z,
-        lead->GetMapId(), lead->GetName());
+        lead->GetMapId(), CStrCompat(lead->GetName()));
 }
 
 static_assert(TortoiseBots::DungeonRun::kStallDirectMaxYd == RemoteCommander::kDirectMaxDistance &&
@@ -8082,7 +8082,7 @@ bool RunOffMapReturn(Player* commander, std::string const& order, std::string& a
         else if (bot->IsBeingTeleportedFar())
             bot->GetSession()->HandleMoveWorldportAckOpcode();
     }
-    TB_LOG_DETAIL("TortoiseBots: run leader: %s returned to the lead bot from outside the instance", bot->GetName());
+    TB_LOG_DETAIL("TortoiseBots: run leader: %s returned to the lead bot from outside the instance", CStrCompat(bot->GetName()));
     answer = "returned " + std::string(name) + " to " + lead->GetName();
     return true;
 }
@@ -8186,7 +8186,7 @@ bool RunFetchReturn(Player* commander, std::string const& order, std::string& an
         answer = "unavailable: " + refused;
         return false;
     }
-    TB_LOG_DETAIL("TortoiseBots: run leader: %s teleported back to %s", fetched.c_str(), lead->GetName());
+    TB_LOG_DETAIL("TortoiseBots: run leader: %s teleported back to %s", fetched.c_str(), CStrCompat(lead->GetName()));
     answer = "fetched " + fetched + " to " + TortoiseBots::DungeonRun::Num(x) + " " + TortoiseBots::DungeonRun::Num(y) +
         " " + TortoiseBots::DungeonRun::Num(z) +
         (refused.empty() ? std::string() : "; left out " + refused);
@@ -8281,7 +8281,7 @@ TortoiseBots::DungeonRun::RejoinSettle SettleRejoin(uint64 raw, Player* bot, boo
     if (verdict == RejoinSettle::Restore)
     {
         std::string const outcome = RestoreRejoinBind(bot, p);
-        sLog.outBasic("[RUN] rejoin %s undone (%s, instance %u): %s", bot->GetName(),
+        sLog.outBasic("[RUN] rejoin %s undone (%s, instance %u): %s", CStrCompat(bot->GetName()),
             refused ? "the teleport was refused" : settleNow ? "logged out or back in elsewhere" :
             "not in the lead bot's copy in time", bot->GetInstanceId(), outcome.c_str());
     }
@@ -9246,7 +9246,7 @@ void DropUnattackableCombat(Player* lead, std::vector<Player*> const& bots, std:
         sServerFacade.GetHostileRefManager(bot).deleteReferences();
         bot->CombatStop();
         TB_LOG_DETAIL("TortoiseBots: run leader: %s dropped combat with units the group cannot attack only%s",
-            bot->GetName(), wedged ? " (wedged on another floor)" : "");
+            CStrCompat(bot->GetName()), wedged ? " (wedged on another floor)" : "");
     }
 }
 
@@ -13542,7 +13542,7 @@ static void SyncReturnHolds(Player* commander, RemoteCommander::Binding const& b
                 bot->GetMotionMaster()->Clear(false);
                 bot->StopMoving();
                 TB_LOG_DETAIL("TortoiseBots: run leader: %s revived %.0f yd from the lead bot: holds still for a summon",
-                    bot->GetName(), yd);
+                    CStrCompat(bot->GetName()), yd);
             }
             auto const revived = slot.reviveHoldMs.find(raw);
             if (revived != slot.reviveHoldMs.end())
@@ -13592,7 +13592,7 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
         // The deferred packs left alive go into the note (DungeonRun::EndRunEarly).
         TortoiseBots::DungeonRun::EndRunEarly(slot.run,
             TortoiseBots::DungeonRun::RunTimeLimitNote(sPlayerbotAIConfig.dungeonRunMaxMinutes));
-        TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", commander ? commander->GetName() : "?",
+        TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", commander ? CStrCompat(commander->GetName()) : "?",
             slot.run.note.c_str());
         SendRunLine(commander, slot, true);
         ReleaseRunHold(commander, binding->leadGuid, slot);
@@ -13713,7 +13713,7 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
                         ReadHoldDone(*current, lead, doneFacts);
                         if (TortoiseBots::DungeonRun::HoldDoneWhilePaused(slot.run, doneFacts))
                         {
-                            TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", commander->GetName(),
+                            TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", CStrCompat(commander->GetName()),
                                 slot.run.note.c_str());
                             SendRunLine(commander, slot, false);
                         }
@@ -13728,7 +13728,7 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
                 ReadRunNeedFacts(slot, doorLead, doorFacts);
                 if (TortoiseBots::DungeonRun::DoorOpenWhilePaused(slot.run, doorFacts))
                 {
-                    TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", commander->GetName(), slot.run.note.c_str());
+                    TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", CStrCompat(commander->GetName()), slot.run.note.c_str());
                     SendRunLine(commander, slot, false);
                 }
             }
@@ -13759,7 +13759,7 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
                 }
                 if (TortoiseBots::DungeonRun::CeilingFightOverWhilePaused(slot.run, partyInCombat, dt))
                 {
-                    TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", commander->GetName(),
+                    TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", CStrCompat(commander->GetName()),
                         slot.run.note.c_str());
                     SendRunLine(commander, slot, false);
                 }
@@ -13772,7 +13772,7 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
             lead->GetMapId() == slot.run.plan->map;
         if (TortoiseBots::DungeonRun::LeadBackWhilePaused(slot.run, back, dt))
         {
-            TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", commander->GetName(), slot.run.note.c_str());
+            TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", CStrCompat(commander->GetName()), slot.run.note.c_str());
             SendRunLine(commander, slot, false);
         }
     }
@@ -13791,7 +13791,7 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
             TortoiseBots::DungeonRun::ApplyPlayerFacts(holdFacts);
             if (TortoiseBots::DungeonRun::PlayerHoldBackWhilePaused(slot.run, holdFacts, dt))
             {
-                TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", commander->GetName(), slot.run.note.c_str());
+                TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", CStrCompat(commander->GetName()), slot.run.note.c_str());
                 SendRunLine(commander, slot, false);
             }
         }
@@ -13926,7 +13926,7 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
         speedRate = 1.0f;
     }
     if (speedRate != speedBefore)
-        TB_LOG_DETAIL("TortoiseBots: run leader of %s: test speed %s", commander->GetName(),
+        TB_LOG_DETAIL("TortoiseBots: run leader of %s: test speed %s", CStrCompat(commander->GetName()),
             speedRate > 1.0f ? (TortoiseBots::DungeonRun::Num(speedRate) + " (walking)").c_str() : "1.0 (a fight, a pull, a rest or an event)");
     ApplyRunSpeed(commanderRaw, lead, bots, speedRate);
     // A bot held in combat by units the group cannot attack only past the grace leaves it (CombatDropTick).
@@ -13974,7 +13974,7 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
     // (DungeonRun::DeferUnreachablePack, in the tick or in the stand's answer above): logged once.
     if (!slot.run.deferLog.empty())
     {
-        TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", commander->GetName(), slot.run.deferLog.c_str());
+        TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", CStrCompat(commander->GetName()), slot.run.deferLog.c_str());
         slot.run.deferLog.clear();
     }
     // While the party rests the lead bot holds where it stands
@@ -14165,7 +14165,7 @@ void TickDungeonRun(uint64 commanderRaw, uint32 dt)
     SyncHoldStands(commander, lead, bots, it->second, order);
     SendRunLine(commander, it->second, false);
     if (it->second.run.state != TortoiseBots::DungeonRun::State::Running)
-        TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", commander->GetName(), it->second.lastLine.c_str());
+        TB_LOG_DETAIL("TortoiseBots: run leader of %s: %s", CStrCompat(commander->GetName()), it->second.lastLine.c_str());
 }
 
 
@@ -15395,7 +15395,7 @@ static bool RunVerbAs(ChatHandler* handler, Player* commander, std::string const
                 commanderRaw, commander->GetName(), plan->name, captureNowMs);
             if (captureId.empty())
                 if (std::string const& why = TortoiseBots::DecisionCaptureService::Instance().lastError(); !why.empty())
-                    TB_LOG_BASIC("TortoiseBots: decision capture for %s not started: %s", commander->GetName(), why.c_str());
+                    TB_LOG_BASIC("TortoiseBots: decision capture for %s not started: %s", CStrCompat(commander->GetName()), why.c_str());
         }
         // Item-leg skip: give after the slot exists; the warning rides the start note.
         stored.giveRun = startPlan.giveRun;
@@ -15414,7 +15414,7 @@ static bool RunVerbAs(ChatHandler* handler, Player* commander, std::string const
         s_dungeonRunMs = 0;
         std::string const captureSuffix =
             captureId.empty() ? std::string() : " (decision capture " + captureId + ")";
-        TB_LOG_DETAIL("TortoiseBots: run leader of %s started plan %s at step %u%s%s", commander->GetName(), plan->name.c_str(),
+        TB_LOG_DETAIL("TortoiseBots: run leader of %s started plan %s at step %u%s%s", CStrCompat(commander->GetName()), plan->name.c_str(),
             static_cast<uint32>(startStep + 1),
             stored.run.testSpeed > 1.0f ? (" at " + TortoiseBots::DungeonRun::SpeedLabel(stored.run)).c_str() : "",
             captureSuffix.c_str());
@@ -17418,7 +17418,7 @@ bool JoinBoundRaid(Player* commander, Player* bot)
     if (bot->GetMapId() != lead->GetMapId() || bot->GetDistance(lead) > 100.0f)
         bot->TeleportTo(lead->GetMapId(), lead->GetPositionX(), lead->GetPositionY(), lead->GetPositionZ(),
             lead->GetOrientation(), 0);
-    TB_LOG_BASIC("TortoiseBots: hire %s joined %s's bound raid (%u of %u seats)", bot->GetName(), lead->GetName(),
+    TB_LOG_BASIC("TortoiseBots: hire %s joined %s's bound raid (%u of %u seats)", CStrCompat(bot->GetName()), CStrCompat(lead->GetName()),
         group->GetMembersCount(), static_cast<uint32>(RemoteCommander::kMaxRaidBindSize));
     return true;
 }

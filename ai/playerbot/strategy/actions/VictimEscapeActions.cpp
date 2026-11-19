@@ -249,7 +249,7 @@ void LogVictimEscape(PlayerbotAI* ai, Unit* boss, Player* victim, uint32 spellId
     }
     char info1[160];
     snprintf(info1, sizeof(info1), "boss=%u,victim=%s,class=%s,spell=%u,result=%s",
-             boss->GetEntry(), victim->GetName(), ClassWord(victim->GetClass()), spellId, ok ? "ok" : "refused");
+             boss->GetEntry(), CStrCompat(victim->GetName()), ClassWord(victim->GetClass()), spellId, ok ? "ok" : "refused");
     char info2[48];
     snprintf(info2, sizeof(info2), "reason=%s", reason);
     sPlayerbotAIConfig.logEvent(ai, "BossTacticsVictimEscape", info1, info2);

@@ -81,7 +81,7 @@ bool PetitionSignAction::Execute(Event& event)
         WorldPacket data(MSG_PETITION_DECLINE);
         data << petitionGuid;
         bot->GetSession()->HandlePetitionDeclineOpcode(data);
-        sLog.outDetail("Bot #%d <%s> declines guild invite", bot->GetGUIDLow(), bot->GetName());
+        sLog.outDetail("Bot #%d <%s> declines guild invite", bot->GetGUIDLow(), CStrCompat(bot->GetName()));
         return false;
     }
     if (accept)
@@ -89,7 +89,7 @@ bool PetitionSignAction::Execute(Event& event)
         WorldPacket data(CMSG_PETITION_SIGN, 20);
         data << petitionGuid << unk;
         bot->GetSession()->HandlePetitionSignOpcode(data);
-        sLog.outDetail("Bot #%d <%s> accepts guild invite", bot->GetGUIDLow(), bot->GetName());
+        sLog.outDetail("Bot #%d <%s> accepts guild invite", bot->GetGUIDLow(), CStrCompat(bot->GetName()));
         return true;
     }
     return false;

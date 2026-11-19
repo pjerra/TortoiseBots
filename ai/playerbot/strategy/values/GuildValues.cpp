@@ -554,7 +554,7 @@ SupplyStep ChooseSourceStep(Player* bot, OrderRecord const& order, SupplyCandida
     SupplyStep const current = order.supplyItemId == candidate.itemId ? order.supplyStep : SupplyStep::None;
     if (picked != current)
         TB_LOG_DETAIL("TortoiseBots: order %s supply item %u: %s -> %s (guild bank %s, craft %s, farm %s)",
-            bot->GetName(), candidate.itemId, TortoiseBots::GuildOrders::SupplyStepToken(current),
+            CStrCompat(bot->GetName()), candidate.itemId, TortoiseBots::GuildOrders::SupplyStepToken(current),
             TortoiseBots::GuildOrders::SupplyStepToken(picked),
             TortoiseBots::GuildOrders::GuildHasBank(bot->GetGuildId()) ? "yes" : "no",
             candidate.craft ? "yes" : "no",
@@ -1235,7 +1235,7 @@ bool HasGuildTravelOrderValue::Calculate()
         last = time(nullptr);
         std::optional<OrderRecord> stored = TortoiseBots::GuildOrders::Find(bot->GetGUIDLow());
         if (stored && stored->state == TortoiseBots::GuildOrders::OrderState::Working)
-            TB_LOG_DETAIL("TortoiseBots: order %s does not travel: %s (step %s)", bot->GetName(), why,
+            TB_LOG_DETAIL("TortoiseBots: order %s does not travel: %s (step %s)", CStrCompat(bot->GetName()), why,
                 TortoiseBots::GuildOrders::SupplyStepToken(stored->supplyStep));
     };
     // No order work while grouped with a player, for any order type. An
@@ -1307,7 +1307,7 @@ bool HasGuildTravelOrderValue::Calculate()
             {
                 at = time(nullptr);
                 TB_LOG_DETAIL("TortoiseBots: order %s counts: delivered %u bags %u mail %u of %u (record item %u, order item %u, state %s)",
-                    bot->GetName(), current->delivered, bot->GetItemCount(order.itemId),
+                    CStrCompat(bot->GetName()), current->delivered, bot->GetItemCount(order.itemId),
                     ai::OrderMailboxItems(bot, order.itemId), order.amount, current->itemId, order.itemId,
                     TortoiseBots::GuildOrders::StateToken(current->state));
             }

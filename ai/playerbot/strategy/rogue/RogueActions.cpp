@@ -81,7 +81,7 @@ bool ReachSapAction::ApproachAroundPack(Unit* target, float standDist)
     {
         if (replanned)
             sLog.outBasic("TortoiseBots: %s skips Sap on %s (entry %u): no approach stays clear of its %u pack-mates",
-                bot->GetName(), target->GetName(), target->GetEntry(), static_cast<uint32>(mates.size()));
+                CStrCompat(bot->GetName()), CStrCompat(target->GetName()), target->GetEntry(), static_cast<uint32>(mates.size()));
         context->GetValue<int32>("manual int", kSapSkipTargetKey)->Set(static_cast<int32>(target->GetObjectGuid().GetCounter()));
         context->GetValue<int32>("manual int", kSapSkipUntilKey)->Set(static_cast<int32>(now + kSapSkipMs));
         return false;

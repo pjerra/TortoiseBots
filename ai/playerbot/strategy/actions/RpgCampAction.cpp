@@ -182,7 +182,7 @@ bool RpgCampAction::Execute(Event& /*event*/)
 
         if (TortoiseBots::HasCampMoveTimedOut(moveElapsedMs, TortoiseBots::CAMP_MOVE_TIMEOUT_MS))
             sLog.outDetail("TortoiseBots: [Camp] %s: MovingToSpot timed out (dist2d=%.1f), continuing from current position.",
-                bot->GetName(), dist2d);
+                CStrCompat(bot->GetName()), dist2d);
 
         ai->StopMoving();
         bot->SetFacingTo(target.o);
@@ -200,13 +200,13 @@ bool RpgCampAction::Execute(Event& /*event*/)
             state.startedMs = now;
             state.nextEmoteMs = now + 2000;
             state.emoteStep = static_cast<uint8>(TortoiseBots::CampEmoteStep::SitEat);
-            sLog.outDetail("TortoiseBots: [Camp] %s: MovingToSpot -> Camping (joiner).", bot->GetName());
+            sLog.outDetail("TortoiseBots: [Camp] %s: MovingToSpot -> Camping (joiner).", CStrCompat(bot->GetName()));
             ai->SetActionDuration(2000);
             return true;
         }
 
         state.phase = PlayerbotAI::CampPhase::SettingUp;
-        sLog.outDetail("TortoiseBots: [Camp] %s: MovingToSpot -> SettingUp.", bot->GetName());
+        sLog.outDetail("TortoiseBots: [Camp] %s: MovingToSpot -> SettingUp.", CStrCompat(bot->GetName()));
     }
 
     if (state.phase == PlayerbotAI::CampPhase::SettingUp)
@@ -231,7 +231,7 @@ bool RpgCampAction::Execute(Event& /*event*/)
 
         state.startedMs = now;
         state.phase = PlayerbotAI::CampPhase::WaitingTentCast;
-        sLog.outDetail("TortoiseBots: [Camp] %s: SettingUp -> WaitingTentCast.", bot->GetName());
+        sLog.outDetail("TortoiseBots: [Camp] %s: SettingUp -> WaitingTentCast.", CStrCompat(bot->GetName()));
         ai->SetActionDuration(500);
         return true;
     }
@@ -274,7 +274,7 @@ bool RpgCampAction::Execute(Event& /*event*/)
 
         state.phase = PlayerbotAI::CampPhase::MovingToFire;
         state.moveStartedMs = now;
-        sLog.outDetail("TortoiseBots: [Camp] %s: WaitingTentCast -> MovingToFire.", bot->GetName());
+        sLog.outDetail("TortoiseBots: [Camp] %s: WaitingTentCast -> MovingToFire.", CStrCompat(bot->GetName()));
         ai->SetActionDuration(500);
         return true;
     }
@@ -305,7 +305,7 @@ bool RpgCampAction::Execute(Event& /*event*/)
 
         if (TortoiseBots::HasCampMoveTimedOut(moveElapsedMs, TortoiseBots::CAMP_MOVE_TIMEOUT_MS))
             sLog.outDetail("TortoiseBots: [Camp] %s: MovingToFire timed out (dist2d=%.1f), continuing from current position.",
-                bot->GetName(), dist2d);
+                CStrCompat(bot->GetName()), dist2d);
 
         ai->StopMoving();
         bot->SetFacingTo(firePt.o);
@@ -314,14 +314,14 @@ bool RpgCampAction::Execute(Event& /*event*/)
             bot->CastSpell(bot, TortoiseBots::CAMP_FIRE_SPELL_ID, true);
             state.startedMs = now;
             state.phase = PlayerbotAI::CampPhase::WaitingFireCast;
-            sLog.outDetail("TortoiseBots: [Camp] %s: MovingToFire -> WaitingFireCast.", bot->GetName());
+            sLog.outDetail("TortoiseBots: [Camp] %s: MovingToFire -> WaitingFireCast.", CStrCompat(bot->GetName()));
             ai->SetActionDuration(500);
             return true;
         }
 
         state.phase = PlayerbotAI::CampPhase::MovingToSeat;
         state.moveStartedMs = now;
-        sLog.outDetail("TortoiseBots: [Camp] %s: MovingToFire -> MovingToSeat.", bot->GetName());
+        sLog.outDetail("TortoiseBots: [Camp] %s: MovingToFire -> MovingToSeat.", CStrCompat(bot->GetName()));
         ai->SetActionDuration(500);
         return true;
     }
@@ -345,7 +345,7 @@ bool RpgCampAction::Execute(Event& /*event*/)
 
         state.phase = PlayerbotAI::CampPhase::MovingToSeat;
         state.moveStartedMs = now;
-        sLog.outDetail("TortoiseBots: [Camp] %s: WaitingFireCast -> MovingToSeat.", bot->GetName());
+        sLog.outDetail("TortoiseBots: [Camp] %s: WaitingFireCast -> MovingToSeat.", CStrCompat(bot->GetName()));
         ai->SetActionDuration(500);
         return true;
     }
@@ -376,7 +376,7 @@ bool RpgCampAction::Execute(Event& /*event*/)
 
         if (TortoiseBots::HasCampMoveTimedOut(moveElapsedMs, TortoiseBots::CAMP_MOVE_TIMEOUT_MS))
             sLog.outDetail("TortoiseBots: [Camp] %s: MovingToSeat timed out (dist2d=%.1f), continuing from current position.",
-                bot->GetName(), dist2d);
+                CStrCompat(bot->GetName()), dist2d);
 
         ai->StopMoving();
         bot->SetFacingTo(seatPt.o);
@@ -385,7 +385,7 @@ bool RpgCampAction::Execute(Event& /*event*/)
         state.startedMs = now;
         state.nextEmoteMs = now + 2000;
         state.emoteStep = static_cast<uint8>(TortoiseBots::CampEmoteStep::SitEat);
-        sLog.outDetail("TortoiseBots: [Camp] %s: MovingToSeat -> Camping.", bot->GetName());
+        sLog.outDetail("TortoiseBots: [Camp] %s: MovingToSeat -> Camping.", CStrCompat(bot->GetName()));
         ai->SetActionDuration(2000);
         return true;
     }

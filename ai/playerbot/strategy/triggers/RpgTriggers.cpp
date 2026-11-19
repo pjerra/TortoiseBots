@@ -936,7 +936,7 @@ bool RpgCampTrigger::IsActive()
         state.orientation = spot->orientation;
         state.spotName = spot->name;
         sLog.outDetail("TortoiseBots: [Camp] %s: join -> MovingToSpot (spot %u: %s).",
-            bot->GetName(), state.spotId, state.spotName.c_str());
+            CStrCompat(bot->GetName()), state.spotId, state.spotName.c_str());
         return true;
     }
 
@@ -993,7 +993,7 @@ bool RpgCampTrigger::IsActive()
     {
         state.cooldownUntilMs = now + TortoiseBots::CAMP_ROLL_RETRY_COOLDOWN_MS;
         sLog.outDetail("TortoiseBots: [Camp] %s: skipped spot %u (%s) due to slope (castZ=%.1f fireZ=%.1f seatZ=%.1f).",
-            bot->GetName(), spot->id, spot->name.c_str(), castZ, fireZ, seatZ);
+            CStrCompat(bot->GetName()), spot->id, spot->name.c_str(), castZ, fireZ, seatZ);
         return false;
     }
 
@@ -1015,6 +1015,6 @@ bool RpgCampTrigger::IsActive()
     state.orientation = spot->orientation;
     state.spotName = spot->name;
     sLog.outDetail("TortoiseBots: [Camp] %s: start -> MovingToSpot (spot %u: %s).",
-        bot->GetName(), state.spotId, state.spotName.c_str());
+        CStrCompat(bot->GetName()), state.spotId, state.spotName.c_str());
     return true;
 }

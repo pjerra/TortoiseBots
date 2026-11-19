@@ -767,7 +767,7 @@ bool ChooseTravelTargetAction::Execute(Event& event)
         // were offered", which looks identical from the outside.
         if (sRandomBotFacade.IsPinnedBot(bot->GetGUIDLow()))
             sLog.outBasic("QUESTPROBE: %s got %u destination ranges for '%s' and picked none",
-                bot->GetName(), uint32(scanList.size()), futureTravelPurpose.c_str());
+                CStrCompat(bot->GetName()), uint32(scanList.size()), futureTravelPurpose.c_str());
 
         //A vendor errand has no other diagnostic: a search that never yields a
         //destination leaves the loot in the bags and produces no event at all,
@@ -1025,7 +1025,7 @@ void ChooseTravelTargetAction::setNewTarget(Player* requester, TravelTarget* new
         sPlayerbotAIConfig.logEvent(ai, "TravelTarget", purpose, destZone);
         if (newPickDest && IsGuildOrderTravelName(purpose) && newPickPos)
             TB_LOG_DETAIL("TortoiseBots: order %s walks to %s at map %u (%.0f, %.0f) in %s, purpose %s",
-                bot->GetName(), newPickDest->GetTitle().c_str(), newPickPos->getMapId(), newPickPos->getX(),
+                CStrCompat(bot->GetName()), newPickDest->GetTitle().c_str(), newPickPos->getMapId(), newPickPos->getX(),
                 newPickPos->getY(), destZone.c_str(), purpose.c_str());
 
         // One vendor journey at a time: a walk to a vendor has just started, and
@@ -2704,7 +2704,7 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
             return false;
         bool ahSupply = mailRecord->supplyStep == TortoiseBots::GuildOrders::SupplyStep::AuctionHouse;
         TB_LOG_DETAIL("TortoiseBots: order %s travel request: step %s item %u zone %u (travel order %s, farm item %u)",
-            bot->GetName(), TortoiseBots::GuildOrders::SupplyStepToken(mailRecord->supplyStep),
+            CStrCompat(bot->GetName()), TortoiseBots::GuildOrders::SupplyStepToken(mailRecord->supplyStep),
             mailRecord->itemId, mailRecord->farmZoneId, order.IsTravelOrder() ? "yes" : "no", orderFarmItem);
 
         if (!order.IsTravelOrder() && !(order.IsCraftOrder() && orderFarmItem) && !ahSupply &&
@@ -2846,14 +2846,14 @@ bool RequestNamedTravelTargetAction::Execute(Event& event)
                 {
                     OrderReason reason = plan.verdict == OrderReason::None ? OrderReason::NoSource : plan.verdict;
                     TB_LOG_DETAIL("TortoiseBots: order %s farm item %u: no zone to farm (plan has %u zones, verdict %s, bot map %u)",
-                        bot->GetName(), itemId, uint32_t(plan.zones.size()),
+                        CStrCompat(bot->GetName()), itemId, uint32_t(plan.zones.size()),
                         TortoiseBots::GuildOrders::ReasonToken(reason), bot->GetMapId());
                     SetState(bot->GetGUIDLow(), TortoiseBots::GuildOrders::StateForReason(reason), reason);
                     return false;
                 }
                 farmZoneId = plan.zones[pick].zoneId;
                 TB_LOG_DETAIL("TortoiseBots: order %s farm item %u: zone %u picked (%u of %u, bot map %u)",
-                    bot->GetName(), itemId, farmZoneId, uint32_t(pick + 1), uint32_t(plan.zones.size()), bot->GetMapId());
+                    CStrCompat(bot->GetName()), itemId, farmZoneId, uint32_t(pick + 1), uint32_t(plan.zones.size()), bot->GetMapId());
                 SetFarmZone(bot->GetGUIDLow(), farmZoneId, plan.zones[pick].chance, uint32_t(pick), itemId);
             }
 
@@ -3589,7 +3589,7 @@ bool RequestQuestTravelTargetAction::Execute(Event& event)
                 readyToHandIn++;
 
         sLog.outBasic("QUESTPROBE: %s has %u finished and unhanded-in, %u quests in the log; offered %u taker, %u objective, %u giver destinations",
-            bot->GetName(), readyToHandIn, uint32(bot->getQuestStatusMap().size()),
+            CStrCompat(bot->GetName()), readyToHandIn, uint32(bot->getQuestStatusMap().size()),
             takers, objectives, givers);
     }
 

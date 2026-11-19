@@ -454,7 +454,7 @@ void PlayerbotFactory::InitBandages()
         return;
     Item* stored = StoreItem(itemId, halfStack - have, true);
     if (stored)
-        sLog.outDetail("Bot %d got bandage %s x%d", bot->GetGUIDLow(), proto->Name1, halfStack - have);
+        sLog.outDetail("Bot %d got bandage %s x%d", bot->GetGUIDLow(), CStrCompat(proto->Name1), halfStack - have);
 }
 
 // Fresh-seed money: a sensible level-scaled amount on first seed only.
@@ -664,7 +664,7 @@ void PlayerbotFactory::InitPet(bool saveToDb)
 
         if (ids.empty())
         {
-            sLog.outError("No pets available for bot %s (%d level)", bot->GetName(), bot->GetLevel());
+            sLog.outError("No pets available for bot %s (%d level)", CStrCompat(bot->GetName()), bot->GetLevel());
             return;
         }
 
@@ -737,7 +737,7 @@ void PlayerbotFactory::InitPet(bool saveToDb)
     }
     else
     {
-        sLog.outError("Cannot create pet for bot %s", bot->GetName());
+        sLog.outError("Cannot create pet for bot %s", CStrCompat(bot->GetName()));
         return;
     }
 
@@ -1497,7 +1497,7 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
     if (bot->GetLevel() < 5)
     {
         sLog.outDetail("Bot #%d <%s> lvl %d: InitEquipment skipped (below level 5)",
-            bot->GetGUIDLow(), bot->GetName(), bot->GetLevel());
+            bot->GetGUIDLow(), CStrCompat(bot->GetName()), bot->GetLevel());
         return;
     }
 
@@ -1518,7 +1518,7 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
     if (specId == 0)
     {
         sLog.outDetail("Bot #%d <%s> lvl %d class %d: InitEquipment skipped (specId=0)",
-            bot->GetGUIDLow(), bot->GetName(), bot->GetLevel(), bot->GetClass());
+            bot->GetGUIDLow(), CStrCompat(bot->GetName()), bot->GetLevel(), bot->GetClass());
         return;
     }
 
@@ -1677,7 +1677,7 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
                 if (Item* stillEquipped = bot->GetItemByPos(INVENTORY_SLOT_BAG_0, slot))
                 {
                     sLog.outDetail("Bot #%d <%s>: clearing stale offhand %u under 2H main hand",
-                        bot->GetGUIDLow(), bot->GetName(), stillEquipped->GetEntry());
+                        bot->GetGUIDLow(), CStrCompat(bot->GetName()), stillEquipped->GetEntry());
                     bot->DestroyItem(stillEquipped->GetBagSlot(), stillEquipped->GetSlot(), true);
                 }
             }
@@ -1755,7 +1755,7 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
             if (slot == EQUIPMENT_SLOT_BODY || slot == EQUIPMENT_SLOT_TABARD)
             {
                 std::vector<uint32> ids = sRandomItemMgr.Query(60, 1, 1, slot, 1);
-                sLog.outDetail("Bot #%d %s:%d <%s>: %u possible items for slot %d", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), bot->GetName(), uint32(ids.size()), slot);
+                sLog.outDetail("Bot #%d %s:%d <%s>: %u possible items for slot %d", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()), uint32(ids.size()), slot);
 
                 if (!ids.empty()) Shuffle(ids);
 
@@ -1956,7 +1956,7 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
                             set->spells, set->items_to_triggerspell, 8))
                     {
                         sLog.outDetail("Player autogear: %s slot %u keeps <%s>, item set %u is active",
-                            bot->GetName(), slot, oldProto->Name1, oldProto->ItemSet);
+                            CStrCompat(bot->GetName()), slot, CStrCompat(oldProto->Name1), oldProto->ItemSet);
                         continue;
                     }
                 }
@@ -2287,8 +2287,8 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
                         if (found && incremental)
                         {
                             if (oldItem)
-                                sLog.outDetail("Bot #%d %s:%d <%s>: Old Item: slot: %u, id: %u, value: %u (%s)", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), bot->GetName(), slot, oldProto->ItemId, oldStatValue, oldProto->Name1);
-                            sLog.outDetail("Bot #%d %s:%d <%s>: New Item: slot: %u, id: %u, value: %u (%s)", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), bot->GetName(), slot, proto->ItemId, newStatValue, proto->Name1);
+                                sLog.outDetail("Bot #%d %s:%d <%s>: Old Item: slot: %u, id: %u, value: %u (%s)", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()), slot, oldProto->ItemId, oldStatValue, CStrCompat(oldProto->Name1));
+                            sLog.outDetail("Bot #%d %s:%d <%s>: New Item: slot: %u, id: %u, value: %u (%s)", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()), slot, proto->ItemId, newStatValue, CStrCompat(proto->Name1));
                         }
                     }
                 }
@@ -2303,7 +2303,7 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
                     if (passingIds.empty())
                     {
                         sLog.outDetail("Bot #%d <%s>: slot %u: pool %zu, 0 passed filters (spec %u, weaponType %u)",
-                            bot->GetGUIDLow(), bot->GetName(), slot, ids.size(), specId, weaponType);
+                            bot->GetGUIDLow(), CStrCompat(bot->GetName()), slot, ids.size(), specId, weaponType);
                         if (playerUpgrade)
                             sLog.outString("PlayerAutogear debug: slot %u pool %zu, 0 passed filters (spec %u)", slot, ids.size(), specId);
                     }
@@ -2312,7 +2312,7 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
                         uint16 probeDest = 0;
                         uint32 err = RandomBotFacade::CanEquipUnseenItem(bot, slot, probeDest, passingIds[0]);
                         sLog.outDetail("Bot #%d <%s>: slot %u: %zu passed filters, all equip attempts failed; first CanEquip err=%u, id=%u",
-                            bot->GetGUIDLow(), bot->GetName(), slot, passingIds.size(), err, passingIds[0]);
+                            bot->GetGUIDLow(), CStrCompat(bot->GetName()), slot, passingIds.size(), err, passingIds[0]);
                         if (playerUpgrade)
                             sLog.outString("PlayerAutogear debug: slot %u %zu passed filters, equip failed; first err=%u id=%u",
                                 slot, passingIds.size(), err, passingIds[0]);
@@ -2424,7 +2424,7 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
                         if (playerUpgrade)
                             autogearUpgrades.push_back({slot, 0, itemId, false});
                         sLog.outDetail("Bot #%d <%s>: slot %u empty-slot backstop equipped %u (ilvl %u)",
-                            bot->GetGUIDLow(), bot->GetName(), slot, itemId, proto->ItemLevel);
+                            bot->GetGUIDLow(), CStrCompat(bot->GetName()), slot, itemId, proto->ItemLevel);
                         return true;
                     }
                 }
@@ -2444,13 +2444,13 @@ void PlayerbotFactory::InitEquipment(bool incremental, bool syncWithMaster, bool
         if (!found)
         {
             if (slot != EQUIPMENT_SLOT_TRINKET1 && slot != EQUIPMENT_SLOT_TRINKET2)
-                sLog.outDetail("Bot #%d %s:%d <%s>: no items for slot %d, quality >= %u", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), bot->GetName(), slot, quality);
+                sLog.outDetail("Bot #%d %s:%d <%s>: no items for slot %d, quality >= %u", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()), slot, quality);
             continue;
         }
     }
 
     sLog.outDetail("Bot #%d %s:%d <%s>: InitEquipment done, GS %u -> %u",
-        bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), bot->GetName(),
+        bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()),
         oldGS, ai ? ai->GetEquipGearScore(bot, false, false) : 0);
 
     // Update stats here so the bots will benefit from the new equipped items' stats
@@ -2571,7 +2571,7 @@ void PlayerbotFactory::InitLevelBags()
         bot->DestroyItem(INVENTORY_SLOT_BAG_0, slot, true);
         Item* pItem = bot->EquipNewItem(eDest, tierBag, true);
         if (pItem)
-            sLog.outDetail("Bot %d got level-tier bag %s (%u slots)", bot->GetGUIDLow(), tierProto->Name1, tierSlots);
+            sLog.outDetail("Bot %d got level-tier bag %s (%u slots)", bot->GetGUIDLow(), CStrCompat(tierProto->Name1), tierSlots);
     }
 }
 
@@ -4213,7 +4213,7 @@ void PlayerbotFactory::InitPotions()
         uint32 itemId = sRandomItemMgr.GetRandomPotion(level, effect);
         if (!itemId)
         {
-            sLog.outDetail("No potions (type %d) available for bot %s (%d level)", effect, bot->GetName(), bot->GetLevel());
+            sLog.outDetail("No potions (type %d) available for bot %s (%d level)", effect, CStrCompat(bot->GetName()), bot->GetLevel());
             continue;
         }
 
@@ -4271,7 +4271,7 @@ void PlayerbotFactory::InitFood()
         uint32 itemId = sRandomItemMgr.GetFood(level, category, bot->GetGUIDLow());
         if (!itemId)
         {
-            sLog.outDetail("No food (category %d) available for bot %s (%d level)", category, bot->GetName(), bot->GetLevel());
+            sLog.outDetail("No food (category %d) available for bot %s (%d level)", category, CStrCompat(bot->GetName()), bot->GetLevel());
             continue;
         }
         ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
@@ -4312,7 +4312,7 @@ void PlayerbotFactory::InitPoolRations()
         uint32 itemId = sRandomItemMgr.GetFood(level, category, bot->GetGUIDLow());
         if (!itemId)
         {
-            sLog.outDetail("No food (category %d) available for bot %s (%d level)", category, bot->GetName(), bot->GetLevel());
+            sLog.outDetail("No food (category %d) available for bot %s (%d level)", category, CStrCompat(bot->GetName()), bot->GetLevel());
             continue;
         }
         ItemPrototype const* proto = GetItemProtoByIdCompat(itemId);
@@ -4449,7 +4449,7 @@ void PlayerbotFactory::InitReagents()
 
         Item* newItem = bot->StoreNewItemInInventorySlot(*i, addCount);
 
-        sLog.outDetail("Bot %d got reagent %s x%d", bot->GetGUIDLow(), proto->Name1, addCount);
+        sLog.outDetail("Bot %d got reagent %s x%d", bot->GetGUIDLow(), CStrCompat(proto->Name1), addCount);
     }
 
     for (PlayerSpellMap::iterator itr = bot->GetSpellMap().begin(); itr != bot->GetSpellMap().end(); ++itr)
@@ -4479,7 +4479,7 @@ void PlayerbotFactory::InitReagents()
 
                 Item* newItem = bot->StoreNewItemInInventorySlot(totem, 1);
 
-                sLog.outDetail("Bot %d got totem %s x%d", bot->GetGUIDLow(), proto->Name1, 1);
+                sLog.outDetail("Bot %d got totem %s x%d", bot->GetGUIDLow(), CStrCompat(proto->Name1), 1);
             }
         }
     }

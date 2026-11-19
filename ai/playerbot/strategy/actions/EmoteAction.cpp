@@ -639,7 +639,7 @@ bool EmoteAction::Execute(Event& event)
         if (allowEmote && pSource && (pSource->getObjectGuid() != bot->getObjectGuid()) &&
             !TortoiseBots::BotManager::Instance().IsBot(pSource->getObjectGuid()))
         {
-            sLog.outDetail("Bot #%d %s:%d <%s> received SMSG_TEXT_EMOTE %d from player #%d <%s>", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), bot->GetName(), text_emote, pSource->GetGUIDLow(), pSource->GetName());
+            sLog.outDetail("Bot #%d %s:%d <%s> received SMSG_TEXT_EMOTE %d from player #%d <%s>", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()), text_emote, pSource->GetGUIDLow(), CStrCompat(pSource->GetName()));
             emote = text_emote;
         }
     }
@@ -661,7 +661,7 @@ bool EmoteAction::Execute(Event& event)
         {
             if ((pSource->getObjectGuid() != bot->getObjectGuid()) && (pSource->GetSelectionGuid() == bot->getObjectGuid() || (urand(0, 1) && sServerFacade.isInFront(pSource, bot, 10.0f, M_PI_F))))
             {
-                sLog.outDetail("Bot #%d %s:%d <%s> received SMSG_EMOTE %d from player #%d <%s>", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), bot->GetName(), emoteId, pSource->GetGUIDLow(), pSource->GetName());
+                sLog.outDetail("Bot #%d %s:%d <%s> received SMSG_EMOTE %d from player #%d <%s>", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()), emoteId, pSource->GetGUIDLow(), CStrCompat(pSource->GetName()));
                 std::vector<uint32> types;
                 for (int32 i = sEmotesTextStore.GetNumRows(); i >= 0; --i)
                 {
