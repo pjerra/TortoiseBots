@@ -277,7 +277,7 @@ private:
             return HunterDeadZoneStep::None;
         Player* bot = ai->GetBot();
         bool const moving = !bot->IsStopped() || sServerFacade.isMoving(bot);
-        return DecideHunterDeadZoneStep(*state, target->GetObjectGuid().GetRawValue(),
+        return DecideHunterDeadZoneStep(*state, GuidKeyCompat(target->GetObjectGuid()),
             WorldTimer::getMSTime(), HunterTargetInDeadZone(ai, target), target->GetVictim() == bot, moving);
     }
 

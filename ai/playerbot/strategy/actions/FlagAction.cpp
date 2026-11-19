@@ -56,9 +56,9 @@ bool FlagAction::Execute(Event& event)
 
     if (clearFlag) bot->SetFlag(PLAYER_FLAGS, playerFlags);
     else if (setFlag) bot->RemoveFlag(PLAYER_FLAGS, playerFlags);
-    else if (toggleFlag && bot->HasFlag(PLAYER_FLAGS, playerFlags)) bot->RemoveFlag(PLAYER_FLAGS, playerFlags);
-    else if (toggleFlag && !bot->HasFlag(PLAYER_FLAGS, playerFlags)) bot->SetFlag(PLAYER_FLAGS, playerFlags);
-    std::ostringstream out; out << ss[0] << " flag is " << chat->formatBoolean(!bot->HasFlag(PLAYER_FLAGS, playerFlags));
+    else if (toggleFlag && HasPlayerFlagCompat(bot, playerFlags)) bot->RemoveFlag(PLAYER_FLAGS, playerFlags);
+    else if (toggleFlag && !HasPlayerFlagCompat(bot, playerFlags)) bot->SetFlag(PLAYER_FLAGS, playerFlags);
+    std::ostringstream out; out << ss[0] << " flag is " << chat->formatBoolean(!HasPlayerFlagCompat(bot, playerFlags));
     ai->TellPlayer(requester, out.str());
     return true;
 }

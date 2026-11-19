@@ -123,7 +123,7 @@ class BossAnchorWiring(unittest.TestCase):
         self.assertIn("monitor.NoteBossState(groupId, ", fn)
         # Before the timeline gate: the evade outcome needs no AiPlayerbot.CombatTimeline.
         self.assertLess(fn.index("monitor.NoteBossState("), fn.index("monitor.TimelineEnabled()"))
-        for guard in ("IsInEvadeMode()", "GetRespawnCoord(", "GetMaxHealth()"):
+        for guard in ("IsInEvadeMode()", "GetRespawnCoordCompat(", "GetMaxHealth()"):
             self.assertIn(guard, fn)
 
 

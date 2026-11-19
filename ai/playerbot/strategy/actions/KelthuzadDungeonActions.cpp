@@ -108,7 +108,7 @@ bool KelthuzadChooseTargetAction::Execute(Event& event)
     const unsigned want = KtPickTarget(ranged, tank,
         found.soldier != nullptr, found.weaver != nullptr,
         found.abom != nullptr, found.guardian != nullptr,
-        found.kt && !found.kt->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE));
+        found.kt && !HasUnitFlagCompat(found.kt, UNIT_FLAG_NOT_SELECTABLE));
     if (!want)
         return false;
 
@@ -125,7 +125,7 @@ bool KelthuzadChooseTargetAction::Execute(Event& event)
 bool KelthuzadPositionAction::Execute(Event& event)
 {
     KtTargets found = FindKtTargets(ai, bot);
-    const bool phaseTwo = found.kt && !found.kt->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_NOT_SELECTABLE);
+    const bool phaseTwo = found.kt && !HasUnitFlagCompat(found.kt, UNIT_FLAG_NOT_SELECTABLE);
 
     if (!phaseTwo)
     {

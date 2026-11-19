@@ -13,6 +13,7 @@
 #undef private
 
 struct Session { bool headless = false; bool IsHeadless() const { return headless; } };
+inline bool IsHeadlessCompat(Session* session) { return session->IsHeadless(); }
 class Group;
 class Player {
 public:

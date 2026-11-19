@@ -31,7 +31,7 @@ bool InGroupWithRealPlayer(Player* bot)
     if (!group)
         return false;
     for (Player* member : LiveGroupMembers(group))
-        if (member && member != bot && member->GetSession() && !member->GetSession()->IsHeadless())
+        if (member && member != bot && member->GetSession() && !IsHeadlessCompat(member->GetSession()))
             return true;
     return false;
 }
@@ -43,7 +43,7 @@ bool InInstance(Player* bot)
     if (bot->InBattleGround() || bot->InBattleGroundQueue())
         return true;
     if (Map* map = bot->GetMap())
-        if (map->IsDungeon() || map->IsRaid() || map->IsBattleGround())
+        if (map->IsDungeon() || map->IsRaid() || MapIsBattlegroundCompat(map))
             return true;
     return false;
 }
@@ -139,7 +139,7 @@ bool BotBusyForMeet(Player* bot)
 
 TeleportWait WaitReason(Player* bot)
 {
-    if (!bot || !bot->GetSession() || !bot->GetSession()->IsHeadless() || !bot->IsInWorld())
+    if (!bot || !bot->GetSession() || !IsHeadlessCompat(bot->GetSession()) || !bot->IsInWorld())
         return TeleportWait::Dead;
     return CanTeleportNow(bot->IsInCombat(), InInstance(bot),
         InGroupWithRealPlayer(bot), bot->IsAlive(), bot->IsTaxiFlying());

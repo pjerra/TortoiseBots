@@ -210,7 +210,7 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
         groupMembers.reserve(groupSlot.size());
         for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
         {
-            Player* member = sObjectMgr.GetPlayer(itr->guid);
+            Player* member = GetPlayerCompat(itr->guid);
             if (member && sServerFacade.IsAlive(member))
                 groupMembers.push_back({ member, member->getPositionX(), member->getPositionY() });
         }
@@ -409,7 +409,7 @@ Unit* GrindTargetValue::FindTargetForGrinding(int assistCount)
             Group::MemberSlotList const& groupSlot = group->GetMemberSlots();
             for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
             {
-                Player* member = sObjectMgr.GetPlayer(itr->guid);
+                Player* member = GetPlayerCompat(itr->guid);
                 if (!member || !sServerFacade.IsAlive(member))
                     continue;
 
@@ -582,7 +582,7 @@ int GrindTargetValue::GetTargetingPlayerCount( Unit* unit )
     Group::MemberSlotList const& groupSlot = group->GetMemberSlots();
     for (Group::member_citerator itr = groupSlot.begin(); itr != groupSlot.end(); itr++)
     {
-        Player *member = sObjectMgr.GetPlayer(itr->guid);
+        Player *member = GetPlayerCompat(itr->guid);
         if( !member || !sServerFacade.IsAlive(member) || member == bot)
             continue;
 

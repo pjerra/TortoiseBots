@@ -126,7 +126,7 @@ bool LftBotFillService::IsEligibleCandidate(Player* bot) const
 {
     if (!bot) return false;
     if (!bot->IsInWorld()) return false;
-    if (!bot->GetSession() || !bot->GetSession()->IsHeadless()) return false;
+    if (!bot->GetSession() || !IsHeadlessCompat(bot->GetSession())) return false;
     if (AhBotSellerAccount::Instance().IsSellerGuid(bot->GetGUIDLow())) return false;
     if (!BotManager::Instance().IsRandomBot(bot->GetObjectGuid())) return false;
     if (sLFTMgr.IsQueued(bot->GetObjectGuid()) || sLFTMgr.IsInOffer(bot->GetObjectGuid())) return false;
@@ -149,7 +149,7 @@ bool LftBotFillService::IsEligibleCandidate(Player* bot) const
 bool LftBotFillService::IsModuleOwnedHeadlessBot(Player const* bot) const
 {
     if (!bot) return false;
-    if (!bot->GetSession() || !bot->GetSession()->IsHeadless()) return false;
+    if (!bot->GetSession() || !IsHeadlessCompat(bot->GetSession())) return false;
     if (AhBotSellerAccount::Instance().IsSellerGuid(bot->GetGUIDLow())) return false;
     if (!BotManager::Instance().IsRandomBot(bot->GetObjectGuid())) return false;
     const Player* p = bot;
@@ -544,12 +544,12 @@ void LftBotFillService::AcceptPartyBotOffers()
         ObjectGuid const hireMaster = hired ? HireLifecycle::Instance().GetMaster(guid) : ObjectGuid();
         Player* candidates[2] = { ai->GetLiveMaster(), nullptr };
         if (Group* group = bot->GetGroup())
-            candidates[1] = sObjectMgr.GetPlayer(group->GetLeaderGuid());
+            candidates[1] = GetPlayerCompat(group->GetLeaderGuid());
         Player* anchor = nullptr;
         for (Player* candidate : candidates)
         {
             if (!candidate || candidate == bot || !candidate->IsInWorld() || !candidate->GetSession() ||
-                !candidate->GetSession()->HasNetworkTransport() ||
+                !HasNetworkTransportCompat(candidate->GetSession()) ||
                 !sLFTMgr.IsInOffer(candidate->GetObjectGuid()))
                 continue;
             bool const anchorIsHireMaster = !hireMaster.IsEmpty() && candidate->GetObjectGuid() == hireMaster;

@@ -157,7 +157,7 @@ bool QuestRelationTravelDestination::IsPossible(const PlayerTravelInfo& info) co
 
     if (GetRelation() == 0)
     {
-        if (!forceThisQuest && (int32)quest->GetQuestLevel() >= (int32)info.GetLevel() + (int32)5)
+        if (!forceThisQuest && (int32)QuestLevelCompat(quest) >= (int32)info.GetLevel() + (int32)5)
             return false;
 
         // No trip back for a grey quest: the same XP grey rule the grind and
@@ -166,8 +166,8 @@ bool QuestRelationTravelDestination::IsPossible(const PlayerTravelInfo& info) co
         // mobs are grey too, so the walk only parks the bot among no-XP mobs.
         // QuestLevel 0 is scaling (GetQuestLevelForPlayer falls back to bot
         // level): never grey. Scoped to givers; hand-ins always pay out.
-        if (!forceThisQuest && quest->GetQuestLevel() > 0 &&
-            (int32)quest->GetQuestLevel() <= (int32)MaNGOS::XP::GetGrayLevel(info.GetLevel()))
+        if (!forceThisQuest && QuestLevelCompat(quest) > 0 &&
+            (int32)QuestLevelCompat(quest) <= (int32)MaNGOS::XP::GetGrayLevel(info.GetLevel()))
             return false;
 
         // MaxLevel 0 is "no upper bound" in this core, not "level 0": the take
@@ -229,7 +229,7 @@ bool QuestRelationTravelDestination::IsPossible(const PlayerTravelInfo& info) co
             AreaTableEntry const* takerArea = takerPoint->GetArea();
             AreaTableEntry const* botArea = info.getPosition().GetArea();
             bool const takerElsewhere = takerArea && botArea && takerArea->Id != botArea->Id;
-            if (!ai::QuestTakerTripFits((int)quest->GetQuestLevel(),
+            if (!ai::QuestTakerTripFits((int)QuestLevelCompat(quest),
                 takerElsewhere, info.GetLevel(), info.IsMasterlessRandom()))
                 return false;
         }
@@ -371,10 +371,10 @@ bool QuestObjectiveTravelDestination::IsPossible(const PlayerTravelInfo& info) c
 
     if (!forceThisQuest)
     {
-        if ((int32)GetQuestTemplate()->GetQuestLevel() > (int32)info.GetLevel() + (int32)1)
+        if ((int32)QuestLevelCompat(GetQuestTemplate()) > (int32)info.GetLevel() + (int32)1)
             return false;
 
-        if (!skipShouldGrindCheck && GetQuestTemplate()->GetQuestLevel() + 5 > (int)info.GetLevel() && !info.GetBoolValue("can fight equal"))
+        if (!skipShouldGrindCheck && QuestLevelCompat(GetQuestTemplate()) + 5 > (int)info.GetLevel() && !info.GetBoolValue("can fight equal"))
             return false;
     }
 
@@ -578,7 +578,7 @@ bool RpgTravelDestination::IsPossible(const PlayerTravelInfo& info) const
     if (point)
     {
         AreaTableEntry const* area = point->GetArea();
-        uint32 zoneId = area ? (area->ZoneId ? area->ZoneId : area->Id) : 0;
+        uint32 zoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id) : 0;
         if (!sPlayerbotAIConfig.allowIsolatedCustomStartingZones &&
             (PlayerbotAIConfig::IsIsolatedCustomZone(zoneId) || (area && PlayerbotAIConfig::IsIsolatedCustomZone(area->Id))))
             return false;
@@ -606,7 +606,7 @@ bool RpgTravelDestination::IsPossible(const PlayerTravelInfo& info) const
         if (!orderMailbox && info.IsMasterlessRandom() && sPlayerbotAIConfig.leaveOutgrownZones &&
             destAreaLevel > 0 && destAreaLevel + 10 < (int32)info.GetLevel())
         {
-            uint32 destZoneId = area ? (area->ZoneId ? area->ZoneId : area->Id) : 0;
+            uint32 destZoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id) : 0;
             AreaTableEntry const* destZone = destZoneId ? GetAreaEntryByAreaID(destZoneId) : nullptr;
             if (!destZone || !(destZone->Flags & AREA_FLAG_CAPITAL))
                 return false;
@@ -722,7 +722,7 @@ bool ExploreTravelDestination::IsPossible(const PlayerTravelInfo& info) const
     if (!area)
         return false;
 
-    uint32 zoneId = area->ZoneId ? area->ZoneId : area->Id;
+    uint32 zoneId = AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id;
     if (!sPlayerbotAIConfig.allowIsolatedCustomStartingZones &&
         (PlayerbotAIConfig::IsIsolatedCustomZone(zoneId) || (area && PlayerbotAIConfig::IsIsolatedCustomZone(area->Id))))
         return false;
@@ -735,7 +735,7 @@ bool ExploreTravelDestination::IsPossible(const PlayerTravelInfo& info) const
         // Enemy home zone, same rule as WorldPosition::isEnemyHomeZoneFor:
         // sub-areas usually carry no team and inherit their zone's.
         uint32 areaTeam = area->Team;
-        if (areaTeam == AREATEAM_NONE && area->ZoneId)
+        if (areaTeam == AREATEAM_NONE && AreaZoneIdCompat(area))
             if (AreaEntry const* zone = AreaEntry::GetById(area->ZoneId))
                 areaTeam = zone->Team;
         Team const botTeam = info.GetTeam();
@@ -827,7 +827,7 @@ bool GrindTravelDestination::IsPossible(const PlayerTravelInfo& info) const
     if (point)
     {
         AreaTableEntry const* area = point->GetArea();
-        uint32 zoneId = area ? (area->ZoneId ? area->ZoneId : area->Id) : 0;
+        uint32 zoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id) : 0;
         if (!sPlayerbotAIConfig.allowIsolatedCustomStartingZones &&
             (PlayerbotAIConfig::IsIsolatedCustomZone(zoneId) || (area && PlayerbotAIConfig::IsIsolatedCustomZone(area->Id))))
             return false;
@@ -1165,7 +1165,7 @@ bool GatherTravelDestination::IsPossible(const PlayerTravelInfo& info) const
                 GetPurpose() == TravelDestinationPurpose::GatherHerbalism))
         {
             AreaTableEntry const* area = point->GetArea();
-            uint32 zoneId = area ? (area->ZoneId ? area->ZoneId : area->Id) : 0;
+            uint32 zoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id) : 0;
             if (zoneId)
             {
                 int32 pointZoneLevel = 0;
@@ -1774,7 +1774,7 @@ int32 TravelMgr::GetAreaLevel(uint32 area_id)
     {
         AreaTableEntry const* subArea = GetAreaEntryByAreaID(i);
 
-        if (!subArea || subArea->ZoneId != area->Id)
+        if (!subArea || AreaZoneIdCompat(subArea) != area->Id)
             continue;
 
         int32 subLevel = GetAreaLevel(subArea->Id);
@@ -1798,10 +1798,10 @@ int32 TravelMgr::GetAreaLevel(uint32 area_id)
     // issue #684). Areas the DBC leaves at 0 are covered by the shipped
     // ai_playerbot_zone_level rows; anything newer falls back to its zone.
     //Use parent zone value.
-    if (area->ZoneId)
+    if (AreaZoneIdCompat(area))
     {
         areaLevels[area_id] = 0; //Set a temporary value so it wont be counted.
-        level = GetAreaLevel(area->ZoneId);
+        level = GetAreaLevel(AreaZoneIdCompat(area));
         areaLevels[area_id] = level;
         return areaLevels[area_id];
     }
@@ -1822,9 +1822,9 @@ bool TravelMgr::TryGetValidatedAreaLevel(uint32 areaId, int32& outLevel) const
     AreaTableEntry const* area = GetAreaEntryByAreaID(areaId);
     if (!area)
         return false;
-    if (area->ZoneId)
+    if (AreaZoneIdCompat(area))
     {
-        auto pit = areaLevels.find(area->ZoneId);
+        auto pit = areaLevels.find(AreaZoneIdCompat(area));
         if (pit != areaLevels.end() && pit->second > 0)
         {
             outLevel = pit->second;
@@ -1836,9 +1836,9 @@ bool TravelMgr::TryGetValidatedAreaLevel(uint32 areaId, int32& outLevel) const
         outLevel = area->AreaLevel;
         return true;
     }
-    if (area->ZoneId)
+    if (AreaZoneIdCompat(area))
     {
-        if (AreaTableEntry const* parent = GetAreaEntryByAreaID(area->ZoneId))
+        if (AreaTableEntry const* parent = GetAreaEntryByAreaID(AreaZoneIdCompat(area)))
             if (parent->AreaLevel > 0)
             {
                 outLevel = parent->AreaLevel;
@@ -3038,7 +3038,7 @@ bool TravelMgr::IsLocationLevelValid(const WorldPosition& position, const Player
     AreaTableEntry const* posArea = position.GetArea();
     if (!sPlayerbotAIConfig.allowIsolatedCustomStartingZones && posArea)
     {
-        uint32 posZoneId = posArea->ZoneId ? posArea->ZoneId : posArea->Id;
+        uint32 posZoneId = AreaZoneIdCompat(posArea) ? AreaZoneIdCompat(posArea) : posArea->Id;
         if (PlayerbotAIConfig::IsIsolatedCustomZone(posZoneId) || PlayerbotAIConfig::IsIsolatedCustomZone(posArea->Id))
             return false;
     }
@@ -3052,7 +3052,7 @@ bool TravelMgr::IsLocationLevelValid(const WorldPosition& position, const Player
         (uint32)TravelDestinationPurpose::GatherFishing |
         (uint32)TravelDestinationPurpose::Explore;
     if ((purposeFlag & levellingPurposes) && posArea &&
-        ai::IsNoLevellingZone(posArea->ZoneId ? posArea->ZoneId : posArea->Id))
+        ai::IsNoLevellingZone(AreaZoneIdCompat(posArea) ? AreaZoneIdCompat(posArea) : posArea->Id))
         return false;
 
     // A beginner vendor trip is the one RPG errand a level 1-4 bot may make (see
@@ -3106,8 +3106,8 @@ bool TravelMgr::IsLocationLevelValid(const WorldPosition& position, const Player
     if (beginnerGrind || beginnerQuest)
     {
         AreaTableEntry const* botArea = info.getPosition().GetArea();
-        uint32 const botZoneId = botArea ? (botArea->ZoneId ? botArea->ZoneId : botArea->Id) : 0;
-        uint32 const pointZoneId = posArea ? (posArea->ZoneId ? posArea->ZoneId : posArea->Id) : 0;
+        uint32 const botZoneId = botArea ? (AreaZoneIdCompat(botArea) ? AreaZoneIdCompat(botArea) : botArea->Id) : 0;
+        uint32 const pointZoneId = posArea ? (AreaZoneIdCompat(posArea) ? AreaZoneIdCompat(posArea) : posArea->Id) : 0;
         WorldPosition const& home = info.GetHomebind();
         bool const homeOnSameMap = home.GetMapId() == position.GetMapId();
         if (!ai::BeginnerValleyLeashAllows(true, botZoneId, pointZoneId, homeOnSameMap,
@@ -3195,7 +3195,7 @@ bool TravelMgr::IsLocationLevelValid(const WorldPosition& position, const Player
         // capital-idle leaves pass 0 and skip this entirely.
         if (excludeZoneId)
         {
-            uint32 pointZoneId = posArea ? (posArea->ZoneId ? posArea->ZoneId : posArea->Id) : 0;
+            uint32 pointZoneId = posArea ? (AreaZoneIdCompat(posArea) ? AreaZoneIdCompat(posArea) : posArea->Id) : 0;
             if (pointZoneId == excludeZoneId)
                 return false;
         }
@@ -3204,7 +3204,7 @@ bool TravelMgr::IsLocationLevelValid(const WorldPosition& position, const Player
         TortoiseBots::GuildOrders::OutgrownFloorApplies(info.IsOrderMode()) &&
         info.IsMasterlessRandom() && info.GetLevel() > 10)
     {
-        uint32 pointZoneId = posArea ? (posArea->ZoneId ? posArea->ZoneId : posArea->Id) : 0;
+        uint32 pointZoneId = posArea ? (AreaZoneIdCompat(posArea) ? AreaZoneIdCompat(posArea) : posArea->Id) : 0;
         if (pointZoneId)
         {
             int32 pointZoneLevel = 0;
@@ -3390,7 +3390,7 @@ PartitionedTravelList TravelMgr::GetOrderZonePartitions(const WorldPosition& cen
             if (found != bestByBand.end() && distance >= std::get<2>(found->second))
                 continue;
             AreaTableEntry const* area = position->GetArea();
-            uint32 pointZoneId = area ? (area->ZoneId ? area->ZoneId : area->Id) : 0;
+            uint32 pointZoneId = area ? (AreaZoneIdCompat(area) ? AreaZoneIdCompat(area) : area->Id) : 0;
             if (pointZoneId != zoneId)
                 continue;
             if (!IsLocationLevelValid(*position, info, purposeFlag))

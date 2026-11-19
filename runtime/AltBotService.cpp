@@ -45,7 +45,7 @@ void Tell(Player* player, std::string const& text)
 Player* OnlineOwner(ObjectGuid ownerGuid)
 {
     Player* owner = ownerGuid.IsEmpty() ? nullptr : sObjectAccessor.FindPlayer(ownerGuid);
-    return owner && owner->GetSession() && owner->GetSession()->HasNetworkTransport() ? owner : nullptr;
+    return owner && owner->GetSession() && HasNetworkTransportCompat(owner->GetSession()) ? owner : nullptr;
 }
 
 // Free slots in the backpack and ordinary bags (not quivers or special bags).
@@ -125,7 +125,7 @@ std::string AwayActivity(Player* bot)
     if (!bot->IsAlive())
         return AltBotAwayActivityWord(true, false, false, false, false, false);
     bool const fighting = bot->IsInCombat();
-    bool const resting = bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_RESTING) || bot->IsTaxiFlying();
+    bool const resting = HasPlayerFlagCompat(bot, PLAYER_FLAGS_RESTING) || bot->IsTaxiFlying();
     PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(bot);
     bool questTravel = false;
     bool anyTravel = false;
@@ -191,7 +191,7 @@ bool GroupAloneOnMap(Player* bot)
     for (Player* member : LiveGroupMembers(group))
     {
         if (member && member != bot && member->GetMapId() == bot->GetMapId() && member->GetSession() &&
-            member->GetSession()->HasNetworkTransport())
+            HasNetworkTransportCompat(member->GetSession()))
             return false;
     }
     return true;
@@ -341,7 +341,7 @@ void AltBotService::TryStart(ObjectGuid guid)
         return;
 
     Player* bot = sObjectAccessor.FindPlayer(guid);
-    if (!bot || !bot->GetSession() || !bot->GetSession()->IsHeadless())
+    if (!bot || !bot->GetSession() || !IsHeadlessCompat(bot->GetSession()))
         return;
     // Still (or again) grouped: a party member was removed, not this alt.
     if (bot->GetGroup())
@@ -514,7 +514,7 @@ bool AltBotService::TakeBack(Player* requester, Player* bot)
 
 void AltBotService::OnMasterBound(Player* bot, Player* master)
 {
-    if (!bot || !master || !master->GetSession() || !master->GetSession()->HasNetworkTransport())
+    if (!bot || !master || !master->GetSession() || !HasNetworkTransportCompat(master->GetSession()))
         return;
     // B8: another player's group gives it a master too; only the owner's
     // account takes the alt back.
@@ -537,7 +537,7 @@ void AltBotService::OnReclaimed(Player* player)
 
 void AltBotService::OnOwnerLogout(Player* owner)
 {
-    if (!owner || !owner->GetSession() || !owner->GetSession()->HasNetworkTransport())
+    if (!owner || !owner->GetSession() || !HasNetworkTransportCompat(owner->GetSession()))
         return;
     uint32_t const accountId = owner->GetSession()->GetAccountId();
     std::vector<std::pair<uint32_t, AltBotAwayPoint>> snapshots;
@@ -566,7 +566,7 @@ void AltBotService::OnOwnerLogout(Player* owner)
 
 void AltBotService::OnOwnerLogin(Player* owner)
 {
-    if (!owner || !owner->GetSession() || !owner->GetSession()->HasNetworkTransport())
+    if (!owner || !owner->GetSession() || !HasNetworkTransportCompat(owner->GetSession()))
         return;
     for (auto const& named : AwayLines(owner->GetSession()->GetAccountId()))
         Tell(owner, named.second);

@@ -20,11 +20,11 @@ namespace ai
             Group* grp = bot->GetGroupInvite();
             if (!grp)
             {
-                sLog.outDebug("TortoiseBots: AcceptInvitationAction %s has no group invite", bot->GetName());
+                sLog.outDebug("TortoiseBots: AcceptInvitationAction %s has no group invite", CStrCompat(bot->GetName()));
                 return false;
             }
 
-            Player* inviter = sObjectMgr.GetPlayer(grp->GetLeaderGuid());
+            Player* inviter = GetPlayerCompat(grp->GetLeaderGuid());
             if (!inviter)
             {
                 sLog.outDebug("TortoiseBots: AcceptInvitationAction %s cannot resolve inviter guid %s",
@@ -47,7 +47,7 @@ namespace ai
                 if (!inviterAi || !inviterAi->HasRealPlayerMaster())
                 {
                     sLog.outDebug("TortoiseBots: AcceptInvitationAction %s declines pool-bot invite from %s",
-                        bot->GetName(), inviter->GetName());
+                        CStrCompat(bot->GetName()), CStrCompat(inviter->GetName()));
                     WorldPacket data(SMSG_GROUP_DECLINE, 10);
                     data << bot->GetName();
                     sServerFacade.SendPacket(inviter, data);
@@ -58,7 +58,7 @@ namespace ai
 
 			bool allowed = ai->GetSecurity()->CheckLevelFor(PlayerbotSecurityLevel::PLAYERBOT_SECURITY_INVITE, false, inviter);
             sLog.outDebug("TortoiseBots: AcceptInvitationAction %s inviter %s security %u",
-                bot->GetName(), inviter->GetName(), allowed ? 1 : 0);
+                CStrCompat(bot->GetName()), CStrCompat(inviter->GetName()), allowed ? 1 : 0);
 			if (!allowed)
             {
                 WorldPacket data(SMSG_GROUP_DECLINE, 10);
@@ -87,7 +87,7 @@ namespace ai
                 if (!adoptedHumanMaster)
                 {
                     sLog.outError("TortoiseBots: module bot %s accepted master %s but durable master bind failed; keeping ownership unchanged",
-                        bot->GetName(), inviter->GetName());
+                        CStrCompat(bot->GetName()), CStrCompat(inviter->GetName()));
                     return false;
                 }
             }
@@ -120,13 +120,13 @@ namespace ai
                     conditions.cooldown = sPlayerbotAIConfig.ownedBotSummonCooldown;
                     if (!TortoiseBots::PlayerConvenience::Instance().RequestGroupSummon(inviter, bot, conditions))
                         sLog.outDebug("TortoiseBots: summon-on-accept for bot %s refused by condition knobs",
-                            bot->GetName());
+                            CStrCompat(bot->GetName()));
                 }
                 ai::Event followEvent("follow", "", inviter);
                 if (!ai->DoSpecificAction("follow chat shortcut", followEvent, true))
                 {
                     sLog.outError("TortoiseBots: mature follow action failed after bot %s joined human %s",
-                        bot->GetName(), inviter->GetName());
+                        CStrCompat(bot->GetName()), CStrCompat(inviter->GetName()));
                     return false;
                 }
             }

@@ -77,7 +77,7 @@ void SendBidderRefund(AuctionEntry* auction, MailAuctionAnswers reason)
         return;
 
     ObjectGuid bidderGuid(HIGHGUID_PLAYER, auction->bidder);
-    Player* bidder = sObjectMgr.GetPlayer(bidderGuid);
+    Player* bidder = GetPlayerCompat(bidderGuid);
     if (bidder && bidder->GetSession())
     {
         if (reason == AUCTION_OUTBIDDED)
@@ -87,7 +87,7 @@ void SendBidderRefund(AuctionEntry* auction, MailAuctionAnswers reason)
         return;
     }
 
-    if (!sObjectMgr.GetPlayerAccountIdByGUID(bidderGuid))
+    if (!AccountIdOfCharacterCompat(bidderGuid))
         return;
     if (IsOfflineHardcore(auction->bidder))
         return;
@@ -637,7 +637,7 @@ bool AhBotService::StepBuyOne()
         auction->bidder = buyerGuidLow;
         auction->bid = eval.amount;
 
-        if (Player* ownerPlayer = sObjectMgr.GetPlayer(ObjectGuid(HIGHGUID_PLAYER, auction->owner)))
+        if (Player* ownerPlayer = GetPlayerCompat(ObjectGuid(HIGHGUID_PLAYER, auction->owner)))
         {
             if (ownerPlayer->GetSession())
                 ownerPlayer->GetSession()->SendAuctionOwnerNotification(auction, false);

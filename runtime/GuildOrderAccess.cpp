@@ -146,7 +146,7 @@ bool IsRankableBot(ObjectGuid guid)
         return false;
     if (ClaimLifecycle::Instance().IsClaimed(guidLow))
         return true;
-    uint32_t accountId = sObjectMgr.GetPlayerAccountIdByGUID(guid);
+    uint32_t accountId = AccountIdOfCharacterCompat(guid);
     return accountId && RandomBotAccountRegistry::Instance().IsRegistered(accountId);
 }
 

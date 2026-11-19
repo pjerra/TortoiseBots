@@ -26,7 +26,7 @@ bool ChooseRpgTargetAction::HasSameTarget(ObjectGuid guid, uint32 max, std::list
 
     for (auto& i : nearGuids)
     {
-        Player* player = sObjectMgr.GetPlayer(i);
+        Player* player = GetPlayerCompat(i);
 
         if (!player)
             continue;

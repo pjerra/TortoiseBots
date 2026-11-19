@@ -1481,7 +1481,7 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
         PlayerbotAI* ai = PlayerbotAIStorage::Instance().GetAI(player);
         Player* master = ai ? ai->GetMaster() : nullptr;
 
-        if (master && master->GetSession() && master->GetSession()->HasNetworkTransport())
+        if (master && master->GetSession() && HasNetworkTransportCompat(master->GetSession()))
         {
             // A real player's bot rebuilds with "follow" (GetDefaultMovementStrategy,
             // mod-playerbots parity): a role change or regroup reset must not swap
@@ -1555,7 +1555,7 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
                 nonCombatEngine->addStrategy("rpg");
             }
 
-            if(!master || (master->GetSession() && !master->GetSession()->HasNetworkTransport()))
+            if(!master || (master->GetSession() && !HasNetworkTransportCompat(master->GetSession())))
             {
                 nonCombatEngine->addStrategy("maintenance");
             }
@@ -1597,7 +1597,7 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
                             nonCombatEngine->addStrategy("rpg");
                         }
 
-                        if ((!master || (master->GetSession() && !master->GetSession()->HasNetworkTransport())) && !isHire)
+                        if ((!master || (master->GetSession() && !HasNetworkTransportCompat(master->GetSession()))) && !isHire)
                         {
                             nonCombatEngine->addStrategy("maintenance");
                         }

@@ -44,7 +44,7 @@ void ReleaseOwnedBot(PlayerbotAI* ai)
         return;
 
     if (!TortoiseBots::BotManager::Instance().ClearBotMaster(bot->GetObjectGuid()))
-        sLog.outError("TortoiseBots: failed to clear durable master for %s after battleground transition", bot->GetName());
+        sLog.outError("TortoiseBots: failed to clear durable master for %s after battleground transition", CStrCompat(bot->GetName()));
 }
 }
 
@@ -134,7 +134,7 @@ bool BGStatusAction::Execute(Event& event)
 
     BattleGroundQueueTypeId queueType = bot->GetBattleGroundQueueTypeId(queueSlot);
     BattleGroundTypeId bgType = sServerFacade.BGTemplateId(queueType);
-    sLog.outDetail("Bot #%u <%s> received battleground invite for %s", bot->GetGUIDLow(), bot->GetName(), BattlegroundName(bgType));
+    sLog.outDetail("Bot #%u <%s> received battleground invite for %s", bot->GetGUIDLow(), CStrCompat(bot->GetName()), BattlegroundName(bgType));
 
     if (time1 == TIME_TO_AUTOREMOVE)
     {

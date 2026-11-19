@@ -129,7 +129,7 @@ bool PetitionOfferAction::Execute(Event& event)
     if (!guid)
         return false;
 
-    Player* player = sObjectMgr.GetPlayer(guid);
+    Player* player = GetPlayerCompat(guid);
 
     if (!player)
         return false;
@@ -163,7 +163,7 @@ bool PetitionOfferNearbyAction::Execute(Event& event)
     std::list<ObjectGuid> nearGuids = ai->GetAiObjectContext()->GetValue<std::list<ObjectGuid> >("nearest friendly players")->Get();
     for (auto& i : nearGuids)
     {
-        Player* player = sObjectMgr.GetPlayer(i);
+        Player* player = GetPlayerCompat(i);
 
         if (!player)
             continue;
@@ -313,8 +313,8 @@ bool PetitionTurnInAction::isUseful()
     AreaTableEntry const* areaEntry = GetAreaEntryByAreaID(sServerFacade.GetAreaId(bot));
     if (areaEntry)
     {
-        if (areaEntry->ZoneId)
-            areaEntry = GetAreaEntryByAreaID(areaEntry->ZoneId);
+        if (AreaZoneIdCompat(areaEntry))
+            areaEntry = GetAreaEntryByAreaID(AreaZoneIdCompat(areaEntry));
 
         if (areaEntry && areaEntry->Flags & AREA_FLAG_CAPITAL)
             inCity = true;
@@ -379,8 +379,8 @@ bool BuyTabardAction::isUseful()
     AreaTableEntry const* areaEntry = GetAreaEntryByAreaID(sServerFacade.GetAreaId(bot));
     if (areaEntry)
     {
-        if (areaEntry->ZoneId)
-            areaEntry = GetAreaEntryByAreaID(areaEntry->ZoneId);
+        if (AreaZoneIdCompat(areaEntry))
+            areaEntry = GetAreaEntryByAreaID(AreaZoneIdCompat(areaEntry));
 
         if (areaEntry && areaEntry->Flags & AREA_FLAG_CAPITAL)
             inCity = true;

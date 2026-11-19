@@ -79,7 +79,7 @@ int main(){
         template = (root/'ai/playerbot/aiplayerbot.conf.dist.in').read_text()
         self.assertIn('AiPlayerbot.RaidBossDiagnostics = 0', template)
         packet = (root/'host/BotPacketAdapter.cpp').read_text()
-        self.assertLess(packet.index('RaidBossDiagnostics::ObservePacket'), packet.index('if (session->IsHeadless())'))
+        self.assertLess(packet.index('RaidBossDiagnostics::ObservePacket'), packet.index('if (IsHeadlessCompat(session))'))
 
 
 if __name__ == '__main__':

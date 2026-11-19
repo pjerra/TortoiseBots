@@ -47,7 +47,7 @@ static void LogGhostMoveDiag(PlayerbotAI* ai, Player* bot, WorldPosition const& 
     // name,map,fromX,fromY,fromZ,targetX,targetY,targetZ,dist,movegenBefore,movegenAfter,started,result,distAfter,posUnchangedSec
     char row[320];
     snprintf(row, sizeof(row), "%s,%u,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%.1f,%d,%d,%d,%d,%.1f,%u",
-        bot->GetName(), target.GetMapId(), botBefore.getX(), botBefore.getY(), botBefore.getZ(),
+        CStrCompat(bot->GetName()), target.GetMapId(), botBefore.getX(), botBefore.getY(), botBefore.getZ(),
         target.getX(), target.getY(), target.getZ(), distBefore, movegenBefore, movegenAfter,
         started ? 1 : 0, moveResult ? 1 : 0, distAfter, posUnchangedSec);
     sPlayerbotAIConfig.log("ghost_moves.csv", row);
@@ -197,7 +197,7 @@ bool ReviveFromCorpseAction::Execute(Event& event)
     if (corpse->GetGhostTime() + bot->GetCorpseReclaimDelay(corpse->GetType() == CORPSE_RESURRECTABLE_PVP) > time(nullptr))
     {
         int64 wait = corpse->GetGhostTime() + bot->GetCorpseReclaimDelay(corpse->GetType() == CORPSE_RESURRECTABLE_PVP) - time(nullptr);
-        sLog.outDetail("[BOT CORPSE] %s: revive from corpse - BLOCKED: reclaim delay not elapsed (%llds left)", bot->GetName(), (long long)wait);
+        sLog.outDetail("[BOT CORPSE] %s: revive from corpse - BLOCKED: reclaim delay not elapsed (%llds left)", CStrCompat(bot->GetName()), (long long)wait);
         return false;
     }
 
@@ -206,7 +206,7 @@ bool ReviveFromCorpseAction::Execute(Event& event)
         //Revive with master.
         if (bot != master && sServerFacade.UnitIsDead(master) && master->GetCorpse() && sServerFacade.IsDistanceLessThan(AI_VALUE2(float, "distance", "master target"), sPlayerbotAIConfig.farDistance))
         {
-            sLog.outDetail("[BOT CORPSE] %s: revive from corpse - BLOCKED: master is dead & nearby, waiting to revive together", bot->GetName());
+            sLog.outDetail("[BOT CORPSE] %s: revive from corpse - BLOCKED: master is dead & nearby, waiting to revive together", CStrCompat(bot->GetName()));
             return false;
         }
     }
@@ -221,7 +221,7 @@ bool ReviveFromCorpseAction::Execute(Event& event)
     if (!corpse->IsWithinDistInMap(bot, reclaimDist, true))
     {
         sLog.outDetail("[BOT CORPSE] %s: revive from corpse - BLOCKED: corpse %.1f yd away, core needs within %d yd; walking closer",
-            bot->GetName(), bot->GetDistance(corpse), CORPSE_RECLAIM_RADIUS);
+            CStrCompat(bot->GetName()), bot->GetDistance(corpse), CORPSE_RECLAIM_RADIUS);
         return false;
     }
 
@@ -246,12 +246,12 @@ bool ReviveFromCorpseAction::Execute(Event& event)
             }
             ai->safeReviveNoSafePoint_ = decision == TortoiseBots::SafeReviveDecision::SpiritHealer;
             sLog.outDetail("[BOT CORPSE] %s: revive from corpse - BLOCKED: %u hostile(s) would aggro here, %s",
-                bot->GetName(), aggro, safePointInReach ? "moving to a safe point" : "no safe point, spirit healer");
+                CStrCompat(bot->GetName()), aggro, safePointInReach ? "moving to a safe point" : "no safe point, spirit healer");
             return false;
         }
     }
 
-    sLog.outDetail("[BOT CORPSE] %s: revive from corpse - RECLAIMING corpse now", bot->GetName());
+    sLog.outDetail("[BOT CORPSE] %s: revive from corpse - RECLAIMING corpse now", CStrCompat(bot->GetName()));
 
     ai->StopMoving();
     WorldPacket packet(CMSG_RECLAIM_CORPSE);
@@ -260,11 +260,11 @@ bool ReviveFromCorpseAction::Execute(Event& event)
 
     if (!sServerFacade.IsAlive(bot))
     {
-        sLog.outDetail("[BOT CORPSE] %s: revive from corpse - RECLAIM DROPPED by core (still dead), retrying next tick", bot->GetName());
+        sLog.outDetail("[BOT CORPSE] %s: revive from corpse - RECLAIM DROPPED by core (still dead), retrying next tick", CStrCompat(bot->GetName()));
         return false;
     }
 
-    sLog.outDetail("Bot #%d %s:%d <%s> revives at body", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), bot->GetName());
+    sLog.outDetail("Bot #%d %s:%d <%s> revives at body", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()));
     ai->safeReviveUnsafeSinceMs_ = 0;
     SET_AI_VALUE(bool, "corpse run", false);
     // Post-rez rescue (best-effort, fail-closed): a random bot that keeps dying
@@ -297,7 +297,7 @@ bool FindCorpseAction::Execute(Event& event)
     Corpse* corpse = bot->GetCorpse();
     if (!corpse)
     {
-        sLog.outDetail("[BOT CORPSE] %s: find corpse - no corpse, abort", bot->GetName());
+        sLog.outDetail("[BOT CORPSE] %s: find corpse - no corpse, abort", CStrCompat(bot->GetName()));
         return false;
     }
 
@@ -338,12 +338,12 @@ bool FindCorpseAction::Execute(Event& event)
         {
             SET_AI_VALUE2(time_t, "manual time", "wait master logged", nowWait);
             sLog.outDetail("[BOT CORPSE] %s: find corpse - wait-for-master timed out after %llds, running to corpse anyway",
-                bot->GetName(), (long long)deadTime);
+                CStrCompat(bot->GetName()), (long long)deadTime);
         }
     }
     if (master && !manualCorpseRun && !waitForMasterTimedOut && master->GetMapId() == bot->GetMapId() && !corpseInDungeon)
     {
-        bool masterCanResurrect = sServerFacade.IsAlive(master) && !master->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST) &&
+        bool masterCanResurrect = sServerFacade.IsAlive(master) && !HasPlayerFlagCompat(master, PLAYER_FLAGS_GHOST) &&
                                   (PlayerbotAI::IsHeal(master) || master->GetClass() == CLASS_PRIEST || master->GetClass() == CLASS_PALADIN ||
                                    master->GetClass() == CLASS_SHAMAN || master->GetClass() == CLASS_DRUID);
 
@@ -351,7 +351,7 @@ bool FindCorpseAction::Execute(Event& event)
         if (masterCanResurrect && botPos.GetMapId() == corpsePos.GetMapId() && !PlayerbotAIStorage::Instance().GetAI(master) && sServerFacade.IsDistanceLessThan(masterTargetDist, sPlayerbotAIConfig.farDistance))
         {
             sLog.outDetail("[BOT CORPSE] %s: find corpse - BLOCKED: real-player master within farDistance (dist=%.1f < %.1f). Waiting for master to resurrect. Say 'corpse run' to override.",
-                bot->GetName(), masterTargetDist, sPlayerbotAIConfig.farDistance);
+                CStrCompat(bot->GetName()), masterTargetDist, sPlayerbotAIConfig.farDistance);
             return false;
         }
     }
@@ -415,7 +415,7 @@ bool FindCorpseAction::Execute(Event& event)
         else
         {
             sLog.outDetail("[BOT CORPSE] %s: find corpse - cross-map corpse on map %u but no entrance trigger from map %u",
-                bot->GetName(), corpsePos.GetMapId(), botPos.GetMapId());
+                CStrCompat(bot->GetName()), corpsePos.GetMapId(), botPos.GetMapId());
             return false;
         }
     }
@@ -445,7 +445,7 @@ bool FindCorpseAction::Execute(Event& event)
         bool moveToMaster = master && master != bot && master->GetMapId() == corpsePos.GetMapId() && masterPos.fDist(corpsePos) < reclaimDist;
 
         sLog.outDetail("[BOT CORPSE] %s: find corpse - corpseDist=%.1f reclaimDist=%.1f reactDist=%.1f moveToMaster=%d deadTime=%llds",
-            bot->GetName(), corpseDist, reclaimDist, sPlayerbotAIConfig.reactDistance, moveToMaster ? 1 : 0, (long long)deadTime);
+            CStrCompat(bot->GetName()), corpseDist, reclaimDist, sPlayerbotAIConfig.reactDistance, moveToMaster ? 1 : 0, (long long)deadTime);
 
         //Should we ressurect? If so, return false. Uses the core's own reclaim
         // predicate (39 yd 3D, same call the core enforces in MiscHandler) so the
@@ -463,7 +463,7 @@ bool FindCorpseAction::Execute(Event& event)
             {
                 if (botPos.fDist(masterPos) < sPlayerbotAIConfig.spellDistance)
                 {
-                    sLog.outDetail("[BOT CORPSE] %s: find corpse - within core reclaim range & near master, yielding to revive-from-corpse", bot->GetName());
+                    sLog.outDetail("[BOT CORPSE] %s: find corpse - within core reclaim range & near master, yielding to revive-from-corpse", CStrCompat(bot->GetName()));
                     return false;
                 }
                 // En route to the master but not yet in spell range: the master
@@ -488,13 +488,13 @@ bool FindCorpseAction::Execute(Event& event)
                 {
                     SET_AI_VALUE2(time_t, "manual time", "reclaim wait logged", nowWait);
                     sLog.outDetail("[BOT CORPSE] %s: find corpse - inside reclaim range, waiting out reclaim delay (%llds left)",
-                        bot->GetName(), (long long)reclaimWait);
+                        CStrCompat(bot->GetName()), (long long)reclaimWait);
                 }
                 return true;
             }
             if (deadTime > 8 * MINUTE) //We have walked too long already.
             {
-                sLog.outDetail("[BOT CORPSE] %s: find corpse - within core reclaim range & deadTime>8min, yielding to revive-from-corpse", bot->GetName());
+                sLog.outDetail("[BOT CORPSE] %s: find corpse - within core reclaim range & deadTime>8min, yielding to revive-from-corpse", CStrCompat(bot->GetName()));
                 return false;
             }
             if (!moveToMaster)
@@ -503,7 +503,7 @@ bool FindCorpseAction::Execute(Event& event)
 
                 if (botPos.GetUnitsAggro(units, bot) == 0) //There are no mobs near.
                 {
-                    sLog.outDetail("[BOT CORPSE] %s: find corpse - within core reclaim range & no mobs near, yielding to revive-from-corpse", bot->GetName());
+                    sLog.outDetail("[BOT CORPSE] %s: find corpse - within core reclaim range & no mobs near, yielding to revive-from-corpse", CStrCompat(bot->GetName()));
                     return false;
                 }
             }
@@ -603,7 +603,7 @@ bool FindCorpseAction::Execute(Event& event)
     // counts. Owned/hired bots (active player master) keep today's handling.
     // Only pool ghosts hop, and only while the corpse is on the same map
     // (cross-map legs are portal walks handled above).
-    if (!ai->HasActivePlayerMaster() && bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST) &&
+    if (!ai->HasActivePlayerMaster() && HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST) &&
         botPos.GetMapId() == corpsePos.GetMapId() &&
         !corpse->IsWithinDistInMap(bot, (float)CORPSE_RECLAIM_RADIUS, true))
     {
@@ -629,7 +629,7 @@ bool FindCorpseAction::Execute(Event& event)
         if (ShouldGhostStallTeleport(ai->HasActivePlayerMaster(), corpse->IsWithinDistInMap(bot, (float)CORPSE_RECLAIM_RADIUS, true), anchor, now))
         {
             sLog.outDetail("[BOT CORPSE] %s: find corpse stalled %.1fy from the corpse for %us, teleporting toward corpse",
-                bot->GetName(), stallDist, kGhostStallTeleportSec);
+                CStrCompat(bot->GetName()), stallDist, kGhostStallTeleportSec);
             bot->GetMotionMaster()->Clear();
             bot->TeleportTo(moveToPos.GetMapId(), moveToPos.getX(), moveToPos.getY(), moveToPos.getZ(), 0);
             if (isRealPlayer_Helper(bot))
@@ -647,7 +647,7 @@ bool FindCorpseAction::Execute(Event& event)
         if (deadTime > delay)
         {
             sLog.outDetail("[BOT CORPSE] %s: find corpse - no detailed-move activity, teleporting to corpse (deadTime=%llds > delay=%us)",
-                bot->GetName(), (long long)deadTime, delay);
+                CStrCompat(bot->GetName()), (long long)deadTime, delay);
             bot->GetMotionMaster()->Clear();
             bot->TeleportTo(moveToPos.GetMapId(), moveToPos.getX(), moveToPos.getY(), moveToPos.getZ(), 0);
             if (isRealPlayer_Helper(bot))
@@ -656,7 +656,7 @@ bool FindCorpseAction::Execute(Event& event)
         else
         {
             sLog.outDetail("[BOT CORPSE] %s: find corpse - no detailed-move activity, waiting out teleport delay (deadTime=%llds < delay=%us)",
-                bot->GetName(), (long long)deadTime, delay);
+                CStrCompat(bot->GetName()), (long long)deadTime, delay);
         }
 
         moved = true;
@@ -667,7 +667,7 @@ bool FindCorpseAction::Execute(Event& event)
             moved = true;
         if (moved)
         {
-            sLog.outDetail("[BOT CORPSE] %s: find corpse - already moving towards corpse", bot->GetName());
+            sLog.outDetail("[BOT CORPSE] %s: find corpse - already moving towards corpse", CStrCompat(bot->GetName()));
         }
         else
         {
@@ -681,11 +681,11 @@ bool FindCorpseAction::Execute(Event& event)
             // riding instead. Owned/hired bots keep today's handling.
             int32 keepMovegen = bot->GetMotionMaster() ? (int32)bot->GetMotionMaster()->GetCurrentMovementGeneratorType() : -1;
             if (ShouldKeepRidingCorpseRun(ai->HasActivePlayerMaster(),
-                bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST),
+                HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST),
                 keepMovegen, (int32)POINT_MOTION_TYPE, WorldPosition(bot).distance(moveToPos)))
             {
                 sLog.outDetail("[BOT CORPSE] %s: find corpse - POINT spline still in flight, keeping it instead of re-dispatching",
-                    bot->GetName());
+                    CStrCompat(bot->GetName()));
                 return true;
             }
             // Ghost-movement triage: capture the motion stack before/after the
@@ -712,7 +712,7 @@ bool FindCorpseAction::Execute(Event& event)
                 SET_AI_VALUE2(time_t, "manual time", "find corpse moveto", nowMove);
             if (logMoveTo)
                 sLog.outDetail("[BOT CORPSE] %s: find corpse - MoveTo(%.1f,%.1f,%.1f) returned %s",
-                    bot->GetName(), moveToPos.getX(), moveToPos.getY(), moveToPos.getZ(), moved ? "true" : "false");
+                    CStrCompat(bot->GetName()), moveToPos.getX(), moveToPos.getY(), moveToPos.getZ(), moved ? "true" : "false");
             // Throttled ghost-move CSV row (30 s key inside LogGhostMoveDiag):
             // the stall signature is MoveTo=true with a POINT generator that
             // never displaces the bot. A false return already falls through to
@@ -724,13 +724,13 @@ bool FindCorpseAction::Execute(Event& event)
             if (!moved && !ai->HasActivePlayerMaster()) //We could not move to coprse. Try spirithealer instead.
             {
                 if (logMoveTo)
-                    sLog.outDetail("[BOT CORPSE] %s: find corpse - MoveTo failed & no active player master, trying spirit healer", bot->GetName());
+                    sLog.outDetail("[BOT CORPSE] %s: find corpse - MoveTo failed & no active player master, trying spirit healer", CStrCompat(bot->GetName()));
                 moved = ai->DoSpecificAction("spirit healer", Event(), true);
             }
             else if (!moved)
             {
                 if (logMoveTo)
-                    sLog.outDetail("[BOT CORPSE] %s: find corpse - MoveTo failed but has active player master, NOT using spirit healer -> FAILED loop", bot->GetName());
+                    sLog.outDetail("[BOT CORPSE] %s: find corpse - MoveTo failed but has active player master, NOT using spirit healer -> FAILED loop", CStrCompat(bot->GetName()));
             }
         }
     }
@@ -767,9 +767,9 @@ bool SpiritHealerAction::Execute(Event& event)
         // A ghost whose corpse the core already removed has nothing to reclaim, and every
         // graveyard lookup below is corpse-based: it used to fail here silently forever.
         // Do what a player would: resurrect at the nearest spirit healer.
-        if (bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST))
+        if (HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST))
         {
-            sLog.outDetail("Bot #%d <%s> is a ghost without a corpse, reviving at the nearest graveyard", bot->GetGUIDLow(), bot->GetName());
+            sLog.outDetail("Bot #%d <%s> is a ghost without a corpse, reviving at the nearest graveyard", bot->GetGUIDLow(), CStrCompat(bot->GetName()));
             bot->RepopAtGraveyard();
             bot->ResurrectPlayer(0.5f, ShouldApplyResurrectionSickness());
             bot->DurabilityLossAll(0.25f, true);
@@ -834,7 +834,7 @@ bool SpiritHealerAction::Execute(Event& event)
             bot->GetGUIDLow(),
             bot->GetTeam() == ALLIANCE ? "A" : "H",
             bot->GetLevel(),
-            bot->GetName()
+            CStrCompat(bot->GetName())
         );
         ai->DoSpecificAction("repop");
         return false;
@@ -856,7 +856,7 @@ bool SpiritHealerAction::Execute(Event& event)
 
         if (!foundSpiritHealer)
         {
-            sLog.outDetail("Bot #%d %s:%d <%s> can't find a spirit healer", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), bot->GetName());
+            sLog.outDetail("Bot #%d %s:%d <%s> can't find a spirit healer", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()));
             ai->TellPlayerNoFacing(requester, "Cannot find any spirit healer nearby");
         }
 
@@ -876,11 +876,11 @@ bool SpiritHealerAction::Execute(Event& event)
         }
         if (now - stepStart < 15 && WorldPosition(bot).fDist(stepSpot) > 3.0f &&
             MoveTo(stepSpot.getMapId(), stepSpot.getX(), stepSpot.getY(),
-                bot->GetMap()->GetHeight(stepSpot.getX(), stepSpot.getY(), stepSpot.getZ() + 5.0f), false, false, false,
+                GetHeightCompat(bot->GetMap(), stepSpot.getX(), stepSpot.getY(), stepSpot.getZ() + 5.0f), false, false, false,
                 true, "move_revive"))
             return true;
 
-        sLog.outDetail("Bot #%d %s:%d <%s> revives at spirit healer", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), bot->GetName());
+        sLog.outDetail("Bot #%d %s:%d <%s> revives at spirit healer", bot->GetGUIDLow(), bot->GetTeam() == ALLIANCE ? "A" : "H", bot->GetLevel(), CStrCompat(bot->GetName()));
         PlayerbotChatHandler ch(bot);
         bot->ResurrectPlayer(0.5f, ShouldApplyResurrectionSickness());
         bot->DurabilityLossAll(0.25f, true);
@@ -958,7 +958,7 @@ bool SpiritHealerAction::Execute(Event& event)
         if (anchor != 0 && now - anchor >= (time_t)kSpiritHealerStallSec)
         {
             sLog.outDetail("[BOT CORPSE] %s: spirit healer walk stalled %.1fy from the graveyard for %us, teleporting there",
-                bot->GetName(), graveDist, kSpiritHealerStallSec);
+                CStrCompat(bot->GetName()), graveDist, kSpiritHealerStallSec);
             shouldTeleportToGY = true;
         }
     }
@@ -1011,5 +1011,5 @@ bool SpiritHealerAction::isUseful()
     if (bot->InBattleGround())
         return false;
 
-    return bot->HasFlag(PLAYER_FLAGS, PLAYER_FLAGS_GHOST);
+    return HasPlayerFlagCompat(bot, PLAYER_FLAGS_GHOST);
 }

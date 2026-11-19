@@ -3111,7 +3111,7 @@ std::string ZoneName(uint32_t zoneId)
     AreaTableEntry const* entry = GetAreaEntryByAreaID(zoneId);
     if (!entry)
         return "-";
-    AreaTableEntry const* zone = entry->ZoneId ? GetAreaEntryByAreaID(entry->ZoneId) : entry;
+    AreaTableEntry const* zone = AreaZoneIdCompat(entry) ? GetAreaEntryByAreaID(AreaZoneIdCompat(entry)) : entry;
     if (!zone || !zone->Name)
         return "-";
     return zone->Name;
@@ -3123,7 +3123,7 @@ std::string BotName(uint32_t botGuidLow)
     if (Player* bot = sObjectAccessor.FindPlayer(guid))
         return bot->GetName();
     std::string name;
-    if (sObjectMgr.GetPlayerNameByGUID(guid, name))
+    if (PlayerNameByGuidCompat(guid, name))
         return name;
     return "?";
 }
@@ -3546,7 +3546,7 @@ bool IsDurableOrderBot(uint32_t guidLow)
         return false;
     if (ClaimLifecycle::Instance().IsClaimed(guidLow))
         return true;
-    uint32_t accountId = sObjectMgr.GetPlayerAccountIdByGUID(guid);
+    uint32_t accountId = AccountIdOfCharacterCompat(guid);
     return accountId && RandomBotAccountRegistry::Instance().IsRegistered(accountId);
 }
 
@@ -3554,7 +3554,7 @@ bool IsOthersAlt(uint32_t guidLow, uint32_t requesterAccountId)
 {
     if (!guidLow || ClaimLifecycle::Instance().IsClaimed(guidLow))
         return false;
-    uint32_t accountId = sObjectMgr.GetPlayerAccountIdByGUID(ObjectGuid(HIGHGUID_PLAYER, guidLow));
+    uint32_t accountId = AccountIdOfCharacterCompat(ObjectGuid(HIGHGUID_PLAYER, guidLow));
     return accountId && accountId != requesterAccountId &&
         !RandomBotAccountRegistry::Instance().IsRegistered(accountId);
 }

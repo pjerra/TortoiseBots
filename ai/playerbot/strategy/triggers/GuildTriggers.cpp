@@ -36,7 +36,7 @@ bool LeaveLargeGuildTrigger::IsActive()
 	if (ai->IsInRealGuild())
 		return false;
 
-	Player* leader = sObjectMgr.GetPlayer(guild->GetLeaderGuid());
+	Player* leader = GetPlayerCompat(guild->GetLeaderGuid());
 
 	//Only leave the guild if we know the leader is not a real player.
 	if (!leader || !PlayerbotAIStorage::Instance().GetAI(leader) || PlayerbotAIStorage::Instance().GetAI(leader)->IsRealPlayer())
