@@ -4654,6 +4654,27 @@
     return kv('Run', `<a class="card-link" href="#/dungeons?run=${encodeURIComponent(run.key)}" title="Open the run's live view">${esc(label)}</a>`);
   }
 
+  // ForeverCore: the engine and bot-driver rows the module sends on every roster row.
+  function foreverEngineRows(live) {
+    const num = v => (v === undefined || v === null) ? null : v;
+    let h = kv('Engine', live.engine === 'on'
+      ? `<span class="badge badge-info">on</span> <span class="cell-muted">${esc(live.engine_state || '')}</span>`
+      : `<span class="cell-muted">${esc(live.engine_state || 'off')}</span>`);
+    if (live.engine === 'on') {
+      h += kv('Combat strategies', kvMono(live.strategy || DASH));
+      h += kv('Non-combat strategies', kvMono(live.strategies_nc || DASH));
+    }
+    if (live.master) {
+      const d = num(live.dist_master);
+      h += kv('Master', `<span class="mono">#${esc(live.master)}</span>${d !== null ? ` <span class="cell-muted">${esc(d.toFixed(1))} yd${live.los_master === 0 ? ', no line of sight' : ''}</span>` : ' <span class="cell-muted">elsewhere</span>'}`);
+    }
+    if (live.move) h += kv('Movement', `<span class="mono">${esc(live.move)}</span> <span class="cell-muted">still ${esc(num(live.still_s) ?? 0)} s</span>`);
+    if (live.ghost || live.rez_pending) h += kv('Life', `${live.ghost ? '<span class="badge">ghost</span> ' : ''}${live.rez_pending ? '<span class="badge badge-info">resurrection offered</span>' : ''}`);
+    if (num(live.free_slots) !== null) h += kv('Bags', `<span class="mono">${esc(live.free_slots)} free</span>`);
+    if (num(live.durability_min_pct) !== null) h += kv('Lowest durability', `<span class="mono">${esc(live.durability_min_pct)}%</span>`);
+    return h;
+  }
+
   function renderProfileOverview() {
     const host = document.getElementById('armory-content-overview');
     if (!host || state.profileTab !== 'overview' || state.profileGuid === null) return;
@@ -4677,7 +4698,7 @@
           ${live.travel_purpose ? kv('Travel', `<strong>${esc(live.travel_purpose)}</strong><span class="cell-muted"> → ${esc(live.travel_to || '')}</span>`) : ''}
           ${live.player ? '' : kv('Last action', kvMono(live.last_action))}
           ${live.player ? '' : kv('Trigger', kvMono(live.last_trigger))}
-          ${live.player ? '' : kv('Strategy', kvMono(live.strategy || 'default'))}
+          ${live.player ? '' : (isForever ? foreverEngineRows(live) : kv('Strategy', kvMono(live.strategy || 'default')))}
           ${(live.pvp || inWorldPvp(live)) ? kv('PvP', pvpBadge(live) || worldPvpBadge(live)) : ''}
           ${dgnRunLink(guid)}
           ${raidRunLink(guid)}
@@ -5730,9 +5751,12 @@
       ['Health', pet.health],
     ];
     if (pet.hunter) {
-      facts.push(['Loyalty', esc(PET_LOYALTY_NAMES[pet.loyalty] || String(pet.loyalty))]);
-      facts.push(['Training points left', pet.train_points]);
-      facts.push(['Happiness', pet.happiness]);
+      // ForeverCore keeps no loyalty, training points or happiness for pets: those rows would always read 0.
+      if (!isForever) {
+        facts.push(['Loyalty', esc(PET_LOYALTY_NAMES[pet.loyalty] || String(pet.loyalty))]);
+        facts.push(['Training points left', pet.train_points]);
+        facts.push(['Happiness', pet.happiness]);
+      }
     }
     const spells = pet.spells || [];
     const actives = spells.filter(s => !s.passive && s.name !== 'Avoidance');
@@ -5813,7 +5837,7 @@
     }
     const statusLabel = st => (st === 1 ? 'Complete' : (st === 2 ? 'Failed' : 'In progress'));
     const rows = list.map(q => {
-      const objs = (q.objectives || []).map(o => `#${o.index}: ${o.count}`).join(', ');
+      const objs = (q.objectives || []).map(o => o.name ? `${o.name}: ${o.count}${o.amount ? '/' + o.amount : ''}` : `#${o.index}: ${o.count}`).join(', ');
       return `<tr>
         <td class="mono" style="color: var(--text-dim);">#${esc(q.quest)}</td>
         <td><strong>${esc(q.title)}</strong>${objs ? `<div class="cell-muted mono" style="font-size: 0.75rem;">${esc(objs)}</div>` : ''}</td>

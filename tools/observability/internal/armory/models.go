@@ -352,6 +352,9 @@ type ReputationEntry struct {
 type QuestObjective struct {
 	Index uint8 `json:"index"`
 	Count int32 `json:"count"`
+	// What the objective asks for and how many (ForeverCore: world.quest_objectives + the creature or item name).
+	Name   string `json:"name,omitempty"`
+	Amount int32  `json:"amount,omitempty"`
 }
 
 type QuestEntry struct {
