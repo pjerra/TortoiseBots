@@ -36,9 +36,13 @@ def body(text, start, end):
 class QuestSourceItemWiringTest(unittest.TestCase):
     def test_the_quest_check_asks_the_source_policy(self):
         fn = body(ITEM_USAGE, "bool ItemUsageValue::IsNeededForQuest(", "\n}\n")
-        self.assertIn("ReqSourceId", fn)
+        # Slice 9 (L9): the 1.12 field reads moved behind QuestSourceItemCompat; the Turtle twin still reads ReqSourceId / ReqSourceCount word for word.
+        self.assertIn("QuestSourceItemCompat(quest, j, sourceId, sourceCount)", fn)
         self.assertIn("ai::QuestSourceItemStillNeeded(", fn)
         self.assertIn("GetItemCount(itemId, true)", fn)
+        twin = (ROOT / "ai/cmangos-compat-s9.h").read_text()
+        self.assertIn("quest->ReqSourceId[index]", twin)
+        self.assertIn("quest->ReqSourceCount[index]", twin)
 
     def test_the_helper_covers_flag_and_viewer_right(self):
         self.assertIn("CorpseHasBodyLootFor(Player* bot, Creature* creature)", HELPER)
